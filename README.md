@@ -56,7 +56,7 @@ in `assets/`:
 The same import can be performed without a file picker:
 
 ```powershell
-.\.venv\Scripts\python.exe extract_assets.py "C:\path\to\pop2.hfs"
+.\.venv\Scripts\python.exe -m tools.extract_assets "C:\path\to\pop2.hfs"
 ```
 
 The importer leaves the disk image unchanged and does not retain the game
@@ -99,13 +99,13 @@ Audio and intro movies are not yet implemented.
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m ruff check --select F,E9 .
-python -m unittest -q test_bootstrap test_extract_assets test_mac_resources test_run_game test_setup_game test_recovery_catalog
-python recovery_catalog.py --check
+python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout
+python -m tools.recovery_catalog --check
 ```
 
 These checks run without original game files and are used in GitHub Actions.
 After importing the game files, run the full gameplay suite with
-`python -m unittest discover -q`.
+`python -m unittest discover -s tests -t . -q`.
 
 Python 3.10 with Pillow 10.4 and 12.3 has been tested. The gameplay suite needs
 the generated files in `assets/`, but not external research folders.
@@ -115,24 +115,30 @@ data from the original Macintosh game files and checks that it matches
 To enable it, set `POP2_RESEARCH_DIR` to a recovery directory containing
 `resource_forks/`.
 The routine catalog can also be rebuilt from that directory with
-`python recovery_catalog.py --source PATH_TO_RECOVERY`.
+`python -m tools.recovery_catalog --source PATH_TO_RECOVERY`.
 
 The old isolated animation comparison remains available through
-`python scene_prototype.py --no-guard`. It is a test harness with simplified
+`python -m pop2.scene_prototype --no-guard`. It is a test harness with simplified
 opening-room boundaries, not the playable terrain mode.
 
-- `scene_prototype.py`: player control, simulation order and scene composition.
-- `window_controls.py` / `game_ui.py`: Tk window, modal input and menu rendering.
-- `sequence_runtime.py` / `animation_data.py`: original animation data and interpreter.
-- `terrain.py`: supporting-foot coordinates, collisions, ledges and room links.
-- `combat.py` / `opponent_generation.py`: combat, guard AI and reinforcements.
-- `mac_resources.py`: standalone resource-fork and HFS readers.
-- `bootstrap.py` / `setup_game.py` / `extract_assets.py`: local environment and
-  first-run game import.
+The launcher stays in the project root. Runtime modules, tests and research
+utilities are separate:
 
-[Behavior map](BEHAVIOR_MAP.md), [rule recovery index](RECOVERY_INDEX.md),
-[collision notes](COLLISION_RECOVERY.md), [enemy AI notes](AI_RECOVERY.md),
-[development history](DEVELOPMENT_HISTORY.md).
+```text
+Launch.cmd          Windows launcher
+bootstrap.py        Local environment setup
+run_game.py         Installation checks and game entry point
+pop2/               Game runtime and first-run import window
+tests/              Regression tests
+tools/              Game-file import and recovery utilities
+docs/               Technical notes and routine catalog
+assets/             Locally imported game files (not bundled)
+.github/            Automated checks
+```
+
+[Behavior map](docs/BEHAVIOR_MAP.md), [rule recovery index](docs/RECOVERY_INDEX.md),
+[collision notes](docs/COLLISION_RECOVERY.md), [enemy AI notes](docs/AI_RECOVERY.md),
+[development history](docs/DEVELOPMENT_HISTORY.md).
 
 Source addresses in comments identify the recovered Macintosh routine behind a
 condition. Passing tests cover those documented subsets, not full-game parity.

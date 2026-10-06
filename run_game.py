@@ -50,19 +50,19 @@ def installation_errors(project=PROJECT):
         errors.append("Missing files in assets/: " + ", ".join(missing))
         errors.append(
             "Run Launch.cmd to import the game files, or use: "
-            "python extract_assets.py PATH_TO_IMAGE.hfs"
+            "python -m tools.extract_assets PATH_TO_IMAGE.hfs"
         )
     return errors
 
 
 def launch_game(peaceful):
-    from scene_prototype import ScenePrototype
+    from pop2.scene_prototype import ScenePrototype
 
     ScenePrototype(peaceful=peaceful).run()
 
 
 def setup_game(project):
-    from setup_game import setup_game as import_game_files
+    from pop2.setup_game import setup_game as import_game_files
 
     return import_game_files(project)
 
