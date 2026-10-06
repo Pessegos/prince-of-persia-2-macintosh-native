@@ -1,0 +1,292 @@
+"""Tk window controls and modal input for the scene host."""
+
+import time
+import tkinter as tk
+
+from PIL import Image, ImageTk
+
+from game_ui import DevelopmentMenu, fit_viewport, viewport_point
+from render_opening import VIEWPORT_HEIGHT, VIEWPORT_WIDTH
+
+
+class WindowControls:
+    """Window callbacks shared by the rooftop scene and animation preview."""
+
+    def create_window(self, title, scale=2):
+        self.root = tk.Tk()
+        self.root.title(title)
+        self.root.resizable(True, True)
+        self.root.minsize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+        self.canvas = tk.Canvas(
+            self.root,
+            width=VIEWPORT_WIDTH * scale,
+            height=VIEWPORT_HEIGHT * scale,
+            highlightthickness=0,
+            bg="#000000",
+        )
+        self.canvas.pack(fill="both", expand=True)
+        self.canvas.bind("<Configure>", lambda _event: self.present_viewport())
+        self.canvas.bind("<Button-1>", self.dev_click)
+        self.canvas.bind("<Button-2>", self.dev_click)
+        self.canvas.bind("<Button-3>", self.dev_click)
+        self.canvas.bind("<Motion>", self.dev_hover)
+        # Menu input runs before gameplay bindings, without a second window.
+        for widget in (self.root, self.canvas):
+            widget.bindtags(("DevelopmentInput", *widget.bindtags()))
+        self.root.bind_class("DevelopmentInput", "<KeyPress>", self.dev_key_press)
+        self.root.bind_class("DevelopmentInput", "<KeyRelease>", self.dev_key_release)
+        self.image_ref = None
+        self.status = tk.StringVar(value="Window escape")
+        self.status_label = tk.Label(
+            self.root, textvariable=self.status, anchor="w", padx=6
+        )
+        self.status_label.pack(fill="x")
+
+        self.root.bind(
+            "<KeyPress-Left>", lambda event: self.horizontal_key(event, -1, True)
+        )
+        self.root.bind(
+            "<KeyRelease-Left>", lambda event: self.horizontal_key(event, -1, False)
+        )
+        self.root.bind(
+            "<KeyPress-Right>", lambda event: self.horizontal_key(event, 1, True)
+        )
+        self.root.bind(
+            "<KeyRelease-Right>", lambda event: self.horizontal_key(event, 1, False)
+        )
+        self.root.bind("<KeyPress-Up>", self.up_key)
+        self.root.bind(
+            "<KeyRelease-Up>", lambda _event: self.set_key_state("up", False)
+        )
+        self.root.bind(
+            "<KeyPress-Down>", lambda _event: self.set_key_state("down", True)
+        )
+        self.root.bind(
+            "<KeyRelease-Down>", lambda _event: self.set_key_state("down", False)
+        )
+        self.root.bind(
+            "<KeyPress-Shift_L>", lambda _event: self.set_key_state("shift", True)
+        )
+        self.root.bind(
+            "<KeyRelease-Shift_L>", lambda _event: self.set_key_state("shift", False)
+        )
+        self.root.bind(
+            "<KeyPress-Shift_R>", lambda _event: self.set_key_state("shift", True)
+        )
+        self.root.bind(
+            "<KeyRelease-Shift_R>", lambda _event: self.set_key_state("shift", False)
+        )
+        self.root.bind(
+            "<KeyPress-Control_L>", lambda _event: self.set_key_state("ctrl", True)
+        )
+        self.root.bind(
+            "<KeyRelease-Control_L>", lambda _event: self.set_key_state("ctrl", False)
+        )
+        self.root.bind(
+            "<KeyPress-Control_R>", lambda _event: self.set_key_state("ctrl", True)
+        )
+        self.root.bind(
+            "<KeyRelease-Control_R>", lambda _event: self.set_key_state("ctrl", False)
+        )
+        self.root.bind("<FocusOut>", self.clear_keys)
+        self.root.bind("<KeyPress-Escape>", self.escape_key)
+        self.root.bind("<KeyRelease-Escape>", self.escape_release)
+        self.root.bind("<Alt-Return>", self.toggle_fullscreen)
+        self.root.bind("<F2>", self.open_dev_mode)
+        self.root.bind("<F5>", self.restart_opening)
+
+    def escape_key(self, _event=None):
+        if not self.escape_held:
+            self.escape_held = True
+            if self.dev_menu is not None:
+                self.apply_dev_action(self.dev_menu.key("Escape"))
+            else:
+                self.set_paused(not self.paused)
+        return "break"
+
+    def escape_release(self, _event=None):
+        self.escape_held = False
+        return "break"
+
+    def set_paused(self, paused):
+        if self.paused == paused:
+            return
+        now = time.perf_counter()
+        self.paused = paused
+        if paused:
+            self.pause_started_at = now
+            if self.animation_after_id is not None:
+                self.root.after_cancel(self.animation_after_id)
+                self.animation_after_id = None
+            self.clear_keys(None)
+            self.pause_resume_keys.update(self.window_keys_down)
+        else:
+            elapsed = now - self.pause_started_at
+            if self.combat is not None and self.combat.last_guard_at is not None:
+                self.combat.last_guard_at += elapsed
+            self.pause_started_at = None
+            self.next_animation_at = now
+            self.schedule_next_animation()
+        self.render()
+
+    def toggle_fullscreen(self, _event=None):
+        if not self.fullscreen:
+            self.windowed_geometry = self.root.geometry()
+            self.windowed_state = self.root.state()
+            self.status_label.pack_forget()
+            self.root.attributes("-fullscreen", True)
+            self.fullscreen = True
+            self.canvas.configure(cursor="" if self.dev_menu is not None else "none")
+        else:
+            self.root.attributes("-fullscreen", False)
+            self.fullscreen = False
+            self.canvas.configure(cursor="")
+            if self.windowed_state == "normal":
+                self.root.geometry(self.windowed_geometry)
+            self.root.state(self.windowed_state)
+            self.status_label.pack(fill="x")
+        self.root.after_idle(self.present_viewport)
+        return "break"
+
+    def open_dev_mode(self, _event=None):
+        if _event is not None:
+            if self.dev_toggle_held:
+                return "break"
+            self.dev_toggle_held = True
+        if self.dev_menu is not None:
+            self.close_dev_mode()
+            return "break"
+        if self.level_map is None:
+            return "break"
+        entries = self.dev_screens()
+        if not entries:
+            return "break"
+        current = self.screen_label(self.room_id)
+        screens = tuple(entries)
+        self.dev_menu = DevelopmentMenu(
+            screens, screens.index(current) if current in entries else 0, self.peaceful
+        )
+        self.dev_was_paused = self.paused
+        self.set_paused(True)
+        self.clear_keys(None)
+        self.pause_resume_keys.update(self.window_keys_down)
+        self.canvas.configure(cursor="")
+        self.render()
+        return "break"
+
+    def close_dev_mode(self):
+        if self.dev_menu is None:
+            return
+        self.dev_menu = None
+        self.clear_keys(None)
+        self.canvas.configure(cursor="none" if self.fullscreen else "")
+        self.set_paused(self.dev_was_paused)
+        self.pause_resume_keys.update(self.window_keys_down)
+        self.render()
+
+    def apply_dev_action(self, action):
+        if self.dev_menu is None:
+            return
+        if action == "resume":
+            self.close_dev_mode()
+        elif action == "go":
+            try:
+                self.jump_to_screen(self.dev_menu.screen)
+            except ValueError as exc:
+                self.dev_menu.error = str(exc)
+                self.render()
+                return
+            self.close_dev_mode()
+        elif action == "peaceful":
+            self.set_peaceful(self.dev_menu.peaceful)
+        else:
+            self.render()
+
+    def dev_key_press(self, event):
+        self.window_keys_down.add(event.keysym)
+        if event.keysym in self.pause_resume_keys:
+            return "break"
+        if self.dev_menu is None:
+            if self.paused and event.keysym not in ("Escape", "F2"):
+                self.set_paused(False)
+                self.pause_resume_keys.update(self.window_keys_down)
+                return "break"
+            return None
+        if event.keysym == "F2":
+            return None
+        if event.keysym == "Escape":
+            return self.escape_key(event)
+        if event.keysym == "Return" and event.state & (0x8 | 0x20000):
+            return None
+        self.apply_dev_action(
+            self.dev_menu.key(event.keysym, backwards=bool(event.state & 1))
+        )
+        if self.dev_menu is None:
+            self.pause_resume_keys.add(event.keysym)
+        return "break"
+
+    def dev_key_release(self, event):
+        self.window_keys_down.discard(event.keysym)
+        if event.keysym == "F2":
+            self.dev_toggle_held = False
+        elif event.keysym == "Escape":
+            self.escape_release(event)
+        if event.keysym in self.pause_resume_keys:
+            self.pause_resume_keys.remove(event.keysym)
+            return "break"
+        if self.dev_menu is not None:
+            return "break"
+        return None
+
+    def dev_pointer(self, event):
+        return viewport_point(
+            event.x, event.y, self.canvas.winfo_width(), self.canvas.winfo_height()
+        )
+
+    def dev_click(self, event):
+        if self.dev_menu is None:
+            if self.paused:
+                self.set_paused(False)
+                self.pause_resume_keys.update(self.window_keys_down)
+                return "break"
+            return None
+        if getattr(event, "num", 1) != 1:
+            return "break"
+        point = self.dev_pointer(event)
+        if point is not None:
+            self.apply_dev_action(self.dev_menu.click(*point))
+        return "break"
+
+    def dev_hover(self, event):
+        if self.dev_menu is not None:
+            point = self.dev_pointer(event)
+            if point is not None and self.dev_menu.hover(*point):
+                self.render()
+
+    def set_peaceful(self, peaceful):
+        self.peaceful = peaceful
+        if self.dev_menu is not None:
+            self.dev_menu.peaceful = peaceful
+        self.clear_keys(None)
+        if self.combat is not None:
+            self.combat.last_guard_at = time.perf_counter()
+        self.render()
+
+    def present_viewport(self):
+        if self.native_viewport is None:
+            return
+        width = self.canvas.winfo_width()
+        height = self.canvas.winfo_height()
+        if width <= 1 or height <= 1:
+            width, height = VIEWPORT_WIDTH * 2, VIEWPORT_HEIGHT * 2
+        size, position = fit_viewport(width, height)
+        frame = self.native_viewport.resize(size, Image.Resampling.NEAREST)
+        self.image_ref = ImageTk.PhotoImage(frame)
+        if self.canvas.find_all():
+            self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)
+            self.canvas.coords(self.canvas.find_all()[0], *position)
+        else:
+            self.canvas.create_image(*position, image=self.image_ref, anchor="nw")
+
+    def run(self):
+        self.root.mainloop()

@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+rendered/
+*.log
+*.hfs
+*.hfv
+*.dsk
+*.img
+*.ROM
+.ruff_cache/
+/notas.txt
+/assets/*
+!/assets/README.md
