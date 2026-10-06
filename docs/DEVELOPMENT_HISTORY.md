@@ -144,9 +144,10 @@ The pressed keys are sampled on every animation frame, following the original
 `ReadKeyboard` priority: Up wins over Down, and Left wins over Right when both
 are held. A newly pressed arrow still shows its first pose immediately.
 
-New commands do not replace a movement animation that is already playing. One
-complete command is buffered and starts at the next natural transition, even
-if its keys are released first. Up plus a horizontal arrow is one jump command;
+New commands do not replace a protected movement animation that is already
+playing. The port keeps at most one buffered command, but native controller
+resets can discard it before the next transition. This is not an unconditional
+queue of every key press. Up plus a horizontal arrow is one jump command;
 pressing either key first produces the same buffered jump. A
 running reversal begins at the next eligible run pose; other running commands
 wait for the cycle boundary. A new command replaces the one buffered command,
@@ -170,6 +171,12 @@ steps select their action lists from the original `SEQS` resources.
 The running jump uses the original takeoff, arc, and landing poses (`SEQS:4`,
 actions `34`-`44`). `DoRunJump` also aligns takeoff against the next two tiles
 and rejects a jump requested too late; it does not extend the 225-pixel arc.
+`GenCtrl` clears directional controls on pose `44` (6:074a-0760,
+4:3e3a). A direction, jump or crouch request released during the arc is
+therefore discarded there. The next running control pass reads the remaining
+held keys, with backward input taking priority over Up (6:1216-1248).
+Holding both horizontal arrows retains ReadKeyboard's Left priority; a
+reversal cannot interrupt the arc or become a standing jump after landing.
 The default mode now checks supporting feet and floor flags
 from FRAM, applies gravity over gaps, and preserves a run or jump through
 supported horizontal room transitions. Landing selects the source soft,

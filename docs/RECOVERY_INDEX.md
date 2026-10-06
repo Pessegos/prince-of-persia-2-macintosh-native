@@ -34,8 +34,8 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 
 | Rule / condition | Source | Status and scope | Owner / tests |
 | --- | --- | --- | --- |
-| Horizontal + Up are one command; keyboard priority | 2:55d2 | T: ordinary keyboard subset | mac_input / test_animation_data |
-| One pending command; legal pose transitions; held repeat | 6:0c32, 1014, 11e4 | T: tested ordinary locomotion, not all GenCtrl | scene_prototype / test_animation_data |
+| Keyboard sample priority; ordinary Forward + Up selection | 2:55d2; 6:0dbe-0dca | T: directional priority and ordinary chord subset; not a native single-command buffer | mac_input / test_animation_data |
+| Host single-command buffer; legal pose transitions; held repeat | 6:0c32, 1014, 11e4; 4:3e84 | T/A: tested transitions; host buffer is not the complete native per-direction -1/0/1 input state | scene_prototype / test_animation_data |
 | Five unarmed / six armed Macintosh ticks | 2:68c8 | T: timer branch | scene_prototype / test_animation_data |
 | Original pose chains, offsets and attachments | FRAM/AFRM/SEQS/SHAP; 4:2c0c | T: used interpreter operations; others fail explicitly | sequence_runtime / test_animation_data |
 | Supporting-foot tile, signed column/row | 4:3a72, 3ad6, 3afa | T: ordinary actors | terrain / test_terrain |
@@ -44,11 +44,13 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Shift step reserves four pixels; caution then deliberate step | 4:5eae; 6:1276-1324 | T: floor/gap/ordinary wall; special barrier states P | terrain/mac_input / test_cautious_step, test_terrain |
 | Run release at native stop gates; queued follow-up | 6:11e4; SEQS:13 | T: ordinary run; 33-pixel stop displacement at both feet audited | scene_prototype / test_animation_data, test_guard_deaths |
 | Standing crouch 50 versus running crouch 26; input at first low pose 109 | 6:0f4e/1068-108a, 125a, 06b4/099a; SEQS:50/26/117/79/49 | T: ordinary crouch, release/crawl gates and wall response; pickup/special-level branches P | scene_prototype / test_animation_data, test_game_ui |
-| Fresh Up during SEQS:4 retains running context until next legal run pose | 6:1230-1248, 1c14-1c34; SEQS:4 to 201 | T: single buffered jump, both directions, short/held Up | scene_prototype / test_animation_data, test_game_ui |
+| Running-jump landing clears pending directional inputs, then resamples held keys | 6:074a-0760, 1216-1248; 4:3e3a/3e84; SEQS:4 to 201 | T: pose-44 reset, released/held Up, opposing chords, backward-before-Up priority; both directions | scene_prototype / test_animation_data, test_game_ui |
+| Other ClearControls sites and full directional/modifier latch lifecycle | 6:059c, 0754 (pose 26); 4:3cae-3f42 | R: ordinary lifecycle and 31 decoded direct clear calls audited; integration missing, special contexts P | INPUT_RECOVERY / test_input_recovery (four expected failures, not parity coverage) |
 | Running jump takeoff checks next two cells | 6:1c14-1d3a | T: ordinary player/NPC subset | terrain / test_terrain, test_rooftop_pursuit |
 | Draw reserves 56 against gap/solid wall; combat turn reserves gap space | 6:2072-2122, 26dc-276c | T: ordinary rooftop floor/gap/wall; full gate/special branches P | terrain / test_terrain, test_game_ui |
 | Standing turn bypasses barrier response; unarmed grounded contact ignores rear wall | 4:4e46, 551a/5586 | T: ordinary exclusions within port sweep; full collision buffers P | terrain / test_terrain, test_game_ui |
 | PutSwordAway clears sword mode before first pose, while animation remains locked | 6:2594; SEQS:92/93 | T: ordinary sword lifecycle, full post-retreat sheath | scene_prototype / test_game_ui |
+| Ctrl while running preserves stop-and-draw intent | host QoL, not native queue parity | A/T: intentional extension; original draw poses retained, short/held Ctrl and both facings tested | scene_prototype / test_input_recovery |
 | Wall bump keeps the used Up press consumed until release, preventing a phantom jump | host input lifecycle; 23:31 comparison video | A/T: release/held-state fix, not a recovered native keyboard routine | scene_prototype / test_game_ui |
 | Front sword bump 64 versus rear sword bump 65 | 4:64f6-6532 | T: ordinary grounded wall response | terrain / test_game_ui |
 | Collision response's wider pose stays outside solid wall | 4:6534-6546 reloads pose | A/T: second body sweep after response; full native buffers P | terrain / test_game_ui |
@@ -101,3 +103,12 @@ intentionally retained for now, without lowering the floor or hiding corpses.
 
 The broader subsystem map remains in [BEHAVIOR_MAP.md](BEHAVIOR_MAP.md).
 Neither this ledger nor green tests certify complete original-game parity.
+
+## Input Audit
+
+[INPUT_RECOVERY.md](INPUT_RECOVERY.md) maps the five native input latches,
+sampling order, ordinary controller priorities and all 31 decoded direct
+ClearControls calls. It distinguishes recovered rules from translated behavior.
+`tests/test_input_recovery.py` tracks four demonstrated gaps as expected
+failures; these are not passing parity coverage. The full native latch lifecycle
+still needs integration, without changing the established animation clocks.

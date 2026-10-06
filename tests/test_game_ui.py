@@ -659,7 +659,7 @@ class GameWindowTests(unittest.TestCase):
         self.assertFalse(scene.sword_drawn)
         self.assertEqual(scene.action, 1)
 
-    def test_buffered_running_jump_matches_held_repeat_with_real_rooftop_physics(self):
+    def test_running_jump_landing_resamples_held_up_with_real_rooftop_physics(self):
         scene = self.scene
 
         def replay(facing, queued_pose=None, held=False):
@@ -677,7 +677,7 @@ class GameWindowTests(unittest.TestCase):
             scene.up_key(None)
             self.tick()
             self.assertEqual((scene.sequence_state.sequence_id, scene.action), (4, 34))
-            if queued_pose is not None:
+            if queued_pose is not None or not held:
                 scene.set_key_state("up", False)
             trace = []
             queued = False
@@ -695,16 +695,56 @@ class GameWindowTests(unittest.TestCase):
                 self.assertFalse(scene.terrain_motion.dead)
                 if index < 12:
                     self.tick()
-            self.assertEqual([frame[3] for frame in trace], [*range(34, 45), 7, 34])
+            self.assertEqual([frame[3] for frame in trace], [*range(34, 45), 7, 34 if held else 8])
             self.assertIsNone(scene.pending_action)
             return trace
 
         for facing in (0, 1):
-            baseline = replay(facing)
-            for pose in (34, 38, 41, 44):
-                for held in (False, True):
+            for held in (False, True):
+                baseline = replay(facing, held=held)
+                for pose in (34, 38, 41, 44):
                     with self.subTest(facing=facing, pose=pose, held=held):
                         self.assertEqual(replay(facing, pose, held), baseline)
+
+    def test_opposite_arrow_during_running_jump_obeys_landing_reset_on_real_rooftop(self):
+        scene = self.scene
+        for held in (False, True):
+            with self.subTest(held=held):
+                scene.jump_to_room(1, row=1, x=120, facing=1)
+                scene.peaceful = True
+                self.clear_guards()
+                scene.in_animation_tick = True
+                scene.horizontal_key(None, 1, True)
+                for _ in range(20):
+                    self.tick()
+                    if scene.action == 7:
+                        break
+                self.assertEqual(scene.action, 7)
+                scene.up_key(None)
+                self.tick(7)
+                self.assertEqual((scene.sequence_state.sequence_id, scene.action), (4, 40))
+                before = (scene.player_x, scene.sequence_state.current_y, scene.action)
+                scene.horizontal_key(None, -1, True)
+                if not held:
+                    scene.set_key_state("up", False)
+                    scene.horizontal_key(None, 1, False)
+                    scene.horizontal_key(None, -1, False)
+                self.assertEqual(
+                    (scene.player_x, scene.sequence_state.current_y, scene.action), before
+                )
+                actions = [scene.action]
+                for _ in range(6):
+                    self.tick()
+                    actions.append(scene.action)
+                    self.assertFalse(scene.terrain_motion.falling)
+                    self.assertFalse(scene.terrain_motion.dead)
+                self.assertEqual(actions, [40, 41, 42, 43, 44, 7, 53])
+                self.assertEqual(scene.sequence_state.sequence_id, 6 if held else 13)
+                self.assertEqual(scene.sequence_state.current_y, 0)
+                self.assertIsNone(scene.pending_action)
+                if not held:
+                    self.tick(12)
+                    self.assertEqual((scene.action, scene.sequence_state.facing), (15, 1))
 
     def test_short_sheath_keeps_its_native_poses_before_buffered_run(self):
         scene = self.scene

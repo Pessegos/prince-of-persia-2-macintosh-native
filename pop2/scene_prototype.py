@@ -221,6 +221,7 @@ class ScenePrototype(WindowControls):
             )
         self.held_directions = []
         self.pending_action = None
+        self.running_jump_controls_cleared = False
         self.run_cycle_boundary_pending = False
         self.horizontal_input = 0
         self.up_held = False
@@ -494,7 +495,11 @@ class ScenePrototype(WindowControls):
                         "jump", direction, running=self.pending_action.running
                     )
                 elif not self._is_resting():
-                    self.pending_action = BufferedCommand("jump", direction)
+                    self.pending_action = BufferedCommand(
+                        "jump", direction,
+                        running=(self.sequence_state.sequence_id in RUN_SEGMENT_SEQUENCES
+                                 or self.sequence_state.sequence_id == RUN_JUMP_SEQUENCE),
+                    )
                 return False
             return self.start_jump_if_needed()
         elif (
@@ -823,14 +828,46 @@ class ScenePrototype(WindowControls):
             state.sequence_id not in RUN_CYCLE_SEQUENCES
             or not 4 <= state.action <= 14
             or command is None
-            or command.kind != "horizontal"
-            or command.mode != "turn"
+            or not (
+                (command.kind == "horizontal" and command.mode == "turn")
+                or (command.kind == "jump" and command.running)
+            )
             or facing_for_direction(command.direction) == state.facing
         ):
             return False
 
-        # GenCtrl enters SEQS:6 directly from run actions 4-14.
+        # GenCtrl 6:1216 checks backward before Up, including a jump chord.
+        # An airborne reversal waits for the first run pose after landing.
         return self.dispatch_pending_action(was_running=True)
+
+    def update_running_jump_controls(self):
+        state = self.sequence_state
+        if state.sequence_id == RUN_JUMP_SEQUENCE and state.action == 44:
+            # GenCtrl 6:074a-0760 -> ClearControls 4:3e3a. Directional
+            # requests from the arc do not survive the final landing pose.
+            if self.pending_action is not None and self.pending_action.kind in (
+                "horizontal", "jump", "crouch", "crawl"
+            ):
+                self.pending_action = None
+            self.running_jump_controls_cleared = True
+            return
+        if not getattr(self, "running_jump_controls_cleared", False):
+            return
+        self.running_jump_controls_cleared = False
+        if state.sequence_id not in RUN_CYCLE_SEQUENCES:
+            return
+        # The next ReadKeyboard/GenCtrl pass sees fresh held directions,
+        # not an unconditional command saved before ClearControls.
+        direction = self.horizontal_input
+        self.run_stop_requested = not direction
+        if self.pending_action is not None:
+            return
+        if direction and facing_for_direction(direction) != state.facing:
+            self.pending_action = BufferedCommand("horizontal", direction, "turn")
+        elif direction and self.up_held:
+            self.start_jump()
+        elif self.down_held and not self.up_held:
+            self.pending_action = BufferedCommand("crouch")
 
     def resume_queued_running_jump_during_run(self):
         state = self.sequence_state
@@ -1173,6 +1210,7 @@ class ScenePrototype(WindowControls):
         if self.run_active:
             self.run_stop_requested = True
         self.pending_action = None
+        self.running_jump_controls_cleared = False
 
     def prepare_next_sequence(self, run_cycle_boundary=False):
         state = self.sequence_state
@@ -1300,6 +1338,7 @@ class ScenePrototype(WindowControls):
             self.in_animation_tick = False
             self.schedule_next_animation()
             return
+        self.update_running_jump_controls()
         if not self.resume_combat_turn():
             self.resume_sword_attack_after_block()
             self.resume_sword_controls()

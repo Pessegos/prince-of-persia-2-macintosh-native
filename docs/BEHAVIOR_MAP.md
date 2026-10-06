@@ -16,7 +16,7 @@ must remain explicitly distinguished.
 | Subsystem | Original reference | Prototype owner | Current coverage | Important gaps |
 | --- | --- | --- | --- | --- |
 | Poses, offsets and animation chains | FRAM, AFRM, SHAP, SEQS resources | `pop2/sequence_runtime.py`, `pop2/animation_data.py`, sprite loaders | Original data and the interpreter operations used by tested paths | Unsupported operations fail; row-changing operations and callers are not a complete terrain engine |
-| Keyboard priority and action transitions | ReadKeyboard 2:55d2; GenCtrl 6:0c32, 1014, 11e4; sword controls 6:27e8 | `pop2/mac_input.py`, `pop2/control_mapping.py`, `pop2/scene_prototype.py` | Tested locomotion, one buffered command, legal transition poses, held-input repetition, native run-stop gates and short/long sheath | Special actors and environmental actions missing |
+| Keyboard priority and action transitions | ReadKeyboard 2:55d2; GenCtrl 6:0c32, 1014, 11e4, 074a; ClearControls 4:3e3a; sword controls 6:27e8 | `pop2/mac_input.py`, `pop2/control_mapping.py`, `pop2/scene_prototype.py` | Tested locomotion, bounded host buffer, legal transition poses, pose-44 input reset, held-input repetition, native run-stop gates and short/long sheath | Full native per-direction input latches/reset sites, special actors and environmental actions missing |
 | Frame cadence | ResetFrameVars 2:68c8 | `pop2/scene_prototype.py` | Five Macintosh ticks unarmed, six armed; deadlines avoid callback rounding drift | Timing is not a substitute for recovering the correct pose/branch list |
 | Level coordinates and lookup | LEVL; SetCharFloor 4:31fa; GetCharCol/GetRow; GetFCharX 4:3a72 | `pop2/terrain.py` | Original links, tile words, native column conversion and supporting feet | Dynamic tiles and special-level semantics missing |
 | Step clearance, warnings and sword preparation | GetBarrDistances 4:5eae; DoStepFwd 6:1276; draw/turn 6:2072, 26dc | `pop2/terrain.py`, input dispatch in `pop2/scene_prototype.py` | Ordinary floor/gap/wall subset, caution sequence, supported draw/turn offsets | Gate openness, special barriers and full wall-distance branches missing |
@@ -36,6 +36,11 @@ must remain explicitly distinguished.
 
 - Input chooses an action at its legal controller transition. It must not
   arbitrarily overwrite a pose halfway through a protected movement.
+- Buffering is conditional: native ClearControls discards directional requests.
+  Running-jump pose 44 resets them before the next held-key read. The host
+  single-command buffer is not a literal implementation of all native latches.
+  [INPUT_RECOVERY.md](INPUT_RECOVERY.md) records the reset/priority audit and
+  known executable mismatches; expected-failure tests do not certify parity.
 - Pose data moves the actor; terrain validates support and geometry. The
   renderer must not silently change position to hide a physics bug.
 - Sprite bounds in Pillow are inclusive. Native QuickDraw right/bottom edges

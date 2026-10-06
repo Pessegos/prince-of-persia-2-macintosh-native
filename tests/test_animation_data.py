@@ -155,6 +155,21 @@ class AnimationDataTests(unittest.TestCase):
         scene.render = lambda: None
         return scene
 
+    def running_jump_scene(self, facing=1):
+        direction = 1 if facing else -1
+        scene = self.sword_scene()
+        scene.sequence_state.facing = facing
+        scene.start_sequence(RUN_CYCLE_SEQUENCE)
+        scene.run_active = True
+        scene.run_direction = direction
+        scene.held_directions = [direction]
+        scene.sample_keyboard()
+        scene.up_key(None)
+        scene.advance_animation()
+        scene.advance_animation()
+        self.assertEqual((scene.sequence_state.sequence_id, scene.action), (4, 34))
+        return scene
+
     def guarded_sword_scene(self, facing=0):
         scene = self.sword_scene()
         scene.sword_drawn = True
@@ -791,7 +806,82 @@ class AnimationDataTests(unittest.TestCase):
         self.assertEqual(scene.sequence_state.sequence_id, RUN_CYCLE_SEQUENCE)
         self.assertTrue(scene.run_active)
 
-    def test_up_repressed_during_running_jump_queues_one_running_jump(self):
+    def test_opposite_arrow_with_held_up_during_running_jump_keeps_running_context(self):
+        for facing in (0, 1):
+            direction = 1 if facing else -1
+            for pose in range(34, 45):
+                with self.subTest(facing=facing, pose=pose):
+                    scene = self.running_jump_scene(facing)
+                    for _ in range(pose - 34):
+                        scene.advance_animation()
+                    before = vars(scene.sequence_state).copy()
+                    scene.horizontal_key(None, -direction, True)
+                    self.assertEqual(vars(scene.sequence_state), before)
+                    if facing:
+                        self.assertEqual(
+                            scene.pending_action, BufferedCommand("jump", -1, running=True)
+                        )
+                    else:
+                        # ReadKeyboard gives Left priority over Right.
+                        self.assertIsNone(scene.pending_action)
+                    actions = [scene.action]
+                    for _ in range(46 - pose):
+                        scene.advance_animation()
+                        actions.append(scene.action)
+                    self.assertEqual(
+                        actions, [*range(pose, 45), 7, 53 if facing else 34]
+                    )
+                    self.assertEqual(
+                        scene.sequence_state.sequence_id,
+                        RUNNING_DRIFT_SEQUENCE if facing else RUN_JUMP_SEQUENCE,
+                    )
+                    self.assertIsNone(scene.pending_action)
+
+    def test_releasing_left_before_running_jump_lands_restores_right_up_chord(self):
+        for pose in range(34, 45):
+            with self.subTest(pose=pose):
+                scene = self.running_jump_scene()
+                for _ in range(pose - 34):
+                    scene.advance_animation()
+                before = vars(scene.sequence_state).copy()
+                scene.horizontal_key(None, -1, True)
+                scene.horizontal_key(None, -1, False)
+                self.assertEqual(vars(scene.sequence_state), before)
+                self.assertEqual(
+                    scene.pending_action, BufferedCommand("jump", 1, running=True)
+                )
+                actions = [scene.action]
+                for _ in range(46 - pose):
+                    scene.advance_animation()
+                    actions.append(scene.action)
+                self.assertEqual(actions, [*range(pose, 45), 7, 34])
+                self.assertIsNone(scene.pending_action)
+
+    def test_fresh_opposite_jump_chord_uses_first_legal_running_reversal_pose(self):
+        for up_first in (False, True):
+            with self.subTest(up_first=up_first):
+                scene = self.sword_scene()
+                scene.sequence_state.facing = 1
+                scene.start_sequence(RUN_CYCLE_SEQUENCE)
+                scene.run_active = True
+                scene.run_direction = 1
+                scene.held_directions = [1]
+                scene.sample_keyboard()
+                scene.advance_animation()
+                self.assertEqual(scene.action, 7)
+                if up_first:
+                    scene.up_key(None)
+                    scene.horizontal_key(None, -1, True)
+                else:
+                    scene.horizontal_key(None, -1, True)
+                    scene.up_key(None)
+                scene.advance_animation()
+                self.assertEqual(
+                    (scene.sequence_state.sequence_id, scene.action), (6, 53)
+                )
+                self.assertIsNone(scene.pending_action)
+
+    def test_up_repressed_during_running_jump_must_remain_held_past_landing_reset(self):
         for facing, direction in ((0, -1), (1, 1)):
             for pose in range(34, 45):
                 for held in (False, True):
@@ -827,16 +917,57 @@ class AnimationDataTests(unittest.TestCase):
                             scene.advance_animation()
                             actions.append(scene.action)
 
-                        self.assertEqual(actions, [*range(pose, 45), 7, 34])
-                        self.assertEqual(scene.sequence_state.sequence_id, RUN_JUMP_SEQUENCE)
+                        self.assertEqual(actions, [*range(pose, 45), 7, 34 if held else 8])
+                        self.assertEqual(
+                            scene.sequence_state.sequence_id,
+                            RUN_JUMP_SEQUENCE if held else RUN_CYCLE_SEQUENCE,
+                        )
                         self.assertIsNone(scene.pending_action)
                         self.assertTrue(scene.run_active)
-                        if not held:
-                            following = []
-                            for _ in range(12):
-                                scene.advance_animation()
-                                following.append(scene.action)
-                            self.assertEqual(following, [*range(35, 45), 7, 8])
+
+    def test_running_jump_discards_released_opposite_chord_at_final_landing_pose(self):
+        for pose in range(34, 45):
+            with self.subTest(pose=pose):
+                scene = self.running_jump_scene()
+                for _ in range(pose - 34):
+                    scene.advance_animation()
+                scene.horizontal_key(None, -1, True)
+                scene.set_key_state("up", False)
+                scene.horizontal_key(None, 1, False)
+                scene.horizontal_key(None, -1, False)
+                self.assertIsNotNone(scene.pending_action)
+                actions = [scene.action]
+                for _ in range(46 - pose):
+                    scene.advance_animation()
+                    actions.append(scene.action)
+                self.assertEqual(actions, [*range(pose, 45), 7, 53])
+                self.assertEqual(scene.sequence_state.sequence_id, RUN_STOP_SEQUENCE)
+                self.assertIsNone(scene.pending_action)
+                for _ in range(12):
+                    scene.advance_animation()
+                self.assertEqual((scene.action, scene.sequence_state.facing), (15, 1))
+
+    def test_running_jump_landing_clears_directional_requests_but_not_ctrl(self):
+        for command in (
+            BufferedCommand("jump", -1, running=True),
+            BufferedCommand("horizontal", -1, "turn"),
+            BufferedCommand("crouch"),
+            BufferedCommand("crawl", 1),
+            BufferedCommand("sword_draw"),
+        ):
+            with self.subTest(command=command):
+                scene = self.running_jump_scene()
+                for _ in range(10):
+                    scene.advance_animation()
+                self.assertEqual(scene.action, 44)
+                scene.pending_action = command
+                scene.update_running_jump_controls()
+                self.assertEqual(
+                    scene.pending_action, command if command.kind == "sword_draw" else None
+                )
+                self.assertEqual(scene.held_directions, [1])
+                self.assertTrue(scene.up_held)
+                self.assertEqual((scene.action, scene.sequence_state.current_y), (44, 0))
 
     def test_releasing_up_at_landing_prevents_next_running_jump(self):
         scene = self.scene(sequence_id=RUN_CYCLE_SEQUENCE, facing=1, running=True)
