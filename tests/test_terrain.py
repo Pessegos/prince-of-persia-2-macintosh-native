@@ -377,6 +377,7 @@ class TerrainTests(unittest.TestCase):
         self.assertIn(63, speeds)
         self.assertEqual(runtime.state.action, 185)
         self.assertEqual(floor_y(motion.row) + runtime.state.current_y, 730)
+        self.assertEqual(runtime.state.sound_events.count(7), 1)
 
     def test_landing_velocity_thresholds_and_damage(self):
         for velocity, sequence, damage, dead in ((12, 17, 0, False), (49, 17, 0, False),
@@ -392,6 +393,8 @@ class TerrainTests(unittest.TestCase):
                 self.assertEqual(events[-1].damage, damage)
                 self.assertEqual(motion.dead, dead)
                 self.assertEqual(runtime.state.vertical_velocity, 0)
+                cue = 7 if dead else 13 if damage else 296
+                self.assertEqual(runtime.state.sound_events.count(cue), 1)
 
     def test_armed_soft_landing_uses_original_sequence(self):
         runtime = self.runtime(12, x=250)
@@ -416,6 +419,21 @@ class TerrainTests(unittest.TestCase):
                     self.assertEqual(events[0].kind, "wall")
                     self.assertFalse(motion.falling)
                     self.assertEqual(runtime.state.horizontal_velocity, 0)
+                    self.assertEqual(10 in runtime.state.sound_events, front)
+
+    def test_unarmed_wall_bump_does_not_request_sword_contact(self):
+        for action, sequence in ((7, 47), (40, 46)):
+            with self.subTest(action=action):
+                runtime = self.runtime(x=250)
+                runtime.state.action = action
+                runtime.state.sound_events.clear()
+                motion = TerrainMotion(1, 1)
+                with patch.object(self.map, "wall_correction", return_value=245):
+                    events = RooftopPhysics(self.map).advance(
+                        motion, runtime, 250, (240, 160, 260, 226), cut_enabled=False)
+                self.assertEqual(runtime.state.sequence_id, sequence)
+                self.assertEqual(events[0].kind, "wall")
+                self.assertNotIn(10, runtime.state.sound_events)
 
     def test_wall_sweep_cannot_tunnel_through_tile(self):
         # Room 5 row 1 has a full wall from column 5.

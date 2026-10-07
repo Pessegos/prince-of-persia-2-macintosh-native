@@ -171,7 +171,7 @@ def extract_audio(image, program_bytes, prince_bytes, directory, progress=lambda
         "bank": struct.unpack_from(">h", level, 0x2186)[0],
         "groups": list(struct.unpack_from(">960h", level, 0x424a)),
     }
-    required = set(LEVEL_ONE_SONGS) | {7, 8, 9, 10, 11, 12, 30, 31, 34, 35, 36, 294, 295, 296}
+    required = set(LEVEL_ONE_SONGS) | {7, 8, 9, 10, 11, 12, 13, 14, 30, 31, 34, 35, 36, 294, 295, 296}
     missing = sorted(cue for cue in required if not manifest["cues"].get(str(cue), {}).get("file"))
     if missing:
         raise ValueError(f"Game audio is incomplete (missing cues: {missing})")

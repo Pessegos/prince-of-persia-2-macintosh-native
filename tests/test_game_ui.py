@@ -128,7 +128,10 @@ class GameWindowTests(unittest.TestCase):
         self.assertGreater(scene.pause_text.width, 50)
         image = ImageTk.getimage(scene.image_ref)
         colors = {color for _count, color in image.getcolors(image.width * image.height)}
-        self.assertIn((255, 255, 85, 255), colors)
+        self.assertIn((253, 255, 168, 255), colors)
+        pause_colors = {color for _count, color in scene.pause_text.getcolors() if color[3]}
+        restart_colors = {color for _count, color in scene.restart_text.getcolors() if color[3]}
+        self.assertEqual(pause_colors, restart_colors)
         last_guard_at = scene.combat.last_guard_at
         scene.escape_release()
         with patch("pop2.scene_prototype.time.perf_counter", return_value=120):
@@ -590,7 +593,7 @@ class GameWindowTests(unittest.TestCase):
         scene.set_paused(True)
         image = scene.native_viewport
         yellow = [(x, y) for y in range(365, 384) for x in range(120, 390)
-                  if image.getpixel((x, y))[:3] == (255, 255, 85)]
+                  if image.getpixel((x, y))[:3] == (253, 255, 168)]
         self.assertEqual((min(y for x, y in yellow), max(y for x, y in yellow)), (369, 379))
 
     def test_direction_pressed_during_sheathing_starts_run_without_an_idle_frame(self):

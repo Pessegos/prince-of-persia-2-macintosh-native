@@ -65,11 +65,13 @@ Non-sequence events use their ordinary recovered cue sites:
 | --- | --- | --- |
 | Window glass | TriggerRoofGlass 23:151e | 36 |
 | Ordinary landing | HitFloor 6:039c | 296 |
-| Damaging/fatal landing | HitFloor 6:0280 onward | 7 |
+| Damaging landing | HitFloor 6:03fe | 13 |
+| Fatal landing / non-water void death | HitFloor 6:0436; Move 4:36ba | 7 |
 | Long Prince fall outside harbor rooms 15/16/19 | Falling 6:00ae; AddKidScream 5:4b5a | 8 |
 | Ordinary guard fall / tumble | Falling 6:00d4; SEQS:185 | 30 |
 | Ledge catch | 4:38c8 | 9 |
-| Wall contact / blocked attacker pose 167 | 4:5a54; AddSFX 5:4cf6 | 10 |
+| Sword-forward wall contact (SEQS:64) / blocked attacker pose 167 | 4:5a3c-5a54; AddSFX 5:4cf6 | 10 |
+| Prince draws sword | DoKidEngarde 6:2126-2136 | 14 |
 | Parry | 6:5af4/5b18 | 11 |
 | Prince / guard hit | CheckStab 6:54dc/550e | 12 / 31 |
 | Water splash | SetupSplash, CODE:23 | 35 |
@@ -78,6 +80,16 @@ SEQS opcode -15 forwards explicit sounds and alternates footsteps 294/295
 through callback 1. Landing or catching stops the Prince's long-fall scream.
 Offscreen/peaceful guard events are drained without playback, so they cannot
 accumulate and sound on a later visit.
+
+Unarmed wall bumps do not request cue 10: `Collide` calls it only for the
+sword-forward response (64), not ordinary responses 45/46/47 or retreat 65.
+Ground impacts are emitted in the shared terrain handler, including fatal
+landings, rather than inferred from a surviving actor's `land` event.
+
+An independent sword-swing cue is not yet confirmed. The inspected strike
+selector (6:2780-2816) and ordinary strike sequences 75/203-205 contain no
+explicit sound request. Cue 15 occurs in jump sequence 14; it must not be
+assigned to sword attacks merely because it follows the draw cue numerically.
 
 ## Death And Retry
 

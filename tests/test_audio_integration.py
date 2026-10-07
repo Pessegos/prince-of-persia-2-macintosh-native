@@ -144,6 +144,42 @@ class SceneAudioTests(unittest.TestCase):
         self.tick()
         self.assertNotEqual(self.backend.remaining, before)
 
+    def test_drawing_sword_plays_once_at_the_start_of_the_action(self):
+        scene = self.scene
+        scene.jump_to_room(1, row=1, x=300, facing=0)
+        scene.start_sword_action("sword_draw")
+        self.assertEqual(self.effects(), [14])
+        self.tick(10)
+        self.assertEqual(self.effects(), [14])
+
+    def test_fatal_ground_impact_stops_the_scream_and_plays_the_death_impact(self):
+        scene = self.scene
+        scene.jump_to_room(1, row=1, x=300, facing=0)
+        scene.audio.add_sound(8)
+        scene.audio.flush()
+        scene.physics.select(scene.sequence_runtime, 12)
+        scene.sequence_state.current_y = -1
+        scene.sequence_state.vertical_velocity = 63
+        scene.terrain_motion.falling = True
+        scene.advance_terrain(scene.player_x)
+        scene.advance_audio()
+        self.assertFalse(scene.combat.player.alive)
+        self.assertEqual(self.effects(), [8, 7])
+        scene.audio.playback.stop.assert_any_call("effect")
+        self.assertFalse(scene.sequence_state.sound_events)
+
+    def test_surviving_a_hard_landing_uses_the_hurt_impact_not_the_death_sound(self):
+        scene = self.scene
+        scene.jump_to_room(1, row=1, x=300, facing=0)
+        scene.physics.select(scene.sequence_runtime, 12)
+        scene.sequence_state.current_y = -1
+        scene.sequence_state.vertical_velocity = 50
+        scene.terrain_motion.falling = True
+        scene.advance_terrain(scene.player_x)
+        scene.advance_audio()
+        self.assertEqual(scene.combat.player.life, 2)
+        self.assertEqual(self.effects(), [13])
+
     def test_warp_stops_existing_effects_and_catch_plays_the_native_cue(self):
         scene = self.scene
         scene.restart_opening()

@@ -530,6 +530,7 @@ class RooftopPhysics:
                 state.animation_state, state.action = 1, 185
                 state.sequence_id, state.cursor = 22, len(runtime.sequences[22]) - 1
                 motion.dead = True
+                state.sound_events.append(7)
                 return (TerrainEvent("death"),)
             return ()
         if motion.falling:
@@ -581,6 +582,9 @@ class RooftopPhysics:
                                 46 if action in (24, 25) or 40 <= action < 43
                                 or 102 <= action <= 106 else 47)
                     self.select(runtime, sequence)
+                    # Collide 4:5a3c-5a54 requests metal contact only for SEQS:64.
+                    if sequence == 64:
+                        state.sound_events.append(10)
                 else:
                     self.select(runtime, 45)
                     motion.falling = True
@@ -600,8 +604,6 @@ class RooftopPhysics:
                             bounds = (bounds[0] + shift, bounds[1],
                                       bounds[2] + shift, bounds[3])
             events.append(TerrainEvent("wall"))
-            if state.sequence_id != 56:
-                state.sound_events.append(10)
         if cut_enabled and self.cut_horizontal(motion, state, bounds):
             events.append(TerrainEvent("room"))
 
@@ -639,6 +641,7 @@ class RooftopPhysics:
             state.vertical_velocity = state.horizontal_velocity = 0
             motion.dead = True
             self.select(runtime, 22)
+            state.sound_events.append(7)
             events.append(TerrainEvent("death"))
             return tuple(events)
 
@@ -664,6 +667,8 @@ class RooftopPhysics:
                 motion.falling = False
                 motion.dead = fatal
                 self.select(runtime, sequence)
+                # HitFloor 6:039c/03fe/0436 distinguishes safe, hurt and fatal impacts.
+                state.sound_events.append(7 if fatal else 13 if velocity >= 50 else 296)
                 events.append(TerrainEvent("death" if motion.dead else "land",
                                            int(not fatal and 50 <= velocity < 63)))
                 break

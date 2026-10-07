@@ -80,7 +80,7 @@ through pygame; the game does not generate diagnostic recordings.
 | Down | Crouch, descend a ledge, or sheath the sword |
 | Shift | Retain a ledge grip |
 | Ctrl | Draw the sword or attack |
-| Esc | Pause; any new key or mouse click resumes |
+| Esc | Pause; ordinary keys or mouse clicks resume (not modifiers, F-keys or system shortcuts) |
 | Alt + Enter | Toggle fullscreen |
 | F2 | Developer menu: screen selection and peaceful mode |
 | F5 | Restart the opening encounter |

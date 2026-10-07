@@ -171,9 +171,10 @@ class ScenePrototype(WindowControls):
         self.attachment_frames = parse_aframe_records(self.kid["AFRM"][25001]["data"])
         prince = load_resource_file("Prince.rsrc")
         self.ui_font = MacintoshFont(prince["NFNT"][23331]["data"])
-        self.pause_text = self.ui_font.text("Game Paused")
         # DrawRestartMessage uses palette index 6; match its displayed RGB.
-        self.restart_text = self.ui_font.text("Press key to continue", (253, 255, 168, 255))
+        hud_text_color = (253, 255, 168, 255)
+        self.pause_text = self.ui_font.text("Game Paused", hud_text_color)
+        self.restart_text = self.ui_font.text("Press key to continue", hud_text_color)
         self.sword_shapes = prince["SHAP"]
         self.first_sword_shape_id = int.from_bytes(
             prince["SHPL"][1000]["data"][:2], "big"
@@ -370,6 +371,7 @@ class ScenePrototype(WindowControls):
                     motion.room, motion.row, state, self.frames[state.action], self.player_bounds())
                 self.player_x += offset * (1 if state.facing else -1)
             self.sword_drawn = True
+            self.sequence_state.sound_events.append(14)
         elif kind == "sword_sheathe":
             self.sword_sheathing = True
             # PutSwordAway (6:2594) clears sword mode before the first pose;
@@ -1570,10 +1572,9 @@ class ScenePrototype(WindowControls):
             self.status.set(f"Screen {self.screen_label(self.room_id)}")
         self.combat.player.row = motion.row
         for event in events:
-            if event.kind == "land":
+            if event.kind in ("land", "death"):
                 if getattr(self, "audio", None) is not None:
                     self.audio.stop_sound(8)
-                self.sequence_state.sound_events.append(7 if event.damage else 296)
             if event.kind in ("fall", "wall", "death"):
                 # The collision/fall sequence has interrupted PutSwordAway.
                 # Its Python-side lock must not outlive that animation.

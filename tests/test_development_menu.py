@@ -241,10 +241,10 @@ class MenuSceneTests(unittest.TestCase):
         self.assertIn("DevelopmentInput", scene.root.bindtags())
         self.assertIn("DevelopmentInput", scene.canvas.bindtags())
 
-    def test_any_key_resumes_pause_without_gameplay_or_key_repeat_until_release(self):
+    def test_ordinary_keys_resume_pause_without_gameplay_or_repeat_until_release(self):
         scene = self.scene
         scene.jump_to_screen("5")
-        for key in ("Left", "Right", "Up", "Down", "Control_L", "Shift_L", "a", "space", "Return"):
+        for key in ("Left", "Right", "Up", "Down", "a", "space", "Return", "Tab", "KP_0"):
             with self.subTest(key=key):
                 scene.set_paused(True)
                 before = scene.sequence_state.__dict__.copy()
@@ -259,6 +259,45 @@ class MenuSceneTests(unittest.TestCase):
                 self.assertIsNone(scene.pending_action)
                 self.assertEqual(scene.dev_key_release(event), "break")
                 self.assertIsNone(scene.dev_key_press(event))
+
+    def test_command_lock_function_and_media_keys_leave_the_game_paused(self):
+        scene = self.scene
+        scene.set_paused(True)
+        keys = ("Control_L", "Control_R", "Shift_L", "Alt_L", "Alt_R", "Super_L",
+                "Caps_Lock", "Num_Lock", "Scroll_Lock", "Pause", "Print", "F1", "F5",
+                "F12", "XF86AudioMute", "XF86AudioRaiseVolume", "XF86AudioPlay")
+        for key in keys:
+            with self.subTest(key=key):
+                self.assertEqual(scene.dev_key_press(self.event(key)), "break")
+                self.assertTrue(scene.paused)
+                scene.dev_key_release(self.event(key))
+
+    def test_system_shortcuts_do_not_resume_but_shifted_text_does(self):
+        scene = self.scene
+        scene.set_paused(True)
+        for key, state in (("Tab", 0x8), ("Tab", 0x20000), ("a", 0x4), ("d", 0x40)):
+            with self.subTest(key=key, state=state):
+                event = self.event(key, state)
+                self.assertEqual(scene.dev_key_press(event), "break")
+                self.assertTrue(scene.paused)
+                scene.dev_key_release(event)
+        scene.dev_key_press(self.event("Alt_L"))
+        self.assertEqual(scene.dev_key_press(self.event("Tab")), "break")
+        self.assertTrue(scene.paused)
+        scene.clear_keys(SimpleNamespace())
+        event = self.event("A", 1)
+        event.char = "A"
+        self.assertEqual(scene.dev_key_press(event), "break")
+        self.assertFalse(scene.paused)
+
+    def test_alt_enter_remains_available_without_resuming_pause(self):
+        scene = self.scene
+        scene.set_paused(True)
+        self.assertIsNone(scene.dev_key_press(self.event("Return", 0x20000)))
+        scene.toggle_fullscreen()
+        self.assertTrue(scene.fullscreen)
+        self.assertTrue(scene.paused)
+        scene.toggle_fullscreen()
 
     def test_mouse_buttons_resume_pause_but_do_not_close_development_menu(self):
         scene = self.scene

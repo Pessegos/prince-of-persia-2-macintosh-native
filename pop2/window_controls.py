@@ -9,6 +9,21 @@ from pop2.game_ui import DevelopmentMenu, fit_viewport, viewport_point
 from pop2.render_opening import VIEWPORT_HEIGHT, VIEWPORT_WIDTH
 
 
+def is_resume_key(event, held_keys=()):
+    command_keys = {"Control_L", "Control_R", "Alt_L", "Alt_R", "Meta_L", "Meta_R",
+                    "Super_L", "Super_R", "Win_L", "Win_R"}
+    if event.state & (0x4 | 0x8 | 0x40 | 0x20000) or command_keys.intersection(held_keys):
+        return False
+    key = event.keysym
+    char = getattr(event, "char", "")
+    return (bool(char) and char.isprintable() or len(key) == 1 and key.isprintable()
+            or key in {"space", "Return", "Tab", "BackSpace", "Delete", "Insert",
+                       "Left", "Right", "Up", "Down", "Home", "End", "Prior", "Next",
+                       "KP_Enter", "KP_Space", "KP_Tab", "KP_Add", "KP_Subtract",
+                       "KP_Multiply", "KP_Divide", "KP_Decimal", "KP_Equal"}
+            or key.startswith("KP_") and key[3:].isdigit())
+
+
 class WindowControls:
     """Window callbacks shared by the rooftop scene and animation preview."""
 
@@ -210,11 +225,12 @@ class WindowControls:
         if event.keysym in self.pause_resume_keys:
             return "break"
         if self.dev_menu is None:
-            if self.paused and event.keysym not in ("Escape", "F2"):
-                self.set_paused(False)
-                self.pause_resume_keys.update(self.window_keys_down)
-                return "break"
             fullscreen_key = event.keysym == "Return" and event.state & (0x8 | 0x20000)
+            if self.paused and event.keysym not in ("Escape", "F2") and not fullscreen_key:
+                if is_resume_key(event, self.window_keys_down):
+                    self.set_paused(False)
+                    self.pause_resume_keys.update(self.window_keys_down)
+                return "break"
             if (not self.paused and self.death.counter >= 0
                     and event.keysym not in ("F2", "F5", "Alt_L", "Alt_R")
                     and not fullscreen_key):

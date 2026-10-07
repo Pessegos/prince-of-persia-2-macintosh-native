@@ -772,7 +772,6 @@ class CombatEncounter:
             if event.kind == "death":
                 guard.life = 0
             elif event.kind == "land":
-                guard.state.sound_events.append(7 if event.damage else 296)
                 guard.life = max(0, guard.life - event.damage)
                 guard.sword_drawn = True
         if guard.room != old_room:
