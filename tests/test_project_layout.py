@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -45,6 +46,24 @@ class ProjectLayoutTests(unittest.TestCase):
             for owner in filter(None, row["prototype_owner"].split(";")):
                 with self.subTest(owner=owner):
                     self.assertTrue((PROJECT_DIR / owner).is_file())
+
+    def test_death_and_column_rules_import_without_original_game_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            shutil.copytree(PROJECT_DIR / "pop2", project / "pop2",
+                            ignore=shutil.ignore_patterns("__pycache__"))
+            script = (
+                "import sys; sys.path.insert(0, '.'); "
+                "from pop2.rebirth import Checkpoint, DeathState; "
+                "from pop2.opponent_generation import character_column; "
+                "assert DeathState().counter == -1; "
+                "assert character_column(51) == 0; "
+                "assert Checkpoint(1, 0, 0).matches(0, 0, 51, 0, True)"
+            )
+            result = subprocess.run([sys.executable, "-I", "-c", script],
+                                    cwd=project, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((project / "assets").exists())
 
 
 if __name__ == "__main__":

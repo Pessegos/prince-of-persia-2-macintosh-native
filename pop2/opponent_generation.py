@@ -3,9 +3,6 @@
 from dataclasses import dataclass
 import struct
 
-from pop2.enemy_profiles import ENEMY_DATA
-
-
 # CODE:3 IsWall / IsObstacle / IsEmpty; ordinary rooftop actors only.
 WALL_TILES = frozenset((20, 2, 7, 25, 43))
 OBSTACLE_TILES = frozenset((11, 15, 26, 12, 13, 24))
@@ -81,6 +78,8 @@ class OpponentGenerationPoint:
 
     @property
     def x(self):
+        from pop2.enemy_profiles import ENEMY_DATA
+
         return ENEMY_DATA["generation_native_x"][self.column] - 207
 
     @property
