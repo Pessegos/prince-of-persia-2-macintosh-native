@@ -6,6 +6,7 @@ import tkinter as tk
 
 from PIL import Image, ImageTk
 
+from pop2.game_menu import GameMenu
 from pop2.game_ui import DevelopmentMenu, fit_viewport, viewport_point
 from pop2.render_opening import VIEWPORT_HEIGHT, VIEWPORT_WIDTH
 
@@ -43,6 +44,9 @@ class WindowControls:
     """Window callbacks shared by the rooftop scene and animation preview."""
 
     def create_window(self, title, scale=2):
+        audio = getattr(self, "audio", None)
+        self.sound_enabled = audio.sound_enabled if audio is not None else True
+        self.music_enabled = audio.music_enabled if audio is not None else True
         self.root = tk.Tk()
         self.root.title(title)
         self.root.resizable(True, True)
@@ -140,6 +144,10 @@ class WindowControls:
         except tk.TclError:
             return
         if focused is None or focused.winfo_toplevel() is not self.root:
+            if getattr(self, "game_menu", None) is not None:
+                self.game_was_paused = True
+            if getattr(self, "dev_menu", None) is not None:
+                self.dev_was_paused = True
             self.set_paused(True)
 
     def cancel_focus_pause(self, event):
@@ -150,7 +158,9 @@ class WindowControls:
     def escape_key(self, _event=None):
         if not self.escape_held:
             self.escape_held = True
-            if self.dev_menu is not None:
+            if self.game_menu is not None:
+                self.apply_game_action(self.game_menu.key("Escape"))
+            elif self.dev_menu is not None:
                 self.apply_dev_action(self.dev_menu.key("Escape"))
             else:
                 self.set_paused(not self.paused)
@@ -191,7 +201,7 @@ class WindowControls:
             self.status_label.pack_forget()
             self.root.attributes("-fullscreen", True)
             self.fullscreen = True
-            self.canvas.configure(cursor="" if self.dev_menu is not None else "none")
+            self.canvas.configure(cursor="" if self.modal_open() else "none")
         else:
             self.root.attributes("-fullscreen", False)
             self.fullscreen = False
@@ -213,15 +223,19 @@ class WindowControls:
             return "break"
         if self.level_map is None:
             return "break"
+        if self.game_menu is not None and self.game_menu.page == "confirm":
+            return "break"
         entries = self.dev_screens()
         if not entries:
             return "break"
         current = self.screen_label(self.room_id)
         screens = tuple(entries)
+        was_paused = self.game_was_paused if self.game_menu is not None else self.paused
+        self.game_menu = None
         self.dev_menu = DevelopmentMenu(
             screens, screens.index(current) if current in entries else 0, self.peaceful
         )
-        self.dev_was_paused = self.paused
+        self.dev_was_paused = was_paused
         self.set_paused(True)
         self.clear_keys(None)
         self.pause_resume_keys.update(self.window_keys_down)
@@ -257,12 +271,122 @@ class WindowControls:
         else:
             self.render()
 
+    def modal_open(self):
+        return self.dev_menu is not None or self.game_menu is not None
+
+    def refresh_game_menu(self):
+        if self.game_menu is not None:
+            self.game_menu.sound = self.sound_enabled
+            self.game_menu.music = self.music_enabled
+            self.game_menu.fullscreen = self.fullscreen
+
+    def open_game_menu(self, page="menu"):
+        if self.game_menu is not None:
+            if self.game_menu.page != "confirm":
+                if page == "menu":
+                    self.close_game_menu()
+                else:
+                    self.game_menu.show_page(page)
+                    self.pause_resume_keys.update(self.window_keys_down)
+                    self.render()
+            return
+        self.game_was_paused = self.dev_was_paused if self.dev_menu is not None else self.paused
+        self.dev_menu = None
+        self.game_menu = GameMenu(page=page, return_to_menu=page == "menu",
+                                  development=self.level_map is not None)
+        self.set_paused(True)
+        self.clear_keys(None)
+        self.pause_resume_keys.update(self.window_keys_down)
+        self.canvas.configure(cursor="")
+        self.render()
+
+    def close_game_menu(self, resume=False):
+        if self.game_menu is None:
+            return
+        self.game_menu = None
+        self.clear_keys(None)
+        self.canvas.configure(cursor="none" if self.fullscreen else "")
+        self.set_paused(False if resume else self.game_was_paused)
+        self.pause_resume_keys.update(self.window_keys_down)
+        self.render()
+
+    def apply_game_action(self, action):
+        if action in ("close", "resume"):
+            self.close_game_menu(resume=action == "resume")
+        elif action in ("confirm_new", "about"):
+            self.open_game_menu("confirm" if action == "confirm_new" else "about")
+        elif action in ("new_game", "restart"):
+            self.set_paused(True)
+            (self.restart_opening if action == "new_game" else self.restart_level)()
+            if self.game_menu is not None:
+                self.close_game_menu(resume=True)
+            else:
+                if self.dev_menu is not None:
+                    self.dev_was_paused = False
+                    self.close_dev_mode()
+                self.set_paused(False)
+            self.pause_resume_keys.update(self.window_keys_down)
+        elif action in ("sound", "music"):
+            name = action + "_enabled"
+            enabled = not getattr(self, name)
+            setattr(self, name, enabled)
+            if self.audio is not None:
+                getattr(self.audio, "set_" + name)(enabled)
+            self.render()
+        elif action == "fullscreen":
+            self.toggle_fullscreen()
+            self.render()
+        elif action == "development":
+            self.open_dev_mode()
+        elif action in ("save", "open", "end", "hall"):
+            if self.game_menu is None:
+                self.open_game_menu()
+            self.game_menu.focus = next(i for i, item in enumerate(self.game_menu.items)
+                                        if item.action == action)
+            self.render()
+        else:
+            self.render()
+
     def dev_key_press(self, event):
+        repeated = event.keysym in self.window_keys_down or (
+            len(event.keysym) == 1 and event.keysym.swapcase() in self.window_keys_down)
         self.window_keys_down.add(event.keysym)
         if event.keysym in self.pause_resume_keys:
             return "break"
+        fullscreen_key = event.keysym == "Return" and event.state & (0x8 | 0x20000)
+        if fullscreen_key:
+            if repeated:
+                return "break"
+            self.pause_resume_keys.add(event.keysym)
+            return None
+        if event.keysym == "F1":
+            if not repeated:
+                self.open_game_menu()
+            return "break"
+        alt = event.state & (0x8 | 0x20000) or {"Alt_L", "Alt_R"}.intersection(self.window_keys_down)
+        command = {"n": "confirm_new", "r": "restart", "t": "sound", "m": "music",
+                   "s": "save", "o": "open", "e": "end", "h": "hall", "v": "about"}.get(
+                       event.keysym.lower()) if alt and not event.state & (0x4 | 0x40) else None
+        if command is not None:
+            if not repeated and (self.game_menu is None or self.game_menu.page != "confirm"):
+                self.apply_game_action(command)
+                self.pause_resume_keys.add(event.keysym)
+            return "break"
+        if self.game_menu is not None:
+            if event.keysym == "F2" and self.game_menu.page != "confirm":
+                return None
+            if event.keysym == "Escape":
+                return self.escape_key(event)
+            if alt or event.state & (0x4 | 0x40):
+                return "break"
+            if repeated and event.keysym in ("Return", "KP_Enter", "space"):
+                return "break"
+            page = self.game_menu.page
+            self.apply_game_action(self.game_menu.key(event.keysym, backwards=bool(event.state & 1)))
+            if self.game_menu is None or self.game_menu.page != page:
+                self.pause_resume_keys.update(self.window_keys_down)
+            return "break"
         if self.dev_menu is None:
-            fullscreen_key = event.keysym == "Return" and event.state & (0x8 | 0x20000)
             if self.paused and event.keysym not in ("Escape", "F2") and not fullscreen_key:
                 if is_resume_key(event, self.window_keys_down):
                     self.set_paused(False)
@@ -278,8 +402,6 @@ class WindowControls:
             return None
         if event.keysym == "Escape":
             return self.escape_key(event)
-        if event.keysym == "Return" and event.state & (0x8 | 0x20000):
-            return None
         self.apply_dev_action(
             self.dev_menu.key(event.keysym, backwards=bool(event.state & 1))
         )
@@ -289,14 +411,18 @@ class WindowControls:
 
     def dev_key_release(self, event):
         self.window_keys_down.discard(event.keysym)
+        released = {event.keysym}
+        if len(event.keysym) == 1:
+            released.add(event.keysym.swapcase())
+            self.window_keys_down.discard(event.keysym.swapcase())
         if event.keysym == "F2":
             self.dev_toggle_held = False
         elif event.keysym == "Escape":
             self.escape_release(event)
-        if event.keysym in self.pause_resume_keys:
-            self.pause_resume_keys.remove(event.keysym)
+        if released.intersection(self.pause_resume_keys):
+            self.pause_resume_keys.difference_update(released)
             return "break"
-        if self.dev_menu is not None:
+        if self.modal_open():
             return "break"
         return None
 
@@ -306,19 +432,24 @@ class WindowControls:
         )
 
     def dev_click(self, event):
-        if self.dev_menu is None:
+        if not self.modal_open():
             return "break" if self.paused else None
         if getattr(event, "num", 1) != 1:
             return "break"
         point = self.dev_pointer(event)
         if point is not None:
-            self.apply_dev_action(self.dev_menu.click(*point))
+            if self.game_menu is not None:
+                self.apply_game_action(self.game_menu.click(*point))
+                self.pause_resume_keys.update(self.window_keys_down)
+            else:
+                self.apply_dev_action(self.dev_menu.click(*point))
         return "break"
 
     def dev_hover(self, event):
-        if self.dev_menu is not None:
+        menu = self.game_menu or self.dev_menu
+        if menu is not None:
             point = self.dev_pointer(event)
-            if point is not None and self.dev_menu.hover(*point):
+            if point is not None and menu.hover(*point):
                 self.render()
 
     def set_peaceful(self, peaceful):

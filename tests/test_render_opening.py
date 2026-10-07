@@ -74,6 +74,7 @@ class OpeningRoomTests(unittest.TestCase):
         scene.death = DeathState()
         scene.paused = False
         scene.dev_menu = None
+        scene.game_menu = None
         scene.background = self.room.background
         scene.foreground = self.room.foreground
         scene.kid = self.kid

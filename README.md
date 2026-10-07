@@ -82,9 +82,21 @@ through pygame; the game does not generate diagnostic recordings.
 | Ctrl | Draw the sword or attack |
 | Esc | Pause; text keys or arrows resume (not mouse clicks, modifiers, F-keys, multimedia, Insert/Delete/Home/End/Page Up/Page Down or system shortcuts) |
 | Alt + Enter | Toggle fullscreen |
+| F1 | Game menu with command shortcuts |
+| Alt + N | New game, after confirmation |
+| Alt + R | Restart from the latest checkpoint or level start |
+| Alt + T | Toggle all sound |
+| Alt + M | Toggle ambient music |
+| Alt + V | About the port |
 | F2 | Developer menu: screen selection and peaceful mode |
 | F5 | Restart the opening encounter |
 | Any key after death | Retry from the checkpoint or level start |
+
+The game menu accepts mouse, arrows and Tab/Shift+Tab; Enter/Space activates
+the selected option. New game defaults to Cancel. Escape backs out without
+discarding progress. Save/Open, End game (return to intro) and Hall of Fame
+are shown disabled until those systems are implemented. There are no
+Alt+Q or Alt+F commands; fullscreen remains Alt+Enter.
 
 The developer menu accepts mouse, Tab/Shift+Tab and arrow navigation.
 Left/Right moves between `Go to screen` and `Resume`; Enter/Space activates
@@ -115,7 +127,7 @@ the recovered rules do not yet cover every original collision or input branch.
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m ruff check --select F,E9 .
-python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_audio tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout
+python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_audio tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_game_menu.GameMenuModelTests
 python -m tools.recovery_catalog --check
 ```
 
@@ -157,6 +169,7 @@ vendor/             Import-time MIDI renderer and its license notices
 [collision notes](docs/COLLISION_RECOVERY.md), [enemy AI notes](docs/AI_RECOVERY.md),
 [harbor and ship notes](docs/HARBOR_RECOVERY.md),
 [audio notes](docs/AUDIO_RECOVERY.md), [death/checkpoint notes](docs/REBIRTH_RECOVERY.md),
+[game commands](docs/GAME_COMMANDS.md),
 [development history](docs/DEVELOPMENT_HISTORY.md).
 
 Source addresses in comments identify the recovered Macintosh routine behind a

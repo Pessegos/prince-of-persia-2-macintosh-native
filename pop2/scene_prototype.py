@@ -276,6 +276,8 @@ class ScenePrototype(WindowControls):
         self.dev_menu = None
         self.dev_was_paused = False
         self.dev_toggle_held = False
+        self.game_menu = None
+        self.game_was_paused = False
         self.native_viewport = None
 
         self.create_window("Prince of Persia 2 Macintosh Native (WIP)" if with_guard
@@ -1791,10 +1793,18 @@ class ScenePrototype(WindowControls):
     def restart_after_death(self):
         if not self.death.can_restart:
             return False
+        self.restart_level()
+        return True
+
+    def restart_level(self):
         held = set(self.window_keys_down)
         snapshot = self.checkpoint
         if snapshot is None:
+            max_life = self.combat.player.max_life if self.combat is not None else None
             self.restart_opening()
+            if max_life is not None:
+                self.combat.player.life = self.combat.player.max_life = max_life
+                self.render()
         else:
             if self.animation_after_id is not None:
                 self.root.after_cancel(self.animation_after_id)
@@ -1807,7 +1817,6 @@ class ScenePrototype(WindowControls):
             if not self.in_animation_tick:
                 self.schedule_next_animation()
         self.pause_resume_keys.update(held)
-        return True
 
     def restart_opening(self, _event=None):
         audio = getattr(self, "audio", None)
@@ -2123,16 +2132,19 @@ class ScenePrototype(WindowControls):
             self.health_art.draw(viewport, combat, show_opponent=not getattr(self, "peaceful", False))
         hud_text = (self.pause_text if self.paused else
                     self.restart_text if self.death.prompt_visible else None)
-        if hud_text is not None and self.dev_menu is None:
+        if hud_text is not None and self.dev_menu is None and self.game_menu is None:
             ink = hud_text.getbbox()
             pause_y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
             viewport.paste(hud_text, ((VIEWPORT_WIDTH - hud_text.width) // 2,
                                       pause_y), hud_text)
-        if self.level_complete and self.dev_menu is None:
+        if self.level_complete and self.dev_menu is None and self.game_menu is None:
             text = self.ui_font.text("Level 1 Complete")
             viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, ROOM_HEIGHT), text)
         if self.dev_menu is not None:
             viewport = self.dev_menu.draw(viewport, self.ui_font)
+        if self.game_menu is not None:
+            self.refresh_game_menu()
+            viewport = self.game_menu.draw(viewport, self.ui_font)
         self.native_viewport = viewport
         self.present_viewport()
 

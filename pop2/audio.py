@@ -32,6 +32,9 @@ class MixerPlayback:
     def stop(self, bus):
         self.channels[bus].stop()
 
+    def set_volume(self, bus, volume):
+        self.channels[bus].set_volume(volume)
+
     def pause(self, paused):
         for channel in self.channels.values():
             (channel.pause if paused else channel.unpause)()
@@ -52,6 +55,8 @@ class AudioEngine:
         self.current_effect = self.current_music = None
         self.pending_effect = self.pending_song = None
         self.paused = False
+        self.sound_enabled = self.music_enabled = True
+        self.current_music_ambient = self.pending_song_ambient = False
 
     def available(self, cue):
         return cue in self.cues and bool(self.cues[cue].get("file"))
@@ -64,10 +69,11 @@ class AudioEngine:
                 or self.cues[cue]["priority"] <= self.cues[self.pending_effect]["priority"]):
             self.pending_effect = cue
 
-    def add_song(self, cue):
+    def add_song(self, cue, ambient=False):
         # AddSong 5:4d58 retains the first request in the current game frame.
         if self.pending_song is None and self.available(cue):
             self.pending_song = cue
+            self.pending_song_ambient = ambient
 
     def drain(self, state, audible=True):
         for cue in state.sound_events:
@@ -113,11 +119,13 @@ class AudioEngine:
                 self.current_effect = cue
         if self.pending_song is not None:
             self.current_music = self.pending_song
+            self.current_music_ambient = self.pending_song_ambient
             self.pending_song = None
+            self.pending_song_ambient = False
             self.playback.play("music", self.current_music)
 
     def ambient(self, room, row, column, fighting=False, alive=True):
-        if not alive or self.music_busy:
+        if not self.music_enabled or not alive or self.music_busy:
             return
         level = self.manifest["level_one"]
         bank = self.manifest["ambient"][level["bank"]]
@@ -134,7 +142,24 @@ class AudioEngine:
         cue = first + self.rng.randrange(count + 1)
         if cue == self.current_music:
             cue = first if cue == first + count else cue + 1
-        self.add_song(cue)
+        self.add_song(cue, ambient=True)
+
+    def set_sound_enabled(self, enabled):
+        self.sound_enabled = bool(enabled)
+        # Keep the cue clock running while muted: death/retry waits on playback.
+        for bus in ("effect", "music"):
+            self.playback.set_volume(bus, 1.0 if self.sound_enabled else 0.0)
+
+    def set_music_enabled(self, enabled):
+        self.music_enabled = bool(enabled)
+        if not self.music_enabled:
+            if self.pending_song_ambient:
+                self.pending_song = None
+                self.pending_song_ambient = False
+            if self.current_music_ambient:
+                self.playback.stop("music")
+                self.current_music = None
+                self.current_music_ambient = False
 
     def pause(self, paused):
         self.paused = paused
@@ -145,6 +170,7 @@ class AudioEngine:
         self.playback.stop("music")
         self.current_effect = self.current_music = None
         self.pending_effect = self.pending_song = None
+        self.current_music_ambient = self.pending_song_ambient = False
 
     def close(self):
         self.reset()

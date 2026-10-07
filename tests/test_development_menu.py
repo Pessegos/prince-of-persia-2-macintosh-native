@@ -194,6 +194,7 @@ class MenuSceneTests(unittest.TestCase):
         self.assertEqual(scene.canvas.cget("cursor"), "")
         for modifier in (0x8, 0x20000, 0x20008):
             self.assertIsNone(scene.dev_key_press(self.event("Return", state=modifier)))
+            scene.dev_key_release(self.event("Return"))
         scene.close_dev_mode()
         self.assertEqual(scene.canvas.cget("cursor"), "none")
         scene.open_dev_mode()
