@@ -118,12 +118,34 @@ class WindowControls:
         self.root.bind(
             "<KeyRelease-Control_R>", lambda _event: self.set_key_state("ctrl", False)
         )
-        self.root.bind("<FocusOut>", self.clear_keys)
+        self.focus_pause_after_id = None
+        self.root.bind("<FocusOut>", self.focus_out)
+        self.root.bind("<Destroy>", self.cancel_focus_pause)
         self.root.bind("<KeyPress-Escape>", self.escape_key)
         self.root.bind("<KeyRelease-Escape>", self.escape_release)
         self.root.bind("<Alt-Return>", self.toggle_fullscreen)
         self.root.bind("<F2>", self.open_dev_mode)
         self.root.bind("<F5>", self.restart_opening)
+
+    def focus_out(self, event):
+        self.clear_keys(event)
+        if self.focus_pause_after_id is None:
+            # Let Tk finish an internal focus transfer before checking its owner.
+            self.focus_pause_after_id = self.root.after_idle(self.pause_if_unfocused)
+
+    def pause_if_unfocused(self):
+        self.focus_pause_after_id = None
+        try:
+            focused = self.root.focus_get()
+        except tk.TclError:
+            return
+        if focused is None or focused.winfo_toplevel() is not self.root:
+            self.set_paused(True)
+
+    def cancel_focus_pause(self, event):
+        if event.widget is self.root and self.focus_pause_after_id is not None:
+            self.root.after_cancel(self.focus_pause_after_id)
+            self.focus_pause_after_id = None
 
     def escape_key(self, _event=None):
         if not self.escape_held:

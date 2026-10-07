@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 import wave
@@ -143,6 +144,34 @@ class SceneAudioTests(unittest.TestCase):
         scene.set_paused(False)
         self.tick()
         self.assertNotEqual(self.backend.remaining, before)
+
+    def test_focus_loss_pauses_simulation_and_both_buses_until_explicit_resume(self):
+        scene = self.scene
+        scene.jump_to_room(1, row=1, x=400, facing=0)
+        scene.dev_key_press(SimpleNamespace(keysym="Left", state=0))
+        scene.horizontal_key(None, -1, True)
+        self.tick(12)
+        scene.sequence_state.sound_events.append(14)
+        scene.advance_audio()
+        with patch.object(scene.root, "after_idle", return_value="focus-pause"):
+            scene.focus_out(SimpleNamespace(widget=scene.root))
+        with patch.object(scene.root, "focus_get", return_value=None):
+            scene.pause_if_unfocused()
+        self.assertTrue(scene.paused)
+        self.assertTrue(scene.audio.paused)
+        self.assertFalse(scene.window_keys_down)
+        self.assertFalse(scene.held_directions)
+        before_audio = self.backend.remaining.copy()
+        before_frame = scene.sequence_state.__dict__.copy()
+        self.tick(30)
+        self.assertEqual(self.backend.remaining, before_audio)
+        self.assertEqual(scene.sequence_state.__dict__, before_frame)
+        with patch.object(scene.root, "focus_get", return_value=scene.canvas):
+            scene.pause_if_unfocused()
+        self.assertTrue(scene.paused)
+        scene.dev_key_press(SimpleNamespace(keysym="a", char="a", state=0))
+        self.assertFalse(scene.paused)
+        self.assertFalse(scene.audio.paused)
 
     def test_drawing_sword_plays_once_at_the_start_of_the_action(self):
         scene = self.scene

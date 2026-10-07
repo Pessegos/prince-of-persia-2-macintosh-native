@@ -2,11 +2,12 @@ import json
 import subprocess
 import sys
 import textwrap
+import tkinter as tk
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from pop2.window_controls import is_resume_key
+from pop2.window_controls import WindowControls, is_resume_key
 
 
 class ResumeKeyTests(unittest.TestCase):
@@ -76,6 +77,60 @@ class ResumeKeyTests(unittest.TestCase):
         with patch("pop2.window_controls.sys.platform", "linux"):
             self.assertTrue(is_resume_key(
                 SimpleNamespace(keysym="minus", char="-", keycode=0x2D, state=0)))
+
+
+class FocusPauseTests(unittest.TestCase):
+    def setUp(self):
+        self.host = WindowControls()
+        self.host.root = Mock()
+        self.host.root.after_idle.return_value = "focus-pause"
+        self.host.focus_pause_after_id = None
+        self.host.clear_keys = Mock()
+        self.host.set_paused = Mock()
+
+    def test_focus_loss_clears_input_and_coalesces_the_focus_check(self):
+        host = self.host
+        event = SimpleNamespace(widget=host.root)
+        host.focus_out(event)
+        host.focus_out(event)
+        host.clear_keys.assert_called_with(event)
+        host.root.after_idle.assert_called_once_with(host.pause_if_unfocused)
+        self.assertEqual(host.focus_pause_after_id, "focus-pause")
+        host.set_paused.assert_not_called()
+        host.root.focus_get.return_value = None
+        host.pause_if_unfocused()
+        host.set_paused.assert_called_once_with(True)
+        self.assertIsNone(host.focus_pause_after_id)
+
+    def test_focus_inside_the_game_neither_pauses_nor_resumes(self):
+        host = self.host
+        for focused in (host.root, Mock()):
+            with self.subTest(focused=focused):
+                focused.winfo_toplevel.return_value = host.root
+                host.root.focus_get.return_value = focused
+                host.pause_if_unfocused()
+        host.set_paused.assert_not_called()
+
+    def test_another_toplevel_is_outside_the_game_even_in_the_same_tk_application(self):
+        self.host.root.focus_get.return_value = Mock()
+        self.host.pause_if_unfocused()
+        self.host.set_paused.assert_called_once_with(True)
+
+    def test_destroy_cancels_pending_check_without_reacting_to_child_destruction(self):
+        host = self.host
+        host.focus_pause_after_id = "focus-pause"
+        host.cancel_focus_pause(SimpleNamespace(widget=Mock()))
+        host.root.after_cancel.assert_not_called()
+        host.cancel_focus_pause(SimpleNamespace(widget=host.root))
+        host.root.after_cancel.assert_called_once_with("focus-pause")
+        self.assertIsNone(host.focus_pause_after_id)
+        host.cancel_focus_pause(SimpleNamespace(widget=host.root))
+        host.root.after_cancel.assert_called_once()
+
+    def test_late_focus_check_does_not_touch_a_destroyed_window(self):
+        self.host.root.focus_get.side_effect = tk.TclError("application has been destroyed")
+        self.host.pause_if_unfocused()
+        self.host.set_paused.assert_not_called()
 
 
 if __name__ == "__main__":
