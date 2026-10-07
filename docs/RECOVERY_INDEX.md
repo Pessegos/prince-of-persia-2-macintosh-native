@@ -90,7 +90,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Dead-pose counter, any-key retry and centered restart message | 2:47e6/7148; 4:3b88/47a0; 3:433a | T: ordinary dead-pose/key gate and actual current/pending playback completion; frontend timeout P | rebirth, audio, scene_prototype, window_controls / test_rebirth, test_audio |
 | Audio cue arbitration, source samples and rooftop music pool | CODE:5; DATA; INST/snd; MIDISnd/DigiSnd | T/A: ordinary level-1 subset; original instruments with host sampler, not bit-exact Mac MIDI driver | audio, audio_formats, extract_audio / test_audio, test_extract_audio, test_audio_integration |
 | LEVL checkpoint trigger and restored start | LEVL:39a6; 2:6b46/1674/19ba/5d50 | T: level-1 foot/cell trigger, native anchor, facing/full life and opponent/generator snapshot; dynamic normalization/story pipeline P | rebirth, scene_prototype / test_rebirth |
-| In-game F2 menu, peaceful scene, ordinary-key/click pause resume, Windows fullscreen | host features | T: font, modal input, modifier/system-shortcut exclusions, held-key consumption and focus reset; not recovered Mac gameplay rules | window_controls/game_ui / test_game_ui, test_development_menu |
+| In-game F2 menu, peaceful scene, ordinary-key/click pause resume, Windows fullscreen | host features | T: font, modal input, modifier/media/navigation/system-shortcut exclusions, held-key consumption and focus reset; not recovered Mac gameplay rules | window_controls/game_ui / test_game_ui, test_development_menu |
 
 ## Corpse Visibility
 

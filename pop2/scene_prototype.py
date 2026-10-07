@@ -10,7 +10,9 @@ from pop2.animation_data import (
     sequence_words,
     shape_id_for_action,
 )
-from pop2.combat import CombatEncounter, GuardSpawn, PLAYER_COMBAT_TURN_SEQUENCE, guard_frame_index
+from pop2.combat import (
+    CombatEncounter, GuardSpawn, PLAYER_COMBAT_TURN_SEQUENCE, contact_allowed, guard_frame_index,
+)
 from pop2.combat_art import GuardArtwork, HealthArtwork, HitArtwork
 from pop2.control_mapping import (
     IDLE_SEQUENCE,
@@ -1744,12 +1746,18 @@ class ScenePrototype(WindowControls):
             return
         if self.sequence_state.action == 167:
             self.sequence_state.sound_events.append(10)
+        elif self.sequence_state.action == 154:
+            # TestStrike 6:5876-588a / 5b00-5b1c also sounds an empty swing.
+            self.sequence_state.sound_events.append(11)
         audio.drain(self.sequence_state)
         if self.combat is not None:
             for guards, _generators in self.combat.room_encounters.values():
                 for guard in guards:
                     if guard.state.action == 167:
                         guard.state.sound_events.append(10)
+                    elif guard.state.action == 154 and contact_allowed(guard, self.combat.player):
+                        # NPCs use 6:5ab4-5af8, after the valid-target gate.
+                        guard.state.sound_events.append(11)
                     audio.drain(guard.state, not self.peaceful and guard.room == self.room_id)
         motion = getattr(self, "terrain_motion", None)
         if motion is not None and not self.level_complete:

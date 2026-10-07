@@ -1,5 +1,6 @@
 """Tk window controls and modal input for the scene host."""
 
+import sys
 import time
 import tkinter as tk
 
@@ -15,10 +16,24 @@ def is_resume_key(event, held_keys=()):
     if event.state & (0x4 | 0x8 | 0x40 | 0x20000) or command_keys.intersection(held_keys):
         return False
     key = event.keysym
+    if (key in command_keys or key in {
+            "Shift_L", "Shift_R", "Caps_Lock", "Num_Lock", "Scroll_Lock",
+            "Pause", "Print", "Sys_Req", "Menu", "Insert", "Delete",
+            "Home", "End", "Prior", "Next", "KP_Insert", "KP_Delete",
+            "KP_Home", "KP_End", "KP_Prior", "KP_Next", "??", "NoSymbol",
+            "VoidSymbol"}
+            or key.startswith("XF86") or key.startswith("F") and key[1:].isdigit()):
+        return False
+    # Windows multimedia events need not carry a reliable Tk keysym/character.
+    code = getattr(event, "keycode", None)
+    if sys.platform == "win32" and isinstance(code, int) and (
+            code in {0x21, 0x22, 0x23, 0x24, 0x2D, 0x2E}
+            or 0xA6 <= code <= 0xB7):
+        return False
     char = getattr(event, "char", "")
     return (bool(char) and char.isprintable() or len(key) == 1 and key.isprintable()
-            or key in {"space", "Return", "Tab", "BackSpace", "Delete", "Insert",
-                       "Left", "Right", "Up", "Down", "Home", "End", "Prior", "Next",
+            or key in {"space", "Return", "Tab", "BackSpace",
+                       "Left", "Right", "Up", "Down",
                        "KP_Enter", "KP_Space", "KP_Tab", "KP_Add", "KP_Subtract",
                        "KP_Multiply", "KP_Divide", "KP_Decimal", "KP_Equal"}
             or key.startswith("KP_") and key[3:].isdigit())

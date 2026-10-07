@@ -152,6 +152,68 @@ class SceneAudioTests(unittest.TestCase):
         self.tick(10)
         self.assertEqual(self.effects(), [14])
 
+    def test_empty_sword_attack_sounds_at_the_strike_pose_not_the_windup(self):
+        scene = self.scene
+        scene.jump_to_room(1, row=1, x=300, facing=0)
+        scene.sword_drawn = True
+        scene.start_sword_action("sword_attack")
+        self.assertEqual(scene.sequence_state.action, 151)
+        self.assertEqual(self.effects(), [])
+        self.tick(2)
+        self.assertEqual(scene.sequence_state.action, 153)
+        self.assertEqual(self.effects(), [])
+        self.tick()
+        self.assertEqual(scene.sequence_state.action, 154)
+        self.assertEqual(self.effects(), [11])
+        self.tick(5)
+        self.assertEqual(self.effects(), [11])
+
+    def test_attack_after_block_uses_the_same_strike_sound_and_block_alone_is_silent(self):
+        scene = self.scene
+        scene.jump_to_room(1, row=1, x=300, facing=0)
+        scene.sword_drawn = True
+        scene.start_sword_action("sword_block")
+        self.tick(12)
+        self.assertEqual(self.effects(), [])
+        scene.start_sword_action("sword_attack", sequence_id=66)
+        self.assertEqual(scene.sequence_state.action, 162)
+        self.tick(2)
+        self.assertEqual(scene.sequence_state.action, 153)
+        self.assertEqual(self.effects(), [])
+        self.tick()
+        self.assertEqual(scene.sequence_state.action, 154)
+        self.assertEqual(self.effects(), [11])
+
+    def test_sword_contacts_keep_priority_over_the_empty_swing_sound(self):
+        scene = self.scene
+        for cue in (10, 12, 31):
+            with self.subTest(cue=cue):
+                scene.jump_to_room(1, row=1, x=300, facing=0)
+                scene.sequence_state.action = 154
+                scene.sequence_state.sound_events.append(cue)
+                scene.advance_audio()
+                self.assertEqual(self.effects()[-1], cue)
+                self.assertNotIn(11, self.effects())
+
+    def test_guard_swing_needs_a_valid_target_and_is_drained_in_peaceful_mode(self):
+        scene = self.scene
+        scene.jump_to_room(1, row=1, x=400, facing=0)
+        guard = scene.combat.guard
+        guard.sword_drawn = True
+        guard.state.action = 154
+        guard.state.animation_state = 1
+        scene.combat.player.targetable = True
+        scene.advance_audio()
+        self.assertEqual(self.effects(), [])
+        self.assertFalse(guard.state.sound_events)
+        scene.peaceful = False
+        scene.combat.player.targetable = False
+        scene.advance_audio()
+        self.assertEqual(self.effects(), [])
+        scene.combat.player.targetable = True
+        scene.advance_audio()
+        self.assertEqual(self.effects(), [11])
+
     def test_fatal_ground_impact_stops_the_scream_and_plays_the_death_impact(self):
         scene = self.scene
         scene.jump_to_room(1, row=1, x=300, facing=0)

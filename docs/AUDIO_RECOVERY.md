@@ -72,7 +72,8 @@ Non-sequence events use their ordinary recovered cue sites:
 | Ledge catch | 4:38c8 | 9 |
 | Sword-forward wall contact (SEQS:64) / blocked attacker pose 167 | 4:5a3c-5a54; AddSFX 5:4cf6 | 10 |
 | Prince draws sword | DoKidEngarde 6:2126-2136 | 14 |
-| Parry | 6:5af4/5b18 | 11 |
+| Prince sword swing, pose 154 (including no target) | TestStrike 6:5876-588a, 5b00-5b1c | 11 |
+| Ordinary NPC swing, pose 154 against a valid target | TestStrike 6:5896-592e, 5ab4-5af8 | 11 |
 | Prince / guard hit | CheckStab 6:54dc/550e | 12 / 31 |
 | Water splash | SetupSplash, CODE:23 | 35 |
 
@@ -86,10 +87,16 @@ sword-forward response (64), not ordinary responses 45/46/47 or retreat 65.
 Ground impacts are emitted in the shared terrain handler, including fatal
 landings, rather than inferred from a surviving actor's `land` event.
 
-An independent sword-swing cue is not yet confirmed. The inspected strike
-selector (6:2780-2816) and ordinary strike sequences 75/203-205 contain no
-explicit sound request. Cue 15 occurs in jump sequence 14; it must not be
-assigned to sword attacks merely because it follows the draw cue numerically.
+The strike selector (6:2780-2816) and sequences 75/203-205 contain no sound
+request: `TestStrike` supplies cue 11 later, at pose 154. Its zero-opponent
+branch (5876-588a) still sounds the Prince's swing. The 5b18 site is the
+Prince's no-contact fallback, not a block-specific sound.
+The helper at 5e42-5eb6 confirms the ordinary strike pose is 154; special
+actors have separate poses that are outside this port's current scope.
+NPCs only reach their sound site after the valid-target checks. Hit and
+blocked-attacker sounds retain their higher priority; winding up, blocking
+without contact and returning to guard do not play a swing. Cue 15 belongs
+to jump sequence 14, not this attack.
 
 ## Death And Retry
 
