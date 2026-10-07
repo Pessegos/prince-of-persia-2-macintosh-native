@@ -28,6 +28,7 @@ class GameMenu:
 
     PANEL = (64, 28, 448, 356)
     DIALOG = (80, 108, 432, 274)
+    ABOUT_DIALOG = (80, 108, 432, 292)
     BUTTONS = ((100, 228, 242, 258), (254, 228, 412, 258))
     ROW_TOP = 64
     ROW_HEIGHT = 22
@@ -46,7 +47,7 @@ class GameMenu:
             MenuItem("hall", "Hall of Fame", "Alt+H", False),
             MenuItem("about", "About", "Alt+V"),
             MenuItem("fullscreen", "Fullscreen", "Alt+Enter", checked=self.fullscreen),
-            MenuItem("development", "Development", "F2", self.development),
+            MenuItem("development", "Dev Mode", "F2", self.development),
         )
 
     def show_page(self, page):
@@ -132,7 +133,9 @@ class GameMenu:
             text(label, (rect[0] + rect[2]) // 2, rect[1] + 10, align="center",
                  max_width=rect[2] - rect[0] - 12)
 
-        draw.rectangle(self.PANEL if self.page == "menu" else self.DIALOG,
+        panel = self.PANEL if self.page == "menu" else (
+            self.ABOUT_DIALOG if self.page == "about" else self.DIALOG)
+        draw.rectangle(panel,
                        fill="#181818", outline="#858585")
         if self.page == "confirm":
             text("New game?", 256, 128, gold, "center")
@@ -145,6 +148,7 @@ class GameMenu:
             text("Macintosh Native", 256, 154, align="center")
             text("Work in progress", 256, 186, muted, "center")
             button((190, 228, 322, 258), "Back" if self.return_to_menu else "Close", True)
+            text("by Pessegos", 420, 270, muted, "right")
         else:
             text("Game", 256, 42, gold, "center")
             for i, item in enumerate(self.items):

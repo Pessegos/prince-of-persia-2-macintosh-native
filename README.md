@@ -88,7 +88,7 @@ through pygame; the game does not generate diagnostic recordings.
 | Alt + T | Toggle all sound |
 | Alt + M | Toggle ambient music |
 | Alt + V | About the port |
-| F2 | Developer menu: screen selection and peaceful mode |
+| F2 | Dev Mode: screen selection and peaceful mode |
 | F5 | Restart the opening encounter |
 | Any key after death | Retry from the checkpoint or level start |
 

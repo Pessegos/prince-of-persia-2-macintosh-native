@@ -18,6 +18,7 @@ class GameMenuModelTests(unittest.TestCase):
         self.assertNotIn("Alt+Q", shortcuts)
         self.assertNotIn("Alt+F", shortcuts)
         self.assertIn("Alt+Enter", shortcuts)
+        self.assertEqual(next(item.label for item in items if item.shortcut == "F2"), "Dev Mode")
         self.assertEqual({item.action for item in items if not item.enabled},
                          {"save", "open", "end", "hall"})
 
@@ -390,6 +391,20 @@ class GameMenuSceneTests(unittest.TestCase):
         self.assertIn("Alt-N", labels)
         self.assertIn("Alt-Enter", labels)
         self.assertFalse(any("+" in label for label in labels))
+
+    def test_about_credit_fits_below_the_button_inside_the_dialog(self):
+        font = self.scene.ui_font
+        menu = GameMenu(page="about")
+        with patch.object(font, "text", wraps=font.text) as text:
+            image = menu.draw(self.scene.native_viewport, font)
+        self.assertIn("by Pessegos", [call.args[0] for call in text.call_args_list])
+        credit = font.text("by Pessegos", "#999999")
+        ink = credit.getbbox()
+        self.assertGreaterEqual(420 - credit.width + ink[0], menu.ABOUT_DIALOG[0] + 1)
+        self.assertLess(270 + ink[3] - ink[1], menu.ABOUT_DIALOG[3])
+        footer = image.crop((420 - credit.width, 270, 420, 286))
+        self.assertIn((153, 153, 153, 255),
+                      {color for _count, color in footer.getcolors(footer.width * footer.height)})
 
     def test_real_tk_bindings_route_alt_n_escape_f1_and_alt_enter(self):
         result = subprocess.run([sys.executable, "-c", textwrap.dedent("""

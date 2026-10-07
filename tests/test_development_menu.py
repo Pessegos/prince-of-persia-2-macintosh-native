@@ -131,6 +131,14 @@ class MenuSceneTests(unittest.TestCase):
         scene.close_dev_mode()
         self.assertEqual(scene.native_viewport.tobytes(), before.tobytes())
 
+    def test_dev_mode_heading_uses_the_same_name_as_the_game_menu(self):
+        scene = self.scene
+        with patch.object(scene.ui_font, "text", wraps=scene.ui_font.text) as text:
+            scene.open_dev_mode()
+        labels = [call.args[0] for call in text.call_args_list]
+        self.assertIn("Dev Mode", labels)
+        self.assertNotIn("Development", labels)
+
     def test_simulation_and_game_inputs_stay_frozen_and_pause_state_is_restored(self):
         scene = self.scene
         scene.jump_to_screen("5")

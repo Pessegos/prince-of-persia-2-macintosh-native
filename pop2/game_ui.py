@@ -133,7 +133,7 @@ class DevelopmentMenu:
             top = y - (ink[1] if ink else 0)
             image.paste(glyphs, (int(x - glyphs.width // 2) if centered else x, top), glyphs)
 
-        text("Development", 256, 86, gold, centered=True)
+        text("Dev Mode", 256, 86, gold, centered=True)
         text("Level 1", 256, 108, muted, centered=True)
         text("Screen", 120, 146)
         for i, rect in enumerate(self.CONTROLS):
