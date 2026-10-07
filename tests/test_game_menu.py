@@ -9,7 +9,6 @@ from PIL import Image
 
 from pop2.game_menu import GameMenu
 from pop2.game_ui import fit_viewport
-from tests import test_terrain
 
 
 class GameMenuModelTests(unittest.TestCase):
@@ -72,8 +71,13 @@ class GameMenuModelTests(unittest.TestCase):
 
 
 class GameMenuSceneTests(unittest.TestCase):
-    setUp = test_terrain.RooftopSceneTests.setUp
-    tick = test_terrain.RooftopSceneTests.tick
+    def setUp(self):
+        from tests.test_terrain import RooftopSceneTests
+        RooftopSceneTests.setUp(self)
+
+    def tick(self, count=1):
+        from tests.test_terrain import RooftopSceneTests
+        RooftopSceneTests.tick(self, count)
 
     @staticmethod
     def event(key, state=0):
