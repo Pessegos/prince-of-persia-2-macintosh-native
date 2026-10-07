@@ -822,6 +822,76 @@ class GameWindowTests(unittest.TestCase):
         self.assertFalse(scene.terrain_motion.falling)
         self.assertFalse(scene.terrain_motion.dead)
 
+    def test_queued_vertical_jump_brakes_before_aligning_a_building_climb(self):
+        scene = self.scene
+        scene.jump_to_room(9, row=1, x=480, facing=0)
+        scene.set_peaceful(True)
+        scene.in_animation_tick = True
+        scene.horizontal_key(None, -1, True)
+        self.tick(20)
+        scene.horizontal_key(None, -1, False)
+        scene.up_key(None)
+        scene.start_jump_if_needed()
+        poses = []
+        for _ in range(48):
+            self.tick()
+            state = scene.sequence_state
+            poses.append((state.sequence_id, state.action, state.target_x))
+        self.assertIn((13, 53, 247), poses)
+        self.assertIn((47, 50, 249), poses)
+        self.assertIn((24, 67, 246), poses)
+        self.assertIn((10, 140, 225), poses)
+        self.assertEqual((scene.terrain_motion.row, scene.action, scene.player_x), (0, 15, 214))
+        self.assertFalse(scene.terrain_motion.falling)
+        self.assertFalse(scene.native_ledge)
+
+    def test_quick_run_to_climb_matches_settled_climb_across_input_phases(self):
+        scene = self.scene
+        scene.set_peaceful(True)
+        render = scene.render
+        with patch.object(scene, "render"):
+            scene.jump_to_room(9, row=1, x=240, facing=0)
+            scene.in_animation_tick = True
+            scene.up_held = True
+            scene.start_upper_ledge_jump()
+            reference = []
+            reference_image = None
+            for _ in range(40):
+                self.tick()
+                if scene.native_ledge:
+                    state = scene.sequence_state
+                    reference.append((state.sequence_id, state.action, state.target_x,
+                                      state.current_y, scene.terrain_motion.row))
+                    if state.action == 140:
+                        render()
+                        reference_image = scene.native_viewport.tobytes()
+            self.assertIsNotNone(reference_image)
+            for run_ticks in range(17, 23):
+                for delay in range(3):
+                    with self.subTest(run_ticks=run_ticks, delay=delay):
+                        scene.jump_to_room(9, row=1, x=480, facing=0)
+                        scene.in_animation_tick = True
+                        scene.horizontal_key(None, -1, True)
+                        self.tick(run_ticks)
+                        scene.horizontal_key(None, -1, False)
+                        self.tick(delay)
+                        scene.up_key(None)
+                        scene.start_jump_if_needed()
+                        actual = []
+                        for _ in range(48):
+                            self.tick()
+                            if scene.native_ledge:
+                                state = scene.sequence_state
+                                actual.append((state.sequence_id, state.action, state.target_x,
+                                               state.current_y, scene.terrain_motion.row))
+                                if state.action == 140:
+                                    render()
+                                    self.assertEqual(scene.native_viewport.tobytes(), reference_image)
+                        self.assertEqual(actual, reference)
+                        self.assertEqual((scene.terrain_motion.row, scene.action), (0, 15))
+                        self.assertFalse(scene.terrain_motion.falling)
+                        self.assertFalse(scene.terrain_motion.dead)
+
     def test_building_junction_remains_a_solid_lower_floor_after_a_running_bump(self):
         scene = self.scene
         scene.jump_to_room(9, row=1, x=300, facing=0)

@@ -626,6 +626,15 @@ class ScenePrototype(WindowControls):
             return False
 
     def dispatch_jump(self, command):
+        if not command.direction and self.sequence_state.sequence_id in RUN_SEGMENT_SEQUENCES:
+            # GenCtrl 6:11e4-1242 never calls DoJumpUp from a running pose.
+            # Keep the host's buffered Up, but brake before aligning its ledge.
+            self.pending_action = command
+            self.run_active = self.run_stop_requested = False
+            self.run_direction = 0
+            self.run_start_x = None
+            self.start_sequence(RUN_STOP_SEQUENCE)
+            return True
         if not command.direction and self.start_upper_ledge_jump():
             return True
         if (
@@ -974,8 +983,10 @@ class ScenePrototype(WindowControls):
 
     def resume_run_stop(self):
         state = self.sequence_state
+        command = self.pending_action
+        vertical_jump = command is not None and command.kind == "jump" and not command.direction
         if (self.run_stop_requested and state.sequence_id in RUN_CYCLE_SEQUENCES
-                and state.action in (7, 11) and self.pending_action is None):
+                and state.action in (7, 11) and (command is None or vertical_jump)):
             # GenCtrl 6:11e4 brakes on either supporting-foot pose. Waiting
             # for the loop's last pose adds an unnecessary half stride.
             self.run_active = False
@@ -1538,6 +1549,10 @@ class ScenePrototype(WindowControls):
         self.action = self.sequence_state.action
         old_room = self.room_id
         before_x = self.sequence_state.target_x
+        command = self.pending_action
+        braking_for_jump = (self.sequence_state.sequence_id == RUN_STOP_SEQUENCE
+                            and command is not None and command.kind == "jump"
+                            and not command.direction)
         events = self.physics.advance(
             motion, self.sequence_runtime, old_x, self.player_bounds(),
             sword_drawn=self.sword_drawn, protected=self.ledge_hanging or self.ledge_climbing,
@@ -1584,10 +1599,13 @@ class ScenePrototype(WindowControls):
                 self.run_active = False
                 self.run_stop_requested = False
                 self.run_cycle_boundary_pending = False
-                self.pending_action = None
+                # A grounded bump can replace braking without discarding the
+                # Up waiting for that brake. An airborne bump still cancels it.
+                self.pending_action = (command if event.kind == "wall" and braking_for_jump
+                                       and not motion.falling else None)
                 self.jump_repeat_armed = False
-                # A wall bump cancels the jump, not its consumed Up press.
-                # Otherwise releasing Up queues an unintended second jump.
+                # Do not re-arm a consumed Up on wall contact: releasing Up
+                # must not queue a second jump after an interrupted jump.
                 if event.kind != "wall":
                     self.jump_started_for_press = False
             if event.kind == "death":

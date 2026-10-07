@@ -471,6 +471,16 @@ The source's additional left-facing rooftop room-19 adjustment is translated
 too. The floor check happens after loading pose 80, not using the earlier
 airborne pose or the post-alignment foot.
 
+A buffered vertical jump at a running-cycle boundary must not enter
+DoJumpUp using the running frame's foot offset. GenCtrl 6:11e4-1242 routes
+running poses through braking or DoRunJump, not DoJumpUp. The host now
+brakes before dispatching that queued vertical jump; a grounded wall bump
+can replace the brake without losing its pending Up. The one-command host
+buffer remains a partial translation, not a native latch implementation.
+Regression tests compare the complete climb trajectory and rendered pose
+140 against a settled approach across 18 rapid-input timings. No scenery
+mask or wall coordinate is changed for this correction.
+
 Ordinary flat deaths now apply the source's post-first-pose alignment
 (6:5524-5558 and 6:04aa-055a). A foot already over space moves back 36;
 the adjacent empty tile then aligns the corpse to native distance 32.
