@@ -46,6 +46,14 @@ class TerrainTests(unittest.TestCase):
         self.assertEqual([character_row(y) for y in (5, 6, 124, 125, 226, 365)],
                          [-1, 0, 0, 1, 1, 3])
 
+    def test_undefined_rooftop_cells_are_air_not_supporting_walls(self):
+        for room, column, row in ((18, -1, 2), (3, 8, 3), (18, -1, 0)):
+            with self.subTest(room=room, column=column, row=row):
+                tile = self.map.tile(room, column, row)
+                self.assertIsNone(tile.room)
+                self.assertEqual(tile.kind, 0)
+                self.assertFalse(self.map.supports(room, column, row))
+
     def test_wall_hang_mode_six_skips_ordinary_wall_reselection_but_not_gate(self):
         from pop2.terrain import Tile
 

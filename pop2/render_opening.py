@@ -501,7 +501,7 @@ def build_opening_room(include_curtain=True, room_id=None):
     for tile_y in tile_rows:
         for tile_x in range(-1, 10):
             if level_map.tile(room_id, tile_x, tile_y).room is None:
-                # The physics sentinel (wall 20) has no scenery. Where there
+                # Undefined cells have no scenery. Where there
                 # is no upper room, extend the top row's background pattern
                 # through the five-pixel viewport margin, without foreground.
                 if tile_y == -1 and 0 <= tile_x < 10:
@@ -578,9 +578,12 @@ def draw_harbor(frame, room_id, harbor, front=False):
                     add_alpha(splash_occlusion, post.getchannel("A"),
                               x + pieces[47][8],
                               (row + 1) * TILE_HEIGHT + SCENERY_Y_OFFSET + pieces[47][9] - post.height)
-                shape(117 + phase, column * TILE_WIDTH + pieces[46][5],
-                      (row + 1) * TILE_HEIGHT + 5 + pieces[46][6],
-                      (x + 13, y + 104, x + 43, y + 196))
+                bottom = (row + 1) * TILE_HEIGHT + 5 + pieces[46][6]
+                wave_top = bottom - shapes[3617 + phase].height
+                # The wave's upper rim completes the near post's submerged
+                # foot; clipping it to the reflection strip severs that rim.
+                shape(117 + phase, column * TILE_WIDTH + pieces[46][5], bottom,
+                      (x + 13, min(y + 104, wave_top), x + 43, y + 196))
             else:
                 index = 119 + phase
                 shape(index - 4 if index > 120 else index,

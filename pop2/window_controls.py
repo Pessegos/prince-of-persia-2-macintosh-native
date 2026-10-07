@@ -307,11 +307,7 @@ class WindowControls:
 
     def dev_click(self, event):
         if self.dev_menu is None:
-            if self.paused:
-                self.set_paused(False)
-                self.pause_resume_keys.update(self.window_keys_down)
-                return "break"
-            return None
+            return "break" if self.paused else None
         if getattr(event, "num", 1) != 1:
             return "break"
         point = self.dev_pointer(event)

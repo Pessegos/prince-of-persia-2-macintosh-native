@@ -2092,7 +2092,7 @@ class ScenePrototype(WindowControls):
         frame = draw_harbor(frame, self.room_id, self.harbor, front=True)
         viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
         viewport.paste(frame, (ROOM_ORIGIN_X, 0))
-        if combat is not None:
+        if combat is not None and not self.death.prompt_visible:
             self.health_art.draw(viewport, combat, show_opponent=not getattr(self, "peaceful", False))
         hud_text = (self.pause_text if self.paused else
                     self.restart_text if self.death.prompt_visible else None)

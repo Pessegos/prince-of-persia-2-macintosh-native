@@ -300,13 +300,13 @@ class MenuSceneTests(unittest.TestCase):
         self.assertTrue(scene.paused)
         scene.toggle_fullscreen()
 
-    def test_mouse_buttons_resume_pause_but_do_not_close_development_menu(self):
+    def test_mouse_buttons_keep_pause_and_do_not_close_development_menu(self):
         scene = self.scene
         for button in (1, 2, 3):
             scene.set_paused(True)
             event = SimpleNamespace(x=10, y=10, num=button)
             self.assertEqual(scene.dev_click(event), "break")
-            self.assertFalse(scene.paused)
+            self.assertTrue(scene.paused)
             scene.open_dev_mode()
             scene.dev_click(event)
             self.assertIsNotNone(scene.dev_menu)

@@ -58,6 +58,9 @@ pillar back/front pieces and four original wave sprites. DrawRoofPillar's
 DATA cc32/cc3a rectangles clip the foreground/background waves respectively,
 offset by the 51x120 cell origin. The source's random initial wave phases and
 conditional per-actor pillar redraw are not fully translated.
+The near reflection also retains its two upper sprite rows, which complete
+the submerged post foot. Cropping those to the reflection strip left a
+straight, severed waterline on every near post; all four phases are tested.
 
 ## Ship
 
@@ -73,6 +76,11 @@ conditional per-actor pillar redraw are not fully translated.
   checks before reaching this special destination.
 - RoofHangingFromShip 23:132c and RoofClimbingIntoShip 23:12ba move the
   gripped Prince with the ship and select SEQS:59 instead of an ordinary climb.
+- GetUndefineCellId 4:28e8-28ea returns empty cells outside rooftop maps,
+  not wall 20. This matters as the hanging Prince moves past the left edge:
+  a false wall selected SEQS:25 and triggered water entry while still gripping
+  the hull. The original SEQS:210 grip expiry is retained; releasing or
+  climbing after the anchor crosses X=0 also remains valid.
 - SEQS:59 retains poses 135-149, then 118/119, with the original row/X offsets.
   Opcode -16 requests a level transition; SEQS:215 then holds invisible pose 0.
 
@@ -87,7 +95,7 @@ It exempts sequences 68/15/59/10 and hanging mode 2. Ordinary actors enter
 water at absolute Y >=327; mode-9 tumbles use Y >=354. SetupSplash 23:0b3e
 centers the original six splash shapes on the actor's anchor plus/minus half
 its sprite width, with the native Y offsets and the tumble's additional 27.
-Sound event 35 is recorded, but this port has no audio playback yet.
+Sound event 35 plays the original water-entry effect.
 Ordinary splashes are masked by the near pillar's original SHAP alpha,
 so they cannot paint over its wood. DrawPillarInBack 23:0f96 permits a
 different ordering for tumble splashes; that existing rendering is retained.

@@ -177,7 +177,7 @@ class HarborRulesTests(unittest.TestCase):
         self.assertEqual(harbor.water[0].age, 8)
         self.assertIsNotNone(ImageChops.difference(before.convert('RGB'), after.convert('RGB')).getbbox())
 
-    def test_foreground_waves_use_the_native_cell_clip_rectangle(self):
+    def test_foreground_waves_retain_post_foot_and_native_horizontal_clip(self):
         level_map, shapes, pieces = rooftop_scene_data()
         harbor = Harbor(wave_frame=2)
         blank = Image.new('RGBA', (510, 365))
@@ -187,9 +187,30 @@ class HarborRulesTests(unittest.TestCase):
             tile = level_map.tile(15, column, 2)
             sprite = shapes[3617 + ((tile.foreground + 2) & 3)]
             top = 365 + pieces[46][6] - sprite.height
-            expected.alpha_composite(sprite.crop((0, 344 - top, sprite.width, 365 - top)),
-                                     (column * 51 + 13, 344))
+            expected.alpha_composite(sprite.crop((0, 0, sprite.width, 365 - top)),
+                                     (column * 51 + 13, top))
         self.assertEqual(actual.tobytes(), expected.tobytes())
+
+    def test_near_post_waterline_keeps_the_complete_wave_rim_on_both_docks(self):
+        level_map, shapes, pieces = rooftop_scene_data()
+        for room_id, columns in ((15, (1, 7)), (18, (5,))):
+            room = build_opening_room(False, room_id)
+            for phase in range(4):
+                image = draw_harbor(room.flattened(), room_id, Harbor(wave_frame=phase), front=True)
+                for column in columns:
+                    tile = level_map.tile(room_id, column, 2)
+                    wave = shapes[3617 + ((tile.foreground + phase) & 3)]
+                    x = column * 51 + pieces[46][5]
+                    top = 365 + pieces[46][6] - wave.height
+                    with self.subTest(room=room_id, column=column, phase=phase):
+                        visible = 0
+                        for sy in range(344 - top):
+                            for sx in range(wave.width):
+                                pixel = wave.getpixel((sx, sy))
+                                if pixel[3] == 255:
+                                    visible += 1
+                                    self.assertEqual(image.getpixel((x + sx, top + sy)), pixel)
+                        self.assertGreater(visible, 0)
 
     def test_player_splash_stays_behind_near_posts_through_all_six_frames(self):
         _, shapes, pieces = rooftop_scene_data()
@@ -567,6 +588,66 @@ class HarborSceneTests(unittest.TestCase):
         self.assertFalse(scene.level_complete)
         self.assertEqual(scene.combat.player.life, 0)
         self.assertGreater(scene.harbor.water[0].age, 6)
+
+    def catch_ship_without_climbing(self):
+        self.prepare('10')
+        scene = self.scene
+        scene.horizontal_key(None, -1, True)
+        for _ in range(60):
+            if scene.player_x < 350 and not scene.up_held:
+                scene.up_key(None)
+                scene.set_key_state('shift', True)
+            self.tick()
+            if scene.ledge_hanging:
+                scene.set_key_state('up', False)
+                scene.horizontal_key(None, -1, False)
+                return
+        self.fail('The Prince never caught the ship')
+
+    def test_ship_grip_follows_the_hull_offscreen_without_finding_a_phantom_wall(self):
+        self.catch_ship_without_climbing()
+        scene = self.scene
+        self.tick()  # SEQS:15 finishes its catch alignment before the hang loop.
+        relative_x = scene.player_x - scene.harbor.ship_x
+        went_offscreen = False
+        for _ in range(80):
+            self.tick()
+            self.assertEqual(scene.room_id, 18)
+            self.assertFalse(scene.level_complete)
+            if not scene.ledge_hanging:
+                break
+            self.assertNotEqual(scene.sequence_state.sequence_id, 25)
+            self.assertEqual(scene.sequence_state.animation_state, 2)
+            self.assertEqual(scene.player_x - scene.harbor.ship_x, relative_x)
+            self.assertFalse(scene.terrain_motion.dead)
+            self.assertNotIn(0, scene.harbor.water)
+            went_offscreen |= scene.player_bounds()[2] < 0
+        self.assertTrue(went_offscreen)
+        self.assertFalse(scene.ledge_hanging)  # Original SEQS:210 grip expiry.
+        self.tick(30)
+        self.assertTrue(scene.terrain_motion.dead)
+        self.assertIn(0, scene.harbor.water)
+        self.assertFalse(scene.level_complete)
+
+    def test_ship_grip_can_be_released_or_climbed_after_crossing_the_map_edge(self):
+        for climb in (False, True):
+            with self.subTest(climb=climb):
+                self.catch_ship_without_climbing()
+                scene = self.scene
+                for _ in range(60):
+                    if scene.player_x < 0:
+                        break
+                    self.tick()
+                self.assertTrue(scene.ledge_hanging)
+                self.assertLess(scene.player_x, 0)
+                if climb:
+                    scene.up_key(None)
+                else:
+                    scene.set_key_state('shift', False)
+                self.tick(40)
+                self.assertEqual(scene.room_id, 18)
+                self.assertEqual(scene.level_complete, climb)
+                self.assertEqual(scene.terrain_motion.dead, not climb)
 
     def test_expired_ship_cannot_be_caught(self):
         self.prepare('10')

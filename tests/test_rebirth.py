@@ -266,6 +266,7 @@ class RebirthSceneTests(unittest.TestCase):
         self.eligible()
         scene.render()
         before = scene.native_viewport.copy()
+        before.paste((0, 0, 0, 255), (0, ROOM_HEIGHT, 512, 384))
         scene.death.prompt_visible = True
         scene.render()
         difference = ImageChops.difference(before.convert("RGB"),
@@ -282,6 +283,22 @@ class RebirthSceneTests(unittest.TestCase):
         self.assertEqual(box, expected.getbbox())
         colors = {color for _count, color in text.getcolors()}
         self.assertEqual(colors - {(0, 0, 0, 0)}, {(253, 255, 168, 255)})
+
+    def test_health_bottles_disappear_only_when_the_retry_prompt_is_shown(self):
+        scene = self.scene
+        self.die()
+        self.eligible()
+        scene.render()
+        bottles = (0, ROOM_HEIGHT, 60, 384)
+        self.assertIsNotNone(scene.native_viewport.crop(bottles).convert('RGB').getbbox())
+        scene.death.prompt_visible = True
+        scene.render()
+        self.assertIsNone(scene.native_viewport.crop(bottles).convert('RGB').getbbox())
+        scene.set_paused(True)
+        self.assertIsNone(scene.native_viewport.crop(bottles).convert('RGB').getbbox())
+        scene.set_paused(False)
+        scene.restart_after_death()
+        self.assertIsNotNone(scene.native_viewport.crop(bottles).convert('RGB').getbbox())
 
     def test_pause_freezes_the_death_clock_and_resume_does_not_also_retry(self):
         scene = self.scene

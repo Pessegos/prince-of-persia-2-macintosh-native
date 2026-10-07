@@ -80,7 +80,9 @@ class LevelMap:
                 direction, column = "right", column - 10
             room = self.neighbor(room, direction)
             if room is None:
-                return Tile(20)
+                # GetUndefineCellId 4:28e8 returns air for rooftop levels.
+                level_kind = struct.unpack_from(">H", self.level, 0x2186)[0]
+                return Tile(0 if level_kind == 5 else 20)
         index = row * 10 + column
         kind = struct.unpack_from(">H", self.level, room * 60 + index * 2)[0]
         fg, bg = struct.unpack_from(">2H", self.level, 0x780 + room * 120 + index * 4)

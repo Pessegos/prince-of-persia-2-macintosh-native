@@ -26,7 +26,10 @@ in the new life. F2, F5 and Alt+Enter retain their host functions.
 At counter 7, the native controller waits for both current and pending sound
 to finish before drawing `Press key to continue` (3:433a; DATA aa96). This is
 not a fixed delay after the hit or water contact. The port now uses actual
-current/pending audio playback for this wait. Reference MIDI event durations:
+current/pending audio playback for this wait. The prompt clears the HUD band
+(3:4378-4398), hiding both actors' health bottles until the retry. Ordinary
+pause still shows health; pausing after the retry prompt does not restore it.
+Reference MIDI event durations:
 
 | Death method | MIDI cue | Duration (seconds) |
 | --- | --- | --- |
