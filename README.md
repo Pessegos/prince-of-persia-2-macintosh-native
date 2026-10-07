@@ -89,6 +89,7 @@ through pygame; the game does not generate diagnostic recordings.
 The developer menu accepts mouse, Tab/Shift+Tab and arrow navigation.
 Left/Right moves between `Go to screen` and `Resume`; Enter/Space activates
 a control. Escape closes the dropdown before closing the menu.
+Screen jumps also set the latest checkpoint along the selected route.
 `python run_game.py --peaceful` starts with guards disabled and terrain intact.
 
 ## Current Progress

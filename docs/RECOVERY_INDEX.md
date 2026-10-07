@@ -66,6 +66,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Per-actor near facade/parapet versus shaded side | 3:35bc; CODE:23; 4:4146 | T/A: row/mode masks; full native ClipChar R | render_opening / test_render_opening, test_game_ui |
 | Prince flat-death edge alignment and settled-rooftop corpse visibility | 6:551c-5558; 4:474c-477c, 4846-485c | T: ordinary Prince/guard dead poses, native room-15/16/19 visibility exceptions | combat, terrain, render_opening / test_rebirth, test_render_opening |
 | Ordinary guard death cue and post-kill sword lowering | 6:570e/5738; 4:09c0; 6:2536/25ee | T: type-2 guards on LEVL 21a4 == 0; ready-pose gate preserves unfinished attacks | combat, rebirth / test_combat, test_rebirth |
+| Dead actors cannot enter a live wall bump during death | 4:5740-5746 | T: Collide returns before displacement/response; shared Prince and guard life gate | terrain, scene_prototype / test_guard_deaths, test_rebirth |
 | All 11 roof decoration IDs, including empty cells | 23:018e-0242; DATA:cca8/ccea | T: native shape/offset/pass tables; conditional draw pipeline P | render_opening / test_render_opening |
 | Climb partial foreground rectangle / ledge overlap veto | 3:3694; 23:0614 | T: tested ordinary poses and overlap exception | render_opening / test_render_opening |
 | Guard corpse's flat-floor placement and supporting foot | 6:04aa, 5524-5558; SEQS:85 | T: source coordinate/edge subset; settled rooftop visibility uses IsCharNonViewable | terrain/combat/render_opening / test_terrain, test_render_opening |
@@ -90,6 +91,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Dead-pose counter, any-key retry and centered restart message | 2:47e6/7148; 4:3b88/47a0; 3:433a | T: ordinary dead-pose/key gate and actual current/pending playback completion; frontend timeout P | rebirth, audio, scene_prototype, window_controls / test_rebirth, test_audio |
 | Audio cue arbitration, source samples and rooftop music pool | CODE:5; DATA; INST/snd; MIDISnd/DigiSnd | T/A: ordinary level-1 subset; original instruments with host sampler, not bit-exact Mac MIDI driver | audio, audio_formats, extract_audio / test_audio, test_extract_audio, test_audio_integration |
 | LEVL checkpoint trigger and restored start | LEVL:39a6; 2:6b46/1674/19ba/5d50 | T: level-1 foot/cell trigger, native anchor, facing/full life and opponent/generator snapshot; dynamic normalization/story pipeline P | rebirth, scene_prototype / test_rebirth |
+| F2 screen jumps seed the latest route checkpoint from LEVL | host feature | T: route order rather than slot order; earlier/secret jumps and F5 clear it; not an original activation rule | scene_prototype / test_rebirth |
 | In-game F2 menu, peaceful scene, ordinary-key/click pause resume, Windows fullscreen | host features | T: font, modal input, modifier/media/navigation/system-shortcut exclusions, held-key consumption and focus reset; not recovered Mac gameplay rules | window_controls/game_ui / test_game_ui, test_development_menu |
 
 ## Corpse Visibility

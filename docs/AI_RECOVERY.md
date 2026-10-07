@@ -307,3 +307,11 @@ modulo two, not Rnd. Even slots retain pose 185. Slot order is the room's
 ordered NPC list, including reinforcements/transferred actors. Special actor
 corpse variants and the complete native bank/lifecycle implementation remain
 outside this ordinary supported-room subset.
+
+`Collide` (4:5740-5746) returns immediately for dead actors, before applying
+barrier displacement or selecting a bump sequence. This gate applies to the
+Prince and guards. Without it, a guard dying beside a wall could switch from
+SEQS:85/213 into SEQS:65 and then combat idle 227, standing indefinitely with
+zero life. Dead actors now finish their death sequence; living actors still
+use the normal wall bump and recovery. Floor contact and tumble physics are
+unchanged.

@@ -426,6 +426,25 @@ class RebirthSceneTests(unittest.TestCase):
             scene.render()
         self.assertEqual(with_body.tobytes(), scene.native_viewport.tobytes())
 
+    def test_dead_prince_beside_wall_cannot_switch_back_to_combat_idle(self):
+        scene = self.scene
+        scene.jump_to_room(9, row=1, x=245, facing=1)
+        scene.combat.guard.state.facing = 0
+        scene.combat.player.life = 1
+        with patch.object(scene.combat, "step", side_effect=lambda *args: [
+                scene.combat._hurt("player", scene.combat.player, scene.combat.guard)]):
+            scene.advance_combat()
+        scene.peaceful = True
+        poses = [scene.sequence_state.action]
+        for _ in range(12):
+            self.tick()
+            poses.append(scene.action)
+            self.assertNotIn(scene.sequence_state.sequence_id, (64, 65, 227))
+        self.assertEqual(poses[:6], [179, 180, 181, 182, 183, 185])
+        self.assertEqual(scene.action, 185)
+        self.assertTrue(scene.death.can_restart)
+        self.assertFalse(scene.combat.player.alive)
+
     def test_armed_guard_death_retains_six_tick_cadence(self):
         scene = self.scene
         scene.jump_to_room(3, row=1, x=411, facing=1)
@@ -470,3 +489,41 @@ class RebirthSceneTests(unittest.TestCase):
             self.assertIsNone(scene.checkpoint)
             self.assertEqual(scene.death.counter, -1)
             self.assertTrue(scene.combat.player.alive)
+
+    def test_dev_warp_after_checkpoint_retries_at_the_native_checkpoint(self):
+        scene = self.scene
+        scene.peaceful = True
+        for label in ("8", "9", "10"):
+            with self.subTest(screen=label):
+                scene.jump_to_screen(label)
+                snapshot = scene.checkpoint
+                self.assertIsNotNone(snapshot)
+                self.assertEqual(snapshot.checkpoint, Checkpoint(2, 14, 5))
+                self.die()
+                self.eligible()
+                self.assertTrue(scene.restart_after_death())
+                self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.player_x,
+                                  scene.sequence_state.facing, scene.action),
+                                 (14, 0, 277, 0, 15))
+                self.assertFalse(scene.opening.active)
+                self.assertIs(scene.checkpoint, snapshot)
+
+    def test_dev_warp_uses_resource_checkpoints_in_route_order_not_slot_order(self):
+        scene = self.scene
+        scene.checkpoints = (Checkpoint(1, 2, 16), Checkpoint(2, 1, 18))
+        scene.jump_to_screen("7")
+        self.assertEqual(scene.checkpoint.checkpoint, Checkpoint(1, 2, 16))
+        scene.jump_to_screen("2")
+        self.assertEqual(scene.checkpoint.checkpoint, Checkpoint(2, 1, 18))
+        scene.jump_to_screen("1")
+        self.assertIsNone(scene.checkpoint)
+        scene.jump_to_screen("Secret (right)")
+        self.assertIsNone(scene.checkpoint)
+
+    def test_going_back_before_checkpoint_or_restarting_clears_dev_checkpoint(self):
+        scene = self.scene
+        for reset in (lambda: scene.jump_to_screen("7"), scene.restart_opening):
+            scene.jump_to_screen("10")
+            self.assertIsNotNone(scene.checkpoint)
+            reset()
+            self.assertIsNone(scene.checkpoint)

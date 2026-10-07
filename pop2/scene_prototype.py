@@ -1542,7 +1542,7 @@ class ScenePrototype(WindowControls):
             motion, self.sequence_runtime, old_x, self.player_bounds(),
             sword_drawn=self.sword_drawn, protected=self.ledge_hanging or self.ledge_climbing,
             frame_record=self.frames[self.action], bounds_for_state=self.player_bounds,
-            old_bounds=old_bounds)
+            old_bounds=old_bounds, alive=self.combat.player.alive)
         if motion.room != old_room:
             dx = self.sequence_state.target_x - before_x
             if motion.room not in self.room_cache:
@@ -1933,23 +1933,32 @@ class ScenePrototype(WindowControls):
                     f"Room ID {room + 1}")
 
     def jump_to_screen(self, label):
-        room = self.dev_screens()[label]
+        screens = self.dev_screens()
+        room = screens[label]
         if room == self.level_map.start_room:
             return self.jump_to_room(room, row=1, x=411, facing=1)
-        if label == "8":
-            # Entry from screen 7 is the upper roof, not the quay below.
-            return self.jump_to_room(room, row=0, x=5 * TILE_WIDTH + 14, facing=0)
         secret = label == "Secret (right)"
         if secret:
             row, column = next((row, column) for row in range(3) for column in range(10)
                                if self.level_map.tile(room, column, row).kind == 1)
             return self.jump_to_room(room, row=row, x=column * TILE_WIDTH + 30, facing=1)
-        column = 9
-        rows = [row for row in range(3)
-                if self.level_map.tile(room, column, row).kind == 1]
-        if not rows:
-            raise ValueError("This screen has no supported entry")
-        self.jump_to_room(room, row=rows[0], x=ROOM_WIDTH - 15, facing=0)
+        if label == "8":
+            # Entry from screen 7 is the upper roof, not the quay below.
+            row, x = 0, 5 * TILE_WIDTH + 14
+        else:
+            rows = [row for row in range(3)
+                    if self.level_map.tile(room, 9, row).kind == 1]
+            if not rows:
+                raise ValueError("This screen has no supported entry")
+            row, x = rows[0], ROOM_WIDTH - 15
+        self.jump_to_room(room, row=row, x=x, facing=0)
+        # A dev warp simulates progress along the route, including the last
+        # LEVL checkpoint it would pass. Normal play still uses the cell gate.
+        route = list(screens.values())[:list(screens).index(label) + 1]
+        checkpoint = max((point for point in self.checkpoints if point.room in route),
+                         key=lambda point: route.index(point.room), default=None)
+        if checkpoint is not None:
+            self.checkpoint = RebirthSnapshot.capture(checkpoint, self.combat)
 
 
     def advance_animation_now(self):

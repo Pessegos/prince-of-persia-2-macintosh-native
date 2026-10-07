@@ -132,8 +132,13 @@ Level 1's checkpoint is native room 15, row 0, column 5: **F2 screen 8**, at
 the landing after descending from screen 7. Retry places the Prince at
 `column * 51 + 22` (X=277), with saved facing, restored maximum/full life
 and idle SEQS:2, without replaying the palace window escape. Before the
-checkpoint, retry starts the level normally. F5 always starts a fresh level;
-a developer warp clears the checkpoint until a trigger is reached again.
+checkpoint, retry starts the level normally. F5 always starts a fresh level.
+F2 screen jumps seed the latest LEVL checkpoint on the selected route up to
+that screen, so testing the quay does not require another rooftop run. A jump
+back before the checkpoint, to the opening or to the secret screen clears it.
+This is a developer convenience, not a recovered original trigger: ordinary
+play still requires the recorded room/cell and live nonfalling state. Low-level
+room jumps clear the checkpoint unless explicitly preserving a retry snapshot.
 
 ## Saved World
 

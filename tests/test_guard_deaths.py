@@ -142,6 +142,35 @@ class GuardDeathTests(unittest.TestCase):
                 self.assertFalse(guard.terrain_motion.falling)
                 encounter.rng.randrange.assert_not_called()
 
+    def test_fatal_hit_beside_wall_finishes_death_without_entering_combat_idle(self):
+        for facing in (0, 1):
+            for x in (270, 280):
+                with self.subTest(facing=facing, x=x):
+                    encounter, guard = self.encounter(roll=3, facing=facing, x=x)
+                    encounter._hurt("guard", guard, encounter.player)
+                    self.assertEqual(guard.state.sequence_id, 85)
+                    poses = [guard.state.action]
+                    for _ in range(15):
+                        self.fixture.tick(encounter)
+                        poses.append(guard.state.action)
+                        self.assertFalse(guard.alive)
+                        self.assertNotIn(guard.state.sequence_id, (64, 65, 227))
+                    self.assertEqual(poses[:6], [179, 180, 181, 182, 183, 185])
+                    self.assertEqual(guard.state.action, 185)
+                    self.assertFalse(guard.terrain_motion.falling)
+
+    def test_nonfatal_wall_hit_still_bumps_and_recovers_normally(self):
+        encounter, guard = self.encounter(roll=3, facing=1, x=280)
+        guard.life = 2
+        encounter._hurt("guard", guard, encounter.player)
+        encounter.advance_guard()
+        self.assertEqual((guard.state.sequence_id, guard.state.action), (65, 160))
+        encounter.advance_guard()
+        encounter.advance_guard()
+        self.assertEqual(guard.state.sequence_id, 227)
+        self.assertTrue(guard.alive)
+        self.assertFalse(guard.recovering)
+
     def test_front_roof_tumble_has_no_normal_foreground_mask(self):
         encounter, guard = self.encounter()
         room = build_opening_room(room_id=9)

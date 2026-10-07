@@ -559,7 +559,9 @@ class RooftopPhysics:
         # CheckBarr (4:4e46) bypasses standing turns. CheckCollide1
         # (4:551a/5586) checks a rear barrier only with the sword drawn.
         collision_facing = None if sword_drawn or motion.falling else state.facing
-        corrected = (state.target_x if state.animation_state == 7 else
+        # Collide 4:5740-5746 returns before displacement or bump selection
+        # for a dead actor. A death pose must never become a live wall bump.
+        corrected = (state.target_x if not alive or state.animation_state == 7 else
                      self.map.wall_correction(motion.room, old_x, state.target_x,
                                               bounds, old_bounds, collision_facing))
         if corrected != state.target_x:
