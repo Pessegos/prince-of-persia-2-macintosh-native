@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import struct
 import subprocess
@@ -54,7 +55,8 @@ class MidiRenderingTests(unittest.TestCase):
 
     def synthesize(self, arguments, **kwargs):
         self.assertEqual(kwargs["cwd"], self.directory)
-        self.assertIn(str(self.synth), kwargs["env"]["PATH"])
+        synth_path = Path(kwargs["env"]["PATH"].split(os.pathsep)[0])
+        self.assertTrue(synth_path.samefile(self.synth))
         self.assertNotIn("--silent", arguments)
         payload = self.samples.tobytes()
         fmt = struct.pack("<HHIIHH", 3, 2, 48000, 384000, 8, 32)
