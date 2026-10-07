@@ -45,7 +45,8 @@ native `GetCharCol` conversion rather than simple sprite X / 51.
 - `Falling`, CODE:6 `0x00a6`, and `HitFloor`, `0x0280`: landing is checked
   in states 4/9. Speed below 50 selects soft landing (`17`, or `63` armed);
   50-62 selects hard landing `20` and one life of damage; 63 selects fatal
-  landing `22`. Falling beyond absolute Y=730 without a lower room is fatal.
+  landing `22`. Falling beyond absolute Y=730 without a lower room is fatal,
+  except in the two harbor water rooms, where RoofWatchOpps owns the death delay.
 - `GetLeftBarr` / `GetRightBarr`, CODE:4 `0x541a` / `0x547c`: the full-wall
   case uses the recovered DATA offsets. A swept body check prevents crossing
   the wall between frames, including horizontal drift during a fall. The
@@ -451,7 +452,7 @@ pursuers, without resetting its ownership, sequence or countdown. Native
 side/floor/wall eligibility and death still determine when another guard
 may spawn; this is not a global one-guard cap.
 
-F2 exposes traversal-order screens 1-7 and the right-hand secret, with
+F2 exposes traversal-order screens 1-10 and the right-hand secret, with
 fixed supported entry positions. It no longer exposes native room IDs,
 floor selection or arbitrary X coordinates. Pause centers the original
 font's visible ink in the 19-pixel HUD band. The long sheath accepts
@@ -470,17 +471,24 @@ The source's additional left-facing rooftop room-19 adjustment is translated
 too. The floor check happens after loading pose 80, not using the earlier
 airborne pose or the post-alignment foot.
 
-Ordinary flat guard deaths now apply the source's post-first-pose alignment
+Ordinary flat deaths now apply the source's post-first-pose alignment
 (6:5524-5558 and 6:04aa-055a). A foot already over space moves back 36;
 the adjacent empty tile then aligns the corpse to native distance 32.
-This avoids leaving a flat corpse across the roof slope. The r12 ordinary
-tumble selection also uses generator LIFE bit 0x80, the registered dead-NPC
+This applies the native supporting-foot correction; settled-body visibility
+is a separate rule below. The r12 ordinary tumble selection also uses
+generator LIFE bit 0x80, the registered dead-NPC
 bank count/Rnd(3), overlapping settled corpses and facing/tile vetoes.
 Mode 9 bypasses roof walls, floor landing and room cuts (2:65ee-6664), follows
 the SEQS:185/207 trajectory with native gravity, and freezes at absolute
 Y=730. Its ordinary ClipChar bypass is distinct from all ledge/facade masks.
 The odd-slot flat corpse variant 195/228 is deterministic. Neither flat
 corpse Y nor all corpse visibility is changed to imitate a screenshot.
+
+The SEQS:85 alignment also applies to the Prince with his own frame record.
+Settled Prince and guard rooftop corpses follow `IsCharNonViewable`
+4:474c-477c, which suppresses dead poses outside native rooms 15/16/19. Death animation poses
+remain visible. The former flat-guard visibility exception is removed. See
+[REBIRTH_RECOVERY.md](REBIRTH_RECOVERY.md) for the death presentation rules.
 
 Room cuts reuse one decoded rooftop atlas. Screen labels and F2 metadata no
 longer build all supported rooms: the first label took about 1.4 seconds
@@ -502,9 +510,14 @@ are local timings, not a hardware-independent performance guarantee.
   rooftops, including the supported alternate-row drop. Full inactive-world
   simulation, other vertical pursuit, special actors
   and all native `CutOpponent` lifecycle branches remain out of scope.
-- Special Rooftops tile 47 is not rendered yet (including native room 16).
-  Entering unsupported scenery is blocked with a status message instead of
-  crashing. Boat behavior, level completion and audio are also unimplemented.
+- Harbor tiles 47/48, the departure counter, ship catch/climb and water deaths
+  are implemented for the end of level 1. The full native moving-obstacle bank
+  and conditional pillar redraw pipeline remain incomplete. Boarding emits
+  the original level-transition request; the host currently shows completion
+  instead of playing the ending movie or loading level 2. Audio is unimplemented.
+
+See [HARBOR_RECOVERY.md](HARBOR_RECOVERY.md) for the source predicates, room
+route, rendering scope and integrated harbor regressions.
 
 No replacement artwork or generic physics library changes the recovered
 animation sequences. The prototype's 12 fps movement / 10 fps combat cadence

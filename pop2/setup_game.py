@@ -1,20 +1,24 @@
 """First-run import of user-supplied Macintosh game files."""
 
 from pathlib import Path
+from queue import Empty, Queue
+from threading import Thread
 import tkinter as tk
 from tkinter import filedialog, ttk
 
 from tools.extract_assets import extract_assets
 
 
-def import_game(image_path, project):
-    return extract_assets(image_path, Path(project) / "assets")
+def import_game(image_path, project, progress=lambda _text: None):
+    return extract_assets(image_path, Path(project) / "assets", progress)
 
 
 class GameSetup:
     def __init__(self, project):
         self.project = Path(project)
         self.completed = False
+        self.importing = False
+        self.messages = Queue()
         self.root = tk.Tk()
         self.root.title("Prince of Persia 2 - Game Files")
         self.root.resizable(False, False)
@@ -61,19 +65,44 @@ class GameSetup:
         if not image_path:
             return
         self.status.set("Importing game files...")
+        self.importing = True
         self.import_button.state(["disabled"])
+        self.cancel_button.state(["disabled"])
         self.root.configure(cursor="watch")
         self.root.update_idletasks()
+        Thread(target=self.import_files, args=(image_path,), daemon=True).start()
+        self.root.after(50, self.poll_import)
+
+    def import_files(self, image_path):
         try:
-            import_game(image_path, self.project)
-        except (OSError, ValueError) as error:
-            self.status.set(str(error))
-            self.import_button.state(["!disabled"])
-            self.root.configure(cursor="")
-            self.root.geometry("")
+            import_game(image_path, self.project,
+                        lambda text: self.messages.put(("progress", text)))
+        except Exception as error:
+            self.messages.put(("error", str(error)))
+        else:
+            self.messages.put(("complete", ""))
+
+    def poll_import(self):
+        while True:
+            try:
+                kind, text = self.messages.get_nowait()
+            except Empty:
+                break
+            if kind == "progress":
+                self.status.set(text)
+                continue
+            self.importing = False
+            if kind == "error":
+                self.status.set(text)
+                self.import_button.state(["!disabled"])
+                self.cancel_button.state(["!disabled"])
+                self.root.configure(cursor="")
+                self.root.geometry("")
+            else:
+                self.completed = True
+                self.close()
             return
-        self.completed = True
-        self.close()
+        self.root.after(50, self.poll_import)
 
     def activate(self, _event):
         if self.root.focus_get() == self.cancel_button:
@@ -82,7 +111,8 @@ class GameSetup:
             self.choose()
 
     def close(self):
-        self.root.destroy()
+        if not self.importing:
+            self.root.destroy()
 
     def run(self):
         self.root.mainloop()

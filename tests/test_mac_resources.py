@@ -1,7 +1,7 @@
 import struct
 import unittest
 
-from pop2.mac_resources import get_resource_fork, parse_resource_fork
+from pop2.mac_resources import get_data_fork, get_resource_fork, parse_resource_fork
 
 
 def resource_fork():
@@ -85,6 +85,15 @@ class ResourceForkTests(unittest.TestCase):
 
 
 class HfsExtractionTests(unittest.TestCase):
+    def test_data_fork_uses_its_own_length_and_extents(self):
+        image = hfs_image()
+        record = 2560 + 14 + 18
+        struct.pack_into(">I", image, record + 26, 5)
+        struct.pack_into(">2H", image, record + 74, 3, 1)
+        image[3584:3589] = b"audio"
+        self.assertEqual(get_data_fork(image, "Prince.rsrc"), b"audio")
+        self.assertEqual(get_resource_fork(image, "Prince.rsrc"), b"abc")
+
     def test_raw_and_wrapped_images_extract_the_same_resource_bytes(self):
         for wrapper in (0, 84, 512):
             with self.subTest(wrapper=wrapper):

@@ -7,6 +7,7 @@ from PIL import Image, ImageChops
 
 from pop2.animation_data import parse_frame_records, sequence_words
 from pop2.opening_animation import OpeningEscape
+from pop2.rebirth import DeathState
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.render_opening import (
     actor_foreground_column,
@@ -65,7 +66,12 @@ class OpeningRoomTests(unittest.TestCase):
             self.assertEqual(room.flattened().tobytes(), before)
 
     def render_scene(self, facing=0, dy=0, sword=None, opening=None, x=370):
+        from pop2.harbor import Harbor
         scene = ScenePrototype.__new__(ScenePrototype)
+        scene.room_id = 3
+        scene.harbor = Harbor()
+        scene.level_complete = False
+        scene.death = DeathState()
         scene.paused = False
         scene.dev_menu = None
         scene.background = self.room.background
@@ -254,6 +260,41 @@ class OpeningRoomTests(unittest.TestCase):
         self.assertLessEqual(right, ledge.x + 22)
         self.assertLessEqual(bottom, ledge.y + ledge.alpha.height)
         self.assertEqual(room.actor_mask(0, state=state).size, (ROOM_WIDTH, ROOM_HEIGHT))
+
+    def test_settled_prince_corpses_are_hidden_on_roofs_but_not_descent_or_water(self):
+        from pop2.rebirth import DEAD_POSES
+        for room_id in (3, 0, 9, 14, 15, 18):
+            room = build_opening_room(room_id=room_id)
+            for pose in DEAD_POSES:
+                with self.subTest(room=room_id, pose=pose):
+                    state = SequenceState(213, action=pose, actor_type=0,
+                                          level_kind=5, animation_state=1)
+                    mask = room.actor_mask(1, state=state, record=self.frames[185])
+                    self.assertEqual(mask.getextrema() == (255, 255),
+                                     room_id not in (14, 15, 18))
+
+    def test_settled_guard_corpses_use_the_same_native_roof_visibility_rule(self):
+        for room_id in (3, 0, 2, 9, 14, 15, 18):
+            room = build_opening_room(room_id=room_id)
+            for pose in (185, 228):
+                for facing in (0, 1):
+                    with self.subTest(room=room_id, pose=pose, facing=facing):
+                        state = SequenceState(213, action=pose, actor_type=2,
+                                              level_kind=5, facing=facing, animation_state=1)
+                        mask = room.actor_mask(1, state=state, record=self.frames[185])
+                        self.assertEqual(mask.getextrema() == (255, 255),
+                                         room_id not in (14, 15, 18))
+
+    def test_roof_corpse_rule_does_not_hide_death_animation_or_other_level_kinds(self):
+        room = build_opening_room(room_id=3)
+        for actor_type, pose, kind in ((0, 179, 5), (0, 183, 5),
+                                       (2, 179, 5), (2, 183, 5),
+                                       (2, 213, 5), (2, 218, 5),
+                                       (2, 185, 1), (2, 228, 1), (0, 185, 1)):
+            state = SequenceState(213, action=pose, actor_type=actor_type,
+                                  level_kind=kind, animation_state=1)
+            mask = room.actor_mask(1, state=state, record=self.frames[185])
+            self.assertNotEqual(mask.getextrema(), (255, 255))
 
     def test_falling_past_junction_shortens_only_the_ledge_foreground(self):
         room = build_opening_room(room_id=9)

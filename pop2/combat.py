@@ -103,6 +103,7 @@ class Fighter:
 class CombatEvent:
     kind: str
     actor: str
+    death_method: int | None = None
 
 
 @dataclass(frozen=True)
@@ -467,9 +468,15 @@ class CombatEncounter:
         if self.level is not None and not guard.sword_drawn:
             self._choose_unarmed_guard_action(guard)
             return
-        if guard.room != player.room or guard.row != player.row:
-            return
         if not player.alive:
+            guard.alert_mode = 0
+            if state.action in GUARD_POSES and state.animation_state < 2:
+                # EnGarde 4:09c0-09e2 -> OnAlert 6:2536-254c ->
+                # 6:2592/25ee: lower the sword only at a ready pose.
+                guard.sword_drawn = False
+                select_sequence(guard, 77)
+            return
+        if guard.room != player.room or guard.row != player.row:
             return
         if state.action == 166 and state.sequence_id == 77:
             guard.sword_drawn = True
@@ -765,6 +772,7 @@ class CombatEncounter:
             if event.kind == "death":
                 guard.life = 0
             elif event.kind == "land":
+                guard.state.sound_events.append(7 if event.damage else 296)
                 guard.life = max(0, guard.life - event.damage)
                 guard.sword_drawn = True
         if guard.room != old_room:
@@ -852,14 +860,21 @@ class CombatEncounter:
             target.targetable = False
         select_sequence(target, sequence, offset)
         target.runtime.next_frame()
-        if (name == "guard" and sequence == 85
-                and getattr(self, "terrain", None) is not None
-                and getattr(self, "guard_art", None) is not None):
-            self.terrain.align_flat_death(
-                target.room, target.row, target.state,
-                self.guard_art.frames[guard_frame_index(target.state.action)])
+        if sequence == 85 and getattr(self, "terrain", None) is not None:
+            record = None
+            if name == "guard" and getattr(self, "guard_art", None) is not None:
+                record = self.guard_art.frames[guard_frame_index(target.state.action)]
+            elif name == "player" and getattr(self, "player_frames", None) is not None:
+                record = self.player_frames[target.state.action]
+            if record is not None:
+                self.terrain.align_flat_death(target.room, target.row, target.state, record)
         target.state.current_x = target.state.target_x
-        return CombatEvent("hit" if target.alive else "death", name)
+        death_method = None
+        if name == "player" and not target.alive:
+            # CheckStab 6:5704-5748: ordinary type-2 guards on supported
+            # levels (LEVL 21a4 == 0) select 14, not skeleton method 2.
+            death_method = 14 if attacker.state.actor_type == 2 else 2
+        return CombatEvent("hit" if target.alive else "death", name, death_method)
 
     def resolve_contacts(self):
         events, hits = [], {}

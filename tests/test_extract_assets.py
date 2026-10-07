@@ -18,6 +18,9 @@ class AssetImportTests(unittest.TestCase):
         self.forks = {name: name.encode("ascii") for name in extract_assets.RESOURCE_FILES}
         self.forks["Prince of Persia 2"] = b"synthetic application"
         self.profiles = {"schema": 1, "profiles": [{"skill": 0}]}
+        audio = patch.object(extract_assets, "extract_audio")
+        self.audio = audio.start()
+        self.addCleanup(audio.stop)
 
     def fork(self, _image, name, file_type="rsrc"):
         self.assertEqual(file_type, "APPL" if name == "Prince of Persia 2" else "rsrc")
@@ -99,6 +102,38 @@ class AssetImportTests(unittest.TestCase):
             extract_assets.extract_assets(self.image, self.output)
         self.assertEqual(original.read_bytes(), b"existing game")
         self.assertEqual(list(self.output.iterdir()), [original])
+
+    def test_audio_failure_preserves_installed_resources_and_removes_staging(self):
+        self.output.mkdir()
+        original = self.output / "Prince.rsrc"
+        original.write_bytes(b"existing game")
+        self.audio.side_effect = ValueError("MIDI rendering failed")
+        with (
+            patch.object(extract_assets, "get_resource_fork", side_effect=self.fork),
+            patch.object(extract_assets, "parse_resource_fork", side_effect=self.resource_types),
+            patch.object(extract_assets, "extract_bytes", return_value=self.profiles),
+            self.assertRaisesRegex(ValueError, "MIDI rendering failed"),
+        ):
+            extract_assets.extract_assets(self.image, self.output)
+        self.assertEqual(original.read_bytes(), b"existing game")
+        self.assertEqual(list(self.output.iterdir()), [original])
+
+    def test_prepared_audio_is_committed_with_the_other_resources(self):
+        def audio(_image, _program, _prince, directory, _progress):
+            directory.mkdir()
+            (directory / "manifest.json").write_bytes(b"{}")
+            (directory / "cue-40.wav").write_bytes(b"prepared song")
+
+        self.audio.side_effect = audio
+        with (
+            patch.object(extract_assets, "get_resource_fork", side_effect=self.fork),
+            patch.object(extract_assets, "parse_resource_fork", side_effect=self.resource_types),
+            patch.object(extract_assets, "extract_bytes", return_value=self.profiles),
+        ):
+            files = extract_assets.extract_assets(self.image, self.output)
+        self.assertEqual(files["audio/cue-40.wav"], b"prepared song")
+        self.assertEqual((self.output / "audio" / "cue-40.wav").read_bytes(), b"prepared song")
+        self.assertFalse(list(self.output.glob(".import-*")))
 
 
 if __name__ == "__main__":

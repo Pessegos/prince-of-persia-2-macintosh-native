@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -14,7 +15,9 @@ class InstallationTests(unittest.TestCase):
         assets = self.project / "assets"
         assets.mkdir()
         for name in run_game.REQUIRED_ASSETS:
+            (assets / name).parent.mkdir(parents=True, exist_ok=True)
             (assets / name).touch()
+        (assets / "audio" / "manifest.json").write_text(json.dumps({"schema": 1, "cues": {}}))
 
     def test_complete_installation_has_no_errors(self):
         self.assertEqual(run_game.installation_errors(self.project), [])
@@ -23,6 +26,13 @@ class InstallationTests(unittest.TestCase):
         (self.project / "assets" / "Kid.rsrc").unlink()
         errors = run_game.installation_errors(self.project)
         self.assertIn("Kid.rsrc", "\n".join(errors))
+
+    def test_missing_prepared_audio_and_corrupt_manifest_request_reimport(self):
+        manifest = self.project / "assets" / "audio" / "manifest.json"
+        manifest.write_text(json.dumps({"schema": 1, "cues": {"40": {"file": "cue-40.wav"}}}))
+        self.assertEqual(run_game.missing_assets(self.project), ["audio/cue-40.wav"])
+        manifest.write_text("invalid json")
+        self.assertIn("needs reimport", " ".join(run_game.missing_assets(self.project)))
 
     def test_old_python_is_rejected_before_opening_a_window(self):
         with patch.object(run_game.sys, "version_info", (3, 9)):

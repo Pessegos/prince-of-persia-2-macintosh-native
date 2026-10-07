@@ -7,7 +7,9 @@ from PIL import Image, ImageChops, ImageDraw, ImageFont
 from pop2.animation_data import parse_frame_records, shape_id_for_action
 from pop2.mac_resources import parse_resource_fork
 from pop2.paths import ASSET_DIR, OUTPUT_DIR
+from pop2.rebirth import DEAD_POSES
 from pop2.terrain import LevelMap, character_column, character_row, floor_contact_x
+from pop2.harbor import HARBOR_ROOMS, SHIP_ROOM
 
 
 TILE_WIDTH = 51
@@ -66,6 +68,7 @@ class RoofForeground:
     y: int
     alpha: Image.Image
     decoration: bool = False
+    floor_redraw: bool = False
 
 
 def actor_foreground_column(state, record, bounds=None):
@@ -132,6 +135,15 @@ class OpeningRoom:
         return Image.alpha_composite(self.background, self.foreground)
 
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
+        actor_type = getattr(state, "actor_type", None)
+        dead_poses = (185, 228) if actor_type == 2 else DEAD_POSES
+        if (state is not None and actor_type in (0, 2)
+                and getattr(state, "level_kind", None) == 5
+                and state.action in dead_poses and self.room_id not in (14, 15, 18)):
+            # IsCharNonViewable 4:474c-477c suppresses settled roof corpses;
+            # IsDeadPos includes guard variant 228 (4:4846-485c). Native
+            # rooms 15/16/19 keep the descent/water drawing path.
+            return Image.new("L", (ROOM_WIDTH, ROOM_HEIGHT), 255)
         if (state is not None and getattr(state, "actor_type", None) == 2
                 and getattr(state, "level_kind", None) == 5
                 and state.animation_state == 9 and self.room_id not in (15, 18)):
@@ -165,11 +177,27 @@ class OpeningRoom:
             overlaps = (bounds is not None and bounds[0] < piece.x + piece.alpha.width
                         and bounds[2] >= piece.x and bounds[1] < piece.y + piece.alpha.height
                         and bounds[3] >= piece.y)
+            if piece.floor_redraw:
+                # DrawHalf 3:3480 requests pass 2 with ComputeHalfRect's clip;
+                # DrawRoofFloor 23:04c4 further limits it to the near 22 pixels.
+                # The complete plank SHAP belongs to background pass 5.
+                rect = None
+                if indexed and piece.row == roof_row and climbing and state.action < 145:
+                    top, left, bottom_edge, right = CLIMB_FOREGROUND_RECTS[state.action - 135]
+                    rect = (piece.column * TILE_WIDTH + left, piece.row * TILE_HEIGHT + top,
+                            piece.column * TILE_WIDTH + min(right, 22),
+                            piece.row * TILE_HEIGHT + bottom_edge)
+                if rect is not None:
+                    alpha = piece.alpha.crop((rect[0] - piece.x, rect[1] - piece.y,
+                                              rect[2] - piece.x, rect[3] - piece.y))
+                    add_alpha(mask, alpha, rect[0], rect[1])
+                continue
             # Fall physics advances the supporting row before the sprite
             # clears the upper facade. Keep intersecting near-face SHAPs in
             # front throughout the fall, not only once Catch selects pose 80.
             # Sloping sides are RoofLedges and retain their own back/strip rule.
             airborne_foreground = airborne and overlaps
+            pillar_foreground = piece.kind == 47 and overlaps
             # Catching the left edge faces the flat near facade, not the
             # shaded side. Keep its complete foreground through SEQS:10's
             # row change; DrawHalf alone exposes hands/feet at poses 141-148.
@@ -178,10 +206,11 @@ class OpeningRoom:
                             and (climbing and (indexed or state.action < 141 and overlaps)
                                  or near_facade_climb
                                  or hanging and overlaps))
-            if piece.row < row and not (climbed_roof or airborne_foreground):
+            if piece.row < row and not (climbed_roof or airborne_foreground or pillar_foreground):
                 continue
             if (column is None or indexed and piece.row >= indexed_row or climbed_roof or airborne_foreground
-                    or piece.kind == 20 or piece.decoration or piece.kind == 1 and not climbing):
+                    or pillar_foreground or piece.kind == 20 or piece.decoration
+                    or piece.kind == 1 and not climbing):
                 # Foreground wall SHAPs remain in front across the whole
                 # actor rectangle, including a right-facing catch. Their
                 # shaded side is background, not part of this alpha mask.
@@ -213,6 +242,7 @@ def s16(data, offset):
     return struct.unpack_from(">h", data, offset)[0]
 
 
+@lru_cache(maxsize=8)
 def load_resource_file(name):
     return parse_resource_fork((ASSET_DIR / name).read_bytes())
 
@@ -365,38 +395,59 @@ def build_opening_room(include_curtain=True, room_id=None):
     ledges = []
     foreground_pieces = []
 
+    # CUST records own the full background and foreground of native room 15.
+    custom = load_resource_file("Rooftops.rsrc").get("CUST", {}).get(3975 + (room_id + 1) * 25)
+    if custom is not None:
+        data = custom["data"]
+        first_shape = u16(data, 2)
+        for offset in range(30, len(data), 32):
+            index, bottom, x, draw_pass = struct.unpack_from(">4h", data, offset)
+            shape = shapes[first_shape + index]
+            layer = 3 if draw_pass == 1 else 0
+            layers[layer].paste(shape, (x, bottom - shape.height), shape)
+            if layer == 3:
+                foreground_pieces.append(RoofForeground(1, 0, 1, x, bottom - shape.height,
+                                                        shape.getchannel("A")))
+
     def tile_info(x, y):
         tile = level_map.tile(room_id, x, y)
         return tile.kind, tile.foreground, tile.background
 
     def draw_shape(layer_index, shape_id, tile_x, tile_y, dx=0, dy=0, ledge=False,
-                   decoration=False):
+                   decoration=False, floor_redraw=False, clip_width=None):
         shape = shapes.get(shape_id)
         if shape is None:
             raise ValueError(f"Missing/unsupported rooftop SHAP:{shape_id}")
+        if clip_width is not None:
+            shape = shape.crop((0, 0, clip_width, shape.height))
         anchor_x = tile_x * TILE_WIDTH + dx
         anchor_y = (tile_y + 1) * TILE_HEIGHT + SCENERY_Y_OFFSET + dy
         layers[layer_index].paste(shape, (anchor_x, anchor_y - shape.height), shape)
-        if layer_index == 3:
+        if layer_index == 3 or floor_redraw:
             if ledge:
                 ledges.append(RoofLedge(tile_y, anchor_x, anchor_y - shape.height,
                                         shape.getchannel("A")))
             else:
                 foreground_pieces.append(RoofForeground(tile_y, tile_x, tile_info(tile_x, tile_y)[0],
                                                        anchor_x, anchor_y - shape.height,
-                                                       shape.getchannel("A"), decoration))
+                                                       shape.getchannel("A"), decoration, floor_redraw))
 
     def draw_background(tile_x, tile_y, background):
         background_type = background & 0x3F
         if background_type:
             piece = pieces[0x24]
-            fill = ROOF_BACKGROUND_FILL[background_type]
+            harbor_tile = level_map.tile(room_id, tile_x, tile_y).room in HARBOR_ROOMS
+            fill = 0 if harbor_tile else ROOF_BACKGROUND_FILL[background_type]
             if fill:
                 draw_shape(0, 3500 + fill, tile_x, tile_y, piece[2], piece[3])
-            draw_shape(0, 3500 + background_type, tile_x, tile_y, piece[2], piece[3])
+            draw_shape(0, 3500 + background_type + (108 if harbor_tile else 0),
+                       tile_x, tile_y, piece[2], piece[3])
 
     def draw_room_tile(tile_x, tile_y):
         tile_type, foreground, background = tile_info(tile_x, tile_y)
+        if foreground & 0xc000:
+            return
+        harbor_tile = level_map.tile(room_id, tile_x, tile_y).room in HARBOR_ROOMS
         if tile_type in (0x00, 0x31):
             draw_background(tile_x, tile_y, background)
             if tile_type == 0x31 and include_curtain:
@@ -406,8 +457,21 @@ def build_opening_room(include_curtain=True, room_id=None):
         elif tile_type == 0x01:
             piece = pieces[0x01]
             draw_background(tile_x, tile_y, background)
-            draw_shape(3, 3500 + (foreground & 0x000F) + 0x33, tile_x, tile_y, piece[8], piece[9])
-            if tile_x < 9 and tile_info(tile_x + 1, tile_y)[0] in (0x00, 0x09, 0x1B, 0x2F, 0x31):
+            if harbor_tile:
+                # DrawRoofFloor 23:0288/032a/046c: far cap in back;
+                # near cap in front; planks in back with partial edge redraws.
+                draw_shape(1, 3612, tile_x, tile_y, 0, piece[6], floor_redraw=True)
+                if tile_info(tile_x - 1, tile_y)[0] in (0x00, 0x09, 0x1B, 0x2F, 0x31):
+                    # DrawFloorBuf 3:37ca-38d4 / DrawRoofFloor 23:04c4:
+                    # the exposed 22-pixel near face stays in front of actors.
+                    # Its SHAP alpha starts below the walkable surface.
+                    draw_shape(3, 3612, tile_x, tile_y, 0, piece[6], clip_width=22)
+                if foreground & 15:
+                    draw_shape(1, 3614, tile_x, tile_y, piece[2], piece[3])
+                    draw_shape(3, 3613, tile_x, tile_y, piece[8], piece[9])
+            else:
+                draw_shape(3, 3500 + (foreground & 0x000F) + 0x33, tile_x, tile_y, piece[8], piece[9])
+            if not harbor_tile and tile_x < 9 and tile_info(tile_x + 1, tile_y)[0] in (0x00, 0x09, 0x1B, 0x2F, 0x31):
                 draw_shape(3, 3500 + min((foreground & 0x000F) + 0x2F, 0x32),
                            tile_x + 1, tile_y, 0, piece[6], ledge=True)
         elif tile_type == 0x14:
@@ -415,6 +479,13 @@ def build_opening_room(include_curtain=True, room_id=None):
                 piece = pieces[0x24]
                 draw_shape(3, 3500 + (foreground & 0x001F) + 0x45, tile_x, tile_y,
                            piece[8], piece[9])
+        elif tile_type == 47:
+            draw_background(tile_x, tile_y, background)
+            piece = pieces[47]
+            draw_shape(1, 3616, tile_x, tile_y, piece[2], piece[3])
+            draw_shape(3, 3615, tile_x, tile_y, piece[8], piece[9])
+        elif tile_type == 48:
+            draw_background(tile_x, tile_y, background)
         else:
             raise ValueError(f"Opening room has unimplemented tile type {tile_type:#x}")
         decoration_id = (foreground >> 8) & 15
@@ -426,7 +497,8 @@ def build_opening_room(include_curtain=True, room_id=None):
                        dx, dy, decoration=True)
 
     # Neighbor rows can overlap the top/bottom five pixels of the room clip.
-    for tile_y in range(3, -2, -1):
+    tile_rows = range(3, -2, -1) if custom is None else ()
+    for tile_y in tile_rows:
         for tile_x in range(-1, 10):
             if level_map.tile(room_id, tile_x, tile_y).room is None:
                 # The physics sentinel (wall 20) has no scenery. Where there
@@ -435,7 +507,7 @@ def build_opening_room(include_curtain=True, room_id=None):
                 if tile_y == -1 and 0 <= tile_x < 10:
                     bg_type = tile_info(tile_x, 0)[2] & 0x3f
                     if bg_type:
-                        strip = shapes[3500 + bg_type].crop(
+                        strip = shapes[3500 + bg_type + (108 if room_id in HARBOR_ROOMS else 0)].crop(
                             (0, 0, TILE_WIDTH, SCENERY_Y_OFFSET))
                         layers[0].paste(strip, (tile_x * TILE_WIDTH, 0), strip)
                 continue
@@ -451,7 +523,7 @@ def build_opening_room(include_curtain=True, room_id=None):
     for row in range(-1, 5):
         mask = Image.new("L", (ROOM_WIDTH, ROOM_HEIGHT), 0)
         for piece in foreground_pieces:
-            if piece.row >= row:
+            if piece.row >= row and not piece.floor_redraw:
                 add_alpha(mask, piece.alpha, piece.x, piece.y)
         for ledge in ledges:
             if ledge.row >= row:
@@ -461,6 +533,71 @@ def build_opening_room(include_curtain=True, room_id=None):
         occlusion[row] = mask
     return OpeningRoom(background, layers[3], occlusion,
                        tuple(ledges), tuple(foreground_pieces), room_id)
+
+
+def draw_harbor(frame, room_id, harbor, front=False):
+    if room_id not in HARBOR_ROOMS:
+        return frame
+    level_map, shapes, pieces = rooftop_scene_data()
+    layer = Image.new("RGBA", frame.size)
+    splash_occlusion = Image.new("L", frame.size) if front and harbor.water else None
+
+    def shape(index, x, bottom, clip=None, occlusion=None):
+        sprite = shapes[3500 + index]
+        top = bottom - sprite.height
+        if clip is not None:
+            left, y, right, end = (max(x, clip[0]), max(top, clip[1]),
+                                   min(x + sprite.width, clip[2]), min(bottom, clip[3]))
+            if left >= right or y >= end:
+                return
+            sprite = sprite.crop((left - x, y - top, right - x, end - top))
+            x, top = left, y
+        if occlusion is not None:
+            sprite = sprite.copy()
+            mask = occlusion.crop((x, top, x + sprite.width, top + sprite.height))
+            sprite.putalpha(ImageChops.multiply(sprite.getchannel("A"), ImageChops.invert(mask)))
+        layer.alpha_composite(sprite, (x, top))
+    if room_id == SHIP_ROOM and harbor.ship_frame <= 98:
+        x = harbor.ship_x
+        if front:
+            shape(123, x + 72, 125 + pieces[48][6])
+        else:
+            shape(122, x, 125 + pieces[48][3])
+            shape(124 + ((-x) & 3), x, 125 + pieces[48][9])
+    for row in range(3):
+        for column in range(10):
+            tile = level_map.tile(room_id, column, row)
+            if tile.kind != 47:
+                continue
+            phase = (tile.foreground + harbor.wave_frame) & 3
+            x, y = column * TILE_WIDTH, row * TILE_HEIGHT
+            # DrawRoofPillar: DATA cc32/cc3a, offset by ComputeOffsetCellRect.
+            if front:
+                if splash_occlusion is not None:
+                    post = shapes[3615]
+                    add_alpha(splash_occlusion, post.getchannel("A"),
+                              x + pieces[47][8],
+                              (row + 1) * TILE_HEIGHT + SCENERY_Y_OFFSET + pieces[47][9] - post.height)
+                shape(117 + phase, column * TILE_WIDTH + pieces[46][5],
+                      (row + 1) * TILE_HEIGHT + 5 + pieces[46][6],
+                      (x + 13, y + 104, x + 43, y + 196))
+            else:
+                index = 119 + phase
+                shape(index - 4 if index > 120 else index,
+                      column * TILE_WIDTH + 52, (row + 1) * TILE_HEIGHT + 5 + 13,
+                      (x + 52, y + 75, x + 82, y + 167))
+    if front:
+        offsets = (5, 4, 5, 7, 1, 0)
+        for entry in harbor.water.values():
+            if entry.room == room_id and entry.age < 6:
+                index = 128 + entry.age
+                sprite = shapes[3500 + index]
+                # DrawPillarInBack 23:0f96 only moves the near pillar behind
+                # a tumble splash. Ordinary splashes stay behind the pillar.
+                shape(index, entry.x - sprite.width // 2,
+                      331 + offsets[entry.age] + (27 if entry.tumble else 0),
+                      occlusion=None if entry.tumble else splash_occlusion)
+    return Image.alpha_composite(frame, layer)
 
 
 def make_opening_room():

@@ -22,8 +22,8 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 2,Main,ResumeGame,0x1038,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,21
 2,Main,SaveGame,,unknown,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 2,Main,SetCheckSavedGameCheckSumValues,0x1504,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
-2,Main,SaveRebirthPtStatus,0x15d0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,13
-2,Main,SetRebirthPtInitials,0x179e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,5,1
+2,Main,SaveRebirthPtStatus,0x15d0,decoded,partial,pop2/rebirth.py;pop2/scene_prototype.py,level-1 opponent/generator snapshot; dynamic normalization and story state missing,1,13
+2,Main,SetRebirthPtInitials,0x179e,jump_table,partial,pop2/rebirth.py;pop2/scene_prototype.py,"level-1 checkpoint room/cell, facing, full maximum life and idle startup",5,1
 2,Main,CopyProtectionDialog,0x1922,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,22
 2,Main,ComputeSymbolPt,0x1c10,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 2,Main,ComputeSymbolRect,0x1c6e,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,1
@@ -108,8 +108,8 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 3,Modular Set 1,GetCustomPieceShape,0x1236,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 3,Modular Set 1,GetCustomPieceSize,0x12a8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 3,Modular Set 1,IsCustomizedRoom,0x1310,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
-3,Modular Set 1,LoadCustomRoomData,0x1378,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,6
-3,Modular Set 1,LoadCustomRoomShapes,0x142a,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,8
+3,Modular Set 1,LoadCustomRoomData,0x1378,jump_table,partial,pop2/render_opening.py,CUST:4350 fixed descent-room image records only,4,6
+3,Modular Set 1,LoadCustomRoomShapes,0x142a,decoded,partial,pop2/render_opening.py,fixed descent-room SHAP images; animated templates missing,2,8
 3,Modular Set 1,RestoreKeepCustomPeel,0x1780,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
 3,Modular Set 1,SetCustomPieceRect,0x1856,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,1
 3,Modular Set 1,SetCustomRoomTemplate,0x18aa,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,0
@@ -118,7 +118,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 3,Modular Set 1,RedrawTopFast,0x1f4e,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,4
 3,Modular Set 1,DrawBackImg,0x1ff4,decoded,indexed-only,,No semantic review recorded in this prototype catalog,9,5
 3,Modular Set 1,GetBackImgStartPass,0x227e,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,3
-3,Modular Set 1,DrawCustomRoomImgs,0x2324,decoded,indexed-only,,No semantic review recorded in this prototype catalog,4,4
+3,Modular Set 1,DrawCustomRoomImgs,0x2324,decoded,partial,pop2/render_opening.py,CUST:4350 static background/foreground passes,4,4
 3,Modular Set 1,DrawCustomRoomImg,0x2438,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,16,0
 3,Modular Set 1,DrawForeImg,0x2598,decoded,indexed-only,,No semantic review recorded in this prototype catalog,4,4
 3,Modular Set 1,CheckGateInFore,0x26e4,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,6
@@ -143,7 +143,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 3,Modular Set 1,DrawObjLoose,0x412c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,3
 3,Modular Set 1,LoadObject,0x41c6,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 3,Modular Set 1,DrawMessage,0x4252,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,11,10
-3,Modular Set 1,DrawRestartMessage,0x433a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,11
+3,Modular Set 1,DrawRestartMessage,0x433a,jump_table,partial,pop2/scene_prototype.py,"original text/font centered in HUD, reference palette-index-6 displayed color; native frontend timeout missing",2,11
 3,Modular Set 1,ClrLifeBar,0x444a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,1
 3,Modular Set 1,ClrMessage,0x448a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,2
 3,Modular Set 1,GetHorseShape,0x44f0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
@@ -195,7 +195,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,GetTotalDeadOpps,0x02e0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,14
 4,Characters 2,InRange,0x0466,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,5
 4,Characters 2,DoOppRunJump,0x07fe,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,16
-4,Characters 2,EnGarde,0x098c,jump_table,partial,pop2/combat.py,ordinary guard skill and ready-pose decisions,1,29
+4,Characters 2,EnGarde,0x098c,jump_table,partial,pop2/combat.py,"ordinary guard skill, ready-pose decisions and sword lowering after Kid death",1,29
 4,Characters 2,WaitingEngarde,0x0c7e,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,22
 4,Characters 2,GenFight,0x0f28,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,13
 4,Characters 2,OpponentClose,0x111a,decoded,partial,pop2/combat.py,ordinary close-range decisions,2,19
@@ -219,7 +219,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,IndexCell1,0x2a38,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,8,1
 4,Characters 2,AddCharX,0x2bae,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,102,0
 4,Characters 2,AddFCharX,0x2bda,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,15,0
-4,Characters 2,AnimChar,0x2c0c,jump_table,partial,pop2/sequence_runtime.py,supported opcodes; others fail explicitly,36,39
+4,Characters 2,AnimChar,0x2c0c,jump_table,partial,pop2/sequence_runtime.py,supported opcodes including -16 level-transition request; others fail explicitly,36,39
 4,Characters 2,GetSeqOp,0x305e,decoded,indexed-only,,No semantic review recorded in this prototype catalog,20,0
 4,Characters 2,hGetSequence,0x3098,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,1
 4,Characters 2,AnimCharTap,0x30e0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,5
@@ -234,14 +234,14 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,GetDist1,0x3aa0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
 4,Characters 2,GetCharCol,0x3ad6,jump_table,partial,pop2/terrain.py,ordinary signed coordinate conversion,23,1
 4,Characters 2,GetRow,0x3afa,jump_table,partial,pop2/terrain.py,signed row conversion,13,0
-4,Characters 2,PlayerCtrl,0x3b88,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,20
+4,Characters 2,PlayerCtrl,0x3b88,jump_table,partial,pop2/rebirth.py;pop2/scene_prototype.py;pop2/audio.py,ordinary dead-pose counter/retry gate with current/pending SDL audio completion,2,20
 4,Characters 2,IsLedge,0x3f44,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,2
 4,Characters 2,RemoveObj,0x406c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
 4,Characters 2,ClipChar,0x4146,jump_table,reference-only,pop2/render_opening.py,full native clipping pipeline not translated,2,13
 4,Characters 2,MakeFCharClipRect,0x4432,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,2
 4,Characters 2,IndexChar,0x4558,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
-4,Characters 2,IsCharNonViewable,0x471e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,1
-4,Characters 2,IsDeadPos,0x47a0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,10,0
+4,Characters 2,IsCharNonViewable,0x471e,jump_table,partial,pop2/render_opening.py,settled Prince/ordinary guard rooftop corpses except native rooms 15/16/19; guard variant 228 included,3,1
+4,Characters 2,IsDeadPos,0x47a0,jump_table,partial,pop2/rebirth.py,Prince dead-pose IDs only,10,0
 4,Characters 2,LoadShad,0x4ac0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,31,0
 4,Characters 2,CheckBarr,0x4e34,jump_table,partial,pop2/terrain.py,standing-turn mode-7 exclusion; full barriers not translated,1,20
 4,Characters 2,InitColDetBufs,0x50da,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,9
@@ -337,20 +337,20 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 5,Modular Set 2,GetSpikeMobRoomRow,0x3f42,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,1
 5,Modular Set 2,MobSpikes,0x3fa4,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 5,Modular Set 2,TriggerSpikes,0x40a0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,2
-5,Modular Set 2,AddKidDeathSong,0x4afc,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
-5,Modular Set 2,AddKidScream,0x4b5a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
+5,Modular Set 2,AddKidDeathSong,0x4afc,jump_table,partial,pop2/rebirth.py;pop2/audio.py;tools/extract_audio.py,"extracted death-method mapping, level-1 songs and actual playback completion",1,2
+5,Modular Set 2,AddKidScream,0x4b5a,jump_table,partial,pop2/terrain.py,ordinary rooftop Prince long fall and harbor room exclusions,2,1
 5,Modular Set 2,AddSFX,0x4cde,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
-5,Modular Set 2,AddSong,0x4d58,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,43,1
-5,Modular Set 2,AddSound,0x4d84,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,89,0
+5,Modular Set 2,AddSong,0x4d58,jump_table,partial,pop2/audio.py,first pending song retained per update,43,1
+5,Modular Set 2,AddSound,0x4d84,jump_table,partial,pop2/audio.py;tools/extract_audio.py,"extracted cue priorities, pending arbitration and ordinary actor footstep suppression",89,0
 5,Modular Set 2,CheckSnd,0x4df8,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 5,Modular Set 2,InitAmbient,0x4e44,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,1
 5,Modular Set 2,LoadSounds,0x4e9c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,6
-5,Modular Set 2,PlayAmbient,0x4f92,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,7
+5,Modular Set 2,PlayAmbient,0x4f92,jump_table,partial,pop2/audio.py;tools/extract_audio.py,"level-1 bank, inclusive RoofA-D pool and advance-on-repeat; later combat transitions missing",2,7
 5,Modular Set 2,PrinceReleaseSnd,0x5210,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,1
 5,Modular Set 2,PrinceResetSnd,0x5252,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,18,1
 5,Modular Set 2,PrinceSetSnd,0x5292,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,1
 5,Modular Set 2,PrinceSndOn,0x52c8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,39,1
-5,Modular Set 2,SetCueSnd,0x530a,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,1
+5,Modular Set 2,SetCueSnd,0x530a,decoded,partial,pop2/audio.py,mode 0/1/2 interruption and priority gates,1,1
 5,Modular Set 2,SpecialMusic,0x5388,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 5,Modular Set 2,TimeForNewAmbient,0x5478,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,8
 5,Modular Set 2,UpdateAmbient,0x571c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,0
@@ -411,11 +411,11 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,CutAllOpponents,0x4382,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,15
 6,Characters 1,IsCharInKidRoom,0x463c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,1
 6,Characters 1,Cut,0x472a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,4
-6,Characters 1,CutChar,0x4918,decoded,partial,pop2/terrain.py,horizontal cuts and downward priority; vertical gaps remain,1,10
+6,Characters 1,CutChar,0x4918,decoded,partial,pop2/terrain.py,"horizontal cuts, downward priority and native room-15 right-cut veto; vertical gaps remain",1,10
 6,Characters 1,NoWallInDirOfChar,0x4dac,decoded,indexed-only,,No semantic review recorded in this prototype catalog,4,3
 6,Characters 1,AutoCtrl,0x4e90,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
 6,Characters 1,SetTensionLevel,0x5022,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,5,0
-6,Characters 1,CheckStab,0x5092,jump_table,partial,pop2/combat.py,"ordinary contact/damage, forced and generator-enabled tumbles",1,8
+6,Characters 1,CheckStab,0x5092,jump_table,partial,pop2/combat.py;pop2/terrain.py,"ordinary contact/damage, type-2 guard death method 14, player/NPC flat alignment, forced and generator-enabled tumbles",1,8
 6,Characters 1,TestStrike,0x57b2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,24
 6,Characters 1,GetCharStrikeRanges,0x5b38,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,0
 6,Characters 1,IsStrikingPos,0x5d60,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,0
@@ -690,7 +690,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 16,Anim & Audio,GetSndItemForId,0x1ea0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,7,0
 16,Anim & Audio,GetSndItemType,0x1f16,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 16,Anim & Audio,PauseAudioSystem,0x1f6c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,5,6
-16,Anim & Audio,PlaySound,0x201e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,18,2
+16,Anim & Audio,PlaySound,0x201e,jump_table,reference-only,pop2/audio.py,native Mac driver playback replaced by SDL; full handle pipeline not translated,18,2
 16,Anim & Audio,PoPAudioCallBack,0x2054,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 16,Anim & Audio,PurgeSounds,0x20e2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,9,1
 16,Anim & Audio,ReleaseSoundItem,0x2150,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
@@ -1176,24 +1176,24 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 22,Mohawk Libs 4,SelectFirstItem__13TimerLinkListFv,0x74ac,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,0
 22,Mohawk Libs 4,SelectLastItem__13TimerLinkListFv,0x74f6,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 22,Mohawk Libs 4,SelectNextItem__13TimerLinkListFv,0x756a,decoded,indexed-only,,No semantic review recorded in this prototype catalog,0,0
-23,Rooftops,DrawRoofBackWall,0x0004,decoded,partial,pop2/render_opening.py,ordinary background fill/SHAP table,5,4
-23,Rooftops,DrawRoofFloor,0x0248,jump_table,partial,pop2/render_opening.py,floor masks/ledge exceptions; conditional passes incomplete,0,14
+23,Rooftops,DrawRoofBackWall,0x0004,decoded,partial,pop2/render_opening.py,ordinary and harbor background SHAP tables; ordinary fill,5,4
+23,Rooftops,DrawRoofFloor,0x0248,jump_table,partial,pop2/render_opening.py,"floor masks/ledge exceptions; harbor cap offsets, background planks, exposed near-face geometry and partial climb redraw; conditional passes incomplete",0,14
 23,Rooftops,DrawRoofLedgeInBack,0x05a2,jump_table,partial,pop2/render_opening.py,row-owned ledge mask subset,0,6
 23,Rooftops,RoofCheckPalette,0x06e8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,4
-23,Rooftops,RoofMakeWaterTestRect,0x087e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,18
-23,Rooftops,RoofWatchOpps,0x09e6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,10
-23,Rooftops,SetupSplash,0x0b3e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,6
+23,Rooftops,RoofMakeWaterTestRect,0x087e,jump_table,partial,pop2/harbor.py;pop2/scene_prototype.py,native room-15 offscreen-right death threshold and SEQS:71; sound waits/cinematic/life-drain presentation missing,1,18
+23,Rooftops,RoofWatchOpps,0x09e6,jump_table,partial,pop2/harbor.py;pop2/scene_prototype.py,"harbor water thresholds, exempt sequences and eight-frame death delay; per-actor host splash storage",2,10
+23,Rooftops,SetupSplash,0x0b3e,jump_table,partial,pop2/harbor.py;pop2/render_opening.py;pop2/audio.py,"six native splash shapes, center/Y offsets and cue 35 playback",4,6
 23,Rooftops,AnimRoofGlass,0x0c30,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,2
 23,Rooftops,DrawRoofGlass,0x0c84,jump_table,partial,pop2/opening_animation.py;pop2/scene_prototype.py,opening window/glass timeline,0,2
-23,Rooftops,AnimRoofPillar,0x0d1c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,6
-23,Rooftops,DrawRoofPillar,0x0dce,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,9
+23,Rooftops,AnimRoofPillar,0x0d1c,jump_table,partial,pop2/harbor.py,four-phase wave cycle; native random phase initialization missing,0,6
+23,Rooftops,DrawRoofPillar,0x0dce,jump_table,partial,pop2/render_opening.py,"pillar/wave SHAPs, PIEC offsets, DATA clips and ordinary splash occlusion; conditional actor ordering incomplete",0,9
 23,Rooftops,DrawPillarInBack,0x0f96,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,2
 23,Rooftops,TriggerRoofPillar,0x1008,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
-23,Rooftops,AnimRoofShip,0x1066,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,2
-23,Rooftops,DrawRoofShip,0x1120,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,7
-23,Rooftops,TriggerRoofShip,0x1256,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,1
-23,Rooftops,RoofClimbingIntoShip,0x12ba,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,0
-23,Rooftops,RoofHangingFromShip,0x132c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,0
+23,Rooftops,AnimRoofShip,0x1066,jump_table,partial,pop2/harbor.py,departure counter and two-pixel hull drift; full native obstacle bank missing,0,2
+23,Rooftops,DrawRoofShip,0x1120,jump_table,partial,pop2/render_opening.py,"native body, hatch foreground and wake shapes/offsets",0,7
+23,Rooftops,TriggerRoofShip,0x1256,jump_table,partial,pop2/harbor.py;pop2/scene_prototype.py,"room-entry activation, pose 34-40 reset and counter limits",1,1
+23,Rooftops,RoofClimbingIntoShip,0x12ba,jump_table,partial,pop2/harbor.py;pop2/scene_prototype.py,SEQS:59 selection and ship-relative actor movement,3,0
+23,Rooftops,RoofHangingFromShip,0x132c,jump_table,partial,pop2/harbor.py;pop2/scene_prototype.py,"native room, X, mode and pose predicate",3,0
 23,Rooftops,ATMGlass,0x137e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,5
 23,Rooftops,DrawObjGlass,0x1416,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,1
 23,Rooftops,TriggerGlass,0x14c0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,5

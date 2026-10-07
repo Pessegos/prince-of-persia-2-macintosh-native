@@ -149,6 +149,9 @@ class SequenceRuntime:
                     self.state.callback_flag = 1
             elif opcode == -18:
                 self.state.sequence_mode = 0
+            elif opcode == -16:
+                # AnimChar 4:2f2c requests the next level, after boarding.
+                self.state.sequence_events.append((opcode, ()))
             elif opcode == -19:
                 self.state.sequence_events.append((opcode, ()))
             elif opcode == -21:

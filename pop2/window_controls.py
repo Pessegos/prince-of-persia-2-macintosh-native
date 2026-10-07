@@ -113,6 +113,9 @@ class WindowControls:
             return
         now = time.perf_counter()
         self.paused = paused
+        audio = getattr(self, "audio", None)
+        if audio is not None:
+            audio.pause(paused)
         if paused:
             self.pause_started_at = now
             if self.animation_after_id is not None:
@@ -210,6 +213,12 @@ class WindowControls:
             if self.paused and event.keysym not in ("Escape", "F2"):
                 self.set_paused(False)
                 self.pause_resume_keys.update(self.window_keys_down)
+                return "break"
+            fullscreen_key = event.keysym == "Return" and event.state & (0x8 | 0x20000)
+            if (not self.paused and self.death.counter >= 0
+                    and event.keysym not in ("F2", "F5", "Alt_L", "Alt_R")
+                    and not fullscreen_key):
+                self.restart_after_death()
                 return "break"
             return None
         if event.keysym == "F2":

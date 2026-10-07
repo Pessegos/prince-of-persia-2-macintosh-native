@@ -161,7 +161,7 @@ class GameWindowTests(unittest.TestCase):
         with patch("pop2.scene_prototype.build_opening_room") as build:
             self.assertEqual(scene.screen_label(2), "3")
             self.assertEqual(tuple(scene.dev_screens()),
-                             ("1", "2", "3", "4", "5", "6", "7", "Secret (right)"))
+                             ("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Secret (right)"))
             build.assert_not_called()
         self.assertEqual(set(scene.room_cache), cached_rooms)
 
@@ -564,7 +564,7 @@ class GameWindowTests(unittest.TestCase):
             scene.open_dev_mode()
             self.assertTrue(scene.paused)
             self.assertEqual(scene.dev_menu.screens,
-                             ("1", "2", "3", "4", "5", "6", "7", "Secret (right)"))
+                             ("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Secret (right)"))
             scene.dev_menu.select(4)
             scene.apply_dev_action("go")
             self.assertIsNone(scene.dev_menu)

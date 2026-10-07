@@ -41,6 +41,7 @@ from pop2.control_mapping import (
 )
 from pop2.mac_input import KeyboardFrame, StepPlan, plan_step, read_keyboard
 from pop2.opening_animation import OpeningEscape
+from pop2.rebirth import DeathState
 from pop2.render_opening import load_resource_file
 from pop2.sequence_runtime import (
     SequenceRuntime,
@@ -140,6 +141,10 @@ class AnimationDataTests(unittest.TestCase):
         scene.run_stop_requested = False
         scene.in_animation_tick = False
         scene.paused = False
+        scene.death = DeathState()
+        scene.checkpoint = None
+        scene.checkpoints = ()
+        scene.level_complete = False
         scene.dev_menu = None
         scene.pause_resume_keys = set()
         scene.window_keys_down = set()

@@ -8,6 +8,7 @@ import sys
 PROJECT = Path(__file__).resolve().parent
 DEPENDENCY_CHECK = (
     "from importlib.metadata import version; from PIL import Image; import tkinter; "
+    "import pygame.mixer, mido, numpy; "
     "v=tuple(int(p) for p in version('Pillow').split('.')[:2]); "
     "assert (10, 4) <= v < (13, 0); assert hasattr(Image, 'Resampling')"
 )

@@ -30,7 +30,10 @@ must remain explicitly distinguished.
 | Pause and Windows presentation | NFNT:23331; native 512x384 viewport | `pop2/game_ui.py`, `pop2/scene_prototype.py` | Escape pause / any key or click resume, Alt+Enter restore, nearest-neighbor aspect-fit, in-game F2 overlay with route-ordered screen entries and peaceful mode | Development selection is level-1 only; menu is port QoL, not recovered Mac gameplay |
 | Health display | DrawKidMeter/DrawOppMeter 3:4902/4a8e; low-life flash 2:5442-546c | `pop2/combat_art.py` | Original bottle assets and one-life blink on simulation-frame parity | Upgrade/level-completion meter effects missing |
 | Scenery and actor drawing | DrawRoofBackWall/DrawRoofFloor/DrawRoofLedgeInBack CODE:23; ledge-overlap predicate 23:0614; ClipChar 4:4146 | `pop2/render_opening.py`, `pop2/scene_prototype.py` | Original room pieces/palettes; row-owned masks, native 17-22-pixel ledge strips, Prince mode/pose overlap exception and body anchors | Mask-based layering is a subset, not all native conditional draw/clip passes |
-| Window escape | Main CODE:2 5d56; CODE:23 roof glass; SEQS/SHAP/DATA tables | `pop2/opening_animation.py` | Isolated recovered opening and original curtain/glass timelines | Intro, opening audio and subsequent scripted scenes missing |
+| Window escape | Main CODE:2 5d56; CODE:23 roof glass; SEQS/SHAP/DATA tables | `pop2/opening_animation.py` | Isolated recovered opening and original curtain/glass timelines | Intro and subsequent scripted scenes missing |
+| Audio | AddSound/AddSong/PlayAmbient CODE:5; DATA cue tables; MIDISnd/DigiSnd; INST/snd resources | `pop2/audio.py`, `pop2/audio_formats.py`, `tools/extract_audio.py` | Original instruments, four rooftop songs, ordinary event/sequence effects and real playback completion | Host sampler is not bit-exact Mac MIDI synthesis; NIS and later-level cue scheduling missing |
+| Harbor, water and departing ship | CUST:4350; CODE:23 06fe/0b3e/0dce/1066/1120/1256/12ba/12f0/132c; SEQS:59/215 | `pop2/harbor.py`, `pop2/render_opening.py`, `pop2/terrain.py`, `pop2/scene_prototype.py` | Level-1 descent, dock and ship rooms, water deaths, native departure/catch bounds and boarding chain | Native shared splash slot, random wave seeding, conditional pillar passes and full obstacle bank missing |
+| End-of-level request | AnimChar 4:2f2c; SEQS opcode -16 | `pop2/sequence_runtime.py`, `pop2/scene_prototype.py` | Boarding emits the original request; host completion screen stops gameplay and permits restart/dev navigation | Ending movie, next-level loader and later-level controllers missing |
 
 ## Boundaries To Preserve
 
@@ -92,8 +95,8 @@ The r3 subset adds GenCtrl's solid-barrier automatic short step at distance
 decoration entries (23:018e, DATA cca8/ccea), and per-guard drawing state.
 F2 peaceful mode is a separate developer feature: it disables NPC simulation
 and rendering, never floor/wall physics. A collision that replaces the
-sheathing sequence must also clear its host-side command lock. Corpse
-visibility at the screen-5 lip is retained as a known visual difference.
+sheathing sequence must also clear its host-side command lock. Settled
+rooftop corpses follow the native visibility rule described below.
 
 Rooftop fatal tumbles use DoOppTumbleSeq 4:0154-02cc and CheckStab
 6:56ba-56d4. GetCellsBehind 4:3a48 checks behind the supporting foot, not
@@ -102,10 +105,24 @@ generator LIFE flag, random roll, registered-death count, corpse overlap,
 facing and tile vetoes. SEQS:185 falls in mode 9 without ordinary floor,
 wall or room-cut handling; ordinary-room drawing bypasses actor occlusion.
 GetOppDeadSeq 4:0074-010a selects flat corpse pose 228 for odd guard slots,
-not randomly. Special-actor corpse variants and special-room tumble clipping
-are still missing. Flat-corpse visibility at the screen-5 lip is retained as
-a known visual difference. Parry remains limited to poses 150/161:
+not randomly. Harbor tumbles now use the native waterline and delayed death;
+special-actor corpse variants and the full conditional clipping pipeline
+are still missing. IsCharNonViewable 4:474c-477c hides settled Prince and
+guard corpses outside native rooftop rooms 15/16/19; this includes ordinary
+guard variant 228. Parry remains limited to poses 150/161:
 raised counterattack pose 162 is vulnerable.
+
+The level-1 route now continues through the custom descent room, the quay
+and the ship. [HARBOR_RECOVERY.md](HARBOR_RECOVERY.md) records the recovered
+ship/water rules and the remaining visual and level-transition boundaries.
+It also records the native screen-8 right-exit exception and the intentional
+DOS-style uninterrupted landing recovery for the screen 7 -> 8 drop.
+
+[REBIRTH_RECOVERY.md](REBIRTH_RECOVERY.md) records the dead-pose/key gate,
+death-song-dependent prompt, all LEVL checkpoint records and the level-1
+world snapshot. Current/pending SDL playback now supplies the sound-completion
+gate; the native timeout-to-frontend is not yet implemented. [Audio notes](AUDIO_RECOVERY.md)
+distinguish source MIDI timing from the host sampler's output and release tails.
 
 ## Public Repository Boundary
 

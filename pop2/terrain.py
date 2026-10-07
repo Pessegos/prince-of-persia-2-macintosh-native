@@ -5,6 +5,7 @@ import struct
 
 from pop2.opponent_generation import character_column, EMPTY_TILES, WALL_TILES
 from pop2.mac_input import StepBoundary
+from pop2.harbor import WATER_ROOMS
 
 
 TILE_WIDTH = 51
@@ -320,7 +321,7 @@ class LevelMap:
             state.target_x += (distance - 32) * direction
         state.current_x = state.target_x
 
-    def catch_ledge(self, room, row, state, record):
+    def catch_ledge(self, room, row, state, record, harbor=None):
         # Falling 6:011e-0132 / Catch 4:37ca: velocity <60 and feet within
         # [-48,+3] of the lower floor. Test the native 17-pixel look-behind.
         if state.vertical_velocity >= 60 or not -48 <= state.current_y <= 3:
@@ -330,8 +331,10 @@ class LevelMap:
         column = character_column(floor_contact_x(trial_x, state.facing, record))
         above = self.tile(room, column, row - 1)
         ahead = self.tile(room, column + direction, row - 1)
-        if (above.room is None or ahead.room is None or above.kind not in EMPTY_TILES
-                or ahead.kind in EMPTY_TILES | WALL_TILES):
+        ordinary = (above.room is not None and ahead.room is not None
+                    and above.kind in EMPTY_TILES and ahead.kind not in EMPTY_TILES | WALL_TILES)
+        ship = harbor is not None and harbor.can_grab_ship(room, row, trial_x)
+        if not ordinary and not ship:
             return False
         state.target_x = trial_x
         state.current_x = trial_x
@@ -406,6 +409,8 @@ class TerrainMotion:
     row: int
     falling: bool = False
     dead: bool = False
+    smooth_landing: bool = False
+    scream_played: bool = False
 
 
 @dataclass(frozen=True)
@@ -448,6 +453,10 @@ class RooftopPhysics:
         elif (left >= 510 if not state.facing else right >= 525):
             direction = "right"
         if direction is None:
+            return False
+        # CutChar 6:4c26-4c48 keeps native room 15 visible on its right exit.
+        # RoofMakeWaterTestRect handles the offscreen death separately.
+        if direction == "right" and motion.room == 14 and state.level_kind == 5:
             return False
         room = self.map.neighbor(motion.room, direction)
         if room is None:
@@ -493,6 +502,11 @@ class RooftopPhysics:
         state = runtime.state
         if protected or motion.dead:
             return ()
+        if not motion.falling:
+            motion.scream_played = False
+        landing_recovery = state.sequence_id in (17, 20, 117, 212, 49)
+        if not motion.falling and not landing_recovery:
+            motion.smooth_landing = False
         events = []
         if state.actor_type == 2 and state.level_kind == 5 and state.animation_state == 9:
             # FrameAdv 2:65da-6664 bypasses barriers/floors/room cuts for
@@ -505,6 +519,11 @@ class RooftopPhysics:
             state.current_x = state.target_x
             motion.falling = True
             if absolute_y > VOID_DEATH_Y:
+                if motion.room in WATER_ROOMS:
+                    # Move 4:36ae-36ec leaves the harbor death to RoofWatchOpps.
+                    state.vertical_velocity = 0
+                    state.animation_state = 1
+                    return ()
                 # Move 4:36a2-36ec freezes at 730 with pose 185. Do not
                 # apply SEQS:22's +6 X offset to this direct native assignment.
                 state.vertical_velocity = state.horizontal_velocity = 0
@@ -514,6 +533,14 @@ class RooftopPhysics:
                 return (TerrainEvent("death"),)
             return ()
         if motion.falling:
+            # Falling 6:00ae-00f2 / AddKidScream 5:4b5a: one long-fall cue;
+            # the Prince is silent over water, ordinary guards use cue 30.
+            if state.vertical_velocity >= 59 and not motion.scream_played:
+                motion.scream_played = True
+                if state.actor_type == 0 and (state.level_kind != 5 or motion.room not in (14, 15, 18)):
+                    state.sound_events.append(8)
+                elif state.actor_type == 2 and state.vertical_velocity <= 63:
+                    state.sound_events.append(30)
             before_x, before_y = state.target_x, state.current_y
             # Move, CODE:4 0x341a/0x3464: add gravity once per simulation frame.
             if state.animation_state in (4, 9):
@@ -537,7 +564,9 @@ class RooftopPhysics:
             state.current_x = state.target_x = corrected
             bounds = (bounds[0] + delta, bounds[1], bounds[2] + delta, bounds[3])
             state.horizontal_velocity = 0
-            if not motion.falling:
+            # DOS-style recovery for the screen 7 -> 8 drop: retain barrier
+            # correction, but do not replace the crouch/rise with GroundBump.
+            if not motion.falling and not (motion.smooth_landing and landing_recovery):
                 record = self.frames[state.action] if self.frames is not None else frame_record
                 contact = (floor_contact_x(corrected, state.facing, record)
                            if record is not None else corrected)
@@ -571,6 +600,8 @@ class RooftopPhysics:
                             bounds = (bounds[0] + shift, bounds[1],
                                       bounds[2] + shift, bounds[3])
             events.append(TerrainEvent("wall"))
+            if state.sequence_id != 56:
+                state.sound_events.append(10)
         if cut_enabled and self.cut_horizontal(motion, state, bounds):
             events.append(TerrainEvent("room"))
 
@@ -601,6 +632,10 @@ class RooftopPhysics:
         absolute_y = floor_y(motion.row) + state.current_y
         if absolute_y > VOID_DEATH_Y and self.map.neighbor(motion.room, "down") is None:
             state.current_y = VOID_DEATH_Y - floor_y(motion.row)
+            if state.level_kind == 5 and motion.room in WATER_ROOMS:
+                state.vertical_velocity = 0
+                state.animation_state = 1
+                return tuple(events)
             state.vertical_velocity = state.horizontal_velocity = 0
             motion.dead = True
             self.select(runtime, 22)
@@ -638,6 +673,8 @@ class RooftopPhysics:
                 room = self.map.neighbor(motion.room, "down")
                 if room is not None:
                     # Cut coordinates use the 365-pixel clip, not 360 tile pixels.
+                    motion.smooth_landing = (motion.room == 11 and room == 14
+                                             and state.actor_type == 0 and state.level_kind == 5)
                     motion.room = room
                     motion.row -= 3
                     state.current_y -= ROOM_HEIGHT - 3 * TILE_HEIGHT

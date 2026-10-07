@@ -480,6 +480,43 @@ class GuardCombatTests(unittest.TestCase):
         self.assertEqual(c.player.state.action, 185)
         self.assertFalse(c.player.alive)
 
+    def test_fatal_guard_hit_selects_guard_not_skeleton_death_music(self):
+        c = self.encounter()
+        c.player.life = 1
+        event = c._hurt("player", c.player, c.guard)
+        self.assertEqual((event.kind, event.actor, event.death_method),
+                         ("death", "player", 14))
+        self.assertIsNone(c._hurt("guard", c.guard, c.player).death_method)
+
+    def test_guard_lowers_sword_after_kill_only_at_native_ready_poses(self):
+        for action in (158, 170, 171):
+            with self.subTest(action=action):
+                c = self.encounter()
+                c.player.life = 0
+                c.guard.state.action = action
+                x = c.guard.state.target_x
+                c.advance_guard()
+                self.assertEqual((c.guard.state.sequence_id, c.guard.state.action), (77, 166))
+                self.assertFalse(c.guard.sword_drawn)
+                self.assertEqual(c.guard.alert_mode, 0)
+                for _ in range(30):
+                    c.advance_guard()
+                self.assertEqual((c.guard.state.action, c.guard.state.target_x), (166, x))
+
+    def test_guard_finishes_its_attack_before_lowering_sword(self):
+        c = self.encounter()
+        select_sequence(c.guard, 58)
+        c.guard.runtime.next_frame()
+        self.assertEqual(c.guard.state.action, 168)
+        c.player.life = 0
+        poses = []
+        for _ in range(15):
+            c.advance_guard()
+            poses.append(c.guard.state.action)
+        self.assertEqual(poses[:5], [151, 152, 153, 154, 155])
+        self.assertEqual(poses[-1], 166)
+        self.assertFalse(c.guard.sword_drawn)
+
     def test_unarmed_hit_arms_player_and_recovers_to_sword_guard(self):
         for facing, hurt_sequence in ((0, 74), (1, 94)):
             c = self.encounter(player_facing=facing)

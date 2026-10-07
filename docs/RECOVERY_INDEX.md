@@ -64,36 +64,46 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Blocked climb destination / special-level grab variants | remaining GenCtrl/Catch branches | P | terrain / new recovery needed |
 | Horizontal cut bounds and exclusions; down-first rule | 6:4918, 4a26, 4dac | T: supported horizontal subset; full vertical timing P | terrain / test_terrain |
 | Per-actor near facade/parapet versus shaded side | 3:35bc; CODE:23; 4:4146 | T/A: row/mode masks; full native ClipChar R | render_opening / test_render_opening, test_game_ui |
+| Prince flat-death edge alignment and settled-rooftop corpse visibility | 6:551c-5558; 4:474c-477c, 4846-485c | T: ordinary Prince/guard dead poses, native room-15/16/19 visibility exceptions | combat, terrain, render_opening / test_rebirth, test_render_opening |
+| Ordinary guard death cue and post-kill sword lowering | 6:570e/5738; 4:09c0; 6:2536/25ee | T: type-2 guards on LEVL 21a4 == 0; ready-pose gate preserves unfinished attacks | combat, rebirth / test_combat, test_rebirth |
 | All 11 roof decoration IDs, including empty cells | 23:018e-0242; DATA:cca8/ccea | T: native shape/offset/pass tables; conditional draw pipeline P | render_opening / test_render_opening |
 | Climb partial foreground rectangle / ledge overlap veto | 3:3694; 23:0614 | T: tested ordinary poses and overlap exception | render_opening / test_render_opening |
-| Guard corpse's flat-floor placement and supporting foot | 6:04aa, 5524-5558; SEQS:85 | T: source coordinate/edge subset; screen-5 visible strip retained as a known difference | terrain/combat/render_opening / test_terrain |
+| Guard corpse's flat-floor placement and supporting foot | 6:04aa, 5524-5558; SEQS:85 | T: source coordinate/edge subset; settled rooftop visibility uses IsCharNonViewable | terrain/combat/render_opening / test_terrain, test_render_opening |
 | Corpse tumble selection: forced or room generator life 0x80, dead bank/Rnd(3), same-cell corpse, facing/tile vetoes | 4:0154-02cc, 03f4; 6:406e, 56ba | T: ordinary supported rooftop subset | combat/opponent_generation / test_guard_deaths, test_rooftop_pursuit |
 | Mode-9 tumble bypasses walls/floors/cuts; absolute row/gravity; offscreen Y=730 | 2:65ee-6664; 4:341a/36a2-36ec | T: ordinary supported rooftop subset | terrain / test_guard_deaths |
 | Flat corpse 195/228 for odd slot, 185 for even slot; no RNG | 4:0074-010a; 2:6544-654c | T: ordinary ordered room slots; full native bank lifecycle P | combat / test_guard_deaths, test_opponent_generation |
-| Mode-9 character clipping bypass | 4:4210-422c; 23:0826 | T: ordinary supported rooms; room 16/19 cap R | render_opening / test_guard_deaths |
+| Mode-9 character clipping bypass and harbor water cap | 4:4210-422c; 23:0826 | T: ordinary rooftop bypass and native harbor 354/327 waterline subset; conditional pillar ordering P | render_opening, scene_prototype / test_guard_deaths, test_harbor |
 | Skill tables, initial guard/generator data | DATA/LEVL; 6:3a0c | T: extracted ordinary rooftop profiles | enemy_profiles/opponent_generation / test_enemy_ai, test_opponent_generation |
 | Ready-pose advance/retreat checks own anchor column | 4:0a82-0b1a; 6:2c90 | T: ordinary guard subset, not immunity to falling | combat / test_enemy_ai, test_rooftop_pursuit |
 | Pursuit, gap jump and incoming reinforcement corridor | 4:057c/0834; 6:1c14/3a0c | T: supported rooftop paths; inactive-world/special actors P | combat / test_rooftop_pursuit, test_opponent_generation |
 | Parry/contact poses, range, damage priority | 6:50ec/523e/53f8/5978 | T: ordinary actors; special attacks P | combat / test_combat |
 | Jump cannot pass a live grounded opposing guard | 2:6c64-6daa | T/A: native gates plus port between-frame sweep | combat / test_game_ui |
 | One-life meter flashing | 2:5442-546c | T: simulation-frame parity; upgrade effects P | combat_art / test_combat |
-| Window escape and glass timeline | 2:5d56; CODE:23; DATA/SEQS | T: isolated opening; intro/audio P | opening_animation / test_opening_animation |
-| Dynamic tiles/gates, ceilings, other levels, level completion | remaining level/controller routines | P | not yet ported |
+| Window escape and glass timeline | 2:5d56; CODE:23; DATA/SEQS | T: isolated opening with glass cue; intro P | opening_animation, audio / test_opening_animation, test_audio_integration |
+| CUST full-room background and foreground | 3:1378/142a/2324; CUST:4350 | T: fixed level-1 descent-room images and draw passes; animated custom templates P | render_opening / test_harbor |
+| Harbor floor, pillars and waves | 23:0248, 0d1c/0dce; DATA:cc32/cc3a | T: native SHAP/PIEC offsets, phase cycle and wave clip rectangles; native random phase seeding / conditional redraw P | render_opening, harbor / test_harbor |
+| Ship activation, two-pixel drift and departure limit | 2:5374; 23:1066/1120/1256 | T: level-1 counter, entry-pose reset and original SHAP layers; full native obstacle-bank lifecycle P | harbor, render_opening / test_harbor |
+| Ship catch, grip movement and boarding sequence | 23:12ba/12f0/132c; SEQS:59 | T: strict X/row/time bounds, relative movement and complete original pose chain | harbor, terrain, scene_prototype / test_harbor |
+| Water entry, splash and delayed death; harbor exception at Y=730 | 23:06fe/0b3e; 4:36ae-36ec | T: player/NPC thresholds, exemptions, six splash poses and eight-frame death delay; host stores one splash per actor rather than the native shared slot | harbor, terrain, scene_prototype / test_harbor |
+| Boarding requests level transition (-16), then holds invisible pose | 4:2f2c; 6:5022; SEQS:59/215 | T/A: original request and sequence translated; host completion screen substitutes for the unported movie / next-level loader | sequence_runtime, scene_prototype / test_harbor |
+| Dynamic tiles/gates, ceilings, other levels and full level-transition pipeline | remaining level/controller routines | P | not yet ported |
+| Dead-pose counter, any-key retry and centered restart message | 2:47e6/7148; 4:3b88/47a0; 3:433a | T: ordinary dead-pose/key gate and actual current/pending playback completion; frontend timeout P | rebirth, audio, scene_prototype, window_controls / test_rebirth, test_audio |
+| Audio cue arbitration, source samples and rooftop music pool | CODE:5; DATA; INST/snd; MIDISnd/DigiSnd | T/A: ordinary level-1 subset; original instruments with host sampler, not bit-exact Mac MIDI driver | audio, audio_formats, extract_audio / test_audio, test_extract_audio, test_audio_integration |
+| LEVL checkpoint trigger and restored start | LEVL:39a6; 2:6b46/1674/19ba/5d50 | T: level-1 foot/cell trigger, native anchor, facing/full life and opponent/generator snapshot; dynamic normalization/story pipeline P | rebirth, scene_prototype / test_rebirth |
 | In-game F2 menu, peaceful scene, any-key/click pause resume, Windows fullscreen | host features | T: font, modal input, held-key consumption and focus reset; not recovered Mac gameplay rules | window_controls/game_ui / test_game_ui, test_development_menu |
 
-## Current Visual Limit
+## Corpse Visibility
 
-The port can leave a few pixels of a flat corpse visible above the screen-5
-roof lip. Reference recordings show no visible strip after the guard settles.
-The port's base Y and FRAM offsets follow SetCharFloor/AddMid; the precise
-remaining clipping or pose difference has not been established. The strip is
-intentionally retained for now, without lowering the floor or hiding corpses.
+The former guard-only visibility exception could leave either a small strip
+above the parapet or a whole flat corpse exposed over a sloping edge.
+Settled Prince and ordinary guard corpses now follow the explicit native
+IsCharNonViewable rule, including guard pose 228. This changes drawing only:
+death sequences, coordinates and stored NPC records remain intact.
 
 ## Next Recovery Pass
 
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
-   dependencies and climb stages. The retained corpse strip is not a blocker
-   for the current prototype.
+   dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
    outgoing branch, marking unimplemented branches explicitly.
 3. Add boundary tests and a reference scenario before changing that branch's

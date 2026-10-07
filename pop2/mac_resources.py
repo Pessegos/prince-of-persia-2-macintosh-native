@@ -86,6 +86,14 @@ def _extents(data, offset):
 
 
 def get_resource_fork(image, file_name, file_type="rsrc"):
+    return _get_fork(image, file_name, file_type, resource=True)
+
+
+def get_data_fork(image, file_name, file_type=None):
+    return _get_fork(image, file_name, file_type, resource=False)
+
+
+def _get_fork(image, file_name, file_type, resource):
     header = _volume_header(image)
     allocation_start = header - 1024 + _u16(image, header + 28) * 512
     block_size = _u32(image, header + 20)
@@ -129,15 +137,16 @@ def get_resource_fork(image, file_name, file_type="rsrc"):
                     name != file_name
                     or not file_data
                     or file_data[0] != 2
-                    or _span(file_data, 4, 4).decode("mac_roman") != file_type
+                    or (file_type is not None
+                        and _span(file_data, 4, 4).decode("mac_roman") != file_type)
                 ):
                     continue
                 return _read_extents(
                     image,
                     allocation_start,
                     block_size,
-                    _extents(file_data, 86),
-                    _u32(file_data, 36),
+                    _extents(file_data, 86 if resource else 74),
+                    _u32(file_data, 36 if resource else 26),
                 )
         node_id = next_node
     raise FileNotFoundError(f"{file_name!r} ({file_type}) not found in the HFS catalog")

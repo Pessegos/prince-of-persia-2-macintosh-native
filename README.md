@@ -9,18 +9,20 @@ logic being recovered from the Macintosh executable through reverse engineering.
 
 ## Run
 
-Install Python 3.10 or newer with Tcl/Tk support, then double-click `Launch.cmd`.
-The launcher prepares a local `.venv` and installs Pillow on the first run;
+On 64-bit Windows, install Python 3.10 or newer with Tcl/Tk support, then
+double-click `Launch.cmd`.
+The launcher prepares a local `.venv` and installs its dependencies on the first run;
 internet access is needed for that installation. It does not change your
 global Python installation.
 
 Original game files are not bundled. At the first launch, select your Macintosh
-Prince of Persia 2 disk image. The importer extracts the resources and enemy
-data, then starts the game. Subsequent launches use those local files without
+Prince of Persia 2 disk image. The importer extracts the resources, enemy data
+and audio, then starts the game. Subsequent launches use those local files without
 asking for the disk image again.
 
 Compatible images contain an HFS volume, the four named resource files below,
-and the `Prince of Persia 2` application. Raw or wrapped `.hfs`, `.hfv`, `.dsk`
+the `Prince of Persia 2` application, `DigiSnd.dat` and `MIDISnd.dat`.
+Raw or wrapped `.hfs`, `.hfv`, `.dsk`
 and `.img` files can be used; the extension alone does not establish compatibility.
 Files whose catalog or resource forks need HFS extents-overflow records are not
 supported by this importer.
@@ -52,6 +54,7 @@ in `assets/`:
 - `Guard.rsrc`
 - `Rooftops.rsrc`
 - `enemy_profiles.json`
+- `audio/` (original samples, MIDI, instruments and prepared level-1 music)
 
 The same import can be performed without a file picker:
 
@@ -61,6 +64,10 @@ The same import can be performed without a file picker:
 
 The importer leaves the disk image unchanged and does not retain the game
 executable or any ROM or system files. Generated game files are ignored by Git.
+Existing installations without audio will ask for the disk image once more.
+Music is prepared during import using the bundled `smssynth` renderer and the
+game's Macintosh instruments, not a General MIDI sound bank. Playback uses SDL
+through pygame; the game does not generate diagnostic recordings.
 
 ## Controls
 
@@ -77,6 +84,7 @@ executable or any ROM or system files. Generated game files are ignored by Git.
 | Alt + Enter | Toggle fullscreen |
 | F2 | Developer menu: screen selection and peaceful mode |
 | F5 | Restart the opening encounter |
+| Any key after death | Retry from the checkpoint or level start |
 
 The developer menu accepts mouse, Tab/Shift+Tab and arrow navigation.
 Left/Right moves between `Go to screen` and `Resume`; Enter/Space activates
@@ -85,21 +93,27 @@ a control. Escape closes the dropdown before closing the menu.
 
 ## Current Progress
 
-Development currently covers part of level 1.
+The level-1 route is playable from the palace window to boarding the ship.
 
-- Seven supported level-1 route screens and the right-hand secret room.
+- Ten level-1 route screens and the right-hand secret room.
 - Window escape, locomotion, ledge movement, sword combat and rooftop guards.
+- Harbor scenery, water falls and the departing ship's original boarding sequence.
+- Death/retry flow and the level-1 checkpoint after the screen-7 descent.
+- Four original rooftop music tracks and movement, combat, glass and water sounds.
+- Death music with playback-dependent restart messages; pause also pauses audio.
 - Original 512x384 viewport, aspect-preserving nearest-neighbor scaling.
 - Movement at 12 fps and ordinary sword combat at 10 fps.
 
-Audio and intro movies are not yet implemented.
+The intro, level-ending scenes and later levels are not yet implemented.
+Boarding the ship currently ends at a level-complete screen. This remains a WIP;
+the recovered rules do not yet cover every original collision or input branch.
 
 ## Development
 
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m ruff check --select F,E9 .
-python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout
+python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_audio tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout
 python -m tools.recovery_catalog --check
 ```
 
@@ -133,11 +147,14 @@ tests/              Regression tests
 tools/              Game-file import and recovery utilities
 docs/               Technical notes and routine catalog
 assets/             Locally imported game files (not bundled)
+vendor/             Import-time MIDI renderer and its license notices
 .github/            Automated checks
 ```
 
 [Behavior map](docs/BEHAVIOR_MAP.md), [rule recovery index](docs/RECOVERY_INDEX.md),
 [collision notes](docs/COLLISION_RECOVERY.md), [enemy AI notes](docs/AI_RECOVERY.md),
+[harbor and ship notes](docs/HARBOR_RECOVERY.md),
+[audio notes](docs/AUDIO_RECOVERY.md), [death/checkpoint notes](docs/REBIRTH_RECOVERY.md),
 [development history](docs/DEVELOPMENT_HISTORY.md).
 
 Source addresses in comments identify the recovered Macintosh routine behind a

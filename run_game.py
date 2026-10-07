@@ -2,6 +2,8 @@
 
 import argparse
 from importlib import import_module
+import json
+import os
 from pathlib import Path
 import sys
 
@@ -13,10 +15,12 @@ REQUIRED_ASSETS = (
     "Guard.rsrc",
     "Rooftops.rsrc",
     "enemy_profiles.json",
+    "audio/manifest.json",
 )
 
 
 def dependency_errors(project=PROJECT):
+    os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
     errors = []
     install_command = f'"{sys.executable}" -m pip install -r "{project / "requirements.txt"}"'
     if sys.version_info < (3, 10):
@@ -34,13 +38,31 @@ def dependency_errors(project=PROJECT):
         errors.append(
             "Python needs Tk support. On Windows, include Tcl/Tk in the Python installer."
         )
+    for name in ("pygame.mixer", "mido", "numpy"):
+        try:
+            import_module(name)
+        except ImportError:
+            errors.append(f"Install audio dependencies: {install_command}")
+            break
     return errors
 
 
 def missing_assets(project=PROJECT):
-    return [
+    missing = [
         name for name in REQUIRED_ASSETS if not (project / "assets" / name).is_file()
     ]
+    manifest_path = project / "assets" / "audio" / "manifest.json"
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="ascii"))
+            if manifest["schema"] != 1 or not isinstance(manifest["cues"], dict):
+                raise ValueError("Unsupported audio schema")
+            for item in manifest["cues"].values():
+                if item.get("file") and not (manifest_path.parent / item["file"]).is_file():
+                    missing.append("audio/" + item["file"])
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            missing.append("audio/manifest.json (needs reimport)")
+    return missing
 
 
 def installation_errors(project=PROJECT):
@@ -56,9 +78,14 @@ def installation_errors(project=PROJECT):
 
 
 def launch_game(peaceful):
+    from pop2.audio import AudioEngine
     from pop2.scene_prototype import ScenePrototype
 
-    ScenePrototype(peaceful=peaceful).run()
+    audio = AudioEngine()
+    try:
+        ScenePrototype(peaceful=peaceful, audio=audio).run()
+    finally:
+        audio.close()
 
 
 def setup_game(project):
@@ -94,7 +121,10 @@ def main(argv=None):
     errors = installation_errors()
     if errors:
         parser.exit(1, "\n".join(errors) + "\n")
-    launch_game(args.peaceful)
+    try:
+        launch_game(args.peaceful)
+    except RuntimeError as error:
+        parser.exit(1, f"Could not start the game: {error}\n")
 
 
 if __name__ == "__main__":

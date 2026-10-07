@@ -7,6 +7,7 @@ import struct
 import tempfile
 
 from tools.extract_enemy_profiles import extract_bytes
+from tools.extract_audio import extract_audio
 from pop2.mac_resources import get_resource_fork, parse_resource_fork
 from pop2.paths import ASSET_DIR
 
@@ -20,7 +21,7 @@ REQUIRED_RESOURCES = {
 }
 
 
-def extract_assets(image_path, output_dir=ASSET_DIR):
+def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None):
     image = Path(image_path).read_bytes()
     # Validate the complete set before replacing any installed game files.
     try:
@@ -42,7 +43,14 @@ def extract_assets(image_path, output_dir=ASSET_DIR):
         staging = Path(directory)
         for name, resource in resources.items():
             (staging / name).write_bytes(resource)
+        extract_audio(image, program, resources["Prince.rsrc"], staging / "audio", progress)
+        # Audio is fully prepared before any installed resources are replaced.
+        for path in (staging / "audio").rglob("*"):
+            if path.is_file():
+                name = path.relative_to(staging).as_posix()
+                resources[name] = path.read_bytes()
         for name in resources:
+            (output_dir / name).parent.mkdir(parents=True, exist_ok=True)
             (staging / name).replace(output_dir / name)
     return resources
 
@@ -53,11 +61,14 @@ def main():
     parser.add_argument("--output", type=Path, default=ASSET_DIR)
     args = parser.parse_args()
     try:
-        resources = extract_assets(args.image, args.output)
+        resources = extract_assets(args.image, args.output, lambda message: print(message, flush=True))
     except (OSError, ValueError) as error:
         parser.exit(1, f"Asset extraction failed: {error}\n")
     for name, resource in resources.items():
-        print(f"{name}: {len(resource):,} bytes")
+        if not name.startswith("audio/"):
+            print(f"{name}: {len(resource):,} bytes")
+    audio = [data for name, data in resources.items() if name.startswith("audio/")]
+    print(f"audio/: {len(audio)} files, {sum(map(len, audio)):,} bytes")
 
 
 if __name__ == "__main__":
