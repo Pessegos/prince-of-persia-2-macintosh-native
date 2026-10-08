@@ -24,6 +24,23 @@ class GameWindowTests(unittest.TestCase):
     place = test_terrain.RooftopSceneTests.place
     tick = test_terrain.RooftopSceneTests.tick
 
+    def test_live_prince_and_health_art_use_the_original_rooftop_palette(self):
+        from pop2.render_opening import decode_ctbl, decode_shap
+
+        scene = self.scene
+        expected = decode_ctbl(scene.kid["CTBL"][25005]["data"])
+        self.assertEqual(scene.sequence_state.level_kind, 5)
+        self.assertEqual(scene.palette, expected)
+        self.assertEqual(scene.palette[5], (17, 17, 28, 255))
+        self.assertEqual(scene.palette[7], (220, 128, 48, 255))
+        sprite = scene.player_sprite()
+        colors = {color for _count, color in sprite.getcolors(sprite.width * sprite.height)}
+        self.assertIn((17, 17, 28, 255), colors)
+        self.assertNotIn((46, 46, 48, 255), colors)
+        for index, icon in scene.health_art.icons.items():
+            original = decode_shap(scene.kid["SHAP"][scene.first_shape_id + index]["data"], expected)
+            self.assertEqual(icon.tobytes(), original.tobytes())
+
     def clear_guards(self):
         self.scene.combat.guards.clear()
         self.scene.combat.guard = None

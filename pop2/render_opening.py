@@ -257,6 +257,13 @@ def decode_ctbl(data):
     return colors
 
 
+def kid_palette_for_level(resources, level_kind):
+    # SetKidPalette (CODE 3:5f1c) selects CTBL 25000 + environment kind.
+    if not 1 <= level_kind < 7:
+        raise ValueError("Unsupported Prince palette environment")
+    return decode_ctbl(resources["CTBL"][25000 + level_kind]["data"])
+
+
 def decompress_rows(data, height, row_bytes):
     output = bytearray()
     offset = 0
@@ -619,7 +626,7 @@ def make_scene_preview(room):
     player_x = (start_tile % 10) * TILE_WIDTH + 14
 
     kid = load_resource_file("Kid.rsrc")
-    palette = decode_ctbl(kid["CTBL"][25001]["data"])
+    palette = kid_palette_for_level(kid, u16(level, 0x2186))
     first_shape_id, _shape_count = struct.unpack_from(">HH", kid["SHPL"][25001]["data"], 0)
     frames = parse_frame_records(kid["FRAM"][25001]["data"])
     player_shape_id = shape_id_for_action(frames, first_shape_id, action=15)

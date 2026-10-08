@@ -25,6 +25,7 @@ from pop2.render_opening import (
     decode_shap,
     load_resource_file,
     load_shapes,
+    kid_palette_for_level,
     rooftop_scene_data,
     roof_ledge_width,
     RoofLedge,
@@ -46,6 +47,23 @@ class DummyCanvas:
         pass
 
 
+class PaletteTests(unittest.TestCase):
+    def test_prince_palette_uses_environment_not_animation_shape_bank(self):
+        resources = {"CTBL": {
+            25000 + kind: {"data": struct.pack(">H4B", 1, kind, 17, 28, 5)}
+            for kind in range(1, 7)
+        }}
+        for kind in range(1, 7):
+            with self.subTest(kind=kind):
+                self.assertEqual(kid_palette_for_level(resources, kind),
+                                 {5: (kind, 17, 28, 255)})
+
+    def test_non_environment_ids_do_not_silently_choose_the_generic_palette(self):
+        for kind in (0, 7, 8, -1):
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                kid_palette_for_level({}, kind)
+
+
 class OpeningRoomTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -53,7 +71,7 @@ class OpeningRoomTests(unittest.TestCase):
         cls.roof = load_resource_file("Rooftops.rsrc")
         cls.roof_palette = decode_ctbl(cls.roof["CTBL"][3500]["data"])
         cls.kid = load_resource_file("Kid.rsrc")
-        cls.kid_palette = decode_ctbl(cls.kid["CTBL"][25001]["data"])
+        cls.kid_palette = kid_palette_for_level(cls.kid, 5)
         cls.frames = parse_frame_records(cls.kid["FRAM"][25001]["data"])
 
     def test_screen_changes_reuse_decoded_atlas_without_modifying_prior_room(self):

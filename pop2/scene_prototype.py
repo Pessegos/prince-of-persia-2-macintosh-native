@@ -66,6 +66,7 @@ from pop2.render_opening import (
     character_sprite_top,
     decode_ctbl,
     decode_shap,
+    kid_palette_for_level,
     load_resource_file,
 )
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
@@ -168,7 +169,6 @@ class ScenePrototype(WindowControls):
         ]
 
         self.kid = load_resource_file("Kid.rsrc")
-        self.palette = decode_ctbl(self.kid["CTBL"][25001]["data"])
         self.first_shape_id = int.from_bytes(
             self.kid["SHPL"][25001]["data"][:2], "big"
         )
@@ -185,6 +185,8 @@ class ScenePrototype(WindowControls):
             prince["SHPL"][1000]["data"][:2], "big"
         )
         level = prince["LEVL"][2000]["data"]
+        level_kind = int.from_bytes(level[0x2186:0x2188], "big")
+        self.palette = kid_palette_for_level(self.kid, level_kind)
         self.checkpoints = level_checkpoints(level)
         self.checkpoint = None
         self.death = DeathState()
@@ -213,7 +215,7 @@ class ScenePrototype(WindowControls):
             target_x=self.player_x,
             facing=0,
             actor_type=0,
-            level_kind=5,
+            level_kind=level_kind,
         )
         self.sequence_runtime = SequenceRuntime(sequences, self.sequence_state)
         self.sequences = sequences
