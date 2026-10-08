@@ -80,6 +80,17 @@ class IntroFormatTests(unittest.TestCase):
             with self.subTest(command=command), self.assertRaises(ValueError):
                 ScriptAnimation(script(command, instruction(0))).advance(0)
 
+    def test_script_terminator_has_no_extra_frame_interval(self):
+        animation = ScriptAnimation(script(instruction(4, 5), instruction(1),
+                                           instruction(1), instruction(0)))
+        animation.advance(9)
+        self.assertFalse(animation.done)
+        animation.advance(10)
+        self.assertTrue(animation.done)
+        self.assertEqual(animation.next_tick, 10)
+        animation.advance(100)
+        self.assertEqual(animation.next_tick, 10)
+
     def test_fade_duration_follows_original_percent_step_and_tick_flags(self):
         self.assertEqual(fade_ticks(0x40001), 25)
         self.assertEqual(fade_ticks(0x90001), 100)
@@ -247,6 +258,77 @@ class IntroPlaybackTests(unittest.TestCase):
     def test_negative_time_is_rejected(self):
         with self.assertRaises(ValueError):
             player(("wait", 60)).advance(-1)
+
+
+class TitlePlaybackTests(unittest.TestCase):
+    def setUp(self):
+        self.p = player(("sound", 25010, 0), ("wait", 60))
+        self.p.sounds["25010"]["markers"].update(e=0, f=.05, g=.1, h=.3, i=10)
+        self.p.assets.title_script = script(
+            instruction(4, 6), instruction(5, 1, 1), instruction(1),
+            instruction(6, 1, 10, 0), instruction(1), instruction(0))
+        self.p.assets.title_shapes = {key: Image.new("L", (1, 1), 1) for key in
+                                      (25001, 25360, 25361, 25365, 25373, 25374)}
+        self.p.assets.title_palette = {1: (120, 80, 20), 160: (255, 255, 255)}
+        self.p.assets.program["title_rects"] = [[152, 52, 179, 458], [129, 87, 179, 423]]
+
+    def test_title_ends_at_script_terminator_before_later_music_cue(self):
+        p = self.p
+        p.start_title()
+        animation = p.title_animation
+        self.assertAlmostEqual(p.wait_until, 31 / 60)
+        p.advance(.1)
+        self.assertFalse(animation.done)
+        self.assertEqual(p.display.getpixel((10, 0)), 1)
+        p.advance(25 / 60)
+        self.assertTrue(p.done)
+        self.assertTrue(animation.done)
+        self.assertIs(p.title_animation, animation)
+        self.assertEqual(p.display.getpixel((10, 0)), 1)
+        self.assertEqual(p.display.getpixel((0, 0)), 160)
+        self.assertAlmostEqual(p.time, 31 / 60)
+
+    def test_second_frame_fade_freezes_script_then_resumes_one_frame(self):
+        p = self.p
+        p.assets.title_script = script(
+            instruction(4, 5), instruction(6, 1, 0, 0), instruction(1),
+            instruction(6, 1, 1, 0), instruction(1),
+            instruction(6, 1, 2, 0), instruction(1),
+            instruction(6, 1, 3, 0), instruction(1), instruction(0))
+        p.start_title()
+        p.advance(5 / 60)
+        self.assertEqual(p.title_animation.layers[0][1], 1)
+        self.assertEqual(p.palette[160], (0, 0, 0))
+        p.advance(20 / 60)
+        self.assertEqual(p.title_animation.layers[0][1], 1)
+        self.assertEqual(p.palette[160], (204, 204, 204))
+        p.advance(5 / 60)
+        self.assertEqual(p.title_animation.layers[0][1], 2)
+        self.assertEqual(p.palette[160], (255, 255, 255))
+        p.advance(5 / 60)
+        self.assertEqual(p.title_animation.layers[0][1], 3)
+
+    def test_title_still_stops_early_if_music_end_marker_arrives_first(self):
+        p = self.p
+        p.sounds["25010"]["markers"]["i"] = .05
+        p.start_title()
+        p.advance(1)
+        self.assertTrue(p.done)
+        self.assertFalse(p.title_animation.done)
+        self.assertAlmostEqual(p.time, .05)
+
+    def test_title_background_keeps_signed_original_cloud_coordinates(self):
+        p = self.p
+        p.assets.title_shapes[25365] = Image.new("L", (325, 150), 2)
+        p.assets.title_shapes[25360] = Image.new("L", (283, 111), 3)
+        p.assets.title_shapes[25361] = Image.new("L", (256, 158), 4)
+        p.start_title()
+        self.assertEqual(p.title_background.getpixel((300, 10)), 2)
+        self.assertEqual(p.title_background.getpixel((0, 58)), 4)
+        self.assertEqual(p.title_background.getpixel((0, 220)), 3)
+        self.assertEqual(p.title_background.getpixel((400, 250)), 3)
+        self.assertEqual(p.title_background.getpixel((100, 300)), 4)
+        self.assertEqual(p.title_background.getpixel((300, 350)), 160)
 
 
 if __name__ == "__main__":

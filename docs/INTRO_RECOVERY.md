@@ -72,6 +72,21 @@ tick interval, notify the coordinator, sound an effect, end a frame or stop.
 Layers and shape indices are one-based. Title shapes use base ID 25001.
 The title's script interval is five Macintosh ticks, not five gameplay frames.
 
+TitleDrawBack (`15:7178-7224`) draws the sky opening at (172, -19), with
+rear clouds at (-21, 128), (-116, 58), (283, 197) and (96, 163). The negative
+coordinates are signed MOVEQ immediates, not positive byte values. Animated
+cloud layers retain the positions and order from the original SCRP.
+
+TitleFunc's second-frame callback (`15:7014-7060`) performs a 25-tick fade.
+During that blocking fade the script stays on frame two. The animation
+maintainer (`16:0366-0468`) schedules from its current TickCount and resumes
+one frame after the fade, without replaying all missed deadlines. With the
+five-tick script interval this adds 20 ticks to the animation clock. The
+original SCRP terminates at tick 1000, so the title ends at tick 1020 (17 s),
+unless the music's final title cue arrives earlier. PlayTheAnimation
+(`16:14be-14d4`) exits when the script stops; it does not loop clouds until
+cue i. The following fade retains the last drawn title image.
+
 All scene deadlines use 60 Hz Macintosh ticks or the original audio markers.
 SetTimer establishes a deadline; WaitTimer waits only for the remaining time,
 including intervening transitions. FadeInColors/FadeOutColors derive the
@@ -91,7 +106,7 @@ Game simulation remains stopped until the intro ends or is skipped.
 
 Scene resources, sound starts and musical cue synchronization are recovered.
 Cached dissolve order is original; the fallback for images without that cache
-does not reproduce Macintosh Random's seed and sequence. Title cloud-loop
-presentation still needs a direct frame-by-frame capture comparison. This is
-not a claim of pixel-perfect intro parity. Later cutscenes are not enabled by
-this implementation.
+does not reproduce Macintosh Random's seed and sequence. Title composition
+and finite script timing have been compared with Macintosh captures. Small
+host/emulator clock differences and complete frame parity are not established.
+Later cutscenes are not enabled by this implementation.

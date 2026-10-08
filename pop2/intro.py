@@ -181,9 +181,10 @@ class ScriptAnimation:
             raise ValueError("Intro animation has no terminator")
 
     def advance(self, tick):
-        while not self.done and self.next_tick <= tick:
+        while not self.done and self.next_tick <= tick + 1e-9:
             self.step()
-            self.next_tick += self.interval
+            if not self.done:
+                self.next_tick += self.interval
 
 
 class IntroPlayer:
@@ -277,10 +278,13 @@ class IntroPlayer:
         if kind == "title":
             tick = (self.time - start) * 60
             animation = self.title_animation
-            if animation.done:
-                self.title_started += animation.next_tick / 60
-                self.title_animation = animation = ScriptAnimation(self.assets.title_script)
-            animation.advance((self.time - self.title_started) * 60)
+            # TitleFunc fades after frame two; maintain schedules one next
+            # frame from the current TickCount rather than catching up.
+            if self.title_fade_start <= tick < self.title_fade_start + self.title_fade_ticks - 1e-9:
+                animation_tick = self.title_fade_start
+            else:
+                animation_tick = tick - self.title_clock_delay if tick >= self.title_fade_start else tick
+            animation.advance(animation_tick)
             frame = self.title_background.copy()
             for shape, x, y, flags in animation.layers:
                 if shape:
@@ -296,8 +300,9 @@ class IntroPlayer:
                 image = self.assets.title_shapes[25374]
                 frame.paste(image, self.title_text_positions[1], image.point([0] + [255] * 255))
             self.display = frame
+            brightness = min(1, max(0, (tick - self.title_fade_start) / self.title_fade_ticks))
             for index, color in self.assets.title_palette.items():
-                self.palette[index] = tuple(round(channel * min(1, tick / 25)) for channel in color)
+                self.palette[index] = tuple(round(channel * brightness) for channel in color)
         elif kind == "fade":
             for index, color in target.items():
                 self.palette[index] = tuple(round(a + (b - a) * progress) for a, b in zip(source[index], color))
@@ -313,10 +318,14 @@ class IntroPlayer:
 
     def start_title(self):
         self.title_animation = ScriptAnimation(self.assets.title_script)
-        self.title_started = self.time
+        self.title_animation.advance(0)
+        self.title_fade_start = self.title_animation.next_tick
+        self.title_fade_ticks = fade_ticks(0x40001)
+        self.title_clock_delay = max(0, self.title_fade_ticks - self.title_fade_start)
         self.title_background = Image.new("L", SIZE, 160)
-        for resource_id, x, y in ((25365, 172, 237), (25360, 235, 128),
-                                   (25361, 140, 58), (25360, 283, 197), (25361, 96, 163)):
+        # TitleDrawBack (15:7178) uses signed MOVEQ coordinates.
+        for resource_id, x, y in ((25365, 172, -19), (25360, -21, 128),
+                                   (25361, -116, 58), (25360, 283, 197), (25361, 96, 163)):
             image = self.assets.title_shapes[resource_id]
             self.title_background.paste(image, (x, y), image.point([0] + [255] * 255))
         # TitleFunc uses these two rectangles to save/restore title overlays.
@@ -324,7 +333,11 @@ class IntroPlayer:
         self.loaded[2] = self.assets.title_palette
         music = self.playing[0]
         markers = self.sounds[str(music[0])]["markers"]
-        duration = max(0, music[1] + markers["i"] - self.time)
+        # PlayTheAnimation exits when SCRP stops, even before TitleFunc's cue i.
+        end = ScriptAnimation(self.assets.title_script)
+        end.advance(float("inf"))
+        duration = min((end.next_tick + self.title_clock_delay) / 60,
+                       max(0, music[1] + markers["i"] - self.time))
         self.transition = ("title", self.time, duration, None, None)
         self.wait_until = self.time + duration
 

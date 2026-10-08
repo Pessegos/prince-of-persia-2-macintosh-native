@@ -10,6 +10,55 @@ from pop2.paths import ASSET_DIR
 
 
 @unittest.skipUnless((ASSET_DIR / "intro.json").is_file(), "Imported intro resources required")
+class OriginalTitleTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from pop2.intro import IntroAssets
+
+        cls.assets = IntroAssets()
+
+    def title_player(self):
+        from pop2.intro import IntroPlayer
+
+        intro = IntroPlayer(self.assets)
+        while intro.transition is None or intro.transition[0] != "title":
+            if intro.done:
+                self.fail("Original scene program did not reach the title")
+            intro.advance(1 / 60)
+        return intro
+
+    def test_original_title_script_finishes_without_restarting(self):
+        from pop2.intro import ScriptAnimation
+
+        script = ScriptAnimation(self.assets.title_script)
+        script.advance(float("inf"))
+        self.assertEqual((script.next_tick, script.interval), (1000, 5))
+        intro = self.title_player()
+        start = intro.transition[1]
+        self.assertAlmostEqual(intro.wait_until - start, 17)
+        intro.advance(intro.wait_until - intro.time)
+        self.assertTrue(intro.title_animation.done)
+        self.assertEqual(intro.transition[0], "fade")
+        self.assertAlmostEqual(intro.transition[1] - start, 17)
+
+    def test_blue_sky_background_is_at_top_not_below_the_moving_clouds(self):
+        intro = self.title_player()
+        expected = self.assets.title_shapes[25365].getpixel((128, 29))
+        self.assertEqual(intro.title_background.getpixel((300, 10)), expected)
+        self.assertEqual(self.assets.title_palette[expected], (0, 74, 206))
+        self.assertEqual(intro.title_background.getpixel((300, 350)), 160)
+
+    def test_title_clock_is_independent_of_host_frame_step_size(self):
+        direct = self.title_player()
+        incremental = self.title_player()
+        direct.advance(13)
+        for _ in range(13 * 60):
+            incremental.advance(1 / 60)
+        self.assertEqual(direct.title_animation.layers, incremental.title_animation.layers)
+        self.assertEqual(direct.frame().tobytes(), incremental.frame().tobytes())
+
+
+@unittest.skipUnless((ASSET_DIR / "intro.json").is_file(), "Imported intro resources required")
 class IntroSceneTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
