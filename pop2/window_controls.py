@@ -187,6 +187,8 @@ class WindowControls:
             self.pause_resume_keys.update(self.window_keys_down)
         else:
             elapsed = now - self.pause_started_at
+            if getattr(self, "intro", None) is not None:
+                self.last_intro_at = now
             if self.combat is not None and self.combat.last_guard_at is not None:
                 self.combat.last_guard_at += elapsed
             self.pause_started_at = None
@@ -279,6 +281,7 @@ class WindowControls:
             self.game_menu.sound = self.sound_enabled
             self.game_menu.music = self.music_enabled
             self.game_menu.fullscreen = self.fullscreen
+            self.game_menu.end_available = getattr(self, "with_intro", False)
 
     def open_game_menu(self, page="menu"):
         if self.game_menu is not None:
@@ -317,7 +320,7 @@ class WindowControls:
             self.open_game_menu("confirm" if action == "confirm_new" else "about")
         elif action in ("new_game", "restart"):
             self.set_paused(True)
-            (self.restart_opening if action == "new_game" else self.restart_level)()
+            (getattr(self, "new_game", self.restart_opening) if action == "new_game" else self.restart_level)()
             if self.game_menu is not None:
                 self.close_game_menu(resume=True)
             else:
@@ -338,6 +341,17 @@ class WindowControls:
             self.render()
         elif action == "development":
             self.open_dev_mode()
+        elif action == "end" and getattr(self, "with_intro", False):
+            self.set_paused(True)
+            self.new_game()
+            if self.game_menu is not None:
+                self.close_game_menu(resume=True)
+            elif self.dev_menu is not None:
+                self.dev_was_paused = False
+                self.close_dev_mode()
+            else:
+                self.set_paused(False)
+            self.pause_resume_keys.update(self.window_keys_down)
         elif action in ("save", "open", "end", "hall"):
             if self.game_menu is None:
                 self.open_game_menu()
@@ -392,6 +406,12 @@ class WindowControls:
                     self.set_paused(False)
                     self.pause_resume_keys.update(self.window_keys_down)
                 return "break"
+            if getattr(self, "intro", None) is not None:
+                if event.keysym in ("Escape", "F2", "F5"):
+                    return None
+                if event.keysym == "space" and not repeated and not alt and not event.state & (0x4 | 0x40):
+                    self.finish_intro()
+                return "break"
             if (not self.paused and self.death.counter >= 0
                     and event.keysym not in ("F2", "F5", "Alt_L", "Alt_R")
                     and not fullscreen_key):
@@ -423,6 +443,8 @@ class WindowControls:
             self.pause_resume_keys.difference_update(released)
             return "break"
         if self.modal_open():
+            return "break"
+        if getattr(self, "intro", None) is not None:
             return "break"
         return None
 

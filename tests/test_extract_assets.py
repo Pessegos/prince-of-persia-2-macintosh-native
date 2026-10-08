@@ -21,6 +21,11 @@ class AssetImportTests(unittest.TestCase):
         audio = patch.object(extract_assets, "extract_audio")
         self.audio = audio.start()
         self.addCleanup(audio.stop)
+        intro = patch.object(extract_assets, "extract_intro")
+        self.intro = intro.start()
+        self.intro.side_effect = lambda _image, _program, _nis, directory, _progress: (
+            directory / "intro.json").write_bytes(b"prepared intro")
+        self.addCleanup(intro.stop)
 
     def fork(self, _image, name, file_type="rsrc"):
         self.assertEqual(file_type, "APPL" if name == "Prince of Persia 2" else "rsrc")
@@ -36,7 +41,7 @@ class AssetImportTests(unittest.TestCase):
             patch.object(extract_assets, "extract_bytes", return_value=self.profiles) as profiles,
         ):
             files = extract_assets.extract_assets(self.image, self.output)
-        self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json"})
+        self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json"})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
         for name in extract_assets.RESOURCE_FILES:
             self.assertEqual((self.output / name).read_bytes(), self.forks[name])
@@ -134,6 +139,21 @@ class AssetImportTests(unittest.TestCase):
         self.assertEqual(files["audio/cue-40.wav"], b"prepared song")
         self.assertEqual((self.output / "audio" / "cue-40.wav").read_bytes(), b"prepared song")
         self.assertFalse(list(self.output.glob(".import-*")))
+
+    def test_intro_failure_preserves_existing_installation(self):
+        self.output.mkdir()
+        old = self.output / "Prince.rsrc"
+        old.write_bytes(b"existing game")
+        self.intro.side_effect = ValueError("Unsupported opening coordinator")
+        with (
+            patch.object(extract_assets, "get_resource_fork", side_effect=self.fork),
+            patch.object(extract_assets, "parse_resource_fork", side_effect=self.resource_types),
+            patch.object(extract_assets, "extract_bytes", return_value=self.profiles),
+            self.assertRaisesRegex(ValueError, "Unsupported opening coordinator"),
+        ):
+            extract_assets.extract_assets(self.image, self.output)
+        self.assertEqual(old.read_bytes(), b"existing game")
+        self.assertEqual(list(self.output.iterdir()), [old])
 
 
 if __name__ == "__main__":

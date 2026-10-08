@@ -61,6 +61,21 @@ class AudioEngine:
     def available(self, cue):
         return cue in self.cues and bool(self.cues[cue].get("file"))
 
+    def play_intro(self, resource_id, kind):
+        if not self.available(resource_id):
+            raise ValueError(f"Intro audio {resource_id} is missing; import the game again")
+        bus = "music" if kind == 0 else "effect"
+        if kind == 0:
+            self.current_music = resource_id
+            self.current_music_ambient = False
+            self.pending_song = None
+        else:
+            self.current_effect = resource_id
+            self.pending_effect = None
+        self.playback.play(bus, resource_id)
+        if self.paused:
+            self.playback.pause(True)
+
     def add_sound(self, cue, actor_type=0):
         # AddSound 5:4d84: one pending effect; smaller priorities win.
         if not self.available(cue) or (actor_type == 1 and cue in (0, 294, 295, 300)):

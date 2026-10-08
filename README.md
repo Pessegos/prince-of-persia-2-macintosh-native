@@ -20,8 +20,9 @@ Prince of Persia 2 disk image. The importer extracts the resources, enemy data
 and audio, then starts the game. Subsequent launches use those local files without
 asking for the disk image again.
 
-Compatible images contain an HFS volume, the four named resource files below,
-the `Prince of Persia 2` application, `DigiSnd.dat` and `MIDISnd.dat`.
+Compatible images contain an HFS volume, the named resource files below,
+the `Prince of Persia 2` application, `DigiSnd.dat`, `MIDISnd.dat`,
+`NISDIGI.dat` and `NISMIDI.dat`.
 Raw or wrapped `.hfs`, `.hfv`, `.dsk`
 and `.img` files can be used; the extension alone does not establish compatibility.
 Files whose catalog or resource forks need HFS extents-overflow records are not
@@ -53,8 +54,10 @@ in `assets/`:
 - `Kid.rsrc`
 - `Guard.rsrc`
 - `Rooftops.rsrc`
+- `NIS.rsrc` and `Title.rsrc`
 - `enemy_profiles.json`
-- `audio/` (original samples, MIDI, instruments and prepared level-1 music)
+- `intro.json` (recovered scene instructions and audio markers)
+- `audio/` (original samples, voices, instruments and prepared music)
 
 The same import can be performed without a file picker:
 
@@ -64,15 +67,19 @@ The same import can be performed without a file picker:
 
 The importer leaves the disk image unchanged and does not retain the game
 executable or any ROM or system files. Generated game files are ignored by Git.
-Existing installations without audio will ask for the disk image once more.
+Existing installations without intro resources will ask for the disk image once more.
 Music is prepared during import using the bundled `smssynth` renderer and the
 game's Macintosh instruments, not a General MIDI sound bank. Playback uses SDL
 through pygame; the game does not generate diagnostic recordings.
+The importer uses Unicorn to recover the opening coordinator's drawing and
+timing calls. The game itself plays the resulting scene program natively,
+without a CPU emulator or the original executable.
 
 ## Controls
 
 | Key | Action |
 | --- | --- |
+| Space during intro | Skip to level 1 |
 | Left / Right | Run, turn, or move in sword mode |
 | Shift + Left / Right | Careful step |
 | Up | Jump, climb, or block in sword mode |
@@ -85,6 +92,7 @@ through pygame; the game does not generate diagnostic recordings.
 | F1 | Game menu with command shortcuts |
 | Alt + N | New game, after confirmation |
 | Alt + R | Restart from the latest checkpoint or level start |
+| Alt + E | End game and return to the introduction |
 | Alt + T | Toggle all sound |
 | Alt + M | Toggle ambient music |
 | Alt + V | About the port |
@@ -94,7 +102,7 @@ through pygame; the game does not generate diagnostic recordings.
 
 The game menu accepts mouse, arrows and Tab/Shift+Tab; Enter/Space activates
 the selected option. New game defaults to Cancel. Escape backs out without
-discarding progress. Save/Open, End game (return to intro) and Hall of Fame
+discarding progress. Save/Open and Hall of Fame
 are shown disabled until those systems are implemented. There are no
 Alt+Q or Alt+F commands; fullscreen remains Alt+Enter.
 
@@ -108,6 +116,7 @@ Screen jumps also set the latest checkpoint along the selected route.
 
 The level-1 route is playable from the palace window to boarding the ship.
 
+- Original opening story, animated title, palace scenes, music and voices.
 - Ten level-1 route screens and the right-hand secret room.
 - Window escape, locomotion, ledge movement, sword combat and rooftop guards.
 - Harbor scenery, water falls and the departing ship's original boarding sequence.
@@ -118,7 +127,7 @@ The level-1 route is playable from the palace window to boarding the ship.
 - Original 512x384 viewport, aspect-preserving nearest-neighbor scaling.
 - Movement at 12 fps and ordinary sword combat at 10 fps.
 
-The intro, level-ending scenes and later levels are not yet implemented.
+Level-ending scenes and later levels are not yet implemented.
 Boarding the ship currently ends at a level-complete screen. This remains a WIP;
 the recovered rules do not yet cover every original collision or input branch.
 
@@ -127,7 +136,7 @@ the recovered rules do not yet cover every original collision or input branch.
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m ruff check --select F,E9 .
-python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_audio tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_game_menu.GameMenuModelTests
+python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_intro tests.test_audio tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_game_menu.GameMenuModelTests
 python -m tools.recovery_catalog --check
 ```
 
@@ -169,6 +178,7 @@ vendor/             Import-time MIDI renderer and its license notices
 [collision notes](docs/COLLISION_RECOVERY.md), [enemy AI notes](docs/AI_RECOVERY.md),
 [harbor and ship notes](docs/HARBOR_RECOVERY.md),
 [audio notes](docs/AUDIO_RECOVERY.md), [death/checkpoint notes](docs/REBIRTH_RECOVERY.md),
+[intro notes](docs/INTRO_RECOVERY.md),
 [game commands](docs/GAME_COMMANDS.md),
 [development history](docs/DEVELOPMENT_HISTORY.md).
 

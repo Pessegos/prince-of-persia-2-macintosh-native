@@ -48,6 +48,18 @@ class ImportedAudioTests(unittest.TestCase):
                  "root.after(300, root.quit); root.mainloop(); "
                  "assert scene.native_viewport.getbbox() is not None; "
                  "audio.close(); root.destroy(); context.stop()"],
+                ["-c", "from unittest.mock import patch; import tkinter as tk; "
+                 "from pop2.audio import AudioEngine; from pop2.scene_prototype import ScenePrototype; "
+                 "root=tk.Tk(); root.withdraw(); audio=AudioEngine(); "
+                 "context=patch('pop2.window_controls.tk.Tk', return_value=root); context.start(); "
+                 "scene=ScenePrototype(peaceful=True, audio=audio, with_intro=True); "
+                 "assert scene.intro is not None and audio.music_busy; "
+                 "root.after(300, root.quit); root.mainloop(); "
+                 "assert scene.intro.time > 0 and scene.native_viewport.getbbox() is not None; "
+                 "scene.set_paused(True); before=scene.intro.time; scene.advance_animation(); "
+                 "assert scene.intro.time == before and audio.paused; scene.set_paused(False); "
+                 "scene.finish_intro(); assert scene.opening.active and audio.effect_busy; "
+                 "audio.close(); root.destroy(); context.stop()"],
             ):
                 result = subprocess.run([sys.executable, *arguments], cwd=fresh, env=env,
                                         capture_output=True, text=True, timeout=120)
@@ -84,13 +96,16 @@ class ImportedAudioTests(unittest.TestCase):
         image_path = Path(__file__).resolve().parents[2] / "pop2.hfs"
         if not image_path.is_file():
             self.skipTest("Original disk image is unavailable")
-        archive = mohawk_resources(get_data_fork(image_path.read_bytes(), "DigiSnd.dat"))["snd "]
+        image = image_path.read_bytes()
+        archives = {name: mohawk_resources(get_data_fork(image, name))["snd "]
+                    for name in ("DigiSnd.dat", "NISDIGI.dat")}
         audio = AudioEngine(playback=object())
         for cue, item in audio.cues.items():
             if item["kind"] != "pcm" or not item.get("file"):
                 continue
             with self.subTest(cue=cue):
-                source = digitized_sound(archive[9752 + cue])
+                archive = archives[item.get("source_archive", "DigiSnd.dat")]
+                source = digitized_sound(archive[item.get("resource_id", 9752 + cue)])
                 with wave.open(str(ASSET_DIR / "audio" / item["file"])) as reader:
                     actual = np.frombuffer(reader.readframes(reader.getnframes()), dtype="<i2")
                     expected = (np.frombuffer(source.pcm, dtype=np.uint8).astype(np.int16) - 128) * 64

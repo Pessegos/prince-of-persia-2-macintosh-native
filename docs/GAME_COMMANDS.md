@@ -14,7 +14,7 @@ development menu.
 | Open Game | Alt+O | Disabled; save system not yet recovered |
 | Sound | Alt+T | Master audio toggle |
 | Ambient Music | Alt+M | Ambient tracks only |
-| End Game | Alt+E | Disabled until the intro/frontend exists |
+| End Game | Alt+E | Return to the introduction |
 | Hall of Fame | Alt+H | Disabled until scoring/frontend exists |
 | Version | Alt+V | Port information, not the original game's version |
 | Full Screen | Alt+Enter | Aspect-preserving nearest-neighbor scaling |
@@ -23,9 +23,11 @@ The version key is handled in CODE 2:4838-486a rather than relying on the
 Edit menu's V entry. Pause and gameplay bindings are unchanged.
 
 New Game is deliberately a host confirmation rather than an immediate
-restart. Confirming clears the checkpoint and starts the window escape;
+restart. Confirming clears the checkpoint and replays the introduction;
 Restart Level shares the existing rebirth path, without requiring death.
-Neither action changes the sound settings or peaceful-mode preference.
+Space skips the introduction to the window escape. Neither action changes
+the sound settings or peaceful-mode preference. The isolated animation test
+harness still restarts directly at the window, without a frontend.
 
 Menus freeze simulation and audio, operate on the native framebuffer and
 use the game's NFNT. Mouse hit testing follows viewport scaling and

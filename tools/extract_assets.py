@@ -8,16 +8,19 @@ import tempfile
 
 from tools.extract_enemy_profiles import extract_bytes
 from tools.extract_audio import extract_audio
+from tools.extract_intro import extract_intro
 from pop2.mac_resources import get_resource_fork, parse_resource_fork
 from pop2.paths import ASSET_DIR
 
 
-RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Rooftops.rsrc")
+RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc")
 REQUIRED_RESOURCES = {
     "Prince.rsrc": {"LEVL", "SEQS", "SHAP", "SHPL", "CTBL", "NFNT"},
     "Kid.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
     "Guard.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
     "Rooftops.rsrc": {"PIEC", "SHAP", "CTBL"},
+    "NIS.rsrc": {"SHAP", "CTBL", "TEXT"},
+    "Title.rsrc": {"SHAP", "CTBL", "SCRP", "ANI "},
 }
 
 
@@ -44,6 +47,9 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         for name, resource in resources.items():
             (staging / name).write_bytes(resource)
         extract_audio(image, program, resources["Prince.rsrc"], staging / "audio", progress)
+        progress("Recovering the original opening scenes...")
+        extract_intro(image, program, resources["NIS.rsrc"], staging, progress)
+        resources["intro.json"] = (staging / "intro.json").read_bytes()
         # Audio is fully prepared before any installed resources are replaced.
         for path in (staging / "audio").rglob("*"):
             if path.is_file():

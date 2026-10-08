@@ -18,6 +18,9 @@ class InstallationTests(unittest.TestCase):
             (assets / name).parent.mkdir(parents=True, exist_ok=True)
             (assets / name).touch()
         (assets / "audio" / "manifest.json").write_text(json.dumps({"schema": 1, "cues": {}}))
+        (assets / "intro.json").write_text(json.dumps({
+            "schema": 1, "audio": {}, "operations": [{"op": "wait", "args": [1]}],
+        }))
 
     def test_complete_installation_has_no_errors(self):
         self.assertEqual(run_game.installation_errors(self.project), [])

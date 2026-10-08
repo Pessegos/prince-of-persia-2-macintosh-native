@@ -60,6 +60,22 @@ class CueTests(unittest.TestCase):
         Path(self.directory.name, "manifest.json").write_text(json.dumps(manifest))
         self.audio = AudioEngine(self.directory.name, self.playback, random.Random(1))
 
+    def test_intro_audio_bypasses_game_effect_priority_and_preserves_pause(self):
+        self.audio.add_sound(7)
+        self.audio.play_intro(11, 1)
+        self.assertIsNone(self.audio.pending_effect)
+        self.playback.play.assert_called_with("effect", 11)
+        self.audio.pause(True)
+        self.audio.play_intro(40, 0)
+        self.assertEqual(self.audio.current_music, 40)
+        self.assertFalse(self.audio.current_music_ambient)
+        self.playback.play.assert_called_with("music", 40)
+        self.playback.pause.assert_called_with(True)
+
+    def test_missing_intro_audio_requires_reimport(self):
+        with self.assertRaisesRegex(ValueError, "import the game again"):
+            self.audio.play_intro(25010, 0)
+
     def test_pending_effect_uses_priority_and_current_effect_rejects_lower_priority(self):
         audio = self.audio
         audio.add_sound(294)

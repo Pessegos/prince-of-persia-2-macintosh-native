@@ -14,8 +14,9 @@ Original game content remains the property of its respective rights holders.
 This includes:
 
 - `assets/Prince.rsrc`, `assets/Kid.rsrc`, `assets/Guard.rsrc` and
-  `assets/Rooftops.rsrc`.
+  `assets/Rooftops.rsrc`, `assets/NIS.rsrc` and `assets/Title.rsrc`.
 - `assets/enemy_profiles.json`, which contains extracted game data.
+- `assets/intro.json`, which contains recovered original scene instructions.
 - `assets/audio/`, including original samples, instruments, MIDI and rendered music.
 - Original artwork, fonts, animation sequences, level data, and other game
   tables, including extracted data embedded in code or tests.
@@ -43,6 +44,9 @@ of this project's MIT license:
 - [mido](https://github.com/mido/mido/blob/main/LICENSE): MIT; MIDI parsing.
 - [NumPy](https://numpy.org/doc/stable/license.html): BSD; binary wheels include
   notices for incorporated libraries.
+- [Unicorn](https://github.com/unicorn-engine/unicorn/blob/2.1.4/COPYING):
+  GPLv2 core, BSD Python bindings. Installed separately and used only during
+  intro extraction, not gameplay playback.
 - [Ruff](https://github.com/astral-sh/ruff/blob/main/LICENSE): MIT license;
   development tool only.
 

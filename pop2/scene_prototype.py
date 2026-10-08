@@ -147,7 +147,10 @@ def next_animation_deadline(previous_deadline, now, interval_ms=ANIMATION_INTERV
 
 
 class ScenePrototype(WindowControls):
-    def __init__(self, with_guard=True, peaceful=False, audio=None):
+    def __init__(self, with_guard=True, peaceful=False, audio=None, with_intro=False):
+        self.with_intro = with_intro
+        self.intro = None
+        self.intro_assets = None
         self.audio = audio
         self.peaceful = peaceful
         room = build_opening_room(include_curtain=False)
@@ -286,13 +289,16 @@ class ScenePrototype(WindowControls):
         self.opening = OpeningEscape(self.sequence_runtime, self.start_tile)
         self.action = self.sequence_state.action
         self.player_x = self.sequence_state.target_x
-        if self.audio is not None:
+        if with_intro:
+            self.start_intro()
+        elif self.audio is not None:
             self.audio.add_sound(36)
             self.advance_audio()
         self.render()
-        self.next_animation_at = time.perf_counter() + ANIMATION_INTERVAL_MS / 1000
+        interval = self.current_animation_interval_ms()
+        self.next_animation_at = time.perf_counter() + interval / 1000
         self.animation_after_id = self.root.after(
-            round(ANIMATION_INTERVAL_MS), self.advance_animation
+            round(interval), self.advance_animation
         )
 
     def set_key_state(self, key, pressed):
@@ -1336,6 +1342,17 @@ class ScenePrototype(WindowControls):
         if self.paused or getattr(self, "level_complete", False):
             return
         self.in_animation_tick = True
+        if getattr(self, "intro", None) is not None:
+            now = time.perf_counter()
+            self.intro.advance(max(0, now - self.last_intro_at))
+            self.last_intro_at = now
+            if self.intro.done:
+                self.finish_intro()
+            else:
+                self.render()
+            self.in_animation_tick = False
+            self.schedule_next_animation()
+            return
         retry_held = ({"space", "Shift_L", "Shift_R", "Control_L", "Control_R"}
                       & self.window_keys_down) - self.pause_resume_keys
         if self.death.can_restart and retry_held:
@@ -1761,6 +1778,8 @@ class ScenePrototype(WindowControls):
                 break
 
     def advance_audio(self):
+        if getattr(self, "intro", None) is not None:
+            return
         audio = getattr(self, "audio", None)
         if audio is None:
             return
@@ -1818,11 +1837,37 @@ class ScenePrototype(WindowControls):
                 self.schedule_next_animation()
         self.pause_resume_keys.update(held)
 
-    def restart_opening(self, _event=None):
+    def start_intro(self):
+        from pop2.intro import IntroAssets, IntroPlayer
+
+        if self.intro_assets is None:
+            self.intro_assets = IntroAssets()
+        if self.audio is not None:
+            self.audio.reset()
+        self.clear_keys(None)
+        self.level_complete = False
+        self.intro = IntroPlayer(self.intro_assets, self.audio)
+        self.last_intro_at = time.perf_counter()
+        self.status.set("Introduction")
+
+    def new_game(self):
+        self.restart_opening(play_sound=not self.with_intro)
+        if self.with_intro:
+            self.start_intro()
+            self.render()
+
+    def finish_intro(self):
+        held = set(self.window_keys_down)
+        self.restart_opening()
+        self.pause_resume_keys.update(held)
+
+    def restart_opening(self, _event=None, play_sound=True):
+        self.intro = None
         audio = getattr(self, "audio", None)
         if audio is not None:
             audio.reset()
-            audio.add_sound(36)
+            if play_sound:
+                audio.add_sound(36)
         if self.animation_after_id is not None:
             self.root.after_cancel(self.animation_after_id)
             self.animation_after_id = None
@@ -1857,7 +1902,8 @@ class ScenePrototype(WindowControls):
         self.action = self.sequence_state.action
         self.player_x = self.sequence_state.target_x
         self.status.set("Window escape")
-        self.advance_audio()
+        if play_sound:
+            self.advance_audio()
         self.render()
         self.next_animation_at = time.perf_counter()
         if not self.in_animation_tick:
@@ -1900,6 +1946,7 @@ class ScenePrototype(WindowControls):
             x = columns[len(columns) // 2] * TILE_WIDTH + 14
         if not 0 <= x < ROOM_WIDTH:
             raise ValueError("X must be between 0 and 509")
+        self.intro = None
         self.clear_keys(None)
         self.death = DeathState()
         if not preserve_checkpoint:
@@ -1998,6 +2045,8 @@ class ScenePrototype(WindowControls):
         self.advance_animation()
 
     def current_animation_interval_ms(self):
+        if getattr(self, "intro", None) is not None:
+            return 1000 / 60
         interval_ms = animation_interval_for_frame(
             self.sequence_state.sequence_id, self.sequence_state.action)
         if self._combat_controls_locked() and self.sword_drawn:
@@ -2052,6 +2101,20 @@ class ScenePrototype(WindowControls):
         return Image.alpha_composite(frame, layer)
 
     def render(self):
+        if getattr(self, "intro", None) is not None:
+            viewport = self.intro.frame()
+            if self.dev_menu is not None:
+                viewport = self.dev_menu.draw(viewport, self.ui_font)
+            elif self.game_menu is not None:
+                self.refresh_game_menu()
+                viewport = self.game_menu.draw(viewport, self.ui_font)
+            elif self.paused:
+                viewport.paste((0, 0, 0, 255), (0, ROOM_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
+                viewport.paste(self.pause_text, ((VIEWPORT_WIDTH - self.pause_text.width) // 2,
+                                                ROOM_HEIGHT), self.pause_text)
+            self.native_viewport = viewport
+            self.present_viewport()
+            return
         frame = self.background.copy()
         frame = draw_harbor(frame, self.room_id, self.harbor)
         opening = getattr(self, "opening", None)
@@ -2153,10 +2216,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-guard", action="store_true", help="Isolated animation comparison")
     parser.add_argument("--peaceful", action="store_true", help="Rooftop terrain test without guards")
+    parser.add_argument("--skip-intro", action="store_true", help="Start directly in level 1")
     args = parser.parse_args()
     from pop2.audio import AudioEngine
     audio = AudioEngine()
     try:
-        ScenePrototype(with_guard=not args.no_guard, peaceful=args.peaceful, audio=audio).run()
+        ScenePrototype(with_guard=not args.no_guard, peaceful=args.peaceful, audio=audio,
+                       with_intro=not args.skip_intro and not args.no_guard).run()
     finally:
         audio.close()

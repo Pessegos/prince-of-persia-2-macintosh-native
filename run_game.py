@@ -14,6 +14,9 @@ REQUIRED_ASSETS = (
     "Kid.rsrc",
     "Guard.rsrc",
     "Rooftops.rsrc",
+    "NIS.rsrc",
+    "Title.rsrc",
+    "intro.json",
     "enemy_profiles.json",
     "audio/manifest.json",
 )
@@ -38,11 +41,11 @@ def dependency_errors(project=PROJECT):
         errors.append(
             "Python needs Tk support. On Windows, include Tcl/Tk in the Python installer."
         )
-    for name in ("pygame.mixer", "mido", "numpy"):
+    for name in ("pygame.mixer", "mido", "numpy", "unicorn"):
         try:
             import_module(name)
         except ImportError:
-            errors.append(f"Install audio dependencies: {install_command}")
+            errors.append(f"Install game dependencies: {install_command}")
             break
     return errors
 
@@ -62,6 +65,18 @@ def missing_assets(project=PROJECT):
                     missing.append("audio/" + item["file"])
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append("audio/manifest.json (needs reimport)")
+    intro_path = project / "assets" / "intro.json"
+    if intro_path.is_file():
+        from pop2.intro import read_program
+
+        try:
+            intro = read_program(intro_path)
+            if manifest_path.is_file():
+                cues = json.loads(manifest_path.read_text(encoding="ascii"))["cues"]
+                if any(not cues.get(key, {}).get("file") for key in intro["audio"]):
+                    raise ValueError("Intro audio is incomplete")
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            missing.append("intro.json (needs reimport)")
     return missing
 
 
@@ -83,7 +98,7 @@ def launch_game(peaceful):
 
     audio = AudioEngine()
     try:
-        ScenePrototype(peaceful=peaceful, audio=audio).run()
+        ScenePrototype(peaceful=peaceful, audio=audio, with_intro=True).run()
     finally:
         audio.close()
 
