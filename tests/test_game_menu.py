@@ -358,10 +358,10 @@ class GameMenuSceneTests(unittest.TestCase):
                 patch.object(scene.canvas, "winfo_height", return_value=1440):
             scene.dev_click(SimpleNamespace(x=20, y=50, num=1))
             self.assertIsNotNone(scene.game_menu)
-            scene.dev_click(SimpleNamespace(x=origin[0] + 200 * size[0] / 512,
+            scene.dev_click(SimpleNamespace(x=origin[0] + 199 * size[0] / 510,
                                              y=origin[1] + 72 * size[1] / 384, num=3))
             self.assertIsNotNone(scene.game_menu)
-            scene.dev_click(SimpleNamespace(x=origin[0] + 200 * size[0] / 512,
+            scene.dev_click(SimpleNamespace(x=origin[0] + 199 * size[0] / 510,
                                              y=origin[1] + 72 * size[1] / 384, num=1))
         self.assertIsNone(scene.game_menu)
         for key in ("Left", "Up", "Control_L", "Shift_L"):

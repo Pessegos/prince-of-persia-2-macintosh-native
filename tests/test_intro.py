@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
+import numpy as np
 from PIL import Image
 
 from pop2.intro import (
@@ -93,11 +94,20 @@ class IntroFormatTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     read_program(path)
 
-    def test_dissolve_copies_horizontal_words_in_two_passes_not_square_blocks(self):
+    def test_dissolve_alternates_word_offsets_per_shuffled_group_in_each_pass(self):
         pattern = {"rect": [2, 4, 4, 12], "order": [3, 0, 2, 1]}
         words = dissolve_words(pattern)
-        self.assertEqual(words.tolist(), [[1544, 1545], [1028, 1029], [1540, 1541], [1032, 1033],
-                                          [1546, 1547], [1030, 1031], [1542, 1543], [1034, 1035]])
+        # Write order verified by executing CODE 15:31ba-3256 on the 68000.
+        self.assertEqual(words.tolist(), [[1544, 1545], [1030, 1031], [1540, 1541], [1034, 1035],
+                                          [1546, 1547], [1028, 1029], [1542, 1543], [1032, 1033]])
+
+    def test_half_dissolve_does_not_favor_vertical_column_pairs(self):
+        words = dissolve_words()
+        first_pass = words[:len(words) // 2].ravel()
+        columns = first_pass % 512
+        self.assertEqual(np.bincount(columns % 4).tolist(), [11040] * 4)
+        self.assertEqual(len(np.unique(words)), 384 * 230)
+        self.assertTrue(np.all(words[:, 1] == words[:, 0] + 1))
 
     def test_invalid_dissolve_permutation_is_rejected(self):
         for order in ([0, 0, 2, 3], [0, 1, 2, 4], [0, 1, 2], [0, 1, 2, 3.0]):
@@ -148,6 +158,8 @@ class IntroPlaybackTests(unittest.TestCase):
         p.advance(3 / 8)
         self.assertEqual([p.display.getpixel((x, 3)) for x in range(4, 12)],
                          [3, 3, 2, 2, 3, 3, 2, 2])
+        self.assertEqual([p.display.getpixel((x, 2)) for x in range(4, 12)],
+                         [2, 2, 3, 3, 2, 2, 3, 3])
         p.advance(.5)
         self.assertEqual(p.display.crop((4, 2, 12, 4)).tobytes(), bytes([3]) * 16)
         self.assertEqual(p.display.getpixel((0, 0)), 2)

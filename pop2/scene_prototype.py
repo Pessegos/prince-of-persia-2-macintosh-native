@@ -2102,7 +2102,9 @@ class ScenePrototype(WindowControls):
 
     def render(self):
         if getattr(self, "intro", None) is not None:
-            viewport = self.intro.frame()
+            viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
+            viewport.paste(self.intro.frame().crop((0, 0, ROOM_WIDTH, VIEWPORT_HEIGHT)),
+                           (ROOM_ORIGIN_X, 0))
             if self.dev_menu is not None:
                 viewport = self.dev_menu.draw(viewport, self.ui_font)
             elif self.game_menu is not None:

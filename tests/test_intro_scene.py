@@ -3,6 +3,9 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+from PIL import Image
+
+from pop2.game_ui import VISIBLE_VIEWPORT
 from pop2.paths import ASSET_DIR
 
 
@@ -46,6 +49,16 @@ class IntroSceneTests(unittest.TestCase):
             scene.set_paused(False)
         self.assertEqual(scene.last_intro_at, 1000)
         self.assertEqual(scene.intro.time, before)
+
+    def test_complete_intro_frame_is_aligned_with_visible_game_rectangle(self):
+        source = Image.new("RGBA", (512, 384), (20, 40, 60, 255))
+        source.paste((255, 0, 0, 255), (510, 0, 512, 384))
+        source.putpixel((0, 0), (0, 255, 0, 255))
+        with patch.object(self.scene.intro, "frame", return_value=source):
+            self.scene.render()
+        visible = self.scene.native_viewport.crop(VISIBLE_VIEWPORT)
+        self.assertEqual(visible.size, (510, 384))
+        self.assertEqual(visible.tobytes(), source.crop((0, 0, 510, 384)).tobytes())
 
     def test_space_skip_does_not_leak_into_level_input(self):
         scene = self.scene

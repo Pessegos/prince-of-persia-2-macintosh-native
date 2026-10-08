@@ -124,7 +124,7 @@ The level-1 route is playable from the palace window to boarding the ship.
 - Four original rooftop music tracks and movement, combat, glass and water sounds.
 - Death music with playback-dependent restart messages; pause also pauses audio.
 - Losing window focus pauses the game and audio. Returning focus does not resume automatically.
-- Original 512x384 viewport, aspect-preserving nearest-neighbor scaling.
+- Original 510x384 visible viewport, aspect-preserving nearest-neighbor scaling.
 - Movement at 12 fps and ordinary sword combat at 10 fps.
 
 Level-ending scenes and later levels are not yet implemented.

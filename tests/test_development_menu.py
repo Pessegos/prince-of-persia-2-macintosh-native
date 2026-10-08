@@ -99,7 +99,7 @@ class MenuModelTests(unittest.TestCase):
             with self.subTest(dimensions=dimensions):
                 size, origin = fit_viewport(*dimensions)
                 for x, y in ((220, 150), (150, 195), (290, 245)):
-                    mapped = viewport_point(origin[0] + x * size[0] / 512,
+                    mapped = viewport_point(origin[0] + (x - 1) * size[0] / 510,
                                             origin[1] + y * size[1] / 384, *dimensions)
                     self.assertAlmostEqual(mapped[0], x)
                     self.assertAlmostEqual(mapped[1], y)

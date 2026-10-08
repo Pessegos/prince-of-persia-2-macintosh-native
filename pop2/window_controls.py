@@ -7,8 +7,7 @@ import tkinter as tk
 from PIL import Image, ImageTk
 
 from pop2.game_menu import GameMenu
-from pop2.game_ui import DevelopmentMenu, fit_viewport, viewport_point
-from pop2.render_opening import VIEWPORT_HEIGHT, VIEWPORT_WIDTH
+from pop2.game_ui import DevelopmentMenu, VISIBLE_SIZE, VISIBLE_VIEWPORT, fit_viewport, viewport_point
 
 
 def is_resume_key(event, held_keys=()):
@@ -50,11 +49,11 @@ class WindowControls:
         self.root = tk.Tk()
         self.root.title(title)
         self.root.resizable(True, True)
-        self.root.minsize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+        self.root.minsize(*VISIBLE_SIZE)
         self.canvas = tk.Canvas(
             self.root,
-            width=VIEWPORT_WIDTH * scale,
-            height=VIEWPORT_HEIGHT * scale,
+            width=VISIBLE_SIZE[0] * scale,
+            height=VISIBLE_SIZE[1] * scale,
             highlightthickness=0,
             bg="#000000",
         )
@@ -489,9 +488,9 @@ class WindowControls:
         width = self.canvas.winfo_width()
         height = self.canvas.winfo_height()
         if width <= 1 or height <= 1:
-            width, height = VIEWPORT_WIDTH * 2, VIEWPORT_HEIGHT * 2
+            width, height = VISIBLE_SIZE[0] * 2, VISIBLE_SIZE[1] * 2
         size, position = fit_viewport(width, height)
-        frame = self.native_viewport.resize(size, Image.Resampling.NEAREST)
+        frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
         self.image_ref = ImageTk.PhotoImage(frame)
         if self.canvas.find_all():
             self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)

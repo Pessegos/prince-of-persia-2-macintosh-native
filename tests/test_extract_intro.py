@@ -52,7 +52,7 @@ class IntroExtractionTests(unittest.TestCase):
             operations = extractor.recover_scenes(b"program", b"nis")
         self.assertEqual([item["op"] for item in operations],
                          ["fill", "sound", "title", "fade_both", "fill", "sound"])
-        self.assertEqual(operations[0]["args"], [15, [0, 0, 384, 512]])
+        self.assertEqual(operations[0]["args"], [15, [0, 0, 384, 510]])
         self.assertEqual(operations[1]["args"], [25010, 0])
         self.assertGreater(operations[0]["pc"], 0x45c2)
 

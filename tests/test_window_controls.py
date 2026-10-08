@@ -7,7 +7,40 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from PIL import Image
+
+from pop2.game_ui import VISIBLE_VIEWPORT, fit_viewport, viewport_point
 from pop2.window_controls import WindowControls, is_resume_key
+
+
+class PresentationTests(unittest.TestCase):
+    def test_presentation_crops_padding_before_nearest_neighbor_scaling(self):
+        host = WindowControls()
+        host.native_viewport = Image.new("RGB", (512, 384), "red")
+        host.native_viewport.paste("blue", VISIBLE_VIEWPORT)
+        host.native_viewport.putpixel((101, 100), (255, 255, 255))
+        host.canvas = Mock()
+        host.canvas.find_all.return_value = (1,)
+        for width, height in ((1020, 768), (1920, 1080), (3440, 1440), (2560, 1070), (800, 900)):
+            with self.subTest(size=(width, height)):
+                host.canvas.winfo_width.return_value = width
+                host.canvas.winfo_height.return_value = height
+                with patch("pop2.window_controls.ImageTk.PhotoImage", side_effect=lambda frame: frame):
+                    host.present_viewport()
+                size, origin = fit_viewport(width, height)
+                self.assertEqual(host.image_ref.size, size)
+                self.assertEqual({color for _count, color in host.image_ref.getcolors(2)},
+                                 {(0, 0, 255), (255, 255, 255)})
+                host.canvas.coords.assert_called_with(1, *origin)
+                expected = host.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+                self.assertEqual(host.image_ref.tobytes(), expected.tobytes())
+
+    def test_pointer_maps_visible_edges_to_composition_coordinates(self):
+        size, origin = fit_viewport(3440, 1440)
+        self.assertEqual(viewport_point(*origin, 3440, 1440), (1, 0))
+        self.assertIsNone(viewport_point(origin[0] + size[0], 0, 3440, 1440))
+        self.assertEqual(viewport_point(origin[0] + size[0] / 2, size[1] / 2,
+                                        3440, 1440), (256, 192))
 
 
 class ResumeKeyTests(unittest.TestCase):

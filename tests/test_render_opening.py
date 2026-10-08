@@ -6,6 +6,7 @@ from unittest.mock import patch
 from PIL import Image, ImageChops
 
 from pop2.animation_data import parse_frame_records, sequence_words
+from pop2.game_ui import VISIBLE_SIZE, VISIBLE_VIEWPORT
 from pop2.opening_animation import OpeningEscape
 from pop2.rebirth import DeathState
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
@@ -103,8 +104,10 @@ class OpeningRoomTests(unittest.TestCase):
             ]
         with patch("pop2.window_controls.ImageTk.PhotoImage", side_effect=lambda frame: frame.copy()):
             scene.render()
-        self.assertEqual(scene.image_ref.size, (VIEWPORT_WIDTH * SCALE, VIEWPORT_HEIGHT * SCALE))
-        return scene.image_ref.resize((VIEWPORT_WIDTH, VIEWPORT_HEIGHT), Image.Resampling.NEAREST)
+        self.assertEqual(scene.image_ref.size, (VISIBLE_SIZE[0] * SCALE, VISIBLE_SIZE[1] * SCALE))
+        presented = scene.image_ref.resize(VISIBLE_SIZE, Image.Resampling.NEAREST)
+        self.assertEqual(presented.tobytes(), scene.native_viewport.crop(VISIBLE_VIEWPORT).tobytes())
+        return scene.native_viewport.copy()
 
     def viewport_background(self):
         image = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))

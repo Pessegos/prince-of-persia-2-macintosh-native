@@ -9,7 +9,7 @@ from PIL import Image, ImageChops, ImageOps, ImageTk
 from pop2.animation_data import parse_frame_records, sequence_words
 from pop2.combat import GuardSpawn, opponent_distance
 from pop2.mac_input import StepBoundary
-from pop2.render_opening import ROOM_ORIGIN_X, build_opening_room, load_resource_file
+from pop2.render_opening import build_opening_room, load_resource_file
 from pop2.scene_prototype import BufferedCommand, ScenePrototype
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.terrain import (LevelMap, RooftopPhysics, TerrainMotion, character_column,
@@ -666,7 +666,7 @@ class RooftopSceneTests(unittest.TestCase):
         scene.combat.guard = None
         scene.combat.generation_points.clear()
         scene.render()
-        image = ImageTk.getimage(scene.image_ref).resize((512, 384), Image.Resampling.NEAREST)
+        image = ImageTk.getimage(scene.image_ref).resize((510, 384), Image.Resampling.NEAREST)
         sprite = scene.player_sprite()
         left, top, _right, _bottom = scene.player_bounds()
         room = scene.room_cache[scene.room_id]
@@ -676,7 +676,7 @@ class RooftopSceneTests(unittest.TestCase):
             for x in range(sprite.width):
                 px, py = left + x, top + y
                 if sprite.getpixel((x, y))[3] == 255 and room.actor_occlusion[1].getpixel((px, py)) == 255:
-                    self.assertEqual(image.getpixel((px + ROOM_ORIGIN_X, py)), scenery.getpixel((px, py)))
+                    self.assertEqual(image.getpixel((px, py)), scenery.getpixel((px, py)))
                     checked += 1
         self.assertGreater(checked, 10)
 
@@ -695,7 +695,7 @@ class RooftopSceneTests(unittest.TestCase):
         self.tick(2)
         self.assertEqual((scene.action, scene.terrain_motion.row), (102, 2))
         scene.render()
-        image = ImageTk.getimage(scene.image_ref).resize((512, 384), Image.Resampling.NEAREST)
+        image = ImageTk.getimage(scene.image_ref).resize((510, 384), Image.Resampling.NEAREST)
         sprite = scene.player_sprite()
         if scene.sequence_state.facing:
             sprite = ImageOps.mirror(sprite)
@@ -708,7 +708,7 @@ class RooftopSceneTests(unittest.TestCase):
                 px, py = left + x, top + y
                 color = sprite.getpixel((x, y))
                 if color[3] == 255 and restored.getpixel((px, py)) == 255:
-                    self.assertEqual(image.getpixel((px + ROOM_ORIGIN_X, py)), color)
+                    self.assertEqual(image.getpixel((px, py)), color)
                     checked += 1
         self.assertGreater(checked, 10)
 
@@ -841,8 +841,8 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertGreater(scene.player_x, 450)
         scene.render()
         image = ImageTk.getimage(scene.image_ref)
-        self.assertEqual(image.size, (1024, 768))
-        self.assertGreater(len(image.getcolors(1024 * 768)), 50)
+        self.assertEqual(image.size, (1020, 768))
+        self.assertGreater(len(image.getcolors(image.width * image.height)), 50)
 
     def test_room_revisit_keeps_defeated_guards_and_generation_state(self):
         scene = self.scene

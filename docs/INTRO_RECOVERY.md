@@ -41,16 +41,24 @@ height, places each baseline four pixels above the line's bottom, then applies
 the font ascent to the bitmap. Decorative initials use the first pass's
 rectangle, not the main lettering's rectangle.
 
-DrawDisolveData (`15:31ba-3256`) copies 2x1-pixel words in two passes: first
-the low-address word of every shuffled four-pixel group, then the other word
-in the same order. This affects the inner story rectangle only, leaving the
-molded frame and subtitle panel intact. The importer recovers that permutation
+DrawDisolveData (`15:31ba-3256`) copies 2x1-pixel words in two passes. The first
+alternates offsets 0 and 2 for successive shuffled four-pixel groups; the
+second copies the complementary words in the same order. D7 advances per
+group, not only per pass. Copying every low-address word first would produce
+vertical stripes at half progress. This affects the inner story rectangle only,
+leaving the molded frame and subtitle panel intact. The importer recovers that permutation
 from the optional `Prince2.opt` DSLV resource. Cached source/destination byte
 offsets use different framebuffer strides; the source stride is inferred from
 the complete row layout before translating to native pixel coordinates.
 Only the permutation and rectangle are retained in `intro.json`, not pointers
 or machine-specific delay calibration. Without a usable cache, playback uses
 a deterministic shuffled group order with the same two-pass word geometry.
+
+GetFullScreenRect (`17:1ada-1b00`) returns 510x384, matching the NIS frame
+SHAP. The host keeps its 512-wide composition buffer but removes its two
+padding columns before nearest-neighbor presentation. Story images are
+aligned with that visible rectangle; gameplay coordinates are unchanged.
+Fullscreen fitting and menu pointer conversion use the same 510x384 extent.
 
 SCRP commands select a layer's shape, position and drawing flags, change the
 tick interval, notify the coordinator, sound an effect, end a frame or stop.

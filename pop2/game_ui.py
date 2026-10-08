@@ -4,7 +4,13 @@ from dataclasses import dataclass
 from PIL import Image, ImageDraw
 
 
-def fit_viewport(width, height, native_width=512, native_height=384):
+# GetFullScreenRect (CODE 17:1ada) is 510x384. The host's 512-wide
+# composition buffer centers the room with one padding column on each side.
+VISIBLE_VIEWPORT = (1, 0, 511, 384)
+VISIBLE_SIZE = (510, 384)
+
+
+def fit_viewport(width, height, native_width=510, native_height=384):
     scale = min(max(1, width) / native_width, max(1, height) / native_height)
     size = (max(1, int(native_width * scale)), max(1, int(native_height * scale)))
     return size, ((width - size[0]) // 2, (height - size[1]) // 2)
@@ -15,7 +21,8 @@ def viewport_point(x, y, width, height):
     if not (origin[0] <= x < origin[0] + size[0]
             and origin[1] <= y < origin[1] + size[1]):
         return None
-    return ((x - origin[0]) * 512 / size[0], (y - origin[1]) * 384 / size[1])
+    return (VISIBLE_VIEWPORT[0] + (x - origin[0]) * VISIBLE_SIZE[0] / size[0],
+            (y - origin[1]) * VISIBLE_SIZE[1] / size[1])
 
 
 @dataclass

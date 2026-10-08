@@ -169,7 +169,7 @@ def recover_scenes(program, nis):
             else:
                 target = displacement
                 if target == 0x10f2:
-                    cpu.mem_write(l(), struct.pack(">4h", 0, 0, 384, 512))
+                    cpu.mem_write(l(), struct.pack(">4h", 0, 0, 384, 510))
                 elif target == 0x10fa:
                     top, left, bottom, right = rectangle(l())
                     dx, dy = w(4), w(6)

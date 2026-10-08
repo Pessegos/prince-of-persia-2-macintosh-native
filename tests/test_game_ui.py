@@ -11,9 +11,12 @@ import tests.test_terrain as test_terrain
 
 class ViewportTests(unittest.TestCase):
     def test_aspect_fit_centers_without_stretching(self):
-        self.assertEqual(fit_viewport(1920, 1080), ((1440, 1080), (240, 0)))
-        self.assertEqual(fit_viewport(1280, 720), ((960, 720), (160, 0)))
-        self.assertEqual(fit_viewport(800, 900), ((800, 600), (0, 150)))
+        self.assertEqual(fit_viewport(1920, 1080), ((1434, 1080), (243, 0)))
+        self.assertEqual(fit_viewport(1280, 720), ((956, 720), (162, 0)))
+        self.assertEqual(fit_viewport(800, 900), ((800, 602), (0, 149)))
+        self.assertEqual(fit_viewport(3440, 1440), ((1912, 1440), (764, 0)))
+        self.assertEqual(fit_viewport(2560, 1070), ((1421, 1070), (569, 0)))
+        self.assertEqual(fit_viewport(1020, 768), ((1020, 768), (0, 0)))
 
 
 class GameWindowTests(unittest.TestCase):

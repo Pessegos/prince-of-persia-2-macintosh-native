@@ -112,7 +112,10 @@ def dissolve_words(pattern=None):
         random.Random(0).shuffle(order)
     groups = np.asarray(order, dtype=np.intp)
     starts = (top + groups // columns) * SIZE[0] + left + (groups % columns) * 4
-    words = np.concatenate((starts, starts + 2))
+    # D7 advances for every group: the first pass alternates word offsets
+    # 0, 2, 0, 2; the second copies their complements in the same order.
+    offsets = np.arange(count, dtype=np.intp) % 2 * 2
+    words = np.concatenate((starts + offsets, starts + 2 - offsets))
     return np.column_stack((words, words + 1))
 
 
