@@ -1,4 +1,5 @@
 import argparse
+import math
 import time
 from dataclasses import dataclass
 
@@ -1346,11 +1347,12 @@ class ScenePrototype(WindowControls):
         self.in_animation_tick = True
         if getattr(self, "intro", None) is not None:
             now = time.perf_counter()
+            revision = self.intro.revision
             self.intro.advance(max(0, now - self.last_intro_at))
             self.last_intro_at = now
             if self.intro.done:
                 self.finish_intro()
-            else:
+            elif self.intro.revision != revision:
                 self.render()
             self.in_animation_tick = False
             self.schedule_next_animation()
@@ -2059,10 +2061,16 @@ class ScenePrototype(WindowControls):
         if self.paused or getattr(self, "level_complete", False):
             return
         now = time.perf_counter()
-        self.next_animation_at, delay_ms = next_animation_deadline(
-            self.next_animation_at, now,
-            interval_ms=self.current_animation_interval_ms(),
-        )
+        if getattr(self, "intro", None) is not None:
+            # Intro time was sampled before rendering. Do not add render cost
+            # to the next script deadline or quantize it to the host's 60 Hz.
+            self.next_animation_at = self.last_intro_at + self.intro.next_update_delay()
+            delay_ms = max(0, math.ceil((self.next_animation_at - now) * 1000))
+        else:
+            self.next_animation_at, delay_ms = next_animation_deadline(
+                self.next_animation_at, now,
+                interval_ms=self.current_animation_interval_ms(),
+            )
         self.animation_after_id = self.root.after(delay_ms, self.advance_animation)
 
     def player_sprite(self, action=None):

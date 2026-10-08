@@ -6,6 +6,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from pop2.game_ui import VISIBLE_VIEWPORT
+from pop2.intro import MAC_TICKS_PER_SECOND
 from pop2.paths import ASSET_DIR
 
 
@@ -35,11 +36,11 @@ class OriginalTitleTests(unittest.TestCase):
         self.assertEqual((script.next_tick, script.interval), (1000, 5))
         intro = self.title_player()
         start = intro.transition[1]
-        self.assertAlmostEqual(intro.wait_until - start, 17)
+        self.assertAlmostEqual(intro.wait_until - start, 1020 / MAC_TICKS_PER_SECOND)
         intro.advance(intro.wait_until - intro.time)
         self.assertTrue(intro.title_animation.done)
         self.assertEqual(intro.transition[0], "fade")
-        self.assertAlmostEqual(intro.transition[1] - start, 17)
+        self.assertAlmostEqual(intro.transition[1] - start, 1020 / MAC_TICKS_PER_SECOND)
 
     def test_blue_sky_background_is_at_top_not_below_the_moving_clouds(self):
         intro = self.title_player()
@@ -56,6 +57,13 @@ class OriginalTitleTests(unittest.TestCase):
             incremental.advance(1 / 60)
         self.assertEqual(direct.title_animation.layers, incremental.title_animation.layers)
         self.assertEqual(direct.frame().tobytes(), incremental.frame().tobytes())
+
+    def test_original_title_clock_uses_macintosh_vertical_blank_rate(self):
+        intro = self.title_player()
+        start = intro.transition[1]
+        intro.advance(start + 15 - intro.time)
+        # 60.14742 Hz has reached one more five-tick frame than nominal 60 Hz.
+        self.assertEqual(intro.title_animation.next_tick, 885)
 
 
 @unittest.skipUnless((ASSET_DIR / "intro.json").is_file(), "Imported intro resources required")
@@ -98,6 +106,48 @@ class IntroSceneTests(unittest.TestCase):
             scene.set_paused(False)
         self.assertEqual(scene.last_intro_at, 1000)
         self.assertEqual(scene.intro.time, before)
+
+    def test_unchanged_intro_does_not_represent_the_same_viewport(self):
+        scene = self.scene
+        scene.intro = SimpleNamespace(revision=5, done=False, advance=lambda _dt: None)
+        scene.last_intro_at = time.perf_counter()
+        with patch.object(scene, "render") as render:
+            scene.advance_animation()
+        render.assert_not_called()
+
+    def test_changed_intro_frame_is_presented(self):
+        scene = self.scene
+
+        def advance(_dt):
+            scene.intro.revision += 1
+
+        scene.intro = SimpleNamespace(revision=5, done=False, advance=advance)
+        scene.last_intro_at = time.perf_counter()
+        with patch.object(scene, "render") as render:
+            scene.advance_animation()
+        render.assert_called_once_with()
+
+    def test_title_deadline_subtracts_time_spent_rendering(self):
+        scene = self.scene
+        scene.intro = SimpleNamespace(next_update_delay=lambda: .1)
+        scene.last_intro_at = 1000
+        with patch("pop2.scene_prototype.time.perf_counter", return_value=1000.03), \
+                patch.object(scene.root, "after", return_value="measured") as after:
+            self.scene_class.schedule_next_animation(scene)
+        self.assertAlmostEqual(scene.next_animation_at, 1000.1)
+        self.assertIn(after.call_args.args[0], (70, 71))
+        self.assertEqual(scene.animation_after_id, "measured")
+        scene.animation_after_id = None
+
+    def test_overdue_intro_frame_is_scheduled_immediately(self):
+        scene = self.scene
+        scene.intro = SimpleNamespace(next_update_delay=lambda: .1)
+        scene.last_intro_at = 1000
+        with patch("pop2.scene_prototype.time.perf_counter", return_value=1000.2), \
+                patch.object(scene.root, "after", return_value="measured") as after:
+            self.scene_class.schedule_next_animation(scene)
+        self.assertEqual(after.call_args.args[0], 0)
+        scene.animation_after_id = None
 
     def test_complete_intro_frame_is_aligned_with_visible_game_rectangle(self):
         source = Image.new("RGBA", (512, 384), (20, 40, 60, 255))

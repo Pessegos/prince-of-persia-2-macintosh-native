@@ -82,16 +82,27 @@ During that blocking fade the script stays on frame two. The animation
 maintainer (`16:0366-0468`) schedules from its current TickCount and resumes
 one frame after the fade, without replaying all missed deadlines. With the
 five-tick script interval this adds 20 ticks to the animation clock. The
-original SCRP terminates at tick 1000, so the title ends at tick 1020 (17 s),
+original SCRP terminates at tick 1000, so the title ends at tick 1020 (about 16.96 s),
 unless the music's final title cue arrives earlier. PlayTheAnimation
 (`16:14be-14d4`) exits when the script stops; it does not loop clouds until
 cue i. The following fade retains the last drawn title image.
 
-All scene deadlines use 60 Hz Macintosh ticks or the original audio markers.
+Tick-based scene deadlines use the classic Macintosh VBL clock, 60.14742 Hz,
+also used by Mini vMac's `OSGLUWIN.c` host timer. Treating it as exactly 60 Hz
+would leave the cloud script about 40 ms behind after 17 seconds. MIDI markers
+and sampled audio retain their own timestamps in seconds; they are not sped up.
 SetTimer establishes a deadline; WaitTimer waits only for the remaining time,
 including intervening transitions. FadeInColors/FadeOutColors derive the
 percentage step and tick delay from their original flags. Muting does not stop
 the scene clock. Pausing freezes playback and the scene clock together.
+
+After the title's initial fade, the host schedules from the next SCRP deadline
+or title cue, accounting for time already spent rendering. It does not snap
+cloud updates to a separate 60 Hz refresh grid. Repeated calls within the same
+cloud frame reuse the indexed composition and converted image unless its
+palette or title overlay changes. The window only presents changed intro
+revisions; resizing and menus still explicitly redraw. Fullscreen measurements
+at 3440x1440 visited every cloud script frame without skipping or reversing.
 
 SDL's existing music and effect channels play the imported audio. MIDI is
 rendered at import with the original Macintosh instruments and the same
@@ -107,6 +118,6 @@ Game simulation remains stopped until the intro ends or is skipped.
 Scene resources, sound starts and musical cue synchronization are recovered.
 Cached dissolve order is original; the fallback for images without that cache
 does not reproduce Macintosh Random's seed and sequence. Title composition
-and finite script timing have been compared with Macintosh captures. Small
-host/emulator clock differences and complete frame parity are not established.
+and finite script timing have been compared with Macintosh captures. Capture
+start phase, audio-driver timing and complete frame parity are not established.
 Later cutscenes are not enabled by this implementation.

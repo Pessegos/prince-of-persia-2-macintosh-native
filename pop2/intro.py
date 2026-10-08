@@ -14,6 +14,8 @@ from pop2.paths import ASSET_DIR
 
 
 SIZE = (512, 384)
+# Classic Macintosh VBL clock, also used by Mini vMac's host timer.
+MAC_TICKS_PER_SECOND = 60.14742
 STORY_RECT = (62, 64, 292, 448)
 OPERATIONS = {
     "shape": 4, "fill": 2, "copy": 1, "clip": 1, "dissolve": 1,
@@ -136,7 +138,7 @@ class IntroAssets:
 
 
 class ScriptAnimation:
-    """ANI/SCRP layer state, with timing in Macintosh 60 Hz ticks."""
+    """ANI/SCRP layer state, with timing in Macintosh vertical-blank ticks."""
 
     LENGTHS = {0: 2, 1: 2, 2: 4, 3: 4, 4: 4, 5: 6, 6: 8, 7: 6}
 
@@ -264,7 +266,7 @@ class IntroPlayer:
         self.changed()
 
     def fade(self, colors, into, flags):
-        duration = fade_ticks(flags) / 60
+        duration = fade_ticks(flags) / MAC_TICKS_PER_SECOND
         target = dict(colors) if into else {index: (0, 0, 0) for index in colors}
         source = {index: self.palette[index] for index in colors}
         self.transition = ("fade", self.time, duration, source, target)
@@ -276,7 +278,7 @@ class IntroPlayer:
         kind, start, duration, source, target = self.transition
         progress = min(1, (self.time - start) / duration) if duration else 1
         if kind == "title":
-            tick = (self.time - start) * 60
+            tick = (self.time - start) * MAC_TICKS_PER_SECOND
             animation = self.title_animation
             # TitleFunc fades after frame two; maintain schedules one next
             # frame from the current TickCount rather than catching up.
@@ -285,22 +287,29 @@ class IntroPlayer:
             else:
                 animation_tick = tick - self.title_clock_delay if tick >= self.title_fade_start else tick
             animation.advance(animation_tick)
+            music = self.playing[0]
+            markers = self.sounds[str(music[0])]["markers"]
+            elapsed = self.time - music[1]
+            overlay = 0
+            if markers["e"] <= elapsed < markers["f"]:
+                overlay = 25373
+            elif markers["g"] <= elapsed < markers["h"]:
+                overlay = 25374
+            brightness = min(1, max(0, (tick - self.title_fade_start) / self.title_fade_ticks))
+            state = (animation.cursor, overlay, brightness)
+            if state == self.title_frame_state and progress < 1:
+                return
+            self.title_frame_state = state
             frame = self.title_background.copy()
             for shape, x, y, flags in animation.layers:
                 if shape:
                     image = self.assets.title_shapes[25000 + shape]
                     frame.paste(image, (x, y), image.point([0] + [255] * 255) if flags & 16 else None)
-            music = self.playing[0]
-            markers = self.sounds[str(music[0])]["markers"]
-            elapsed = self.time - music[1]
-            if markers["e"] <= elapsed < markers["f"]:
-                image = self.assets.title_shapes[25373]
-                frame.paste(image, self.title_text_positions[0], image.point([0] + [255] * 255))
-            if markers["g"] <= elapsed < markers["h"]:
-                image = self.assets.title_shapes[25374]
-                frame.paste(image, self.title_text_positions[1], image.point([0] + [255] * 255))
+            if overlay:
+                image = self.assets.title_shapes[overlay]
+                position = self.title_text_positions[overlay - 25373]
+                frame.paste(image, position, image.point([0] + [255] * 255))
             self.display = frame
-            brightness = min(1, max(0, (tick - self.title_fade_start) / self.title_fade_ticks))
             for index, color in self.assets.title_palette.items():
                 self.palette[index] = tuple(round(channel * brightness) for channel in color)
         elif kind == "fade":
@@ -317,6 +326,7 @@ class IntroPlayer:
         self.changed()
 
     def start_title(self):
+        self.title_frame_state = None
         self.title_animation = ScriptAnimation(self.assets.title_script)
         self.title_animation.advance(0)
         self.title_fade_start = self.title_animation.next_tick
@@ -336,7 +346,7 @@ class IntroPlayer:
         # PlayTheAnimation exits when SCRP stops, even before TitleFunc's cue i.
         end = ScriptAnimation(self.assets.title_script)
         end.advance(float("inf"))
-        duration = min((end.next_tick + self.title_clock_delay) / 60,
+        duration = min((end.next_tick + self.title_clock_delay) / MAC_TICKS_PER_SECOND,
                        max(0, music[1] + markers["i"] - self.time))
         self.transition = ("title", self.time, duration, None, None)
         self.wait_until = self.time + duration
@@ -353,7 +363,7 @@ class IntroPlayer:
         elif op == "clip":
             self.clip = self.box(args[0])
         elif op == "dissolve":
-            duration = args[0] / 60
+            duration = args[0] / MAC_TICKS_PER_SECOND
             self.transition = ("dissolve", self.time, duration,
                                [0, np.array(self.display).ravel()], np.array(self.target).ravel())
             self.wait_until = self.time + duration
@@ -370,11 +380,11 @@ class IntroPlayer:
         elif op == "wait_current":
             self.wait_until = max(self.time, self.sound_end(args[0]))
         elif op == "timer":
-            self.timers[args[0]] = self.time + args[1] / 60
+            self.timers[args[0]] = self.time + args[1] / MAC_TICKS_PER_SECOND
         elif op == "wait_timer":
             self.wait_until = max(self.time, self.timers[args[0]])
         elif op == "wait":
-            self.wait_until = self.time + args[0] / 60
+            self.wait_until = self.time + args[0] / MAC_TICKS_PER_SECOND
         elif op == "cue":
             playing = self.playing.get(0)
             if playing is None:
@@ -414,7 +424,7 @@ class IntroPlayer:
             # FadeIndex 15:2a90: 95 down to 0 percent, steps of five.
             index, red, green, blue, delay = args
             source = {index: tuple(channel * 95 // 100 for channel in (red, green, blue))}
-            duration = 20 * delay / 60
+            duration = 20 * delay / MAC_TICKS_PER_SECOND
             self.transition = ("fade", self.time, duration, source, {index: (0, 0, 0)})
             self.wait_until = self.time + duration
         elif op == "title":
@@ -441,6 +451,22 @@ class IntroPlayer:
             item = self.operations[self.position]
             self.position += 1
             self.execute(item["op"], item["args"])
+
+    def next_update_delay(self):
+        if self.transition is not None and self.transition[0] == "title":
+            start = self.transition[1]
+            tick = (self.time - start) * MAC_TICKS_PER_SECOND
+            if tick >= self.title_fade_start + self.title_fade_ticks:
+                next_tick = self.title_animation.next_tick + self.title_clock_delay
+                deadline = min(start + next_tick / MAC_TICKS_PER_SECOND, self.wait_until)
+                music = self.playing[0]
+                markers = self.sounds[str(music[0])]["markers"]
+                for key in ("e", "f", "g", "h", "i"):
+                    cue = music[1] + markers[key]
+                    if cue > self.time + 1e-9:
+                        deadline = min(deadline, cue)
+                return max(0, deadline - self.time)
+        return 1 / 60
 
     def frame(self):
         if self.frame_cache is None:

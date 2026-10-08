@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 from pop2.intro import (
-    IntroPlayer, ScriptAnimation, dissolve_words, fade_ticks, indexed_shape, palette_colors,
+    MAC_TICKS_PER_SECOND, IntroPlayer, ScriptAnimation, dissolve_words, fade_ticks, indexed_shape, palette_colors,
     read_program, text_strings,
 )
 
@@ -138,15 +138,15 @@ class IntroPlaybackTests(unittest.TestCase):
         self.assertFalse(p.done)
         p.advance(1)
         self.assertTrue(p.done)
-        self.assertAlmostEqual(p.time, 4.25)
+        self.assertAlmostEqual(p.time, 3.25 + 60 / MAC_TICKS_PER_SECOND)
 
     def test_timers_include_time_spent_in_intervening_transitions(self):
         p = player(("timer", 0, 120), ("dissolve", 30), ("wait_timer", 0))
-        p.advance(1.99)
+        p.advance(119 / MAC_TICKS_PER_SECOND)
         self.assertFalse(p.done)
-        p.advance(.01)
+        p.advance(1 / MAC_TICKS_PER_SECOND)
         self.assertTrue(p.done)
-        self.assertAlmostEqual(p.time, 2)
+        self.assertAlmostEqual(p.time, 120 / MAC_TICKS_PER_SECOND)
 
     def test_unrelated_sound_wait_does_not_wait_on_replacement(self):
         p = player(("sound", 27001, 1), ("wait_sound", 999, 1))
@@ -163,15 +163,15 @@ class IntroPlaybackTests(unittest.TestCase):
         p = player(("fill", 2, [0, 0, 384, 512]), ("copy", [0, 0, 384, 512]),
                    ("fill", 3, [0, 0, 384, 512]), ("dissolve", 60),
                    dissolve={"rect": [2, 4, 4, 12], "order": [3, 0, 2, 1]})
-        p.advance(1 / 8)
+        p.advance(7.5 / MAC_TICKS_PER_SECOND)
         self.assertEqual([p.display.getpixel((x, 3)) for x in range(4, 12)],
                          [2, 2, 2, 2, 3, 3, 2, 2])
-        p.advance(3 / 8)
+        p.advance(22.5 / MAC_TICKS_PER_SECOND)
         self.assertEqual([p.display.getpixel((x, 3)) for x in range(4, 12)],
                          [3, 3, 2, 2, 3, 3, 2, 2])
         self.assertEqual([p.display.getpixel((x, 2)) for x in range(4, 12)],
                          [2, 2, 3, 3, 2, 2, 3, 3])
-        p.advance(.5)
+        p.advance(30 / MAC_TICKS_PER_SECOND)
         self.assertEqual(p.display.crop((4, 2, 12, 4)).tobytes(), bytes([3]) * 16)
         self.assertEqual(p.display.getpixel((0, 0)), 2)
         self.assertTrue(p.done)
@@ -234,9 +234,9 @@ class IntroPlaybackTests(unittest.TestCase):
     def test_palette_fade_and_cached_render(self):
         p = player(("palette", 1, 69, 0x40001), ("fill", 1, [0, 0, 384, 512]),
                    ("copy", [0, 0, 384, 512]), ("fade", 1, True, 0x40001))
-        p.advance(25 / 120)
+        p.advance(12.5 / MAC_TICKS_PER_SECOND)
         self.assertEqual(p.frame().getpixel((0, 0)), (60, 40, 10, 255))
-        p.advance(25 / 120)
+        p.advance(12.5 / MAC_TICKS_PER_SECOND)
         self.assertEqual(p.frame().getpixel((0, 0)), (120, 80, 20, 255))
 
     def test_sound_dispatch_uses_existing_audio_engine(self):
@@ -246,13 +246,13 @@ class IntroPlaybackTests(unittest.TestCase):
 
     def test_flash_uses_native_twenty_steps_and_tick_delay(self):
         p = player(("flash", 15, 168, 17, 2, 3))
-        p.advance(.5)
+        p.advance(30 / MAC_TICKS_PER_SECOND)
         self.assertFalse(p.done)
         self.assertEqual(p.frame().getpixel((0, 0)), (0, 0, 0, 255))
         self.assertEqual(p.palette[15], (80, 8, 0))
-        p.advance(.5)
+        p.advance(30 / MAC_TICKS_PER_SECOND)
         self.assertTrue(p.done)
-        self.assertAlmostEqual(p.time, 1)
+        self.assertAlmostEqual(p.time, 60 / MAC_TICKS_PER_SECOND)
         self.assertEqual(p.palette[15], (0, 0, 0))
 
     def test_negative_time_is_rejected(self):
@@ -276,17 +276,17 @@ class TitlePlaybackTests(unittest.TestCase):
         p = self.p
         p.start_title()
         animation = p.title_animation
-        self.assertAlmostEqual(p.wait_until, 31 / 60)
-        p.advance(.1)
+        self.assertAlmostEqual(p.wait_until, 31 / MAC_TICKS_PER_SECOND)
+        p.advance(6 / MAC_TICKS_PER_SECOND)
         self.assertFalse(animation.done)
         self.assertEqual(p.display.getpixel((10, 0)), 1)
-        p.advance(25 / 60)
+        p.advance(25 / MAC_TICKS_PER_SECOND)
         self.assertTrue(p.done)
         self.assertTrue(animation.done)
         self.assertIs(p.title_animation, animation)
         self.assertEqual(p.display.getpixel((10, 0)), 1)
         self.assertEqual(p.display.getpixel((0, 0)), 160)
-        self.assertAlmostEqual(p.time, 31 / 60)
+        self.assertAlmostEqual(p.time, 31 / MAC_TICKS_PER_SECOND)
 
     def test_second_frame_fade_freezes_script_then_resumes_one_frame(self):
         p = self.p
@@ -296,17 +296,80 @@ class TitlePlaybackTests(unittest.TestCase):
             instruction(6, 1, 2, 0), instruction(1),
             instruction(6, 1, 3, 0), instruction(1), instruction(0))
         p.start_title()
-        p.advance(5 / 60)
+        p.advance(5 / MAC_TICKS_PER_SECOND)
         self.assertEqual(p.title_animation.layers[0][1], 1)
         self.assertEqual(p.palette[160], (0, 0, 0))
-        p.advance(20 / 60)
+        p.advance(20 / MAC_TICKS_PER_SECOND)
         self.assertEqual(p.title_animation.layers[0][1], 1)
         self.assertEqual(p.palette[160], (204, 204, 204))
-        p.advance(5 / 60)
+        p.advance(5 / MAC_TICKS_PER_SECOND)
         self.assertEqual(p.title_animation.layers[0][1], 2)
         self.assertEqual(p.palette[160], (255, 255, 255))
-        p.advance(5 / 60)
+        p.advance(5 / MAC_TICKS_PER_SECOND)
         self.assertEqual(p.title_animation.layers[0][1], 3)
+
+    def long_title(self):
+        self.p.assets.title_script = script(instruction(4, 5), instruction(5, 1, 1),
+                                          *[instruction(1)] * 30, instruction(0))
+        self.p.start_title()
+        return self.p
+
+    def test_title_reuses_frame_between_script_deadlines(self):
+        p = self.long_title()
+        p.advance(40 / MAC_TICKS_PER_SECOND)
+        p.frame()
+        display, cached, revision = p.display, p.frame_cache, p.revision
+        p.advance(1 / MAC_TICKS_PER_SECOND)
+        self.assertIs(p.display, display)
+        self.assertIs(p.frame_cache, cached)
+        self.assertEqual(p.revision, revision)
+        p.advance(4 / MAC_TICKS_PER_SECOND)
+        self.assertIsNot(p.display, display)
+        self.assertGreater(p.revision, revision)
+
+    def test_title_overlay_changes_between_cloud_frames(self):
+        p = self.long_title()
+        p.sounds["25010"]["markers"].update(e=0, f=.68, g=.70, h=.72)
+        p.advance(.675)
+        cursor = p.title_animation.cursor
+        self.assertEqual(p.display.getpixel((52, 152)), 1)
+        p.advance(.01)
+        self.assertEqual(p.title_animation.cursor, cursor)
+        self.assertEqual(p.display.getpixel((52, 152)), 160)
+        p.advance(.02)
+        self.assertEqual(p.title_animation.cursor, cursor)
+        self.assertEqual(p.display.getpixel((87, 129)), 1)
+        p.advance(.02)
+        self.assertEqual(p.title_animation.cursor, cursor)
+        self.assertEqual(p.display.getpixel((87, 129)), 160)
+
+    def test_fade_changes_palette_even_while_cloud_script_is_frozen(self):
+        p = self.long_title()
+        p.advance(10 / MAC_TICKS_PER_SECOND)
+        cursor, revision = p.title_animation.cursor, p.revision
+        before = p.palette[160]
+        p.advance(1 / MAC_TICKS_PER_SECOND)
+        self.assertEqual(p.title_animation.cursor, cursor)
+        self.assertGreater(p.revision, revision)
+        self.assertNotEqual(p.palette[160], before)
+
+    def test_next_title_update_uses_script_deadline_not_host_refresh_grid(self):
+        p = self.long_title()
+        p.advance(41 / MAC_TICKS_PER_SECOND)
+        self.assertAlmostEqual(p.next_update_delay(), 4 / MAC_TICKS_PER_SECOND)
+
+    def test_next_title_update_preserves_music_cues_between_script_frames(self):
+        p = self.long_title()
+        p.sounds["25010"]["markers"].update(e=0, f=.68, g=.70, h=.72)
+        p.advance(.675)
+        self.assertAlmostEqual(p.next_update_delay(), .005)
+        p.advance(.005)
+        self.assertAlmostEqual(p.next_update_delay(), .02)
+
+    def test_fades_keep_host_refresh_updates(self):
+        p = self.long_title()
+        p.advance(10 / MAC_TICKS_PER_SECOND)
+        self.assertAlmostEqual(p.next_update_delay(), 1 / 60)
 
     def test_title_still_stops_early_if_music_end_marker_arrives_first(self):
         p = self.p
