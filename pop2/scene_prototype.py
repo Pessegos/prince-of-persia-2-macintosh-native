@@ -2065,7 +2065,9 @@ class ScenePrototype(WindowControls):
             # Intro time was sampled before rendering. Do not add render cost
             # to the next script deadline or quantize it to the host's 60 Hz.
             self.next_animation_at = self.last_intro_at + self.intro.next_update_delay()
-            delay_ms = max(0, math.ceil((self.next_animation_at - now) * 1000))
+            # A zero-delay chain starves Tk's idle redraws when fullscreen
+            # presentation costs more than the fade/dissolve frame budget.
+            delay_ms = max(1, math.ceil((self.next_animation_at - now) * 1000))
         else:
             self.next_animation_at, delay_ms = next_animation_deadline(
                 self.next_animation_at, now,

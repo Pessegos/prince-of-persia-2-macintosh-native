@@ -361,6 +361,11 @@ class WindowControls:
             self.render()
 
     def dev_key_press(self, event):
+        alt = event.state & (0x8 | 0x20000) or {"Alt_L", "Alt_R"}.intersection(self.window_keys_down)
+        # Closing the host window must bypass intro, pause and menu filters.
+        if event.keysym == "F4" and alt:
+            self.root.destroy()
+            return "break"
         repeated = event.keysym in self.window_keys_down or (
             len(event.keysym) == 1 and event.keysym.swapcase() in self.window_keys_down)
         self.window_keys_down.add(event.keysym)
@@ -376,7 +381,6 @@ class WindowControls:
             if not repeated:
                 self.open_game_menu()
             return "break"
-        alt = event.state & (0x8 | 0x20000) or {"Alt_L", "Alt_R"}.intersection(self.window_keys_down)
         command = {"n": "confirm_new", "r": "restart", "t": "sound", "m": "music",
                    "s": "save", "o": "open", "e": "end", "h": "hall", "v": "about"}.get(
                        event.keysym.lower()) if alt and not event.state & (0x4 | 0x40) else None

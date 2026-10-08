@@ -1,3 +1,7 @@
+import json
+import subprocess
+import sys
+import textwrap
 import time
 from types import SimpleNamespace
 import unittest
@@ -139,15 +143,46 @@ class IntroSceneTests(unittest.TestCase):
         self.assertEqual(scene.animation_after_id, "measured")
         scene.animation_after_id = None
 
-    def test_overdue_intro_frame_is_scheduled_immediately(self):
+    def test_overdue_intro_frame_yields_to_window_redraws(self):
         scene = self.scene
         scene.intro = SimpleNamespace(next_update_delay=lambda: .1)
         scene.last_intro_at = 1000
         with patch("pop2.scene_prototype.time.perf_counter", return_value=1000.2), \
                 patch.object(scene.root, "after", return_value="measured") as after:
             self.scene_class.schedule_next_animation(scene)
-        self.assertEqual(after.call_args.args[0], 0)
+        self.assertEqual(after.call_args.args[0], 1)
         scene.animation_after_id = None
+
+    def test_alt_f4_reaches_close_callback_from_fullscreen_intro(self):
+        for paused in (False, True):
+            with self.subTest(paused=paused):
+                result = subprocess.run([sys.executable, "-c", textwrap.dedent("""
+                    import json
+                    import sys
+                    import tkinter as tk
+                    from pop2.scene_prototype import ScenePrototype
+
+                    scene = ScenePrototype(with_intro=True)
+                    scene.root.after_cancel(scene.animation_after_id)
+                    scene.animation_after_id = None
+                    scene.schedule_next_animation = lambda: None
+                    scene.root.update()
+                    scene.toggle_fullscreen()
+                    scene.root.update()
+                    scene.set_paused(sys.argv[1] == "True")
+                    scene.canvas.focus_force()
+                    scene.root.update()
+                    scene.canvas.event_generate("<Alt-KeyPress-F4>")
+                    try:
+                        closed = not scene.root.winfo_exists()
+                    except tk.TclError:
+                        closed = True
+                    if not closed:
+                        scene.root.destroy()
+                    print(json.dumps({"closed": closed}))
+                """), str(paused)], capture_output=True, text=True, timeout=15)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertTrue(json.loads(result.stdout)["closed"])
 
     def test_complete_intro_frame_is_aligned_with_visible_game_rectangle(self):
         source = Image.new("RGBA", (512, 384), (20, 40, 60, 255))

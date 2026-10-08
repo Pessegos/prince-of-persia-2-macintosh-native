@@ -103,6 +103,11 @@ cloud frame reuse the indexed composition and converted image unless its
 palette or title overlay changes. The window only presents changed intro
 revisions; resizing and menus still explicitly redraw. Fullscreen measurements
 at 3440x1440 visited every cloud script frame without skipping or reversing.
+Overdue intro callbacks yield for at least one millisecond so Tk can paint and
+process idle work even when a full-resolution upload exceeds a transition's
+frame budget. A continuous zero-delay callback chain would defer painting until
+the fade or dissolve ended. Alt+F4 closes the host before modal input filters,
+including during the intro and while paused.
 
 SDL's existing music and effect channels play the imported audio. MIDI is
 rendered at import with the original Macintosh instruments and the same
