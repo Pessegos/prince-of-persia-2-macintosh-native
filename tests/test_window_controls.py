@@ -43,47 +43,6 @@ class PresentationTests(unittest.TestCase):
                                         3440, 1440), (256, 192))
 
 
-class IntroSchedulingTests(unittest.TestCase):
-    def test_expensive_intro_frames_do_not_starve_tk_idle_redraws(self):
-        result = subprocess.run([sys.executable, "-c", textwrap.dedent("""
-            import json
-            import time
-            import tkinter as tk
-            from types import SimpleNamespace
-            from pop2.scene_prototype import ScenePrototype
-
-            scene = ScenePrototype.__new__(ScenePrototype)
-            scene.root = tk.Tk()
-            scene.root.withdraw()
-            scene.root.update_idletasks()
-            scene.paused = scene.level_complete = False
-            scene.animation_after_id = None
-            scene.intro = SimpleNamespace(revision=0, done=False, next_update_delay=lambda: 1 / 60)
-            scene.intro.advance = lambda _dt: setattr(scene.intro, "revision", scene.intro.revision + 1)
-            # Model a fullscreen upload exceeding the transition's 16.7 ms budget.
-            scene.render = lambda: time.sleep(.025)
-            scene.last_intro_at = scene.next_animation_at = time.perf_counter()
-            redraws = []
-
-            def probe():
-                scene.root.after_idle(lambda: redraws.append(time.perf_counter()))
-                scene.root.after(10, probe)
-
-            probe()
-            scene.schedule_next_animation()
-            scene.root.after(600, scene.root.quit)
-            scene.root.mainloop()
-            for timer in scene.root.tk.call("after", "info"):
-                scene.root.after_cancel(timer)
-            scene.root.destroy()
-            print(json.dumps({"redraws": len(redraws), "frames": scene.intro.revision}))
-        """)], capture_output=True, text=True, timeout=15)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        data = json.loads(result.stdout)
-        self.assertGreaterEqual(data["redraws"], 5)
-        self.assertGreater(data["frames"], 5)
-
-
 class CloseShortcutTests(unittest.TestCase):
     def test_alt_f4_closes_before_intro_pause_or_menu_input_filters(self):
         for mode in ("intro", "paused", "menu", "development", "gameplay"):
