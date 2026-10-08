@@ -41,6 +41,13 @@ height, places each baseline four pixels above the line's bottom, then applies
 the font ascent to the bitmap. Decorative initials use the first pass's
 rectangle, not the main lettering's rectangle.
 
+NIS palette uploads (`15:2976-2982`, `17:0b40-0b4c`) call ShowColors
+(`17:0694`) for entries 1 through 254 only. The display's black entry 255
+stays reserved even when a scene CTBL contains a different RGB value there.
+Playback retains those source colors in its working table but presents index
+255 as black. Applying CTBL 27013's green entry 255 to the display would
+incorrectly recolor the text shadow throughout the second opening.
+
 DrawDisolveData (`15:31ba-3256`) copies 2x1-pixel words in two passes. The first
 alternates offsets 0 and 2 for successive shuffled four-pixel groups; the
 second copies the complementary words in the same order. D7 advances per

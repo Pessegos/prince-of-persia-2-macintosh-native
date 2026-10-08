@@ -432,6 +432,8 @@ class IntroPlayer:
     def frame(self):
         if self.frame_cache is None:
             frame = self.display.convert("P")
-            frame.putpalette([value for color in self.palette for value in color])
+            # ShowColors (17:0694), called with entries 1..254 by NIS,
+            # leaves the display's black index 255 unchanged.
+            frame.putpalette([value for color in self.palette[:255] for value in color] + [0, 0, 0])
             self.frame_cache = frame.convert("RGBA")
         return self.frame_cache.copy()

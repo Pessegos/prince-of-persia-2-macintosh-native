@@ -187,6 +187,39 @@ class IntroPlaybackTests(unittest.TestCase):
         self.assertEqual(p.display.getpixel((0, 0)), 2)
         self.assertEqual(p.display.getpixel((1, 0)), 1)
 
+    def test_second_story_palette_cannot_recolor_black_text_shadow(self):
+        p = player(("wait", 60))
+        glyph = Image.new("RGBA", (2, 23))
+        glyph.putpixel((0, 0), (255, 255, 255, 255))
+        p.assets.font = SimpleNamespace(height=23, ascent=15, text=lambda _: glyph)
+        p.assets.strings = {1: ["a\ra"]}
+        p.assets.shapes[25002] = Image.new("L", (512, 87), 15)
+        p.assets.palettes[2] = {3: (202, 89, 15), 14: (245, 220, 140),
+                               254: (23, 76, 148), 255: (189, 239, 87)}
+        p.execute("palette", [2, 66, 0])
+        p.text(1, 1, 0, 0, 0)
+        frame = p.frame()
+        for y in (321, 344):
+            self.assertEqual(frame.getpixel((259, y)), (245, 220, 140, 255))
+            self.assertEqual(frame.getpixel((260, y)), (202, 89, 15, 255))
+            self.assertEqual(frame.getpixel((262, y)), (0, 0, 0, 255))
+        self.assertEqual(p.assets.palettes[2][255], (189, 239, 87))
+
+    def test_palette_fades_and_brightness_preserve_reserved_display_black(self):
+        for operation, args in (("brightness", [2, 50]), ("fade", [2, True, 0x40001]),
+                                ("flash", [255, 189, 239, 87, 1])):
+            with self.subTest(operation=operation):
+                p = player(("wait", 60))
+                p.assets.palettes[2] = {254: (23, 76, 148), 255: (189, 239, 87)}
+                p.execute("palette", [2, 66, 0])
+                p.display.putpixel((0, 0), 255)
+                p.display.putpixel((1, 0), 254)
+                p.execute(operation, args)
+                if p.transition is not None:
+                    p.advance(p.transition[2] / 2)
+                self.assertEqual(p.frame().getpixel((0, 0)), (0, 0, 0, 255))
+                self.assertNotEqual(p.frame().getpixel((1, 0)), (0, 0, 0, 255))
+
     def test_palette_fade_and_cached_render(self):
         p = player(("palette", 1, 69, 0x40001), ("fill", 1, [0, 0, 384, 512]),
                    ("copy", [0, 0, 384, 512]), ("fade", 1, True, 0x40001))
