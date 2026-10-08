@@ -58,7 +58,9 @@ class WindowControls:
             bg="#000000",
         )
         self.canvas.pack(fill="both", expand=True)
+        self.bitmap_presenter = None
         self.canvas.bind("<Configure>", lambda _event: self.present_viewport())
+        self.canvas.bind("<Expose>", self.expose_viewport)
         self.canvas.bind("<Button-1>", self.dev_click)
         self.canvas.bind("<Button-2>", self.dev_click)
         self.canvas.bind("<Button-3>", self.dev_click)
@@ -124,6 +126,7 @@ class WindowControls:
         self.focus_pause_after_id = None
         self.root.bind("<FocusOut>", self.focus_out)
         self.root.bind("<Destroy>", self.cancel_focus_pause)
+        self.root.bind("<Destroy>", self.close_bitmap_presenter, add="+")
         self.root.bind("<KeyPress-Escape>", self.escape_key)
         self.root.bind("<KeyRelease-Escape>", self.escape_release)
         self.root.bind("<Alt-Return>", self.toggle_fullscreen)
@@ -494,6 +497,21 @@ class WindowControls:
         if width <= 1 or height <= 1:
             width, height = VISIBLE_SIZE[0] * 2, VISIBLE_SIZE[1] * 2
         size, position = fit_viewport(width, height)
+        if (sys.platform == "win32" and getattr(self, "fullscreen", False)
+                and getattr(self, "intro", None) is not None):
+            from pop2.bitmap_presenter import CanvasBitmap
+
+            if getattr(self, "bitmap_presenter", None) is None:
+                self.bitmap_presenter = CanvasBitmap(self.canvas)
+                for item in self.canvas.find_all():
+                    self.canvas.itemconfigure(item, image="")
+                self.image_ref = None
+            frame = self.native_viewport.crop(VISIBLE_VIEWPORT).convert("RGB").resize(size, Image.Resampling.NEAREST)
+            self.bitmap_presenter.present(frame, position)
+            return
+        if getattr(self, "bitmap_presenter", None) is not None:
+            self.bitmap_presenter.close()
+            self.bitmap_presenter = None
         frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
         self.image_ref = ImageTk.PhotoImage(frame)
         if self.canvas.find_all():
@@ -501,6 +519,15 @@ class WindowControls:
             self.canvas.coords(self.canvas.find_all()[0], *position)
         else:
             self.canvas.create_image(*position, image=self.image_ref, anchor="nw")
+
+    def expose_viewport(self, _event=None):
+        if self.bitmap_presenter is not None:
+            self.bitmap_presenter.redraw()
+
+    def close_bitmap_presenter(self, event):
+        if event.widget is self.root and self.bitmap_presenter is not None:
+            self.bitmap_presenter.close()
+            self.bitmap_presenter = None
 
     def run(self):
         self.root.mainloop()

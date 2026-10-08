@@ -91,6 +91,21 @@ class IntroFormatTests(unittest.TestCase):
         animation.advance(100)
         self.assertEqual(animation.next_tick, 10)
 
+    def test_opt_in_cloud_repetition_keeps_absolute_frame_deadlines(self):
+        animation = ScriptAnimation(script(
+            instruction(4, 5), instruction(5, 1, 360), instruction(6, 1, 10, 0), instruction(1),
+            instruction(6, 1, 15, 0), instruction(1), instruction(0)))
+        for tick, x, deadline in ((0, 10, 5), (5, 15, 10), (10, 10, 15), (35, 15, 40)):
+            animation.advance(tick, repeat=True)
+            self.assertEqual(animation.layers[0][1], x)
+            self.assertEqual(animation.next_tick, deadline)
+            self.assertFalse(animation.done)
+
+    def test_empty_animation_cannot_loop_forever(self):
+        animation = ScriptAnimation(script(instruction(0)))
+        animation.advance(100, repeat=True)
+        self.assertTrue(animation.done)
+
     def test_fade_duration_follows_original_percent_step_and_tick_flags(self):
         self.assertEqual(fade_ticks(0x40001), 25)
         self.assertEqual(fade_ticks(0x90001), 100)
@@ -198,6 +213,19 @@ class IntroPlaybackTests(unittest.TestCase):
         self.assertEqual(p.display.getpixel((0, 0)), 2)
         self.assertEqual(p.display.getpixel((1, 0)), 1)
 
+    def test_text_ignores_leading_resource_spaces_before_centering_each_line(self):
+        p = player(("wait", 60))
+        font = Mock(height=23, ascent=15)
+        font.text.side_effect = lambda text: Image.new("RGBA", (len(text) * 6, 23), "white")
+        p.assets.font = font
+        p.assets.strings = {1: ["  ne morning...\r next line", "ne morning...\rnext line"]}
+        p.assets.shapes[25002] = Image.new("L", (512, 87), 15)
+        p.text(1, 1, 1, 150, -2)
+        spaced = p.display.tobytes()
+        self.assertEqual([call.args[0] for call in font.text.call_args_list], ["ne morning...", "next line"])
+        p.text(1, 2, 1, 150, -2)
+        self.assertEqual(p.display.tobytes(), spaced)
+
     def test_second_story_palette_cannot_recolor_black_text_shadow(self):
         p = player(("wait", 60))
         glyph = Image.new("RGBA", (2, 23))
@@ -272,7 +300,7 @@ class TitlePlaybackTests(unittest.TestCase):
         self.p.assets.title_palette = {1: (120, 80, 20), 160: (255, 255, 255)}
         self.p.assets.program["title_rects"] = [[152, 52, 179, 458], [129, 87, 179, 423]]
 
-    def test_title_ends_at_script_terminator_before_later_music_cue(self):
+    def test_title_preserves_scene_deadline_while_clouds_continue_looping(self):
         p = self.p
         p.start_title()
         animation = p.title_animation
@@ -282,31 +310,47 @@ class TitlePlaybackTests(unittest.TestCase):
         self.assertEqual(p.display.getpixel((10, 0)), 1)
         p.advance(25 / MAC_TICKS_PER_SECOND)
         self.assertTrue(p.done)
-        self.assertTrue(animation.done)
+        self.assertFalse(animation.done)
         self.assertIs(p.title_animation, animation)
         self.assertEqual(p.display.getpixel((10, 0)), 1)
         self.assertEqual(p.display.getpixel((0, 0)), 160)
         self.assertAlmostEqual(p.time, 31 / MAC_TICKS_PER_SECOND)
 
-    def test_second_frame_fade_freezes_script_then_resumes_one_frame(self):
+    def test_clouds_keep_moving_during_the_initial_fade(self):
         p = self.p
         p.assets.title_script = script(
             instruction(4, 5), instruction(6, 1, 0, 0), instruction(1),
             instruction(6, 1, 1, 0), instruction(1),
             instruction(6, 1, 2, 0), instruction(1),
-            instruction(6, 1, 3, 0), instruction(1), instruction(0))
+            instruction(6, 1, 3, 0), instruction(1),
+            instruction(6, 1, 4, 0), instruction(1),
+            instruction(6, 1, 5, 0), instruction(1),
+            instruction(6, 1, 6, 0), instruction(1), instruction(0))
         p.start_title()
         p.advance(5 / MAC_TICKS_PER_SECOND)
         self.assertEqual(p.title_animation.layers[0][1], 1)
         self.assertEqual(p.palette[160], (0, 0, 0))
         p.advance(20 / MAC_TICKS_PER_SECOND)
-        self.assertEqual(p.title_animation.layers[0][1], 1)
+        self.assertEqual(p.title_animation.layers[0][1], 5)
         self.assertEqual(p.palette[160], (204, 204, 204))
         p.advance(5 / MAC_TICKS_PER_SECOND)
-        self.assertEqual(p.title_animation.layers[0][1], 2)
+        self.assertEqual(p.title_animation.layers[0][1], 6)
         self.assertEqual(p.palette[160], (255, 255, 255))
+
+    def test_clouds_keep_moving_during_final_fade_without_extending_it(self):
+        p = self.long_title()
+        p.operations.append({"op": "fade_both", "args": [0x90001]})
+        deadline = p.wait_until
+        p.advance(deadline - p.time)
+        end = p.wait_until
+        cursor = p.title_animation.cursor
         p.advance(5 / MAC_TICKS_PER_SECOND)
-        self.assertEqual(p.title_animation.layers[0][1], 3)
+        self.assertNotEqual(p.title_animation.cursor, cursor)
+        self.assertEqual(p.wait_until, end)
+        self.assertEqual(p.title_started_at, 0)
+        p.advance(end - p.time)
+        self.assertIsNone(p.title_started_at)
+        self.assertEqual(p.palette[160], (0, 0, 0))
 
     def long_title(self):
         self.p.assets.title_script = script(instruction(4, 5), instruction(5, 1, 1),
@@ -343,7 +387,7 @@ class TitlePlaybackTests(unittest.TestCase):
         self.assertEqual(p.title_animation.cursor, cursor)
         self.assertEqual(p.display.getpixel((87, 129)), 160)
 
-    def test_fade_changes_palette_even_while_cloud_script_is_frozen(self):
+    def test_fade_changes_palette_between_cloud_frames(self):
         p = self.long_title()
         p.advance(10 / MAC_TICKS_PER_SECOND)
         cursor, revision = p.title_animation.cursor, p.revision
@@ -366,10 +410,12 @@ class TitlePlaybackTests(unittest.TestCase):
         p.advance(.005)
         self.assertAlmostEqual(p.next_update_delay(), .02)
 
-    def test_fades_keep_host_refresh_updates(self):
+    def test_fade_deadlines_stay_on_the_refresh_grid_despite_callback_lateness(self):
         p = self.long_title()
         p.advance(10 / MAC_TICKS_PER_SECOND)
-        self.assertAlmostEqual(p.next_update_delay(), 1 / 60)
+        self.assertAlmostEqual(p.time + p.next_update_delay(), 10 / 60)
+        p.advance(p.next_update_delay() + .002)
+        self.assertAlmostEqual(p.time + p.next_update_delay(), 11 / 60)
 
     def test_title_still_stops_early_if_music_end_marker_arrives_first(self):
         p = self.p

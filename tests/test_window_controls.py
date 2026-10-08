@@ -14,6 +14,30 @@ from pop2.window_controls import WindowControls, is_resume_key
 
 
 class PresentationTests(unittest.TestCase):
+    def test_fullscreen_intro_uses_opaque_bitmap_then_restores_tk_for_gameplay(self):
+        host = WindowControls()
+        host.canvas = Mock()
+        host.canvas.find_all.return_value = (1,)
+        host.canvas.winfo_width.return_value = 3440
+        host.canvas.winfo_height.return_value = 1440
+        host.native_viewport = Image.new("RGBA", (512, 384), "red")
+        host.intro, host.fullscreen = object(), True
+        with patch("pop2.window_controls.sys.platform", "win32"), \
+                patch("pop2.bitmap_presenter.CanvasBitmap") as bitmap, \
+                patch("pop2.window_controls.ImageTk.PhotoImage", side_effect=lambda frame: frame):
+            host.present_viewport()
+            frame, origin = bitmap.return_value.present.call_args.args
+            self.assertEqual((frame.size, origin), fit_viewport(3440, 1440))
+            self.assertEqual(frame.mode, "RGB")
+            self.assertIsNone(host.image_ref)
+            host.expose_viewport()
+            bitmap.return_value.redraw.assert_called_once()
+            host.intro = None
+            host.present_viewport()
+            bitmap.return_value.close.assert_called_once()
+            self.assertIsNone(host.bitmap_presenter)
+            self.assertIsNotNone(host.image_ref)
+
     def test_presentation_crops_padding_before_nearest_neighbor_scaling(self):
         host = WindowControls()
         host.native_viewport = Image.new("RGB", (512, 384), "red")

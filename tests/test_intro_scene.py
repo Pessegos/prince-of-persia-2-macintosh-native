@@ -74,7 +74,7 @@ class OriginalTitleTests(unittest.TestCase):
             intro.advance(1 / 60)
         return intro
 
-    def test_original_title_script_finishes_without_restarting(self):
+    def test_original_script_deadline_is_preserved_despite_continuous_cloud_motion(self):
         from pop2.intro import ScriptAnimation
 
         script = ScriptAnimation(self.assets.title_script)
@@ -84,7 +84,7 @@ class OriginalTitleTests(unittest.TestCase):
         start = intro.transition[1]
         self.assertAlmostEqual(intro.wait_until - start, 1020 / MAC_TICKS_PER_SECOND)
         intro.advance(intro.wait_until - intro.time)
-        self.assertTrue(intro.title_animation.done)
+        self.assertFalse(intro.title_animation.done)
         self.assertEqual(intro.transition[0], "fade")
         self.assertAlmostEqual(intro.transition[1] - start, 1020 / MAC_TICKS_PER_SECOND)
 
@@ -109,7 +109,33 @@ class OriginalTitleTests(unittest.TestCase):
         start = intro.transition[1]
         intro.advance(start + 15 - intro.time)
         # 60.14742 Hz has reached one more five-tick frame than nominal 60 Hz.
-        self.assertEqual(intro.title_animation.next_tick, 885)
+        self.assertEqual(intro.title_animation.next_tick, 905)
+
+    def test_original_cloud_script_repeats_without_a_visible_seam(self):
+        intro = self.title_player()
+        frames = []
+        for frame in range(200):
+            intro.draw_title(frame * 5, 0)
+            frames.append(intro.display.tobytes())
+        self.assertEqual(frames[:100], frames[100:])
+        intro.draw_title(1000, 0)
+        self.assertEqual(intro.display.tobytes(), frames[0])
+
+    def test_clouds_change_in_both_fades_and_keep_the_original_music_deadlines(self):
+        intro = self.title_player()
+        start = intro.transition[1]
+        intro.advance(start + 10 / MAC_TICKS_PER_SECOND - intro.time)
+        initial = intro.display.tobytes()
+        intro.advance(5 / MAC_TICKS_PER_SECOND)
+        self.assertNotEqual(intro.display.tobytes(), initial)
+        intro.advance(intro.wait_until - intro.time)
+        self.assertEqual(intro.transition[0], "fade")
+        deadline = intro.wait_until
+        final = intro.display.tobytes()
+        intro.advance(5 / MAC_TICKS_PER_SECOND)
+        self.assertNotEqual(intro.display.tobytes(), final)
+        self.assertEqual(intro.wait_until, deadline)
+        self.assertAlmostEqual(deadline - start, 1120 / MAC_TICKS_PER_SECOND)
 
 
 @unittest.skipUnless((ASSET_DIR / "intro.json").is_file(), "Imported intro resources required")

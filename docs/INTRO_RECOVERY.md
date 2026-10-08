@@ -40,6 +40,9 @@ They do not shift vertically. TextInRect (`17:28de/2b9a`) centers the line
 height, places each baseline four pixels above the line's bottom, then applies
 the font ascent to the bitmap. Decorative initials use the first pass's
 rectangle, not the main lettering's rectangle.
+TextInRect (`17:294e-29ba`) skips leading spaces before measuring and centering
+each line. This includes the two resource spaces before `ne morning...`;
+they are not an extra gap after the decorative O.
 
 NIS palette uploads (`15:2976-2982`, `17:0b40-0b4c`) call ShowColors
 (`17:0694`) for entries 1 through 254 only. The display's black entry 255
@@ -85,7 +88,15 @@ five-tick script interval this adds 20 ticks to the animation clock. The
 original SCRP terminates at tick 1000, so the title ends at tick 1020 (about 16.96 s),
 unless the music's final title cue arrives earlier. PlayTheAnimation
 (`16:14be-14d4`) exits when the script stops; it does not loop clouds until
-cue i. The following fade retains the last drawn title image.
+cue i. The Macintosh's following fade retains the last drawn title image.
+
+The port intentionally keeps clouds moving through both fades, as a QoL
+departure from those blocking Macintosh transitions. The original SCRP's
+two 100-frame cycles produce pixel-identical images, so repeating that script
+continues the final fade without a visible reset. The cloud clock runs
+continuously; scene deadlines still include the original 20-tick delay and
+title overlays still follow the same MIDI cues. Neither the music nor the
+following story is retimed to accommodate this change.
 
 Tick-based scene deadlines use the classic Macintosh VBL clock, 60.14742 Hz,
 also used by Mini vMac's `OSGLUWIN.c` host timer. Treating it as exactly 60 Hz
@@ -108,6 +119,17 @@ process idle work even when a full-resolution upload exceeds a transition's
 frame budget. A continuous zero-delay callback chain would defer painting until
 the fade or dissolve ended. Alt+F4 closes the host before modal input filters,
 including during the intro and while paused.
+
+Fullscreen intro playback on Windows uses Pillow's opaque DIB presentation
+instead of allocating a full-resolution Tk PhotoImage for every frame. The
+same cropped image is resized with Pillow's nearest-neighbor sampling before
+transfer, preserving the existing scale, pixels and letterboxing. Painting
+runs at idle, after Tk's exposure/resize clearing, and is repeated on exposure.
+Leaving the intro or fullscreen restores normal Tk presentation. Other hosts
+retain the Tk path. Fade/dissolve callbacks use absolute 60 Hz deadlines, so
+callback rounding does not accumulate. On a 3440x1440 desktop the measured
+fade interval was 16.69 ms at the median, with no intervals above 25 ms;
+viewport preparation took about 4.2 ms, excluding the idle bitmap draw.
 
 SDL's existing music and effect channels play the imported audio. MIDI is
 rendered at import with the original Macintosh instruments and the same

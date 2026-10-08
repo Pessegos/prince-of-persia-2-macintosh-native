@@ -1,6 +1,7 @@
 """Native playback of the Macintosh opening scene program."""
 
 import json
+import math
 from pathlib import Path
 import random
 import struct
@@ -148,6 +149,7 @@ class ScriptAnimation:
         self.data, self.cursor, self.interval = data, 4, 3
         self.layers = [[0, 0, 0, 16] for _ in range(layers)]
         self.next_tick = 0
+        self.cycle_start = 0
         self.done = False
         self.events = []
 
@@ -182,10 +184,16 @@ class ScriptAnimation:
         if not self.done:
             raise ValueError("Intro animation has no terminator")
 
-    def advance(self, tick):
+    def advance(self, tick, repeat=False):
         while not self.done and self.next_tick <= tick + 1e-9:
             self.step()
-            if not self.done:
+            if self.done and repeat and self.next_tick > self.cycle_start:
+                self.cycle_start = self.next_tick
+                self.cursor = 4
+                self.layers = [[0, 0, 0, 16] for _ in self.layers]
+                self.events.clear()
+                self.done = False
+            elif not self.done:
                 self.next_tick += self.interval
 
 
@@ -207,6 +215,7 @@ class IntroPlayer:
         self.transition = None
         self.deferred_palette = None
         self.title_animation = None
+        self.title_started_at = None
         self.revision = 0
         self.frame_cache = None
         self.dissolve_words = dissolve_words(assets.program.get("dissolve"))
@@ -247,7 +256,8 @@ class IntroPlayer:
         if 25002 in self.assets.shapes:
             self.target.paste(self.assets.shapes[25002], (0, 297))
         if index:
-            lines = self.assets.strings[resource_id][index - 1].split("\r")
+            # TextInRect (17:294e-29ba) skips leading spaces on each line.
+            lines = [line.lstrip(" ") for line in self.assets.strings[resource_id][index - 1].split("\r")]
             font = self.assets.font
             # NISTextDraw 15:0302 and TextInRect 17:28de/2b9a use a
             # baseline, not the top of the NFNT bitmap, to center the lines.
@@ -276,17 +286,9 @@ class IntroPlayer:
         if self.transition is None:
             return
         kind, start, duration, source, target = self.transition
-        progress = min(1, (self.time - start) / duration) if duration else 1
+        progress = 1 if self.time + 1e-9 >= start + duration else (self.time - start) / duration
         if kind == "title":
             tick = (self.time - start) * MAC_TICKS_PER_SECOND
-            animation = self.title_animation
-            # TitleFunc fades after frame two; maintain schedules one next
-            # frame from the current TickCount rather than catching up.
-            if self.title_fade_start <= tick < self.title_fade_start + self.title_fade_ticks - 1e-9:
-                animation_tick = self.title_fade_start
-            else:
-                animation_tick = tick - self.title_clock_delay if tick >= self.title_fade_start else tick
-            animation.advance(animation_tick)
             music = self.playing[0]
             markers = self.sounds[str(music[0])]["markers"]
             elapsed = self.time - music[1]
@@ -296,25 +298,21 @@ class IntroPlayer:
             elif markers["g"] <= elapsed < markers["h"]:
                 overlay = 25374
             brightness = min(1, max(0, (tick - self.title_fade_start) / self.title_fade_ticks))
-            state = (animation.cursor, overlay, brightness)
-            if state == self.title_frame_state and progress < 1:
+            changed = self.draw_title(tick, overlay)
+            colors = {index: tuple(round(channel * brightness) for channel in color)
+                      for index, color in self.assets.title_palette.items()}
+            if not changed and all(self.palette[index] == color for index, color in colors.items()) and progress < 1:
                 return
-            self.title_frame_state = state
-            frame = self.title_background.copy()
-            for shape, x, y, flags in animation.layers:
-                if shape:
-                    image = self.assets.title_shapes[25000 + shape]
-                    frame.paste(image, (x, y), image.point([0] + [255] * 255) if flags & 16 else None)
-            if overlay:
-                image = self.assets.title_shapes[overlay]
-                position = self.title_text_positions[overlay - 25373]
-                frame.paste(image, position, image.point([0] + [255] * 255))
-            self.display = frame
-            for index, color in self.assets.title_palette.items():
-                self.palette[index] = tuple(round(channel * brightness) for channel in color)
+            for index, color in colors.items():
+                self.palette[index] = color
         elif kind == "fade":
+            if self.title_started_at is not None:
+                tick = (self.time - self.title_started_at) * MAC_TICKS_PER_SECOND
+                self.draw_title(tick, self.title_frame_state[1])
             for index, color in target.items():
                 self.palette[index] = tuple(round(a + (b - a) * progress) for a, b in zip(source[index], color))
+            if progress >= 1:
+                self.title_started_at = None
         else:
             count = int(progress * len(self.dissolve_words))
             indices = self.dissolve_words[source[0]:count].ravel()
@@ -325,8 +323,30 @@ class IntroPlayer:
             self.transition = None
         self.changed()
 
+    def draw_title(self, tick, overlay):
+        # QoL: unlike the blocking Mac fades, clouds keep their native cadence.
+        # SCRP's two cycles are pixel-identical and repeat seamlessly.
+        animation = self.title_animation
+        animation.advance(tick, repeat=True)
+        state = (animation.cursor, overlay)
+        if state == self.title_frame_state:
+            return False
+        self.title_frame_state = state
+        frame = self.title_background.copy()
+        for shape, x, y, flags in animation.layers:
+            if shape:
+                image = self.assets.title_shapes[25000 + shape]
+                frame.paste(image, (x, y), image.point([0] + [255] * 255) if flags & 16 else None)
+        if overlay:
+            image = self.assets.title_shapes[overlay]
+            position = self.title_text_positions[overlay - 25373]
+            frame.paste(image, position, image.point([0] + [255] * 255))
+        self.display = frame
+        return True
+
     def start_title(self):
         self.title_frame_state = None
+        self.title_started_at = self.time
         self.title_animation = ScriptAnimation(self.assets.title_script)
         self.title_animation.advance(0)
         self.title_fade_start = self.title_animation.next_tick
@@ -343,7 +363,8 @@ class IntroPlayer:
         self.loaded[2] = self.assets.title_palette
         music = self.playing[0]
         markers = self.sounds[str(music[0])]["markers"]
-        # PlayTheAnimation exits when SCRP stops, even before TitleFunc's cue i.
+        # Preserve the Mac scene/audio deadlines, including its blocking fade's
+        # delay, independently of the continuously moving cloud clock.
         end = ScriptAnimation(self.assets.title_script)
         end.advance(float("inf"))
         duration = min((end.next_tick + self.title_clock_delay) / MAC_TICKS_PER_SECOND,
@@ -457,7 +478,7 @@ class IntroPlayer:
             start = self.transition[1]
             tick = (self.time - start) * MAC_TICKS_PER_SECOND
             if tick >= self.title_fade_start + self.title_fade_ticks:
-                next_tick = self.title_animation.next_tick + self.title_clock_delay
+                next_tick = self.title_animation.next_tick
                 deadline = min(start + next_tick / MAC_TICKS_PER_SECOND, self.wait_until)
                 music = self.playing[0]
                 markers = self.sounds[str(music[0])]["markers"]
@@ -466,6 +487,10 @@ class IntroPlayer:
                     if cue > self.time + 1e-9:
                         deadline = min(deadline, cue)
                 return max(0, deadline - self.time)
+        if self.transition is not None:
+            start = self.transition[1]
+            frame = math.floor((self.time - start) * 60 + 1e-9) + 1
+            return max(0, min(self.wait_until, start + frame / 60) - self.time)
         return 1 / 60
 
     def frame(self):
