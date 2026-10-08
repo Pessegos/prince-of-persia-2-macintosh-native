@@ -14,8 +14,54 @@ import numpy as np
 
 from pop2.audio_formats import Sample, digitized_sound, mohawk_resources
 from pop2.mac_resources import get_data_fork, parse_resource_fork
+from pop2.mac_resources import get_resource_fork
+from pop2.intro import STORY_RECT
 from tools.extract_audio import render_midi
 from tools.extract_enemy_profiles import expand_a5_data
+
+
+def recover_dissolve(data):
+    """Recover pixel order from the game's cached DSLV pointer offsets."""
+    if len(data) < 28:
+        raise ValueError("Truncated intro dissolve table")
+    top, left, bottom, right = struct.unpack_from(">4h", data, 4)
+    columns = (right - left + 1) // 4
+    count = columns * (bottom - top)
+    if columns < 1 or bottom <= top or len(data) != 20 + (count + 1) * 8:
+        raise ValueError("Invalid intro dissolve table size")
+    sources = [source for source, _destination in struct.iter_unpack(">2I", data[20:-8])]
+    sorted_sources = sorted(sources)
+    if len(sources) <= columns:
+        raise ValueError("Intro dissolve table needs at least two rows")
+    stride = sorted_sources[columns] - sorted_sources[0]
+    if stride < columns * 4:
+        raise ValueError("Invalid intro dissolve source stride")
+    base = top * stride + left
+    order = []
+    for source in sources:
+        row, x = divmod(source - base, stride)
+        if not 0 <= row < bottom - top or x % 4 or not 0 <= x < columns * 4:
+            raise ValueError("Invalid intro dissolve source offset")
+        order.append(row * columns + x // 4)
+    if set(order) != set(range(count)):
+        raise ValueError("Intro dissolve table is not a permutation")
+    return {"rect": [top, left, bottom, left + columns * 4], "order": order}
+
+
+def extract_dissolve(image):
+    # Prince2.opt is optional: the Macintosh game creates it on first run.
+    try:
+        cache = parse_resource_fork(get_resource_fork(image, "Prince2.opt", None))
+    except (FileNotFoundError, ValueError):
+        return None
+    for resource in cache.get("DSLV", {}).values():
+        try:
+            pattern = recover_dissolve(resource["data"])
+        except (ValueError, struct.error):
+            continue
+        if tuple(pattern["rect"]) == STORY_RECT:
+            return pattern
+    return None
 
 
 def recover_scenes(program, nis):
@@ -227,4 +273,7 @@ def extract_intro(image, program, nis, directory, progress=lambda _text: None):
     a5 = expand_a5_data(parse_resource_fork(program))
     title_rects = [list(struct.unpack_from(">4h", a5, len(a5) - offset)) for offset in (0x22f4, 0x22ec)]
     result = {"schema": 1, "operations": operations, "audio": audio, "title_rects": title_rects}
+    pattern = extract_dissolve(image)
+    if pattern is not None:
+        result["dissolve"] = pattern
     (directory / "intro.json").write_text(json.dumps(result, indent=2) + "\n", encoding="ascii")

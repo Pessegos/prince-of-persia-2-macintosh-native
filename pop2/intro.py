@@ -5,6 +5,7 @@ from pathlib import Path
 import random
 import struct
 
+import numpy as np
 from PIL import Image
 
 from pop2.game_ui import MacintoshFont
@@ -13,6 +14,7 @@ from pop2.paths import ASSET_DIR
 
 
 SIZE = (512, 384)
+STORY_RECT = (62, 64, 292, 448)
 OPERATIONS = {
     "shape": 4, "fill": 2, "copy": 1, "clip": 1, "dissolve": 1,
     "text": 5, "sound": 2, "wait_sound": 2, "wait_current": 1,
@@ -90,6 +92,28 @@ def fade_ticks(flags):
     # FadeInColors/FadeOutColors 17:0ab6/0d0e: percent step and tick delay.
     step = ((flags >> 16) & 7) if flags > 65535 else 9
     return (100 // max(1, step)) * (flags & 31)
+
+
+def dissolve_words(pattern=None):
+    """DrawDisolveData 15:31ba copies the two words of each shuffled long."""
+    top, left, bottom, right = pattern["rect"] if pattern else STORY_RECT
+    if not (0 <= left < right <= SIZE[0] and 0 <= top < bottom <= SIZE[1]
+            and (right - left) % 4 == 0):
+        raise ValueError("Invalid intro dissolve rectangle")
+    columns = (right - left) // 4
+    count = columns * (bottom - top)
+    if pattern:
+        order = pattern["order"]
+        if (len(order) != count or any(type(value) is not int for value in order)
+                or set(order) != set(range(count))):
+            raise ValueError("Invalid intro dissolve order")
+    else:
+        order = list(range(count))
+        random.Random(0).shuffle(order)
+    groups = np.asarray(order, dtype=np.intp)
+    starts = (top + groups // columns) * SIZE[0] + left + (groups % columns) * 4
+    words = np.concatenate((starts, starts + 2))
+    return np.column_stack((words, words + 1))
 
 
 class IntroAssets:
@@ -170,7 +194,6 @@ class IntroPlayer:
         self.wait_until = 0.0
         self.timers, self.playing = {}, {}
         self.palette = [(0, 0, 0)] * 256
-        self.palette[255] = (255, 255, 255)
         self.loaded = {}
         self.target = Image.new("L", SIZE, 1)
         self.display = self.target.copy()
@@ -180,9 +203,7 @@ class IntroPlayer:
         self.title_animation = None
         self.revision = 0
         self.frame_cache = None
-        rng = random.Random(0)
-        self.blocks = [(x, y, x + 4, y + 4) for y in range(0, 384, 4) for x in range(0, 512, 4)]
-        rng.shuffle(self.blocks)
+        self.dissolve_words = dissolve_words(assets.program.get("dissolve"))
         self.advance(0)
 
     @staticmethod
@@ -222,15 +243,17 @@ class IntroPlayer:
         if index:
             lines = self.assets.strings[resource_id][index - 1].split("\r")
             font = self.assets.font
-            top = 297 + (87 - len(lines) * font.height) // 2
+            # NISTextDraw 15:0302 and TextInRect 17:28de/2b9a use a
+            # baseline, not the top of the NFNT bitmap, to center the lines.
+            top = 297 + 87 // 2 - len(lines) * font.height // 2 + font.height - 4 - font.ascent
             for n, line in enumerate(lines):
                 mask = font.text(line).getchannel("A")
-                left = (510 - mask.width) // 2
-                for offset, color in ((3, 1), (1, 3), (0, 14)):
-                    self.target.paste(color, (left + offset, top + n * font.height + offset), mask)
+                left = 1 + max(0, (508 - mask.width) // 2)
+                for offset, color in ((8, 255), (6, 3), (5, 14)):
+                    self.target.paste(color, (left + offset, top + n * font.height), mask)
             if initial:
                 clip, self.clip = self.clip, (0, 0, *SIZE)
-                self.draw_shape(initial, 5 + dx, 297 + 30 + dy, 16)
+                self.draw_shape(initial, 8 + dx, 297 + 30 + dy, 16)
                 self.clip = clip
         rect = (0, 297, 512, 384)
         self.display.paste(self.target.crop(rect), rect)
@@ -276,9 +299,10 @@ class IntroPlayer:
             for index, color in target.items():
                 self.palette[index] = tuple(round(a + (b - a) * progress) for a, b in zip(source[index], color))
         else:
-            count = int(progress * len(self.blocks))
-            for box in self.blocks[source[0]:count]:
-                self.display.paste(target.crop(box), box)
+            count = int(progress * len(self.dissolve_words))
+            indices = self.dissolve_words[source[0]:count].ravel()
+            source[1][indices] = target[indices]
+            self.display = Image.fromarray(source[1].reshape(SIZE[1], SIZE[0]))
             source[0] = count
         if progress >= 1:
             self.transition = None
@@ -314,7 +338,8 @@ class IntroPlayer:
             self.clip = self.box(args[0])
         elif op == "dissolve":
             duration = args[0] / 60
-            self.transition = ("dissolve", self.time, duration, [0], self.target.copy())
+            self.transition = ("dissolve", self.time, duration,
+                               [0, np.array(self.display).ravel()], np.array(self.target).ravel())
             self.wait_until = self.time + duration
         elif op == "text":
             self.text(*args)

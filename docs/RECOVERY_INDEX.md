@@ -82,6 +82,8 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | One-life meter flashing | 2:5442-546c | T: simulation-frame parity; upgrade effects P | combat_art / test_combat |
 | Window escape and glass timeline | 2:5d56; CODE:23; DATA/SEQS | T: isolated opening with glass cue | opening_animation, audio / test_opening_animation, test_audio_integration |
 | Opening story, title and audio synchronization | 15:45c2/4ee8/6f1a/6fec; CODE:16 SCRP; NIS/Title archives | T: recovered coordinator calls, native scene/audio program; pixel parity P | intro, extract_intro / test_intro, test_extract_intro, test_intro_scene |
+| Story lettering baselines and three horizontal shadow/color passes | 15:0302-03ae; 17:28de/2b9a; FOND:213/NFNT:24878 | T: ordinary intro subtitle layout and decorative-initial origin | intro / test_intro |
+| Two-pass 2x1-pixel dissolve and cached group order | 15:2d7a/31ba-3256; Prince2.opt DSLV | T/A: original cached permutation and word geometry; deterministic fallback order when cache absent, native Random seed P | intro, extract_intro / test_intro, test_extract_intro |
 | CUST full-room background and foreground | 3:1378/142a/2324; CUST:4350 | T: fixed level-1 descent-room images and draw passes; animated custom templates P | render_opening / test_harbor |
 | Harbor floor, pillars and waves | 23:0248, 0d1c/0dce; DATA:cc32/cc3a | T: native SHAP/PIEC offsets, phase cycle and wave clip rectangles; native random phase seeding / conditional redraw P | render_opening, harbor / test_harbor |
 | Ship activation, two-pixel drift and departure limit | 2:5374; 23:1066/1120/1256 | T: level-1 counter, entry-pose reset and original SHAP layers; full native obstacle-bank lifecycle P | harbor, render_opening / test_harbor |

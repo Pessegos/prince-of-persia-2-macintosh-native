@@ -9,7 +9,7 @@ from unittest.mock import Mock
 from PIL import Image
 
 from pop2.intro import (
-    IntroPlayer, ScriptAnimation, fade_ticks, indexed_shape, palette_colors,
+    IntroPlayer, ScriptAnimation, dissolve_words, fade_ticks, indexed_shape, palette_colors,
     read_program, text_strings,
 )
 
@@ -23,12 +23,12 @@ def script(*commands):
     return struct.pack(">I", len(payload)) + payload
 
 
-def player(*operations, audio=None):
+def player(*operations, audio=None, dissolve=None):
     sounds = {"25010": {"duration": 4, "markers": {"a": 1.25}, "kind": 0},
               "27001": {"duration": 2, "markers": {}, "kind": 1}}
     assets = SimpleNamespace(
         program={"operations": [{"op": op, "args": list(args)} for op, *args in operations],
-                 "audio": sounds},
+                 "audio": sounds, "dissolve": dissolve},
         palettes={1: {1: (120, 80, 20)}},
         shapes={1: Image.frombytes("L", (2, 1), b"\0\1")},
     )
@@ -93,6 +93,17 @@ class IntroFormatTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     read_program(path)
 
+    def test_dissolve_copies_horizontal_words_in_two_passes_not_square_blocks(self):
+        pattern = {"rect": [2, 4, 4, 12], "order": [3, 0, 2, 1]}
+        words = dissolve_words(pattern)
+        self.assertEqual(words.tolist(), [[1544, 1545], [1028, 1029], [1540, 1541], [1032, 1033],
+                                          [1546, 1547], [1030, 1031], [1542, 1543], [1034, 1035]])
+
+    def test_invalid_dissolve_permutation_is_rejected(self):
+        for order in ([0, 0, 2, 3], [0, 1, 2, 4], [0, 1, 2], [0, 1, 2, 3.0]):
+            with self.subTest(order=order), self.assertRaises(ValueError):
+                dissolve_words({"rect": [2, 4, 4, 12], "order": order})
+
 
 class IntroPlaybackTests(unittest.TestCase):
     def test_cue_and_voice_waits_use_original_audio_clock_without_a_sound_device(self):
@@ -126,6 +137,38 @@ class IntroPlaybackTests(unittest.TestCase):
                    ("clip", [0, 1, 1, 2]), ("shape", 1, 1, 0, 0),
                    ("copy", [0, 0, 384, 512]), ("wait", 1))
         self.assertEqual([p.display.getpixel((x, 0)) for x in range(3)], [3, 0, 3])
+
+    def test_dissolve_keeps_pixels_outside_the_scene_and_finishes_both_word_passes(self):
+        p = player(("fill", 2, [0, 0, 384, 512]), ("copy", [0, 0, 384, 512]),
+                   ("fill", 3, [0, 0, 384, 512]), ("dissolve", 60),
+                   dissolve={"rect": [2, 4, 4, 12], "order": [3, 0, 2, 1]})
+        p.advance(1 / 8)
+        self.assertEqual([p.display.getpixel((x, 3)) for x in range(4, 12)],
+                         [2, 2, 2, 2, 3, 3, 2, 2])
+        p.advance(3 / 8)
+        self.assertEqual([p.display.getpixel((x, 3)) for x in range(4, 12)],
+                         [3, 3, 2, 2, 3, 3, 2, 2])
+        p.advance(.5)
+        self.assertEqual(p.display.crop((4, 2, 12, 4)).tobytes(), bytes([3]) * 16)
+        self.assertEqual(p.display.getpixel((0, 0)), 2)
+        self.assertTrue(p.done)
+
+    def test_story_text_uses_original_baselines_and_horizontal_shadow_passes(self):
+        p = player(("wait", 60))
+        glyph = Image.new("RGBA", (2, 23))
+        glyph.putpixel((0, 0), (255, 255, 255, 255))
+        p.assets.font = SimpleNamespace(height=23, ascent=15, text=lambda _: glyph)
+        p.assets.strings = {1: ["a\ra", "a"]}
+        p.assets.shapes[25002] = Image.new("L", (512, 87), 15)
+        p.text(1, 1, 0, 0, 0)
+        for y in (321, 344):
+            self.assertEqual([p.display.getpixel((x, y)) for x in range(259, 263)], [14, 3, 15, 255])
+            self.assertEqual(p.display.getpixel((259, y + 1)), 15)
+        self.assertEqual(p.palette[255], (0, 0, 0))
+        p.text(1, 2, 1, 0, 0)
+        self.assertEqual(p.display.getpixel((259, 333)), 14)
+        self.assertEqual(p.display.getpixel((9, 327)), 1)
+        self.assertEqual(p.display.getpixel((6, 327)), 15)
 
     def test_fill_rectangles_are_half_open(self):
         p = player(("fill", 2, [0, 0, 1, 1]), ("copy", [0, 0, 384, 512]), ("wait", 1))

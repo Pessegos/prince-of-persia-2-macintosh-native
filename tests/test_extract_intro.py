@@ -24,6 +24,21 @@ def coordinator(entry):
 
 
 class IntroExtractionTests(unittest.TestCase):
+    def test_cached_dissolve_offsets_recover_order_independent_of_framebuffer_stride(self):
+        offsets = [(3 * 528 + 8, 0), (2 * 528 + 4, 0),
+                   (3 * 528 + 4, 0), (2 * 528 + 8, 0), (2 * 528 + 4, 0)]
+        data = struct.pack(">6h2i", 2, 4, 2, 4, 4, 12, 0, 0)
+        data += b"".join(struct.pack(">2I", *pair) for pair in offsets)
+        self.assertEqual(extractor.recover_dissolve(data),
+                         {"rect": [2, 4, 4, 12], "order": [3, 0, 2, 1]})
+        for corrupt in (data[:-1], data[:20] + data[20:28] * 5):
+            with self.assertRaises(ValueError):
+                extractor.recover_dissolve(corrupt)
+
+    def test_missing_optional_macintosh_dissolve_cache_is_allowed(self):
+        with patch.object(extractor, "get_resource_fork", side_effect=FileNotFoundError):
+            self.assertIsNone(extractor.extract_dissolve(b"image"))
+
     def test_original_coordinator_calls_are_recovered_without_macintosh_services(self):
         code = bytearray(0x5100)
         for entry in (0x45c2, 0x4ee8):

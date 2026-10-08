@@ -33,6 +33,25 @@ their own panel. Transparency depends on drawing flags; color zero is not
 universally transparent. The original NFNT 24878 renders the story text and
 separate SHAP images provide the decorative initials.
 
+NISTextDraw (`15:0302-03ae`) selects font family 213 at size 20, whose FOND
+entry references NFNT 24878. The three text passes shift the rectangle by
+8, 6 and 5 pixels horizontally and use palette indices 255 (black), 3 and 14.
+They do not shift vertically. TextInRect (`17:28de/2b9a`) centers the line
+height, places each baseline four pixels above the line's bottom, then applies
+the font ascent to the bitmap. Decorative initials use the first pass's
+rectangle, not the main lettering's rectangle.
+
+DrawDisolveData (`15:31ba-3256`) copies 2x1-pixel words in two passes: first
+the low-address word of every shuffled four-pixel group, then the other word
+in the same order. This affects the inner story rectangle only, leaving the
+molded frame and subtitle panel intact. The importer recovers that permutation
+from the optional `Prince2.opt` DSLV resource. Cached source/destination byte
+offsets use different framebuffer strides; the source stride is inferred from
+the complete row layout before translating to native pixel coordinates.
+Only the permutation and rectangle are retained in `intro.json`, not pointers
+or machine-specific delay calibration. Without a usable cache, playback uses
+a deterministic shuffled group order with the same two-pass word geometry.
+
 SCRP commands select a layer's shape, position and drawing flags, change the
 tick interval, notify the coordinator, sound an effect, end a frame or stop.
 Layers and shape indices are one-based. Title shapes use base ID 25001.
@@ -56,8 +75,8 @@ Game simulation remains stopped until the intro ends or is skipped.
 ## Remaining Fidelity Work
 
 Scene resources, sound starts and musical cue synchronization are recovered.
-The dissolve duration is original, but its randomized pixel ordering is a
-native approximation, not the recovered Macintosh random-number sequence.
-Subtitle shadow offsets and title cloud-loop presentation still need a direct
-frame-by-frame capture comparison. This is not a claim of pixel-perfect intro
-parity. Later cutscenes are not enabled by this implementation.
+Cached dissolve order is original; the fallback for images without that cache
+does not reproduce Macintosh Random's seed and sequence. Title cloud-loop
+presentation still needs a direct frame-by-frame capture comparison. This is
+not a claim of pixel-perfect intro parity. Later cutscenes are not enabled by
+this implementation.
