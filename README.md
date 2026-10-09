@@ -95,7 +95,6 @@ executable. Demo recovery adds time to the first import, not to later launches.
 | F1 | Game menu with command shortcuts |
 | Alt + N | New game, after confirmation |
 | Alt + R | Restart from the latest checkpoint or level start |
-| Alt + E | End game and return to the introduction |
 | Alt + T | Toggle all sound |
 | Alt + M | Toggle ambient music |
 | Alt + V | About the port |

@@ -321,11 +321,36 @@ unchanged.
 SwordCtrl (6:2258-22ea) can turn toward a live opponent at a ready pose
 (animation state 0/1), including the end of an unfinished hurt sequence. It
 does not wait for the port's recovery lock to expire. DoTurn's existing edge
-clearance still applies. Across-gap alert mode 1 allows facing the opponent;
-blocked-wall mode 0 does not. Uninterruptible animation states remain protected.
+clearance still applies. Turns require an engaged or waiting opponent (alert
+mode >=2); gap/wall modes 1/0 do not turn. Uninterruptible animation states remain protected.
 
 EnGarde (2:6f76-6f9c) scans the actors' supporting columns rather than their
 sprite anchors. A hurt pose can move its anchor past the roof edge while its
 supporting foot remains on the roof. Using the anchor here prematurely lost
 the combat target and prevented the Prince from turning after the first hit.
-The opening regression now checks all three stabs through death, without input.
+The opening regression checks three stabs through death for fixed guard seeds,
+without input. Different attack timings can put the supporting foot outside
+the roof sooner; neither health nor the hit count overrides floor contact.
+
+## Fatal Hits At Edges
+
+CheckStab (6:5428-54b2) chooses SEQS:81 rather than a flat corpse if the
+struck actor's supporting cell is empty, or the cell behind it is empty and
+GetDist1 is at least six pixels. Types 6, 7, 8 and 11 bypass this branch.
+The offset is GetDist1 - 12, with another -51 when the queried cell differs
+from the cached supporting column. The row advances while absolute Y is
+preserved. Ordinary hurt/flat-death branches instead set the actor to its
+current floor and clear vertical velocity.
+
+For an opposing-facing ordinary guard, CheckStab first applies the hit's
+-10 offset (6:52ec-5302), even when fatal. The subsequent edge test retains
+the pre-displacement supporting column. Omitting that order changes both
+the death position and the choice between an edge fall and rooftop tumble.
+Direct execution of the original CheckStab verifies the Prince's initial
+roof fall and the guard's existing tumble/flat-death cases.
+
+Shift catches require a living Prince, as Catch (4:37ca) requires a negative
+native alive word. The port also retains hit provenance throughout the shared
+fall loop: a fall entered from hurt sequences 74/94 cannot be caught, matching
+the recorded knockback behavior. A new voluntary retreat retains the catch;
+this does not prevent either fighter from being knocked off an edge.

@@ -95,12 +95,12 @@ class AttractSceneTests(unittest.TestCase):
             scene.close_dev_mode()
             scene.dev_key_release(SimpleNamespace(keysym="F2"))
 
-    def test_cutscene_pause_uses_contextual_text(self):
+    def test_cutscene_pause_uses_hud_position_without_backing_bar(self):
         scene = self.scene
         expected = scene.native_viewport.copy()
         text = scene.cutscene_pause_text
         ink = text.getbbox()
-        position = ((512 - text.width) // 2, (384 - (ink[3] - ink[1])) // 2 - ink[1])
+        position = ((512 - text.width) // 2, 365 + (19 - (ink[3] - ink[1])) // 2 - ink[1])
         expected.paste(text, position, text)
         scene.set_paused(True)
         self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())

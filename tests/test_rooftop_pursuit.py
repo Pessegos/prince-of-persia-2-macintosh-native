@@ -232,7 +232,8 @@ class RooftopPursuitTests(unittest.TestCase):
         guard.life = 1
         guard.state.action = 170
         encounter._hurt("guard", guard, encounter.player)
-        self.assertEqual(guard.state.target_x, 129)
+        # Native CheckStab probe: scene X 190 -> 127, including the hit's -10.
+        self.assertEqual(guard.state.target_x, 127)
         for _ in range(15):
             self.tick(encounter)
         self.assertEqual((guard.state.action, guard.row), (185, 1))

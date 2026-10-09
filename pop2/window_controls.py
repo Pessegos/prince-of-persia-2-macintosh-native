@@ -318,7 +318,6 @@ class WindowControls:
             self.game_menu.sound = self.sound_enabled
             self.game_menu.music = self.music_enabled
             self.game_menu.fullscreen = self.fullscreen
-            self.game_menu.end_available = getattr(self, "with_intro", False)
             self.game_menu.development = self.development_available()
 
     def open_game_menu(self, page="menu"):
@@ -379,18 +378,7 @@ class WindowControls:
             self.render()
         elif action == "development":
             self.open_dev_mode()
-        elif action == "end" and getattr(self, "with_intro", False):
-            self.set_paused(True)
-            self.new_game()
-            if self.game_menu is not None:
-                self.close_game_menu(resume=True)
-            elif self.dev_menu is not None:
-                self.dev_was_paused = False
-                self.close_dev_mode()
-            else:
-                self.set_paused(False)
-            self.pause_resume_keys.update(self.window_keys_down)
-        elif action in ("save", "open", "end", "hall"):
+        elif action in ("save", "open", "hall"):
             if self.game_menu is None:
                 self.open_game_menu()
             self.game_menu.focus = next(i for i, item in enumerate(self.game_menu.items)
@@ -427,7 +415,7 @@ class WindowControls:
                 self.open_game_menu()
             return "break"
         command = {"n": "confirm_new", "r": "restart", "t": "sound", "m": "music",
-                   "s": "save", "o": "open", "e": "end", "h": "hall", "v": "about"}.get(
+                   "s": "save", "o": "open", "h": "hall", "v": "about"}.get(
                        event.keysym.lower()) if alt and not event.state & (0x4 | 0x40) else None
         if command is not None:
             if not repeated and (self.game_menu is None or self.game_menu.page != "confirm"):

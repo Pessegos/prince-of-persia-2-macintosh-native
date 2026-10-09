@@ -13,7 +13,9 @@ from pop2.opponent_generation import (
     OpponentGenerationPoint, character_column, tile_kind,
     WALL_TILES, OBSTACLE_TILES, EMPTY_TILES,
 )
-from pop2.terrain import RooftopPhysics, TerrainMotion, floor_contact_x, floor_edge_distance, floor_y
+from pop2.terrain import (
+    RooftopPhysics, TerrainMotion, TILE_HEIGHT, floor_contact_x, floor_edge_distance, floor_y,
+)
 
 
 GUARD_POSES = {158, 170, 171}
@@ -848,25 +850,55 @@ class CombatEncounter:
         if name == "guard":
             # CODE:6 0x513e-0x5152 uses the struck generator's skill.
             self.attack_pause = HIT_PAUSE[target.skill]
+        terrain = getattr(self, "terrain", None)
+        record = None
+        if name == "guard" and getattr(self, "guard_art", None) is not None:
+            record = self.guard_art.frames[guard_frame_index(target.state.action)]
+        elif name == "player" and getattr(self, "player_frames", None) is not None:
+            record = self.player_frames[target.state.action]
+        column = (character_column(floor_contact_x(target.state.target_x, target.state.facing, record))
+                  if record is not None else None)
+        if (not fatal_sequence and target.state.actor_type == 2
+                and target.state.facing != attacker.state.facing):
+            # CheckStab 6:52ec-5302 displaces even a fatal NPC hit. GetBlock
+            # still uses the cached supporting column from before this move.
+            target.state.target_x += -10 if target.state.facing else 10
+        fall_offset = (terrain.fatal_hit_fall_offset(
+                       target.room, target.row, target.state, record, column)
+                       if not target.alive and not fatal_sequence
+                       and terrain is not None and record is not None else None)
         if not target.alive:
             sequence, offset = 85, -17 if target.state.actor_type == 2 else 0
-            if name == "guard" and self._opponent_tumble(target):
+            if fall_offset is not None:
+                sequence, offset = 81, fall_offset
+            elif name == "guard" and self._opponent_tumble(target):
                 # CheckStab 6:56ba-56d4 selects the native tumble, not 85.
                 sequence, offset = 185, -12
         elif target.state.facing == attacker.state.facing:
             sequence, offset = 94, 0
         else:
             sequence = 74 if target.state.actor_type == 0 else 183
-            offset = -10 if target.state.actor_type == 2 else 0
-        # SetCharFloor/clear fall velocity, CODE:6 0x5478-0x547e.
-        target.state.current_y = 0
-        target.state.vertical_velocity = 0
+            offset = 0
+        if sequence == 81:
+            target.row += 1
+            target.state.current_y -= TILE_HEIGHT
+            if target.terrain_motion is None:
+                target.terrain_motion = TerrainMotion(target.room, target.row)
+            target.terrain_motion.row = target.row
+            target.terrain_motion.falling = True
+            target.terrain_motion.hit_fall = True
+            target.targetable = False
+        else:
+            # SetCharFloor/clear fall velocity, CODE:6 0x5478-0x547e.
+            target.state.current_y = 0
+            target.state.vertical_velocity = 0
         if sequence == 185:
             # Mode 9 passes in front of the roof, not onto the next floor.
             if target.terrain_motion is None:
                 target.terrain_motion = TerrainMotion(target.room, target.row)
             target.terrain_motion.row = target.row
             target.terrain_motion.falling = True
+            target.terrain_motion.hit_fall = True
             target.targetable = False
         select_sequence(target, sequence, offset)
         target.runtime.next_frame()

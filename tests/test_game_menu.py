@@ -17,10 +17,11 @@ class GameMenuModelTests(unittest.TestCase):
         shortcuts = {item.shortcut for item in items}
         self.assertNotIn("Alt+Q", shortcuts)
         self.assertNotIn("Alt+F", shortcuts)
+        self.assertNotIn("Alt+E", shortcuts)
         self.assertIn("Alt+Enter", shortcuts)
         self.assertEqual(next(item.label for item in items if item.shortcut == "F2"), "Dev Mode")
         self.assertEqual({item.action for item in items if not item.enabled},
-                         {"save", "open", "end", "hall"})
+                         {"save", "open", "hall"})
 
     def test_navigation_wraps_and_activation_is_explicit(self):
         menu = GameMenu()
@@ -277,7 +278,7 @@ class GameMenuSceneTests(unittest.TestCase):
         scene = self.scene
         scene.jump_to_screen("9")
         before = (scene.room_id, scene.player_x, scene.checkpoint)
-        for key, action in (("s", "save"), ("o", "open"), ("e", "end"), ("h", "hall")):
+        for key, action in (("s", "save"), ("o", "open"), ("h", "hall")):
             self.press(key, 8)
             item = scene.game_menu.items[scene.game_menu.focus]
             self.assertEqual(item.action, action)
@@ -285,6 +286,17 @@ class GameMenuSceneTests(unittest.TestCase):
             self.press("Return")
             self.assertEqual(before, (scene.room_id, scene.player_x, scene.checkpoint))
             self.press("Escape")
+
+    def test_removed_end_game_shortcut_does_not_reset_or_open_a_menu(self):
+        scene = self.scene
+        scene.jump_to_screen("9")
+        before = scene.room_id, scene.player_x, scene.checkpoint
+        for paused in (False, True):
+            scene.set_paused(paused)
+            self.press("e", 8)
+            self.assertIsNone(scene.game_menu)
+            self.assertEqual(scene.paused, paused)
+            self.assertEqual((scene.room_id, scene.player_x, scene.checkpoint), before)
 
     def test_f1_and_f2_switch_menus_without_losing_the_original_pause_state(self):
         scene = self.scene
@@ -309,7 +321,8 @@ class GameMenuSceneTests(unittest.TestCase):
         self.press("Return")
         self.assertIsNone(scene.game_menu)
         self.press("F1")
-        scene.game_menu.focus = 9
+        scene.game_menu.focus = next(i for i, item in enumerate(scene.game_menu.items)
+                                     if item.action == "about")
         self.press("Return")
         self.assertEqual(scene.game_menu.page, "about")
         self.press("Escape")

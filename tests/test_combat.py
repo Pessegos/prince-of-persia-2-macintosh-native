@@ -473,7 +473,8 @@ class GuardCombatTests(unittest.TestCase):
         c.resolve_contacts()
         self.assertEqual(c.guard.state.sequence_id, 85)
         self.assertEqual(c.guard.state.action, 179)
-        self.assertEqual(c.guard.state.target_x, 183)
+        # Opposed hit -10 (6:52ec), then flat death -17 (6:5524).
+        self.assertEqual(c.guard.state.target_x, 173)
         poses = []
         for _ in range(12):
             c.advance_guard()

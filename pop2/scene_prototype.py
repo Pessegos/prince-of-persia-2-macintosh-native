@@ -235,6 +235,7 @@ class ScenePrototype(WindowControls):
             )
             self.combat.terrain = self.level_map
             self.combat.player_frames = self.frames
+            self.combat.player.terrain_motion = self.terrain_motion
             self.guard_art = GuardArtwork(
                 load_resource_file("Guard.rsrc"), self.sword_shapes,
                 self.first_sword_shape_id, self.sword_palette,
@@ -1392,7 +1393,8 @@ class ScenePrototype(WindowControls):
         old_bounds = self.player_bounds() if motion is not None else None
         if motion is not None and (motion.falling or motion.dead):
             self.sequence_runtime.next_frame()
-            if (not motion.dead and self.shift_held and not self.sword_drawn
+            if (not motion.dead and not motion.hit_fall and self.combat.player.alive
+                    and self.shift_held and not self.sword_drawn
                     and self.level_map.catch_ledge(motion.room, motion.row,
                         self.sequence_state, self.frames[self.sequence_state.action], self.harbor)):
                 motion.falling = False
@@ -2023,6 +2025,7 @@ class ScenePrototype(WindowControls):
         if getattr(self, "level_map", None) is not None:
             self.room_id = self.level_map.start_room
             self.terrain_motion = TerrainMotion(self.room_id, 1)
+            self.combat.player.terrain_motion = self.terrain_motion
             room = self.room_cache[self.room_id]
             self.background, self.foreground = room.background, room.foreground
         self.opening = OpeningEscape(self.sequence_runtime, self.start_tile)
@@ -2104,6 +2107,7 @@ class ScenePrototype(WindowControls):
         self.terrain_motion = TerrainMotion(room_id, row)
         if reset_guards:
             self.combat.reset()
+        self.combat.player.terrain_motion = self.terrain_motion
         self.combat.enter_room(room_id, row)
         self.harbor.enter_room(room_id, 15)
         self.combat.player.life = self.combat.player.max_life
@@ -2253,7 +2257,7 @@ class ScenePrototype(WindowControls):
             elif self.paused:
                 text = self.cutscene_pause_text
                 ink = text.getbbox()
-                y = (VIEWPORT_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
+                y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
                 viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, y), text)
             self.native_viewport = viewport
             self.present_viewport()

@@ -285,13 +285,20 @@ class IntroSceneTests(unittest.TestCase):
         self.assertIsNone(scene.checkpoint)
         self.assertFalse(scene.paused)
 
-    def test_end_game_returns_to_intro_even_from_completed_level(self):
+    def test_new_game_returns_to_intro_even_from_completed_level(self):
         scene = self.scene
         scene.intro = None
         scene.level_complete = True
-        scene.apply_game_action("end")
+        scene.apply_game_action("new_game")
         self.assertIsNotNone(scene.intro)
         self.assertFalse(scene.level_complete)
+
+    def test_removed_alt_e_does_not_restart_intro_or_skip_it(self):
+        scene = self.scene
+        before = scene.intro
+        self.key("e", 8)
+        self.assertIs(scene.intro, before)
+        self.assertIsNone(scene.game_menu)
 
     def test_complete_original_scene_program_reaches_window_escape(self):
         scene = self.scene

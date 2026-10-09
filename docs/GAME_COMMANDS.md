@@ -3,7 +3,7 @@
 The Macintosh application resource fork lists the normal game commands in
 MENU 401 (File) and MENU 403 (Game). The Windows port uses Alt in place of
 Command, with the requested exception of Alt+Enter for fullscreen. It does
-not bind Alt+Q or Alt+F. F1 opens the in-game command menu; F2 retains the
+not bind Alt+Q, Alt+F or the redundant Alt+E. F1 opens the in-game command menu; F2 retains the
 development menu.
 
 | Original command | Port shortcut | Status |
@@ -14,7 +14,7 @@ development menu.
 | Open Game | Alt+O | Disabled; save system not yet recovered |
 | Sound | Alt+T | Master audio toggle |
 | Ambient Music | Alt+M | Ambient tracks only |
-| End Game | Alt+E | Return to the introduction |
+| End Game | Not bound | New Game already returns to the introduction |
 | Hall of Fame | Alt+H | Disabled until scoring/frontend exists |
 | Version | Alt+V | Port information, not the original game's version |
 | Full Screen | Alt+Enter | Aspect-preserving nearest-neighbor scaling |

@@ -323,6 +323,22 @@ class LevelMap:
             state.target_x += (distance - 32) * direction
         state.current_x = state.target_x
 
+    def fatal_hit_fall_offset(self, room, row, state, record, supporting_column=None):
+        # CheckStab 6:5428-54b2 tests the struck pose before loading death.
+        # A supported foot can still tip backward over an adjacent empty cell.
+        if state.actor_type in (6, 7, 8, 11):
+            return None
+        contact = floor_contact_x(state.target_x, state.facing, record)
+        column = (character_column(contact) if supporting_column is None else supporting_column)
+        distance = floor_edge_distance(contact, state.facing)
+        if self.tile(room, column, row).kind in EMPTY_TILES:
+            return distance - 12
+        direction = 1 if state.facing else -1
+        if (self.tile(room, column - direction, row).kind in EMPTY_TILES
+                and distance >= 6):
+            return distance - 12 - TILE_WIDTH
+        return None
+
     def catch_ledge(self, room, row, state, record, harbor=None):
         # Falling 6:011e-0132 / Catch 4:37ca: velocity <60 and feet within
         # [-48,+3] of the lower floor. Test the native 17-pixel look-behind.
@@ -413,6 +429,7 @@ class TerrainMotion:
     dead: bool = False
     smooth_landing: bool = False
     scream_played: bool = False
+    hit_fall: bool = False
 
 
 @dataclass(frozen=True)
@@ -477,6 +494,8 @@ class RooftopPhysics:
 
     def start_fall(self, motion, runtime):
         state = runtime.state
+        # Retain the cause across SEQS links into the shared free-fall loop.
+        motion.hit_fall = state.source_sequence_id in (74, 94, 183)
         # StartFall, CODE:4 0x4cbe-0x4d90, ordinary unarmed rooftop subset.
         sequence = {9: 7, 13: 19, 26: 18, 44: 21}.get(state.action, 7)
         if state.action == 81:

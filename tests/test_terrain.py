@@ -73,6 +73,45 @@ class TerrainTests(unittest.TestCase):
         self.assertEqual(floor_contact_x(323, 1, self.frames[38]), 307)
         self.assertEqual(floor_contact_x(160, 0, self.frames[44]), 174)
 
+    def test_fatal_hit_fall_uses_space_behind_and_six_pixel_threshold_both_sides(self):
+        from dataclasses import replace
+        from pop2.terrain import Tile
+
+        record = replace(self.frames[171], offset_x=0, aux=0)
+        for facing in (0, 1):
+            for room in (0, 3, 9):
+                for current, behind, distance, expected in (
+                        (1, 1, 20, None), (1, 20, 20, None), (1, 0, 5, None),
+                        (1, 0, 6, -57), (1, 0, 20, -43), (0, 1, 20, 8)):
+                    with self.subTest(facing=facing, room=room, current=current,
+                                      behind=behind, distance=distance):
+                        x = 227 + (50 - distance if facing else distance)
+                        state = SequenceState(227, action=171, target_x=x, facing=facing)
+                        column = character_column(x)
+                        with patch.object(self.map, "tile", side_effect=lambda r, c, y:
+                                          Tile(current if c == column else behind)):
+                            self.assertEqual(self.map.fatal_hit_fall_offset(
+                                room, 1, state, record), expected)
+
+    def test_fatal_hit_fall_preserves_native_special_actor_exclusions(self):
+        from pop2.terrain import Tile
+
+        with patch.object(self.map, "tile", return_value=Tile(0)):
+            for actor_type in (6, 7, 8, 11):
+                state = SequenceState(227, action=171, target_x=250, actor_type=actor_type)
+                self.assertIsNone(self.map.fatal_hit_fall_offset(3, 1, state, self.frames[171]))
+
+    def test_fatal_guard_hit_checks_cached_column_after_the_predeath_displacement(self):
+        from pop2.combat import guard_frame_index
+
+        frames = parse_frame_records(load_resource_file("Guard.rsrc")["FRAM"][750]["data"])
+        record = frames[guard_frame_index(170)]
+        state = SequenceState(227, action=170, target_x=145, facing=0, actor_type=2)
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        self.assertEqual(self.map.fatal_hit_fall_offset(0, 1, state, record), -18)
+        state.target_x += 10
+        self.assertIsNone(self.map.fatal_hit_fall_offset(0, 1, state, record, column))
+
     def test_shift_clearance_uses_links_not_screen_edges(self):
         self.assertGreaterEqual(self.map.step_clearance(3, 1, 25, -1), 42)
         self.assertEqual(self.map.step_clearance(3, 1, 395, 1), 13)
@@ -594,7 +633,7 @@ class RooftopSceneTests(unittest.TestCase):
             self.tick()
             if scene.combat.player.life != life:
                 life_changes.append(scene.combat.player.life)
-            self.assertFalse(scene.terrain_motion.falling)
+            self.assertEqual(scene.terrain_motion.falling, not scene.combat.player.alive)
             if scene.combat.player.life == 1:
                 self.assertEqual(scene.sequence_state.facing, 0)
             if not scene.combat.player.alive:
@@ -860,6 +899,48 @@ class RooftopSceneTests(unittest.TestCase):
                     self.assertFalse(scene.terrain_motion.falling)
                 self.assertEqual(lives, [2, 1, 0])
                 self.assertEqual(turn_x, 385)
+                self.assertTrue(scene.terrain_motion.falling)
+                self.assertEqual((scene.sequence_state.sequence_id, scene.action), (81, 102))
+                self.assertEqual(scene.terrain_motion.row, 2)
+
+    def test_enemy_hit_fall_cannot_catch_even_with_shift_held(self):
+        scene = self.scene
+        for facing, x in ((0, 404), (1, 420)):
+            with self.subTest(facing=facing), patch.object(scene, "render"):
+                scene.jump_to_room(3, row=1, x=x, facing=facing)
+                scene.set_peaceful(True)
+                scene.sword_drawn = scene.combat.player.sword_drawn = True
+                scene.start_sequence(227)
+                scene.sequence_runtime.next_frame()
+                scene.combat.guard.state.facing = 1
+                scene.combat._hurt("player", scene.combat.player, scene.combat.guard)
+                scene.set_key_state("shift", True)
+                fell = False
+                for _ in range(30):
+                    self.tick()
+                    if scene.terrain_motion.falling:
+                        if not fell:
+                            self.assertEqual(scene.combat.player.life, 2)
+                        fell = True
+                        self.assertTrue(scene.terrain_motion.hit_fall)
+                    self.assertFalse(scene.ledge_hanging)
+                    if scene.terrain_motion.dead:
+                        break
+                self.assertTrue(fell)
+
+    def test_dead_actor_cannot_catch_a_ledge_in_the_shared_fall_loop(self):
+        scene = self.scene
+        self.place(3, 2, 451, 0)
+        scene.set_peaceful(True)
+        scene.terrain_motion.falling = True
+        scene.combat.player.life = 0
+        scene.start_sequence(12)
+        scene.sequence_state.current_y = -44
+        scene.sequence_state.vertical_velocity = 22
+        scene.shift_held = True
+        self.tick()
+        self.assertFalse(scene.ledge_hanging)
+        self.assertTrue(scene.terrain_motion.falling)
 
     def test_repeated_sword_retreat_from_opening_can_catch_the_right_edge(self):
         scene = self.scene
@@ -880,6 +961,7 @@ class RooftopSceneTests(unittest.TestCase):
                     if scene.terrain_motion.falling:
                         break
                 self.assertTrue(scene.terrain_motion.falling)
+                self.assertFalse(scene.terrain_motion.hit_fall)
                 self.assertFalse(scene.sword_drawn)
                 self.tick(delay)
                 scene.set_key_state("shift", True)

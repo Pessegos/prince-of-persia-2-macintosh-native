@@ -22,12 +22,11 @@ class GameMenu:
     music: bool = True
     fullscreen: bool = False
     development: bool = True
-    end_available: bool = False
     focus: int = 0
     page: str = "menu"
     return_to_menu: bool = True
 
-    PANEL = (64, 28, 448, 356)
+    PANEL = (64, 28, 448, 334)
     DIALOG = (80, 108, 432, 274)
     ABOUT_DIALOG = (80, 108, 432, 292)
     BUTTONS = ((100, 228, 242, 258), (254, 228, 412, 258))
@@ -44,7 +43,6 @@ class GameMenu:
             MenuItem("open", "Open game", "Alt+O", False),
             MenuItem("sound", "Sound", "Alt+T", checked=self.sound),
             MenuItem("music", "Ambient music", "Alt+M", checked=self.music),
-            MenuItem("end", "End game", "Alt+E", self.end_available),
             MenuItem("hall", "Hall of Fame", "Alt+H", False),
             MenuItem("about", "About", "Alt+V"),
             MenuItem("fullscreen", "Fullscreen", "Alt+Enter", checked=self.fullscreen),
