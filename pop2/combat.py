@@ -396,9 +396,9 @@ class CombatEncounter:
     def choose_player_turn(self, frame_record=None):
         player, guard = self.player, self.guard
         state = player.state
-        if (guard is None or not player.alive or not guard.alive or player.controls_locked
+        if (guard is None or not player.alive or not guard.alive
                 or not player.sword_drawn or not player.targetable
-                or not guard.targetable or guard.alert_mode < 2
+                or not guard.targetable or guard.alert_mode < 1
                 or state.animation_state >= 2
                 or player.room != guard.room or player.row != guard.row):
             return False
@@ -539,8 +539,7 @@ class CombatEncounter:
                 or self.player.state.actor_type == 1):
             guard.alert_mode = 0
             return
-        low, high = sorted((character_column(guard.state.target_x),
-                            character_column(self.player.state.target_x)))
+        low, high = sorted((self._supporting_column(guard), self._supporting_column(self.player)))
         # CODE:2 0x6fce skips the scan for actors in the same column.
         terrain = ([tile_kind(self.level, guard.room, col, self.player.row)
                     for col in range(low, high + 1)] if low < high else [])
@@ -556,6 +555,19 @@ class CombatEncounter:
             guard.alert_mode = 2
         if guard.alert_mode:
             guard.pursuing = True
+
+    def _supporting_column(self, fighter):
+        # EnGarde 2:6f76-6f9c scans the stored supporting columns, not anchors.
+        state = fighter.state
+        art = getattr(self, "guard_art", None)
+        frames = getattr(self, "player_frames", None)
+        if state.actor_type == 2:
+            record = art.frames[guard_frame_index(state.action)] if art is not None else None
+        else:
+            record = frames[state.action] if frames is not None else None
+        contact = (floor_contact_x(state.target_x, state.facing, record)
+                   if record is not None else state.target_x)
+        return character_column(contact)
 
     def _choose_unarmed_guard_action(self, guard):
         state, other = guard.state, self.player.state

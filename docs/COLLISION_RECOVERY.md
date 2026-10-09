@@ -34,6 +34,9 @@ native `GetCharCol` conversion rather than simple sprite X / 51.
 - `StartFall`, CODE:4 `0x4cbe`-`0x4d90`: supported ordinary run/jump/sword
   poses select their corresponding fall sequence and advance the floor row.
   New commands cannot cancel a fall.
+- CODE:4 `0x4ca8`-`0x4cb2` clears the drawn-sword flag on fall entry, before
+  those pose-specific branches. This lets a retreat off a ledge use the normal
+  Shift catch controller; retaining sword mode incorrectly blocked the catch.
 - The preparation at CODE:4 `0x4b16` now aligns ordinary falls using the old
   pose's supporting foot and cached column. It checks floor/wall cells ahead,
   behind and above, applies the source 17/34-pixel thresholds, and when needed
@@ -320,7 +323,7 @@ resume, aspect-fit scaling, fullscreen state and the in-game development menu.
 The current room's guards and reinforcement points load from the original
 level data. Revisits retain their state; screen transitions retain player life,
 held input and the current movement sequence. Curtain/glass effects stay in
-the opening room and do not replay on return. F5 resets the world and opening.
+the opening room and do not replay on return. New Game resets the world and opening.
 
 Initial guards also retain generator word +0x0c (palette variant). The native
 palette resource rule, CODE:6 `0x4210`, is CTBL=749+variant: the opening guard

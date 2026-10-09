@@ -44,6 +44,8 @@ class OpeningEscape:
 
     @property
     def curtain_frame(self):
+        if self.phase == "done":
+            return 8
         foreground = self.tick + 1
         return ROOF_GLASS_FRAMES[foreground] if foreground < 14 else 8
 

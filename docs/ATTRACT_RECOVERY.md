@@ -3,7 +3,10 @@
 The opening now continues into the level-one demonstration, the original four
 credits pages and another opening. Space skips the opening; a gameplay key
 leaves the demo or credits and starts a clean game. Pause, window focus loss,
-fullscreen and the menus retain their normal behavior.
+fullscreen and the command menu remain available. Story scenes and credits
+show `Cutscene Paused`; the demo retains `Game Paused`. Dev Mode is disabled
+throughout the attract cycle, including its command-menu entry. F5 no longer
+restarts the opening; use the New Game or Restart Level commands.
 
 ## Recorded Controls
 

@@ -586,6 +586,55 @@ class RooftopSceneTests(unittest.TestCase):
         self.tick(3)
         self.assertFalse(self.scene.terrain_motion.falling)
 
+    def test_idle_window_escape_takes_three_stabs_without_premature_fall(self):
+        scene = self.scene
+        life_changes = []
+        for _ in range(300):
+            life = scene.combat.player.life
+            self.tick()
+            if scene.combat.player.life != life:
+                life_changes.append(scene.combat.player.life)
+            self.assertFalse(scene.terrain_motion.falling)
+            if scene.combat.player.life == 1:
+                self.assertEqual(scene.sequence_state.facing, 0)
+            if not scene.combat.player.alive:
+                break
+        self.assertEqual(life_changes, [2, 1, 0])
+
+    def test_sword_retreat_fall_can_catch_initial_roof_with_shift(self):
+        scene = self.scene
+        scene.peaceful = True
+        scene.jump_to_room(scene.level_map.start_room, 1, 390, facing=0)
+        scene.sword_drawn = scene.combat.player.sword_drawn = True
+        scene.sequence_state.sequence_id, scene.sequence_state.cursor = 227, 0
+        scene.sequence_runtime.next_frame()
+        scene.horizontal_key(None, 1, True)
+        fell = False
+        for _ in range(30):
+            if scene.terrain_motion.falling:
+                fell = True
+                self.assertFalse(scene.sword_drawn)
+                self.assertFalse(scene.combat.player.sword_drawn)
+                scene.set_key_state("shift", True)
+            self.tick()
+            if scene.ledge_hanging:
+                break
+        self.assertTrue(fell)
+        self.assertTrue(scene.ledge_hanging)
+        self.assertEqual(scene.action, 80)
+        self.assertFalse(scene.terrain_motion.falling)
+        self.assertTrue(scene.combat.player.alive)
+
+    def test_f2_first_screen_uses_settled_curtain(self):
+        scene = self.scene
+        scene.jump_to_screen("1")
+        self.assertEqual(scene.opening.curtain_frame, 8)
+        after_jump = scene.native_viewport.crop((220, 30, 350, 140)).tobytes()
+        scene.restart_opening()
+        self.tick(19)
+        self.assertEqual(scene.opening.curtain_frame, 8)
+        self.assertEqual(scene.native_viewport.crop((220, 30, 350, 140)).tobytes(), after_jump)
+
     def test_shift_step_reaches_original_right_edge_without_lifting_actor(self):
         self.place(3, 1, 411, 1)
         scene = self.scene

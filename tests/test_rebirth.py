@@ -322,11 +322,13 @@ class RebirthSceneTests(unittest.TestCase):
         self.checkpoint()
         self.die()
         self.eligible()
-        for key, modifier in (("F2", 0), ("F5", 0),
-                              ("Alt_L", 0), ("Return", 0x8), ("Return", 0x20000)):
+        for key, modifier in (("F2", 0), ("Alt_L", 0),
+                              ("Return", 0x8), ("Return", 0x20000)):
             self.assertIsNone(scene.dev_key_press(self.event(key, modifier)))
             self.assertFalse(scene.combat.player.alive)
             scene.dev_key_release(self.event(key))
+        self.assertEqual(scene.dev_key_press(self.event("F5")), "break")
+        self.assertFalse(scene.combat.player.alive)
 
     def test_escape_also_retries_when_dead_instead_of_pausing(self):
         scene = self.scene

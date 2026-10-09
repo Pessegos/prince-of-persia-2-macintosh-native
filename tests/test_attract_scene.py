@@ -1,7 +1,7 @@
 import time
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from pop2.paths import ASSET_DIR
 
@@ -27,6 +27,83 @@ class AttractSceneTests(unittest.TestCase):
         self.assertIsNotNone(self.scene.demo)
         self.assertIsNot(self.scene.combat, self.scene.live_combat)
         self.assertEqual(self.scene.attract_stage, "demo")
+
+    def test_demo_starts_rooftop_music_after_intro_stops(self):
+        from pop2.audio import AudioEngine
+        from tests.test_audio import TimedPlayback
+
+        audio = AudioEngine(playback=Mock())
+        playback = TimedPlayback(audio.cues)
+        playback.play = Mock(wraps=playback.play)
+        audio.playback = playback
+        self.scene.audio = audio
+        self.scene.intro.audio = audio
+        self.scene.intro.advance(1000)
+        self.assertTrue(self.scene.intro.done)
+        self.scene.finish_attract_stage()
+        self.assertIn(audio.current_music, (40, 41, 42, 43))
+        self.assertTrue(audio.current_music_ambient)
+        playback.play.assert_any_call("music", audio.current_music)
+        while not self.scene.demo.done:
+            interval = self.scene.demo.next_update_delay()
+            playback.advance(interval)
+            self.scene.demo.advance(interval)
+            if self.scene.demo.index < 457:
+                self.assertTrue(audio.music_busy)
+                self.assertTrue(audio.current_music_ambient)
+        songs = [call.args[1] for call in playback.play.call_args_list if call.args[0] == "music"]
+        self.assertGreaterEqual(sum(cue in (40, 41, 42, 43) for cue in songs), 2)
+        self.assertEqual(audio.current_music, 38)
+        self.scene.start_credits()
+        self.assertEqual(audio.current_music, 10019)
+
+    def test_demo_respects_ambient_music_toggle(self):
+        from pop2.audio import AudioEngine
+
+        playback = Mock()
+        playback.busy.return_value = False
+        audio = AudioEngine(playback=playback)
+        self.scene.audio = audio
+        audio.set_music_enabled(False)
+        self.scene.start_demo()
+        self.assertIsNone(audio.current_music)
+        audio.set_music_enabled(True)
+        self.scene.demo.advance(self.scene.demo.next_update_delay())
+        self.assertIn(audio.current_music, (40, 41, 42, 43))
+
+    def test_f2_and_menu_cannot_open_dev_mode_during_attract_cycle(self):
+        scene = self.scene
+        for start in (lambda: None, scene.start_demo, scene.start_credits):
+            start()
+            self.assertEqual(self.key("F2"), "break")
+            scene.open_dev_mode()
+            self.assertIsNone(scene.dev_menu)
+            scene.open_game_menu()
+            self.assertFalse(next(item.enabled for item in scene.game_menu.items
+                                  if item.action == "development"))
+            scene.apply_game_action("development")
+            self.assertIsNone(scene.dev_menu)
+            scene.close_game_menu()
+            scene.dev_key_release(SimpleNamespace(keysym="F2"))
+
+    def test_cutscene_pause_uses_contextual_text(self):
+        scene = self.scene
+        expected = scene.native_viewport.copy()
+        text = scene.cutscene_pause_text
+        position = ((512 - text.width) // 2, 365)
+        expected.paste(text, position, text)
+        scene.set_paused(True)
+        self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
+
+    def test_f5_has_no_binding_or_effect(self):
+        scene = self.scene
+        self.assertEqual(scene.root.bind("<F5>"), "")
+        for start in (lambda: None, scene.start_demo, scene.start_credits, scene.finish_intro):
+            start()
+            before = scene.intro, scene.demo, scene.room_id, scene.player_x, scene.paused
+            self.assertEqual(self.key("F5"), "break")
+            self.assertEqual((scene.intro, scene.demo, scene.room_id, scene.player_x, scene.paused), before)
+            scene.dev_key_release(SimpleNamespace(keysym="F5"))
 
     def test_demo_credits_intro_cycle(self):
         scene = self.scene

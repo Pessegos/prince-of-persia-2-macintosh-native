@@ -131,7 +131,6 @@ class WindowControls:
         self.root.bind("<KeyRelease-Escape>", self.escape_release)
         self.root.bind("<Alt-Return>", self.toggle_fullscreen)
         self.root.bind("<F2>", self.open_dev_mode)
-        self.root.bind("<F5>", self.restart_opening)
 
     def focus_out(self, event):
         self.clear_keys(event)
@@ -220,6 +219,8 @@ class WindowControls:
         return "break"
 
     def open_dev_mode(self, _event=None):
+        if not self.development_available():
+            return "break"
         if _event is not None:
             if self.dev_toggle_held:
                 return "break"
@@ -280,12 +281,17 @@ class WindowControls:
     def modal_open(self):
         return self.dev_menu is not None or self.game_menu is not None
 
+    def development_available(self):
+        return (self.level_map is not None and getattr(self, "intro", None) is None
+                and getattr(self, "demo", None) is None)
+
     def refresh_game_menu(self):
         if self.game_menu is not None:
             self.game_menu.sound = self.sound_enabled
             self.game_menu.music = self.music_enabled
             self.game_menu.fullscreen = self.fullscreen
             self.game_menu.end_available = getattr(self, "with_intro", False)
+            self.game_menu.development = self.development_available()
 
     def open_game_menu(self, page="menu"):
         if self.game_menu is not None:
@@ -300,7 +306,7 @@ class WindowControls:
         self.game_was_paused = self.dev_was_paused if self.dev_menu is not None else self.paused
         self.dev_menu = None
         self.game_menu = GameMenu(page=page, return_to_menu=page == "menu",
-                                  development=self.level_map is not None)
+                                  development=self.development_available())
         self.set_paused(True)
         self.clear_keys(None)
         self.pause_resume_keys.update(self.window_keys_down)
@@ -374,6 +380,8 @@ class WindowControls:
         repeated = event.keysym in self.window_keys_down or (
             len(event.keysym) == 1 and event.keysym.swapcase() in self.window_keys_down)
         self.window_keys_down.add(event.keysym)
+        if event.keysym == "F5" or event.keysym == "F2" and not self.development_available():
+            return "break"
         if event.keysym in self.pause_resume_keys:
             return "break"
         fullscreen_key = event.keysym == "Return" and event.state & (0x8 | 0x20000)
@@ -415,7 +423,7 @@ class WindowControls:
                     self.pause_resume_keys.update(self.window_keys_down)
                 return "break"
             if getattr(self, "intro", None) is not None:
-                if event.keysym in ("Escape", "F2", "F5"):
+                if event.keysym == "Escape":
                     return None
                 if (not repeated and not alt and not event.state & (0x4 | 0x40)
                         and (event.keysym == "space" or (getattr(self, "attract_stage", None) == "credits"
@@ -423,13 +431,13 @@ class WindowControls:
                     self.finish_intro()
                 return "break"
             if getattr(self, "demo", None) is not None:
-                if event.keysym in ("Escape", "F2", "F5"):
+                if event.keysym == "Escape":
                     return None
                 if not repeated and not alt and is_resume_key(event, self.window_keys_down):
                     self.finish_intro()
                 return "break"
             if (not self.paused and self.death.counter >= 0
-                    and event.keysym not in ("F2", "F5", "Alt_L", "Alt_R")
+                    and event.keysym not in ("F2", "Alt_L", "Alt_R")
                     and not fullscreen_key):
                 self.restart_after_death()
                 return "break"

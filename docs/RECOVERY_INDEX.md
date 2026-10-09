@@ -50,6 +50,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Draw reserves 56 against gap/solid wall; combat turn reserves gap space | 6:2072-2122, 26dc-276c | T: ordinary rooftop floor/gap/wall; full gate/special branches P | terrain / test_terrain, test_game_ui |
 | Standing turn bypasses barrier response; unarmed grounded contact ignores rear wall | 4:4e46, 551a/5586 | T: ordinary exclusions within port sweep; full collision buffers P | terrain / test_terrain, test_game_ui |
 | PutSwordAway clears sword mode before first pose, while animation remains locked | 6:2594; SEQS:92/93 | T: ordinary sword lifecycle, full post-retreat sheath | scene_prototype / test_game_ui |
+| StartFall clears sword mode before selecting the fall sequence | 4:4ca8-4cb2 | T: ordinary fall entry, including Shift catch after sword retreat from the initial roof | scene_prototype / test_terrain |
 | Ctrl while running preserves stop-and-draw intent | host QoL, not native queue parity | A/T: intentional extension; original draw poses retained, short/held Ctrl and both facings tested | scene_prototype / test_input_recovery |
 | Wall bump keeps the used Up press consumed until release, preventing a phantom jump | host input lifecycle; 23:31 comparison video | A/T: release/held-state fix, not a recovered native keyboard routine | scene_prototype / test_game_ui |
 | Front sword bump 64 versus rear sword bump 65 | 4:64f6-6532 | T: ordinary grounded wall response | terrain / test_game_ui |
@@ -78,6 +79,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Ready-pose advance/retreat checks own anchor column | 4:0a82-0b1a; 6:2c90 | T: ordinary guard subset, not immunity to falling | combat / test_enemy_ai, test_rooftop_pursuit |
 | Pursuit, gap jump and incoming reinforcement corridor | 4:057c/0834; 6:1c14/3a0c | T: supported rooftop paths; inactive-world/special actors P | combat / test_rooftop_pursuit, test_opponent_generation |
 | Parry/contact poses, range, damage priority | 6:50ec/523e/53f8/5978 | T: ordinary actors; special attacks P | combat / test_combat |
+| Ready hurt poses may turn toward the opponent; alert scan uses supporting columns | 6:2258-22ea; 2:6f76-6f9c | T: ordinary ready/locked poses, wall/gap alert gates and idle opening through three stabs; full column lifecycle P | combat, scene_prototype / test_combat, test_terrain |
 | Jump cannot pass a live grounded opposing guard | 2:6c64-6daa | T/A: native gates plus port between-frame sweep | combat / test_game_ui |
 | One-life meter flashing | 2:5442-546c | T: simulation-frame parity; upgrade effects P | combat_art / test_combat |
 | Window escape and glass timeline | 2:5d56; CODE:23; DATA/SEQS | T: isolated opening with glass cue | opening_animation, audio / test_opening_animation, test_audio_integration |
@@ -97,8 +99,8 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Dead-pose counter, any-key retry and centered restart message | 2:47e6/7148; 4:3b88/47a0; 3:433a | T: ordinary dead-pose/key gate and actual current/pending playback completion; frontend timeout P | rebirth, audio, scene_prototype, window_controls / test_rebirth, test_audio |
 | Audio cue arbitration, source samples and rooftop music pool | CODE:5; DATA; INST/snd; MIDISnd/DigiSnd | T/A: ordinary level-1 subset; original instruments with host sampler, not bit-exact Mac MIDI driver | audio, audio_formats, extract_audio / test_audio, test_extract_audio, test_audio_integration |
 | LEVL checkpoint trigger and restored start | LEVL:39a6; 2:6b46/1674/19ba/5d50 | T: level-1 foot/cell trigger, native anchor, facing/full life and opponent/generator snapshot; dynamic normalization/story pipeline P | rebirth, scene_prototype / test_rebirth |
-| F2 screen jumps seed the latest route checkpoint from LEVL | host feature | T: route order rather than slot order; earlier/secret jumps and F5 clear it; not an original activation rule | scene_prototype / test_rebirth |
-| In-game F2 menu, peaceful scene, ordinary-key/click pause resume, Windows fullscreen | host features | T: font, modal input, modifier/media/navigation/system-shortcut exclusions, held-key consumption and focus reset; not recovered Mac gameplay rules | window_controls/game_ui / test_game_ui, test_development_menu |
+| F2 screen jumps seed the latest route checkpoint from LEVL | host feature | T: route order rather than slot order; earlier/secret jumps and New Game clear it; not an original activation rule | scene_prototype / test_rebirth |
+| In-game F2 menu, peaceful scene, ordinary-key pause resume, Windows fullscreen | host features | T: font, modal input, attract-cycle Dev Mode exclusion, modifier/media/navigation/system-shortcut exclusions, held-key consumption and focus reset; not recovered Mac gameplay rules | window_controls/game_ui / test_game_ui, test_development_menu, test_attract_scene |
 
 ## Corpse Visibility
 

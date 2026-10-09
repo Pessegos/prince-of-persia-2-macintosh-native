@@ -202,7 +202,7 @@ The additional ordinary first-rooftop controller paths are:
 Tests exercise the raw first-room point, eligibility boundaries, living-NPC
 blocking, corpse limits, cadence, native entry/brake/draw poses, per-NPC
 probabilities and damage, target selection, waiting gates, traded-hit priority,
-and an input-driven opening followed by two successful combats. F5 restores
+and an input-driven opening followed by two successful combats. New Game restores
 the initial NPC and the unconsumed reinforcement point.
 
 ## Room Persistence
@@ -211,7 +211,7 @@ the initial NPC and the unconsumed reinforcement point.
 reinforcement points on its first visit. Rooms with no initial NPC are valid;
 the active target and enemy health display can be absent. Returning to a room
 reuses its NPC objects, corpse poses, remaining life and generation counters.
-The Prince's life and sword state are not reset by a screen change. F5 clears
+The Prince's life and sword state are not reset by a screen change. New Game clears
 these encounters and restores the opening.
 
 NPCs now use the rooftop physics and transfer between visited horizontal
@@ -315,3 +315,17 @@ SEQS:85/213 into SEQS:65 and then combat idle 227, standing indefinitely with
 zero life. Dead actors now finish their death sequence; living actors still
 use the normal wall bump and recovery. Floor contact and tumble physics are
 unchanged.
+
+## Hurt Recovery And Facing
+
+SwordCtrl (6:2258-22ea) can turn toward a live opponent at a ready pose
+(animation state 0/1), including the end of an unfinished hurt sequence. It
+does not wait for the port's recovery lock to expire. DoTurn's existing edge
+clearance still applies. Across-gap alert mode 1 allows facing the opponent;
+blocked-wall mode 0 does not. Uninterruptible animation states remain protected.
+
+EnGarde (2:6f76-6f9c) scans the actors' supporting columns rather than their
+sprite anchors. A hurt pose can move its anchor past the roof edge while its
+supporting foot remains on the roof. Using the anchor here prematurely lost
+the combat target and prevented the Prince from turning after the first hit.
+The opening regression now checks all three stabs through death, without input.

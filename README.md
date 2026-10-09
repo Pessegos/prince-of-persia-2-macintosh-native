@@ -99,8 +99,7 @@ executable. Demo recovery adds time to the first import, not to later launches.
 | Alt + T | Toggle all sound |
 | Alt + M | Toggle ambient music |
 | Alt + V | About the port |
-| F2 | Dev Mode: screen selection and peaceful mode |
-| F5 | Restart the opening encounter |
+| F2 | Dev Mode during gameplay: screen selection and peaceful mode |
 | Any key after death | Retry from the checkpoint or level start |
 
 The game menu accepts mouse, arrows and Tab/Shift+Tab; Enter/Space activates

@@ -250,21 +250,32 @@ class GuardCombatTests(unittest.TestCase):
 
     def test_auto_turn_rejects_unavailable_or_unengaged_target(self):
         for field, value in (("life", 0), ("targetable", False),
-                             ("alert_mode", 1), ("row", 2), ("room", 2)):
+                             ("alert_mode", 0), ("row", 2), ("room", 2)):
             c = self.encounter(player_facing=1)
             setattr(c.guard, field, value)
             self.assertFalse(c.choose_player_turn(), field)
 
     def test_auto_turn_preserves_protected_player_animations(self):
         for field, value in (("life", 0), ("targetable", False),
-                             ("sword_drawn", False), ("recovering", True)):
+                             ("sword_drawn", False)):
             c = self.encounter(player_facing=1)
             setattr(c.player, field, value)
             self.assertFalse(c.choose_player_turn(), field)
-        for mode in (2, 4, 5, 8, 9, 10):
+        for mode in (2, 3, 4, 5, 8, 9, 10):
             c = self.encounter(player_facing=1)
+            c.player.recovering = True
             c.player.state.animation_state = mode
             self.assertFalse(c.choose_player_turn(), mode)
+
+    def test_ready_hurt_recovery_can_turn_toward_opponent_across_edge(self):
+        c = self.encounter(player_facing=1)
+        c.player.recovering = True
+        c.guard.alert_mode = 1
+        c.player.state.sequence_id = 205
+        c.player.state.action = 156
+        c.player.state.animation_state = 0
+        self.assertTrue(c.choose_player_turn())
+        self.assertEqual(c.player.state.sequence_id, PLAYER_COMBAT_TURN_SEQUENCE)
 
     def test_auto_turn_uses_combat_control_state_not_a_generic_idle_check(self):
         c = self.encounter(player_facing=1)

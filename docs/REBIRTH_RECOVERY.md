@@ -21,7 +21,7 @@ is not a queued retry. The port also polls held Space, so holding it through
 the death animation works without depending on Windows key-repeat settings.
 Held Shift/Ctrl are polled as action buttons; a held arrow alone is not.
 Retry keys are consumed until release, rather than becoming a jump/attack
-in the new life. F2, F5 and Alt+Enter retain their host functions.
+in the new life. F2 and Alt+Enter retain their host functions.
 
 At counter 7, the native controller waits for both current and pending sound
 to finish before drawing `Press key to continue` (3:433a; DATA aa96). This is
@@ -132,7 +132,8 @@ Level 1's checkpoint is native room 15, row 0, column 5: **F2 screen 8**, at
 the landing after descending from screen 7. Retry places the Prince at
 `column * 51 + 22` (X=277), with saved facing, restored maximum/full life
 and idle SEQS:2, without replaying the palace window escape. Before the
-checkpoint, retry starts the level normally. F5 always starts a fresh level.
+checkpoint, retry starts the level normally. New Game (Alt+N) clears checkpoints;
+Restart Level (Alt+R) uses the checkpoint when one is active.
 F2 screen jumps seed the latest LEVL checkpoint on the selected route up to
 that screen, so testing the quay does not require another rooftop run. A jump
 back before the checkpoint, to the opening or to the secret screen clears it.

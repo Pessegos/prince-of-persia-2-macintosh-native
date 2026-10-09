@@ -123,5 +123,6 @@ both transitions and the full hold cycle, and the full landing/rise pose
 chain after releasing the final rooftop, with ordinary wall bumps unchanged.
 
 Successful boarding freezes gameplay at a host level-complete screen.
-F2 and F5 remain available. The level-ending movie and level-2 loader are
-not implemented; green tests are not a claim of full original-game parity.
+Dev Mode and the New Game/Restart Level commands remain available. The
+level-ending movie and level-2 loader are not implemented; green tests are
+not a claim of full original-game parity.

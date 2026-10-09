@@ -184,6 +184,7 @@ class ScenePrototype(WindowControls):
         # DrawRestartMessage uses palette index 6; match its displayed RGB.
         hud_text_color = (253, 255, 168, 255)
         self.pause_text = self.ui_font.text("Game Paused", hud_text_color)
+        self.cutscene_pause_text = self.ui_font.text("Cutscene Paused", hud_text_color)
         self.restart_text = self.ui_font.text("Press key to continue", hud_text_color)
         self.sword_shapes = prince["SHAP"]
         self.first_sword_shape_id = int.from_bytes(
@@ -1412,6 +1413,8 @@ class ScenePrototype(WindowControls):
             self.schedule_next_animation()
             return
         if self._combat_controls_locked():
+            # SwordCtrl may turn at a ready pose before the hurt sequence ends.
+            self.resume_combat_turn()
             self.combat.advance_player_recovery()
             self.advance_terrain(old_x, old_bounds)
             self.advance_combat()
@@ -1628,6 +1631,10 @@ class ScenePrototype(WindowControls):
             self.status.set(f"Screen {self.screen_label(self.room_id)}")
         self.combat.player.row = motion.row
         for event in events:
+            if event.kind == "fall":
+                # StartFall 4:4ca8-4cb2 puts the drawn sword away immediately.
+                self.sword_drawn = self.combat.player.sword_drawn = False
+                self.combat.player.recovering = False
             if event.kind in ("land", "death"):
                 if getattr(self, "audio", None) is not None:
                     self.audio.stop_sound(8)
@@ -2201,8 +2208,8 @@ class ScenePrototype(WindowControls):
                 viewport = self.game_menu.draw(viewport, self.ui_font)
             elif self.paused:
                 viewport.paste((0, 0, 0, 255), (0, ROOM_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
-                viewport.paste(self.pause_text, ((VIEWPORT_WIDTH - self.pause_text.width) // 2,
-                                                ROOM_HEIGHT), self.pause_text)
+                text = self.cutscene_pause_text
+                viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, ROOM_HEIGHT), text)
             self.native_viewport = viewport
             self.present_viewport()
             return
