@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 import run_game
+from tests.test_attract import fixture
 
 
 class InstallationTests(unittest.TestCase):
@@ -17,10 +18,14 @@ class InstallationTests(unittest.TestCase):
         for name in run_game.REQUIRED_ASSETS:
             (assets / name).parent.mkdir(parents=True, exist_ok=True)
             (assets / name).touch()
-        (assets / "audio" / "manifest.json").write_text(json.dumps({"schema": 1, "cues": {}}))
+        self.credit_cue = {"file": "credits-10019.wav"}
+        (assets / "audio" / "credits-10019.wav").touch()
+        (assets / "audio" / "manifest.json").write_text(json.dumps({
+            "schema": 1, "cues": {"10019": self.credit_cue}}))
         (assets / "intro.json").write_text(json.dumps({
             "schema": 1, "audio": {}, "operations": [{"op": "wait", "args": [1]}],
         }))
+        (assets / "attract.json").write_text(json.dumps(fixture()))
 
     def test_complete_installation_has_no_errors(self):
         self.assertEqual(run_game.installation_errors(self.project), [])
@@ -32,10 +37,23 @@ class InstallationTests(unittest.TestCase):
 
     def test_missing_prepared_audio_and_corrupt_manifest_request_reimport(self):
         manifest = self.project / "assets" / "audio" / "manifest.json"
-        manifest.write_text(json.dumps({"schema": 1, "cues": {"40": {"file": "cue-40.wav"}}}))
+        manifest.write_text(json.dumps({"schema": 1, "cues": {
+            "40": {"file": "cue-40.wav"}, "10019": self.credit_cue}}))
         self.assertEqual(run_game.missing_assets(self.project), ["audio/cue-40.wav"])
         manifest.write_text("invalid json")
         self.assertIn("needs reimport", " ".join(run_game.missing_assets(self.project)))
+
+    def test_old_installation_requests_demo_import(self):
+        (self.project / "assets" / "attract.json").unlink()
+        self.assertIn("attract.json", run_game.missing_assets(self.project))
+
+    def test_corrupt_demo_requests_reimport(self):
+        (self.project / "assets" / "attract.json").write_text("{}")
+        self.assertIn("attract.json (needs reimport)", run_game.missing_assets(self.project))
+
+    def test_missing_credits_music_requests_reimport(self):
+        (self.project / "assets" / "audio" / "manifest.json").write_text(json.dumps({"schema": 1, "cues": {}}))
+        self.assertIn("attract.json (needs reimport)", run_game.missing_assets(self.project))
 
     def test_old_python_is_rejected_before_opening_a_window(self):
         with patch.object(run_game.sys, "version_info", (3, 9)):

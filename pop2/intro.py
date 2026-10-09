@@ -42,7 +42,7 @@ def read_program(path):
     return data
 
 
-def indexed_shape(data):
+def indexed_shape(data, allow_trailing=False):
     flags, stride, width, height = struct.unpack_from(">HhhH", data)
     if not 0 < width <= 2048 or not 0 < height <= 2048:
         raise ValueError("Invalid intro SHAP dimensions")
@@ -67,7 +67,7 @@ def indexed_shape(data):
             if cursor != end or len(row) != width:
                 raise ValueError("Invalid intro SHAP row")
             pixels.extend(row)
-        if len(body) - cursor not in (0, 2):
+        if not allow_trailing and len(body) - cursor not in (0, 2):
             raise ValueError("Trailing intro SHAP data")
     elif compression == 0 and stride >= width and len(body) == stride * height:
         pixels = b"".join(body[y * stride:y * stride + width] for y in range(height))

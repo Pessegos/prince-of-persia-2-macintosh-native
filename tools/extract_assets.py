@@ -9,6 +9,7 @@ import tempfile
 from tools.extract_enemy_profiles import extract_bytes
 from tools.extract_audio import extract_audio
 from tools.extract_intro import extract_intro
+from tools.extract_attract import extract_attract, extract_credits_music
 from pop2.mac_resources import get_resource_fork, parse_resource_fork
 from pop2.paths import ASSET_DIR
 
@@ -40,7 +41,7 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         ).encode("ascii")
     except (FileNotFoundError, ValueError, KeyError, IndexError, struct.error) as error:
         raise ValueError(f"This is not a supported Macintosh PoP2 disk image: {error}") from error
-    output_dir = Path(output_dir)
+    output_dir = Path(output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".import-", dir=output_dir) as directory:
         staging = Path(directory)
@@ -50,6 +51,10 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         progress("Recovering the original opening scenes...")
         extract_intro(image, program, resources["NIS.rsrc"], staging, progress)
         resources["intro.json"] = (staging / "intro.json").read_bytes()
+        progress("Recovering the original recorded demo and credits...")
+        extract_attract(program, resources, staging, progress)
+        extract_credits_music(image, staging)
+        resources["attract.json"] = (staging / "attract.json").read_bytes()
         # Audio is fully prepared before any installed resources are replaced.
         for path in (staging / "audio").rglob("*"):
             if path.is_file():

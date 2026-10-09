@@ -153,6 +153,10 @@ class ScenePrototype(WindowControls):
         self.with_intro = with_intro
         self.intro = None
         self.intro_assets = None
+        self.demo = None
+        self.attract_data = self.credits_assets = None
+        self.attract_stage = None
+        self.live_combat = None
         self.audio = audio
         self.peaceful = peaceful
         room = build_opening_room(include_curtain=False)
@@ -1351,9 +1355,21 @@ class ScenePrototype(WindowControls):
             self.intro.advance(max(0, now - self.last_intro_at))
             self.last_intro_at = now
             if self.intro.done:
-                self.finish_intro()
+                self.finish_attract_stage()
             elif self.intro.revision != revision:
                 self.render()
+            self.in_animation_tick = False
+            self.schedule_next_animation()
+            return
+        if getattr(self, "demo", None) is not None:
+            now = time.perf_counter()
+            self.demo.advance(max(0, now - self.last_demo_at))
+            self.last_demo_at = now
+            if self.demo.done:
+                self.start_credits()
+            else:
+                self.apply_demo_frame()
+            self.render()
             self.in_animation_tick = False
             self.schedule_next_animation()
             return
@@ -1844,6 +1860,8 @@ class ScenePrototype(WindowControls):
     def start_intro(self):
         from pop2.intro import IntroAssets, IntroPlayer
 
+        self.end_demo()
+        self.attract_stage = "intro"
         if self.intro_assets is None:
             self.intro_assets = IntroAssets()
         if self.audio is not None:
@@ -1853,6 +1871,58 @@ class ScenePrototype(WindowControls):
         self.intro = IntroPlayer(self.intro_assets, self.audio)
         self.last_intro_at = time.perf_counter()
         self.status.set("Introduction")
+
+    def finish_attract_stage(self):
+        if self.attract_stage == "credits":
+            self.start_intro()
+        else:
+            self.start_demo()
+        self.render()
+
+    def start_demo(self):
+        from pop2.attract import DemoEncounter, DemoPlayer, read_attract
+        from pop2.paths import ASSET_DIR
+
+        if self.attract_data is None:
+            self.attract_data = read_attract(ASSET_DIR / "attract.json")
+        self.restart_opening()
+        self.attract_stage = "demo"
+        self.live_combat = self.combat
+        self.combat = DemoEncounter(self.level_map, self.sequence_runtime)
+        self.demo = DemoPlayer(self.attract_data, self.audio)
+        self.last_demo_at = time.perf_counter()
+        self.apply_demo_frame()
+        self.status.set("Demo")
+
+    def apply_demo_frame(self):
+        frame = self.demo.frame
+        self.combat.apply(frame, self.demo.index)
+        self.room_id = frame["room"] - 1
+        if self.room_id not in self.room_cache:
+            self.room_cache[self.room_id] = build_opening_room(include_curtain=False, room_id=self.room_id)
+        room = self.room_cache[self.room_id]
+        self.background, self.foreground = room.background, room.foreground
+        self.terrain_motion = TerrainMotion(self.room_id, self.combat.player.row)
+        self.action, self.player_x = self.sequence_state.action, self.sequence_state.target_x
+        self.sword_drawn = self.combat.player.sword_drawn
+        self.opening.tick = self.demo.index
+        self.opening.active = False
+
+    def end_demo(self):
+        self.demo = None
+        if getattr(self, "live_combat", None) is not None:
+            self.combat, self.live_combat = self.live_combat, None
+
+    def start_credits(self):
+        from pop2.attract import CreditsAssets, CreditsPlayer
+
+        self.end_demo()
+        if self.credits_assets is None:
+            self.credits_assets = CreditsAssets(self.attract_data)
+        self.attract_stage = "credits"
+        self.intro = CreditsPlayer(self.credits_assets, self.audio)
+        self.last_intro_at = time.perf_counter()
+        self.status.set("Credits")
 
     def new_game(self):
         self.restart_opening(play_sound=not self.with_intro)
@@ -1866,6 +1936,8 @@ class ScenePrototype(WindowControls):
         self.pause_resume_keys.update(held)
 
     def restart_opening(self, _event=None, play_sound=True):
+        self.end_demo()
+        self.attract_stage = None
         self.intro = None
         audio = getattr(self, "audio", None)
         if audio is not None:
@@ -1950,6 +2022,8 @@ class ScenePrototype(WindowControls):
             x = columns[len(columns) // 2] * TILE_WIDTH + 14
         if not 0 <= x < ROOM_WIDTH:
             raise ValueError("X must be between 0 and 509")
+        self.end_demo()
+        self.attract_stage = None
         self.intro = None
         self.clear_keys(None)
         self.death = DeathState()
@@ -2049,7 +2123,7 @@ class ScenePrototype(WindowControls):
         self.advance_animation()
 
     def current_animation_interval_ms(self):
-        if getattr(self, "intro", None) is not None:
+        if getattr(self, "intro", None) is not None or getattr(self, "demo", None) is not None:
             return 1000 / 60
         interval_ms = animation_interval_for_frame(
             self.sequence_state.sequence_id, self.sequence_state.action)
@@ -2067,6 +2141,9 @@ class ScenePrototype(WindowControls):
             self.next_animation_at = self.last_intro_at + self.intro.next_update_delay()
             # A zero-delay chain starves Tk's idle redraws when fullscreen
             # presentation costs more than the fade/dissolve frame budget.
+            delay_ms = max(1, math.ceil((self.next_animation_at - now) * 1000))
+        elif getattr(self, "demo", None) is not None:
+            self.next_animation_at = self.last_demo_at + self.demo.next_update_delay()
             delay_ms = max(1, math.ceil((self.next_animation_at - now) * 1000))
         else:
             self.next_animation_at, delay_ms = next_animation_deadline(
@@ -2144,7 +2221,8 @@ class ScenePrototype(WindowControls):
             ), curtain)
         combat = getattr(self, "combat", None)
         frame = Image.alpha_composite(frame, self.foreground)
-        if combat is not None and not getattr(self, "peaceful", False):
+        hide_guards = getattr(self, "peaceful", False) and getattr(self, "demo", None) is None
+        if combat is not None and not hide_guards:
             for guard in combat.visible_guards():
                 layer = Image.new("RGBA", frame.size)
                 self.guard_art.draw(layer, guard.state, floor_y(guard.row), guard.palette_variant)
@@ -2186,7 +2264,7 @@ class ScenePrototype(WindowControls):
                                      self.sequence_state, player_bounds, self.frames[self.action])
 
         if combat is not None:
-            for guard in (() if getattr(self, "peaceful", False) else combat.visible_guards()):
+            for guard in (() if hide_guards else combat.visible_guards()):
                 layer = Image.new("RGBA", frame.size)
                 self.hit_art.draw(layer, guard.state, floor_y(guard.row))
                 bounds = self.guard_art.bounds(guard.state, floor_y(guard.row))
@@ -2206,7 +2284,7 @@ class ScenePrototype(WindowControls):
         viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
         viewport.paste(frame, (ROOM_ORIGIN_X, 0))
         if combat is not None and not self.death.prompt_visible:
-            self.health_art.draw(viewport, combat, show_opponent=not getattr(self, "peaceful", False))
+            self.health_art.draw(viewport, combat, show_opponent=not hide_guards)
         hud_text = (self.pause_text if self.paused else
                     self.restart_text if self.death.prompt_visible else None)
         if hud_text is not None and self.dev_menu is None and self.game_menu is None:

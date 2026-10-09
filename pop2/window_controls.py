@@ -191,6 +191,8 @@ class WindowControls:
             elapsed = now - self.pause_started_at
             if getattr(self, "intro", None) is not None:
                 self.last_intro_at = now
+            if getattr(self, "demo", None) is not None:
+                self.last_demo_at = now
             if self.combat is not None and self.combat.last_guard_at is not None:
                 self.combat.last_guard_at += elapsed
             self.pause_started_at = None
@@ -415,7 +417,15 @@ class WindowControls:
             if getattr(self, "intro", None) is not None:
                 if event.keysym in ("Escape", "F2", "F5"):
                     return None
-                if event.keysym == "space" and not repeated and not alt and not event.state & (0x4 | 0x40):
+                if (not repeated and not alt and not event.state & (0x4 | 0x40)
+                        and (event.keysym == "space" or (getattr(self, "attract_stage", None) == "credits"
+                             and is_resume_key(event, self.window_keys_down)))):
+                    self.finish_intro()
+                return "break"
+            if getattr(self, "demo", None) is not None:
+                if event.keysym in ("Escape", "F2", "F5"):
+                    return None
+                if not repeated and not alt and is_resume_key(event, self.window_keys_down):
                     self.finish_intro()
                 return "break"
             if (not self.paused and self.death.counter >= 0
@@ -450,7 +460,7 @@ class WindowControls:
             return "break"
         if self.modal_open():
             return "break"
-        if getattr(self, "intro", None) is not None:
+        if getattr(self, "intro", None) is not None or getattr(self, "demo", None) is not None:
             return "break"
         return None
 

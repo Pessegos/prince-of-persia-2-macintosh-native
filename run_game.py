@@ -17,6 +17,7 @@ REQUIRED_ASSETS = (
     "NIS.rsrc",
     "Title.rsrc",
     "intro.json",
+    "attract.json",
     "enemy_profiles.json",
     "audio/manifest.json",
 )
@@ -77,6 +78,18 @@ def missing_assets(project=PROJECT):
                     raise ValueError("Intro audio is incomplete")
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append("intro.json (needs reimport)")
+    attract_path = project / "assets" / "attract.json"
+    if attract_path.is_file():
+        from pop2.attract import read_attract
+
+        try:
+            attract = read_attract(attract_path)
+            if manifest_path.is_file():
+                cues = json.loads(manifest_path.read_text(encoding="ascii"))["cues"]
+                if not cues.get(str(attract["credits"]["song"]), {}).get("file"):
+                    raise ValueError("Credits music is incomplete")
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            missing.append("attract.json (needs reimport)")
     return missing
 
 

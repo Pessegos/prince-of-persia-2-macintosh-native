@@ -26,6 +26,14 @@ class AssetImportTests(unittest.TestCase):
         self.intro.side_effect = lambda _image, _program, _nis, directory, _progress: (
             directory / "intro.json").write_bytes(b"prepared intro")
         self.addCleanup(intro.stop)
+        attract = patch.object(extract_assets, "extract_attract")
+        self.attract = attract.start()
+        self.attract.side_effect = lambda _program, _resources, directory, _progress: (
+            directory / "attract.json").write_bytes(b"prepared attract cycle")
+        self.addCleanup(attract.stop)
+        credits_music = patch.object(extract_assets, "extract_credits_music")
+        credits_music.start()
+        self.addCleanup(credits_music.stop)
 
     def fork(self, _image, name, file_type="rsrc"):
         self.assertEqual(file_type, "APPL" if name == "Prince of Persia 2" else "rsrc")
@@ -41,7 +49,7 @@ class AssetImportTests(unittest.TestCase):
             patch.object(extract_assets, "extract_bytes", return_value=self.profiles) as profiles,
         ):
             files = extract_assets.extract_assets(self.image, self.output)
-        self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json"})
+        self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json", "attract.json"})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
         for name in extract_assets.RESOURCE_FILES:
             self.assertEqual((self.output / name).read_bytes(), self.forks[name])
@@ -150,6 +158,21 @@ class AssetImportTests(unittest.TestCase):
             patch.object(extract_assets, "parse_resource_fork", side_effect=self.resource_types),
             patch.object(extract_assets, "extract_bytes", return_value=self.profiles),
             self.assertRaisesRegex(ValueError, "Unsupported opening coordinator"),
+        ):
+            extract_assets.extract_assets(self.image, self.output)
+        self.assertEqual(old.read_bytes(), b"existing game")
+        self.assertEqual(list(self.output.iterdir()), [old])
+
+    def test_demo_failure_preserves_existing_installation(self):
+        self.output.mkdir()
+        old = self.output / "Prince.rsrc"
+        old.write_bytes(b"existing game")
+        self.attract.side_effect = ValueError("Invalid recorded demo")
+        with (
+            patch.object(extract_assets, "get_resource_fork", side_effect=self.fork),
+            patch.object(extract_assets, "parse_resource_fork", side_effect=self.resource_types),
+            patch.object(extract_assets, "extract_bytes", return_value=self.profiles),
+            self.assertRaisesRegex(ValueError, "Invalid recorded demo"),
         ):
             extract_assets.extract_assets(self.image, self.output)
         self.assertEqual(old.read_bytes(), b"existing game")

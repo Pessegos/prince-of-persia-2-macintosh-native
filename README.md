@@ -57,6 +57,7 @@ in `assets/`:
 - `NIS.rsrc` and `Title.rsrc`
 - `enemy_profiles.json`
 - `intro.json` (recovered scene instructions and audio markers)
+- `attract.json` (original level-one demo and credits program)
 - `audio/` (original samples, voices, instruments and prepared music)
 
 The same import can be performed without a file picker:
@@ -67,19 +68,21 @@ The same import can be performed without a file picker:
 
 The importer leaves the disk image unchanged and does not retain the game
 executable or any ROM or system files. Generated game files are ignored by Git.
-Existing installations without intro resources will ask for the disk image once more.
+Existing installations without the demo resources will ask for the disk image once more.
 Music is prepared during import using the bundled `smssynth` renderer and the
 game's Macintosh instruments, not a General MIDI sound bank. Playback uses SDL
 through pygame; the game does not generate diagnostic recordings.
 The importer uses Unicorn to recover the opening coordinator's drawing and
-timing calls. The game itself plays the resulting scene program natively,
-without a CPU emulator or the original executable.
+timing calls and resolve the original recorded demo into actor states. The game
+itself plays the resulting data natively, without a CPU emulator or the original
+executable. Demo recovery adds time to the first import, not to later launches.
 
 ## Controls
 
 | Key | Action |
 | --- | --- |
 | Space during intro | Skip to level 1 |
+| Gameplay key during demo or credits | Start a new game |
 | Left / Right | Run, turn, or move in sword mode |
 | Shift + Left / Right | Careful step |
 | Up | Jump, climb, or block in sword mode |
@@ -117,6 +120,7 @@ Screen jumps also set the latest checkpoint along the selected route.
 The level-1 route is playable from the palace window to boarding the ship.
 
 - Original opening story, animated title, palace scenes, music and voices.
+- Original level-one autoplay demo, credits and looping opening.
 - Ten level-1 route screens and the right-hand secret room.
 - Window escape, locomotion, ledge movement, sword combat and rooftop guards.
 - Harbor scenery, water falls and the departing ship's original boarding sequence.
@@ -136,7 +140,7 @@ the recovered rules do not yet cover every original collision or input branch.
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m ruff check --select F,E9 .
-python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_intro tests.test_audio tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests
+python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests
 python -m tools.recovery_catalog --check
 ```
 
@@ -179,6 +183,7 @@ vendor/             Import-time MIDI renderer and its license notices
 [harbor and ship notes](docs/HARBOR_RECOVERY.md),
 [audio notes](docs/AUDIO_RECOVERY.md), [death/checkpoint notes](docs/REBIRTH_RECOVERY.md),
 [intro notes](docs/INTRO_RECOVERY.md),
+[demo and credits notes](docs/ATTRACT_RECOVERY.md),
 [game commands](docs/GAME_COMMANDS.md),
 [development history](docs/DEVELOPMENT_HISTORY.md).
 
