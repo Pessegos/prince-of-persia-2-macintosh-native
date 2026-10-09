@@ -3,6 +3,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
+from PIL import Image
+
 from pop2.paths import ASSET_DIR
 
 
@@ -95,14 +97,30 @@ class AttractSceneTests(unittest.TestCase):
             scene.close_dev_mode()
             scene.dev_key_release(SimpleNamespace(keysym="F2"))
 
-    def test_cutscene_pause_uses_hud_position_without_backing_bar(self):
+    def test_cutscene_pause_dims_the_frame_and_centers_text_without_a_panel(self):
         scene = self.scene
-        expected = scene.native_viewport.copy()
+        original = scene.native_viewport.copy()
+        expected = Image.alpha_composite(
+            original, Image.new("RGBA", original.size, (0, 0, 0, 100)))
         text = scene.cutscene_pause_text
         ink = text.getbbox()
-        position = ((512 - text.width) // 2, 365 + (19 - (ink[3] - ink[1])) // 2 - ink[1])
-        expected.paste(text, position, text)
+        x, y = (512 - text.width) // 2, (384 - (ink[3] - ink[1])) // 2 - ink[1]
+        expected.paste((0, 0, 0, 255),
+                       (x + 1, y + 1, x + 1 + text.width, y + 1 + text.height), text)
+        expected.paste(text, (x, y), text)
         scene.set_paused(True)
+        self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
+        scene.render()
+        self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
+        scene.set_paused(False)
+        self.assertEqual(scene.native_viewport.tobytes(), original.tobytes())
+
+    def test_cutscene_pause_does_not_double_dim_the_command_menu(self):
+        scene = self.scene
+        original = scene.native_viewport.copy()
+        scene.set_paused(True)
+        scene.open_game_menu()
+        expected = scene.game_menu.draw(original, scene.ui_font)
         self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
 
     def test_every_imported_playback_part_can_be_selected_without_live_ai_updates(self):

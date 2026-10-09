@@ -2255,10 +2255,15 @@ class ScenePrototype(WindowControls):
                 self.refresh_game_menu()
                 viewport = self.game_menu.draw(viewport, self.ui_font)
             elif self.paused:
+                viewport = Image.alpha_composite(
+                    viewport, Image.new("RGBA", viewport.size, (0, 0, 0, 100)))
                 text = self.cutscene_pause_text
                 ink = text.getbbox()
-                y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
-                viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, y), text)
+                x = (VIEWPORT_WIDTH - text.width) // 2
+                y = (VIEWPORT_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
+                viewport.paste((0, 0, 0, 255),
+                               (x + 1, y + 1, x + 1 + text.width, y + 1 + text.height), text)
+                viewport.paste(text, (x, y), text)
             self.native_viewport = viewport
             self.present_viewport()
             return
