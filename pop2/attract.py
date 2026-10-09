@@ -56,8 +56,9 @@ def actor_state(words, actor_type):
                          current_x=x, target_x=x, current_y=words[3] - floor_y(row),
                          facing=int(words[1] == 0), animation_state=words[8],
                          actor_type=actor_type, level_kind=5, callback_flag=words[12],
-                         horizontal_velocity=words[9], vertical_velocity=words[4],
-                         special_flag=words[26], engine_counter=words[27])
+                         horizontal_velocity=words[9], vertical_velocity=words[10],
+                         special_flag=words[26], engine_counter=words[27],
+                         selected_sequence_id=words[20])
 
 
 @dataclass
@@ -149,6 +150,19 @@ class DemoPlayer:
     def next_update_delay(self):
         return max(0, self.deadline - self.time)
 
+    def seek_frame(self, index):
+        if not 0 <= index < len(self.frames):
+            raise ValueError("Demo part is outside the recording")
+        self.index, self.done = index, False
+        self.time = sum(frame["ticks"] for frame in self.frames[:index]) / MAC_TICKS_PER_SECOND
+        self.deadline = self.time + self.frame["ticks"] / MAC_TICKS_PER_SECOND
+        if self.audio is not None:
+            self.audio.reset()
+            player = self.frame["actors"][5]
+            self.audio.ambient(self.frame["room"] - 1, player[7], max(0, min(9, player[6])),
+                               player[13] == 1, player[15] > 0)
+            self.audio.flush()
+
 
 class CreditsAssets:
     def __init__(self, data, directory=ASSET_DIR):
@@ -238,3 +252,19 @@ class CreditsPlayer:
 
     def next_update_delay(self):
         return 1 / MAC_TICKS_PER_SECOND
+
+    def seek_page(self, index, audio=None):
+        if not 0 <= index < len(self.assets.pages):
+            raise ValueError("Credits page is outside the scene program")
+        program = self.assets.program
+        self.time = (program["fade_ticks"] + index *
+                     (program["hold_ticks"] + program["dissolve_ticks"])) / MAC_TICKS_PER_SECOND
+        self.done = False
+        self.advance(0)
+        if audio is not None:
+            audio.reset()
+            audio.play_intro(program["song"], 0, offset=self.time)
+
+    @property
+    def page_index(self):
+        return self._signature[0]

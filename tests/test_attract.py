@@ -54,8 +54,10 @@ class AttractDataTests(unittest.TestCase):
     def test_actor_projection_uses_native_coordinates_and_facing(self):
         words = fixture()["frames"][0]["actors"][5]
         words[1], words[18] = -1, 14
+        words[4], words[10], words[19], words[20] = 0, 28, 205, 94
         state = actor_state(words, 0)
         self.assertEqual((state.target_x, state.current_y, state.facing, state.cursor), (349, 0, 0, 7))
+        self.assertEqual((state.vertical_velocity, state.sequence_id, state.source_sequence_id), (28, 205, 94))
 
     def test_read_only_encounter_projects_neighbor_without_mutating_actor(self):
         data = fixture()["frames"][0]
@@ -86,6 +88,26 @@ class AttractDataTests(unittest.TestCase):
 
 
 class DemoClockTests(unittest.TestCase):
+    def test_seek_uses_recorded_clock_without_replaying_skipped_effects(self):
+        data = fixture()
+        data["frames"] = [deepcopy(data["frames"][0]) for _ in range(4)]
+        data["frames"][1]["ticks"] = 6
+        data["frames"][1]["sounds"] = [["sound", 7, 0]]
+        audio = Mock()
+        demo = DemoPlayer(data, audio)
+        audio.reset_mock()
+        demo.seek_frame(2)
+        self.assertAlmostEqual(demo.time, 11 / MAC_TICKS_PER_SECOND)
+        self.assertEqual(demo.index, 2)
+        self.assertFalse(demo.done)
+        audio.reset.assert_called_once()
+        audio.add_sound.assert_not_called()
+        audio.ambient.assert_called_once()
+        demo.advance(4 / MAC_TICKS_PER_SECOND)
+        self.assertEqual(demo.index, 2)
+        demo.advance(1 / MAC_TICKS_PER_SECOND)
+        self.assertEqual(demo.index, 3)
+
     def test_clock_and_audio_are_independent_of_host_frame_step(self):
         data = fixture()
         data["frames"] = [deepcopy(data["frames"][0]) for _ in range(3)]
@@ -112,6 +134,17 @@ class DemoClockTests(unittest.TestCase):
 
 
 class CreditsClockTests(unittest.TestCase):
+    def test_seek_reaches_each_page_and_resumes_music_at_its_scene_time(self):
+        assets = self.assets()
+        player, audio = CreditsPlayer(assets), Mock()
+        for index in range(4):
+            player.seek_page(index, audio)
+            self.assertEqual(player.page_index, index)
+            self.assertEqual(player.display.tobytes(), assets.pages[index].tobytes())
+            self.assertFalse(player.done)
+            audio.play_intro.assert_called_with(10019, 0, offset=player.time)
+            self.assertAlmostEqual(player.next_update_delay(), 1 / MAC_TICKS_PER_SECOND)
+
     def assets(self):
         return SimpleNamespace(program=fixture()["credits"], palette=[(i, i, i) for i in range(256)],
                                pages=[Image.new("L", (512, 384), value) for value in (25, 50, 75, 100)])

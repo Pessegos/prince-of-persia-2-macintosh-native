@@ -56,8 +56,7 @@ class OpeningEscape:
         return index if index < len(GLASS_POSITIONS) else None
 
     def _jump_sequence(self, sequence_id):
-        self.state.sequence_id = sequence_id
-        self.state.cursor = 0
+        self.state.select(sequence_id)
 
     def advance(self):
         if not self.active:

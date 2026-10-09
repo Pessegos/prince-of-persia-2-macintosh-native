@@ -168,8 +168,7 @@ def select_sequence(fighter, sequence_id, offset=0):
     state = fighter.state
     state.target_x += offset if state.facing else -offset
     state.current_x = state.target_x
-    state.sequence_id = sequence_id
-    state.cursor = 0
+    state.select(sequence_id)
 
 
 class CombatEncounter:
@@ -398,7 +397,7 @@ class CombatEncounter:
         state = player.state
         if (guard is None or not player.alive or not guard.alive
                 or not player.sword_drawn or not player.targetable
-                or not guard.targetable or guard.alert_mode < 1
+                or not guard.targetable or guard.alert_mode < 2
                 or state.animation_state >= 2
                 or player.room != guard.room or player.row != guard.row):
             return False

@@ -76,6 +76,12 @@ class CueTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "import the game again"):
             self.audio.play_intro(25010, 0)
 
+    def test_seek_offset_is_forwarded_without_losing_pause(self):
+        self.audio.pause(True)
+        self.audio.play_intro(40, 0, offset=2.5)
+        self.playback.play.assert_called_with("music", 40, offset=2.5)
+        self.playback.pause.assert_called_with(True)
+
     def test_pending_effect_uses_priority_and_current_effect_rejects_lower_priority(self):
         audio = self.audio
         audio.add_sound(294)
@@ -313,6 +319,24 @@ class SdlPlaybackTests(unittest.TestCase):
                     self.assertFalse(playback.busy("music"))
                 finally:
                     playback.close()
+
+
+class MixerSeekTests(unittest.TestCase):
+    def test_pcm_offset_is_aligned_to_whole_sample_frames(self):
+        playback = MixerPlayback.__new__(MixerPlayback)
+        playback.mixer = Mock()
+        playback.mixer.get_init.return_value = (48000, -16, 2)
+        original = Mock()
+        pcm = bytes(range(256)) * 1000
+        original.get_raw.return_value = pcm
+        playback.sounds = {40: original}
+        channel = Mock()
+        playback.channels = {"music": channel}
+        playback.play("music", 40, offset=.25)
+        playback.mixer.Sound.assert_called_once_with(buffer=pcm[48000:])
+        channel.play.assert_called_once_with(playback.mixer.Sound.return_value)
+        playback.play("music", 40, offset=100)
+        channel.stop.assert_called_once()
 
 
 if __name__ == "__main__":

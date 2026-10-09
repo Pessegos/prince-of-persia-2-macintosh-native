@@ -19,5 +19,5 @@ jobs:
       - run: python -m ruff check --select F,E9 .
       - run: python run_game.py --check-dependencies
       - name: Tests without original game files
-        run: python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests tests.test_palettes
+        run: python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_playback_navigation tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests tests.test_palettes
       - run: python -m tools.recovery_catalog --check

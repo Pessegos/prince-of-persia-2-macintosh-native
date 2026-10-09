@@ -100,19 +100,19 @@ class OpeningEscapeTests(unittest.TestCase):
         reference = self.opening()
         self.assertEqual(vars(opening.state), vars(reference.state))
 
-    def test_velocity_opcode_adds_and_caps_without_moving_actor(self):
+    def test_velocity_opcode_assigns_without_moving_actor(self):
         state = SequenceState(1, horizontal_velocity=23, vertical_velocity=62)
         runtime = SequenceRuntime({1: (-8, 6, 15, 106, -23)}, state)
         runtime.next_frame()
-        self.assertEqual((state.horizontal_velocity, state.vertical_velocity), (24, 63))
+        self.assertEqual((state.horizontal_velocity, state.vertical_velocity), (6, 15))
         self.assertEqual((state.target_x, state.current_y), (0, 0))
         self.assertEqual(state.sequence_events, [(-8, (6, 15))])
 
-    def test_terminal_fall_velocity_prevents_horizontal_acceleration(self):
+    def test_velocity_assignment_can_replace_terminal_fall_speed(self):
         state = SequenceState(1, horizontal_velocity=8, vertical_velocity=63)
         runtime = SequenceRuntime({1: (-8, 6, 15, 106, -23)}, state)
         runtime.next_frame()
-        self.assertEqual((state.horizontal_velocity, state.vertical_velocity), (8, 63))
+        self.assertEqual((state.horizontal_velocity, state.vertical_velocity), (6, 15))
 
 
 if __name__ == "__main__":

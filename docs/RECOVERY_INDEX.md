@@ -38,6 +38,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Host single-command buffer; legal pose transitions; held repeat | 6:0c32, 1014, 11e4; 4:3e84 | T/A: tested transitions; host buffer is not the complete native per-direction -1/0/1 input state | scene_prototype / test_animation_data |
 | Five unarmed / six armed Macintosh ticks | 2:68c8 | T: timer branch | scene_prototype / test_animation_data |
 | Original pose chains, offsets and attachments | FRAM/AFRM/SEQS/SHAP; 4:2c0c | T: used interpreter operations; others fail explicitly | sequence_runtime / test_animation_data |
+| Selected SEQS survives -1 links; -8 assigns velocity with 10000 sentinel | 6:0006; 4:2ec2, 2ff4-3018 | T: hurt/turn allowance and repeat sword-retreat catch; -9 is a separate additive opcode | sequence_runtime/terrain / test_animation_data, test_terrain |
 | Supporting-foot tile, signed column/row | 4:3a72, 3ad6, 3afa | T: ordinary actors | terrain / test_terrain |
 | Floor checks require FRAM 0x40 | 4:35ba | T: ordinary rooftop subset | terrain / test_terrain |
 | Fresh forward press, solid barrier type 1, distance <27 | 6:11a0-11d6 | T: short step without Shift; strict threshold | scene_prototype / test_game_ui |
@@ -100,7 +101,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Audio cue arbitration, source samples and rooftop music pool | CODE:5; DATA; INST/snd; MIDISnd/DigiSnd | T/A: ordinary level-1 subset; original instruments with host sampler, not bit-exact Mac MIDI driver | audio, audio_formats, extract_audio / test_audio, test_extract_audio, test_audio_integration |
 | LEVL checkpoint trigger and restored start | LEVL:39a6; 2:6b46/1674/19ba/5d50 | T: level-1 foot/cell trigger, native anchor, facing/full life and opponent/generator snapshot; dynamic normalization/story pipeline P | rebirth, scene_prototype / test_rebirth |
 | F2 screen jumps seed the latest route checkpoint from LEVL | host feature | T: route order rather than slot order; earlier/secret jumps and New Game clear it; not an original activation rule | scene_prototype / test_rebirth |
-| In-game F2 menu, peaceful scene, ordinary-key pause resume, Windows fullscreen | host features | T: font, modal input, attract-cycle Dev Mode exclusion, modifier/media/navigation/system-shortcut exclusions, held-key consumption and focus reset; not recovered Mac gameplay rules | window_controls/game_ui / test_game_ui, test_development_menu, test_attract_scene |
+| In-game F2 menu, peaceful scene, ordinary-key pause resume, Windows fullscreen | host features | T: Level/Playback/Display tabs, attract-cycle level-control exclusion, sample-offset seeking, centered cutscene pause, optional debug bar, modifier/media/navigation/system-shortcut exclusions, held-key consumption and focus reset; not recovered Mac gameplay rules | window_controls/game_ui / test_game_ui, test_development_menu, test_attract_scene |
 
 ## Corpse Visibility
 

@@ -65,6 +65,9 @@ class WindowControls:
         self.canvas.bind("<Button-2>", self.dev_click)
         self.canvas.bind("<Button-3>", self.dev_click)
         self.canvas.bind("<Motion>", self.dev_hover)
+        self.canvas.bind("<MouseWheel>", self.dev_scroll)
+        self.canvas.bind("<Button-4>", self.dev_scroll)
+        self.canvas.bind("<Button-5>", self.dev_scroll)
         # Menu input runs before gameplay bindings, without a second window.
         for widget in (self.root, self.canvas):
             widget.bindtags(("DevelopmentInput", *widget.bindtags()))
@@ -75,7 +78,7 @@ class WindowControls:
         self.status_label = tk.Label(
             self.root, textvariable=self.status, anchor="w", padx=6
         )
-        self.status_label.pack(fill="x")
+        self.debug_status = False
 
         self.root.bind(
             "<KeyPress-Left>", lambda event: self.horizontal_key(event, -1, True)
@@ -214,7 +217,7 @@ class WindowControls:
             if self.windowed_state == "normal":
                 self.root.geometry(self.windowed_geometry)
             self.root.state(self.windowed_state)
-            self.status_label.pack(fill="x")
+            self.update_status_visibility()
         self.root.after_idle(self.present_viewport)
         return "break"
 
@@ -240,8 +243,13 @@ class WindowControls:
         was_paused = self.game_was_paused if self.game_menu is not None else self.paused
         self.game_menu = None
         self.dev_menu = DevelopmentMenu(
-            screens, screens.index(current) if current in entries else 0, self.peaceful
+            screens, screens.index(current) if current in entries else 0, self.peaceful,
+            sections=tuple(part.label for part in self.development_parts()),
+            section_index=self.current_playback_part(), debug_status=self.debug_status,
+            level_available=self.level_navigation_available(),
         )
+        if not self.dev_menu.level_available:
+            self.dev_menu.change_tab(1)
         self.dev_was_paused = was_paused
         self.set_paused(True)
         self.clear_keys(None)
@@ -265,7 +273,7 @@ class WindowControls:
             return
         if action == "resume":
             self.close_dev_mode()
-        elif action == "go":
+        elif action == "go" and self.level_navigation_available():
             try:
                 self.jump_to_screen(self.dev_menu.screen)
             except ValueError as exc:
@@ -273,8 +281,19 @@ class WindowControls:
                 self.render()
                 return
             self.close_dev_mode()
-        elif action == "peaceful":
+        elif action == "peaceful" and self.level_navigation_available():
             self.set_peaceful(self.dev_menu.peaceful)
+        elif action in ("seek", "next_part"):
+            parts = self.development_parts()
+            if not parts:
+                return
+            index = (self.dev_menu.section_index + int(action == "next_part")) % len(parts)
+            self.seek_playback_part(parts[index])
+            self.close_dev_mode()
+        elif action == "debug_status":
+            self.debug_status = self.dev_menu.debug_status
+            self.update_status_visibility()
+            self.render()
         else:
             self.render()
 
@@ -282,8 +301,17 @@ class WindowControls:
         return self.dev_menu is not None or self.game_menu is not None
 
     def development_available(self):
-        return (self.level_map is not None and getattr(self, "intro", None) is None
+        return self.level_map is not None
+
+    def level_navigation_available(self):
+        return (self.development_available() and getattr(self, "intro", None) is None
                 and getattr(self, "demo", None) is None)
+
+    def update_status_visibility(self):
+        if self.debug_status and not self.fullscreen:
+            self.status_label.pack(fill="x")
+        else:
+            self.status_label.pack_forget()
 
     def refresh_game_menu(self):
         if self.game_menu is not None:
@@ -382,6 +410,10 @@ class WindowControls:
         self.window_keys_down.add(event.keysym)
         if event.keysym == "F5" or event.keysym == "F2" and not self.development_available():
             return "break"
+        if event.keysym == "F2":
+            if not repeated:
+                self.open_dev_mode(event)
+            return "break"
         if event.keysym in self.pause_resume_keys:
             return "break"
         fullscreen_key = event.keysym == "Return" and event.state & (0x8 | 0x20000)
@@ -403,8 +435,6 @@ class WindowControls:
                 self.pause_resume_keys.add(event.keysym)
             return "break"
         if self.game_menu is not None:
-            if event.keysym == "F2" and self.game_menu.page != "confirm":
-                return None
             if event.keysym == "Escape":
                 return self.escape_key(event)
             if alt or event.state & (0x4 | 0x40):
@@ -441,8 +471,6 @@ class WindowControls:
                     and not fullscreen_key):
                 self.restart_after_death()
                 return "break"
-            return None
-        if event.keysym == "F2":
             return None
         if event.keysym == "Escape":
             return self.escape_key(event)
@@ -497,6 +525,19 @@ class WindowControls:
             point = self.dev_pointer(event)
             if point is not None and menu.hover(*point):
                 self.render()
+
+    def dev_scroll(self, event):
+        if self.dev_menu is None or not self.dev_menu.dropdown:
+            return None
+        point = self.dev_pointer(event)
+        if point is not None and self.dev_menu.hit(*point) is not None:
+            delta = getattr(event, "delta", 0)
+            steps = (-max(1, abs(delta) // 120) if delta > 0 else
+                     max(1, abs(delta) // 120) if delta < 0 else
+                     -1 if getattr(event, "num", None) == 4 else 1)
+            self.dev_menu.scroll(steps)
+            self.render()
+        return "break"
 
     def set_peaceful(self, peaceful):
         self.peaceful = peaceful

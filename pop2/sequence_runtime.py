@@ -32,6 +32,16 @@ class SequenceState:
     engine_counter: int = 0
     horizontal_velocity: int = 0
     vertical_velocity: int = 0
+    selected_sequence_id: int | None = None
+
+    @property
+    def source_sequence_id(self):
+        return self.sequence_id if self.selected_sequence_id is None else self.selected_sequence_id
+
+    def select(self, sequence_id):
+        # JumpSeq resets both IDs; an AnimChar -1 link changes only the current ID.
+        self.sequence_id = self.selected_sequence_id = sequence_id
+        self.cursor = 0
 
 
 @dataclass(frozen=True)
@@ -74,6 +84,8 @@ class SequenceRuntime:
             ) from error
 
     def next_frame(self):
+        if self.state.selected_sequence_id is None:
+            self.state.selected_sequence_id = self.state.sequence_id
         for _ in range(self.max_operations_per_frame):
             opcode_cursor = self.state.cursor
             opcode = self._next_word()
@@ -106,19 +118,12 @@ class SequenceRuntime:
                 first = self._next_operand(opcode, opcode_cursor)
                 second = self._next_operand(opcode, opcode_cursor)
                 self.state.sequence_events.append((opcode, (first, second)))
-                # AnimChar, CODE:4 0x2cec-0x2d4e: additive, capped fall velocity.
-                if (
-                    first
-                    and self.state.horizontal_velocity < 24
-                    and self.state.vertical_velocity < 63
-                ):
-                    self.state.horizontal_velocity = min(
-                        24, self.state.horizontal_velocity + first
-                    )
-                if second and self.state.vertical_velocity < 63:
-                    self.state.vertical_velocity = min(
-                        63, self.state.vertical_velocity + second
-                    )
+                # AnimChar 4:2ff4-3018 sets velocity; 10000 keeps that axis.
+                # The additive operation at 4:2cd6 is -9, not -8.
+                if first != 10000:
+                    self.state.horizontal_velocity = first
+                if second != 10000:
+                    self.state.vertical_velocity = second
             elif opcode == -10:
                 callback_id = self._next_operand(opcode, opcode_cursor)
                 self.state.sequence_events.append((opcode, (callback_id,)))

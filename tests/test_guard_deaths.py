@@ -111,12 +111,14 @@ class GuardDeathTests(unittest.TestCase):
         encounter, guard = self.encounter(x=300)
         encounter._hurt("guard", guard, encounter.player)
         positions, poses = [], []
-        for _ in range(12):
+        for _ in range(13):
             positions.append(floor_y(guard.row) + guard.state.current_y)
             poses.append(guard.state.action)
             self.fixture.tick(encounter)
             self.assertFalse(guard.targetable)
-        self.assertEqual(positions, [226, 231, 250, 281, 328, 373, 427, 490, 553, 616, 679, 730])
+        # CODE 4:2c0c/341a/3464: SEQS:207 replaces velocity with 44,
+        # then gravity adds six. It does not add 44 to the previous speed.
+        self.assertEqual(positions, [226, 231, 250, 281, 328, 373, 427, 490, 540, 596, 658, 721, 730])
         self.assertEqual(poses[:9], [213, 214, 215, 216, 217, 218, 217, 218, 217])
         self.assertEqual((guard.room, guard.state.action), (9, 185))
         x = guard.state.target_x

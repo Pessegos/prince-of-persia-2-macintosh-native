@@ -183,7 +183,7 @@ class LevelMap:
                 break
         if allowance is None:
             return 0
-        if state.sequence_id == 94:
+        if state.source_sequence_id == 94:
             allowance += 22
         elif state.action == 207:
             allowance += TILE_WIDTH
@@ -428,8 +428,7 @@ class RooftopPhysics:
 
     @staticmethod
     def select(runtime, sequence):
-        runtime.state.sequence_id = sequence
-        runtime.state.cursor = 0
+        runtime.state.select(sequence)
         runtime.next_frame()
 
     def cut_horizontal(self, motion, state, bounds):
@@ -486,9 +485,9 @@ class RooftopPhysics:
             sequence = 19
         elif 150 <= state.action < 180:
             if state.actor_type == 2:
-                sequence = 83 if state.sequence_id in (86, 67, 108, 94) else 82
+                sequence = 83 if state.source_sequence_id in (86, 67, 108, 94) else 82
             else:
-                sequence = 95 if state.action == 153 or state.sequence_id in (56, 94) else 81
+                sequence = 95 if state.action == 153 or state.source_sequence_id in (56, 94) else 81
         elif state.actor_type == 2 and state.sequence_id == 100:
             sequence = 186
         motion.row += 1
@@ -530,6 +529,7 @@ class RooftopPhysics:
                 # apply SEQS:22's +6 X offset to this direct native assignment.
                 state.vertical_velocity = state.horizontal_velocity = 0
                 state.animation_state, state.action = 1, 185
+                state.selected_sequence_id = 22
                 state.sequence_id, state.cursor = 22, len(runtime.sequences[22]) - 1
                 motion.dead = True
                 state.sound_events.append(7)

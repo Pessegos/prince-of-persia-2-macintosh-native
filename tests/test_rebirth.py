@@ -322,7 +322,12 @@ class RebirthSceneTests(unittest.TestCase):
         self.checkpoint()
         self.die()
         self.eligible()
-        for key, modifier in (("F2", 0), ("Alt_L", 0),
+        self.assertEqual(scene.dev_key_press(self.event("F2")), "break")
+        self.assertIsNotNone(scene.dev_menu)
+        self.assertFalse(scene.combat.player.alive)
+        scene.close_dev_mode()
+        scene.dev_key_release(self.event("F2"))
+        for key, modifier in (("Alt_L", 0),
                               ("Return", 0x8), ("Return", 0x20000)):
             self.assertIsNone(scene.dev_key_press(self.event(key, modifier)))
             self.assertFalse(scene.combat.player.alive)
@@ -376,7 +381,7 @@ class RebirthSceneTests(unittest.TestCase):
         scene = self.scene
         scene.peaceful = True
         scene.jump_to_room(1, row=1, x=180, facing=0)
-        scene.physics.select(scene.sequence_runtime, 23)
+        scene.physics.select(scene.sequence_runtime, 12)
         scene.sequence_state.current_y = -1
         scene.sequence_state.vertical_velocity = 63
         scene.terrain_motion.falling = True

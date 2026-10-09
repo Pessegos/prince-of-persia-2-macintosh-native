@@ -23,8 +23,18 @@ class MixerPlayback:
         self.sounds = {cue: mixer.Sound(str(Path(directory) / item["file"]))
                        for cue, item in cues.items() if item.get("file")}
 
-    def play(self, bus, cue):
-        self.channels[bus].play(self.sounds[cue])
+    def play(self, bus, cue, offset=0):
+        sound = self.sounds[cue]
+        if offset:
+            rate, bits, channels = self.mixer.get_init()
+            frame_size = abs(bits) // 8 * channels
+            start = int(max(0, offset) * rate) * frame_size
+            remaining = sound.get_raw()[start:]
+            if not remaining:
+                self.stop(bus)
+                return
+            sound = self.mixer.Sound(buffer=remaining)
+        self.channels[bus].play(sound)
 
     def busy(self, bus):
         return self.channels[bus].get_busy()
@@ -61,7 +71,7 @@ class AudioEngine:
     def available(self, cue):
         return cue in self.cues and bool(self.cues[cue].get("file"))
 
-    def play_intro(self, resource_id, kind):
+    def play_intro(self, resource_id, kind, offset=0):
         if not self.available(resource_id):
             raise ValueError(f"Intro audio {resource_id} is missing; import the game again")
         bus = "music" if kind == 0 else "effect"
@@ -72,7 +82,10 @@ class AudioEngine:
         else:
             self.current_effect = resource_id
             self.pending_effect = None
-        self.playback.play(bus, resource_id)
+        if offset:
+            self.playback.play(bus, resource_id, offset=offset)
+        else:
+            self.playback.play(bus, resource_id)
         if self.paused:
             self.playback.pause(True)
 

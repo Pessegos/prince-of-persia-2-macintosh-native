@@ -50,7 +50,11 @@ class MenuModelTests(unittest.TestCase):
         menu.key("Tab")
         self.assertEqual(menu.key("space"), "resume")
         menu.key("Tab")
+        self.assertEqual(menu.focus, -1)
+        menu.key("Tab")
         self.assertEqual(menu.focus, 0)
+        menu.key("Tab", backwards=True)
+        self.assertEqual(menu.focus, -1)
         menu.key("Tab", backwards=True)
         self.assertEqual(menu.focus, 3)
 
@@ -93,6 +97,62 @@ class MenuModelTests(unittest.TestCase):
         self.assertTrue(menu.hover(220, 172))
         self.assertEqual(menu.option_index, 0)
         self.assertEqual(menu.screen, "5")
+
+    def test_tabs_and_display_checkbox_are_keyboard_accessible(self):
+        menu = self.menu
+        menu.focus = -1
+        menu.key("Right")
+        self.assertEqual((menu.tab, menu.focus), (1, -1))
+        menu.key("Right")
+        menu.key("Down")
+        self.assertEqual((menu.tab, menu.focus), (2, 1))
+        self.assertEqual(menu.key("space"), "debug_status")
+        self.assertTrue(menu.debug_status)
+        menu.key("Down")
+        menu.key("Left")
+        self.assertEqual(menu.focus, 3)
+
+    def test_playback_dropdown_scrolls_to_all_parts_without_covering_the_viewport(self):
+        menu = self.menu
+        menu.sections = tuple(f"Story {i}" for i in range(30))
+        menu.change_tab(1)
+        menu.open_dropdown()
+        for _ in range(25):
+            menu.key("Down")
+        self.assertEqual(menu.option_index, 25)
+        self.assertEqual(menu.popup_start, 20)
+        menu.click(220, 166 + 5 * 19 + 8)
+        self.assertEqual(menu.section_index, 25)
+        menu.focus = 2
+        self.assertEqual(menu.key("Return"), "seek")
+
+    def test_disabled_level_controls_cannot_activate_or_receive_button_focus(self):
+        menu = self.menu
+        menu.level_available = False
+        menu.change_tab(0)
+        self.assertEqual(menu.focus, 3)
+        menu.key("Left")
+        self.assertEqual(menu.focus, 3)
+        self.assertEqual(menu.click(150, 195), "changed")
+        self.assertFalse(menu.peaceful)
+
+    def test_popup_hover_keeps_rows_stable_and_wheel_reaches_both_ends(self):
+        menu = self.menu
+        menu.sections = tuple(f"Story {i}" for i in range(30))
+        menu.section_index = 15
+        menu.change_tab(1)
+        menu.open_dropdown()
+        start = menu.popup_start
+        menu.hover(220, 172)
+        self.assertEqual(menu.popup_start, start)
+        menu.click(220, 172)
+        self.assertEqual(menu.section_index, start)
+        menu.open_dropdown()
+        menu.scroll(100)
+        self.assertEqual((menu.option_index, menu.popup_start), (29, 20))
+        menu.scroll(-100)
+        self.assertEqual((menu.option_index, menu.popup_start), (0, 0))
+        self.assertEqual(menu.section_index, start)
 
     def test_native_pointer_coordinates_survive_resize_and_letterboxing(self):
         for dimensions in ((512, 384), (800, 900), (1920, 1080), (2560, 1440)):
@@ -138,6 +198,39 @@ class MenuSceneTests(unittest.TestCase):
         labels = [call.args[0] for call in text.call_args_list]
         self.assertIn("Dev Mode", labels)
         self.assertNotIn("Development", labels)
+
+    def test_debug_status_is_hidden_by_default_and_restored_only_when_enabled(self):
+        scene = self.scene
+        self.assertFalse(scene.debug_status)
+        self.assertEqual(scene.status_label.winfo_manager(), "")
+        scene.open_dev_mode()
+        scene.dev_menu.change_tab(2)
+        scene.dev_menu.focus = 1
+        scene.apply_dev_action(scene.dev_menu.activate())
+        self.assertTrue(scene.debug_status)
+        self.assertEqual(scene.status_label.winfo_manager(), "pack")
+        with patch.object(scene.root, "attributes"), patch.object(scene.root, "state"):
+            scene.toggle_fullscreen()
+            self.assertEqual(scene.status_label.winfo_manager(), "")
+            scene.toggle_fullscreen()
+            self.assertEqual(scene.status_label.winfo_manager(), "pack")
+        scene.apply_dev_action(scene.dev_menu.activate())
+        self.assertFalse(scene.debug_status)
+        self.assertEqual(scene.status_label.winfo_manager(), "")
+
+    def test_mouse_wheel_scrolls_only_the_open_dev_dropdown(self):
+        scene = self.scene
+        event = SimpleNamespace(delta=-120)
+        self.assertIsNone(scene.dev_scroll(event))
+        scene.open_dev_mode()
+        scene.dev_menu.sections = tuple(f"Story {i}" for i in range(30))
+        scene.dev_menu.change_tab(1)
+        scene.dev_menu.open_dropdown()
+        with patch.object(scene, "dev_pointer", return_value=(220, 172)):
+            for _ in range(20):
+                self.assertEqual(scene.dev_scroll(event), "break")
+        self.assertEqual(scene.dev_menu.option_index, 20)
+        self.assertEqual(scene.dev_menu.section_index, 0)
 
     def test_simulation_and_game_inputs_stay_frozen_and_pause_state_is_restored(self):
         scene = self.scene
@@ -325,8 +418,8 @@ class MenuSceneTests(unittest.TestCase):
     def test_f2_from_pause_keeps_pause_and_focus_loss_clears_consumed_key(self):
         scene = self.scene
         scene.set_paused(True)
-        self.assertIsNone(scene.dev_key_press(self.event("F2")))
-        scene.open_dev_mode()
+        self.assertEqual(scene.dev_key_press(self.event("F2")), "break")
+        self.assertIsNotNone(scene.dev_menu)
         scene.close_dev_mode()
         self.assertTrue(scene.paused)
         scene.dev_key_press(self.event("Left"))

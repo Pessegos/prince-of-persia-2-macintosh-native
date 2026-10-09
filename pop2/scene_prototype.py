@@ -1019,8 +1019,7 @@ class ScenePrototype(WindowControls):
             self.step_warning_direction = 0
         if getattr(self, "combat", None) is not None:
             self.combat.notify_player_sequence(sequence_id)
-        self.sequence_state.sequence_id = sequence_id
-        self.sequence_state.cursor = 0
+        self.sequence_state.select(sequence_id)
         self.sequence_state.target_x = self.player_x
         self.sequence_state.current_x = self.player_x
         if sequence_id in (JUMP_FORWARD_SEQUENCE, JUMP_VERTICAL_SEQUENCE, RUN_JUMP_SEQUENCE):
@@ -1699,6 +1698,7 @@ class ScenePrototype(WindowControls):
             motion.falling = False
             state.horizontal_velocity = state.vertical_velocity = 0
             state.animation_state, state.action = 1, 185
+            state.selected_sequence_id = 22
             state.sequence_id, state.cursor = 22, len(self.sequences[22]) - 1
             self.combat.player.life = 0
             self.death.begin(15)
@@ -1714,6 +1714,7 @@ class ScenePrototype(WindowControls):
                         guard.terrain_motion.dead = True
                         guard.state.horizontal_velocity = guard.state.vertical_velocity = 0
                         guard.state.action, guard.state.animation_state = 185, 1
+                        guard.state.selected_sequence_id = 22
                         guard.state.sequence_id, guard.state.cursor = 22, len(self.sequences[22]) - 1
         if (-16, ()) in state.sequence_events:
             state.sequence_events.remove((-16, ()))
@@ -1864,7 +1865,7 @@ class ScenePrototype(WindowControls):
                 self.schedule_next_animation()
         self.pause_resume_keys.update(held)
 
-    def start_intro(self):
+    def start_intro(self, part_index=None):
         from pop2.intro import IntroAssets, IntroPlayer
 
         self.end_demo()
@@ -1875,9 +1876,47 @@ class ScenePrototype(WindowControls):
             self.audio.reset()
         self.clear_keys(None)
         self.level_complete = False
-        self.intro = IntroPlayer(self.intro_assets, self.audio)
+        self.intro = IntroPlayer(self.intro_assets, self.audio if part_index is None else None)
+        if part_index is not None:
+            self.intro.audio = self.audio
+            self.intro.seek_operation(part_index)
         self.last_intro_at = time.perf_counter()
         self.status.set("Introduction")
+
+    def development_parts(self):
+        if not self.with_intro:
+            return ()
+        from pop2.attract import read_attract
+        from pop2.paths import ASSET_DIR
+        from pop2.playback_navigation import playback_parts
+
+        if self.attract_data is None:
+            self.attract_data = read_attract(ASSET_DIR / "attract.json")
+        return playback_parts(self.intro_assets, self.attract_data, self.screen_label)
+
+    def current_playback_part(self):
+        stage = self.attract_stage
+        position = (self.demo.index if stage == "demo" else
+                    self.intro.position - 1 if stage == "intro" else
+                    self.intro.page_index if stage == "credits" else -1)
+        matches = [index for index, part in enumerate(self.development_parts())
+                   if part.stage == stage and part.index <= position]
+        return matches[-1] if matches else 0
+
+    def seek_playback_part(self, part):
+        # Always construct the destination's own state; demo actors never
+        # become live combat actors or carry their inputs into gameplay.
+        self.intro = None
+        if part.stage == "intro":
+            self.start_intro(part.index)
+        elif part.stage == "demo":
+            self.start_demo(part.index)
+        elif part.stage == "credits":
+            self.start_credits(part.index)
+        else:
+            raise ValueError("Unknown playback stage")
+        self.last_intro_at = self.last_demo_at = time.perf_counter()
+        self.clear_keys(None)
 
     def finish_attract_stage(self):
         if self.attract_stage == "credits":
@@ -1886,17 +1925,20 @@ class ScenePrototype(WindowControls):
             self.start_demo()
         self.render()
 
-    def start_demo(self):
+    def start_demo(self, part_index=None):
         from pop2.attract import DemoEncounter, DemoPlayer, read_attract
         from pop2.paths import ASSET_DIR
 
         if self.attract_data is None:
             self.attract_data = read_attract(ASSET_DIR / "attract.json")
-        self.restart_opening()
+        self.restart_opening(play_sound=part_index is None)
         self.attract_stage = "demo"
         self.live_combat = self.combat
         self.combat = DemoEncounter(self.level_map, self.sequence_runtime)
-        self.demo = DemoPlayer(self.attract_data, self.audio)
+        self.demo = DemoPlayer(self.attract_data, self.audio if part_index is None else None)
+        if part_index is not None:
+            self.demo.audio = self.audio
+            self.demo.seek_frame(part_index)
         self.last_demo_at = time.perf_counter()
         self.apply_demo_frame()
         self.status.set("Demo")
@@ -1920,14 +1962,16 @@ class ScenePrototype(WindowControls):
         if getattr(self, "live_combat", None) is not None:
             self.combat, self.live_combat = self.live_combat, None
 
-    def start_credits(self):
+    def start_credits(self, part_index=None):
         from pop2.attract import CreditsAssets, CreditsPlayer
 
         self.end_demo()
         if self.credits_assets is None:
             self.credits_assets = CreditsAssets(self.attract_data)
         self.attract_stage = "credits"
-        self.intro = CreditsPlayer(self.credits_assets, self.audio)
+        self.intro = CreditsPlayer(self.credits_assets, self.audio if part_index is None else None)
+        if part_index is not None:
+            self.intro.seek_page(part_index, self.audio)
         self.last_intro_at = time.perf_counter()
         self.status.set("Credits")
 
@@ -2207,9 +2251,10 @@ class ScenePrototype(WindowControls):
                 self.refresh_game_menu()
                 viewport = self.game_menu.draw(viewport, self.ui_font)
             elif self.paused:
-                viewport.paste((0, 0, 0, 255), (0, ROOM_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
                 text = self.cutscene_pause_text
-                viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, ROOM_HEIGHT), text)
+                ink = text.getbbox()
+                y = (VIEWPORT_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
+                viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, y), text)
             self.native_viewport = viewport
             self.present_viewport()
             return

@@ -267,13 +267,15 @@ class GuardCombatTests(unittest.TestCase):
             c.player.state.animation_state = mode
             self.assertFalse(c.choose_player_turn(), mode)
 
-    def test_ready_hurt_recovery_can_turn_toward_opponent_across_edge(self):
+    def test_ready_hurt_recovery_waits_for_an_engaged_opponent(self):
         c = self.encounter(player_facing=1)
         c.player.recovering = True
         c.guard.alert_mode = 1
         c.player.state.sequence_id = 205
         c.player.state.action = 156
         c.player.state.animation_state = 0
+        self.assertFalse(c.choose_player_turn())
+        c.guard.alert_mode = 2
         self.assertTrue(c.choose_player_turn())
         self.assertEqual(c.player.state.sequence_id, PLAYER_COMBAT_TURN_SEQUENCE)
 

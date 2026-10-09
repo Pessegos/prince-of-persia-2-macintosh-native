@@ -4,8 +4,9 @@ The opening now continues into the level-one demonstration, the original four
 credits pages and another opening. Space skips the opening; a gameplay key
 leaves the demo or credits and starts a clean game. Pause, window focus loss,
 fullscreen and the command menu remain available. Story scenes and credits
-show `Cutscene Paused`; the demo retains `Game Paused`. Dev Mode is disabled
-throughout the attract cycle, including its command-menu entry. F5 no longer
+show centered `Cutscene Paused` without a backing bar; the demo retains
+`Game Paused`. Dev Mode offers contextual playback controls during the attract
+cycle, with level jumps and peaceful controls disabled. F5 no longer
 restarts the opening; use the New Game or Restart Level commands.
 
 ## Recorded Controls
@@ -33,6 +34,24 @@ scene renderer and audio engine; it does not run Macintosh code or the live AI.
 Ambient music uses the ordinary port audio selection. Playback cannot alter
 the real encounter, checkpoint or peaceful setting. The generated trace, like
 all extracted game data, stays outside Git.
+
+## Development Playback
+
+The F2 Playback tab derives story boundaries from the imported text operations,
+the cloud title from its scene operation, demo entries from the first recorded
+frame in each room, and credits pages from the imported credits program. It
+does not keep a second hardcoded timeline. Seeking rebuilds the scene's palette,
+timers and animation state without playing earlier cues, then resumes active
+audio at its elapsed sample offset. Demo seeking applies the selected recorded
+frame and starts ordinary ambient music without replaying skipped effects.
+The existing explicit pause state is retained across a seek.
+
+Native actor word 19 is the current SEQS resource; word 20 is the last sequence
+selected by JumpSeq (6:0006). AnimChar's -1 links change only word 19. The port
+retains both IDs so a hurt chain linked to SEQS:205 still receives DoTurn's
+SEQS:94 gap allowance. Native word 10 is vertical velocity, not word 4 (type).
+AnimChar's -8 dispatch targets 4:2ff4: it assigns each velocity axis, retaining
+an axis only when its operand is 10000. The additive branch at 4:2cd6 is -9.
 
 ## Credits
 

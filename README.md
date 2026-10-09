@@ -99,7 +99,7 @@ executable. Demo recovery adds time to the first import, not to later launches.
 | Alt + T | Toggle all sound |
 | Alt + M | Toggle ambient music |
 | Alt + V | About the port |
-| F2 | Dev Mode during gameplay: screen selection and peaceful mode |
+| F2 | Dev Mode: level, intro/demo playback and display controls |
 | Any key after death | Retry from the checkpoint or level start |
 
 The game menu accepts mouse, arrows and Tab/Shift+Tab; Enter/Space activates
@@ -110,8 +110,12 @@ Alt+Q or Alt+F commands; fullscreen remains Alt+Enter.
 
 The developer menu accepts mouse, Tab/Shift+Tab and arrow navigation.
 Left/Right moves between `Go to screen` and `Resume`; Enter/Space activates
-a control. Escape closes the dropdown before closing the menu.
-Screen jumps also set the latest checkpoint along the selected route.
+a control. Focus the tab row to switch between `Level`, `Playback` and `Display`
+with Left/Right. Escape closes the dropdown before closing the menu.
+Screen jumps also set the latest checkpoint along the selected route. During
+the attract cycle, only playback and display controls are available. Playback
+can jump to a story part, the animated title, a demo screen or a credits page.
+The Windows debug status bar is hidden by default; enable it in `Display`.
 `python run_game.py --peaceful` starts with guards disabled and terrain intact.
 
 ## Current Progress
@@ -127,6 +131,7 @@ The level-1 route is playable from the palace window to boarding the ship.
 - Four original rooftop music tracks and movement, combat, glass and water sounds.
 - Death music with playback-dependent restart messages; pause also pauses audio.
 - Losing window focus pauses the game and audio. Returning focus does not resume automatically.
+- Story/credits pause text is centered over the scene without obscuring it with a black bar.
 - Original 510x384 visible viewport, aspect-preserving nearest-neighbor scaling.
 - Movement at 12 fps and ordinary sword combat at 10 fps.
 
@@ -139,7 +144,7 @@ the recovered rules do not yet cover every original collision or input branch.
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m ruff check --select F,E9 .
-python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests
+python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_playback_navigation tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests tests.test_palettes
 python -m tools.recovery_catalog --check
 ```
 

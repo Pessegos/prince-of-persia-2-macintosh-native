@@ -289,6 +289,26 @@ class AnimationDataTests(unittest.TestCase):
         self.assertEqual(runtime.state.sequence_id, 201)
         self.assertEqual(runtime.state.animation_state, 1)
 
+    def test_sequence_links_preserve_the_selected_native_sequence(self):
+        runtime = self.runtime(94)
+        for _ in range(4):
+            runtime.next_frame()
+        self.assertEqual((runtime.state.sequence_id, runtime.state.source_sequence_id), (205, 94))
+        runtime.state.select(57)
+        self.assertEqual((runtime.state.sequence_id, runtime.state.source_sequence_id,
+                          runtime.state.cursor), (57, 57, 0))
+
+    def test_velocity_assignment_resets_axes_and_honors_native_sentinel(self):
+        state = SequenceState(1, horizontal_velocity=-4, vertical_velocity=28)
+        runtime = SequenceRuntime({1: (-8, 0, 0, 157, -8, -2, 10000, 160,
+                                      -8, 10000, 22, 106)}, state)
+        runtime.next_frame()
+        self.assertEqual((state.horizontal_velocity, state.vertical_velocity), (0, 0))
+        runtime.next_frame()
+        self.assertEqual((state.horizontal_velocity, state.vertical_velocity), (-2, 0))
+        runtime.next_frame()
+        self.assertEqual((state.horizontal_velocity, state.vertical_velocity), (-2, 22))
+
     def test_horizontal_mapping_uses_original_orientation_and_sequences(self):
         self.assertEqual(movement_sequence_for_key(-1, facing=0), RUN_START_SEQUENCE)
         self.assertEqual(movement_sequence_for_key(1, facing=1), RUN_START_SEQUENCE)

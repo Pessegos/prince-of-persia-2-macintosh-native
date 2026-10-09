@@ -700,7 +700,7 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertEqual((scene.action, scene.player_x, scene.sequence_state.current_y),
                          (102, 425, -107))
         self.tick(4)
-        self.assertEqual((scene.action, scene.player_x), (106, 453))
+        self.assertEqual((scene.action, scene.player_x), (106, 451))
         self.assertGreater(scene.player_bounds()[0], 431)
         for _ in range(25):
             self.tick()
@@ -838,6 +838,58 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertTrue(scene.sword_drawn)
         self.assertEqual(scene.combat.player.life, 3)
         self.assertEqual(scene.terrain_motion.row, 1)
+
+    def test_opening_hurt_turn_uses_native_recovery_offset_and_preserves_three_hits(self):
+        scene = self.scene
+        for seed in (1, 2):
+            with self.subTest(seed=seed), patch.object(scene, "render"):
+                scene.restart_opening()
+                scene.combat.rng.seed = seed
+                lives, turn_x = [], None
+                previous = 3
+                for _ in range(300):
+                    self.tick()
+                    life = scene.combat.player.life
+                    if life != previous:
+                        lives.append(life)
+                        previous = life
+                    if scene.action == 177 and turn_x is None:
+                        turn_x = scene.player_x
+                    if not scene.combat.player.alive:
+                        break
+                    self.assertFalse(scene.terrain_motion.falling)
+                self.assertEqual(lives, [2, 1, 0])
+                self.assertEqual(turn_x, 385)
+
+    def test_repeated_sword_retreat_from_opening_can_catch_the_right_edge(self):
+        scene = self.scene
+        for delay in (0, 1, 3):
+            with self.subTest(delay=delay), patch.object(scene, "render"):
+                scene.set_peaceful(True)
+                scene.jump_to_screen("1")
+                scene.horizontal_key(None, -1, True)
+                scene.horizontal_key(None, -1, False)
+                self.tick(10)
+                scene.set_key_state("ctrl", True)
+                self.tick(10)
+                scene.set_key_state("ctrl", False)
+                self.assertTrue(scene.sword_drawn)
+                scene.horizontal_key(None, 1, True)
+                for _ in range(12):
+                    self.tick()
+                    if scene.terrain_motion.falling:
+                        break
+                self.assertTrue(scene.terrain_motion.falling)
+                self.assertFalse(scene.sword_drawn)
+                self.tick(delay)
+                scene.set_key_state("shift", True)
+                for _ in range(12):
+                    self.tick()
+                    if scene.ledge_hanging:
+                        break
+                self.assertTrue(scene.ledge_hanging)
+                self.assertEqual((scene.sequence_state.sequence_id, scene.player_x), (15, 423))
+                self.assertFalse(scene.terrain_motion.falling)
 
     def test_armed_auto_turn_at_both_gap_sides_preserves_queued_attack(self):
         scene = self.scene

@@ -451,7 +451,23 @@ class IntroPlayer:
         elif op == "title":
             self.start_title()
 
-    def advance(self, seconds):
+    def seek_operation(self, index):
+        if not 0 <= index < len(self.operations):
+            raise ValueError("Intro part is outside the scene program")
+        audio = self.audio
+        self.__init__(self.assets)
+        while not self.done and self.position <= index:
+            self.advance(max(0, self.wait_until - self.time), stop_position=index + 1)
+        self.advance(0)
+        self.audio = audio
+        if audio is not None:
+            audio.reset()
+            for kind, (cue, start, duration) in self.playing.items():
+                elapsed = self.time - start
+                if elapsed < duration:
+                    audio.play_intro(cue, kind, offset=elapsed)
+
+    def advance(self, seconds, stop_position=None):
         if seconds < 0:
             raise ValueError("Intro cannot run backwards")
         end = self.time + seconds
@@ -468,6 +484,8 @@ class IntroPlayer:
                 self.execute("palette", args)
             if self.position >= len(self.operations):
                 self.done = True
+                return
+            if stop_position is not None and self.position >= stop_position:
                 return
             item = self.operations[self.position]
             self.position += 1

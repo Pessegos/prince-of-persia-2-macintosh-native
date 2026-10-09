@@ -71,29 +71,97 @@ class AttractSceneTests(unittest.TestCase):
         self.scene.demo.advance(self.scene.demo.next_update_delay())
         self.assertIn(audio.current_music, (40, 41, 42, 43))
 
-    def test_f2_and_menu_cannot_open_dev_mode_during_attract_cycle(self):
+    def test_f2_and_menu_open_playback_controls_without_live_level_controls(self):
         scene = self.scene
         for start in (lambda: None, scene.start_demo, scene.start_credits):
             start()
             self.assertEqual(self.key("F2"), "break")
-            scene.open_dev_mode()
-            self.assertIsNone(scene.dev_menu)
+            self.assertIsNotNone(scene.dev_menu)
+            self.assertEqual(scene.dev_menu.tab, 1)
+            self.assertFalse(scene.dev_menu.level_available)
+            self.assertTrue(scene.paused)
+            before = scene.room_id, scene.player_x, scene.peaceful
+            scene.apply_dev_action("go")
+            scene.apply_dev_action("peaceful")
+            self.assertEqual((scene.room_id, scene.player_x, scene.peaceful), before)
+            scene.close_dev_mode()
+            self.assertFalse(scene.paused)
             scene.open_game_menu()
-            self.assertFalse(next(item.enabled for item in scene.game_menu.items
+            self.assertTrue(next(item.enabled for item in scene.game_menu.items
                                   if item.action == "development"))
             scene.apply_game_action("development")
-            self.assertIsNone(scene.dev_menu)
-            scene.close_game_menu()
+            self.assertIsNotNone(scene.dev_menu)
+            self.assertEqual(scene.dev_menu.tab, 1)
+            scene.close_dev_mode()
             scene.dev_key_release(SimpleNamespace(keysym="F2"))
 
     def test_cutscene_pause_uses_contextual_text(self):
         scene = self.scene
         expected = scene.native_viewport.copy()
         text = scene.cutscene_pause_text
-        position = ((512 - text.width) // 2, 365)
+        ink = text.getbbox()
+        position = ((512 - text.width) // 2, (384 - (ink[3] - ink[1])) // 2 - ink[1])
         expected.paste(text, position, text)
         scene.set_paused(True)
         self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
+
+    def test_every_imported_playback_part_can_be_selected_without_live_ai_updates(self):
+        scene = self.scene
+        live = scene.combat
+        parts = scene.development_parts()
+        self.assertEqual({part.stage for part in parts}, {"intro", "demo", "credits"})
+        for part in parts:
+            with self.subTest(part=part.label), patch.object(scene, "render"):
+                scene.seek_playback_part(part)
+                self.assertEqual(scene.attract_stage, part.stage)
+                if part.stage == "demo":
+                    self.assertEqual(scene.demo.index, part.index)
+                    self.assertIsNot(scene.combat, live)
+                else:
+                    self.assertIs(scene.combat, live)
+                self.assertEqual(parts[scene.current_playback_part()], part)
+                self.assertFalse(scene.held_directions)
+        scene.finish_intro()
+        self.assertIs(scene.combat, live)
+        self.assertEqual(scene.combat.player.life, 3)
+        self.assertIsNone(scene.intro)
+        self.assertIsNone(scene.demo)
+
+    def test_next_part_preserves_explicit_pause_and_consumes_activation_key(self):
+        scene = self.scene
+        scene.set_paused(True)
+        scene.open_dev_mode()
+        part = scene.development_parts()[scene.dev_menu.section_index + 1]
+        scene.dev_menu.focus = 1
+        self.key("Return")
+        self.assertIsNone(scene.dev_menu)
+        self.assertTrue(scene.paused)
+        self.assertEqual(scene.development_parts()[scene.current_playback_part()], part)
+        self.assertEqual(self.key("Return"), "break")
+        self.assertTrue(scene.paused)
+
+    def test_seeking_does_not_briefly_play_the_destination_stages_initial_cues(self):
+        from pop2.audio import AudioEngine
+
+        scene = self.scene
+        playback = Mock()
+        playback.busy.return_value = False
+        scene.audio = AudioEngine(playback=playback)
+        parts = scene.development_parts()
+        for stage in ("intro", "demo", "credits"):
+            part = [part for part in parts if part.stage == stage][-1]
+            playback.play.reset_mock()
+            with self.subTest(stage=stage), patch.object(scene, "render"):
+                scene.seek_playback_part(part)
+                calls = playback.play.call_args_list
+                self.assertNotIn(("effect", 36), [call.args for call in calls])
+                if stage == "intro":
+                    active = [cue for cue, start, duration in scene.intro.playing.values()
+                              if scene.intro.time - start < duration]
+                    self.assertEqual([call.args[1] for call in calls], active)
+                else:
+                    self.assertEqual(len(calls), 1)
+                    self.assertEqual(calls[0].args[0], "music")
 
     def test_f5_has_no_binding_or_effect(self):
         scene = self.scene

@@ -142,6 +142,21 @@ class IntroFormatTests(unittest.TestCase):
 
 
 class IntroPlaybackTests(unittest.TestCase):
+    def test_seek_reconstructs_timers_and_audio_without_playing_skipped_cues(self):
+        audio = Mock()
+        p = player(("sound", 25010, 0), ("timer", 0, 120), ("wait", 60),
+                   ("sound", 27001, 1), ("wait_timer", 0), ("wait_current", 1), audio=audio)
+        audio.reset_mock()
+        p.seek_operation(3)
+        self.assertAlmostEqual(p.time, 60 / MAC_TICKS_PER_SECOND)
+        self.assertEqual(p.position, 5)
+        self.assertAlmostEqual(p.wait_until, 120 / MAC_TICKS_PER_SECOND)
+        self.assertEqual(audio.play_intro.call_count, 2)
+        audio.play_intro.assert_any_call(25010, 0, offset=p.time)
+        audio.play_intro.assert_any_call(27001, 1, offset=0)
+        p.advance(3)
+        self.assertTrue(p.done)
+
     def test_cue_and_voice_waits_use_original_audio_clock_without_a_sound_device(self):
         p = player(("sound", 25010, 0), ("cue", 97), ("sound", 27001, 1),
                    ("wait_current", 1), ("wait", 60))
