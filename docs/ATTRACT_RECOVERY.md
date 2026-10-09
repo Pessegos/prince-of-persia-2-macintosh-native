@@ -6,7 +6,13 @@ leaves the demo or credits and starts a clean game. Pause, window focus loss,
 fullscreen and the command menu remain available. Story scenes, the demo and
 credits show centered `Cutscene Paused` over a lightly dimmed frame, without a
 backing bar. Live gameplay retains `Game Paused`. Dev Mode offers contextual playback controls during the attract
-cycle, with level jumps and peaceful controls disabled. F5 no longer
+cycle, with level jumps and peaceful controls disabled. Playback navigation
+selects a sequence first, then one of its parts. The scene program's title
+operation separates Prologue, Titles and Opening story; demo rooms and credits
+pages have their own groups. Next part retains chronological playback order,
+crossing sequence boundaries and returning to the beginning after the last part.
+Both selectors retain the imported part indices, and opening Dev Mode selects
+the current sequence and part. F5 no longer
 restarts the opening; use the New Game or Restart Level commands.
 
 ## Recorded Controls

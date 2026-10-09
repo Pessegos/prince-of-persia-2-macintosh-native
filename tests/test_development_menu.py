@@ -5,6 +5,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from pop2.game_ui import DevelopmentMenu, fit_viewport, viewport_point
+from pop2.playback_navigation import PlaybackGroup
 import tests.test_terrain as test_terrain
 
 
@@ -116,12 +117,14 @@ class MenuModelTests(unittest.TestCase):
         menu = self.menu
         menu.sections = tuple(f"Story {i}" for i in range(30))
         menu.change_tab(1)
+        menu.focus = 4
         menu.open_dropdown()
         for _ in range(25):
             menu.key("Down")
         self.assertEqual(menu.option_index, 25)
-        self.assertEqual(menu.popup_start, 20)
-        menu.click(220, 166 + 5 * 19 + 8)
+        self.assertEqual(menu.popup_start, 21)
+        self.assertEqual(menu.popup_count, 8)
+        menu.click(220, 208 + (25 - menu.popup_start) * 19 + 8)
         self.assertEqual(menu.section_index, 25)
         menu.focus = 2
         self.assertEqual(menu.key("Return"), "seek")
@@ -141,18 +144,74 @@ class MenuModelTests(unittest.TestCase):
         menu.sections = tuple(f"Story {i}" for i in range(30))
         menu.section_index = 15
         menu.change_tab(1)
+        menu.focus = 4
         menu.open_dropdown()
         start = menu.popup_start
-        menu.hover(220, 172)
+        menu.hover(220, 214)
         self.assertEqual(menu.popup_start, start)
-        menu.click(220, 172)
+        menu.click(220, 214)
         self.assertEqual(menu.section_index, start)
         menu.open_dropdown()
         menu.scroll(100)
-        self.assertEqual((menu.option_index, menu.popup_start), (29, 20))
+        self.assertEqual((menu.option_index, menu.popup_start), (29, 22))
         menu.scroll(-100)
         self.assertEqual((menu.option_index, menu.popup_start), (0, 0))
         self.assertEqual(menu.section_index, start)
+
+    def test_playback_sequences_filter_parts_and_preserve_absolute_selection(self):
+        menu = self.menu
+        menu.sections = ("Story 1", "Story 2", "Clouds", "Screen 1", "Screen 2")
+        menu.section_groups = (PlaybackGroup("Prologue", (0, 1)),
+                               PlaybackGroup("Titles", (2,)),
+                               PlaybackGroup("Level 1 demo", (3, 4)))
+        menu.section_index = 4
+        menu.change_tab(1)
+        self.assertEqual(menu.group_index, 2)
+        self.assertEqual(menu.options, ("Prologue", "Titles", "Level 1 demo"))
+        self.assertEqual(menu.field_options(4), ("Screen 1", "Screen 2"))
+        self.assertEqual(menu.field_selected_index(4), 1)
+        menu.key("Left")
+        self.assertEqual(menu.section_index, 2)
+        self.assertEqual(menu.field_options(4), ("Clouds",))
+        menu.key("Left")
+        menu.key("Down")
+        self.assertEqual(menu.focus, 4)
+        menu.key("Right")
+        self.assertEqual(menu.section_index, 1)
+        self.assertEqual(menu.next_section_index, 2)
+        menu.key("Down")
+        self.assertEqual(menu.key("Return"), "next_part")
+
+    def test_sequence_popup_cancel_does_not_change_current_part(self):
+        menu = self.menu
+        menu.sections = ("First", "Second")
+        menu.section_groups = (PlaybackGroup("Intro", (0,)), PlaybackGroup("Demo", (1,)))
+        menu.change_tab(1)
+        menu.key("Return")
+        menu.key("Down")
+        self.assertEqual(menu.section_index, 0)
+        menu.key("Escape")
+        self.assertEqual(menu.group_index, 0)
+        menu.click(220, 150)
+        menu.click(220, 166 + 19 + 8)
+        self.assertEqual(menu.section_index, 1)
+
+    def test_playback_buttons_keep_horizontal_navigation_and_click_actions(self):
+        menu = self.menu
+        menu.sections = ("First", "Second")
+        menu.change_tab(1)
+        menu.click(220, 194)
+        self.assertEqual(menu.dropdown_control, 4)
+        menu.click(220, 208 + 19 + 8)
+        self.assertEqual(menu.section_index, 1)
+        menu.focus = 2
+        menu.key("Right")
+        self.assertEqual(menu.focus, 3)
+        menu.key("Left")
+        self.assertEqual(menu.focus, 2)
+        self.assertEqual(menu.click(150, 285), "seek")
+        self.assertEqual(menu.click(290, 285), "resume")
+        self.assertEqual(menu.click(220, 232), "next_part")
 
     def test_native_pointer_coordinates_survive_resize_and_letterboxing(self):
         for dimensions in ((512, 384), (800, 900), (1920, 1080), (2560, 1440)):
@@ -225,8 +284,9 @@ class MenuSceneTests(unittest.TestCase):
         scene.open_dev_mode()
         scene.dev_menu.sections = tuple(f"Story {i}" for i in range(30))
         scene.dev_menu.change_tab(1)
+        scene.dev_menu.focus = 4
         scene.dev_menu.open_dropdown()
-        with patch.object(scene, "dev_pointer", return_value=(220, 172)):
+        with patch.object(scene, "dev_pointer", return_value=(220, 214)):
             for _ in range(20):
                 self.assertEqual(scene.dev_scroll(event), "break")
         self.assertEqual(scene.dev_menu.option_index, 20)
@@ -342,6 +402,20 @@ class MenuSceneTests(unittest.TestCase):
         self.assertEqual(result.getpixel((200, 166 + 8 * 19)), (244, 216, 115, 255))
         self.assertIn("DevelopmentInput", scene.root.bindtags())
         self.assertIn("DevelopmentInput", scene.canvas.bindtags())
+
+    def test_playback_part_popup_fits_below_the_second_selector(self):
+        scene = self.scene
+        menu = DevelopmentMenu(SCREENS, 0, False, sections=tuple(f"Story {i}" for i in range(30)))
+        menu.change_tab(1)
+        menu.focus = 4
+        menu.open_dropdown()
+        viewport = Image.new("RGBA", (512, 384), (80, 80, 80, 255))
+        result = menu.draw(viewport, scene.ui_font)
+        bottom = menu.control_rect(4)[3] + menu.popup_count * menu.OPTION_HEIGHT
+        self.assertEqual(bottom, 360)
+        left = menu.control_rect(4)[0]
+        self.assertEqual(result.getpixel((left, bottom)), (244, 216, 115, 255))
+        self.assertEqual(result.getpixel((left, bottom + 1)), result.getpixel((30, 20)))
 
     def test_ordinary_keys_resume_pause_without_gameplay_or_repeat_until_release(self):
         scene = self.scene

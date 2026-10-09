@@ -242,9 +242,12 @@ class WindowControls:
         screens = tuple(entries)
         was_paused = self.game_was_paused if self.game_menu is not None else self.paused
         self.game_menu = None
+        from pop2.playback_navigation import playback_groups
+
+        parts = self.development_parts()
         self.dev_menu = DevelopmentMenu(
             screens, screens.index(current) if current in entries else 0, self.peaceful,
-            sections=tuple(part.label for part in self.development_parts()),
+            sections=tuple(part.label for part in parts), section_groups=playback_groups(parts),
             section_index=self.current_playback_part(), debug_status=self.debug_status,
             level_available=self.level_navigation_available(),
         )
@@ -287,7 +290,8 @@ class WindowControls:
             parts = self.development_parts()
             if not parts:
                 return
-            index = (self.dev_menu.section_index + int(action == "next_part")) % len(parts)
+            index = (self.dev_menu.next_section_index if action == "next_part"
+                     else self.dev_menu.section_index)
             self.seek_playback_part(parts[index])
             self.close_dev_mode()
         elif action == "debug_status":

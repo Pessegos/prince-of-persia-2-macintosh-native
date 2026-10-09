@@ -180,6 +180,34 @@ class AttractSceneTests(unittest.TestCase):
         self.assertEqual(self.key("Return"), "break")
         self.assertTrue(scene.paused)
 
+    def test_group_selection_seeks_only_after_activation_and_next_keeps_playback_order(self):
+        scene = self.scene
+        parts = scene.development_parts()
+        scene.open_dev_mode()
+        groups = scene.dev_menu.groups
+        scene.close_dev_mode()
+        self.assertEqual([group.label for group in groups],
+                         ["Prologue", "Titles", "Opening story", "Level 1 demo", "Credits"])
+        for group_index, group in enumerate(groups):
+            with self.subTest(sequence=group.label):
+                scene.open_dev_mode()
+                scene.dev_menu.change_tab(1)
+                before = scene.intro, scene.demo
+                scene.dev_menu.select(group_index)
+                self.assertEqual((scene.intro, scene.demo), before)
+                self.assertEqual(scene.dev_menu.section_index, group.part_indices[0])
+                scene.dev_menu.section_index = group.part_indices[-1]
+                target_index = (group.part_indices[-1] + 1) % len(parts)
+                scene.apply_dev_action("next_part")
+                self.assertIsNone(scene.dev_menu)
+                self.assertEqual(parts[scene.current_playback_part()], parts[target_index])
+                scene.open_dev_mode()
+                target_group = next(i for i, item in enumerate(groups) if target_index in item.part_indices)
+                self.assertEqual(scene.dev_menu.group_index, target_group)
+                self.assertEqual(scene.dev_menu.field_options(4),
+                                 tuple(parts[index].label for index in groups[target_group].part_indices))
+                scene.close_dev_mode()
+
     def test_seeking_does_not_briefly_play_the_destination_stages_initial_cues(self):
         from pop2.audio import AudioEngine
 

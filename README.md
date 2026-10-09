@@ -113,7 +113,8 @@ a control. Focus the tab row to switch between `Level`, `Playback` and `Display`
 with Left/Right. Escape closes the dropdown before closing the menu.
 Screen jumps also set the latest checkpoint along the selected route. During
 the attract cycle, only playback and display controls are available. Playback
-can jump to a story part, the animated title, a demo screen or a credits page.
+selects a sequence first, then a story part, animated title, demo screen or
+credits page. `Next part` follows playback order across sequence boundaries.
 The Windows debug status bar is hidden by default; enable it in `Display`.
 `python run_game.py --peaceful` starts with guards disabled and terrain intact.
 

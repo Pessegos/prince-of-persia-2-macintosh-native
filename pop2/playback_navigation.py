@@ -8,23 +8,42 @@ class PlaybackPart:
     label: str
     stage: str
     index: int
+    group: str = ""
+
+
+@dataclass(frozen=True)
+class PlaybackGroup:
+    label: str
+    part_indices: tuple
+
+
+def playback_groups(parts):
+    groups = {}
+    for index, part in enumerate(parts):
+        label = part.group or part.stage.title()
+        groups.setdefault(label, []).append(index)
+    return tuple(PlaybackGroup(label, tuple(indices)) for label, indices in groups.items())
 
 
 def playback_parts(intro_assets, attract_data, screen_label):
     parts = []
     story = 0
+    group = "Prologue"
     for index, item in enumerate(intro_assets.program["operations"]):
         if item["op"] == "title":
-            parts.append(PlaybackPart("Clouds / titles", "intro", index))
+            parts.append(PlaybackPart("Clouds / titles", "intro", index, "Titles"))
+            group = "Opening story"
+            story = 0
         elif item["op"] == "text" and item["args"][1]:
             story += 1
-            parts.append(PlaybackPart(f"Story {story}", "intro", index))
+            parts.append(PlaybackPart(f"Story {story}", "intro", index, group))
     seen = set()
     for index, frame in enumerate(attract_data["frames"]):
         room = frame["room"] - 1
         if room not in seen:
-            parts.append(PlaybackPart(f"Demo: screen {screen_label(room)}", "demo", index))
+            parts.append(PlaybackPart(f"Demo: screen {screen_label(room)}", "demo", index,
+                                      "Level 1 demo"))
             seen.add(room)
     for index in range(len(attract_data["credits"]["pages"])):
-        parts.append(PlaybackPart(f"Credits: page {index + 1}", "credits", index))
+        parts.append(PlaybackPart(f"Credits: page {index + 1}", "credits", index, "Credits"))
     return tuple(parts)

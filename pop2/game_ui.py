@@ -3,6 +3,8 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageDraw
 
+from pop2.playback_navigation import PlaybackGroup
+
 
 # GetFullScreenRect (CODE 17:1ada) is 510x384. The host's 512-wide
 # composition buffer centers the room with one padding column on each side.
@@ -40,20 +42,64 @@ class DevelopmentMenu:
     section_index: int = 0
     debug_status: bool = False
     level_available: bool = True
+    section_groups: tuple = ()
+    dropdown_control: int = 0
 
     CONTROLS = ((200, 138, 392, 166), (120, 180, 392, 210),
                 (120, 231, 252, 263), (264, 231, 392, 263))
     PANEL = (100, 70, 412, 328)
     OPTION_HEIGHT = 19
     TABS = ((120, 106, 207, 127), (211, 106, 298, 127), (302, 106, 392, 127))
+    PLAYBACK_CONTROLS = {
+        0: (212, 138, 392, 166), 4: (212, 180, 392, 208),
+        1: (120, 220, 392, 248),
+        2: (120, 269, 252, 301), 3: (264, 269, 392, 301),
+    }
+
+    @property
+    def groups(self):
+        return self.section_groups or ((PlaybackGroup("Playback", tuple(range(len(self.sections)))),)
+                                       if self.sections else ())
+
+    @property
+    def group_index(self):
+        return next((i for i, group in enumerate(self.groups)
+                     if self.section_index in group.part_indices), 0)
+
+    @property
+    def part_indices(self):
+        return self.groups[self.group_index].part_indices if self.groups else ()
+
+    @property
+    def next_section_index(self):
+        return (self.section_index + 1) % len(self.sections)
+
+    def field_options(self, control):
+        if self.tab != 1:
+            return self.screens
+        return (tuple(group.label for group in self.groups) if control == 0 else
+                tuple(self.sections[i] for i in self.part_indices))
+
+    def field_selected_index(self, control):
+        if self.tab != 1:
+            return self.screen_index
+        return self.group_index if control == 0 else self.part_indices.index(self.section_index)
 
     @property
     def options(self):
-        return self.sections if self.tab == 1 else self.screens
+        return self.field_options(self.dropdown_control if self.dropdown else self.focus)
 
     @property
     def selected_index(self):
-        return self.section_index if self.tab == 1 else self.screen_index
+        return self.field_selected_index(self.dropdown_control if self.dropdown else self.focus)
+
+    def control_rect(self, index):
+        return self.PLAYBACK_CONTROLS[index] if self.tab == 1 else self.CONTROLS[index]
+
+    @property
+    def popup_count(self):
+        bottom = self.control_rect(self.dropdown_control)[3]
+        return min(10, len(self.options), (374 - bottom) // self.OPTION_HEIGHT)
 
     @property
     def controls(self):
@@ -62,7 +108,7 @@ class DevelopmentMenu:
         if ((self.tab == 0 and not self.level_available)
                 or (self.tab == 1 and not self.sections)):
             return (3,)
-        return (0, 1, 2, 3)
+        return (0, 4, 1, 2, 3) if self.tab == 1 else (0, 1, 2, 3)
 
     def change_tab(self, index):
         self.tab = index % 3
@@ -75,12 +121,14 @@ class DevelopmentMenu:
         return self.screens[self.screen_index]
 
     def open_dropdown(self):
+        self.dropdown_control = self.focus
         self.dropdown = True
         self.option_index = self.selected_index
         self.center_popup()
 
     def center_popup(self):
-        self.popup_start = max(0, min(self.option_index - 4, len(self.options) - 10))
+        count = self.popup_count
+        self.popup_start = max(0, min(self.option_index - count // 2, len(self.options) - count))
 
     def scroll(self, delta):
         if not self.dropdown:
@@ -91,7 +139,9 @@ class DevelopmentMenu:
 
     def select(self, index):
         if self.tab == 1:
-            self.section_index = index
+            control = self.dropdown_control if self.dropdown else self.focus
+            self.section_index = (self.groups[index].part_indices[0] if control == 0
+                                  else self.part_indices[index])
         else:
             self.screen_index = index
         self.dropdown = False
@@ -120,7 +170,7 @@ class DevelopmentMenu:
         elif key in ("Left", "Right") and self.focus == -1:
             self.change_tab(self.tab + (-1 if key == "Left" else 1))
             self.focus = -1
-        elif key in ("Left", "Right") and self.focus == 0:
+        elif key in ("Left", "Right") and self.focus in (0, 4):
             self.select((self.selected_index + (-1 if key == "Left" else 1)) % len(self.options))
         elif key in ("Left", "Right") and self.focus in (2, 3):
             destination = 2 if key == "Left" else 3
@@ -133,7 +183,7 @@ class DevelopmentMenu:
     def activate(self):
         if self.focus not in self.controls:
             return "changed"
-        if self.focus == 0:
+        if self.focus in (0, 4):
             self.open_dropdown()
         elif self.focus == 1:
             if self.tab == 2:
@@ -154,12 +204,12 @@ class DevelopmentMenu:
 
     def hit(self, x, y):
         if self.dropdown:
-            left, _top, right, bottom = self.CONTROLS[0]
-            popup = (left, bottom, right, bottom + min(10, len(self.options)) * self.OPTION_HEIGHT)
+            left, _top, right, bottom = self.control_rect(self.dropdown_control)
+            popup = (left, bottom, right, bottom + self.popup_count * self.OPTION_HEIGHT)
             if self.contains(popup, x, y):
                 return self.popup_start + int((y - bottom) // self.OPTION_HEIGHT)
             return None
-        return next((i for i in self.controls if self.contains(self.CONTROLS[i], x, y)), None)
+        return next((i for i in self.controls if self.contains(self.control_rect(i), x, y)), None)
 
     def hover(self, x, y):
         index = self.hit(x, y)
@@ -209,16 +259,25 @@ class DevelopmentMenu:
             text(label, (rect[0] + rect[2]) // 2, 112, gold if i == self.tab else muted,
                  centered=True, max_width=rect[2] - rect[0] - 8)
         available = len(self.controls) > 1
-        if self.tab != 2:
-            text("Screen" if self.tab == 0 else "Part", 120, 146)
+        if self.tab == 0:
+            text("Screen", 120, 146)
+        elif self.tab == 1:
+            text("Sequence", 120, 146)
+            if available:
+                text("Part", 120, 188)
         for i in self.controls:
-            rect = self.CONTROLS[i]
+            rect = self.control_rect(i)
             draw.rectangle(rect, fill="#303030" if i == self.focus else "#222222",
                            outline=gold if i == self.focus else "#626262")
         if available and self.tab != 2:
-            text(self.options[self.selected_index], 210, 146, max_width=158)
-            draw.polygon(((377, 150), (385, 150), (381, 154)), fill=white)
-            text("Go to part" if self.tab == 1 else "Go to screen", 186, 241,
+            for control in ((0, 4) if self.tab == 1 else (0,)):
+                left, top, right, _bottom = self.control_rect(control)
+                text(self.field_options(control)[self.field_selected_index(control)],
+                     left + 10, top + 8, max_width=right - left - 34)
+                draw.polygon(((right - 15, top + 12), (right - 7, top + 12),
+                              (right - 11, top + 16)), fill=white)
+            text("Go to part" if self.tab == 1 else "Go to screen", 186,
+                 self.control_rect(2)[1] + 10,
                  centered=True, max_width=118)
         if available and self.tab in (0, 2):
             draw.rectangle((130, 189, 141, 200), fill="#121212", outline=muted)
@@ -228,11 +287,11 @@ class DevelopmentMenu:
             text("Debug status bar" if self.tab == 2 else "Peaceful (no guards)",
                  151, 190, max_width=231)
         elif available:
-            text("Next part", 256, 190, centered=True)
+            text("Next part", 256, 230, centered=True)
         else:
             text("Unavailable during playback" if self.tab == 0 else "No playback data",
                  256, 190, muted, centered=True, max_width=272)
-        text("Resume", 328, 241, centered=True)
+        text("Resume", 328, self.control_rect(3)[1] + 10, centered=True)
         if self.error:
             words, line, lines = self.error.split(), "", []
             for word in words:
@@ -246,8 +305,8 @@ class DevelopmentMenu:
             for i, line in enumerate(lines[:3]):
                 text(line, 120, 277 + i * 16, "#ff9b9b", max_width=272)
         if self.dropdown:
-            left, _top, right, bottom = self.CONTROLS[0]
-            count = min(10, len(self.options))
+            left, _top, right, bottom = self.control_rect(self.dropdown_control)
+            count = self.popup_count
             draw.rectangle((left, bottom, right, bottom + count * self.OPTION_HEIGHT),
                            fill="#222222", outline=gold)
             for i in range(self.popup_start, self.popup_start + count):
