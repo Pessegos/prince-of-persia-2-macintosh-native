@@ -23,8 +23,10 @@ class IntroSchedulingTests(unittest.TestCase):
             import tkinter as tk
             from types import SimpleNamespace
             from pop2.scene_prototype import ScenePrototype
+            from pop2.game_session import GameSession
 
             scene = ScenePrototype.__new__(ScenePrototype)
+            scene.game = GameSession()
             scene.root = tk.Tk()
             scene.root.withdraw()
             scene.root.update_idletasks()

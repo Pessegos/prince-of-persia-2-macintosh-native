@@ -6,13 +6,10 @@ from dataclasses import dataclass
 from PIL import Image, ImageChops, ImageOps
 
 from pop2.animation_data import (
-    parse_aframe_records,
-    parse_frame_records,
-    sequence_words,
     shape_id_for_action,
 )
 from pop2.combat import (
-    CombatEncounter, GuardSpawn, PLAYER_COMBAT_TURN_SEQUENCE, contact_allowed, guard_frame_index,
+    PLAYER_COMBAT_TURN_SEQUENCE, contact_allowed, guard_frame_index,
 )
 from pop2.combat_art import GuardArtwork, HealthArtwork, HitArtwork
 from pop2.control_mapping import (
@@ -46,12 +43,13 @@ from pop2.control_mapping import (
     jump_sequence_for_input,
 )
 from pop2.mac_input import plan_cautious_step, plan_step, read_keyboard
-from pop2.opening_animation import GLASS_POSITIONS, OpeningEscape
-from pop2.harbor import Harbor, SHIP_CLIMB_SEQUENCE
-from pop2.rebirth import DeathState, RebirthSnapshot, level_checkpoints
+from pop2.opening_animation import GLASS_POSITIONS
+from pop2.harbor import SHIP_CLIMB_SEQUENCE
+from pop2.rebirth import RebirthSnapshot
+from pop2.game_session import GameResources, GameSession
+from pop2.level_rendering import LevelRenderer
 from pop2.render_opening import (
     OPENING_FLOOR_Y,
-    ROOF_DECORATIONS,
     ROOF_GLASS_OFFSETS,
     ROOM_ORIGIN_X,
     ROOM_HEIGHT,
@@ -61,17 +59,13 @@ from pop2.render_opening import (
     TILE_WIDTH,
     VIEWPORT_HEIGHT,
     VIEWPORT_WIDTH,
-    build_opening_room,
-    draw_harbor,
-    rooftop_scene_data,
     character_sprite_top,
     decode_ctbl,
     decode_shap,
     kid_palette_for_level,
     load_resource_file,
 )
-from pop2.sequence_runtime import SequenceRuntime, SequenceState
-from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion, floor_y, floor_contact_x
+from pop2.terrain import TerrainMotion, floor_y, floor_contact_x
 from pop2.game_ui import MacintoshFont
 from pop2.window_controls import WindowControls
 
@@ -149,7 +143,71 @@ def next_animation_deadline(previous_deadline, now, interval_ms=ANIMATION_INTERV
 
 
 class ScenePrototype(WindowControls):
-    def __init__(self, with_guard=True, peaceful=False, audio=None, with_intro=False):
+    @property
+    def room_id(self):
+        return self.game.room_id
+
+    @room_id.setter
+    def room_id(self, value):
+        self.game.room_id = value
+
+    @property
+    def terrain_motion(self):
+        return self.game.motion
+
+    @terrain_motion.setter
+    def terrain_motion(self, value):
+        self.game.motion = value
+
+    @property
+    def combat(self):
+        return self.game.combat
+
+    @combat.setter
+    def combat(self, value):
+        self.game.combat = value
+
+    @property
+    def opening(self):
+        return self.game.opening
+
+    @opening.setter
+    def opening(self, value):
+        self.game.opening = value
+
+    @property
+    def harbor(self):
+        return self.game.harbor
+
+    @harbor.setter
+    def harbor(self, value):
+        self.game.harbor = value
+
+    @property
+    def death(self):
+        return self.game.death
+
+    @death.setter
+    def death(self, value):
+        self.game.death = value
+
+    @property
+    def checkpoint(self):
+        return self.game.checkpoint
+
+    @checkpoint.setter
+    def checkpoint(self, value):
+        self.game.checkpoint = value
+
+    @property
+    def level_complete(self):
+        return self.game.complete
+
+    @level_complete.setter
+    def level_complete(self, value):
+        self.game.complete = value
+
+    def __init__(self, with_guard=True, peaceful=False, audio=None, with_intro=False, level_number=1):
         self.with_intro = with_intro
         self.intro = None
         self.intro_assets = None
@@ -159,7 +217,11 @@ class ScenePrototype(WindowControls):
         self.live_combat = None
         self.audio = audio
         self.peaceful = peaceful
-        room = build_opening_room(include_curtain=False)
+        self.terrain_enabled = with_guard
+        self.resources = GameResources.load()
+        self.game = GameSession.load(self.resources, level_number, terrain_enabled=with_guard)
+        self.level_renderer = LevelRenderer(self.game.level)
+        room = self.level_renderer.room(self.room_id)
         self.background = room.background
         self.foreground = room.foreground
         roof = load_resource_file("Rooftops.rsrc")
@@ -173,13 +235,11 @@ class ScenePrototype(WindowControls):
             for index in range(len(GLASS_POSITIONS))
         ]
 
-        self.kid = load_resource_file("Kid.rsrc")
-        self.first_shape_id = int.from_bytes(
-            self.kid["SHPL"][25001]["data"][:2], "big"
-        )
-        self.frames = parse_frame_records(self.kid["FRAM"][25001]["data"])
-        self.attachment_frames = parse_aframe_records(self.kid["AFRM"][25001]["data"])
-        prince = load_resource_file("Prince.rsrc")
+        self.kid = self.resources.kid
+        self.first_shape_id = self.resources.first_shape_id
+        self.frames = self.resources.frames
+        self.attachment_frames = self.resources.attachment_frames
+        prince = self.resources.prince
         self.ui_font = MacintoshFont(prince["NFNT"][23331]["data"])
         # DrawRestartMessage uses palette index 6; match its displayed RGB.
         hud_text_color = (253, 255, 168, 255)
@@ -190,62 +250,8 @@ class ScenePrototype(WindowControls):
         self.first_sword_shape_id = int.from_bytes(
             prince["SHPL"][1000]["data"][:2], "big"
         )
-        level = prince["LEVL"][2000]["data"]
-        level_kind = int.from_bytes(level[0x2186:0x2188], "big")
-        self.palette = kid_palette_for_level(self.kid, level_kind)
-        self.checkpoints = level_checkpoints(level)
-        self.checkpoint = None
-        self.death = DeathState()
-        self.room_id = int.from_bytes(level[0x2198:0x219A], "big") - 1
-        self.level_map = LevelMap(level) if with_guard else None
-        self.terrain_motion = TerrainMotion(self.room_id, 1) if with_guard else None
-        self.physics = RooftopPhysics(self.level_map, self.frames) if with_guard else None
-        self.room_cache = {self.room_id: room}
-        self.harbor = Harbor()
-        self.level_complete = False
-        start_tile = int.from_bytes(level[0x219A:0x219C], "big")
-        self.start_tile = start_tile
-        self.player_x = (start_tile % 10) * 51 + 14
-        self.right_platform_edge_x = self._right_platform_edge(
-            level, self.room_id, start_tile % 10
-        )
-        self.action = 15
-        sequences = {
-            resource_id: sequence_words(resource["data"])
-            for resource_id, resource in prince["SEQS"].items()
-        }
-        self.sequence_state = SequenceState(
-            sequence_id=IDLE_SEQUENCE,
-            action=15,
-            current_x=self.player_x,
-            target_x=self.player_x,
-            facing=0,
-            actor_type=0,
-            level_kind=level_kind,
-        )
-        self.sequence_runtime = SequenceRuntime(sequences, self.sequence_state)
-        self.sequences = sequences
-        self.sword_palette = sword_palette_for_level(prince, self.sequence_state.level_kind)
-        self.combat = None
-        if with_guard:
-            self.combat = CombatEncounter(
-                self.sequence_runtime, sequences,
-                GuardSpawn.from_level(level, self.room_id), self.right_platform_edge_x,
-                level=level,
-            )
-            self.combat.terrain = self.level_map
-            self.combat.player_frames = self.frames
-            self.combat.player.terrain_motion = self.terrain_motion
-            self.guard_art = GuardArtwork(
-                load_resource_file("Guard.rsrc"), self.sword_shapes,
-                self.first_sword_shape_id, self.sword_palette,
-            )
-            self.combat.guard_art = self.guard_art
-            self.health_art = HealthArtwork(self.kid, self.palette, self.first_shape_id)
-            self.hit_art = HitArtwork(
-                self.kid, self.palette, self.first_shape_id,
-                self.frames, self.guard_art.frames,
-            )
+        self.sequences = self.resources.sequences
+        self.bind_level(self.game, self.level_renderer)
         self.held_directions = []
         self.pending_action = None
         self.running_jump_controls_cleared = False
@@ -295,7 +301,6 @@ class ScenePrototype(WindowControls):
         self.create_window("Prince of Persia 2 Macintosh Native (WIP)" if with_guard
                            else "Prince of Persia 2 Macintosh Native - Animation Preview (WIP)",
                            scale=SCALE)
-        self.opening = OpeningEscape(self.sequence_runtime, self.start_tile)
         self.action = self.sequence_state.action
         self.player_x = self.sequence_state.target_x
         if with_intro:
@@ -309,6 +314,51 @@ class ScenePrototype(WindowControls):
         self.animation_after_id = self.root.after(
             round(interval), self.advance_animation
         )
+
+    def bind_level(self, game, renderer):
+        palette = kid_palette_for_level(self.kid, game.level.kind)
+        sword_palette = sword_palette_for_level(self.resources.prince, game.level.kind)
+        guard_art = health_art = hit_art = None
+        if game.combat is not None:
+            guard_art = GuardArtwork(load_resource_file("Guard.rsrc"), self.sword_shapes,
+                                     self.first_sword_shape_id, sword_palette)
+            health_art = HealthArtwork(self.kid, palette, self.first_shape_id)
+            hit_art = HitArtwork(self.kid, palette, self.first_shape_id,
+                                 self.frames, guard_art.frames)
+            game.combat.guard_art = guard_art
+        room = renderer.room(game.room_id)
+        self.game, self.level_renderer = game, renderer
+        self.palette, self.sword_palette = palette, sword_palette
+        self.guard_art, self.health_art, self.hit_art = guard_art, health_art, hit_art
+        self.checkpoints = game.level.checkpoints
+        self.level_map, self.physics = game.level_map, game.physics
+        self.room_cache = renderer.rooms
+        self.background, self.foreground = room.background, room.foreground
+        self.start_tile = game.level.start_tile
+        self.right_platform_edge_x = game.level.right_platform_edge()
+        self.sequence_runtime, self.sequence_state = game.runtime, game.runtime.state
+        self.action, self.player_x = self.sequence_state.action, self.sequence_state.target_x
+        self.sprite_cache, self.sword_sprite_cache = {}, {}
+
+    def load_level(self, number):
+        # Prepare the complete destination before replacing a running session.
+        game = GameSession.load(self.resources, number, self.terrain_enabled)
+        renderer = LevelRenderer(game.level)
+        self.bind_level(game, renderer)
+        self.demo = self.live_combat = None
+        self.attract_stage = self.intro = None
+        self.clear_keys(None)
+        self.reset_level_controls()
+        if self.audio is not None:
+            self.audio.reset()
+        if self.animation_after_id is not None:
+            self.root.after_cancel(self.animation_after_id)
+            self.animation_after_id = None
+        self.status.set(f"Level {game.level.number}")
+        self.render()
+        self.next_animation_at = time.perf_counter()
+        if not self.in_animation_tick:
+            self.schedule_next_animation()
 
     def set_key_state(self, key, pressed):
         if self.paused or self.dev_menu is not None:
@@ -1151,7 +1201,8 @@ class ScenePrototype(WindowControls):
                 return False
             self.ledge_climb_requested = False
             self.ledge_climbing = True
-            ship = self.harbor.hanging_from_ship(self.room_id, self.sequence_state)
+            ship = (self.harbor is not None
+                    and self.harbor.hanging_from_ship(self.room_id, self.sequence_state))
             self.start_sequence(SHIP_CLIMB_SEQUENCE if ship else 10)
             self.status.set("Boarding the ship" if ship else "Climb: original SEQS:10 / 235")
             if not self.in_animation_tick:
@@ -1407,6 +1458,7 @@ class ScenePrototype(WindowControls):
             self.advance_terrain(old_x, old_bounds)
             self.advance_combat()
             self.advance_harbor()
+            self.advance_level_events()
             self.advance_rebirth()
             self.advance_audio()
             self.render()
@@ -1420,6 +1472,7 @@ class ScenePrototype(WindowControls):
             self.advance_terrain(old_x, old_bounds)
             self.advance_combat()
             self.advance_harbor()
+            self.advance_level_events()
             self.advance_rebirth()
             self.advance_audio()
             self.render()
@@ -1543,6 +1596,7 @@ class ScenePrototype(WindowControls):
         # A room cut rebases X; it must not be swept as a cross-room jump.
         self.advance_combat(old_x if motion is None or motion.room == old_room else None)
         self.advance_harbor()
+        self.advance_level_events()
         self.advance_rebirth()
         self.advance_audio()
         self.render()
@@ -1605,8 +1659,7 @@ class ScenePrototype(WindowControls):
             dx = self.sequence_state.target_x - before_x
             if motion.room not in self.room_cache:
                 try:
-                    self.room_cache[motion.room] = build_opening_room(
-                        include_curtain=False, room_id=motion.room)
+                    self.level_renderer.room(motion.room)
                 except ValueError as error:
                     # Keep the playable section intact at unsupported scenery.
                     motion.room = old_room
@@ -1628,7 +1681,8 @@ class ScenePrototype(WindowControls):
             room = self.room_cache[self.room_id]
             self.background, self.foreground = room.background, room.foreground
             self.combat.enter_room(self.room_id, motion.row)
-            self.harbor.enter_room(self.room_id, self.action)
+            if self.harbor is not None:
+                self.harbor.enter_room(self.room_id, self.action)
             self.status.set(f"Screen {self.screen_label(self.room_id)}")
         self.combat.player.row = motion.row
         for event in events:
@@ -1673,7 +1727,7 @@ class ScenePrototype(WindowControls):
 
     def advance_harbor(self):
         motion = getattr(self, "terrain_motion", None)
-        if motion is None:
+        if motion is None or self.harbor is None:
             return
         state = self.sequence_state
         if (state.sequence_id == SHIP_CLIMB_SEQUENCE
@@ -1718,12 +1772,12 @@ class ScenePrototype(WindowControls):
                         guard.state.action, guard.state.animation_state = 185, 1
                         guard.state.selected_sequence_id = 22
                         guard.state.sequence_id, guard.state.cursor = 22, len(self.sequences[22]) - 1
-        if (-16, ()) in state.sequence_events:
-            state.sequence_events.remove((-16, ()))
-            self.level_complete = True
-            self.clear_keys(None)
-            self.status.set("Level 1 complete")
         self.player_x, self.action = state.target_x, state.action
+
+    def advance_level_events(self):
+        if self.game.consume_completion():
+            self.clear_keys(None)
+            self.status.set(f"Level {self.game.level.number} complete")
 
     def resume_combat_turn(self):
         combat = getattr(self, "combat", None)
@@ -1802,7 +1856,8 @@ class ScenePrototype(WindowControls):
         contact = floor_contact_x(state.target_x, state.facing, self.frames[state.action])
         for checkpoint in self.checkpoints:
             if checkpoint.matches(motion.room, motion.row, contact,
-                                  state.animation_state, self.combat.player.alive):
+                                  state.animation_state, self.combat.player.alive,
+                                  level_number=self.game.level.number):
                 if self.checkpoint is None or self.checkpoint.checkpoint != checkpoint:
                     self.checkpoint = RebirthSnapshot.capture(checkpoint, self.combat)
                 break
@@ -1829,7 +1884,7 @@ class ScenePrototype(WindowControls):
                         guard.state.sound_events.append(11)
                     audio.drain(guard.state, not self.peaceful and guard.room == self.room_id)
         motion = getattr(self, "terrain_motion", None)
-        if motion is not None and not self.level_complete:
+        if motion is not None and not self.level_complete and self.game.level.number == 1:
             fighting = (self.sword_drawn and not self.peaceful
                         and any(guard.alive and guard.row == motion.row
                                 for guard in self.combat.active_guards()))
@@ -1949,9 +2004,7 @@ class ScenePrototype(WindowControls):
         frame = self.demo.frame
         self.combat.apply(frame, self.demo.index)
         self.room_id = frame["room"] - 1
-        if self.room_id not in self.room_cache:
-            self.room_cache[self.room_id] = build_opening_room(include_curtain=False, room_id=self.room_id)
-        room = self.room_cache[self.room_id]
+        room = self.level_renderer.room(self.room_id)
         self.background, self.foreground = room.background, room.foreground
         self.terrain_motion = TerrainMotion(self.room_id, self.combat.player.row)
         self.action, self.player_x = self.sequence_state.action, self.sequence_state.target_x
@@ -1978,6 +2031,8 @@ class ScenePrototype(WindowControls):
         self.status.set("Credits")
 
     def new_game(self):
+        if self.game.level.number != 1:
+            self.load_level(1)
         self.restart_opening(play_sound=not self.with_intro)
         if self.with_intro:
             self.start_intro()
@@ -1995,16 +2050,29 @@ class ScenePrototype(WindowControls):
         audio = getattr(self, "audio", None)
         if audio is not None:
             audio.reset()
-            if play_sound:
+            if play_sound and self.game.level.window_escape:
                 audio.add_sound(36)
         if self.animation_after_id is not None:
             self.root.after_cancel(self.animation_after_id)
             self.animation_after_id = None
-        self.checkpoint = None
-        self.death = DeathState()
         self.clear_keys(None)
-        self.harbor = Harbor()
-        self.level_complete = False
+        self.game.restart()
+        self.reset_level_controls()
+        room = self.level_renderer.room(self.room_id) if hasattr(self, "level_renderer") else None
+        if room is not None:
+            self.background, self.foreground = room.background, room.foreground
+        self.action = self.sequence_state.action
+        self.player_x = self.sequence_state.target_x
+        self.status.set("Window escape" if self._opening_active() else f"Level {self.game.level.number}")
+        if play_sound:
+            self.advance_audio()
+        self.render()
+        self.next_animation_at = time.perf_counter()
+        if not self.in_animation_tick:
+            self.schedule_next_animation()
+        return "break"
+
+    def reset_level_controls(self):
         self.run_active = False
         self.run_stop_requested = False
         self.run_direction = 0
@@ -2020,54 +2088,17 @@ class ScenePrototype(WindowControls):
         self.native_ledge = False
         self.ledge_grip_delay = 0
         self.down_sheathe_consumed = False
-        if getattr(self, "combat", None) is not None:
-            self.combat.reset()
-        if getattr(self, "level_map", None) is not None:
-            self.room_id = self.level_map.start_room
-            self.terrain_motion = TerrainMotion(self.room_id, 1)
-            self.combat.player.terrain_motion = self.terrain_motion
-            room = self.room_cache[self.room_id]
-            self.background, self.foreground = room.background, room.foreground
-        self.opening = OpeningEscape(self.sequence_runtime, self.start_tile)
-        self.action = self.sequence_state.action
-        self.player_x = self.sequence_state.target_x
-        self.status.set("Window escape")
-        if play_sound:
-            self.advance_audio()
-        self.render()
-        self.next_animation_at = time.perf_counter()
-        if not self.in_animation_tick:
-            self.schedule_next_animation()
-        return "break"
-
 
     def dev_rooms(self):
-        rooms = []
         if self.level_map is None:
-            return rooms
-        scenery_map, _shapes, _pieces = rooftop_scene_data()
-        supported_kinds = {0, 1, 20, 47, 48, 49}
-        for room_id in range(32):
-            if not any(self.level_map.tile(room_id, column, row).kind == 1
-                       for row in range(3) for column in range(10)):
-                continue
-            # Labels and the F2 list inspect metadata only. Building every
-            # screen here used to stall the first screen cut for over a second.
-            tiles = [scenery_map.tile(room_id, column, row)
-                     for row in range(-1, 4) for column in range(-1, 10)]
-            if any(tile.room is not None and (tile.kind not in supported_kinds
-                   or ((tile.foreground >> 8) & 15) > len(ROOF_DECORATIONS))
-                   for tile in tiles):
-                continue
-            rooms.append(room_id)
-        return rooms
+            return []
+        return self.level_renderer.supported_rooms()
 
     def jump_to_room(self, room_id, row=1, x=None, facing=None, reset_guards=True,
                      preserve_checkpoint=False):
         if self.level_map is None or not 0 <= room_id < 32 or not 0 <= row < 3:
             raise ValueError("Invalid level, room or floor")
-        room = self.room_cache.get(room_id) or build_opening_room(
-            include_curtain=False, room_id=room_id)
+        room = self.level_renderer.room(room_id)
         if x is None:
             columns = [column for column in range(10)
                        if self.level_map.tile(room_id, column, row).kind == 1]
@@ -2080,60 +2111,20 @@ class ScenePrototype(WindowControls):
         self.attract_stage = None
         self.intro = None
         self.clear_keys(None)
-        self.death = DeathState()
-        if not preserve_checkpoint:
-            self.checkpoint = None
-        self.harbor = Harbor()
-        self.level_complete = False
-        self.run_active = self.run_stop_requested = False
-        self.run_direction = 0
-        self.run_start_x = None
-        self.run_cycle_boundary_pending = False
-        self.sword_drawn = self.sword_sheathing = False
-        self.ledge_hanging = self.ledge_climbing = False
-        self.ledge_climb_requested = self.ledge_action_consumed = False
-        self.native_ledge = False
-        self.ledge_grip_delay = 0
-        self.opening.active = False
-        self.opening.tick = len(GLASS_POSITIONS)
-        self.opening.phase = "done"
-        fresh = SequenceState(IDLE_SEQUENCE, action=15, current_x=x, target_x=x,
-                              facing=self.sequence_state.facing if facing is None else facing,
-                              actor_type=0, level_kind=5)
-        self.sequence_state.__dict__.update(fresh.__dict__)
-        self.room_id = room_id
-        self.room_cache[room_id] = room
+        self.game.place(room_id, row, x,
+                        self.sequence_state.facing if facing is None else facing,
+                        reset_guards, preserve_checkpoint)
+        self.reset_level_controls()
         self.background, self.foreground = room.background, room.foreground
-        self.terrain_motion = TerrainMotion(room_id, row)
-        if reset_guards:
-            self.combat.reset()
-        self.combat.player.terrain_motion = self.terrain_motion
-        self.combat.enter_room(room_id, row)
-        self.harbor.enter_room(room_id, 15)
-        self.combat.player.life = self.combat.player.max_life
-        self.combat.player.sword_drawn = False
-        self.combat.player.targetable = True
-        self.combat.player.recovering = False
         self.player_x, self.action = x, 15
         if getattr(self, "audio", None) is not None:
             self.audio.reset()
             self.advance_audio()
-        self.status.set(f"Level 1 / Screen {self.screen_label(room_id)}")
+        self.status.set(f"Level {self.game.level.number} / Screen {self.screen_label(room_id)}")
         self.render()
 
     def dev_screens(self):
-        available = set(self.dev_rooms())
-        screens = []
-        room = self.level_map.start_room
-        while room in available and room not in screens:
-            screens.append(room)
-            left = self.level_map.neighbor(room, "left")
-            room = left if left in available else self.level_map.neighbor(room, "down")
-        entries = {str(index + 1): room for index, room in enumerate(screens)}
-        secret = self.level_map.neighbor(self.level_map.start_room, "right")
-        if secret in available and secret not in screens:
-            entries["Secret (right)"] = secret
-        return entries
+        return self.level_renderer.screen_entries() if self.level_map is not None else {}
 
     def screen_label(self, room):
         return next((label for label, target in self.dev_screens().items() if target == room),
@@ -2272,7 +2263,7 @@ class ScenePrototype(WindowControls):
             self.present_viewport()
             return
         frame = self.background.copy()
-        frame = draw_harbor(frame, self.room_id, self.harbor)
+        frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor)
         opening = getattr(self, "opening", None)
         show_opening = opening is not None and (
             getattr(self, "level_map", None) is None or self.room_id == self.level_map.start_room)
@@ -2345,7 +2336,7 @@ class ScenePrototype(WindowControls):
             layer = Image.new("RGBA", frame.size)
             layer.paste(glass, (glass_x, character_sprite_top(glass_y, glass.height)), glass)
             frame = self.composite_actor(frame, layer)
-        frame = draw_harbor(frame, self.room_id, self.harbor, front=True)
+        frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor, front=True)
         viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
         viewport.paste(frame, (ROOM_ORIGIN_X, 0))
         if combat is not None and not self.death.prompt_visible:
@@ -2360,7 +2351,7 @@ class ScenePrototype(WindowControls):
             viewport.paste(hud_text, ((VIEWPORT_WIDTH - hud_text.width) // 2,
                                       pause_y), hud_text)
         if self.level_complete and self.dev_menu is None and self.game_menu is None:
-            text = self.ui_font.text("Level 1 Complete")
+            text = self.ui_font.text(f"Level {self.game.level.number} Complete")
             viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, ROOM_HEIGHT), text)
         if demo_paused and self.dev_menu is None and self.game_menu is None:
             viewport = self.draw_cutscene_pause(viewport)

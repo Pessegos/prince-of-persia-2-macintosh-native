@@ -48,7 +48,10 @@ class GuardSpawn:
     @classmethod
     def all_from_level(cls, level, room):
         # CODE:6 GetGen/SetOppMaxLifePts: one-based room, 38-byte generator.
-        if struct.unpack_from(">H", level, 0x21A4)[0] != 0:
+        opponent_type = struct.unpack_from(">h", level, 0x21A4)[0]
+        if opponent_type == -1:
+            return []
+        if opponent_type != 0:
             raise ValueError("Special opponent types are not implemented here")
         offset = 0x20E6 + (room + 1) * 0xC0
         count = struct.unpack_from(">H", level, offset)[0]
@@ -181,15 +184,35 @@ class CombatEncounter:
         self.platform_edge = platform_edge
         self.rng = rng if rng is not None else QuickDrawRandom()
         self.level = level
+        self.level_kind = player_runtime.state.level_kind
         self.reset()
 
     def reset(self):
+        if self.spawn is None:
+            if self.level is None:
+                raise ValueError("An encounter without an initial guard needs LEVL data")
+            room = struct.unpack_from(">H", self.level, 0x2198)[0] - 1
+            row = struct.unpack_from(">H", self.level, 0x219a)[0] // 10
+            self.player = Fighter(self.player_runtime, 3, 3, room, row)
+            self.room_encounters = {}
+            self._load_room(room)
+            self.guards, self.generation_points = self.room_encounters[room]
+            self.guard = self.guards[0] if self.guards else None
+        else:
+            self._reset_initial_guard()
+        self.world_frame = 0
+        self.parry_timer = 0
+        self.advance_pause = 0
+        self.attack_pause = 0
+        self.last_guard_at = None
+
+    def _reset_initial_guard(self):
         self.player = Fighter(self.player_runtime, 3, 3,
                               self.spawn.room, self.spawn.row)
         state = SequenceState(
             sequence_id=self.spawn.sequence_id, current_x=self.spawn.x,
             target_x=self.spawn.x, facing=self.spawn.facing,
-            actor_type=2, level_kind=5,
+            actor_type=2, level_kind=self.level_kind,
         )
         self.guard = Fighter(SequenceRuntime(self.sequences, state),
                              self.spawn.life, self.spawn.life,
@@ -202,11 +225,6 @@ class CombatEncounter:
         self.guards = [self.guard]
         self.generation_points = (OpponentGenerationPoint.from_level(self.level, self.spawn.room)
                                   if self.level is not None else [])
-        self.world_frame = 0
-        self.parry_timer = 0
-        self.advance_pause = 0
-        self.attack_pause = 0
-        self.last_guard_at = None
         self.room_encounters = {self.spawn.room: (self.guards, self.generation_points)}
 
     def _load_room(self, room):
@@ -217,7 +235,7 @@ class CombatEncounter:
             for spawn in GuardSpawn.all_from_level(self.level, room):
                 state = SequenceState(spawn.sequence_id, current_x=spawn.x,
                                       target_x=spawn.x, facing=spawn.facing,
-                                      actor_type=2, level_kind=5)
+                                      actor_type=2, level_kind=self.level_kind)
                 fighter = Fighter(SequenceRuntime(self.sequences, state),
                                   spawn.life, spawn.life, room, spawn.row,
                                   skill=spawn.skill, selected_sequence=spawn.sequence_id,
@@ -226,7 +244,9 @@ class CombatEncounter:
                                   alternate_row=spawn.alternate_row)
                 fighter.runtime.next_frame()
                 guards.append(fighter)
-            self.room_encounters[room] = (guards, OpponentGenerationPoint.from_level(self.level, room))
+            points = (OpponentGenerationPoint.from_level(self.level, room)
+                      if struct.unpack_from(">h", self.level, 0x21a4)[0] == 0 else [])
+            self.room_encounters[room] = (guards, points)
 
     def enter_room(self, room, row):
         """Keep the Prince and the visited room's NPC/generator objects intact."""
@@ -727,7 +747,7 @@ class CombatEncounter:
             armed = abs(point.column - character_column(self.player.state.target_x)) <= 3 and point.life >= 6
             state = SequenceState(90 if armed else 84, current_x=point.x,
                                   target_x=point.x, facing=point.facing,
-                                  actor_type=2, level_kind=5)
+                                  actor_type=2, level_kind=self.level_kind)
             guard = Fighter(SequenceRuntime(self.sequences, state), point.life, point.life,
                             point.room, point.row, sword_drawn=armed, skill=point.skill,
                             alert_mode=3 if armed else 0, entry_x=point.x,

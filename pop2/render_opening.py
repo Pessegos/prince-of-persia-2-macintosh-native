@@ -376,10 +376,10 @@ def make_kid_contact_sheet():
     focus.save(OUTPUT_DIR / "kid_sprites_focus.png")
 
 
-@lru_cache(maxsize=1)
-def rooftop_scene_data():
+@lru_cache(maxsize=14)
+def rooftop_scene_data(level_resource_id=2000):
     level_resources = load_resource_file("Prince.rsrc")
-    level = level_resources["LEVL"][2000]["data"]
+    level = level_resources["LEVL"][level_resource_id]["data"]
     level_map = LevelMap(level)
     level_kind = u16(level, 0x2186)
     if level_kind != 5:
@@ -392,9 +392,9 @@ def rooftop_scene_data():
     return level_map, shapes, pieces
 
 
-def build_opening_room(include_curtain=True, room_id=None):
+def build_opening_room(include_curtain=True, room_id=None, level_resource_id=2000):
     # Decode the read-only level atlas once, not during every screen cut.
-    level_map, shapes, pieces = rooftop_scene_data()
+    level_map, shapes, pieces = rooftop_scene_data(level_resource_id)
     if room_id is None:
         room_id = level_map.start_room
 
@@ -542,10 +542,10 @@ def build_opening_room(include_curtain=True, room_id=None):
                        tuple(ledges), tuple(foreground_pieces), room_id)
 
 
-def draw_harbor(frame, room_id, harbor, front=False):
+def draw_harbor(frame, room_id, harbor, front=False, level_resource_id=2000):
     if room_id not in HARBOR_ROOMS:
         return frame
-    level_map, shapes, pieces = rooftop_scene_data()
+    level_map, shapes, pieces = rooftop_scene_data(level_resource_id)
     layer = Image.new("RGBA", frame.size)
     splash_occlusion = Image.new("L", frame.size) if front and harbor.water else None
 

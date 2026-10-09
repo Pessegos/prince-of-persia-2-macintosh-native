@@ -181,7 +181,7 @@ class GameWindowTests(unittest.TestCase):
     def test_screen_labels_do_not_render_other_rooms(self):
         scene = self.scene
         cached_rooms = set(scene.room_cache)
-        with patch("pop2.scene_prototype.build_opening_room") as build:
+        with patch("pop2.level_rendering.build_opening_room") as build:
             self.assertEqual(scene.screen_label(2), "3")
             self.assertEqual(tuple(scene.dev_screens()),
                              ("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Secret (right)"))

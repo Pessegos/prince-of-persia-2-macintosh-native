@@ -57,6 +57,8 @@ from pop2.scene_prototype import (
     TAP_RELEASE_ACTION,
     next_animation_deadline,
 )
+from pop2.game_session import GameSession
+from pop2.level_data import LevelDefinition
 
 
 class DummyStatus:
@@ -113,6 +115,7 @@ class AnimationDataTests(unittest.TestCase):
             level_kind=5,
         )
         scene.sequence_runtime = SequenceRuntime(scene.sequences, scene.sequence_state)
+        scene.game = GameSession(LevelDefinition.read(self.prince, 1), scene.sequence_runtime)
         scene.player_x = 116
         scene.held_directions = []
         scene.pending_action = None

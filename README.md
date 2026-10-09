@@ -141,10 +141,14 @@ the recovered rules do not yet cover every original collision or input branch.
 
 ## Development
 
+[Level loading](docs/LEVEL_LOADING.md) describes the separation between original
+level data, gameplay state, scenery and the window host. Level 2's starting data
+and arrival sequence can be loaded in tests; its scenery is not yet playable.
+
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m ruff check --select F,E9 .
-python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_playback_navigation tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests tests.test_palettes
+python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_playback_navigation tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests tests.test_palettes tests.test_game_session
 python -m tools.recovery_catalog --check
 ```
 

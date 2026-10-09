@@ -31,6 +31,9 @@ from pop2.render_opening import (
     RoofLedge,
 )
 from pop2.scene_prototype import SCALE, START_FLOOR_Y, ScenePrototype
+from pop2.game_session import GameSession
+from pop2.level_data import LevelDefinition
+from pop2.level_rendering import LevelRenderer
 
 
 class DummyCanvas:
@@ -70,6 +73,9 @@ class OpeningRoomTests(unittest.TestCase):
     def render_scene(self, facing=0, dy=0, sword=None, opening=None, x=370):
         from pop2.harbor import Harbor
         scene = ScenePrototype.__new__(ScenePrototype)
+        level = LevelDefinition.read(load_resource_file("Prince.rsrc"), 1)
+        scene.game = GameSession(level)
+        scene.level_renderer = LevelRenderer(level)
         scene.room_id = 3
         scene.harbor = Harbor()
         scene.level_complete = False
