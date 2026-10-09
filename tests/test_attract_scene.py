@@ -99,29 +99,51 @@ class AttractSceneTests(unittest.TestCase):
 
     def test_cutscene_pause_dims_the_frame_and_centers_text_without_a_panel(self):
         scene = self.scene
-        original = scene.native_viewport.copy()
-        expected = Image.alpha_composite(
-            original, Image.new("RGBA", original.size, (0, 0, 0, 100)))
         text = scene.cutscene_pause_text
         ink = text.getbbox()
         x, y = (512 - text.width) // 2, (384 - (ink[3] - ink[1])) // 2 - ink[1]
-        expected.paste((0, 0, 0, 255),
-                       (x + 1, y + 1, x + 1 + text.width, y + 1 + text.height), text)
-        expected.paste(text, (x, y), text)
-        scene.set_paused(True)
-        self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
-        scene.render()
-        self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
-        scene.set_paused(False)
-        self.assertEqual(scene.native_viewport.tobytes(), original.tobytes())
+        for start in (lambda: None, scene.start_demo, scene.start_credits):
+            start()
+            scene.render()
+            with self.subTest(stage=scene.attract_stage):
+                original = scene.native_viewport.copy()
+                expected = Image.alpha_composite(
+                    original, Image.new("RGBA", original.size, (0, 0, 0, 100)))
+                expected.paste((0, 0, 0, 255),
+                               (x + 1, y + 1, x + 1 + text.width, y + 1 + text.height), text)
+                expected.paste(text, (x, y), text)
+                scene.set_paused(True)
+                self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
+                scene.render()
+                self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
+                scene.set_paused(False)
+                self.assertEqual(scene.native_viewport.tobytes(), original.tobytes())
 
     def test_cutscene_pause_does_not_double_dim_the_command_menu(self):
         scene = self.scene
-        original = scene.native_viewport.copy()
+        for start in (lambda: None, scene.start_demo, scene.start_credits):
+            start()
+            scene.render()
+            with self.subTest(stage=scene.attract_stage):
+                original = scene.native_viewport.copy()
+                scene.set_paused(True)
+                scene.open_game_menu()
+                expected = scene.game_menu.draw(original, scene.ui_font)
+                self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
+                scene.close_game_menu(resume=True)
+
+    def test_leaving_demo_restores_gameplay_pause_without_dimming(self):
+        scene = self.scene
+        scene.start_demo()
         scene.set_paused(True)
-        scene.open_game_menu()
-        expected = scene.game_menu.draw(original, scene.ui_font)
-        self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
+        scene.finish_intro()
+        original = scene.native_viewport.copy()
+        text = scene.pause_text
+        ink = text.getbbox()
+        original.paste(text, ((512 - text.width) // 2,
+                             365 + (19 - (ink[3] - ink[1])) // 2 - ink[1]), text)
+        scene.set_paused(True)
+        self.assertEqual(scene.native_viewport.tobytes(), original.tobytes())
 
     def test_every_imported_playback_part_can_be_selected_without_live_ai_updates(self):
         scene = self.scene

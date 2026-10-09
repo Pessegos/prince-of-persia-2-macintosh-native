@@ -2244,6 +2244,18 @@ class ScenePrototype(WindowControls):
             layer.paste((0, 0, 0, 0), (0, water_y, layer.width, layer.height))
         return Image.alpha_composite(frame, layer)
 
+    def draw_cutscene_pause(self, viewport):
+        viewport = Image.alpha_composite(
+            viewport, Image.new("RGBA", viewport.size, (0, 0, 0, 100)))
+        text = self.cutscene_pause_text
+        ink = text.getbbox()
+        x = (VIEWPORT_WIDTH - text.width) // 2
+        y = (VIEWPORT_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
+        viewport.paste((0, 0, 0, 255),
+                       (x + 1, y + 1, x + 1 + text.width, y + 1 + text.height), text)
+        viewport.paste(text, (x, y), text)
+        return viewport
+
     def render(self):
         if getattr(self, "intro", None) is not None:
             viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
@@ -2255,15 +2267,7 @@ class ScenePrototype(WindowControls):
                 self.refresh_game_menu()
                 viewport = self.game_menu.draw(viewport, self.ui_font)
             elif self.paused:
-                viewport = Image.alpha_composite(
-                    viewport, Image.new("RGBA", viewport.size, (0, 0, 0, 100)))
-                text = self.cutscene_pause_text
-                ink = text.getbbox()
-                x = (VIEWPORT_WIDTH - text.width) // 2
-                y = (VIEWPORT_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
-                viewport.paste((0, 0, 0, 255),
-                               (x + 1, y + 1, x + 1 + text.width, y + 1 + text.height), text)
-                viewport.paste(text, (x, y), text)
+                viewport = self.draw_cutscene_pause(viewport)
             self.native_viewport = viewport
             self.present_viewport()
             return
@@ -2348,7 +2352,9 @@ class ScenePrototype(WindowControls):
             self.health_art.draw(viewport, combat, show_opponent=not hide_guards)
         hud_text = (self.pause_text if self.paused else
                     self.restart_text if self.death.prompt_visible else None)
-        if hud_text is not None and self.dev_menu is None and self.game_menu is None:
+        demo_paused = self.paused and getattr(self, "demo", None) is not None
+        if (hud_text is not None and not demo_paused
+                and self.dev_menu is None and self.game_menu is None):
             ink = hud_text.getbbox()
             pause_y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
             viewport.paste(hud_text, ((VIEWPORT_WIDTH - hud_text.width) // 2,
@@ -2356,6 +2362,8 @@ class ScenePrototype(WindowControls):
         if self.level_complete and self.dev_menu is None and self.game_menu is None:
             text = self.ui_font.text("Level 1 Complete")
             viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, ROOM_HEIGHT), text)
+        if demo_paused and self.dev_menu is None and self.game_menu is None:
+            viewport = self.draw_cutscene_pause(viewport)
         if self.dev_menu is not None:
             viewport = self.dev_menu.draw(viewport, self.ui_font)
         if self.game_menu is not None:
