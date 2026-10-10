@@ -211,6 +211,7 @@ class ScenePrototype(WindowControls):
         self.with_intro = with_intro
         self.intro = None
         self.intro_assets = None
+        self.ending_assets = None
         self.demo = None
         self.attract_data = self.credits_assets = None
         self.attract_stage = None
@@ -1398,9 +1399,19 @@ class ScenePrototype(WindowControls):
 
     def advance_animation(self):
         self.animation_after_id = None
-        if self.paused or getattr(self, "level_complete", False):
+        if self.paused:
             return
         self.in_animation_tick = True
+        if getattr(self, "level_complete", False):
+            if self.game.exit is not None:
+                if self.harbor is not None:
+                    self.harbor.advance()
+                if self.game.exit.advance(self.current_animation_interval_ms() / 1000, self.audio):
+                    self.start_ending()
+                self.render()
+            self.in_animation_tick = False
+            self.schedule_next_animation()
+            return
         if getattr(self, "intro", None) is not None:
             now = time.perf_counter()
             revision = self.intro.revision
@@ -1421,6 +1432,16 @@ class ScenePrototype(WindowControls):
                 self.start_credits()
             else:
                 self.apply_demo_frame()
+            self.render()
+            self.in_animation_tick = False
+            self.schedule_next_animation()
+            return
+        if self.game.entry_active:
+            frame = self.sequence_runtime.next_frame()
+            self.action, self.player_x = frame.action, frame.target_x
+            if self.combat is not None:
+                self.combat.world_frame += 1
+            self.advance_audio()
             self.render()
             self.in_animation_tick = False
             self.schedule_next_animation()
@@ -1610,6 +1631,8 @@ class ScenePrototype(WindowControls):
     def _combat_controls_locked(self):
         if getattr(self, "level_complete", False):
             return True
+        if self.game.entry_active:
+            return True
         motion = getattr(self, "terrain_motion", None)
         if motion is not None and (motion.falling or motion.dead):
             return True
@@ -1776,6 +1799,18 @@ class ScenePrototype(WindowControls):
 
     def advance_level_events(self):
         if self.game.consume_completion():
+            if self.game.level.number == 1:
+                import json
+                from pop2.level_transition import LevelExit
+                from pop2.paths import ASSET_DIR
+
+                # GetEndSong 5:4e0c selects 32 for the rooftop environment.
+                cues = (self.audio.cues if self.audio is not None else
+                        {int(key): item for key, item in json.loads(
+                            (ASSET_DIR / "audio/manifest.json").read_text(encoding="ascii"))["cues"].items()})
+                self.game.exit = LevelExit(32, cues[32]["duration"])
+                if self.audio is not None:
+                    self.audio.add_song(32)
             self.clear_keys(None)
             self.status.set(f"Level {self.game.level.number} complete")
 
@@ -1892,6 +1927,10 @@ class ScenePrototype(WindowControls):
                                      self.sequence_state.facing, self.frames[self.action])
             audio.ambient(self.room_id, motion.row, max(0, min(9, int(contact // 51))),
                           fighting, self.combat.player.alive)
+        elif motion is not None and self.game.level.number == 2:
+            # DesertFunc 18:01ee-020a repeats the shore sound when cue 51 ends.
+            if audio.current_effect != 51 or not audio.effect_busy:
+                audio.add_sound(51)
         audio.flush()
 
     def restart_after_death(self):
@@ -1945,16 +1984,31 @@ class ScenePrototype(WindowControls):
             return ()
         from pop2.attract import read_attract
         from pop2.paths import ASSET_DIR
-        from pop2.playback_navigation import playback_parts
+        from pop2.playback_navigation import playback_parts, ending_parts
 
         if self.attract_data is None:
             self.attract_data = read_attract(ASSET_DIR / "attract.json")
-        return playback_parts(self.intro_assets, self.attract_data, self.screen_label)
+        if self.intro_assets is None:
+            from pop2.intro import IntroAssets
+            self.intro_assets = IntroAssets()
+        self.load_ending_assets()
+        if self.game.level.number == 1:
+            screen_label = self.screen_label
+        else:
+            from pop2.level_data import LevelDefinition
+            entries = LevelRenderer(LevelDefinition.read(self.resources.prince, 1)).screen_entries()
+            labels = {room: label for label, room in entries.items()}
+            screen_label = lambda room: labels.get(room, f"Room ID {room + 1}")
+        return (playback_parts(self.intro_assets, self.attract_data, screen_label)
+                + ending_parts(self.ending_assets))
 
     def current_playback_part(self):
         stage = self.attract_stage
+        if stage is None and self.game.level.number == 2:
+            return next((index for index, part in enumerate(self.development_parts())
+                         if part.stage == "level" and part.index == 2), 0)
         position = (self.demo.index if stage == "demo" else
-                    self.intro.position - 1 if stage == "intro" else
+                    self.intro.position - 1 if stage in ("intro", "ending") else
                     self.intro.page_index if stage == "credits" else -1)
         matches = [index for index, part in enumerate(self.development_parts())
                    if part.stage == stage and part.index <= position]
@@ -1970,13 +2024,19 @@ class ScenePrototype(WindowControls):
             self.start_demo(part.index)
         elif part.stage == "credits":
             self.start_credits(part.index)
+        elif part.stage == "ending":
+            self.start_ending(part.index)
+        elif part.stage == "level":
+            self.load_level(part.index)
         else:
             raise ValueError("Unknown playback stage")
         self.last_intro_at = self.last_demo_at = time.perf_counter()
         self.clear_keys(None)
 
     def finish_attract_stage(self):
-        if self.attract_stage == "credits":
+        if self.attract_stage == "ending":
+            self.finish_ending()
+        elif self.attract_stage == "credits":
             self.start_intro()
         else:
             self.start_demo()
@@ -1988,6 +2048,8 @@ class ScenePrototype(WindowControls):
 
         if self.attract_data is None:
             self.attract_data = read_attract(ASSET_DIR / "attract.json")
+        if self.game.level.number != 1:
+            self.load_level(1)
         self.restart_opening(play_sound=part_index is None)
         self.attract_stage = "demo"
         self.live_combat = self.combat
@@ -2040,8 +2102,43 @@ class ScenePrototype(WindowControls):
 
     def finish_intro(self):
         held = set(self.window_keys_down)
-        self.restart_opening()
+        if self.attract_stage == "ending":
+            self.finish_ending()
+        else:
+            if self.game.level.number != 1:
+                self.load_level(1)
+            self.restart_opening()
         self.pause_resume_keys.update(held)
+
+    def load_ending_assets(self):
+        if self.ending_assets is None:
+            from pop2.intro import IntroAssets
+            self.ending_assets = IntroAssets(program_name="ending.json")
+
+    def start_ending(self, part_index=None):
+        from pop2.intro import IntroPlayer
+
+        self.end_demo()
+        self.load_ending_assets()
+        self.clear_keys(None)
+        self.game.exit = None
+        self.level_complete = False
+        self.attract_stage = "ending"
+        if self.audio is not None:
+            self.audio.reset()
+        self.intro = IntroPlayer(self.ending_assets, self.audio if part_index is None else None)
+        if part_index is not None:
+            self.intro.audio = self.audio
+            self.intro.seek_operation(part_index)
+        self.last_intro_at = time.perf_counter()
+        self.status.set("Voyage")
+
+    def finish_ending(self):
+        max_life = self.combat.player.max_life if self.combat is not None else None
+        self.load_level(2)
+        if max_life is not None:
+            self.combat.player.life = self.combat.player.max_life = max_life
+            self.render()
 
     def restart_opening(self, _event=None, play_sound=True):
         self.end_demo()
@@ -2134,6 +2231,8 @@ class ScenePrototype(WindowControls):
         screens = self.dev_screens()
         room = screens[label]
         if room == self.level_map.start_room:
+            if not self.game.level.window_escape:
+                return self.load_level(self.game.level.number)
             return self.jump_to_room(room, row=1, x=411, facing=1)
         secret = label == "Secret (right)"
         if secret:
@@ -2178,7 +2277,7 @@ class ScenePrototype(WindowControls):
         return interval_ms
 
     def schedule_next_animation(self):
-        if self.paused or getattr(self, "level_complete", False):
+        if self.paused or (getattr(self, "level_complete", False) and self.game.exit is None):
             return
         now = time.perf_counter()
         if getattr(self, "intro", None) is not None:
@@ -2263,7 +2362,8 @@ class ScenePrototype(WindowControls):
             self.present_viewport()
             return
         frame = self.background.copy()
-        frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor)
+        frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor,
+                    frame_number=self.combat.world_frame if self.combat is not None else 0)
         opening = getattr(self, "opening", None)
         show_opening = opening is not None and (
             getattr(self, "level_map", None) is None or self.room_id == self.level_map.start_room)
@@ -2350,7 +2450,8 @@ class ScenePrototype(WindowControls):
             pause_y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
             viewport.paste(hud_text, ((VIEWPORT_WIDTH - hud_text.width) // 2,
                                       pause_y), hud_text)
-        if self.level_complete and self.dev_menu is None and self.game_menu is None:
+        if (self.level_complete and self.game.exit is None
+                and self.dev_menu is None and self.game_menu is None):
             text = self.ui_font.text(f"Level {self.game.level.number} Complete")
             viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, ROOM_HEIGHT), text)
         if demo_paused and self.dev_menu is None and self.game_menu is None:

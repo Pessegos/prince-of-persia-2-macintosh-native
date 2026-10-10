@@ -50,8 +50,8 @@ separately from the initial absolute Y, as before this separation.
 
 The next branch, 2:5dba-5dca, selects SEQS:124 for environment 1. Level 2's
 resource places the Prince in native room 2, tile 15, facing right, and declares
-no opponents. Its arrival chain uses poses 256-263, then idle pose 15. The loader
-and this pose chain are tested without presenting a level-2 room.
+no opponents. Its arrival chain uses poses 256-263, then idle pose 15. The host
+runs the entire arrival sequence before enabling ordinary controls and physics.
 
 Ordinary guard creation now inherits the selected environment for initial,
 visited-room and generated guards. A room with no guards is valid. Special
@@ -59,14 +59,15 @@ opponent types still fail explicitly rather than creating ordinary guards.
 
 ## Current Boundary
 
-Only rooftop scenery is implemented. Loading level 2's world state for tests
-does not make level 2 playable. The island scenery, environmental controllers,
-music scheduling and the movie after boarding the ship still need recovery.
+Rooftop scenery and the level-2 entrance are implemented. The beach reads
+Desert.rsrc's original CUST/SHAP records, including the floating planks' animation.
+The remaining island scenery, environmental controllers and music scheduling
+still need recovery. Unsupported room transitions retain the current room.
 Other environments' start controllers also remain explicitly unsupported.
 
-SEQS opcode -16 now marks completion in the session, independently of the
-harbor watcher. The host still stops at the level-complete screen; no ending
-movie or next-level transition has been added in this update.
+SEQS opcode -16 marks completion in the session, independently of the harbor
+watcher. The host continues the ship animation while the original end song
+plays, then starts NIS 9 and loads level 2. See [Level transitions](LEVEL_TRANSITION.md).
 
 `tests/test_game_session.py` includes synthetic, asset-free tests for metadata,
 state ownership and resets, plus optional original-resource tests for all

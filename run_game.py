@@ -16,7 +16,9 @@ REQUIRED_ASSETS = (
     "Rooftops.rsrc",
     "NIS.rsrc",
     "Title.rsrc",
+    "Desert.rsrc",
     "intro.json",
+    "ending.json",
     "attract.json",
     "enemy_profiles.json",
     "audio/manifest.json",
@@ -64,20 +66,23 @@ def missing_assets(project=PROJECT):
             for item in manifest["cues"].values():
                 if item.get("file") and not (manifest_path.parent / item["file"]).is_file():
                     missing.append("audio/" + item["file"])
+            if not manifest["cues"].get("32", {}).get("file"):
+                missing.append("audio/manifest.json (needs voyage music)")
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append("audio/manifest.json (needs reimport)")
-    intro_path = project / "assets" / "intro.json"
-    if intro_path.is_file():
-        from pop2.intro import read_program
+    for name in ("intro.json", "ending.json"):
+        scene_path = project / "assets" / name
+        if scene_path.is_file():
+            from pop2.intro import read_program
 
-        try:
-            intro = read_program(intro_path)
-            if manifest_path.is_file():
-                cues = json.loads(manifest_path.read_text(encoding="ascii"))["cues"]
-                if any(not cues.get(key, {}).get("file") for key in intro["audio"]):
-                    raise ValueError("Intro audio is incomplete")
-        except (OSError, ValueError, KeyError, TypeError, AttributeError):
-            missing.append("intro.json (needs reimport)")
+            try:
+                scene = read_program(scene_path)
+                if manifest_path.is_file():
+                    cues = json.loads(manifest_path.read_text(encoding="ascii"))["cues"]
+                    if any(not cues.get(key, {}).get("file") for key in scene["audio"]):
+                        raise ValueError("Scene audio is incomplete")
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                missing.append(name + " (needs reimport)")
     attract_path = project / "assets" / "attract.json"
     if attract_path.is_file():
         from pop2.attract import read_attract

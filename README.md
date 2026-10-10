@@ -54,9 +54,11 @@ in `assets/`:
 - `Kid.rsrc`
 - `Guard.rsrc`
 - `Rooftops.rsrc`
+- `Desert.rsrc`
 - `NIS.rsrc` and `Title.rsrc`
 - `enemy_profiles.json`
 - `intro.json` (recovered scene instructions and audio markers)
+- `ending.json` (voyage after level 1)
 - `attract.json` (original level-one demo and credits program)
 - `audio/` (original samples, voices, instruments and prepared music)
 
@@ -68,11 +70,11 @@ The same import can be performed without a file picker:
 
 The importer leaves the disk image unchanged and does not retain the game
 executable or any ROM or system files. Generated game files are ignored by Git.
-Existing installations without the demo resources will ask for the disk image once more.
+Existing installations missing the new scene resources will ask for the disk image once more.
 Music is prepared during import using the bundled `smssynth` renderer and the
 game's Macintosh instruments, not a General MIDI sound bank. Playback uses SDL
 through pygame; the game does not generate diagnostic recordings.
-The importer uses Unicorn to recover the opening coordinator's drawing and
+The importer uses Unicorn to recover the scene coordinators' drawing and
 timing calls and resolve the original recorded demo into actor states. The game
 itself plays the resulting data natively, without a CPU emulator or the original
 executable. Demo recovery adds time to the first import, not to later launches.
@@ -82,6 +84,7 @@ executable. Demo recovery adds time to the first import, not to later launches.
 | Key | Action |
 | --- | --- |
 | Space during intro | Skip to level 1 |
+| Space during voyage | Skip to the level-2 arrival |
 | Gameplay key during demo or credits | Start a new game |
 | Left / Right | Run, turn, or move in sword mode |
 | Shift + Left / Right | Careful step |
@@ -120,13 +123,16 @@ The Windows debug status bar is hidden by default; enable it in `Display`.
 
 ## Current Progress
 
-The level-1 route is playable from the palace window to boarding the ship.
+The level-1 route is playable from the palace window through the ship's departure
+and voyage to the level-2 beach.
 
 - Original opening story, animated title, palace scenes, music and voices.
 - Original level-one autoplay demo, credits and looping opening.
 - Ten level-1 route screens and the right-hand secret room.
 - Window escape, locomotion, ledge movement, sword combat and rooftop guards.
 - Harbor scenery, water falls and the departing ship's original boarding sequence.
+- Voyage cutscene with original music, voices, dream and storm scenes.
+- Level-2 beach and the original arrival animation.
 - Death/retry flow and the level-1 checkpoint after the screen-7 descent.
 - Four original rooftop music tracks and movement, combat, glass and water sounds.
 - Death music with playback-dependent restart messages; pause also pauses audio.
@@ -135,20 +141,20 @@ The level-1 route is playable from the palace window to boarding the ship.
 - Original 510x384 visible viewport, aspect-preserving nearest-neighbor scaling.
 - Movement at 12 fps and ordinary sword combat at 10 fps.
 
-Level-ending scenes and later levels are not yet implemented.
-Boarding the ship currently ends at a level-complete screen. This remains a WIP;
+Only the entrance of level 2 is implemented; its remaining rooms and later
+levels are not yet playable. This remains a WIP;
 the recovered rules do not yet cover every original collision or input branch.
 
 ## Development
 
 [Level loading](docs/LEVEL_LOADING.md) describes the separation between original
-level data, gameplay state, scenery and the window host. Level 2's starting data
-and arrival sequence can be loaded in tests; its scenery is not yet playable.
+level data, gameplay state, scenery and the window host.
+[Level transitions](docs/LEVEL_TRANSITION.md) documents the boat-to-beach sequence.
 
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m ruff check --select F,E9 .
-python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_playback_navigation tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests tests.test_palettes tests.test_game_session
+python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_playback_navigation tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests tests.test_palettes tests.test_game_session tests.test_level_ending
 python -m tools.recovery_catalog --check
 ```
 

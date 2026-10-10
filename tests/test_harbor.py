@@ -660,14 +660,16 @@ class HarborSceneTests(unittest.TestCase):
         self.assertTrue(scene.terrain_motion.dead)
         self.assertFalse(scene.level_complete)
 
-    def test_completion_stops_gameplay_but_dev_jump_and_restart_remain_usable(self):
+    def test_completion_holds_actors_but_ship_and_development_controls_continue(self):
         self.prepare('9')
         self.run_to_ship()
         scene = self.scene
         self.assertTrue(scene.level_complete)
-        snapshot = (scene.player_x, scene.action, scene.harbor.ship_frame, scene.combat.world_frame)
+        snapshot = (scene.player_x, scene.action, scene.combat.world_frame)
+        ship_frame = scene.harbor.ship_frame
         self.tick(20)
-        self.assertEqual(snapshot, (scene.player_x, scene.action, scene.harbor.ship_frame, scene.combat.world_frame))
+        self.assertEqual(snapshot, (scene.player_x, scene.action, scene.combat.world_frame))
+        self.assertGreater(scene.harbor.ship_frame, ship_frame)
         scene.jump_to_screen('10')
         self.assertFalse(scene.level_complete)
         self.assertEqual(scene.harbor.ship_frame, 0)
@@ -675,6 +677,26 @@ class HarborSceneTests(unittest.TestCase):
         self.assertEqual(scene.room_id, 3)
         self.assertTrue(scene.opening.active)
         self.assertFalse(scene.harbor.ship_active)
+
+    def test_actual_boarding_runs_through_voyage_to_the_level_two_arrival(self):
+        self.prepare('9')
+        self.run_to_ship()
+        scene = self.scene
+        self.assertTrue(scene.level_complete)
+        self.assertEqual(scene.action, 0)
+        with patch.object(scene, 'render'):
+            for _ in range(5000):
+                self.tick()
+                if scene.game.level.number == 2:
+                    break
+            self.assertEqual(scene.game.level.number, 2)
+            self.assertEqual(scene.action, 256)
+            self.assertIsNone(scene.harbor)
+            self.assertIsNone(scene.intro)
+            self.tick(8)
+        self.assertEqual((scene.player_x, scene.action), (247, 15))
+        self.assertFalse(scene.terrain_motion.dead)
+        self.assertEqual(scene.combat.player.life, 3)
 
     def test_f2_entry_for_descent_starts_on_upper_roof(self):
         self.prepare('8')

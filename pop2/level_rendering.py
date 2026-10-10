@@ -7,27 +7,41 @@ from pop2.render_opening import (
 
 class LevelRenderer:
     def __init__(self, level):
-        if level.kind != 5:
+        if level.kind != 5 and level.number != 2:
             raise ValueError(f"Level {level.number} scenery is not implemented (environment {level.kind})")
         self.level = level
         self.rooms = {}
+        self.beach = None
         self.room(level.start_room)
 
     def room(self, room_id):
         if not 0 <= room_id < 32:
             raise ValueError("Invalid scenery room")
         if room_id not in self.rooms:
-            self.rooms[room_id] = build_opening_room(include_curtain=False, room_id=room_id,
-                                                     level_resource_id=self.level.resource_id)
+            if self.level.kind == 1:
+                if room_id != self.level.start_room:
+                    raise ValueError("Only the level 2 entrance is implemented")
+                from pop2.desert import BeachScene
+                from pop2.render_opening import load_resource_file
+
+                self.beach = BeachScene.read(load_resource_file("Desert.rsrc"), room_id)
+                self.rooms[room_id] = self.beach.room
+            else:
+                self.rooms[room_id] = build_opening_room(include_curtain=False, room_id=room_id,
+                                                        level_resource_id=self.level.resource_id)
         return self.rooms[room_id]
 
-    def animated_layer(self, frame, room_id, harbor, front=False):
+    def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0):
+        if self.beach is not None:
+            return frame if front else self.beach.draw(frame, frame_number)
         if harbor is None:
             return frame
         return draw_harbor(frame, room_id, harbor, front=front,
                            level_resource_id=self.level.resource_id)
 
     def supported_rooms(self):
+        if self.level.kind == 1:
+            return [self.level.start_room]
         scenery_map, _shapes, _pieces = rooftop_scene_data(self.level.resource_id)
         supported_kinds = {0, 1, 20, 47, 48, 49}
         rooms = []
@@ -44,6 +58,8 @@ class LevelRenderer:
         return rooms
 
     def screen_entries(self):
+        if self.level.kind == 1:
+            return {"1": self.level.start_room}
         terrain, _shapes, _pieces = rooftop_scene_data(self.level.resource_id)
         available = set(self.supported_rooms())
         route = []

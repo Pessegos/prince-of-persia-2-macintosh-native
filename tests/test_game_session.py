@@ -259,12 +259,11 @@ class OriginalLevelSessionTests(unittest.TestCase):
                              build_opening_room(include_curtain=False, room_id=room).flattened().tobytes())
             self.assertIs(renderer.room(room), renderer.room(room))
 
-    def test_missing_level_two_scenery_is_reported_before_opening_a_window(self):
+    def test_missing_later_level_scenery_is_reported_before_opening_a_window(self):
         from pop2.level_rendering import LevelRenderer
 
-        game = GameSession.load(self.resources, 2)
         with self.assertRaisesRegex(ValueError, "scenery is not implemented"):
-            LevelRenderer(game.level)
+            LevelRenderer(self.resources.level(3))
 
     def test_initial_visited_and_generated_guards_inherit_the_player_environment(self):
         data = bytearray(self.resources.level(1).data)
@@ -301,8 +300,8 @@ class LevelHostTests(unittest.TestCase):
         scene.combat.player.life = 2
         viewport = scene.native_viewport.tobytes()
         with patch.object(scene, "render") as render, \
-                self.assertRaisesRegex(ValueError, "scenery is not implemented"):
-            scene.load_level(2)
+                self.assertRaisesRegex(ValueError, "entry controller is not implemented"):
+            scene.load_level(3)
         render.assert_not_called()
         self.assertIs(scene.game, game)
         self.assertIs(scene.level_renderer, renderer)
@@ -313,8 +312,7 @@ class LevelHostTests(unittest.TestCase):
     def test_restart_keeps_the_current_level_and_new_game_returns_to_level_one(self):
         scene = self.scene
         second = GameSession.load(scene.resources, 2)
-        # Keep a test-only scenery adapter: this test exercises host reset
-        # ownership, not level-two rendering, which is still unsupported.
+        # This test isolates reset ownership from the beach renderer.
         scene.bind_level(second, scene.level_renderer)
         scene.combat.player.max_life = 5
         scene.combat.player.life = 1

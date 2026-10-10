@@ -122,7 +122,7 @@ They also cover a real dock descent/hold/climb, the plank-tip pixels throughout
 both transitions and the full hold cycle, and the full landing/rise pose
 chain after releasing the final rooftop, with ordinary wall bumps unchanged.
 
-Successful boarding freezes gameplay at a host level-complete screen.
-Dev Mode and the New Game/Restart Level commands remain available. The
-level-ending movie and level-2 loader are not implemented; green tests are
-not a claim of full original-game parity.
+Successful boarding continues the ship animation during the level-end song,
+then plays the voyage and enters the level-2 beach. See
+[Level transitions](LEVEL_TRANSITION.md) for that handoff and its current boundary.
+Green tests are not a claim of full original-game parity.

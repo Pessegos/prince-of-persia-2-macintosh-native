@@ -23,7 +23,7 @@ OPERATIONS = {
     "text": 5, "sound": 2, "wait_sound": 2, "wait_current": 1,
     "timer": 2, "wait_timer": 1, "wait": 1, "cue": 1, "palette": 3,
     "brightness": 2, "fade": 3, "fade_both": 1, "flash": 5, "stop": 1,
-    "title": 0,
+    "title": 0, "fade_in_both": 1,
 }
 
 
@@ -123,9 +123,9 @@ def dissolve_words(pattern=None):
 
 
 class IntroAssets:
-    def __init__(self, directory=ASSET_DIR):
+    def __init__(self, directory=ASSET_DIR, program_name="intro.json"):
         directory = Path(directory)
-        self.program = read_program(directory / "intro.json")
+        self.program = read_program(directory / program_name)
         resources = parse_resource_fork((directory / "NIS.rsrc").read_bytes())
         self.shapes = {key: indexed_shape(value["data"]) for key, value in resources["SHAP"].items()}
         self.palettes = {key: palette_colors(value["data"]) for key, value in resources["CTBL"].items()}
@@ -431,9 +431,9 @@ class IntroPlayer:
                 self.changed()
         elif op == "fade":
             self.fade(self.assets.palettes.get(args[0], {}), args[1], args[2])
-        elif op == "fade_both":
+        elif op in ("fade_both", "fade_in_both"):
             colors = {index: color for colors in self.loaded.values() for index, color in colors.items()}
-            self.fade(colors, False, args[0])
+            self.fade(colors, op == "fade_in_both", args[0])
         elif op == "brightness":
             flags, percent = args
             for flag, colors in self.loaded.items():

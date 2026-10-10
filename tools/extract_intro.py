@@ -64,7 +64,7 @@ def extract_dissolve(image):
     return None
 
 
-def recover_scenes(program, nis):
+def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8)):
     from unicorn import Uc, UcError, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE
     from unicorn.m68k_const import (
         UC_M68K_REG_A5, UC_M68K_REG_A7, UC_M68K_REG_PC, UC_M68K_REG_D0,
@@ -76,7 +76,7 @@ def recover_scenes(program, nis):
     data = expand_a5_data(resources)
     shapes = parse_resource_fork(nis)["SHAP"]
     scenes = []
-    for entry in (0x45c2, 0x4ee8):
+    for entry in entries:
         if code[entry:entry + 2] != b"\x4e\x56":
             raise ValueError("Unsupported Macintosh opening coordinator")
         if entry == 0x4ee8:
@@ -88,6 +88,7 @@ def recover_scenes(program, nis):
         cpu.mem_map(0, 0x1000000)
         cpu.mem_write(base, code)
         cpu.mem_write(a5 - len(data), data)
+        cpu.mem_write(a5 - 0x521e, b"\1")
         cpu.mem_write(stack, struct.pack(">I", end))
         cpu.reg_write(UC_M68K_REG_A5, a5)
         cpu.reg_write(UC_M68K_REG_A7, stack)
@@ -147,7 +148,9 @@ def recover_scenes(program, nis):
                     cpu.mem_write(a5 - 0x245e, b"\0\0")
                 elif target == 0x0bf4:
                     emit("sound", w(4), 1)
-                    emit("text", w(), w(2), 0, 0, 0)
+                    initial = word(a5 - 0x2460) if word(a5 - 0x245e) else 0
+                    emit("text", w(), w(2), initial, word(a5 - 0x2462), word(a5 - 0x2464))
+                    cpu.mem_write(a5 - 0x245e, b"\0\0")
                     emit("wait_sound", w(4), 1)
                 elif target == 0x26fc:
                     emit("palette", w(), w(2), l(4))
@@ -160,6 +163,8 @@ def recover_scenes(program, nis):
                     emit("brightness", w(), w(2))
                 elif target == 0x2a3e:
                     emit("fade_both", l())
+                elif target == 0x29ea:
+                    emit("fade_in_both", l())
                 elif target == 0x2a90:
                     emit("flash", w(), l(2), l(6), l(10), l(14))
                 elif target == 0x2b70:
@@ -210,7 +215,7 @@ def recover_scenes(program, nis):
                     emit("stop", w())
                 elif target == 0xfb2:
                     emit("stop", 1)
-                elif target not in (0xf8a, 0x1012, 0x11fa, 0x1202):
+                elif target not in (0xf8a, 0xfea, 0x1012, 0x11fa, 0x1202):
                     raise ValueError(f"Unrecognized opening API {target:#x}")
             cpu.reg_write(UC_M68K_REG_D0, result)
             cpu.reg_write(UC_M68K_REG_PC, address + 4)
@@ -226,9 +231,8 @@ def recover_scenes(program, nis):
     return scenes
 
 
-def extract_intro(image, program, nis, directory, progress=lambda _text: None):
-    directory = Path(directory)
-    operations = recover_scenes(program, nis)
+def extract_scene_audio(image, operations, directory, progress=lambda _text: None):
+    directory = Path(directory).resolve()
     banks = {
         0: mohawk_resources(get_data_fork(image, "NISMIDI.dat"))["MIDI"],
         1: mohawk_resources(get_data_fork(image, "NISDIGI.dat"))["snd "],
@@ -270,6 +274,13 @@ def extract_intro(image, program, nis, directory, progress=lambda _text: None):
         manifest["cues"][str(resource_id)] = entry
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="ascii")
     (directory / "audio/playback.mid").unlink(missing_ok=True)
+    return audio
+
+
+def extract_intro(image, program, nis, directory, progress=lambda _text: None):
+    directory = Path(directory)
+    operations = recover_scenes(program, nis)
+    audio = extract_scene_audio(image, operations, directory, progress)
     a5 = expand_a5_data(parse_resource_fork(program))
     title_rects = [list(struct.unpack_from(">4h", a5, len(a5) - offset)) for offset in (0x22f4, 0x22ec)]
     result = {"schema": 1, "operations": operations, "audio": audio, "title_rects": title_rects}
@@ -277,3 +288,12 @@ def extract_intro(image, program, nis, directory, progress=lambda _text: None):
     if pattern is not None:
         result["dissolve"] = pattern
     (directory / "intro.json").write_text(json.dumps(result, indent=2) + "\n", encoding="ascii")
+
+
+def extract_ending(image, program, nis, directory, progress=lambda _text: None):
+    """CheckPlayNIS selects NIS 9 for the level 1 -> 2 transition."""
+    directory = Path(directory)
+    operations = recover_scenes(program, nis, entries=(0x0cf2,))
+    audio = extract_scene_audio(image, operations, directory, progress)
+    result = {"schema": 1, "operations": operations, "audio": audio}
+    (directory / "ending.json").write_text(json.dumps(result, indent=2) + "\n", encoding="ascii")

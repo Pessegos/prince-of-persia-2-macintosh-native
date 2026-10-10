@@ -26,6 +26,11 @@ class AssetImportTests(unittest.TestCase):
         self.intro.side_effect = lambda _image, _program, _nis, directory, _progress: (
             directory / "intro.json").write_bytes(b"prepared intro")
         self.addCleanup(intro.stop)
+        ending = patch.object(extract_assets, "extract_ending")
+        self.ending = ending.start()
+        self.ending.side_effect = lambda _image, _program, _nis, directory, _progress: (
+            directory / "ending.json").write_bytes(b"prepared voyage")
+        self.addCleanup(ending.stop)
         attract = patch.object(extract_assets, "extract_attract")
         self.attract = attract.start()
         self.attract.side_effect = lambda _program, _resources, directory, _progress: (
@@ -49,7 +54,8 @@ class AssetImportTests(unittest.TestCase):
             patch.object(extract_assets, "extract_bytes", return_value=self.profiles) as profiles,
         ):
             files = extract_assets.extract_assets(self.image, self.output)
-        self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json", "attract.json"})
+        self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json",
+                                     "ending.json", "attract.json"})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
         for name in extract_assets.RESOURCE_FILES:
             self.assertEqual((self.output / name).read_bytes(), self.forks[name])
@@ -126,6 +132,21 @@ class AssetImportTests(unittest.TestCase):
             patch.object(extract_assets, "parse_resource_fork", side_effect=self.resource_types),
             patch.object(extract_assets, "extract_bytes", return_value=self.profiles),
             self.assertRaisesRegex(ValueError, "MIDI rendering failed"),
+        ):
+            extract_assets.extract_assets(self.image, self.output)
+        self.assertEqual(original.read_bytes(), b"existing game")
+        self.assertEqual(list(self.output.iterdir()), [original])
+
+    def test_voyage_failure_preserves_installed_resources(self):
+        self.output.mkdir()
+        original = self.output / "Prince.rsrc"
+        original.write_bytes(b"existing game")
+        self.ending.side_effect = ValueError("Unsupported voyage coordinator")
+        with (
+            patch.object(extract_assets, "get_resource_fork", side_effect=self.fork),
+            patch.object(extract_assets, "parse_resource_fork", side_effect=self.resource_types),
+            patch.object(extract_assets, "extract_bytes", return_value=self.profiles),
+            self.assertRaisesRegex(ValueError, "Unsupported voyage coordinator"),
         ):
             extract_assets.extract_assets(self.image, self.output)
         self.assertEqual(original.read_bytes(), b"existing game")

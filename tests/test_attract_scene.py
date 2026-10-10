@@ -149,20 +149,26 @@ class AttractSceneTests(unittest.TestCase):
         scene = self.scene
         live = scene.combat
         parts = scene.development_parts()
-        self.assertEqual({part.stage for part in parts}, {"intro", "demo", "credits"})
+        self.assertEqual({part.stage for part in parts}, {"intro", "demo", "credits", "ending", "level"})
         for part in parts:
             with self.subTest(part=part.label), patch.object(scene, "render"):
                 scene.seek_playback_part(part)
-                self.assertEqual(scene.attract_stage, part.stage)
-                if part.stage == "demo":
+                if part.stage == "level":
+                    self.assertIsNone(scene.attract_stage)
+                    self.assertEqual(scene.game.level.number, part.index)
+                    self.assertIsNot(scene.combat, live)
+                elif part.stage == "demo":
+                    self.assertEqual(scene.attract_stage, part.stage)
                     self.assertEqual(scene.demo.index, part.index)
                     self.assertIsNot(scene.combat, live)
                 else:
+                    self.assertEqual(scene.attract_stage, part.stage)
                     self.assertIs(scene.combat, live)
                 self.assertEqual(parts[scene.current_playback_part()], part)
                 self.assertFalse(scene.held_directions)
         scene.finish_intro()
-        self.assertIs(scene.combat, live)
+        self.assertIsNot(scene.combat, live)
+        self.assertEqual(scene.game.level.number, 1)
         self.assertEqual(scene.combat.player.life, 3)
         self.assertIsNone(scene.intro)
         self.assertIsNone(scene.demo)
@@ -187,7 +193,7 @@ class AttractSceneTests(unittest.TestCase):
         groups = scene.dev_menu.groups
         scene.close_dev_mode()
         self.assertEqual([group.label for group in groups],
-                         ["Prologue", "Titles", "Opening story", "Level 1 demo", "Credits"])
+                         ["Prologue", "Titles", "Opening story", "Level 1 demo", "Credits", "After Level 1"])
         for group_index, group in enumerate(groups):
             with self.subTest(sequence=group.label):
                 scene.open_dev_mode()
@@ -216,14 +222,14 @@ class AttractSceneTests(unittest.TestCase):
         playback.busy.return_value = False
         scene.audio = AudioEngine(playback=playback)
         parts = scene.development_parts()
-        for stage in ("intro", "demo", "credits"):
+        for stage in ("intro", "demo", "credits", "ending"):
             part = [part for part in parts if part.stage == stage][-1]
             playback.play.reset_mock()
             with self.subTest(stage=stage), patch.object(scene, "render"):
                 scene.seek_playback_part(part)
                 calls = playback.play.call_args_list
                 self.assertNotIn(("effect", 36), [call.args for call in calls])
-                if stage == "intro":
+                if stage in ("intro", "ending"):
                     active = [cue for cue, start, duration in scene.intro.playing.values()
                               if scene.intro.time - start < duration]
                     self.assertEqual([call.args[1] for call in calls], active)

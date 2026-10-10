@@ -47,3 +47,15 @@ def playback_parts(intro_assets, attract_data, screen_label):
     for index in range(len(attract_data["credits"]["pages"])):
         parts.append(PlaybackPart(f"Credits: page {index + 1}", "credits", index, "Credits"))
     return tuple(parts)
+
+
+def ending_parts(assets):
+    parts = [PlaybackPart("Voyage: departure", "ending", 0, "After Level 1")]
+    names = {28002: "Stowaway", 28004: "Dream", 28008: "Storm"}
+    for index, item in enumerate(assets.program["operations"]):
+        if item["op"] == "palette" and item["args"][0] in names:
+            parts.append(PlaybackPart("Voyage: " + names[item["args"][0]], "ending", index,
+                                      "After Level 1"))
+            names.pop(item["args"][0])
+    parts.append(PlaybackPart("Level 2: arrival", "level", 2, "After Level 1"))
+    return tuple(parts)

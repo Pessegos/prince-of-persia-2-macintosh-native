@@ -17,7 +17,7 @@ from tools.extract_enemy_profiles import expand_a5_data
 
 
 AUDIO_SCHEMA = 1
-LEVEL_ONE_SONGS = (6, 38, 39, 40, 41, 42, 43, 64)
+LEVEL_ONE_SONGS = (6, 32, 38, 39, 40, 41, 42, 43, 64)
 SYNTH_DIR = Path(__file__).resolve().parents[1] / "vendor" / "smssynth"
 
 
