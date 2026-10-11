@@ -41,6 +41,16 @@ class TerrainTests(unittest.TestCase):
         self.assertEqual(self.map.tile(3, 10, 1), self.map.tile(4, 0, 1))
         self.assertIsNone(self.map.tile(3, 8, 3).room)
 
+    def test_down_cut_veto_matches_native_room_and_environment_pairs(self):
+        self.assertIsNotNone(self.map.neighbor(10, "down"))
+        for kind, blocked in ((5, {10}), (6, {2, 4}), (1, set())):
+            level = bytearray(self.level)
+            struct.pack_into(">H", level, 0x2186, kind)
+            level_map = LevelMap(level)
+            for room in range(20):
+                with self.subTest(kind=kind, room=room):
+                    self.assertEqual(level_map.allows_down_cut(room), room not in blocked)
+
     def test_source_floor_and_row_coordinates(self):
         self.assertEqual([floor_y(i) for i in range(3)], [106, 226, 346])
         self.assertEqual([character_row(y) for y in (5, 6, 124, 125, 226, 365)],
@@ -426,6 +436,37 @@ class TerrainTests(unittest.TestCase):
         self.assertEqual(floor_y(motion.row) + runtime.state.current_y, 730)
         self.assertEqual(runtime.state.sound_events.count(7), 1)
 
+    def test_vetoed_lower_link_keeps_room_through_fatal_fall(self):
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                motion = TerrainMotion(10, 1, falling=True)
+                runtime = self.runtime(12, x=200, facing=facing)
+                physics = RooftopPhysics(self.map, self.frames)
+                events = []
+                for _ in range(30):
+                    old_x = runtime.state.target_x
+                    runtime.next_frame()
+                    events.extend(physics.advance(
+                        motion, runtime, old_x, (190, 160, 210, 226), cut_enabled=False))
+                    self.assertEqual(motion.room, 10)
+                    if motion.dead:
+                        break
+                self.assertTrue(motion.dead)
+                self.assertGreater(floor_y(motion.row) + runtime.state.current_y, 365)
+                self.assertNotIn("room", [event.kind for event in events])
+                self.assertEqual([event.kind for event in events].count("death"), 1)
+
+    def test_vetoed_lower_link_cannot_allow_an_endless_void_fall(self):
+        runtime = self.runtime(12, x=200)
+        motion = TerrainMotion(10, 5, falling=True)
+        runtime.state.current_y = 731 - floor_y(motion.row)
+        events = RooftopPhysics(self.map, self.frames).advance(
+            motion, runtime, 200, (190, 670, 210, 731), cut_enabled=False)
+        self.assertTrue(motion.dead)
+        self.assertEqual(motion.room, 10)
+        self.assertEqual(floor_y(motion.row) + runtime.state.current_y, 730)
+        self.assertEqual([event.kind for event in events], ["death"])
+
     def test_landing_velocity_thresholds_and_damage(self):
         for velocity, sequence, damage, dead in ((12, 17, 0, False), (49, 17, 0, False),
                                                 (50, 20, 1, False), (62, 20, 1, False),
@@ -624,6 +665,20 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertEqual((self.scene.terrain_motion.room, self.scene.terrain_motion.row), (3, 1))
         self.tick(3)
         self.assertFalse(self.scene.terrain_motion.falling)
+
+    def test_missed_screen_six_jump_does_not_show_unused_lower_room(self):
+        scene = self.scene
+        scene.peaceful = True
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                scene.jump_to_room(10, row=0, x=200, facing=facing)
+                for _ in range(45):
+                    self.tick()
+                    self.assertEqual((scene.room_id, scene.terrain_motion.room), (10, 10))
+                    if scene.terrain_motion.dead:
+                        break
+                self.assertTrue(scene.terrain_motion.dead)
+                self.assertEqual(scene.combat.player.life, 0)
 
     def test_guard_approaches_during_window_escape_without_hitting_the_opening(self):
         scene = self.scene

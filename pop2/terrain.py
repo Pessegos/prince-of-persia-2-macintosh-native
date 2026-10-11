@@ -67,6 +67,16 @@ class LevelMap:
         value = struct.unpack_from(">H", self.level, 0x2080 + room * 8 + offset)[0]
         return value - 1 if value else None
 
+    def allows_down_cut(self, room, actor_type=0):
+        # CutChar 6:4c90-4cd2 vetoes these native rooms before following
+        # their lower LEVL links. NPCs use Cut (6:472a), without this veto.
+        # Room IDs here are zero-based.
+        if actor_type not in (0, None):
+            return True
+        kind = struct.unpack_from(">H", self.level, 0x2186)[0]
+        blocked = {5: (10,), 6: (2, 4)}
+        return room not in blocked.get(kind, ())
+
     def tile(self, room, column, row):
         # Same vertical-before-horizontal link traversal as GetBlock/Cut.
         while not 0 <= column < 10 or not 0 <= row < 3:
@@ -660,7 +670,10 @@ class RooftopPhysics:
             self.map.align_wall(motion.room, motion.row, state, frame_record)
 
         absolute_y = floor_y(motion.row) + state.current_y
-        if absolute_y > VOID_DEATH_Y and self.map.neighbor(motion.room, "down") is None:
+        if absolute_y > VOID_DEATH_Y and (
+            self.map.neighbor(motion.room, "down") is None
+            or not self.map.allows_down_cut(motion.room, state.actor_type)
+        ):
             state.current_y = VOID_DEATH_Y - floor_y(motion.row)
             if state.level_kind == 5 and motion.room in WATER_ROOMS:
                 state.vertical_velocity = 0
@@ -703,7 +716,8 @@ class RooftopPhysics:
             motion.row += 1
             state.current_y -= TILE_HEIGHT
             if motion.row >= 3:
-                room = self.map.neighbor(motion.room, "down")
+                room = (self.map.neighbor(motion.room, "down")
+                        if self.map.allows_down_cut(motion.room, state.actor_type) else None)
                 if room is not None:
                     # Cut coordinates use the 365-pixel clip, not 360 tile pixels.
                     motion.smooth_landing = (motion.room == 11 and room == 14

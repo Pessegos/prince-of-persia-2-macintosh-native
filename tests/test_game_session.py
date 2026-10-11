@@ -57,6 +57,17 @@ def session(source, number=1, terrain_enabled=True):
 
 
 class LevelDefinitionTests(unittest.TestCase):
+    def test_native_down_cut_veto_uses_environment_not_level_number(self):
+        from pop2.terrain import LevelMap
+
+        for number in (1, 2, 5):
+            for kind, blocked in ((5, {10}), (6, {2, 4}), (1, set())):
+                level_map = LevelMap(level_bytes(number, kind))
+                for room in range(20):
+                    with self.subTest(number=number, kind=kind, room=room):
+                        self.assertEqual(level_map.allows_down_cut(room), room not in blocked)
+                        self.assertTrue(level_map.allows_down_cut(room, actor_type=2))
+
     def test_resource_selection_decodes_start_and_checkpoint_per_level(self):
         data = resources()
         first, second = data.level(1), data.level(2)

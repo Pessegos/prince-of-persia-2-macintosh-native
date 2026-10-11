@@ -96,6 +96,8 @@ SWORD_SEQUENCES = {
 }
 SWORD_STEP_KINDS = {"sword_advance", "sword_retreat"}
 SWORD_STEP_SEQUENCES = {SWORD_ADVANCE_SEQUENCE, SWORD_RETREAT_SEQUENCE}
+SWORD_ATTACK_START_SEQUENCES = {SWORD_ATTACK_SEQUENCE, SWORD_BLOCK_ATTACK_SEQUENCE, 203}
+SWORD_ATTACK_START_POSES = {151, 152, 162}
 SWORD_COMBAT_SEQUENCES = set(SWORD_SEQUENCES.values()) | {
     SWORD_GUARD_SEQUENCE, SWORD_BLOCK_ATTACK_SEQUENCE, 69, 203, 204, 205, 206,
     PLAYER_COMBAT_TURN_SEQUENCE, 245,
@@ -420,6 +422,13 @@ class ScenePrototype(WindowControls):
     def queue_sword_action(self, kind):
         if self.sword_sheathing or self._combat_controls_locked():
             return False
+        state = self.sequence_state
+        # Port QoL: a rapid repeat during the first two attack poses must
+        # not schedule another swing. Drawing/blocking still accepts Ctrl.
+        if (kind == "sword_attack"
+                and state.sequence_id in SWORD_ATTACK_START_SEQUENCES
+                and state.action in SWORD_ATTACK_START_POSES):
+            return False
         if (kind == "sword_draw" and self._is_resting()) or (
             kind != "sword_draw"
             and self.sword_drawn
@@ -666,21 +675,24 @@ class ScenePrototype(WindowControls):
     def start_jump(self):
         self.jump_started_for_press = True
         horizontal = self.horizontal_input
-        starting_run = (
+        starting_reverse = (
             horizontal != 0
             and self.sequence_state.sequence_id == RUN_START_SEQUENCE
             and self.sequence_state.action in (1, 2, 3)
+            and facing_for_direction(horizontal) != self.sequence_state.facing
         )
         running = (
             horizontal != 0
             and (self.sequence_state.sequence_id in RUN_SEGMENT_SEQUENCES
                  or self.sequence_state.sequence_id == RUN_JUMP_SEQUENCE)
-            and not starting_run
+            and not starting_reverse
         )
         # A fresh Up during SEQS:4 waits for DoRunJump's next run pose;
         # landing must not turn that buffered command into a standing jump.
         command = BufferedCommand("jump", horizontal, running=running)
-        if self._is_resting() or starting_run:
+        # Port QoL: Up during run startup waits for the legal run-jump pose
+        # instead of rewinding the run into a standing forward jump.
+        if self._is_resting() or starting_reverse:
             self.pending_action = None
             self.dispatch_jump(command)
         else:

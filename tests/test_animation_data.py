@@ -1231,26 +1231,21 @@ class AnimationDataTests(unittest.TestCase):
         scene.advance_animation()
         self.assertEqual(scene.action, 15)
 
-    def test_standing_horizontal_jump_works_in_either_key_order(self):
-        for up_first in (False, True):
-            with self.subTest(up_first=up_first):
-                scene = self.scene(facing=0)
+    def test_up_before_forward_still_selects_a_standing_jump(self):
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                scene = self.scene(facing=facing)
                 scene.root = DummyRoot()
                 scene.animation_after_id = None
                 scene.next_animation_at = 0
                 scene.render = lambda: None
 
-                if up_first:
-                    scene.up_key(None)
-                    scene.horizontal_key(None, -1, True)
-                else:
-                    scene.horizontal_key(None, -1, True)
-                    self.assertEqual(scene.action, 1)
-                    scene.up_key(None)
+                scene.up_key(None)
+                scene.horizontal_key(None, 1 if facing else -1, True)
 
                 self.assertEqual(scene.sequence_state.sequence_id, JUMP_FORWARD_SEQUENCE)
                 self.assertEqual(scene.action, 16)
-                self.assertEqual(scene.player_x, 112)
+                self.assertEqual(scene.player_x, 120 if facing else 112)
                 self.assertFalse(scene.run_active)
                 self.assertIsNone(scene.pending_action)
                 scene.set_key_state("up", False)
@@ -1260,6 +1255,32 @@ class AnimationDataTests(unittest.TestCase):
                     actions.append(scene.action)
                 self.assertEqual(actions, [*range(16, 34), 15])
                 self.assertNotIn(160, actions)
+
+    def test_early_up_during_run_keeps_startup_and_waits_for_running_jump(self):
+        for facing in (0, 1):
+            for pose in range(1, 7):
+                with self.subTest(facing=facing, pose=pose):
+                    scene = self.sword_scene()
+                    scene.sequence_state.facing = facing
+                    direction = 1 if facing else -1
+                    scene.horizontal_key(None, direction, True)
+                    for _ in range(pose - 1):
+                        scene.advance_animation()
+                    before = (scene.action, scene.player_x)
+                    scene.up_key(None)
+                    scene.set_key_state("up", False)
+                    self.assertEqual((scene.action, scene.player_x), before)
+                    self.assertEqual(scene.pending_action,
+                                     BufferedCommand("jump", direction, running=True))
+                    actions = [scene.action]
+                    for _ in range(9):
+                        scene.advance_animation()
+                        actions.append(scene.action)
+                        if scene.sequence_state.sequence_id == RUN_JUMP_SEQUENCE:
+                            break
+                    self.assertEqual(actions, [*range(pose, 8), 34])
+                    self.assertTrue(scene.run_active)
+                    self.assertIsNone(scene.pending_action)
 
     def test_held_horizontal_jump_repeats_and_release_keeps_explicit_queue(self):
         scene = self.scene(facing=1)
@@ -2335,6 +2356,55 @@ class AnimationDataTests(unittest.TestCase):
             scene.advance_animation()
             self.assertEqual(scene.action, action)
         self.assertIsNone(scene.pending_action)
+
+    def test_rapid_ctrl_during_attack_start_does_not_queue_an_extra_swing(self):
+        for facing in (0, 1):
+            for counter in (False, True):
+                for elapsed_frames in (0, 1):
+                    with self.subTest(facing=facing, counter=counter,
+                                      elapsed_frames=elapsed_frames):
+                        scene = self.guarded_sword_scene(facing)
+                        scene.start_sword_action(
+                            "sword_attack", sequence_id=66 if counter else None)
+                        for _ in range(elapsed_frames):
+                            scene.advance_animation()
+                        for _ in range(8):
+                            scene.set_key_state("ctrl", True)
+                            scene.set_key_state("ctrl", False)
+                        self.assertIsNone(scene.pending_action)
+                        for _ in range(12):
+                            scene.advance_animation()
+                        self.assertEqual(scene.sequence_state.sequence_id, SWORD_GUARD_SEQUENCE)
+
+    def test_spaced_ctrl_after_attack_start_preserves_one_queued_swing(self):
+        for facing in (0, 1):
+            for counter in (False, True):
+                with self.subTest(facing=facing, counter=counter):
+                    scene = self.guarded_sword_scene(facing)
+                    scene.start_sword_action("sword_attack", sequence_id=66 if counter else None)
+                    for _ in range(2):
+                        scene.advance_animation()
+                    self.assertEqual(scene.action, 153)
+                    scene.set_key_state("ctrl", True)
+                    scene.set_key_state("ctrl", False)
+                    self.assertEqual(scene.pending_action, BufferedCommand("sword_attack"))
+                    actions = []
+                    for _ in range(18):
+                        scene.advance_animation()
+                        actions.append(scene.action)
+                    self.assertEqual(actions.count(151), 1)
+                    self.assertEqual(scene.sequence_state.sequence_id, SWORD_GUARD_SEQUENCE)
+                    self.assertIsNone(scene.pending_action)
+
+    def test_attack_start_filter_does_not_discard_block_or_sheathe_requests(self):
+        for kind in ("sword_block", "sword_sheathe"):
+            with self.subTest(kind=kind):
+                scene = self.guarded_sword_scene()
+                scene.start_sword_action("sword_attack")
+                scene.queue_sword_action(kind)
+                scene.set_key_state("ctrl", True)
+                scene.set_key_state("ctrl", False)
+                self.assertEqual(scene.pending_action, BufferedCommand(kind))
 
     def test_sword_step_tap_preserves_facing_and_source_offsets(self):
         for facing in (0, 1):

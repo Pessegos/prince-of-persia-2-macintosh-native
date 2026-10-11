@@ -93,7 +93,7 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 | Standing with Shift pending/consumed | Fresh Backward, Up, Down before a fresh Forward-only step | 6:0d4c-0db0 | Step/turn tested; buffered host modifier classification can be stale |
 | Draw from rest | Fresh Ctrl and no directional latches; consume modifier, clear directions, DoEngarde | 6:0c90-0cb6, 1e78 | Draw implemented; simultaneous-input gates partial |
 | Turn poses 45-49 | Pose 48: active Forward, no Up/Down, modifier >= 0 resumes run; otherwise protected | 6:1014-1066 | Held-run transition tested; host-held state replaces latches |
-| Run start poses 1-3 | Fresh Up AND fresh Forward: forward jump; clear directions | 6:15b6-15da | Common chord tested; full latch timing missing |
+| Run start poses 1-3 | Fresh Up AND fresh Forward: forward jump; clear directions | 6:15b6-15da | Port deliberately buffers a run jump during forward startup; see Intentional Port Extensions |
 | Vertical preparation 67-69 | Active Forward: standing forward jump | 6:15de-15e8 | Chord tested; 35 ms host chord delay is an approximation |
 | Running 4-14 | Both horizontals zero: brake only at 7/11; otherwise Backward before fresh Up, then fresh Down; finally consume fresh Forward | 6:11e4-1274 | Ordinary flow tested, including release at pose 8 waiting for 11; latest-command slot cannot reproduce every conflict |
 | Run-jump takeoff | Legal run poses plus two-cell geometry; accepted jump clears directions, consumes Up | 6:1c14-1d5e | Ordinary geometry tested |
@@ -198,6 +198,19 @@ current pose is not immediately overwritten and that the original draw poses
 207-210 reach sword guard. Native-latch integration must preserve this explicit
 extension separately from ordinary attack buffering.
 
+Up pressed during run startup now retains a running-jump request until the
+first legal run pose (7). It does not rewind startup poses 1-3 into a standing
+jump. This is an intentional input-tolerance extension; Up before Forward
+still selects a standing jump, and takeoff alignment/range are unchanged.
+
+Rapid Ctrl repeats during the first two attack poses do not buffer another
+swing. Normal attacks close the buffer at poses 151/152; counters at 162/152.
+The buffer opens at pose 153, about 200 ms into either attack at 10 fps.
+This is another intentional extension, not a recovered native timing rule.
+Drawing the sword still accepts a first queued attack, and block/counter,
+movement and sheathing commands are not delayed. Using animation poses keeps
+the window frozen while paused and avoids depending on OS key-repeat timing.
+
 ## Run Stop and Ledge Entry Audit
 
 Executing the original GenCtrl, AnimChar, LoadFrame, CheckFloor and
@@ -219,6 +232,24 @@ multiple release poses. It is a developer spawn choice, not a recovered
 universal original-game entry position. Normal room cuts, stop displacement,
 the ledge-distance predicate and falling are unchanged. No screen-specific
 brake, automatic edge clamp or wider descent window is introduced.
+
+The continued run from the screen-6 landing can also miss this window in the
+original. Executing the native player frame and CutAllOpponents routines from
+the same test approach produces screen-7 entry X=494 at pose 7, stop X=368,
+turn X=377 and crouch rather than descent. The user confirmed the same
+approach-dependent behavior in both versions; no edge protection is added.
+
+## Downward Room Cuts
+
+CutChar 6:4c90-4cd2 vetoes downward cuts in native room 11 for environment 5,
+and native rooms 3/5 for environment 6, even when their LEVL lower links exist.
+The shared geometry layer now checks these source-backed room/environment
+pairs before following a lower link. This keeps a failed screen-6 jump in the
+screen-6 viewport through death without breaking the screen-7 dock drop.
+Executing the original CutChar confirms no cut from rooms 11 (environment 5)
+or 3/5 (environment 6), while room 12 (environment 5) cuts down normally.
+NPCs use the separate Cut routine (6:472a) and retain their lower-link behavior;
+the camera veto is not applied to guard falls.
 
 ## Implementation Order
 
