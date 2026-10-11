@@ -576,6 +576,69 @@ class HarborSceneTests(unittest.TestCase):
         self.assertEqual(len(set(relative_x)), 1)
         self.assertTrue(scene.level_complete)
 
+    def test_ship_catch_uses_fall_displacement_on_last_eligible_frame(self):
+        scene = self.scene
+        for ship_frame in (31, 32, 33):
+            with self.subTest(ship_frame=ship_frame):
+                self.prepare('10')
+                scene.set_key_state('shift', True)
+                scene.set_key_state('up', True)
+                state = scene.sequence_state
+                state.sequence_id, state.cursor = 12, 0
+                state.action, state.animation_state = 106, 4
+                state.current_x = state.target_x = scene.player_x = 69
+                state.current_y = -57
+                state.horizontal_velocity, state.vertical_velocity = 8, 21
+                scene.terrain_motion.row, scene.terrain_motion.falling = 2, True
+                scene.harbor.ship_frame = ship_frame
+                self.assertFalse(scene.level_map.catch_ledge(
+                    18, 2, state, scene.frames[state.action], scene.harbor))
+                with patch.object(scene.level_map, 'catch_ledge',
+                                  wraps=scene.level_map.catch_ledge) as catch:
+                    self.tick()
+                    self.assertEqual(catch.call_count, 1)
+                self.assertEqual(scene.harbor.ship_frame, ship_frame + 1)
+                if ship_frame < 33:
+                    self.assertTrue(scene.ledge_hanging)
+                    self.assertFalse(scene.terrain_motion.falling)
+                    self.assertEqual((state.action, state.sequence_id), (80, 15))
+                    self.tick(60)
+                    self.assertTrue(scene.level_complete)
+                    self.assertFalse(scene.terrain_motion.dead)
+                else:
+                    self.assertFalse(scene.ledge_hanging)
+                    self.tick(30)
+                    self.assertTrue(scene.terrain_motion.dead)
+                    self.assertFalse(scene.level_complete)
+
+    def test_jump_across_room_cut_then_jump_to_ship(self):
+        scene = self.scene
+        for jump_x in (330, 340, 350):
+            with self.subTest(jump_x=jump_x):
+                self.prepare('9')
+                scene.horizontal_key(None, -1, True)
+                jumps, entered_in_jump = 0, False
+                for _ in range(180):
+                    with patch('pop2.scene_prototype.time.perf_counter', return_value=self.now):
+                        if jumps == 0 and scene.room_id == 15 and scene.player_x < 120:
+                            scene.up_key(None)
+                            scene.set_key_state('up', False)
+                            jumps = 1
+                        elif (jumps == 1 and scene.room_id == 18 and scene.player_x < jump_x
+                              and 7 <= scene.action <= 14):
+                            scene.up_key(None)
+                            scene.set_key_state('shift', True)
+                            jumps = 2
+                    self.tick()
+                    if scene.room_id == 18 and 34 <= scene.action <= 40:
+                        entered_in_jump = True
+                    if scene.level_complete or scene.terrain_motion.dead:
+                        break
+                self.assertTrue(entered_in_jump)
+                self.assertEqual(jumps, 2)
+                self.assertTrue(scene.level_complete)
+                self.assertFalse(scene.terrain_motion.dead)
+
     def test_missing_ship_grip_drowns_instead_of_completing(self):
         self.prepare('10')
         scene = self.scene

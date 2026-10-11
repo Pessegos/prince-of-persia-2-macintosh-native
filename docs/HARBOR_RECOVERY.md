@@ -74,6 +74,12 @@ straight, severed waterline on every near post; all four phases are tested.
 - RoofCanGrabShip 23:12f0 requires native X <297 (scene X <90), row <3 and
   counter <33. Catch retains the ordinary velocity <60 and height [-48,+3]
   checks before reaching this special destination.
+- FrameAdv 2:6372-63a6 runs AnimChar, gravity and Move before the floor
+  watcher calls Falling/Catch (5:1276 -> 6:00a6/012e). The catch callback
+  uses the displaced actor before advancing its floor row. Checking before
+  Move delayed the catch one simulation frame and could lose the ship's
+  last eligible counter value, even with Shift held. The counter, X/height
+  limits, jump offsets and hull speed are unchanged.
 - RoofHangingFromShip 23:132c and RoofClimbingIntoShip 23:12ba move the
   gripped Prince with the ship and select SEQS:59 instead of an ordinary climb.
 - GetUndefineCellId 4:28e8-28ea returns empty cells outside rooftop maps,
@@ -118,6 +124,9 @@ generator profiles and a slain quay guard's tumble. Integrated tests use
 the real input callbacks to traverse screens 7-10 and board the ship without
 teleporting between rooms. They also check failure without Shift, late arrival,
 the complete boarding pose chain and fixed relative position on the moving hull.
+They include a running-jump entry from screen 9 followed by the boarding jump,
+and a falling actor reaching catch height at counters 31/32/33: the first two
+board successfully, while the expired counter still causes a water death.
 They also cover a real dock descent/hold/climb, the plank-tip pixels throughout
 both transitions and the full hold cycle, and the full landing/rise pose
 chain after releasing the final rooftop, with ordinary wall bumps unchanged.

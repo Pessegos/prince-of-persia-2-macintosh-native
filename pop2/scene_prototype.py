@@ -1477,17 +1477,6 @@ class ScenePrototype(WindowControls):
         old_bounds = self.player_bounds() if motion is not None else None
         if motion is not None and (motion.falling or motion.dead):
             self.sequence_runtime.next_frame()
-            if (not motion.dead and not motion.hit_fall and self.combat.player.alive
-                    and self.shift_held and not self.sword_drawn
-                    and self.level_map.catch_ledge(motion.room, motion.row,
-                        self.sequence_state, self.frames[self.sequence_state.action], self.harbor)):
-                motion.falling = False
-                self.player_x = self.sequence_state.target_x
-                self._begin_native_ledge(15)
-                self.sequence_runtime.next_frame()
-                # Catch 4:38da-3928 aligns using the first caught pose (80).
-                state = self.sequence_state
-                self.level_map.align_catch(motion.room, motion.row, state, self.frames[state.action])
             self.advance_terrain(old_x, old_bounds)
             self.advance_combat()
             self.advance_harbor()
@@ -1667,6 +1656,21 @@ class ScenePrototype(WindowControls):
         bottom = self.player_floor_y() + self.sequence_state.current_y + record.offset_y
         return left, character_sprite_top(bottom, sprite.height), left + sprite.width - 1, bottom
 
+    def catch_falling_ledge(self):
+        motion, state = self.terrain_motion, self.sequence_state
+        if (motion.dead or motion.hit_fall or not self.combat.player.alive
+                or not self.shift_held or self.sword_drawn
+                or not self.level_map.catch_ledge(motion.room, motion.row,
+                    state, self.frames[state.action], self.harbor)):
+            return False
+        motion.falling = False
+        self.player_x = state.target_x
+        self._begin_native_ledge(15)
+        self.sequence_runtime.next_frame()
+        # Catch 4:38da-3928 aligns using the first caught pose (80).
+        self.level_map.align_catch(motion.room, motion.row, state, self.frames[state.action])
+        return True
+
     def advance_terrain(self, old_x, old_bounds=None):
         motion = getattr(self, "terrain_motion", None)
         if motion is None or self._opening_active():
@@ -1690,7 +1694,8 @@ class ScenePrototype(WindowControls):
             motion, self.sequence_runtime, old_x, self.player_bounds(),
             sword_drawn=self.sword_drawn, protected=self.ledge_hanging or self.ledge_climbing,
             frame_record=self.frames[self.action], bounds_for_state=self.player_bounds,
-            old_bounds=old_bounds, alive=self.combat.player.alive)
+            old_bounds=old_bounds, alive=self.combat.player.alive,
+            catch_ledge=self.catch_falling_ledge)
         if motion.room != old_room:
             dx = self.sequence_state.target_x - before_x
             if motion.room not in self.room_cache:

@@ -518,7 +518,7 @@ class RooftopPhysics:
 
     def advance(self, motion, runtime, old_x, bounds, sword_drawn=False, protected=False,
                 frame_flags=0x40, frame_record=None, bounds_for_state=None, cut_enabled=True,
-                alive=True, old_bounds=None):
+                alive=True, old_bounds=None, catch_ledge=None):
         state = runtime.state
         if protected or motion.dead:
             return ()
@@ -647,6 +647,11 @@ class RooftopPhysics:
                 if tile.kind in EMPTY_TILES:
                     self.start_fall(motion, runtime)
                     events.append(TerrainEvent("fall"))
+            return tuple(events)
+
+        # FrameAdv 2:6372-63a6 runs AnimChar/Move before Falling/Catch.
+        # Catch must see this frame's displacement before the floor row advances.
+        if catch_ledge is not None and catch_ledge():
             return tuple(events)
 
         # Falling 6:0156-0174 corrects the foot before comparing its height

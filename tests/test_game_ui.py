@@ -1211,7 +1211,10 @@ class GameWindowTests(unittest.TestCase):
                             with self.subTest(frame=frame, pose=scene.action):
                                 self.assertIsNone(ImageChops.multiply(
                                     difference.convert("L"), facade).getbbox())
-                        self.assertEqual(falling_poses, set(range(102, 107)))
+                        # Native Move/Catch replaces pose 106 with the caught
+                        # pose in the same frame when Shift is held.
+                        self.assertEqual(falling_poses, set(range(
+                            102, 106 if shift_at is not None else 107)))
                         if shift_at is not None:
                             self.assertTrue({80, 91, 92}.issubset(caught_poses))
                             self.assertEqual(climb_poses, set(range(135, 149)))
