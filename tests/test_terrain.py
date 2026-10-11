@@ -638,6 +638,32 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertGreater(scene.combat.guard.state.target_x, initial_x + 60)
         self.assertEqual(scene.combat.player.life, 3)
 
+    def test_tumble_hit_burst_stays_in_front_of_roof_in_actual_scene_render(self):
+        from pop2.render_opening import ROOM_ORIGIN_X
+
+        scene = self.scene
+        self.place(9, 1, 310, facing=1)
+        scene.combat.player.sword_drawn = scene.sword_drawn = True
+        scene.combat.player.state.action = 154
+        guard = scene.combat.guard
+        guard.state.current_x = guard.state.target_x = 409
+        guard.state.facing, guard.sword_drawn, guard.life = 0, True, 1
+        self.assertEqual(opponent_distance(scene.combat.player, guard), 120)
+        with patch.object(scene.combat.rng, "randrange", return_value=0):
+            events = scene.combat.resolve_contacts()
+        self.assertEqual([(event.kind, event.actor) for event in events], [("death", "guard")])
+        self.assertEqual((guard.state.action, guard.state.animation_state), (213, 9))
+        with patch.object(scene.hit_art, "draw"):
+            scene.render()
+            baseline = scene.native_viewport.copy()
+        burst = Image.new("RGBA", scene.background.size)
+        scene.hit_art.draw(burst, guard.state, floor_y(guard.row))
+        self.assertIsNotNone(burst.getbbox())
+        expected = baseline.copy()
+        expected.alpha_composite(burst, (ROOM_ORIGIN_X, 0))
+        scene.render()
+        self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
+
     def test_idle_window_escape_takes_three_stabs_without_premature_fall(self):
         scene = self.scene
         life_changes = []

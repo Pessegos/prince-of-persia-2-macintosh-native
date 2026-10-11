@@ -934,6 +934,41 @@ class GuardCombatTests(unittest.TestCase):
                 art.draw(image, fighter.state, 226)
             self.assertIsNone(image.getbbox())
 
+    def test_tumble_hit_draws_native_burst_on_first_pose_in_both_facings(self):
+        art = self.hit_art()
+        for facing in (0, 1):
+            c = self.encounter()
+            target = c.guard
+            target.state.facing = facing
+            select_sequence(target, 185)
+            target.runtime.next_frame()
+            self.assertEqual((target.state.action, target.state.animation_state), (213, 9))
+            image = Image.new("RGBA", (510, 365))
+            art.draw(image, target.state, 226)
+            self.assertIsNotNone(image.getbbox())
+            # The native anchor/pixels are the same as for the mode-10 burst.
+            target.state.animation_state = 10
+            expected = Image.new("RGBA", image.size)
+            art.draw(expected, target.state, 226)
+            self.assertEqual(image.tobytes(), expected.tobytes())
+            target.state.animation_state = 9
+            again = Image.new("RGBA", image.size)
+            art.draw(again, target.state, 226)
+            self.assertEqual(image.tobytes(), again.tobytes())
+            target.runtime.next_frame()
+            after = Image.new("RGBA", image.size)
+            art.draw(after, target.state, 226)
+            self.assertIsNone(after.getbbox())
+
+    def test_tumble_burst_gate_does_not_include_later_poses_or_prince_turn(self):
+        art = self.hit_art()
+        for actor_type, action, mode in ((2, 214, 9), (2, 213, 1), (0, 213, 9)):
+            state = SequenceState(185, actor_type=actor_type, action=action,
+                                  animation_state=mode, target_x=200)
+            image = Image.new("RGBA", (510, 365))
+            art.draw(image, state, 226)
+            self.assertIsNone(image.getbbox())
+
     def test_reset_clears_impact_and_engagement_state(self):
         scene = self.scene()
         c = scene.combat

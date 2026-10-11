@@ -106,7 +106,9 @@ class HitArtwork:
     def draw(self, image, state, floor_y):
         # SetupChar 0x07dc consumes state 10 on the first hurt/death pose.
         # Keep rendering that pose until its next animation tick, not per paint.
-        if state.animation_state != 10:
+        # SetupOpp 3:0994-09ce also draws the first mode-9 tumble pose.
+        tumble_hit = state.actor_type == 2 and state.animation_state == 9 and state.action == 213
+        if state.animation_state != 10 and not tumble_hit:
             return
         is_player = state.actor_type == 0
         record = (self.player_frames[state.action] if is_player

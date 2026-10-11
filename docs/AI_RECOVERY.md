@@ -203,6 +203,14 @@ advance for poses 43/103/105/106/109/117/118/15 with their opening modes,
 and wait for 107/110/116 in mode 5. Scene tests verify early approach, unchanged
 escape geometry and health, and the existing three-hit fatal edge fall.
 
+SetupOpp `3:0994-09ce` draws the damage burst for mode 9 at pose 213 as
+well as mode 10. HitArtwork now includes that first SEQS:185 tumble pose;
+later tumble poses do not repeat the effect. The burst uses the same actor
+clipping context as the body, so the native mode-9 roof bypass also applies
+to it. A scene regression resolves a fatal sword contact at distance 120
+(one pixel below the ordinary upper bound 121) and compares the complete
+render against the original burst pixels in front of the roof.
+
 ## Remaining Work
 
 This is not a complete translation of every enemy controller. The default

@@ -91,6 +91,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Complete NPC candidate filtering and unarmed obstacle braking | 6:36f2-3918; 4:0664-06d4 | R/P: ordinary subset exists; full vertical/type filtering and native obstacle/distance branching missing | AI_RECOVERY / further recovery needed |
 | Pursuit, gap jump and incoming reinforcement corridor | 4:057c/0834; 6:1c14/3a0c | T: supported rooftop paths; inactive-world/special actors P | combat / test_rooftop_pursuit, test_opponent_generation |
 | Parry/contact poses, range, damage priority | 6:50ec/523e/53f8/5978 | T: ordinary actors; special attacks P | combat / test_combat |
+| Sword-hit burst on first rooftop tumble pose, including long-range fatal contact | 3:0994-09ce/0ba4-0cc6 | T: ordinary NPC mode 9/pose 213, one animation pose, native burst anchor and front-of-roof draw | combat_art, scene_prototype / test_combat, test_terrain |
 | Ready hurt poses may turn toward the opponent; alert scan uses supporting columns | 6:2258-22ea; 2:6f76-6f9c | T: ordinary ready/locked poses, wall/gap alert gates and idle opening through three stabs; full column lifecycle P | combat, scene_prototype / test_combat, test_terrain |
 | Jump cannot pass a live grounded opposing guard | 2:6c64-6daa | T/A: native gates plus port between-frame sweep | combat / test_game_ui |
 | One-life meter flashing | 2:5442-546c | T: simulation-frame parity; upgrade effects P | combat_art / test_combat |

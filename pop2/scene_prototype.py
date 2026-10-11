@@ -2439,7 +2439,9 @@ class ScenePrototype(WindowControls):
                 layer = Image.new("RGBA", frame.size)
                 self.hit_art.draw(layer, guard.state, floor_y(guard.row))
                 bounds = self.guard_art.bounds(guard.state, floor_y(guard.row))
-                frame = self.composite_actor(frame, layer, guard.row, bounds[3])
+                record = self.guard_art.frames[guard_frame_index(guard.state.action)]
+                frame = self.composite_actor(frame, layer, guard.row, bounds[3],
+                                             guard.state, bounds, record)
             layer = Image.new("RGBA", frame.size)
             self.hit_art.draw(layer, combat.player.state, self.player_floor_y())
             frame = self.composite_actor(frame, layer, motion.row if motion is not None else None,
