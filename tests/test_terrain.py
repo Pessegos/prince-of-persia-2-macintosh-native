@@ -640,6 +640,66 @@ class RooftopSceneTests(unittest.TestCase):
                 break
         self.assertEqual(life_changes, [2, 1, 0])
 
+    def test_parry_at_initial_edge_recoils_and_falls_without_losing_health(self):
+        from pop2.combat import select_sequence
+
+        scene = self.scene
+        self.place(3, 1, 411, facing=0)
+        scene.sword_drawn = scene.combat.player.sword_drawn = True
+        scene.start_sequence(62)
+        scene.sequence_runtime.next_frame()
+        scene.sequence_runtime.next_frame()
+        self.assertEqual(scene.sequence_state.action, 150)
+        guard = scene.combat.guard
+        guard.state.current_x = guard.state.target_x = 351
+        guard.state.facing, guard.alert_mode, guard.sword_drawn = 1, 3, True
+        select_sequence(guard, 58)
+        guard.runtime.next_frame()
+        guard.state.action = 153
+        scene.action, scene.player_x = scene.sequence_state.action, scene.sequence_state.target_x
+        events = scene.combat.resolve_contacts()
+        self.assertEqual([(e.kind, e.actor) for e in events], [("parry", "player")])
+        scene.up_held = True
+        scene.pending_action = BufferedCommand("sword_block")
+        self.tick(3)
+        self.assertTrue(scene.terrain_motion.falling)
+        self.assertFalse(scene.terrain_motion.hit_fall)
+        self.assertEqual(scene.combat.player.life, 3)
+        self.assertFalse(scene.sword_drawn)
+
+    def test_parry_on_supported_roof_recoils_but_does_not_invent_a_fall(self):
+        scene = self.scene
+        self.place(3, 1, 300, facing=0)
+        scene.peaceful = True
+        scene.sword_drawn = scene.combat.player.sword_drawn = True
+        scene.start_sequence(62)
+        scene.sequence_runtime.next_frame()
+        scene.sequence_runtime.next_frame()
+        scene.sequence_state.action = scene.action = 161
+        before = scene.sequence_state.target_x
+        self.tick(3)
+        self.assertEqual(scene.player_x, before + 25)
+        self.assertFalse(scene.terrain_motion.falling)
+        self.assertEqual(scene.combat.player.life, 3)
+
+    def test_parry_counter_is_not_replaced_by_recoil_in_the_animation_tick(self):
+        scene = self.scene
+        self.place(3, 1, 300, facing=0)
+        scene.peaceful = True
+        scene.sword_drawn = scene.combat.player.sword_drawn = True
+        scene.start_sequence(62)
+        scene.sequence_runtime.next_frame()
+        scene.sequence_runtime.next_frame()
+        scene.sequence_state.action = scene.action = 161
+        before = scene.sequence_state.target_x
+        scene.player_x = before
+        scene.set_key_state("ctrl", True)
+        self.tick()
+        self.assertEqual(scene.sequence_state.source_sequence_id, 66)
+        self.assertEqual(scene.action, 162)
+        self.assertEqual(scene.player_x, before + 6)
+        self.assertFalse(scene.terrain_motion.falling)
+
     def test_sword_retreat_fall_can_catch_initial_roof_with_shift(self):
         scene = self.scene
         scene.peaceful = True

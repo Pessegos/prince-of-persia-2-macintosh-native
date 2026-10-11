@@ -98,9 +98,10 @@ it with the level's default; the DATA mapping then supplies its actor type.
   opponent at pose 152 allows sequence 246. Own blocked-attack pose 167 can
   select sequence 61. A parried block without a counter retreats via 57.
 - DoAdvance/DoRetreat `0x1dda`/`0x1d6e` only start steps at 158/170/171.
-- CODE:6 `0x2522`, `0x25ae`, `0x514a`: player attack pauses approach for 15
-  AI frames; sheathing suppresses attacks for 9; a hit uses the struck
-  enemy's profile pause. AutoCtrl `0x4e98` decrements encounter timers.
+- CODE:6 `0x2522`, `0x25ae`, `0x514a`: player attack sets approach pause to 15;
+  sheathing sets attack pause to 9; a hit uses the struck enemy's profile
+  pause. AutoCtrl `0x4e98` decrements these shared timers on each NPC call,
+  not once per world frame.
 - Prince strike range at `0x5c18` tests the target's engagement field, not its
   sword flag. The ordinary NPC range branch still tests the Prince's sword.
 - Sword contacts at CODE:6 `0x581c`/`0x5856` run NPC-first, then Prince;
@@ -175,7 +176,11 @@ selects skill 0. The guard starts at native X=105 / scene X=-102, facing right.
 The encounter now owns an ordered NPC list. The corpse, second guard,
 animation cursors, explicit selected sequences, life and profiles remain
 separate. Hit pause uses the struck NPC's skill; shared encounter timers
-are still decremented once per world tick. Contact checks remain NPC-first,
+decrement before each processed NPC's decision, including a corpse still in
+the room. FrameAdv `2:64f2-651e` skips controllers below absolute Y=484 when
+their room has no lower link; those fallen actors do not consume timer ticks.
+The keyboard callback gate still allows only one NPC pass per world tick.
+Contact checks remain NPC-first,
 then Prince against each NPC, followed by the native simultaneous-hit rule.
 
 The additional ordinary first-rooftop controller paths are:
@@ -331,6 +336,23 @@ the combat target and prevented the Prince from turning after the first hit.
 The opening regression checks three stabs through death for fixed guard seeds,
 without input. Different attack timings can put the supporting foot outside
 the roof sooner; neither health nor the hit count overrides floor contact.
+
+## Player Parry Recoil
+
+GenCtrl `6:24da-2506` handles successful block pose 161. Without attack input,
+it selects retreat SEQS:57 and applies `AddCharX(-9)` for the Prince. Ordinary
+NPCs select the same retreat but do not receive that extra displacement.
+SEQS:57 supplies the remaining movement and poses. The forced retreat does
+not use the voluntary retreat's floor-clearance veto: a block at the edge
+can push the Prince off the roof without taking health.
+
+A buffered counter has priority and selects SEQS:66 from pose 150/161. Its
+selection must not be overwritten by the recoil before AnimChar displays the
+first counter pose. Held block input does not cancel the forced retreat.
+Blocking without sword contact does not trigger it. Direct execution of the
+original GenCtrl verifies SEQS:57 and the nine-pixel player offset in both
+directions. Scene tests cover contact, recoil, edge fall, supported retreat
+and counter priority through the actual animation tick.
 
 ## Fatal Hits At Edges
 

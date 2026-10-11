@@ -3,7 +3,9 @@ import hashlib
 import os
 from pathlib import Path
 import struct
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from pop2.animation_data import sequence_words
 from pop2.combat import CombatEncounter, GuardIntent, GuardSpawn, select_sequence, strike_range
@@ -324,6 +326,59 @@ class GuardDecisionTests(unittest.TestCase):
         for t in (0.01, 0.03, 0.07):
             c.step(t, 0.1)
         self.assertEqual((c.parry_timer, c.advance_pause, c.attack_pause), (3, 14, 8))
+
+    def test_shared_timers_decrement_before_each_npc_not_once_per_world_frame(self):
+        c = self.encounter(rolls=())
+        for life in (3, 0):
+            runtime = SequenceRuntime(c.sequences, replace(c.guard.state))
+            c.guards.append(replace(c.guard, runtime=runtime, life=life))
+        c.parry_timer, c.advance_pause, c.attack_pause = 4, 15, 20
+        observed = []
+        with patch.object(c, "choose_guard_action", side_effect=lambda guard:
+                          observed.append((c.parry_timer, c.advance_pause, c.attack_pause))):
+            c.step(0, 0.1)
+            for t in (0.01, 0.03, 0.07):
+                c.step(t, 0.1)
+        self.assertEqual(observed, [(3, 14, 19), (2, 13, 18), (1, 12, 17)])
+        self.assertEqual(c.world_frame, 1)
+
+    def test_attack_pause_can_expire_for_a_later_guard_in_the_same_frame(self):
+        c = self.encounter(rolls=(0,))
+        second = replace(c.guard, runtime=SequenceRuntime(c.sequences, replace(c.guard.state)))
+        c.guards.append(second)
+        c.attack_pause = 2
+        c.advance_guard()
+        self.assertEqual(c.guard.state.source_sequence_id, 227)
+        self.assertEqual(second.state.source_sequence_id, 58)
+        self.assertEqual(c.rng.calls, [256])
+        self.assertEqual(c.attack_pause, 0)
+
+    def test_shared_timers_do_not_underflow_or_advance_without_processed_npcs(self):
+        c = self.encounter(rolls=())
+        c.guard.life = 0
+        c.parry_timer, c.advance_pause, c.attack_pause = 1, 0, 2
+        c.advance_guard()
+        c.advance_guard()
+        c.advance_guard()
+        self.assertEqual((c.parry_timer, c.advance_pause, c.attack_pause), (0, 0, 0))
+        c.guards.clear()
+        c.attack_pause = 9
+        c.advance_guard()
+        self.assertEqual(c.attack_pause, 9)
+
+    def test_fallen_npcs_only_tick_shared_timers_if_they_have_a_lower_room(self):
+        from pop2.terrain import floor_y
+
+        for y, lower_room, expected in ((484, None, 8), (485, None, 9), (485, 6, 8)):
+            with self.subTest(y=y, lower_room=lower_room):
+                c = self.encounter(rolls=())
+                c.guard.state.current_y = y - floor_y(c.guard.row)
+                c.guard.life = 0
+                c.terrain = SimpleNamespace(neighbor=lambda room, direction: lower_room)
+                c.attack_pause = 9
+                with patch.object(c, "active_guards", return_value=[c.guard]):
+                    c.advance_guard()
+                self.assertEqual(c.attack_pause, expected)
 
     def test_turn_and_hurt_phases_cannot_be_replaced_by_attack_input(self):
         for mode in (2, 4, 5, 8, 9, 10):

@@ -759,21 +759,26 @@ class CombatEncounter:
         self.refresh_target()
 
     def advance_guard(self):
-        self.parry_timer = max(0, self.parry_timer - 1)
-        self.advance_pause = max(0, self.advance_pause - 1)
-        self.attack_pause = max(0, self.attack_pause - 1)
+        terrain = getattr(self, "terrain", None)
         for guard in self.active_guards():
             old_x = guard.state.target_x
             art = getattr(self, "guard_art", None)
             old_bounds = art.bounds(guard.state, floor_y(guard.row)) if art is not None else None
-            with self._local_opponents(guard):
-                self.choose_guard_action(guard)
+            # FrameAdv 2:64f2-651e skips NPCs below Y=484 without a lower
+            # room. Each remaining AutoCtrl call decrements the shared timers,
+            # including calls for corpses, before that NPC's decision.
+            if (terrain is None or floor_y(guard.row) + guard.state.current_y <= 484
+                    or terrain.neighbor(guard.room, "down") is not None):
+                self.parry_timer = max(0, self.parry_timer - 1)
+                self.advance_pause = max(0, self.advance_pause - 1)
+                self.attack_pause = max(0, self.attack_pause - 1)
+                with self._local_opponents(guard):
+                    self.choose_guard_action(guard)
             guard.runtime.next_frame()
             self._select_guard_corpse_pose(guard)
             # Allow native offscreen entry; each room has its own floor extent.
             entry = guard.entry_x or 0
             low, high = min(0, entry), max(self.platform_edge, entry)
-            terrain = getattr(self, "terrain", None)
             if terrain is not None and getattr(self, "guard_art", None) is not None:
                 self._advance_guard_terrain(guard, old_x, old_bounds)
             else:

@@ -488,6 +488,18 @@ class ScenePrototype(WindowControls):
             )
         return False
 
+    def resume_sword_parry_recoil(self):
+        if (not self.sword_drawn or self.sword_sheathing
+                or self.sequence_state.action != 161
+                or (self.pending_action is not None
+                    and self.pending_action.kind == "sword_attack")):
+            return False
+        # GenCtrl 6:24da-2506: a parried block without a counter selects
+        # SEQS:57 and AddCharX(-9). This forced retreat has no floor veto.
+        state = self.sequence_state
+        self.player_x = state.target_x - 9 * (1 if state.facing else -1)
+        return self.start_sword_action("sword_retreat")
+
     def queue_sword_step(self, direction):
         kind = (
             "sword_advance"
@@ -1515,7 +1527,8 @@ class ScenePrototype(WindowControls):
             return
         self.update_running_jump_controls()
         if not self.resume_combat_turn():
-            self.resume_sword_attack_after_block()
+            if not self.resume_sword_attack_after_block():
+                self.resume_sword_parry_recoil()
             self.resume_sword_controls()
         self.resume_crouch()
         self.resume_queued_action_during_run_stop()

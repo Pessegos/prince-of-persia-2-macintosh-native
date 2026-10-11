@@ -43,6 +43,7 @@ class GuardCombatTests(unittest.TestCase):
     def scene(self):
         fixture = animation_tests.AnimationDataTests()
         fixture.sequences = self.sequences
+        fixture.prince, fixture.kid = self.prince, self.kid
         scene = fixture.sword_scene()
         scene.start_tile = 2
         scene.combat = CombatEncounter(scene.sequence_runtime, self.sequences, self.spawn, 408)
@@ -380,6 +381,48 @@ class GuardCombatTests(unittest.TestCase):
             self.assertEqual(c.guard.state.action, 167)
             self.assertEqual(c.player.state.action, 161)
             self.assertEqual(c.parry_timer, 4)
+
+    def test_successful_player_parry_recoils_nine_pixels_before_retreat(self):
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                scene = self.scene()
+                scene.sword_drawn = True
+                scene.in_animation_tick = True
+                state = scene.sequence_state
+                state.facing, state.action = facing, 161
+                state.current_x = state.target_x = scene.player_x = 260
+                scene.pending_action = BufferedCommand("sword_block")
+                self.assertTrue(scene.resume_sword_parry_recoil())
+                self.assertEqual(state.target_x, 269 if facing == 0 else 251)
+                self.assertEqual(state.source_sequence_id, 57)
+                self.assertEqual(scene.pending_action.kind, "sword_block")
+                state.action = 160
+                self.assertFalse(scene.resume_sword_parry_recoil())
+
+    def test_player_parry_counter_has_priority_over_forced_retreat(self):
+        scene = self.scene()
+        scene.sword_drawn = True
+        scene.in_animation_tick = True
+        state = scene.sequence_state
+        state.action = 161
+        x = state.target_x
+        scene.pending_action = BufferedCommand("sword_attack")
+        self.assertFalse(scene.resume_sword_parry_recoil())
+        self.assertTrue(scene.resume_sword_attack_after_block())
+        self.assertEqual(state.source_sequence_id, 66)
+        self.assertEqual(state.target_x, x)
+        self.assertIsNone(scene.pending_action)
+
+    def test_uncontacted_block_and_unarmed_pose_do_not_recoil(self):
+        scene = self.scene()
+        for action, drawn, sheathing in ((150, True, False), (169, True, False),
+                                         (161, False, False), (161, True, True)):
+            with self.subTest(action=action, drawn=drawn, sheathing=sheathing):
+                scene.sequence_state.action = action
+                scene.sword_drawn, scene.sword_sheathing = drawn, sheathing
+                x = scene.sequence_state.target_x
+                self.assertFalse(scene.resume_sword_parry_recoil())
+                self.assertEqual(scene.sequence_state.target_x, x)
 
     def test_block_requires_opposed_facing_and_parry_range(self):
         for distance in (60, 100):
@@ -750,6 +793,7 @@ class GuardCombatTests(unittest.TestCase):
     def test_complete_opening_defence_counterattack_and_guard_defeat(self):
         fixture = animation_tests.AnimationDataTests()
         fixture.sequences = self.sequences
+        fixture.prince, fixture.kid = self.prince, self.kid
         scene = fixture.opening_scene()
         scene.combat = CombatEncounter(scene.sequence_runtime, self.sequences,
                                        self.spawn, 408, random.Random(1))
