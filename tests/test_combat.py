@@ -811,13 +811,9 @@ class GuardCombatTests(unittest.TestCase):
                     break
                 tick()
             self.assertFalse(scene.opening.active)
-            scene.horizontal_key(None, -1, True)
-            scene.horizontal_key(None, -1, False)
-            for _ in range(8):
-                tick()
             scene.set_key_state("ctrl", True)
             scene.set_key_state("ctrl", False)
-            for _ in range(8):
+            for _ in range(12):
                 tick()
             parried = False
             for _ in range(100):

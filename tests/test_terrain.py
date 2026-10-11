@@ -625,6 +625,19 @@ class RooftopSceneTests(unittest.TestCase):
         self.tick(3)
         self.assertFalse(self.scene.terrain_motion.falling)
 
+    def test_guard_approaches_during_window_escape_without_hitting_the_opening(self):
+        scene = self.scene
+        initial_x = scene.combat.guard.state.target_x
+        self.tick(2)
+        self.assertTrue(scene.opening.active)
+        self.assertGreater(scene.combat.guard.state.target_x, initial_x)
+        for _ in range(17):
+            self.assertEqual(scene.combat.player.life, 3)
+            self.tick()
+        self.assertFalse(scene.opening.active)
+        self.assertGreater(scene.combat.guard.state.target_x, initial_x + 60)
+        self.assertEqual(scene.combat.player.life, 3)
+
     def test_idle_window_escape_takes_three_stabs_without_premature_fall(self):
         scene = self.scene
         life_changes = []
@@ -1292,12 +1305,9 @@ class RooftopSceneTests(unittest.TestCase):
         scene = self.scene
         with patch("pop2.scene_prototype.time.perf_counter", side_effect=lambda: self.now):
             self.tick(19)
-            scene.horizontal_key(None, -1, True)
-            scene.horizontal_key(None, -1, False)
-            self.tick(8)
             scene.set_key_state("ctrl", True)
             scene.set_key_state("ctrl", False)
-            self.tick(8)
+            self.tick(12)
             for _ in range(350):
                 c = scene.combat
                 if scene.action in (158, 170, 171) and scene.sequence_state.sequence_id == 227:

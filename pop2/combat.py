@@ -546,8 +546,6 @@ class CombatEncounter:
             return
         if guard.alert_mode != 3:
             return
-        if not player.targetable:
-            return
         if opponent_distance(guard, player) < -15:
             # SwordCtrl 6:2206/22e6/26a8 permits ordinary-NPC turns in
             # modes 0/1, not just pose 171. SEQS:60 performs the facing flip.

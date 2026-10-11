@@ -341,6 +341,8 @@ class OpponentGenerationTests(unittest.TestCase):
     def test_complete_input_driven_opening_and_two_defeated_guards(self):
         fixture = animation_tests.AnimationDataTests()
         fixture.sequences = self.sequences
+        fixture.prince = combat_tests.GuardCombatTests.prince
+        fixture.kid = combat_tests.GuardCombatTests.kid
         scene = fixture.opening_scene()
         scene.combat = CombatEncounter(scene.sequence_runtime, self.sequences,
                                        self.spawn, 408, random.Random(1), self.level)
@@ -358,13 +360,9 @@ class OpponentGenerationTests(unittest.TestCase):
                     break
                 tick()
             self.assertFalse(scene.opening.active)
-            scene.horizontal_key(None, -1, True)
-            scene.horizontal_key(None, -1, False)
-            for _ in range(8):
-                tick()
             scene.set_key_state("ctrl", True)
             scene.set_key_state("ctrl", False)
-            for _ in range(8):
+            for _ in range(12):
                 tick()
             for _ in range(350):
                 c = scene.combat

@@ -194,6 +194,15 @@ evaluates decisions during recovery; SwordCtrl/ordinary input only accepts
 them in modes 0/1. Modes >=2 remain protected. This permits responses at the
 interruptible end of recovery without waiting for a resource link to 227.
 
+The opening escape's host contact exclusion must not disable NPC decisions.
+EnGarde `4:09e6-0a08` waits at distance >=39 for Prince poses 102-117 in
+mode 5, not throughout the window escape. Removing the additional targetable
+decision gate lets the first guard approach during the airborne poses while
+retaining the scene's opening damage protection. Original opcode probes request
+advance for poses 43/103/105/106/109/117/118/15 with their opening modes,
+and wait for 107/110/116 in mode 5. Scene tests verify early approach, unchanged
+escape geometry and health, and the existing three-hit fatal edge fall.
+
 ## Remaining Work
 
 This is not a complete translation of every enemy controller. The default

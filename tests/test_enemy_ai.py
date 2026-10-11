@@ -361,10 +361,28 @@ class GuardDecisionTests(unittest.TestCase):
             c.choose_guard_action()
             self.assertEqual(c.guard.state.sequence_id, 227)
             self.assertEqual(c.rng.calls, [])
-        c = self.encounter(rolls=())
-        c.player.targetable = False
-        c.choose_guard_action()
-        self.assertEqual(c.rng.calls, [])
+
+    def test_contact_protection_does_not_disable_native_guard_decisions(self):
+        for distance, expected in ((65, 58), (140, 86)):
+            with self.subTest(distance=distance):
+                c = self.encounter(distance=distance, player_action=15, rolls=(0,))
+                c.player.sword_drawn = False
+                c.player.targetable = False
+                c.choose_guard_action()
+                self.assertEqual(c.guard.state.sequence_id, expected)
+
+    def test_opening_fall_and_landing_use_native_pose_gate_not_contact_protection(self):
+        for action, mode, expected in ((43, 1, 86), (103, 3, 86), (106, 4, 86),
+                                       (107, 5, 227), (109, 1, 86), (116, 5, 227),
+                                       (117, 1, 86), (118, 1, 86)):
+            with self.subTest(action=action):
+                c = self.encounter(distance=200, player_action=action, rolls=(0,))
+                c.player.state.facing = c.guard.state.facing
+                c.player.state.animation_state = mode
+                c.player.sword_drawn = False
+                c.player.targetable = False
+                c.choose_guard_action()
+                self.assertEqual(c.guard.state.sequence_id, expected)
 
     def test_guard_hurt_lock_does_not_extend_past_native_interruptible_modes(self):
         for mode, expected in ((0, 58), (1, 58), (2, 183), (5, 183)):
