@@ -2398,7 +2398,7 @@ class AnimationDataTests(unittest.TestCase):
     def test_rapid_ctrl_during_attack_start_does_not_queue_an_extra_swing(self):
         for facing in (0, 1):
             for counter in (False, True):
-                for elapsed_frames in (0, 1):
+                for elapsed_frames in (0, 1, 2):
                     with self.subTest(facing=facing, counter=counter,
                                       elapsed_frames=elapsed_frames):
                         scene = self.guarded_sword_scene(facing)
@@ -2420,9 +2420,9 @@ class AnimationDataTests(unittest.TestCase):
                 with self.subTest(facing=facing, counter=counter):
                     scene = self.guarded_sword_scene(facing)
                     scene.start_sword_action("sword_attack", sequence_id=66 if counter else None)
-                    for _ in range(2):
+                    for _ in range(3):
                         scene.advance_animation()
-                    self.assertEqual(scene.action, 153)
+                    self.assertEqual(scene.action, 154)
                     scene.set_key_state("ctrl", True)
                     scene.set_key_state("ctrl", False)
                     self.assertEqual(scene.pending_action, BufferedCommand("sword_attack"))

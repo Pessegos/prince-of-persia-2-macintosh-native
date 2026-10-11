@@ -17,6 +17,8 @@ REQUIRED_ASSETS = (
     "NIS.rsrc",
     "Title.rsrc",
     "Desert.rsrc",
+    "Caverns.rsrc",
+    "caverns_entry.json",
     "intro.json",
     "ending.json",
     "attract.json",

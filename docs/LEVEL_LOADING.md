@@ -55,15 +55,19 @@ runs the entire arrival sequence before enabling ordinary controls and physics.
 
 Ordinary guard creation now inherits the selected environment for initial,
 visited-room and generated guards. A room with no guards is valid. Special
-opponent types still fail explicitly rather than creating ordinary guards.
+opponent types with nonempty spawn tables still fail explicitly rather than
+creating ordinary guards. Their empty rooms can be loaded safely.
 
 ## Current Boundary
 
-Rooftop scenery and the level-2 entrance are implemented. The beach reads
+Rooftop scenery and the level-2 shore are implemented. The beach reads
 Desert.rsrc's original CUST/SHAP records, including the floating planks' animation.
-The remaining island scenery, environmental controllers and music scheduling
-still need recovery. Unsupported room transitions retain the current room.
-Other environments' start controllers also remain explicitly unsupported.
+The stone controller is owned by the session and resets with the level.
+The opening cave exit loads level 3, preserving the player's health capacity.
+Its starting room uses drawing commands recovered at import time from CODE:3
+and CODE:8. The level-3 entry uses SEQS:5 (SetKidDefaults, 2:5e34).
+Further cavern rooms and their interactive objects remain unsupported;
+unsupported room transitions retain the current room.
 
 SEQS opcode -16 marks completion in the session, independently of the harbor
 watcher. The host continues the ship animation while the original end song

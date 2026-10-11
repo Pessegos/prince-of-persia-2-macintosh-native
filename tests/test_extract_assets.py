@@ -31,6 +31,11 @@ class AssetImportTests(unittest.TestCase):
         self.ending.side_effect = lambda _image, _program, _nis, directory, _progress: (
             directory / "ending.json").write_bytes(b"prepared voyage")
         self.addCleanup(ending.stop)
+        caverns = patch.object(extract_assets, "extract_caverns")
+        self.caverns = caverns.start()
+        self.caverns.side_effect = lambda _program, _caverns, _prince, directory: (
+            directory / "caverns_entry.json").write_bytes(b"prepared cavern entrance")
+        self.addCleanup(caverns.stop)
         attract = patch.object(extract_assets, "extract_attract")
         self.attract = attract.start()
         self.attract.side_effect = lambda _program, _resources, directory, _progress: (
@@ -55,7 +60,7 @@ class AssetImportTests(unittest.TestCase):
         ):
             files = extract_assets.extract_assets(self.image, self.output)
         self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json",
-                                     "ending.json", "attract.json"})
+                                     "ending.json", "attract.json", "caverns_entry.json"})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
         for name in extract_assets.RESOURCE_FILES:
             self.assertEqual((self.output / name).read_bytes(), self.forks[name])

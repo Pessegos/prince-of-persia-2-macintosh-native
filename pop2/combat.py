@@ -51,10 +51,12 @@ class GuardSpawn:
         opponent_type = struct.unpack_from(">h", level, 0x21A4)[0]
         if opponent_type == -1:
             return []
-        if opponent_type != 0:
-            raise ValueError("Special opponent types are not implemented here")
         offset = 0x20E6 + (room + 1) * 0xC0
         count = struct.unpack_from(">H", level, offset)[0]
+        if opponent_type != 0:
+            if count == 0:
+                return []
+            raise ValueError("Special opponent types are not implemented here")
         if not 0 <= count <= 5:
             raise ValueError("Invalid initial ordinary-guard count")
         spawns = []

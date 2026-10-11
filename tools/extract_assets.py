@@ -10,11 +10,12 @@ from tools.extract_enemy_profiles import extract_bytes
 from tools.extract_audio import extract_audio
 from tools.extract_intro import extract_intro, extract_ending
 from tools.extract_attract import extract_attract, extract_credits_music
+from tools.extract_caverns import extract_caverns
 from pop2.mac_resources import get_resource_fork, parse_resource_fork
 from pop2.paths import ASSET_DIR
 
 
-RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc")
+RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc")
 REQUIRED_RESOURCES = {
     "Prince.rsrc": {"LEVL", "SEQS", "SHAP", "SHPL", "CTBL", "NFNT"},
     "Kid.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
@@ -23,6 +24,7 @@ REQUIRED_RESOURCES = {
     "NIS.rsrc": {"SHAP", "CTBL", "TEXT"},
     "Title.rsrc": {"SHAP", "CTBL", "SCRP", "ANI "},
     "Desert.rsrc": {"CUST", "SHAP", "CTBL"},
+    "Caverns.rsrc": {"PIEC", "SHAP", "CTBL"},
 }
 
 
@@ -55,6 +57,9 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         progress("Recovering the original voyage scenes...")
         extract_ending(image, program, resources["NIS.rsrc"], staging, progress)
         resources["ending.json"] = (staging / "ending.json").read_bytes()
+        progress("Recovering the cavern entrance...")
+        extract_caverns(program, resources["Caverns.rsrc"], resources["Prince.rsrc"], staging)
+        resources["caverns_entry.json"] = (staging / "caverns_entry.json").read_bytes()
         progress("Recovering the original recorded demo and credits...")
         extract_attract(program, resources, staging, progress)
         extract_credits_music(image, staging)

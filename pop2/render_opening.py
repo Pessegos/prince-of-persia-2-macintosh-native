@@ -130,11 +130,14 @@ class OpeningRoom:
     ledges: tuple[RoofLedge, ...]
     pieces: tuple[RoofForeground, ...]
     room_id: int
+    level_kind: int = 5
 
     def flattened(self):
         return Image.alpha_composite(self.background, self.foreground)
 
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
+        if self.level_kind != 5:
+            return self.actor_occlusion[max(-1, min(4, row))]
         actor_type = getattr(state, "actor_type", None)
         dead_poses = (185, 228) if actor_type == 2 else DEAD_POSES
         if (state is not None and actor_type in (0, 2)

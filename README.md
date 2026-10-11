@@ -55,6 +55,7 @@ in `assets/`:
 - `Guard.rsrc`
 - `Rooftops.rsrc`
 - `Desert.rsrc`
+- `Caverns.rsrc` and `caverns_entry.json` (recovered cavern entrance)
 - `NIS.rsrc` and `Title.rsrc`
 - `enemy_profiles.json`
 - `intro.json` (recovered scene instructions and audio markers)
@@ -109,6 +110,8 @@ the selected option. New game defaults to Cancel. Escape backs out without
 discarding progress. Save/Open and Hall of Fame
 are shown disabled until those systems are implemented. There are no
 Alt+Q or Alt+F commands; fullscreen remains Alt+Enter.
+The original manual-symbol challenge is enabled by default. The F1 option
+`Copy protection` disables only that challenge, not the stone puzzle.
 
 The developer menu accepts mouse, Tab/Shift+Tab and arrow navigation.
 Left/Right moves between `Go to screen` and `Resume`; Enter/Space activates
@@ -124,7 +127,7 @@ The Windows debug status bar is hidden by default; enable it in `Display`.
 ## Current Progress
 
 The level-1 route is playable from the palace window through the ship's departure
-and voyage to the level-2 beach.
+and voyage through the level-2 shore and stone puzzle to the level-3 entrance.
 
 - Original opening story, animated title, palace scenes, music and voices.
 - Original level-one autoplay demo, credits and looping opening.
@@ -133,6 +136,8 @@ and voyage to the level-2 beach.
 - Harbor scenery, water falls and the departing ship's original boarding sequence.
 - Voyage cutscene with original music, voices, dream and storm scenes.
 - Level-2 beach and the original arrival animation.
+- Level-2 shore, stone puzzle, moving cave entrance and original manual-symbol challenge.
+- Level-3 starting room and original entry sequence.
 - Death/retry flow and the level-1 checkpoint after the screen-7 descent.
 - Four original rooftop music tracks and movement, combat, glass and water sounds.
 - Death music with playback-dependent restart messages; pause also pauses audio.
@@ -141,8 +146,8 @@ and voyage to the level-2 beach.
 - Original 510x384 visible viewport, aspect-preserving nearest-neighbor scaling.
 - Movement at 12 fps and ordinary sword combat at 10 fps.
 
-Only the entrance of level 2 is implemented; its remaining rooms and later
-levels are not yet playable. This remains a WIP;
+Level 3 is limited to its entrance: cavern objects, enemies and the rest of
+its route still need recovery. This remains a WIP;
 the recovered rules do not yet cover every original collision or input branch.
 
 ## Development
@@ -150,12 +155,14 @@ the recovered rules do not yet cover every original collision or input branch.
 [Level loading](docs/LEVEL_LOADING.md) describes the separation between original
 level data, gameplay state, scenery and the window host.
 [Level transitions](docs/LEVEL_TRANSITION.md) documents the boat-to-beach sequence.
+[Desert recovery](docs/DESERT_RECOVERY.md) covers the stones and manual challenge.
 
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m ruff check --select F,E9 .
 python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_playback_navigation tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests tests.test_palettes tests.test_game_session tests.test_level_ending
 python -m tools.recovery_catalog --check
+python -m unittest -q tests.test_desert
 ```
 
 These checks run without original game files and are used in GitHub Actions.

@@ -302,10 +302,11 @@ class WindowControls:
             self.render()
 
     def modal_open(self):
-        return self.dev_menu is not None or self.game_menu is not None
+        return (self.dev_menu is not None or self.game_menu is not None
+                or getattr(self, "copy_challenge", None) is not None)
 
     def development_available(self):
-        return self.level_map is not None
+        return self.level_map is not None and getattr(self, "copy_challenge", None) is None
 
     def level_navigation_available(self):
         return (self.development_available() and getattr(self, "intro", None) is None
@@ -323,6 +324,7 @@ class WindowControls:
             self.game_menu.music = self.music_enabled
             self.game_menu.fullscreen = self.fullscreen
             self.game_menu.development = self.development_available()
+            self.game_menu.copy_protection = getattr(self, "copy_protection_enabled", True)
 
     def open_game_menu(self, page="menu"):
         if self.game_menu is not None:
@@ -379,6 +381,12 @@ class WindowControls:
             self.render()
         elif action == "fullscreen":
             self.toggle_fullscreen()
+            self.render()
+        elif action == "copy_protection":
+            self.copy_protection_enabled = not getattr(self, "copy_protection_enabled", True)
+            if not self.copy_protection_enabled:
+                self.copy_challenge = None
+                self.clear_keys(None)
             self.render()
         elif action == "development":
             self.open_dev_mode()
@@ -439,6 +447,19 @@ class WindowControls:
                 self.pause_resume_keys.update(self.window_keys_down)
             return "break"
         if self.dev_menu is None:
+            challenge = getattr(self, "copy_challenge", None)
+            if challenge is not None:
+                if event.keysym == "Escape":
+                    return None
+                if self.paused:
+                    if not repeated and is_resume_key(event, self.window_keys_down):
+                        self.set_paused(False)
+                        self.pause_resume_keys.update(self.window_keys_down)
+                elif not alt and not repeated and not event.state & (0x4 | 0x40):
+                    challenge.key(event.keysym)
+                    self.resolve_copy_challenge()
+                    self.render()
+                return "break"
             if self.paused and event.keysym not in ("Escape", "F2") and not fullscreen_key:
                 if is_resume_key(event, self.window_keys_down):
                     self.set_paused(False)
@@ -507,6 +528,13 @@ class WindowControls:
             if self.game_menu is not None:
                 self.apply_game_action(self.game_menu.click(*point))
                 self.pause_resume_keys.update(self.window_keys_down)
+            elif getattr(self, "copy_challenge", None) is not None:
+                if not self.paused:
+                    symbol = self.copy_challenge.hit(*point)
+                    if symbol is not None:
+                        self.copy_challenge.choose(symbol)
+                        self.resolve_copy_challenge()
+                        self.render()
             else:
                 self.apply_dev_action(self.dev_menu.click(*point))
         return "break"

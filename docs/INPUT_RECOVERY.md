@@ -205,9 +205,9 @@ running-jump request until the first legal run pose (7), without rewinding
 the startup into a standing jump. This narrower input-tolerance extension
 preserves the ordinary standing chord; takeoff alignment/range are unchanged.
 
-Rapid Ctrl repeats during the first two attack poses do not buffer another
-swing. Normal attacks close the buffer at poses 151/152; counters at 162/152.
-The buffer opens at pose 153, about 200 ms into either attack at 10 fps.
+Rapid Ctrl repeats during the first three attack poses do not buffer another
+swing. Normal attacks close the buffer at poses 151/152/153; counters at 162/152/153.
+The buffer opens at pose 154, about 300 ms into either attack at 10 fps.
 This is another intentional extension, not a recovered native timing rule.
 Drawing the sword still accepts a first queued attack, and block/counter,
 movement and sheathing commands are not delayed. Using animation poses keeps

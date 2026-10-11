@@ -25,6 +25,7 @@ class GameMenu:
     focus: int = 0
     page: str = "menu"
     return_to_menu: bool = True
+    copy_protection: bool = True
 
     PANEL = (64, 28, 448, 334)
     DIALOG = (80, 108, 432, 274)
@@ -47,6 +48,7 @@ class GameMenu:
             MenuItem("about", "About", "Alt+V"),
             MenuItem("fullscreen", "Fullscreen", "Alt+Enter", checked=self.fullscreen),
             MenuItem("development", "Dev Mode", "F2", self.development),
+            MenuItem("copy_protection", "Copy protection", "", checked=self.copy_protection),
         )
 
     def show_page(self, page):

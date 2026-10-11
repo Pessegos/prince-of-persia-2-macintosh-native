@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from pop2.animation_data import parse_aframe_records, parse_frame_records, sequence_words
 from pop2.control_mapping import IDLE_SEQUENCE
+from pop2.desert_state import DesertState
 from pop2.harbor import Harbor
 from pop2.level_data import LevelDefinition
 from pop2.level_transition import LevelExit
@@ -56,6 +57,7 @@ class GameSession:
     death: DeathState = field(default_factory=DeathState)
     complete: bool = False
     exit: LevelExit | None = None
+    desert: DesertState | None = None
 
     @property
     def entry_active(self):
@@ -95,6 +97,9 @@ class GameSession:
         self.death = DeathState()
         self.complete = False
         self.exit = None
+        self.desert = DesertState() if level.kind == 1 else None
+        if self.level_map is not None:
+            self.level_map.desert = self.desert
         self.room_id = level.start_room
         self.harbor = Harbor() if level.kind == 5 else None
         fresh = SequenceState(IDLE_SEQUENCE, action=15, current_x=level.start_x,
@@ -123,6 +128,8 @@ class GameSession:
         self.harbor = Harbor() if self.level.kind == 5 else None
         self.complete = False
         self.exit = None
+        self.desert = DesertState() if self.level.kind == 1 else None
+        self.level_map.desert = self.desert
         if self.opening is not None:
             self.opening.active = False
             self.opening.tick = len(GLASS_POSITIONS)

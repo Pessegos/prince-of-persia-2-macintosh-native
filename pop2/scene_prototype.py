@@ -97,7 +97,7 @@ SWORD_SEQUENCES = {
 SWORD_STEP_KINDS = {"sword_advance", "sword_retreat"}
 SWORD_STEP_SEQUENCES = {SWORD_ADVANCE_SEQUENCE, SWORD_RETREAT_SEQUENCE}
 SWORD_ATTACK_START_SEQUENCES = {SWORD_ATTACK_SEQUENCE, SWORD_BLOCK_ATTACK_SEQUENCE, 203}
-SWORD_ATTACK_START_POSES = {151, 152, 162}
+SWORD_ATTACK_START_POSES = {151, 152, 153, 162}
 SWORD_COMBAT_SEQUENCES = set(SWORD_SEQUENCES.values()) | {
     SWORD_GUARD_SEQUENCE, SWORD_BLOCK_ATTACK_SEQUENCE, 69, 203, 204, 205, 206,
     PLAYER_COMBAT_TURN_SEQUENCE, 245,
@@ -298,6 +298,9 @@ class ScenePrototype(WindowControls):
         self.game_menu = None
         self.game_was_paused = False
         self.native_viewport = None
+        self.copy_protection_enabled = True
+        self.copy_verified = False
+        self.copy_challenge = None
 
         self.create_window("Prince of Persia 2 Macintosh Native (WIP)" if with_guard
                            else "Prince of Persia 2 Macintosh Native - Animation Preview (WIP)",
@@ -346,6 +349,7 @@ class ScenePrototype(WindowControls):
         game = GameSession.load(self.resources, number, self.terrain_enabled)
         renderer = LevelRenderer(game.level)
         self.bind_level(game, renderer)
+        self.copy_challenge = None
         self.demo = self.live_combat = None
         self.attract_stage = self.intro = None
         self.clear_keys(None)
@@ -423,7 +427,7 @@ class ScenePrototype(WindowControls):
         if self.sword_sheathing or self._combat_controls_locked():
             return False
         state = self.sequence_state
-        # Port QoL: a rapid repeat during the first two attack poses must
+        # Port QoL: a rapid repeat during the first three attack poses must
         # not schedule another swing. Drawing/blocking still accepts Ctrl.
         if (kind == "sword_attack"
                 and state.sequence_id in SWORD_ATTACK_START_SEQUENCES
@@ -1413,6 +1417,10 @@ class ScenePrototype(WindowControls):
         if self.paused:
             return
         self.in_animation_tick = True
+        if getattr(self, "copy_challenge", None) is not None:
+            self.in_animation_tick = False
+            self.schedule_next_animation()
+            return
         if getattr(self, "level_complete", False):
             if self.game.exit is not None:
                 if self.harbor is not None:
@@ -1815,6 +1823,33 @@ class ScenePrototype(WindowControls):
         self.player_x, self.action = state.target_x, state.action
 
     def advance_level_events(self):
+        desert = getattr(self.game, "desert", None)
+        if desert is not None and self.terrain_motion is not None:
+            cues = desert.advance(self.room_id, self.sequence_state, self.frames[self.action],
+                                  self.combat is None or self.combat.player.alive)
+            for cue in cues:
+                if cue in (46, 49) and self.audio is not None:
+                    self.audio.add_song(cue)
+                else:
+                    self.sequence_state.sound_events.append(cue)
+            if (self.room_id == 0 and getattr(self, "copy_protection_enabled", True)
+                    and not getattr(self, "copy_verified", False)):
+                from pop2.copy_protection import CopyProtection
+
+                self.copy_challenge = CopyProtection(self.resources.prince)
+                self.clear_keys(None)
+                self.pause_resume_keys.update(self.window_keys_down)
+            if (self.room_id == 0 and desert.exit_open and self.player_x < 0
+                    and getattr(self, "copy_challenge", None) is None):
+                max_life = self.combat.player.max_life
+                self.load_level(3)
+                self.combat.player.life = self.combat.player.max_life = max_life
+                return
+            if self.room_id == 2 and self.player_x >= 572:
+                self.sequence_state.current_x = self.sequence_state.target_x = 572
+                self.player_x = 572
+                self.clear_keys(None)
+                self.start_sequence(IDLE_SEQUENCE)
         if self.game.consume_completion():
             if self.game.level.number == 1:
                 import json
@@ -1830,6 +1865,17 @@ class ScenePrototype(WindowControls):
                     self.audio.add_song(32)
             self.clear_keys(None)
             self.status.set(f"Level {self.game.level.number} complete")
+
+    def resolve_copy_challenge(self):
+        challenge = self.copy_challenge
+        if challenge.accepted:
+            self.copy_verified = True
+            self.copy_challenge = None
+        elif challenge.failed:
+            self.copy_challenge = None
+            self.restart_level()
+        self.clear_keys(None)
+        self.pause_resume_keys.update(self.window_keys_down)
 
     def resume_combat_turn(self):
         combat = getattr(self, "combat", None)
@@ -1947,8 +1993,13 @@ class ScenePrototype(WindowControls):
             audio.ambient(self.room_id, motion.row, max(0, min(9, int(contact // 51))),
                           fighting, self.combat.player.alive)
         elif motion is not None and self.game.level.number == 2:
-            # DesertFunc 18:01ee-020a repeats the shore sound when cue 51 ends.
-            if audio.current_effect != 51 or not audio.effect_busy:
+            # DesertFunc 18:01ee / 0004: waves are AddSound; cave cue 50
+            # and puzzle cues 46/49 are AddSong, leaving stone effects independent.
+            if self.room_id == 0:
+                audio.stop_sound(51)
+                if not audio.music_busy:
+                    audio.add_song(50, ambient=True)
+            elif not audio.effect_busy:
                 audio.add_sound(51)
         audio.flush()
 
@@ -2112,6 +2163,8 @@ class ScenePrototype(WindowControls):
         self.status.set("Credits")
 
     def new_game(self):
+        self.copy_verified = False
+        self.copy_challenge = None
         if self.game.level.number != 1:
             self.load_level(1)
         self.restart_opening(play_sound=not self.with_intro)
@@ -2160,6 +2213,7 @@ class ScenePrototype(WindowControls):
             self.render()
 
     def restart_opening(self, _event=None, play_sound=True):
+        self.copy_challenge = None
         self.end_demo()
         self.attract_stage = None
         self.intro = None
@@ -2384,7 +2438,8 @@ class ScenePrototype(WindowControls):
             return
         frame = self.background.copy()
         frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor,
-                    frame_number=self.combat.world_frame if self.combat is not None else 0)
+                    frame_number=self.combat.world_frame if self.combat is not None else 0,
+                    desert=getattr(self.game, "desert", None))
         opening = getattr(self, "opening", None)
         show_opening = opening is not None and (
             getattr(self, "level_map", None) is None or self.room_id == self.level_map.start_room)
@@ -2459,7 +2514,8 @@ class ScenePrototype(WindowControls):
             layer = Image.new("RGBA", frame.size)
             layer.paste(glass, (glass_x, character_sprite_top(glass_y, glass.height)), glass)
             frame = self.composite_actor(frame, layer)
-        frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor, front=True)
+        frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor, front=True,
+                                                  desert=getattr(self.game, "desert", None))
         viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
         viewport.paste(frame, (ROOM_ORIGIN_X, 0))
         if combat is not None and not self.death.prompt_visible:
@@ -2479,6 +2535,14 @@ class ScenePrototype(WindowControls):
             viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, ROOM_HEIGHT), text)
         if demo_paused and self.dev_menu is None and self.game_menu is None:
             viewport = self.draw_cutscene_pause(viewport)
+        if getattr(self, "copy_challenge", None) is not None:
+            viewport = self.copy_challenge.draw(viewport, self.ui_font)
+            if self.paused and self.game_menu is None:
+                shade = Image.new("RGBA", viewport.size, (0, 0, 0, 160))
+                viewport = Image.alpha_composite(viewport.convert("RGBA"), shade)
+                viewport.paste(self.pause_text,
+                               ((VIEWPORT_WIDTH - self.pause_text.width) // 2,
+                                (VIEWPORT_HEIGHT - self.pause_text.height) // 2), self.pause_text)
         if self.dev_menu is not None:
             viewport = self.dev_menu.draw(viewport, self.ui_font)
         if self.game_menu is not None:

@@ -61,6 +61,7 @@ class LevelMap:
         self.level = level
         self.start_room = struct.unpack_from(">H", level, 0x2198)[0] - 1
         self.start_tile = struct.unpack_from(">H", level, 0x219a)[0]
+        self.desert = None
 
     def neighbor(self, room, direction):
         offset = {"left": 0, "right": 2, "up": 4, "down": 6}[direction]
@@ -96,6 +97,8 @@ class LevelMap:
         index = row * 10 + column
         kind = struct.unpack_from(">H", self.level, room * 60 + index * 2)[0]
         fg, bg = struct.unpack_from(">2H", self.level, 0x780 + room * 120 + index * 4)
+        if kind == 4 and self.desert is not None:
+            fg = (fg & 0xff00) | (104 if self.desert.exit_open else 0)
         return Tile(kind, fg, bg, room, column, row)
 
     def supports(self, room, column, row):
@@ -411,12 +414,15 @@ class LevelMap:
         for row in range(character_row(top), character_row(bottom) + 1):
             for col in range(-1, 11):
                 tile = self.tile(room, col, row)
-                if tile.kind not in WALL_TILES:
+                desert_exit = (tile.kind == 4 and self.desert is not None
+                               and not self.desert.exit_open)
+                if tile.kind not in WALL_TILES and not desert_exit:
                     continue
                 # GetLeftBarr/GetRightBarr, code 4, DATA c9e0/c9f2[4].
-                barrier = (2 if tile.kind == 7 and bottom - top + 1 <= 34 else
+                barrier = (1 if desert_exit else
+                           2 if tile.kind == 7 and bottom - top + 1 <= 34 else
                            3 if tile.kind == 2 and (tile.foreground & 255) < 3 else 4)
-                left_offset, right_offset = {2: (0, 50), 3: (-22, -22), 4: (3, 0)}[barrier]
+                left_offset, right_offset = {1: (40, 0), 2: (0, 50), 3: (-22, -22), 4: (3, 0)}[barrier]
                 wall_left = col * TILE_WIDTH + 22 + left_offset
                 wall_right = col * TILE_WIDTH + 72 - right_offset
                 # A landing/foot alignment may already overlap the barrier.
@@ -481,6 +487,11 @@ class RooftopPhysics:
         elif (left >= 510 if not state.facing else right >= 525):
             direction = "right"
         if direction is None:
+            return False
+        # DesertFunc, rather than CutChar, owns the cave exit and the
+        # far-right shore. Their extra LEVL rooms are not camera targets.
+        if state.level_kind == 1 and ((motion.room == 0 and direction == "left")
+                                     or (motion.room == 2 and direction == "right")):
             return False
         # CutChar 6:4c26-4c48 keeps native room 15 visible on its right exit.
         # RoofMakeWaterTestRect handles the offscreen death separately.

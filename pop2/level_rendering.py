@@ -7,11 +7,11 @@ from pop2.render_opening import (
 
 class LevelRenderer:
     def __init__(self, level):
-        if level.kind != 5 and level.number != 2:
+        if level.kind != 5 and level.number not in (2, 3):
             raise ValueError(f"Level {level.number} scenery is not implemented (environment {level.kind})")
         self.level = level
         self.rooms = {}
-        self.beach = None
+        self.desert_rooms = {}
         self.room(level.start_room)
 
     def room(self, room_id):
@@ -19,21 +19,28 @@ class LevelRenderer:
             raise ValueError("Invalid scenery room")
         if room_id not in self.rooms:
             if self.level.kind == 1:
-                if room_id != self.level.start_room:
-                    raise ValueError("Only the level 2 entrance is implemented")
-                from pop2.desert import BeachScene
+                if room_id not in (0, 1, 2):
+                    raise ValueError("Outside the desert shore")
+                from pop2.desert import DesertScene
                 from pop2.render_opening import load_resource_file
 
-                self.beach = BeachScene.read(load_resource_file("Desert.rsrc"), room_id)
-                self.rooms[room_id] = self.beach.room
+                scene = DesertScene.read(load_resource_file("Desert.rsrc"), room_id)
+                self.desert_rooms[room_id] = scene
+                self.rooms[room_id] = scene.room
+            elif self.level.number == 3:
+                if room_id != self.level.start_room:
+                    raise ValueError("Cavern room recovery is not implemented beyond the entrance")
+                from pop2.caverns import entrance_room
+
+                self.rooms[room_id] = entrance_room()
             else:
                 self.rooms[room_id] = build_opening_room(include_curtain=False, room_id=room_id,
                                                         level_resource_id=self.level.resource_id)
         return self.rooms[room_id]
 
-    def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0):
-        if self.beach is not None:
-            return frame if front else self.beach.draw(frame, frame_number)
+    def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None):
+        if room_id in self.desert_rooms:
+            return self.desert_rooms[room_id].draw(frame, frame_number, desert, front)
         if harbor is None:
             return frame
         return draw_harbor(frame, room_id, harbor, front=front,
@@ -41,6 +48,8 @@ class LevelRenderer:
 
     def supported_rooms(self):
         if self.level.kind == 1:
+            return [0, 1, 2]
+        if self.level.number == 3:
             return [self.level.start_room]
         scenery_map, _shapes, _pieces = rooftop_scene_data(self.level.resource_id)
         supported_kinds = {0, 1, 20, 47, 48, 49}
@@ -59,6 +68,8 @@ class LevelRenderer:
 
     def screen_entries(self):
         if self.level.kind == 1:
+            return {"1": 1, "2 (Stones)": 0, "Right shore": 2}
+        if self.level.number == 3:
             return {"1": self.level.start_room}
         terrain, _shapes, _pieces = rooftop_scene_data(self.level.resource_id)
         available = set(self.supported_rooms())
