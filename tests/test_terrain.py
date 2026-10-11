@@ -664,6 +664,52 @@ class RooftopSceneTests(unittest.TestCase):
         scene.render()
         self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
 
+    def test_fast_screen_four_escape_turns_to_carried_guard_after_screen_five_kill(self):
+        self.place(0, 1, 495)
+        scene = self.scene
+        scene.horizontal_input, scene.held_directions = -1, [-1]
+        scene.in_animation_tick = True
+        scene.start_sequence(1)
+        jumped = False
+        first = incoming = None
+        killed_at = turned_at = None
+        for tick in range(90):
+            with patch("pop2.scene_prototype.time.perf_counter", return_value=self.now):
+                if not jumped and scene.player_x < 385:
+                    scene.up_key(None)
+                    scene.set_key_state("up", False)
+                    jumped = True
+                if scene.room_id == 9 and first is None:
+                    first = scene.combat.guard
+                    incoming, = [guard for guard in scene.combat.guards if guard is not first]
+                    self.assertGreater(incoming.state.target_x, 510)
+                    self.assertNotIn(incoming, scene.combat.room_encounters[0][0])
+                    scene.horizontal_key(None, -1, False)
+                    scene.set_key_state("ctrl", True)
+                    scene.set_key_state("ctrl", False)
+                if first is not None and first.alive and scene.action in (158, 170, 171):
+                    if opponent_distance(scene.combat.player, first) >= 100:
+                        scene.horizontal_key(None, -1, True)
+                    else:
+                        scene.horizontal_key(None, -1, False)
+                        scene.set_key_state("ctrl", True)
+                        scene.set_key_state("ctrl", False)
+            self.tick()
+            if first is not None and not first.alive:
+                if killed_at is None:
+                    killed_at = tick
+                    self.assertEqual(scene.sequence_state.facing, 0)
+                if scene.sequence_state.facing == 1:
+                    turned_at = tick
+                    break
+        self.assertIsNotNone(killed_at)
+        self.assertIsNotNone(turned_at)
+        self.assertEqual(turned_at, killed_at + 1)
+        self.assertIs(scene.combat.guard, incoming)
+        self.assertEqual(scene.combat.player.life, 3)
+        self.assertTrue(incoming.alive)
+        self.assertGreater(incoming.state.target_x, 510)
+
     def test_idle_window_escape_takes_three_stabs_without_premature_fall(self):
         scene = self.scene
         life_changes = []

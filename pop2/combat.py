@@ -250,9 +250,32 @@ class CombatEncounter:
 
     def enter_room(self, room, row):
         """Keep the Prince and the visited room's NPC/generator objects intact."""
+        previous_room = self.player.room
         self._load_room(room)
         self.player.room, self.player.row = room, row
         self.guards, self.generation_points = self.room_encounters[room]
+        terrain = getattr(self, "terrain", None)
+        if terrain is not None and previous_room in (
+                terrain.neighbor(room, "left"), terrain.neighbor(room, "right")):
+            offset = self._room_offset(previous_room, room)
+            previous_guards = self.room_encounters[previous_room][0]
+            for guard in list(previous_guards):
+                state = guard.state
+                # CutAllOpponents 6:44c8-450a carries ordinary runners;
+                # TransferOppInfo 6:3304/4864 rebases the existing actor.
+                running = (186 <= state.action <= 201 and guard.generation_flags != 0
+                           or 202 <= state.action <= 212 and guard.generation_flags == 1)
+                if (not guard.alive or state.actor_type != 2
+                        or not running or len(self.guards) >= 5):
+                    continue
+                state.current_x += offset
+                state.target_x += offset
+                guard.room = room
+                guard.entry_x = state.target_x if not 0 <= state.target_x < 510 else None
+                if guard.terrain_motion is not None:
+                    guard.terrain_motion.room = room
+                previous_guards.remove(guard)
+                self.guards.append(guard)
         self.guard = self._nearest_guard() or (self.guards[0] if self.guards else None)
 
     def active_guards(self):

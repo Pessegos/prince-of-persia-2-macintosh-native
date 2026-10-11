@@ -98,9 +98,11 @@ class OpponentGenerationPoint:
 
     def eligible(self, player, guards, frame, level):
         # IsActiveOppGenPt 0x3daa and IsTimeToGenOpp 0x3e0a.
+        # 6:3e56-3e68 uses DIVU/SWAP/TST.L, not a remainder-only test:
+        # the quotient also survives, so only a zero 16-bit counter fails.
         if (not player.alive or player.state.actor_type == 1
                 or player.room != self.room or len(guards) >= 5
-                or frame % 3 == 0 or self.remaining == 0
+                or frame & 0xffff == 0 or self.remaining == 0
                 or player.row not in (self.row, self.alternate_row)):
             return False
         player_column = character_column(player.state.target_x)

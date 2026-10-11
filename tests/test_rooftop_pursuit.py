@@ -248,14 +248,17 @@ class RooftopPursuitTests(unittest.TestCase):
         for frame in range(17, 47):
             encounter.world_frame = frame
             encounter.generate_opponents()
-        self.assertEqual(encounter.guards, [])
+        self.assertEqual(encounter.guards, [guard])
+        self.assertEqual(guard.room, 2)
         self.assertEqual((point.remaining, point.countdown), (3, 8))
         self.assertEqual(sum(g.alive for g in encounter.active_guards()), 1)
         guard.life = 0
         for frame in range(47, 64):
             encounter.world_frame = frame
             encounter.generate_opponents()
-        self.assertEqual(len(encounter.guards), 1)
+        self.assertEqual(len(encounter.guards), 2)
+        self.assertIs(encounter.guards[0], guard)
+        self.assertEqual(sum(g.alive for g in encounter.guards), 1)
         self.assertEqual(point.remaining, 2)
 
     def test_fatal_hit_at_roof_edge_uses_tumble_and_keeps_falling_after_death(self):
@@ -386,6 +389,47 @@ class RooftopPursuitTests(unittest.TestCase):
                 break
         self.assertEqual(guard.room, 2)
         self.assertTrue(guard.alive)
+
+    def test_room_change_carries_native_running_and_jump_poses_without_teleport(self):
+        for pose, flags, carried in ((185, 1, False), (186, -1, True), (201, 2, True),
+                                     (194, 0, False), (202, 1, True), (212, 1, True),
+                                     (202, 2, False), (212, -1, False), (213, 1, False)):
+            with self.subTest(pose=pose, flags=flags):
+                encounter = self.encounter(0, player_x=50)
+                guard = self.runner(encounter, 0, 400, flags=flags)
+                guard.state.action = pose
+                guard.life, guard.palette_variant = 2, 3
+                guard.terrain_motion = TerrainMotion(0, 1)
+                old_state = (guard.state.cursor, guard.state.sequence_id,
+                             guard.state.action, guard.state.facing)
+                encounter.enter_room(9, 1)
+                self.assertEqual(guard.room, 9 if carried else 0)
+                self.assertEqual(guard.state.target_x, 910 if carried else 400)
+                self.assertEqual(guard.state.current_x, guard.state.target_x)
+                self.assertEqual(guard.terrain_motion.room, guard.room)
+                self.assertEqual((guard.life, guard.palette_variant), (2, 3))
+                self.assertEqual((guard.state.cursor, guard.state.sequence_id,
+                                  guard.state.action, guard.state.facing), old_state)
+                self.assertEqual(sum(g is guard for guards, _ in encounter.room_encounters.values()
+                                     for g in guards), 1)
+                if carried:
+                    self.assertEqual(guard.entry_x, 910)
+                    encounter.advance_guard()
+                    self.assertEqual(guard.room, 9)
+
+    def test_carry_to_right_rebases_runner_and_preserves_five_record_limit(self):
+        encounter = self.encounter(0)
+        guard = self.runner(encounter, 0, 100, facing=1)
+        encounter.enter_room(2, 1)
+        self.assertEqual((guard.room, guard.state.target_x, guard.entry_x), (2, -410, -410))
+        encounter = self.encounter(0)
+        guard = self.runner(encounter, 0, 400)
+        encounter._load_room(9)
+        while len(encounter.room_encounters[9][0]) < 5:
+            self.runner(encounter, 9, 300)
+        encounter.enter_room(9, 1)
+        self.assertEqual((guard.room, guard.state.target_x), (0, 400))
+        self.assertEqual(len(encounter.guards), 5)
 
     def test_player_with_one_life_blinks_only_first_bottle_and_stops_when_healed(self):
         encounter = self.encounter()

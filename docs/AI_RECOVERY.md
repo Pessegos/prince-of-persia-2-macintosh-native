@@ -322,11 +322,29 @@ NPCs now use the rooftop physics and transfer between visited horizontal
 rooms, preserving the original actor object. Adjacent visited rooms and
 already engaged pursuers keep simulating; other rooms remain inactive.
 Coordinate views rebase a distant target for AI/rendering without moving its
-actual actor. Transfer is performed only when the guard reaches a room cut.
+actual actor. On the Prince's horizontal room cut, CutAllOpponents
+`6:44c8-450a` carries ordinary NPC running poses 186-201 with nonzero
+movement flags and jump poses 202-212 with flag 1. TransferOppInfo
+`6:3304/4864` changes ownership and rebases X by 510 without restarting
+the animation or moving the actor in world space. The carried NPC belongs
+to the new target bank even while outside the image, so the Prince can
+turn toward it after killing the first screen-5 opponent. Non-carried NPCs
+still transfer on their own room cut; the port retains its five-record cap.
 Generated offscreen entrants retain ownership of their spawn room until they
-enter it. This lifecycle is not a complete translation of all `CutOpponent`,
+enter it or are carried by a subsequent Prince room cut. This lifecycle is
+not a complete translation of all `CutOpponent`,
 `CheckSideRoomsForVisibleOpps` and special-actor branches. Player movement is documented in
 [COLLISION_RECOVERY.md](COLLISION_RECOVERY.md).
+
+IsTimeToGenOpp `6:3e56-3e68` divides the unsigned 16-bit frame counter
+by three, swaps its quotient/remainder halves, then tests the entire long
+word. This is not a modulo-three throttle: only counter zero fails. The
+previous port skipped every third cycle and delayed incoming guards.
+Executing the original instructions for all 65,536 counter values confirms
+the corrected gate. Generator countdowns, probabilities and movement
+speeds are unchanged. An input-driven scene regression runs/jumps through
+screen 4, kills screen 5's initial guard and verifies the automatic turn
+toward the same carried pursuer on the next animation cycle.
 
 ## Rooftop Pursuit And Jumping
 

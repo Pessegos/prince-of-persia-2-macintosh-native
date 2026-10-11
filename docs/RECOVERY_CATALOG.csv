@@ -392,7 +392,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,SetOppMaxLifePts,0x2b44,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 6,Characters 1,CheckSideRoomsForVisibleOpps,0x2b7e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,25
 6,Characters 1,UpdateOppInfo,0x30b0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,13
-6,Characters 1,TransferOppInfo,0x3304,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,6
+6,Characters 1,TransferOppInfo,0x3304,decoded,partial,pop2/combat.py,"ordinary horizontal runner carry, 510-pixel coordinate rebase and persistent actor identity; full native record fields missing",1,6
 6,Characters 1,SetSpecialOppInfo,0x33bc,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,2
 6,Characters 1,RemoveOppFromRoom,0x3462,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,2
 6,Characters 1,AddOppToRoom,0x358e,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
@@ -403,12 +403,12 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,GenerateOpponent,0x3a84,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,8
 6,Characters 1,GetOppGenPtOnRow,0x3d28,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,2
 6,Characters 1,IsActiveOppGenPt,0x3daa,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
-6,Characters 1,IsTimeToGenOpp,0x3e0a,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,1
+6,Characters 1,IsTimeToGenOpp,0x3e0a,decoded,partial,pop2/opponent_generation.py,ordinary rooftop eligibility and DIVU/SWAP full-word counter gate; full native NPC bank lifecycle missing,1,1
 6,Characters 1,GetOppGenPtIdx,0x3fc8,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 6,Characters 1,IsOppGenPtWithTumbleOn,0x406e,jump_table,partial,pop2/opponent_generation.py;pop2/combat.py,current room packed-life 0x80 flag,1,1
 6,Characters 1,PresetOppBanks,0x40f6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 6,Characters 1,CutOpponent,0x424c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,9
-6,Characters 1,CutAllOpponents,0x4382,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,15
+6,Characters 1,CutAllOpponents,0x4382,jump_table,partial,pop2/combat.py,"horizontal Prince cuts carry ordinary running/jump poses and movement flags; stationary, vertical and special-actor branches missing",2,15
 6,Characters 1,IsCharInKidRoom,0x463c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,1
 6,Characters 1,Cut,0x472a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,4
 6,Characters 1,CutChar,0x4918,decoded,partial,pop2/terrain.py,"horizontal cuts, downward priority and native room-15 right-cut veto; vertical gaps remain",1,10

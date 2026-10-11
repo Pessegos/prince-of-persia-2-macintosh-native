@@ -78,6 +78,16 @@ class OpponentGenerationTests(unittest.TestCase):
         self.assertFalse(point.eligible(c.player, c.guards, 0, self.level))
         self.assertTrue(point.eligible(c.player, c.guards, 1, self.level))
 
+    def test_native_counter_gate_keeps_multiples_of_three_and_wraps_as_word(self):
+        c = self.encounter()
+        point = c.generation_points[0]
+        for frame in (1, 2, 3, 6, 9, 12, 24, 65535, 65537, 65539):
+            with self.subTest(frame=frame):
+                self.assertTrue(point.eligible(c.player, c.guards, frame, self.level))
+        for frame in (0, 65536, 131072):
+            with self.subTest(frame=frame):
+                self.assertFalse(point.eligible(c.player, c.guards, frame, self.level))
+
     def test_living_guard_on_other_side_is_not_an_invented_death_gate(self):
         c = self.encounter(first_alive=True)
         c.guard.state.target_x = c.guard.state.current_x = 350
@@ -111,10 +121,10 @@ class OpponentGenerationTests(unittest.TestCase):
         c = self.encounter()
         corpse = c.guard
         corpse_state = (corpse.state.action, corpse.state.target_x, corpse.state.facing)
-        for frame in range(8):
+        for frame in range(6):
             c.step(frame / 10, 0.1)
             self.assertEqual(len(c.guards), 1, frame)
-        c.step(0.8, 0.1)
+        c.step(0.6, 0.1)
         incoming = c.guards[1]
         self.assertEqual((incoming.state.action, incoming.state.target_x), (187, -102))
         self.assertEqual((incoming.skill, incoming.life, incoming.max_life, incoming.state.facing),
@@ -124,7 +134,7 @@ class OpponentGenerationTests(unittest.TestCase):
         self.assertEqual((corpse.state.action, corpse.state.target_x, corpse.state.facing), corpse_state)
         self.assertFalse(incoming.contact_consumed)
         self.assertEqual(c.generation_points[0].remaining, 0)
-        for frame in range(9, 150):
+        for frame in range(7, 150):
             c.step(frame / 10, 0.1)
         self.assertEqual(len(c.guards), 2)
 
