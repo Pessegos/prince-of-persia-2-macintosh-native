@@ -675,6 +675,11 @@ class ScenePrototype(WindowControls):
     def start_jump(self):
         self.jump_started_for_press = True
         horizontal = self.horizontal_input
+        starting_chord = (
+            horizontal != 0
+            and self.sequence_state.sequence_id == RUN_START_SEQUENCE
+            and self.sequence_state.action == 1
+        )
         starting_reverse = (
             horizontal != 0
             and self.sequence_state.sequence_id == RUN_START_SEQUENCE
@@ -685,14 +690,14 @@ class ScenePrototype(WindowControls):
             horizontal != 0
             and (self.sequence_state.sequence_id in RUN_SEGMENT_SEQUENCES
                  or self.sequence_state.sequence_id == RUN_JUMP_SEQUENCE)
-            and not starting_reverse
+            and not (starting_chord or starting_reverse)
         )
         # A fresh Up during SEQS:4 waits for DoRunJump's next run pose;
         # landing must not turn that buffered command into a standing jump.
         command = BufferedCommand("jump", horizontal, running=running)
-        # Port QoL: Up during run startup waits for the legal run-jump pose
-        # instead of rewinding the run into a standing forward jump.
-        if self._is_resting() or starting_reverse:
+        # The first run pose allows a near-simultaneous Forward + Up chord.
+        # Later startup poses preserve the run and wait for legal takeoff.
+        if self._is_resting() or starting_chord or starting_reverse:
             self.pending_action = None
             self.dispatch_jump(command)
         else:

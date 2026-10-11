@@ -691,6 +691,43 @@ class GameWindowTests(unittest.TestCase):
         self.assertNotIn(51, actions)
         self.assertNotIn(52, actions)
 
+    def test_standing_jump_chords_keep_the_same_rooftop_motion_in_both_key_orders(self):
+        scene = self.scene
+        scene.peaceful = True
+        for facing in (0, 1):
+            for up_first in (False, True):
+                with self.subTest(facing=facing, up_first=up_first):
+                    scene.jump_to_room(1, row=1, x=250, facing=facing)
+                    self.clear_guards()
+                    direction = 1 if facing else -1
+                    with patch("pop2.scene_prototype.time.perf_counter", return_value=100):
+                        if up_first:
+                            scene.up_key(None)
+                        else:
+                            scene.horizontal_key(None, direction, True)
+                            self.assertEqual(scene.action, 1)
+                    delay = 0.02 if up_first else 0.08
+                    with patch("pop2.scene_prototype.time.perf_counter",
+                               return_value=100 + delay):
+                        if up_first:
+                            scene.horizontal_key(None, direction, True)
+                        else:
+                            scene.up_key(None)
+                    self.assertEqual((scene.sequence_state.sequence_id, scene.action), (3, 16))
+                    self.assertEqual(scene.player_x, 250 + 4 * direction)
+                    scene.set_key_state("up", False)
+                    scene.horizontal_key(None, direction, False)
+                    actions = [scene.action]
+                    for _ in range(25):
+                        self.tick()
+                        actions.append(scene.action)
+                        self.assertFalse(scene.terrain_motion.dead)
+                        self.assertFalse(scene.terrain_motion.falling)
+                        if scene.sequence_state.sequence_id == 2:
+                            break
+                    self.assertEqual(actions, [*range(16, 34), 15])
+                    self.assertEqual((scene.room_id, scene.terrain_motion.row), (1, 1))
+
     def test_consecutive_running_jumps_cross_both_rooftop_gaps(self):
         scene = self.scene
         scene.jump_to_screen("3")

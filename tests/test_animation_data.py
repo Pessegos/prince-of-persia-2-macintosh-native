@@ -1231,34 +1231,72 @@ class AnimationDataTests(unittest.TestCase):
         scene.advance_animation()
         self.assertEqual(scene.action, 15)
 
-    def test_up_before_forward_still_selects_a_standing_jump(self):
+    def test_standing_horizontal_jump_works_in_either_key_order(self):
         for facing in (0, 1):
-            with self.subTest(facing=facing):
-                scene = self.scene(facing=facing)
-                scene.root = DummyRoot()
-                scene.animation_after_id = None
-                scene.next_animation_at = 0
-                scene.render = lambda: None
+            for up_first in (False, True):
+                with self.subTest(facing=facing, up_first=up_first):
+                    scene = self.sword_scene()
+                    scene.sequence_state.facing = facing
+                    direction = 1 if facing else -1
+                    if up_first:
+                        scene.up_key(None)
+                        scene.horizontal_key(None, direction, True)
+                    else:
+                        scene.horizontal_key(None, direction, True)
+                        scene.up_key(None)
 
-                scene.up_key(None)
-                scene.horizontal_key(None, 1 if facing else -1, True)
+                    self.assertEqual(scene.sequence_state.sequence_id, JUMP_FORWARD_SEQUENCE)
+                    self.assertEqual(scene.action, 16)
+                    self.assertEqual(scene.player_x, 120 if facing else 112)
+                    self.assertFalse(scene.run_active)
+                    self.assertIsNone(scene.pending_action)
+                    scene.set_key_state("up", False)
+                    actions = [scene.action]
+                    while scene.sequence_state.sequence_id != IDLE_SEQUENCE:
+                        scene.advance_animation()
+                        actions.append(scene.action)
+                    self.assertEqual(actions, [*range(16, 34), 15])
+                    self.assertNotIn(160, actions)
 
-                self.assertEqual(scene.sequence_state.sequence_id, JUMP_FORWARD_SEQUENCE)
-                self.assertEqual(scene.action, 16)
-                self.assertEqual(scene.player_x, 120 if facing else 112)
-                self.assertFalse(scene.run_active)
-                self.assertIsNone(scene.pending_action)
-                scene.set_key_state("up", False)
-                actions = [scene.action]
-                while scene.sequence_state.sequence_id != IDLE_SEQUENCE:
-                    scene.advance_animation()
-                    actions.append(scene.action)
-                self.assertEqual(actions, [*range(16, 34), 15])
-                self.assertNotIn(160, actions)
+    def test_forward_then_up_has_a_full_first_pose_chord_window(self):
+        for facing in (0, 1):
+            for delay in (0, 0.02, 0.06, 0.08):
+                with self.subTest(facing=facing, delay=delay):
+                    scene = self.sword_scene()
+                    scene.sequence_state.facing = facing
+                    with patch("pop2.scene_prototype.time.perf_counter", return_value=100):
+                        scene.horizontal_key(None, 1 if facing else -1, True)
+                    self.assertEqual(scene.action, 1)
+                    self.assertAlmostEqual(scene.next_animation_at,
+                                           100 + ANIMATION_INTERVAL_MS / 1000)
+                    self.assertLess(100 + delay, scene.next_animation_at)
+                    with patch("pop2.scene_prototype.time.perf_counter",
+                               return_value=100 + delay):
+                        scene.up_key(None)
+                    self.assertEqual(scene.sequence_state.sequence_id, JUMP_FORWARD_SEQUENCE)
+                    self.assertEqual(scene.action, 16)
+                    self.assertEqual(scene.player_x, 120 if facing else 112)
+                    self.assertFalse(scene.run_active)
+                    self.assertIsNone(scene.pending_action)
+
+    def test_up_after_first_startup_pose_preserves_running_jump_intent(self):
+        scene = self.sword_scene()
+        scene.sequence_state.facing = 1
+        with patch("pop2.scene_prototype.time.perf_counter", return_value=100):
+            scene.horizontal_key(None, 1, True)
+        with patch("pop2.scene_prototype.time.perf_counter",
+                   return_value=scene.next_animation_at):
+            scene.advance_animation()
+            self.assertEqual(scene.action, 2)
+            before = scene.player_x
+            scene.up_key(None)
+        self.assertEqual(scene.action, 2)
+        self.assertEqual(scene.player_x, before)
+        self.assertEqual(scene.pending_action, BufferedCommand("jump", 1, running=True))
 
     def test_early_up_during_run_keeps_startup_and_waits_for_running_jump(self):
         for facing in (0, 1):
-            for pose in range(1, 7):
+            for pose in range(2, 7):
                 with self.subTest(facing=facing, pose=pose):
                     scene = self.sword_scene()
                     scene.sequence_state.facing = facing
