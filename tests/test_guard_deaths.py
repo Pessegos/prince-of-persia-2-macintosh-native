@@ -190,6 +190,29 @@ class RunStopDistanceTests(unittest.TestCase):
         animation_tests.AnimationDataTests.setUpClass()
         cls.fixture = animation_tests.AnimationDataTests()
 
+    def test_release_at_pose_eight_waits_for_the_next_native_supporting_foot(self):
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                scene = self.fixture.sword_scene()
+                scene.sequence_state.facing = facing
+                scene.start_sequence(201)
+                while scene.sequence_state.action != 8:
+                    scene.sequence_runtime.next_frame()
+                scene.player_x = scene.sequence_state.target_x = scene.sequence_state.current_x = 200
+                scene.action = 8
+                scene.run_active = True
+                scene.run_direction = 1 if facing else -1
+                scene.horizontal_input = scene.run_direction
+                scene.held_directions = [scene.run_direction]
+                scene.horizontal_key(None, scene.run_direction, False)
+                poses = []
+                for _ in range(12):
+                    scene.advance_animation()
+                    poses.append(scene.action)
+                self.assertEqual(poses, [9, 10, 11, 53, 54, 55, 56, 49, 50, 51, 52, 15])
+                self.assertEqual(scene.player_x, 200 + (72 if facing else -72))
+                self.assertFalse(scene.run_active)
+
     def test_release_at_either_supporting_foot_uses_only_native_stop_displacement(self):
         for facing in (0, 1):
             for pose in (7, 11):

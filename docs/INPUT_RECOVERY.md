@@ -95,7 +95,7 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 | Turn poses 45-49 | Pose 48: active Forward, no Up/Down, modifier >= 0 resumes run; otherwise protected | 6:1014-1066 | Held-run transition tested; host-held state replaces latches |
 | Run start poses 1-3 | Fresh Up AND fresh Forward: forward jump; clear directions | 6:15b6-15da | Common chord tested; full latch timing missing |
 | Vertical preparation 67-69 | Active Forward: standing forward jump | 6:15de-15e8 | Chord tested; 35 ms host chord delay is an approximation |
-| Running 4-14 | Both horizontals zero: brake only at 7/11; otherwise Backward before fresh Up, then fresh Down; finally consume fresh Forward | 6:11e4-1274 | Ordinary flow tested; latest-command slot cannot reproduce every conflict |
+| Running 4-14 | Both horizontals zero: brake only at 7/11; otherwise Backward before fresh Up, then fresh Down; finally consume fresh Forward | 6:11e4-1274 | Ordinary flow tested, including release at pose 8 waiting for 11; latest-command slot cannot reproduce every conflict |
 | Run-jump takeoff | Legal run poses plus two-cell geometry; accepted jump clears directions, consumes Up | 6:1c14-1d5e | Ordinary geometry tested |
 | Other unarmed poses | No general dispatch; pending latches remain unless reset/special branch intervenes | 6:0560-07e0 | Full native lifecycle missing |
 | Crouch pose 109 | Down active: fresh Forward selects crawl, then clear/consume; Down zero: rise unless terrain vetoes | 6:099a-0b58 | Tap/hold/crawl tested; low-hold and mode-5 resets missing |
@@ -198,6 +198,28 @@ current pose is not immediately overwritten and that the original draw poses
 207-210 reach sword guard. Native-latch integration must preserve this explicit
 extension separately from ordinary attack buffering.
 
+## Run Stop and Ledge Entry Audit
+
+Executing the original GenCtrl, AnimChar, LoadFrame, CheckFloor and
+StairClimbing instructions confirms that release at running pose 8 must wait
+for pose 11. The old host-only pose-8 brake exception is removed. Both
+facings retain the SEQS:13 displacement of 33 pixels; standing turn retains
+its resource displacement of 9 pixels toward the new facing.
+
+On level 1 screen 7, starting left-facing at X=468 and releasing at poses
+8-11 stops at X=339. Turning right finishes at X=348 and Down selects
+SEQS:68. Starting instead at X=495 stops at X=366, turns to X=375 and Down
+selects crouch SEQS:50 in the original as well. These are executed native
+instruction results, not positions inferred from scaled video pixels.
+
+Developer navigation now uses the existing entry-cell inset of 30 pixels
+for ordinary right-side spawns, just as for the secret-room entry. This
+changes its X from 495 to 489 and allows the stop/turn/descent route from
+multiple release poses. It is a developer spawn choice, not a recovered
+universal original-game entry position. Normal room cuts, stop displacement,
+the ledge-distance predicate and falling are unchanged. No screen-specific
+brake, automatic edge clamp or wider descent window is introduced.
+
 ## Implementation Order
 
 1. Translate five native latches, sampling, facing remap and consume/reset
@@ -213,7 +235,7 @@ extension separately from ordinary attack buffering.
 5. Use original recordings or traces for unresolved sampling/update timing
    and special branches instead of assigning unsupported semantics.
 
-This audit adds documentation and executable mismatch cases only. It does
-not replace the runtime buffer, change animation clocks or change the approved
-running-jump fix. Routine-level progress is in
+The native-latch audit adds documentation and executable mismatch cases only.
+The run-stop correction does not replace the runtime buffer, change animation
+clocks or change the approved running-jump fix. Routine-level progress is in
 [RECOVERY_INDEX.md](RECOVERY_INDEX.md).

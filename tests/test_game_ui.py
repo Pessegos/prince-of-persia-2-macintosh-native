@@ -592,14 +592,14 @@ class GameWindowTests(unittest.TestCase):
             scene.apply_dev_action("go")
             self.assertIsNone(scene.dev_menu)
             self.assertEqual(scene.paused, paused)
-            self.assertEqual((scene.room_id, scene.player_x, scene.terrain_motion.row), (9, 495, 1))
+            self.assertEqual((scene.room_id, scene.player_x, scene.terrain_motion.row), (9, 489, 1))
 
     def test_screen_selection_uses_route_order_and_the_entry_floor(self):
         scene = self.scene
-        for label, room, row, x, facing in (("1", 3, 1, 411, 1), ("2", 1, 1, 495, 0),
-                                           ("3", 2, 1, 495, 0), ("4", 0, 1, 495, 0),
-                                           ("5", 9, 1, 495, 0), ("6", 10, 0, 495, 0),
-                                           ("7", 11, 1, 495, 0), ("Secret (right)", 4, 0, 285, 1)):
+        for label, room, row, x, facing in (("1", 3, 1, 411, 1), ("2", 1, 1, 489, 0),
+                                           ("3", 2, 1, 489, 0), ("4", 0, 1, 489, 0),
+                                           ("5", 9, 1, 489, 0), ("6", 10, 0, 489, 0),
+                                           ("7", 11, 1, 489, 0), ("Secret (right)", 4, 0, 285, 1)):
             with self.subTest(screen=label):
                 scene.jump_to_screen(label)
                 self.clear_guards()
@@ -615,6 +615,60 @@ class GameWindowTests(unittest.TestCase):
         yellow = [(x, y) for y in range(365, 384) for x in range(120, 390)
                   if image.getpixel((x, y))[:3] == (253, 255, 168)]
         self.assertEqual((min(y for x, y in yellow), max(y for x, y in yellow)), (369, 379))
+
+    def test_run_stop_turn_and_descend_matches_native_positions(self):
+        scene = self.scene
+        scene.peaceful = True
+        for origin, stopped, turned, sequence in ((468, 339, 348, 68),
+                                                  (495, 366, 375, 50)):
+            for release_tick in range(7, 11):
+                with self.subTest(origin=origin, release_tick=release_tick):
+                    scene.jump_to_room(11, row=1, x=origin, facing=0)
+                    scene.horizontal_key(None, -1, True)
+                    self.tick(release_tick)
+                    self.assertEqual(scene.action, release_tick + 1)
+                    scene.horizontal_key(None, -1, False)
+                    self.tick(20)
+                    self.assertEqual((scene.action, scene.player_x), (15, stopped))
+                    self.assertFalse(scene.terrain_motion.falling)
+                    scene.horizontal_key(None, 1, True)
+                    scene.horizontal_key(None, 1, False)
+                    self.tick(10)
+                    self.assertEqual((scene.action, scene.player_x), (15, turned))
+                    scene.set_key_state("down", True)
+                    self.assertEqual(scene.sequence_state.sequence_id, sequence)
+
+    def test_dev_entry_allows_multiple_run_release_poses_before_descending(self):
+        scene = self.scene
+        scene.peaceful = True
+        for release_tick in range(7, 11):
+            with self.subTest(release_tick=release_tick):
+                scene.jump_to_screen("7")
+                scene.horizontal_key(None, -1, True)
+                self.tick(release_tick)
+                scene.horizontal_key(None, -1, False)
+                self.tick(20)
+                self.assertEqual((scene.action, scene.player_x), (15, 360))
+                scene.horizontal_key(None, 1, True)
+                scene.horizontal_key(None, 1, False)
+                self.tick(10)
+                self.assertEqual((scene.action, scene.player_x), (15, 369))
+                scene.set_key_state("down", True)
+                self.assertEqual(scene.sequence_state.sequence_id, 68)
+
+    def test_run_release_after_the_last_safe_foot_does_not_clamp_to_the_ledge(self):
+        scene = self.scene
+        scene.peaceful = True
+        scene.jump_to_screen("7")
+        scene.horizontal_key(None, -1, True)
+        self.tick(11)
+        self.assertEqual(scene.action, 12)
+        scene.horizontal_key(None, -1, False)
+        for _ in range(12):
+            self.tick()
+            if scene.terrain_motion.falling:
+                break
+        self.assertTrue(scene.terrain_motion.falling)
 
     def test_direction_pressed_during_sheathing_starts_run_without_an_idle_frame(self):
         scene = self.scene

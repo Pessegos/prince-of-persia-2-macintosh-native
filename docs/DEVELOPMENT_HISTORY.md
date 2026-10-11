@@ -163,8 +163,9 @@ The animation clock targets 12 fps for movement (about 83 ms per pose) and
 Macintosh ticks. The first draw pose still uses the movement interval, and the
 first sheathing pose still uses the combat interval; later poses use the new
 mode's interval. Following poses use fixed deadlines to
-avoid rounding drift. A short arrow tap follows the source game's exact chain:
-acceleration actions `1` to `8`, stopping actions `53` to `56` and `49` to `52`,
+avoid rounding drift. The later instruction-level run-stop audit corrected
+the short arrow tap to acceleration actions `1` to `7`, followed by
+stopping actions `53` to `56` and `49` to `52`,
 then idle action `15`. The full Shift step uses actions `121` to `132`; shorter
 steps select their action lists from the original `SEQS` resources.
 

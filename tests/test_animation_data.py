@@ -54,7 +54,6 @@ from pop2.scene_prototype import (
     BufferedCommand,
     ScenePrototype,
     sword_palette_for_level,
-    TAP_RELEASE_ACTION,
     next_animation_deadline,
 )
 from pop2.game_session import GameSession
@@ -425,6 +424,7 @@ class AnimationDataTests(unittest.TestCase):
         self.assertTrue(scene.run_stop_requested)
         frames = []
         while True:
+            scene.resume_run_stop()
             scene.prepare_next_sequence()
             frame = scene.sequence_runtime.next_frame()
             frames.append(frame)
@@ -434,9 +434,9 @@ class AnimationDataTests(unittest.TestCase):
 
         self.assertEqual(
             [frame.action for frame in frames],
-            [*range(1, 9), 53, 54, 55, 56, 49, 50, 51, 52, 15],
+            [*range(1, 8), 53, 54, 55, 56, 49, 50, 51, 52, 15],
         )
-        self.assertEqual(frames[-1].target_x, 206)
+        self.assertEqual(frames[-1].target_x, 196)
         self.assertFalse(scene.run_active)
 
     def test_arrow_press_shows_its_first_pose_immediately(self):
@@ -599,7 +599,7 @@ class AnimationDataTests(unittest.TestCase):
         self.assertTrue(scene.run_active)
         self.assertEqual(scene.run_direction, -1)
 
-    def test_opposite_direction_at_tap_release_pose_enters_drift(self):
+    def test_opposite_direction_at_run_pose_eight_enters_drift(self):
         scene = self.scene(facing=1)
         scene.root = DummyRoot()
         scene.animation_after_id = None
@@ -609,7 +609,7 @@ class AnimationDataTests(unittest.TestCase):
         scene.horizontal_key(None, 1, True)
         for _ in range(7):
             scene.advance_animation()
-        self.assertEqual(scene.action, TAP_RELEASE_ACTION)
+        self.assertEqual(scene.action, 8)
 
         scene.horizontal_key(None, 1, False)
         scene.horizontal_key(None, -1, True)

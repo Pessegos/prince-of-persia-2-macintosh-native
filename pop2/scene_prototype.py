@@ -86,8 +86,6 @@ JUMP_LANDING_SEQUENCE = 11
 RUN_SEGMENT_SEQUENCES = RUN_CYCLE_SEQUENCES | {
     RUNNING_DRIFT_SEQUENCE, RUNNING_TURN_SEQUENCE
 }
-TAP_RELEASE_SEQUENCE = 201
-TAP_RELEASE_ACTION = 8
 SWORD_SEQUENCES = {
     "sword_draw": SWORD_DRAW_SEQUENCE,
     "sword_advance": SWORD_ADVANCE_SEQUENCE,
@@ -1328,22 +1326,6 @@ class ScenePrototype(WindowControls):
         self.running_jump_controls_cleared = False
 
     def prepare_next_sequence(self, run_cycle_boundary=False):
-        state = self.sequence_state
-        # A short tap in the original branches after acceleration pose 8. The
-        # remaining run poses (9-14) only play while the direction stays held.
-        if (
-            not run_cycle_boundary
-            and self.run_stop_requested
-            and self.pending_action is None
-            and state.sequence_id == TAP_RELEASE_SEQUENCE
-            and state.action == TAP_RELEASE_ACTION
-        ):
-            self.run_active = False
-            self.run_stop_requested = False
-            self.run_direction = 0
-            self.start_sequence(RUN_STOP_SEQUENCE)
-            return True
-
         if run_cycle_boundary:
             if self.pending_action is not None and self.dispatch_pending_action(
                 was_running=True
@@ -2267,7 +2249,9 @@ class ScenePrototype(WindowControls):
                     if self.level_map.tile(room, 9, row).kind == 1]
             if not rows:
                 raise ValueError("This screen has no supported entry")
-            row, x = rows[0], ROOM_WIDTH - 15
+            # Use the same supported entry-cell inset as the secret-room warp.
+            # A near-boundary spawn changes the phase of subsequent run stops.
+            row, x = rows[0], 9 * TILE_WIDTH + 30
         self.jump_to_room(room, row=row, x=x, facing=0)
         # A dev warp simulates progress along the route, including the last
         # LEVL checkpoint it would pass. Normal play still uses the cell gate.
