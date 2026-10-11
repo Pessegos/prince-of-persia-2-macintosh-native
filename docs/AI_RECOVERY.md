@@ -117,6 +117,43 @@ No new animation assets, guessed aggression constants, or output audio filters
 are introduced by this change. Opening/movement cadence and player controls
 retain their existing tests.
 
+## Close Spacing After Retreats And Turns
+
+EnGarde `4:0a82-0c08` distinguishes the selected sequence at A5 `-0x502e`
+from the resource AnimChar currently interprets. A continuation into combat
+idle 227 does not erase a selected retreat 57/104 or turn 60. Reading only
+the current resource allowed the port to restart an advance after retreating,
+repeatedly pass the Prince and turn without reaching attack range.
+
+At ready pose 171, the ordinary too-close branch tries the front cell first,
+except after retreat 57/104. It otherwise requests retreat if the rear cell
+is advancable. After turn 60, `4:0b1e-0c08` instead prefers retreat when the
+rear cell is advancable, the facing-relative distance is positive, and any
+of these conditions holds:
+
+- The supporting foot's GetDist1 distance is at most 25 pixels.
+- The lower strike bound minus opponent distance is at most 17 pixels.
+- The second rear cell is advancable.
+
+Otherwise it tries the front cell. Cell queries use the cached anchor column;
+GetDist1 uses the FRAM supporting foot. No new collision barrier or blanket
+minimum spacing replaces these decisions. The existing special rooftop-room
+exceptions and non-flat terrain branches remain outside this subset.
+
+SwordCtrl `6:2206-220e`, `6:22e6` and DoTurn `6:26a8-26b0` allow an ordinary
+guard to select turn 60 in animation modes 0/1, not only at pose 171. Modes
+2 and above remain protected; the sequence's own opcode changes facing.
+Original SwordCtrl execution confirms this across six poses and four modes.
+
+Direct execution of original EnGarde, strike-range, tile-classifier and
+GetDist1 opcodes matched the port in 2,200 close-spacing cases: both facings,
+five selected sequences, five distances and 44 opening-room positions.
+Map reads were supplied from the same LEVL data. Real-resource regressions
+previously made 10-12 turns and no attacks over 240 frames; they now make
+one turn and return to repeated in-range attacks. Tests also cover the
+25/17 boundaries, rear gaps, zero distance and continuation identity.
+Forced parry recoil, wounds and their edge falls retain their own rules.
+
 ## Remaining Work
 
 This is not a complete translation of every enemy controller. The default

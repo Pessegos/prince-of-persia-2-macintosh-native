@@ -335,12 +335,14 @@ class CombatEncounter:
         if distance >= 39 and 102 <= other.action < 118 and other.animation_state == 5:
             return GuardIntent()
         if distance < low:
-            # EnGarde 4:0a82-0b1a: ready pose, front cell first, then the
-            # cell behind. DoRetreat itself does not make an edge safe.
+            # EnGarde reads JumpSeq's selected ID (-0x502e), not the current
+            # AnimChar resource. Retreat/turn history survives links to 227.
             if state.action != 171:
                 return GuardIntent()
             if self.level is not None:
-                if state.sequence_id not in (57, 104) and self._guard_floor_clear(guard, 1, 1):
+                if state.source_sequence_id == 60:
+                    return self._turned_guard_close_intent(guard, distance, low)
+                if state.source_sequence_id not in (57, 104) and self._guard_floor_clear(guard, 1, 1):
                     return GuardIntent(advance=True)
                 return GuardIntent(retreat=self._guard_floor_clear(guard, -1, 1))
             return GuardIntent(retreat=True)
@@ -373,6 +375,23 @@ class CombatEncounter:
             table = COUNTER_CHANCE if state.action in BLOCK_POSES else STRIKE_CHANCE
             strike = self._chance(table, guard)
         return GuardIntent(block=block, strike=strike)
+
+    def _turned_guard_close_intent(self, guard, distance, low):
+        # EnGarde 4:0b1e-0c08: prefer space behind after a combat turn,
+        # subject to the supporting-foot distance and the second rear cell.
+        if (distance > 0 and self._guard_floor_clear(guard, -1, 1)
+                and (self._guard_front_edge_distance(guard) <= 25
+                     or low - distance <= 17 or self._guard_floor_clear(guard, -1, 2))):
+            return GuardIntent(retreat=True)
+        return GuardIntent(advance=self._guard_floor_clear(guard, 1, 1))
+
+    def _guard_front_edge_distance(self, guard):
+        state = guard.state
+        art = getattr(self, "guard_art", None)
+        record = art.frames[guard_frame_index(state.action)] if art is not None else None
+        contact = (floor_contact_x(state.target_x, state.facing, record)
+                   if record is not None else state.target_x)
+        return floor_edge_distance(contact, state.facing)
 
     def _close_intent(self, guard=None):
         guard = guard or self.guard
@@ -513,8 +532,9 @@ class CombatEncounter:
         if not player.targetable:
             return
         if opponent_distance(guard, player) < -15:
-            # The combat turn has its own facing opcode; never flip mid-step.
-            if state.action == 171 and state.animation_state < 2:
+            # SwordCtrl 6:2206/22e6/26a8 permits ordinary-NPC turns in
+            # modes 0/1, not just pose 171. SEQS:60 performs the facing flip.
+            if state.animation_state < 2:
                 select_sequence(guard, 60)
             return
         if (self.level is not None and state.action in GUARD_POSES

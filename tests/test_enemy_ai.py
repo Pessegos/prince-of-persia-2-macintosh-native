@@ -199,13 +199,70 @@ class GuardDecisionTests(unittest.TestCase):
             for sequence in (227, 57):
                 with self.subTest(facing=facing, sequence=sequence):
                     state = c.guard.state
-                    state.action, state.facing, state.sequence_id = 171, facing, sequence
+                    state.action, state.facing = 171, facing
+                    state.sequence_id, state.selected_sequence_id = 227, sequence
                     state.current_x = state.target_x = x
                     c.player.state.facing = 1 - facing
                     c.player.state.target_x = x + (20 if facing else -20)
                     expected = GuardIntent(advance=True) if sequence != 57 else GuardIntent()
                     self.assertEqual(c.decide_guard_intent(), expected)
         self.assertEqual(c.rng.calls, [])
+
+    def test_retreat_continuation_keeps_the_native_close_spacing_decision(self):
+        for source in (57, 104):
+            for facing in (0, 1):
+                with self.subTest(source=source, facing=facing):
+                    c = self.encounter(rolls=())
+                    c.level = self.prince["LEVL"][2000]["data"]
+                    state = c.guard.state
+                    state.facing = facing
+                    state.current_x = state.target_x = 300
+                    state.selected_sequence_id = source
+                    c.player.state.facing = 1 - facing
+                    c.player.state.target_x = 300 + (19 if facing else -19)
+                    self.assertEqual(c.decide_guard_intent(), GuardIntent(retreat=True))
+                    self.assertEqual(c.rng.calls, [])
+
+    def test_post_turn_spacing_uses_native_edge_and_distance_boundaries(self):
+        for edge in (25, 26):
+            for distance in (43, 44):
+                for rear_cells in (1, 2):
+                    with self.subTest(edge=edge, distance=distance, rear_cells=rear_cells):
+                        c = self.encounter(distance=distance, rolls=())
+                        c.level = self.prince["LEVL"][2000]["data"]
+                        c.guard.state.selected_sequence_id = 60
+                        clear = lambda guard, direction, count: direction == 1 or count <= rear_cells
+                        with patch.object(c, "_guard_floor_clear", side_effect=clear), \
+                                patch.object(c, "_guard_front_edge_distance", return_value=edge):
+                            retreat = edge <= 25 or 61 - distance <= 17 or rear_cells == 2
+                            self.assertEqual(c.decide_guard_intent(),
+                                             GuardIntent(retreat=retreat, advance=not retreat))
+                        self.assertEqual(c.rng.calls, [])
+
+    def test_post_turn_does_not_retreat_into_a_gap_or_away_from_a_zero_distance_target(self):
+        for distance, rear_clear, front_clear in ((40, False, True), (0, True, True),
+                                                   (40, False, False)):
+            with self.subTest(distance=distance, rear_clear=rear_clear, front_clear=front_clear):
+                c = self.encounter(rolls=())
+                c.level = self.prince["LEVL"][2000]["data"]
+                c.guard.state.selected_sequence_id = 60
+                c.player.state.facing = c.guard.state.facing
+                c.player.state.target_x = c.guard.state.target_x + distance
+                clear = lambda guard, direction, count: front_clear if direction == 1 else rear_clear
+                with patch.object(c, "_guard_floor_clear", side_effect=clear):
+                    self.assertEqual(c.decide_guard_intent(), GuardIntent(advance=front_clear))
+                self.assertEqual(c.rng.calls, [])
+
+    def test_guard_turn_uses_animation_mode_not_only_the_ready_pose(self):
+        for action in (150, 158, 160, 165, 170, 171):
+            for mode in (0, 1, 2, 4, 5, 8):
+                with self.subTest(action=action, mode=mode):
+                    c = self.encounter(action=action, rolls=())
+                    c.player.state.target_x = c.guard.state.target_x - 16
+                    c.guard.state.animation_state = mode
+                    c.choose_guard_action()
+                    self.assertEqual(c.guard.state.source_sequence_id, 60 if mode < 2 else 227)
+                    self.assertEqual(c.rng.calls, [])
 
     def test_too_close_retreat_is_still_possible_when_there_is_floor_behind(self):
         c = self.encounter(distance=20, rolls=())

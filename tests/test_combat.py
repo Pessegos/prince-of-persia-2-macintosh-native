@@ -726,16 +726,17 @@ class GuardCombatTests(unittest.TestCase):
         c.choose_guard_action()
         self.assertEqual(c.guard.state.sequence_id, 58)
 
-    def test_guard_waits_for_current_step_before_turning(self):
+    def test_guard_turn_can_interrupt_a_low_mode_step_but_does_not_restart_itself(self):
         c = self.encounter(player_x=130)
         select_sequence(c.guard, 86)
         c.guard.runtime.next_frame()
         c.choose_guard_action()
-        self.assertEqual(c.guard.state.sequence_id, 86)
-        select_sequence(c.guard, 227)
-        c.guard.state.action = 171
-        c.choose_guard_action()
         self.assertEqual(c.guard.state.sequence_id, 60)
+        c.guard.runtime.next_frame()
+        self.assertGreaterEqual(c.guard.state.animation_state, 2)
+        cursor = c.guard.state.cursor
+        c.choose_guard_action()
+        self.assertEqual(c.guard.state.cursor, cursor)
         facing = c.guard.state.facing
         for _ in range(4):
             c.advance_guard()

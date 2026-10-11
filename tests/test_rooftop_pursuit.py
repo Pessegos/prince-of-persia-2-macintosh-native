@@ -5,7 +5,9 @@ import unittest
 from PIL import Image
 
 from pop2.animation_data import parse_frame_records, sequence_words
-from pop2.combat import CombatEncounter, Fighter, GuardSpawn, select_sequence
+from pop2.combat import (
+    CombatEncounter, Fighter, GuardSpawn, opponent_distance, select_sequence, strike_range,
+)
 from pop2.combat_art import GuardArtwork, HealthArtwork
 from pop2.render_opening import decode_ctbl, load_resource_file
 from pop2.scene_prototype import sword_palette_for_level
@@ -129,6 +131,47 @@ class RooftopPursuitTests(unittest.TestCase):
         guard.state.sequence_id, guard.state.action = 208, 192
         encounter.choose_guard_action(guard)
         self.assertNotEqual(guard.state.sequence_id, 100)
+
+    def test_close_guard_returns_to_attack_range_instead_of_turning_in_a_loop(self):
+        for x, facing in ((280, 0), (290, 1), (310, 0), (320, 1)):
+            with self.subTest(x=x, facing=facing):
+                encounter = self.encounter(3, player_x=300, facing=0, running=False)
+                guard = self.runner(encounter, 3, x, facing=facing, flags=0)
+                guard.sword_drawn = encounter.player.sword_drawn = True
+                guard.alert_mode = 3
+                encounter.player.state.action = 150
+                select_sequence(guard, 227)
+                turns = strikes = 0
+                for _ in range(240):
+                    encounter.choose_guard_action(guard)
+                    turns += guard.state.sequence_id == 60 and guard.state.cursor == 0
+                    if guard.state.sequence_id == 58 and guard.state.cursor == 0:
+                        strikes += 1
+                        low, high = strike_range(guard, encounter.player)
+                        self.assertLessEqual(low, opponent_distance(guard, encounter.player))
+                        self.assertLess(opponent_distance(guard, encounter.player), high)
+                    old_x = guard.state.target_x
+                    old_bounds = self.art.bounds(guard.state, floor_y(guard.row))
+                    guard.runtime.next_frame()
+                    encounter._advance_guard_terrain(guard, old_x, old_bounds)
+                    self.assertFalse(guard.terrain_motion.falling)
+                self.assertLessEqual(turns, 3)
+                self.assertGreater(strikes, 5)
+                self.assertGreaterEqual(opponent_distance(guard, encounter.player),
+                                        strike_range(guard, encounter.player)[0])
+
+    def test_post_turn_distance_uses_the_ready_pose_support_foot_not_the_anchor(self):
+        encounter = self.encounter(3, running=False)
+        guard = self.runner(encounter, 3, 300, flags=0)
+        select_sequence(guard, 227)
+        guard.runtime.next_frame()
+        guard.state.action = 171
+        for facing, x, expected in ((0, 280, 27), (0, 300, 47), (0, 320, 16),
+                                    (1, 280, 22), (1, 300, 2), (1, 320, 33)):
+            with self.subTest(facing=facing, x=x):
+                guard.state.facing = facing
+                guard.state.target_x = x
+                self.assertEqual(encounter._guard_front_edge_distance(guard), expected)
 
     def test_incoming_pursuer_blocks_duplicate_generation_across_room_ownership(self):
         encounter = self.encounter(0, player_x=50, running=False)

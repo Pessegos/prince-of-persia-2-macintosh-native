@@ -439,8 +439,13 @@ held Shift-step frames each verify the junction stays solid.
 
 Ordinary EnGarde's too-close branch (CODE:4 0x0a82-0x0b1a) runs only at
 ready pose 171. An advancable cell in front requests advance, except while
-already in retreat sequences 57/104; otherwise an advancable cell behind
+the selected sequence is retreat 57/104; this identity survives AnimChar's
+continuation to idle 227. Otherwise an advancable cell behind
 permits retreat. No supported cell behind means no voluntary retreat.
+After a selected combat turn 60, 0x0b1e-0x0c08 instead checks the rear cell,
+positive opponent distance, FRAM foot distance <=25, strike-range shortfall
+<=17 and the second rear cell before choosing retreat or advance. See
+[AI_RECOVERY.md](AI_RECOVERY.md#close-spacing-after-retreats-and-turns).
 DoOppInput (CODE:6 0x2c90-0x2ca0) loads the anchor column before this decision;
 LoadFrame (CODE:4 0x2a7c) computes the FRAM foot column later for CheckFloor.
 Those columns must not be conflated. Real-resource AI/physics tests keep a
