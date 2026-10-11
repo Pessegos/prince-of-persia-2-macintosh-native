@@ -1,6 +1,7 @@
 """Index known original routines without treating disassembly as recovered logic."""
 
 import argparse
+from collections import Counter
 import csv
 import io
 from pathlib import Path
@@ -32,8 +33,12 @@ REVIEWS = {
     (3, "DrawCustomRoomImgs"): ("partial", "pop2/render_opening.py", "CUST:4350 static background/foreground passes"),
     (3, "DrawKidMeter"): ("partial", "pop2/combat_art.py", "ordinary health icons; upgrade effects missing"),
     (3, "DrawOppMeter"): ("partial", "pop2/combat_art.py", "ordinary guard health icons"),
-    (4, "EnGarde"): ("partial", "pop2/combat.py", "ordinary guard skill, ready-pose decisions and sword lowering after Kid death"),
+    (4, "EnGarde"): ("partial", "pop2/combat.py", "ordinary range/pose decisions, selected retreat/turn history, far-run anticipation limits and pursuit; level-5 bridge/special actors missing"),
     (4, "OpponentClose"): ("partial", "pop2/combat.py", "ordinary close-range decisions"),
+    (4, "WaitingEngarde"): ("partial", "pop2/combat.py", "ordinary multi-guard spacing and same-facing pursuit; self-nearest obstacle branch missing"),
+    (4, "GenFight"): ("partial", "pop2/combat.py", "102-pixel spacing plus 36 per later nearby NPC, including corpses; full native bank lifecycle missing"),
+    (4, "GetCellsInFront"): ("partial", "pop2/combat.py;pop2/terrain.py", "ordinary facing-relative front cells from controller anchor column"),
+    (4, "GetDist1"): ("partial", "pop2/combat.py;pop2/terrain.py", "ordinary supporting-foot distance, including post-turn guard spacing"),
     (4, "DoOppTumbleSeq"): ("partial", "pop2/combat.py;pop2/terrain.py", "forced rooftops, generator life flag, death-bank/Rnd(3), overlap and facing/tile vetoes; ordinary rooftop NPCs"),
     (4, "GetOppDeadSeq"): ("partial", "pop2/combat.py", "ordinary rooftop slot-parity corpse 195/228; special actors missing"),
     (4, "AnimChar"): ("partial", "pop2/sequence_runtime.py", "supported opcodes including -16 level-transition request; others fail explicitly"),
@@ -52,6 +57,11 @@ REVIEWS = {
     (6, "CheckOppGenPts"): ("partial", "pop2/opponent_generation.py;pop2/combat.py", "tested rooftop reinforcement branches"),
     (6, "CutChar"): ("partial", "pop2/terrain.py", "horizontal cuts, downward priority and native room-15 right-cut veto; vertical gaps remain"),
     (6, "CheckStab"): ("partial", "pop2/combat.py;pop2/terrain.py", "ordinary contact/damage, type-2 guard death method 14, player/NPC flat alignment, forced and generator-enabled tumbles"),
+    (6, "TestStrike"): ("partial", "pop2/combat.py;pop2/scene_prototype.py", "ordinary sword contact, row/strict 15-pixel height gate, no blanket grab/climb immunity; special attacks missing"),
+    (6, "GetCharStrikeRanges"): ("partial", "pop2/combat.py", "ordinary Prince/type-2 NPC ranges, facing, sword and engagement flags; special actors missing"),
+    (6, "GetOppIdxClosestToKid"): ("partial", "pop2/combat.py", "ordinary living same-floor nearest actors on each side; full native vertical/type candidate filtering missing"),
+    (6, "AutoCtrl"): ("partial", "pop2/combat.py", "ordinary unarmed/armed dispatch and shared timer decrement per processed NPC; special actor controllers missing"),
+    (6, "OnAlert"): ("partial", "pop2/combat.py;pop2/scene_prototype.py", "ordinary attack/block/advance/retreat gates, counter priority, forced parry recoil and sword lowering"),
     (6, "IsOppGenPtWithTumbleOn"): ("partial", "pop2/opponent_generation.py;pop2/combat.py", "current room packed-life 0x80 flag"),
     (23, "DrawRoofBackWall"): ("partial", "pop2/render_opening.py", "ordinary and harbor background SHAP tables; ordinary fill"),
     (23, "DrawRoofFloor"): ("partial", "pop2/render_opening.py", "floor masks/ledge exceptions; harbor cap offsets, background planks, exposed near-face geometry and partial climb redraw; conditional passes incomplete"),
@@ -116,19 +126,31 @@ def catalog_text(rows):
     return output.getvalue()
 
 
+def catalog_summary(rows):
+    """Count recorded routine reviews, not atomic rules or implementation progress."""
+    counts = Counter(row["review_status"] for row in rows)
+    return {"routine_markers": len(rows),
+            **{status: counts[status] for status in ("partial", "reference-only", "indexed-only")}}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Check the existing catalog without writing")
     parser.add_argument("--source", type=Path, help="Optional original recovery directory to re-index")
+    parser.add_argument("--summary", action="store_true", help="Print review counts without writing")
     args = parser.parse_args()
     rows = catalog_rows(args.source)
     expected = catalog_text(rows)
     if args.check:
         if not CATALOG.exists() or CATALOG.read_text(encoding="utf-8") != expected:
             raise SystemExit("Catalog is stale; run python -m tools.recovery_catalog")
-    else:
+    elif not args.summary:
         CATALOG.write_text(expected, encoding="utf-8", newline="")
     print(f"{len(rows)} named routine markers indexed; this is not a recovered-rule completion count")
+    if args.summary:
+        for status, count in catalog_summary(rows).items():
+            if status != "routine_markers":
+                print(f"{status}: {count}")
 
 
 if __name__ == "__main__":

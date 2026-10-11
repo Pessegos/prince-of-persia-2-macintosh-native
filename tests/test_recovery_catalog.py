@@ -1,6 +1,6 @@
 import unittest
 
-from tools.recovery_catalog import CATALOG, REVIEWS, catalog_rows, catalog_text
+from tools.recovery_catalog import CATALOG, REVIEWS, catalog_rows, catalog_summary, catalog_text
 
 
 class RecoveryCatalogTests(unittest.TestCase):
@@ -19,6 +19,15 @@ class RecoveryCatalogTests(unittest.TestCase):
 
     def test_generated_catalog_is_current(self):
         self.assertEqual(CATALOG.read_text(encoding="utf-8"), catalog_text(catalog_rows()))
+
+    def test_summary_counts_reviews_without_claiming_a_rule_total(self):
+        summary = catalog_summary(catalog_rows())
+        self.assertEqual(summary['routine_markers'], 1198)
+        self.assertEqual(sum(summary[key] for key in ('partial', 'reference-only', 'indexed-only')), 1198)
+        self.assertGreater(summary['partial'], 0)
+        self.assertNotIn('complete', summary)
+        self.assertEqual(catalog_summary([]), {'routine_markers': 0, 'partial': 0,
+                                             'reference-only': 0, 'indexed-only': 0})
 
 
 if __name__ == "__main__":

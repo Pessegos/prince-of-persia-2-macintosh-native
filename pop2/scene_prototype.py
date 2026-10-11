@@ -1834,10 +1834,7 @@ class ScenePrototype(WindowControls):
                 or self.sequence_state.cursor == 0):
             return False
         combat.player.sword_drawn = self.sword_drawn
-        combat.player.targetable = not (
-            self._opening_active() or self.ledge_hanging or self.ledge_climbing
-            or (getattr(self, "terrain_motion", None) is not None and self.terrain_motion.falling)
-        )
+        combat.player.targetable = not self._opening_active()
         record = (self.frames[self.sequence_state.action]
                   if getattr(self, "level_map", None) is not None else None)
         if combat.choose_player_turn(record):
@@ -1850,10 +1847,9 @@ class ScenePrototype(WindowControls):
         if combat is None:
             return
         combat.player.sword_drawn = self.sword_drawn
-        combat.player.targetable = not (
-            self._opening_active() or self.ledge_hanging or self.ledge_climbing
-            or (getattr(self, "terrain_motion", None) is not None and self.terrain_motion.falling)
-        )
+        # CheckStrikes 6:58aa-592c uses row, height and actor/mode exclusions;
+        # beginning a grab, climb or fall does not confer invulnerability.
+        combat.player.targetable = not self._opening_active()
         if getattr(self, "peaceful", False):
             combat.world_frame += 1
             combat.last_guard_at = time.perf_counter()
@@ -1882,6 +1878,12 @@ class ScenePrototype(WindowControls):
                 self.sword_sheathing = False
                 self.jump_started_for_press = False
                 self.jump_repeat_armed = False
+                self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
+                self.ledge_climb_requested = False
+                self.sequence_state.engine_counter = 0
+                if (getattr(self, "terrain_motion", None) is not None
+                        and self.sequence_state.source_sequence_id != 81):
+                    self.terrain_motion.falling = False
                 if event.kind == "death":
                     self.clear_keys(None)
                     self.death.begin(event.death_method)

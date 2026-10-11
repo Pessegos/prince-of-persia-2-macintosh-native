@@ -169,8 +169,9 @@ class GuardDecisionTests(unittest.TestCase):
             self.assertEqual(c.decide_guard_intent(), GuardIntent(strike=True))
             self.assertEqual(c.rng.calls, [])
         for action, distance in ((7, 150), (14, 150), (34, 186), (43, 186)):
-            c = self.encounter(distance=distance, player_action=action, rolls=(0,))
-            self.assertEqual(c.decide_guard_intent(), GuardIntent(advance=True))
+            c = self.encounter(distance=distance, player_action=action, rolls=())
+            self.assertEqual(c.decide_guard_intent(), GuardIntent())
+            self.assertEqual(c.rng.calls, [])
 
     def test_anticipating_attack_requires_opposed_facing(self):
         c = self.encounter(distance=149, player_action=7, rolls=(0,))
@@ -354,7 +355,7 @@ class GuardDecisionTests(unittest.TestCase):
 
     def test_unavailable_and_multi_guard_waiting_targets_are_not_invented(self):
         for field, value in (("alert_mode", 1), ("alert_mode", 2),
-                             ("recovering", True), ("life", 0)):
+                             ("life", 0)):
             c = self.encounter(rolls=())
             setattr(c.guard, field, value)
             c.choose_guard_action()
@@ -364,6 +365,25 @@ class GuardDecisionTests(unittest.TestCase):
         c.player.targetable = False
         c.choose_guard_action()
         self.assertEqual(c.rng.calls, [])
+
+    def test_guard_hurt_lock_does_not_extend_past_native_interruptible_modes(self):
+        for mode, expected in ((0, 58), (1, 58), (2, 183), (5, 183)):
+            with self.subTest(mode=mode):
+                c = self.encounter(action=165, rolls=(0,))
+                c.guard.recovering = True
+                select_sequence(c.guard, 183)
+                c.guard.state.animation_state = mode
+                c.choose_guard_action()
+                self.assertEqual(c.guard.state.sequence_id, expected)
+
+    def test_guard_can_attack_unarmed_jump_hang_and_climb_poses(self):
+        for action, mode in ((22, 2), (87, 6), (135, 1)):
+            c = self.encounter(distance=65, player_action=action, rolls=())
+            c.player.sword_drawn = False
+            c.player.state.animation_state = mode
+            c.choose_guard_action()
+            self.assertEqual(c.guard.state.sequence_id, 58)
+            self.assertEqual(c.rng.calls, [])
 
     def test_sheathing_and_damage_set_distinct_source_timers(self):
         c = self.encounter(rolls=())

@@ -195,9 +195,9 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,GetTotalDeadOpps,0x02e0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,14
 4,Characters 2,InRange,0x0466,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,5
 4,Characters 2,DoOppRunJump,0x07fe,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,16
-4,Characters 2,EnGarde,0x098c,jump_table,partial,pop2/combat.py,"ordinary guard skill, ready-pose decisions and sword lowering after Kid death",1,29
-4,Characters 2,WaitingEngarde,0x0c7e,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,22
-4,Characters 2,GenFight,0x0f28,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,13
+4,Characters 2,EnGarde,0x098c,jump_table,partial,pop2/combat.py,"ordinary range/pose decisions, selected retreat/turn history, far-run anticipation limits and pursuit; level-5 bridge/special actors missing",1,29
+4,Characters 2,WaitingEngarde,0x0c7e,decoded,partial,pop2/combat.py,ordinary multi-guard spacing and same-facing pursuit; self-nearest obstacle branch missing,1,22
+4,Characters 2,GenFight,0x0f28,decoded,partial,pop2/combat.py,"102-pixel spacing plus 36 per later nearby NPC, including corpses; full native bank lifecycle missing",1,13
 4,Characters 2,OpponentClose,0x111a,decoded,partial,pop2/combat.py,ordinary close-range decisions,2,19
 4,Characters 2,IsExitChasingSkel,0x17aa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,0
 4,Characters 2,SetSkelShakes,0x17fa,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,1
@@ -230,8 +230,8 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,LoadShadwOpp,0x335a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,1
 4,Characters 2,ConvertX,0x33e6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 4,Characters 2,DecLifePts,0x34f2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,35,0
-4,Characters 2,GetCellsInFront,0x39fc,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,48,1
-4,Characters 2,GetDist1,0x3aa0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
+4,Characters 2,GetCellsInFront,0x39fc,jump_table,partial,pop2/combat.py;pop2/terrain.py,ordinary facing-relative front cells from controller anchor column,48,1
+4,Characters 2,GetDist1,0x3aa0,jump_table,partial,pop2/combat.py;pop2/terrain.py,"ordinary supporting-foot distance, including post-turn guard spacing",2,1
 4,Characters 2,GetCharCol,0x3ad6,jump_table,partial,pop2/terrain.py,ordinary signed coordinate conversion,23,1
 4,Characters 2,GetRow,0x3afa,jump_table,partial,pop2/terrain.py,signed row conversion,13,0
 4,Characters 2,PlayerCtrl,0x3b88,jump_table,partial,pop2/rebirth.py;pop2/scene_prototype.py;pop2/audio.py,ordinary dead-pose counter/retry gate with current/pending SDL audio completion,2,20
@@ -384,7 +384,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,DoEngarde,0x1e78,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,5
 6,Characters 1,DoKidEngarde,0x1f04,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,15
 6,Characters 1,OppToFight,0x2392,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,3
-6,Characters 1,OnAlert,0x24bc,decoded,indexed-only,,No semantic review recorded in this prototype catalog,5,8
+6,Characters 1,OnAlert,0x24bc,decoded,partial,pop2/combat.py;pop2/scene_prototype.py,"ordinary attack/block/advance/retreat gates, counter priority, forced parry recoil and sword lowering",5,8
 6,Characters 1,DoStrike,0x2638,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,15
 6,Characters 1,CrushChar,0x28f0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,12
 6,Characters 1,CrushOppInfo,0x29fa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
@@ -397,7 +397,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,RemoveOppFromRoom,0x3462,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,2
 6,Characters 1,AddOppToRoom,0x358e,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
 6,Characters 1,GetOppInfoIdx,0x3642,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,36,0
-6,Characters 1,GetOppIdxClosestToKid,0x36f2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,19,1
+6,Characters 1,GetOppIdxClosestToKid,0x36f2,jump_table,partial,pop2/combat.py,ordinary living same-floor nearest actors on each side; full native vertical/type candidate filtering missing,19,1
 6,Characters 1,SetCharacterBank,0x3946,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,4
 6,Characters 1,CheckOppGenPts,0x3a0c,jump_table,partial,pop2/opponent_generation.py;pop2/combat.py,tested rooftop reinforcement branches,1,3
 6,Characters 1,GenerateOpponent,0x3a84,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,8
@@ -413,11 +413,11 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,Cut,0x472a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,4
 6,Characters 1,CutChar,0x4918,decoded,partial,pop2/terrain.py,"horizontal cuts, downward priority and native room-15 right-cut veto; vertical gaps remain",1,10
 6,Characters 1,NoWallInDirOfChar,0x4dac,decoded,indexed-only,,No semantic review recorded in this prototype catalog,4,3
-6,Characters 1,AutoCtrl,0x4e90,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
+6,Characters 1,AutoCtrl,0x4e90,jump_table,partial,pop2/combat.py,ordinary unarmed/armed dispatch and shared timer decrement per processed NPC; special actor controllers missing,1,2
 6,Characters 1,SetTensionLevel,0x5022,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,5,0
 6,Characters 1,CheckStab,0x5092,jump_table,partial,pop2/combat.py;pop2/terrain.py,"ordinary contact/damage, type-2 guard death method 14, player/NPC flat alignment, forced and generator-enabled tumbles",1,8
-6,Characters 1,TestStrike,0x57b2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,24
-6,Characters 1,GetCharStrikeRanges,0x5b38,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,0
+6,Characters 1,TestStrike,0x57b2,jump_table,partial,pop2/combat.py;pop2/scene_prototype.py,"ordinary sword contact, row/strict 15-pixel height gate, no blanket grab/climb immunity; special attacks missing",1,24
+6,Characters 1,GetCharStrikeRanges,0x5b38,jump_table,partial,pop2/combat.py,"ordinary Prince/type-2 NPC ranges, facing, sword and engagement flags; special actors missing",4,0
 6,Characters 1,IsStrikingPos,0x5d60,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 6,Characters 1,IsTheStrikePos,0x5e42,decoded,indexed-only,,No semantic review recorded in this prototype catalog,4,0
 6,Characters 1,IsAdvancableId,0x5eca,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,14,3

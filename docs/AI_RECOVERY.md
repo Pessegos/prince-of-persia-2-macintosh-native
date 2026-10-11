@@ -137,8 +137,9 @@ of these conditions holds:
 
 Otherwise it tries the front cell. Cell queries use the cached anchor column;
 GetDist1 uses the FRAM supporting foot. No new collision barrier or blanket
-minimum spacing replaces these decisions. The existing special rooftop-room
-exceptions and non-flat terrain branches remain outside this subset.
+minimum spacing replaces these decisions. The level-5 bridge exceptions
+(LEVL +0x218a == 5, not rooftop environment +0x2186 == 5) and non-flat
+terrain branches remain outside this subset.
 
 SwordCtrl `6:2206-220e`, `6:22e6` and DoTurn `6:26a8-26b0` allow an ordinary
 guard to select turn 60 in animation modes 0/1, not only at pose 171. Modes
@@ -154,14 +155,58 @@ one turn and return to repeated in-range attacks. Tests also cover the
 25/17 boundaries, rear gaps, zero distance and continuation identity.
 Forced parry recoil, wounds and their edge falls retain their own rules.
 
+## Leaving Combat And Climbing Under Attack
+
+The screen-5 comparison exposed a host-only immunity: the scene marked the
+Prince untargetable throughout falls, holds and climbs. CheckStrikes
+`6:58aa-592c` does not exclude those animation modes. Ordinary sword contact
+instead needs the same row, absolute Y difference strictly below 15, a living
+target and the native actor/mode exclusions. Direct execution of the original
+routine marks a wound during jump, fall, hold and climb poses when those
+geometric conditions hold. A high enough jump still avoids a low sword.
+
+The scene now retains only its opening-escape exclusion. Guard decisions can
+continue while the Prince attempts a grab; a hit clears the interrupted
+ledge/queued-climb state before playing the original hurt or death sequence.
+Fatal climb sequence 10 still uses CheckStab's existing fatal-sequence rule.
+Tests cover scene-level hits during hold/climb, strict -14/-15 height bounds,
+and the original opening and edge-fall regressions. This does not imply that
+every climb can be hit or that escaping screen 5 must always be impossible.
+
+EnGarde's far branch `4:0c14-0c66` only enters pursuit at distance >= upper
+strike bound +18 and with no attack pause. An opposing run (poses 7-14) or
+jump (34-43) requests an anticipating strike below 150/186 respectively;
+at or beyond those thresholds it waits, without a chance roll or advance.
+
+Ordinary pursuit `4:0fb8-1098` requests retreat when both front cells are
+empty. Otherwise a nonzero movement flag, same-facing moving Prince and
+Prince mode !=7 can resume SEQS:84. It does not require two flat, traversable
+cells or a guard ready pose before selecting that run: AutoCtrl and collision
+handle the upcoming obstacle. Other cases consult OpponentClose's advance
+table. The level-5 bridge exceptions remain untranslated and do not apply
+to level 1. Original EnGarde/range/tile opcodes agree with the port in 2,016
+audited far-branch cases across three rooms, four positions, both facings,
+seven Prince poses, flags -1/0/1 and attack pauses 0/1. Probability branches
+used a supplied zero roll; this is not a full native RNG/update-order trace.
+
+The NPC hurt lock no longer outlives its native animation gate. EnGarde still
+evaluates decisions during recovery; SwordCtrl/ordinary input only accepts
+them in modes 0/1. Modes >=2 remain protected. This permits responses at the
+interruptible end of recovery without waiting for a resource link to 227.
+
 ## Remaining Work
 
 This is not a complete translation of every enemy controller. The default
 prototype now loads guards and reinforcement points per visited room, and
-grounded NPC clearance reads the current room's tiles. Full front/behind tile
-checks, gates, NPC falling, cross-room pursuit, different-floor target
-selection, full alert acquisition and special roof-room branches need the
-corresponding collision/map work. Ordinary same-floor target selection,
+grounded NPC clearance reads the current room's tiles. Ordinary falls and
+horizontal pursuit are implemented for the supported rooftops. Full
+front/behind obstacle/gate branching, different-floor target selection,
+native NPC bank/candidate filtering and full alert acquisition still need
+recovery. WaitingEngarde's self-nearest obstacle retreat (`4:0e94-0f0e`)
+and unarmed AutoCtrl's obstacle/distance branches (`4:0664-06d4`) are not
+fully translated. Level-5 bridge helpers `8:02ae/04a2` are identified, not
+implemented; they must not be enabled just because the environment is rooftops.
+Ordinary same-floor target selection,
 flat-rooftop WaitingEngarde spacing and the first room's reinforcement now
 have their own implementation and tests, detailed below.
 
@@ -269,9 +314,10 @@ enter it. This lifecycle is not a complete translation of all `CutOpponent`,
 ## Rooftop Pursuit And Jumping
 
 - Preserve initial generator +0x14, not just reinforcement flags.
-- CODE:4 `0x0fb8`-`0x1056` can resume run sequence 84 behind a same-facing
-  moving Prince, subject to traversable look-ahead tiles and capability.
-  The prototype performs that transition at the supported guard poses.
+- CODE:4 `0x0fb8`-`0x1098` can resume run sequence 84 behind a same-facing
+  moving Prince, subject to the two-empty-cell veto and a nonzero movement
+  flag. See the far-branch conditions above; this is not a generic ready-pose
+  transition whenever the Prince is outside the ordinary strike range.
 - AutoCtrl `0x07dc`-`0x0974` checks jump capability at poses 192/196,
   the third tile ahead, the first empty tile and gap width. Gaps under four
   tiles are eligible; a four-tile gap uses the original capability-based

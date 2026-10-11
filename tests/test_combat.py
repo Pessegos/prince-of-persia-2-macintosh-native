@@ -334,7 +334,7 @@ class GuardCombatTests(unittest.TestCase):
         scene.sequence_runtime.next_frame()
         self.assertFalse(scene.resume_combat_turn())
 
-    def test_airborne_hanging_and_opening_targets_are_not_hit(self):
+    def test_height_unavailable_target_and_protected_mode_prevent_contact(self):
         for y, targetable, mode in ((-15, True, 1), (80, True, 1), (0, False, 1), (0, True, 8)):
             c = self.encounter()
             c.guard.state.action = 154

@@ -640,6 +640,48 @@ class RooftopSceneTests(unittest.TestCase):
                 break
         self.assertEqual(life_changes, [2, 1, 0])
 
+    def test_screen_five_grab_and_climb_do_not_make_the_prince_invulnerable(self):
+        from pop2.combat import select_sequence
+
+        scene = self.scene
+        for sequence, action, mode, expected_life in ((25, 87, 6, 2), (10, 135, 1, 0)):
+            with self.subTest(sequence=sequence):
+                self.place(9, 1, 300, facing=0)
+                scene.combat.player.life = 3
+                scene.start_sequence(sequence)
+                scene.sequence_runtime.next_frame()
+                scene.sequence_state.action, scene.sequence_state.animation_state = action, mode
+                scene.sequence_state.current_y = -14
+                scene.native_ledge = scene.ledge_hanging = True
+                scene.ledge_climbing = scene.ledge_climb_requested = sequence == 10
+                guard = scene.combat.guard
+                guard.state.current_x = guard.state.target_x = 365
+                guard.state.facing, guard.alert_mode, guard.sword_drawn = 0, 3, True
+                guard.contact_consumed = False
+                select_sequence(guard, 58)
+                guard.runtime.next_frame()
+                guard.state.action = 154
+                scene.combat.last_guard_at = self.now
+                with patch('pop2.scene_prototype.time.perf_counter', return_value=self.now):
+                    scene.advance_combat()
+                self.assertEqual(scene.combat.player.life, expected_life)
+                self.assertFalse(scene.native_ledge or scene.ledge_hanging or scene.ledge_climbing)
+                self.assertFalse(scene.ledge_climb_requested)
+
+    def test_screen_five_jump_height_still_protects_from_a_low_sword_strike(self):
+        scene = self.scene
+        self.place(9, 1, 300, facing=0)
+        scene.sequence_state.current_y = -15
+        scene.ledge_hanging = True
+        guard = scene.combat.guard
+        guard.state.current_x = guard.state.target_x = 365
+        guard.state.facing, guard.state.action, guard.sword_drawn = 0, 154, True
+        scene.combat.last_guard_at = self.now
+        with patch('pop2.scene_prototype.time.perf_counter', return_value=self.now):
+            scene.advance_combat()
+        self.assertEqual(scene.combat.player.life, 3)
+        self.assertTrue(scene.ledge_hanging)
+
     def test_parry_at_initial_edge_recoils_and_falls_without_losing_health(self):
         from pop2.combat import select_sequence
 

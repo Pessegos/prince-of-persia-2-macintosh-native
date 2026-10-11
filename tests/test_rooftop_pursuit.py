@@ -1,6 +1,7 @@
 import random
 import struct
 import unittest
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -53,6 +54,40 @@ class RooftopPursuitTests(unittest.TestCase):
     def tick(self, encounter):
         encounter.update_guard_alerts()
         encounter.advance_guard()
+
+    def test_pursuit_waits_for_high_plus_18_and_respects_attack_pause(self):
+        for distance, pause, expected in ((100, 0, 86), (101, 0, 84), (140, 1, 227)):
+            with self.subTest(distance=distance, pause=pause):
+                encounter = self.encounter(9, player_x=350, facing=1)
+                guard = self.runner(encounter, 9, 350 - distance, facing=1, flags=-1)
+                select_sequence(guard, 227)
+                guard.runtime.next_frame()
+                guard.sword_drawn, guard.alert_mode = True, 3
+                encounter.attack_pause = pause
+                encounter.choose_guard_action(guard)
+                self.assertEqual(guard.state.sequence_id, expected)
+
+    def test_pursuit_does_not_require_two_flat_floor_cells_before_running(self):
+        encounter = self.encounter(9, player_x=300, facing=0)
+        guard = self.runner(encounter, 9, 440, facing=0)
+        select_sequence(guard, 227)
+        guard.runtime.next_frame()
+        guard.sword_drawn, guard.alert_mode = True, 3
+        # Native 4:0fd4-0fea only vetoes when BOTH cells are empty.
+        with patch('pop2.combat.tile_kind', side_effect=(1, 20)):
+            encounter.choose_guard_action(guard)
+        self.assertEqual(guard.state.sequence_id, 84)
+        self.assertFalse(guard.sword_drawn)
+
+    def test_pursuit_recoils_when_both_front_cells_are_empty(self):
+        encounter = self.encounter(9, player_x=300, facing=0)
+        guard = self.runner(encounter, 9, 440, facing=0)
+        select_sequence(guard, 227)
+        guard.runtime.next_frame()
+        guard.sword_drawn, guard.alert_mode = True, 3
+        with patch('pop2.combat.tile_kind', side_effect=(0, 0)):
+            encounter.choose_guard_action(guard)
+        self.assertEqual(guard.state.sequence_id, 57)
 
     def test_guard_run_jump_uses_all_original_poses_without_a_fall(self):
         for room, x in ((2, 450), (0, 450)):

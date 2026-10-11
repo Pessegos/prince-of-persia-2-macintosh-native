@@ -13,6 +13,8 @@ probable body offset, current review scope and known call-site counts.
 `python -m tools.recovery_catalog --check` checks review entries against the bundled
 catalog. Use `--source PATH_TO_RECOVERY` to re-index the original `symbols.csv`
 and `named_calls.csv`; those research files are not needed to run the game or tests.
+`python -m tools.recovery_catalog --summary` prints the recorded review counts
+without modifying the catalog. These counts include all subsystems, not just AI.
 
 - `indexed-only`: located by the extraction, with no semantic review recorded
   in this prototype catalog. This does not claim nobody ever inspected it.
@@ -78,6 +80,14 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Mode-9 character clipping bypass and harbor water cap | 4:4210-422c; 23:0826 | T: ordinary rooftop bypass and native harbor 354/327 waterline subset; conditional pillar ordering P | render_opening, scene_prototype / test_guard_deaths, test_harbor |
 | Skill tables, initial guard/generator data | DATA/LEVL; 6:3a0c | T: extracted ordinary rooftop profiles | enemy_profiles/opponent_generation / test_enemy_ai, test_opponent_generation |
 | Ready-pose advance/retreat checks own anchor column | 4:0a82-0b1a; 6:2c90 | T: ordinary guard subset, not immunity to falling | combat / test_enemy_ai, test_rooftop_pursuit |
+| Selected retreat/turn survives links to combat idle; turn spacing uses front foot and rear cells | 4:0a8c-0c08; 6:2206-22e6/26a8 | T: ordinary close guard subset, both facings and 240-frame turn-loop regression; bridge exceptions P | combat / test_enemy_ai, test_rooftop_pursuit |
+| Far pursuit only after high+18 and without attack pause; both empty front cells request recoil | 4:0c14-0c66/0fb8-1098 | T: ordinary first-level guards; native level-5 bridge exceptions R | combat / test_enemy_ai, test_rooftop_pursuit |
+| Opposing approaching run/jump waits outside 150/186, rather than advancing | 4:0c2a-0c64 | T: strict boundaries; no probability roll for these branches | combat / test_enemy_ai |
+| Shared parry/advance/attack timers decrement per processed NPC, including dead records | 6:4e98-4eb6; 2:64f2-651e | T: ordinary processed NPCs and below-room exclusion | combat / test_enemy_ai |
+| Hurt recovery does not add a lock beyond native animation mode | 6:2206-220e; 4:098c-0c6a | T: ordinary NPC modes 0/1 can respond; modes >=2 still reject sword input | combat / test_enemy_ai |
+| Jump/hold/climb does not grant blanket sword immunity; same row and height difference <15 required | 6:58aa-592c | T: ordinary actors, native dead/protected-mode exclusions and scene interruption cleanup | combat, scene_prototype / test_combat, test_terrain |
+| Waiting NPC spacing versus other NPC; self-nearest obstacle response | 4:0c7e-0f14/0f28 | T: ordinary multi-NPC spacing; R: self-nearest front-obstacle retreat | combat / test_rooftop_pursuit |
+| Complete NPC candidate filtering and unarmed obstacle braking | 6:36f2-3918; 4:0664-06d4 | R/P: ordinary subset exists; full vertical/type filtering and native obstacle/distance branching missing | AI_RECOVERY / further recovery needed |
 | Pursuit, gap jump and incoming reinforcement corridor | 4:057c/0834; 6:1c14/3a0c | T: supported rooftop paths; inactive-world/special actors P | combat / test_rooftop_pursuit, test_opponent_generation |
 | Parry/contact poses, range, damage priority | 6:50ec/523e/53f8/5978 | T: ordinary actors; special attacks P | combat / test_combat |
 | Ready hurt poses may turn toward the opponent; alert scan uses supporting columns | 6:2258-22ea; 2:6f76-6f9c | T: ordinary ready/locked poses, wall/gap alert gates and idle opening through three stabs; full column lifecycle P | combat, scene_prototype / test_combat, test_terrain |

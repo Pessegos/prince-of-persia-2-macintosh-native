@@ -352,10 +352,11 @@ class CombatEncounter:
             # CODE:4 0x0c2a: attacks against an approaching run or jump need
             # neither a normal in-range check nor a probability-table roll.
             if state.facing != other.facing:
-                if (7 <= other.action < 15 and distance < 150
-                        or 34 <= other.action < 44 and distance < 186):
-                    return GuardIntent(strike=True)
-            return self._close_intent(guard)
+                if 7 <= other.action < 15:
+                    return GuardIntent(strike=distance < 150)
+                if 34 <= other.action < 44:
+                    return GuardIntent(strike=distance < 186)
+            return self._pursuit_intent(guard)
         if not player.sword_drawn or state.facing == other.facing:
             # InRange 0x048a: an unarmed/back-facing opponent is handled
             # directly, without consulting the normal strike table.
@@ -399,6 +400,24 @@ class CombatEncounter:
         if guard.skill and self.advance_pause:
             return GuardIntent()
         return GuardIntent(advance=self._chance(ADVANCE_CHANCE, guard))
+
+    def _pursuit_intent(self, guard):
+        # EnGarde 4:0c14/0fb8: both empty cells veto pursuit, not every
+        # non-advancable cell. Collision and AutoCtrl handle the next obstacle.
+        if self.level is not None:
+            column = character_column(guard.state.target_x)
+            direction = 1 if guard.state.facing else -1
+            if all(tile_kind(self.level, guard.room, column + n * direction, guard.row)
+                   in EMPTY_TILES for n in (1, 2)):
+                return GuardIntent(retreat=True)
+            other = self.player.state
+            moving = (1 <= other.action <= 14 or 49 <= other.action <= 56
+                      or 34 <= other.action <= 44)
+            if (guard.generation_flags and moving and guard.state.facing == other.facing
+                    and other.animation_state != 7):
+                self._resume_guard_run(guard)
+                return GuardIntent()
+        return self._close_intent(guard)
 
     def apply_guard_intent(self, intent, guard=None):
         """Original ordinary-NPC DoStrike/DoBlock/DoAdvance/DoRetreat gates."""
@@ -503,8 +522,6 @@ class CombatEncounter:
             # stabbed actor is not counted in the previous NPC bank yet.
             guard.death_registered = True
             return
-        if guard.recovering:
-            return
         if self.level is not None and not guard.sword_drawn:
             self._choose_unarmed_guard_action(guard)
             return
@@ -537,16 +554,6 @@ class CombatEncounter:
             if state.animation_state < 2:
                 select_sequence(guard, 60)
             return
-        if (self.level is not None and state.action in GUARD_POSES
-                and opponent_distance(guard, player) >= strike_range(guard, player)[1]):
-            other = player.state
-            moving = 1 <= other.action <= 14 or 49 <= other.action <= 56 or 34 <= other.action <= 44
-            # CODE:4 0fb8-1056: an eligible pursuer runs after a same-facing
-            # moving Kid while the two tiles ahead remain traversable.
-            if (guard.generation_flags and moving and state.facing == other.facing
-                    and other.animation_state != 7 and self._guard_floor_clear(guard, 1, 2)):
-                self._resume_guard_run(guard)
-                return
         self.apply_guard_intent(self.decide_guard_intent(guard), guard)
 
     def _nearest_guard(self, side=None):
