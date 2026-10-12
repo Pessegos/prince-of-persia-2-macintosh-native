@@ -2552,6 +2552,19 @@ class ScenePrototype(WindowControls):
         viewport.paste(text, (x, y), text)
         return viewport
 
+    def draw_screenshot_notice(self, viewport):
+        message = getattr(self, "screenshot_toast", None)
+        if message is None and (self.game_menu is None or self.game_menu.page != "screenshots"):
+            return viewport
+        if message is None:
+            message = "F8: Save Screenshot"
+        text = self.ui_font.text(message, (253, 255, 168, 255))
+        x = VIEWPORT_WIDTH - text.width - 8
+        y = ROOM_HEIGHT - self.ui_font.height - 6
+        viewport.paste((0, 0, 0, 255), (x + 1, y + 1), text)
+        viewport.paste(text, (x, y), text)
+        return viewport
+
     def render(self):
         if getattr(self, "intro", None) is not None:
             viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
@@ -2565,6 +2578,7 @@ class ScenePrototype(WindowControls):
                 viewport = self.game_menu.draw(viewport, self.ui_font)
             elif self.paused:
                 viewport = self.draw_cutscene_pause(viewport)
+            viewport = self.draw_screenshot_notice(viewport)
             self.native_viewport = viewport
             self.present_viewport()
             return
@@ -2688,6 +2702,7 @@ class ScenePrototype(WindowControls):
         if self.game_menu is not None:
             self.refresh_game_menu()
             viewport = self.game_menu.draw(viewport, self.ui_font)
+        viewport = self.draw_screenshot_notice(viewport)
         self.native_viewport = viewport
         self.present_viewport()
 

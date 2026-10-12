@@ -47,6 +47,8 @@ class WindowControls:
     def create_window(self, title, scale=2):
         self.screenshot_settings = ScreenshotSettings.load()
         self.screenshot_viewport = None
+        self.screenshot_toast = None
+        self.screenshot_toast_after_id = None
         self.screenshot_dialog_active = False
         audio = getattr(self, "audio", None)
         self.sound_enabled = audio.sound_enabled if audio is not None else True
@@ -380,6 +382,21 @@ class WindowControls:
             self.render()
         return path
 
+    def show_screenshot_toast(self):
+        self.screenshot_toast = "Screenshot saved"
+        if self.screenshot_toast_after_id is not None:
+            try:
+                self.root.after_cancel(self.screenshot_toast_after_id)
+            except tk.TclError:
+                pass
+        self.screenshot_toast_after_id = self.root.after(2500, self.clear_screenshot_toast)
+        self.render()
+
+    def clear_screenshot_toast(self):
+        self.screenshot_toast = None
+        self.screenshot_toast_after_id = None
+        self.render()
+
     def modal_open(self):
         return (self.dev_menu is not None or self.game_menu is not None
                 or getattr(self, "copy_challenge", None) is not None)
@@ -521,7 +538,8 @@ class WindowControls:
         self.window_keys_down.add(event.keysym)
         if event.keysym == "F8":
             if not repeated and not alt and not event.state & (0x4 | 0x40):
-                self.capture_screenshot()
+                if self.capture_screenshot() is not None:
+                    self.show_screenshot_toast()
             return "break"
         if event.keysym == "F2":
             if not repeated:

@@ -8,7 +8,8 @@ F2 opens standalone screenshot controls, and F3 opens Developer Tools.
 
 Screenshots are a port-only feature, not a recovered Macintosh command.
 F8 saves the current clean game framebuffer as PNG without altering playback or
-pause. F2's screenshot controls offer the same capture command, a native folder picker
+pause, then briefly confirms the save in the game's bitmap font. F2's screenshot
+controls show an F8 reminder and offer the same capture command, a native folder picker
 (including typed/pasted paths), and 1x-4x integer sizes. The original 510x384
 viewport and HUD are retained; host padding, menus and pause overlays are not.
 Local preferences and the default output folder live under ignored `rendered/`.
