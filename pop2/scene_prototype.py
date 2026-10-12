@@ -2557,8 +2557,11 @@ class ScenePrototype(WindowControls):
         if message is None and (self.game_menu is None or self.game_menu.page != "screenshots"):
             return viewport
         if message is None:
-            message = "F8: Save Screenshot"
-        text = self.ui_font.text(message, (253, 255, 168, 255))
+            message = "Take Screenshots with F8"
+            color = (153, 153, 153, 255)
+        else:
+            color = (253, 255, 168, 255)
+        text = self.ui_font.text(message, color)
         x = VIEWPORT_WIDTH - text.width - 8
         y = ROOM_HEIGHT - self.ui_font.height - 6
         viewport.paste((0, 0, 0, 255), (x + 1, y + 1), text)
