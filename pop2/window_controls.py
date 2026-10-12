@@ -3,11 +3,13 @@
 import sys
 import time
 import tkinter as tk
+from tkinter import filedialog, messagebox
 
 from PIL import Image, ImageTk
 
 from pop2.game_menu import GameMenu
 from pop2.game_ui import DevelopmentMenu, VISIBLE_SIZE, VISIBLE_VIEWPORT, fit_viewport, viewport_point
+from pop2.screenshots import ScreenshotSettings, save_screenshot
 
 
 def is_resume_key(event, held_keys=()):
@@ -43,6 +45,9 @@ class WindowControls:
     """Window callbacks shared by the rooftop scene and animation preview."""
 
     def create_window(self, title, scale=2):
+        self.screenshot_settings = ScreenshotSettings.load()
+        self.screenshot_viewport = None
+        self.screenshot_dialog_active = False
         audio = getattr(self, "audio", None)
         self.sound_enabled = audio.sound_enabled if audio is not None else True
         self.music_enabled = audio.music_enabled if audio is not None else True
@@ -151,6 +156,8 @@ class WindowControls:
 
     def pause_if_unfocused(self):
         self.focus_pause_after_id = None
+        if getattr(self, "screenshot_dialog_active", False):
+            return
         if getattr(self, "copy_challenge", None) is not None:
             return
         try:
@@ -271,6 +278,8 @@ class WindowControls:
             section_index=self.current_playback_part(), debug_status=self.debug_status,
             level_available=self.level_navigation_available(),
             level_options=level_options, level_index=level_index if level_options else 0,
+            screenshot_scale=self.screenshot_settings.scale,
+            screenshot_folder=str(self.screenshot_settings.folder),
         )
         if not self.dev_menu.level_available:
             self.dev_menu.change_tab(1)
@@ -296,6 +305,12 @@ class WindowControls:
     def apply_dev_action(self, action):
         if self.dev_menu is None:
             return
+        if self.dev_menu.screenshot_scale != self.screenshot_settings.scale:
+            self.screenshot_settings.scale = self.dev_menu.screenshot_scale
+            try:
+                self.screenshot_settings.save()
+            except OSError:
+                self.dev_menu.error = "Could not remember screenshot settings."
         if action == "resume":
             self.close_dev_mode()
         elif action == "go" and self.level_navigation_available():
@@ -322,8 +337,57 @@ class WindowControls:
             self.debug_status = self.dev_menu.debug_status
             self.update_status_visibility()
             self.render()
+        elif action == "screenshot_folder":
+            self.choose_screenshot_folder()
+        elif action == "screenshot":
+            self.capture_screenshot()
         else:
             self.render()
+
+    def choose_screenshot_folder(self):
+        settings = self.screenshot_settings
+        held_keys = self.window_keys_down.copy()
+        self.screenshot_dialog_active = True
+        try:
+            initial = settings.folder if settings.folder.is_dir() else settings.folder.parent
+            folder = filedialog.askdirectory(parent=self.root, title="Screenshot folder",
+                                             initialdir=str(initial), mustexist=True)
+            if folder:
+                from pathlib import Path
+
+                selected = Path(folder).resolve()
+                ScreenshotSettings(selected, settings.scale).save()
+                settings.folder = selected
+                self.dev_menu.screenshot_folder = str(selected)
+                self.dev_menu.error = self.dev_menu.screenshot_status = ""
+        except (OSError, tk.TclError):
+            self.dev_menu.error = "Could not remember the screenshot folder."
+        finally:
+            self.screenshot_dialog_active = False
+            self.clear_keys(None)
+            self.pause_resume_keys.update(held_keys)
+            self.render()
+
+    def capture_screenshot(self):
+        try:
+            viewport = getattr(self, "screenshot_viewport", None)
+            if viewport is None:
+                raise ValueError("No game frame is available yet")
+            path = save_screenshot(viewport, self.screenshot_settings)
+        except (OSError, ValueError) as exc:
+            message = "Could not save PNG. Check the screenshot folder."
+            if self.dev_menu is not None:
+                self.dev_menu.error = message
+                self.render()
+            else:
+                messagebox.showerror("Screenshot", f"{message}\n\n{exc}", parent=self.root)
+            return None
+        self.status.set(f"Screenshot saved: {path}")
+        if self.dev_menu is not None:
+            self.dev_menu.error = ""
+            self.dev_menu.screenshot_status = "PNG saved"
+            self.render()
+        return path
 
     def modal_open(self):
         return (self.dev_menu is not None or self.game_menu is not None
@@ -439,6 +503,10 @@ class WindowControls:
         repeated = event.keysym in self.window_keys_down or (
             len(event.keysym) == 1 and event.keysym.swapcase() in self.window_keys_down)
         self.window_keys_down.add(event.keysym)
+        if event.keysym == "F8":
+            if not repeated and not alt and not event.state & (0x4 | 0x40):
+                self.capture_screenshot()
+            return "break"
         if event.keysym == "F5" or event.keysym == "F2" and not self.development_available():
             return "break"
         if event.keysym == "F2":
@@ -508,6 +576,8 @@ class WindowControls:
             return None
         if event.keysym == "Escape":
             return self.escape_key(event)
+        if repeated and event.keysym in ("Return", "KP_Enter", "space"):
+            return "break"
         self.apply_dev_action(
             self.dev_menu.key(event.keysym, backwards=bool(event.state & 1))
         )

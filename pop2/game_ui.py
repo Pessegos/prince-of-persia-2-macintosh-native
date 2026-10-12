@@ -46,6 +46,9 @@ class DevelopmentMenu:
     dropdown_control: int = 0
     level_options: tuple = ()
     level_index: int = 0
+    screenshot_scale: int = 3
+    screenshot_folder: str = ""
+    screenshot_status: str = ""
 
     CONTROLS = ((200, 138, 392, 166), (120, 180, 392, 210),
                 (120, 231, 252, 263), (264, 231, 392, 263))
@@ -59,6 +62,11 @@ class DevelopmentMenu:
         0: (212, 138, 392, 166), 4: (212, 180, 392, 208),
         1: (120, 220, 392, 248),
         2: (120, 269, 252, 301), 3: (264, 269, 392, 301),
+    }
+    DISPLAY_CONTROLS = {
+        1: (120, 138, 392, 166), 0: (212, 180, 392, 208),
+        4: (120, 220, 392, 248),
+        2: (120, 282, 252, 314), 3: (264, 282, 392, 314),
     }
 
     @property
@@ -80,6 +88,8 @@ class DevelopmentMenu:
         return (self.section_index + 1) % len(self.sections)
 
     def field_options(self, control):
+        if self.tab == 2:
+            return tuple(f"{scale}x ({510 * scale} x {384 * scale})" for scale in range(1, 5))
         if self.tab == 0 and self.level_options:
             return (tuple(option[1] for option in self.level_options) if control == 0
                     else self.screen_options)
@@ -97,6 +107,8 @@ class DevelopmentMenu:
         return self.level_options[self.level_index][0] if self.level_options else None
 
     def field_selected_index(self, control):
+        if self.tab == 2:
+            return self.screenshot_scale - 1
         if self.tab == 0 and self.level_options:
             return self.level_index if control == 0 else self.screen_index
         if self.tab != 1:
@@ -112,6 +124,8 @@ class DevelopmentMenu:
         return self.field_selected_index(self.dropdown_control if self.dropdown else self.focus)
 
     def control_rect(self, index):
+        if self.tab == 2:
+            return self.DISPLAY_CONTROLS[index]
         if self.tab == 0 and self.level_options:
             return self.LEVEL_CONTROLS[index]
         return self.PLAYBACK_CONTROLS[index] if self.tab == 1 else self.CONTROLS[index]
@@ -124,7 +138,7 @@ class DevelopmentMenu:
     @property
     def controls(self):
         if self.tab == 2:
-            return (1, 3)
+            return (1, 0, 4, 2, 3)
         if ((self.tab == 0 and not self.level_available)
                 or (self.tab == 1 and not self.sections)):
             return (3,)
@@ -162,7 +176,9 @@ class DevelopmentMenu:
         return True
 
     def select(self, index):
-        if self.tab == 1:
+        if self.tab == 2:
+            self.screenshot_scale = index + 1
+        elif self.tab == 1:
             control = self.dropdown_control if self.dropdown else self.focus
             self.section_index = (self.groups[index].part_indices[0] if control == 0
                                   else self.part_indices[index])
@@ -199,7 +215,8 @@ class DevelopmentMenu:
         elif key in ("Left", "Right") and self.focus == -1:
             self.change_tab(self.tab + (-1 if key == "Left" else 1))
             self.focus = -1
-        elif key in ("Left", "Right") and self.focus in (0, 4):
+        elif (key in ("Left", "Right") and self.focus in (0, 4)
+              and not (self.tab == 2 and self.focus == 4)):
             self.select((self.selected_index + (-1 if key == "Left" else 1)) % len(self.options))
         elif key in ("Left", "Right") and self.focus in (2, 3):
             destination = 2 if key == "Left" else 3
@@ -212,12 +229,17 @@ class DevelopmentMenu:
     def activate(self):
         if self.focus not in self.controls:
             return "changed"
+        if self.tab == 2:
+            if self.focus == 0:
+                self.open_dropdown()
+                return "changed"
+            if self.focus == 1:
+                self.debug_status = not self.debug_status
+                return "debug_status"
+            return {4: "screenshot_folder", 2: "screenshot", 3: "resume"}[self.focus]
         if self.focus in (0, 4):
             self.open_dropdown()
         elif self.focus == 1:
-            if self.tab == 2:
-                self.debug_status = not self.debug_status
-                return "debug_status"
             if self.tab == 1:
                 return "next_part"
             self.peaceful = not self.peaceful
@@ -271,7 +293,7 @@ class DevelopmentMenu:
         image = Image.alpha_composite(viewport, Image.new("RGBA", viewport.size, (0, 0, 0, 100)))
         draw = ImageDraw.Draw(image)
         gold, white, muted = "#f4d873", "#eeeeee", "#b9b9b9"
-        panel = ((100, 70, 412, 350) if self.tab == 0 and self.level_options
+        panel = ((100, 70, 412, 350) if self.tab == 2 or self.tab == 0 and self.level_options
                  else (100, 70, 412, 328))
         draw.rectangle(panel, fill="#181818", outline="#858585")
 
@@ -298,11 +320,13 @@ class DevelopmentMenu:
             text("Sequence", 120, 146)
             if available:
                 text("Part", 120, 188)
+        elif self.tab == 2:
+            text("PNG size", 120, 188)
         for i in self.controls:
             rect = self.control_rect(i)
             draw.rectangle(rect, fill="#303030" if i == self.focus else "#222222",
                            outline=gold if i == self.focus else "#626262")
-        if available and self.tab != 2:
+        if available:
             selectors = ((0, 4) if self.tab == 1 or self.tab == 0 and self.level_options
                          else (0,))
             for control in selectors:
@@ -311,7 +335,7 @@ class DevelopmentMenu:
                      left + 10, top + 8, max_width=right - left - 34)
                 draw.polygon(((right - 15, top + 12), (right - 7, top + 12),
                               (right - 11, top + 16)), fill=white)
-            text("Go to part" if self.tab == 1 else "Go to screen", 186,
+            text("Save PNG" if self.tab == 2 else "Go to part" if self.tab == 1 else "Go to screen", 186,
                  self.control_rect(2)[1] + 10,
                  centered=True, max_width=118)
         if available and self.tab in (0, 2):
@@ -323,12 +347,27 @@ class DevelopmentMenu:
                            (139, checkbox_y + 2)), fill=gold, width=2)
             text("Debug status bar" if self.tab == 2 else "Peaceful (no guards)",
                  151, checkbox_y + (1 if self.tab == 0 and self.level_options else 0), max_width=231)
-        elif available:
+        elif available and self.tab == 1:
             text("Next part", 256, 230, centered=True)
-        else:
+        elif not available:
             text("Unavailable during playback" if self.tab == 0 else "No playback data",
                  256, 190, muted, centered=True, max_width=272)
         text("Resume", 328, self.control_rect(3)[1] + 10, centered=True)
+        if self.tab == 2:
+            text("Choose folder...", 256, 229, centered=True)
+            encoded = self.screenshot_folder.replace("\\", "/").encode("mac_roman", errors="replace")
+            encoded = bytes(code if code in font.glyphs else 63 for code in encoded)
+            widths = [font.glyphs[code][2] for code in encoded]
+            width, start = sum(widths), 0
+            if width > 272:
+                limit = 272 - font.text("...").width
+                while width > limit and start < len(widths):
+                    width -= widths[start]
+                    start += 1
+            folder = ("..." if start else "") + encoded[start:].decode("mac_roman")
+            text(folder, 120, 255, muted, max_width=272)
+            if self.screenshot_status and not self.error:
+                text(self.screenshot_status, 120, 320, gold, max_width=272)
         if self.error:
             words, line, lines = self.error.split(), "", []
             for word in words:
@@ -339,8 +378,9 @@ class DevelopmentMenu:
                 else:
                     line = candidate
             lines.append(line)
-            error_y = 318 if self.tab == 0 and self.level_options else 277
-            line_limit = 2 if self.tab == 0 and self.level_options else 3
+            compact = self.tab == 2 or self.tab == 0 and self.level_options
+            error_y = 318 if compact else 277
+            line_limit = 2 if compact else 3
             for i, line in enumerate(lines[:line_limit]):
                 text(line, 120, error_y + i * 14, "#ff9b9b", max_width=272)
         if self.dropdown:

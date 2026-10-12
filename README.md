@@ -134,6 +134,7 @@ executable. Demo recovery adds time to the first import, not to later launches.
 | Alt + M | Toggle ambient music |
 | Alt + V | About the port |
 | F2 | Dev Mode: levels 1-3, intro/demo playback and display controls |
+| F8 | Save a clean PNG screenshot to the configured folder |
 | Any key after death | Retry from the checkpoint or level start |
 
 The game menu accepts mouse, arrows and Tab/Shift+Tab; Enter/Space activates
@@ -157,6 +158,13 @@ the attract cycle, only playback and display controls are available. Playback
 selects a sequence first, then a story part, animated title, demo screen or
 credits page. `Next part` follows playback order across sequence boundaries.
 The Windows debug status bar is hidden by default; enable it in `Display`.
+`F2 > Display` also selects the screenshot folder and PNG size. `Save PNG` or
+F8 captures the game image without window borders, fullscreen letterboxing,
+menus or pause overlays. The original in-game HUD remains part of the image.
+Sizes range from native 510 x 384 to 4x, using nearest-neighbor integer scaling;
+the default is 3x (1530 x 1152). Folder and size are remembered locally in
+`rendered/screenshot-settings.json`. The default folder is `rendered/screenshots/`;
+captures use unique timestamped filenames and are not published by Git.
 `python run_game.py --peaceful` starts with guards disabled and terrain intact.
 
 ## Development
@@ -173,6 +181,7 @@ python -m ruff check --select F,E9 .
 python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_playback_navigation tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests tests.test_palettes tests.test_game_session tests.test_level_ending
 python -m tools.recovery_catalog --check
 python -m unittest -q tests.test_desert tests.test_caverns
+python -m unittest -q tests.test_screenshots
 ```
 
 These checks run without original game files and are used in GitHub Actions.

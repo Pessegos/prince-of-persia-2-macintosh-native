@@ -6,6 +6,13 @@ Command, with the requested exception of Alt+Enter for fullscreen. It does
 not bind Alt+Q, Alt+F or the redundant Alt+E. F1 opens the in-game command menu; F2 retains the
 development menu.
 
+Developer screenshots are a port-only feature, not a recovered Macintosh command.
+F8 saves the current clean game framebuffer as PNG without altering playback or
+pause. F2's Display tab offers the same capture command, a native folder picker
+(including typed/pasted paths), and 1x-4x integer sizes. The original 510x384
+viewport and HUD are retained; host padding, menus and pause overlays are not.
+Local preferences and the default output folder live under ignored `rendered/`.
+
 | Original command | Port shortcut | Status |
 | --- | --- | --- |
 | New Game | Alt+N | Confirmation, default Cancel |

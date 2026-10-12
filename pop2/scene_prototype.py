@@ -2547,6 +2547,7 @@ class ScenePrototype(WindowControls):
             viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
             viewport.paste(self.intro.frame().crop((0, 0, ROOM_WIDTH, VIEWPORT_HEIGHT)),
                            (ROOM_ORIGIN_X, 0))
+            self.screenshot_viewport = viewport.copy()
             if self.dev_menu is not None:
                 viewport = self.dev_menu.draw(viewport, self.ui_font)
             elif self.game_menu is not None:
@@ -2647,6 +2648,12 @@ class ScenePrototype(WindowControls):
         viewport.paste(frame, (ROOM_ORIGIN_X, 0))
         if combat is not None and not self.death.prompt_visible:
             self.health_art.draw(viewport, combat, show_opponent=not hide_guards)
+        self.screenshot_viewport = viewport.copy()
+        if self.death.prompt_visible:
+            text = self.restart_text
+            ink = text.getbbox()
+            y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
+            self.screenshot_viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, y), text)
         hud_text = (self.pause_text if self.paused else
                     self.restart_text if self.death.prompt_visible else None)
         demo_paused = self.paused and getattr(self, "demo", None) is not None
@@ -2660,10 +2667,12 @@ class ScenePrototype(WindowControls):
                 and self.dev_menu is None and self.game_menu is None):
             text = self.ui_font.text(f"Level {self.game.level.number} Complete")
             viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, ROOM_HEIGHT), text)
+            self.screenshot_viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, ROOM_HEIGHT), text)
         if demo_paused and self.dev_menu is None and self.game_menu is None:
             viewport = self.draw_cutscene_pause(viewport)
         if getattr(self, "copy_challenge", None) is not None:
             viewport = self.copy_challenge.draw(viewport, self.ui_font)
+            self.screenshot_viewport = viewport.copy()
         if self.dev_menu is not None:
             viewport = self.dev_menu.draw(viewport, self.ui_font)
         if self.game_menu is not None:
