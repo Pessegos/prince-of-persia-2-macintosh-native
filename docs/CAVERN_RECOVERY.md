@@ -44,6 +44,14 @@ skeleton enemies still require semantic recovery and integrated tests.
 The ordinary-guard decoder does not reinterpret skeleton spawn records; the
 preview encounter host omits those actors until their implementation exists.
 
+The scenery itself is not yet visually validated. A comparison with the user's
+Macintosh route exposed a concrete exporter defect: AddNextBFItemToTable items
+from the flask library (item type 1) are recorded as Caverns shapes (type 4).
+The export also loses that library identity, and runtime ignores the recorded
+draw mode. This can substitute rock tiles for potion pieces, not merely omit
+their animation. See [Route audit](LEVEL3_ROUTE_AUDIT.md) for evidence, reference
+moments and the order of recovery. Room coverage tests do not catch this defect.
+
 `tests/test_caverns.py` checks clip pixels and masks, all 32 exports, every
 original map link, the generated map, and F2 room placements. These checks do
 not certify hazards, object interactions or completion of level 3.
