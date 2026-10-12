@@ -19,13 +19,20 @@ logic being recovered from the Macintosh executable through reverse engineering.
 
 ## Screenshots
 
-| Title | Intro |
-| --- | --- |
-| ![Original cloud title sequence](docs/screenshots/01-title.png) | ![The Prince and Princess in the intro](docs/screenshots/02-intro.png) |
-| **Cutscene Pause** | **Opening Escape** |
-| ![Paused cutscene with a dimmed background](docs/screenshots/03-cutscene-pause.png) | ![The Prince escaping through the palace window](docs/screenshots/04-opening.png) |
-| **Checkpoint** | **Boat Jump** |
-| ![The level-1 checkpoint near the docks](docs/screenshots/05-checkpoint.png) | ![The Prince jumping from the docks to the boat](docs/screenshots/06-boat-jump.png) |
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/01-title.png" alt="Original cloud title sequence"></td>
+    <td width="50%"><img src="docs/screenshots/02-intro.png" alt="The Prince and Princess in the intro"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/03-cutscene-pause.png" alt="Paused cutscene with a dimmed background"></td>
+    <td><img src="docs/screenshots/04-opening.png" alt="The Prince escaping through the palace window"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/05-checkpoint.png" alt="The level-1 checkpoint near the docks"></td>
+    <td><img src="docs/screenshots/06-boat-jump.png" alt="The Prince jumping from the docks to the boat"></td>
+  </tr>
+</table>
 
 ## Run
 
