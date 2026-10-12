@@ -7,16 +7,6 @@ without requiring a Macintosh emulator.
 It uses the original artwork, animation sequences and level data, with gameplay
 logic being recovered from the Macintosh executable through reverse engineering.
 
-## Current Progress
-
-- Playable: the complete level-1 route and voyage, the level-2 beach, shore and
-  stone puzzle. Level 3 has its original room layout and scenery previews.
-  The original intro, demo and credits are included.
-- Implemented systems: movement, sword combat, guards, music and sound effects,
-  checkpoints, retry, menus and level transitions.
-- Remaining work: level-3 mechanisms and enemies, guard behavior and some
-  gameplay edge cases.
-
 ## Screenshots
 
 <table>
@@ -33,6 +23,20 @@ logic being recovered from the Macintosh executable through reverse engineering.
     <td><img src="docs/screenshots/06-boat-jump.png" alt="The Prince jumping from the docks to the boat"></td>
   </tr>
 </table>
+
+## Current Progress
+
+- **Level 1:** Fully playable route, including combat, the checkpoint, boat
+  escape and voyage to level 2.
+- **Level 2:** Playable beach, shore and stone puzzle, with quicksand and the
+  optional original copy-protection challenge.
+- **Level 3:** Scenery recovered for all 32 rooms, including animated torches
+  and entrance-door closure. Gameplay is still under development.
+- **Presentation and Systems:** Original intro, demo and credits with music
+  and sound effects; movement, sword combat, checkpoints, retry, fullscreen
+  and menus.
+- **Remaining Work:** Level-3 gameplay, potion rendering, guard-AI refinement
+  and remaining differences from the Macintosh original.
 
 ## Run
 
