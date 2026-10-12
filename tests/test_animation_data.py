@@ -413,6 +413,35 @@ class AnimationDataTests(unittest.TestCase):
         scene.advance_animation()
         self.assertEqual(scene.action, 15)
 
+    def test_rapid_step_repeat_is_ignored_but_later_step_is_buffered(self):
+        scene = self.sword_scene()
+        scene.sequence_state.facing = 1
+        scene.shift_held = True
+        scene.horizontal_key(None, 1, True)
+        scene.horizontal_key(None, 1, False)
+
+        scene.horizontal_key(None, 1, True)
+        self.assertIsNone(scene.pending_action)
+        scene.horizontal_key(None, 1, False)
+        for _ in range(4):
+            scene.advance_animation()
+
+        scene.horizontal_key(None, 1, True)
+        self.assertEqual(scene.pending_action, BufferedCommand("horizontal", 1, "step"))
+
+    def test_different_command_survives_a_rapid_step_repeat(self):
+        scene = self.sword_scene()
+        scene.sequence_state.facing = 1
+        scene.shift_held = True
+        scene.horizontal_key(None, 1, True)
+        scene.horizontal_key(None, 1, False)
+
+        scene.up_key(None)
+        self.assertEqual(scene.pending_action, BufferedCommand("jump"))
+        scene.set_key_state("up", False)
+        scene.horizontal_key(None, 1, True)
+        self.assertEqual(scene.pending_action, BufferedCommand("jump"))
+
     def test_arrow_tap_plays_native_start_run_and_stop_phases(self):
         scene = self.scene(facing=1)
 
@@ -911,7 +940,7 @@ class AnimationDataTests(unittest.TestCase):
 
     def test_up_repressed_during_running_jump_must_remain_held_past_landing_reset(self):
         for facing, direction in ((0, -1), (1, 1)):
-            for pose in range(34, 45):
+            for pose in range(38, 45):
                 for held in (False, True):
                     with self.subTest(facing=facing, pose=pose, held=held):
                         scene = self.scene(
@@ -952,6 +981,18 @@ class AnimationDataTests(unittest.TestCase):
                         )
                         self.assertIsNone(scene.pending_action)
                         self.assertTrue(scene.run_active)
+
+    def test_rapid_up_repeat_during_jump_does_not_queue_an_extra_jump(self):
+        scene = self.running_jump_scene()
+        scene.set_key_state("up", False)
+        scene.up_key(None)
+
+        self.assertIsNone(scene.pending_action)
+        scene.set_key_state("up", False)
+        for _ in range(4):
+            scene.advance_animation()
+        scene.up_key(None)
+        self.assertEqual(scene.pending_action, BufferedCommand("jump", 1, running=True))
 
     def test_running_jump_discards_released_opposite_chord_at_final_landing_pose(self):
         for pose in range(34, 45):
@@ -1816,6 +1857,23 @@ class AnimationDataTests(unittest.TestCase):
             actions.append(scene.action)
         self.assertEqual(actions, [108, 109, *range(110, 120), 15, 15])
         self.assertEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)
+
+    def test_rapid_crawl_repeat_does_not_queue_an_extra_step(self):
+        scene = self.sword_scene()
+        scene.set_key_state("down", True)
+        for _ in range(4):
+            scene.advance_animation()
+        scene.horizontal_key(None, -1, True)
+        scene.horizontal_key(None, -1, False)
+
+        scene.horizontal_key(None, -1, True)
+        self.assertIsNone(scene.pending_action)
+        scene.horizontal_key(None, -1, False)
+        for _ in range(4):
+            scene.advance_animation()
+        scene.horizontal_key(None, -1, True)
+        self.assertEqual(scene.sequence_state.sequence_id, CROUCH_STEP_SEQUENCE)
+        self.assertEqual(scene.action, 110)
 
     def test_crouch_step_tap_during_descent_is_queued(self):
         scene = self.scene()

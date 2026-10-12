@@ -76,6 +76,7 @@ ANIMATION_FPS = 12
 ANIMATION_INTERVAL_MS = 1000 / ANIMATION_FPS
 COMBAT_ANIMATION_FPS = 10
 COMBAT_ANIMATION_INTERVAL_MS = 1000 / COMBAT_ANIMATION_FPS
+QUEUE_GRACE_MS = 300
 RUN_CYCLE_SEQUENCES = {1, 200, 201, 202}
 REST_SEQUENCES = {IDLE_SEQUENCE}
 CROUCH_SEQUENCES = {
@@ -256,6 +257,8 @@ class ScenePrototype(WindowControls):
         self.bind_level(self.game, self.level_renderer)
         self.held_directions = []
         self.pending_action = None
+        self.queue_grace_remaining_ms = 0
+        self.queue_grace_command = None
         self.running_jump_controls_cleared = False
         self.run_cycle_boundary_pending = False
         self.horizontal_input = 0
@@ -410,8 +413,8 @@ class ScenePrototype(WindowControls):
                     if not self.start_native_descent():
                         self.start_crouch_lower()
                 elif self.sequence_state.sequence_id not in CROUCH_SEQUENCES:
-                    self.pending_action = BufferedCommand("crouch")
-                    if self.run_active and self.sequence_state.sequence_id not in RUN_CYCLE_SEQUENCES:
+                    queued = self.buffer_input(BufferedCommand("crouch"))
+                    if queued and self.run_active and self.sequence_state.sequence_id not in RUN_CYCLE_SEQUENCES:
                         self.run_stop_requested = True
         elif key == "shift":
             self.shift_held = pressed
@@ -441,8 +444,19 @@ class ScenePrototype(WindowControls):
         ):
             self.pending_action = None
             return self.start_sword_action(kind)
-        self.pending_action = BufferedCommand(kind)
+        self.buffer_input(BufferedCommand(kind))
         return False
+
+    def buffer_input(self, command):
+        if (getattr(self, "queue_grace_remaining_ms", 0) > 0
+                and command == getattr(self, "queue_grace_command", None)):
+            return False
+        self.pending_action = command
+        return True
+
+    def start_queue_grace(self, command):
+        self.queue_grace_command = command
+        self.queue_grace_remaining_ms = QUEUE_GRACE_MS
 
     def start_sword_action(self, kind, sequence_id=None):
         if kind == "sword_draw":
@@ -483,6 +497,7 @@ class ScenePrototype(WindowControls):
         }[kind])
         if not self.in_animation_tick:
             self.advance_animation_now()
+        self.start_queue_grace(BufferedCommand(kind))
         return True
 
     def resume_sword_attack_after_block(self):
@@ -606,11 +621,11 @@ class ScenePrototype(WindowControls):
                         "jump", direction, running=self.pending_action.running
                     )
                 elif not self._is_resting():
-                    self.pending_action = BufferedCommand(
+                    self.buffer_input(BufferedCommand(
                         "jump", direction,
                         running=(self.sequence_state.sequence_id in RUN_SEGMENT_SEQUENCES
                                  or self.sequence_state.sequence_id == RUN_JUMP_SEQUENCE),
-                    )
+                    ))
                 return False
             return self.start_jump_if_needed()
         elif (
@@ -627,7 +642,7 @@ class ScenePrototype(WindowControls):
                 self.pending_action = None
                 self.start_crouch_step(direction)
                 return True
-            self.pending_action = BufferedCommand("crawl", direction)
+            self.buffer_input(BufferedCommand("crawl", direction))
             return False
         elif self.shift_held:
             return self.queue_horizontal_action(direction, "step")
@@ -706,7 +721,7 @@ class ScenePrototype(WindowControls):
             self.pending_action = None
             self.dispatch_jump(command)
         else:
-            self.pending_action = command
+            self.buffer_input(command)
 
     def queue_horizontal_action(self, direction, mode):
         if (
@@ -720,9 +735,12 @@ class ScenePrototype(WindowControls):
         command = BufferedCommand("horizontal", direction, mode)
         if self._is_resting():
             self.pending_action = None
-            return self.dispatch_horizontal_action(command)
+            dispatched = self.dispatch_horizontal_action(command)
+            if dispatched:
+                self.start_queue_grace(command)
+            return dispatched
         else:
-            self.pending_action = command
+            self.buffer_input(command)
             return False
 
     def dispatch_jump(self, command):
@@ -781,6 +799,7 @@ class ScenePrototype(WindowControls):
             self.status.set(f"Jump: original SEQS:{sequence_id}")
         if not self.in_animation_tick:
             self.advance_animation_now()
+        self.start_queue_grace(command)
         return True
 
     def dispatch_horizontal_action(self, command, was_running=False):
@@ -1120,12 +1139,14 @@ class ScenePrototype(WindowControls):
         self.status.set(f"Crouch: original SEQS:{sequence}")
         if not self.in_animation_tick:
             self.advance_animation_now()
+        self.start_queue_grace(BufferedCommand("crouch"))
 
     def start_crouch_step(self, direction):
         self.start_sequence(CROUCH_STEP_SEQUENCE)
         self.status.set("Crouch step: original SEQS:79")
         if not self.in_animation_tick:
             self.advance_animation_now()
+        self.start_queue_grace(BufferedCommand("crawl", direction))
 
     def start_crouch_rise(self):
         self.start_sequence(CROUCH_RISE_SEQUENCE)
@@ -1403,6 +1424,8 @@ class ScenePrototype(WindowControls):
                 self.pending_action = command
             return dispatched
         dispatched = self.dispatch_horizontal_action(command, was_running=was_running)
+        if dispatched:
+            self.start_queue_grace(command)
         if (
             dispatched
             and command.mode == "run"
@@ -1418,6 +1441,10 @@ class ScenePrototype(WindowControls):
         if self.paused:
             return
         self.in_animation_tick = True
+        self.queue_grace_remaining_ms = max(
+            0, getattr(self, "queue_grace_remaining_ms", 0)
+            - self.current_animation_interval_ms()
+        )
         if getattr(self, "copy_challenge", None) is not None:
             self.in_animation_tick = False
             self.schedule_next_animation()
@@ -2255,6 +2282,8 @@ class ScenePrototype(WindowControls):
         return "break"
 
     def reset_level_controls(self):
+        self.queue_grace_remaining_ms = 0
+        self.queue_grace_command = None
         self.run_active = False
         self.run_stop_requested = False
         self.run_direction = 0
