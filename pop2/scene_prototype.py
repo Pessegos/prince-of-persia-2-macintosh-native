@@ -83,6 +83,7 @@ CROUCH_SEQUENCES = {
     CROUCH_STEP_SEQUENCE, CROUCH_RISE_SEQUENCE,
 }
 JUMP_LANDING_SEQUENCE = 11
+DESERT_FAR_SHORE_SOUND_X = 0x30B - ROOM_WIDTH
 RUN_SEGMENT_SEQUENCES = RUN_CYCLE_SEQUENCES | {
     RUNNING_DRIFT_SEQUENCE, RUNNING_TURN_SEQUENCE
 }
@@ -2001,8 +2002,14 @@ class ScenePrototype(WindowControls):
                 audio.stop_sound(51)
                 if not audio.music_busy:
                     audio.add_song(50, ambient=True)
-            elif not audio.sound_playing(51):
-                audio.add_sound(51)
+            else:
+                if not audio.sound_playing(51):
+                    audio.add_sound(51)
+                # DesertFunc 18:0334 checks world X >= 0x30B before cue 56.
+                # Room 2 starts one viewport-width into that coordinate space.
+                if (self.room_id == 2 and self.player_x >= DESERT_FAR_SHORE_SOUND_X
+                        and not audio.sound_playing(56)):
+                    audio.add_sound(56)
         audio.flush()
 
     def restart_after_death(self):

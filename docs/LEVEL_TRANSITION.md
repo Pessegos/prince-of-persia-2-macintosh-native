@@ -28,6 +28,9 @@ through the ship's departure, the voyage cutscene and the beach arrival.
 - DesertFunc, CODE:18 01ee-020a, checks `PrinceSndOn(51)` and queues wave
   sound 51 again when that specific cue finishes; unrelated effects do not
   suppress the repeat.
+- DesertFunc, CODE:18 0334-0392, queues splash cue 56 on the far-right shore
+  once native X reaches `0x30B`, repeating only after cue 56 finishes. Room 2's
+  local X threshold is 267 after accounting for its 512-pixel world offset.
 
 The recovered scene calls control the cutscene timing. The port does not add
 an artificial black-screen delay to imitate resource-loading time in an emulator.
@@ -51,4 +54,4 @@ tests also run in CI without original assets.
 
 The level-2 shore and stone puzzle lead to the level-3 entrance. Level 3 remains
 limited to that first room; its later rooms, interactive objects, animated
-cavern details and the optional far-shore event still need recovery.
+cavern details and other far-shore interactions still need recovery.

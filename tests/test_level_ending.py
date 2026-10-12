@@ -238,6 +238,28 @@ class OriginalEndingTests(unittest.TestCase):
         scene.audio.add_sound.assert_called_once_with(51)
         scene.audio.ambient.assert_not_called()
 
+    def test_far_right_shore_plays_repeating_splash_cue_at_native_x_threshold(self):
+        from pop2.scene_prototype import DESERT_FAR_SHORE_SOUND_X
+
+        scene = self.scene
+        scene.load_level(2)
+        scene.audio = Mock()
+        scene.audio.sound_playing.return_value = False
+        scene.room_id = 2
+        scene.player_x = DESERT_FAR_SHORE_SOUND_X - 1
+        scene.advance_audio()
+        self.assertNotIn((56,), [call.args for call in scene.audio.add_sound.call_args_list])
+
+        scene.audio.add_sound.reset_mock()
+        scene.player_x = DESERT_FAR_SHORE_SOUND_X
+        scene.advance_audio()
+        scene.audio.add_sound.assert_any_call(56)
+
+        scene.audio.add_sound.reset_mock()
+        scene.audio.sound_playing.side_effect = lambda cue: cue == 56
+        scene.advance_audio()
+        self.assertNotIn((56,), [call.args for call in scene.audio.add_sound.call_args_list])
+
     def test_beach_dev_jump_replays_arrival_instead_of_using_the_palace_position(self):
         scene = self.scene
         scene.load_level(2)
