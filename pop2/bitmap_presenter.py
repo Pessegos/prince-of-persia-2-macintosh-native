@@ -25,9 +25,16 @@ class CanvasBitmap:
 
     def paint(self):
         self.after_id = None
+        if self.bitmap is None:
+            return
         x, y = self.position
         width, height = self.bitmap.size
-        self.bitmap.draw(ImageWin.HWND(self.canvas.winfo_id()), (x, y, x + width, y + height))
+        hwnd = self.canvas.winfo_id()
+        dc = self.bitmap.image.getdc(hwnd)
+        try:
+            self.bitmap.draw(dc, (x, y, x + width, y + height))
+        finally:
+            self.bitmap.image.releasedc(hwnd, dc)
 
     def close(self):
         if self.after_id is not None:
