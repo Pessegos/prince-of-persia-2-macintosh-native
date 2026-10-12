@@ -42,11 +42,11 @@ logic being recovered from the Macintosh executable through reverse engineering.
 
 - Automatic pause on focus loss; returning to the window, mouse clicks and
   system or multimedia keys do not resume the game.
-- Cutscene pause with a dimmed background.
+- You can pause cutscenes now without skipping them.
 - Confirmation before starting a new game, to prevent accidental progress loss.
 - A 0.3-second filter for rapid repeated commands in the input queue, while
   preserving combinations of different commands.
-- Optional original copy protection, without removing the stone puzzle.
+- Original copy protection is optional.
 - Clouds keep moving during the intro's fades.
 - Clean PNG screenshots with a configurable folder and pixel-preserving scaling.
 
