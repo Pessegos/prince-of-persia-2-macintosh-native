@@ -25,11 +25,11 @@ def playback_groups(parts):
     return tuple(PlaybackGroup(label, tuple(indices)) for label, indices in groups.items())
 
 
-def playback_parts(intro_assets, attract_data, screen_label):
+def playback_parts(intro_program, attract_data, screen_label):
     parts = []
     story = 0
     group = "Prologue"
-    for index, item in enumerate(intro_assets.program["operations"]):
+    for index, item in enumerate(intro_program["operations"]):
         if item["op"] == "title":
             parts.append(PlaybackPart("Clouds / titles", "intro", index, "Titles"))
             group = "Opening story"
@@ -49,10 +49,10 @@ def playback_parts(intro_assets, attract_data, screen_label):
     return tuple(parts)
 
 
-def ending_parts(assets):
+def ending_parts(program):
     parts = [PlaybackPart("Voyage: departure", "ending", 0, "After Level 1")]
     names = {28002: "Stowaway", 28004: "Dream", 28008: "Storm"}
-    for index, item in enumerate(assets.program["operations"]):
+    for index, item in enumerate(program["operations"]):
         if item["op"] == "palette" and item["args"][0] in names:
             parts.append(PlaybackPart("Voyage: " + names[item["args"][0]], "ending", index,
                                       "After Level 1"))

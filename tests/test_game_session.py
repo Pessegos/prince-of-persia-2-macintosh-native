@@ -57,6 +57,18 @@ def session(source, number=1, terrain_enabled=True):
 
 
 class LevelDefinitionTests(unittest.TestCase):
+    def test_navigation_renderer_can_read_level_metadata_without_preparing_artwork(self):
+        from pop2.level_rendering import LevelRenderer
+
+        level = resources().level(2)
+        with patch.object(LevelRenderer, 'room') as prepare:
+            renderer = LevelRenderer(level, preload_room=False)
+            self.assertEqual(renderer.screen_entries(), {'1': 1, '2 (Stones)': 0, 'Right shore': 2})
+            self.assertEqual(renderer.rooms, {})
+            prepare.assert_not_called()
+            LevelRenderer(level)
+            prepare.assert_called_once_with(level.start_room)
+
     def test_native_down_cut_veto_uses_environment_not_level_number(self):
         from pop2.terrain import LevelMap
 

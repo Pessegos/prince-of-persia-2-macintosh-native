@@ -17,6 +17,12 @@ Neither screenshot controls nor Developer Tools add a command row to F1.
 F2 toggles the screenshot controls, and Escape closes them; both restore the
 previous pause state. Switching among F1, F2 and F3 also preserves that state.
 
+Developer Tools prepares its level and playback lists before the animation
+clock starts. Navigation reads scene-program metadata without decoding
+cutscene images or rendering other levels' rooms. The first F3 press therefore
+uses the same cached lists as later presses; artwork is loaded when playback
+or a level jump actually needs it. Menu presentation remains synchronous.
+
 | Original command | Port shortcut | Status |
 | --- | --- | --- |
 | New Game | Alt+N | Confirmation, default Cancel |

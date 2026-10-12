@@ -51,7 +51,7 @@ class LevelExitTests(unittest.TestCase):
             {"op": "sound", "args": [28100, 0]},
             *({"op": "palette", "args": [index, 2, 0]} for index in (28002, 28004, 28002, 28008)),
         ]})
-        parts = ending_parts(assets)
+        parts = ending_parts(assets.program)
         self.assertEqual([part.index for part in parts], [0, 1, 2, 4, 2])
         self.assertEqual([part.stage for part in parts], ["ending"] * 4 + ["level"])
         self.assertEqual(len(playback_groups(parts)), 1)
@@ -205,7 +205,7 @@ class OriginalEndingTests(unittest.TestCase):
     def test_development_arrival_and_voyage_navigation_build_the_destination_state(self):
         scene = self.scene
         scene.load_ending_assets()
-        parts = ending_parts(scene.ending_assets)
+        parts = ending_parts(scene.ending_assets.program)
         scene.seek_playback_part(parts[1])
         self.assertEqual(scene.attract_stage, "ending")
         self.assertGreater(scene.intro.position, parts[1].index)

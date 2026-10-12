@@ -6,7 +6,7 @@ from pop2.render_opening import (
 
 
 class LevelRenderer:
-    def __init__(self, level):
+    def __init__(self, level, preload_room=True):
         if level.kind != 5 and level.number not in (2, 3):
             raise ValueError(f"Level {level.number} scenery is not implemented (environment {level.kind})")
         self.level = level
@@ -18,7 +18,8 @@ class LevelRenderer:
             from pop2.caverns import cavern_assets
 
             self.cavern_program = cavern_assets()[0]
-        self.room(level.start_room)
+        if preload_room:
+            self.room(level.start_room)
 
     def room(self, room_id, caverns=None):
         if not 0 <= room_id < 32:

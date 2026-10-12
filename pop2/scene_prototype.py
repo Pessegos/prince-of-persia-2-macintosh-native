@@ -306,6 +306,9 @@ class ScenePrototype(WindowControls):
         self.copy_verified = False
         self.copy_challenge = None
 
+        # Prepare menu metadata before the animation clock starts, not on F3.
+        self.development_levels()
+        self.development_parts()
         self.create_window("Prince of Persia 2 Macintosh Native (WIP)" if with_guard
                            else "Prince of Persia 2 Macintosh Native - Animation Preview (WIP)",
                            scale=SCALE)
@@ -2130,25 +2133,31 @@ class ScenePrototype(WindowControls):
     def development_parts(self):
         if not self.with_intro:
             return ()
+        cached = getattr(self, "development_playback_parts", None)
+        if cached is not None:
+            return cached
         from pop2.attract import read_attract
+        from pop2.intro import read_program
         from pop2.paths import ASSET_DIR
         from pop2.playback_navigation import playback_parts, ending_parts
 
         if self.attract_data is None:
             self.attract_data = read_attract(ASSET_DIR / "attract.json")
-        if self.intro_assets is None:
-            from pop2.intro import IntroAssets
-            self.intro_assets = IntroAssets()
-        self.load_ending_assets()
+        intro_program = (self.intro_assets.program if self.intro_assets is not None else
+                         read_program(ASSET_DIR / "intro.json"))
+        ending_program = (self.ending_assets.program if self.ending_assets is not None else
+                          read_program(ASSET_DIR / "ending.json"))
         if self.game.level.number == 1:
             screen_label = self.screen_label
         else:
             from pop2.level_data import LevelDefinition
-            entries = LevelRenderer(LevelDefinition.read(self.resources.prince, 1)).screen_entries()
+            entries = LevelRenderer(LevelDefinition.read(self.resources.prince, 1),
+                                    preload_room=False).screen_entries()
             labels = {room: label for label, room in entries.items()}
             screen_label = lambda room: labels.get(room, f"Room ID {room + 1}")
-        return (playback_parts(self.intro_assets, self.attract_data, screen_label)
-                + ending_parts(self.ending_assets))
+        self.development_playback_parts = (playback_parts(intro_program, self.attract_data, screen_label)
+                                           + ending_parts(ending_program))
+        return self.development_playback_parts
 
     def current_playback_part(self):
         stage = self.attract_stage
@@ -2389,7 +2398,8 @@ class ScenePrototype(WindowControls):
         options = []
         for number in (1, 2, 3):
             renderer = (self.level_renderer if self.game.level.number == number else
-                        LevelRenderer(LevelDefinition.read(self.resources.prince, number)))
+                        LevelRenderer(LevelDefinition.read(self.resources.prince, number),
+                                      preload_room=False))
             screens = tuple(renderer.screen_entries())
             if screens:
                 options.append((number, f"Level {number}", screens))

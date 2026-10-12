@@ -104,6 +104,36 @@ class AttractSceneTests(unittest.TestCase):
         self.assertEqual(render.call_count, 1)
         scene.dev_key_release(SimpleNamespace(keysym="F3"))
 
+    def test_first_f3_uses_prepared_navigation_without_loading_scene_artwork(self):
+        scene = self.scene
+        self.assertTrue(scene.development_level_options)
+        self.assertTrue(scene.development_playback_parts)
+        self.assertIsNone(scene.ending_assets)
+        with (patch('pop2.intro.IntroAssets', side_effect=AssertionError('Menu loaded artwork')),
+              patch('pop2.intro.read_program', side_effect=AssertionError('Menu read scene data')),
+              patch('pop2.attract.read_attract', side_effect=AssertionError('Menu read demo data')),
+              patch('pop2.level_rendering.LevelRenderer.room',
+                    side_effect=AssertionError('Menu rendered a room'))):
+            for _ in range(2):
+                scene.open_dev_mode()
+                self.assertIsNotNone(scene.dev_menu)
+                scene.close_dev_mode()
+        self.assertIsNone(scene.ending_assets)
+
+    def test_cold_playback_navigation_reads_programs_without_decoding_images(self):
+        scene = self.scene
+        original = scene.development_playback_parts
+        scene.development_playback_parts = None
+        scene.intro_assets = scene.ending_assets = scene.attract_data = None
+        with (patch('pop2.intro.IntroAssets', side_effect=AssertionError('Navigation loaded artwork')),
+              patch('pop2.intro.indexed_shape', side_effect=AssertionError('Navigation decoded a shape'))):
+            parts = scene.development_parts()
+        self.assertEqual(parts, original)
+        self.assertIsNone(scene.intro_assets)
+        self.assertIsNone(scene.ending_assets)
+        with patch('pop2.intro.read_program', side_effect=AssertionError('Navigation rebuilt its cache')):
+            self.assertIs(scene.development_parts(), parts)
+
     def test_cutscene_pause_dims_the_frame_and_centers_text_without_a_panel(self):
         scene = self.scene
         text = scene.cutscene_pause_text

@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 import unittest
 
 from pop2.playback_navigation import PlaybackPart, playback_groups, playback_parts
@@ -6,10 +5,10 @@ from pop2.playback_navigation import PlaybackPart, playback_groups, playback_par
 
 class PlaybackNavigationTests(unittest.TestCase):
     def test_parts_use_scene_operations_and_first_recorded_room_entries(self):
-        intro = SimpleNamespace(program={"operations": [
+        intro = {"operations": [
             {"op": "text", "args": [0, 0]}, {"op": "text", "args": [0, 10]},
             {"op": "title", "args": []}, {"op": "wait", "args": [60]},
-            {"op": "text", "args": [0, 20]}]})
+            {"op": "text", "args": [0, 20]}]}
         data = {"frames": [{"room": room} for room in (4, 4, 2, 4, 10)],
                 "credits": {"pages": [[], []]}}
         parts = playback_parts(intro, data, lambda room: str({3: 1, 1: 2, 9: 5}[room]))
