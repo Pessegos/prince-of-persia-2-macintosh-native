@@ -55,7 +55,7 @@ in `assets/`:
 - `Guard.rsrc`
 - `Rooftops.rsrc`
 - `Desert.rsrc`
-- `Caverns.rsrc` and `caverns_entry.json` (recovered cavern entrance)
+- `Caverns.rsrc` and `caverns_entry.json` (all 32 level-3 scenery rooms)
 - `NIS.rsrc` and `Title.rsrc`
 - `enemy_profiles.json`
 - `intro.json` (recovered scene instructions and audio markers)
@@ -115,7 +115,8 @@ The original manual-symbol challenge is enabled by default. The F1 option
 
 The developer menu accepts mouse, Tab/Shift+Tab and arrow navigation.
 Its `Level` and `Screen` selectors include the playable routes in levels 1-2
-and the entrance to level 3. Choose `2 (Stones)` to jump directly to the level-2
+and scenery previews of all 32 level-3 rooms. Level-3 mechanisms and skeletons
+are not implemented yet. Choose `2 (Stones)` to jump directly to the level-2
 puzzle without replaying the beach arrival. Left/Right moves between `Go to screen`
 and `Resume`; Enter/Space activates
 a control. Focus the tab row to switch between `Level`, `Playback` and `Display`
@@ -130,11 +131,12 @@ The Windows debug status bar is hidden by default; enable it in `Display`.
 ## Current Progress
 
 - Playable: the complete level-1 route and voyage, the level-2 beach, shore and
-  stone puzzle, and the opening of level 3. The original intro, demo and credits
+  stone puzzle. Level 3 has its original room layout and scenery previews.
+  The original intro, demo and credits
   are included.
 - Implemented systems: movement, sword combat, guards, music and sound effects,
   checkpoints, retry, menus and level transitions.
-- Remaining work: the rest of level 3, guard behavior and some gameplay edge
+- Remaining work: level-3 mechanisms and enemies, guard behavior and some gameplay edge
   cases.
 
 ## Development
@@ -143,6 +145,7 @@ The Windows debug status bar is hidden by default; enable it in `Display`.
 level data, gameplay state, scenery and the window host.
 [Level transitions](docs/LEVEL_TRANSITION.md) documents the boat-to-beach sequence.
 [Desert recovery](docs/DESERT_RECOVERY.md) covers the stones and manual challenge.
+[Cavern recovery](docs/CAVERN_RECOVERY.md) tracks level-3 scenery and remaining mechanics.
 
 ```powershell
 python -m pip install -r requirements-dev.txt

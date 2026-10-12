@@ -233,6 +233,10 @@ class CombatEncounter:
         if self.level is None:
             raise ValueError("Room changes require LEVL data")
         if room not in self.room_encounters:
+            # Scenery previews may visit skeleton rooms before that actor is recovered.
+            if struct.unpack_from(">h", self.level, 0x21a4)[0] != 0:
+                self.room_encounters[room] = ([], [])
+                return
             guards = []
             for spawn in GuardSpawn.all_from_level(self.level, room):
                 state = SequenceState(spawn.sequence_id, current_x=spawn.x,

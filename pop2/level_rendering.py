@@ -28,11 +28,9 @@ class LevelRenderer:
                 self.desert_rooms[room_id] = scene
                 self.rooms[room_id] = scene.room
             elif self.level.number == 3:
-                if room_id != self.level.start_room:
-                    raise ValueError("Cavern room recovery is not implemented beyond the entrance")
-                from pop2.caverns import entrance_room
+                from pop2.caverns import cavern_room
 
-                self.rooms[room_id] = entrance_room()
+                self.rooms[room_id] = cavern_room(room_id)
             else:
                 self.rooms[room_id] = build_opening_room(include_curtain=False, room_id=room_id,
                                                         level_resource_id=self.level.resource_id)
@@ -50,7 +48,7 @@ class LevelRenderer:
         if self.level.kind == 1:
             return [0, 1, 2]
         if self.level.number == 3:
-            return [self.level.start_room]
+            return list(range(32))
         scenery_map, _shapes, _pieces = rooftop_scene_data(self.level.resource_id)
         supported_kinds = {0, 1, 20, 47, 48, 49}
         rooms = []
@@ -70,7 +68,7 @@ class LevelRenderer:
         if self.level.kind == 1:
             return {"1": 1, "2 (Stones)": 0, "Right shore": 2}
         if self.level.number == 3:
-            return {"1": self.level.start_room}
+            return {f"Room {room + 1}": room for room in self.supported_rooms()}
         terrain, _shapes, _pieces = rooftop_scene_data(self.level.resource_id)
         available = set(self.supported_rooms())
         route = []

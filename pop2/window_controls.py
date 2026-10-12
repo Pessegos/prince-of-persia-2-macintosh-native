@@ -550,7 +550,7 @@ class WindowControls:
                 self.apply_game_action(self.game_menu.click(*point))
                 self.pause_resume_keys.update(self.window_keys_down)
             elif getattr(self, "copy_challenge", None) is not None:
-                if not self.paused:
+                if not self.paused and getattr(self.copy_challenge, 'input_ready', True):
                     # The original tracks GetMouse while StillDown is true.
                     self.copy_pointer_held = True
                     focus = self.copy_challenge.hit(*point)
@@ -573,8 +573,9 @@ class WindowControls:
         self.copy_pointer_held = False
         point = self.dev_pointer(event)
         symbol = challenge.hit(*point) if point is not None else None
-        if not self.paused and symbol is not None:
+        if not self.paused and symbol is not None and getattr(challenge, 'input_ready', True):
             challenge.choose(symbol)
+            self.last_copy_at = time.perf_counter()
             self.resolve_copy_challenge()
             self.render()
         elif challenge.focus is not None:

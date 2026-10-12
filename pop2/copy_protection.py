@@ -1,11 +1,12 @@
 """The original COPY page/symbol challenge, independent of the desert puzzle."""
 
 import random
+import math
 import struct
 
 from PIL import Image, ImageDraw
 
-from pop2.intro import SIZE, indexed_shape
+from pop2.intro import SIZE, indexed_shape, MAC_TICKS_PER_SECOND
 from pop2.render_opening import decode_ctbl, decode_shap
 from pop2.game_ui import MacintoshFont
 
@@ -42,17 +43,46 @@ class CopyProtection:
         self.accepted = False
         self.failed = False
         self.challenge = self.rng.randrange(count)
+        # DialogFadeIn/Out 2:0774/07ee use flags 0x40001: 4% per VBL tick.
+        self.fade = 'in'
+        self.fade_time = 0.0
+
+    @property
+    def input_ready(self):
+        return self.fade == 'ready'
+
+    @property
+    def closed(self):
+        return self.fade == 'closed'
+
+    def advance(self, interval):
+        if self.fade not in ('in', 'out'):
+            return
+        self.fade_time += max(0, interval)
+        if self.fade_time * MAC_TICKS_PER_SECOND >= 25:
+            self.fade = 'ready' if self.fade == 'in' else 'closed'
+
+    @property
+    def brightness(self):
+        if self.fade == 'ready':
+            return 1.0
+        if self.fade == 'closed':
+            return 0.0
+        percent = min(100, math.floor(self.fade_time * MAC_TICKS_PER_SECOND + 1e-9) * 4)
+        return (percent if self.fade == 'in' else 100 - percent) / 100
 
     def choose(self, symbol):
         if self.accepted or self.failed:
             return
         if symbol == self.answers[self.challenge][1]:
             self.accepted = True
+            self.fade, self.fade_time = 'out', 0.0
         else:
             self.focus = None
             self.attempts += 1
             if self.attempts == 3:
                 self.failed = True
+                self.fade, self.fade_time = 'out', 0.0
             else:
                 previous = self.challenge
                 self.challenge = (previous + 1 + self.rng.randrange(len(self.answers) - 1)) % len(self.answers)
@@ -93,4 +123,8 @@ class CopyProtection:
             # DrawSymbolBox uses palette color 27; QuickDraw Rect excludes right/bottom.
             draw.rectangle((left, top, right - 1, bottom - 1),
                            outline=self.palette[27], width=1)
+        brightness = self.brightness if hasattr(self, 'fade') else 1.0
+        if brightness != 1:
+            colors = [round(value * brightness) for value in range(256)]
+            image = image.convert('RGB').point(colors * 3).convert('RGBA')
         return image

@@ -1446,6 +1446,13 @@ class ScenePrototype(WindowControls):
             - self.current_animation_interval_ms()
         )
         if getattr(self, "copy_challenge", None) is not None:
+            now = time.perf_counter()
+            last = getattr(self, 'last_copy_at', None)
+            self.copy_challenge.advance(1 / 60 if last is None else max(0, now - last))
+            self.last_copy_at = now
+            if self.copy_challenge.closed:
+                self.resolve_copy_challenge()
+            self.render()
             self.in_animation_tick = False
             self.schedule_next_animation()
             return
@@ -1872,6 +1879,7 @@ class ScenePrototype(WindowControls):
                 from pop2.copy_protection import CopyProtection
 
                 self.copy_challenge = CopyProtection(self.resources.prince)
+                self.last_copy_at = None
                 self.update_cursor_visibility()
                 self.clear_keys(None)
                 self.pause_resume_keys.update(self.window_keys_down)
@@ -1905,6 +1913,8 @@ class ScenePrototype(WindowControls):
 
     def resolve_copy_challenge(self):
         challenge = self.copy_challenge
+        if not challenge.closed:
+            return
         if challenge.accepted:
             self.copy_verified = True
             self.copy_challenge = None
@@ -1914,6 +1924,10 @@ class ScenePrototype(WindowControls):
         self.update_cursor_visibility()
         self.clear_keys(None)
         self.pause_resume_keys.update(self.window_keys_down)
+        if challenge.accepted:
+            max_life = self.combat.player.max_life
+            self.load_level(3)
+            self.combat.player.life = self.combat.player.max_life = max_life
 
     def resume_combat_turn(self):
         combat = getattr(self, "combat", None)
@@ -2394,6 +2408,13 @@ class ScenePrototype(WindowControls):
             if not rows:
                 raise ValueError("The stone screen has no supported entry")
             return self.jump_to_room(room, rows[0], 9 * TILE_WIDTH + 30, facing=0)
+        elif self.game.level.number == 3:
+            candidates = [(row, column) for row in range(3) for column in range(10)
+                          if self.level_map.tile(room, column, row).kind == 1]
+            if not candidates:
+                raise ValueError("This room has no safe standing floor for a dev warp")
+            row, column = min(candidates, key=lambda cell: abs(cell[1] - 5))
+            return self.jump_to_room(room, row=row, x=column * TILE_WIDTH + 30, facing=0)
         else:
             rows = [row for row in range(3)
                     if self.level_map.tile(room, 9, row).kind == 1]
@@ -2422,7 +2443,8 @@ class ScenePrototype(WindowControls):
         self.advance_animation()
 
     def current_animation_interval_ms(self):
-        if getattr(self, "intro", None) is not None or getattr(self, "demo", None) is not None:
+        if (getattr(self, "intro", None) is not None or getattr(self, "demo", None) is not None
+                or getattr(self, 'copy_challenge', None) is not None):
             return 1000 / 60
         interval_ms = animation_interval_for_frame(
             self.sequence_state.sequence_id, self.sequence_state.action)

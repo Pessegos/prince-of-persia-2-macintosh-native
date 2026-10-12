@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 from PIL import Image, ImageChops
 
 from pop2.copy_protection import CopyProtection
+from pop2.intro import MAC_TICKS_PER_SECOND
 from pop2.desert_state import DesertState, Stone
 from pop2.paths import ASSET_DIR
 from pop2.window_controls import WindowControls
@@ -200,6 +201,64 @@ class CopyProtectionTests(unittest.TestCase):
         self.assertTrue(challenge.accepted)
         challenge.choose(0)
         self.assertEqual(challenge.attempts, 0)
+
+    def test_native_fades_use_four_percent_steps_and_twenty_five_ticks(self):
+        challenge = self.challenge()
+        self.assertFalse(challenge.input_ready)
+        self.assertEqual(challenge.brightness, 0)
+        challenge.advance(0.5 / MAC_TICKS_PER_SECOND)
+        self.assertEqual(challenge.brightness, 0)
+        challenge.advance(0.5 / MAC_TICKS_PER_SECOND)
+        self.assertEqual(challenge.brightness, 0.04)
+        challenge.advance(23 / MAC_TICKS_PER_SECOND)
+        self.assertFalse(challenge.input_ready)
+        self.assertEqual(challenge.brightness, 0.96)
+        challenge.advance(1 / MAC_TICKS_PER_SECOND)
+        self.assertTrue(challenge.input_ready)
+        self.assertEqual(challenge.brightness, 1)
+        challenge.choose(challenge.answers[challenge.challenge][1])
+        self.assertFalse(challenge.input_ready)
+        self.assertFalse(challenge.closed)
+        challenge.advance(24 / MAC_TICKS_PER_SECOND)
+        self.assertEqual(challenge.brightness, 0.04)
+        self.assertFalse(challenge.closed)
+        challenge.advance(1 / MAC_TICKS_PER_SECOND)
+        self.assertTrue(challenge.closed)
+        self.assertEqual(challenge.brightness, 0)
+
+    def test_wrong_pages_do_not_restart_fade_but_final_failure_fades_out(self):
+        challenge = self.challenge()
+        challenge.advance(25 / MAC_TICKS_PER_SECOND)
+        for _ in range(2):
+            challenge.choose(0)
+            self.assertTrue(challenge.input_ready)
+            self.assertEqual(challenge.brightness, 1)
+        challenge.choose(0)
+        self.assertTrue(challenge.failed)
+        self.assertFalse(challenge.input_ready)
+        self.assertFalse(challenge.closed)
+        challenge.advance(25 / MAC_TICKS_PER_SECOND)
+        self.assertTrue(challenge.closed)
+
+    def test_fading_dialog_ignores_mouse_press_and_release(self):
+        host = WindowControls()
+        host.copy_challenge = self.challenge()
+        host.copy_pointer_held = False
+        host.game_menu = host.dev_menu = None
+        host.paused = False
+        host.canvas = Mock()
+        host.render = Mock()
+        host.resolve_copy_challenge = Mock()
+        event = SimpleNamespace(num=1, x=80, y=131)
+        with patch.object(host, 'dev_pointer', return_value=(80, 131)):
+            host.dev_click(event)
+            self.assertFalse(host.copy_pointer_held)
+            self.assertIsNone(host.copy_challenge.focus)
+            host.copy_pointer_held = True
+            host.dev_release(event)
+        self.assertEqual(host.copy_challenge.attempts, 0)
+        self.assertFalse(host.copy_challenge.accepted)
+        host.resolve_copy_challenge.assert_not_called()
 
     def test_three_wrong_answers_fail_and_pages_do_not_repeat_immediately(self):
         challenge = self.challenge()
@@ -459,9 +518,13 @@ class OriginalDesertTests(unittest.TestCase):
         self.assertEqual(scene.action, before)
         challenge.choose(challenge.answers[challenge.challenge][1])
         scene.resolve_copy_challenge()
+        self.assertIs(scene.copy_challenge, challenge)
+        self.assertIs(scene.game.desert, desert)
+        challenge.advance(25 / MAC_TICKS_PER_SECOND)
+        scene.resolve_copy_challenge()
         self.assertTrue(scene.copy_verified)
         self.assertIsNone(scene.copy_challenge)
-        self.assertIs(scene.game.desert, desert)
+        self.assertEqual(scene.game.level.number, 3)
 
     def test_f1_bypass_keeps_stones_and_does_not_open_exit(self):
         scene = self.scene

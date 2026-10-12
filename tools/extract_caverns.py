@@ -1,4 +1,4 @@
-"""Export the native cavern entrance drawing commands during asset import."""
+"""Export native level-three scenery drawing commands during asset import."""
 
 import json
 import struct
@@ -8,7 +8,7 @@ from pop2.terrain import LevelMap
 from tools.extract_enemy_profiles import expand_a5_data
 
 
-def recover_entrance(program, caverns, level):
+def recover_room(program, caverns, level, room_id=0):
     from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE
     from unicorn.m68k_const import (
         UC_CPU_M68K_M68000, UC_M68K_REG_A5, UC_M68K_REG_A7,
@@ -60,7 +60,7 @@ def recover_entrance(program, caverns, level):
     put_long(a5 - 0x5014, lev)
     put_long(a5 - 0x4ab2, 0)  # No actor-specific gate peeling in a static scene.
     put_word(a5 - 0x4832, 0)
-    put_word(a5 - 0x4fc2, 1)
+    put_word(a5 - 0x4fc2, room_id + 1)
     for offset in (0x4600, 0x4fec):
         cpu.mem_write(a5 - offset, struct.pack('>4h', 0, 0, 365, 510))
     terrain = LevelMap(level)
@@ -85,7 +85,13 @@ def recover_entrance(program, caverns, level):
         segment = (address - 0x100000) // 0x10000
         offset = address - bases.get(segment, address)
         result = None
-        if opcode == b'\x4e\x90' and segment == 8 and offset in (0x1ca4, 0x1752):
+        if opcode == b'\x4e\x90' and segment == 8 and offset == 0x20a6:
+            top, left, bottom, right = struct.unpack('>4h', cpu.mem_read(long(sp), 8))
+            cpu.mem_write(sp + 4, bytes([int(top >= bottom or left >= right), 0]))
+            cpu.reg_write(UC_M68K_REG_A7, sp + 4)
+            cpu.reg_write(UC_M68K_REG_PC, address + 2)
+            return
+        if opcode == b'\x4e\x90' and segment == 8 and offset in (0x1ca4, 0x1752, 0x1f86):
             out, first, second = (long(sp + i) for i in (0, 4, 8))
             r1 = struct.unpack('>4h', cpu.mem_read(first, 8))
             r2 = struct.unpack('>4h', cpu.mem_read(second, 8))
@@ -101,7 +107,8 @@ def recover_entrance(program, caverns, level):
             if shape not in artwork['SHAP']:
                 raise ValueError(f'Missing cavern shape {shape}')
             commands.append([layer, shape, fields[7] * 51 + fields[13],
-                             (fields[8] + 1) * 120 + 5 + fields[14], fields[3], fields[8]])
+                             (fields[8] + 1) * 120 + 5 + fields[14], fields[3], fields[8],
+                             list(struct.unpack('>4h', cpu.mem_read(a5 - 0x4600, 8)))])
             result = 1
         elif segment == 3 and offset == 0x29e2:
             cpu.mem_write(info, bytes(38))
@@ -113,7 +120,7 @@ def recover_entrance(program, caverns, level):
         elif segment == 3 and offset in (0x29b6, 0x2ac4, 0x06c4, 0x2324):
             result = 0
         elif segment == 5 and offset == 0x08c4:
-            result = terrain.tile(0, word(sp + 4), word(sp + 6)).kind
+            result = terrain.tile(room_id, word(sp + 4), word(sp + 6)).kind
         elif segment == 3 and offset == 0x26e4:
             result = 0
         if result is not None:
@@ -129,13 +136,13 @@ def recover_entrance(program, caverns, level):
             for column in range(10):
                 put_word(a5 - 0x45f8, column)
                 put_word(a5 - 0x45f6, row)
-                tile, previous = terrain.tile(0, column, row), terrain.tile(0, column - 1, row)
+                tile, previous = terrain.tile(room_id, column, row), terrain.tile(room_id, column - 1, row)
                 put_word(a5 - 0x4814, tile.kind)
                 put_long(a5 - 0x4818, (tile.foreground << 16) | tile.background)
                 put_word(a5 - 0x49d6, previous.kind)
                 put_long(a5 - 0x49d4, (previous.foreground << 16) | previous.background)
                 for col in range(10):
-                    below = terrain.tile(0, col - 1, row + 1)
+                    below = terrain.tile(room_id, col - 1, row + 1)
                     put_word(a5 - 0x4a84 + col * 6, below.kind)
                     put_long(a5 - 0x4a82 + col * 6, (below.foreground << 16) | below.background)
                 cpu.reg_write(UC_M68K_REG_A5, a5)
@@ -150,10 +157,11 @@ def recover_entrance(program, caverns, level):
                     raise ValueError(f'Cavern renderer failed at {pc:#x}, {layer} {column},{row}: {history}') from error
                 if cpu.reg_read(UC_M68K_REG_PC) != end:
                     raise ValueError('Cavern drawing did not complete')
-    return {'version': 1, 'level': 3, 'room': 0, 'commands': commands}
+    return {'version': 1, 'level': 3, 'room': room_id, 'commands': commands}
 
 
 def extract_caverns(program, caverns, prince, output):
     level = parse_resource_fork(prince)['LEVL'][2002]['data']
-    result = recover_entrance(program, caverns, level)
+    rooms = {str(room): recover_room(program, caverns, level, room)['commands'] for room in range(32)}
+    result = {'version': 2, 'level': 3, 'rooms': rooms}
     (output / 'caverns_entry.json').write_text(json.dumps(result) + '\n', encoding='ascii')

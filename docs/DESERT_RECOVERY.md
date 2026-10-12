@@ -68,16 +68,25 @@ is required; clicking a symbol selects it. The world stops while the dialog is
 open. F1 can disable this challenge; it is enabled by default. Correct answers
 persist until New Game.
 
+DialogFadeIn (2:0746, flags at 0774) and DialogFadeOut (2:07da, flags at 07ee)
+pass 0x40001 to the palette fade routines 17:0ab6/0d0e: 4 percent per Macintosh
+tick, reaching the endpoint after 25 ticks (about 0.416 seconds). The port uses
+these discrete brightness steps on a 60 Hz presentation loop, freezing the
+world and mouse selection during the fade. The dialog fades in once and fades
+out after acceptance or final failure; changing the page after an intermediate
+wrong answer does not restart a fade (CopyProtectionDialog, 2:1a36-1b84).
+Level 3 loads only after the accepted dialog reaches black.
+
 After three wrong answers the port restarts level 2. This is a port policy,
 not a claim to reproduce the original failure alert and exit path.
 
 ## Cavern Boundary
 
-Import runs the original drawing routines for the level-3 entrance and stores
+Import runs the original drawing routines for all 32 level-3 rooms and stores
 their commands in `caverns_entry.json`. Runtime uses those commands and
 Caverns.rsrc directly, without executing the Macintosh program.
-Only the starting room is currently supported. Animated cavern objects,
-special enemies, later rooms and the complete cavern renderer remain future work.
+The rooms are available as scenery previews; animated cavern objects and
+special enemies remain future work. See [Cavern recovery](CAVERN_RECOVERY.md).
 DesertFunc (CODE:18 0334-0392) queues splash cue 56 in native room 3 at X >=
 0x30B, with a Rnd(20) gate while that cue is not playing. The far-right shore
 stays in view past the viewport, so the native threshold is not room-local.

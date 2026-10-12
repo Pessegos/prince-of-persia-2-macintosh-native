@@ -28,6 +28,8 @@ class InstallationTests(unittest.TestCase):
         }))
         (assets / "attract.json").write_text(json.dumps(fixture()))
         (assets / "ending.json").write_bytes((assets / "intro.json").read_bytes())
+        (assets / 'caverns_entry.json').write_text(json.dumps({
+            'version': 2, 'level': 3, 'rooms': {str(room): [] for room in range(32)}}))
 
     def test_complete_installation_has_no_errors(self):
         self.assertEqual(run_game.installation_errors(self.project), [])
@@ -57,6 +59,12 @@ class InstallationTests(unittest.TestCase):
     def test_old_installation_requests_voyage_import(self):
         (self.project / "assets" / "ending.json").unlink()
         self.assertIn("ending.json", run_game.missing_assets(self.project))
+
+    def test_entrance_only_cavern_export_requests_full_level_reimport(self):
+        (self.project / 'assets/caverns_entry.json').write_text(json.dumps({
+            'version': 1, 'level': 3, 'room': 0, 'commands': []}))
+        self.assertIn('caverns_entry.json (needs full level-three scenery)',
+                      run_game.missing_assets(self.project))
 
     def test_missing_desert_music_requests_reimport(self):
         path = self.project / "assets/audio/manifest.json"
