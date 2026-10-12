@@ -38,6 +38,24 @@ logic being recovered from the Macintosh executable through reverse engineering.
 - **Remaining Work:** Level-3 gameplay, potion rendering, guard-AI refinement
   and remaining differences from the Macintosh original.
 
+## Quality of Life
+
+- Automatic pause on focus loss; returning to the window, mouse clicks and
+  system or multimedia keys do not resume the game.
+- Cutscene pause with a dimmed background.
+- Confirmation before starting a new game, to prevent accidental progress loss.
+- A 0.3-second filter for rapid repeated commands in the input queue, while
+  preserving combinations of different commands.
+- Optional original copy protection, without removing the stone puzzle.
+- Clouds keep moving during the intro's fades.
+- Clean PNG screenshots with a configurable folder and pixel-preserving scaling.
+
+## Developer Tools
+
+- Level and screen navigation through F2's Dev Mode.
+- Direct access to parts of cutscenes, the demo and credits.
+- Peaceful mode without guards and an optional debug status bar.
+
 ## Run
 
 On 64-bit Windows, install Python 3.10 or newer with Tcl/Tk support, then
