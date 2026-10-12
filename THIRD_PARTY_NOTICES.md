@@ -20,6 +20,8 @@ This includes:
 - `assets/audio/`, including original samples, instruments, MIDI and rendered music.
 - Original artwork, fonts, animation sequences, level data, and other game
   tables, including extracted data embedded in code or tests.
+- Original artwork visible in the port screenshots in `docs/screenshots/`;
+  these images are not covered by the port's MIT license.
 - Any original executable, ROM, disk image, audio, movie or disassembly used
   during research or produced by extraction tools.
 

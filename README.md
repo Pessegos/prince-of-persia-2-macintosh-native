@@ -7,6 +7,26 @@ without requiring a Macintosh emulator.
 It uses the original artwork, animation sequences and level data, with gameplay
 logic being recovered from the Macintosh executable through reverse engineering.
 
+## Current Progress
+
+- Playable: the complete level-1 route and voyage, the level-2 beach, shore and
+  stone puzzle. Level 3 has its original room layout and scenery previews.
+  The original intro, demo and credits are included.
+- Implemented systems: movement, sword combat, guards, music and sound effects,
+  checkpoints, retry, menus and level transitions.
+- Remaining work: level-3 mechanisms and enemies, guard behavior and some
+  gameplay edge cases.
+
+## Screenshots
+
+| Title | Intro |
+| --- | --- |
+| ![Original cloud title sequence](docs/screenshots/01-title.png) | ![The Prince and Princess in the intro](docs/screenshots/02-intro.png) |
+| **Cutscene Pause** | **Opening Escape** |
+| ![Paused cutscene with a dimmed background](docs/screenshots/03-cutscene-pause.png) | ![The Prince escaping through the palace window](docs/screenshots/04-opening.png) |
+| **Checkpoint** | **Boat Jump** |
+| ![The level-1 checkpoint near the docks](docs/screenshots/05-checkpoint.png) | ![The Prince jumping from the docks to the boat](docs/screenshots/06-boat-jump.png) |
+
 ## Run
 
 On 64-bit Windows, install Python 3.10 or newer with Tcl/Tk support, then
@@ -128,17 +148,6 @@ credits page. `Next part` follows playback order across sequence boundaries.
 The Windows debug status bar is hidden by default; enable it in `Display`.
 `python run_game.py --peaceful` starts with guards disabled and terrain intact.
 
-## Current Progress
-
-- Playable: the complete level-1 route and voyage, the level-2 beach, shore and
-  stone puzzle. Level 3 has its original room layout and scenery previews.
-  The original intro, demo and credits
-  are included.
-- Implemented systems: movement, sword combat, guards, music and sound effects,
-  checkpoints, retry, menus and level transitions.
-- Remaining work: level-3 mechanisms and enemies, guard behavior and some gameplay edge
-  cases.
-
 ## Development
 
 [Level loading](docs/LEVEL_LOADING.md) describes the separation between original
@@ -152,7 +161,7 @@ python -m pip install -r requirements-dev.txt
 python -m ruff check --select F,E9 .
 python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_playback_navigation tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests tests.test_palettes tests.test_game_session tests.test_level_ending
 python -m tools.recovery_catalog --check
-python -m unittest -q tests.test_desert
+python -m unittest -q tests.test_desert tests.test_caverns
 ```
 
 These checks run without original game files and are used in GitHub Actions.

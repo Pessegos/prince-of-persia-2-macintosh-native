@@ -19,26 +19,6 @@ from tools.extract_caverns import exit_closing_frames
 
 
 class CavernDrawingTests(unittest.TestCase):
-    def test_dock_waterline_does_not_clip_cavern_actors_in_same_numbered_rooms(self):
-        from pop2.scene_prototype import ScenePrototype
-
-        scene = ScenePrototype.__new__(ScenePrototype)
-        scene.game = SimpleNamespace(room_id=0, level=SimpleNamespace(kind=3))
-        scene.foreground = Image.new('RGBA', (510, 365))
-        background = Image.new('RGBA', (510, 365), 'black')
-        for room in (15, 18):
-            scene.room_id = room
-            for kind, animation, visible in ((3, 0, True), (3, 9, True),
-                                             (5, 0, False), (5, 9, True)):
-                with self.subTest(room=room, kind=kind, animation=animation):
-                    layer = Image.new('RGBA', background.size, 'magenta')
-                    state = SimpleNamespace(level_kind=kind, animation_state=animation)
-                    frame = scene.composite_actor(background, layer, state=state)
-                    self.assertEqual(frame.getpixel((250, 340)),
-                                     (255, 0, 255, 255) if visible else (0, 0, 0, 255))
-                    self.assertEqual(frame.getpixel((250, 360)),
-                                     (255, 0, 255, 255) if kind == 3 else (0, 0, 0, 255))
-
     def test_monochrome_flask_uses_native_whole_bitmap_rle_and_ink_color(self):
         data = struct.pack('>HhhH2H', 0x9200, 2, 9, 2, 0, 0) + bytes([1, 128, 128, 0])
         colors = {233: (25, 112, 217, 255)}
@@ -135,6 +115,27 @@ class CavernEntryTests(unittest.TestCase):
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class OriginalCavernTests(unittest.TestCase):
+    def test_dock_waterline_does_not_clip_cavern_actors_in_same_numbered_rooms(self):
+        # The scene host imports gameplay tables from the installed game files.
+        from pop2.scene_prototype import ScenePrototype
+
+        scene = ScenePrototype.__new__(ScenePrototype)
+        scene.game = SimpleNamespace(room_id=0, level=SimpleNamespace(kind=3))
+        scene.foreground = Image.new('RGBA', (510, 365))
+        background = Image.new('RGBA', (510, 365), 'black')
+        for room in (15, 18):
+            scene.room_id = room
+            for kind, animation, visible in ((3, 0, True), (3, 9, True),
+                                             (5, 0, False), (5, 9, True)):
+                with self.subTest(room=room, kind=kind, animation=animation):
+                    layer = Image.new('RGBA', background.size, 'magenta')
+                    state = SimpleNamespace(level_kind=kind, animation_state=animation)
+                    frame = scene.composite_actor(background, layer, state=state)
+                    self.assertEqual(frame.getpixel((250, 340)),
+                                     (255, 0, 255, 255) if visible else (0, 0, 0, 255))
+                    self.assertEqual(frame.getpixel((250, 360)),
+                                     (255, 0, 255, 255) if kind == 3 else (0, 0, 0, 255))
+
     def test_entry_records_native_right_wall_shadows_top_border_and_cell_clips(self):
         program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
         commands = program['rooms']['0']
