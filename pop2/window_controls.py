@@ -64,7 +64,9 @@ class WindowControls:
         self.canvas.bind("<Button-1>", self.dev_click)
         self.canvas.bind("<Button-2>", self.dev_click)
         self.canvas.bind("<Button-3>", self.dev_click)
+        self.canvas.bind("<ButtonRelease-1>", self.dev_release)
         self.canvas.bind("<Motion>", self.dev_hover)
+        self.canvas.bind("<B1-Motion>", self.dev_hover)
         self.canvas.bind("<MouseWheel>", self.dev_scroll)
         self.canvas.bind("<Button-4>", self.dev_scroll)
         self.canvas.bind("<Button-5>", self.dev_scroll)
@@ -74,6 +76,7 @@ class WindowControls:
         self.root.bind_class("DevelopmentInput", "<KeyPress>", self.dev_key_press)
         self.root.bind_class("DevelopmentInput", "<KeyRelease>", self.dev_key_release)
         self.image_ref = None
+        self.copy_pointer_held = False
         self.status = tk.StringVar(value="Window escape")
         self.status_label = tk.Label(
             self.root, textvariable=self.status, anchor="w", padx=6
@@ -137,12 +140,19 @@ class WindowControls:
 
     def focus_out(self, event):
         self.clear_keys(event)
+        self.copy_pointer_held = False
+        challenge = getattr(self, "copy_challenge", None)
+        if challenge is not None and challenge.focus is not None:
+            challenge.focus = None
+            self.render()
         if self.focus_pause_after_id is None:
             # Let Tk finish an internal focus transfer before checking its owner.
             self.focus_pause_after_id = self.root.after_idle(self.pause_if_unfocused)
 
     def pause_if_unfocused(self):
         self.focus_pause_after_id = None
+        if getattr(self, "copy_challenge", None) is not None:
+            return
         try:
             focused = self.root.focus_get()
         except tk.TclError:
@@ -209,11 +219,11 @@ class WindowControls:
             self.status_label.pack_forget()
             self.root.attributes("-fullscreen", True)
             self.fullscreen = True
-            self.canvas.configure(cursor="" if self.modal_open() else "none")
+            self.update_cursor_visibility()
         else:
             self.root.attributes("-fullscreen", False)
             self.fullscreen = False
-            self.canvas.configure(cursor="")
+            self.update_cursor_visibility()
             if self.windowed_state == "normal":
                 self.root.geometry(self.windowed_geometry)
             self.root.state(self.windowed_state)
@@ -235,21 +245,31 @@ class WindowControls:
             return "break"
         if self.game_menu is not None and self.game_menu.page == "confirm":
             return "break"
-        entries = self.dev_screens()
-        if not entries:
-            return "break"
-        current = self.screen_label(self.room_id)
-        screens = tuple(entries)
+        level_options = self.development_levels() if self.level_navigation_available() else ()
+        if level_options:
+            level_index = next((i for i, option in enumerate(level_options)
+                                if option[0] == self.game.level.number), 0)
+            screens = level_options[level_index][2]
+            current = self.screen_label(self.room_id)
+            screen_index = screens.index(current) if current in screens else 0
+        else:
+            entries = self.dev_screens()
+            if not entries:
+                return "break"
+            current = self.screen_label(self.room_id)
+            screens = tuple(entries)
+            screen_index = screens.index(current) if current in entries else 0
         was_paused = self.game_was_paused if self.game_menu is not None else self.paused
         self.game_menu = None
         from pop2.playback_navigation import playback_groups
 
         parts = self.development_parts()
         self.dev_menu = DevelopmentMenu(
-            screens, screens.index(current) if current in entries else 0, self.peaceful,
+            screens, screen_index, self.peaceful,
             sections=tuple(part.label for part in parts), section_groups=playback_groups(parts),
             section_index=self.current_playback_part(), debug_status=self.debug_status,
             level_available=self.level_navigation_available(),
+            level_options=level_options, level_index=level_index if level_options else 0,
         )
         if not self.dev_menu.level_available:
             self.dev_menu.change_tab(1)
@@ -257,7 +277,7 @@ class WindowControls:
         self.set_paused(True)
         self.clear_keys(None)
         self.pause_resume_keys.update(self.window_keys_down)
-        self.canvas.configure(cursor="")
+        self.update_cursor_visibility()
         self.render()
         return "break"
 
@@ -266,7 +286,7 @@ class WindowControls:
             return
         self.dev_menu = None
         self.clear_keys(None)
-        self.canvas.configure(cursor="none" if self.fullscreen else "")
+        self.update_cursor_visibility()
         self.set_paused(self.dev_was_paused)
         self.pause_resume_keys.update(self.window_keys_down)
         self.render()
@@ -278,6 +298,8 @@ class WindowControls:
             self.close_dev_mode()
         elif action == "go" and self.level_navigation_available():
             try:
+                if self.dev_menu.level_number != self.game.level.number:
+                    self.load_level(self.dev_menu.level_number)
                 self.jump_to_screen(self.dev_menu.screen)
             except ValueError as exc:
                 self.dev_menu.error = str(exc)
@@ -304,6 +326,10 @@ class WindowControls:
     def modal_open(self):
         return (self.dev_menu is not None or self.game_menu is not None
                 or getattr(self, "copy_challenge", None) is not None)
+
+    def update_cursor_visibility(self):
+        visible = not self.fullscreen or self.modal_open()
+        self.canvas.configure(cursor="" if visible else "none")
 
     def development_available(self):
         return self.level_map is not None and getattr(self, "copy_challenge", None) is None
@@ -343,7 +369,7 @@ class WindowControls:
         self.set_paused(True)
         self.clear_keys(None)
         self.pause_resume_keys.update(self.window_keys_down)
-        self.canvas.configure(cursor="")
+        self.update_cursor_visibility()
         self.render()
 
     def close_game_menu(self, resume=False):
@@ -351,7 +377,7 @@ class WindowControls:
             return
         self.game_menu = None
         self.clear_keys(None)
-        self.canvas.configure(cursor="none" if self.fullscreen else "")
+        self.update_cursor_visibility()
         self.set_paused(False if resume else self.game_was_paused)
         self.pause_resume_keys.update(self.window_keys_down)
         self.render()
@@ -386,6 +412,7 @@ class WindowControls:
             self.copy_protection_enabled = not getattr(self, "copy_protection_enabled", True)
             if not self.copy_protection_enabled:
                 self.copy_challenge = None
+                self.copy_pointer_held = False
                 self.clear_keys(None)
             self.render()
         elif action == "development":
@@ -449,16 +476,6 @@ class WindowControls:
         if self.dev_menu is None:
             challenge = getattr(self, "copy_challenge", None)
             if challenge is not None:
-                if event.keysym == "Escape":
-                    return None
-                if self.paused:
-                    if not repeated and is_resume_key(event, self.window_keys_down):
-                        self.set_paused(False)
-                        self.pause_resume_keys.update(self.window_keys_down)
-                elif not alt and not repeated and not event.state & (0x4 | 0x40):
-                    challenge.key(event.keysym)
-                    self.resolve_copy_challenge()
-                    self.render()
                 return "break"
             if self.paused and event.keysym not in ("Escape", "F2") and not fullscreen_key:
                 if is_resume_key(event, self.window_keys_down):
@@ -530,16 +547,48 @@ class WindowControls:
                 self.pause_resume_keys.update(self.window_keys_down)
             elif getattr(self, "copy_challenge", None) is not None:
                 if not self.paused:
-                    symbol = self.copy_challenge.hit(*point)
-                    if symbol is not None:
-                        self.copy_challenge.choose(symbol)
-                        self.resolve_copy_challenge()
+                    # The original tracks GetMouse while StillDown is true.
+                    self.copy_pointer_held = True
+                    focus = self.copy_challenge.hit(*point)
+                    if self.copy_challenge.focus != focus:
+                        self.copy_challenge.focus = focus
                         self.render()
             else:
                 self.apply_dev_action(self.dev_menu.click(*point))
         return "break"
 
+    def dev_release(self, event):
+        challenge = getattr(self, "copy_challenge", None)
+        if challenge is None:
+            self.copy_pointer_held = False
+            return None
+        if getattr(event, "num", 1) != 1:
+            return "break"
+        if not self.copy_pointer_held:
+            return "break"
+        self.copy_pointer_held = False
+        point = self.dev_pointer(event)
+        symbol = challenge.hit(*point) if point is not None else None
+        if not self.paused and symbol is not None:
+            challenge.choose(symbol)
+            self.resolve_copy_challenge()
+            self.render()
+        elif challenge.focus is not None:
+            challenge.focus = None
+            self.render()
+        return "break"
+
     def dev_hover(self, event):
+        challenge = getattr(self, "copy_challenge", None)
+        if challenge is not None:
+            if not self.copy_pointer_held or self.paused:
+                return
+            point = self.dev_pointer(event)
+            focus = challenge.hit(*point) if point is not None else None
+            if challenge.focus != focus:
+                challenge.focus = focus
+                self.render()
+            return
         menu = self.game_menu or self.dev_menu
         if menu is not None:
             point = self.dev_pointer(event)

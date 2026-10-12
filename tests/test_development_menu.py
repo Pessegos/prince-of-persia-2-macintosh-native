@@ -139,6 +139,22 @@ class MenuModelTests(unittest.TestCase):
         self.assertEqual(menu.click(150, 195), "changed")
         self.assertFalse(menu.peaceful)
 
+    def test_level_selector_updates_screens_before_screen_selection(self):
+        levels = ((1, "Level 1", SCREENS),
+                  (2, "Level 2", ("1", "2 (Stones)", "Right shore")))
+        menu = DevelopmentMenu(SCREENS, 4, False, level_options=levels)
+
+        menu.open_dropdown()
+        menu.select(1)
+        self.assertEqual(menu.level_number, 2)
+        self.assertEqual(menu.screen, "1")
+        self.assertEqual(menu.screen_options, levels[1][2])
+
+        menu.focus = 4
+        menu.open_dropdown()
+        menu.select(1)
+        self.assertEqual(menu.screen, "2 (Stones)")
+
     def test_popup_hover_keeps_rows_stable_and_wheel_reaches_both_ends(self):
         menu = self.menu
         menu.sections = tuple(f"Story {i}" for i in range(30))
@@ -372,9 +388,9 @@ class MenuSceneTests(unittest.TestCase):
                 patch.object(scene.canvas, "winfo_height", return_value=1080):
             scene.dev_click(SimpleNamespace(x=100, y=200))
             self.assertFalse(scene.peaceful)
-            scene.dev_click(SimpleNamespace(x=240 + 150 * 1080 / 384, y=195 * 1080 / 384))
+            scene.dev_click(SimpleNamespace(x=240 + 150 * 1080 / 384, y=235 * 1080 / 384))
             self.assertTrue(scene.peaceful)
-            scene.dev_hover(SimpleNamespace(x=240 + 290 * 1080 / 384, y=245 * 1080 / 384))
+            scene.dev_hover(SimpleNamespace(x=240 + 290 * 1080 / 384, y=296 * 1080 / 384))
             self.assertEqual(scene.dev_menu.focus, 3)
 
     def test_invalid_destination_keeps_menu_and_scene_intact_with_inline_error(self):
@@ -536,7 +552,7 @@ class MenuSceneTests(unittest.TestCase):
         for key in keys:
             scene.dev_key_press(self.event(key))
         scene.set_peaceful(True)
-        with patch.object(scene, "dev_pointer", return_value=(300, 245)):
+        with patch.object(scene, "dev_pointer", return_value=(300, 296)):
             scene.dev_click(SimpleNamespace(x=600, y=490, num=1))
         self.assertIsNone(scene.dev_menu)
         for key in keys:

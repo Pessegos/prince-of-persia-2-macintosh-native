@@ -47,5 +47,6 @@ skip, health transfer, level-state isolation, the complete arrival pose chain,
 shore audio and the development shortcuts. Synthetic scenery and transition
 tests also run in CI without original assets.
 
-Only the level-2 entrance is available. The remaining rooms, palette-cycled
-water and other island controllers are outside this update.
+The level-2 shore and stone puzzle lead to the level-3 entrance. Level 3 remains
+limited to that first room; its later rooms, interactive objects, animated
+cavern details and the optional far-shore event still need recovery.

@@ -22,10 +22,16 @@ manual challenge never changes its solution or gate state.
 
 The original COPY:8005 resource supplies nineteen page/symbol pairs.
 TEXT:8005, SHAP:8005-8014, CTBL:8000 and NFNT:24878 supply the prompt,
-symbols, colors and font. No answer is inferred from the puzzle stones.
-Mouse or arrow navigation and Enter/Space select a symbol. The world stops
-while the dialog is open. F1 can disable this challenge; it is enabled by
-default. Correct answers persist until New Game.
+symbols, colors and font. CODE:02 also contains the native PlayNIS 100,
+CopyProtectionDialog and symbol drawing/selection routines. The port uses
+those resources and recovered layout, but implements the modal in its own
+renderer. No answer is inferred from the puzzle stones.
+
+The dialog appears only when crossing the opened cavern exit from the stone
+room into level 3, not on entering the stone room. As on Macintosh, the mouse
+is required; clicking a symbol selects it. The world stops while the dialog is
+open. F1 can disable this challenge; it is enabled by default. Correct answers
+persist until New Game.
 
 After three wrong answers the port restarts level 2. This is a port policy,
 not a claim to reproduce the original failure alert and exit path.

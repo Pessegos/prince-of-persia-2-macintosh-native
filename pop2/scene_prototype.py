@@ -1832,15 +1832,16 @@ class ScenePrototype(WindowControls):
                     self.audio.add_song(cue)
                 else:
                     self.sequence_state.sound_events.append(cue)
-            if (self.room_id == 0 and getattr(self, "copy_protection_enabled", True)
+            entering_cavern = self.room_id == 0 and desert.exit_open and self.player_x < 0
+            if (entering_cavern and getattr(self, "copy_protection_enabled", True)
                     and not getattr(self, "copy_verified", False)):
                 from pop2.copy_protection import CopyProtection
 
                 self.copy_challenge = CopyProtection(self.resources.prince)
+                self.update_cursor_visibility()
                 self.clear_keys(None)
                 self.pause_resume_keys.update(self.window_keys_down)
-            if (self.room_id == 0 and desert.exit_open and self.player_x < 0
-                    and getattr(self, "copy_challenge", None) is None):
+            if entering_cavern and getattr(self, "copy_challenge", None) is None:
                 max_life = self.combat.player.max_life
                 self.load_level(3)
                 self.combat.player.life = self.combat.player.max_life = max_life
@@ -1874,6 +1875,7 @@ class ScenePrototype(WindowControls):
         elif challenge.failed:
             self.copy_challenge = None
             self.restart_level()
+        self.update_cursor_visibility()
         self.clear_keys(None)
         self.pause_resume_keys.update(self.window_keys_down)
 
@@ -2296,6 +2298,22 @@ class ScenePrototype(WindowControls):
     def dev_screens(self):
         return self.level_renderer.screen_entries() if self.level_map is not None else {}
 
+    def development_levels(self):
+        cached = getattr(self, "development_level_options", None)
+        if cached is not None:
+            return cached
+        from pop2.level_data import LevelDefinition
+
+        options = []
+        for number in (1, 2, 3):
+            renderer = (self.level_renderer if self.game.level.number == number else
+                        LevelRenderer(LevelDefinition.read(self.resources.prince, number)))
+            screens = tuple(renderer.screen_entries())
+            if screens:
+                options.append((number, f"Level {number}", screens))
+        self.development_level_options = tuple(options)
+        return self.development_level_options
+
     def screen_label(self, room):
         return next((label for label, target in self.dev_screens().items() if target == room),
                     f"Room ID {room + 1}")
@@ -2315,6 +2333,12 @@ class ScenePrototype(WindowControls):
         if label == "8":
             # Entry from screen 7 is the upper roof, not the quay below.
             row, x = 0, 5 * TILE_WIDTH + 14
+        elif self.game.level.kind == 1 and label == "2 (Stones)":
+            rows = [row for row in range(3)
+                    if self.level_map.tile(room, 9, row).kind == 1]
+            if not rows:
+                raise ValueError("The stone screen has no supported entry")
+            return self.jump_to_room(room, rows[0], 9 * TILE_WIDTH + 30, facing=0)
         else:
             rows = [row for row in range(3)
                     if self.level_map.tile(room, 9, row).kind == 1]
@@ -2537,12 +2561,6 @@ class ScenePrototype(WindowControls):
             viewport = self.draw_cutscene_pause(viewport)
         if getattr(self, "copy_challenge", None) is not None:
             viewport = self.copy_challenge.draw(viewport, self.ui_font)
-            if self.paused and self.game_menu is None:
-                shade = Image.new("RGBA", viewport.size, (0, 0, 0, 160))
-                viewport = Image.alpha_composite(viewport.convert("RGBA"), shade)
-                viewport.paste(self.pause_text,
-                               ((VIEWPORT_WIDTH - self.pause_text.width) // 2,
-                                (VIEWPORT_HEIGHT - self.pause_text.height) // 2), self.pause_text)
         if self.dev_menu is not None:
             viewport = self.dev_menu.draw(viewport, self.ui_font)
         if self.game_menu is not None:

@@ -44,10 +44,15 @@ class DevelopmentMenu:
     level_available: bool = True
     section_groups: tuple = ()
     dropdown_control: int = 0
+    level_options: tuple = ()
+    level_index: int = 0
 
     CONTROLS = ((200, 138, 392, 166), (120, 180, 392, 210),
                 (120, 231, 252, 263), (264, 231, 392, 263))
-    PANEL = (100, 70, 412, 328)
+    LEVEL_CONTROLS = {0: (200, 138, 392, 166), 1: (120, 220, 392, 246),
+                      2: (120, 282, 252, 314), 3: (264, 282, 392, 314),
+                      4: (200, 179, 392, 207)}
+    PANEL = (100, 70, 412, 350)
     OPTION_HEIGHT = 19
     TABS = ((120, 106, 207, 127), (211, 106, 298, 127), (302, 106, 392, 127))
     PLAYBACK_CONTROLS = {
@@ -75,12 +80,25 @@ class DevelopmentMenu:
         return (self.section_index + 1) % len(self.sections)
 
     def field_options(self, control):
+        if self.tab == 0 and self.level_options:
+            return (tuple(option[1] for option in self.level_options) if control == 0
+                    else self.screen_options)
         if self.tab != 1:
             return self.screens
         return (tuple(group.label for group in self.groups) if control == 0 else
                 tuple(self.sections[i] for i in self.part_indices))
 
+    @property
+    def screen_options(self):
+        return self.level_options[self.level_index][2] if self.level_options else self.screens
+
+    @property
+    def level_number(self):
+        return self.level_options[self.level_index][0] if self.level_options else None
+
     def field_selected_index(self, control):
+        if self.tab == 0 and self.level_options:
+            return self.level_index if control == 0 else self.screen_index
         if self.tab != 1:
             return self.screen_index
         return self.group_index if control == 0 else self.part_indices.index(self.section_index)
@@ -94,6 +112,8 @@ class DevelopmentMenu:
         return self.field_selected_index(self.dropdown_control if self.dropdown else self.focus)
 
     def control_rect(self, index):
+        if self.tab == 0 and self.level_options:
+            return self.LEVEL_CONTROLS[index]
         return self.PLAYBACK_CONTROLS[index] if self.tab == 1 else self.CONTROLS[index]
 
     @property
@@ -108,7 +128,11 @@ class DevelopmentMenu:
         if ((self.tab == 0 and not self.level_available)
                 or (self.tab == 1 and not self.sections)):
             return (3,)
-        return (0, 4, 1, 2, 3) if self.tab == 1 else (0, 1, 2, 3)
+        if self.tab == 1:
+            return (0, 4, 1, 2, 3)
+        if self.tab == 0 and self.level_options:
+            return (0, 4, 1, 2, 3)
+        return (0, 1, 2, 3)
 
     def change_tab(self, index):
         self.tab = index % 3
@@ -118,7 +142,7 @@ class DevelopmentMenu:
 
     @property
     def screen(self):
-        return self.screens[self.screen_index]
+        return self.screen_options[self.screen_index]
 
     def open_dropdown(self):
         self.dropdown_control = self.focus
@@ -142,6 +166,11 @@ class DevelopmentMenu:
             control = self.dropdown_control if self.dropdown else self.focus
             self.section_index = (self.groups[index].part_indices[0] if control == 0
                                   else self.part_indices[index])
+        elif (self.tab == 0 and self.level_options
+              and (self.dropdown_control if self.dropdown else self.focus) == 0):
+            self.level_index = index
+            self.screens = self.screen_options
+            self.screen_index = 0
         else:
             self.screen_index = index
         self.dropdown = False
@@ -242,7 +271,9 @@ class DevelopmentMenu:
         image = Image.alpha_composite(viewport, Image.new("RGBA", viewport.size, (0, 0, 0, 100)))
         draw = ImageDraw.Draw(image)
         gold, white, muted = "#f4d873", "#eeeeee", "#b9b9b9"
-        draw.rectangle(self.PANEL, fill="#181818", outline="#858585")
+        panel = ((100, 70, 412, 350) if self.tab == 0 and self.level_options
+                 else (100, 70, 412, 328))
+        draw.rectangle(panel, fill="#181818", outline="#858585")
 
         def text(value, x, y, color=white, centered=False, max_width=None):
             glyphs = font.text(value, color)
@@ -260,7 +291,9 @@ class DevelopmentMenu:
                  centered=True, max_width=rect[2] - rect[0] - 8)
         available = len(self.controls) > 1
         if self.tab == 0:
-            text("Screen", 120, 146)
+            text("Level" if self.level_options else "Screen", 120, 146)
+            if self.level_options:
+                text("Screen", 120, 187)
         elif self.tab == 1:
             text("Sequence", 120, 146)
             if available:
@@ -270,7 +303,9 @@ class DevelopmentMenu:
             draw.rectangle(rect, fill="#303030" if i == self.focus else "#222222",
                            outline=gold if i == self.focus else "#626262")
         if available and self.tab != 2:
-            for control in ((0, 4) if self.tab == 1 else (0,)):
+            selectors = ((0, 4) if self.tab == 1 or self.tab == 0 and self.level_options
+                         else (0,))
+            for control in selectors:
                 left, top, right, _bottom = self.control_rect(control)
                 text(self.field_options(control)[self.field_selected_index(control)],
                      left + 10, top + 8, max_width=right - left - 34)
@@ -280,12 +315,14 @@ class DevelopmentMenu:
                  self.control_rect(2)[1] + 10,
                  centered=True, max_width=118)
         if available and self.tab in (0, 2):
-            draw.rectangle((130, 189, 141, 200), fill="#121212", outline=muted)
+            checkbox_y = self.control_rect(1)[1] + (8 if self.tab == 0 and self.level_options else 9)
+            draw.rectangle((130, checkbox_y, 141, checkbox_y + 11), fill="#121212", outline=muted)
             checked = self.debug_status if self.tab == 2 else self.peaceful
             if checked:
-                draw.line(((132, 194), (135, 197), (139, 191)), fill=gold, width=2)
+                draw.line(((132, checkbox_y + 5), (135, checkbox_y + 8),
+                           (139, checkbox_y + 2)), fill=gold, width=2)
             text("Debug status bar" if self.tab == 2 else "Peaceful (no guards)",
-                 151, 190, max_width=231)
+                 151, checkbox_y + (1 if self.tab == 0 and self.level_options else 0), max_width=231)
         elif available:
             text("Next part", 256, 230, centered=True)
         else:
@@ -302,8 +339,10 @@ class DevelopmentMenu:
                 else:
                     line = candidate
             lines.append(line)
-            for i, line in enumerate(lines[:3]):
-                text(line, 120, 277 + i * 16, "#ff9b9b", max_width=272)
+            error_y = 318 if self.tab == 0 and self.level_options else 277
+            line_limit = 2 if self.tab == 0 and self.level_options else 3
+            for i, line in enumerate(lines[:line_limit]):
+                text(line, 120, error_y + i * 14, "#ff9b9b", max_width=272)
         if self.dropdown:
             left, _top, right, bottom = self.control_rect(self.dropdown_control)
             count = self.popup_count

@@ -588,6 +588,7 @@ class GameWindowTests(unittest.TestCase):
             self.assertTrue(scene.paused)
             self.assertEqual(scene.dev_menu.screens,
                              ("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Secret (right)"))
+            scene.dev_menu.focus = 4
             scene.dev_menu.select(4)
             scene.apply_dev_action("go")
             self.assertIsNone(scene.dev_menu)

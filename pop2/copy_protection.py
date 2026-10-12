@@ -3,8 +3,9 @@
 import random
 import struct
 
-from PIL import ImageDraw
+from PIL import Image, ImageDraw
 
+from pop2.intro import SIZE, indexed_shape
 from pop2.render_opening import decode_ctbl, decode_shap
 from pop2.game_ui import MacintoshFont
 
@@ -24,8 +25,20 @@ class CopyProtection:
         self.palette = palette
         self.font = MacintoshFont(resources['NFNT'][24878]['data'])
         self.symbols = tuple(decode_shap(resources['SHAP'][8005 + i]['data'], palette) for i in range(10))
+        border = Image.new('L', SIZE, 25)
+        horizontal = indexed_shape(resources['SHAP'][8001]['data'])
+        vertical = indexed_shape(resources['SHAP'][8000]['data'], allow_trailing=True)
+        border.paste(horizontal, (vertical.width, 0))
+        border.paste(horizontal.transpose(Image.Transpose.FLIP_TOP_BOTTOM),
+                     (vertical.width, SIZE[1] - horizontal.height))
+        border.paste(vertical, (0, 0))
+        border.paste(vertical.transpose(Image.Transpose.FLIP_LEFT_RIGHT), (510 - vertical.width, 0))
+        indexed_border = border.convert('P')
+        indexed_border.putpalette(bytes(channel for index in range(256)
+                                        for channel in palette.get(index, (0, 0, 0, 255))[:3]))
+        self.border = indexed_border.convert('RGBA')
         self.attempts = 0
-        self.focus = 0
+        self.focus = None
         self.accepted = False
         self.failed = False
         self.challenge = self.rng.randrange(count)
@@ -36,6 +49,7 @@ class CopyProtection:
         if symbol == self.answers[self.challenge][1]:
             self.accepted = True
         else:
+            self.focus = None
             self.attempts += 1
             if self.attempts == 3:
                 self.failed = True
@@ -53,16 +67,10 @@ class CopyProtection:
         return next((i for i in range(10) if self.rectangle(i)[0] <= x < self.rectangle(i)[2]
                      and self.rectangle(i)[1] <= y < self.rectangle(i)[3]), None)
 
-    def key(self, key):
-        if key in ('Left', 'Right', 'Up', 'Down'):
-            self.focus = (self.focus + {'Left': -1, 'Right': 1, 'Up': -5, 'Down': 5}[key]) % 10
-        elif key in ('Return', 'KP_Enter', 'space'):
-            self.choose(self.focus)
-
     def draw(self, viewport, font):
-        image = viewport.copy()
+        image = self.border.copy()
         draw = ImageDraw.Draw(image)
-        draw.rectangle((0, 0, 511, 383), fill=self.palette[25])
+        draw.rectangle((13, 13, 496, 370), outline=(0, 0, 0, 255), width=1)
         words = (self.message % self.answers[self.challenge][0]).split()
         lines = ['']
         for word in words:
@@ -72,11 +80,17 @@ class CopyProtection:
             else:
                 lines[-1] = candidate
         for row, line in enumerate(lines):
-            for offset, color in ((3, (0, 0, 0, 255)), (1, self.palette[16]), (0, self.palette[27])):
+            text_x = (SIZE[0] - self.font.text(line).width) // 2
+            # DialogDrawStr uses three horizontal origins on the same baseline.
+            for offset_x, color in ((3, (0, 0, 0, 255)), (1, self.palette[16]), (0, self.palette[27])):
                 text = self.font.text(line, color)
-                image.paste(text, (55 + offset, 40 + row * 24 + offset), text)
+                image.paste(text, (text_x + offset_x, 50 + row * 24), text)
         for i, sprite in enumerate(self.symbols):
             x, y = 80 + i % 5 * 76, 131 + i // 5 * 76
             image.paste(sprite, (x, y), sprite)
-        draw.rectangle(self.rectangle(self.focus), outline=(255, 255, 0, 255), width=1)
+        if self.focus is not None:
+            left, top, right, bottom = self.rectangle(self.focus)
+            # DrawSymbolBox uses palette color 27; QuickDraw Rect excludes right/bottom.
+            draw.rectangle((left, top, right - 1, bottom - 1),
+                           outline=self.palette[27], width=1)
         return image

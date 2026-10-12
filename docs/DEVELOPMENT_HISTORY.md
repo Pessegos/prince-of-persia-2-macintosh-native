@@ -125,11 +125,12 @@ unlike `--no-guard`, this keeps the real rooftop collisions and room links.
   is hidden over the fullscreen game, visible in the developer menu and
   restored when returning to a window.
 - F2: toggle the in-game developer menu over a dimmed, paused scene. Choose
-  a supported level-1 screen and start at its entry position.
-  Screen numbers follow the route from the opening (1), not internal room
+  a level and then a supported screen to start at its entry position.
+  Level 1 screens follow the route from the opening (1), not internal room
   IDs: the building climb is screen 5. The right-hand secret is a separate
-  entry. Teleporting resets guards, health and pending inputs. Other levels
-  are not playable/selectable yet. Mouse, Tab/Shift+Tab and arrows navigate;
+  entry. Level 2 includes the beach, stone puzzle and far shore; level 3
+  currently offers its entrance. Teleporting resets guards, health and inputs.
+  Mouse, Tab/Shift+Tab and arrows navigate;
   Left/Right moves between the side-by-side `Go to screen` / `Resume` buttons.
   Enter/Space activates the focused control. Escape cancels an open screen
   dropdown first, then closes the menu. F2 closes it directly.

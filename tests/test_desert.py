@@ -2,7 +2,7 @@ import random
 import struct
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from PIL import Image
 
@@ -83,10 +83,11 @@ class CopyProtectionTests(unittest.TestCase):
         resources = {'COPY': {8005: {'data': struct.pack('>5H', 2, 1, 3, 2, 7)}},
                      'TEXT': {8005: {'data': b'\1Select the symbol on page %d\0'}},
                      'CTBL': {8000: {'data': b''}},
-                     'SHAP': {8005 + i: {'data': b''} for i in range(10)},
+                     'SHAP': {8000 + i: {'data': b''} for i in range(15)},
                      'NFNT': {24878: {'data': b''}}}
         with patch('pop2.copy_protection.decode_ctbl', return_value={}), \
                 patch('pop2.copy_protection.decode_shap', return_value=Image.new('RGBA', (50, 50))), \
+                patch('pop2.copy_protection.indexed_shape', return_value=Image.new('L', (2, 2))), \
                 patch('pop2.copy_protection.MacintoshFont'):
             return CopyProtection(resources, random.Random(12))
 
@@ -108,17 +109,114 @@ class CopyProtectionTests(unittest.TestCase):
         self.assertTrue(challenge.failed)
         self.assertFalse(challenge.accepted)
 
-    def test_native_symbol_rectangles_and_keyboard_selection(self):
+    def test_native_symbol_rectangles_start_without_a_selection(self):
         challenge = self.challenge()
         self.assertEqual(challenge.hit(80, 131), 0)
         self.assertEqual(challenge.hit(384, 207), 9)
         self.assertIsNone(challenge.hit(0, 0))
-        challenge.key('Left')
-        self.assertEqual(challenge.focus, 9)
-        challenge.key('Down')
-        self.assertEqual(challenge.focus, 4)
+        self.assertIsNone(challenge.focus)
 
-    def test_paused_dialog_resumes_without_selecting_an_answer(self):
+    def test_symbol_outline_uses_native_color_and_exclusive_bounds(self):
+        class PixelFont:
+            def text(self, _text, color=(255, 255, 255, 255)):
+                return Image.new('RGBA', (1, 1), color)
+
+        challenge = CopyProtection.__new__(CopyProtection)
+        challenge.border = Image.new('RGBA', (512, 384), (123, 0, 0, 255))
+        challenge.message = 'Select the symbol on page %d'
+        challenge.answers = ((8, 0),)
+        challenge.challenge = 0
+        challenge.font = PixelFont()
+        challenge.palette = {16: (238, 135, 33, 255), 27: (245, 220, 140, 255)}
+        challenge.symbols = ()
+        challenge.focus = 0
+
+        image = challenge.draw(None, None)
+
+        self.assertEqual(image.getpixel((75, 126)), challenge.palette[27])
+        self.assertEqual(image.getpixel((134, 185)), challenge.palette[27])
+        self.assertEqual(image.getpixel((135, 185)), (123, 0, 0, 255))
+
+    def test_copy_protection_text_shadow_uses_macintosh_offsets(self):
+        class PixelFont:
+            def text(self, _text, color=(255, 255, 255, 255)):
+                return Image.new('RGBA', (1, 1), color)
+
+        challenge = CopyProtection.__new__(CopyProtection)
+        challenge.border = Image.new('RGBA', (512, 384), (123, 0, 0, 255))
+        challenge.message = 'Select the symbol on page %d'
+        challenge.answers = ((8, 0),)
+        challenge.challenge = 0
+        challenge.font = PixelFont()
+        challenge.palette = {16: (238, 135, 33, 255), 27: (245, 220, 140, 255)}
+        challenge.symbols = ()
+        challenge.focus = None
+
+        image = challenge.draw(None, None)
+
+        self.assertEqual(image.getpixel((255, 50)), challenge.palette[27])
+        self.assertEqual(image.getpixel((256, 50)), challenge.palette[16])
+        self.assertEqual(image.getpixel((258, 50)), (0, 0, 0, 255))
+        self.assertNotEqual(image.getpixel((255, 51)), challenge.palette[27])
+
+    def test_fullscreen_cursor_is_visible_for_copy_challenge_only(self):
+        host = WindowControls()
+        host.canvas = Mock()
+        host.fullscreen = True
+        host.game_menu = host.dev_menu = None
+        host.copy_challenge = object()
+        host.copy_pointer_held = False
+
+        host.update_cursor_visibility()
+        self.assertEqual(host.canvas.configure.call_args.kwargs, {'cursor': ''})
+
+        host.copy_challenge = None
+        host.update_cursor_visibility()
+        self.assertEqual(host.canvas.configure.call_args.kwargs, {'cursor': 'none'})
+
+    def test_copy_symbol_highlight_tracks_only_while_button_held_and_selects_on_release(self):
+        class Challenge:
+            focus = None
+
+            @staticmethod
+            def hit(x, _y):
+                return x if x in (0, 1) else None
+
+            def choose(self, symbol):
+                self.chosen = symbol
+
+        host = WindowControls()
+        host.copy_challenge = Challenge()
+        host.copy_pointer_held = False
+        host.game_menu = host.dev_menu = None
+        host.paused = False
+        host.canvas = Mock()
+        host.render = Mock()
+        host.resolve_copy_challenge = Mock()
+        event = SimpleNamespace(num=1, x=0, y=0)
+
+        with patch.object(host, 'dev_pointer', return_value=(0, 0)):
+            host.dev_hover(event)
+        self.assertIsNone(host.copy_challenge.focus)
+
+        with patch.object(host, 'dev_pointer', return_value=(0, 0)):
+            host.dev_click(event)
+        self.assertTrue(host.copy_pointer_held)
+        self.assertEqual(host.copy_challenge.focus, 0)
+        self.assertFalse(hasattr(host.copy_challenge, 'chosen'))
+        host.resolve_copy_challenge.assert_not_called()
+
+        with patch.object(host, 'dev_pointer', return_value=(1, 0)):
+            host.dev_hover(event)
+        self.assertEqual(host.copy_challenge.focus, 1)
+
+        with patch.object(host, 'dev_pointer', return_value=(1, 0)):
+            host.dev_release(event)
+        self.assertFalse(host.copy_pointer_held)
+        self.assertEqual(host.copy_challenge.chosen, 1)
+        host.resolve_copy_challenge.assert_called_once_with()
+
+    def test_paused_dialog_ignores_keys_without_selecting_an_answer(self):
         from unittest.mock import Mock
 
         host = WindowControls()
@@ -130,12 +228,12 @@ class CopyProtectionTests(unittest.TestCase):
         host.set_paused = Mock()
         host.resolve_copy_challenge = Mock()
         host.dev_key_press(SimpleNamespace(keysym='Return', state=0, char='\r'))
-        host.set_paused.assert_called_once_with(False)
+        host.set_paused.assert_not_called()
         host.resolve_copy_challenge.assert_not_called()
         self.assertFalse(host.copy_challenge.accepted)
-        self.assertIn('Return', host.pause_resume_keys)
+        self.assertNotIn('Return', host.pause_resume_keys)
 
-    def test_dialog_keeps_escape_available_and_disables_development(self):
+    def test_dialog_consumes_keyboard_input_and_disables_development(self):
         host = WindowControls()
         host.copy_challenge = self.challenge()
         host.game_menu = host.dev_menu = None
@@ -144,7 +242,8 @@ class CopyProtectionTests(unittest.TestCase):
         host.window_keys_down = set()
         host.pause_resume_keys = set()
         self.assertFalse(host.development_available())
-        self.assertIsNone(host.dev_key_press(SimpleNamespace(keysym='Escape', state=0, char='')))
+        self.assertEqual(host.dev_key_press(SimpleNamespace(keysym='Escape', state=0, char='')),
+                         'break')
 
 
 @unittest.skipUnless((ASSET_DIR / 'Caverns.rsrc').is_file(), 'Imported game resources required')
@@ -165,6 +264,8 @@ class OriginalDesertTests(unittest.TestCase):
     def test_challenge_blocks_world_and_acceptance_preserves_puzzle_state(self):
         scene = self.scene
         scene.jump_to_room(0, x=440)
+        scene.game.desert.gate = 20
+        scene.player_x = -1
         scene.advance_level_events()
         challenge, desert = scene.copy_challenge, scene.game.desert
         self.assertIsNotNone(challenge)

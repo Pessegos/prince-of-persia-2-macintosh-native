@@ -102,7 +102,7 @@ executable. Demo recovery adds time to the first import, not to later launches.
 | Alt + T | Toggle all sound |
 | Alt + M | Toggle ambient music |
 | Alt + V | About the port |
-| F2 | Dev Mode: level, intro/demo playback and display controls |
+| F2 | Dev Mode: levels 1-3, intro/demo playback and display controls |
 | Any key after death | Retry from the checkpoint or level start |
 
 The game menu accepts mouse, arrows and Tab/Shift+Tab; Enter/Space activates
@@ -114,7 +114,10 @@ The original manual-symbol challenge is enabled by default. The F1 option
 `Copy protection` disables only that challenge, not the stone puzzle.
 
 The developer menu accepts mouse, Tab/Shift+Tab and arrow navigation.
-Left/Right moves between `Go to screen` and `Resume`; Enter/Space activates
+Its `Level` and `Screen` selectors include the playable routes in levels 1-2
+and the entrance to level 3. Choose `2 (Stones)` to jump directly to the level-2
+puzzle without replaying the beach arrival. Left/Right moves between `Go to screen`
+and `Resume`; Enter/Space activates
 a control. Focus the tab row to switch between `Level`, `Playback` and `Display`
 with Left/Right. Escape closes the dropdown before closing the menu.
 Screen jumps also set the latest checkpoint along the selected route. During
