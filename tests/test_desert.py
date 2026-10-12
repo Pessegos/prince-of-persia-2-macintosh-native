@@ -43,6 +43,20 @@ class StoneTests(unittest.TestCase):
         self.assertIn(53, desert.advance(0, self.state(3), self.record))
         self.assertEqual(desert.stones[0].phase, 11)
 
+    def test_failure_song_is_requested_once_when_leaving_the_marked_stone(self):
+        desert = DesertState(marked_stone=2, room=0,
+                             stones=[Stone(13, 0, 0) for _ in range(6)])
+        self.assertNotIn(49, desert.advance(0, self.state(4), self.record))
+        self.assertTrue(desert.failed)
+        self.assertIn(49, desert.advance(0, self.state(5), self.record))
+        self.assertNotIn(49, desert.advance(0, self.state(5), self.record))
+
+    def test_sand_fall_sinks_the_previous_and_current_stones(self):
+        desert = DesertState(room=0, last_column=4,
+                             stones=[Stone(13, 0, 0) for _ in range(6)])
+        self.assertEqual(desert.fall_into_sand(5), [53, 53])
+        self.assertEqual([stone.phase for stone in desert.stones], [13, 13, 12, 12, 13, 13])
+
     def test_only_marked_stone_remaining_opens_the_exit_with_native_cues(self):
         stones = [Stone(0, 0, 0) for _ in range(6)]
         stones[3].phase = 13
@@ -119,6 +133,30 @@ class StoneTests(unittest.TestCase):
         desert.advance(0, state, self.record)
         self.assertEqual(desert.stones[0].delay, 20)
 
+    def test_desert_song_starts_when_the_last_stone_finishes_rising(self):
+        desert = DesertState(room=0, stones=[Stone(13, 0, 0) for _ in range(6)])
+        desert.stones[0] = Stone(12, 0, 1)
+        self.assertNotIn(50, desert.advance(0, self.state(8), self.record))
+        self.assertIn(50, desert.advance(0, self.state(8), self.record))
+        self.assertTrue(desert.music_started)
+        self.assertNotIn(50, desert.advance(0, self.state(8), self.record))
+
+    def test_every_native_symbol_and_marked_stone_uses_the_same_solution_rule(self):
+        for symbol in range(3):
+            for marked in range(1, 6):
+                for skip_marked in (False, True):
+                    with self.subTest(symbol=symbol, marked=marked, skip=skip_marked):
+                        desert = DesertState(symbol=symbol, marked_stone=marked, room=0,
+                                             stones=[Stone(13, 0, 0) for _ in range(6)])
+                        cues = []
+                        for column in range(8, 0, -1):
+                            pose = 52 if skip_marked and column == marked + 2 else 15
+                            cues.extend(desert.advance(0, self.state(column, pose), self.record))
+                        for _ in range(60):
+                            cues.extend(desert.advance(0, self.state(1), self.record))
+                        self.assertEqual(desert.exit_open, skip_marked)
+                        self.assertEqual(desert.failed, not skip_marked)
+                        self.assertEqual(49 in cues, not skip_marked)
     def test_standing_on_marked_stone_fails_but_jumping_over_it_does_not(self):
         desert = DesertState(marked_stone=2)
         desert.advance(0, self.state(4, 52), self.record)
@@ -462,7 +500,10 @@ class OriginalDesertTests(unittest.TestCase):
         scene = self.scene
         scene.copy_protection_enabled = False
         scene.jump_to_room(0, x=440)
-        scene.audio = Mock(music_busy=False, effect_busy=False)
+        scene.audio = Mock(music_busy=False, effect_busy=False, current_music=None,
+                           music_enabled=True)
+        scene.audio.song_playing.return_value = False
+        scene.audio.rng.randrange.return_value = 0
         scene.game.desert.stones = [Stone(0, 0, 0) for _ in range(6)]
         scene.game.desert.stones[scene.game.desert.marked_stone].phase = 13
         scene.game.desert.counter = 6
@@ -474,10 +515,116 @@ class OriginalDesertTests(unittest.TestCase):
         self.assertIn(55, scene.sequence_state.sound_events)
         scene.audio.add_song.assert_not_called()
         scene.advance_audio()
-        scene.audio.stop_sound.assert_called_once_with(51)
+        scene.audio.stop_sound.assert_not_called()
         scene.audio.add_song.assert_called_once_with(50, ambient=True)
+        scene.audio.current_music = 50
+        scene.audio.song_playing.return_value = True
+        scene.audio.music_busy = True
+        scene.advance_audio()
+        scene.audio.stop_sound.assert_called_once_with(51)
 
-    def test_running_from_arrival_reaches_stones_without_loading_dummy_rooms(self):
+    def test_prepared_desert_music_plays_on_entry_and_failure_interrupts_it(self):
+        from pop2.audio import AudioEngine
+        from tests.test_audio import TimedPlayback
+        from tests.test_terrain import RooftopSceneTests
+
+        scene = self.scene
+        scene.jump_to_room(0, x=440)
+        audio = AudioEngine(playback=Mock())
+        for cue in (46, 47, 48, 49, 50):
+            self.assertTrue(audio.available(cue))
+        audio.playback = TimedPlayback(audio.cues)
+        scene.audio = audio
+        scene.audio.rng = random.Random(1)
+        scene.audio.add_sound(51)
+        scene.audio.flush()
+        RooftopSceneTests.tick(self)
+        self.assertEqual(audio.current_effect, 51)
+        self.assertIsNone(audio.current_music)
+        RooftopSceneTests.tick(self, 50)
+        self.assertEqual(audio.current_music, 50)
+        self.assertTrue(audio.song_playing(50))
+        self.assertNotEqual(audio.current_effect, 51)
+        desert = scene.game.desert
+        desert.last_column = desert.marked_stone + 2
+        desert.failed = True
+        scene.advance_level_events()
+        scene.advance_audio()
+        self.assertEqual(audio.current_music, 49)
+        self.assertTrue(audio.song_playing(49))
+        scene.advance_audio()
+        self.assertEqual(audio.current_music, 49)
+
+    def test_quicksand_inputs_do_not_cancel_the_native_death_animation(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        scene = self.scene
+        scene.jump_to_room(0, x=278)
+        scene.game.desert.stones = [Stone(0, 0, 0) for _ in range(6)]
+        RooftopSceneTests.tick(self)
+        self.assertTrue(scene._combat_controls_locked())
+        scene.up_key(None)
+        scene.horizontal_key(None, 1, True)
+        scene.set_key_state('ctrl', True)
+        RooftopSceneTests.tick(self, 26)
+        self.assertEqual(scene.sequence_state.source_sequence_id, 27)
+        self.assertTrue(scene.terrain_motion.dead)
+        self.assertEqual(scene.death.method, 8)
+
+    def test_live_stone_phase_drives_the_native_two_phase_support_threshold(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        scene = self.scene
+        for phase in (0, 1, 2, 13):
+            with self.subTest(phase=phase):
+                scene.jump_to_room(0, x=278, facing=1)
+                desert = scene.game.desert
+                desert.stones = [Stone(13, 0, 0) for _ in range(6)]
+                desert.stones[2] = Stone(phase, 0, 0)
+                self.assertEqual(scene.level_map.tile(0, 4, 1).foreground & 15, phase)
+                RooftopSceneTests.tick(self)
+                self.assertEqual(scene.terrain_motion.sinking, phase < 2)
+                self.assertEqual(scene.sequence_state.source_sequence_id, 27 if phase < 2 else 2)
+
+    def test_quicksand_uses_original_sequence_and_death_method_without_gravity(self):
+        from tests.test_terrain import RooftopSceneTests
+        from copy import deepcopy
+        from pop2.sequence_runtime import SequenceRuntime
+
+        scene = self.scene
+        scene.jump_to_room(0, x=278, facing=1)
+        scene.game.desert.stones = [Stone(0, 0, 0) for _ in range(6)]
+        RooftopSceneTests.tick(self)
+        self.assertTrue(scene.terrain_motion.sinking)
+        reference = SequenceRuntime(scene.sequences, deepcopy(scene.sequence_state))
+        for _ in range(27):
+            reference.next_frame()
+            RooftopSceneTests.tick(self)
+            self.assertEqual((scene.sequence_state.action, scene.player_x,
+                              scene.sequence_state.current_y),
+                             (reference.state.action, reference.state.target_x,
+                              reference.state.current_y))
+        self.assertTrue(scene.terrain_motion.dead)
+        self.assertEqual(scene.death.method, 8)
+        self.assertFalse(scene.combat.player.alive)
+
+    def test_quicksand_clips_actor_below_original_surface_and_draws_the_sand_peel(self):
+        scene = self.scene
+        scene.jump_to_room(0, x=278)
+        scene.sequence_state.select(27)
+        layer = Image.new('RGBA', scene.background.size, (255, 0, 255, 255))
+        composite = scene.composite_actor(scene.background.copy(), layer, state=scene.sequence_state)
+        self.assertEqual(composite.getpixel((278, 243)), scene.background.getpixel((278, 243)))
+        art = scene.level_renderer.desert_rooms[0]
+        for frame in (0, 1):
+            actual = art.draw_sand(scene.background.copy(), frame, (264, 200, 283, 270))
+            sprite = art.shapes[4004 + frame]
+            expected = scene.background.copy()
+            expected.paste(sprite, (274 - (sprite.width >> 1), 243 - sprite.height), sprite)
+            self.assertIsNone(ImageChops.difference(actual.convert('RGB'),
+                                                  expected.convert('RGB')).getbbox())
+
+    def test_running_straight_into_unraised_stones_sinks_without_loading_dummy_rooms(self):
         from tests.test_terrain import RooftopSceneTests
 
         scene = self.scene
@@ -487,6 +634,6 @@ class OriginalDesertTests(unittest.TestCase):
         scene.horizontal_key(None, -1, True)
         RooftopSceneTests.tick(self, 130)
         self.assertEqual(scene.room_id, 0)
-        self.assertFalse(scene.terrain_motion.dead)
-        self.assertTrue(scene.game.desert.failed)
-        self.assertGreaterEqual(scene.player_x, 80)
+        self.assertTrue(scene.terrain_motion.dead)
+        self.assertEqual(scene.death.method, 8)
+        self.assertGreater(scene.player_x, 100)

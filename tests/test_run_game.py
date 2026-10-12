@@ -21,7 +21,8 @@ class InstallationTests(unittest.TestCase):
         self.credit_cue = {"file": "credits-10019.wav"}
         (assets / "audio" / "credits-10019.wav").touch()
         (assets / "audio" / "manifest.json").write_text(json.dumps({
-            "schema": 1, "cues": {"10019": self.credit_cue, "32": self.credit_cue}}))
+            "schema": 1, "cues": dict.fromkeys(
+                ("10019", "32", "46", "47", "48", "49", "50"), self.credit_cue)}))
         (assets / "intro.json").write_text(json.dumps({
             "schema": 1, "audio": {}, "operations": [{"op": "wait", "args": [1]}],
         }))
@@ -39,7 +40,8 @@ class InstallationTests(unittest.TestCase):
     def test_missing_prepared_audio_and_corrupt_manifest_request_reimport(self):
         manifest = self.project / "assets" / "audio" / "manifest.json"
         manifest.write_text(json.dumps({"schema": 1, "cues": {
-            "40": {"file": "cue-40.wav"}, "10019": self.credit_cue, "32": self.credit_cue}}))
+            "40": {"file": "cue-40.wav"}, **dict.fromkeys(
+                ("10019", "32", "46", "47", "48", "49", "50"), self.credit_cue)}}))
         self.assertEqual(run_game.missing_assets(self.project), ["audio/cue-40.wav"])
         manifest.write_text("invalid json")
         self.assertIn("needs reimport", " ".join(run_game.missing_assets(self.project)))
@@ -55,6 +57,16 @@ class InstallationTests(unittest.TestCase):
     def test_old_installation_requests_voyage_import(self):
         (self.project / "assets" / "ending.json").unlink()
         self.assertIn("ending.json", run_game.missing_assets(self.project))
+
+    def test_missing_desert_music_requests_reimport(self):
+        path = self.project / "assets/audio/manifest.json"
+        manifest = json.loads(path.read_text())
+        for cue in (46, 47, 48, 49, 50):
+            with self.subTest(cue=cue):
+                incomplete = {**manifest, "cues": {**manifest["cues"], str(cue): {}}}
+                path.write_text(json.dumps(incomplete))
+                self.assertIn("audio/manifest.json (needs desert music)",
+                              run_game.missing_assets(self.project))
 
     def test_corrupt_voyage_requests_reimport(self):
         (self.project / "assets" / "ending.json").write_text("{}")

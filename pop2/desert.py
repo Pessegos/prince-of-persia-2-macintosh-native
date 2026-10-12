@@ -60,6 +60,16 @@ class DesertScene:
     kind: int
     first_shape: int
 
+    def draw_sand(self, frame, frame_number, bounds):
+        if self.kind != 6:
+            return frame
+        # SetupSand 18:0546-05b2 alternates CUST 4/5, centered on the actor.
+        record = self.records[4 + (frame_number & 1)]
+        sprite = self.shapes[self.first_shape + record[0]]
+        left = bounds[0] + ((bounds[2] - bounds[0] + 1) >> 1) - (sprite.width >> 1)
+        frame.paste(sprite, (left, 243 - sprite.height), sprite)
+        return frame
+
     @classmethod
     def read(cls, resources, room_id):
         data = resources['CUST'][4000 + room_id * 25]['data']

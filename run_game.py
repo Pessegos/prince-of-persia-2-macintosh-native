@@ -70,6 +70,9 @@ def missing_assets(project=PROJECT):
                     missing.append("audio/" + item["file"])
             if not manifest["cues"].get("32", {}).get("file"):
                 missing.append("audio/manifest.json (needs voyage music)")
+            if any(not manifest["cues"].get(str(cue), {}).get("file")
+                   for cue in (46, 47, 48, 49, 50)):
+                missing.append("audio/manifest.json (needs desert music)")
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append("audio/manifest.json (needs reimport)")
     for name in ("intro.json", "ending.json"):

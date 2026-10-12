@@ -99,6 +99,9 @@ class LevelMap:
         fg, bg = struct.unpack_from(">2H", self.level, 0x780 + room * 120 + index * 4)
         if kind == 4 and self.desert is not None:
             fg = (fg & 0xff00) | (104 if self.desert.exit_open else 0)
+        elif kind == 30 and self.desert is not None and room == 0 and row == 1 and 2 <= column <= 7:
+            stone = self.desert.stones[column - 2]
+            fg = (fg & 0xfe00) | stone.phase | (stone.delay << 4)
         return Tile(kind, fg, bg, room, column, row)
 
     def supports(self, room, column, row):
@@ -446,12 +449,14 @@ class TerrainMotion:
     smooth_landing: bool = False
     scream_played: bool = False
     hit_fall: bool = False
+    sinking: bool = False
 
 
 @dataclass(frozen=True)
 class TerrainEvent:
     kind: str
     damage: int = 0
+    death_method: int | None = None
 
 
 class RooftopPhysics:
@@ -515,6 +520,8 @@ class RooftopPhysics:
 
     def start_fall(self, motion, runtime):
         state = runtime.state
+        contact = (floor_contact_x(state.target_x, state.facing, self.frames[state.action])
+                   if self.frames is not None else state.target_x)
         # Retain the cause across SEQS links into the shared free-fall loop.
         motion.hit_fall = state.source_sequence_id in (74, 94, 183)
         # StartFall, CODE:4 0x4cbe-0x4d90, ordinary unarmed rooftop subset.
@@ -534,6 +541,16 @@ class RooftopPhysics:
         state.current_y -= TILE_HEIGHT
         if self.frames is not None:
             self.map.align_fall(motion.room, motion.row, state, self.frames[state.action])
+        if state.level_kind == 1:
+            # StartFall 4:4d94-4db2: desert falls select SEQS:27, method 8.
+            motion.sinking = True
+            motion.falling = False
+            motion.hit_fall = False
+            if self.map.desert is not None:
+                cues = self.map.desert.fall_into_sand(character_column(contact))
+                state.sound_events.extend(cues)
+            self.select(runtime, 27)
+            return
         motion.falling = True
         self.select(runtime, sequence)
 
@@ -542,6 +559,13 @@ class RooftopPhysics:
                 alive=True, old_bounds=None, catch_ledge=None):
         state = runtime.state
         if protected or motion.dead:
+            return ()
+        if motion.sinking:
+            # SEQS:27 owns every displacement; ordinary gravity must not run.
+            if state.action == 185:
+                motion.sinking = False
+                motion.dead = True
+                return (TerrainEvent("death", death_method=8),)
             return ()
         if not motion.falling:
             motion.scream_played = False
@@ -665,7 +689,7 @@ class RooftopPhysics:
                 tile = self.map.tile(motion.room, column, motion.row)
                 if frame_record is not None and tile.kind in WALL_TILES:
                     tile = self.map.align_wall(motion.room, motion.row, state, frame_record)
-                if tile.kind in EMPTY_TILES:
+                if tile.kind in EMPTY_TILES or (tile.kind == 30 and (tile.foreground & 15) < 2):
                     self.start_fall(motion, runtime)
                     events.append(TerrainEvent("fall"))
             return tuple(events)

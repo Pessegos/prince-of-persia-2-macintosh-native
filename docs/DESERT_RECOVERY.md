@@ -27,6 +27,27 @@ three pixels **left** per phase, at unchanged heights, on background pass 11.
 The foreground cliff stays fixed. RedrawStone (18:0aa8-0b36) shows the small
 marked-stone symbol at phase 9 and its raised version only above that phase.
 
+The three symbol variants use the same puzzle controller. SetupDesert chooses
+Rnd(2) for the symbol and Rnd(4) + 1 for the marked stone (18:046a-0484).
+All fifteen combinations were compared with execution of CODE:18, including
+the complete opening sequence. Failure song 49 is requested on leaving the
+marked stone, after SinkDsrtStone succeeds (18:02c4-02e2), not on initial contact.
+
+CheckFloor (4:3616-3628) treats tile 30 as unsupported below phase 2.
+The live stone phases must therefore feed terrain queries, not just rendering.
+StartFall (4:4d94-4db2) selects SEQS:27 and death method 8 for desert falls,
+calling 18:0d06 to sink both the remembered and current foot-contact stones.
+SEQS:27 supplies all sinking displacements without ordinary fall gravity.
+SetupSand (18:051e-0666) uses CUST 4/5 at bottom 243, centered on the actor,
+and the sand surface conceals the submerged body.
+
+The importer prepares original MIDI cues 46-50, including failure and quicksand
+death songs. AnimDsrtStone (18:0a3c-0a56) starts song 50 when the last rise ends.
+DesertFunc (18:01ee-0278) keeps waves until song 50 plays; subsequent background
+requests require a living actor outside mode 7, no playing song or active stone,
+and inclusive Rnd(30) == 0. Shores permit those requests only after the first
+desert music request. Music disabled in the port suppresses this ambient song.
+
 The closed entrance uses the desert barrier branch in GetBarrCode (4:532e).
 The desert controller owns the outer shore boundaries rather than following
 dummy room links. Restart and F2 placement reset the puzzle; disabling the

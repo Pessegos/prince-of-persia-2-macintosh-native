@@ -47,6 +47,7 @@ class DesertState:
     visited_cave: bool = False
     room: int | None = None
     gate_active: bool = False
+    music_started: bool = False
 
     def enter_room(self, room):
         # SetupDesert (18:043c) resets contact/failure on each room load.
@@ -71,6 +72,14 @@ class DesertState:
             # SinkDsrtStone (18:0cce) animates once before AnimTrobs.
             stone.advance()
         return triggered
+
+    def fall_into_sand(self, column):
+        # 18:0d06 sinks both the remembered stone and the current foot's stone.
+        sounds = []
+        for contact in (self.last_column, column):
+            if 2 <= contact <= 7:
+                self.sink_stone(contact - 2, sounds)
+        return sounds
 
     def advance(self, room, state, record, alive=True, audio=None):
         sounds = []
@@ -108,10 +117,17 @@ class DesertState:
                 self.counter = 0
         sequence = getattr(state, 'source_sequence_id', getattr(state, 'sequence_id', None))
         delay_enabled = alive and sequence != 27
+        finished_rise = False
         for stone in self.stones:
             if stone.phase == 0 and stone.delay == 0 and stone.direction == 1:
                 sounds.append(52)
+            finished_rise |= stone.direction == 1 and stone.phase == 13 and not stone.delay
             stone.advance(delay_enabled)
+        # AnimDsrtStone 18:0a3c-0a56 starts song 50 when the last rise ends.
+        if finished_rise and not any(stone.direction for stone in self.stones):
+            if audio is None or not audio.song_playing(50):
+                self.music_started = True
+                sounds.append(50)
         if self.gate_active:
             if self.gate == 20:
                 self.gate_active = False

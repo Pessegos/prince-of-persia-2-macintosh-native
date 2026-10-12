@@ -1510,7 +1510,7 @@ class ScenePrototype(WindowControls):
         old_x = self.sequence_state.target_x
         motion = getattr(self, "terrain_motion", None)
         old_bounds = self.player_bounds() if motion is not None else None
-        if motion is not None and (motion.falling or motion.dead):
+        if motion is not None and (motion.falling or motion.sinking or motion.dead):
             self.sequence_runtime.next_frame()
             self.advance_terrain(old_x, old_bounds)
             self.advance_combat()
@@ -1671,7 +1671,7 @@ class ScenePrototype(WindowControls):
         if self.game.entry_active:
             return True
         motion = getattr(self, "terrain_motion", None)
-        if motion is not None and (motion.falling or motion.dead):
+        if motion is not None and (motion.falling or motion.sinking or motion.dead):
             return True
         combat = getattr(self, "combat", None)
         return combat is not None and combat.player.controls_locked
@@ -1787,7 +1787,8 @@ class ScenePrototype(WindowControls):
                     self.jump_started_for_press = False
             if event.kind == "death":
                 self.combat.player.life = 0
-                self.death.begin(3 if not motion.falling else 0)
+                self.death.begin(event.death_method if event.death_method is not None
+                                 else 3 if not motion.falling else 0)
                 self.status.set("Defeated")
             elif event.damage:
                 self.combat.player.life = max(0, self.combat.player.life - event.damage)
@@ -1857,8 +1858,12 @@ class ScenePrototype(WindowControls):
                                   self.combat is None or self.combat.player.alive,
                                   audio=self.audio)
             for cue in cues:
-                if cue in (46, 47, 49) and self.audio is not None:
-                    self.audio.add_song(cue)
+                if cue in (46, 47, 49, 50) and self.audio is not None:
+                    if cue == 50:
+                        if self.audio.music_enabled:
+                            self.audio.add_song(cue, ambient=True)
+                    else:
+                        self.audio.add_song(cue)
                 else:
                     self.sequence_state.sound_events.append(cue)
             entering_cavern = self.room_id == 0 and desert.exit_open and self.player_x < 0
@@ -2029,10 +2034,12 @@ class ScenePrototype(WindowControls):
             # DesertFunc 18:01ee checks PrinceSndOn(51) before queuing another wave.
             # Cave cue 50 and puzzle cues 46/49 use AddSong instead.
             if self.room_id == 0:
-                audio.stop_sound(51)
-                if not audio.music_busy:
-                    audio.add_song(50, ambient=True)
+                # 18:0212-0238 retains waves until desert song 50 starts.
+                if audio.song_playing(50):
+                    audio.stop_sound(51)
+                allow_song = not audio.song_playing(50)
             else:
+                allow_song = self.game.desert.music_started
                 if not audio.sound_playing(51):
                     audio.add_sound(51)
                 # DesertFunc 18:0334-0392 checks native room 3, X >= 0x30B,
@@ -2041,6 +2048,14 @@ class ScenePrototype(WindowControls):
                         and not audio.sound_playing(56)):
                     if audio.rng.randrange(21) == 0:
                         audio.add_sound(56)
+            # DesertFunc 18:023c-0278 retries only with no active stone,
+            # no playing song, a live actor outside mode 7 and inclusive Rnd(30)==0.
+            if (allow_song and audio.music_enabled and self.combat.player.alive
+                    and self.sequence_state.animation_state != 7 and not audio.music_busy
+                    and audio.rng.randrange(31) == 0
+                    and not any(stone.direction for stone in self.game.desert.stones)):
+                self.game.desert.music_started = True
+                audio.add_song(50, ambient=True)
         audio.flush()
 
     def restart_after_death(self):
@@ -2471,6 +2486,10 @@ class ScenePrototype(WindowControls):
         if self.room_id in (15, 18):
             water_y = 354 if state is not None and state.animation_state == 9 else 327
             layer.paste((0, 0, 0, 0), (0, water_y, layer.width, layer.height))
+        if (getattr(state, 'level_kind', None) == 1
+                and getattr(state, 'source_sequence_id', None) == 27):
+            # SetupSand 18:057a draws the surface at bottom 243.
+            layer.paste((0, 0, 0, 0), (0, 243, layer.width, layer.height))
         return Image.alpha_composite(frame, layer)
 
     def draw_cutscene_pause(self, viewport):
@@ -2558,6 +2577,12 @@ class ScenePrototype(WindowControls):
         frame = self.composite_actor(frame, player_layer, motion.row if motion is not None else None,
                                      player_bounds[3] if player_bounds is not None else None,
                                      self.sequence_state, player_bounds, self.frames[self.action])
+        if (motion is not None and self.sequence_state.level_kind == 1
+                and self.sequence_state.source_sequence_id == 27
+                and player_bounds[1] < 227):
+            art = self.level_renderer.desert_rooms[self.room_id]
+            frame_number = self.combat.world_frame
+            frame = art.draw_sand(frame, frame_number, player_bounds)
 
         if combat is not None:
             for guard in (() if hide_guards else combat.visible_guards()):

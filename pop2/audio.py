@@ -117,6 +117,10 @@ class AudioEngine:
         return (self.pending_effect == cue or
                 (self.current_effect == cue and self.playback.busy("effect")))
 
+    def song_playing(self, cue):
+        return (self.pending_song == cue or
+                (self.current_music == cue and self.playback.busy("music")))
+
     @property
     def music_busy(self):
         return self.pending_song is not None or self.playback.busy("music")

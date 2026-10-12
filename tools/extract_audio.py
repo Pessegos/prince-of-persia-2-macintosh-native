@@ -18,6 +18,7 @@ from tools.extract_enemy_profiles import expand_a5_data
 
 AUDIO_SCHEMA = 1
 LEVEL_ONE_SONGS = (6, 32, 38, 39, 40, 41, 42, 43, 64)
+DESERT_SONGS = (46, 47, 48, 49, 50)
 SYNTH_DIR = Path(__file__).resolve().parents[1] / "vendor" / "smssynth"
 
 
@@ -162,7 +163,7 @@ def extract_audio(image, program_bytes, prince_bytes, directory, progress=lambda
             entry["duration"] = sequence.length
             entry["name"] = next((message.name for track in sequence.tracks for message in track
                                    if message.type == "track_name"), "")
-            if int(cue) in LEVEL_ONE_SONGS:
+            if int(cue) in LEVEL_ONE_SONGS + DESERT_SONGS:
                 progress(f"Preparing music: {entry['name']}")
                 entry["file"] = f"cue-{cue}.wav"
                 entry["playback_duration"] = render_midi(directory, raw_name, entry["file"])
@@ -171,7 +172,7 @@ def extract_audio(image, program_bytes, prince_bytes, directory, progress=lambda
         "bank": struct.unpack_from(">h", level, 0x2186)[0],
         "groups": list(struct.unpack_from(">960h", level, 0x424a)),
     }
-    required = set(LEVEL_ONE_SONGS) | {7, 8, 9, 10, 11, 12, 13, 14, 30, 31, 34, 35, 36, 294, 295, 296}
+    required = set(LEVEL_ONE_SONGS + DESERT_SONGS) | {7, 8, 9, 10, 11, 12, 13, 14, 30, 31, 34, 35, 36, 294, 295, 296}
     missing = sorted(cue for cue in required if not manifest["cues"].get(str(cue), {}).get("file"))
     if missing:
         raise ValueError(f"Game audio is incomplete (missing cues: {missing})")

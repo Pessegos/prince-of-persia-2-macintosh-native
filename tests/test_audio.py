@@ -76,6 +76,18 @@ class CueTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "import the game again"):
             self.audio.play_intro(25010, 0)
 
+    def test_song_playing_checks_pending_and_live_music_not_the_effect_channel(self):
+        audio = self.audio
+        self.assertFalse(audio.song_playing(40))
+        audio.add_song(40)
+        self.assertTrue(audio.song_playing(40))
+        self.assertFalse(audio.song_playing(41))
+        audio.flush()
+        self.assertFalse(audio.song_playing(40))
+        self.busy['music'] = True
+        self.assertTrue(audio.song_playing(40))
+        self.assertFalse(audio.sound_playing(40))
+
     def test_seek_offset_is_forwarded_without_losing_pause(self):
         self.audio.pause(True)
         self.audio.play_intro(40, 0, offset=2.5)

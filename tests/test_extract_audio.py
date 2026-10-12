@@ -1,3 +1,4 @@
+import io
 import os
 from pathlib import Path
 import struct
@@ -10,10 +11,37 @@ import wave
 import mido
 import numpy as np
 
-from tools.extract_audio import audio_tables, render_midi
+from tools.extract_audio import audio_tables, extract_audio, render_midi, DESERT_SONGS, LEVEL_ONE_SONGS
+from pop2.audio_formats import Sample
 
 
 class AudioTableTests(unittest.TestCase):
+    def test_import_prepares_all_five_desert_songs_from_original_midi(self):
+        songs = LEVEL_ONE_SONGS + DESERT_SONGS
+        effects = (7, 8, 9, 10, 11, 12, 13, 14, 30, 31, 34, 35, 36, 294, 295, 296)
+        manifest = {'schema': 1, 'cues': {
+            str(cue): {'kind': 'midi' if cue in songs else 'pcm'}
+            for cue in songs + effects}}
+        midi = io.BytesIO()
+        sequence = mido.MidiFile()
+        sequence.tracks.append(mido.MidiTrack([mido.MetaMessage('end_of_track')]))
+        sequence.save(file=midi)
+        archives = {'MIDISnd.dat': {'MIDI': {9752 + cue: midi.getvalue() for cue in songs}},
+                    'DigiSnd.dat': {'snd ': {9752 + cue: b'pcm' for cue in effects}}}
+        level = bytes(0x49ca)
+        with (tempfile.TemporaryDirectory() as directory,
+              patch('tools.extract_audio.parse_resource_fork', side_effect=[{}, {'LEVL': {2000: {'data': level}}}]),
+              patch('tools.extract_audio.audio_tables', return_value=manifest),
+              patch('tools.extract_audio.instrument_bank'),
+              patch('tools.extract_audio.get_data_fork', side_effect=lambda _image, name: name),
+              patch('tools.extract_audio.mohawk_resources', side_effect=archives.__getitem__),
+              patch('tools.extract_audio.digitized_sound', return_value=Sample(b'\x80' * 8, 22050)),
+              patch('tools.extract_audio.render_midi', return_value=1.0) as render):
+            result = extract_audio(b'image', b'program', b'prince', directory)
+        for cue in DESERT_SONGS:
+            self.assertEqual(result['cues'][str(cue)]['file'], f'cue-{cue}.wav')
+            self.assertIn(f'cue-{cue}.mid', [call.args[1] for call in render.call_args_list])
+
     def test_rooftop_pool_has_one_group_not_three_adjacent_tables(self):
         data = bytearray(0x5000)
         base = len(data)
