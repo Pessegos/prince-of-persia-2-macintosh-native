@@ -3,7 +3,7 @@ import math
 import time
 from dataclasses import dataclass
 
-from PIL import Image, ImageChops, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageOps
 
 from pop2.animation_data import (
     shape_id_for_action,
@@ -2562,6 +2562,13 @@ class ScenePrototype(WindowControls):
         text = self.ui_font.text(message, (253, 255, 168, 255))
         x = 8 if showing_toast else VIEWPORT_WIDTH - text.width - 8
         y = ROOM_HEIGHT - self.ui_font.height - 6
+        if showing_toast:
+            plate = Image.new("RGBA", viewport.size, (0, 0, 0, 0))
+            ImageDraw.Draw(plate).rectangle(
+                (x - 4, y - 3, x + text.width + 4, y + text.height + 3),
+                fill=(0, 0, 0, 190), outline=(72, 72, 72, 220),
+            )
+            viewport = Image.alpha_composite(viewport, plate)
         viewport.paste((0, 0, 0, 255), (x + 1, y + 1), text)
         viewport.paste(text, (x, y), text)
         return viewport

@@ -183,7 +183,7 @@ menus or pause overlays. The original in-game HUD remains part of the image.
 Sizes range from native 510 x 384 to 4x, using nearest-neighbor integer scaling;
 the default is 3x (1530 x 1152). Folder and size are remembered locally in
 `rendered/screenshot-settings.json`. The default folder is `rendered/screenshots/`;
-captures use Minecraft-style `YYYY-MM-DD_HH.mm.ss.png` filenames, with a numeric
+captures use Minecraft-style `PoP2_YYYY-MM-DD_HH.mm.ss.png` filenames, with a numeric
 suffix if multiple screenshots are saved in the same second. They are not published
 by Git.
 F2 or Escape closes the screenshot controls and restores the previous pause state.
