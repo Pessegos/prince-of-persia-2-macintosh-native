@@ -28,9 +28,11 @@ through the ship's departure, the voyage cutscene and the beach arrival.
 - DesertFunc, CODE:18 01ee-020a, checks `PrinceSndOn(51)` and queues wave
   sound 51 again when that specific cue finishes; unrelated effects do not
   suppress the repeat.
-- DesertFunc, CODE:18 0334-0392, queues splash cue 56 on the far-right shore
-  once native X reaches `0x30B`, repeating only after cue 56 finishes. Room 2's
-  local X threshold is 267 after accounting for its 512-pixel world offset.
+- DesertFunc, CODE:18 0334-0392, queues splash cue 56 in native room 3 once X
+  reaches `0x30B` (779). It first checks `PrinceSndOn(56)`, then uses `Rnd(20)`
+  to make the splash occasional while the cue is not playing. CutChar keeps the
+  far-right shore in view while the Prince moves beyond the viewport, so the
+  threshold is not a room-local X of 267.
 
 The recovered scene calls control the cutscene timing. The port does not add
 an artificial black-screen delay to imitate resource-loading time in an emulator.

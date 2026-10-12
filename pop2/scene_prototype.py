@@ -83,7 +83,7 @@ CROUCH_SEQUENCES = {
     CROUCH_STEP_SEQUENCE, CROUCH_RISE_SEQUENCE,
 }
 JUMP_LANDING_SEQUENCE = 11
-DESERT_FAR_SHORE_SOUND_X = 0x30B - ROOM_WIDTH
+DESERT_FAR_SHORE_SOUND_X = 0x30B
 RUN_SEGMENT_SEQUENCES = RUN_CYCLE_SEQUENCES | {
     RUNNING_DRIFT_SEQUENCE, RUNNING_TURN_SEQUENCE
 }
@@ -1847,9 +1847,11 @@ class ScenePrototype(WindowControls):
                 self.load_level(3)
                 self.combat.player.life = self.combat.player.max_life = max_life
                 return
-            if self.room_id == 2 and self.player_x >= 572:
-                self.sequence_state.current_x = self.sequence_state.target_x = 572
-                self.player_x = 572
+            if self.room_id == 2 and self.player_x >= DESERT_FAR_SHORE_SOUND_X:
+                self.sequence_state.current_x = self.sequence_state.target_x = (
+                    DESERT_FAR_SHORE_SOUND_X
+                )
+                self.player_x = DESERT_FAR_SHORE_SOUND_X
                 self.clear_keys(None)
                 self.start_sequence(IDLE_SEQUENCE)
         if self.game.consume_completion():
@@ -2005,11 +2007,12 @@ class ScenePrototype(WindowControls):
             else:
                 if not audio.sound_playing(51):
                     audio.add_sound(51)
-                # DesertFunc 18:0334 checks world X >= 0x30B before cue 56.
-                # Room 2 starts one viewport-width into that coordinate space.
+                # DesertFunc 18:0334-0392 checks native room 3, X >= 0x30B,
+                # then gates cue 56 with Rnd(20) while it is not playing.
                 if (self.room_id == 2 and self.player_x >= DESERT_FAR_SHORE_SOUND_X
                         and not audio.sound_playing(56)):
-                    audio.add_sound(56)
+                    if audio.rng.randrange(21) == 0:
+                        audio.add_sound(56)
         audio.flush()
 
     def restart_after_death(self):

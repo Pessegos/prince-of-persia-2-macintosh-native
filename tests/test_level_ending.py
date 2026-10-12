@@ -238,7 +238,7 @@ class OriginalEndingTests(unittest.TestCase):
         scene.audio.add_sound.assert_called_once_with(51)
         scene.audio.ambient.assert_not_called()
 
-    def test_far_right_shore_plays_repeating_splash_cue_at_native_x_threshold(self):
+    def test_far_right_shore_splash_uses_native_threshold_and_random_gate(self):
         from pop2.scene_prototype import DESERT_FAR_SHORE_SOUND_X
 
         scene = self.scene
@@ -248,17 +248,40 @@ class OriginalEndingTests(unittest.TestCase):
         scene.room_id = 2
         scene.player_x = DESERT_FAR_SHORE_SOUND_X - 1
         scene.advance_audio()
-        self.assertNotIn((56,), [call.args for call in scene.audio.add_sound.call_args_list])
+        scene.audio.rng.randrange.assert_not_called()
 
         scene.audio.add_sound.reset_mock()
         scene.player_x = DESERT_FAR_SHORE_SOUND_X
+        scene.audio.rng.randrange.side_effect = (1, 0)
+        scene.advance_audio()
+        scene.audio.rng.randrange.assert_called_once_with(21)
+        self.assertNotIn((56,), [call.args for call in scene.audio.add_sound.call_args_list])
+
+        scene.audio.add_sound.reset_mock()
         scene.advance_audio()
         scene.audio.add_sound.assert_any_call(56)
 
-        scene.audio.add_sound.reset_mock()
+        scene.audio.rng.randrange.reset_mock()
         scene.audio.sound_playing.side_effect = lambda cue: cue == 56
         scene.advance_audio()
-        self.assertNotIn((56,), [call.args for call in scene.audio.add_sound.call_args_list])
+        scene.audio.rng.randrange.assert_not_called()
+
+    def test_far_right_shore_remains_walkable_until_native_splash_threshold(self):
+        from pop2.scene_prototype import DESERT_FAR_SHORE_SOUND_X
+
+        scene = self.scene
+        scene.load_level(2)
+        scene.room_id = scene.terrain_motion.room = 2
+        scene.player_x = scene.sequence_state.current_x = scene.sequence_state.target_x = 572
+        scene.advance_level_events()
+        self.assertEqual((scene.room_id, scene.player_x), (2, 572))
+
+        scene.player_x = scene.sequence_state.current_x = scene.sequence_state.target_x = (
+            DESERT_FAR_SHORE_SOUND_X
+        )
+        scene.advance_level_events()
+        self.assertEqual((scene.room_id, scene.player_x), (2, DESERT_FAR_SHORE_SOUND_X))
+        self.assertEqual(scene.sequence_state.target_x, DESERT_FAR_SHORE_SOUND_X)
 
     def test_beach_dev_jump_replays_arrival_instead_of_using_the_palace_position(self):
         scene = self.scene

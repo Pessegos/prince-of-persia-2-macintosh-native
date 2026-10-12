@@ -43,8 +43,10 @@ their commands in `caverns_entry.json`. Runtime uses those commands and
 Caverns.rsrc directly, without executing the Macintosh program.
 Only the starting room is currently supported. Animated cavern objects,
 special enemies, later rooms and the complete cavern renderer remain future work.
-The far-right shore's repeated splash cue is recovered from DesertFunc
-(CODE:18 0334-0392); other far-shore interactions remain unrecovered.
+DesertFunc (CODE:18 0334-0392) queues splash cue 56 in native room 3 at X >=
+0x30B, with a Rnd(20) gate while that cue is not playing. The far-right shore
+stays in view past the viewport, so the native threshold is not room-local.
+Other far-shore interactions remain unrecovered.
 
 `tests/test_desert.py` covers stone phases, contact, failure, opening cues,
 manual answers, modal input, the F1 toggle, exit collision and loading level 3.
