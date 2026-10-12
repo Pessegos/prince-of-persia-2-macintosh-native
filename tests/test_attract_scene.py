@@ -97,6 +97,13 @@ class AttractSceneTests(unittest.TestCase):
             scene.close_dev_mode()
             scene.dev_key_release(SimpleNamespace(keysym="F2"))
 
+    def test_opening_f2_menu_renders_only_once_while_it_pauses(self):
+        scene = self.scene
+        with patch.object(scene, "render", wraps=scene.render) as render:
+            self.assertEqual(self.key("F2"), "break")
+        self.assertEqual(render.call_count, 1)
+        scene.dev_key_release(SimpleNamespace(keysym="F2"))
+
     def test_cutscene_pause_dims_the_frame_and_centers_text_without_a_panel(self):
         scene = self.scene
         text = scene.cutscene_pause_text

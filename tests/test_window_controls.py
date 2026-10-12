@@ -38,24 +38,30 @@ class PresentationTests(unittest.TestCase):
             self.assertIsNone(host.bitmap_presenter)
             self.assertIsNotNone(host.image_ref)
 
-    def test_fullscreen_intro_menus_keep_the_opaque_bitmap_presenter(self):
-        for menu in ("game_menu", "dev_menu"):
-            with self.subTest(menu=menu):
-                host = WindowControls()
-                host.canvas = Mock()
-                host.canvas.find_all.return_value = (1,)
-                host.canvas.winfo_width.return_value = 3440
-                host.canvas.winfo_height.return_value = 1440
-                host.native_viewport = Image.new("RGBA", (512, 384), "red")
-                host.intro, host.fullscreen, host.paused = object(), True, True
-                setattr(host, menu, object())
-                with patch("pop2.window_controls.sys.platform", "win32"), \
-                        patch("pop2.bitmap_presenter.CanvasBitmap") as bitmap, \
-                        patch("pop2.window_controls.ImageTk.PhotoImage") as photo:
-                    host.present_viewport()
-                    bitmap.return_value.present.assert_called_once()
-                    photo.assert_not_called()
-                    self.assertIs(host.bitmap_presenter, bitmap.return_value)
+    def test_fullscreen_intro_menu_uses_tk_photo_and_resumes_bitmap_presenter(self):
+        host = WindowControls()
+        host.canvas = Mock()
+        host.canvas.find_all.return_value = (1,)
+        host.canvas.winfo_width.return_value = 3440
+        host.canvas.winfo_height.return_value = 1440
+        host.native_viewport = Image.new("RGBA", (512, 384), "red")
+        host.intro, host.fullscreen, host.paused = object(), True, True
+        host.game_menu = object()
+        presenter = Mock()
+        host.bitmap_presenter = presenter
+        with patch("pop2.window_controls.sys.platform", "win32"), \
+                patch("pop2.bitmap_presenter.CanvasBitmap") as bitmap, \
+                patch("pop2.window_controls.ImageTk.PhotoImage", side_effect=lambda frame: frame):
+            host.present_viewport()
+            presenter.close.assert_called_once_with()
+            self.assertIsNone(host.bitmap_presenter)
+            self.assertIsNotNone(host.image_ref)
+            self.assertEqual(host.canvas.itemconfigure.call_args.kwargs["image"], host.image_ref)
+
+            host.paused = False
+            host.game_menu = None
+            host.present_viewport()
+            bitmap.return_value.present.assert_called_once()
 
     def test_presentation_crops_padding_before_nearest_neighbor_scaling(self):
         host = WindowControls()

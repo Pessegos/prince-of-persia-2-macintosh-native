@@ -245,6 +245,7 @@ class WindowControls:
             return "break"
         if self.game_menu is not None and self.game_menu.page == "confirm":
             return "break"
+        already_paused = self.paused
         level_options = self.development_levels() if self.level_navigation_available() else ()
         if level_options:
             level_index = next((i for i, option in enumerate(level_options)
@@ -278,7 +279,8 @@ class WindowControls:
         self.clear_keys(None)
         self.pause_resume_keys.update(self.window_keys_down)
         self.update_cursor_visibility()
-        self.render()
+        if already_paused:
+            self.render()
         return "break"
 
     def close_dev_mode(self):
@@ -362,6 +364,7 @@ class WindowControls:
                     self.pause_resume_keys.update(self.window_keys_down)
                     self.render()
             return
+        already_paused = self.paused
         self.game_was_paused = self.dev_was_paused if self.dev_menu is not None else self.paused
         self.dev_menu = None
         self.game_menu = GameMenu(page=page, return_to_menu=page == "menu",
@@ -370,7 +373,8 @@ class WindowControls:
         self.clear_keys(None)
         self.pause_resume_keys.update(self.window_keys_down)
         self.update_cursor_visibility()
-        self.render()
+        if already_paused:
+            self.render()
 
     def close_game_menu(self, resume=False):
         if self.game_menu is None:
@@ -626,7 +630,11 @@ class WindowControls:
             width, height = VISIBLE_SIZE[0] * 2, VISIBLE_SIZE[1] * 2
         size, position = fit_viewport(width, height)
         if (sys.platform == "win32" and getattr(self, "fullscreen", False)
-                and getattr(self, "intro", None) is not None):
+                and getattr(self, "intro", None) is not None
+                and not getattr(self, "paused", False)
+                and getattr(self, "game_menu", None) is None
+                and getattr(self, "dev_menu", None) is None
+                and getattr(self, "copy_challenge", None) is None):
             from pop2.bitmap_presenter import CanvasBitmap
 
             if getattr(self, "bitmap_presenter", None) is None:

@@ -109,6 +109,12 @@ class GameMenuSceneTests(unittest.TestCase):
         self.assertFalse(scene.paused)
         self.assertEqual(scene.native_viewport.tobytes(), before.tobytes())
 
+    def test_opening_f1_menu_renders_only_once_while_it_pauses(self):
+        scene = self.scene
+        with patch.object(scene, "render", wraps=scene.render) as render:
+            self.assertEqual(self.press("F1"), "break")
+        self.assertEqual(render.call_count, 1)
+
     def test_alt_n_never_restarts_until_explicit_confirmation(self):
         scene = self.scene
         scene.jump_to_screen("9")
