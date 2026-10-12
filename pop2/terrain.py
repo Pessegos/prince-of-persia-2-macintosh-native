@@ -62,6 +62,7 @@ class LevelMap:
         self.start_room = struct.unpack_from(">H", level, 0x2198)[0] - 1
         self.start_tile = struct.unpack_from(">H", level, 0x219a)[0]
         self.desert = None
+        self.caverns = None
 
     def neighbor(self, room, direction):
         offset = {"left": 0, "right": 2, "up": 4, "down": 6}[direction]
@@ -97,6 +98,8 @@ class LevelMap:
         index = row * 10 + column
         kind = struct.unpack_from(">H", self.level, room * 60 + index * 2)[0]
         fg, bg = struct.unpack_from(">2H", self.level, 0x780 + room * 120 + index * 4)
+        if self.caverns is not None:
+            fg = self.caverns.foreground(room, index, fg)
         if kind == 4 and self.desert is not None:
             fg = (fg & 0xff00) | (104 if self.desert.exit_open else 0)
         elif kind == 30 and self.desert is not None and room == 0 and row == 1 and 2 <= column <= 7:

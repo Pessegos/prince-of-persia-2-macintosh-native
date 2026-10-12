@@ -12,11 +12,26 @@ class LevelRenderer:
         self.level = level
         self.rooms = {}
         self.desert_rooms = {}
+        self.cavern_frames = {}
+        self.cavern_program = None
+        if self.level.number == 3:
+            from pop2.caverns import cavern_assets
+
+            self.cavern_program = cavern_assets()[0]
         self.room(level.start_room)
 
-    def room(self, room_id):
+    def room(self, room_id, caverns=None):
         if not 0 <= room_id < 32:
             raise ValueError("Invalid scenery room")
+        if self.level.number == 3:
+            from pop2.caverns import cavern_room
+
+            frame = caverns.entry_frame if caverns is not None else 0
+            key = room_id, frame if room_id == self.level.start_room else 0
+            if key not in self.cavern_frames:
+                self.cavern_frames[key] = cavern_room(room_id, entry_frame=key[1])
+            self.rooms[room_id] = self.cavern_frames[key]
+            return self.rooms[room_id]
         if room_id not in self.rooms:
             if self.level.kind == 1:
                 if room_id not in (0, 1, 2):
@@ -27,10 +42,6 @@ class LevelRenderer:
                 scene = DesertScene.read(load_resource_file("Desert.rsrc"), room_id)
                 self.desert_rooms[room_id] = scene
                 self.rooms[room_id] = scene.room
-            elif self.level.number == 3:
-                from pop2.caverns import cavern_room
-
-                self.rooms[room_id] = cavern_room(room_id)
             else:
                 self.rooms[room_id] = build_opening_room(include_curtain=False, room_id=room_id,
                                                         level_resource_id=self.level.resource_id)

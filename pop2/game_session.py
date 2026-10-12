@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from pop2.animation_data import parse_aframe_records, parse_frame_records, sequence_words
 from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.desert_state import DesertState
+from pop2.cavern_state import CavernState
 from pop2.harbor import Harbor
 from pop2.level_data import LevelDefinition
 from pop2.level_transition import LevelExit
@@ -58,6 +59,7 @@ class GameSession:
     complete: bool = False
     exit: LevelExit | None = None
     desert: DesertState | None = None
+    caverns: CavernState | None = None
 
     @property
     def entry_active(self):
@@ -98,8 +100,10 @@ class GameSession:
         self.complete = False
         self.exit = None
         self.desert = DesertState() if level.kind == 1 else None
+        self.caverns = CavernState() if level.kind == 3 else None
         if self.level_map is not None:
             self.level_map.desert = self.desert
+            self.level_map.caverns = self.caverns
         self.room_id = level.start_room
         if self.desert is not None:
             self.desert.enter_room(self.room_id)

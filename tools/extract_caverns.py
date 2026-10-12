@@ -8,7 +8,7 @@ from pop2.terrain import LevelMap
 from tools.extract_enemy_profiles import expand_a5_data
 
 
-def recover_room(program, caverns, level, room_id=0):
+def recover_room(program, caverns, level, room_id=0, prince=None):
     from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE
     from unicorn.m68k_const import (
         UC_CPU_M68K_M68000, UC_M68K_REG_A5, UC_M68K_REG_A7,
@@ -17,6 +17,7 @@ def recover_room(program, caverns, level, room_id=0):
 
     resources = parse_resource_fork(program)
     artwork = parse_resource_fork(caverns)
+    flasks = parse_resource_fork(prince) if prince is not None else None
     data = expand_a5_data(resources)
     cpu = Uc(UC_ARCH_M68K, UC_MODE_BIG_ENDIAN)
     cpu.ctl_set_cpu_model(UC_CPU_M68K_M68000)
@@ -103,12 +104,16 @@ def recover_room(program, caverns, level, room_id=0):
             return
         if segment == 3 and offset == 4:
             fields = struct.unpack('>19h', cpu.mem_read(info, 38))
-            shape = 3500 + fields[12]
-            if shape not in artwork['SHAP']:
-                raise ValueError(f'Missing cavern shape {shape}')
+            library = fields[0]
+            if library not in (1, 4):
+                raise ValueError(f'Unsupported cavern shape library {library}')
+            shape = (3000 if library == 1 else 3500) + fields[12]
+            source = flasks if library == 1 else artwork
+            if source is None or shape not in source['SHAP']:
+                raise ValueError(f'Missing library {library} shape {shape}')
             commands.append([layer, shape, fields[7] * 51 + fields[13],
                              (fields[8] + 1) * 120 + 5 + fields[14], fields[3], fields[8],
-                             list(struct.unpack('>4h', cpu.mem_read(a5 - 0x4600, 8)))])
+                             list(struct.unpack('>4h', cpu.mem_read(a5 - 0x4600, 8))), library])
             result = 1
         elif segment == 3 and offset == 0x29e2:
             cpu.mem_write(info, bytes(38))
@@ -162,6 +167,37 @@ def recover_room(program, caverns, level, room_id=0):
 
 def extract_caverns(program, caverns, prince, output):
     level = parse_resource_fork(prince)['LEVL'][2002]['data']
-    rooms = {str(room): recover_room(program, caverns, level, room)['commands'] for room in range(32)}
-    result = {'version': 2, 'level': 3, 'rooms': rooms}
+    rooms = {str(room): recover_room(program, caverns, level, room, prince)['commands'] for room in range(32)}
+    result = {'version': 3, 'level': 3, 'rooms': rooms}
+    terrain = LevelMap(level)
+    # FirstFrame 2:5f62 scans for the first exit-right tile in the start room.
+    cell = next((cell for cell in range(30)
+                 if terrain.tile(terrain.start_room, cell % 10, cell // 10).kind == 17), None)
+    if cell is not None:
+        frames = exit_closing_frames(parse_resource_fork(program))
+        mutable = bytearray(level)
+        offset = 0x780 + terrain.start_room * 120 + cell * 4
+        foreground = struct.unpack_from('>H', level, offset)[0] & 0xff00
+        for frame in frames:
+            struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
+            frame['commands'] = recover_room(program, caverns, bytes(mutable), terrain.start_room, prince)['commands']
+        result['entry_exit'] = {'room': terrain.start_room, 'cell': cell, 'frames': frames}
     (output / 'caverns_entry.json').write_text(json.dumps(result) + '\n', encoding='ascii')
+
+
+def exit_closing_frames(resources):
+    data = expand_a5_data(resources)
+    # CloseExit 5:25d0 sets 79/state 4. ATMExit 5:15da reads the next
+    # state-indexed decrement, stopping with effect 20 only on underflow.
+    phase, state = 79, 4
+    frames = [{'phase': phase, 'sounds': []}]
+    while state < 31:
+        state += 1
+        decrement = struct.unpack_from('>h', data, len(data) - 0x45fc + state * 2)[0]
+        if decrement < 0:
+            raise ValueError('Invalid native exit closing decrement')
+        phase -= decrement
+        frames.append({'phase': max(0, phase), 'sounds': [20] if phase < 0 else []})
+        if phase < 0:
+            return frames
+    raise ValueError('Native exit closure did not terminate')

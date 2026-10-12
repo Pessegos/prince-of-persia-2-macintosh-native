@@ -21,6 +21,9 @@ Do not derive collision windows or trap delays from this successful route alone.
 
 ## Reference Moments
 
+The port boundaries below describe the audit snapshot, before the follow-up
+corrections recorded at the end of this document.
+
 | Approximate Time | Macintosh Observation | Port Boundary |
 | --- | --- | --- |
 | 6-12 s | Room 1 entrance door closes; Prince descends past the foreground columns and the camera cuts down to Room 4 | Door remains at its exported initial phase; no cavern door/plate controller exists |
@@ -70,7 +73,7 @@ and draw mode together. Runtime currently discards the draw-mode field too.
 1. Correct the portable export's library identities and drawing modes. Validate
    room images against Macintosh frames, especially flask rooms; a nonblank
    image or successful room load is insufficient.
-2. Make Room 1 functional: entry door, plates, terrain contact, descent/climb
+2. Make Room 1 functional: entry door, terrain contact, descent/climb
    occlusion and camera cuts. Compare actor positions and layer ordering, not
    elapsed route time with unknown player inputs.
 3. Recover reusable gate, plate and loose-floor state across rooms. Keep native
@@ -92,3 +95,22 @@ implemented or semantically verified.
 No gameplay changes were made during this audit. The previous 32-room tests
 still establish coverage and clip handling only; they do not certify a
 Macintosh-faithful level 3, even in the starting room.
+
+## Implemented After Audit
+
+- Export version 3 preserves BF library identity. Flask bodies and colored
+  monochrome masks now use Prince resources and their relocated palette;
+  large cavern rocks no longer substitute for potion pieces. Collection and
+  upgrades remain unimplemented.
+- Room 1's entry door closes from native FirstFrame/CloseExit/ATMExit data,
+  including the final impact cue. Restart resets it. Tiles 16/17 are the portal
+  halves, not two pressure plates; general gate/plate recovery remains separate.
+- The dock water mask is restricted to environment 5. It no longer truncates
+  actors below Y 327 in cavern Rooms 16/19.
+- A targeted entry descent works facing the building with Down + Shift. This
+  does not certify the full actor-clipping pipeline or every approach position.
+
+See [Cavern recovery](CAVERN_RECOVERY.md) for native addresses and validation.
+The next work remains terrain/object semantics and actor occlusion, followed by
+potions, skeletons, hazards, music and completion. These corrections do not
+constitute a completed level-3 route.

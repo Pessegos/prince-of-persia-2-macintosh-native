@@ -334,7 +334,9 @@ class ScenePrototype(WindowControls):
             hit_art = HitArtwork(self.kid, palette, self.first_shape_id,
                                  self.frames, guard_art.frames)
             game.combat.guard_art = guard_art
-        room = renderer.room(game.room_id)
+        if game.caverns is not None:
+            game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'))
+        room = renderer.room(game.room_id, game.caverns)
         self.game, self.level_renderer = game, renderer
         self.palette, self.sword_palette = palette, sword_palette
         self.guard_art, self.health_art, self.hit_art = guard_art, health_art, hit_art
@@ -1742,7 +1744,7 @@ class ScenePrototype(WindowControls):
             dx = self.sequence_state.target_x - before_x
             if motion.room not in self.room_cache:
                 try:
-                    self.level_renderer.room(motion.room)
+                    self.level_renderer.room(motion.room, self.game.caverns)
                 except ValueError as error:
                     # Keep the playable section intact at unsupported scenery.
                     motion.room = old_room
@@ -1859,6 +1861,10 @@ class ScenePrototype(WindowControls):
         self.player_x, self.action = state.target_x, state.action
 
     def advance_level_events(self):
+        if self.game.caverns is not None:
+            self.sequence_state.sound_events.extend(self.game.caverns.advance())
+            room = self.level_renderer.room(self.room_id, self.game.caverns)
+            self.background, self.foreground = room.background, room.foreground
         desert = getattr(self.game, "desert", None)
         if desert is not None and self.terrain_motion is not None:
             cues = desert.advance(self.room_id, self.sequence_state, self.frames[self.action],
@@ -2296,8 +2302,11 @@ class ScenePrototype(WindowControls):
             self.animation_after_id = None
         self.clear_keys(None)
         self.game.restart()
+        if self.game.caverns is not None:
+            self.game.caverns.configure_entry(self.level_renderer.cavern_program.get('entry_exit'))
         self.reset_level_controls()
-        room = self.level_renderer.room(self.room_id) if hasattr(self, "level_renderer") else None
+        room = (self.level_renderer.room(self.room_id, self.game.caverns)
+                if hasattr(self, "level_renderer") else None)
         if room is not None:
             self.background, self.foreground = room.background, room.foreground
         self.action = self.sequence_state.action
@@ -2339,7 +2348,7 @@ class ScenePrototype(WindowControls):
                      preserve_checkpoint=False):
         if self.level_map is None or not 0 <= room_id < 32 or not 0 <= row < 3:
             raise ValueError("Invalid level, room or floor")
-        room = self.level_renderer.room(room_id)
+        room = self.level_renderer.room(room_id, self.game.caverns)
         if x is None:
             columns = [column for column in range(10)
                        if self.level_map.tile(room_id, column, row).kind == 1]
@@ -2505,7 +2514,10 @@ class ScenePrototype(WindowControls):
         mask = (room.actor_mask(row, bottom, state, bounds, record)
                 if room is not None and row is not None else self.foreground.getchannel("A"))
         layer.putalpha(ImageChops.multiply(layer.getchannel("A"), ImageChops.invert(mask)))
-        if self.room_id in (15, 18):
+        level = getattr(getattr(self, 'game', None), 'level', None)
+        level_kind = getattr(state, 'level_kind', getattr(level, 'kind', None))
+        # ClipChar 4:4218-4228 restricts the dock waterline to environment 5.
+        if level_kind == 5 and self.room_id in (15, 18):
             water_y = 354 if state is not None and state.animation_state == 9 else 327
             layer.paste((0, 0, 0, 0), (0, water_y, layer.width, layer.height))
         if (getattr(state, 'level_kind', None) == 1

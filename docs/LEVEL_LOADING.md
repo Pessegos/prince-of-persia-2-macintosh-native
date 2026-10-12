@@ -64,12 +64,15 @@ previews rather than creating substitute guards.
 Rooftop scenery and the level-2 shore are implemented. The beach reads
 Desert.rsrc's original CUST/SHAP records, including the floating planks' animation.
 The stone controller is owned by the session and resets with the level.
+The cavern entry-door controller is likewise session-owned; import supplies
+its native closure phases and sound cues, and restart restores its initial state.
 The opening cave exit loads level 3, preserving the player's health capacity.
 All 32 rooms use drawing commands recovered at import time from CODE:3
 and CODE:8. The level-3 entry uses SEQS:5 (SetKidDefaults, 2:5e34).
 The original links are followed between these rooms, and F2 offers a floor-based
-preview placement in each room. Interactive objects and skeletons remain
-unsupported. See [Cavern recovery](CAVERN_RECOVERY.md) for the current boundary.
+preview placement in each room. Beyond entry-door closure, interactive cavern
+objects and skeletons remain unsupported. See [Cavern recovery](CAVERN_RECOVERY.md)
+for the current boundary.
 
 SEQS opcode -16 marks completion in the session, independently of the harbor
 watcher. The host continues the ship animation while the original end song
