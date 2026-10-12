@@ -224,14 +224,16 @@ class OriginalEndingTests(unittest.TestCase):
         self.assertNotEqual(frame.getpixel((420, 300)), (0, 0, 0, 255))
         self.assertNotEqual(frame.getpixel((420, 300)), (255, 255, 255, 255))
 
-    def test_shore_audio_repeats_without_restarting_an_active_wave(self):
+    def test_shore_audio_repeats_only_after_its_wave_cue_finishes(self):
         scene = self.scene
         scene.load_level(2)
         scene.audio = Mock()
         scene.audio.current_effect, scene.audio.effect_busy = 51, True
+        scene.audio.sound_playing.side_effect = lambda cue: (
+            cue == scene.audio.current_effect and scene.audio.effect_busy)
         scene.advance_audio()
         scene.audio.add_sound.assert_not_called()
-        scene.audio.effect_busy = False
+        scene.audio.current_effect = 12
         scene.advance_audio()
         scene.audio.add_sound.assert_called_once_with(51)
         scene.audio.ambient.assert_not_called()

@@ -53,7 +53,7 @@ class CueTests(unittest.TestCase):
         self.busy = {"effect": False, "music": False}
         self.playback.busy.side_effect = self.busy.__getitem__
         cues = {str(i): {"mode": 1, "priority": i, "file": f"{i}.wav"}
-                for i in (7, 11, 12, 31, 38, 40, 41, 42, 43, 119, 294, 295, 300)}
+                for i in (7, 11, 12, 31, 38, 40, 41, 42, 43, 51, 119, 294, 295, 300)}
         manifest = {"schema": 1, "cues": cues, "death_cues": [38] * 16,
                     "level_one": {"bank": 0, "groups": [0] * 960},
                     "ambient": [{"starts": [40], "counts": [3], "combat_group": -1}]}
@@ -94,6 +94,17 @@ class CueTests(unittest.TestCase):
         audio.flush()
         self.assertEqual(self.playback.play.call_count, 1)
         self.assertIsNone(audio.pending_effect)
+
+    def test_sound_playing_checks_the_requested_cue_not_any_effect(self):
+        self.audio.current_effect = 12
+        self.busy["effect"] = True
+        self.assertTrue(self.audio.sound_playing(12))
+        self.assertFalse(self.audio.sound_playing(51))
+        self.audio.pending_effect = 51
+        self.assertTrue(self.audio.sound_playing(51))
+        self.busy["effect"] = False
+        self.audio.pending_effect = None
+        self.assertFalse(self.audio.sound_playing(12))
 
     def test_mode_one_does_not_restart_itself_but_mode_two_can(self):
         audio = self.audio

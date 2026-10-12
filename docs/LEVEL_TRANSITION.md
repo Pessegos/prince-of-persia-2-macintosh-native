@@ -25,7 +25,9 @@ through the ship's departure, the voyage cutscene and the beach arrival.
   with bottom-based coordinates. AnimDsrtPlanks/DrawDsrtPlanks, CODE:18
   0808-08b4, cycle six steps with two steps per image. GetObjShouldAnim,
   CODE:5 11e2, is a visibility gate, not a separate animation timer.
-- DesertFunc, CODE:18 01ee-020a, repeats wave sound 51 when it finishes.
+- DesertFunc, CODE:18 01ee-020a, checks `PrinceSndOn(51)` and queues wave
+  sound 51 again when that specific cue finishes; unrelated effects do not
+  suppress the repeat.
 
 The recovered scene calls control the cutscene timing. The port does not add
 an artificial black-screen delay to imitate resource-loading time in an emulator.

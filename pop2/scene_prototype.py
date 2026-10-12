@@ -1995,13 +1995,13 @@ class ScenePrototype(WindowControls):
             audio.ambient(self.room_id, motion.row, max(0, min(9, int(contact // 51))),
                           fighting, self.combat.player.alive)
         elif motion is not None and self.game.level.number == 2:
-            # DesertFunc 18:01ee / 0004: waves are AddSound; cave cue 50
-            # and puzzle cues 46/49 are AddSong, leaving stone effects independent.
+            # DesertFunc 18:01ee checks PrinceSndOn(51) before queuing another wave.
+            # Cave cue 50 and puzzle cues 46/49 use AddSong instead.
             if self.room_id == 0:
                 audio.stop_sound(51)
                 if not audio.music_busy:
                     audio.add_song(50, ambient=True)
-            elif not audio.effect_busy:
+            elif not audio.sound_playing(51):
                 audio.add_sound(51)
         audio.flush()
 
