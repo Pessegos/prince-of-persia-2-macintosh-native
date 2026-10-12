@@ -28,8 +28,7 @@ logic being recovered from the Macintosh executable through reverse engineering.
 
 - **Level 1:** Fully playable route, including combat, the checkpoint, boat
   escape and voyage to level 2.
-- **Level 2:** Playable beach, shore and stone puzzle, with quicksand and the
-  optional original copy-protection challenge.
+- **Level 2:** Playable beach, shore and stone puzzle, including quicksand.
 - **Level 3:** Scenery recovered for all 32 rooms, including animated torches
   and entrance-door closure. Gameplay is still under development.
 - **Presentation and Systems:** Original intro, demo and credits with music
