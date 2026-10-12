@@ -278,8 +278,6 @@ class WindowControls:
             section_index=self.current_playback_part(), debug_status=self.debug_status,
             level_available=self.level_navigation_available(),
             level_options=level_options, level_index=level_index if level_options else 0,
-            screenshot_scale=self.screenshot_settings.scale,
-            screenshot_folder=str(self.screenshot_settings.folder),
         )
         if not self.dev_menu.level_available:
             self.dev_menu.change_tab(1)
@@ -305,12 +303,6 @@ class WindowControls:
     def apply_dev_action(self, action):
         if self.dev_menu is None:
             return
-        if self.dev_menu.screenshot_scale != self.screenshot_settings.scale:
-            self.screenshot_settings.scale = self.dev_menu.screenshot_scale
-            try:
-                self.screenshot_settings.save()
-            except OSError:
-                self.dev_menu.error = "Could not remember screenshot settings."
         if action == "resume":
             self.close_dev_mode()
         elif action == "go" and self.level_navigation_available():
@@ -337,15 +329,12 @@ class WindowControls:
             self.debug_status = self.dev_menu.debug_status
             self.update_status_visibility()
             self.render()
-        elif action == "screenshot_folder":
-            self.choose_screenshot_folder()
-        elif action == "screenshot":
-            self.capture_screenshot()
         else:
             self.render()
 
     def choose_screenshot_folder(self):
         settings = self.screenshot_settings
+        menu = self.game_menu
         held_keys = self.window_keys_down.copy()
         self.screenshot_dialog_active = True
         try:
@@ -358,10 +347,10 @@ class WindowControls:
                 selected = Path(folder).resolve()
                 ScreenshotSettings(selected, settings.scale).save()
                 settings.folder = selected
-                self.dev_menu.screenshot_folder = str(selected)
-                self.dev_menu.error = self.dev_menu.screenshot_status = ""
+                menu.screenshot_folder = str(selected)
+                menu.error = menu.screenshot_status = ""
         except (OSError, tk.TclError):
-            self.dev_menu.error = "Could not remember the screenshot folder."
+            menu.error = "Could not remember the screenshot folder."
         finally:
             self.screenshot_dialog_active = False
             self.clear_keys(None)
@@ -369,6 +358,7 @@ class WindowControls:
             self.render()
 
     def capture_screenshot(self):
+        menu = self.game_menu if self.game_menu is not None and self.game_menu.page == "screenshots" else None
         try:
             viewport = getattr(self, "screenshot_viewport", None)
             if viewport is None:
@@ -376,16 +366,16 @@ class WindowControls:
             path = save_screenshot(viewport, self.screenshot_settings)
         except (OSError, ValueError) as exc:
             message = "Could not save PNG. Check the screenshot folder."
-            if self.dev_menu is not None:
-                self.dev_menu.error = message
+            if menu is not None:
+                menu.error = message
                 self.render()
             else:
                 messagebox.showerror("Screenshot", f"{message}\n\n{exc}", parent=self.root)
             return None
         self.status.set(f"Screenshot saved: {path}")
-        if self.dev_menu is not None:
-            self.dev_menu.error = ""
-            self.dev_menu.screenshot_status = "PNG saved"
+        if menu is not None:
+            menu.error = ""
+            menu.screenshot_status = "PNG saved"
             self.render()
         return path
 
@@ -432,7 +422,9 @@ class WindowControls:
         self.game_was_paused = self.dev_was_paused if self.dev_menu is not None else self.paused
         self.dev_menu = None
         self.game_menu = GameMenu(page=page, return_to_menu=page == "menu",
-                                  development=self.development_available())
+                                  development=self.development_available(),
+                                  screenshot_scale=self.screenshot_settings.scale,
+                                  screenshot_folder=str(self.screenshot_settings.folder))
         self.set_paused(True)
         self.clear_keys(None)
         self.pause_resume_keys.update(self.window_keys_down)
@@ -451,10 +443,21 @@ class WindowControls:
         self.render()
 
     def apply_game_action(self, action):
+        menu = self.game_menu
+        if menu is not None and menu.page == "screenshots" and menu.screenshot_scale != self.screenshot_settings.scale:
+            self.screenshot_settings.scale = menu.screenshot_scale
+            try:
+                self.screenshot_settings.save()
+            except OSError:
+                menu.error = "Could not remember screenshot settings."
         if action in ("close", "resume"):
             self.close_game_menu(resume=action == "resume")
-        elif action in ("confirm_new", "about"):
-            self.open_game_menu("confirm" if action == "confirm_new" else "about")
+        elif action in ("confirm_new", "about", "screenshots"):
+            self.open_game_menu("confirm" if action == "confirm_new" else action)
+        elif action == "screenshot_folder":
+            self.choose_screenshot_folder()
+        elif action == "screenshot":
+            self.capture_screenshot()
         elif action in ("new_game", "restart"):
             self.set_paused(True)
             (getattr(self, "new_game", self.restart_opening) if action == "new_game" else self.restart_level)()

@@ -1,4 +1,4 @@
-"""Clean viewport PNGs and local developer capture preferences."""
+"""Clean viewport PNGs and local capture preferences."""
 
 from dataclasses import dataclass
 from datetime import datetime

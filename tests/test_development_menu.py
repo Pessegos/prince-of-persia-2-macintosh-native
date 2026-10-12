@@ -113,12 +113,8 @@ class MenuModelTests(unittest.TestCase):
         self.assertEqual(menu.key("space"), "debug_status")
         self.assertTrue(menu.debug_status)
         menu.key("Down")
-        self.assertEqual(menu.focus, 0)
-        menu.key("Down")
-        menu.key("Down")
-        menu.key("Down")
         menu.key("Left")
-        self.assertEqual(menu.focus, 2)
+        self.assertEqual(menu.focus, 3)
 
     def test_playback_dropdown_scrolls_to_all_parts_without_covering_the_viewport(self):
         menu = self.menu
@@ -278,7 +274,8 @@ class MenuSceneTests(unittest.TestCase):
         with patch.object(scene.ui_font, "text", wraps=scene.ui_font.text) as text:
             scene.open_dev_mode()
         labels = [call.args[0] for call in text.call_args_list]
-        self.assertIn("Dev Mode", labels)
+        self.assertIn("Developer Tools", labels)
+        self.assertNotIn("Dev Mode", labels)
         self.assertNotIn("Development", labels)
 
     def test_clean_capture_matches_unpaused_game_and_excludes_menu_and_pause_text(self):
@@ -286,8 +283,8 @@ class MenuSceneTests(unittest.TestCase):
         scene.jump_to_screen("5")
         original = scene.native_viewport.crop((1, 0, 511, 384)).convert("RGB")
         scene.set_paused(True)
-        scene.open_dev_mode()
-        scene.dev_menu.change_tab(2)
+        scene.open_game_menu()
+        scene.apply_game_action("screenshots")
         scene.render()
         with TemporaryDirectory() as directory:
             scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
@@ -295,7 +292,7 @@ class MenuSceneTests(unittest.TestCase):
             with Image.open(path) as image:
                 self.assertEqual(image.tobytes(), original.tobytes())
         self.assertTrue(scene.paused)
-        self.assertIsNotNone(scene.dev_menu)
+        self.assertIsNotNone(scene.game_menu)
 
     def test_intro_and_demo_capture_exclude_the_dimmed_pause_overlay(self):
         scene = self.scene
@@ -312,27 +309,26 @@ class MenuSceneTests(unittest.TestCase):
                     with Image.open(path) as image:
                         self.assertEqual(image.tobytes(), original.tobytes())
 
-    def test_capture_preferences_are_kept_when_the_developer_menu_is_reopened(self):
+    def test_capture_preferences_are_kept_when_the_game_menu_is_reopened(self):
         scene = self.scene
         with TemporaryDirectory() as directory:
             scene.screenshot_settings = ScreenshotSettings(Path(directory), 2)
-            scene.open_dev_mode()
-            scene.dev_menu.change_tab(2)
-            scene.dev_menu.focus = 0
-            scene.dev_menu.select(3)
+            scene.open_game_menu()
+            scene.apply_game_action("screenshots")
+            scene.game_menu.screenshot_scale = 4
             with patch.object(ScreenshotSettings, "save") as save:
-                scene.apply_dev_action("changed")
+                scene.apply_game_action("changed")
                 save.assert_called_once_with()
-            scene.close_dev_mode()
-            scene.open_dev_mode()
-            self.assertEqual(scene.dev_menu.screenshot_scale, 4)
-            self.assertEqual(scene.dev_menu.screenshot_folder, directory)
+            scene.close_game_menu()
+            scene.open_game_menu()
+            self.assertEqual(scene.game_menu.screenshot_scale, 4)
+            self.assertEqual(scene.game_menu.screenshot_folder, directory)
 
-    def test_display_capture_menu_text_and_controls_fit_the_panel(self):
+    def test_game_capture_menu_text_and_controls_fit_the_panel(self):
         scene = self.scene
-        scene.open_dev_mode()
-        menu = scene.dev_menu
-        menu.change_tab(2)
+        scene.open_game_menu()
+        scene.apply_game_action("screenshots")
+        menu = scene.game_menu
         menu.screenshot_folder = "C:/[a very long folder name]/\u65e5\u672c/" * 8
         menu.screenshot_status = "PNG saved"
         with patch.object(scene.ui_font, "text", wraps=scene.ui_font.text) as text:
@@ -341,10 +337,9 @@ class MenuSceneTests(unittest.TestCase):
         self.assertIn("Save PNG", labels)
         self.assertIn("Choose folder...", labels)
         self.assertIn("PNG saved", labels)
-        for control in menu.controls:
-            left, top, right, bottom = menu.control_rect(control)
-            self.assertTrue(100 <= left < right <= 412)
-            self.assertTrue(127 < top < bottom <= 350)
+        for left, top, right, bottom in menu.CAPTURE_CONTROLS:
+            self.assertTrue(80 <= left < right <= 432)
+            self.assertTrue(127 < top < bottom <= 322)
 
     def test_debug_status_is_hidden_by_default_and_restored_only_when_enabled(self):
         scene = self.scene

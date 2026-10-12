@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageDraw
 
-from pop2.game_ui import DevelopmentMenu
+from pop2.game_ui import DevelopmentMenu, VISIBLE_SIZE
 
 
 @dataclass(frozen=True)
@@ -26,13 +26,24 @@ class GameMenu:
     page: str = "menu"
     return_to_menu: bool = True
     copy_protection: bool = True
+    screenshot_scale: int = 3
+    screenshot_folder: str = ""
+    screenshot_status: str = ""
+    error: str = ""
+    dropdown: bool = False
+    option_index: int = 0
 
-    PANEL = (64, 28, 448, 334)
+    PANEL = (64, 28, 448, 356)
     DIALOG = (80, 108, 432, 274)
     ABOUT_DIALOG = (80, 108, 432, 292)
     BUTTONS = ((100, 228, 242, 258), (254, 228, 412, 258))
     ROW_TOP = 64
     ROW_HEIGHT = 22
+    SCREENSHOT_PANEL = (80, 92, 432, 322)
+    CAPTURE_CONTROLS = ((212, 136, 412, 164), (100, 180, 412, 208),
+                        (100, 250, 250, 282), (264, 250, 412, 282))
+    CAPTURE_SIZES = tuple(f"{scale}x ({VISIBLE_SIZE[0] * scale} x {VISIBLE_SIZE[1] * scale})"
+                          for scale in range(1, 5))
 
     @property
     def items(self):
@@ -47,23 +58,33 @@ class GameMenu:
             MenuItem("hall", "Hall of Fame", "Alt+H", False),
             MenuItem("about", "About", "Alt+V"),
             MenuItem("fullscreen", "Fullscreen", "Alt+Enter", checked=self.fullscreen),
-            MenuItem("development", "Dev Mode", "F2", self.development),
+            MenuItem("development", "Developer Tools", "F2", self.development),
             MenuItem("copy_protection", "Copy protection", "", checked=self.copy_protection),
+            MenuItem("screenshots", "Screenshots", ""),
         )
 
     def show_page(self, page):
         self.return_to_menu = self.page == "menu"
         self.page = page
         self.focus = 0
+        self.dropdown = False
+        self.error = self.screenshot_status = ""
 
     def back(self):
         if not self.return_to_menu:
             return "close"
         self.page = "menu"
         self.focus = 0
+        self.dropdown = False
         return "changed"
 
     def activate(self):
+        if self.page == "screenshots":
+            if self.focus == 0:
+                self.dropdown = True
+                self.option_index = self.screenshot_scale - 1
+                return "changed"
+            return self.back() if self.focus == 3 else {1: "screenshot_folder", 2: "screenshot"}[self.focus]
         if self.page == "confirm":
             return "new_game" if self.focus == 1 else self.back()
         if self.page == "about":
@@ -72,6 +93,32 @@ class GameMenu:
         return item.action if item.enabled else "changed"
 
     def key(self, key, backwards=False):
+        if self.page == "screenshots":
+            if key == "Escape":
+                if self.dropdown:
+                    self.dropdown = False
+                    return "changed"
+                return self.back()
+            if key == "Tab":
+                self.dropdown = False
+                self.focus = (self.focus + (-1 if backwards else 1)) % 4
+                return "changed"
+            if self.dropdown:
+                if key in ("Up", "Down", "Left", "Right"):
+                    self.option_index = (self.option_index + (-1 if key in ("Up", "Left") else 1)) % 4
+                elif key in ("Return", "KP_Enter", "space"):
+                    self.screenshot_scale = self.option_index + 1
+                    self.dropdown = False
+            elif key in ("Up", "Down"):
+                delta = -1 if key == "Up" else 1
+                self.focus = (self.focus + delta) % 4
+            elif key in ("Left", "Right") and self.focus == 0:
+                self.screenshot_scale = (self.screenshot_scale - 1 + (-1 if key == "Left" else 1)) % 4 + 1
+            elif key in ("Left", "Right") and self.focus in (2, 3):
+                self.focus = 2 if key == "Left" else 3
+            elif key in ("Return", "KP_Enter", "space"):
+                return self.activate()
+            return "changed"
         if key == "Escape":
             return "close" if self.page == "menu" else self.back()
         if key in ("Return", "KP_Enter", "space"):
@@ -92,6 +139,14 @@ class GameMenu:
         return (80, top, 432, top + self.ROW_HEIGHT - 2)
 
     def hit(self, x, y):
+        if self.page == "screenshots":
+            if self.dropdown:
+                left, _top, right, bottom = self.CAPTURE_CONTROLS[0]
+                if left <= x < right and bottom <= y < bottom + 4 * self.ROW_HEIGHT:
+                    return int((y - bottom) // self.ROW_HEIGHT)
+                return None
+            return next((i for i, rect in enumerate(self.CAPTURE_CONTROLS)
+                         if DevelopmentMenu.contains(rect, x, y)), None)
         rects = ([self.row_rect(i) for i in range(len(self.items))]
                  if self.page == "menu" else self.BUTTONS if self.page == "confirm"
                  else ((190, 228, 322, 258),))
@@ -100,13 +155,19 @@ class GameMenu:
 
     def hover(self, x, y):
         index = self.hit(x, y)
-        if index is None or index == self.focus:
+        field = "option_index" if self.page == "screenshots" and self.dropdown else "focus"
+        if index is None or index == getattr(self, field):
             return False
-        self.focus = index
+        setattr(self, field, index)
         return True
 
     def click(self, x, y):
         index = self.hit(x, y)
+        if self.page == "screenshots" and self.dropdown:
+            if index is not None:
+                self.screenshot_scale = index + 1
+            self.dropdown = False
+            return "changed"
         if index is None:
             return "changed"
         self.focus = index
@@ -134,11 +195,46 @@ class GameMenu:
             text(label, (rect[0] + rect[2]) // 2, rect[1] + 10, align="center",
                  max_width=rect[2] - rect[0] - 12)
 
-        panel = self.PANEL if self.page == "menu" else (
+        panel = self.SCREENSHOT_PANEL if self.page == "screenshots" else self.PANEL if self.page == "menu" else (
             self.ABOUT_DIALOG if self.page == "about" else self.DIALOG)
         draw.rectangle(panel,
                        fill="#181818", outline="#858585")
-        if self.page == "confirm":
+        if self.page == "screenshots":
+            text("Screenshots", 256, 110, gold, "center")
+            text("PNG size", 100, 144)
+            left, top, right, bottom = self.CAPTURE_CONTROLS[0]
+            draw.rectangle((left, top, right, bottom), fill="#303030" if self.focus == 0 else "#222222",
+                           outline=gold if self.focus == 0 else "#626262")
+            text(self.CAPTURE_SIZES[self.screenshot_scale - 1], left + 10, top + 9, max_width=right - left - 34)
+            draw.polygon(((right - 15, top + 12), (right - 7, top + 12),
+                          (right - 11, top + 16)), fill=white)
+            button(self.CAPTURE_CONTROLS[1], "Choose folder...", self.focus == 1)
+            encoded = self.screenshot_folder.replace("\\", "/").encode("mac_roman", errors="replace")
+            encoded = bytes(code if code in font.glyphs else 63 for code in encoded)
+            widths = [font.glyphs[code][2] for code in encoded]
+            width, start = sum(widths), 0
+            if width > 312:
+                limit = 312 - font.text("...").width
+                while width > limit and start < len(widths):
+                    width -= widths[start]
+                    start += 1
+            text(("..." if start else "") + encoded[start:].decode("mac_roman"), 100, 218, muted)
+            button(self.CAPTURE_CONTROLS[2], "Save PNG", self.focus == 2)
+            button(self.CAPTURE_CONTROLS[3], "Back" if self.return_to_menu else "Close", self.focus == 3)
+            if self.error or self.screenshot_status:
+                text(self.error or self.screenshot_status, 100, 294,
+                     "#ff9b9b" if self.error else gold, max_width=312)
+            if self.dropdown:
+                left, _top, right, bottom = self.CAPTURE_CONTROLS[0]
+                draw.rectangle((left, bottom, right, bottom + 4 * self.ROW_HEIGHT),
+                               fill="#222222", outline=gold)
+                for index, label in enumerate(self.CAPTURE_SIZES):
+                    y = bottom + index * self.ROW_HEIGHT
+                    if index == self.option_index:
+                        draw.rectangle((left + 1, y + 1, right - 1, y + self.ROW_HEIGHT - 1), fill="#454545")
+                    text(label, left + 8, y + 6,
+                         gold if index == self.screenshot_scale - 1 else white, max_width=right - left - 16)
+        elif self.page == "confirm":
             text("New game?", 256, 128, gold, "center")
             text("Restart the game?", 256, 165, align="center")
             text("Unsaved progress will be lost.", 256, 187, muted, "center", 312)
@@ -169,5 +265,5 @@ class GameMenu:
                 # The game's NFNT replaces '+' with a trademark glyph.
                 text(item.shortcut.replace("+", "-"), rect[2] - 10, y, color, "right", 100)
             if not self.items[self.focus].enabled:
-                text("Not implemented yet", 256, 339, muted, "center")
+                text("Not implemented yet", 256, 361, muted, "center")
         return image

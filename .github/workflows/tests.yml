@@ -23,5 +23,5 @@ jobs:
       - run: python -m tools.recovery_catalog --check
       - name: Desert and cavern rules without original game files
         run: python -m unittest -q tests.test_desert tests.test_caverns
-      - name: Screenshot export and developer capture controls
+      - name: Screenshot export and game-menu capture controls
         run: python -m unittest -q tests.test_screenshots

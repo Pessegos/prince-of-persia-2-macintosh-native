@@ -1,4 +1,6 @@
 from types import SimpleNamespace
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import subprocess
 import sys
 import textwrap
@@ -9,6 +11,7 @@ from PIL import Image
 
 from pop2.game_menu import GameMenu
 from pop2.game_ui import fit_viewport
+from pop2.screenshots import ScreenshotSettings
 
 
 class GameMenuModelTests(unittest.TestCase):
@@ -19,7 +22,7 @@ class GameMenuModelTests(unittest.TestCase):
         self.assertNotIn("Alt+F", shortcuts)
         self.assertNotIn("Alt+E", shortcuts)
         self.assertIn("Alt+Enter", shortcuts)
-        self.assertEqual(next(item.label for item in items if item.shortcut == "F2"), "Dev Mode")
+        self.assertEqual(next(item.label for item in items if item.shortcut == "F2"), "Developer Tools")
         self.assertEqual({item.action for item in items if not item.enabled},
                          {"save", "open", "hall"})
 
@@ -71,6 +74,13 @@ class GameMenuModelTests(unittest.TestCase):
         menu = GameMenu(page="about", return_to_menu=False)
         self.assertEqual(menu.click(256, 240), "close")
 
+    def test_all_command_rows_fit_inside_the_panel(self):
+        menu = GameMenu()
+        for index in range(len(menu.items)):
+            left, top, right, bottom = menu.row_rect(index)
+            self.assertTrue(menu.PANEL[0] < left < right < menu.PANEL[2])
+            self.assertTrue(menu.PANEL[1] < top < bottom < menu.PANEL[3])
+
 
 class GameMenuSceneTests(unittest.TestCase):
     def setUp(self):
@@ -114,6 +124,33 @@ class GameMenuSceneTests(unittest.TestCase):
         with patch.object(scene, "render", wraps=scene.render) as render:
             self.assertEqual(self.press("F1"), "break")
         self.assertEqual(render.call_count, 1)
+
+    def test_f1_capture_works_during_intro_with_developer_tools_unavailable(self):
+        scene = self.scene
+        scene.start_intro()
+        scene.render()
+        intro = scene.intro
+        with TemporaryDirectory() as directory:
+            scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
+            with patch.object(scene, "development_available", return_value=False):
+                self.press("F1")
+                scene.game_menu.focus = next(index for index, item in enumerate(scene.game_menu.items)
+                                             if item.action == "screenshots")
+                self.press("Return")
+                self.assertEqual(scene.game_menu.page, "screenshots")
+                expected = scene.screenshot_viewport.crop((1, 0, 511, 384)).convert("RGB")
+                self.press("F8")
+                files = list(Path(directory).glob("*.png"))
+                self.assertEqual(len(files), 1)
+                with Image.open(files[0]) as image:
+                    self.assertEqual(image.tobytes(), expected.tobytes())
+                self.assertTrue(scene.paused)
+                self.assertIs(scene.intro, intro)
+                self.assertIsNone(scene.dev_menu)
+                self.press("Escape")
+                self.assertEqual(scene.game_menu.page, "menu")
+                self.press("Escape")
+                self.assertFalse(scene.paused)
 
     def test_alt_n_never_restarts_until_explicit_confirmation(self):
         scene = self.scene
