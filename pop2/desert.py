@@ -81,7 +81,7 @@ class DesertScene:
         foreground = Image.new('RGBA', background.size)
         for record in records:
             index, bottom, x, draw_pass = record[:4]
-            if draw_pass == 0 or draw_pass == 1 and kind == 7:
+            if draw_pass in (0, 1):
                 sprite = shapes[first_shape + index]
                 layer = foreground if draw_pass == 1 else background
                 layer.paste(sprite, (x, bottom - sprite.height), sprite)
@@ -104,22 +104,21 @@ class DesertScene:
         if state is None:
             return frame
         if front:
-            # DrawDsrtExit 18:06dc: both entrance pieces rise three pixels
-            # per phase, and are clipped to the original exit drawing area.
-            layer = Image.new('RGBA', frame.size)
-            for index, bottom, x in ((1, 269, 0), (2, 248, 13)):
-                sprite = self.shapes[first + index]
-                layer.paste(sprite, (x, bottom - state.gate * 3 - sprite.height), sprite)
-            layer = layer.crop((0, 59, 87, 286))
-            frame.paste(layer, (0, 59), layer)
+            return frame
         else:
-            shape(16 + state.symbol, 158, 41)
+            # DrawDsrtExit (18:074c) moves CUST X, leaving Y and the
+            # foreground cliff fixed. Both moving pieces use background pass 11.
+            door, symbol = self.records[2], self.records[16]
+            shape(door[0], door[1], door[2] - state.gate * 3)
+            shape(16 + state.symbol, symbol[1], symbol[2] - state.gate * 3)
             for index, stone in enumerate(state.stones):
                 if stone.phase:
                     record = self.records[stone.phase + 2]
                     shape(record[0], 240 + record[1], (index + 2) * 51 + record[2])
-                if index == state.marked_stone:
-                    shape(19 + state.symbol if stone.phase >= 9 else 22 + state.symbol,
-                          240 + max(-6, (12 - stone.phase) * 2 - 6) if stone.phase > 9 else 240,
-                          (index + 2) * 51 + 30)
+                if index == state.marked_stone and stone.phase >= 9:
+                    mark = self.records[17 if stone.phase == 9 else 18]
+                    bottom = (mark[1] if stone.phase == 9
+                              else max(-6, (12 - stone.phase) * 2 - 6))
+                    shape((22 if stone.phase == 9 else 19) + state.symbol,
+                          240 + bottom, (index + 2) * 51 + mark[2])
         return frame

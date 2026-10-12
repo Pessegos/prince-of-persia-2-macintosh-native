@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 from pop2.copy_protection import CopyProtection
 from pop2.desert_state import DesertState, Stone
@@ -35,24 +35,89 @@ class StoneTests(unittest.TestCase):
         self.assertEqual((stone.phase, stone.delay, stone.direction), (0, 0, 0))
 
     def test_leaving_a_stone_sinks_it_but_airborne_poses_do_not_update_contact(self):
-        desert = DesertState(marked_stone=5, stones=[Stone(13, 0, 0) for _ in range(6)])
+        desert = DesertState(marked_stone=5, stones=[Stone(13, 0, 0) for _ in range(6)], room=0)
         desert.advance(0, self.state(2), self.record)
         desert.advance(0, self.state(3, 52), self.record)
         self.assertEqual(desert.last_column, 2)
         self.assertEqual(desert.stones[0].phase, 13)
         self.assertIn(53, desert.advance(0, self.state(3), self.record))
-        self.assertEqual(desert.stones[0].phase, 12)
+        self.assertEqual(desert.stones[0].phase, 11)
 
     def test_only_marked_stone_remaining_opens_the_exit_with_native_cues(self):
         stones = [Stone(0, 0, 0) for _ in range(6)]
         stones[3].phase = 13
-        desert = DesertState(marked_stone=3, stones=stones)
+        desert = DesertState(marked_stone=3, stones=stones, room=0)
         cues = []
         for _ in range(50):
             cues.extend(desert.advance(0, self.state(8), self.record))
         self.assertTrue(desert.exit_open)
         self.assertEqual(desert.stones[3].phase, 0)
-        self.assertEqual(cues, [46, 55, 47])
+        self.assertEqual(cues, [46, 55, 53, 47] + [17] * 20)
+
+    def test_stone_delays_start_on_cave_entry_after_waiting_on_the_beach(self):
+        desert = DesertState(marked_stone=3)
+        for _ in range(200):
+            self.assertEqual(desert.advance(1, self.state(8), self.record), [])
+        self.assertEqual([(stone.phase, stone.delay) for stone in desert.stones], [(0, 0)] * 6)
+        with patch('pop2.desert_state.random.randint', return_value=21):
+            self.assertEqual(desert.advance(0, self.state(8), self.record), [])
+            self.assertEqual([stone.delay for stone in desert.stones], [21] * 6)
+            for _ in range(21):
+                self.assertEqual(desert.advance(0, self.state(8), self.record), [])
+        self.assertEqual([stone.phase for stone in desert.stones], [0] * 6)
+        self.assertEqual(desert.advance(0, self.state(8), self.record), [52] * 6)
+        self.assertEqual([stone.phase for stone in desert.stones], [1] * 6)
+
+    def test_room_reentry_rearms_sunken_stones_and_clears_puzzle_failure(self):
+        desert = DesertState(marked_stone=2, room=0, failed=True)
+        desert.stones[0] = Stone(13, 0, 0)
+        desert.stones[1] = Stone(5, 0, -1)
+        desert.enter_room(1)
+        with patch('pop2.desert_state.random.randint', return_value=31):
+            desert.enter_room(0)
+        self.assertFalse(desert.failed)
+        self.assertEqual(desert.last_column, -1)
+        self.assertEqual((desert.stones[0].phase, desert.stones[0].direction), (13, 0))
+        self.assertEqual((desert.stones[1].phase, desert.stones[1].direction), (5, -1))
+        self.assertEqual([(s.phase, s.delay, s.direction) for s in desert.stones[2:]],
+                         [(0, 31, 1)] * 4)
+
+    def test_activated_stones_animate_offscreen_and_dead_delays_wait(self):
+        desert = DesertState(room=1)
+        desert.stones[0] = Stone(2, 0, 1)
+        desert.stones[1] = Stone(0, 21, 1)
+        desert.advance(1, self.state(8), self.record, alive=False)
+        self.assertEqual(desert.stones[0].phase, 3)
+        self.assertEqual(desert.stones[1].delay, 21)
+        desert.advance(1, self.state(8), self.record)
+        self.assertEqual((desert.stones[0].phase, desert.stones[1].delay), (4, 20))
+
+    def test_gate_movement_sound_waits_for_puzzle_effect_and_stops_at_twenty(self):
+        desert = DesertState(room=0, gate_active=True)
+        audio = Mock()
+        audio.sound_playing.return_value = True
+        self.assertEqual(desert.advance(0, self.state(8), self.record, audio=audio), [])
+        self.assertEqual(desert.gate, 1)
+        audio.sound_playing.return_value = False
+        self.assertEqual(desert.advance(0, self.state(8), self.record, audio=audio), [17])
+        for _ in range(18):
+            desert.advance(0, self.state(8), self.record, audio=audio)
+        self.assertTrue(desert.exit_open)
+        audio.stop_sound.assert_not_called()
+        desert.advance(0, self.state(8), self.record, audio=audio)
+        audio.stop_sound.assert_called_once_with(17)
+        self.assertFalse(desert.gate_active)
+
+    def test_sequence_twenty_seven_freezes_rise_delays_across_animation_links(self):
+        desert = DesertState(room=0)
+        desert.stones[0] = Stone(0, 21, 1)
+        state = self.state(8)
+        state.sequence_id, state.source_sequence_id = 2, 27
+        desert.advance(0, state, self.record)
+        self.assertEqual(desert.stones[0].delay, 21)
+        state.source_sequence_id = 2
+        desert.advance(0, state, self.record)
+        self.assertEqual(desert.stones[0].delay, 20)
 
     def test_standing_on_marked_stone_fails_but_jumping_over_it_does_not(self):
         desert = DesertState(marked_stone=2)
@@ -253,6 +318,88 @@ class OriginalDesertTests(unittest.TestCase):
         RooftopSceneTests.setUp(self)
         self.scene.load_level(2)
         self.scene.peaceful = True
+
+    def test_cave_entry_has_no_ground_symbol_and_keeps_the_foreground_cliff(self):
+        scene = self.scene
+        scene.jump_to_room(0, x=440)
+        art = scene.level_renderer.desert_rooms[0]
+        back = art.draw(art.room.background.copy(), 0, scene.game.desert)
+        ground = (100, 200, 445, 250)
+        self.assertIsNone(ImageChops.difference(back.convert('RGB'),
+                                              art.room.background.convert('RGB')).crop(ground).getbbox())
+        self.assertIsNotNone(art.room.foreground.getbbox())
+
+    def test_door_and_symbol_use_native_horizontal_offsets_in_the_background(self):
+        scene = self.scene
+        scene.jump_to_room(0, x=440)
+        art = scene.level_renderer.desert_rooms[0]
+        desert = scene.game.desert
+        desert.symbol = 1
+        for phase in (0, 1, 10, 20):
+            with self.subTest(phase=phase):
+                desert.gate = phase
+                back = art.draw(art.room.background.copy(), 0, desert)
+                expected = art.room.background.copy()
+                # DrawDsrtExit 18:074c-0788: recovered CUST 2 and 16 calls.
+                for shape_id, bottom, x in ((4002, 248, 13 - phase * 3),
+                                             (4017, 158, 41 - phase * 3)):
+                    sprite = art.shapes[shape_id]
+                    expected.paste(sprite, (x, bottom - sprite.height), sprite)
+                self.assertIsNone(ImageChops.difference(back.convert('RGB'),
+                                                      expected.convert('RGB')).getbbox())
+                front = art.draw(back.copy(), 0, desert, front=True)
+                self.assertIsNone(ImageChops.difference(front.convert('RGB'),
+                                                      back.convert('RGB')).getbbox())
+
+    def test_marked_stone_symbol_appears_at_nine_then_uses_the_raised_variant(self):
+        scene = self.scene
+        scene.jump_to_room(0, x=440)
+        art = scene.level_renderer.desert_rooms[0]
+        desert = scene.game.desert
+        desert.symbol, desert.marked_stone = 1, 2
+        blank = art.draw(art.room.background.copy(), 0, desert)
+        for phase, symbol_id, symbol_bottom in ((8, None, None), (9, 4023, 241),
+                                                  (10, 4020, 238), (13, 4020, 234)):
+            with self.subTest(phase=phase):
+                desert.stones[2].phase = phase
+                actual = art.draw(art.room.background.copy(), 0, desert)
+                expected = blank.copy()
+                record = art.records[phase + 2]
+                sprite = art.shapes[4000 + record[0]]
+                expected.paste(sprite, (204 + record[2], 240 + record[1] - sprite.height), sprite)
+                if symbol_id is not None:
+                    symbol = art.shapes[symbol_id]
+                    expected.paste(symbol, (234, symbol_bottom - symbol.height), symbol)
+                self.assertIsNone(ImageChops.difference(actual.convert('RGB'),
+                                                      expected.convert('RGB')).getbbox())
+
+    def test_actual_controls_solve_stones_and_open_the_cavern(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        scene = self.scene
+        scene.jump_to_room(0, x=440, facing=0)
+        desert = scene.game.desert
+        desert.marked_stone = 2
+        RooftopSceneTests.tick(self, 45)
+        scene.horizontal_key(None, -1, True)
+        RooftopSceneTests.tick(self, 7)
+        scene.horizontal_key(None, -1, False)
+        RooftopSceneTests.tick(self, 40)
+        self.assertEqual(desert.last_column, 5)
+        scene.up_key(None)
+        scene.horizontal_key(None, -1, True)
+        scene.set_key_state('up', False)
+        scene.horizontal_key(None, -1, False)
+        RooftopSceneTests.tick(self, 35)
+        self.assertFalse(desert.failed)
+        self.assertEqual(desert.last_column, 2)
+        scene.set_key_state('shift', True)
+        scene.horizontal_key(None, -1, True)
+        scene.horizontal_key(None, -1, False)
+        RooftopSceneTests.tick(self, 70)
+        self.assertTrue(desert.exit_open)
+        self.assertEqual([stone.phase for stone in desert.stones], [0] * 6)
+        self.assertFalse(scene.terrain_motion.dead)
 
     def test_supplied_manual_matches_every_original_answer(self):
         challenge = CopyProtection(self.scene.resources.prince)

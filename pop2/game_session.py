@@ -101,6 +101,8 @@ class GameSession:
         if self.level_map is not None:
             self.level_map.desert = self.desert
         self.room_id = level.start_room
+        if self.desert is not None:
+            self.desert.enter_room(self.room_id)
         self.harbor = Harbor() if level.kind == 5 else None
         fresh = SequenceState(IDLE_SEQUENCE, action=15, current_x=level.start_x,
                               target_x=level.start_x, facing=level.facing,
@@ -129,6 +131,8 @@ class GameSession:
         self.complete = False
         self.exit = None
         self.desert = DesertState() if self.level.kind == 1 else None
+        if self.desert is not None:
+            self.desert.enter_room(room)
         self.level_map.desert = self.desert
         if self.opening is not None:
             self.opening.active = False

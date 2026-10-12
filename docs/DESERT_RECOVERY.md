@@ -7,11 +7,25 @@ The shore's planks advance through six animation steps, two per image
 ## Stones And Exit
 
 `DesertState` implements the CODE:18 desert controller independently of the
-window. Stones have the original 0-13 phases, 21-31-frame initial delays and
-standing-pose contact checks. Leaving a stone sinks it; stepping on the marked
-stone fails the puzzle. Jumping over it does not. Keeping only that stone raised
-starts the original counter and sound sequence, sinks it and opens the exit.
-The exit moves three pixels per phase (DrawDsrtExit, 18:06dc).
+window. KeepTime (CODE:2 512a-5136) triggers the loaded room's stones through
+TriggerStone (18:0d90-0dd2), which chooses an inclusive Rnd(10) + 21 delay.
+The 21-31 frames start on entering the stone room, not on arriving at the beach.
+Once triggered, stone animations continue offscreen; delayed rises wait while
+the Prince is dead or uses sequence 27 (18:0a82-0a9e).
+
+Stones have the original 0-13 phases and standing-pose contact checks.
+SinkDsrtStone (18:0cce) advances a departing stone immediately, before the normal
+AnimTrobs frame. Stepping on the marked stone fails the puzzle; jumping over it
+does not. SetupDesert (18:043c-0448) clears contact and failure on room entry.
+Returning to the stone room schedules a fresh delayed rise for stones at phase 0.
+
+Keeping only the marked stone raised starts the original counter and cues 46,
+55 and 53, then opens the exit with song 47 (18:0050-0166). The gate takes twenty
+animation steps; effect 17 waits for cue 55 to finish and stops after phase 20
+(18:067c-0706). DrawDsrtExit (18:074c-0788) shifts the door and its wall symbol
+three pixels **left** per phase, at unchanged heights, on background pass 11.
+The foreground cliff stays fixed. RedrawStone (18:0aa8-0b36) shows the small
+marked-stone symbol at phase 9 and its raised version only above that phase.
 
 The closed entrance uses the desert barrier branch in GetBarrCode (4:532e).
 The desert controller owns the outer shore boundaries rather than following
@@ -48,5 +62,6 @@ DesertFunc (CODE:18 0334-0392) queues splash cue 56 in native room 3 at X >=
 stays in view past the viewport, so the native threshold is not room-local.
 Other far-shore interactions remain unrecovered.
 
-`tests/test_desert.py` covers stone phases, contact, failure, opening cues,
-manual answers, modal input, the F1 toggle, exit collision and loading level 3.
+`tests/test_desert.py` covers room-entry delays, reentry, stone phases, contact,
+failure, opening cues and rendering, a solution using gameplay controls, manual
+answers, modal input, the F1 toggle, exit collision and loading level 3.

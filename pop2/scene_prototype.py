@@ -1854,9 +1854,10 @@ class ScenePrototype(WindowControls):
         desert = getattr(self.game, "desert", None)
         if desert is not None and self.terrain_motion is not None:
             cues = desert.advance(self.room_id, self.sequence_state, self.frames[self.action],
-                                  self.combat is None or self.combat.player.alive)
+                                  self.combat is None or self.combat.player.alive,
+                                  audio=self.audio)
             for cue in cues:
-                if cue in (46, 49) and self.audio is not None:
+                if cue in (46, 47, 49) and self.audio is not None:
                     self.audio.add_song(cue)
                 else:
                     self.sequence_state.sound_events.append(cue)
