@@ -129,16 +129,13 @@ The Windows debug status bar is hidden by default; enable it in `Display`.
 
 ## Current Progress
 
-Playable content includes the complete level-1 route and voyage, the level-2
-beach, shore and stone puzzle, and the opening of level 3. The original intro,
-demo and credits are also included.
-
-Movement, sword combat, guards, music and sound effects, checkpoints, retry,
-menus and level transitions are implemented.
-
-Level 3 currently stops at its entrance; its remaining rooms and enemies are
-not implemented. Guard behavior and some gameplay edge cases are still being
-refined.
+- Playable: the complete level-1 route and voyage, the level-2 beach, shore and
+  stone puzzle, and the opening of level 3. The original intro, demo and credits
+  are included.
+- Implemented systems: movement, sword combat, guards, music and sound effects,
+  checkpoints, retry, menus and level transitions.
+- Remaining work: the rest of level 3, guard behavior and some gameplay edge
+  cases.
 
 ## Development
 
