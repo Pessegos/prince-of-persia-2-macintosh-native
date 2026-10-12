@@ -50,7 +50,7 @@ class ScreenshotTests(unittest.TestCase):
     def test_folder_and_size_persist_and_bad_settings_fall_back_to_defaults(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "settings" / "capture.json"
-            settings = ScreenshotSettings(Path(directory) / "chosen folder", 4)
+            settings = ScreenshotSettings((Path(directory) / "chosen folder").resolve(), 4)
             settings.save(path)
             self.assertEqual(ScreenshotSettings.load(path), settings)
             for value in ("broken JSON", "[]", json.dumps({"folder": 42, "scale": True}),
