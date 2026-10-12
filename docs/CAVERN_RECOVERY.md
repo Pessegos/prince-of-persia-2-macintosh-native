@@ -17,7 +17,7 @@ including side paths outside the shortest route.
 During import, `tools.extract_caverns` executes CODE:3/8 drawing routines against
 the original LEVL, Caverns PIEC and SHAP resources. It records background passes
 0/5 and foreground pass 1 for every tile of every room. The portable export
-retains the existing filename `caverns_entry.json`, now version 3:
+retains the existing filename `caverns_entry.json`, now version 4:
 
 ```text
 rooms[zero_based_room] = [layer, shape_id, x, bottom, draw_mode, row, clip_rect, library][]
@@ -31,8 +31,21 @@ both sprite pixels and actor-occlusion masks to those rectangles. Resources and
 decoded shapes are cached across room changes. No Macintosh executable is
 retained or executed by the game itself.
 
-Older exports request an asset reimport: version 2 lacks the flask library
-identity, and version 1 supplies only the entrance. F2 can preview each room, placing
+The exporter now mirrors ComputeCellRect (5:0162-01b6), rather than allowing
+each piece to overwrite the whole room. It follows the bottom-up cell order and
+upper-room border from RedrawCellFast (3:1c64-1d38), restores BF midpoint fields
+after admission, and retains background-record rectangle unions. DumpTable
+(3:2c1e-2c68) paints back walls before floor/pillar bodies.
+
+The former PieceRightId stub (5:08c4, column advance at 0904) incorrectly returned
+the current tile. DrawCaveWall (8:1852-1876) consequently skipped shadows behind
+pillars. Correct neighbor lookup restores the missing pieces from PIEC without
+adding room-specific artwork or positions. The entry-room columns, platform
+joins and ceiling border have been compared visually with the Macintosh route.
+
+Older exports request an asset reimport: version 3 lacks the corrected cell
+drawing and live torches, version 2 lacks flask library identity, and version 1
+supplies only the entrance. F2 can preview each room, placing
 the Prince on a basic floor tile from LEVL rather than using per-room positions.
 
 ## Flasks And Entry Door
@@ -42,8 +55,9 @@ not Caverns rock shapes. LoadFlaskSet (3:5614, 5630-5658) relocates CTBL:3000
 to palette index 224. Monochrome masks use the descriptor's ink color and the
 whole-bitmap RLE in hGetNShapeItem (17:5f78-5fa0), distinct from color row RLE.
 Executing that native loop independently agrees with the portable decoder for
-all 18 compressed monochrome flask shapes. This fixes their appearance, not
-collection, animation or health upgrades.
+all 18 compressed monochrome flask shapes. This fixes the wrong shape library
+and mask decoding. The user subsequently identified incorrect flask colors;
+palette fidelity remains open, as do collection, animation and health upgrades.
 
 FirstFrame (2:5f36-5f90) finds the first exit-right tile (kind 17) in the starting
 room. CloseExit (5:25aa) starts phase 79/state 4; ATMExit (5:15bc) subtracts the
@@ -59,12 +73,31 @@ The rooftop waterline previously clipped actors in cavern Rooms 16 and 19
 because their room IDs matched the docks. Composition now requires environment
 5, as in ClipChar (4:4218-4228). Cavern actors retain their lower pixels.
 
+## Torch Animation
+
+Version 4 records visible flame fragments separately under `torches[room]`,
+including native draw commands and the originating room/cell. Static previews
+retain their exported flame; gameplay caches scenery without that flame and
+paints the current frame before actors and foreground. The nine SHAPs are
+3581-3589, selected by DrawCaveTorch (8:2ae8-2b90) at the PIEC position. Torches
+with foreground bit 0x10 retain the unlit shape and are not animated.
+
+TriggerTorch (5:1ffa-2088) initializes Rnd(8), inclusive. ATM Torch (5:1446-1498)
+advances visible torches through CaveGetTorchFrame (8:3b4e-3b78): choose 0-8;
+if it equals the previous frame, increment and wrap at 9. A diagnostic executed
+the original routine for all 81 previous/random pairs and agrees with the
+portable selection. This reproduces the selection policy, not the original
+machine's random seed. Session state preserves upper foreground flags and
+updates each logical torch once per simulation tick, even when its pixels are
+split across several cell clips. Pause freezes the animation without rebuilding
+room scenery. Restart reinitializes it.
+
 ## Current Boundary
 
 This is the scenery foundation, not a completed playable level. Original room
 transitions and the common movement runtime are available. Cavern-specific
 floor classifications, gate and plate controllers, loose floors, spikes,
-crushers, lava, potion behavior, special draw modes, animated torches and
+crushers, lava, potion behavior and colors, special draw modes and
 skeleton enemies still require semantic recovery and integrated tests.
 The ordinary-guard decoder does not reinterpret skeleton spawn records; the
 preview encounter host omits those actors until their implementation exists.
@@ -78,5 +111,6 @@ the remaining recovery order. Room coverage alone is not visual fidelity.
 
 `tests/test_caverns.py` checks clip pixels and masks, all 32 exports, every
 original map link, the generated map, F2 room placements, flask libraries and
-mask decoding, entry closure/restart and cross-environment water clipping. These checks do
+mask decoding, entry closure/restart, cross-environment water clipping,
+missing pillar shadows, upper-border records and torch selection/pause. These checks do
 not certify hazards, object interactions or completion of level 3.

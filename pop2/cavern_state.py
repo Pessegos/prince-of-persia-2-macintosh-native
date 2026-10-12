@@ -1,6 +1,7 @@
 """Recovered cavern state, independent of the window and original executable."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import random
 
 
 @dataclass
@@ -9,6 +10,26 @@ class CavernState:
     entry_cell: int | None = None
     entry_frames: tuple = ()
     entry_frame: int = 0
+    torches: dict = field(default_factory=dict)
+
+    def configure_torches(self, metadata):
+        self.torches.clear()
+        for records in metadata.values():
+            for record in records:
+                key = record['room'], record['cell']
+                if key not in self.torches:
+                    # TriggerTorch 5:2050-2072: Rnd(8), preserving upper bits.
+                    self.torches[key] = (record['foreground'] & 0xfff0) | random.randint(0, 8)
+
+    def advance_torches(self, records):
+        for key in {(record['room'], record['cell']) for record in records}:
+            value = self.torches[key]
+            previous = value & 15
+            phase = random.randint(0, 8)
+            # CaveGetTorchFrame 8:3b4e: adjacent phase if Rnd repeats.
+            if phase == previous:
+                phase = (phase + 1) % 9
+            self.torches[key] = (value & 0xfff0) | phase
 
     def configure_entry(self, metadata):
         if metadata is None:
@@ -20,6 +41,8 @@ class CavernState:
     def foreground(self, room, cell, value):
         if (room, cell) == (self.entry_room, self.entry_cell) and self.entry_frames:
             return (value & 0xff00) | self.entry_frames[self.entry_frame][0]
+        if (room, cell) in self.torches:
+            return self.torches[room, cell]
         return value
 
     def advance(self):

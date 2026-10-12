@@ -66,6 +66,8 @@ Desert.rsrc's original CUST/SHAP records, including the floating planks' animati
 The stone controller is owned by the session and resets with the level.
 The cavern entry-door controller is likewise session-owned; import supplies
 its native closure phases and sound cues, and restart restores its initial state.
+Visible cavern torches share session-owned phases across their cell fragments;
+their changing flame is composed separately from cached scenery.
 The opening cave exit loads level 3, preserving the player's health capacity.
 All 32 rooms use drawing commands recovered at import time from CODE:3
 and CODE:8. The level-3 entry uses SEQS:5 (SetKidDefaults, 2:5e34).

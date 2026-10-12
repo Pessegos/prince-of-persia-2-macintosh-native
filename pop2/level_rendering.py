@@ -29,7 +29,7 @@ class LevelRenderer:
             frame = caverns.entry_frame if caverns is not None else 0
             key = room_id, frame if room_id == self.level.start_room else 0
             if key not in self.cavern_frames:
-                self.cavern_frames[key] = cavern_room(room_id, entry_frame=key[1])
+                self.cavern_frames[key] = cavern_room(room_id, entry_frame=key[1], animated=True)
             self.rooms[room_id] = self.cavern_frames[key]
             return self.rooms[room_id]
         if room_id not in self.rooms:
@@ -47,7 +47,11 @@ class LevelRenderer:
                                                         level_resource_id=self.level.resource_id)
         return self.rooms[room_id]
 
-    def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None):
+    def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
+        if self.level.number == 3 and caverns is not None and not front:
+            from pop2.caverns import draw_cavern_torches
+
+            return draw_cavern_torches(frame, room_id, caverns)
         if room_id in self.desert_rooms:
             return self.desert_rooms[room_id].draw(frame, frame_number, desert, front)
         if harbor is None:

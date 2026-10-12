@@ -66,10 +66,26 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
         cpu.mem_write(a5 - offset, struct.pack('>4h', 0, 0, 365, 510))
     terrain = LevelMap(level)
     commands = []
+    command_kinds = []
+    torches = []
     layer = 'back'
     history = []
+    previous_items = {}
+    back_items = []
+    back_rect = None
+
+    def reset_item(draw_pass, previous=False):
+        cpu.mem_write(info, bytes(38))
+        for index, value in ((0, 4), (1, word(a5 - 0x45f8)), (2, word(a5 - 0x45f6)),
+                             (3, 16), (5, draw_pass)):
+            put_word(info + index * 2, value)
+        if previous:
+            table = 'front' if draw_pass in (1, 2) else 'back'
+            cpu.mem_write(info + 14, previous_items[table][14:24])
+        put_long(a5 - 0x4f8c, info)
 
     def hook(cpu, address, size, _user):
+        nonlocal back_rect
         history.append(hex(address))
         del history[:-15]
         if not 0x110000 <= address < 0x300000:
@@ -86,6 +102,17 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
         segment = (address - 0x100000) // 0x10000
         offset = address - bases.get(segment, address)
         result = None
+        if opcode == b'\x4e\x90' and segment == 8 and offset == 0x176c:
+            out, first, second = (long(sp + i) for i in (0, 4, 8))
+            r1 = struct.unpack('>4h', cpu.mem_read(first, 8))
+            r2 = struct.unpack('>4h', cpu.mem_read(second, 8))
+            rect = [min(r1[0], r2[0]), min(r1[1], r2[1]), max(r1[2], r2[2]), max(r1[3], r2[3])]
+            cpu.mem_write(out, struct.pack('>4h', *rect))
+            if out == 0x93000 + 30 and back_rect is not None:
+                back_rect[:] = rect
+            cpu.reg_write(UC_M68K_REG_A7, sp + 12)
+            cpu.reg_write(UC_M68K_REG_PC, address + 2)
+            return
         if opcode == b'\x4e\x90' and segment == 8 and offset == 0x20a6:
             top, left, bottom, right = struct.unpack('>4h', cpu.mem_read(long(sp), 8))
             cpu.mem_write(sp + 4, bytes([int(top >= bottom or left >= right), 0]))
@@ -102,7 +129,9 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
             cpu.reg_write(UC_M68K_REG_A7, sp + 12)
             cpu.reg_write(UC_M68K_REG_PC, address + 2)
             return
-        if segment == 3 and offset == 4:
+        if segment == 3 and offset == 4 and not long(a5 - 0x4f8c):
+            result = 0
+        elif segment == 3 and offset == 4:
             fields = struct.unpack('>19h', cpu.mem_read(info, 38))
             library = fields[0]
             if library not in (1, 4):
@@ -111,21 +140,51 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
             source = flasks if library == 1 else artwork
             if source is None or shape not in source['SHAP']:
                 raise ValueError(f'Missing library {library} shape {shape}')
-            commands.append([layer, shape, fields[7] * 51 + fields[13],
-                             (fields[8] + 1) * 120 + 5 + fields[14], fields[3], fields[8],
-                             list(struct.unpack('>4h', cpu.mem_read(a5 - 0x4600, 8))), library])
-            result = 1
+            width, height = struct.unpack_from('>hH', source['SHAP'][shape]['data'], 4)
+            x, bottom = fields[7] * 51 + fields[13], (fields[8] + 1) * 120 + 5 + fields[14]
+            clip = list(struct.unpack('>4h', cpu.mem_read(a5 - 0x4600, 8)))
+            result = int(max(x, clip[1]) < min(x + width, clip[3])
+                         and max(bottom - height, clip[0]) < min(bottom, clip[2]))
+            if result:
+                rect = [max(bottom - height, clip[0]), max(x, clip[1]),
+                        min(bottom, clip[2]), min(x + width, clip[3])]
+                commands.append([layer, shape, x, bottom, fields[3], fields[8], rect, library])
+                command_kinds.append(fields[9])
+                if library == 4 and 3581 <= shape <= 3589:
+                    tile = terrain.tile(room_id, fields[7], fields[8])
+                    torches.append({'room': tile.room, 'cell': tile.row * 10 + tile.column,
+                                    'foreground': tile.foreground, 'command': commands[-1]})
+                table = 'front' if fields[5] in (1, 2) else 'back'
+                previous_items[table] = bytes(cpu.mem_read(info, 38))
+                if table == 'back':
+                    # GetBackTableImgRow 3:06c4 searches admitted BF records
+                    # by shape, source column and row, not rendered coordinates.
+                    back_items.append((shape, fields[1], fields[2], rect))
+                put_long(a5 - 0x4f8c, 0)
         elif segment == 3 and offset == 0x29e2:
-            cpu.mem_write(info, bytes(38))
-            for index, value in ((0, 4), (1, word(a5 - 0x45f8)), (2, word(a5 - 0x45f6)),
-                                 (3, 16), (5, word(sp + 4))):
-                put_word(info + index * 2, value)
-            put_long(a5 - 0x4f8c, info)
+            reset_item(word(sp + 4))
             result = 0
-        elif segment == 3 and offset in (0x29b6, 0x2ac4, 0x06c4, 0x2324):
+        elif segment == 3 and offset == 0x29b6:
+            if not long(a5 - 0x4f8c):
+                reset_item(word(sp + 4))
+            result = 0
+        elif segment == 3 and offset == 0x2ac4:
+            reset_item(word(sp + 4), previous=True)
+            result = 0
+        elif segment == 3 and offset == 0x06c4:
+            shape, column, row = (word(sp + i) for i in (4, 6, 8))
+            match = next((item for item in back_items
+                          if item[:3] == (3500 + shape, column, row)), None)
+            result = 0
+            if match is not None:
+                result = 0x93000
+                back_rect = match[3]
+                cpu.mem_write(result + 30, struct.pack('>4h', *match[3]))
+        elif segment == 3 and offset == 0x2324:
             result = 0
         elif segment == 5 and offset == 0x08c4:
-            result = terrain.tile(room_id, word(sp + 4), word(sp + 6)).kind
+            # PieceRightId 5:0904 advances the requested column before lookup.
+            result = terrain.tile(room_id, word(sp + 4) + 1, word(sp + 6)).kind
         elif segment == 3 and offset == 0x26e4:
             result = 0
         if result is not None:
@@ -136,9 +195,14 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
             raise ValueError(f'Unexpected Macintosh trap in cavern renderer {segment}:{offset:x}')
 
     cpu.hook_add(UC_HOOK_CODE, hook)
-    for layer, entry, draw_pass in (('back', 0x1ff4, 0), ('back', 0x1ff4, 5), ('front', 0x2598, 1)):
-        for row in range(3):
-            for column in range(10):
+    for row in (2, 1, 0, -1):
+        for column in range(10):
+            for layer, entry, draw_pass in (('back', 0x1ff4, 0), ('back', 0x1ff4, 5),
+                                            ('front', 0x2598, 1)):
+                # GetCells/ComputeCellRect 5:0162-01b6; RedrawCellFast
+                # 3:1c64-1d38 visits bottom-up, then the upper room's border.
+                cpu.mem_write(a5 - 0x4600, struct.pack('>4h', max(0, row * 120 + 5), column * 51,
+                                                     min(365, row * 120 + 125), (column + 1) * 51))
                 put_word(a5 - 0x45f8, column)
                 put_word(a5 - 0x45f6, row)
                 tile, previous = terrain.tile(room_id, column, row), terrain.tile(room_id, column - 1, row)
@@ -146,7 +210,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
                 put_long(a5 - 0x4818, (tile.foreground << 16) | tile.background)
                 put_word(a5 - 0x49d6, previous.kind)
                 put_long(a5 - 0x49d4, (previous.foreground << 16) | previous.background)
-                for col in range(10):
+                for col in range(11):
                     below = terrain.tile(room_id, col - 1, row + 1)
                     put_word(a5 - 0x4a84 + col * 6, below.kind)
                     put_long(a5 - 0x4a82 + col * 6, (below.foreground << 16) | below.background)
@@ -162,13 +226,20 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
                     raise ValueError(f'Cavern renderer failed at {pc:#x}, {layer} {column},{row}: {history}') from error
                 if cpu.reg_read(UC_M68K_REG_PC) != end:
                     raise ValueError('Cavern drawing did not complete')
-    return {'version': 1, 'level': 3, 'room': room_id, 'commands': commands}
+    # DumpTable 3:2c1e-2c68 paints back-wall records (kind 0) before
+    # floor/pillar bodies, regardless of their admission order.
+    ordered = sorted(zip(commands, command_kinds),
+                     key=lambda item: (item[0][0] == 'front', item[1] != 0 if item[0][0] == 'back' else False))
+    return {'version': 1, 'level': 3, 'room': room_id,
+            'commands': [command for command, _kind in ordered], 'torches': torches}
 
 
 def extract_caverns(program, caverns, prince, output):
     level = parse_resource_fork(prince)['LEVL'][2002]['data']
-    rooms = {str(room): recover_room(program, caverns, level, room, prince)['commands'] for room in range(32)}
-    result = {'version': 3, 'level': 3, 'rooms': rooms}
+    scenes = {str(room): recover_room(program, caverns, level, room, prince) for room in range(32)}
+    result = {'version': 4, 'level': 3,
+              'rooms': {room: scene['commands'] for room, scene in scenes.items()},
+              'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     terrain = LevelMap(level)
     # FirstFrame 2:5f62 scans for the first exit-right tile in the start room.
     cell = next((cell for cell in range(30)

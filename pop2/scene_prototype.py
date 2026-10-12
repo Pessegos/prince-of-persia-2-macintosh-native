@@ -336,6 +336,7 @@ class ScenePrototype(WindowControls):
             game.combat.guard_art = guard_art
         if game.caverns is not None:
             game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'))
+            game.caverns.configure_torches(renderer.cavern_program.get('torches', {}))
         room = renderer.room(game.room_id, game.caverns)
         self.game, self.level_renderer = game, renderer
         self.palette, self.sword_palette = palette, sword_palette
@@ -1863,6 +1864,8 @@ class ScenePrototype(WindowControls):
     def advance_level_events(self):
         if self.game.caverns is not None:
             self.sequence_state.sound_events.extend(self.game.caverns.advance())
+            self.game.caverns.advance_torches(
+                self.level_renderer.cavern_program.get('torches', {}).get(str(self.room_id), ()))
             room = self.level_renderer.room(self.room_id, self.game.caverns)
             self.background, self.foreground = room.background, room.foreground
         desert = getattr(self.game, "desert", None)
@@ -2304,6 +2307,7 @@ class ScenePrototype(WindowControls):
         self.game.restart()
         if self.game.caverns is not None:
             self.game.caverns.configure_entry(self.level_renderer.cavern_program.get('entry_exit'))
+            self.game.caverns.configure_torches(self.level_renderer.cavern_program.get('torches', {}))
         self.reset_level_controls()
         room = (self.level_renderer.room(self.room_id, self.game.caverns)
                 if hasattr(self, "level_renderer") else None)
@@ -2556,7 +2560,7 @@ class ScenePrototype(WindowControls):
         frame = self.background.copy()
         frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor,
                     frame_number=self.combat.world_frame if self.combat is not None else 0,
-                    desert=getattr(self.game, "desert", None))
+                    desert=getattr(self.game, "desert", None), caverns=self.game.caverns)
         opening = getattr(self, "opening", None)
         show_opening = opening is not None and (
             getattr(self, "level_map", None) is None or self.room_id == self.level_map.start_room)

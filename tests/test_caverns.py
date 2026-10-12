@@ -89,6 +89,26 @@ class CavernDrawingTests(unittest.TestCase):
 
 
 class CavernEntryTests(unittest.TestCase):
+    def test_torch_initialization_is_shared_across_visible_fragments_and_preserves_flags(self):
+        state = CavernState()
+        record = {'room': 0, 'cell': 21, 'foreground': 0x0102}
+        with patch('pop2.cavern_state.random.randint', return_value=8) as random:
+            state.configure_torches({'0': [record, record], '3': [record]})
+        random.assert_called_once_with(0, 8)
+        self.assertEqual(state.foreground(0, 21, 0x0102), 0x0108)
+        self.assertEqual(state.foreground(0, 22, 0x0102), 0x0102)
+
+    def test_visible_torches_advance_once_per_tick_and_never_repeat_a_frame(self):
+        state = CavernState(torches={(0, 21): 0x0108, (4, 3): 2})
+        records = [{'room': 0, 'cell': 21}] * 2
+        with patch('pop2.cavern_state.random.randint', return_value=8) as random:
+            state.advance_torches(records)
+        random.assert_called_once_with(0, 8)
+        self.assertEqual(state.torches, {(0, 21): 0x0100, (4, 3): 2})
+        with patch('pop2.cavern_state.random.randint', return_value=5):
+            state.advance_torches(records)
+        self.assertEqual(state.torches[0, 21], 0x0105)
+
     def test_closing_frames_are_extracted_from_the_native_table(self):
         data = bytearray(0x5000)
         struct.pack_into('>2h', data, len(data) - 0x45fc + 10, 32, 200)
@@ -115,9 +135,44 @@ class CavernEntryTests(unittest.TestCase):
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class OriginalCavernTests(unittest.TestCase):
+    def test_entry_records_native_right_wall_shadows_top_border_and_cell_clips(self):
+        program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
+        commands = program['rooms']['0']
+        # DrawCaveWall back pass next to pillars, omitted by the old
+        # incorrect RightPieceId stub. Coordinates come from PIEC.
+        self.assertTrue(any(command[1:4] == [3550, 51, 245] for command in commands))
+        self.assertTrue(any(command[1:4] == [3551, 306, 365] for command in commands))
+        self.assertTrue(any(command[5] == -1 for command in commands))
+        for command in commands:
+            self.assertLessEqual(command[6][3] - command[6][1], 51)
+
+    def test_scene_torch_moves_without_rebuilding_scenery_and_freezes_when_paused(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(3)
+        scene.advance_level_events()
+        scene.advance_level_events()
+        scene.render()
+        first = scene.native_viewport.copy()
+        first_background = scene.background
+        key = (0, 20)
+        previous = scene.game.caverns.torches[key] & 15
+        with patch('pop2.cavern_state.random.randint', return_value=previous):
+            scene.advance_level_events()
+        self.assertNotEqual(scene.game.caverns.torches[key] & 15, previous)
+        scene.render()
+        self.assertIs(scene.background, first_background)
+        self.assertNotEqual(first.tobytes(), scene.native_viewport.tobytes())
+        scene.paused = True
+        phases = scene.game.caverns.torches.copy()
+        RooftopSceneTests.tick(self, 3)
+        self.assertEqual(scene.game.caverns.torches, phases)
+
     def test_all_native_rooms_render_with_recorded_clip_rectangles(self):
         program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
-        self.assertEqual(program['version'], 3)
+        self.assertEqual(program['version'], 4)
         self.assertEqual(set(program['rooms']), {str(room) for room in range(32)})
         for room in range(32):
             with self.subTest(room=room):

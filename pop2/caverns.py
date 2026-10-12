@@ -63,9 +63,36 @@ def flask_assets():
     return resources, palette
 
 
-def cavern_room(room_id=0, entry_frame=0):
+def clipped_sprite(sprite, command):
+    x, bottom = command[2:4]
+    if len(command) >= 7:
+        top, left, end_y, right = command[6]
+        rect = (max(0, left - x), max(0, top - (bottom - sprite.height)),
+                min(sprite.width, right - x), min(sprite.height, end_y - (bottom - sprite.height)))
+        if rect[0] >= rect[2] or rect[1] >= rect[3]:
+            return None
+        x, bottom = x + rect[0], bottom - sprite.height + rect[3]
+        sprite = sprite.crop(rect)
+    return sprite, (x, bottom - sprite.height)
+
+
+def draw_cavern_torches(frame, room_id, state):
     program, resources, palette, shapes = cavern_assets()
-    if program.get('version') in (2, 3) and program.get('level') == 3:
+    for record in program.get('torches', {}).get(str(room_id), ()):
+        value = state.foreground(record['room'], record['cell'], record['foreground'])
+        index = 3581 + (value & 15)
+        if index not in shapes:
+            shapes[index] = decode_shap(resources['SHAP'][index]['data'], palette)
+        clipped = clipped_sprite(shapes[index], record['command'])
+        if clipped is not None:
+            sprite, position = clipped
+            frame.paste(sprite, position, sprite)
+    return frame
+
+
+def cavern_room(room_id=0, entry_frame=0, animated=False):
+    program, resources, palette, shapes = cavern_assets()
+    if program.get('version') in (2, 3, 4) and program.get('level') == 3:
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, 3, room_id):
         commands = program['commands']
@@ -80,6 +107,8 @@ def cavern_room(room_id=0, entry_frame=0):
     for command in commands:
         layer, index, x, bottom, flags, row = command[:6]
         library = command[7] if len(command) >= 8 else 4
+        if animated and program.get('version') == 4 and library == 4 and 3581 <= index <= 3589:
+            continue
         key = (library, index, flags) if library == 1 else index
         if key not in shapes:
             if library == 1:
@@ -90,16 +119,11 @@ def cavern_room(room_id=0, entry_frame=0):
             else:
                 raise ValueError(f'Unsupported cavern shape library {library}')
         sprite = shapes[key]
-        if len(command) >= 7:
-            top, left, end_y, right = command[6]
-            rect = (max(0, left - x), max(0, top - (bottom - sprite.height)),
-                    min(sprite.width, right - x), min(sprite.height, end_y - (bottom - sprite.height)))
-            if rect[0] >= rect[2] or rect[1] >= rect[3]:
-                continue
-            sprite = sprite.crop(rect)
-            x, bottom = x + rect[0], bottom - shapes[key].height + rect[3]
+        clipped = clipped_sprite(sprite, command)
+        if clipped is None:
+            continue
+        sprite, position = clipped
         destination = background if layer == 'back' else foreground
-        position = x, bottom - sprite.height
         destination.paste(sprite, position, sprite)
         if layer == 'front':
             mask = Image.new('L', background.size)

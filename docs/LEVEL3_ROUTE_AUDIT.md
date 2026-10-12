@@ -107,10 +107,17 @@ Macintosh-faithful level 3, even in the starting room.
   halves, not two pressure plates; general gate/plate recovery remains separate.
 - The dock water mask is restricted to environment 5. It no longer truncates
   actors below Y 327 in cavern Rooms 16/19.
+- The entry-room drawing now includes native per-cell clipping, upper-room
+  border pieces, BF record restoration and background ordering. The corrected
+  PieceRightId lookup restores wall shadows beside the columns. These changes
+  apply to the export of every room, not a patch to Room 1's image.
+- Cavern torches use the nine original flame frames and native nonrepeating
+  random selection, with session-owned phases and pause behavior. The same
+  logical torch shares state across its visible cell fragments.
 - A targeted entry descent works facing the building with Down + Shift. This
   does not certify the full actor-clipping pipeline or every approach position.
 
 See [Cavern recovery](CAVERN_RECOVERY.md) for native addresses and validation.
 The next work remains terrain/object semantics and actor occlusion, followed by
-potions, skeletons, hazards, music and completion. These corrections do not
+potion colors and behavior, skeletons, hazards, music and completion. These corrections do not
 constitute a completed level-3 route.
