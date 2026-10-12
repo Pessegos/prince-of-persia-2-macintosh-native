@@ -129,29 +129,16 @@ The Windows debug status bar is hidden by default; enable it in `Display`.
 
 ## Current Progress
 
-The level-1 route is playable from the palace window through the ship's departure
-and voyage through the level-2 shore and stone puzzle to the level-3 entrance.
+Playable content includes the complete level-1 route and voyage, the level-2
+beach, shore and stone puzzle, and the opening of level 3. The original intro,
+demo and credits are also included.
 
-- Original opening story, animated title, palace scenes, music and voices.
-- Original level-one autoplay demo, credits and looping opening.
-- Ten level-1 route screens and the right-hand secret room.
-- Window escape, locomotion, ledge movement, sword combat and rooftop guards.
-- Harbor scenery, water falls and the departing ship's original boarding sequence.
-- Voyage cutscene with original music, voices, dream and storm scenes.
-- Level-2 beach and the original arrival animation.
-- Level-2 shore, stone puzzle, moving cave entrance and original manual-symbol challenge.
-- Level-3 starting room and original entry sequence.
-- Death/retry flow and the level-1 checkpoint after the screen-7 descent.
-- Four original rooftop music tracks and movement, combat, glass and water sounds.
-- Death music with playback-dependent restart messages; pause also pauses audio.
-- Losing window focus pauses the game and audio. Returning focus does not resume automatically.
-- Story/credits pause text is centered over the scene without obscuring it with a black bar.
-- Original 510x384 visible viewport, aspect-preserving nearest-neighbor scaling.
-- Movement at 12 fps and ordinary sword combat at 10 fps.
+Movement, sword combat, guards, music and sound effects, checkpoints, retry,
+menus and level transitions are implemented.
 
-Level 3 is limited to its entrance: cavern objects, enemies and the rest of
-its route still need recovery. This remains a WIP;
-the recovered rules do not yet cover every original collision or input branch.
+Level 3 currently stops at its entrance; its remaining rooms and enemies are
+not implemented. Guard behavior and some gameplay edge cases are still being
+refined.
 
 ## Development
 
