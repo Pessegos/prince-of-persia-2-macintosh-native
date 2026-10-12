@@ -141,7 +141,8 @@ class WindowControls:
         self.root.bind("<KeyPress-Escape>", self.escape_key)
         self.root.bind("<KeyRelease-Escape>", self.escape_release)
         self.root.bind("<Alt-Return>", self.toggle_fullscreen)
-        self.root.bind("<F2>", self.open_dev_mode)
+        self.root.bind("<F2>", self.toggle_screenshot_menu)
+        self.root.bind("<F3>", self.open_dev_mode)
 
     def focus_out(self, event):
         self.clear_keys(event)
@@ -405,16 +406,22 @@ class WindowControls:
             self.game_menu.sound = self.sound_enabled
             self.game_menu.music = self.music_enabled
             self.game_menu.fullscreen = self.fullscreen
-            self.game_menu.development = self.development_available()
             self.game_menu.copy_protection = getattr(self, "copy_protection_enabled", True)
 
     def open_game_menu(self, page="menu"):
         if self.game_menu is not None:
             if self.game_menu.page != "confirm":
                 if page == "menu":
-                    self.close_game_menu()
+                    if self.game_menu.page == "screenshots":
+                        self.game_menu.show_page("menu")
+                        self.pause_resume_keys.update(self.window_keys_down)
+                        self.render()
+                    else:
+                        self.close_game_menu()
                 else:
                     self.game_menu.show_page(page)
+                    if page == "screenshots":
+                        self.game_menu.return_to_menu = False
                     self.pause_resume_keys.update(self.window_keys_down)
                     self.render()
             return
@@ -422,7 +429,6 @@ class WindowControls:
         self.game_was_paused = self.dev_was_paused if self.dev_menu is not None else self.paused
         self.dev_menu = None
         self.game_menu = GameMenu(page=page, return_to_menu=page == "menu",
-                                  development=self.development_available(),
                                   screenshot_scale=self.screenshot_settings.scale,
                                   screenshot_folder=str(self.screenshot_settings.folder))
         self.set_paused(True)
@@ -431,6 +437,15 @@ class WindowControls:
         self.update_cursor_visibility()
         if already_paused:
             self.render()
+
+    def toggle_screenshot_menu(self, _event=None):
+        if self.game_menu is not None and self.game_menu.page == "confirm":
+            return "break"
+        if self.game_menu is not None and self.game_menu.page == "screenshots":
+            self.close_game_menu()
+        else:
+            self.open_game_menu("screenshots")
+        return "break"
 
     def close_game_menu(self, resume=False):
         if self.game_menu is None:
@@ -452,7 +467,7 @@ class WindowControls:
                 menu.error = "Could not remember screenshot settings."
         if action in ("close", "resume"):
             self.close_game_menu(resume=action == "resume")
-        elif action in ("confirm_new", "about", "screenshots"):
+        elif action in ("confirm_new", "about"):
             self.open_game_menu("confirm" if action == "confirm_new" else action)
         elif action == "screenshot_folder":
             self.choose_screenshot_folder()
@@ -486,8 +501,6 @@ class WindowControls:
                 self.copy_pointer_held = False
                 self.clear_keys(None)
             self.render()
-        elif action == "development":
-            self.open_dev_mode()
         elif action in ("save", "open", "hall"):
             if self.game_menu is None:
                 self.open_game_menu()
@@ -510,9 +523,13 @@ class WindowControls:
             if not repeated and not alt and not event.state & (0x4 | 0x40):
                 self.capture_screenshot()
             return "break"
-        if event.keysym == "F5" or event.keysym == "F2" and not self.development_available():
-            return "break"
         if event.keysym == "F2":
+            if not repeated:
+                self.toggle_screenshot_menu(event)
+            return "break"
+        if event.keysym == "F5" or event.keysym == "F3" and not self.development_available():
+            return "break"
+        if event.keysym == "F3":
             if not repeated:
                 self.open_dev_mode(event)
             return "break"
@@ -552,7 +569,7 @@ class WindowControls:
             challenge = getattr(self, "copy_challenge", None)
             if challenge is not None:
                 return "break"
-            if self.paused and event.keysym not in ("Escape", "F2") and not fullscreen_key:
+            if self.paused and event.keysym not in ("Escape", "F2", "F3") and not fullscreen_key:
                 if is_resume_key(event, self.window_keys_down):
                     self.set_paused(False)
                     self.pause_resume_keys.update(self.window_keys_down)
@@ -572,7 +589,7 @@ class WindowControls:
                     self.finish_intro()
                 return "break"
             if (not self.paused and self.death.counter >= 0
-                    and event.keysym not in ("F2", "Alt_L", "Alt_R")
+                    and event.keysym not in ("F2", "F3", "Alt_L", "Alt_R")
                     and not fullscreen_key):
                 self.restart_after_death()
                 return "break"
@@ -594,7 +611,7 @@ class WindowControls:
         if len(event.keysym) == 1:
             released.add(event.keysym.swapcase())
             self.window_keys_down.discard(event.keysym.swapcase())
-        if event.keysym == "F2":
+        if event.keysym == "F3":
             self.dev_toggle_held = False
         elif event.keysym == "Escape":
             self.escape_release(event)

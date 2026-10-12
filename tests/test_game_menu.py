@@ -22,7 +22,10 @@ class GameMenuModelTests(unittest.TestCase):
         self.assertNotIn("Alt+F", shortcuts)
         self.assertNotIn("Alt+E", shortcuts)
         self.assertIn("Alt+Enter", shortcuts)
-        self.assertEqual(next(item.label for item in items if item.shortcut == "F2"), "Developer Tools")
+        self.assertNotIn("F2", shortcuts)
+        self.assertNotIn("F3", shortcuts)
+        self.assertNotIn("development", {item.action for item in items})
+        self.assertNotIn("screenshots", {item.action for item in items})
         self.assertEqual({item.action for item in items if not item.enabled},
                          {"save", "open", "hall"})
 
@@ -50,7 +53,7 @@ class GameMenuModelTests(unittest.TestCase):
         self.assertEqual(menu.key("Return"), "new_game")
 
     def test_disabled_items_are_visible_but_never_activate(self):
-        menu = GameMenu(development=False)
+        menu = GameMenu()
         for index, item in enumerate(menu.items):
             if not item.enabled:
                 menu.focus = index
@@ -125,7 +128,7 @@ class GameMenuSceneTests(unittest.TestCase):
             self.assertEqual(self.press("F1"), "break")
         self.assertEqual(render.call_count, 1)
 
-    def test_f1_capture_works_during_intro_with_developer_tools_unavailable(self):
+    def test_f2_capture_works_during_intro_with_developer_tools_unavailable(self):
         scene = self.scene
         scene.start_intro()
         scene.render()
@@ -133,10 +136,7 @@ class GameMenuSceneTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
             with patch.object(scene, "development_available", return_value=False):
-                self.press("F1")
-                scene.game_menu.focus = next(index for index, item in enumerate(scene.game_menu.items)
-                                             if item.action == "screenshots")
-                self.press("Return")
+                self.press("F2")
                 self.assertEqual(scene.game_menu.page, "screenshots")
                 expected = scene.screenshot_viewport.crop((1, 0, 511, 384)).convert("RGB")
                 self.press("F8")
@@ -147,10 +147,25 @@ class GameMenuSceneTests(unittest.TestCase):
                 self.assertTrue(scene.paused)
                 self.assertIs(scene.intro, intro)
                 self.assertIsNone(scene.dev_menu)
-                self.press("Escape")
-                self.assertEqual(scene.game_menu.page, "menu")
-                self.press("Escape")
+                self.press("F2")
+                self.assertIsNone(scene.game_menu)
                 self.assertFalse(scene.paused)
+
+    def test_f2_hold_and_escape_close_restore_running_and_paused_states(self):
+        scene = self.scene
+        for paused in (False, True):
+            with self.subTest(paused=paused):
+                scene.set_paused(paused)
+                event = self.event("F2")
+                scene.dev_key_press(event)
+                self.assertEqual(scene.game_menu.page, "screenshots")
+                scene.dev_key_press(event)
+                self.assertIsNotNone(scene.game_menu)
+                self.assertTrue(scene.paused)
+                scene.dev_key_release(event)
+                self.press("Escape")
+                self.assertIsNone(scene.game_menu)
+                self.assertEqual(scene.paused, paused)
 
     def test_alt_n_never_restarts_until_explicit_confirmation(self):
         scene = self.scene
@@ -193,7 +208,7 @@ class GameMenuSceneTests(unittest.TestCase):
         self.press("n", 0x8)
         with patch.object(scene, "restart_opening") as new, \
                 patch.object(scene, "restart_level") as restart:
-            for key, state in (("F1", 0), ("F2", 0), ("F5", 0), ("n", 8),
+            for key, state in (("F1", 0), ("F2", 0), ("F3", 0), ("F5", 0), ("n", 8),
                                ("r", 8), ("v", 8), ("t", 8)):
                 self.assertEqual(self.press(key, state), "break")
                 self.assertEqual(scene.game_menu.page, "confirm")
@@ -341,7 +356,7 @@ class GameMenuSceneTests(unittest.TestCase):
             self.assertEqual(scene.paused, paused)
             self.assertEqual((scene.room_id, scene.player_x, scene.checkpoint), before)
 
-    def test_f1_and_f2_switch_menus_without_losing_the_original_pause_state(self):
+    def test_f1_f2_and_f3_switch_menus_without_losing_the_original_pause_state(self):
         scene = self.scene
         for paused in (True, False):
             scene.set_paused(paused)
@@ -350,8 +365,13 @@ class GameMenuSceneTests(unittest.TestCase):
             self.assertIsNone(scene.dev_menu)
             self.assertIsNotNone(scene.game_menu)
             self.assertTrue(scene.paused)
-            self.assertEqual(scene.dev_key_press(self.event("F2")), "break")
-            scene.dev_key_release(self.event("F2"))
+            self.press("F2")
+            self.assertEqual(scene.game_menu.page, "screenshots")
+            self.assertFalse(scene.game_menu.return_to_menu)
+            self.press("F1")
+            self.assertEqual(scene.game_menu.page, "menu")
+            self.assertEqual(scene.dev_key_press(self.event("F3")), "break")
+            scene.dev_key_release(self.event("F3"))
             self.assertIsNone(scene.game_menu)
             self.assertIsNotNone(scene.dev_menu)
             scene.close_dev_mode()

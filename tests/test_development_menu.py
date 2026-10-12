@@ -283,8 +283,7 @@ class MenuSceneTests(unittest.TestCase):
         scene.jump_to_screen("5")
         original = scene.native_viewport.crop((1, 0, 511, 384)).convert("RGB")
         scene.set_paused(True)
-        scene.open_game_menu()
-        scene.apply_game_action("screenshots")
+        scene.toggle_screenshot_menu()
         scene.render()
         with TemporaryDirectory() as directory:
             scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
@@ -313,21 +312,19 @@ class MenuSceneTests(unittest.TestCase):
         scene = self.scene
         with TemporaryDirectory() as directory:
             scene.screenshot_settings = ScreenshotSettings(Path(directory), 2)
-            scene.open_game_menu()
-            scene.apply_game_action("screenshots")
+            scene.toggle_screenshot_menu()
             scene.game_menu.screenshot_scale = 4
             with patch.object(ScreenshotSettings, "save") as save:
                 scene.apply_game_action("changed")
                 save.assert_called_once_with()
             scene.close_game_menu()
-            scene.open_game_menu()
+            scene.toggle_screenshot_menu()
             self.assertEqual(scene.game_menu.screenshot_scale, 4)
             self.assertEqual(scene.game_menu.screenshot_folder, directory)
 
     def test_game_capture_menu_text_and_controls_fit_the_panel(self):
         scene = self.scene
-        scene.open_game_menu()
-        scene.apply_game_action("screenshots")
+        scene.toggle_screenshot_menu()
         menu = scene.game_menu
         menu.screenshot_folder = "C:/[a very long folder name]/\u65e5\u672c/" * 8
         menu.screenshot_status = "PNG saved"
@@ -418,9 +415,9 @@ class MenuSceneTests(unittest.TestCase):
             self.assertTrue(scene.paused)
             self.assertEqual(before, (scene.room_id, scene.player_x, scene.sequence_state.__dict__))
 
-    def test_f2_toggles_without_repeated_open_close_while_held(self):
+    def test_f3_toggles_without_repeated_open_close_while_held(self):
         scene = self.scene
-        event = self.event("F2")
+        event = self.event("F3")
         scene.open_dev_mode(event)
         scene.open_dev_mode(event)
         self.assertIsNotNone(scene.dev_menu)
@@ -572,10 +569,10 @@ class MenuSceneTests(unittest.TestCase):
             self.assertTrue(scene.paused)
             scene.close_dev_mode()
 
-    def test_f2_from_pause_keeps_pause_and_focus_loss_clears_consumed_key(self):
+    def test_f3_from_pause_keeps_pause_and_focus_loss_clears_consumed_key(self):
         scene = self.scene
         scene.set_paused(True)
-        self.assertEqual(scene.dev_key_press(self.event("F2")), "break")
+        self.assertEqual(scene.dev_key_press(self.event("F3")), "break")
         self.assertIsNotNone(scene.dev_menu)
         scene.close_dev_mode()
         self.assertTrue(scene.paused)
@@ -636,14 +633,14 @@ class MenuSceneTests(unittest.TestCase):
         scene.close_dev_mode()
         self.assertIsNone(scene.dev_key_press(self.event("Down")))
 
-    def test_consumed_f2_and_escape_releases_reset_their_toggle_guards(self):
+    def test_consumed_f3_and_escape_releases_reset_their_toggle_guards(self):
         scene = self.scene
         scene.open_dev_mode()
-        scene.dev_key_press(self.event("F2"))
-        scene.open_dev_mode(self.event("F2"))
+        scene.dev_key_press(self.event("F3"))
+        scene.open_dev_mode(self.event("F3"))
         self.assertIsNone(scene.dev_menu)
         self.assertTrue(scene.dev_toggle_held)
-        scene.dev_key_release(self.event("F2"))
+        scene.dev_key_release(self.event("F3"))
         self.assertFalse(scene.dev_toggle_held)
         scene.open_dev_mode()
         scene.dev_key_press(self.event("Escape"))
@@ -655,7 +652,7 @@ class MenuSceneTests(unittest.TestCase):
 
     def test_focus_loss_clears_physical_keys_and_modal_toggle_guards(self):
         scene = self.scene
-        scene.window_keys_down.update(("Right", "F2", "Escape"))
+        scene.window_keys_down.update(("Right", "F3", "Escape"))
         scene.pause_resume_keys.add("Right")
         scene.escape_held = scene.dev_toggle_held = True
         scene.clear_keys(SimpleNamespace())

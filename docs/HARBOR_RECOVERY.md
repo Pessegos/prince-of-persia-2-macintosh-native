@@ -1,9 +1,9 @@
 # Level-1 Harbor And Ship
 
 The level-1 route now reaches the ship. Native room numbers are one-based;
-runtime indices are zero-based. The F2 traversal labels are:
+runtime indices are zero-based. The F3 traversal labels are:
 
-| F2 screen | Native room | Runtime room | Entry |
+| F3 screen | Native room | Runtime room | Entry |
 | --- | --- | --- | --- |
 | 7 | 12 | 11 | Last palace rooftop |
 | 8 | 15 | 14 | Upper roof, followed by the drop to the street |

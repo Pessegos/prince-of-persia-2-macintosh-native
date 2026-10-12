@@ -3,16 +3,19 @@
 The Macintosh application resource fork lists the normal game commands in
 MENU 401 (File) and MENU 403 (Game). The Windows port uses Alt in place of
 Command, with the requested exception of Alt+Enter for fullscreen. It does
-not bind Alt+Q, Alt+F or the redundant Alt+E. F1 opens the in-game command menu; F2 retains the
-Developer Tools menu.
+not bind Alt+Q, Alt+F or the redundant Alt+E. F1 opens the in-game command menu,
+F2 opens standalone screenshot controls, and F3 opens Developer Tools.
 
 Screenshots are a port-only feature, not a recovered Macintosh command.
 F8 saves the current clean game framebuffer as PNG without altering playback or
-pause. F1's Screenshots page offers the same capture command, a native folder picker
+pause. F2's screenshot controls offer the same capture command, a native folder picker
 (including typed/pasted paths), and 1x-4x integer sizes. The original 510x384
 viewport and HUD are retained; host padding, menus and pause overlays are not.
 Local preferences and the default output folder live under ignored `rendered/`.
-Capture does not require Developer Tools; F2 remains separate development UI.
+Capture does not require Developer Tools; F3 remains separate development UI.
+Neither screenshot controls nor Developer Tools add a command row to F1.
+F2 toggles the screenshot controls, and Escape closes them; both restore the
+previous pause state. Switching among F1, F2 and F3 also preserves that state.
 
 | Original command | Port shortcut | Status |
 | --- | --- | --- |

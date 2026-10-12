@@ -322,11 +322,13 @@ class RebirthSceneTests(unittest.TestCase):
         self.checkpoint()
         self.die()
         self.eligible()
-        self.assertEqual(scene.dev_key_press(self.event("F2")), "break")
-        self.assertIsNotNone(scene.dev_menu)
-        self.assertFalse(scene.combat.player.alive)
-        scene.close_dev_mode()
-        scene.dev_key_release(self.event("F2"))
+        for key, menu, close in (("F2", "game_menu", scene.close_game_menu),
+                                 ("F3", "dev_menu", scene.close_dev_mode)):
+            self.assertEqual(scene.dev_key_press(self.event(key)), "break")
+            self.assertIsNotNone(getattr(scene, menu))
+            self.assertFalse(scene.combat.player.alive)
+            close()
+            scene.dev_key_release(self.event(key))
         for key, modifier in (("Alt_L", 0),
                               ("Return", 0x8), ("Return", 0x20000)):
             self.assertIsNone(scene.dev_key_press(self.event(key, modifier)))

@@ -43,7 +43,7 @@ all extracted game data, stays outside Git.
 
 ## Development Playback
 
-The F2 Playback tab derives story boundaries from the imported text operations,
+The F3 Playback tab derives story boundaries from the imported text operations,
 the cloud title from its scene operation, demo entries from the first recorded
 frame in each room, and credits pages from the imported credits program. It
 does not keep a second hardcoded timeline. Seeking rebuilds the scene's palette,

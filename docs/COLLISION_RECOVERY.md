@@ -460,7 +460,7 @@ pursuers, without resetting its ownership, sequence or countdown. Native
 side/floor/wall eligibility and death still determine when another guard
 may spawn; this is not a global one-guard cap.
 
-F2 exposes traversal-order screens 1-10 and the right-hand secret, with
+F3 exposes traversal-order screens 1-10 and the right-hand secret, with
 fixed supported entry positions. It no longer exposes native room IDs,
 floor selection or arbitrary X coordinates. Pause centers the original
 font's visible ink in the 19-pixel HUD band. The long sheath accepts
@@ -508,7 +508,7 @@ Settled Prince and guard rooftop corpses follow `IsCharNonViewable`
 remain visible. The former flat-guard visibility exception is removed. See
 [REBIRTH_RECOVERY.md](REBIRTH_RECOVERY.md) for the death presentation rules.
 
-Room cuts reuse one decoded rooftop atlas. Screen labels and F2 metadata no
+Room cuts reuse one decoded rooftop atlas. Screen labels and F3 metadata no
 longer build all supported rooms: the first label took about 1.4 seconds
 before this change, versus about 2 ms afterwards on the development PC;
 building an additional room fell from about 105 ms to about 3.5 ms. These

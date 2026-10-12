@@ -263,7 +263,7 @@ the camera veto is not applied to guard falls.
    rather than treating every original-game difference as a defect.
 3. At protected poses, test input before/at/after reset, released versus held,
    both facings, modifier changes and conflicts. Check pose order/offsets too.
-4. Run real scene tests with terrain, combat, screen transitions, pause/F2
+4. Run real scene tests with terrain, combat, screen transitions, pause/F3
    and focus loss. Host modal resets stay distinct from native ClearControls.
 5. Use original recordings or traces for unresolved sampling/update timing
    and special branches instead of assigning unsupported semantics.

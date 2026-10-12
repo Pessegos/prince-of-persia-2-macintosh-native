@@ -52,7 +52,7 @@ logic being recovered from the Macintosh executable through reverse engineering.
 
 ## Developer Tools
 
-- Level and screen navigation through F2's Developer Tools.
+- Level and screen navigation through F3's Developer Tools.
 - Direct access to parts of cutscenes, the demo and credits.
 - Peaceful mode without guards and an optional debug status bar.
 
@@ -151,7 +151,8 @@ executable. Demo recovery adds time to the first import, not to later launches.
 | Alt + T | Toggle all sound |
 | Alt + M | Toggle ambient music |
 | Alt + V | About the port |
-| F2 | Developer Tools: levels 1-3, intro/demo playback and debug display |
+| F2 | Screenshot controls: folder, PNG size and capture |
+| F3 | Developer Tools: levels 1-3, intro/demo playback and debug display |
 | F8 | Save a clean PNG screenshot to the configured folder |
 | Any key after death | Retry from the checkpoint or level start |
 
@@ -176,13 +177,14 @@ the attract cycle, only playback and display controls are available. Playback
 selects a sequence first, then a story part, animated title, demo screen or
 credits page. `Next part` follows playback order across sequence boundaries.
 The Windows debug status bar is hidden by default; enable it in `Display`.
-`F1 > Screenshots` selects the screenshot folder and PNG size. `Save PNG` or
+F2 opens standalone screenshot controls for the folder and PNG size. `Save PNG` or
 F8 captures the game image without window borders, fullscreen letterboxing,
 menus or pause overlays. The original in-game HUD remains part of the image.
 Sizes range from native 510 x 384 to 4x, using nearest-neighbor integer scaling;
 the default is 3x (1530 x 1152). Folder and size are remembered locally in
 `rendered/screenshot-settings.json`. The default folder is `rendered/screenshots/`;
 captures use unique timestamped filenames and are not published by Git.
+F2 or Escape closes the screenshot controls and restores the previous pause state.
 `python run_game.py --peaceful` starts with guards disabled and terrain intact.
 
 ## Development

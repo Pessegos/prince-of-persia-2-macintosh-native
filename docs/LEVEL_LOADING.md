@@ -11,7 +11,7 @@ require the Tk window, and scenery caches belong to the selected level.
   terrain, combat, opening controller, harbor, death and checkpoint state.
   Restarting or placing the player does not create a window or play audio.
 - `pop2/level_rendering.py`: lazy room images, supported scenery and screen
-  labels. Room images are built only when requested, not when opening F2.
+  labels. Room images are built only when requested, not when opening F3.
 - `pop2/scene_prototype.py`: keyboard controllers, frame ordering, audio,
   composition and the connection to `pop2/window_controls.py`.
 
@@ -71,7 +71,7 @@ their changing flame is composed separately from cached scenery.
 The opening cave exit loads level 3, preserving the player's health capacity.
 All 32 rooms use drawing commands recovered at import time from CODE:3
 and CODE:8. The level-3 entry uses SEQS:5 (SetKidDefaults, 2:5e34).
-The original links are followed between these rooms, and F2 offers a floor-based
+The original links are followed between these rooms, and F3 offers a floor-based
 preview placement in each room. Beyond entry-door closure, interactive cavern
 objects and skeletons remain unsupported. See [Cavern recovery](CAVERN_RECOVERY.md)
 for the current boundary.

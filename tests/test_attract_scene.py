@@ -73,11 +73,11 @@ class AttractSceneTests(unittest.TestCase):
         self.scene.demo.advance(self.scene.demo.next_update_delay())
         self.assertIn(audio.current_music, (40, 41, 42, 43))
 
-    def test_f2_and_menu_open_playback_controls_without_live_level_controls(self):
+    def test_f3_opens_playback_controls_without_live_level_controls(self):
         scene = self.scene
         for start in (lambda: None, scene.start_demo, scene.start_credits):
             start()
-            self.assertEqual(self.key("F2"), "break")
+            self.assertEqual(self.key("F3"), "break")
             self.assertIsNotNone(scene.dev_menu)
             self.assertEqual(scene.dev_menu.tab, 1)
             self.assertFalse(scene.dev_menu.level_available)
@@ -89,20 +89,20 @@ class AttractSceneTests(unittest.TestCase):
             scene.close_dev_mode()
             self.assertFalse(scene.paused)
             scene.open_game_menu()
-            self.assertTrue(next(item.enabled for item in scene.game_menu.items
-                                  if item.action == "development"))
-            scene.apply_game_action("development")
+            self.assertNotIn("development", {item.action for item in scene.game_menu.items})
+            scene.dev_key_release(SimpleNamespace(keysym="F3"))
+            self.key("F3")
             self.assertIsNotNone(scene.dev_menu)
             self.assertEqual(scene.dev_menu.tab, 1)
             scene.close_dev_mode()
-            scene.dev_key_release(SimpleNamespace(keysym="F2"))
+            scene.dev_key_release(SimpleNamespace(keysym="F3"))
 
-    def test_opening_f2_menu_renders_only_once_while_it_pauses(self):
+    def test_opening_f3_menu_renders_only_once_while_it_pauses(self):
         scene = self.scene
         with patch.object(scene, "render", wraps=scene.render) as render:
-            self.assertEqual(self.key("F2"), "break")
+            self.assertEqual(self.key("F3"), "break")
         self.assertEqual(render.call_count, 1)
-        scene.dev_key_release(SimpleNamespace(keysym="F2"))
+        scene.dev_key_release(SimpleNamespace(keysym="F3"))
 
     def test_cutscene_pause_dims_the_frame_and_centers_text_without_a_panel(self):
         scene = self.scene

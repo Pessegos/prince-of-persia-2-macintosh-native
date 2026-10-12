@@ -8,7 +8,7 @@ and ending at the final door. Overview frames were sampled every two seconds;
 the entrance and both health upgrades were examined at shorter intervals.
 Times below are navigation references, not recovered engine timing constants.
 
-Room numbers are one-based Macintosh LEVL/F2 `Room` numbers, not a numbered
+Room numbers are one-based Macintosh LEVL/F3 `Room` numbers, not a numbered
 walkthrough. Room identification uses scenery and the original room links;
 intermediate rooms can be traversed between overview samples. Black frames and
 the manual dialog must not be classified as cavern rooms.

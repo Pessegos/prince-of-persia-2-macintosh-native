@@ -30,7 +30,7 @@ separately; they are not assumed to be identical.
 
 SDL/pygame uses independent music/effect channels. Samples are loaded once
 at startup; gameplay does not spawn a synthesizer, read new sound files
-every step or generate diagnostic recordings. Pause/F2 pauses both channels.
+every step or generate diagnostic recordings. Pause/F3 pauses both channels.
 Restart/developer warps stop current and pending playback. Import is staged
 before replacing installed resources; progress reaches Tk through a queue.
 

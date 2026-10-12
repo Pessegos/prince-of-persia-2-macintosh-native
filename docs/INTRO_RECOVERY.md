@@ -137,7 +137,7 @@ headroom as level audio. No emulated sound driver or post-processing filter
 is used.
 
 Space skips to the palace window escape without leaking input into the level.
-F1/F2, fullscreen, focus-loss pause, New Game and End Game work during playback.
+F1/F2/F3, fullscreen, focus-loss pause, New Game and End Game work during playback.
 Game simulation remains stopped until the intro ends or is skipped.
 
 ## Remaining Fidelity Work

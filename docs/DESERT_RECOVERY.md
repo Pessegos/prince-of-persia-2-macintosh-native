@@ -50,7 +50,7 @@ desert music request. Music disabled in the port suppresses this ambient song.
 
 The closed entrance uses the desert barrier branch in GetBarrCode (4:532e).
 The desert controller owns the outer shore boundaries rather than following
-dummy room links. Restart and F2 placement reset the puzzle; disabling the
+dummy room links. Restart and F3 placement reset the puzzle; disabling the
 manual challenge never changes its solution or gate state.
 
 ## Manual Challenge

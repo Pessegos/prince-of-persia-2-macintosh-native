@@ -1,7 +1,7 @@
 # Death And Checkpoints
 
 Addresses refer to the Macintosh executable. Room numbers in this document
-are native, one-based LEVL IDs, not the F2 route labels. Runtime room IDs are
+are native, one-based LEVL IDs, not the F3 route labels. Runtime room IDs are
 zero-based.
 
 ## Retry Gate
@@ -21,7 +21,7 @@ is not a queued retry. The port also polls held Space, so holding it through
 the death animation works without depending on Windows key-repeat settings.
 Held Shift/Ctrl are polled as action buttons; a held arrow alone is not.
 Retry keys are consumed until release, rather than becoming a jump/attack
-in the new life. F2 and Alt+Enter retain their host functions.
+in the new life. F2/F3 and Alt+Enter retain their host functions.
 
 At counter 7, the native controller waits for both current and pending sound
 to finish before drawing `Press key to continue` (3:433a; DATA aa96). This is
@@ -44,7 +44,7 @@ ID `9752 + cue`, selected through DATA bc6a / `AddKidDeathSong` (5:4afc).
 The importer extracts that mapping and measures the rendered audio too.
 `DEATH_CUE_SECONDS` has been removed: native counter gates still advance on
 simulation frames, while final completion comes from SDL's playback state,
-including the prepared sampler's release tail. Pause/F2 freezes both. Tests
+including the prepared sampler's release tail. Pause/F3 freezes both. Tests
 that reproduce the earlier event-duration timing use a deterministic backend
 in the test suite, not a timer table in the runtime. See [AUDIO_RECOVERY.md](AUDIO_RECOVERY.md)
 for the distinction between MIDI events and host sampler output.
@@ -128,13 +128,13 @@ from the supporting foot (`LoadFrame` 4:2a72 -> `GetFCharX`/`GetCharCol`),
 not merely the sprite anchor. Revisiting the current slot does not recapture
 it; reaching a different slot can replace it.
 
-Level 1's checkpoint is native room 15, row 0, column 5: **F2 screen 8**, at
+Level 1's checkpoint is native room 15, row 0, column 5: **F3 screen 8**, at
 the landing after descending from screen 7. Retry places the Prince at
 `column * 51 + 22` (X=277), with saved facing, restored maximum/full life
 and idle SEQS:2, without replaying the palace window escape. Before the
 checkpoint, retry starts the level normally. New Game (Alt+N) clears checkpoints;
 Restart Level (Alt+R) uses the checkpoint when one is active.
-F2 screen jumps seed the latest LEVL checkpoint on the selected route up to
+F3 screen jumps seed the latest LEVL checkpoint on the selected route up to
 that screen, so testing the quay does not require another rooftop run. A jump
 back before the checkpoint, to the opening or to the secret screen clears it.
 This is a developer convenience, not a recovered original trigger: ordinary

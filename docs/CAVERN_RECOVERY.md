@@ -45,7 +45,7 @@ joins and ceiling border have been compared visually with the Macintosh route.
 
 Older exports request an asset reimport: version 3 lacks the corrected cell
 drawing and live torches, version 2 lacks flask library identity, and version 1
-supplies only the entrance. F2 can preview each room, placing
+supplies only the entrance. F3 can preview each room, placing
 the Prince on a basic floor tile from LEVL rather than using per-room positions.
 
 ## Flasks And Entry Door
@@ -110,7 +110,7 @@ pipeline. See [Route audit](LEVEL3_ROUTE_AUDIT.md) for reference moments and
 the remaining recovery order. Room coverage alone is not visual fidelity.
 
 `tests/test_caverns.py` checks clip pixels and masks, all 32 exports, every
-original map link, the generated map, F2 room placements, flask libraries and
+original map link, the generated map, F3 room placements, flask libraries and
 mask decoding, entry closure/restart, cross-environment water clipping,
 missing pillar shadows, upper-border records and torch selection/pause. These checks do
 not certify hazards, object interactions or completion of level 3.

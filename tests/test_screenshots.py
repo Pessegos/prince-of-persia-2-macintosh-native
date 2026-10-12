@@ -70,8 +70,8 @@ class ScreenshotTests(unittest.TestCase):
 
 
 class CaptureMenuTests(unittest.TestCase):
-    def test_size_folder_capture_and_back_are_keyboard_and_mouse_accessible(self):
-        menu = GameMenu(page="screenshots")
+    def test_size_folder_capture_and_close_are_keyboard_and_mouse_accessible(self):
+        menu = GameMenu(page="screenshots", return_to_menu=False)
         menu.key("Return")
         menu.key("Down")
         menu.key("Return")
@@ -82,26 +82,24 @@ class CaptureMenuTests(unittest.TestCase):
         menu.key("Left")
         self.assertEqual(menu.focus, 1)
         self.assertEqual(menu.click(150, 267), "screenshot")
-        self.assertEqual(menu.click(290, 267), "changed")
-        self.assertEqual(menu.page, "menu")
+        self.assertEqual(menu.click(290, 267), "close")
 
     def test_capture_controls_do_not_require_developer_tools(self):
-        menu = GameMenu(development=False)
-        item = next(item for item in menu.items if item.action == "screenshots")
-        self.assertTrue(item.enabled)
+        menu = GameMenu()
+        self.assertNotIn("screenshots", {item.action for item in menu.items})
+        self.assertNotIn("development", {item.action for item in menu.items})
         menu.show_page("screenshots")
         menu.focus = 2
         self.assertEqual(menu.activate(), "screenshot")
 
-    def test_escape_closes_the_size_popup_before_returning_to_the_game_menu(self):
-        menu = GameMenu(page="screenshots")
+    def test_escape_cancels_the_size_popup_before_closing_screenshot_controls(self):
+        menu = GameMenu(page="screenshots", return_to_menu=False)
         menu.key("Return")
         menu.key("Down")
         menu.key("Escape")
         self.assertEqual(menu.screenshot_scale, 3)
         self.assertEqual(menu.page, "screenshots")
-        menu.key("Escape")
-        self.assertEqual(menu.page, "menu")
+        self.assertEqual(menu.key("Escape"), "close")
 
 
 class WindowScreenshotTests(unittest.TestCase):
@@ -134,6 +132,19 @@ class WindowScreenshotTests(unittest.TestCase):
             host.dev_key_release(event)
             host.dev_key_press(SimpleNamespace(keysym="F8", state=0x8))
             self.assertEqual(capture.call_count, 2)
+
+    def test_f2_toggles_screenshots_once_per_press_without_developer_availability(self):
+        host = self.host
+        with patch.object(host, "toggle_screenshot_menu") as toggle, \
+                patch.object(host, "development_available", return_value=False) as available:
+            event = SimpleNamespace(keysym="F2", state=0)
+            host.dev_key_press(event)
+            host.dev_key_press(event)
+            toggle.assert_called_once_with(event)
+            available.assert_not_called()
+            host.dev_key_release(event)
+            host.dev_key_press(event)
+            self.assertEqual(toggle.call_count, 2)
 
     def test_capture_uses_clean_buffer_and_keeps_menu_and_pause(self):
         host = self.host

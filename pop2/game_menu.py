@@ -21,7 +21,6 @@ class GameMenu:
     sound: bool = True
     music: bool = True
     fullscreen: bool = False
-    development: bool = True
     focus: int = 0
     page: str = "menu"
     return_to_menu: bool = True
@@ -33,7 +32,7 @@ class GameMenu:
     dropdown: bool = False
     option_index: int = 0
 
-    PANEL = (64, 28, 448, 356)
+    PANEL = (64, 28, 448, 312)
     DIALOG = (80, 108, 432, 274)
     ABOUT_DIALOG = (80, 108, 432, 292)
     BUTTONS = ((100, 228, 242, 258), (254, 228, 412, 258))
@@ -58,9 +57,7 @@ class GameMenu:
             MenuItem("hall", "Hall of Fame", "Alt+H", False),
             MenuItem("about", "About", "Alt+V"),
             MenuItem("fullscreen", "Fullscreen", "Alt+Enter", checked=self.fullscreen),
-            MenuItem("development", "Developer Tools", "F2", self.development),
             MenuItem("copy_protection", "Copy protection", "", checked=self.copy_protection),
-            MenuItem("screenshots", "Screenshots", ""),
         )
 
     def show_page(self, page):
@@ -265,5 +262,5 @@ class GameMenu:
                 # The game's NFNT replaces '+' with a trademark glyph.
                 text(item.shortcut.replace("+", "-"), rect[2] - 10, y, color, "right", 100)
             if not self.items[self.focus].enabled:
-                text("Not implemented yet", 256, 361, muted, "center")
+                text("Not implemented yet", 256, 317, muted, "center")
         return image
