@@ -56,7 +56,7 @@ def save_screenshot(viewport, settings):
                              Image.Resampling.NEAREST)
     folder = Path(settings.folder).expanduser().resolve()
     folder.mkdir(parents=True, exist_ok=True)
-    stem = "pop2_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
+    stem = datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
     for index in range(1000):
         path = folder / (stem + (f"_{index}" if index else "") + ".png")
         try:

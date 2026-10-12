@@ -2554,15 +2554,13 @@ class ScenePrototype(WindowControls):
 
     def draw_screenshot_notice(self, viewport):
         message = getattr(self, "screenshot_toast", None)
-        if message is None and (self.game_menu is None or self.game_menu.page != "screenshots"):
+        showing_toast = message is not None
+        if not showing_toast and (self.game_menu is None or self.game_menu.page != "screenshots"):
             return viewport
-        if message is None:
+        if not showing_toast:
             message = "Take Screenshots with F8"
-            color = (153, 153, 153, 255)
-        else:
-            color = (253, 255, 168, 255)
-        text = self.ui_font.text(message, color)
-        x = VIEWPORT_WIDTH - text.width - 8
+        text = self.ui_font.text(message, (253, 255, 168, 255))
+        x = 8 if showing_toast else VIEWPORT_WIDTH - text.width - 8
         y = ROOM_HEIGHT - self.ui_font.height - 6
         viewport.paste((0, 0, 0, 255), (x + 1, y + 1), text)
         viewport.paste(text, (x, y), text)

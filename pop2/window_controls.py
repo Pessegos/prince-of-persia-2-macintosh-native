@@ -379,17 +379,18 @@ class WindowControls:
         if menu is not None:
             menu.error = ""
             menu.screenshot_status = "PNG saved"
-            self.render()
+        self.show_screenshot_toast(path.name)
         return path
 
-    def show_screenshot_toast(self):
-        self.screenshot_toast = "Screenshot saved"
-        if self.screenshot_toast_after_id is not None:
+    def show_screenshot_toast(self, filename):
+        self.screenshot_toast = f"Saved screenshot as {filename}"
+        after_id = getattr(self, "screenshot_toast_after_id", None)
+        if after_id is not None:
             try:
-                self.root.after_cancel(self.screenshot_toast_after_id)
+                self.root.after_cancel(after_id)
             except tk.TclError:
                 pass
-        self.screenshot_toast_after_id = self.root.after(2500, self.clear_screenshot_toast)
+        self.screenshot_toast_after_id = self.root.after(4000, self.clear_screenshot_toast)
         self.render()
 
     def clear_screenshot_toast(self):
@@ -538,8 +539,7 @@ class WindowControls:
         self.window_keys_down.add(event.keysym)
         if event.keysym == "F8":
             if not repeated and not alt and not event.state & (0x4 | 0x40):
-                if self.capture_screenshot() is not None:
-                    self.show_screenshot_toast()
+                self.capture_screenshot()
             return "break"
         if event.keysym == "F2":
             if not repeated:
