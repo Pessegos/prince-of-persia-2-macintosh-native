@@ -92,7 +92,7 @@ def draw_cavern_torches(frame, room_id, state):
 
 def cavern_room(room_id=0, entry_frame=0, animated=False):
     program, resources, palette, shapes = cavern_assets()
-    if program.get('version') in (2, 3, 4) and program.get('level') == 3:
+    if program.get('version') in (2, 3, 4, 5) and program.get('level') == 3:
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, 3, room_id):
         commands = program['commands']
@@ -107,7 +107,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False):
     for command in commands:
         layer, index, x, bottom, flags, row = command[:6]
         library = command[7] if len(command) >= 8 else 4
-        if animated and program.get('version') == 4 and library == 4 and 3581 <= index <= 3589:
+        if animated and program.get('version') in (4, 5) and library == 4 and 3581 <= index <= 3589:
             continue
         key = (library, index, flags) if library == 1 else index
         if key not in shapes:

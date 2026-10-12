@@ -60,7 +60,9 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
     put_long(a5 - 0x4b9e, pieces)
     put_long(a5 - 0x5014, lev)
     put_long(a5 - 0x4ab2, 0)  # No actor-specific gate peeling in a static scene.
-    put_word(a5 - 0x4832, 0)
+    # DoCleanCut 2:608c-6096 builds scenery with full-room repaint enabled.
+    # Per-cell redraws change the overlap order of adjacent exit pieces.
+    put_word(a5 - 0x4832, 1)
     put_word(a5 - 0x4fc2, room_id + 1)
     for offset in (0x4600, 0x4fec):
         cpu.mem_write(a5 - offset, struct.pack('>4h', 0, 0, 365, 510))
@@ -199,10 +201,10 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
         for column in range(10):
             for layer, entry, draw_pass in (('back', 0x1ff4, 0), ('back', 0x1ff4, 5),
                                             ('front', 0x2598, 1)):
-                # GetCells/ComputeCellRect 5:0162-01b6; RedrawCellFast
-                # 3:1c64-1d38 visits bottom-up, then the upper room's border.
-                cpu.mem_write(a5 - 0x4600, struct.pack('>4h', max(0, row * 120 + 5), column * 51,
-                                                     min(365, row * 120 + 125), (column + 1) * 51))
+                # GetCells 5:0abe-0ac8 copies fullclip during DoCleanCut;
+                # ComputeClipRect is only used for subsequent dirty cells.
+                # RedrawCellFast 3:1c64-1d38 visits bottom-up, then the border.
+                cpu.mem_write(a5 - 0x4600, bytes(cpu.mem_read(a5 - 0x4fec, 8)))
                 put_word(a5 - 0x45f8, column)
                 put_word(a5 - 0x45f6, row)
                 tile, previous = terrain.tile(room_id, column, row), terrain.tile(room_id, column - 1, row)
@@ -237,7 +239,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
 def extract_caverns(program, caverns, prince, output):
     level = parse_resource_fork(prince)['LEVL'][2002]['data']
     scenes = {str(room): recover_room(program, caverns, level, room, prince) for room in range(32)}
-    result = {'version': 4, 'level': 3,
+    result = {'version': 5, 'level': 3,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     terrain = LevelMap(level)

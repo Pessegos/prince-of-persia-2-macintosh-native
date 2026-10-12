@@ -17,7 +17,7 @@ including side paths outside the shortest route.
 During import, `tools.extract_caverns` executes CODE:3/8 drawing routines against
 the original LEVL, Caverns PIEC and SHAP resources. It records background passes
 0/5 and foreground pass 1 for every tile of every room. The portable export
-retains the existing filename `caverns_entry.json`, now version 4:
+retains the existing filename `caverns_entry.json`, now version 5:
 
 ```text
 rooms[zero_based_room] = [layer, shape_id, x, bottom, draw_mode, row, clip_rect, library][]
@@ -31,11 +31,22 @@ both sprite pixels and actor-occlusion masks to those rectangles. Resources and
 decoded shapes are cached across room changes. No Macintosh executable is
 retained or executed by the game itself.
 
-The exporter now mirrors ComputeCellRect (5:0162-01b6), rather than allowing
-each piece to overwrite the whole room. It follows the bottom-up cell order and
+The exporter follows DoCleanCut (2:608c-6096): set A5-4832 to 1 before building
+a complete room. GetCells (5:0abe-0ac8) then copies the full-room clip instead
+of ComputeClipRect's dirty-cell bounds. The drawing routines still intersect
+their own gate/piece clips. It follows the bottom-up cell order and
 upper-room border from RedrawCellFast (3:1c64-1d38), restores BF midpoint fields
 after admission, and retains background-record rectangle unions. DumpTable
 (3:2c1e-2c68) paints back walls before floor/pillar bodies.
+
+Version 4 incorrectly built a complete room in incremental cell-redraw mode.
+Its cell clips prevented the exit-right piece from repainting the threshold
+over the exit-left floor. Full repaint restores the four-row strip at the
+door's base, while retaining the right floor in front of it. Comparison with
+the user's Macintosh capture at native resolution finds no unmarked scenery
+differences in the entrance, excluding the independently animated torch and
+the Prince. This is a native repaint-mode correction for every room, not an
+entrance-only overlay or changed sprite.
 
 The former PieceRightId stub (5:08c4, column advance at 0904) incorrectly returned
 the current tile. DrawCaveWall (8:1852-1876) consequently skipped shadows behind
@@ -43,7 +54,8 @@ pillars. Correct neighbor lookup restores the missing pieces from PIEC without
 adding room-specific artwork or positions. The entry-room columns, platform
 joins and ceiling border have been compared visually with the Macintosh route.
 
-Older exports request an asset reimport: version 3 lacks the corrected cell
+Older exports request an asset reimport: version 4 lacks the full-room repaint
+mode, version 3 lacks the corrected cell
 drawing and live torches, version 2 lacks flask library identity, and version 1
 supplies only the entrance. F3 can preview each room, placing
 the Prince on a basic floor tile from LEVL rather than using per-room positions.
@@ -112,5 +124,6 @@ the remaining recovery order. Room coverage alone is not visual fidelity.
 `tests/test_caverns.py` checks clip pixels and masks, all 32 exports, every
 original map link, the generated map, F3 room placements, flask libraries and
 mask decoding, entry closure/restart, cross-environment water clipping,
-missing pillar shadows, upper-border records and torch selection/pause. These checks do
+missing pillar shadows, upper-border records, clean-cut setup, threshold overlap
+through every closing phase and torch selection/pause. These checks do
 not certify hazards, object interactions or completion of level 3.

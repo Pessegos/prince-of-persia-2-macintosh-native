@@ -12,13 +12,49 @@ from pop2.caverns import cavern_room, flask_shape, flask_assets
 from pop2.cavern_state import CavernState
 from pop2.level_data import LevelDefinition
 from pop2.paths import ASSET_DIR
-from pop2.render_opening import load_resource_file
+from pop2.render_opening import load_resource_file, decode_shap, decode_ctbl
 from pop2.terrain import LevelMap
 from tools.render_cavern_map import room_positions
-from tools.extract_caverns import exit_closing_frames
+from tools.extract_caverns import exit_closing_frames, recover_room
 
 
 class CavernDrawingTests(unittest.TestCase):
+    def test_export_uses_clean_cut_flag_and_full_clip_for_every_cell(self):
+        from unicorn import Uc
+
+        code = bytearray(0x259a)
+        for offset in (0x1ff4, 0x2598):
+            code[offset:offset + 2] = bytes.fromhex('4e75')  # Synthetic RTS, no game assets.
+        resources = {'CODE': {0: {'data': bytes(16)}, 3: {'data': bytes(code)}}}
+        artwork = {'PIEC': {3500: {'data': bytes(4)}}}
+        data = bytearray(0x6000)
+        struct.pack_into('>i', data, len(data) - 0x4aea + 12, -0x100)
+        level = bytearray(0x49ca)
+        struct.pack_into('>H', level, 0x2198, 1)
+        observed = []
+
+        emulate = Uc.emu_start
+
+        def observe(cpu, *args, **kwargs):
+            observed.append((struct.unpack('>h', cpu.mem_read(0x80000 - 0x4832, 2))[0],
+                             struct.unpack('>4h', cpu.mem_read(0x80000 - 0x4600, 8))))
+            return emulate(cpu, *args, **kwargs)
+
+        with (patch.object(Uc, 'emu_start', observe),
+              patch('tools.extract_caverns.parse_resource_fork', side_effect=[resources, artwork]),
+              patch('tools.extract_caverns.expand_a5_data', return_value=bytes(data))):
+            recover_room(b'program', b'artwork', bytes(level))
+        self.assertEqual(len(observed), 120)
+        self.assertEqual(set(observed), {(1, (0, 0, 365, 510))})
+
+    def test_repaint_export_keeps_live_flames_out_of_static_scenery(self):
+        sprite = Image.new('RGBA', (3, 3), 'orange')
+        commands = [['back', 3581, 10, 20, 16, 1, [0, 0, 365, 510], 4]]
+        program = {'version': 5, 'level': 3, 'rooms': {'0': commands}}
+        with patch('pop2.caverns.cavern_assets', return_value=(program, {}, {}, {3581: sprite})):
+            self.assertEqual(cavern_room().background.getpixel((10, 18)), (255, 165, 0, 255))
+            self.assertEqual(cavern_room(animated=True).background.getpixel((10, 18)), (0, 0, 0, 255))
+
     def test_monochrome_flask_uses_native_whole_bitmap_rle_and_ink_color(self):
         data = struct.pack('>HhhH2H', 0x9200, 2, 9, 2, 0, 0) + bytes([1, 128, 128, 0])
         colors = {233: (25, 112, 217, 255)}
@@ -136,7 +172,7 @@ class OriginalCavernTests(unittest.TestCase):
                     self.assertEqual(frame.getpixel((250, 360)),
                                      (255, 0, 255, 255) if kind == 3 else (0, 0, 0, 255))
 
-    def test_entry_records_native_right_wall_shadows_top_border_and_cell_clips(self):
+    def test_entry_records_native_right_wall_shadows_top_border_and_room_clips(self):
         program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
         commands = program['rooms']['0']
         # DrawCaveWall back pass next to pillars, omitted by the old
@@ -144,8 +180,28 @@ class OriginalCavernTests(unittest.TestCase):
         self.assertTrue(any(command[1:4] == [3550, 51, 245] for command in commands))
         self.assertTrue(any(command[1:4] == [3551, 306, 365] for command in commands))
         self.assertTrue(any(command[5] == -1 for command in commands))
+        self.assertTrue(any(command[6][3] - command[6][1] > 51 for command in commands))
         for command in commands:
-            self.assertLessEqual(command[6][3] - command[6][1], 51)
+            top, left, bottom, right = command[6]
+            self.assertTrue(0 <= left < right <= 510)
+            self.assertTrue(0 <= top < bottom <= 365)
+
+    def test_door_threshold_survives_left_floor_without_covering_right_floor(self):
+        resources = load_resource_file('Caverns.rsrc')
+        palette = decode_ctbl(resources['CTBL'][3500]['data'])
+        door = decode_shap(resources['SHAP'][3564]['data'], palette)
+        right_floor = decode_shap(resources['SHAP'][3527]['data'], palette)
+        program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
+        frames = program['entry_exit']['frames']
+        for phase in range(len(frames)):
+            art = cavern_room(entry_frame=phase)
+            with self.subTest(phase=phase):
+                for x, y in ((191, 215), (200, 215), (239, 215), (190, 218)):
+                    self.assertEqual(art.background.getpixel((x, y)), door.getpixel((x - 186, y - 99)))
+                self.assertEqual(art.background.getpixel((240, 218)), right_floor.getpixel((34, 3)))
+                # Clean-cut drawing lets the right portal repaint across both cells.
+                self.assertTrue(any(command[1] == 3564 and command[6][1] < 204
+                                    and command[6][3] > 255 for command in frames[phase]['commands']))
 
     def test_scene_torch_moves_without_rebuilding_scenery_and_freezes_when_paused(self):
         from tests.test_terrain import RooftopSceneTests
@@ -173,7 +229,7 @@ class OriginalCavernTests(unittest.TestCase):
 
     def test_all_native_rooms_render_with_recorded_clip_rectangles(self):
         program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
-        self.assertEqual(program['version'], 4)
+        self.assertEqual(program['version'], 5)
         self.assertEqual(set(program['rooms']), {str(room) for room in range(32)})
         for room in range(32):
             with self.subTest(room=room):
