@@ -2561,14 +2561,18 @@ class ScenePrototype(WindowControls):
             message = "Take Screenshots with F8"
         text = self.ui_font.text(message, (253, 255, 168, 255))
         x = 8 if showing_toast else VIEWPORT_WIDTH - text.width - 8
-        y = ROOM_HEIGHT - self.ui_font.height - 6
         if showing_toast:
+            plate_height = text.height + 8
+            plate_top = ROOM_HEIGHT - 2 - plate_height
+            y = plate_top + (plate_height - text.height) // 2
             plate = Image.new("RGBA", viewport.size, (0, 0, 0, 0))
             ImageDraw.Draw(plate).rectangle(
-                (x - 4, y - 3, x + text.width + 4, y + text.height + 3),
-                fill=(0, 0, 0, 190), outline=(72, 72, 72, 220),
+                (x - 4, plate_top, x + text.width + 4, ROOM_HEIGHT - 3),
+                fill=(0, 0, 0, 128),
             )
             viewport = Image.alpha_composite(viewport, plate)
+        else:
+            y = ROOM_HEIGHT - self.ui_font.height - 6
         viewport.paste((0, 0, 0, 255), (x + 1, y + 1), text)
         viewport.paste(text, (x, y), text)
         return viewport
