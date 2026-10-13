@@ -484,7 +484,7 @@ class OriginalCavernTests(unittest.TestCase):
 
     def test_all_native_rooms_render_with_recorded_clip_rectangles(self):
         program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
-        self.assertEqual(program['version'], 8)
+        self.assertEqual(program['version'], 9)
         self.assertEqual(set(program['rooms']), {str(room) for room in range(32)})
         for room in range(32):
             with self.subTest(room=room):

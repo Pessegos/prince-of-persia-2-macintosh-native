@@ -50,6 +50,7 @@ from pop2.rebirth import RebirthSnapshot
 from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
 from pop2.caverns import cavern_clip_top
+from pop2.loose_floors import floor_hits_actor
 from pop2.render_opening import (
     OPENING_FLOOR_Y,
     ROOF_GLASS_OFFSETS,
@@ -1515,6 +1516,7 @@ class ScenePrototype(WindowControls):
             self.in_animation_tick = False
             self.schedule_next_animation()
             return
+        self.advance_cavern_floors()
         if self.combat is not None and not self.combat.player.alive:
             self.death.begin(0)
             # PlayerCtrl runs before AnimChar: count the previous dead pose,
@@ -1872,8 +1874,61 @@ class ScenePrototype(WindowControls):
                         guard.state.sequence_id, guard.state.cursor = 22, len(self.sequences[22]) - 1
         self.player_x, self.action = state.target_x, state.action
 
+    def advance_cavern_floors(self):
+        caverns = self.game.caverns
+        if caverns is None:
+            return
+        # FrameAdv 2:622c-6230 moves existing debris before AnimTrobs.
+        cues, blocks = caverns.loose.advance_falling(self.level_map, self.sequence_state,
+                                                    self.terrain_motion, self.frames[self.action])
+        self.sequence_state.sound_events.extend(cues)
+        actors = (self.combat.player, *self.combat.active_guards())
+        for block in blocks:
+            for actor in actors:
+                state, motion = actor.state, actor.terrain_motion
+                record = (self.frames[state.action] if actor is self.combat.player else
+                          self.guard_art.frames[guard_frame_index(state.action)])
+                if (motion is None or not floor_hits_actor(block, motion, state, record, actor.alive)
+                        or 5 <= state.action < 15 or state.action == 109
+                        or state.animation_state >= 2 and state.animation_state != 7
+                        or state.actor_type == 1):
+                    continue
+                # Crushed 6:28f0: one life for the Prince, fatal for an
+                # ordinary guard; survivors use SEQS:52, not sword recoil.
+                actor.life = max(0, actor.life - (1 if state.actor_type == 0 else 100))
+                state.current_y = 0
+                motion.falling = False
+                actor.recovering = actor.alive
+                self.physics.select(actor.runtime, 52 if actor.alive else 22)
+                if actor.alive:
+                    state.sound_events.append(300)
+                else:
+                    motion.dead = True
+                    if actor is self.combat.player:
+                        self.death.begin(3)
+                if actor is self.combat.player:
+                    self.run_active = self.run_stop_requested = self.run_cycle_boundary_pending = False
+                    self.pending_action = None
+                    self.action, self.player_x = state.action, state.target_x
+        caverns.loose.advance_tiles(self.level_map)
+
     def advance_level_events(self):
         if self.game.caverns is not None:
+            loose = self.game.caverns.loose
+            state, motion = self.sequence_state, self.terrain_motion
+            if motion is not None:
+                state.sound_events.extend(loose.press(self.level_map, motion, state, self.frames[state.action]))
+                for guard in self.combat.active_guards():
+                    if guard.terrain_motion is not None:
+                        guard.state.sound_events.extend(loose.press(self.level_map, guard.terrain_motion,
+                            guard.state, self.guard_art.frames[guard_frame_index(guard.state.action)]))
+                for event in tuple(state.sequence_events):
+                    if event[0] in (-19, -20):
+                        # CheckAlert 2:6c1c consumes the SEQS shake request.
+                        row = motion.row - int(event[0] == -20)
+                        state.sound_events.extend(loose.shake_row(self.level_map, motion.room, row,
+                                                                 state, motion, self.frames[state.action]))
+                        state.sequence_events.remove(event)
             self.sequence_state.sound_events.extend(self.game.caverns.advance())
             self.game.caverns.advance_torches(
                 self.level_renderer.cavern_program.get('torches', {}).get(str(self.room_id), ()))

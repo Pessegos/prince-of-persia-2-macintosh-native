@@ -29,7 +29,7 @@ class InstallationTests(unittest.TestCase):
         (assets / "attract.json").write_text(json.dumps(fixture()))
         (assets / "ending.json").write_bytes((assets / "intro.json").read_bytes())
         (assets / 'caverns_entry.json').write_text(json.dumps({
-            'version': 8, 'level': 3, 'rooms': {str(room): [] for room in range(32)}}))
+            'version': 9, 'level': 3, 'rooms': {str(room): [] for room in range(32)}}))
 
     def test_complete_installation_has_no_errors(self):
         self.assertEqual(run_game.installation_errors(self.project), [])

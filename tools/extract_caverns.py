@@ -2,10 +2,13 @@
 
 import json
 import struct
+from itertools import product
 
 from pop2.mac_resources import parse_resource_fork
 from pop2.terrain import LevelMap
 from tools.extract_enemy_profiles import expand_a5_data
+from pop2.loose_floors import cleared_below_cell, rubble_tile, space_foreground
+from pop2.opponent_generation import EMPTY_TILES
 
 
 def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=None, floor_redraw=False):
@@ -266,7 +269,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
 def extract_caverns(program, caverns, prince, output):
     level = parse_resource_fork(prince)['LEVL'][2002]['data']
     scenes = {str(room): recover_room(program, caverns, level, room, prince) for room in range(32)}
-    result = {'version': 8, 'level': 3,
+    result = {'version': 9, 'level': 3,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     result['climb_redraw'] = {
@@ -289,7 +292,96 @@ def extract_caverns(program, caverns, prince, output):
             struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
             frame['commands'] = recover_room(program, caverns, bytes(mutable), terrain.start_room, prince)['commands']
         result['entry_exit'] = {'room': terrain.start_room, 'cell': cell, 'frames': frames}
+    result['loose_floors'] = extract_loose_floor_scenery(program, caverns, prince, level, result)
     (output / 'caverns_entry.json').write_text(json.dumps(result) + '\n', encoding='ascii')
+
+
+def loose_floor_cells(terrain):
+    """Native loose cells and the surfaces their falling slabs can modify."""
+    cells, struck = {}, set()
+    for room in range(32):
+        for cell in range(30):
+            tile = terrain.tile(room, cell % 10, cell // 10)
+            if tile.kind != 11:
+                continue
+            cells[room, cell] = ((11, tile.foreground),
+                                 (11, (tile.foreground & 0xfff0) | 1),
+                                 (0, space_foreground(tile.foreground)))
+            visited = set()
+            for below_row in range(tile.row + 1, tile.row + 97):
+                below = terrain.tile(room, tile.column, below_row)
+                key = below.room, below.row * 10 + below.column
+                if below.room is None or key in visited:
+                    break
+                visited.add(key)
+                if below.kind == 11:
+                    struck.add(key)
+                    continue
+                if below.kind in EMPTY_TILES:
+                    continue
+                before = below.kind, below.foreground
+                after = rubble_tile(*before)
+                if before != after:
+                    cells[key] = (before, after)
+                break
+    for key in struck:
+        cells[key] += (cells[key][2],)  # Collision removal does not clear below.
+    return cells
+
+
+def extract_loose_floor_scenery(program, caverns, prince, level, base):
+    terrain = LevelMap(level)
+    choices = loose_floor_cells(terrain)
+    data = expand_a5_data(parse_resource_fork(program))
+    offsets = struct.unpack_from('>13h', data, len(data) - 0x2f30)
+    # DrawCaveLoose 8:24dc/257c applies the original two table lookups.
+    shifts = [offsets[index] for index in offsets]
+    clears = {key: below for key in choices if choices[key][0][0] == 11
+              and (below := cleared_below_cell(terrain, *key)) is not None}
+    result = {'shifts': shifts, 'cells': {f'{room}:{cell}': values
+                                         for (room, cell), values in choices.items()}, 'rooms': {}}
+    for room in range(32):
+        visible = {(tile.room, tile.row * 10 + tile.column)
+                   for row in range(-1, 4) for column in range(-1, 11)
+                   if (tile := terrain.tile(room, column, row)).room is not None}
+        keys = sorted(visible & choices.keys())
+        keys = sorted(set(keys) | {key for key, below in clears.items() if below in visible})
+        if not keys:
+            continue
+        variants = {}
+        for indices in product(*(range(len(choices[key])) for key in keys)):
+            if not any(indices):
+                continue
+            mutable = bytearray(level)
+            for key, index in zip(keys, indices):
+                kind, foreground = choices[key][index]
+                source_room, source_cell = key
+                struct.pack_into('>H', mutable, source_room * 60 + source_cell * 2, kind)
+                struct.pack_into('>H', mutable, 0x780 + source_room * 120 + source_cell * 4, foreground)
+            for key, index in zip(keys, indices):
+                if index == 2 and key in clears:
+                    target_room, target_cell = clears[key]
+                    offset = 0x780 + target_room * 120 + target_cell * 4
+                    foreground = struct.unpack_from('>H', mutable, offset)[0]
+                    struct.pack_into('>H', mutable, offset, foreground & 0xf0ff)
+            variant = {'commands': recover_room(program, caverns, bytes(mutable), room, prince)['commands']}
+            variant['floor_redraw'] = recover_room(program, caverns, bytes(mutable), room, prince,
+                                                   floor_redraw=True)['commands']
+            variant['climb_redraw'] = {str(action): recover_room(program, caverns, bytes(mutable),
+                                                                room, prince, action)['commands']
+                                       for action in range(135, 145)}
+            entry = base.get('entry_exit')
+            if entry is not None and room == entry['room']:
+                variant['entry_frames'] = []
+                offset = 0x780 + room * 120 + entry['cell'] * 4
+                foreground = struct.unpack_from('>H', level, offset)[0] & 0xff00
+                for frame in entry['frames']:
+                    struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
+                    variant['entry_frames'].append(recover_room(program, caverns, bytes(mutable),
+                                                               room, prince)['commands'])
+            variants[''.join(map(str, indices))] = variant
+        result['rooms'][str(room)] = {'cells': keys, 'variants': variants}
+    return result
 
 
 def exit_closing_frames(resources):

@@ -157,7 +157,8 @@ class SequenceRuntime:
             elif opcode == -16:
                 # AnimChar 4:2f2c requests the next level, after boarding.
                 self.state.sequence_events.append((opcode, ()))
-            elif opcode == -19:
+            elif opcode in (-19, -20):
+                # AnimChar 4:2f18/2f22 requests shaking above / at the floor.
                 self.state.sequence_events.append((opcode, ()))
             elif opcode == -21:
                 self.state.sequence_mode = self._next_operand(opcode, opcode_cursor)

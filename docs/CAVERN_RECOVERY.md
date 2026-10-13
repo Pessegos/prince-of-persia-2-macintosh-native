@@ -17,7 +17,7 @@ including side paths outside the shortest route.
 During import, `tools.extract_caverns` executes CODE:3/8 drawing routines against
 the original LEVL, Caverns PIEC and SHAP resources. It records background passes
 0/5 and foreground pass 1 for every tile of every room. The portable export
-retains the existing filename `caverns_entry.json`, now version 6:
+retains the existing filename `caverns_entry.json`, now version 9:
 
 ```text
 rooms[zero_based_room] = [layer, shape_id, x, bottom, draw_mode, row, clip_rect, library, draw_column, draw_row][]
@@ -175,6 +175,45 @@ room scenery. Restart reinitializes it.
 
 ## Current Boundary
 
+### Loose Floors
+
+LEVL:2002 contains 15 kind-11 tiles. The entrance shows one at row 0, column 7
+and another through its upper-room link (room 32, row 2, column 8). The same
+controller handles every tile, including tiles outside the currently drawn room.
+
+CheckPress (5:127e-13d6) uses the supporting foot column, FRAM bit 0x40,
+animation mode and an eleven-pixel floor-height tolerance. Catch pose 79 and
+climbing poses have separate above-floor checks. BreakLoose (5:2710) preserves
+an existing phase instead of restarting it on repeated contact. AnimLoose
+(5:446a) advances twelve collapse phases, or four warning phases after a distant
+shake. ShakeEm (5:2876) handles nearby actors and the third repeated shake;
+SEQS operations -19/-20 request the current/upper row respectively.
+
+FrameAdv (2:622c) moves existing debris before advancing loose tiles. MakeRubble
+(5:2b10) adds eight units of velocity below speed 60, crosses downward room links
+with a 365-unit physical cut, and uses the original impact classifications and
+sound cues 28/26. A falling actor strikes a loose floor with its own velocity;
+Falling (6:01ee) halves that velocity and retains the airborne state. Crushed
+(6:28f0) supplies the ordinary Prince's one-life damage and SEQS:52 recovery.
+Special actors and pressure-plate/gate responses remain separate recovery work.
+
+Version 9 exports native drawing variants for shaken/removed floors and their
+landing cells, including DrawHalf/DrawFloorBuf repaint commands and all entry
+closure phases. AnimLoose's ClearCaveBelowFloor (8:39b8) also removes the native
+decoration flags below the detached floor. DrawObjCaveLoose (8:2bb4) supplies
+SHAP 3557 and 3604 at the original anchors; debris is painted before actors and
+foreground. These changes reuse the original room drawing routines, not a
+rectangle painted over the hole. Restart restores the tiles; pause freezes them.
+
+Portable debris phases, positions, full terrain/foreground state and ordered
+sounds matched 3,150 native updates (all 15 floors, initial velocities 0/1/40,
+70 updates each). CheckPress matched 3,840 pose/mode/facing/height combinations.
+The diagnostic supplies drawing bookkeeping, stubs skeleton/plate responses and
+the actor-hit loop, and substitutes an equivalent LEVL read for one unsupported
+68020 addressing block. Thus it validates those controllers, not the missing
+gate/plate mechanisms or complete collision parity. The user's entrance video
+was also checked visually for the shaking strip, opening and falling stone.
+
 ### Sword-Wall Contact
 
 The shared actor collision bounds now include the native attachment extension.
@@ -194,7 +233,7 @@ is shared with ordinary guards and other environments, without room overrides.
 
 This is the scenery foundation, not a completed playable level. Original room
 transitions and the common movement runtime are available. Cavern-specific
-floor classifications, gate and plate controllers, loose floors, spikes,
+floor classifications, gate and plate controllers, spikes,
 crushers, lava, potion behavior and colors, special draw modes and
 skeleton enemies still require semantic recovery and integrated tests.
 The ordinary-guard decoder does not reinterpret skeleton spawn records; the
@@ -212,4 +251,8 @@ original map link, the generated map, F3 room placements, flask libraries and
 mask decoding, entry closure/restart, cross-environment water clipping,
 missing pillar shadows, upper-border records, clean-cut setup, threshold overlap
 through every closing phase and torch selection/pause. These checks do
-not certify hazards, object interactions or completion of level 3.
+not certify all hazards, object interactions or completion of level 3.
+`tests/test_loose_floors.py` covers pressure, warnings, detachment, forced falls,
+room-link traversal, impacts, decoration changes, ordinary crushing, dynamic
+floor/climb repainting, pause and restart. Its imported-resource cases are
+skipped on CI; the pure controller cases run without proprietary game files.

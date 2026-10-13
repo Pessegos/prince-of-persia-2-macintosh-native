@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 import random
 
+from pop2.loose_floors import LooseFloors
+
 
 @dataclass
 class CavernState:
@@ -11,6 +13,7 @@ class CavernState:
     entry_frames: tuple = ()
     entry_frame: int = 0
     torches: dict = field(default_factory=dict)
+    loose: LooseFloors = field(default_factory=LooseFloors)
 
     def configure_torches(self, metadata):
         self.torches.clear()
@@ -39,6 +42,11 @@ class CavernState:
         self.entry_frame = 0
 
     def foreground(self, room, cell, value):
+        if (room, cell) in self.loose.tiles:
+            kind, foreground = self.loose.tiles[room, cell]
+            if kind == 19 and (room, cell) in self.torches:
+                foreground = (foreground & 0xfff0) | (self.torches[room, cell] & 15)
+            return foreground
         if (room, cell) == (self.entry_room, self.entry_cell) and self.entry_frames:
             return (value & 0xff00) | self.entry_frames[self.entry_frame][0]
         if (room, cell) in self.torches:

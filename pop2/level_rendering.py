@@ -25,12 +25,15 @@ class LevelRenderer:
         if not 0 <= room_id < 32:
             raise ValueError("Invalid scenery room")
         if self.level.number == 3:
-            from pop2.caverns import cavern_room
+            from pop2.caverns import cavern_room, cavern_scene_signature
 
             frame = caverns.entry_frame if caverns is not None else 0
-            key = room_id, frame if room_id == self.level.start_room else 0
+            signature = (cavern_scene_signature(self.cavern_program, room_id, caverns)
+                         if caverns is not None else '')
+            key = room_id, frame if room_id == self.level.start_room else 0, signature
             if key not in self.cavern_frames:
-                self.cavern_frames[key] = cavern_room(room_id, entry_frame=key[1], animated=True)
+                self.cavern_frames[key] = cavern_room(room_id, entry_frame=key[1], animated=True,
+                                                    loose_key=signature)
             self.rooms[room_id] = self.cavern_frames[key]
             return self.rooms[room_id]
         if room_id not in self.rooms:
@@ -50,9 +53,10 @@ class LevelRenderer:
 
     def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
         if self.level.number == 3 and caverns is not None and not front:
-            from pop2.caverns import draw_cavern_torches
+            from pop2.caverns import draw_cavern_torches, draw_cavern_falling
 
-            return draw_cavern_torches(frame, room_id, caverns)
+            frame = draw_cavern_torches(frame, room_id, caverns)
+            return draw_cavern_falling(frame, room_id, caverns, self.level.data)
         if room_id in self.desert_rooms:
             return self.desert_rooms[room_id].draw(frame, frame_number, desert, front)
         if harbor is None:

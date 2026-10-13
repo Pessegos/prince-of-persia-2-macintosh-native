@@ -99,6 +99,7 @@ class LevelMap:
         kind = struct.unpack_from(">H", self.level, room * 60 + index * 2)[0]
         fg, bg = struct.unpack_from(">2H", self.level, 0x780 + room * 120 + index * 4)
         if self.caverns is not None:
+            kind = self.caverns.loose.tiles.get((room, index), (kind, fg))[0]
             fg = self.caverns.foreground(room, index, fg)
         if kind == 4 and self.desert is not None:
             fg = (fg & 0xff00) | (104 if self.desert.exit_open else 0)
@@ -741,6 +742,15 @@ class RooftopPhysics:
                 tile = self.map.align_wall(motion.room, motion.row, state, frame_record)
             if tile.room is not None and tile.kind not in EMPTY_TILES | WALL_TILES:
                 velocity = state.vertical_velocity
+                if tile.kind == 11 and self.map.caverns is not None and velocity:
+                    # Falling 6:01ee-0260: strike the slab, halve velocity and
+                    # remain airborne just above the current floor.
+                    state.sound_events.extend(self.map.caverns.loose.trigger(tile, force=velocity))
+                    state.vertical_velocity //= 2
+                    state.current_y = -13
+                    if velocity >= 63 or state.actor_type == 2:
+                        events.append(TerrainEvent('damage', 100))
+                    break
                 # HitFloor 6:0348-0444 makes an ordinary NPC's >=50 fall
                 # fatal; the Prince can survive 50..62 with one life lost.
                 fatal = not alive or velocity >= (50 if state.actor_type == 2 else 63)

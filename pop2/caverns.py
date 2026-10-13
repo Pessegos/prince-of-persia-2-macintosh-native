@@ -203,6 +203,9 @@ def merge_positioned_mask(existing, source, position):
 def draw_cavern_torches(frame, room_id, state):
     program, resources, palette, shapes = cavern_assets()
     for record in program.get('torches', {}).get(str(room_id), ()):
+        tile = state.loose.tiles.get((record['room'], record['cell']))
+        if tile is not None and tile[0] != 19:
+            continue
         value = state.foreground(record['room'], record['cell'], record['foreground'])
         index = 3581 + (value & 15)
         if index not in shapes:
@@ -211,6 +214,46 @@ def draw_cavern_torches(frame, room_id, state):
         if clipped is not None:
             sprite, position = clipped
             frame.paste(sprite, position, sprite)
+    return frame
+
+
+def cavern_scene_signature(program, room_id, state):
+    metadata = program.get('loose_floors', {})
+    cells = metadata.get('rooms', {}).get(str(room_id), {}).get('cells', ())
+    indices = []
+    for room, cell in cells:
+        choices = metadata['cells'][f'{room}:{cell}']
+        kind, foreground = state.loose.tiles.get((room, cell), choices[0])
+        if choices[0][0] == 11:
+            index = (int(bool(metadata['shifts'][foreground & 15])) if kind == 11 else
+                     2 if (room, cell) in state.loose.cleared or len(choices) == 3 else 3)
+        else:
+            index = next(i for i, value in enumerate(choices) if value[0] == kind and
+                         (choices[0][0] != choices[1][0]
+                          or value[1] & 0xf0ff == foreground & 0xf0ff))
+        indices.append(str(index))
+    return ''.join(indices)
+
+
+def draw_cavern_falling(frame, room_id, state, level):
+    from pop2.terrain import LevelMap
+
+    _program, resources, palette, shapes = cavern_assets()
+    terrain = LevelMap(level)
+    for block in state.loose.falling:
+        if block.room == room_id:
+            y = block.y
+        elif block.room == terrain.neighbor(room_id, 'up') and block.room is not None:
+            y = block.y - 364
+        elif block.room == terrain.neighbor(room_id, 'down') and block.room is not None:
+            y = block.y + 364
+        else:
+            continue
+        # DrawObjCaveLoose 8:2bb4-2bf4 adds the upper lip and stone body.
+        for index, bottom in ((3557, y - 18), (3604, y)):
+            sprite = cavern_command_sprite(['back', index, block.x, bottom, 16],
+                                            resources, palette, shapes)
+            frame.paste(sprite, (block.x, bottom - sprite.height), sprite)
     return frame
 
 
@@ -229,17 +272,22 @@ def cavern_command_sprite(command, resources, palette, shapes):
     return shapes[key]
 
 
-def cavern_room(room_id=0, entry_frame=0, animated=False):
+def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key=''):
     program, resources, palette, shapes = cavern_assets()
-    if program.get('version') in (2, 3, 4, 5, 6, 7, 8) and program.get('level') == 3:
+    if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9) and program.get('level') == 3:
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, 3, room_id):
         commands = program['commands']
     else:
         raise ValueError('Unsupported cavern drawing export')
     entry = program.get('entry_exit')
+    variant = program.get('loose_floors', {}).get('rooms', {}).get(str(room_id), {}).get(
+        'variants', {}).get(loose_key)
+    if variant is not None:
+        commands = variant['commands']
     if entry is not None and room_id == entry['room']:
-        commands = entry['frames'][entry_frame]['commands']
+        commands = (variant['entry_frames'][entry_frame] if variant is not None else
+                    entry['frames'][entry_frame]['commands'])
     background = Image.new('RGBA', (510, 365), (0, 0, 0, 255))
     foreground = Image.new('RGBA', background.size)
     masks = {row: Image.new('L', background.size) for row in range(-1, 5)}
@@ -247,7 +295,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False):
     for command in commands:
         layer, index, _, _, _, row = command[:6]
         library = command[7] if len(command) >= 8 else 4
-        if animated and program.get('version') in (4, 5, 6, 7, 8) and library == 4 and 3581 <= index <= 3589:
+        if animated and program.get('version') >= 4 and library == 4 and 3581 <= index <= 3589:
             continue
         clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
         if clipped is None:
@@ -266,14 +314,18 @@ def cavern_room(room_id=0, entry_frame=0, animated=False):
                 if merged is not None:
                     cell_masks[cell] = merged
     redraw = {}
-    for action, redraw_commands in program.get('climb_redraw', {}).get(str(room_id), {}).items():
+    climb_commands = (variant['climb_redraw'] if variant is not None else
+                      program.get('climb_redraw', {}).get(str(room_id), {}))
+    for action, redraw_commands in climb_commands.items():
         for command in redraw_commands:
             clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
             if clipped is not None:
                 cell = (int(action), command[8], command[9])
                 redraw.setdefault(cell, []).append(clipped)
     floors = {}
-    for command in program.get('floor_redraw', {}).get(str(room_id), ()):
+    floor_commands = (variant['floor_redraw'] if variant is not None else
+                      program.get('floor_redraw', {}).get(str(room_id), ()))
+    for command in floor_commands:
         clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
         if clipped is not None:
             floors.setdefault(tuple(command[8:10]), []).append(clipped)

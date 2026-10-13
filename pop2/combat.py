@@ -9,6 +9,7 @@ from pop2.enemy_profiles import (
     STRIKE_CHANCE, HIT_PAUSE, QuickDrawRandom,
 )
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
+from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.opponent_generation import (
     OpponentGenerationPoint, character_column, tile_kind,
     WALL_TILES, OBSTACLE_TILES, EMPTY_TILES,
@@ -1060,5 +1061,6 @@ class CombatEncounter:
     def advance_player_recovery(self):
         player = self.player
         player.runtime.next_frame()
-        if player.recovering and player.state.sequence_id == 227:
+        if player.recovering and (player.state.sequence_id == 227 or
+                player.state.source_sequence_id == 52 and player.state.sequence_id == IDLE_SEQUENCE):
             player.recovering = False
