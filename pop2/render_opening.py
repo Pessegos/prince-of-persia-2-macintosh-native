@@ -122,6 +122,29 @@ def roof_ledge_width(room_id, row, actor_row, actor_bottom):
     return 22
 
 
+def native_buffer_cells(bounds):
+    """Cells marked by MarkBufsForRect (CODE:5, 0x19f8)."""
+    left, top, right, bottom = bounds
+    if top >= bottom or left >= right:
+        return ()
+
+    def cell_row(y):
+        return -1 if y < 5 else min(2, (y - 5) // TILE_HEIGHT)
+
+    def cell_column(x):
+        if x <= 50:
+            return 0
+        if x >= 460:
+            return 9
+        return x // TILE_WIDTH
+
+    first_row, last_row = cell_row(top), cell_row(bottom)
+    first_column, last_column = cell_column(left), cell_column(right)
+    return tuple((column, row)
+                 for row in range(first_row, last_row + 1)
+                 for column in range(first_column, last_column + 1))
+
+
 @dataclass(frozen=True)
 class OpeningRoom:
     background: Image.Image
@@ -131,6 +154,7 @@ class OpeningRoom:
     pieces: tuple[RoofForeground, ...]
     room_id: int
     level_kind: int = 5
+    actor_cell_occlusion: dict[tuple[int, int], tuple[Image.Image, tuple[int, int]]] | None = None
 
     def flattened(self):
         return Image.alpha_composite(self.background, self.foreground)
@@ -139,6 +163,16 @@ class OpeningRoom:
         if self.level_kind != 5:
             if bounds is None:
                 return self.actor_occlusion[max(-1, min(4, row))]
+            if self.actor_cell_occlusion is not None:
+                mask = Image.new("L", (ROOM_WIDTH, ROOM_HEIGHT))
+                for cell in native_buffer_cells(bounds):
+                    positioned = self.actor_cell_occlusion.get(cell)
+                    if positioned is not None:
+                        cell_mask, (x, y) = positioned
+                        rect = (x, y, x + cell_mask.width, y + cell_mask.height)
+                        current = mask.crop(rect)
+                        mask.paste(ImageChops.lighter(current, cell_mask), (x, y))
+                return mask
             first_row = max(-1, min(2, character_row(bounds[1])))
             last_row = max(-1, min(2, character_row(bounds[3])))
             mask = self.actor_occlusion[first_row].copy()

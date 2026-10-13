@@ -76,6 +76,26 @@ def clipped_sprite(sprite, command):
     return sprite, (x, bottom - sprite.height)
 
 
+def merge_positioned_mask(existing, source, position):
+    box = source.getbbox()
+    if box is None:
+        return existing
+    x, y = position[0] + box[0], position[1] + box[1]
+    source = source.crop(box)
+    if existing is None:
+        return source, (x, y)
+
+    previous, previous_position = existing
+    left, top = min(x, previous_position[0]), min(y, previous_position[1])
+    right = max(x + source.width, previous_position[0] + previous.width)
+    bottom = max(y + source.height, previous_position[1] + previous.height)
+    combined = Image.new('L', (right - left, bottom - top))
+    combined.paste(previous, (previous_position[0] - left, previous_position[1] - top))
+    added = Image.new('L', combined.size)
+    added.paste(source, (x - left, y - top))
+    return ImageChops.lighter(combined, added), (left, top)
+
+
 def draw_cavern_torches(frame, room_id, state):
     program, resources, palette, shapes = cavern_assets()
     for record in program.get('torches', {}).get(str(room_id), ()):
@@ -92,7 +112,7 @@ def draw_cavern_torches(frame, room_id, state):
 
 def cavern_room(room_id=0, entry_frame=0, animated=False):
     program, resources, palette, shapes = cavern_assets()
-    if program.get('version') in (2, 3, 4, 5) and program.get('level') == 3:
+    if program.get('version') in (2, 3, 4, 5, 6) and program.get('level') == 3:
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, 3, room_id):
         commands = program['commands']
@@ -104,10 +124,11 @@ def cavern_room(room_id=0, entry_frame=0, animated=False):
     background = Image.new('RGBA', (510, 365), (0, 0, 0, 255))
     foreground = Image.new('RGBA', background.size)
     masks = {row: Image.new('L', background.size) for row in range(-1, 5)}
+    cell_masks = {} if program.get('version') >= 6 else None
     for command in commands:
-        layer, index, x, bottom, flags, row = command[:6]
+        layer, index, _, _, flags, row = command[:6]
         library = command[7] if len(command) >= 8 else 4
-        if animated and program.get('version') in (4, 5) and library == 4 and 3581 <= index <= 3589:
+        if animated and program.get('version') in (4, 5, 6) and library == 4 and 3581 <= index <= 3589:
             continue
         key = (library, index, flags) if library == 1 else index
         if key not in shapes:
@@ -130,4 +151,9 @@ def cavern_room(room_id=0, entry_frame=0, animated=False):
             mask.paste(sprite.getchannel('A'), position)
             if row in masks:
                 masks[row] = ImageChops.lighter(masks[row], mask)
-    return OpeningRoom(background, foreground, masks, (), (), room_id, 3)
+            if cell_masks is not None and len(command) >= 10:
+                cell = (command[8], command[9])
+                merged = merge_positioned_mask(cell_masks.get(cell), sprite.getchannel('A'), position)
+                if merged is not None:
+                    cell_masks[cell] = merged
+    return OpeningRoom(background, foreground, masks, (), (), room_id, 3, cell_masks)

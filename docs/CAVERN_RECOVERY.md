@@ -17,10 +17,10 @@ including side paths outside the shortest route.
 During import, `tools.extract_caverns` executes CODE:3/8 drawing routines against
 the original LEVL, Caverns PIEC and SHAP resources. It records background passes
 0/5 and foreground pass 1 for every tile of every room. The portable export
-retains the existing filename `caverns_entry.json`, now version 5:
+retains the existing filename `caverns_entry.json`, now version 6:
 
 ```text
-rooms[zero_based_room] = [layer, shape_id, x, bottom, draw_mode, row, clip_rect, library][]
+rooms[zero_based_room] = [layer, shape_id, x, bottom, draw_mode, row, clip_rect, library, draw_column, draw_row][]
 clip_rect = [top, left, bottom, right]
 library = 4 (Caverns) or 1 (Prince flasks)
 ```
@@ -54,10 +54,10 @@ pillars. Correct neighbor lookup restores the missing pieces from PIEC without
 adding room-specific artwork or positions. The entry-room columns, platform
 joins and ceiling border have been compared visually with the Macintosh route.
 
-Older exports request an asset reimport: version 4 lacks the full-room repaint
-mode, version 3 lacks the corrected cell
-drawing and live torches, version 2 lacks flask library identity, and version 1
-supplies only the entrance. F3 can preview each room, placing
+Older exports request an asset reimport: version 5 lacks per-command draw-cell
+metadata, version 4 lacks the full-room repaint mode, version 3 lacks the
+corrected cell drawing and live torches, version 2 lacks flask library identity,
+and version 1 supplies only the entrance. F3 can preview each room, placing
 the Prince on a basic floor tile from LEVL rather than using per-room positions.
 
 ## Flasks And Entry Door
@@ -89,8 +89,11 @@ Non-rooftop actor masks now include every 120-pixel scenery row intersected by
 the actor's native sprite bounds. This follows MarkPeelForeBufs (CODE:3,
 0x0428) and MarkBufsForRect (CODE:5, 0x19f8), which mark redraw cells from the
 full actor rectangle; choosing only its supporting-floor row caused incorrect
-foreground clipping during falls. The row alpha masks remain an approximation
-of the original per-cell redraw and ClipChar pipeline.
+foreground clipping during falls. Version 6 also retains each command's
+drawing cell, so runtime selects foreground masks only from columns and rows
+touched by the actor rectangle, using the native 51-by-120 mapping and edge
+clamps. Older exports fall back to row masks. ClipChar still has pose-specific
+rules beyond this redraw-cell selection, so the full pipeline is not claimed.
 
 ## Torch Animation
 

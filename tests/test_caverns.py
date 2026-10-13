@@ -12,13 +12,36 @@ from pop2.caverns import cavern_room, flask_shape, flask_assets
 from pop2.cavern_state import CavernState
 from pop2.level_data import LevelDefinition
 from pop2.paths import ASSET_DIR
-from pop2.render_opening import OpeningRoom, load_resource_file, decode_shap, decode_ctbl
+from pop2.render_opening import (OpeningRoom, load_resource_file, decode_shap,
+                                 decode_ctbl, native_buffer_cells)
 from pop2.terrain import LevelMap
 from tools.render_cavern_map import room_positions
 from tools.extract_caverns import exit_closing_frames, recover_room
 
 
 class CavernDrawingTests(unittest.TestCase):
+    def test_native_buffer_cells_follow_full_actor_rectangle(self):
+        self.assertEqual(native_buffer_cells((50, 4, 51, 5)),
+                         ((0, -1), (1, -1), (0, 0), (1, 0)))
+        self.assertEqual(native_buffer_cells((459, 124, 460, 125)),
+                         ((9, 0), (9, 1)))
+        self.assertEqual(native_buffer_cells((50, 5, 50, 6)), ())
+
+    def test_actor_occlusion_uses_only_native_cells_touched_by_bounds(self):
+        blank = {row: Image.new('L', (510, 365)) for row in range(-1, 5)}
+        cells = {}
+        for cell, point in (((0, 0), (20, 20)), ((1, 0), (70, 20)),
+                            ((0, 1), (20, 140)), ((1, 1), (70, 140)),
+                            ((2, 1), (120, 140))):
+            cell_mask = Image.new('L', (1, 1), 255)
+            cells[cell] = (cell_mask, point)
+        room = OpeningRoom(Image.new('RGBA', (510, 365)), Image.new('RGBA', (510, 365)),
+                           blank, (), (), 0, 3, cells)
+
+        mask = room.actor_mask(0, bounds=(50, 124, 51, 125))
+        points = ((20, 20), (70, 20), (20, 140), (70, 140), (120, 140))
+        self.assertEqual([mask.getpixel(point) for point in points], [255, 255, 255, 255, 0])
+
     def test_actor_occlusion_uses_every_native_cell_row_touched_by_sprite_bounds(self):
         masks = {row: Image.new('L', (510, 365)) for row in range(-1, 5)}
         for row, y in ((0, 20), (1, 140), (2, 260), (3, 340)):
@@ -63,11 +86,24 @@ class CavernDrawingTests(unittest.TestCase):
 
     def test_repaint_export_keeps_live_flames_out_of_static_scenery(self):
         sprite = Image.new('RGBA', (3, 3), 'orange')
-        commands = [['back', 3581, 10, 20, 16, 1, [0, 0, 365, 510], 4]]
-        program = {'version': 5, 'level': 3, 'rooms': {'0': commands}}
+        commands = [['back', 3581, 10, 20, 16, 1, [0, 0, 365, 510], 4, 0, 1]]
+        program = {'version': 6, 'level': 3, 'rooms': {'0': commands}}
         with patch('pop2.caverns.cavern_assets', return_value=(program, {}, {}, {3581: sprite})):
             self.assertEqual(cavern_room().background.getpixel((10, 18)), (255, 165, 0, 255))
             self.assertEqual(cavern_room(animated=True).background.getpixel((10, 18)), (0, 0, 0, 255))
+
+    def test_version_six_export_populates_draw_cell_occlusion(self):
+        sprite = Image.new('RGBA', (3, 3), (200, 100, 30, 255))
+        command = ['front', 3501, 10, 20, 16, 0, [0, 0, 365, 510], 4, 2, 1]
+        next_command = ['front', 3502, 12, 20, 16, 0, [0, 0, 365, 510], 4, 2, 1]
+        program = {'version': 6, 'level': 3, 'rooms': {'0': [command, next_command]}}
+        with patch('pop2.caverns.cavern_assets',
+                   return_value=(program, {}, {}, {3501: sprite, 3502: sprite})):
+            art = cavern_room()
+        cell_mask, position = art.actor_cell_occlusion[(2, 1)]
+        self.assertEqual((position, cell_mask.size), ((10, 17), (5, 3)))
+        self.assertEqual((cell_mask.getpixel((0, 0)), cell_mask.getpixel((4, 2))), (255, 255))
+        self.assertNotIn((1, 1), art.actor_cell_occlusion)
 
     def test_monochrome_flask_uses_native_whole_bitmap_rle_and_ink_color(self):
         data = struct.pack('>HhhH2H', 0x9200, 2, 9, 2, 0, 0) + bytes([1, 128, 128, 0])
@@ -243,14 +279,16 @@ class OriginalCavernTests(unittest.TestCase):
 
     def test_all_native_rooms_render_with_recorded_clip_rectangles(self):
         program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
-        self.assertEqual(program['version'], 5)
+        self.assertEqual(program['version'], 6)
         self.assertEqual(set(program['rooms']), {str(room) for room in range(32)})
         for room in range(32):
             with self.subTest(room=room):
                 commands = program['rooms'][str(room)]
                 self.assertTrue(commands)
-                self.assertTrue(all(len(command) == 8 and len(command[6]) == 4 for command in commands))
+                self.assertTrue(all(len(command) == 10 and len(command[6]) == 4 for command in commands))
                 self.assertTrue(all(command[7] in (1, 4) for command in commands))
+                self.assertTrue(all(0 <= command[8] <= 9 and -1 <= command[9] <= 2
+                                    for command in commands))
                 art = cavern_room(room)
                 self.assertEqual(art.background.size, (510, 365))
                 self.assertGreater(len(art.background.getcolors(510 * 365)), 20)
