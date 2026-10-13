@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 from pop2.mac_input import StepBoundary
 from pop2.paths import ASSET_DIR
-from pop2.sequence_runtime import SequenceState
-from pop2.terrain import LevelMap, character_column
+from pop2.sequence_runtime import SequenceRuntime, SequenceState
+from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion, character_column
 
 
 class VerticalJumpTests(unittest.TestCase):
@@ -78,6 +78,20 @@ class VerticalJumpTests(unittest.TestCase):
             self.assertEqual(character_column(self.state.target_x + 8), column + 1)
             self.assertEqual(self.choose(room=room, row=2), (expected, 0))
 
+    def test_barrier_bypass_uses_the_previous_jump_pose_not_the_current_pose(self):
+        physics = RooftopPhysics(self.terrain)
+        for facing in (0, 1):
+            for old_action in (15, 69, 70, 71, 77, 78, 79, 81, None):
+                for action in (70, 71, 78, 79, 81):
+                    state = SequenceState(14, action=action, animation_state=1,
+                                          target_x=130, facing=facing)
+                    with self.subTest(facing=facing, previous=old_action, action=action):
+                        with patch.object(self.terrain, 'wall_correction', return_value=130) as check:
+                            physics.advance(TerrainMotion(0, 1), SequenceRuntime({}, state),
+                                            131, (105, 102, 134, 191), frame_flags=0,
+                                            old_action=old_action)
+                        self.assertEqual(check.called, old_action not in (70, 78))
+
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class OriginalCeilingTests(unittest.TestCase):
@@ -117,3 +131,32 @@ class OriginalCeilingTests(unittest.TestCase):
             scene.in_animation_tick = True
             scene.start_jump()
             self.assertEqual(scene.sequence_state.sequence_id, 14)
+
+    def test_left_ceiling_jump_is_not_replaced_by_a_false_ground_bump(self):
+        from PIL import ImageChops
+
+        scene = self.scene
+        scene.jump_to_room(0, row=1, x=127, facing=0)
+        floor = scene.native_viewport.convert('RGB').copy()
+        scene.in_animation_tick = True
+        scene.start_jump()
+        self.assertEqual(scene.sequence_state.sequence_id, 14)
+        for _ in range(12):
+            self.tick()
+        self.assertEqual(scene.action, 78)
+        self.tick()
+        self.assertEqual((scene.action, scene.sequence_state.sequence_id,
+                          scene.player_x, scene.terrain_motion.row), (79, 14, 114, 1))
+        self.assertFalse(scene.terrain_motion.falling)
+        self.tick()
+        self.assertEqual(scene.terrain_motion.row, 2)
+        self.assertNotEqual(scene.sequence_state.source_sequence_id, 45)
+        self.assertTrue(scene.terrain_motion.falling)
+        self.assertLess(scene.sequence_state.current_y, 0)
+        for _ in range(3):
+            # The former ground-bump legs crossed this solid floor strip.
+            region = (140, 227, 175, 241)
+            self.assertIsNone(ImageChops.difference(
+                scene.native_viewport.convert('RGB').crop(region),
+                floor.crop(region)).getbbox())
+            self.tick()

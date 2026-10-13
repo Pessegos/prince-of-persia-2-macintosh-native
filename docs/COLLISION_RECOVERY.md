@@ -545,6 +545,28 @@ tests cover the entrance's one-frame pose 79, return to the same floor, final X
 and other cavern ceilings. This is jump selection, not complete head collision
 for horizontal jumps or blocked climbing destinations.
 
+### Saved Jump Pose And Barrier Checks
+
+CheckBarr (4:4e46-4e60) clears its left/right collision candidates and skips
+ordinary barrier detection when the current mode is 7 OR the saved previous
+pose is 70 or 78. The latter field is the old character action at A5-0x502e,
+not the newly loaded action at A5-0x504c. The host now passes that previous
+pose from the animation tick into shared player/NPC terrain physics.
+
+Without this bypass, the wider pose 79 collided with the entrance ceiling
+and became SEQS:45, a ground bump, before the native jump could finish. The
+wrong floor row/mode then prevented QuickFloor from repainting the floor
+over the falling legs. Keeping the native jump transition instead lets
+SEQS:11/StartFall enter the lower row and reuse the existing floor redraw.
+No entrance-specific mask, invented collision boundary or Y clamp is added.
+
+Native execution confirmed the ordinary bypass in 330 combinations of
+previous pose, current mode and level (1-3). Pure tests distinguish previous
+from current pose in both facings; the imported entrance regression checks
+pose 79, the lower-row fall and actual floor pixels during its first three
+poses. This does not replace the remaining swept-body collision approximation
+with the complete native three-row collision buffers.
+
 - The old Shift+Down hold exists only in the isolated `--no-guard` animation
   scene. The terrain scene uses the native ledge controller above. Full
   ceiling/head collision, blocked climb destinations and special-level grab

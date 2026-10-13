@@ -583,7 +583,8 @@ class RooftopPhysics:
 
     def advance(self, motion, runtime, old_x, bounds, sword_drawn=False, protected=False,
                 frame_flags=0x40, frame_record=None, bounds_for_state=None, cut_enabled=True,
-                alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None):
+                alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None,
+                old_action=None):
         state = runtime.state
         if protected or motion.dead:
             return ()
@@ -647,14 +648,16 @@ class RooftopPhysics:
             else:
                 dx, dy = state.target_x - before_x, state.current_y - before_y
                 bounds = (bounds[0] + dx, bounds[1] + dy, bounds[2] + dx, bounds[3] + dy)
-        # CheckBarr (4:4e46) bypasses standing turns. CheckCollide1
-        # (4:551a/5586) checks a rear barrier only with the sword drawn.
+        # CheckBarr (4:4e46-4e60) also bypasses the saved, PREVIOUS pose
+        # 70/78. Testing the wider next jump pose falsely hits the ceiling.
+        # CheckCollide1 (4:551a/5586) checks a rear barrier only with the sword drawn.
         collision_facing = None if sword_drawn or motion.falling else state.facing
         collision_bounds = (collision_bounds_for_state() if collision_bounds_for_state is not None
                             else bounds)
         # Collide 4:5740-5746 returns before displacement or bump selection
         # for a dead actor. A death pose must never become a live wall bump.
-        corrected = (state.target_x if not alive or state.animation_state == 7 else
+        corrected = (state.target_x if not alive or state.animation_state == 7
+                     or old_action in (70, 78) else
                      self.map.wall_correction(motion.room, old_x, state.target_x,
                                               collision_bounds, old_bounds, collision_facing))
         if corrected != state.target_x:

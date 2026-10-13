@@ -1530,11 +1530,12 @@ class ScenePrototype(WindowControls):
                                getattr(self, "audio", None))
         self.sample_keyboard()
         old_x = self.sequence_state.target_x
+        old_action = self.sequence_state.action
         motion = getattr(self, "terrain_motion", None)
         old_bounds = self.player_collision_bounds() if motion is not None else None
         if motion is not None and (motion.falling or motion.sinking or motion.dead):
             self.sequence_runtime.next_frame()
-            self.advance_terrain(old_x, old_bounds)
+            self.advance_terrain(old_x, old_bounds, old_action)
             self.advance_combat()
             self.advance_harbor()
             self.advance_level_events()
@@ -1548,7 +1549,7 @@ class ScenePrototype(WindowControls):
             # SwordCtrl may turn at a ready pose before the hurt sequence ends.
             self.resume_combat_turn()
             self.combat.advance_player_recovery()
-            self.advance_terrain(old_x, old_bounds)
+            self.advance_terrain(old_x, old_bounds, old_action)
             self.advance_combat()
             self.advance_harbor()
             self.advance_level_events()
@@ -1672,7 +1673,7 @@ class ScenePrototype(WindowControls):
             self.sequence_state.current_y -= TILE_HEIGHT
             self.physics.select(self.sequence_runtime, 23)
         old_room = motion.room if motion is not None else None
-        self.advance_terrain(old_x, old_bounds)
+        self.advance_terrain(old_x, old_bounds, old_action)
         # A room cut rebases X; it must not be swept as a cross-room jump.
         self.advance_combat(old_x if motion is None or motion.room == old_room else None)
         self.advance_harbor()
@@ -1733,7 +1734,7 @@ class ScenePrototype(WindowControls):
         self.level_map.align_catch(motion.room, motion.row, state, self.frames[state.action])
         return True
 
-    def advance_terrain(self, old_x, old_bounds=None):
+    def advance_terrain(self, old_x, old_bounds=None, old_action=None):
         motion = getattr(self, "terrain_motion", None)
         if motion is None or self._opening_active():
             return
@@ -1756,7 +1757,7 @@ class ScenePrototype(WindowControls):
             motion, self.sequence_runtime, old_x, self.player_bounds(),
             sword_drawn=self.sword_drawn, protected=self.ledge_hanging or self.ledge_climbing,
             frame_record=self.frames[self.action], bounds_for_state=self.player_bounds,
-            old_bounds=old_bounds, alive=self.combat.player.alive,
+            old_bounds=old_bounds, old_action=old_action, alive=self.combat.player.alive,
             collision_bounds_for_state=self.player_collision_bounds,
             catch_ledge=self.catch_falling_ledge)
         if motion.room != old_room:
