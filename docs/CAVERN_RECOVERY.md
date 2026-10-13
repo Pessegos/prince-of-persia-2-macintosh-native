@@ -85,6 +85,13 @@ The rooftop waterline previously clipped actors in cavern Rooms 16 and 19
 because their room IDs matched the docks. Composition now requires environment
 5, as in ClipChar (4:4218-4228). Cavern actors retain their lower pixels.
 
+Non-rooftop actor masks now include every 120-pixel scenery row intersected by
+the actor's native sprite bounds. This follows MarkPeelForeBufs (CODE:3,
+0x0428) and MarkBufsForRect (CODE:5, 0x19f8), which mark redraw cells from the
+full actor rectangle; choosing only its supporting-floor row caused incorrect
+foreground clipping during falls. The row alpha masks remain an approximation
+of the original per-cell redraw and ClipChar pipeline.
+
 ## Torch Animation
 
 Version 4 records visible flame fragments separately under `torches[room]`,

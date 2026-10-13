@@ -137,7 +137,14 @@ class OpeningRoom:
 
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
         if self.level_kind != 5:
-            return self.actor_occlusion[max(-1, min(4, row))]
+            if bounds is None:
+                return self.actor_occlusion[max(-1, min(4, row))]
+            first_row = max(-1, min(2, character_row(bounds[1])))
+            last_row = max(-1, min(2, character_row(bounds[3])))
+            mask = self.actor_occlusion[first_row].copy()
+            for actor_row in range(first_row + 1, last_row + 1):
+                mask = ImageChops.lighter(mask, self.actor_occlusion[actor_row])
+            return mask
         actor_type = getattr(state, "actor_type", None)
         dead_poses = (185, 228) if actor_type == 2 else DEAD_POSES
         if (state is not None and actor_type in (0, 2)

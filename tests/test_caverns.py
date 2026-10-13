@@ -12,13 +12,27 @@ from pop2.caverns import cavern_room, flask_shape, flask_assets
 from pop2.cavern_state import CavernState
 from pop2.level_data import LevelDefinition
 from pop2.paths import ASSET_DIR
-from pop2.render_opening import load_resource_file, decode_shap, decode_ctbl
+from pop2.render_opening import OpeningRoom, load_resource_file, decode_shap, decode_ctbl
 from pop2.terrain import LevelMap
 from tools.render_cavern_map import room_positions
 from tools.extract_caverns import exit_closing_frames, recover_room
 
 
 class CavernDrawingTests(unittest.TestCase):
+    def test_actor_occlusion_uses_every_native_cell_row_touched_by_sprite_bounds(self):
+        masks = {row: Image.new('L', (510, 365)) for row in range(-1, 5)}
+        for row, y in ((0, 20), (1, 140), (2, 260), (3, 340)):
+            masks[row].putpixel((20, y), 255)
+        room = OpeningRoom(Image.new('RGBA', (510, 365)), Image.new('RGBA', (510, 365)),
+                           masks, (), (), 0, 3)
+
+        # Native MarkBufsForRect maps the sprite's top and bottom to 120-pixel
+        # cell rows. This bounds rectangle touches rows 0, 1 and 2.
+        mask = room.actor_mask(1, bounds=(10, 124, 30, 245))
+        self.assertEqual([mask.getpixel((20, y)) for y in (20, 140, 260, 340)],
+                         [255, 255, 255, 0])
+        self.assertEqual(room.actor_mask(3).getpixel((20, 340)), 255)
+
     def test_export_uses_clean_cut_flag_and_full_clip_for_every_cell(self):
         from unicorn import Uc
 
