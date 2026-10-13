@@ -48,6 +48,7 @@ from pop2.harbor import SHIP_CLIMB_SEQUENCE
 from pop2.rebirth import RebirthSnapshot
 from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
+from pop2.caverns import cavern_clip_top
 from pop2.render_opening import (
     OPENING_FLOOR_Y,
     ROOF_GLASS_OFFSETS,
@@ -2530,6 +2531,10 @@ class ScenePrototype(WindowControls):
         layer.putalpha(ImageChops.multiply(layer.getchannel("A"), ImageChops.invert(mask)))
         level = getattr(getattr(self, 'game', None), 'level', None)
         level_kind = getattr(state, 'level_kind', getattr(level, 'kind', None))
+        if level_kind == 3 and state is not None and bounds is not None and row is not None:
+            clip_top = cavern_clip_top(self.level_map, self.room_id, row, state, bounds)
+            if clip_top > 0:
+                layer.paste((0, 0, 0, 0), (0, 0, layer.width, clip_top))
         # ClipChar 4:4218-4228 restricts the dock waterline to environment 5.
         if level_kind == 5 and self.room_id in (15, 18):
             water_y = 354 if state is not None and state.animation_state == 9 else 327
@@ -2538,7 +2543,10 @@ class ScenePrototype(WindowControls):
                 and getattr(state, 'source_sequence_id', None) == 27):
             # SetupSand 18:057a draws the surface at bottom 243.
             layer.paste((0, 0, 0, 0), (0, 243, layer.width, layer.height))
-        return Image.alpha_composite(frame, layer)
+        frame = Image.alpha_composite(frame, layer)
+        if level_kind == 3 and room is not None and state is not None and bounds is not None:
+            frame = room.draw_actor_foreground(frame, state, bounds)
+        return frame
 
     def draw_cutscene_pause(self, viewport):
         viewport = Image.alpha_composite(

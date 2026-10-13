@@ -8,7 +8,7 @@ from pop2.terrain import LevelMap
 from tools.extract_enemy_profiles import expand_a5_data
 
 
-def recover_room(program, caverns, level, room_id=0, prince=None):
+def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=None, floor_redraw=False):
     from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE
     from unicorn.m68k_const import (
         UC_CPU_M68K_M68000, UC_M68K_REG_A5, UC_M68K_REG_A7,
@@ -62,8 +62,12 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
     put_long(a5 - 0x4ab2, 0)  # No actor-specific gate peeling in a static scene.
     # DoCleanCut 2:608c-6096 builds scenery with full-room repaint enabled.
     # Per-cell redraws change the overlap order of adjacent exit pieces.
-    put_word(a5 - 0x4832, 1)
+    put_word(a5 - 0x4832, int(climb_action is None and not floor_redraw))
     put_word(a5 - 0x4fc2, room_id + 1)
+    if climb_action is not None:
+        if not 135 <= climb_action <= 144:
+            raise ValueError('DrawHalf requires a native climbing pose')
+        put_word(a5 - 0x50c8, climb_action)
     for offset in (0x4600, 0x4fec):
         cpu.mem_write(a5 - offset, struct.pack('>4h', 0, 0, 365, 510))
     terrain = LevelMap(level)
@@ -104,6 +108,13 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
         segment = (address - 0x100000) // 0x10000
         offset = address - bases.get(segment, address)
         result = None
+        if opcode == bytes.fromhex('a8a8') and segment == 5 and offset == 0x21c:
+            dy, dx, rect_pointer = word(sp), word(sp + 2), long(sp + 4)
+            top, left, bottom, right = struct.unpack('>4h', cpu.mem_read(rect_pointer, 8))
+            cpu.mem_write(rect_pointer, struct.pack('>4h', top + dy, left + dx, bottom + dy, right + dx))
+            cpu.reg_write(UC_M68K_REG_A7, sp + 8)
+            cpu.reg_write(UC_M68K_REG_PC, address + 2)
+            return
         if opcode == b'\x4e\x90' and segment == 8 and offset == 0x176c:
             out, first, second = (long(sp + i) for i in (0, 4, 8))
             r1 = struct.unpack('>4h', cpu.mem_read(first, 8))
@@ -121,7 +132,9 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
             cpu.reg_write(UC_M68K_REG_A7, sp + 4)
             cpu.reg_write(UC_M68K_REG_PC, address + 2)
             return
-        if opcode == b'\x4e\x90' and segment == 8 and offset in (0x1ca4, 0x1752, 0x1f86):
+        if (opcode == b'\x4e\x90'
+                and (segment == 8 and offset in (0x1ca4, 0x1752, 0x1f86)
+                     or segment == 5 and offset == 0x230)):
             out, first, second = (long(sp + i) for i in (0, 4, 8))
             r1 = struct.unpack('>4h', cpu.mem_read(first, 8))
             r2 = struct.unpack('>4h', cpu.mem_read(second, 8))
@@ -190,6 +203,8 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
             result = terrain.tile(room_id, word(sp + 4) + 1, word(sp + 6)).kind
         elif segment == 3 and offset == 0x26e4:
             result = 0
+        elif segment == 5 and offset == 0x1990 and (climb_action is not None or floor_redraw):
+            result = 0  # Dirty-buffer bookkeeping does not emit shape commands.
         if result is not None:
             cpu.reg_write(UC_M68K_REG_D0, result)
             cpu.reg_write(UC_M68K_REG_PC, long(sp))
@@ -198,14 +213,24 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
             raise ValueError(f'Unexpected Macintosh trap in cavern renderer {segment}:{offset:x}')
 
     cpu.hook_add(UC_HOOK_CODE, hook)
+    passes = (('back', 0x1ff4, 0), ('back', 0x1ff4, 5), ('front', 0x2598, 1))
+    if climb_action is not None:
+        passes = (('front', 0x3480, 2),)
+    elif floor_redraw:
+        passes = (('front', 0x371c, 2),)
     for draw_row in (2, 1, 0, -1):
         for draw_column in range(10):
-            for layer, entry, draw_pass in (('back', 0x1ff4, 0), ('back', 0x1ff4, 5),
-                                            ('front', 0x2598, 1)):
+            for layer, entry, draw_pass in passes:
                 # GetCells 5:0abe-0ac8 copies fullclip during DoCleanCut;
                 # ComputeClipRect is only used for subsequent dirty cells.
                 # RedrawCellFast 3:1c64-1d38 visits bottom-up, then the border.
                 cpu.mem_write(a5 - 0x4600, bytes(cpu.mem_read(a5 - 0x4fec, 8)))
+                if floor_redraw:
+                    # GetCells/ComputeClipRect supplies the dirty cell clip;
+                    # RedrawCell intersects it with QuickFloor's actor rect.
+                    cpu.mem_write(a5 - 0x4600, struct.pack('>4h',
+                                  max(0, draw_row * 120 + 5), draw_column * 51,
+                                  (draw_row + 1) * 120 + 5, (draw_column + 1) * 51))
                 put_word(a5 - 0x45f8, draw_column)
                 put_word(a5 - 0x45f6, draw_row)
                 tile, previous = (terrain.tile(room_id, draw_column, draw_row),
@@ -241,9 +266,16 @@ def recover_room(program, caverns, level, room_id=0, prince=None):
 def extract_caverns(program, caverns, prince, output):
     level = parse_resource_fork(prince)['LEVL'][2002]['data']
     scenes = {str(room): recover_room(program, caverns, level, room, prince) for room in range(32)}
-    result = {'version': 6, 'level': 3,
+    result = {'version': 8, 'level': 3,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
+    result['climb_redraw'] = {
+        str(room): {str(action): recover_room(program, caverns, level, room, prince, action)['commands']
+                    for action in range(135, 145)}
+        for room in range(32)}
+    result['floor_redraw'] = {
+        str(room): recover_room(program, caverns, level, room, prince, floor_redraw=True)['commands']
+        for room in range(32)}
     terrain = LevelMap(level)
     # FirstFrame 2:5f62 scans for the first exit-right tile in the start room.
     cell = next((cell for cell in range(30)

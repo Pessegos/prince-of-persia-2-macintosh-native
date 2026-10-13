@@ -2,12 +2,116 @@
 
 import json
 import struct
+from dataclasses import dataclass
 from functools import lru_cache
 
 from PIL import Image, ImageChops
 
 from pop2.paths import ASSET_DIR
+from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.render_opening import OpeningRoom, decode_ctbl, decode_shap, load_resource_file
+from pop2.terrain import character_row
+
+
+def drawn_actor_columns(bounds, facing):
+    left, _, right, _ = bounds
+    return (max(0, character_column(left + (21 if facing else 22))),
+            min(9, character_column(right + (23 if facing else 24))))
+
+
+def floor_redraw_cells(state, bounds):
+    # QuickFloor 2:69b6-6ac4; the right-facing climb uses MarkHalf instead.
+    if state.facing and 135 <= state.action <= 144:
+        return ()
+    top_row, bottom_row = character_row(min(365, bounds[1])), character_row(bounds[3])
+    if bottom_row == -1:
+        bottom_row = 3
+    mode = state.animation_state
+    if (mode not in (2, 3, 4, 6) and not (mode == 5 and top_row != bottom_row)
+            and state.action not in (79, 81)):
+        return ()
+    rows = []
+    if min(365, bounds[3] + 1) > bottom_row * 120 + 106:
+        rows.append(bottom_row)
+    if top_row != bottom_row:
+        rows.append(top_row)
+    first, last = drawn_actor_columns(bounds, state.facing)
+    return tuple((column, row) for row in rows if 0 <= row < 3
+                 for column in range(first, last + 1))
+
+
+@dataclass(frozen=True)
+class CavernRoom(OpeningRoom):
+    climb_redraw: dict | None = None
+    floor_redraw: dict | None = None
+
+    def draw_actor_foreground(self, frame, state, bounds):
+        # QuickFloor 2:69b6-69e2 marks DrawHalf only for right-facing
+        # poses 135-144, using the drawn left column and top row.
+        clip = None
+        if self.climb_redraw and state.facing and 135 <= state.action <= 144:
+            column, _ = drawn_actor_columns(bounds, state.facing)
+            row = character_row(min(365, bounds[1]))
+            records = self.climb_redraw.get((state.action, column, row), ())
+        elif self.floor_redraw:
+            records = [record for cell in floor_redraw_cells(state, bounds)
+                       for record in self.floor_redraw.get(cell, ())]
+            clip = (max(0, bounds[0] + int(bool(state.facing))), max(0, bounds[1]),
+                    min(510, bounds[2] + 1), min(365, bounds[3] + 1))
+        else:
+            return frame
+        for sprite, position in records:
+            if clip is not None:
+                x, y = position
+                left, top = max(x, clip[0]), max(y, clip[1])
+                right, bottom = min(x + sprite.width, clip[2]), min(y + sprite.height, clip[3])
+                if left >= right or top >= bottom:
+                    continue
+                sprite = sprite.crop((left - x, top - y, right - x, bottom - y))
+                position = (left, top)
+            frame.paste(sprite, position, sprite)
+            # RedrawCell emits DrawHalf before DrawForeImg. Keep ordinary
+            # foreground pillars in front of the repainted floor strip.
+            x, y = position
+            cover = self.foreground.crop((x, y, x + sprite.width, y + sprite.height))
+            frame.paste(cover, position, cover)
+        return frame
+
+
+def cavern_clip_top(terrain, room, row, state, bounds):
+    """ClipChar 4:4230-43de, for the cavern environment (kind 3)."""
+    if state.animation_state == 9 or state.actor_type in (7, 8):
+        return 0
+    # Entry/exit poses use a separate environment rectangle at 4:416a-420c.
+    # Do not apply the ordinary-body branch to those poses.
+    if state.actor_type == 0 and 217 <= state.action <= 226:
+        return 0
+    left, top, right, bottom = bounds
+    boundary = row * 120 + 5
+    char_top = min(365, top)
+    if row != 0 and (bottom <= boundary or char_top <= boundary - 28):
+        return 0
+    if top - 1 >= boundary:
+        return 0
+    level_number = struct.unpack_from('>H', terrain.level, 0x218a)[0]
+    if ((room == 15 and level_number == 9) or (room == 26 and level_number == 6)
+            or (room == 0 and level_number == 14)):
+        return 0
+    if not (state.facing and 87 <= state.action <= 99):
+        # GetCharEdges 4:5d20-5e52 expands width by one before GetCharCol.
+        # character_column accepts foot-space X; drawn-space X is 21/22
+        # pixels further right, depending on the mirrored sprite anchor.
+        first, last = drawn_actor_columns(bounds, state.facing)
+        top_row = character_row(char_top)
+        first_tile = terrain.tile(room, first, top_row)
+        if first_tile.kind in EMPTY_TILES:
+            return 0
+        if first_tile.room == 0 and level_number == 14:
+            return 0
+        if not (state.animation_state == 0 and state.action in (79, 81)):
+            if terrain.tile(room, last, top_row).kind in EMPTY_TILES:
+                return 0
+    return boundary
 
 
 @lru_cache(maxsize=1)
@@ -110,9 +214,24 @@ def draw_cavern_torches(frame, room_id, state):
     return frame
 
 
+def cavern_command_sprite(command, resources, palette, shapes):
+    library = command[7] if len(command) >= 8 else 4
+    index, flags = command[1], command[4]
+    key = (library, index, flags) if library == 1 else index
+    if key not in shapes:
+        if library == 1:
+            source, colors = flask_assets()
+            shapes[key] = flask_shape(source['SHAP'][index]['data'], colors, flags)
+        elif library == 4:
+            shapes[key] = decode_shap(resources['SHAP'][index]['data'], palette)
+        else:
+            raise ValueError(f'Unsupported cavern shape library {library}')
+    return shapes[key]
+
+
 def cavern_room(room_id=0, entry_frame=0, animated=False):
     program, resources, palette, shapes = cavern_assets()
-    if program.get('version') in (2, 3, 4, 5, 6) and program.get('level') == 3:
+    if program.get('version') in (2, 3, 4, 5, 6, 7, 8) and program.get('level') == 3:
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, 3, room_id):
         commands = program['commands']
@@ -126,21 +245,11 @@ def cavern_room(room_id=0, entry_frame=0, animated=False):
     masks = {row: Image.new('L', background.size) for row in range(-1, 5)}
     cell_masks = {} if program.get('version') >= 6 else None
     for command in commands:
-        layer, index, _, _, flags, row = command[:6]
+        layer, index, _, _, _, row = command[:6]
         library = command[7] if len(command) >= 8 else 4
-        if animated and program.get('version') in (4, 5, 6) and library == 4 and 3581 <= index <= 3589:
+        if animated and program.get('version') in (4, 5, 6, 7, 8) and library == 4 and 3581 <= index <= 3589:
             continue
-        key = (library, index, flags) if library == 1 else index
-        if key not in shapes:
-            if library == 1:
-                source, colors = flask_assets()
-                shapes[key] = flask_shape(source['SHAP'][index]['data'], colors, flags)
-            elif library == 4:
-                shapes[key] = decode_shap(resources['SHAP'][index]['data'], palette)
-            else:
-                raise ValueError(f'Unsupported cavern shape library {library}')
-        sprite = shapes[key]
-        clipped = clipped_sprite(sprite, command)
+        clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
         if clipped is None:
             continue
         sprite, position = clipped
@@ -156,4 +265,16 @@ def cavern_room(room_id=0, entry_frame=0, animated=False):
                 merged = merge_positioned_mask(cell_masks.get(cell), sprite.getchannel('A'), position)
                 if merged is not None:
                     cell_masks[cell] = merged
-    return OpeningRoom(background, foreground, masks, (), (), room_id, 3, cell_masks)
+    redraw = {}
+    for action, redraw_commands in program.get('climb_redraw', {}).get(str(room_id), {}).items():
+        for command in redraw_commands:
+            clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
+            if clipped is not None:
+                cell = (int(action), command[8], command[9])
+                redraw.setdefault(cell, []).append(clipped)
+    floors = {}
+    for command in program.get('floor_redraw', {}).get(str(room_id), ()):
+        clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
+        if clipped is not None:
+            floors.setdefault(tuple(command[8:10]), []).append(clipped)
+    return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks, redraw, floors)

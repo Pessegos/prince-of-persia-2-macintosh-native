@@ -85,15 +85,74 @@ The rooftop waterline previously clipped actors in cavern Rooms 16 and 19
 because their room IDs matched the docks. Composition now requires environment
 5, as in ClipChar (4:4218-4228). Cavern actors retain their lower pixels.
 
-Non-rooftop actor masks now include every 120-pixel scenery row intersected by
-the actor's native sprite bounds. This follows MarkPeelForeBufs (CODE:3,
-0x0428) and MarkBufsForRect (CODE:5, 0x19f8), which mark redraw cells from the
-full actor rectangle; choosing only its supporting-floor row caused incorrect
-foreground clipping during falls. Version 6 also retains each command's
-drawing cell, so runtime selects foreground masks only from columns and rows
-touched by the actor rectangle, using the native 51-by-120 mapping and edge
-clamps. Older exports fall back to row masks. ClipChar still has pose-specific
-rules beyond this redraw-cell selection, so the full pipeline is not claimed.
+Version 6 retains each command's drawing cell. Runtime uses the actor's bounds
+to select cell foreground masks; older exports fall back to intersected-row
+masks. MarkPeelForeBufs (3:0428) and MarkBufsForRect (5:19f8) explain dirty-cell
+selection, not the complete character clip. The first two clipping revisions
+tested that selection in isolation and missed the user's climb defect. In the
+affected rectangle the cell-mask revision produces the same alpha as the
+previous row-mask revision; it cannot remove the exposed turban by itself.
+
+Composition now also implements the ordinary cavern branch of ClipChar
+(4:4230-43de). GetCharEdges (4:5cbc-5e52) supplies drawn columns and top row;
+IsSpace determines whether both edges are behind terrain. Right-facing hangs
+and stationary poses 79/81 have separate tile-check exceptions. Except for
+physical row zero, clipping requires the drawn bottom below `row * 120 + 5`
+and the top coordinate strictly greater than that boundary minus 28. Tumbling
+and actor types 7/8 bypass this branch. This changes drawing only, not movement
+or collisions.
+
+The original M68K GetCharEdges and ClipChar were executed for 61,440 cases:
+all 32 level-three rooms, both facings, three rows, ten pose/mode pairs,
+eight X positions and four top-edge offsets. The portable clip top matched
+every case. Shape-size lookup and initial QuickDraw rectangle construction
+were supplied from the same inclusive sprite bounds; terrain lookup, column
+calculation and ClipChar itself ran natively. For the recorded entrance climb,
+pose 136 has bounds `(106, 218, 125, 302)` and native clip top 245. The new
+rendering regression checks that this upper slice contains scenery only.
+Pose 137 is not clipped by that branch, so this is not a blanket hide-during-
+climb workaround.
+
+This verifies the ordinary top-clip branch, not complete frame parity. The
+user's subsequent recording showed a separate defect at pose 137: red pixels
+were still visible through the near floor at Y 231-236. Comparing equal poses
+(Mac approximately 2.95 seconds, port approximately 2.25 seconds) established
+that ClipChar alone was insufficient.
+
+Version 7 executes native DrawHalf (3:3480-35a8) and ComputeHalfRect for every
+pose 135-144 in all 32 rooms. The resulting shapes, colors, positions and
+QuickDraw clips are exported separately under `climb_redraw`; static scenery
+is unchanged. QuickFloor (2:69b6-69e2) selects only a right-facing climb's drawn
+left column and top row, even after SEQS changes its physical floor row.
+For pose 137, entry cell (2, 1) emits SHAP 3525 at (104, 245), with native
+clip (top 229, left 104, bottom 240, right 128). Those floor pixels are painted
+over the actor, followed by ordinary foreground inside that rectangle, as in
+RedrawCell (3:1eb8-1f30). This preserves pillars instead of painting the floor
+strip over them. Both the pixel-leak regression and the foreground-order test
+fail when their respective drawing steps are omitted.
+
+Version 8 adds the ordinary-character QuickFloor/DrawFloorBuf path, exposed
+by the next upper platform in the user's second comparison. Before the catch,
+pose 79 has bounds (304, 102, 333, 191). ClipChar is disabled because the
+drawn left edge is over air; DrawFloorBuf must still repaint the solid floor
+in drawn cell (6, 0). The native command is SHAP 3528 at (315, 125), clipped
+to (top 100, left 315, bottom 125, right 357). Omitting it exposes the turban
+through the rock for one pose.
+
+The extractor now executes DrawFloorBuf (3:371c-39c4) with dirty-cell clips
+for every room. Runtime applies QuickFloor's ordinary-character selection
+(2:69e6-6ac4) to jumping, falling, wall-hanging, cross-row mode 5 and poses
+79/81. It clips the emitted floor pixels to the actor's native visible
+rectangle, then restores ordinary foreground over that repaint. Right-facing
+poses 135-144 retain the separate DrawHalf path. No room-specific movement
+or position workaround is involved. Executing native QuickFloor over 1,440
+pose/mode/facing/bounds combinations produced the same selected floor cells;
+the integrated upper-platform test fails without the repaint. The first
+entrance-climb regression remains covered as well.
+
+Special entry/exit rectangles, projectile/special-actor drawing modes and
+full dirty-buffer persistence remain separate recovery work. The two aligned
+video defects are addressed; complete level-three frame parity is not claimed.
 
 ## Torch Animation
 
