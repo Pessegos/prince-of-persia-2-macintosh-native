@@ -11,16 +11,44 @@ logic being recovered from the Macintosh executable through reverse engineering.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/01-title.png" alt="Original cloud title sequence"></td>
-    <td width="50%"><img src="docs/screenshots/02-intro.png" alt="The Prince and Princess in the intro"></td>
+    <td width="50%">
+      <img src="docs/screenshots/01-title.png" alt="Prince of Persia 2 title screen" width="100%">
+      <p align="center"><strong>Prince of Persia 2 title screen</strong></p>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/02-cutscene-pause.png" alt="A paused story cutscene" width="100%">
+      <p align="center"><strong>Pause a cutscene without skipping it</strong></p>
+    </td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/03-cutscene-pause.png" alt="Paused cutscene with a dimmed background"></td>
-    <td><img src="docs/screenshots/04-opening.png" alt="The Prince escaping through the palace window"></td>
+    <td width="50%">
+      <img src="docs/screenshots/03-game-menu.png" alt="The in-game menu and keyboard shortcuts" width="100%">
+      <p align="center"><strong>Game menu and keyboard shortcuts</strong></p>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/04-screenshot-menu.png" alt="Screenshot controls with the F8 hint" width="100%">
+      <p align="center"><strong>Screenshot controls and F8 capture</strong></p>
+    </td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/05-checkpoint.png" alt="The level-1 checkpoint near the docks"></td>
-    <td><img src="docs/screenshots/06-boat-jump.png" alt="The Prince jumping from the docks to the boat"></td>
+    <td width="50%">
+      <img src="docs/screenshots/05-level-1.png" alt="The Prince escaping the palace in level 1" width="100%">
+      <p align="center"><strong>Level 1: the palace escape</strong></p>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/06-level-2.png" alt="The desert stone puzzle in level 2" width="100%">
+      <p align="center"><strong>Level 2: the stone puzzle</strong></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/07-copy-protection.png" alt="The original copy-protection symbol screen" width="100%">
+      <p align="center"><strong>Optional original copy protection</strong></p>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/08-level-3.png" alt="The entrance room in level 3's caverns" width="100%">
+      <p align="center"><strong>Level 3: the cavern entrance</strong></p>
+    </td>
   </tr>
 </table>
 
