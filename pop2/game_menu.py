@@ -244,7 +244,7 @@ class GameMenu:
             button((190, 228, 322, 258), "Back" if self.return_to_menu else "Close", True)
             text("by Pessegos", 420, 270, muted, "right")
         else:
-            text("Game", 256, 42, gold, "center")
+            text("Game Menu", 256, 42, gold, "center")
             for i, item in enumerate(self.items):
                 rect = self.row_rect(i)
                 selected = i == self.focus
