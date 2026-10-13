@@ -591,6 +591,15 @@ class WindowControls:
                 if is_resume_key(event, self.window_keys_down):
                     self.set_paused(False)
                     self.pause_resume_keys.update(self.window_keys_down)
+                    # Port QoL: a horizontal resume press also reaches the
+                    # gameplay binding; its release must reach that binding too.
+                    if (event.keysym in ("Left", "Right")
+                            and getattr(self, "intro", None) is None
+                            and getattr(self, "demo", None) is None
+                            and not getattr(self, "level_complete", False)
+                            and self.death.counter < 0):
+                        self.pause_resume_keys.discard(event.keysym)
+                        return None
                 return "break"
             if getattr(self, "intro", None) is not None:
                 if event.keysym == "Escape":

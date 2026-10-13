@@ -159,6 +159,100 @@ class GameWindowTests(unittest.TestCase):
         self.assertFalse(scene.paused)
         self.assertEqual(scene.combat.last_guard_at, last_guard_at + 20)
 
+    def test_horizontal_resume_hold_starts_moving_without_a_second_press(self):
+        from types import SimpleNamespace
+
+        scene = self.scene
+        for direction, key in ((-1, "Left"), (1, "Right")):
+            with self.subTest(direction=direction):
+                scene.jump_to_room(9, row=1, x=320, facing=int(direction > 0))
+                self.clear_guards()
+                scene.set_paused(True)
+                x = scene.player_x
+                event = SimpleNamespace(keysym=key, state=0, char="")
+                self.assertIsNone(scene.dev_key_press(event))
+                # Tk forwards the same event to the ordinary root binding.
+                scene.horizontal_key(event, direction, True)
+                self.assertFalse(scene.paused)
+                self.assertEqual(scene.held_directions, [direction])
+                self.tick(6)
+                self.assertGreater((scene.player_x - x) * direction, 20)
+                self.assertIsNone(scene.dev_key_press(event))
+                scene.horizontal_key(event, direction, True)
+                self.assertEqual(scene.held_directions, [direction])
+                self.assertIsNone(scene.pending_action)
+                self.assertIsNone(scene.dev_key_release(event))
+                scene.horizontal_key(event, direction, False)
+                self.assertEqual(scene.held_directions, [])
+
+    def test_held_up_after_junction_climb_starts_another_jump(self):
+        scene = self.scene
+        scene.jump_to_room(9, row=1, x=240, facing=0)
+        self.clear_guards()
+        scene.in_animation_tick = True
+        scene.up_held = True
+        scene.start_jump()
+        self.assertTrue(scene.native_ledge)
+        for _ in range(40):
+            self.tick()
+            if not scene.native_ledge:
+                break
+        self.assertEqual((scene.action, scene.terrain_motion.row), (15, 0))
+        self.assertTrue(scene.jump_repeat_armed)
+        self.tick()
+        self.assertIn(scene.sequence_state.sequence_id, (14, 24, 28))
+        self.assertEqual(scene.action, 67)
+        self.assertTrue(scene.up_held)
+
+    def test_releasing_up_during_or_immediately_after_climb_does_not_jump(self):
+        scene = self.scene
+        for release_during in (False, True):
+            with self.subTest(release_during=release_during):
+                scene.jump_to_room(9, row=1, x=240, facing=0)
+                self.clear_guards()
+                scene.in_animation_tick = True
+                scene.up_held = True
+                scene.start_jump()
+                for _ in range(40):
+                    self.tick()
+                    if release_during and scene.ledge_climbing and scene.up_held:
+                        scene.set_key_state("up", False)
+                    if not scene.native_ledge:
+                        break
+                self.assertEqual(scene.action, 15)
+                if not release_during:
+                    scene.set_key_state("up", False)
+                self.tick(20)
+                self.assertEqual((scene.action, scene.terrain_motion.row), (15, 0))
+                self.assertIsNone(scene.pending_action)
+                self.assertFalse(scene.jump_repeat_armed)
+
+    def test_held_up_chains_real_cavern_ledges_across_the_upper_room_link(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.peaceful = True
+        scene.jump_to_room(3, row=1, x=429, facing=0)
+        scene.in_animation_tick = True
+        scene.up_held = scene.shift_held = True
+        scene.start_jump()
+        finished = []
+        for _ in range(75):
+            climbing = scene.native_ledge
+            self.tick()
+            if climbing and not scene.native_ledge:
+                self.assertEqual(scene.action, 15)
+                finished.append((scene.room_id, scene.terrain_motion.row, scene.player_x))
+                if len(finished) == 2:
+                    break
+        self.assertEqual(finished, [(3, 0, 418), (0, 2, 367)])
+        scene.set_key_state("up", False)
+        self.tick(20)
+        self.assertEqual((scene.action, scene.room_id, scene.terrain_motion.row,
+                          scene.player_x), (15, 0, 2, 367))
+        self.assertFalse(scene.native_ledge)
+        self.assertFalse(scene.terrain_motion.falling)
+        self.assertIsNone(scene.pending_action)
+
     def test_fullscreen_remembers_normal_and_maximized_state(self):
         scene = self.scene
         for state in ("normal", "zoomed"):
@@ -956,6 +1050,8 @@ class GameWindowTests(unittest.TestCase):
             self.tick()
             state = scene.sequence_state
             poses.append((state.sequence_id, state.action, state.target_x))
+            if scene.ledge_climbing:
+                scene.set_key_state("up", False)
         self.assertIn((13, 53, 247), poses)
         self.assertIn((47, 50, 249), poses)
         self.assertIn((24, 67, 246), poses)
@@ -977,6 +1073,8 @@ class GameWindowTests(unittest.TestCase):
             reference_image = None
             for _ in range(40):
                 self.tick()
+                if scene.ledge_climbing:
+                    scene.set_key_state("up", False)
                 if scene.native_ledge:
                     state = scene.sequence_state
                     reference.append((state.sequence_id, state.action, state.target_x,
@@ -999,6 +1097,8 @@ class GameWindowTests(unittest.TestCase):
                         actual = []
                         for _ in range(48):
                             self.tick()
+                            if scene.ledge_climbing:
+                                scene.set_key_state("up", False)
                             if scene.native_ledge:
                                 state = scene.sequence_state
                                 actual.append((state.sequence_id, state.action, state.target_x,

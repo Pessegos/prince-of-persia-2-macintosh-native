@@ -208,6 +208,13 @@ before/on pose 109 and preservation of other pending commands.
 
 ## Intentional Port Extensions
 
+A horizontal arrow used to resume ordinary gameplay also reaches the normal
+movement binding in that same key press. It is not blocked until release,
+and the release reaches gameplay too, so holding starts movement and releasing
+stops it normally. Other resume keys remain consumed; menus, cutscenes, demos,
+death and completion states do not forward this resume press into gameplay.
+This is a host pause QoL, not a recovered Macintosh pause rule.
+
 Ctrl pressed while running preserves a request to stop running and draw the
 sword once the current run segment reaches its transition. A short Ctrl tap
 is sufficient; no second press is required. The user's Macintosh comparison
@@ -234,6 +241,22 @@ This is another intentional extension, not a recovered native timing rule.
 Drawing the sword still accepts a first queued attack, and block/counter,
 movement and sheathing commands are not delayed. Using animation poses keeps
 the window frozen while paused and avoids depending on OS key-repeat timing.
+
+## Holding Up After A Climb
+
+The native climb consumes Up at 6:19c8-19d0, but its pose 149 is mode 5.
+GenCtrl's mode-5 gate (6:0576-059c) clears the consumed direction. The next
+directional update at 4:3e84-3f08 makes a still-held Up fresh again. Original
+instruction execution confirms the reset/resampling for both facings, with
+Up held and released; the latter leaves no upward request.
+
+The host's native-ledge entry cleared `jump_repeat_armed` without rearming it
+after climbing. Climb completion now restores the existing held-jump repeat
+only when Up remains held, after the actor has returned to its floor and idle
+sequence. It keeps the press marked consumed until the next jump, so releasing
+between completion and that jump cannot trigger the short-tap release fallback.
+Tests cover repeated jumping, release during/immediately after climbing and two
+real cavern climbs across an upper-room link, without fabricated ledge geometry.
 
 ## Run Stop and Ledge Entry Audit
 

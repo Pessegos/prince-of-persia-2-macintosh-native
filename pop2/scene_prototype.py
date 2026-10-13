@@ -1666,6 +1666,10 @@ class ScenePrototype(WindowControls):
             self.sequence_state.current_y = 0
             self.sequence_state.horizontal_velocity = 0
             self.sequence_state.vertical_velocity = 0
+            # The climb's mode-5 pose clears native Up (6:059c), so a held
+            # key becomes fresh again. Repeat only after reaching the floor.
+            self.jump_started_for_press = self.up_held
+            self.jump_repeat_armed = self.up_held
             self.status.set("Back on the rooftop")
         if (motion is not None and self.ledge_hanging and not self.ledge_climbing
                 and not self.shift_held and self.sequence_state.sequence_id == LEDGE_HANG_SEQUENCE):

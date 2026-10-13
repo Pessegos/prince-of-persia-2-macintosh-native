@@ -122,6 +122,28 @@ class CloseShortcutTests(unittest.TestCase):
 
 
 class ResumeKeyTests(unittest.TestCase):
+    def test_horizontal_resume_press_and_release_reach_gameplay_only(self):
+        for key in ("Left", "Right"):
+            for mode in ("gameplay", "intro", "demo", "death", "complete"):
+                with self.subTest(key=key, mode=mode):
+                    host = WindowControls()
+                    host.window_keys_down = set()
+                    host.pause_resume_keys = set()
+                    host.game_menu = host.dev_menu = None
+                    host.paused = True
+                    host.intro = object() if mode == "intro" else None
+                    host.demo = object() if mode == "demo" else None
+                    host.level_complete = mode == "complete"
+                    host.death = SimpleNamespace(counter=0 if mode == "death" else -1)
+                    host.set_paused = Mock(side_effect=lambda value: setattr(host, "paused", value))
+                    event = SimpleNamespace(keysym=key, char="", state=0)
+                    expected = None if mode == "gameplay" else "break"
+                    self.assertEqual(host.dev_key_press(event), expected)
+                    host.set_paused.assert_called_once_with(False)
+                    self.assertEqual(key in host.pause_resume_keys, mode != "gameplay")
+                    self.assertEqual(host.dev_key_release(event), expected)
+                    self.assertNotIn(key, host.window_keys_down)
+
     @unittest.skipUnless(sys.platform == "win32", "Windows virtual-key events")
     def test_windows_tk_media_and_navigation_events_cannot_resume(self):
         result = subprocess.run([sys.executable, "-c", textwrap.dedent("""

@@ -500,7 +500,7 @@ class MenuSceneTests(unittest.TestCase):
     def test_ordinary_keys_resume_pause_without_gameplay_or_repeat_until_release(self):
         scene = self.scene
         scene.jump_to_screen("5")
-        for key in ("Left", "Right", "Up", "Down", "a", "space", "Return", "Tab", "KP_0"):
+        for key in ("Up", "Down", "a", "space", "Return", "Tab", "KP_0"):
             with self.subTest(key=key):
                 scene.set_paused(True)
                 before = scene.sequence_state.__dict__.copy()
