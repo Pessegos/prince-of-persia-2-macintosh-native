@@ -10,7 +10,7 @@ logic being recovered from the Macintosh executable through reverse engineering.
 ## Screenshots
 
 | Title | You can pause cutscenes |
-| --- | --- |
+| :---: | :---: |
 | ![Prince of Persia 2 title screen](docs/screenshots/01-title.png) | ![A paused story cutscene](docs/screenshots/02-cutscene-pause.png) |
 | **Game Menu** | **Screenshot Menu** |
 | ![The in-game menu and keyboard shortcuts](docs/screenshots/03-game-menu.png) | ![Screenshot controls with the F8 hint](docs/screenshots/04-screenshot-menu.png) |
