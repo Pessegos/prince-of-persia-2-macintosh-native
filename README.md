@@ -198,7 +198,7 @@ python -m pip install -r requirements-dev.txt
 python -m ruff check --select F,E9 .
 python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_playback_navigation tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests tests.test_palettes tests.test_game_session tests.test_level_ending
 python -m tools.recovery_catalog --check
-python -m unittest -q tests.test_desert tests.test_caverns tests.test_loose_floors
+python -m unittest -q tests.test_desert tests.test_caverns tests.test_loose_floors tests.test_ceiling
 python -m unittest -q tests.test_screenshots
 ```
 

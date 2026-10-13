@@ -287,6 +287,29 @@ class LevelMap:
             return (floor_edge_distance(contact, state.facing) - 21) * direction
         return None
 
+    def vertical_jump(self, room, row, state, record, bounds):
+        # DoJumpUp's ordinary fallback (6:1774-187c) tests the supporting
+        # foot eight pixels forward before choosing low SEQS:14 / high 28.
+        direction = 1 if state.facing else -1
+        boundary = self.step_boundary(room, row, state, record, bounds)
+        offset = ((boundary.clearance - 10) * direction
+                  if boundary.clearance < 6 and boundary.barrier_type == 1 else 0)
+        contact = floor_contact_x(state.target_x + offset + 8 * direction, state.facing, record)
+        column = character_column(contact)
+        if self.tile(room, column, row - 1).kind in EMPTY_TILES:
+            return 28, offset
+        environment = struct.unpack_from('>H', self.level, 0x2186)[0]
+        # These exceptions are in the native selector, not port-specific
+        # protections. Keep the rooftop boat and later temple branches.
+        if environment == 5 and room == 14:
+            return 28, offset
+        cached_column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        if environment == 6 and room == 6 and (row != 2 or cached_column not in (2, 6)):
+            return 28, offset
+        if environment == 6 and room == 7 and (row != 2 or 0 <= cached_column <= 4):
+            return 28, offset
+        return 14, offset
+
     def wall_supported_hang(self, room, row, state, record):
         # GenCtrl 6:1920-1968 uses GetBlock under the supporting foot.
         column = character_column(floor_contact_x(state.target_x, state.facing, record))

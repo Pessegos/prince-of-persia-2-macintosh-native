@@ -786,6 +786,11 @@ class ScenePrototype(WindowControls):
             self.sequence_state.facing,
             running=command.running,
         )
+        if sequence_id == JUMP_VERTICAL_SEQUENCE and getattr(self, "level_map", None) is not None:
+            sequence_id, offset = self.level_map.vertical_jump(
+                self.room_id, self.terrain_motion.row, self.sequence_state,
+                self.frames[self.sequence_state.action], self.player_collision_bounds())
+            self.player_x += offset
         if sequence_id == RUN_JUMP_SEQUENCE and getattr(self, "level_map", None) is not None:
             if not 7 <= self.sequence_state.action <= 14:
                 return False
@@ -1134,7 +1139,7 @@ class ScenePrototype(WindowControls):
         self.sequence_state.select(sequence_id)
         self.sequence_state.target_x = self.player_x
         self.sequence_state.current_x = self.player_x
-        if sequence_id in (JUMP_FORWARD_SEQUENCE, JUMP_VERTICAL_SEQUENCE, RUN_JUMP_SEQUENCE):
+        if sequence_id in (JUMP_FORWARD_SEQUENCE, JUMP_VERTICAL_SEQUENCE, RUN_JUMP_SEQUENCE, 14):
             self.sequence_state.current_y = 0
 
     def start_crouch_lower(self):

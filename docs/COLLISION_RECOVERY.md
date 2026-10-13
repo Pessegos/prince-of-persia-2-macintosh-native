@@ -514,6 +514,37 @@ before this change, versus about 2 ms afterwards on the development PC;
 building an additional room fell from about 105 ms to about 3.5 ms. These
 are local timings, not a hardware-independent performance guarantee.
 
+### Jumping Under A Ceiling
+
+DoJumpUp's ordinary fallback (6:1774-187c) does not always select SEQS:28.
+After GetBarrDistances, a type-1 barrier less than six pixels away first
+corrects X by `(distance - 10)` in the facing direction. The selector then
+temporarily moves eight pixels forward and derives the supporting column
+from the current FRAM foot offset. GetBlock reads that column one row above,
+including the upper-room link when standing in physical row zero.
+
+An empty cell uses SEQS:28; a solid ceiling uses SEQS:14. Both retain the
+original preparatory poses 67-77, but the latter advances 13 pixels at pose
+78, switches to mode 0 at 79, requests an upper-row shake and links directly
+to SEQS:11. The former has four extra pose-79 frames and a -7/-4 Y excursion.
+Using 28 unconditionally caused the prolonged head penetration shown in the
+user's cavern entrance recording. The port now selects the original sequence
+and retains the existing actor clipping, rather than imposing a height clamp.
+
+The rooftop room-15 exception and the later temple room-7/8 selector branches
+are retained from 6:1816-1864. Those temple branches use the cached pre-probe
+column, not the temporary eight-pixel look-ahead column. This helper implements
+the ordinary Prince branch; the special actor-1 moving-object test is separate.
+
+Native execution of 6:1774 agreed on sequence choice and pre-offset in 5,376
+cases across every defined room of levels 1-3, all physical rows, both facings,
+eight X positions and two barrier results. The diagnostic supplies the already
+recovered GetBarrDistances result and intercepts JumpSeq to record the selection;
+foot conversion, above-cell lookup and the selector execute natively. Integrated
+tests cover the entrance's one-frame pose 79, return to the same floor, final X
+and other cavern ceilings. This is jump selection, not complete head collision
+for horizontal jumps or blocked climbing destinations.
+
 - The old Shift+Down hold exists only in the isolated `--no-guard` animation
   scene. The terrain scene uses the native ledge controller above. Full
   ceiling/head collision, blocked climb destinations and special-level grab
