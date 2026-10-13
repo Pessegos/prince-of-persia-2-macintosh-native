@@ -587,6 +587,25 @@ row-based transition separate. Native threshold/rebase execution covers ten
 heights including 439/440; regressions check coordinates, wall drift and the
 complete entrance landing/recovery without queued input.
 
+### Upward Camera Cuts During Climbing
+
+CutChar 6:4994-49ca chooses the upper room when absolute actor Y is below
+19, excluding modes 3/4/5, selected SEQS:70 and native level-5 room 3.
+The player transition at 6:48da-48ea adds 360 and recomputes GetRow; it does
+not use the sprite's top edge or wait for the climbing animation to finish.
+The port formerly had no upward camera cut, and its protected ledge path
+returned before any vertical camera checks. Held/climbing ledges now retain
+their sequence-owned movement while allowing the shared player camera cuts.
+NPC transitions and the existing sequence row opcodes remain unchanged.
+
+Native execution matched upward selection and rebasing in 140 height/mode/
+sequence cases. Regressions cover the strict 18/19 boundary, fall-mode and
+selected-sequence vetoes, missing links, the level-5 exception and protected
+physics. The imported cavern route climbs from zero-based room 2 to room 8
+at pose 141 and finishes standing at Y 346, rather than disappearing above
+the old viewport. Its fixture clears the loose floor already collapsed in
+the reference recording; no room-specific camera trigger is introduced.
+
 - The old Shift+Down hold exists only in the isolated `--no-guard` animation
   scene. The terrain scene uses the native ledge controller above. Full
   ceiling/head collision, blocked climb destinations and special-level grab

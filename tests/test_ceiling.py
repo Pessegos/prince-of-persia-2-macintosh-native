@@ -129,6 +129,69 @@ class VerticalJumpTests(unittest.TestCase):
             self.assertEqual(floor_y(motion.row) + state.current_y,
                              y - 360 if y >= 440 else y)
 
+    def test_player_up_cut_uses_actor_height_and_rebases_by_360(self):
+        for y in (-120, -14, 0, 18, 19, 20, 106):
+            state = SequenceState(10, current_y=y-floor_y(0), actor_type=0)
+            motion = TerrainMotion(0, 0)
+            self.assertEqual(RooftopPhysics(self.terrain).cut_up(motion, state), y < 19)
+            self.assertEqual(motion.room, int(y < 19))
+            self.assertEqual(floor_y(motion.row) + state.current_y,
+                             y + 360 if y < 19 else y)
+        self.assertEqual(motion.row, 0)
+
+    def test_player_up_cut_retains_native_mode_and_selected_sequence_vetoes(self):
+        for mode in range(10):
+            for selected in (10, 70):
+                state = SequenceState(235, action=70, animation_state=mode,
+                                      selected_sequence_id=selected,
+                                      current_y=-14-floor_y(-1), actor_type=0)
+                motion = TerrainMotion(0, -1)
+                allowed = mode not in (3, 4, 5) and selected != 70
+                with self.subTest(mode=mode, selected=selected):
+                    self.assertEqual(RooftopPhysics(self.terrain).cut_up(motion, state), allowed)
+                    self.assertEqual(motion.room, int(allowed))
+                    self.assertEqual((motion.row, state.current_y),
+                                     (2, 0) if allowed else (-1, 0))
+
+    def test_player_up_cut_preserves_level_five_exception_and_missing_links(self):
+        struct.pack_into('>H', self.level, 0x218a, 5)
+        struct.pack_into('>H', self.level, 0x2094, 2)
+        for room, allowed in ((0, True), (1, False), (2, False)):
+            state = SequenceState(10, current_y=-14-floor_y(-1), actor_type=0)
+            motion = TerrainMotion(room, -1)
+            self.assertEqual(RooftopPhysics(self.terrain).cut_up(motion, state), allowed)
+            self.assertEqual(motion.room, 1 if allowed else room)
+        struct.pack_into('>H', self.level, 0x218a, 3)
+        self.assertTrue(RooftopPhysics(self.terrain).cut_up(motion, state))
+        self.assertEqual((motion.room, motion.row, state.current_y), (1, 2, 0))
+
+    def test_protected_climb_can_cut_without_running_free_fall_physics(self):
+        struct.pack_into('>H', self.level, 0x2086, 2)
+        for y, expected_row, expected_y in ((-14, 2, 0), (440, 0, -26)):
+            state = SequenceState(10, target_x=123, current_y=y-floor_y(-1),
+                                  vertical_velocity=8, actor_type=0)
+            motion = TerrainMotion(0, -1)
+            with patch.object(self.terrain, 'wall_correction') as wall:
+                events = RooftopPhysics(self.terrain).advance(
+                    motion, SequenceRuntime({}, state), 123, (100, -80, 130, 10),
+                    protected=True)
+            self.assertEqual([event.kind for event in events], ['room'])
+            self.assertEqual((motion.room, motion.row, state.current_y),
+                             (1, expected_row, expected_y))
+            self.assertEqual((state.target_x, state.vertical_velocity), (123, 8))
+            self.assertFalse(motion.falling)
+            wall.assert_not_called()
+
+    def test_protected_camera_cut_requires_live_player_and_enabled_cuts(self):
+        for actor, dead, enabled in ((2, False, True), (0, True, True), (0, False, False)):
+            state = SequenceState(10, current_y=0, actor_type=actor)
+            motion = TerrainMotion(0, -1, dead=dead)
+            events = RooftopPhysics(self.terrain).advance(
+                motion, SequenceRuntime({}, state), 123, (100, -80, 130, 10),
+                protected=True, cut_enabled=enabled)
+            self.assertEqual(events, ())
+            self.assertEqual((motion.room, motion.row, state.current_y), (0, -1, 0))
+
     def test_body_overlap_with_ceiling_is_not_a_physical_row_wall(self):
         self.put_tile(0, 1, 0, 20)
         bounds, old = (104, 102, 133, 191), (107, 121, 130, 213)
@@ -241,3 +304,31 @@ class OriginalCeilingTests(unittest.TestCase):
         self.assertEqual((scene.room_id, scene.terrain_motion.row), (3, 0))
         self.assertEqual(floor_y(scene.terrain_motion.row) + scene.sequence_state.current_y, 88)
         self.assertTrue(scene.terrain_motion.falling)
+
+    def test_upper_room_climb_cuts_during_pose_141_and_finishes_on_its_floor(self):
+        scene = self.scene
+        # The recorded route has already collapsed this loose floor above the grab.
+        scene.game.caverns.loose.tiles[(8, 22)] = (0, 0)
+        scene.jump_to_room(2, row=0, x=145, facing=0)
+        scene.in_animation_tick = True
+        scene.shift_held = scene.up_held = True
+        scene.start_jump()
+        self.assertEqual(scene.sequence_state.sequence_id, 24)
+        for _ in range(21):
+            self.tick()
+            self.assertEqual(scene.room_id, 2)
+        self.assertEqual(scene.action, 140)
+        self.assertTrue(scene.ledge_climbing)
+        self.tick()
+        self.assertEqual((scene.action, scene.room_id, scene.terrain_motion.row,
+                          scene.sequence_state.current_y, scene.player_x), (141, 8, 2, 0, 100))
+        self.assertTrue(scene.ledge_climbing)
+        scene.up_held = False
+        for _ in range(14):
+            self.tick()
+            self.assertEqual(scene.room_id, 8)
+        self.assertEqual((scene.action, scene.terrain_motion.row,
+                          scene.sequence_state.current_y, scene.player_x), (15, 2, 0, 112))
+        self.assertFalse(scene.terrain_motion.falling)
+        self.assertFalse(scene.ledge_climbing)
+        self.assertFalse(scene.native_ledge)

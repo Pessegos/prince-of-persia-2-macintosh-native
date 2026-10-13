@@ -566,6 +566,25 @@ class RooftopPhysics:
         motion.room = room
         return True
 
+    def cut_up(self, motion, state):
+        # CutChar 6:4994-49ca tests the floor-relative actor Y, not the
+        # sprite top. Falling modes 3/4/5 must not select an upper room.
+        absolute_y = floor_y(motion.row) + state.current_y
+        level_number = struct.unpack_from('>H', self.map.level, 0x218a)[0]
+        if (absolute_y >= 19 or state.animation_state in (3, 4, 5)
+                or state.source_sequence_id == 70
+                or (level_number == 5 and motion.room == 2)):
+            return False
+        room = self.map.neighbor(motion.room, "up")
+        if room is None:
+            return False
+        motion.room = room
+        # Player Cut 6:48da-48ea adds 360 and recomputes GetRow.
+        absolute_y += 3 * TILE_HEIGHT
+        motion.row = character_row(absolute_y)
+        state.current_y = absolute_y - floor_y(motion.row)
+        return True
+
     def cut_down(self, motion, state):
         # CutChar 6:49ce-4a22 selects down at Y >= 440; the player
         # rebase at 6:48f2 subtracts 360, unlike the NPC Cut's 365.
@@ -624,7 +643,13 @@ class RooftopPhysics:
                 frame_flags=0x40, frame_record=None, bounds_for_state=None, cut_enabled=True,
                 alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None):
         state = runtime.state
-        if protected or motion.dead:
+        if motion.dead:
+            return ()
+        if protected:
+            # A held/climbing ledge bypasses free-fall physics, not CutChar.
+            if (cut_enabled and state.actor_type in (0, None)
+                    and (self.cut_up(motion, state) or self.cut_down(motion, state))):
+                return (TerrainEvent("room"),)
             return ()
         if motion.sinking:
             # SEQS:27 owns every displacement; ordinary gravity must not run.
@@ -747,7 +772,10 @@ class RooftopPhysics:
                             bounds = (bounds[0] + shift, bounds[1],
                                       bounds[2] + shift, bounds[3])
             events.append(TerrainEvent("wall"))
-        if cut_enabled and self.cut_horizontal(motion, state, bounds):
+        if (cut_enabled and state.actor_type in (0, None)
+                and self.cut_up(motion, state)):
+            events.append(TerrainEvent("room"))
+        elif cut_enabled and self.cut_horizontal(motion, state, bounds):
             events.append(TerrainEvent("room"))
         if (cut_enabled and state.actor_type in (0, None)
                 and self.cut_down(motion, state)):
