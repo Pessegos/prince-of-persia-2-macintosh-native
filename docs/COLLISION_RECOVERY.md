@@ -545,27 +545,47 @@ tests cover the entrance's one-frame pose 79, return to the same floor, final X
 and other cavern ceilings. This is jump selection, not complete head collision
 for horizontal jumps or blocked climbing destinations.
 
-### Saved Jump Pose And Barrier Checks
+### Sequence And Physical Row In Barrier Checks
 
-CheckBarr (4:4e46-4e60) clears its left/right collision candidates and skips
-ordinary barrier detection when the current mode is 7 OR the saved previous
-pose is 70 or 78. The latter field is the old character action at A5-0x502e,
-not the newly loaded action at A5-0x504c. The host now passes that previous
-pose from the animation tick into shared player/NPC terrain physics.
+CheckBarr (4:4e46-4e60) clears its collision candidates and bypasses ordinary
+barriers in mode 7 or selected SEQS:70/78. A5-0x502e is a selected sequence
+ID, written by JumpSeq at 6:0032, NOT the previous pose. The earlier port
+change mistakenly treated this field as a saved pose; that interpretation
+and the extra old-action plumbing have been removed. Native execution of
+the bypass predicate covers 330 mode/ID/level combinations; pure tests now
+distinguish the selected sequence from the current pose and linked sequence.
 
-Without this bypass, the wider pose 79 collided with the entrance ceiling
-and became SEQS:45, a ground bump, before the native jump could finish. The
-wrong floor row/mode then prevented QuickFloor from repainting the floor
-over the falling legs. Keeping the native jump transition instead lets
-SEQS:11/StartFall enter the lower row and reuse the existing floor redraw.
-No entrance-specific mask, invented collision boundary or Y clamp is added.
+The entrance's false pose-79 ceiling collision instead came from sweeping
+the sprite through every vertically overlapped wall row. CheckBarr's current
+floor-row buffer and CheckCollide1 (4:55fc-562e) inspect the physical row.
+Shared physics now passes that row to the wall sweep, so the wide airborne
+body is not treated as entering the ceiling's wall cell. CheckCollide1's
+rear-barrier test is also restricted to drawn swords, including while falling.
+The previous ceiling/floor-pixel regression remains intact without the
+misinterpreted pose bypass or a room-specific mask. Complete native buffer
+history, special barriers and controller interactions remain incomplete.
 
-Native execution confirmed the ordinary bypass in 330 combinations of
-previous pose, current mode and level (1-3). Pure tests distinguish previous
-from current pose in both facings; the imported entrance regression checks
-pose 79, the lower-row fall and actual floor pixels during its first three
-poses. This does not replace the remaining swept-body collision approximation
-with the complete native three-row collision buffers.
+### Landing Beside A Gap And Downward Camera Cuts
+
+HitFloor 6:02ba-0310 tests the forward cell before loading the landing pose.
+For space or IsImpassable kinds 11/15/26/12/13/23/24, a native distance of
+30 or less shifts X by `(distance - 32)` in the facing direction. Ordinary
+walls and kinds 6/34 are not IsImpassable for this branch. Actors 7/8 and
+current tiles 23/24 bypass it. Native execution matched the portable offset
+in 600 cases: 50 tile kinds, six distances and both facings. Without this
+alignment, the landing/get-up sequence carried the Prince beyond the narrow
+lower platform in the user's entrance recording.
+
+CutChar 6:49ce-4a22 chooses a downward camera cut at absolute Y >= 440,
+independently of advancing the physical floor row. The player transition
+at 6:48f2-4902 subtracts 360 and recomputes the row, unlike the NPC Cut's
+365-unit rebase at 6:47b4. The host previously followed the lower link only
+when stepping past another floor: it could land below the viewport and wait
+an extra fall before switching screens. Player cuts now use their own
+threshold, retain the known vetoes/missing-link behavior, and leave the NPC
+row-based transition separate. Native threshold/rebase execution covers ten
+heights including 439/440; regressions check coordinates, wall drift and the
+complete entrance landing/recovery without queued input.
 
 - The old Shift+Down hold exists only in the isolated `--no-guard` animation
   scene. The terrain scene uses the native ledge controller above. Full

@@ -6,7 +6,8 @@ from unittest.mock import patch
 from pop2.mac_input import StepBoundary
 from pop2.paths import ASSET_DIR
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
-from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion, character_column
+from pop2.terrain import (LevelMap, RooftopPhysics, TerrainMotion, character_column,
+                         floor_y, floor_contact_x)
 
 
 class VerticalJumpTests(unittest.TestCase):
@@ -78,19 +79,62 @@ class VerticalJumpTests(unittest.TestCase):
             self.assertEqual(character_column(self.state.target_x + 8), column + 1)
             self.assertEqual(self.choose(room=room, row=2), (expected, 0))
 
-    def test_barrier_bypass_uses_the_previous_jump_pose_not_the_current_pose(self):
+    def test_barrier_bypass_uses_selected_sequence_not_the_pose_or_linked_sequence(self):
         physics = RooftopPhysics(self.terrain)
         for facing in (0, 1):
-            for old_action in (15, 69, 70, 71, 77, 78, 79, 81, None):
+            for selected in (14, 28, 69, 70, 71, 77, 78, 79, 81):
                 for action in (70, 71, 78, 79, 81):
                     state = SequenceState(14, action=action, animation_state=1,
-                                          target_x=130, facing=facing)
-                    with self.subTest(facing=facing, previous=old_action, action=action):
+                                          target_x=130, facing=facing, selected_sequence_id=selected)
+                    with self.subTest(facing=facing, selected=selected, action=action):
                         with patch.object(self.terrain, 'wall_correction', return_value=130) as check:
                             physics.advance(TerrainMotion(0, 1), SequenceRuntime({}, state),
-                                            131, (105, 102, 134, 191), frame_flags=0,
-                                            old_action=old_action)
-                        self.assertEqual(check.called, old_action not in (70, 78))
+                                            131, (105, 102, 134, 191), frame_flags=0)
+                        self.assertEqual(check.called, selected not in (70, 78))
+
+    def test_landing_edge_reserve_matches_native_threshold_in_both_facings(self):
+        for facing in (0, 1):
+            self.state.facing = facing
+            self.state.actor_type = 0
+            direction = 1 if facing else -1
+            for distance in (0, 1, 17, 30, 31, 50):
+                self.state.target_x = 430 - distance if facing else 380 + distance
+                column = character_column(self.state.target_x)
+                self.put_tile(0, column, 1, 1)
+                for kind in (0, 9, 11, 15, 26, 12, 13, 23, 24, 1, 20, 6, 34):
+                    self.put_tile(0, column + direction, 1, kind)
+                    expected = ((distance - 32) * direction if distance <= 30
+                                and kind in (0, 9, 11, 15, 26, 12, 13, 23, 24) else 0)
+                    with self.subTest(facing=facing, distance=distance, kind=kind):
+                        self.assertEqual(self.terrain.landing_offset(
+                            0, 1, self.state, self.record), expected)
+
+    def test_landing_alignment_preserves_native_actor_and_special_floor_exclusions(self):
+        self.state.target_x = 420
+        column = character_column(420)
+        self.put_tile(0, column + 1, 1, 0)
+        for kind, actor in ((1, 0), (23, 0), (24, 0), (1, 7), (1, 8)):
+            self.state.actor_type = actor
+            self.put_tile(0, column, 1, kind)
+            self.assertEqual(self.terrain.landing_offset(0, 1, self.state, self.record),
+                             -22 if kind == 1 and actor == 0 else 0)
+
+    def test_player_down_cut_waits_for_440_then_rebases_by_360(self):
+        struct.pack_into('>H', self.level, 0x2086, 2)
+        for y in (346, 365, 439, 440, 448, 466):
+            state = SequenceState(12, target_x=200, current_y=y-floor_y(3), actor_type=0)
+            motion = TerrainMotion(0, 3, falling=True)
+            self.assertEqual(RooftopPhysics(self.terrain).cut_down(motion, state), y >= 440)
+            self.assertEqual(motion.room, int(y >= 440))
+            self.assertEqual(floor_y(motion.row) + state.current_y,
+                             y - 360 if y >= 440 else y)
+
+    def test_body_overlap_with_ceiling_is_not_a_physical_row_wall(self):
+        self.put_tile(0, 1, 0, 20)
+        bounds, old = (104, 102, 133, 191), (107, 121, 130, 213)
+        self.assertEqual(self.terrain.wall_correction(
+            0, 114, 114, bounds, old, 0, physical_row=1), 114)
+        self.assertGreater(self.terrain.wall_correction(0, 114, 114, bounds, old, 0), 114)
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
@@ -143,6 +187,7 @@ class OriginalCeilingTests(unittest.TestCase):
         self.assertEqual(scene.sequence_state.sequence_id, 14)
         for _ in range(12):
             self.tick()
+
         self.assertEqual(scene.action, 78)
         self.tick()
         self.assertEqual((scene.action, scene.sequence_state.sequence_id,
@@ -160,3 +205,39 @@ class OriginalCeilingTests(unittest.TestCase):
                 scene.native_viewport.convert('RGB').crop(region),
                 floor.crop(region)).getbbox())
             self.tick()
+
+    def test_entrance_drop_lands_and_finishes_recovery_on_the_lower_platform(self):
+        scene = self.scene
+        scene.jump_to_room(0, row=1, x=234, facing=1)
+        scene.held_directions.append(1)
+        scene.start_running(1)
+        landed = False
+        for _ in range(45):
+            self.tick()
+            if scene.terrain_motion.falling:
+                scene.held_directions.clear()
+            elif scene.terrain_motion.row == 2:
+                landed = True
+            self.assertEqual(scene.room_id, 0)
+        self.assertTrue(landed)
+        self.assertEqual((scene.action, scene.terrain_motion.row,
+                          scene.sequence_state.current_y, scene.player_x), (15, 2, 0, 379))
+        self.assertFalse(scene.terrain_motion.falling)
+        foot = floor_contact_x(scene.player_x, 1, scene.frames[15])
+        self.assertNotEqual(scene.level_map.tile(0, character_column(foot), 2).kind, 0)
+
+    def test_player_drop_cuts_below_entrance_at_the_native_threshold(self):
+        scene = self.scene
+        scene.jump_to_room(0, row=2, x=410, facing=1)
+        scene.sequence_state.select(12)
+        scene.sequence_runtime.next_frame()
+        scene.terrain_motion.row = 3
+        scene.terrain_motion.falling = True
+        scene.sequence_state.current_y = 430 - floor_y(3)
+        self.tick()
+        self.assertEqual(scene.room_id, 0)
+        self.assertEqual(floor_y(scene.terrain_motion.row) + scene.sequence_state.current_y, 436)
+        self.tick()
+        self.assertEqual((scene.room_id, scene.terrain_motion.row), (3, 0))
+        self.assertEqual(floor_y(scene.terrain_motion.row) + scene.sequence_state.current_y, 88)
+        self.assertTrue(scene.terrain_motion.falling)

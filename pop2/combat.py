@@ -817,7 +817,6 @@ class CombatEncounter:
         terrain = getattr(self, "terrain", None)
         for guard in self.active_guards():
             old_x = guard.state.target_x
-            old_action = guard.state.action
             art = getattr(self, "guard_art", None)
             old_bounds = (art.collision_bounds(guard.state, floor_y(guard.row), guard.sword_drawn)
                           if art is not None else None)
@@ -837,7 +836,7 @@ class CombatEncounter:
             entry = guard.entry_x or 0
             low, high = min(0, entry), max(self.platform_edge, entry)
             if terrain is not None and getattr(self, "guard_art", None) is not None:
-                self._advance_guard_terrain(guard, old_x, old_bounds, old_action)
+                self._advance_guard_terrain(guard, old_x, old_bounds)
             else:
                 guard.state.target_x = max(low, min(high, guard.state.target_x))
             guard.state.current_x = guard.state.target_x
@@ -846,7 +845,7 @@ class CombatEncounter:
             if guard.recovering and guard.state.sequence_id == 227:
                 guard.recovering = False
 
-    def _advance_guard_terrain(self, guard, old_x, old_bounds=None, old_action=None):
+    def _advance_guard_terrain(self, guard, old_x, old_bounds=None):
         if guard.terrain_motion is None:
             guard.terrain_motion = TerrainMotion(guard.room, guard.row)
         motion = guard.terrain_motion
@@ -862,7 +861,7 @@ class CombatEncounter:
         events = self.guard_physics.advance(
             motion, guard.runtime, old_x, bounds(), sword_drawn=guard.sword_drawn,
             bounds_for_state=bounds, cut_enabled=guard.entry_x is None, alive=guard.alive,
-            old_bounds=old_bounds, old_action=old_action, collision_bounds_for_state=collision_bounds)
+            old_bounds=old_bounds, collision_bounds_for_state=collision_bounds)
         guard.room, guard.row = motion.room, motion.row
         guard.targetable = not motion.falling and not motion.dead
         for event in events:

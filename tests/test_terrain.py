@@ -574,19 +574,19 @@ class TerrainTests(unittest.TestCase):
         runtime = self.runtime(12, x=250)
         runtime.state.horizontal_velocity = 24
         runtime.state.current_y = 20
-        motion = TerrainMotion(4, 0, falling=True)
-        events = RooftopPhysics(self.map).advance(motion, runtime, 250, (238, 90, 263, 126))
+        motion = TerrainMotion(4, 1, falling=True)
+        events = RooftopPhysics(self.map).advance(motion, runtime, 250, (238, 210, 263, 246))
         self.assertLess(runtime.state.target_x, 274)
         self.assertEqual(runtime.state.horizontal_velocity, 0)
         self.assertIn("wall", [event.kind for event in events])
 
-    def test_vertical_cut_rebases_365_pixel_clip(self):
+    def test_player_vertical_cut_rebases_360_at_the_native_camera_threshold(self):
         runtime = self.runtime(12, x=150)
-        runtime.state.current_y = -1
-        motion = TerrainMotion(6, 2, falling=True)
-        events = RooftopPhysics(self.map).advance(motion, runtime, 150, (140, 280, 160, 345))
+        runtime.state.current_y = 439 - floor_y(3)
+        motion = TerrainMotion(6, 3, falling=True)
+        events = RooftopPhysics(self.map).advance(motion, runtime, 150, (140, 374, 160, 439))
         self.assertEqual((motion.room, motion.row), (3, 0))
-        self.assertEqual(floor_y(motion.row) + runtime.state.current_y, -14)
+        self.assertEqual(floor_y(motion.row) + runtime.state.current_y, 85)
         self.assertEqual([event.kind for event in events], ["room"])
 
     def test_rooms_without_initial_guards_are_valid(self):

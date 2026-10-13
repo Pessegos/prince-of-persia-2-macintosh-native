@@ -366,6 +366,22 @@ class LevelMap:
             state.target_x += (distance - 32) * direction
         state.current_x = state.target_x
 
+    def landing_offset(self, room, row, state, record):
+        # HitFloor 6:02ba-0310 reserves native distance 32 before loading
+        # the landing pose when the forward cell cannot receive a landing.
+        if state.actor_type in (7, 8):
+            return 0
+        contact = floor_contact_x(state.target_x, state.facing, record)
+        column = character_column(contact)
+        if self.tile(room, column, row).kind in (23, 24):
+            return 0
+        direction = 1 if state.facing else -1
+        ahead = self.tile(room, column + direction, row).kind
+        impassable = {11, 15, 26, 12, 13, 23, 24}
+        distance = floor_edge_distance(contact, state.facing)
+        return ((distance - 32) * direction
+                if distance <= 30 and ahead in EMPTY_TILES | impassable else 0)
+
     def fatal_hit_fall_offset(self, room, row, state, record, supporting_column=None):
         # CheckStab 6:5428-54b2 tests the struck pose before loading death.
         # A supported foot can still tip backward over an adjacent empty cell.
@@ -433,7 +449,8 @@ class LevelMap:
         return self.tile(room, character_column(floor_contact_x(
             state.target_x, state.facing, record)), row)
 
-    def wall_correction(self, room, old_x, new_x, bounds, old_bounds=None, facing=None):
+    def wall_correction(self, room, old_x, new_x, bounds, old_bounds=None, facing=None,
+                        physical_row=None):
         left, top, right, bottom = bounds
         delta = new_x - old_x
         old_left, _, old_right, _ = (old_bounds if old_bounds is not None else
@@ -441,7 +458,11 @@ class LevelMap:
         if not delta and (old_left, old_right) == (left, right):
             return new_x
         corrected = new_x
-        for row in range(character_row(top), character_row(bottom) + 1):
+        # CheckBarr's current-row buffer and CheckCollide1 (4:55fc-562e)
+        # use the physical floor row, not every row overlapped by the art.
+        rows = (range(character_row(top), character_row(bottom) + 1)
+                if physical_row is None else (physical_row,))
+        for row in rows:
             for col in range(-1, 11):
                 tile = self.tile(room, col, row)
                 desert_exit = (tile.kind == 4 and self.desert is not None
@@ -545,6 +566,24 @@ class RooftopPhysics:
         motion.room = room
         return True
 
+    def cut_down(self, motion, state):
+        # CutChar 6:49ce-4a22 selects down at Y >= 440; the player
+        # rebase at 6:48f2 subtracts 360, unlike the NPC Cut's 365.
+        absolute_y = floor_y(motion.row) + state.current_y
+        if (absolute_y < DOWN_CUT_Y or state.source_sequence_id == 70
+                or not self.map.allows_down_cut(motion.room, state.actor_type)):
+            return False
+        room = self.map.neighbor(motion.room, "down")
+        if room is None:
+            return False
+        motion.smooth_landing = (motion.room == 11 and room == 14
+                                 and state.actor_type == 0 and state.level_kind == 5)
+        motion.room = room
+        absolute_y -= 3 * TILE_HEIGHT
+        motion.row = character_row(absolute_y)
+        state.current_y = absolute_y - floor_y(motion.row)
+        return True
+
     def start_fall(self, motion, runtime):
         state = runtime.state
         contact = (floor_contact_x(state.target_x, state.facing, self.frames[state.action])
@@ -583,8 +622,7 @@ class RooftopPhysics:
 
     def advance(self, motion, runtime, old_x, bounds, sword_drawn=False, protected=False,
                 frame_flags=0x40, frame_record=None, bounds_for_state=None, cut_enabled=True,
-                alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None,
-                old_action=None):
+                alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None):
         state = runtime.state
         if protected or motion.dead:
             return ()
@@ -648,18 +686,19 @@ class RooftopPhysics:
             else:
                 dx, dy = state.target_x - before_x, state.current_y - before_y
                 bounds = (bounds[0] + dx, bounds[1] + dy, bounds[2] + dx, bounds[3] + dy)
-        # CheckBarr (4:4e46-4e60) also bypasses the saved, PREVIOUS pose
-        # 70/78. Testing the wider next jump pose falsely hits the ceiling.
+        # CheckBarr (4:4e46-4e60) bypasses selected SEQS:70/78, not
+        # previous poses. JumpSeq writes this ID to A5-0x502e (6:0032).
         # CheckCollide1 (4:551a/5586) checks a rear barrier only with the sword drawn.
-        collision_facing = None if sword_drawn or motion.falling else state.facing
+        collision_facing = None if sword_drawn else state.facing
         collision_bounds = (collision_bounds_for_state() if collision_bounds_for_state is not None
                             else bounds)
         # Collide 4:5740-5746 returns before displacement or bump selection
         # for a dead actor. A death pose must never become a live wall bump.
         corrected = (state.target_x if not alive or state.animation_state == 7
-                     or old_action in (70, 78) else
+                     or state.source_sequence_id in (70, 78) else
                      self.map.wall_correction(motion.room, old_x, state.target_x,
-                                              collision_bounds, old_bounds, collision_facing))
+                                              collision_bounds, old_bounds, collision_facing,
+                                              physical_row=motion.row))
         if corrected != state.target_x:
             delta = corrected - state.target_x
             state.current_x = state.target_x = corrected
@@ -701,7 +740,7 @@ class RooftopPhysics:
                             motion.room, response_x, response_x,
                             collision_bounds_for_state() if collision_bounds_for_state is not None else bounds,
                             previous_bounds,
-                            collision_facing)
+                            collision_facing, physical_row=motion.row)
                         if corrected != response_x:
                             shift = corrected - response_x
                             state.current_x = state.target_x = corrected
@@ -709,6 +748,9 @@ class RooftopPhysics:
                                       bounds[2] + shift, bounds[3])
             events.append(TerrainEvent("wall"))
         if cut_enabled and self.cut_horizontal(motion, state, bounds):
+            events.append(TerrainEvent("room"))
+        if (cut_enabled and state.actor_type in (0, None)
+                and self.cut_down(motion, state)):
             events.append(TerrainEvent("room"))
 
         if self.frames is not None:
@@ -783,6 +825,9 @@ class RooftopPhysics:
                 sequence = (22 if fatal else 20 if velocity >= 50
                             else 187 if state.actor_type == 2 and state.sequence_id == 186
                             else 63 if sword_drawn or state.actor_type == 2 else 17)
+                if frame_record is not None:
+                    state.target_x += self.map.landing_offset(
+                        motion.room, motion.row, state, frame_record)
                 state.current_y = 0
                 state.horizontal_velocity = state.vertical_velocity = 0
                 motion.falling = False
@@ -796,6 +841,10 @@ class RooftopPhysics:
             motion.row += 1
             state.current_y -= TILE_HEIGHT
             if motion.row >= 3:
+                if state.actor_type in (0, None):
+                    # The player's camera cut has its own Y threshold.
+                    # Advancing a physical floor row must not change it.
+                    break
                 room = (self.map.neighbor(motion.room, "down")
                         if self.map.allows_down_cut(motion.room, state.actor_type) else None)
                 if room is not None:
