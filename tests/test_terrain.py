@@ -666,6 +666,64 @@ class RooftopSceneTests(unittest.TestCase):
         self.tick(3)
         self.assertFalse(self.scene.terrain_motion.falling)
 
+    def test_cavern_late_down_matches_held_down_through_both_drops(self):
+        traces = []
+        scene = self.scene
+        for down_pose in (102, 107, 108):
+            with self.subTest(down_pose=down_pose):
+                scene.load_level(3)
+                scene.peaceful = True
+                scene.jump_to_room(0, row=1, x=234, facing=1)
+                scene.in_animation_tick = True
+                scene.horizontal_key(None, 1, True)
+                pressed = False
+                trace = []
+                for _ in range(45):
+                    if scene.action == down_pose and not pressed:
+                        scene.set_key_state("down", True)
+                        pressed = True
+                    self.tick()
+                    trace.append((scene.room_id, scene.terrain_motion.row,
+                                  scene.action, scene.player_x))
+                    if scene.room_id == 3:
+                        break
+                self.assertTrue(pressed)
+                self.assertEqual(scene.room_id, 3)
+                self.assertTrue(any(room == 0 and row == 2 and action == 110
+                                    for room, row, action, x in trace))
+                self.assertIsNone(scene.pending_action)
+                traces.append(trace)
+        self.assertEqual(traces[1:], [traces[0], traces[0]])
+
+    def test_cavern_landing_down_release_rises_once_without_replaying_crouch(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.peaceful = True
+        scene.jump_to_room(0, row=1, x=234, facing=1)
+        scene.in_animation_tick = True
+        scene.horizontal_key(None, 1, True)
+        for _ in range(25):
+            self.tick()
+            if scene.sequence_state.sequence_id == 17:
+                break
+        self.assertEqual(scene.action, 107)
+        scene.set_key_state("down", True)
+        scene.horizontal_key(None, 1, False)
+        self.tick(2)
+        self.assertEqual(scene.action, 109)
+        scene.set_key_state("down", False)
+        rises = []
+        for _ in range(20):
+            self.tick()
+            if scene.sequence_state.sequence_id == 49:
+                rises.append(scene.action)
+            self.assertNotEqual(scene.sequence_state.sequence_id, 50)
+            self.assertFalse(scene.terrain_motion.falling)
+        self.assertEqual(rises, list(range(110, 120)))
+        self.assertEqual((scene.action, scene.room_id, scene.terrain_motion.row,
+                          scene.player_x), (15, 0, 2, 379))
+        self.assertIsNone(scene.pending_action)
+
     def test_cavern_sword_draw_contacts_wall_with_attachment_and_recoils(self):
         scene = self.scene
         scene.load_level(3)

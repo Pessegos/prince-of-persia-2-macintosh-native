@@ -1173,6 +1173,10 @@ class ScenePrototype(WindowControls):
                 CROUCH_HOLD_SEQUENCE)
                 or state.action != 109 or state.cursor == 0):
             return False
+        # GenCtrl 6:099a-0b38 consumes Down at the low pose. A landing
+        # already fulfilled a buffered crouch; don't replay it after rising.
+        if self.pending_action is not None and self.pending_action.kind == "crouch":
+            self.pending_action = None
         if self.pending_action is not None and self.pending_action.kind == "crawl":
             direction = self.pending_action.direction
             self.pending_action = None

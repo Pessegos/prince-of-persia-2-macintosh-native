@@ -2038,6 +2038,72 @@ class AnimationDataTests(unittest.TestCase):
             frames.append((scene.action, scene.player_x - start_x))
         self.assertEqual(frames, [(107, -2), (108, -10), (109, -21), (110, -24)])
 
+    def test_down_during_landing_is_consumed_before_held_crawl_in_both_facings(self):
+        for facing, direction in ((0, -1), (1, 1)):
+            for pose in (107, 108):
+                with self.subTest(facing=facing, pose=pose):
+                    scene = self.sword_scene()
+                    scene.sequence_state.facing = facing
+                    scene.held_directions = [direction]
+                    scene.start_sequence(17)
+                    scene.advance_animation()
+                    if pose == 108:
+                        scene.advance_animation()
+                    self.assertEqual(scene.action, pose)
+                    scene.set_key_state("down", True)
+                    self.assertEqual(scene.pending_action, BufferedCommand("crouch"))
+                    for _ in range(3):
+                        scene.advance_animation()
+                        if scene.sequence_state.sequence_id == CROUCH_STEP_SEQUENCE:
+                            break
+                    self.assertEqual((scene.sequence_state.sequence_id, scene.action),
+                                     (CROUCH_STEP_SEQUENCE, 110))
+                    self.assertIsNone(scene.pending_action)
+
+    def test_down_tap_during_landing_does_not_crouch_again_after_rising(self):
+        for pose in (107, 108):
+            for release_at_low_pose in (False, True):
+                with self.subTest(pose=pose, release_at_low_pose=release_at_low_pose):
+                    scene = self.sword_scene()
+                    scene.start_sequence(17)
+                    scene.advance_animation()
+                    if pose == 108:
+                        scene.advance_animation()
+                    scene.set_key_state("down", True)
+                    if release_at_low_pose:
+                        for _ in range(2):
+                            if scene.action == 109:
+                                break
+                            scene.advance_animation()
+                        self.assertEqual(scene.action, 109)
+                    scene.set_key_state("down", False)
+                    rises = []
+                    for _ in range(20):
+                        scene.advance_animation()
+                        if scene.sequence_state.sequence_id == CROUCH_RISE_SEQUENCE:
+                            rises.append(scene.action)
+                        self.assertNotEqual(scene.sequence_state.sequence_id,
+                                            CROUCH_STANDING_LOWER_SEQUENCE)
+                    self.assertEqual(rises, list(range(110, 120)))
+                    self.assertEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)
+                    self.assertIsNone(scene.pending_action)
+
+    def test_low_pose_only_consumes_the_already_fulfilled_crouch_request(self):
+        for command in (BufferedCommand("crawl", -1), BufferedCommand("sword_draw"),
+                        BufferedCommand("jump"), BufferedCommand("horizontal", 1, "turn")):
+            with self.subTest(command=command):
+                scene = self.sword_scene()
+                scene.start_sequence(CROUCH_HOLD_SEQUENCE)
+                scene.sequence_runtime.next_frame()
+                scene.down_held = True
+                scene.pending_action = command
+                scene.resume_crouch()
+                if command.kind == "crawl":
+                    self.assertEqual(scene.sequence_state.sequence_id, CROUCH_STEP_SEQUENCE)
+                    self.assertIsNone(scene.pending_action)
+                else:
+                    self.assertEqual(scene.pending_action, command)
+
     def test_rooftop_hang_still_works_in_either_shift_down_order(self):
         for down_first in (False, True):
             with self.subTest(down_first=down_first):

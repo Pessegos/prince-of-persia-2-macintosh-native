@@ -98,7 +98,7 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 | Running 4-14 | Both horizontals zero: brake only at 7/11; otherwise Backward before fresh Up, then fresh Down; finally consume fresh Forward | 6:11e4-1274 | Ordinary flow tested, including release at pose 8 waiting for 11; latest-command slot cannot reproduce every conflict |
 | Run-jump takeoff | Legal run poses plus two-cell geometry; accepted jump clears directions, consumes Up | 6:1c14-1d5e | Ordinary geometry tested |
 | Other unarmed poses | No general dispatch; pending latches remain unless reset/special branch intervenes | 6:0560-07e0 | Full native lifecycle missing |
-| Crouch pose 109 | Down active: fresh Forward selects crawl, then clear/consume; Down zero: rise unless terrain vetoes | 6:099a-0b58 | Tap/hold/crawl tested; low-hold and mode-5 resets missing |
+| Crouch pose 109 | Down active: fresh Forward selects crawl, then clear/consume; Down zero: rise unless terrain vetoes | 6:099a-0b58 | Tap/hold/crawl and fulfilled landing-Down consumption tested; full latch/mode-5 resets missing |
 | Cautious step | Consume Forward and modifier; no unconditional ClearControls at ordinary step entry | 6:1276-128a | Common repeat/late requests tested |
 | Ledge poses 87-99 | Up active, grip delay zero: climb before release check; otherwise zero modifier or sequence-mode 11 releases | 6:18e0-1994 | Up/Shift and expiry tested; modifier/special branches partial |
 | Climb/release | Clear directions; consume Up + modifier on climb, Down on release | 6:1998-19d0, 1a84-1a8c | Terrain transitions tested; full latch reset missing |
@@ -183,6 +183,28 @@ track mismatches, not successful parity tests. Remove the decorator when
 fixing a case, and update older tests that encode host-buffer behavior.
 Early-jump tap and released-Ctrl block-chain tests must not be treated as
 authoritative original-game requirements.
+
+## Landing Into Crouch
+
+An ordinary landing uses SEQS:17: poses 107/108 in mode 5, then mode 1
+and the low pose 109 in SEQS:117. Native GenCtrl clears directional latches
+in mode 5 (6:0576-059c); its low-pose handler consumes active Down and clears
+directions when selecting crawl (6:099a-0b38). It does not preserve a second
+stand-to-crouch request after the actor has already landed low.
+
+The host accepted Down during the first landing poses into its latest-wins
+slot. That pending crouch blocked held-direction crawl at pose 109 and was
+replayed after releasing Down and completing the rise. The low-pose handler
+now removes only that fulfilled crouch request before checking crawl/rise.
+Other buffered commands and the repeat-filter window are unchanged; this is
+not a complete translation of the native independent input latches.
+
+Execution of the original GenCtrl matched nine ordinary low-pose Down/Forward
+combinations, intercepting JumpSeq and supplying no pickup/rise veto. Integrated
+tests compare identical cavern movement traces with Down pressed during the
+fall, at landing pose 107, or at pose 108, through the next downward room cut.
+Released Down rises once; animation tests also cover both facings, release
+before/on pose 109 and preservation of other pending commands.
 
 ## Intentional Port Extensions
 
