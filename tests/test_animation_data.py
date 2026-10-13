@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 
 from pop2.animation_data import (
+    character_collision_bounds,
     parse_aframe_records,
     parse_frame_records,
     sequence_words,
@@ -58,6 +59,29 @@ from pop2.scene_prototype import (
 )
 from pop2.game_session import GameSession
 from pop2.level_data import LevelDefinition
+
+
+class CharacterCollisionBoundsTests(unittest.TestCase):
+    def test_native_attachment_extension_is_directional_and_horizontal_only(self):
+        bounds = (55, 282, 111, 348)
+        for facing, expected in ((1, (55, 282, 130, 348)),
+                                 (0, (36, 282, 111, 348))):
+            with self.subTest(facing=facing):
+                state = SequenceState(227, actor_type=0, facing=facing)
+                self.assertEqual(character_collision_bounds(
+                    state, bounds, (1, 4, 22, -38), True), expected)
+
+    def test_native_exclusions_and_non_positive_extension_keep_body_bounds(self):
+        bounds = (55, 282, 111, 348)
+        for actor, drawn, attachment in ((0, False, (1, 4, 22, -38)),
+                                         (7, True, (1, 4, 22, -38)),
+                                         (8, True, (1, 4, 22, -38)),
+                                         (2, True, (0, -1, 22, 0)),
+                                         (0, True, (1, 39, -9, -56)),
+                                         (0, True, (1, 1, 3, 0))):
+            with self.subTest(actor=actor, drawn=drawn, attachment=attachment):
+                self.assertEqual(character_collision_bounds(
+                    SequenceState(227, actor_type=actor), bounds, attachment, drawn), bounds)
 
 
 class DummyStatus:

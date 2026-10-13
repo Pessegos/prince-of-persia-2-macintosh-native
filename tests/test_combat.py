@@ -164,6 +164,23 @@ class GuardCombatTests(unittest.TestCase):
         self.assertIn((84, 21, 30, 255), colors)
         self.assertIn((255, 245, 176, 255), colors)
 
+    def test_guard_collision_bounds_use_its_own_attachment_without_changing_art(self):
+        art = GuardArtwork(self.guard_resource, self.prince["SHAP"], 1001,
+                           sword_palette_for_level(self.prince, 5))
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                state = SequenceState(227, action=171, target_x=100, facing=facing, actor_type=2)
+                body = art.bounds(state, 226)
+                before = Image.new("RGBA", (200, 240))
+                art.draw(before, state, 226)
+                self.assertEqual(art.collision_bounds(state, 226, False), body)
+                expected = (body[0] if facing else body[0] - 13, body[1],
+                            body[2] + 13 if facing else body[2], body[3])
+                self.assertEqual(art.collision_bounds(state, 226, True), expected)
+                after = Image.new("RGBA", (200, 240))
+                art.draw(after, state, 226)
+                self.assertEqual(before.tobytes(), after.tobytes())
+
     def test_zero_generator_health_uses_source_default_three(self):
         level = bytearray(self.prince["LEVL"][2000]["data"])
         offset = 0x20E6 + 4 * 0xC0 + 2 + 26

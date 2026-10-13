@@ -175,6 +175,23 @@ room scenery. Restart reinitializes it.
 
 ## Current Boundary
 
+### Sword-Wall Contact
+
+The shared actor collision bounds now include the native attachment extension.
+GetCharEdges (4:5cbc) calls 4:5e6e: when sword mode is 1 and the actor is not
+type 7/8, a nonzero AFRM attachment extends the facing edge by `max(0, X - 3)`.
+The drawing rectangle stays unchanged; this width belongs to barrier detection,
+not foreground clipping, floor contact or the sword's visual bounding box.
+Executing the original size routine agrees with the portable extension for
+all 110 Kid AFRM entries, both facings and actor types 0/2/7/8 (880 cases).
+
+In the entry room's lower corridor, the ready pose has AFRM X = 22. Its extra
+19 pixels contact the right wall after SEQS:55. CheckCollide1 (4:5586-55ee)
+and Collide (4:589e-5a54) correct X by -4, select SEQS:64 and request sound 10.
+That resource's -10/+6 steps finish at X = 81, rather than the old X = 89.
+The Macintosh comparison shows the same short recoil and final pose. The rule
+is shared with ordinary guards and other environments, without room overrides.
+
 This is the scenery foundation, not a completed playable level. Original room
 transitions and the common movement runtime are available. Cavern-specific
 floor classifications, gate and plate controllers, loose floors, spikes,

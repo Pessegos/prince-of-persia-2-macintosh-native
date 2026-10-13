@@ -817,7 +817,8 @@ class CombatEncounter:
         for guard in self.active_guards():
             old_x = guard.state.target_x
             art = getattr(self, "guard_art", None)
-            old_bounds = art.bounds(guard.state, floor_y(guard.row)) if art is not None else None
+            old_bounds = (art.collision_bounds(guard.state, floor_y(guard.row), guard.sword_drawn)
+                          if art is not None else None)
             # FrameAdv 2:64f2-651e skips NPCs below Y=484 without a lower
             # room. Each remaining AutoCtrl call decrements the shared timers,
             # including calls for corpses, before that NPC's decision.
@@ -854,10 +855,12 @@ class CombatEncounter:
                       for action in (*range(149, 255), *range(102, 107))}
             self.guard_physics = RooftopPhysics(self.terrain, frames)
         bounds = lambda: self.guard_art.bounds(guard.state, floor_y(motion.row))
+        collision_bounds = lambda: self.guard_art.collision_bounds(
+            guard.state, floor_y(motion.row), guard.sword_drawn)
         events = self.guard_physics.advance(
             motion, guard.runtime, old_x, bounds(), sword_drawn=guard.sword_drawn,
             bounds_for_state=bounds, cut_enabled=guard.entry_x is None, alive=guard.alive,
-            old_bounds=old_bounds)
+            old_bounds=old_bounds, collision_bounds_for_state=collision_bounds)
         guard.room, guard.row = motion.room, motion.row
         guard.targetable = not motion.falling and not motion.dead
         for event in events:

@@ -2,7 +2,9 @@
 
 from PIL import ImageOps
 
-from pop2.animation_data import parse_aframe_records, parse_frame_records, shape_id_for_action
+from pop2.animation_data import (
+    character_collision_bounds, parse_aframe_records, parse_frame_records, shape_id_for_action,
+)
 from pop2.combat import guard_frame_index
 from pop2.render_opening import character_sprite_top, decode_ctbl, decode_shap
 
@@ -69,6 +71,11 @@ class GuardArtwork:
         bottom = floor_y + state.current_y + record.offset_y
         return (left, character_sprite_top(bottom, body.height),
                 left + body.width - 1, bottom)
+
+    def collision_bounds(self, state, floor_y, sword_drawn):
+        record = self.frames[guard_frame_index(state.action)]
+        return character_collision_bounds(state, self.bounds(state, floor_y),
+                                          self.attachments[record.afrm_index], sword_drawn)
 
 
 class HealthArtwork:

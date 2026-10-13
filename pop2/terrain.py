@@ -559,7 +559,7 @@ class RooftopPhysics:
 
     def advance(self, motion, runtime, old_x, bounds, sword_drawn=False, protected=False,
                 frame_flags=0x40, frame_record=None, bounds_for_state=None, cut_enabled=True,
-                alive=True, old_bounds=None, catch_ledge=None):
+                alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None):
         state = runtime.state
         if protected or motion.dead:
             return ()
@@ -626,15 +626,19 @@ class RooftopPhysics:
         # CheckBarr (4:4e46) bypasses standing turns. CheckCollide1
         # (4:551a/5586) checks a rear barrier only with the sword drawn.
         collision_facing = None if sword_drawn or motion.falling else state.facing
+        collision_bounds = (collision_bounds_for_state() if collision_bounds_for_state is not None
+                            else bounds)
         # Collide 4:5740-5746 returns before displacement or bump selection
         # for a dead actor. A death pose must never become a live wall bump.
         corrected = (state.target_x if not alive or state.animation_state == 7 else
                      self.map.wall_correction(motion.room, old_x, state.target_x,
-                                              bounds, old_bounds, collision_facing))
+                                              collision_bounds, old_bounds, collision_facing))
         if corrected != state.target_x:
             delta = corrected - state.target_x
             state.current_x = state.target_x = corrected
             bounds = (bounds[0] + delta, bounds[1], bounds[2] + delta, bounds[3])
+            collision_bounds = (collision_bounds[0] + delta, collision_bounds[1],
+                                collision_bounds[2] + delta, collision_bounds[3])
             state.horizontal_velocity = 0
             # DOS-style recovery for the screen 7 -> 8 drop: retain barrier
             # correction, but do not replace the crouch/rise with GroundBump.
@@ -660,14 +664,16 @@ class RooftopPhysics:
                     self.select(runtime, 45)
                     motion.falling = True
                 if bounds_for_state is not None:
-                    previous_bounds = bounds
+                    previous_bounds = collision_bounds
                     bounds = bounds_for_state()
                     if not motion.falling:
                         # Collide reloads the response pose. Its wider body
                         # must not undo the barrier correction just applied.
                         response_x = state.target_x
                         corrected = self.map.wall_correction(
-                            motion.room, response_x, response_x, bounds, previous_bounds,
+                            motion.room, response_x, response_x,
+                            collision_bounds_for_state() if collision_bounds_for_state is not None else bounds,
+                            previous_bounds,
                             collision_facing)
                         if corrected != response_x:
                             shift = corrected - response_x

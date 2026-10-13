@@ -666,6 +666,40 @@ class RooftopSceneTests(unittest.TestCase):
         self.tick(3)
         self.assertFalse(self.scene.terrain_motion.falling)
 
+    def test_cavern_sword_draw_contacts_wall_with_attachment_and_recoils(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.jump_to_room(0, row=2, x=115, facing=1)
+        scene.in_animation_tick = True
+        scene.horizontal_key(None, 1, True)
+        self.tick(35)
+        scene.horizontal_key(None, 1, False)
+        self.tick(10)
+        self.assertEqual((scene.action, scene.player_x), (15, 119))
+        scene.start_sword_action("sword_draw")
+        frames = [(scene.action, scene.player_x)]
+        for _ in range(10):
+            self.tick()
+            frames.append((scene.action, scene.player_x))
+        # Native GetCharEdges reserves AFRM X - 3, then Collide selects SEQS:64.
+        self.assertEqual(frames[:9], [(207, 61), (208, 61), (209, 72), (210, 85),
+                                     (157, 75), (160, 81), (158, 81), (170, 81), (171, 81)])
+        self.assertEqual(frames[-1], (171, 81))
+        self.assertEqual(scene.player_bounds(), (47, 282, 103, 348))
+        self.assertEqual(scene.player_collision_bounds(), (47, 282, 122, 348))
+        self.assertIn(10, scene.sequence_state.sound_events)
+        self.assertFalse(scene.terrain_motion.falling)
+
+    def test_sword_draw_in_clear_cavern_does_not_add_wall_recoil(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.jump_to_room(0, row=1, x=250, facing=1)
+        scene.in_animation_tick = True
+        scene.start_sword_action("sword_draw")
+        self.tick(10)
+        self.assertEqual((scene.action, scene.player_x), (171, 272))
+        self.assertFalse(scene.terrain_motion.falling)
+
     def test_missed_screen_six_jump_does_not_show_unused_lower_room(self):
         scene = self.scene
         scene.peaceful = True

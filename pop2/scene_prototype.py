@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
 from pop2.animation_data import (
+    character_collision_bounds,
     shape_id_for_action,
 )
 from pop2.combat import (
@@ -1523,7 +1524,7 @@ class ScenePrototype(WindowControls):
         self.sample_keyboard()
         old_x = self.sequence_state.target_x
         motion = getattr(self, "terrain_motion", None)
-        old_bounds = self.player_bounds() if motion is not None else None
+        old_bounds = self.player_collision_bounds() if motion is not None else None
         if motion is not None and (motion.falling or motion.sinking or motion.dead):
             self.sequence_runtime.next_frame()
             self.advance_terrain(old_x, old_bounds)
@@ -1705,6 +1706,11 @@ class ScenePrototype(WindowControls):
         bottom = self.player_floor_y() + self.sequence_state.current_y + record.offset_y
         return left, character_sprite_top(bottom, sprite.height), left + sprite.width - 1, bottom
 
+    def player_collision_bounds(self):
+        state = self.sequence_state
+        attachment = self.attachment_frames[self.frames[state.action].afrm_index]
+        return character_collision_bounds(state, self.player_bounds(), attachment, self.sword_drawn)
+
     def catch_falling_ledge(self):
         motion, state = self.terrain_motion, self.sequence_state
         if (motion.dead or motion.hit_fall or not self.combat.player.alive
@@ -1744,6 +1750,7 @@ class ScenePrototype(WindowControls):
             sword_drawn=self.sword_drawn, protected=self.ledge_hanging or self.ledge_climbing,
             frame_record=self.frames[self.action], bounds_for_state=self.player_bounds,
             old_bounds=old_bounds, alive=self.combat.player.alive,
+            collision_bounds_for_state=self.player_collision_bounds,
             catch_ledge=self.catch_falling_ledge)
         if motion.room != old_room:
             dx = self.sequence_state.target_x - before_x

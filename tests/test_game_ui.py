@@ -366,15 +366,22 @@ class GameWindowTests(unittest.TestCase):
                 self.assertEqual(scene.player_x, x - 52 * (1 if facing else -1))
                 reference = SequenceRuntime(scene.sequences, replace(scene.sequence_state))
                 actions = []
-                for _ in range(7):
+                for _ in range(9):
                     expected = reference.next_frame()
+                    if expected.action == 158 and expected.sequence_id == 227 and 157 not in actions:
+                        # The first ready pose extends the collider by AFRM X - 3.
+                        # Native Collide corrects four pixels, then selects SEQS:64.
+                        reference.state.target_x -= 4 * (1 if facing else -1)
+                        reference.state.select(64)
+                        expected = reference.next_frame()
                     self.tick()
                     actions.append(scene.action)
                     self.assertEqual((scene.sequence_state.sequence_id, scene.action, scene.player_x),
                                      (expected.sequence_id, expected.action, expected.target_x))
                     self.assertTrue(scene.sword_drawn)
                     self.assertFalse(scene.terrain_motion.falling)
-                self.assertEqual(actions, [207, 208, 209, 210, 158, 170, 171])
+                self.assertEqual(actions, [207, 208, 209, 210, 157, 160, 158, 170, 171])
+                self.assertEqual(scene.player_x, x - 38 * (1 if facing else -1))
 
     def test_releasing_wall_supported_hang_uses_full_native_floor_return(self):
         from dataclasses import replace

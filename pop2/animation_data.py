@@ -37,6 +37,16 @@ def parse_aframe_records(data):
     )
 
 
+def character_collision_bounds(state, bounds, attachment, sword_drawn):
+    # GetCharEdges / 4:5e6e extends only the sword-facing edge by AFRM X - 3.
+    if not sword_drawn or state.actor_type in (7, 8) or attachment[0] == 0:
+        return bounds
+    extension = max(0, attachment[2] - 3)
+    left, top, right, bottom = bounds
+    return (left if state.facing else left - extension, top,
+            right + extension if state.facing else right, bottom)
+
+
 def sequence_words(data):
     if len(data) % 2:
         raise ValueError("SEQS resource length is not a multiple of 2 bytes")
