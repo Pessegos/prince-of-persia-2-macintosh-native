@@ -278,7 +278,8 @@ class CavernDrawingTests(unittest.TestCase):
         self.assertIsNone(art.foreground.getbbox())
 
 
-class CavernEntryTests(unittest.TestCase):
+@unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
+class OriginalCavernClimbTests(unittest.TestCase):
     def test_upper_platform_hides_the_turban_before_the_catch(self):
         from tests.test_terrain import RooftopSceneTests
 
@@ -357,6 +358,8 @@ class CavernEntryTests(unittest.TestCase):
         self.assertNotEqual(scene.native_viewport.crop((107, 218, 127, 229)).tobytes(),
                             scenery.crop((106, 218, 126, 229)).tobytes())
 
+
+class CavernEntryTests(unittest.TestCase):
     def test_torch_initialization_is_shared_across_visible_fragments_and_preserves_flags(self):
         state = CavernState()
         record = {'room': 0, 'cell': 21, 'foreground': 0x0102}
