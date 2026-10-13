@@ -1256,7 +1256,7 @@ class AnimationDataTests(unittest.TestCase):
         )
         self.assertEqual(frames[-1].action, 15)
         self.assertEqual(runtime.state.current_y, 0)
-        self.assertEqual(runtime.state.sequence_events, [(-19, ())])
+        self.assertEqual(runtime.state.sequence_events, [(-13, ()), (-19, ())])
 
     def test_vertical_jump_can_be_repeated_after_landing(self):
         scene = self.scene(facing=1)

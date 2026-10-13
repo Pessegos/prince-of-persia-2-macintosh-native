@@ -1922,12 +1922,14 @@ class ScenePrototype(WindowControls):
                     if guard.terrain_motion is not None:
                         guard.state.sound_events.extend(loose.press(self.level_map, guard.terrain_motion,
                             guard.state, self.guard_art.frames[guard_frame_index(guard.state.action)]))
-                for event in tuple(state.sequence_events):
-                    if event[0] in (-19, -20):
-                        # CheckAlert 2:6c1c consumes the SEQS shake request.
-                        row = motion.row - int(event[0] == -20)
-                        state.sound_events.extend(loose.shake_row(self.level_map, motion.room, row,
-                                                                 state, motion, self.frames[state.action]))
+                shakes = [event for event in state.sequence_events if event[0] in (-12, -13)]
+                if shakes:
+                    # CheckAlert 2:6c1c consumes one scalar request; a later
+                    # SEQS shake operation replaces an earlier one.
+                    row = motion.row - int(shakes[-1][0] == -12)
+                    state.sound_events.extend(loose.shake_row(self.level_map, motion.room, row,
+                                                             state, motion, self.frames[state.action]))
+                    for event in shakes:
                         state.sequence_events.remove(event)
             self.sequence_state.sound_events.extend(self.game.caverns.advance())
             self.game.caverns.advance_torches(

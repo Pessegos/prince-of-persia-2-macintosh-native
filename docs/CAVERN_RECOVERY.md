@@ -187,7 +187,14 @@ climbing poses have separate above-floor checks. BreakLoose (5:2710) preserves
 an existing phase instead of restarting it on repeated contact. AnimLoose
 (5:446a) advances twelve collapse phases, or four warning phases after a distant
 shake. ShakeEm (5:2876) handles nearby actors and the third repeated shake;
-SEQS operations -19/-20 request the current/upper row respectively.
+SEQS operations -13/-12 request the current/upper row respectively. The
+dispatch table at 4:2c70 maps -19 to SetCharFloor (4:2f72), not a shake.
+The first implementation misidentified those operations and wrongly shook
+the floor on completing SEQS:235; the corrected runtime preserves floor
+alignment without emitting a shake.
+Executing native AnimChar for -12/-13/-19 in all three rows confirms the
+shake-request mapping. CheckAlert consumes the last request once per update,
+not a queue of shakes; later operations replace earlier ones.
 
 FrameAdv (2:622c) moves existing debris before advancing loose tiles. MakeRubble
 (5:2b10) adds eight units of velocity below speed 60, crosses downward room links
@@ -196,6 +203,14 @@ sound cues 28/26. A falling actor strikes a loose floor with its own velocity;
 Falling (6:01ee) halves that velocity and retains the airborne state. Crushed
 (6:28f0) supplies the ordinary Prince's one-life damage and SEQS:52 recovery.
 Special actors and pressure-plate/gate responses remain separate recovery work.
+
+DrawMob (5:3128-32e0) also marks the next column's floor for repaint at the
+object's bottom row and, when different, its top row. ComputeMobRect uses
+height 43, width 87 and bottom Y+1. The portable renderer now applies the
+exported DrawFloorBuf commands inside that rectangle after drawing debris,
+restoring ordinary foreground over the repainted pixels. This prevents the
+first two falling poses from crossing the neighboring solid floor. Native
+execution matched the selected repaint cells for 4,530 column/Y combinations.
 
 Version 9 exports native drawing variants for shaken/removed floors and their
 landing cells, including DrawHalf/DrawFloorBuf repaint commands and all entry

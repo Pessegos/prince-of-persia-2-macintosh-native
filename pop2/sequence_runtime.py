@@ -127,8 +127,10 @@ class SequenceRuntime:
             elif opcode == -10:
                 callback_id = self._next_operand(opcode, opcode_cursor)
                 self.state.sequence_events.append((opcode, (callback_id,)))
-            elif opcode == -13:
-                self.state.special_flag = -1
+            elif opcode in (-12, -13):
+                # AnimChar's dispatch table (4:2c70) maps these to the
+                # upper/current-row shake requests at 2f18/2f22.
+                self.state.sequence_events.append((opcode, ()))
             elif opcode == -15:
                 callback_id = self._next_operand(opcode, opcode_cursor)
                 if callback_id == 0:
@@ -157,8 +159,9 @@ class SequenceRuntime:
             elif opcode == -16:
                 # AnimChar 4:2f2c requests the next level, after boarding.
                 self.state.sequence_events.append((opcode, ()))
-            elif opcode in (-19, -20):
-                # AnimChar 4:2f18/2f22 requests shaking above / at the floor.
+            elif opcode == -19:
+                # 4:2f72 calls SetCharFloor, not ShakeEm. Terrain owns
+                # physical row/height; retain the alignment notification.
                 self.state.sequence_events.append((opcode, ()))
             elif opcode == -21:
                 self.state.sequence_mode = self._next_operand(opcode, opcode_cursor)

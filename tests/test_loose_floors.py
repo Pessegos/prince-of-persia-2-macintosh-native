@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 
 from pop2.cavern_state import CavernState
-from pop2.caverns import cavern_scene_signature
+from pop2.caverns import cavern_scene_signature, falling_floor_redraw_cells
 from pop2.loose_floors import FallingFloor, floor_hits_actor, rubble_tile
 from pop2.paths import ASSET_DIR
 from pop2.sequence_runtime import SequenceState, SequenceRuntime
@@ -205,10 +205,23 @@ class LooseFloorTests(unittest.TestCase):
 
     def test_native_shake_sequence_operations_retain_request_direction(self):
         state = SequenceState(1)
-        runtime = SequenceRuntime({1: (-20, 79, -19, 15)}, state)
+        runtime = SequenceRuntime({1: (-12, 79, -13, 15)}, state)
         runtime.next_frame()
         runtime.next_frame()
-        self.assertEqual(state.sequence_events, [(-20, ()), (-19, ())])
+        self.assertEqual(state.sequence_events, [(-12, ()), (-13, ())])
+
+    def test_floor_alignment_operation_does_not_request_a_shake(self):
+        state = SequenceState(1, current_y=7)
+        runtime = SequenceRuntime({1: (-19, 15)}, state)
+        runtime.next_frame()
+        self.assertEqual(state.sequence_events, [(-19, ())])
+        self.assertFalse(any(opcode in (-12, -13) for opcode, _ in state.sequence_events))
+
+    def test_falling_slab_repaints_the_next_column_at_top_and_bottom(self):
+        for y, cells in ((143, ((8, 1), (8, 0))), (151, ((8, 1), (8, 0))),
+                         (167, ((8, 1), (8, 0))), (311, ((8, 2),)), (2, ((8, -1),))):
+            self.assertEqual(falling_floor_redraw_cells(357, y), cells)
+        self.assertEqual(falling_floor_redraw_cells(459, 143), ())
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
@@ -235,6 +248,61 @@ class ImportedLooseFloorTests(unittest.TestCase):
         self.assertEqual(scene.level_map.tile(0, 7, 0).kind, 0)
         self.assertTrue(scene.terrain_motion.falling)
         self.assertEqual(scene.game.caverns.loose.falling[0].y, 143)
+
+    def test_climbing_the_solid_edge_does_not_shake_the_loose_floor(self):
+        scene = self.scene
+        scene.jump_to_room(0, row=1, x=323, facing=1)
+        scene.in_animation_tick = True
+        scene.shift_held = True
+        scene.up_key(None)
+        climbed = False
+        for _ in range(65):
+            self.tick()
+            climbed |= scene.action == 135
+            self.assertEqual(scene.game.caverns.loose.active, {})
+            if climbed and scene.action == 15:
+                break
+        self.assertTrue(climbed)
+        self.assertEqual((scene.action, scene.terrain_motion.row), (15, 0))
+
+    def test_only_the_last_shake_request_in_an_update_is_applied(self):
+        scene = self.scene
+        scene.jump_to_room(0, row=1, x=225, facing=1)
+        scene.sequence_state.sequence_events = [(-12, ()), (-13, ())]
+        scene.advance_level_events()
+        self.assertEqual(scene.game.caverns.loose.active, {})
+        self.assertEqual(scene.sequence_state.sequence_events, [])
+
+    def test_falling_stone_does_not_paint_over_the_neighboring_floor(self):
+        from unittest.mock import patch
+        from pop2.caverns import CavernRoom
+
+        scene = self.scene
+        loose = scene.game.caverns.loose
+        loose.trigger(scene.level_map.tile(0, 7, 0), force=True)
+        loose.advance_tiles(scene.level_map)
+        for y in (143, 151):
+            with self.subTest(y=y):
+                loose.falling[0].y = y
+                scene.advance_level_events()
+                scene.render()
+                corrected = scene.native_viewport.copy()
+                with patch.object(CavernRoom, 'draw_falling_foreground', side_effect=lambda frame, *args: frame):
+                    scene.render()
+                old = scene.native_viewport.copy()
+                art = scene.level_renderer.room(0, scene.game.caverns)
+                records = art.floor_redraw[8, 0]
+                changed = []
+                for sprite, (x, top) in records:
+                    for sy in range(sprite.height):
+                        for sx in range(sprite.width):
+                            px, py = x + sx + 1, top + sy
+                            if (sprite.getpixel((sx, sy))[3] and 0 <= px < 510 and 0 <= py < 365
+                                    and old.getpixel((px, py)) != corrected.getpixel((px, py))):
+                                changed.append((px, py))
+                                expected = art.flattened().getpixel((px - 1, py))
+                                self.assertEqual(corrected.getpixel((px, py)), expected)
+                self.assertTrue(changed)
 
     def test_room_drawing_and_actor_climb_redraw_change_after_collapse(self):
         scene = self.scene

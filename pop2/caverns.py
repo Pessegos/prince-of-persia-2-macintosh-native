@@ -40,6 +40,15 @@ def floor_redraw_cells(state, bounds):
                  for column in range(first, last + 1))
 
 
+def falling_floor_redraw_cells(x, y):
+    # Cave loose MOB: 5:3128-32e0 marks the next column at the bottom
+    # and, if different, at the top of its 43-unit bounding rectangle.
+    column = x // 51 + 1
+    bottom, top = character_row(y), character_row(y - 43)
+    rows = (bottom,) if top == bottom else (bottom, top)
+    return tuple((column, row) for row in rows if 0 <= column < 10 and -1 <= row < 3)
+
+
 @dataclass(frozen=True)
 class CavernRoom(OpeningRoom):
     climb_redraw: dict | None = None
@@ -60,6 +69,15 @@ class CavernRoom(OpeningRoom):
                     min(510, bounds[2] + 1), min(365, bounds[3] + 1))
         else:
             return frame
+        return self.draw_floor_records(frame, records, clip)
+
+    def draw_falling_foreground(self, frame, x, y):
+        records = [record for cell in falling_floor_redraw_cells(x, y)
+                   for record in (self.floor_redraw or {}).get(cell, ())]
+        # ComputeMobRect 5:32f6 uses width 87, bottom Y+1.
+        return self.draw_floor_records(frame, records, (x, y - 43, x + 87, y + 1))
+
+    def draw_floor_records(self, frame, records, clip):
         for sprite, position in records:
             if clip is not None:
                 x, y = position
@@ -235,11 +253,12 @@ def cavern_scene_signature(program, room_id, state):
     return ''.join(indices)
 
 
-def draw_cavern_falling(frame, room_id, state, level):
+def draw_cavern_falling(frame, room_id, state, level, art):
     from pop2.terrain import LevelMap
 
     _program, resources, palette, shapes = cavern_assets()
     terrain = LevelMap(level)
+    redraw = []
     for block in state.loose.falling:
         if block.room == room_id:
             y = block.y
@@ -254,6 +273,9 @@ def draw_cavern_falling(frame, room_id, state, level):
             sprite = cavern_command_sprite(['back', index, block.x, bottom, 16],
                                             resources, palette, shapes)
             frame.paste(sprite, (block.x, bottom - sprite.height), sprite)
+        redraw.append((block.x, y))
+    for x, y in redraw:
+        art.draw_falling_foreground(frame, x, y)
     return frame
 
 

@@ -56,7 +56,8 @@ class LevelRenderer:
             from pop2.caverns import draw_cavern_torches, draw_cavern_falling
 
             frame = draw_cavern_torches(frame, room_id, caverns)
-            return draw_cavern_falling(frame, room_id, caverns, self.level.data)
+            return draw_cavern_falling(frame, room_id, caverns, self.level.data,
+                                       self.room(room_id, caverns))
         if room_id in self.desert_rooms:
             return self.desert_rooms[room_id].draw(frame, frame_number, desert, front)
         if harbor is None:
