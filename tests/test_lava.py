@@ -251,6 +251,21 @@ class EnhancedLavaTests(unittest.TestCase):
 
 
 class RecessedLavaArtworkTests(unittest.TestCase):
+    def test_pixel_touchup_matches_the_supplied_edit_and_changes_nothing_else(self):
+        import hashlib
+        from pop2.caverns import recessed_lava_surface
+
+        palette = {i: (i, 255 - i, i, 255) for i in range(256)}
+        sprite = recessed_lava_surface(palette)
+        edits = ((75, 5, 0xb9, 0xd4), (78, 5, 0xb9, 0xd4),
+                 (56, 6, 0xb9, 0xd4), (43, 7, 0xb9, 0xaa),
+                 (44, 7, 0xbb, 0xd4), (45, 8, 0xaa, 0xbb))
+        for x, y, old, new in edits:
+            self.assertEqual(sprite.getpixel((x, y)), palette[new])
+            sprite.putpixel((x, y), palette[old])
+        self.assertEqual(hashlib.sha256(sprite.tobytes()).hexdigest(),
+                         'f7f98f89fdd6d8e8fc78647aa31a4f205440c05ea0f6045bfb49dc0ea165f118')
+
     def test_artwork_uses_only_palette_pixels_and_binary_transparency(self):
         from pop2.caverns import recessed_lava_surface
 
