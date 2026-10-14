@@ -409,6 +409,50 @@ class GameWindowTests(unittest.TestCase):
         self.assertEqual(scene.action, 67)
         self.assertTrue(scene.up_held)
 
+    def test_rooftop_drift_then_released_run_chord_has_no_standing_jump_break(self):
+        scene = self.scene
+        traces = []
+        for up_first in (False, True):
+            with self.subTest(up_first=up_first):
+                scene.jump_to_room(3, row=1, x=245, facing=1)
+                scene.set_peaceful(True)
+                scene.in_animation_tick = True
+                scene.horizontal_key(None, 1, True)
+                self.tick(7)
+                self.assertEqual(scene.action, 7)
+                scene.horizontal_key(None, 1, False)
+                scene.horizontal_key(None, -1, True)
+                self.tick()
+                self.assertEqual(scene.action, 53)
+                self.tick(3)
+                scene.horizontal_key(None, -1, False)
+                self.tick(4)
+                self.assertEqual((scene.sequence_state.sequence_id, scene.action), (6, 60))
+                self.assertEqual(scene.queue_grace_remaining_ms, 0)
+                if up_first:
+                    scene.up_key(None)
+                    scene.horizontal_key(None, -1, True)
+                else:
+                    scene.horizontal_key(None, -1, True)
+                    scene.up_key(None)
+                trace = []
+                for _ in range(20):
+                    previous_x = scene.player_x
+                    self.tick()
+                    trace.append((scene.action, scene.player_x, scene.sequence_state.facing))
+                    self.assertEqual(scene.room_id, 3)
+                    self.assertFalse(scene.terrain_motion.falling)
+                    self.assertNotEqual(scene.sequence_state.sequence_id, 3)
+                    if scene.sequence_state.sequence_id == 4:
+                        self.assertEqual((scene.action, scene.player_x), (34, previous_x))
+                        break
+                else:
+                    self.fail("Recorded rooftop chord did not reach running takeoff")
+                self.assertEqual([action for action, x, face in trace], [61, 62, 63, 64, 65, 13, 34])
+                self.assertIsNone(scene.pending_action)
+                traces.append(trace)
+        self.assertEqual(traces[0], traces[1])
+
     def test_releasing_up_during_or_immediately_after_climb_does_not_jump(self):
         scene = self.scene
         for release_during in (False, True):

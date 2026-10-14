@@ -269,6 +269,32 @@ between completion and that jump cannot trigger the short-tap release fallback.
 Tests cover repeated jumping, release during/immediately after climbing and two
 real cavern climbs across an upper-room link, without fabricated ledge geometry.
 
+## Buffered Chords After A Running Reversal
+
+SEQS:6 finishes every drift pose 53-65 before flipping facing and linking to
+SEQS:202 at pose 13. GenCtrl does not dispatch a jump from those drift poses.
+Once the running poses resume, 6:1216-1242 checks Backward before fresh Up;
+Up calls DoRunJump with SEQS:4, whose legal Prince poses are 7-14
+(6:1c14-1c34). This choice belongs to the current controller pose, not to
+the time when a host key callback entered the buffer.
+
+The host stored `running=False` when Up arrived during a released-direction
+gap in the drift. The second chord key updated its direction but kept that
+stale classification. It then missed the pose-13 running-jump gate and launched
+SEQS:3 at a run-cycle boundary, inserting standing preparation into a running
+reversal. Buffered directional jumps now use the live running classification
+at dispatch, and the ordinary running/reversal gates no longer require that
+classification to have been captured by the first callback. Standing-turn
+and run-start chord gates, vertical braking, takeoff geometry and the 300 ms
+repeat filter remain unchanged.
+
+Original GenCtrl/DoRunJump execution matched 384 controller/flat-floor cases:
+both facings, all drift poses and run poses 4-14, pending/consumed Up/Forward,
+and Backward priority. Imported rooftop and animation regressions compare both
+chord orders after four/five released-direction ticks, including tapped inputs.
+They retain all remaining drift poses and transition 13 -> 34 without the former
+standing pose 16 or an extra run-loop displacement.
+
 ## Run Stop and Ledge Entry Audit
 
 Executing the original GenCtrl, AnimChar, LoadFrame, CheckFloor and

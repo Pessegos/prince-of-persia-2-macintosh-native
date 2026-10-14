@@ -1026,7 +1026,7 @@ class ScenePrototype(WindowControls):
             or command is None
             or not (
                 (command.kind == "horizontal" and command.mode == "turn")
-                or (command.kind == "jump" and command.running)
+                or (command.kind == "jump" and command.direction)
             )
             or facing_for_direction(command.direction) == state.facing
         ):
@@ -1073,7 +1073,6 @@ class ScenePrototype(WindowControls):
             or not 7 <= state.action <= 14
             or command is None
             or command.kind != "jump"
-            or not command.running
             or not command.direction
             or facing_for_direction(command.direction) != state.facing
         ):
@@ -1473,6 +1472,12 @@ class ScenePrototype(WindowControls):
             self.start_crouch_step(command.direction)
             return True
         if command.kind == "jump":
+            # GenCtrl 6:1216-1242 uses the current running pose, not the
+            # state sampled when an Up+direction chord entered the host queue.
+            if (was_running and command.direction
+                    and self.sequence_state.sequence_id in RUN_CYCLE_SEQUENCES
+                    and 4 <= self.sequence_state.action <= 14):
+                command = BufferedCommand("jump", command.direction, running=True)
             dispatched = self.dispatch_jump(command)
             if not dispatched and self.up_held:
                 self.pending_action = command

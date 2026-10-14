@@ -681,6 +681,84 @@ class AnimationDataTests(unittest.TestCase):
         self.assertEqual(scene.sequence_state.sequence_id, 202)
         self.assertEqual(scene.sequence_state.facing, 0)
 
+    def test_post_drift_jump_chord_is_decided_at_the_live_running_pose(self):
+        for facing in (0, 1):
+            direction = 1 if facing else -1
+            for release_pose in (55, 58):
+                for gap in (4, 5):
+                    traces = []
+                    for up_first in (False, True):
+                        for held in (False, True):
+                            with self.subTest(facing=facing, release_pose=release_pose,
+                                              gap=gap, up_first=up_first, held=held):
+                                scene = self.sword_scene()
+                                scene.sequence_state.facing = facing
+                                scene.player_x = 300 if facing else 200
+                                scene.sequence_state.target_x = scene.sequence_state.current_x = scene.player_x
+                                scene.start_sequence(RUN_CYCLE_SEQUENCE)
+                                scene.run_active = True
+                                scene.run_direction = direction
+                                scene.held_directions = [direction]
+                                scene.advance_animation()
+                                scene.horizontal_key(None, direction, False)
+                                scene.horizontal_key(None, -direction, True)
+                                scene.advance_animation()
+                                while scene.action != release_pose:
+                                    scene.advance_animation()
+                                scene.horizontal_key(None, -direction, False)
+                                for _ in range(gap):
+                                    scene.advance_animation()
+                                before = scene.action
+                                self.assertEqual(scene.sequence_state.sequence_id, RUNNING_DRIFT_SEQUENCE)
+                                self.assertEqual(scene.queue_grace_remaining_ms, 0)
+                                if up_first:
+                                    scene.up_key(None)
+                                    scene.horizontal_key(None, -direction, True)
+                                else:
+                                    scene.horizontal_key(None, -direction, True)
+                                    scene.up_key(None)
+                                self.assertEqual(scene.pending_action.running, not up_first)
+                                if not held:
+                                    scene.set_key_state("up", False)
+                                    scene.horizontal_key(None, -direction, False)
+                                trace = []
+                                for _ in range(20):
+                                    previous_x = scene.player_x
+                                    scene.advance_animation()
+                                    trace.append((scene.action, scene.player_x, scene.sequence_state.facing))
+                                    self.assertNotEqual(scene.sequence_state.sequence_id, JUMP_FORWARD_SEQUENCE)
+                                    if scene.sequence_state.sequence_id == RUN_JUMP_SEQUENCE:
+                                        self.assertEqual(scene.action, 34)
+                                        self.assertEqual(scene.player_x, previous_x)
+                                        self.assertEqual(scene.sequence_state.facing, 1-facing)
+                                        self.assertIsNone(scene.pending_action)
+                                        break
+                                else:
+                                    self.fail("Post-drift chord did not reach running takeoff")
+                                self.assertEqual([action for action, x, face in trace],
+                                                 [*range(before + 1, 66), 13, 34])
+                                traces.append(trace)
+                    self.assertEqual(traces[1:], [traces[0]] * 3)
+
+    def test_up_first_reverse_chord_from_running_uses_backward_priority(self):
+        for facing in (0, 1):
+            direction = 1 if facing else -1
+            scene = self.sword_scene()
+            scene.sequence_state.facing = facing
+            scene.start_sequence(RUN_CYCLE_SEQUENCE)
+            scene.run_active = True
+            scene.run_direction = direction
+            scene.held_directions = [direction]
+            scene.advance_animation()
+            scene.horizontal_key(None, direction, False)
+            scene.up_key(None)
+            scene.horizontal_key(None, -direction, True)
+            self.assertFalse(scene.pending_action.running)
+            scene.advance_animation()
+            self.assertEqual((scene.sequence_state.sequence_id, scene.action),
+                             (RUNNING_DRIFT_SEQUENCE, 53))
+            self.assertIsNone(scene.pending_action)
+
     def test_releasing_opposite_direction_during_turn_cancels_followup_run(self):
         scene = self.scene(facing=1)
         scene.root = DummyRoot()
