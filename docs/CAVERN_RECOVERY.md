@@ -72,6 +72,36 @@ corrected cell drawing and live torches, version 2 lacks flask library identity,
 and version 1 supplies only the entrance. F3 can preview each room, placing
 the Prince on a basic floor tile from LEVL rather than using per-room positions.
 
+## Stone Gate Collisions
+
+The supplied Macintosh/port door recordings show Room 17, row 2/column 7.
+The port treated tile 4 as floor in cavern wall collision, allowing the Prince
+to run or step through the closed stone gate.
+
+GetBarrCode (4:531c-532c) maps tile 4 in environment 3 to barrier type 5.
+GetLeftBarr/GetRightBarr (4:541a/547c) use the original DATA offsets 18/0,
+giving scene X planes `51*column + 40` and `51*column + 72`. The Room 17 gate
+therefore occupies X 397-429 for collision; no room-specific wall is added.
+
+Gate admission (4:5b0e-5ba2) reads the low foreground byte in quarter-phase
+steps. It blocks when `2*(phase >> 2) + 11 < clipped_body_height + 13`.
+The body height comes from GetCharEdges' viewport-clipped rectangle, not a
+fixed standing height or a universal phase-104 threshold. Actor 1 and selected
+SEQS:68 bypass this test; actor types 7/8 add 46/33 to the tested height.
+CheckCollide's actor-11 exemption also applies to the collision sweep.
+
+The portable predicate is shared by the cavern collision sweep and
+GetBarrDistances' cautious-step subset. Existing bump selection handles a
+blocked run; ordinary wall behavior, other environments and room links are
+unchanged. Native execution matched 12,288 gate-admission cases and both
+Room 17 barrier planes. Tests cover closed/open/partial phases, low versus
+standing poses, selected-sequence exceptions, both facings, all nine native
+level-three gates and running/Shift-walking at the recorded gate.
+
+This implements collision with the current gate phase. Gate buttons, timed
+opening/closing, and GateBarrToStandUp's separate crouch-rise controller are
+not recovered by this change.
+
 ## Flasks And Entry Door
 
 The health bottles in the bottom strip are a separate Kid.rsrc HUD library.

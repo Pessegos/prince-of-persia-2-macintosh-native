@@ -46,6 +46,17 @@ def floor_edge_distance(contact_x, facing):
     return 50 - remainder if facing else remainder
 
 
+def stone_gate_blocks(foreground, bounds, state=None):
+    # Gate collision 4:5b0e-5ba2 uses the viewport-clipped body rectangle
+    # and quarter-phase steps, not a fixed open/closed threshold.
+    actor = state.actor_type if state is not None else 0
+    if actor == 1 or (state is not None and state.source_sequence_id == 68):
+        return False
+    height = max(0, min(365, bounds[3] + 1) - max(0, bounds[1]))
+    height += {7: 46, 8: 33}.get(actor, 0)
+    return ((foreground & 255) >> 2) * 2 + 11 < height + 13
+
+
 @dataclass(frozen=True)
 class Tile:
     kind: int
@@ -159,11 +170,13 @@ class LevelMap:
         distance = floor_edge_distance(contact, state.facing)
         for col, tile in ((column, current), (column + direction, ahead)):
             # GetBarrierType/DistToBarrier; c944 enables type 3 for tile 2.
-            if tile.kind in WALL_TILES | {12}:
-                barrier = (6 if tile.kind == 12 else
+            stone_gate = (tile.kind == 4 and struct.unpack_from('>H', self.level, 0x2186)[0] == 3
+                          and stone_gate_blocks(tile.foreground, bounds, state))
+            if tile.kind in WALL_TILES | {12} or stone_gate:
+                barrier = (5 if stone_gate else 6 if tile.kind == 12 else
                            3 if tile.kind == 2 and (tile.foreground & 255) < 3 else 4)
-                left_offset = {3: -22, 4: 3, 6: 8}[barrier]
-                right_offset = {3: -22, 4: 0, 6: 16}[barrier]
+                left_offset = {3: -22, 4: 3, 5: 18, 6: 8}[barrier]
+                right_offset = {3: -22, 4: 0, 5: 0, 6: 16}[barrier]
                 # GetCharEdges / QuickDraw uses an exclusive right edge;
                 # Pillow's last sprite column is inclusive.
                 barrier_distance = (col * TILE_WIDTH + 22 + left_offset - (bounds[2] + 1)
@@ -450,7 +463,7 @@ class LevelMap:
             state.target_x, state.facing, record)), row)
 
     def wall_correction(self, room, old_x, new_x, bounds, old_bounds=None, facing=None,
-                        physical_row=None):
+                        physical_row=None, state=None):
         left, top, right, bottom = bounds
         delta = new_x - old_x
         old_left, _, old_right, _ = (old_bounds if old_bounds is not None else
@@ -467,13 +480,17 @@ class LevelMap:
                 tile = self.tile(room, col, row)
                 desert_exit = (tile.kind == 4 and self.desert is not None
                                and not self.desert.exit_open)
-                if tile.kind not in WALL_TILES and not desert_exit:
+                stone_gate = (tile.kind == 4 and struct.unpack_from('>H', self.level, 0x2186)[0] == 3
+                              and (state is None or state.actor_type != 11)
+                              and stone_gate_blocks(tile.foreground, bounds, state))
+                if tile.kind not in WALL_TILES and not desert_exit and not stone_gate:
                     continue
-                # GetLeftBarr/GetRightBarr, code 4, DATA c9e0/c9f2[4].
-                barrier = (1 if desert_exit else
+                # GetLeftBarr/GetRightBarr, code 4, DATA c9e0/c9f2[barrier].
+                barrier = (5 if stone_gate else 1 if desert_exit else
                            2 if tile.kind == 7 and bottom - top + 1 <= 34 else
                            3 if tile.kind == 2 and (tile.foreground & 255) < 3 else 4)
-                left_offset, right_offset = {1: (40, 0), 2: (0, 50), 3: (-22, -22), 4: (3, 0)}[barrier]
+                left_offset, right_offset = {1: (40, 0), 2: (0, 50), 3: (-22, -22),
+                                             4: (3, 0), 5: (18, 0)}[barrier]
                 wall_left = col * TILE_WIDTH + 22 + left_offset
                 wall_right = col * TILE_WIDTH + 72 - right_offset
                 # A landing/foot alignment may already overlap the barrier.
@@ -723,7 +740,7 @@ class RooftopPhysics:
                      or state.source_sequence_id in (70, 78) else
                      self.map.wall_correction(motion.room, old_x, state.target_x,
                                               collision_bounds, old_bounds, collision_facing,
-                                              physical_row=motion.row))
+                                              physical_row=motion.row, state=state))
         if corrected != state.target_x:
             delta = corrected - state.target_x
             state.current_x = state.target_x = corrected
@@ -765,7 +782,7 @@ class RooftopPhysics:
                             motion.room, response_x, response_x,
                             collision_bounds_for_state() if collision_bounds_for_state is not None else bounds,
                             previous_bounds,
-                            collision_facing, physical_row=motion.row)
+                            collision_facing, physical_row=motion.row, state=state)
                         if corrected != response_x:
                             shift = corrected - response_x
                             state.current_x = state.target_x = corrected
