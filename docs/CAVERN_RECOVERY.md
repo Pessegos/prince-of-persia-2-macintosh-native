@@ -148,7 +148,7 @@ presentation retains the native square pixels. Original bitmaps are unchanged.
 The filled surface is drawn
 BEFORE both bubble passes; keeping it between those passes hides rear bubbles
 because it is more opaque than the original cover. Native bubble records,
-counts and sequences are unchanged. Enhanced mode adds four native pixels to
+counts and sequences are unchanged. Enhanced mode adds six native pixels to
 the bubble drawing X coordinates to center them further inside the recessed
 surface. Native event coordinates and bubble state are unchanged; the surface,
 character-death drawings, splashes, mirror flags and all collision positions
@@ -160,8 +160,14 @@ Enhanced effects have separate surface and raised passes. The six native
 sequences reuse 26 scheduled SHAPs; the native tables do not assign physical
 surface/air classifications. Examining their artwork shows flat ripple frames,
 attached bubbles, and burst frames that combine raised bodies with contact
-waves at the bottom. `LAVA_AIR_ROWS` supplies port-authored per-SHAP row splits
-for those mixed frames. The split preserves each source pixel exactly once;
+waves at the bottom. `LAVA_AIR_ROWS` supplies port-authored upper seed bands.
+Four-connected opaque pixels carry the entire raised body into the air pass,
+including its lower rows, while separately drawn contact rings remain on the
+surface. A hard horizontal split previously put 6-12 body pixels from each of
+five native splash frames into the surface pass, visibly slicing them where
+the pool mask met rock. Connected-body selection removes that artificial cut
+without inventing frames, interpolating movement or changing the native cadence.
+The split preserves each source pixel exactly once;
 it is a presentation adaptation to the new cavity, not a recovered native rule.
 
 Ripples, attached bubbles and the contact-wave parts of splashes are clipped
@@ -169,7 +175,8 @@ against the bright-liquid pixels of the approved surface, excluding rock and
 dark-red crust around every side, including the rear perimeter. Raised drops
 and burst bodies are drawn after the solid contours without that spatial mask,
 so they can rise above the pool or pass in front of rock without being sliced.
-No source shape, event timing, bubble count or four-pixel offset is changed.
+No source shape, event timing or bubble count is changed. The six-pixel offset
+is presentation-only; it replaces the earlier four-pixel placement.
 
 Before raised effects, enhanced mode restores solid contours. A cached mask protects
 rock below each column's first molten pixel: both the near-side floor and the

@@ -7,7 +7,7 @@ from pop2.opponent_generation import character_column
 from pop2.terrain import character_row, floor_contact_x, floor_y
 
 
-ENHANCED_BUBBLE_OFFSET_X = 4
+ENHANCED_BUBBLE_OFFSET_X = 6
 
 
 @dataclass

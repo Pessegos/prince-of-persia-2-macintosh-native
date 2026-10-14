@@ -276,8 +276,9 @@ def recessed_lava_liquid_mask(surface):
     return mask
 
 
-# Native SHAPs mix raised splash bodies with flat waves at the bottom.
-# These row splits are port presentation metadata, not Macintosh logic.
+# Upper seed bands identify raised bodies in the native SHAPs. Follow their
+# four-connected pixels, leaving the separate contact waves on the surface.
+# These seeds are port presentation metadata, not Macintosh logic.
 LAVA_AIR_ROWS = {3619: 4, 3620: 3, 3621: 3, 3625: 8, 3626: 5,
                  3632: 9, 3633: 7, 3634: 6, 3635: 5,
                  3639: 3, 3640: 2, 3641: 2, 3642: 2}
@@ -286,9 +287,20 @@ LAVA_AIR_ROWS = {3619: 4, 3620: 3, 3621: 3, 3625: 8, 3626: 5,
 def split_lava_bubble(sprite, shape):
     surface, airborne = sprite.copy(), Image.new('RGBA', sprite.size)
     rows = min(sprite.height, LAVA_AIR_ROWS.get(shape, 0))
-    if rows:
-        airborne.paste(sprite.crop((0, 0, sprite.width, rows)), (0, 0))
-        surface.paste((0, 0, 0, 0), (0, 0, sprite.width, rows))
+    pending = [(x, y) for y in range(rows) for x in range(sprite.width)
+               if sprite.getpixel((x, y))[3]]
+    visited = set()
+    while pending:
+        x, y = pending.pop()
+        if not (0 <= x < sprite.width and 0 <= y < sprite.height) or (x, y) in visited:
+            continue
+        visited.add((x, y))
+        pixel = sprite.getpixel((x, y))
+        if not pixel[3]:
+            continue
+        airborne.putpixel((x, y), pixel)
+        surface.putpixel((x, y), (0, 0, 0, 0))
+        pending.extend(((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)))
     return surface, airborne
 
 

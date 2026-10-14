@@ -211,8 +211,8 @@ class EnhancedLavaTests(unittest.TestCase):
             pool.bubbles[0] = [1, 0, 0, -11, 58, 0]
             pool.bubbles[1] = [1, 1, 0, -11, 42, 1]
         self.assertEqual(enhanced.drawings(), [(3614, 0, 0, False),
-                                             (3617, 46, -11, False),
-                                             (3616, 62, -11, False)])
+                                             (3617, 48, -11, False),
+                                             (3616, 64, -11, False)])
         self.assertEqual(enhanced.drawings()[1:], [
             (shape, x + ENHANCED_BUBBLE_OFFSET_X, y, flip)
             for shape, x, y, flip in original.drawings() if shape != 3615])
@@ -224,7 +224,7 @@ class EnhancedLavaTests(unittest.TestCase):
             pool.bubbles[0] = [1, 0, 0, -11, 58, 0]
         self.assertEqual(original.bubbles, enhanced.bubbles)
         self.assertIn((3616, 58, -11, False), original.drawings())
-        self.assertIn((3616, 62, -11, False), enhanced.drawings())
+        self.assertIn((3616, 64, -11, False), enhanced.drawings())
         for mode in (0, 3):
             for facing in (0, 1):
                 for pool in (original, enhanced):
@@ -280,6 +280,7 @@ class RecessedLavaArtworkTests(unittest.TestCase):
         base.paste((255, 127, 0, 255), (2, 3, 6, 7))
         base.putpixel((3, 4), (127, 0, 0, 255))
         effect = Image.new('RGBA', (8, 10), red)
+        effect.paste((0, 0, 0, 0), (0, 8, 8, 9))
         pool = LavaPool(synthetic_tables(), enhanced=True)
         state = SimpleNamespace(lava=SimpleNamespace(pools={(0, 27): pool}))
         program = {'lava': {'rooms': {'0': [{'room': 0, 'cell': 27, 'x': 10, 'bottom': 20}]}}}
@@ -309,6 +310,24 @@ class RecessedLavaArtworkTests(unittest.TestCase):
             self.assertEqual(combined.tobytes(), sprite.tobytes())
         for shape in (3616, 3622, 3624, 3631, 3643, 3644, 3645):
             self.assertIsNone(split_lava_bubble(sprite, shape)[1].getbbox())
+
+    def test_raised_body_continues_below_seed_band_without_taking_diagonal_ripples(self):
+        from PIL import Image
+        from pop2.caverns import split_lava_bubble
+
+        red = (255, 31, 0, 255)
+        sprite = Image.new('RGBA', (6, 9))
+        sprite.paste(red, (2, 0, 4, 6))
+        sprite.putpixel((5, 1), red)
+        for point in ((1, 6), (2, 7), (3, 7), (4, 6)):
+            sprite.putpixel(point, red)
+        surface, airborne = split_lava_bubble(sprite, 3619)
+        self.assertEqual(airborne.getpixel((2, 5)), red)
+        self.assertEqual(airborne.getpixel((5, 1)), red)
+        self.assertEqual(surface.getpixel((2, 5))[3], 0)
+        for point in ((1, 6), (2, 7), (3, 7), (4, 6)):
+            self.assertEqual(surface.getpixel(point), red)
+            self.assertEqual(airborne.getpixel(point)[3], 0)
 
     def test_foreground_mask_protects_inset_rock_and_floor_but_not_the_rear_rim(self):
         from PIL import Image
@@ -355,6 +374,7 @@ class RecessedLavaArtworkTests(unittest.TestCase):
         surface = Image.new('RGBA', (5, 5), (60, 40, 30, 255))
         surface.putpixel((2, 2), (255, 127, 0, 255))
         bubble = Image.new('RGBA', (5, 5), (255, 31, 0, 255))
+        bubble.paste((0, 0, 0, 0), (0, 3, 5, 4))
         unchanged = surface.tobytes()
         pool = LavaPool(synthetic_tables(), enhanced=True)
         state = SimpleNamespace(lava=SimpleNamespace(pools={(0, 27): pool}))
@@ -619,6 +639,20 @@ class ImportedLavaTests(unittest.TestCase):
                         self.assertIsNone(ImageChops.multiply(changed, ImageOps.invert(allowed)).getbbox())
         self.assertGreater(visible, 0)
 
+    def test_native_raised_bodies_are_not_sliced_at_the_seed_row(self):
+        from pop2.caverns import cavern_assets, split_lava_bubble
+        from pop2.render_opening import decode_shap
+
+        _, resources, palette, _ = cavern_assets()
+        for shape, point in ((3626, (4, 5)), (3632, (4, 9)), (3633, (5, 7)),
+                             (3634, (6, 6)), (3635, (7, 5))):
+            sprite = decode_shap(resources['SHAP'][shape]['data'], palette)
+            surface, airborne = split_lava_bubble(sprite, shape)
+            with self.subTest(shape=shape):
+                self.assertEqual(airborne.getpixel(point), sprite.getpixel(point))
+                self.assertNotEqual(airborne.getpixel(point)[3], 0)
+                self.assertEqual(surface.getpixel(point)[3], 0)
+
     def test_raised_splash_pixels_are_preserved_above_and_in_front_of_rock(self):
         from pop2.caverns import (cavern_assets, cavern_room, draw_cavern_lava,
                                  recessed_lava_liquid_mask, recessed_lava_surface, split_lava_bubble)
@@ -631,14 +665,14 @@ class ImportedLavaTests(unittest.TestCase):
         state.configure_lava(tables)
         state.lava.enter_room(5, tables['rooms']['5'])
         pool = state.lava.pools[5, 27]
-        pool.bubbles[0] = [1, 7, 5, -10, 45, 0]
+        pool.bubbles[0] = [1, 7, 5, -15, 55, 0]
         record = tables['rooms']['5'][0]
         sprite = decode_shap(resources['SHAP'][3632]['data'], palette)
         raised = split_lava_bubble(sprite, 3632)[1]
         surface = recessed_lava_surface(palette)
         liquid = recessed_lava_liquid_mask(surface)
         frame = draw_cavern_lava(cavern_room(5).flattened(), 5, state)
-        x, y = record['x'] + 45 + ENHANCED_BUBBLE_OFFSET_X, record['bottom'] - 10 - sprite.height
+        x, y = record['x'] + 55 + ENHANCED_BUBBLE_OFFSET_X, record['bottom'] - 15 - sprite.height
         outside = 0
         for yy in range(sprite.height):
             for xx in range(sprite.width):
