@@ -12,6 +12,11 @@ from pop2.game_ui import DevelopmentMenu, VISIBLE_SIZE, VISIBLE_VIEWPORT, fit_vi
 from pop2.screenshots import ScreenshotSettings, save_screenshot
 
 
+PAUSE_GAMEPLAY_KEYS = frozenset({
+    "Left", "Right", "Up", "Down", "Shift_L", "Shift_R", "Control_L", "Control_R",
+})
+
+
 def is_resume_key(event, held_keys=()):
     command_keys = {"Control_L", "Control_R", "Alt_L", "Alt_R", "Meta_L", "Meta_R",
                     "Super_L", "Super_R", "Win_L", "Win_R"}
@@ -194,6 +199,26 @@ class WindowControls:
         self.escape_held = False
         return "break"
 
+    def gameplay_controls_available(self):
+        return (getattr(self, "game_menu", None) is None
+                and getattr(self, "dev_menu", None) is None
+                and getattr(self, "intro", None) is None
+                and getattr(self, "demo", None) is None
+                and getattr(self, "copy_challenge", None) is None
+                and not getattr(self, "level_complete", False)
+                and getattr(getattr(self, "death", None), "counter", -1) < 0)
+
+    def record_paused_key(self, event, pressed):
+        if event.keysym in ("Left", "Right"):
+            self.horizontal_key(event, -1 if event.keysym == "Left" else 1, pressed)
+        elif event.keysym in PAUSE_GAMEPLAY_KEYS:
+            key = event.keysym.lower().split('_')[0]
+            key = "ctrl" if key == "control" else key
+            if key in ("shift", "ctrl"):
+                pair = ("Shift_L", "Shift_R") if key == "shift" else ("Control_L", "Control_R")
+                pressed = bool(set(pair).intersection(self.window_keys_down))
+            self.set_key_state(key, pressed)
+
     def set_paused(self, paused):
         if self.paused == paused:
             return
@@ -207,7 +232,10 @@ class WindowControls:
             if self.animation_after_id is not None:
                 self.root.after_cancel(self.animation_after_id)
                 self.animation_after_id = None
-            self.clear_keys(None)
+            # Ordinary pause freezes controls as well as animation. Menus and
+            # focus loss still explicitly clear input rather than restoring it.
+            if not self.gameplay_controls_available():
+                self.clear_keys(None)
             self.pause_resume_keys.update(self.window_keys_down)
         else:
             elapsed = now - self.pause_started_at
@@ -219,6 +247,11 @@ class WindowControls:
                 self.combat.last_guard_at += elapsed
             self.pause_started_at = None
             self.next_animation_at = now
+            if self.gameplay_controls_available():
+                self.resume_pause_controls()
+                self.pause_resume_keys.difference_update(PAUSE_GAMEPLAY_KEYS)
+                # Keep the normal Up+direction chord window before the next tick.
+                self.next_animation_at += self.current_animation_interval_ms() / 1000
             self.schedule_next_animation()
         self.render()
 
@@ -551,6 +584,10 @@ class WindowControls:
             if not repeated:
                 self.open_dev_mode(event)
             return "break"
+        if (self.paused and self.gameplay_controls_available()
+                and event.keysym in PAUSE_GAMEPLAY_KEYS
+                and (repeated or not is_resume_key(event, self.window_keys_down))):
+            self.record_paused_key(event, True)
         if event.keysym in self.pause_resume_keys:
             return "break"
         fullscreen_key = event.keysym == "Return" and event.state & (0x8 | 0x20000)
@@ -590,15 +627,10 @@ class WindowControls:
             if self.paused and event.keysym not in ("Escape", "F2", "F3") and not fullscreen_key:
                 if is_resume_key(event, self.window_keys_down):
                     self.set_paused(False)
-                    self.pause_resume_keys.update(self.window_keys_down)
-                    # Port QoL: a horizontal resume press also reaches the
-                    # gameplay binding; its release must reach that binding too.
-                    if (event.keysym in ("Left", "Right")
-                            and getattr(self, "intro", None) is None
-                            and getattr(self, "demo", None) is None
-                            and not getattr(self, "level_complete", False)
-                            and self.death.counter < 0):
-                        self.pause_resume_keys.discard(event.keysym)
+                    gameplay = self.gameplay_controls_available()
+                    self.pause_resume_keys.update(
+                        self.window_keys_down - PAUSE_GAMEPLAY_KEYS if gameplay else self.window_keys_down)
+                    if gameplay and event.keysym in PAUSE_GAMEPLAY_KEYS:
                         return None
                 return "break"
             if getattr(self, "intro", None) is not None:
@@ -638,6 +670,10 @@ class WindowControls:
         if len(event.keysym) == 1:
             released.add(event.keysym.swapcase())
             self.window_keys_down.discard(event.keysym.swapcase())
+        if self.paused and self.gameplay_controls_available() and event.keysym in PAUSE_GAMEPLAY_KEYS:
+            self.record_paused_key(event, False)
+            self.pause_resume_keys.difference_update(released)
+            return "break"
         if event.keysym == "F3":
             self.dev_toggle_held = False
         elif event.keysym == "Escape":

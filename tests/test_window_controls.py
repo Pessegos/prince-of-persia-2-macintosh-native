@@ -122,8 +122,8 @@ class CloseShortcutTests(unittest.TestCase):
 
 
 class ResumeKeyTests(unittest.TestCase):
-    def test_horizontal_resume_press_and_release_reach_gameplay_only(self):
-        for key in ("Left", "Right"):
+    def test_directional_resume_press_and_release_reach_gameplay_only(self):
+        for key in ("Left", "Right", "Up", "Down"):
             for mode in ("gameplay", "intro", "demo", "death", "complete"):
                 with self.subTest(key=key, mode=mode):
                     host = WindowControls()

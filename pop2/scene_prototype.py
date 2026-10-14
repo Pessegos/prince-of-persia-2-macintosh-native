@@ -275,6 +275,7 @@ class ScenePrototype(WindowControls):
         self.step_warning_direction = 0
         self.ctrl_held = False
         self.sword_drawn = False
+        self.paused_ctrl_request = False
         self.sword_sheathing = False
         self.down_sheathe_consumed = False
         self.ledge_test_active = False
@@ -379,7 +380,22 @@ class ScenePrototype(WindowControls):
             self.schedule_next_animation()
 
     def set_key_state(self, key, pressed):
-        if self.paused or self.dev_menu is not None:
+        if self.paused:
+            if self.gameplay_controls_available():
+                previous = getattr(self, f"{key}_held")
+                setattr(self, f"{key}_held", pressed)
+                if key == "up" and (not pressed or not previous):
+                    self.jump_started_for_press = False
+                    self.jump_repeat_armed = False
+                elif key == "ctrl":
+                    if not pressed:
+                        self.paused_ctrl_request = False
+                    elif not previous:
+                        self.paused_ctrl_request = True
+                elif key == "down" and not pressed:
+                    self.down_sheathe_consumed = False
+            return "break"
+        if self.dev_menu is not None:
             return "break"
         if self._combat_controls_locked():
             setattr(self, f"{key}_held", pressed)
@@ -576,7 +592,19 @@ class ScenePrototype(WindowControls):
         self._try_start_ledge_hang()
 
     def horizontal_key(self, _event, direction, pressed):
-        if self.paused or self.dev_menu is not None:
+        if self.paused:
+            if self.gameplay_controls_available():
+                if pressed and direction not in self.held_directions:
+                    self.held_directions.append(direction)
+                elif not pressed and direction in self.held_directions:
+                    self.held_directions.remove(direction)
+                if not pressed and getattr(self, "step_warning_direction", 0) == direction:
+                    self.step_warning_direction = 0
+                self.sample_keyboard()
+                if self.run_active:
+                    self.run_stop_requested = self.horizontal_input != self.run_direction
+            return "break"
+        if self.dev_menu is not None:
             return "break"
         previous_direction = self.horizontal_input
         if pressed:
@@ -619,6 +647,13 @@ class ScenePrototype(WindowControls):
         )
         self.horizontal_input = frame.horizontal
         return frame
+
+    def resume_pause_controls(self):
+        self.sample_keyboard()
+        if (getattr(self, "paused_ctrl_request", False) and self.ctrl_held
+                and not self._combat_controls_locked() and not self.sword_sheathing):
+            self.buffer_input(BufferedCommand("sword_attack" if self.sword_drawn else "sword_draw"))
+        self.paused_ctrl_request = False
 
     def queue_sampled_horizontal_action(self, direction):
         if self.sword_drawn and not self.sword_sheathing:
@@ -1378,6 +1413,7 @@ class ScenePrototype(WindowControls):
         self.down_held = False
         self.shift_held = False
         self.ctrl_held = False
+        self.paused_ctrl_request = False
         self.down_sheathe_consumed = False
         self.ledge_test_active = False
         self.ledge_action_consumed = False

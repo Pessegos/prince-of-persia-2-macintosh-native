@@ -208,12 +208,23 @@ before/on pose 109 and preservation of other pending commands.
 
 ## Intentional Port Extensions
 
-A horizontal arrow used to resume ordinary gameplay also reaches the normal
-movement binding in that same key press. It is not blocked until release,
-and the release reaches gameplay too, so holding starts movement and releasing
-stops it normally. Other resume keys remain consumed; menus, cutscenes, demos,
-death and completion states do not forward this resume press into gameplay.
-This is a host pause QoL, not a recovered Macintosh pause rule.
+An arrow used to resume ordinary gameplay also reaches its normal control
+binding in that same press. Up/Down and horizontal jump chords are included,
+not only running. Ordinary pause freezes existing holds and repeat/queue state;
+key releases and modifier changes during pause update held state without moving
+the actor. Resuming with Escape therefore preserves a continuously held Shift
+on a ledge, but does not restore a Shift or direction released during pause.
+Ctrl newly held during pause is buffered only on explicit resume; releasing it
+before resume cancels that request. Modifiers and system keys still do not
+resume by themselves. A full gameplay frame interval after resume preserves
+the existing Up+direction chord window; ordinary key handlers can still start
+their action immediately.
+
+All resumed gameplay-key releases reach the ordinary bindings rather than
+being swallowed by the resume-key filter. Menus, cutscenes, demos, copy
+protection, death and completion states retain their input filters. Focus loss
+still explicitly clears physical/logical holds; returning focus does not resume
+or restore them. This is a host pause QoL, not a recovered Macintosh pause rule.
 
 Ctrl pressed while running preserves a request to stop running and draw the
 sword once the current run segment reaches its transition. A short Ctrl tap

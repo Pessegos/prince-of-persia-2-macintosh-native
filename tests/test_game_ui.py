@@ -24,6 +24,24 @@ class GameWindowTests(unittest.TestCase):
     place = test_terrain.RooftopSceneTests.place
     tick = test_terrain.RooftopSceneTests.tick
 
+    def control_key(self, key, pressed=True):
+        from types import SimpleNamespace
+
+        scene = self.scene
+        event = SimpleNamespace(keysym=key, state=0, char="")
+        result = (scene.dev_key_press if pressed else scene.dev_key_release)(event)
+        if result is None:
+            if key in ("Left", "Right"):
+                scene.horizontal_key(event, -1 if key == "Left" else 1, pressed)
+            elif key == "Up" and pressed:
+                scene.up_key(event)
+            elif key == "Escape":
+                (scene.escape_key if pressed else scene.escape_release)(event)
+            else:
+                name = key.lower().split('_')[0]
+                scene.set_key_state("ctrl" if name == "control" else name, pressed)
+        return result
+
     def test_live_prince_and_health_art_use_the_original_rooftop_palette(self):
         from pop2.render_opening import decode_ctbl, decode_shap
 
@@ -184,6 +202,193 @@ class GameWindowTests(unittest.TestCase):
                 self.assertIsNone(scene.dev_key_release(event))
                 scene.horizontal_key(event, direction, False)
                 self.assertEqual(scene.held_directions, [])
+
+    def test_pause_resume_horizontal_jump_chord_works_in_both_key_orders(self):
+        scene = self.scene
+        for facing, arrow in ((0, "Left"), (1, "Right")):
+            for up_first in (False, True):
+                with self.subTest(facing=facing, up_first=up_first):
+                    scene.jump_to_room(9, row=1, x=330, facing=facing)
+                    self.clear_guards()
+                    scene.set_paused(True)
+                    keys = ("Up", arrow) if up_first else (arrow, "Up")
+                    self.assertIsNone(self.control_key(keys[0]))
+                    self.assertIsNone(self.control_key(keys[1]))
+                    scene.start_jump_if_needed()
+                    self.assertFalse(scene.paused)
+                    self.assertEqual(scene.sequence_state.sequence_id, 3)
+                    self.assertEqual(scene.up_held, True)
+                    self.assertEqual(scene.horizontal_input, 1 if facing else -1)
+                    self.control_key("Up", False)
+                    self.control_key(arrow, False)
+
+    def test_up_resume_can_hold_repeat_and_release_without_an_extra_jump(self):
+        scene = self.scene
+        scene.jump_to_room(9, row=1, x=330, facing=1)
+        self.clear_guards()
+        scene.set_paused(True)
+        self.control_key("Up")
+        scene.start_jump_if_needed()
+        starts = 0
+        for _ in range(90):
+            self.tick()
+            starts += scene.action == 67
+        self.assertGreaterEqual(starts, 2)
+        self.assertTrue(scene.up_held)
+        self.control_key("Up", False)
+        for _ in range(40):
+            self.tick()
+        self.assertEqual(scene.action, 15)
+        self.assertFalse(scene.jump_repeat_armed)
+        self.assertIsNone(scene.pending_action)
+
+    def test_up_already_held_before_escape_pause_keeps_its_repeat_state(self):
+        scene = self.scene
+        scene.jump_to_room(9, row=1, x=330, facing=1)
+        self.clear_guards()
+        self.control_key("Up")
+        scene.start_jump_if_needed()
+        self.tick(6)
+        before = (scene.action, scene.jump_started_for_press, scene.jump_repeat_armed)
+        self.control_key("Escape")
+        self.control_key("Escape", False)
+        self.assertEqual(self.control_key("Up"), "break")
+        self.tick(5)
+        self.assertTrue(scene.paused)
+        self.assertEqual((scene.action, scene.jump_started_for_press, scene.jump_repeat_armed), before)
+        self.control_key("Escape")
+        self.control_key("Escape", False)
+        starts = 0
+        for _ in range(90):
+            self.tick()
+            starts += scene.action == 67
+        self.assertGreaterEqual(starts, 2)
+        self.control_key("Up", False)
+        self.assertFalse(scene.up_held)
+
+    def test_paused_modifier_pair_remains_held_until_both_keys_are_released(self):
+        scene = self.scene
+        scene.jump_to_room(9, row=1, x=330, facing=1)
+        self.clear_guards()
+        scene.set_paused(True)
+        self.control_key("Shift_L")
+        self.control_key("Shift_R")
+        self.control_key("Shift_L", False)
+        self.assertTrue(scene.shift_held)
+        self.control_key("Shift_R", False)
+        self.assertFalse(scene.shift_held)
+        self.assertTrue(scene.paused)
+
+    def test_down_resume_can_descend_a_real_ledge_with_paused_shift_held(self):
+        scene = self.scene
+        scene.jump_to_room(9, row=0, x=214, facing=0)
+        self.clear_guards()
+        scene.set_paused(True)
+        self.assertEqual(self.control_key("Shift_L"), "break")
+        self.assertTrue(scene.paused)
+        self.assertTrue(scene.shift_held)
+        self.assertIsNone(self.control_key("Down"))
+        self.assertTrue(scene.native_ledge)
+        self.assertTrue(scene.down_held)
+        self.tick(25)
+        self.assertTrue(scene.ledge_hanging)
+        self.assertFalse(scene.terrain_motion.falling)
+
+    def test_pause_keeps_a_held_ledge_and_tracks_shift_release_or_repress(self):
+        from pop2.scene_prototype import BufferedCommand
+
+        scene = self.scene
+        for release_shift, repress_shift in ((False, False), (True, False), (True, True)):
+            with self.subTest(release_shift=release_shift, repress_shift=repress_shift):
+                scene.jump_to_room(2, row=1, x=140, facing=1)
+                self.clear_guards()
+                state = scene.sequence_state
+                scene.in_animation_tick = True
+                self.control_key("Shift_L")
+                scene.dispatch_jump(BufferedCommand("jump", 1))
+                for _ in range(50):
+                    self.tick()
+                    if scene.sequence_state.sequence_id == 25 and scene.action == 91:
+                        break
+                self.assertTrue(scene.ledge_hanging)
+                frozen = state.__dict__.copy()
+                self.control_key("Escape")
+                self.control_key("Escape", False)
+                self.assertTrue(scene.paused)
+                if release_shift:
+                    self.control_key("Shift_L", False)
+                if repress_shift:
+                    self.control_key("Shift_L")
+                self.tick(5)
+                self.assertEqual(state.__dict__, frozen)
+                self.control_key("Escape")
+                self.control_key("Escape", False)
+                self.assertFalse(scene.paused)
+                self.tick(2)
+                if release_shift and not repress_shift:
+                    self.assertFalse(scene.native_ledge)
+                    self.assertTrue(scene.terrain_motion.falling)
+                else:
+                    self.assertTrue(scene.native_ledge)
+                    self.assertFalse(scene.terrain_motion.falling)
+                    self.assertTrue(scene.shift_held)
+                    self.control_key("Shift_L", False)
+                    self.assertFalse(scene.shift_held)
+                    self.tick(2)
+                    self.assertTrue(scene.terrain_motion.falling)
+
+    def test_release_during_pause_does_not_restore_stale_run_or_up_holds(self):
+        scene = self.scene
+        scene.jump_to_room(9, row=1, x=330, facing=1)
+        self.clear_guards()
+        self.control_key("Right")
+        scene.step_warning_direction = 1
+        scene.set_paused(True)
+        self.control_key("Right", False)
+        self.assertEqual(scene.step_warning_direction, 0)
+        self.control_key("Shift_L")
+        self.control_key("Control_L")
+        self.control_key("Control_L", False)
+        self.control_key("Escape")
+        self.control_key("Escape", False)
+        self.assertEqual(scene.horizontal_input, 0)
+        self.assertFalse(scene.ctrl_held)
+        self.assertFalse(scene.up_held)
+        self.assertIsNone(scene.pending_action)
+        self.tick(20)
+        self.assertFalse(scene.run_active)
+
+    def test_ctrl_held_during_pause_is_buffered_only_after_explicit_resume(self):
+        scene = self.scene
+        scene.jump_to_room(9, row=1, x=330, facing=1)
+        self.clear_guards()
+        scene.set_paused(True)
+        frozen = scene.sequence_state.__dict__.copy()
+        self.assertEqual(self.control_key("Control_L"), "break")
+        self.assertEqual(scene.sequence_state.__dict__, frozen)
+        self.assertTrue(scene.paused)
+        self.control_key("Escape")
+        self.control_key("Escape", False)
+        self.tick()
+        self.assertEqual(scene.sequence_state.sequence_id, 55)
+        self.assertTrue(scene.sword_drawn)
+
+    def test_focus_loss_during_pause_discards_the_frozen_holds(self):
+        from types import SimpleNamespace
+
+        scene = self.scene
+        scene.jump_to_room(9, row=1, x=330, facing=1)
+        self.clear_guards()
+        self.control_key("Right")
+        scene.set_paused(True)
+        scene.clear_keys(SimpleNamespace())
+        self.assertFalse(scene.shift_held)
+        self.assertEqual(scene.window_keys_down, set())
+        self.control_key("Escape")
+        self.control_key("Escape", False)
+        self.tick(20)
+        self.assertFalse(scene.run_active)
+        self.assertEqual(scene.horizontal_input, 0)
 
     def test_held_up_after_junction_climb_starts_another_jump(self):
         scene = self.scene
