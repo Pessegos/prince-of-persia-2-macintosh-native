@@ -251,7 +251,7 @@ class EnhancedLavaTests(unittest.TestCase):
 
 
 class RecessedLavaArtworkTests(unittest.TestCase):
-    def test_foreground_mask_protects_only_floor_below_the_last_molten_pixel(self):
+    def test_foreground_mask_protects_inset_rock_and_floor_but_not_the_rear_rim(self):
         from PIL import Image
         from pop2.caverns import recessed_lava_foreground_mask
 
@@ -262,7 +262,31 @@ class RecessedLavaArtworkTests(unittest.TestCase):
         surface.putpixel((3, 2), (255, 79, 0, 0))
         mask = recessed_lava_foreground_mask(surface)
         self.assertEqual({(x, y) for y in range(5) for x in range(5) if mask.getpixel((x, y))},
-                         {(1, 4), (2, 3), (2, 4)})
+                         {(1, 2), (1, 4), (2, 3), (2, 4)})
+
+    def test_inset_rock_and_embedded_crust_occlude_animation_without_hiding_liquid(self):
+        from PIL import Image
+        from pop2.caverns import draw_cavern_lava
+
+        rock, crust = (60, 40, 30, 255), (127, 0, 0, 255)
+        surface = Image.new('RGBA', (5, 7), rock)
+        for y in (1, 5):
+            surface.putpixel((2, y), (255, 127, 0, 255))
+        surface.putpixel((2, 3), crust)
+        bubble = Image.new('RGBA', surface.size, (255, 31, 0, 255))
+        unchanged = surface.tobytes()
+        pool = LavaPool(synthetic_tables(), enhanced=True)
+        state = SimpleNamespace(lava=SimpleNamespace(pools={(0, 27): pool}))
+        program = {'lava': {'rooms': {'0': [{'room': 0, 'cell': 27, 'x': 10, 'bottom': 20}]}}}
+        shapes = {('recessed', 3614): surface, 3616: bubble}
+        with (patch('pop2.caverns.cavern_assets', return_value=(program, {}, {}, shapes)),
+              patch.object(pool, 'drawings', return_value=[(3614, 0, 0, False), (3616, 0, 0, False)])):
+            frame = draw_cavern_lava(Image.new('RGBA', (30, 30)), 0, state)
+        self.assertEqual(frame.getpixel((12, 15)), rock)
+        self.assertEqual(frame.getpixel((12, 16)), crust)
+        for y in (13, 14, 18):
+            self.assertEqual(frame.getpixel((12, y)), (255, 31, 0, 255))
+        self.assertEqual(surface.tobytes(), unchanged)
 
     def test_animation_is_behind_the_front_rock_but_not_the_back_rim(self):
         from PIL import Image
@@ -499,7 +523,7 @@ class ImportedLavaTests(unittest.TestCase):
             with self.subTest(room=room):
                 self.assertEqual(draw_cavern_lava(frame, int(room), state).tobytes(), expected.tobytes())
 
-    def test_front_floor_is_preserved_without_changing_other_animation_pixels(self):
+    def test_solid_contours_are_preserved_without_changing_other_animation_pixels(self):
         from PIL import Image, ImageChops
         from pop2.caverns import (cavern_assets, cavern_room, draw_cavern_lava,
                                  recessed_lava_foreground_mask, recessed_lava_surface)
@@ -509,6 +533,10 @@ class ImportedLavaTests(unittest.TestCase):
         _, _, palette, shapes = cavern_assets()
         sprite = recessed_lava_surface(palette)
         mask = recessed_lava_foreground_mask(sprite)
+        for point in ((41, 13), (83, 11), (36, 26)):
+            self.assertEqual(mask.getpixel(point), 255)
+        for point in ((75, 5), (80, 10)):
+            self.assertEqual(mask.getpixel(point), 0)
         dx, dy = tables['piece_offsets']
         for room, records in tables['rooms'].items():
             room = int(room)

@@ -249,14 +249,20 @@ def recessed_lava_surface(palette):
 
 
 def recessed_lava_foreground_mask(surface):
-    """Protect floor pixels in front of each column's last molten pixel."""
+    """Protect inset rock, near-side floor and crust embedded in the liquid."""
     mask = Image.new('L', surface.size)
     for x in range(surface.width):
-        for y in range(surface.height - 1, -1, -1):
-            red, green, blue, alpha = surface.getpixel((x, y))
-            if alpha and blue == 0 and (red == 255 or (red, green) == (127, 0)):
-                mask.paste(255, (x, y + 1, x + 1, surface.height))
-                break
+        column = [surface.getpixel((x, y)) for y in range(surface.height)]
+        liquid = [y for y, (r, g, b, a) in enumerate(column) if a and r == 255 and b == 0]
+        crust = {y for y, pixel in enumerate(column) if pixel == (127, 0, 0, 255)}
+        molten = set(liquid) | crust
+        if not molten:
+            continue
+        for y in range(min(molten) + 1, surface.height):
+            # The rear crust stays behind rising bubbles; only crust with
+            # liquid both above and below belongs to an inset contour.
+            if y not in molten or y in crust and liquid and liquid[0] < y < liquid[-1]:
+                mask.putpixel((x, y), 255)
     return mask
 
 
@@ -285,7 +291,7 @@ def draw_cavern_lava(frame, room_id, state):
                 foreground = (frame.crop((x, y, x + sprite.width, y + sprite.height)),
                               position, shapes[mask_key])
         if foreground is not None:
-            # Restore only the near-side floor, never the liquid or rear rim.
+            # Restore solid contours, never the liquid or rear rim.
             frame.paste(*foreground)
     return frame
 
