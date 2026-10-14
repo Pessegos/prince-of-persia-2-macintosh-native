@@ -64,6 +64,7 @@ class DeathState:
     counter: int = -1
     method: int = 0
     prompt_visible: bool = False
+    music_method: int | None = None
 
     def begin(self, method):
         if self.counter < 0:
@@ -84,7 +85,7 @@ class DeathState:
             self.counter += 1
         elif self.counter == 6:
             if audio is not None:
-                audio.death_song(self.method)
+                audio.death_song(self.method if self.music_method is None else self.music_method)
             self.counter = 7
         elif self.counter == 7:
             finished = audio is None or (not audio.music_busy and not audio.effect_busy)

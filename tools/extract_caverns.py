@@ -9,6 +9,7 @@ from pop2.terrain import LevelMap
 from tools.extract_enemy_profiles import expand_a5_data
 from pop2.loose_floors import cleared_below_cell, rubble_tile, space_foreground
 from pop2.opponent_generation import EMPTY_TILES
+from tools.extract_lava import lava_tables
 
 
 def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=None, floor_redraw=False):
@@ -294,7 +295,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
 def extract_caverns(program, caverns, prince, output):
     level = parse_resource_fork(prince)['LEVL'][2002]['data']
     scenes = {str(room): recover_room(program, caverns, level, room, prince) for room in range(32)}
-    result = {'version': 10, 'level': 3,
+    result = {'version': 11, 'level': 3,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     result['climb_redraw'] = {
@@ -305,6 +306,8 @@ def extract_caverns(program, caverns, prince, output):
         str(room): recover_room(program, caverns, level, room, prince, floor_redraw=True)['commands']
         for room in range(32)}
     terrain = LevelMap(level)
+    result['lava'] = lava_tables(program, caverns)
+    result['lava']['rooms'] = lava_room_records(result, terrain)
     # FirstFrame 2:5f62 scans for the first exit-right tile in the start room.
     cell = next((cell for cell in range(30)
                  if terrain.tile(terrain.start_room, cell % 10, cell // 10).kind == 17), None)
@@ -319,6 +322,24 @@ def extract_caverns(program, caverns, prince, output):
         result['entry_exit'] = {'room': terrain.start_room, 'cell': cell, 'frames': frames}
     result['loose_floors'] = extract_loose_floor_scenery(program, caverns, prince, level, result)
     (output / 'caverns_entry.json').write_text(json.dumps(result) + '\n', encoding='ascii')
+
+
+def lava_room_records(program, terrain):
+    rooms = {}
+    for room, commands in program['rooms'].items():
+        records, seen = [], set()
+        for command in commands:
+            if command[1] != 3614:
+                continue
+            x, bottom, row = command[2], command[3], command[5]
+            tile = terrain.tile(int(room), x // 51, row)
+            key = tile.room, tile.row * 10 + tile.column, x, bottom
+            if tile.kind != 23 or key in seen:
+                continue
+            seen.add(key)
+            records.append({'room': tile.room, 'cell': key[1], 'x': x, 'bottom': bottom})
+        rooms[room] = records
+    return rooms
 
 
 def loose_floor_cells(terrain):

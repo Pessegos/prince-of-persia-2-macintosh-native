@@ -27,6 +27,9 @@ class LevelRenderer:
         if self.level.number == 3:
             from pop2.caverns import cavern_room, cavern_scene_signature
 
+            if caverns is not None:
+                caverns.lava.enter_room(room_id,
+                    self.cavern_program.get('lava', {}).get('rooms', {}).get(str(room_id), ()))
             frame = caverns.entry_frame if caverns is not None else 0
             signature = (cavern_scene_signature(self.cavern_program, room_id, caverns)
                          if caverns is not None else '')
@@ -53,9 +56,10 @@ class LevelRenderer:
 
     def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
         if self.level.number == 3 and caverns is not None and not front:
-            from pop2.caverns import draw_cavern_torches, draw_cavern_falling
+            from pop2.caverns import draw_cavern_torches, draw_cavern_falling, draw_cavern_lava
 
             frame = draw_cavern_torches(frame, room_id, caverns)
+            frame = draw_cavern_lava(frame, room_id, caverns)
             return draw_cavern_falling(frame, room_id, caverns, self.level.data,
                                        self.room(room_id, caverns))
         if room_id in self.desert_rooms:

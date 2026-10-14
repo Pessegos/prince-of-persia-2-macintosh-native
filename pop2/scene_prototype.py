@@ -344,6 +344,7 @@ class ScenePrototype(WindowControls):
         if game.caverns is not None:
             game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'))
             game.caverns.configure_torches(renderer.cavern_program.get('torches', {}))
+            game.caverns.configure_lava(renderer.cavern_program.get('lava'))
         room = renderer.room(game.room_id, game.caverns)
         self.game, self.level_renderer = game, renderer
         self.palette, self.sword_palette = palette, sword_palette
@@ -1970,6 +1971,26 @@ class ScenePrototype(WindowControls):
 
     def advance_level_events(self):
         if self.game.caverns is not None:
+            lava = self.game.caverns.lava
+            lava.enter_room(self.room_id, self.level_renderer.cavern_program.get(
+                'lava', {}).get('rooms', {}).get(str(self.room_id), ()))
+            self.sequence_state.sound_events.extend(lava.advance())
+            pool = lava.contact(self.level_map, self.terrain_motion, self.sequence_state,
+                                self.frames[self.action]) if self.terrain_motion is not None else None
+            if pool is not None:
+                state, motion = self.sequence_state, self.terrain_motion
+                sequence, cue = pool.begin_death(state.animation_state, state.facing)
+                self.clear_keys(None)
+                self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
+                motion.dead, motion.falling = True, False
+                state.horizontal_velocity = state.vertical_velocity = 0
+                self.combat.player.life = 0
+                self.death.begin(5)
+                self.physics.select(self.sequence_runtime, sequence)
+                self.death.music_method = state.death_song_method
+                state.sound_events.append(cue)
+                self.action, self.player_x = state.action, state.target_x
+                self.status.set('Defeated')
             loose = self.game.caverns.loose
             state, motion = self.sequence_state, self.terrain_motion
             if motion is not None:
@@ -2438,6 +2459,7 @@ class ScenePrototype(WindowControls):
         if self.game.caverns is not None:
             self.game.caverns.configure_entry(self.level_renderer.cavern_program.get('entry_exit'))
             self.game.caverns.configure_torches(self.level_renderer.cavern_program.get('torches', {}))
+            self.game.caverns.configure_lava(self.level_renderer.cavern_program.get('lava'))
         self.reset_level_controls()
         room = (self.level_renderer.room(self.room_id, self.game.caverns)
                 if hasattr(self, "level_renderer") else None)
@@ -2618,6 +2640,10 @@ class ScenePrototype(WindowControls):
         self.animation_after_id = self.root.after(delay_ms, self.advance_animation)
 
     def player_sprite(self, action=None):
+        # DrawKid/DrawChar 3:089e/09ea: death method 5 is drawn by lava.
+        death = getattr(self, 'death', None)
+        if death is not None and death.counter >= 0 and death.method == 5:
+            return None
         shape_id = shape_id_for_action(self.frames, self.first_shape_id,
                                       self.action if action is None else action)
         if shape_id is None:

@@ -223,7 +223,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,GetSeqOp,0x305e,decoded,indexed-only,,No semantic review recorded in this prototype catalog,20,0
 4,Characters 2,hGetSequence,0x3098,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,1
 4,Characters 2,AnimCharTap,0x30e0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,5
-4,Characters 2,SetKidDeathMethod,0x3196,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,20,1
+4,Characters 2,SetKidDeathMethod,0x3196,jump_table,partial,pop2/sequence_runtime.py;pop2/rebirth.py,SEQS -11 death-music selector for actor 0/1; level-five story branch missing,20,1
 4,Characters 2,FirstInRow,0x322a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,35,0
 4,Characters 2,LoadKidwOpp,0x3286,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
 4,Characters 2,LoadShadAsOpp,0x3312,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,5,0
@@ -480,7 +480,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,DrawCaveExitMovable,0x1ba4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,12
 8,Caverns,DrawCaveFloor,0x1da8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,12,4
 8,Caverns,DrawCaveGateMovable,0x1f40,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,8
-8,Caverns,DrawCaveLavaBubbles,0x219e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,17
+8,Caverns,DrawCaveLavaBubbles,0x219e,jump_table,partial,pop2/lava.py;pop2/caverns.py;tools/extract_lava.py,"native SHAP cover, bubble layer order and character death triples; full/incremental drawing commands compared",0,17
 8,Caverns,DrawCaveLoose,0x24d4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,5
 8,Caverns,DrawCavePillarTop,0x2702,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,5
 8,Caverns,DrawCaveTorch,0x2ae8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,4
@@ -488,15 +488,15 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,TriggerGateWithRevPlate,0x2c38,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,3
 8,Caverns,CheckDartHit,0x2e82,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,3
 8,Caverns,MobDart,0x2f98,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,8
-8,Caverns,AnimLava,0x31fe,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,7
-8,Caverns,CheckLavaBoil,0x33fc,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,3
-8,Caverns,GetLavaInfoHnd,0x34a6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,13
-8,Caverns,GetLavaCharSeqIdx,0x3648,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,0
+8,Caverns,AnimLava,0x31fe,jump_table,partial,pop2/lava.py,"native phase, bubble markers, three character sequence indices and rare Prince continuation; 6000 native tick comparisons",0,7
+8,Caverns,CheckLavaBoil,0x33fc,jump_table,partial,pop2/lava.py;pop2/scene_prototype.py,"supporting-foot column, 43/36 limits, physical row, FRAM bit 0x40 and surface Y; Prince integration only",2,3
+8,Caverns,GetLavaInfoHnd,0x34a6,jump_table,partial,pop2/lava.py;pop2/scene_prototype.py,"native death flags, Rnd(3), facing, SEQS 115/116 and cues 69/70; Prince death host, no Mac handles or skeleton host",2,13
+8,Caverns,GetLavaCharSeqIdx,0x3648,decoded,partial,pop2/lava.py,0x8000 eligibility and 0x6000 sequence-index extraction,2,0
 8,Caverns,GetLavaTrob,0x368a,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,3
 8,Caverns,RedrawLava,0x36e4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
-8,Caverns,ResetLavaInfo,0x37c2,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,2
-8,Caverns,TriggerLava,0x3844,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,5
-8,Caverns,TriggerLavaBubble,0x38e4,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,0
+8,Caverns,ResetLavaInfo,0x37c2,decoded,partial,pop2/lava.py,"initial cell-modulo-three phase seed, initial bubbles and phase-only cycle reset",2,2
+8,Caverns,TriggerLava,0x3844,jump_table,partial,pop2/lava.py;tools/extract_caverns.py,one pool per native tile 23 and visible upper-border copies; native handle/trob bank replaced,1,5
+8,Caverns,TriggerLavaBubble,0x38e4,decoded,partial,pop2/lava.py,"first inactive bubble reuse, event coordinates/sequence/layer and previous-phase activation",2,0
 8,Caverns,CaveClearFlawFromPieceBelow,0x39b8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 8,Caverns,CaveMoveSquishingGate,0x3a58,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,5
 8,Caverns,CaveGetTorchFrame,0x3b4e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1

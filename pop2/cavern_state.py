@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 import random
 
 from pop2.loose_floors import LooseFloors
+from pop2.lava import Lava
 
 
 @dataclass
@@ -14,6 +15,10 @@ class CavernState:
     entry_frame: int = 0
     torches: dict = field(default_factory=dict)
     loose: LooseFloors = field(default_factory=LooseFloors)
+    lava: Lava = field(default_factory=Lava)
+
+    def configure_lava(self, metadata):
+        self.lava = Lava(metadata)
 
     def configure_torches(self, metadata):
         self.torches.clear()

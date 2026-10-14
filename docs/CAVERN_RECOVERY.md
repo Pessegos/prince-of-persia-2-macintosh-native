@@ -17,7 +17,7 @@ including side paths outside the shortest route.
 During import, `tools.extract_caverns` executes CODE:3/8 drawing routines against
 the original LEVL, Caverns PIEC and SHAP resources. It records background passes
 0/5 and foreground pass 1 for every tile of every room. The portable export
-retains the existing filename `caverns_entry.json`, now version 10:
+retains the existing filename `caverns_entry.json`, now version 11:
 
 ```text
 rooms[zero_based_room] = [layer, shape_id, x, bottom, draw_mode, row, clip_rect, library, draw_column, draw_row][]
@@ -65,12 +65,55 @@ pillars. Correct neighbor lookup restores the missing pieces from PIEC without
 adding room-specific artwork or positions. The entry-room columns, platform
 joins and ceiling border have been compared visually with the Macintosh route.
 
-Older exports request an asset reimport: version 9 lacks the native upper-border
+Older exports request an asset reimport: version 10 lacks the live lava tables;
+version 9 lacks the native upper-border
 context, version 5 lacks per-command draw-cell
 metadata, version 4 lacks the full-room repaint mode, version 3 lacks the
 corrected cell drawing and live torches, version 2 lacks flask library identity,
 and version 1 supplies only the entrance. F3 can preview each room, placing
 the Prince on a basic floor tile from LEVL rather than using per-room positions.
+
+## Lava
+
+The Macintosh/port lava recordings show native Room 6's bottom-row pool.
+The port previously drew only SHAP:3614: a continuous static lava fill.
+DrawCaveLava (8:221e-24ba) also paints SHAP:3615, whose opaque rock pixels
+cut into that fill, with animated bubbles behind and in front of the cover.
+Reconstructing those layers with the original resources reproduces the
+fragmented appearance in the Macintosh recording. It is not evidence of an
+emulator fault; whether the original artists intended that appearance cannot
+be established from the rendering code alone.
+
+Version 11 imports the original DATA bubble sequences, 22 scheduled events,
+death drawing triples and PIEC offsets. AnimLava (8:31fe-33ee) cycles through
+phases 0-22, retaining active bubbles on reset. Bubble marker -2 moves that
+bubble to the front pass and advances past the marker. The portable state
+matched 6,000 native updates across all three initial phase seeds and the
+Prince's death branches; drawing command order/coordinates/mirror flags
+matched another 216 native frames in both facings.
+
+CheckLavaBoil (8:33fc-348c) tests the supporting-foot column, not the sprite's
+anchor or bounding box. Tiles 23/24 use foot-X limits `51*column +43/+36`,
+FRAM flag 0x40, and absolute Y strictly greater than `120*row +76`.
+Native execution matched 3,420 contact cases. The predicate is shared by all
+five pools in the level, including camera-border copies; no room-specific
+death rectangle is introduced. Normal jumps above the surface remain safe.
+
+GetLavaInfoHnd (8:34a6-358e) selects SEQS:116 and cue 70 for the Prince.
+Airborne modes 3/4 use drawing sequence 0. Grounded entry uses sequence 1;
+Rnd(3)==0 additionally retains it for a longer continuation in which the
+Prince re-emerges. Rnd(3) includes 0-3, so this branch has probability 1/4,
+not a separate emulator-dependent animation. Facing sets the native mirror
+flag. Non-Prince actors use drawing sequence 2, SEQS:115 and cue 69; those
+tables are recovered but skeleton gameplay is not yet integrated.
+
+Cue 68 occurs at the native sequence limit. DrawKid/DrawChar
+(3:089e/09ea) suppress the ordinary actor sprite for death cause 5, letting
+the lava draw the body instead. SEQS:116's -11 operand 1 separately selects
+death music via SetKidDeathMethod (4:3196); death cause 5 and music selector 1
+must not be conflated. The existing dead-pose retry/prompt mechanism resumes
+after the original sequence reaches pose 185. Tests cover boiling without
+input, fatal contact, safe height, rare continuation, layer order and retry.
 
 ## Stone Gate Collisions
 
@@ -300,7 +343,7 @@ is shared with ordinary guards and other environments, without room overrides.
 This is the scenery foundation, not a completed playable level. Original room
 transitions and the common movement runtime are available. Cavern-specific
 floor classifications, gate and plate controllers, spikes,
-crushers, lava, potion behavior and colors, special draw modes and
+crushers, potion behavior and colors, special draw modes and
 skeleton enemies still require semantic recovery and integrated tests.
 The ordinary-guard decoder does not reinterpret skeleton spawn records; the
 preview encounter host omits those actors until their implementation exists.

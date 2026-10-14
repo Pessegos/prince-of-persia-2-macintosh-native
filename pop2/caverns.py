@@ -5,7 +5,7 @@ import struct
 from dataclasses import dataclass
 from functools import lru_cache
 
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageOps
 
 from pop2.paths import ASSET_DIR
 from pop2.opponent_generation import EMPTY_TILES, character_column
@@ -235,6 +235,23 @@ def draw_cavern_torches(frame, room_id, state):
     return frame
 
 
+def draw_cavern_lava(frame, room_id, state):
+    program, resources, palette, shapes = cavern_assets()
+    for record in program.get('lava', {}).get('rooms', {}).get(str(room_id), ()):
+        pool = state.lava.pools.get((record['room'], record['cell']))
+        if pool is None:
+            continue
+        for shape, dx, dy, mirrored in pool.drawings():
+            if shape not in shapes:
+                shapes[shape] = decode_shap(resources['SHAP'][shape]['data'], palette)
+            sprite = shapes[shape]
+            if mirrored:
+                sprite = ImageOps.mirror(sprite)
+            frame.paste(sprite, (record['x'] + dx,
+                                 record['bottom'] + dy - sprite.height), sprite)
+    return frame
+
+
 def cavern_scene_signature(program, room_id, state):
     metadata = program.get('loose_floors', {})
     cells = metadata.get('rooms', {}).get(str(room_id), {}).get('cells', ())
@@ -296,7 +313,7 @@ def cavern_command_sprite(command, resources, palette, shapes):
 
 def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key=''):
     program, resources, palette, shapes = cavern_assets()
-    if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10) and program.get('level') == 3:
+    if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11) and program.get('level') == 3:
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, 3, room_id):
         commands = program['commands']
