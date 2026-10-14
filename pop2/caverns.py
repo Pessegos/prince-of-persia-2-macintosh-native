@@ -248,12 +248,25 @@ def recessed_lava_surface(palette):
     return sprite
 
 
+def recessed_lava_foreground_mask(surface):
+    """Protect floor pixels in front of each column's last molten pixel."""
+    mask = Image.new('L', surface.size)
+    for x in range(surface.width):
+        for y in range(surface.height - 1, -1, -1):
+            red, green, blue, alpha = surface.getpixel((x, y))
+            if alpha and blue == 0 and (red == 255 or (red, green) == (127, 0)):
+                mask.paste(255, (x, y + 1, x + 1, surface.height))
+                break
+    return mask
+
+
 def draw_cavern_lava(frame, room_id, state):
     program, resources, palette, shapes = cavern_assets()
     for record in program.get('lava', {}).get('rooms', {}).get(str(room_id), ()):
         pool = state.lava.pools.get((record['room'], record['cell']))
         if pool is None:
             continue
+        foreground = None
         for shape, dx, dy, mirrored in pool.drawings():
             key = ('recessed', shape) if pool.enhanced and shape == 3614 else shape
             if key not in shapes:
@@ -262,8 +275,18 @@ def draw_cavern_lava(frame, room_id, state):
             sprite = shapes[key]
             if mirrored:
                 sprite = ImageOps.mirror(sprite)
-            frame.paste(sprite, (record['x'] + dx,
-                                 record['bottom'] + dy - sprite.height), sprite)
+            position = record['x'] + dx, record['bottom'] + dy - sprite.height
+            frame.paste(sprite, position, sprite)
+            if key != shape:
+                mask_key = ('recessed-front', shape)
+                if mask_key not in shapes:
+                    shapes[mask_key] = recessed_lava_foreground_mask(sprite)
+                x, y = position
+                foreground = (frame.crop((x, y, x + sprite.width, y + sprite.height)),
+                              position, shapes[mask_key])
+        if foreground is not None:
+            # Restore only the near-side floor, never the liquid or rear rim.
+            frame.paste(*foreground)
     return frame
 
 

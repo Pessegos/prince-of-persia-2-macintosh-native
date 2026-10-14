@@ -150,6 +150,17 @@ BEFORE both bubble passes; keeping it between those passes hides rear bubbles
 because it is more opaque than the original cover. Rear/front bubble order,
 counts, positions and sequences are unchanged. A pixel regression test
 confirms that the filled surface no longer erases a rear bubble.
+After animation, enhanced mode restores only the near-side floor. A cached
+mask selects rows below each column's last molten pixel, including the dark-red
+crust as molten and recognizing the brighter orange shades. The saved pixels
+come from the frame immediately after painting the static pool, so transparent
+parts of the overlay retain the existing room floor as well. The liquid,
+back rim and rising bubbles remain unobscured. This prevents bubbles and death
+splashes from repainting the rock in front of the recessed cavity without
+editing the approved artwork. Native reference mode has no additional pass.
+Tests compare 100 boiling frames and both facings of all three Prince death
+branches for every pool and visible camera-border copy: only this floor mask
+can differ from the previous uncut rendering.
 This retains the game's palette and bubble artwork without the cover's
 rock-cut gaps.
 Death body/splash triples and mirror flags remain unchanged; only the pool

@@ -251,6 +251,39 @@ class EnhancedLavaTests(unittest.TestCase):
 
 
 class RecessedLavaArtworkTests(unittest.TestCase):
+    def test_foreground_mask_protects_only_floor_below_the_last_molten_pixel(self):
+        from PIL import Image
+        from pop2.caverns import recessed_lava_foreground_mask
+
+        surface = Image.new('RGBA', (5, 5), (60, 40, 30, 255))
+        surface.putpixel((1, 1), (255, 127, 0, 255))
+        surface.putpixel((1, 3), (127, 0, 0, 255))
+        surface.putpixel((2, 2), (255, 79, 0, 255))
+        surface.putpixel((3, 2), (255, 79, 0, 0))
+        mask = recessed_lava_foreground_mask(surface)
+        self.assertEqual({(x, y) for y in range(5) for x in range(5) if mask.getpixel((x, y))},
+                         {(1, 4), (2, 3), (2, 4)})
+
+    def test_animation_is_behind_the_front_rock_but_not_the_back_rim(self):
+        from PIL import Image
+        from pop2.caverns import draw_cavern_lava
+
+        surface = Image.new('RGBA', (5, 5), (60, 40, 30, 255))
+        surface.putpixel((2, 2), (255, 127, 0, 255))
+        bubble = Image.new('RGBA', (5, 5), (255, 31, 0, 255))
+        unchanged = surface.tobytes()
+        pool = LavaPool(synthetic_tables(), enhanced=True)
+        state = SimpleNamespace(lava=SimpleNamespace(pools={(0, 27): pool}))
+        program = {'lava': {'rooms': {'0': [{'room': 0, 'cell': 27, 'x': 10, 'bottom': 20}]}}}
+        shapes = {('recessed', 3614): surface, 3616: bubble}
+        with (patch('pop2.caverns.cavern_assets', return_value=(program, {}, {}, shapes)),
+              patch.object(pool, 'drawings', return_value=[(3614, 0, 0, False), (3616, 0, 0, False)])):
+            frame = draw_cavern_lava(Image.new('RGBA', (30, 30)), 0, state)
+        self.assertEqual(frame.getpixel((12, 19)), (60, 40, 30, 255))
+        self.assertEqual(frame.getpixel((12, 17)), (255, 31, 0, 255))
+        self.assertEqual(frame.getpixel((12, 15)), (255, 31, 0, 255))
+        self.assertEqual(surface.tobytes(), unchanged)
+
     def test_pixel_touchup_matches_the_supplied_edit_and_changes_nothing_else(self):
         import hashlib
         from pop2.caverns import recessed_lava_surface
@@ -465,6 +498,54 @@ class ImportedLavaTests(unittest.TestCase):
                 expected.paste(sprite, (record['x'] + dx, record['bottom'] + dy - 33), sprite)
             with self.subTest(room=room):
                 self.assertEqual(draw_cavern_lava(frame, int(room), state).tobytes(), expected.tobytes())
+
+    def test_front_floor_is_preserved_without_changing_other_animation_pixels(self):
+        from PIL import Image, ImageChops
+        from pop2.caverns import (cavern_assets, cavern_room, draw_cavern_lava,
+                                 recessed_lava_foreground_mask, recessed_lava_surface)
+        from pop2.cavern_state import CavernState
+
+        tables = self.scene.level_renderer.cavern_program['lava']
+        _, _, palette, shapes = cavern_assets()
+        sprite = recessed_lava_surface(palette)
+        mask = recessed_lava_foreground_mask(sprite)
+        dx, dy = tables['piece_offsets']
+        for room, records in tables['rooms'].items():
+            room = int(room)
+            state = CavernState()
+            state.configure_lava(tables)
+            state.lava.enter_room(room, records)
+            background = cavern_room(room).flattened()
+            static = background.copy()
+            for record in records:
+                static.paste(sprite, (record['x'] + dx, record['bottom'] + dy - sprite.height), sprite)
+
+            def check_frame():
+                with patch.dict(shapes, {('recessed-front', 3614): Image.new('L', sprite.size)}):
+                    uncut = draw_cavern_lava(background.copy(), room, state)
+                corrected = draw_cavern_lava(background.copy(), room, state)
+                expected = uncut.copy()
+                for record in records:
+                    x, y = record['x'] + dx, record['bottom'] + dy - sprite.height
+                    expected.paste(static.crop((x, y, x + sprite.width, y + sprite.height)), (x, y), mask)
+                self.assertEqual(corrected.tobytes(), expected.tobytes())
+                return ImageChops.difference(corrected.convert('RGB'), uncut.convert('RGB')).getbbox() is not None
+
+            clipped = False
+            for tick in range(100):
+                state.lava.advance()
+                with self.subTest(room=room, tick=tick):
+                    clipped |= check_frame()
+            if room in (5, 9, 14, 25, 30):
+                self.assertTrue(clipped)
+            for mode, roll in ((3, 0), (0, 1), (0, 0)):
+                for facing in (0, 1):
+                    for pool in state.lava.pools.values():
+                        pool.begin_death(mode, facing, random_value=roll)
+                    for tick in range(23):
+                        with self.subTest(room=room, mode=mode, roll=roll, facing=facing, tick=tick):
+                            check_frame()
+                        state.lava.advance()
 
 
 if __name__ == '__main__':
