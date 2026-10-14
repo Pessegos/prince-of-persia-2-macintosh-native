@@ -184,9 +184,13 @@ class CavernDrawingTests(unittest.TestCase):
         from unicorn import Uc
 
         code = bytearray(0x259a)
-        for offset in (0x1ff4, 0x2598):
+        for offset in (0x1ab0, 0x1ff4, 0x2598):
             code[offset:offset + 2] = bytes.fromhex('4e75')  # Synthetic RTS, no game assets.
-        resources = {'CODE': {0: {'data': bytes(16)}, 3: {'data': bytes(code)}}}
+        cells_code = bytearray(0x0b52)
+        for offset in (0x026a, 0x03bc, 0x0a4c, 0x0b50):
+            cells_code[offset:offset + 2] = bytes.fromhex('4e75')
+        resources = {'CODE': {0: {'data': bytes(16)}, 3: {'data': bytes(code)},
+                              5: {'data': bytes(cells_code)}}}
         artwork = {'PIEC': {3500: {'data': bytes(4)}}}
         data = bytearray(0x6000)
         struct.pack_into('>i', data, len(data) - 0x4aea + 12, -0x100)
@@ -205,7 +209,7 @@ class CavernDrawingTests(unittest.TestCase):
               patch('tools.extract_caverns.parse_resource_fork', side_effect=[resources, artwork]),
               patch('tools.extract_caverns.expand_a5_data', return_value=bytes(data))):
             recover_room(b'program', b'artwork', bytes(level))
-        self.assertEqual(len(observed), 120)
+        self.assertEqual(len(observed), 134)
         self.assertEqual(set(observed), {(1, (0, 0, 365, 510))})
 
     def test_repaint_export_keeps_live_flames_out_of_static_scenery(self):
@@ -484,7 +488,7 @@ class OriginalCavernTests(unittest.TestCase):
 
     def test_all_native_rooms_render_with_recorded_clip_rectangles(self):
         program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
-        self.assertEqual(program['version'], 9)
+        self.assertEqual(program['version'], 10)
         self.assertEqual(set(program['rooms']), {str(room) for room in range(32)})
         for room in range(32):
             with self.subTest(room=room):
@@ -529,6 +533,21 @@ class OriginalCavernTests(unittest.TestCase):
             self.assertLessEqual(image.width, 30)
             self.assertLessEqual(image.height, 64)
             self.assertIsNotNone(image.getbbox())
+
+    def test_unlinked_upper_borders_use_native_scenery_floor_not_collision_wall(self):
+        program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
+        terrain = LevelMap(LevelDefinition.read(load_resource_file('Prince.rsrc'), 3).data)
+        for room in range(32):
+            if terrain.neighbor(room, 'up') is not None:
+                continue
+            with self.subTest(room=room):
+                commands = [command for command in program['rooms'][str(room)] if command[9] == -1]
+                fronts = [command for command in commands if command[0] == 'front']
+                self.assertEqual([command[1] for command in fronts], [3523] * 10)
+                self.assertEqual([command[2] for command in fronts], list(range(0, 510, 51)))
+                self.assertTrue(all(command[3] == 5 and command[6][0:3:2] == [0, 5]
+                                    for command in commands))
+                self.assertFalse(any(command[1] == 3537 for command in commands))
 
     def test_entry_closes_updates_scenery_and_resets_on_restart(self):
         from tests.test_terrain import RooftopSceneTests

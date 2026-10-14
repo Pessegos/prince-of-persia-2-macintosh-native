@@ -6,7 +6,7 @@ from pop2.animation_data import (
     character_collision_bounds, parse_aframe_records, parse_frame_records, shape_id_for_action,
 )
 from pop2.combat import guard_frame_index
-from pop2.render_opening import character_sprite_top, decode_ctbl, decode_shap
+from pop2.render_opening import ROOM_ORIGIN_X, character_sprite_top, decode_ctbl, decode_shap
 
 
 class GuardArtwork:
@@ -93,13 +93,15 @@ class HealthArtwork:
             if index == 0 and encounter.player.life == 1:
                 full = bool(encounter.world_frame & 1)
             icon = self.icons[300 if full else 299]
-            viewport.paste(icon, (3 + index * 12, 368), icon)
+            # DrawKidMeter coordinates belong to the visible 510-pixel game,
+            # which is centered inside the host's 512-pixel composition buffer.
+            viewport.paste(icon, (ROOM_ORIGIN_X + 3 + index * 12, 368), icon)
         if (show_opponent and encounter.guard is not None and encounter.guard.alive
                 and encounter.guard.room == encounter.player.room
                 and encounter.guard.row == encounter.player.row):
             for index in range(encounter.guard.max_life):
                 icon = self.icons[298 if index < encounter.guard.life else 297]
-                viewport.paste(icon, (495 - index * 12, 368), icon)
+                viewport.paste(icon, (ROOM_ORIGIN_X + 495 - index * 12, 368), icon)
 
 
 class HitArtwork:

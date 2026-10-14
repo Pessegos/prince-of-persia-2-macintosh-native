@@ -296,7 +296,7 @@ def cavern_command_sprite(command, resources, palette, shapes):
 
 def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key=''):
     program, resources, palette, shapes = cavern_assets()
-    if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9) and program.get('level') == 3:
+    if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10) and program.get('level') == 3:
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, 3, room_id):
         commands = program['commands']

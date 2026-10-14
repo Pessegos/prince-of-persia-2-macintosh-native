@@ -886,6 +886,16 @@ class GuardCombatTests(unittest.TestCase):
         self.assertIsNone(viewport.crop((0, 0, 512, 368)).getbbox())
         self.assertIsNotNone(viewport.crop((3, 368, 38, 384)).getbbox())
         self.assertIsNotNone(viewport.crop((495, 368, 512, 384)).getbbox())
+        # Display and F8 both crop the centered 512-pixel buffer to 510 pixels.
+        visible = viewport.crop((1, 0, 511, 384))
+        expected = Image.new('RGBA', visible.size)
+        for index in range(c.player.max_life):
+            icon = art.icons[300 if index < c.player.life else 299]
+            expected.paste(icon, (3 + index * 12, 368), icon)
+        for index in range(c.guard.max_life):
+            icon = art.icons[298 if index < c.guard.life else 297]
+            expected.paste(icon, (495 - index * 12, 368), icon)
+        self.assertEqual(visible.tobytes(), expected.tobytes())
         c.player.life = 1
         c.guard.life = 0
         viewport = Image.new("RGBA", (512, 384))

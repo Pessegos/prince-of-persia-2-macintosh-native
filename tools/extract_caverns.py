@@ -216,13 +216,61 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             raise ValueError(f'Unexpected Macintosh trap in cavern renderer {segment}:{offset:x}')
 
     cpu.hook_add(UC_HOOK_CODE, hook)
+
+    def execute(segment, entry, argument=None):
+        cpu.reg_write(UC_M68K_REG_A5, a5)
+        cpu.reg_write(UC_M68K_REG_A0, 0)
+        cpu.reg_write(UC_M68K_REG_A7, stack)
+        put_long(stack, end)
+        if argument is not None:
+            put_word(stack + 4, argument)
+        try:
+            cpu.emu_start(bases[segment] + entry, end, count=200000)
+        except Exception as error:
+            pc = cpu.reg_read(UC_M68K_REG_PC)
+            raise ValueError(f'Cavern renderer failed at {pc:#x}: {history}') from error
+        if cpu.reg_read(UC_M68K_REG_PC) != end:
+            raise ValueError('Cavern drawing did not complete')
+
     passes = (('back', 0x1ff4, 0), ('back', 0x1ff4, 5), ('front', 0x2598, 1))
     if climb_action is not None:
         passes = (('front', 0x3480, 2),)
     elif floor_redraw:
         passes = (('front', 0x371c, 2),)
     for draw_row in (2, 1, 0, -1):
+        if draw_row == -1:
+            # RedrawCellFast 3:1cb6-1cda draws the upper room's last row,
+            # with the current room below it. Missing rooms use GetCells'
+            # scenery default (floor 1), not GetBlock's collision wall 20.
+            above = terrain.neighbor(room_id, 'up')
+            put_word(a5 - 0x4fc2, above + 1 if above is not None else 0)
+            execute(3, 0x1ab0)
+            put_word(a5 - 0x4fba, room_id + 1)
+            execute(5, 0x0b50)
+            put_word(a5 - 0x45f6, 2)
+            execute(5, 0x026a)
+            execute(5, 0x03bc)
         for draw_column in range(10):
+            put_word(a5 - 0x45f8, draw_column)
+            put_word(a5 - 0x45f6, draw_row)
+            if draw_row == -1:
+                # Obtain the native border cell/neighbor records; dirty clips
+                # remain supplied by the export pass below.
+                repaint = word(a5 - 0x4832)
+                put_word(a5 - 0x4832, 1)
+                execute(5, 0x0a4c)
+                put_word(a5 - 0x4832, repaint)
+            else:
+                tile, previous = (terrain.tile(room_id, draw_column, draw_row),
+                                  terrain.tile(room_id, draw_column - 1, draw_row))
+                put_word(a5 - 0x4814, tile.kind)
+                put_long(a5 - 0x4818, (tile.foreground << 16) | tile.background)
+                put_word(a5 - 0x49d6, previous.kind)
+                put_long(a5 - 0x49d4, (previous.foreground << 16) | previous.background)
+                for col in range(11):
+                    below = terrain.tile(room_id, col - 1, draw_row + 1)
+                    put_word(a5 - 0x4a84 + col * 6, below.kind)
+                    put_long(a5 - 0x4a82 + col * 6, (below.foreground << 16) | below.background)
             for layer, entry, draw_pass in passes:
                 # GetCells 5:0abe-0ac8 copies fullclip during DoCleanCut;
                 # ComputeClipRect is only used for subsequent dirty cells.
@@ -234,30 +282,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                     cpu.mem_write(a5 - 0x4600, struct.pack('>4h',
                                   max(0, draw_row * 120 + 5), draw_column * 51,
                                   (draw_row + 1) * 120 + 5, (draw_column + 1) * 51))
-                put_word(a5 - 0x45f8, draw_column)
-                put_word(a5 - 0x45f6, draw_row)
-                tile, previous = (terrain.tile(room_id, draw_column, draw_row),
-                                  terrain.tile(room_id, draw_column - 1, draw_row))
-                put_word(a5 - 0x4814, tile.kind)
-                put_long(a5 - 0x4818, (tile.foreground << 16) | tile.background)
-                put_word(a5 - 0x49d6, previous.kind)
-                put_long(a5 - 0x49d4, (previous.foreground << 16) | previous.background)
-                for col in range(11):
-                    below = terrain.tile(room_id, col - 1, draw_row + 1)
-                    put_word(a5 - 0x4a84 + col * 6, below.kind)
-                    put_long(a5 - 0x4a82 + col * 6, (below.foreground << 16) | below.background)
-                cpu.reg_write(UC_M68K_REG_A5, a5)
-                cpu.reg_write(UC_M68K_REG_A0, 0)
-                cpu.reg_write(UC_M68K_REG_A7, stack)
-                put_long(stack, end)
-                put_word(stack + 4, draw_pass)
-                try:
-                    cpu.emu_start(bases[3] + entry, end, count=200000)
-                except Exception as error:
-                    pc = cpu.reg_read(UC_M68K_REG_PC)
-                    raise ValueError(f'Cavern renderer failed at {pc:#x}, {layer} {draw_column},{draw_row}: {history}') from error
-                if cpu.reg_read(UC_M68K_REG_PC) != end:
-                    raise ValueError('Cavern drawing did not complete')
+                execute(3, entry, draw_pass)
     # DumpTable 3:2c1e-2c68 paints back-wall records (kind 0) before
     # floor/pillar bodies, regardless of their admission order.
     ordered = sorted(zip(commands, command_kinds),
@@ -269,7 +294,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
 def extract_caverns(program, caverns, prince, output):
     level = parse_resource_fork(prince)['LEVL'][2002]['data']
     scenes = {str(room): recover_room(program, caverns, level, room, prince) for room in range(32)}
-    result = {'version': 9, 'level': 3,
+    result = {'version': 10, 'level': 3,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     result['climb_redraw'] = {

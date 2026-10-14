@@ -17,7 +17,7 @@ including side paths outside the shortest route.
 During import, `tools.extract_caverns` executes CODE:3/8 drawing routines against
 the original LEVL, Caverns PIEC and SHAP resources. It records background passes
 0/5 and foreground pass 1 for every tile of every room. The portable export
-retains the existing filename `caverns_entry.json`, now version 9:
+retains the existing filename `caverns_entry.json`, now version 10:
 
 ```text
 rooms[zero_based_room] = [layer, shape_id, x, bottom, draw_mode, row, clip_rect, library, draw_column, draw_row][]
@@ -39,6 +39,17 @@ upper-room border from RedrawCellFast (3:1c64-1d38), restores BF midpoint fields
 after admission, and retains background-record rectangle unions. DumpTable
 (3:2c1e-2c68) paints back walls before floor/pillar bodies.
 
+Version 10 recovers the upper border's separate drawing context from
+RedrawCellFast (3:1cb6-1cda): select the upper room, make the current room its
+lower neighbor, load the last-row neighbor arrays, then draw at row -1.
+GetCells (5:0a4c-0aa2) and GetObject (5:053e-055c) use scenery floor 1 with
+zero foreground/background when that upper room is absent. GetBlock's wall 20
+is correct for collision but was not the border drawing default. Version 9
+consequently pasted SHAP:3537 across the top five rows of unlinked rooms,
+including Room 5. Native GetCells/neighbor-array execution now supplies the
+border records, producing floor pieces 3525/3523 instead. Physics and LEVL
+links are unchanged; the correction applies to every room and exported variant.
+
 Version 4 incorrectly built a complete room in incremental cell-redraw mode.
 Its cell clips prevented the exit-right piece from repainting the threshold
 over the exit-left floor. Full repaint restores the four-row strip at the
@@ -54,13 +65,23 @@ pillars. Correct neighbor lookup restores the missing pieces from PIEC without
 adding room-specific artwork or positions. The entry-room columns, platform
 joins and ceiling border have been compared visually with the Macintosh route.
 
-Older exports request an asset reimport: version 5 lacks per-command draw-cell
+Older exports request an asset reimport: version 9 lacks the native upper-border
+context, version 5 lacks per-command draw-cell
 metadata, version 4 lacks the full-room repaint mode, version 3 lacks the
 corrected cell drawing and live torches, version 2 lacks flask library identity,
 and version 1 supplies only the entrance. F3 can preview each room, placing
 the Prince on a basic floor tile from LEVL rather than using per-room positions.
 
 ## Flasks And Entry Door
+
+The health bottles in the bottom strip are a separate Kid.rsrc HUD library.
+DrawKidMeter (3:4914, 4984-49d4) uses X = 3 + 12*index, Y = 368;
+DrawOppMeter (3:4c08-4c30) uses X = 495 - 12*index. These are coordinates
+inside the visible 510-pixel game. The host centers that image at X = 1 in a
+512-pixel composition buffer, then display/F8 crop it back to 510 pixels.
+HealthArtwork formerly drew directly at the native X in the larger buffer,
+shifting both meters one pixel left after cropping. Both now include the
+room origin. Icon shapes, spacing, palette and last-life blinking are unchanged.
 
 Flask BF items now retain library 1 and use Prince.rsrc SHPL:3000 / SHAP:3001-3033,
 not Caverns rock shapes. LoadFlaskSet (3:5614, 5630-5658) relocates CTBL:3000
