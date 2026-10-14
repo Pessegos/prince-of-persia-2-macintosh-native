@@ -102,6 +102,10 @@ class LavaPool:
                     records.append((3500 + shape, x, y, mirrored))
             if phase < 3:
                 return records
+        elif self.enhanced:
+            # The filled surface is a background, not an occluding cover:
+            # painting it between bubble passes would erase rear bubbles.
+            records.append((cover, dx, dy, False))
         # DrawCaveLava 8:23c0-24b4 interleaves rear bubbles, the cover,
         # then front bubbles. The cover's rock pixels erase the base fill.
         for layer in range(2):
@@ -109,7 +113,7 @@ class LavaPool:
                 if active and foreground != layer:
                     shape = 3616 + self.tables['bubbles'][kind][frame]
                     records.append((shape, x, y, False))
-            if layer == 0 and sequence < 0:
+            if layer == 0 and sequence < 0 and not self.enhanced:
                 records.append((cover, dx, dy, False))
         return records
 

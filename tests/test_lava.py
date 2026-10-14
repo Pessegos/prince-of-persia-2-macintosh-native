@@ -204,14 +204,17 @@ class EnhancedLavaTests(unittest.TestCase):
         self.assertEqual(pool.bubbles[0], [1, 1, 0, -11, 58, 1])
         self.assertEqual(pool.bubbles[1], [1, 0, 0, -11, 58, 0])
 
-    def test_enhanced_cover_keeps_original_positions_and_bubble_order(self):
+    def test_enhanced_surface_is_behind_both_bubble_layers(self):
         original = LavaPool(synthetic_tables())
         enhanced = LavaPool(synthetic_tables(), enhanced=True)
         for pool in (original, enhanced):
             pool.bubbles[0] = [1, 0, 0, -11, 58, 0]
             pool.bubbles[1] = [1, 1, 0, -11, 42, 1]
-        self.assertEqual(enhanced.drawings(), [(3614 if shape == 3615 else shape, x, y, flip)
-                                             for shape, x, y, flip in original.drawings()])
+        self.assertEqual(enhanced.drawings(), [(3614, 0, 0, False),
+                                             (3617, 42, -11, False),
+                                             (3616, 58, -11, False)])
+        self.assertEqual(enhanced.drawings()[1:], [record for record in original.drawings()
+                                                 if record[0] != 3615])
 
     def test_death_flags_probability_duration_and_sounds_are_unchanged(self):
         for mode in (0, 1, 3, 4):
@@ -348,6 +351,31 @@ class ImportedLavaTests(unittest.TestCase):
         self.assertGreaterEqual(changed[1], 335)
         self.assertLessEqual(changed[2], 497)
         self.assertLessEqual(changed[3], 365)
+
+    def test_enhanced_surface_does_not_erase_rear_bubble_pixels(self):
+        from pop2.caverns import cavern_room, draw_cavern_lava
+        from pop2.cavern_state import CavernState
+        from PIL import ImageChops
+
+        tables = self.scene.level_renderer.cavern_program['lava']
+        state = CavernState()
+        state.configure_lava(tables)
+        state.lava.enter_room(5, tables['rooms']['5'])
+        pool = state.lava.pools[5, 27]
+        pool.bubbles[0] = [1, 1, 0, -11, 58, 1]
+        records = pool.drawings()
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0][0], 3614)
+        background = cavern_room(5).background
+        corrected = draw_cavern_lava(background.copy(), 5, state)
+        with patch.object(pool, 'drawings', return_value=records[::-1]):
+            erased = draw_cavern_lava(background.copy(), 5, state)
+        changed = ImageChops.difference(corrected.convert('RGB'), erased.convert('RGB')).getbbox()
+        self.assertIsNotNone(changed)
+        self.assertGreaterEqual(changed[0], 415)
+        self.assertLessEqual(changed[2], 440)
+        self.assertGreaterEqual(changed[1], 335)
+        self.assertLessEqual(changed[3], 354)
 
 
 if __name__ == '__main__':

@@ -129,11 +129,16 @@ phases, including the phase-three reset, limits, sounds and Rnd(3) branch,
 are unchanged. All five visible pools were checked for 100 consecutive frames
 without a repeated image; the native pause remains covered by reference tests.
 
-For presentation, SHAP:3614 replaces the SHAP:3615 cover at the same position
-and point in the draw order. This retains the game's continuous lava surface,
-palette and bubble artwork without the cover's rock-cut gaps. No original
-bitmap is modified or replaced. Death body/splash triples and mirror flags
-remain unchanged; only the pool surface behind them differs. Pixel checks
+For presentation, SHAP:3614 supplies the continuous surface instead of the
+SHAP:3615 rock-cut cover, at the same position. The filled surface is drawn
+BEFORE both bubble passes; keeping it between those passes hides rear bubbles
+because it is more opaque than the original cover. Rear/front bubble order,
+counts, positions and sequences are unchanged. A pixel regression test
+confirms that the filled surface no longer erases a rear bubble.
+This retains the game's palette and bubble artwork without the cover's
+rock-cut gaps. No original bitmap is modified or replaced.
+Death body/splash triples and mirror flags remain unchanged; only the pool
+surface behind them differs. Pixel checks
 confine the change to the original pool bounds. Contact geometry, fatal Y,
 retry behavior and the 1/4 grounded-death continuation probability are intact.
 
