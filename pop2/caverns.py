@@ -4,6 +4,7 @@ import json
 import struct
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 from PIL import Image, ImageChops, ImageOps
 
@@ -235,6 +236,18 @@ def draw_cavern_torches(frame, room_id, state):
     return frame
 
 
+def recessed_lava_surface(palette):
+    """Port-authored shallow cavity, indexed into the imported cavern palette."""
+    artwork = json.loads(Path(__file__).with_name('lava_recess.json').read_text(encoding='ascii'))
+    sprite = Image.new('RGBA', tuple(artwork['size']))
+    for y, (left, row) in enumerate(artwork['rows']):
+        for offset in range(0, len(row), 2):
+            index = row[offset:offset + 2]
+            if index != '--':
+                sprite.putpixel((left + offset // 2, y), palette[int(index, 16)])
+    return sprite
+
+
 def draw_cavern_lava(frame, room_id, state):
     program, resources, palette, shapes = cavern_assets()
     for record in program.get('lava', {}).get('rooms', {}).get(str(room_id), ()):
@@ -242,9 +255,11 @@ def draw_cavern_lava(frame, room_id, state):
         if pool is None:
             continue
         for shape, dx, dy, mirrored in pool.drawings():
-            if shape not in shapes:
-                shapes[shape] = decode_shap(resources['SHAP'][shape]['data'], palette)
-            sprite = shapes[shape]
+            key = ('recessed', shape) if pool.enhanced and shape == 3614 else shape
+            if key not in shapes:
+                shapes[key] = (recessed_lava_surface(palette) if key != shape else
+                               decode_shap(resources['SHAP'][shape]['data'], palette))
+            sprite = shapes[key]
             if mirrored:
                 sprite = ImageOps.mirror(sprite)
             frame.paste(sprite, (record['x'] + dx,

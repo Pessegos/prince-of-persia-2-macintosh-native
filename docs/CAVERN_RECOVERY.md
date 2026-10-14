@@ -129,14 +129,29 @@ phases, including the phase-three reset, limits, sounds and Rnd(3) branch,
 are unchanged. All five visible pools were checked for 100 consecutive frames
 without a repeated image; the native pause remains covered by reference tests.
 
-For presentation, SHAP:3614 supplies the continuous surface instead of the
-SHAP:3615 rock-cut cover, at the same position. The filled surface is drawn
+For presentation, enhanced mode substitutes a shallow recessed pool for the
+SHAP:3615 rock-cut cover. `pop2/lava_recess.json` contains the new artwork as
+sparse rows of cavern-palette indices, with transparent pixels outside the edit.
+It was adapted from the user-approved visual concept at the native pixel grid,
+retaining the irregular silhouette, dark-red crust and shallow rock cut faces.
+It is port artwork, not an extracted or recovered Macintosh feature. The file
+does not include an original resource fork, palette or surrounding room image.
+No concept generator, external reference file or new asset import is needed at
+runtime. The imported cavern palette supplies every opaque pixel's color.
+
+The 140 x 33 overlay retains the original bottom anchor; its opaque region
+stays inside the old 140 x 30 pool bounds. The original base supplies the
+untouched exterior floor. One cached surface serves all five pools and their
+camera-border copies, without room-specific coordinates. Nearest-neighbor
+presentation retains the native square pixels. Original bitmaps are unchanged.
+
+The filled surface is drawn
 BEFORE both bubble passes; keeping it between those passes hides rear bubbles
 because it is more opaque than the original cover. Rear/front bubble order,
 counts, positions and sequences are unchanged. A pixel regression test
 confirms that the filled surface no longer erases a rear bubble.
 This retains the game's palette and bubble artwork without the cover's
-rock-cut gaps. No original bitmap is modified or replaced.
+rock-cut gaps.
 Death body/splash triples and mirror flags remain unchanged; only the pool
 surface behind them differs. Pixel checks
 confine the change to the original pool bounds. Contact geometry, fatal Y,

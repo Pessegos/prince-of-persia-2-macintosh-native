@@ -250,6 +250,58 @@ class EnhancedLavaTests(unittest.TestCase):
             self.assertEqual(lava.pools[5, 27].enhanced, lava.enhanced)
 
 
+class RecessedLavaArtworkTests(unittest.TestCase):
+    def test_artwork_uses_only_palette_pixels_and_binary_transparency(self):
+        from pop2.caverns import recessed_lava_surface
+
+        palette = {i: (i, 255 - i, i, 255) for i in range(256)}
+        sprite = recessed_lava_surface(palette)
+        self.assertEqual(sprite.size, (140, 33))
+        self.assertEqual(sprite.getchannel('A').getbbox(), (13, 3, 116, 29))
+        self.assertEqual(set(sprite.getchannel('A').tobytes()), {0, 255})
+        self.assertLessEqual({sprite.getpixel((x, y)) for y in range(sprite.height)
+                              for x in range(sprite.width)}, {(0, 0, 0, 0), *palette.values()})
+        # Keep the approved surface's broad middle and dark-red crust details.
+        self.assertEqual(sprite.getpixel((80, 10)), palette[0xbc])
+        self.assertEqual(sprite.getpixel((41, 10)), palette[0xd4])
+        self.assertEqual(sprite.getpixel((0, 15)), (0, 0, 0, 0))
+
+    def test_enhanced_rendering_caches_art_and_retains_the_native_bottom_anchor(self):
+        from PIL import Image
+        from pop2.caverns import draw_cavern_lava
+
+        pool = LavaPool(synthetic_tables(), enhanced=True)
+        state = SimpleNamespace(lava=SimpleNamespace(pools={(0, 27): pool}))
+        program = {'lava': {'rooms': {'0': [{'room': 0, 'cell': 27, 'x': 10, 'bottom': 50}]}}}
+        shapes = {}
+        surface = Image.new('RGBA', (140, 33), (1, 2, 3, 255))
+        with (patch('pop2.caverns.cavern_assets', return_value=(program, {}, {}, shapes)),
+              patch('pop2.caverns.recessed_lava_surface', return_value=surface) as build,
+              patch('pop2.caverns.decode_shap') as decode):
+            for _ in range(2):
+                image = draw_cavern_lava(Image.new('RGBA', (200, 70)), 0, state)
+                self.assertEqual(image.getbbox(), (10, 17, 150, 50))
+            build.assert_called_once_with({})
+            decode.assert_not_called()
+
+    def test_native_reference_does_not_load_the_enhancement(self):
+        from PIL import Image
+        from pop2.caverns import draw_cavern_lava
+
+        pool = LavaPool(synthetic_tables())
+        state = SimpleNamespace(lava=SimpleNamespace(pools={(0, 27): pool}))
+        program = {'lava': {'rooms': {'0': [{'room': 0, 'cell': 27, 'x': 10, 'bottom': 50}]}}}
+        resources = {'SHAP': {3615: {'data': b'native cover'}}}
+        cover = Image.new('RGBA', (140, 30), (1, 2, 3, 255))
+        with (patch('pop2.caverns.cavern_assets', return_value=(program, resources, {}, {})),
+              patch('pop2.caverns.recessed_lava_surface') as build,
+              patch('pop2.caverns.decode_shap', return_value=cover) as decode):
+            image = draw_cavern_lava(Image.new('RGBA', (200, 70)), 0, state)
+            self.assertEqual(image.getbbox(), (10, 20, 150, 50))
+            build.assert_not_called()
+            decode.assert_called_once_with(b'native cover', {})
+
+
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class ImportedLavaTests(unittest.TestCase):
     def setUp(self):
@@ -376,6 +428,28 @@ class ImportedLavaTests(unittest.TestCase):
         self.assertLessEqual(changed[2], 440)
         self.assertGreaterEqual(changed[1], 335)
         self.assertLessEqual(changed[3], 354)
+
+    def test_recess_is_shared_by_every_pool_and_camera_border_copy(self):
+        from PIL import Image
+        from pop2.caverns import cavern_assets, draw_cavern_lava, recessed_lava_surface
+        from pop2.cavern_state import CavernState
+
+        tables = self.scene.level_renderer.cavern_program['lava']
+        sprite = recessed_lava_surface(cavern_assets()[2])
+        dx, dy = tables['piece_offsets']
+        for room, records in tables['rooms'].items():
+            state = CavernState()
+            state.configure_lava(tables)
+            state.lava.enter_room(int(room), records)
+            for pool in state.lava.pools.values():
+                for bubble in pool.bubbles:
+                    bubble[0] = 0
+            frame = Image.new('RGBA', (510, 365))
+            expected = frame.copy()
+            for record in records:
+                expected.paste(sprite, (record['x'] + dx, record['bottom'] + dy - 33), sprite)
+            with self.subTest(room=room):
+                self.assertEqual(draw_cavern_lava(frame, int(room), state).tobytes(), expected.tobytes())
 
 
 if __name__ == '__main__':
