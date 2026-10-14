@@ -148,7 +148,12 @@ presentation retains the native square pixels. Original bitmaps are unchanged.
 The filled surface is drawn
 BEFORE both bubble passes; keeping it between those passes hides rear bubbles
 because it is more opaque than the original cover. Rear/front bubble order,
-counts, positions and sequences are unchanged. A pixel regression test
+counts and sequences are unchanged. Enhanced mode adds four native pixels to
+the bubble drawing X coordinates to center them further inside the recessed
+surface. Native event coordinates and bubble state are unchanged; the surface,
+character-death drawings, splashes, mirror flags and all collision positions
+retain their original anchors. Reference mode has no displacement.
+A pixel regression test
 confirms that the filled surface no longer erases a rear bubble.
 After animation, enhanced mode restores solid contours. A cached mask protects
 rock below each column's first molten pixel: both the near-side floor and the

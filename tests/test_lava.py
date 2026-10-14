@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from pop2.animation_data import FrameRecord
-from pop2.lava import Lava, LavaPool
+from pop2.lava import ENHANCED_BUBBLE_OFFSET_X, Lava, LavaPool
 from pop2.paths import ASSET_DIR
 from pop2.terrain import LevelMap, TerrainMotion
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
@@ -211,12 +211,31 @@ class EnhancedLavaTests(unittest.TestCase):
             pool.bubbles[0] = [1, 0, 0, -11, 58, 0]
             pool.bubbles[1] = [1, 1, 0, -11, 42, 1]
         self.assertEqual(enhanced.drawings(), [(3614, 0, 0, False),
-                                             (3617, 42, -11, False),
-                                             (3616, 58, -11, False)])
-        self.assertEqual(enhanced.drawings()[1:], [record for record in original.drawings()
-                                                 if record[0] != 3615])
+                                             (3617, 46, -11, False),
+                                             (3616, 62, -11, False)])
+        self.assertEqual(enhanced.drawings()[1:], [
+            (shape, x + ENHANCED_BUBBLE_OFFSET_X, y, flip)
+            for shape, x, y, flip in original.drawings() if shape != 3615])
+
+    def test_bubble_offset_is_visual_only_and_does_not_move_surface_or_death_art(self):
+        original = LavaPool(synthetic_tables())
+        enhanced = LavaPool(synthetic_tables(), enhanced=True)
+        for pool in (original, enhanced):
+            pool.bubbles[0] = [1, 0, 0, -11, 58, 0]
+        self.assertEqual(original.bubbles, enhanced.bubbles)
+        self.assertIn((3616, 58, -11, False), original.drawings())
+        self.assertIn((3616, 62, -11, False), enhanced.drawings())
+        for mode in (0, 3):
+            for facing in (0, 1):
+                for pool in (original, enhanced):
+                    pool.begin_death(mode, facing, random_value=1)
+                    pool.flags |= 1
+                self.assertEqual(enhanced.drawings()[0], (3614, 0, 0, False))
+                self.assertEqual(enhanced.drawings()[1:], original.drawings()[1:])
 
     def test_death_flags_probability_duration_and_sounds_are_unchanged(self):
+        bubble_shapes = {3616 + index for sequence in synthetic_tables()['bubbles']
+                         for index in sequence if index >= 0}
         for mode in (0, 1, 3, 4):
             for roll in range(4):
                 for facing in (0, 1):
@@ -232,7 +251,8 @@ class EnhancedLavaTests(unittest.TestCase):
                                 self.assertEqual(enhanced.flags, original.flags)
                                 self.assertEqual(enhanced.bubbles, original.bubbles)
                                 self.assertEqual(enhanced.drawings(), [
-                                    (3614 if shape == 3615 else shape, x, y, flip)
+                                    (3614 if shape == 3615 else shape,
+                                     x + (ENHANCED_BUBBLE_OFFSET_X if shape in bubble_shapes else 0), y, flip)
                                     for shape, x, y, flip in original.drawings()])
                                 self.assertEqual(enhanced.advance(), original.advance())
                                 if original.character_sequence < 0:
@@ -496,8 +516,8 @@ class ImportedLavaTests(unittest.TestCase):
             erased = draw_cavern_lava(background.copy(), 5, state)
         changed = ImageChops.difference(corrected.convert('RGB'), erased.convert('RGB')).getbbox()
         self.assertIsNotNone(changed)
-        self.assertGreaterEqual(changed[0], 415)
-        self.assertLessEqual(changed[2], 440)
+        self.assertGreaterEqual(changed[0], 415 + ENHANCED_BUBBLE_OFFSET_X)
+        self.assertLessEqual(changed[2], 440 + ENHANCED_BUBBLE_OFFSET_X)
         self.assertGreaterEqual(changed[1], 335)
         self.assertLessEqual(changed[3], 354)
 
