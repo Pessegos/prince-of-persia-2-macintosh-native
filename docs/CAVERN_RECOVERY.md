@@ -147,7 +147,7 @@ presentation retains the native square pixels. Original bitmaps are unchanged.
 
 The filled surface is drawn
 BEFORE both bubble passes; keeping it between those passes hides rear bubbles
-because it is more opaque than the original cover. Rear/front bubble order,
+because it is more opaque than the original cover. Native bubble records,
 counts and sequences are unchanged. Enhanced mode adds four native pixels to
 the bubble drawing X coordinates to center them further inside the recessed
 surface. Native event coordinates and bubble state are unchanged; the surface,
@@ -155,7 +155,23 @@ character-death drawings, splashes, mirror flags and all collision positions
 retain their original anchors. Reference mode has no displacement.
 A pixel regression test
 confirms that the filled surface no longer erases a rear bubble.
-After animation, enhanced mode restores solid contours. A cached mask protects
+
+Enhanced effects have separate surface and raised passes. The six native
+sequences reuse 26 scheduled SHAPs; the native tables do not assign physical
+surface/air classifications. Examining their artwork shows flat ripple frames,
+attached bubbles, and burst frames that combine raised bodies with contact
+waves at the bottom. `LAVA_AIR_ROWS` supplies port-authored per-SHAP row splits
+for those mixed frames. The split preserves each source pixel exactly once;
+it is a presentation adaptation to the new cavity, not a recovered native rule.
+
+Ripples, attached bubbles and the contact-wave parts of splashes are clipped
+against the bright-liquid pixels of the approved surface, excluding rock and
+dark-red crust around every side, including the rear perimeter. Raised drops
+and burst bodies are drawn after the solid contours without that spatial mask,
+so they can rise above the pool or pass in front of rock without being sliced.
+No source shape, event timing, bubble count or four-pixel offset is changed.
+
+Before raised effects, enhanced mode restores solid contours. A cached mask protects
 rock below each column's first molten pixel: both the near-side floor and the
 inset stone that separates upper and lower liquid along the left contour.
 Dark-red crust is restored only where bright liquid occurs both above and
@@ -163,18 +179,19 @@ below it, preserving the right-hand inset without hiding bubbles that rise
 in front of the rear rim. The brighter orange shades count as liquid as well.
 The saved pixels
 come from the frame immediately after painting the static pool, so transparent
-parts of the overlay retain the existing room floor as well. The liquid,
-back rim and rising bubbles remain unobscured. This prevents bubbles and death
-splashes from repainting the solid outlines of the recessed cavity without
-editing the approved artwork. Native reference mode has no additional pass.
+parts of the overlay retain the existing room floor as well. This also retains
+the existing occlusion of character-death drawings and their contact splashes.
+Raised bubble effects remain in front of this pass. The approved artwork is
+unchanged. Native reference mode has neither the split nor the additional masks.
 Tests compare 100 boiling frames and both facings of all three Prince death
-branches for every pool and visible camera-border copy: only this contour mask
-can differ from the previous uncut rendering.
+branches for every pool and visible camera-border copy. Focused checks admit
+all three flat-ripple frames at every scheduled ripple position without a
+changed pixel outside liquid, and verify raised-splash pixels over rock intact.
 This retains the game's palette and bubble artwork without the cover's
 rock-cut gaps.
-Death body/splash triples and mirror flags remain unchanged; only the pool
-surface behind them differs. Pixel checks
-confine the change to the original pool bounds. Contact geometry, fatal Y,
+Death body/splash triples and mirror flags remain unchanged. Surface edits
+stay in the original pool bounds; raised effects retain their native extents
+at the shifted bubble anchor. Contact geometry, fatal Y,
 retry behavior and the 1/4 grounded-death continuation probability are intact.
 
 ## Stone Gate Collisions

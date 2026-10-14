@@ -266,6 +266,32 @@ def recessed_lava_foreground_mask(surface):
     return mask
 
 
+def recessed_lava_liquid_mask(surface):
+    mask = Image.new('L', surface.size)
+    for y in range(surface.height):
+        for x in range(surface.width):
+            red, _, blue, alpha = surface.getpixel((x, y))
+            if alpha and red == 255 and blue == 0:
+                mask.putpixel((x, y), 255)
+    return mask
+
+
+# Native SHAPs mix raised splash bodies with flat waves at the bottom.
+# These row splits are port presentation metadata, not Macintosh logic.
+LAVA_AIR_ROWS = {3619: 4, 3620: 3, 3621: 3, 3625: 8, 3626: 5,
+                 3632: 9, 3633: 7, 3634: 6, 3635: 5,
+                 3639: 3, 3640: 2, 3641: 2, 3642: 2}
+
+
+def split_lava_bubble(sprite, shape):
+    surface, airborne = sprite.copy(), Image.new('RGBA', sprite.size)
+    rows = min(sprite.height, LAVA_AIR_ROWS.get(shape, 0))
+    if rows:
+        airborne.paste(sprite.crop((0, 0, sprite.width, rows)), (0, 0))
+        surface.paste((0, 0, 0, 0), (0, 0, sprite.width, rows))
+    return surface, airborne
+
+
 def draw_cavern_lava(frame, room_id, state):
     program, resources, palette, shapes = cavern_assets()
     for record in program.get('lava', {}).get('rooms', {}).get(str(room_id), ()):
@@ -273,6 +299,16 @@ def draw_cavern_lava(frame, room_id, state):
         if pool is None:
             continue
         foreground = None
+        airborne = []
+        if pool.enhanced:
+            if ('recessed', 3614) not in shapes:
+                shapes['recessed', 3614] = recessed_lava_surface(palette)
+            base = shapes['recessed', 3614]
+            if ('recessed-liquid', 3614) not in shapes:
+                shapes['recessed-liquid', 3614] = recessed_lava_liquid_mask(base)
+            liquid = shapes['recessed-liquid', 3614]
+            base_dx, base_dy = pool.tables['piece_offsets']
+            liquid_x, liquid_y = record['x'] + base_dx, record['bottom'] + base_dy - base.height
         for shape, dx, dy, mirrored in pool.drawings():
             key = ('recessed', shape) if pool.enhanced and shape == 3614 else shape
             if key not in shapes:
@@ -282,6 +318,17 @@ def draw_cavern_lava(frame, room_id, state):
             if mirrored:
                 sprite = ImageOps.mirror(sprite)
             position = record['x'] + dx, record['bottom'] + dy - sprite.height
+            if pool.enhanced and 3616 <= shape <= 3645:
+                effect_key = ('recessed-effect', shape)
+                if effect_key not in shapes:
+                    shapes[effect_key] = split_lava_bubble(sprite, shape)
+                surface, raised = shapes[effect_key]
+                x, y = position[0] - liquid_x, position[1] - liquid_y
+                clip = liquid.crop((x, y, x + sprite.width, y + sprite.height))
+                sprite = surface.copy()
+                sprite.putalpha(ImageChops.multiply(surface.getchannel('A'), clip))
+                if raised.getbbox() is not None:
+                    airborne.append((raised, position))
             frame.paste(sprite, position, sprite)
             if key != shape:
                 mask_key = ('recessed-front', shape)
@@ -293,6 +340,8 @@ def draw_cavern_lava(frame, room_id, state):
         if foreground is not None:
             # Restore solid contours, never the liquid or rear rim.
             frame.paste(*foreground)
+        for sprite, position in airborne:
+            frame.paste(sprite, position, sprite)
     return frame
 
 
