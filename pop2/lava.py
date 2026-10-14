@@ -12,6 +12,7 @@ class LavaPool:
     tables: dict
     flags: int = 0
     bubbles: list = field(default_factory=lambda: [[0] * 6 for _ in range(15)])
+    enhanced: bool = False
 
     @property
     def character_sequence(self):
@@ -48,8 +49,13 @@ class LavaPool:
         # AnimLava 8:31fe-33ee uses the PREVIOUS phase for tests/events.
         previous, sequence = self.flags & 31, self.character_sequence
         if previous == 22 or sequence >= 0 and previous == 3:
-            self.flags = (self.flags & 0xf800) | 4 if previous == 3 else 0
-            return ()
+            if previous == 22 and sequence < 0 and self.enhanced:
+                # Visual QoL: wrap and process phase zero in this update,
+                # rather than holding every bubble for one extra frame.
+                self.flags, previous = 0, 0
+            else:
+                self.flags = (self.flags & 0xf800) | 4 if previous == 3 else 0
+                return ()
         self.flags += 1
         if sequence >= 0 and previous < 3:
             return ()
@@ -78,12 +84,15 @@ class LavaPool:
         return sounds
 
     def drawings(self):
-        """Native (shape, X offset, bottom offset, mirrored) admission order."""
+        """(Shape, X offset, bottom offset, mirrored) admission order."""
         sequence, phase = self.character_sequence, self.flags & 31
         dx, dy = self.tables['piece_offsets']
+        # Keep the native cover/order as the reference. Enhanced lava uses
+        # the original continuous surface instead of the rock-cut cover.
+        cover = 3614 if self.enhanced else 3615
         records = []
         if sequence >= 0:
-            records.append((3615, dx, dy, False))
+            records.append((cover, dx, dy, False))
             shape, x, y = self.tables['characters'][sequence][phase]
             if shape != -1:
                 mirrored = bool(self.flags & 0x0800)
@@ -101,7 +110,7 @@ class LavaPool:
                     shape = 3616 + self.tables['bubbles'][kind][frame]
                     records.append((shape, x, y, False))
             if layer == 0 and sequence < 0:
-                records.append((3615, dx, dy, False))
+                records.append((cover, dx, dy, False))
         return records
 
 
@@ -110,6 +119,7 @@ class Lava:
     tables: dict | None = None
     room: int | None = None
     pools: dict = field(default_factory=dict)
+    enhanced: bool = False
 
     def enter_room(self, room, records):
         if self.tables is None or room == self.room:
@@ -119,7 +129,7 @@ class Lava:
         for record in records:
             key = record['room'], record['cell']
             if key not in self.pools:
-                pool = self.pools[key] = LavaPool(self.tables)
+                pool = self.pools[key] = LavaPool(self.tables, enhanced=self.enhanced)
                 pool.initialize(key[1])
 
     def advance(self):

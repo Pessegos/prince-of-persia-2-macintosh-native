@@ -17,8 +17,8 @@ class CavernState:
     loose: LooseFloors = field(default_factory=LooseFloors)
     lava: Lava = field(default_factory=Lava)
 
-    def configure_lava(self, metadata):
-        self.lava = Lava(metadata)
+    def configure_lava(self, metadata, enhanced=True):
+        self.lava = Lava(metadata, enhanced=enhanced)
 
     def configure_torches(self, metadata):
         self.torches.clear()

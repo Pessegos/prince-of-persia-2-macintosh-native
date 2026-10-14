@@ -194,6 +194,59 @@ class LavaExtractionTests(unittest.TestCase):
             self.extract()
 
 
+class EnhancedLavaTests(unittest.TestCase):
+    def test_wrap_advances_bubbles_and_starts_next_cycle_in_the_same_tick(self):
+        pool = LavaPool(synthetic_tables(), enhanced=True)
+        pool.flags = 22
+        pool.bubbles[0] = [1, 0, 0, -11, 58, 1]
+        self.assertEqual(pool.advance(), ())
+        self.assertEqual(pool.flags, 1)
+        self.assertEqual(pool.bubbles[0], [1, 1, 0, -11, 58, 1])
+        self.assertEqual(pool.bubbles[1], [1, 0, 0, -11, 58, 0])
+
+    def test_enhanced_cover_keeps_original_positions_and_bubble_order(self):
+        original = LavaPool(synthetic_tables())
+        enhanced = LavaPool(synthetic_tables(), enhanced=True)
+        for pool in (original, enhanced):
+            pool.bubbles[0] = [1, 0, 0, -11, 58, 0]
+            pool.bubbles[1] = [1, 1, 0, -11, 42, 1]
+        self.assertEqual(enhanced.drawings(), [(3614 if shape == 3615 else shape, x, y, flip)
+                                             for shape, x, y, flip in original.drawings()])
+
+    def test_death_flags_probability_duration_and_sounds_are_unchanged(self):
+        for mode in (0, 1, 3, 4):
+            for roll in range(4):
+                for facing in (0, 1):
+                    for actor in (0, 2):
+                        with self.subTest(mode=mode, roll=roll, facing=facing, actor=actor):
+                            original = LavaPool(synthetic_tables())
+                            enhanced = LavaPool(synthetic_tables(), enhanced=True)
+                            for pool in (original, enhanced):
+                                pool.initialize(22)
+                            self.assertEqual(original.begin_death(mode, facing, actor, roll),
+                                             enhanced.begin_death(mode, facing, actor, roll))
+                            for _ in range(23):
+                                self.assertEqual(enhanced.flags, original.flags)
+                                self.assertEqual(enhanced.bubbles, original.bubbles)
+                                self.assertEqual(enhanced.drawings(), [
+                                    (3614 if shape == 3615 else shape, x, y, flip)
+                                    for shape, x, y, flip in original.drawings()])
+                                self.assertEqual(enhanced.advance(), original.advance())
+                                if original.character_sequence < 0:
+                                    self.assertEqual(enhanced.character_sequence, -1)
+                                    break
+                            else:
+                                self.fail('Death animation did not finish')
+
+    def test_room_initialization_propagates_mode_and_native_reference_remains_available(self):
+        records = [{'room': 5, 'cell': 27}]
+        enhanced = Lava(synthetic_tables(), enhanced=True)
+        original = Lava(synthetic_tables())
+        for lava in (original, enhanced):
+            lava.enter_room(5, records)
+            self.assertEqual(lava.pools[5, 27].enhanced, lava.enhanced)
+
+
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class ImportedLavaTests(unittest.TestCase):
     def setUp(self):
@@ -254,6 +307,47 @@ class ImportedLavaTests(unittest.TestCase):
         scene.advance_level_events()
         self.assertFalse(scene.combat.player.alive)
         self.assertEqual(scene.game.caverns.lava.pools[5, 27].flags, 0x8000)
+
+    def test_all_five_enhanced_pools_have_no_frozen_frames_at_loop_boundaries(self):
+        from pop2.caverns import cavern_room, draw_cavern_lava
+        from pop2.cavern_state import CavernState
+
+        tables = self.scene.level_renderer.cavern_program['lava']
+        for room in (5, 9, 14, 25, 30):
+            state = CavernState()
+            state.configure_lava(tables)
+            state.lava.enter_room(room, tables['rooms'][str(room)])
+            record = tables['rooms'][str(room)][0]
+            box = (record['x'], record['bottom'] - 80, record['x'] + 140, record['bottom'])
+            background = cavern_room(room).background
+            previous = None
+            for tick in range(100):
+                state.lava.advance()
+                frame = draw_cavern_lava(background.copy(), room, state).crop(box).tobytes()
+                with self.subTest(room=room, tick=tick):
+                    self.assertNotEqual(frame, previous)
+                previous = frame
+
+    def test_enhanced_surface_changes_only_the_lava_region(self):
+        from pop2.caverns import cavern_room, draw_cavern_lava
+        from pop2.cavern_state import CavernState
+        from PIL import ImageChops
+
+        tables = self.scene.level_renderer.cavern_program['lava']
+        frames = []
+        for enhanced in (False, True):
+            state = CavernState()
+            state.configure_lava(tables, enhanced=enhanced)
+            state.lava.enter_room(5, tables['rooms']['5'])
+            for _ in range(10):
+                state.lava.advance()
+            frames.append(draw_cavern_lava(cavern_room(5).background.copy(), 5, state))
+        changed = ImageChops.difference(frames[0].convert('RGB'), frames[1].convert('RGB')).getbbox()
+        self.assertIsNotNone(changed)
+        self.assertGreaterEqual(changed[0], 357)
+        self.assertGreaterEqual(changed[1], 335)
+        self.assertLessEqual(changed[2], 497)
+        self.assertLessEqual(changed[3], 365)
 
 
 if __name__ == '__main__':

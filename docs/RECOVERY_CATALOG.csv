@@ -480,7 +480,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,DrawCaveExitMovable,0x1ba4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,12
 8,Caverns,DrawCaveFloor,0x1da8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,12,4
 8,Caverns,DrawCaveGateMovable,0x1f40,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,8
-8,Caverns,DrawCaveLavaBubbles,0x219e,jump_table,partial,pop2/lava.py;pop2/caverns.py;tools/extract_lava.py,"native SHAP cover, bubble layer order and character death triples; full/incremental drawing commands compared",0,17
+8,Caverns,DrawCaveLavaBubbles,0x219e,jump_table,partial,pop2/lava.py;pop2/caverns.py;tools/extract_lava.py,native reference cover/order/death triples compared; enhanced presentation uses continuous original surface,0,17
 8,Caverns,DrawCaveLoose,0x24d4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,5
 8,Caverns,DrawCavePillarTop,0x2702,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,5
 8,Caverns,DrawCaveTorch,0x2ae8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,4
@@ -488,7 +488,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,TriggerGateWithRevPlate,0x2c38,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,3
 8,Caverns,CheckDartHit,0x2e82,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,3
 8,Caverns,MobDart,0x2f98,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,8
-8,Caverns,AnimLava,0x31fe,jump_table,partial,pop2/lava.py,"native phase, bubble markers, three character sequence indices and rare Prince continuation; 6000 native tick comparisons",0,7
+8,Caverns,AnimLava,0x31fe,jump_table,partial,pop2/lava.py,native reference phase/bubble/death branches: 6000 tick comparisons; visual QoL skips ordinary wrap hold without changing deaths,0,7
 8,Caverns,CheckLavaBoil,0x33fc,jump_table,partial,pop2/lava.py;pop2/scene_prototype.py,"supporting-foot column, 43/36 limits, physical row, FRAM bit 0x40 and surface Y; Prince integration only",2,3
 8,Caverns,GetLavaInfoHnd,0x34a6,jump_table,partial,pop2/lava.py;pop2/scene_prototype.py,"native death flags, Rnd(3), facing, SEQS 115/116 and cues 69/70; Prince death host, no Mac handles or skeleton host",2,13
 8,Caverns,GetLavaCharSeqIdx,0x3648,decoded,partial,pop2/lava.py,0x8000 eligibility and 0x6000 sequence-index extraction,2,0

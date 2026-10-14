@@ -115,6 +115,28 @@ must not be conflated. The existing dead-pose retry/prompt mechanism resumes
 after the original sequence reaches pose 185. Tests cover boiling without
 input, fatal contact, safe height, rare continuation, layer order and retry.
 
+### Port Visual QoL
+
+Gameplay enables enhanced lava through `CavernState.configure_lava`.
+The original `LavaPool` mode remains the default reference for native-rule
+comparisons; `enhanced=False` also selects it when configuring a cavern.
+This is an explicit presentation deviation, not another recovered Mac rule.
+
+At the ordinary cycle boundary, enhanced mode wraps and processes phase zero
+in the same update instead of freezing all active bubbles for one update.
+Individual bubble frames still advance at the game cadence. Character-death
+phases, including the phase-three reset, limits, sounds and Rnd(3) branch,
+are unchanged. All five visible pools were checked for 100 consecutive frames
+without a repeated image; the native pause remains covered by reference tests.
+
+For presentation, SHAP:3614 replaces the SHAP:3615 cover at the same position
+and point in the draw order. This retains the game's continuous lava surface,
+palette and bubble artwork without the cover's rock-cut gaps. No original
+bitmap is modified or replaced. Death body/splash triples and mirror flags
+remain unchanged; only the pool surface behind them differs. Pixel checks
+confine the change to the original pool bounds. Contact geometry, fatal Y,
+retry behavior and the 1/4 grounded-death continuation probability are intact.
+
 ## Stone Gate Collisions
 
 The supplied Macintosh/port door recordings show Room 17, row 2/column 7.
