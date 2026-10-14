@@ -740,6 +740,45 @@ class AnimationDataTests(unittest.TestCase):
                                 traces.append(trace)
                     self.assertEqual(traces[1:], [traces[0]] * 3)
 
+    def test_repressing_drift_direction_keeps_the_uninterrupted_running_trace(self):
+        for facing in (0, 1):
+            direction = 1 if facing else -1
+            for release_pose, gap in ((53, 1), (53, 3), (53, 5), (53, 12),
+                                      (53, 13), (55, 4), (58, 5)):
+                with self.subTest(facing=facing, release_pose=release_pose, gap=gap):
+                    scenes = [self.sword_scene(), self.sword_scene()]
+                    for scene in scenes:
+                        scene.sequence_state.facing = facing
+                        scene.player_x = 360 if facing else 150
+                        scene.sequence_state.target_x = scene.sequence_state.current_x = scene.player_x
+                        scene.start_sequence(RUN_CYCLE_SEQUENCE)
+                        scene.run_active = True
+                        scene.run_direction = direction
+                        scene.held_directions = [direction]
+                        scene.advance_animation()
+                        scene.horizontal_key(None, direction, False)
+                        scene.horizontal_key(None, -direction, True)
+                        scene.advance_animation()
+                        while scene.action != release_pose:
+                            scene.advance_animation()
+                    resumed, uninterrupted = scenes
+                    resumed.horizontal_key(None, -direction, False)
+                    for _ in range(gap):
+                        for scene in scenes:
+                            scene.advance_animation()
+                    resumed.horizontal_key(None, -direction, True)
+                    self.assertIsNone(resumed.pending_action)
+                    self.assertFalse(resumed.run_stop_requested)
+                    for _ in range(18):
+                        for scene in scenes:
+                            scene.advance_animation()
+                        self.assertEqual(
+                            (resumed.sequence_state.sequence_id, resumed.action,
+                             resumed.player_x, resumed.sequence_state.facing),
+                            (uninterrupted.sequence_state.sequence_id, uninterrupted.action,
+                             uninterrupted.player_x, uninterrupted.sequence_state.facing),
+                        )
+
     def test_up_first_reverse_chord_from_running_uses_backward_priority(self):
         for facing in (0, 1):
             direction = 1 if facing else -1

@@ -295,6 +295,27 @@ chord orders after four/five released-direction ticks, including tapped inputs.
 They retain all remaining drift poses and transition 13 -> 34 without the former
 standing pose 16 or an extra run-loop displacement.
 
+### Repressing The Drift Direction
+
+During SEQS:6, `run_direction` already names the chosen post-drift direction,
+but sprite facing remains unchanged through pose 65. Repressing that direction
+was therefore classified as a second turn. Short gaps let the repeat filter
+discard it without cancelling the stop request; longer gaps queued a turn that
+became a new SEQS:1 run start at the cycle boundary (13 -> 14 -> 1).
+
+Resuming the chosen running direction now cancels the stop request for both
+host `run` and `turn` classifications, without queuing a new sequence. Steps,
+jump chords, standing turns and the 300 ms repeat filter are unchanged. The
+existing sequence remains responsible for 53-65 -> 13 -> 14 -> 7.
+
+GenCtrl 6:11e4-1274 brakes only when both horizontal controls are absent at
+poses 7/11. Fresh or consumed Forward otherwise leaves the running sequence
+untouched; Backward starts SEQS:6. Native execution confirmed 144 additional
+continuation/braking cases across both facings and every run/drift pose.
+Regressions compare full pose, position and facing traces with an uninterrupted
+held run, including gaps below/above 300 ms and represses after the facing flip,
+plus the same release/repress sequence on the imported level-one rooftop.
+
 ## Run Stop and Ledge Entry Audit
 
 Executing the original GenCtrl, AnimChar, LoadFrame, CheckFloor and

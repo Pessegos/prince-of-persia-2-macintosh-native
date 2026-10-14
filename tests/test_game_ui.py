@@ -453,6 +453,37 @@ class GameWindowTests(unittest.TestCase):
                 traces.append(trace)
         self.assertEqual(traces[0], traces[1])
 
+    def test_rooftop_repress_during_drift_matches_continuously_held_run(self):
+        scene = self.scene
+        traces = []
+        for released in (False, True):
+            scene.jump_to_room(3, row=1, x=245, facing=1)
+            scene.set_peaceful(True)
+            scene.in_animation_tick = True
+            scene.horizontal_key(None, 1, True)
+            self.tick(7)
+            scene.horizontal_key(None, 1, False)
+            scene.horizontal_key(None, -1, True)
+            self.tick()
+            self.assertEqual(scene.action, 53)
+            if released:
+                scene.horizontal_key(None, -1, False)
+            self.tick(5)
+            self.assertEqual(scene.action, 58)
+            if released:
+                scene.horizontal_key(None, -1, True)
+            trace = []
+            for _ in range(15):
+                self.tick()
+                self.assertEqual(scene.room_id, 3)
+                self.assertFalse(scene.terrain_motion.falling)
+                trace.append((scene.sequence_state.sequence_id, scene.action,
+                              scene.player_x, scene.sequence_state.facing))
+            traces.append(trace)
+        self.assertEqual(traces[0], traces[1])
+        self.assertEqual([pose for seq, pose, x, face in traces[1]],
+                         [59, 60, 61, 62, 63, 64, 65, 13, 14, 7, 8, 9, 10, 11, 12])
+
     def test_releasing_up_during_or_immediately_after_climb_does_not_jump(self):
         scene = self.scene
         for release_during in (False, True):

@@ -769,10 +769,12 @@ class ScenePrototype(WindowControls):
 
     def queue_horizontal_action(self, direction, mode):
         if (
-            mode == "run"
+            mode in ("run", "turn")
             and self._is_running()
             and self.run_direction == direction
         ):
+            # SEQS:6 flips facing only after pose 65. Repressing its chosen
+            # direction resumes the held run, not another queued turn/start.
             self.run_stop_requested = False
             return False
 
