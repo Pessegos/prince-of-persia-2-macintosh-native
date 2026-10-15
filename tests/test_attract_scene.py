@@ -363,22 +363,24 @@ class AttractSceneTests(unittest.TestCase):
         self.assertEqual(scene.room_id, 9)
         self.assertEqual(scene.combat.player.life, 0)
 
-    def test_fullscreen_presentation_switches_between_demo_and_credits(self):
+    def test_fullscreen_presentation_covers_demo_credits_and_live_gameplay(self):
+        import sys
+
         scene = self.scene
         scene.start_demo()
         scene.toggle_fullscreen()
         scene.render()
-        self.assertIsNone(getattr(scene, "bitmap_presenter", None))
+        self.assertEqual(scene.bitmap_presenter is not None, sys.platform == "win32")
         scene.start_credits()
         scene.intro.advance(2)
         scene.render()
-        import sys
-
-        if sys.platform == "win32":
-            self.assertIsNotNone(scene.bitmap_presenter)
+        self.assertEqual(scene.bitmap_presenter is not None, sys.platform == "win32")
         scene.finish_attract_stage()
         self.assertEqual(scene.attract_stage, "intro")
         scene.finish_intro()
+        self.assertEqual(scene.bitmap_presenter is not None, sys.platform == "win32")
+        scene.toggle_fullscreen()
+        scene.render()
         self.assertIsNone(scene.bitmap_presenter)
         with patch.object(scene.root, "destroy") as destroy:
             self.assertEqual(self.key("F4", state=0x20000), "break")
