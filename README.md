@@ -9,15 +9,46 @@ logic being recovered from the Macintosh executable through reverse engineering.
 
 ## Screenshots
 
-| Title | You can pause cutscenes |
-| :---: | :---: |
-| ![Prince of Persia 2 title screen](docs/screenshots/01-title.png) | ![A paused story cutscene](docs/screenshots/02-cutscene-pause.png) |
-| **Game Menu** | **Screenshot Menu** |
-| ![The in-game menu and keyboard shortcuts](docs/screenshots/03-game-menu.png) | ![Screenshot controls with the F8 hint](docs/screenshots/04-screenshot-menu.png) |
-| **Level 1** | **Level 2** |
-| ![The Prince escaping the palace in level 1](docs/screenshots/05-level-1.png) | ![The desert stone puzzle in level 2](docs/screenshots/06-level-2.png) |
-| **Copyright Screen** | **Level 3** |
-| ![The original copy-protection symbol screen](docs/screenshots/07-copy-protection.png) | ![The entrance room in level 3's caverns](docs/screenshots/08-level-3.png) |
+<table width="100%">
+  <tr>
+    <th width="50%" align="center">Title</th>
+    <th width="50%" align="center">You can pause cutscenes</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/01-title.png" alt="Prince of Persia 2 title screen" width="100%"></td>
+    <td align="center"><img src="docs/screenshots/02-cutscene-pause.png" alt="A paused story cutscene" width="100%"></td>
+  </tr>
+  <tr>
+    <th align="center">Game Menu</th>
+    <th align="center">Screenshot Menu</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/03-game-menu.png" alt="The in-game menu and keyboard shortcuts" width="100%"></td>
+    <td align="center"><img src="docs/screenshots/04-screenshot-menu.png" alt="Screenshot controls with the F8 hint" width="100%"></td>
+  </tr>
+  <tr>
+    <th colspan="2" align="center">Lava Overhaul comparison</th>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/screenshots/lava-overhaul-comparison.gif" alt="Original Macintosh lava on the left and overhauled lava on the right" width="100%"></td>
+  </tr>
+  <tr>
+    <th align="center">Level 1</th>
+    <th align="center">Level 2</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/05-level-1.png" alt="The Prince escaping the palace in level 1" width="100%"></td>
+    <td align="center"><img src="docs/screenshots/06-level-2.png" alt="The desert stone puzzle in level 2" width="100%"></td>
+  </tr>
+  <tr>
+    <th align="center">Copyright Screen</th>
+    <th align="center">Level 3</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/07-copy-protection.png" alt="The original copy-protection symbol screen" width="100%"></td>
+    <td align="center"><img src="docs/screenshots/08-level-3.png" alt="The entrance room in level 3's caverns" width="100%"></td>
+  </tr>
+</table>
 
 ## Current Progress
 
