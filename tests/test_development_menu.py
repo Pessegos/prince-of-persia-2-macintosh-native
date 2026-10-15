@@ -19,6 +19,24 @@ class MenuModelTests(unittest.TestCase):
     def setUp(self):
         self.menu = DevelopmentMenu(SCREENS, 4, False)
 
+    def test_all_tab_sizes_are_centered_with_matching_tab_and_control_hits(self):
+        for levels in ((), ((1, "Level 1", SCREENS),)):
+            menu = DevelopmentMenu(SCREENS, 0, False, sections=("First",), level_options=levels)
+            for tab in range(3):
+                menu.change_tab(tab)
+                with self.subTest(levels=bool(levels), tab=tab):
+                    left, top, right, bottom = menu.panel_rect
+                    self.assertEqual((left + right, top + bottom), (512, 384))
+                    for index in menu.controls:
+                        x1, y1, x2, y2 = menu.control_rect(index)
+                        self.assertTrue(left < x1 < x2 < right)
+                        self.assertTrue(top < y1 < y2 < bottom)
+                        self.assertEqual(menu.hit((x1 + x2) // 2, (y1 + y2) // 2), index)
+                    target = (tab + 1) % 3
+                    x1, y1, x2, y2 = menu.tab_rect(target)
+                    menu.click((x1 + x2) // 2, (y1 + y2) // 2)
+                    self.assertEqual(menu.tab, target)
+
     def test_screen_keys_wrap_and_popup_commits_only_on_selection(self):
         menu = self.menu
         menu.key("Right")
@@ -66,7 +84,7 @@ class MenuModelTests(unittest.TestCase):
         menu = self.menu
         menu.click(220, 150)
         self.assertTrue(menu.dropdown)
-        menu.click(220, 166 + 3 * 19 + 8)
+        menu.click(220, menu.control_rect(0)[3] + 3 * 19 + 8)
         self.assertEqual(menu.screen, "4")
         self.assertFalse(menu.peaceful)
         menu.click(220, 150)
@@ -98,7 +116,7 @@ class MenuModelTests(unittest.TestCase):
         self.assertFalse(menu.hover(150, 195))
         menu.focus = 0
         menu.open_dropdown()
-        self.assertTrue(menu.hover(220, 172))
+        self.assertTrue(menu.hover(220, menu.control_rect(0)[3] + 6))
         self.assertEqual(menu.option_index, 0)
         self.assertEqual(menu.screen, "5")
 
@@ -126,8 +144,8 @@ class MenuModelTests(unittest.TestCase):
             menu.key("Down")
         self.assertEqual(menu.option_index, 25)
         self.assertEqual(menu.popup_start, 21)
-        self.assertEqual(menu.popup_count, 8)
-        menu.click(220, 208 + (25 - menu.popup_start) * 19 + 8)
+        self.assertEqual(menu.popup_count, 9)
+        menu.click(220, menu.control_rect(4)[3] + (25 - menu.popup_start) * 19 + 8)
         self.assertEqual(menu.section_index, 25)
         menu.focus = 2
         self.assertEqual(menu.key("Return"), "seek")
@@ -166,13 +184,14 @@ class MenuModelTests(unittest.TestCase):
         menu.focus = 4
         menu.open_dropdown()
         start = menu.popup_start
-        menu.hover(220, 214)
+        popup_y = menu.control_rect(4)[3] + 6
+        menu.hover(220, popup_y)
         self.assertEqual(menu.popup_start, start)
-        menu.click(220, 214)
+        menu.click(220, popup_y)
         self.assertEqual(menu.section_index, start)
         menu.open_dropdown()
         menu.scroll(100)
-        self.assertEqual((menu.option_index, menu.popup_start), (29, 22))
+        self.assertEqual((menu.option_index, menu.popup_start), (29, 21))
         menu.scroll(-100)
         self.assertEqual((menu.option_index, menu.popup_start), (0, 0))
         self.assertEqual(menu.section_index, start)
@@ -212,7 +231,7 @@ class MenuModelTests(unittest.TestCase):
         menu.key("Escape")
         self.assertEqual(menu.group_index, 0)
         menu.click(220, 150)
-        menu.click(220, 166 + 19 + 8)
+        menu.click(220, menu.control_rect(0)[3] + 19 + 8)
         self.assertEqual(menu.section_index, 1)
 
     def test_playback_buttons_keep_horizontal_navigation_and_click_actions(self):
@@ -221,7 +240,7 @@ class MenuModelTests(unittest.TestCase):
         menu.change_tab(1)
         menu.click(220, 194)
         self.assertEqual(menu.dropdown_control, 4)
-        menu.click(220, 208 + 19 + 8)
+        menu.click(220, menu.control_rect(4)[3] + 19 + 8)
         self.assertEqual(menu.section_index, 1)
         menu.focus = 2
         menu.key("Right")
@@ -230,17 +249,22 @@ class MenuModelTests(unittest.TestCase):
         self.assertEqual(menu.focus, 2)
         self.assertEqual(menu.click(150, 285), "seek")
         self.assertEqual(menu.click(290, 285), "resume")
-        self.assertEqual(menu.click(220, 232), "next_part")
+        self.assertEqual(menu.click(220, menu.control_rect(1)[1] + 8), "next_part")
 
     def test_native_pointer_coordinates_survive_resize_and_letterboxing(self):
         for dimensions in ((512, 384), (800, 900), (1920, 1080), (2560, 1440)):
             with self.subTest(dimensions=dimensions):
                 size, origin = fit_viewport(*dimensions)
-                for x, y in ((220, 150), (150, 195), (290, 245)):
-                    mapped = viewport_point(origin[0] + (x - 1) * size[0] / 510,
-                                            origin[1] + y * size[1] / 384, *dimensions)
-                    self.assertAlmostEqual(mapped[0], x)
-                    self.assertAlmostEqual(mapped[1], y)
+                for tab in range(3):
+                    self.menu.change_tab(tab)
+                    for index in self.menu.controls:
+                        left, top, right, bottom = self.menu.control_rect(index)
+                        x, y = (left + right) / 2, (top + bottom) / 2
+                        mapped = viewport_point(origin[0] + (x - 1) * size[0] / 510,
+                                                origin[1] + y * size[1] / 384, *dimensions)
+                        self.assertAlmostEqual(mapped[0], x)
+                        self.assertAlmostEqual(mapped[1], y)
+                        self.assertEqual(self.menu.hit(*mapped), index)
                 self.assertIsNone(viewport_point(origin[0] - 1, origin[1], *dimensions))
                 self.assertIsNone(viewport_point(origin[0] + size[0], origin[1], *dimensions))
 
@@ -336,7 +360,7 @@ class MenuSceneTests(unittest.TestCase):
         self.assertIn("PNG saved", labels)
         for left, top, right, bottom in menu.CAPTURE_CONTROLS:
             self.assertTrue(80 <= left < right <= 432)
-            self.assertTrue(127 < top < bottom <= 322)
+            self.assertTrue(menu.SCREENSHOT_PANEL[1] < top < bottom < menu.SCREENSHOT_PANEL[3])
 
     def test_debug_status_is_hidden_by_default_and_restored_only_when_enabled(self):
         scene = self.scene
@@ -452,9 +476,11 @@ class MenuSceneTests(unittest.TestCase):
                 patch.object(scene.canvas, "winfo_height", return_value=1080):
             scene.dev_click(SimpleNamespace(x=100, y=200))
             self.assertFalse(scene.peaceful)
-            scene.dev_click(SimpleNamespace(x=240 + 150 * 1080 / 384, y=235 * 1080 / 384))
+            checkbox_y = scene.dev_menu.control_rect(1)[1] + 8
+            scene.dev_click(SimpleNamespace(x=240 + 150 * 1080 / 384, y=checkbox_y * 1080 / 384))
             self.assertTrue(scene.peaceful)
-            scene.dev_hover(SimpleNamespace(x=240 + 290 * 1080 / 384, y=296 * 1080 / 384))
+            resume_y = scene.dev_menu.control_rect(3)[1] + 8
+            scene.dev_hover(SimpleNamespace(x=240 + 290 * 1080 / 384, y=resume_y * 1080 / 384))
             self.assertEqual(scene.dev_menu.focus, 3)
 
     def test_invalid_destination_keeps_menu_and_scene_intact_with_inline_error(self):
@@ -479,7 +505,7 @@ class MenuSceneTests(unittest.TestCase):
         result = menu.draw(viewport, scene.ui_font)
         self.assertEqual(result.size, viewport.size)
         self.assertEqual(viewport.getpixel((256, 200)), (80, 80, 80, 255))
-        self.assertEqual(result.getpixel((200, 166 + 8 * 19)), (244, 216, 115, 255))
+        self.assertEqual(result.getpixel((200, menu.control_rect(0)[3] + 8 * 19)), (244, 216, 115, 255))
         self.assertIn("DevelopmentInput", scene.root.bindtags())
         self.assertIn("DevelopmentInput", scene.canvas.bindtags())
 
@@ -492,7 +518,7 @@ class MenuSceneTests(unittest.TestCase):
         viewport = Image.new("RGBA", (512, 384), (80, 80, 80, 255))
         result = menu.draw(viewport, scene.ui_font)
         bottom = menu.control_rect(4)[3] + menu.popup_count * menu.OPTION_HEIGHT
-        self.assertEqual(bottom, 360)
+        self.assertEqual(bottom, 372)
         left = menu.control_rect(4)[0]
         self.assertEqual(result.getpixel((left, bottom)), (244, 216, 115, 255))
         self.assertEqual(result.getpixel((left, bottom + 1)), result.getpixel((30, 20)))
@@ -616,7 +642,8 @@ class MenuSceneTests(unittest.TestCase):
         for key in keys:
             scene.dev_key_press(self.event(key))
         scene.set_peaceful(True)
-        with patch.object(scene, "dev_pointer", return_value=(300, 296)):
+        resume_y = scene.dev_menu.control_rect(3)[1] + 8
+        with patch.object(scene, "dev_pointer", return_value=(300, resume_y)):
             scene.dev_click(SimpleNamespace(x=600, y=490, num=1))
         self.assertIsNone(scene.dev_menu)
         for key in keys:

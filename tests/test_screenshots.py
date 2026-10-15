@@ -81,8 +81,8 @@ class CaptureMenuTests(unittest.TestCase):
         self.assertEqual(menu.key("Return"), "screenshot_folder")
         menu.key("Left")
         self.assertEqual(menu.focus, 1)
-        self.assertEqual(menu.click(150, 267), "screenshot")
-        self.assertEqual(menu.click(290, 267), "close")
+        self.assertEqual(menu.click(150, menu.CAPTURE_CONTROLS[2][1] + 8), "screenshot")
+        self.assertEqual(menu.click(290, menu.CAPTURE_CONTROLS[3][1] + 8), "close")
 
     def test_capture_controls_do_not_require_developer_tools(self):
         menu = GameMenu()

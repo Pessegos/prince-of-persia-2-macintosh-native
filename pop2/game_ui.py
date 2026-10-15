@@ -12,6 +12,12 @@ VISIBLE_VIEWPORT = (1, 0, 511, 384)
 VISIBLE_SIZE = (510, 384)
 
 
+def centered_panel(width, height):
+    left = VISIBLE_VIEWPORT[0] + (VISIBLE_SIZE[0] - width) // 2
+    top = VISIBLE_VIEWPORT[1] + (VISIBLE_SIZE[1] - height) // 2
+    return left, top, left + width, top + height
+
+
 def fit_viewport(width, height, native_width=510, native_height=384):
     scale = min(max(1, width) / native_width, max(1, height) / native_height)
     size = (max(1, int(native_width * scale)), max(1, int(native_height * scale)))
@@ -52,6 +58,7 @@ class DevelopmentMenu:
     LEVEL_CONTROLS = {0: (200, 138, 392, 166), 1: (120, 220, 392, 246),
                       2: (120, 282, 252, 314), 3: (264, 282, 392, 314),
                       4: (200, 179, 392, 207)}
+    # Control templates use this reference panel; each tab is positioned as a unit.
     PANEL = (100, 70, 412, 350)
     OPTION_HEIGHT = 19
     TABS = ((120, 106, 207, 127), (211, 106, 298, 127), (302, 106, 392, 127))
@@ -113,8 +120,25 @@ class DevelopmentMenu:
 
     def control_rect(self, index):
         if self.tab == 0 and self.level_options:
-            return self.LEVEL_CONTROLS[index]
-        return self.PLAYBACK_CONTROLS[index] if self.tab == 1 else self.CONTROLS[index]
+            rect = self.LEVEL_CONTROLS[index]
+        else:
+            rect = self.PLAYBACK_CONTROLS[index] if self.tab == 1 else self.CONTROLS[index]
+        return self.position_rect(rect)
+
+    @property
+    def panel_rect(self):
+        return centered_panel(312, 280 if self.tab == 0 and self.level_options else 258)
+
+    @property
+    def layout_offset(self):
+        return self.panel_rect[1] - self.PANEL[1]
+
+    def position_rect(self, rect):
+        left, top, right, bottom = rect
+        return left, top + self.layout_offset, right, bottom + self.layout_offset
+
+    def tab_rect(self, index):
+        return self.position_rect(self.TABS[index])
 
     @property
     def popup_count(self):
@@ -251,7 +275,8 @@ class DevelopmentMenu:
 
     def click(self, x, y):
         if not self.dropdown:
-            tab = next((i for i, rect in enumerate(self.TABS) if self.contains(rect, x, y)), None)
+            tab = next((i for i in range(len(self.TABS))
+                        if self.contains(self.tab_rect(i), x, y)), None)
             if tab is not None:
                 self.change_tab(tab)
                 return "changed"
@@ -271,9 +296,8 @@ class DevelopmentMenu:
         image = Image.alpha_composite(viewport, Image.new("RGBA", viewport.size, (0, 0, 0, 100)))
         draw = ImageDraw.Draw(image)
         gold, white, muted = "#f4d873", "#eeeeee", "#b9b9b9"
-        panel = ((100, 70, 412, 350) if self.tab == 0 and self.level_options
-                 else (100, 70, 412, 328))
-        draw.rectangle(panel, fill="#181818", outline="#858585")
+        offset = self.layout_offset
+        draw.rectangle(self.panel_rect, fill="#181818", outline="#858585")
 
         def text(value, x, y, color=white, centered=False, max_width=None):
             glyphs = font.text(value, color)
@@ -283,21 +307,22 @@ class DevelopmentMenu:
             top = y - (ink[1] if ink else 0)
             image.paste(glyphs, (int(x - glyphs.width // 2) if centered else x, top), glyphs)
 
-        text("Developer Tools", 256, 86, gold, centered=True)
-        for i, (label, rect) in enumerate(zip(("Level", "Playback", "Display"), self.TABS)):
+        text("Developer Tools", 256, 86 + offset, gold, centered=True)
+        for i, label in enumerate(("Level", "Playback", "Display")):
+            rect = self.tab_rect(i)
             draw.rectangle(rect, fill="#353535" if i == self.tab else "#222222",
                            outline=gold if i == self.tab and self.focus == -1 else "#626262")
-            text(label, (rect[0] + rect[2]) // 2, 112, gold if i == self.tab else muted,
+            text(label, (rect[0] + rect[2]) // 2, rect[1] + 6, gold if i == self.tab else muted,
                  centered=True, max_width=rect[2] - rect[0] - 8)
         available = len(self.controls) > 1
         if self.tab == 0:
-            text("Level" if self.level_options else "Screen", 120, 146)
+            text("Level" if self.level_options else "Screen", 120, 146 + offset)
             if self.level_options:
-                text("Screen", 120, 187)
+                text("Screen", 120, 187 + offset)
         elif self.tab == 1:
-            text("Sequence", 120, 146)
+            text("Sequence", 120, 146 + offset)
             if available:
-                text("Part", 120, 188)
+                text("Part", 120, 188 + offset)
         for i in self.controls:
             rect = self.control_rect(i)
             draw.rectangle(rect, fill="#303030" if i == self.focus else "#222222",
@@ -324,10 +349,10 @@ class DevelopmentMenu:
             text("Debug status bar" if self.tab == 2 else "Peaceful (no guards)",
                  151, checkbox_y + (1 if self.tab == 0 and self.level_options else 0), max_width=231)
         elif available:
-            text("Next part", 256, 230, centered=True)
+            text("Next part", 256, 230 + offset, centered=True)
         else:
             text("Unavailable during playback" if self.tab == 0 else "No playback data",
-                 256, 190, muted, centered=True, max_width=272)
+                 256, 190 + offset, muted, centered=True, max_width=272)
         text("Resume", 328, self.control_rect(3)[1] + 10, centered=True)
         if self.error:
             words, line, lines = self.error.split(), "", []
@@ -340,7 +365,7 @@ class DevelopmentMenu:
                     line = candidate
             lines.append(line)
             compact = self.tab == 0 and self.level_options
-            error_y = 318 if compact else 277
+            error_y = (318 if compact else 277) + offset
             line_limit = 2 if compact else 3
             for i, line in enumerate(lines[:line_limit]):
                 text(line, 120, error_y + i * 14, "#ff9b9b", max_width=272)

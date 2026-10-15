@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 from PIL import Image
 
 from pop2.game_menu import GameMenu
-from pop2.game_ui import fit_viewport
+from pop2.game_ui import fit_viewport, viewport_point
 from pop2.screenshots import ScreenshotSettings
 
 
@@ -83,6 +83,39 @@ class GameMenuModelTests(unittest.TestCase):
             left, top, right, bottom = menu.row_rect(index)
             self.assertTrue(menu.PANEL[0] < left < right < menu.PANEL[2])
             self.assertTrue(menu.PANEL[1] < top < bottom < menu.PANEL[3])
+
+    def test_all_game_menu_pages_are_centered_in_the_visible_game(self):
+        menu = GameMenu()
+        for panel in (menu.PANEL, menu.SCREENSHOT_PANEL, menu.DIALOG, menu.ABOUT_DIALOG):
+            with self.subTest(panel=panel):
+                self.assertEqual(panel[0] - 1, 511 - panel[2])
+                self.assertEqual(panel[1], 384 - panel[3])
+
+    def test_centered_capture_controls_and_dropdown_share_mouse_geometry(self):
+        menu = GameMenu(page="screenshots", return_to_menu=False)
+        for index, (left, top, right, bottom) in enumerate(menu.CAPTURE_CONTROLS):
+            self.assertEqual(menu.hit((left + right) // 2, (top + bottom) // 2), index)
+            self.assertTrue(menu.SCREENSHOT_PANEL[1] < top < bottom < menu.SCREENSHOT_PANEL[3])
+        left, top, right, bottom = menu.CAPTURE_CONTROLS[0]
+        menu.click(left + 8, top + 8)
+        self.assertTrue(menu.dropdown)
+        menu.click(left + 8, bottom + 3 * menu.ROW_HEIGHT + 8)
+        self.assertEqual(menu.screenshot_scale, 4)
+        self.assertFalse(menu.dropdown)
+
+    def test_centered_game_and_capture_hits_survive_window_and_fullscreen_scaling(self):
+        for page in ("menu", "screenshots"):
+            menu = GameMenu(page=page)
+            rects = (menu.CAPTURE_CONTROLS if page == "screenshots" else
+                     [menu.row_rect(i) for i in range(len(menu.items))])
+            for dimensions in ((512, 384), (800, 900), (1920, 1080), (3440, 1440)):
+                size, origin = fit_viewport(*dimensions)
+                for index, (left, top, right, bottom) in enumerate(rects):
+                    with self.subTest(page=page, dimensions=dimensions, control=index):
+                        x, y = (left + right) / 2, (top + bottom) / 2
+                        point = viewport_point(origin[0] + (x - 1) * size[0] / 510,
+                                               origin[1] + y * size[1] / 384, *dimensions)
+                        self.assertEqual(menu.hit(*point), index)
 
 
 class GameMenuSceneTests(unittest.TestCase):
@@ -429,15 +462,16 @@ class GameMenuSceneTests(unittest.TestCase):
         for key in ("Left", "Up", "Control_L", "Shift_L"):
             scene.dev_key_press(self.event(key))
         size, origin = fit_viewport(3440, 1440)
+        row_y = scene.game_menu.row_rect(0)[1] + 8
         with patch.object(scene.canvas, "winfo_width", return_value=3440), \
                 patch.object(scene.canvas, "winfo_height", return_value=1440):
             scene.dev_click(SimpleNamespace(x=20, y=50, num=1))
             self.assertIsNotNone(scene.game_menu)
             scene.dev_click(SimpleNamespace(x=origin[0] + 199 * size[0] / 510,
-                                             y=origin[1] + 72 * size[1] / 384, num=3))
+                                             y=origin[1] + row_y * size[1] / 384, num=3))
             self.assertIsNotNone(scene.game_menu)
             scene.dev_click(SimpleNamespace(x=origin[0] + 199 * size[0] / 510,
-                                             y=origin[1] + 72 * size[1] / 384, num=1))
+                                             y=origin[1] + row_y * size[1] / 384, num=1))
         self.assertIsNone(scene.game_menu)
         for key in ("Left", "Up", "Control_L", "Shift_L"):
             self.assertEqual(scene.dev_key_press(self.event(key)), "break")
@@ -458,6 +492,36 @@ class GameMenuSceneTests(unittest.TestCase):
                 self.assertTrue(0 <= rect[0] < rect[2] <= 512)
                 self.assertTrue(0 <= rect[1] < rect[3] <= 384)
 
+    def test_centered_panels_and_controls_are_drawn_at_their_mouse_coordinates(self):
+        from pop2.game_ui import DevelopmentMenu
+
+        viewport = Image.new("RGBA", (512, 384), (80, 80, 80, 255))
+        menus = [(GameMenu(page=page), panel) for page, panel in (
+            ("menu", GameMenu.PANEL), ("screenshots", GameMenu.SCREENSHOT_PANEL),
+            ("confirm", GameMenu.DIALOG), ("about", GameMenu.ABOUT_DIALOG))]
+        for levels in ((), ((1, "Level 1", ("1", "2")),)):
+            for tab in range(3):
+                menu = DevelopmentMenu(("1", "2"), 0, False, tab=tab,
+                                       sections=("First", "Second"), level_options=levels)
+                menus.append((menu, menu.panel_rect))
+        for menu, (left, top, right, bottom) in menus:
+            with self.subTest(menu=type(menu).__name__, panel=(left, top, right, bottom)):
+                image = menu.draw(viewport, self.scene.ui_font)
+                for point in ((left, top), (right, top), (left, bottom), (right, bottom)):
+                    self.assertEqual(image.getpixel(point), (133, 133, 133, 255))
+                self.assertEqual((left + right, top + bottom), (512, 384))
+                if isinstance(menu, DevelopmentMenu):
+                    rects = [menu.control_rect(i) for i in menu.controls]
+                else:
+                    rects = (menu.CAPTURE_CONTROLS if menu.page == "screenshots" else
+                             menu.BUTTONS if menu.page == "confirm" else
+                             (menu.ABOUT_BUTTON,) if menu.page == "about" else
+                             [menu.row_rect(i) for i in range(len(menu.items))])
+                for index, rect in enumerate(rects):
+                    self.assertEqual(menu.hit((rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2),
+                                     menu.controls[index] if isinstance(menu, DevelopmentMenu) else index)
+                    self.assertNotEqual(image.getpixel((rect[0], rect[1])), (24, 24, 24, 255))
+
     def test_shortcuts_avoid_the_original_fonts_trademark_glyph(self):
         font = self.scene.ui_font
         with patch.object(font, "text", wraps=font.text) as text:
@@ -476,8 +540,9 @@ class GameMenuSceneTests(unittest.TestCase):
         credit = font.text("by Pessegos", "#999999")
         ink = credit.getbbox()
         self.assertGreaterEqual(420 - credit.width + ink[0], menu.ABOUT_DIALOG[0] + 1)
-        self.assertLess(270 + ink[3] - ink[1], menu.ABOUT_DIALOG[3])
-        footer = image.crop((420 - credit.width, 270, 420, 286))
+        credit_y = menu.ABOUT_DIALOG[1] + 162
+        self.assertLess(credit_y + ink[3] - ink[1], menu.ABOUT_DIALOG[3])
+        footer = image.crop((420 - credit.width, credit_y, 420, credit_y + 16))
         self.assertIn((153, 153, 153, 255),
                       {color for _count, color in footer.getcolors(footer.width * footer.height)})
 

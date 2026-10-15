@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageDraw
 
-from pop2.game_ui import DevelopmentMenu, VISIBLE_SIZE
+from pop2.game_ui import DevelopmentMenu, VISIBLE_SIZE, centered_panel
 
 
 @dataclass(frozen=True)
@@ -32,15 +32,19 @@ class GameMenu:
     dropdown: bool = False
     option_index: int = 0
 
-    PANEL = (64, 28, 448, 312)
-    DIALOG = (80, 108, 432, 274)
-    ABOUT_DIALOG = (80, 108, 432, 292)
-    BUTTONS = ((100, 228, 242, 258), (254, 228, 412, 258))
-    ROW_TOP = 64
+    PANEL = centered_panel(384, 284)
+    DIALOG = centered_panel(352, 166)
+    ABOUT_DIALOG = centered_panel(352, 184)
+    BUTTONS = ((100, DIALOG[1] + 120, 242, DIALOG[1] + 150),
+               (254, DIALOG[1] + 120, 412, DIALOG[1] + 150))
+    ABOUT_BUTTON = (190, ABOUT_DIALOG[1] + 120, 322, ABOUT_DIALOG[1] + 150)
+    ROW_TOP = PANEL[1] + 36
     ROW_HEIGHT = 22
-    SCREENSHOT_PANEL = (80, 92, 432, 322)
-    CAPTURE_CONTROLS = ((212, 136, 412, 164), (100, 180, 412, 208),
-                        (100, 250, 250, 282), (264, 250, 412, 282))
+    SCREENSHOT_PANEL = centered_panel(352, 230)
+    CAPTURE_CONTROLS = ((212, SCREENSHOT_PANEL[1] + 44, 412, SCREENSHOT_PANEL[1] + 72),
+                        (100, SCREENSHOT_PANEL[1] + 88, 412, SCREENSHOT_PANEL[1] + 116),
+                        (100, SCREENSHOT_PANEL[1] + 158, 250, SCREENSHOT_PANEL[1] + 190),
+                        (264, SCREENSHOT_PANEL[1] + 158, 412, SCREENSHOT_PANEL[1] + 190))
     CAPTURE_SIZES = tuple(f"{scale}x ({VISIBLE_SIZE[0] * scale} x {VISIBLE_SIZE[1] * scale})"
                           for scale in range(1, 5))
 
@@ -146,7 +150,7 @@ class GameMenu:
                          if DevelopmentMenu.contains(rect, x, y)), None)
         rects = ([self.row_rect(i) for i in range(len(self.items))]
                  if self.page == "menu" else self.BUTTONS if self.page == "confirm"
-                 else ((190, 228, 322, 258),))
+                 else (self.ABOUT_BUTTON,))
         return next((i for i, rect in enumerate(rects)
                      if DevelopmentMenu.contains(rect, x, y)), None)
 
@@ -196,9 +200,10 @@ class GameMenu:
             self.ABOUT_DIALOG if self.page == "about" else self.DIALOG)
         draw.rectangle(panel,
                        fill="#181818", outline="#858585")
+        panel_top = panel[1]
         if self.page == "screenshots":
-            text("Screenshots", 256, 110, gold, "center")
-            text("PNG size", 100, 144)
+            text("Screenshots", 256, panel_top + 18, gold, "center")
+            text("PNG size", 100, panel_top + 52)
             left, top, right, bottom = self.CAPTURE_CONTROLS[0]
             draw.rectangle((left, top, right, bottom), fill="#303030" if self.focus == 0 else "#222222",
                            outline=gold if self.focus == 0 else "#626262")
@@ -215,11 +220,11 @@ class GameMenu:
                 while width > limit and start < len(widths):
                     width -= widths[start]
                     start += 1
-            text(("..." if start else "") + encoded[start:].decode("mac_roman"), 100, 218, muted)
+            text(("..." if start else "") + encoded[start:].decode("mac_roman"), 100, panel_top + 126, muted)
             button(self.CAPTURE_CONTROLS[2], "Save PNG", self.focus == 2)
             button(self.CAPTURE_CONTROLS[3], "Back" if self.return_to_menu else "Close", self.focus == 3)
             if self.error or self.screenshot_status:
-                text(self.error or self.screenshot_status, 100, 294,
+                text(self.error or self.screenshot_status, 100, panel_top + 202,
                      "#ff9b9b" if self.error else gold, max_width=312)
             if self.dropdown:
                 left, _top, right, bottom = self.CAPTURE_CONTROLS[0]
@@ -232,19 +237,19 @@ class GameMenu:
                     text(label, left + 8, y + 6,
                          gold if index == self.screenshot_scale - 1 else white, max_width=right - left - 16)
         elif self.page == "confirm":
-            text("New game?", 256, 128, gold, "center")
-            text("Restart the game?", 256, 165, align="center")
-            text("Unsaved progress will be lost.", 256, 187, muted, "center", 312)
+            text("New game?", 256, panel_top + 20, gold, "center")
+            text("Restart the game?", 256, panel_top + 57, align="center")
+            text("Unsaved progress will be lost.", 256, panel_top + 79, muted, "center", 312)
             for i, (rect, label) in enumerate(zip(self.BUTTONS, ("Cancel", "New game"))):
                 button(rect, label, i == self.focus)
         elif self.page == "about":
-            text("Prince of Persia 2", 256, 128, gold, "center", 312)
-            text("Macintosh Native", 256, 154, align="center")
-            text("Work in progress", 256, 186, muted, "center")
-            button((190, 228, 322, 258), "Back" if self.return_to_menu else "Close", True)
-            text("by Pessegos", 420, 270, muted, "right")
+            text("Prince of Persia 2", 256, panel_top + 20, gold, "center", 312)
+            text("Macintosh Native", 256, panel_top + 46, align="center")
+            text("Work in progress", 256, panel_top + 78, muted, "center")
+            button(self.ABOUT_BUTTON, "Back" if self.return_to_menu else "Close", True)
+            text("by Pessegos", 420, panel_top + 162, muted, "right")
         else:
-            text("Game Menu", 256, 42, gold, "center")
+            text("Game Menu", 256, panel_top + 14, gold, "center")
             for i, item in enumerate(self.items):
                 rect = self.row_rect(i)
                 selected = i == self.focus
@@ -262,5 +267,5 @@ class GameMenu:
                 # The game's NFNT replaces '+' with a trademark glyph.
                 text(item.shortcut.replace("+", "-"), rect[2] - 10, y, color, "right", 100)
             if not self.items[self.focus].enabled:
-                text("Not implemented yet", 256, 317, muted, "center")
+                text("Not implemented yet", 256, panel[3] + 5, muted, "center")
         return image
