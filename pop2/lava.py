@@ -7,7 +7,8 @@ from pop2.opponent_generation import character_column
 from pop2.terrain import character_row, floor_contact_x, floor_y
 
 
-ENHANCED_BUBBLE_OFFSET_X = 6
+ENHANCED_BUBBLE_OFFSET_X = 5
+ENHANCED_BUBBLE_OFFSET_Y = -1
 
 
 @dataclass
@@ -118,7 +119,8 @@ class LavaPool:
                     # Presentation-only: leave the native event positions and
                     # all character/splash anchors untouched.
                     draw_x = x + (ENHANCED_BUBBLE_OFFSET_X if self.enhanced else 0)
-                    records.append((shape, draw_x, y, False))
+                    draw_y = y + (ENHANCED_BUBBLE_OFFSET_Y if self.enhanced else 0)
+                    records.append((shape, draw_x, draw_y, False))
             if layer == 0 and sequence < 0 and not self.enhanced:
                 records.append((cover, dx, dy, False))
         return records

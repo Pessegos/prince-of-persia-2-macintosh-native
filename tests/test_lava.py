@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from pop2.animation_data import FrameRecord
-from pop2.lava import ENHANCED_BUBBLE_OFFSET_X, Lava, LavaPool
+from pop2.lava import ENHANCED_BUBBLE_OFFSET_X, ENHANCED_BUBBLE_OFFSET_Y, Lava, LavaPool
 from pop2.paths import ASSET_DIR
 from pop2.terrain import LevelMap, TerrainMotion
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
@@ -211,10 +211,10 @@ class EnhancedLavaTests(unittest.TestCase):
             pool.bubbles[0] = [1, 0, 0, -11, 58, 0]
             pool.bubbles[1] = [1, 1, 0, -11, 42, 1]
         self.assertEqual(enhanced.drawings(), [(3614, 0, 0, False),
-                                             (3617, 48, -11, False),
-                                             (3616, 64, -11, False)])
+                                             (3617, 47, -12, False),
+                                             (3616, 63, -12, False)])
         self.assertEqual(enhanced.drawings()[1:], [
-            (shape, x + ENHANCED_BUBBLE_OFFSET_X, y, flip)
+            (shape, x + ENHANCED_BUBBLE_OFFSET_X, y + ENHANCED_BUBBLE_OFFSET_Y, flip)
             for shape, x, y, flip in original.drawings() if shape != 3615])
 
     def test_bubble_offset_is_visual_only_and_does_not_move_surface_or_death_art(self):
@@ -224,7 +224,7 @@ class EnhancedLavaTests(unittest.TestCase):
             pool.bubbles[0] = [1, 0, 0, -11, 58, 0]
         self.assertEqual(original.bubbles, enhanced.bubbles)
         self.assertIn((3616, 58, -11, False), original.drawings())
-        self.assertIn((3616, 64, -11, False), enhanced.drawings())
+        self.assertIn((3616, 63, -12, False), enhanced.drawings())
         for mode in (0, 3):
             for facing in (0, 1):
                 for pool in (original, enhanced):
@@ -252,7 +252,8 @@ class EnhancedLavaTests(unittest.TestCase):
                                 self.assertEqual(enhanced.bubbles, original.bubbles)
                                 self.assertEqual(enhanced.drawings(), [
                                     (3614 if shape == 3615 else shape,
-                                     x + (ENHANCED_BUBBLE_OFFSET_X if shape in bubble_shapes else 0), y, flip)
+                                     x + (ENHANCED_BUBBLE_OFFSET_X if shape in bubble_shapes else 0),
+                                     y + (ENHANCED_BUBBLE_OFFSET_Y if shape in bubble_shapes else 0), flip)
                                     for shape, x, y, flip in original.drawings()])
                                 self.assertEqual(enhanced.advance(), original.advance())
                                 if original.character_sequence < 0:
@@ -672,7 +673,8 @@ class ImportedLavaTests(unittest.TestCase):
         surface = recessed_lava_surface(palette)
         liquid = recessed_lava_liquid_mask(surface)
         frame = draw_cavern_lava(cavern_room(5).flattened(), 5, state)
-        x, y = record['x'] + 55 + ENHANCED_BUBBLE_OFFSET_X, record['bottom'] - 15 - sprite.height
+        x = record['x'] + 55 + ENHANCED_BUBBLE_OFFSET_X
+        y = record['bottom'] - 15 + ENHANCED_BUBBLE_OFFSET_Y - sprite.height
         outside = 0
         for yy in range(sprite.height):
             for xx in range(sprite.width):

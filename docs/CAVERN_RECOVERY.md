@@ -148,9 +148,9 @@ presentation retains the native square pixels. Original bitmaps are unchanged.
 The filled surface is drawn
 BEFORE both bubble passes; keeping it between those passes hides rear bubbles
 because it is more opaque than the original cover. Native bubble records,
-counts and sequences are unchanged. Enhanced mode adds six native pixels to
-the bubble drawing X coordinates to center them further inside the recessed
-surface. Native event coordinates and bubble state are unchanged; the surface,
+counts and sequences are unchanged. Enhanced mode adds five native pixels to
+the bubble drawing X coordinates and subtracts one from Y to place them inside
+the recessed surface. Native event coordinates and bubble state are unchanged; the surface,
 character-death drawings, splashes, mirror flags and all collision positions
 retain their original anchors. Reference mode has no displacement.
 A pixel regression test
@@ -175,8 +175,9 @@ against the bright-liquid pixels of the approved surface, excluding rock and
 dark-red crust around every side, including the rear perimeter. Raised drops
 and burst bodies are drawn after the solid contours without that spatial mask,
 so they can rise above the pool or pass in front of rock without being sliced.
-No source shape, event timing or bubble count is changed. The six-pixel offset
-is presentation-only; it replaces the earlier four-pixel placement.
+No source shape, event timing or bubble count is changed. This offset
+is presentation-only; it moves the earlier six-pixel-right placement one pixel
+left and one pixel up.
 
 Before raised effects, enhanced mode restores solid contours. A cached mask protects
 rock below each column's first molten pixel: both the near-side floor and the
