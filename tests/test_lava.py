@@ -294,8 +294,9 @@ class RecessedLavaArtworkTests(unittest.TestCase):
                 self.assertNotEqual(ripple.getpixel(point), red)
             with patch.object(pool, 'drawings', return_value=[(3614, 0, 0, False), (3632, 0, 0, False)]):
                 splash = draw_cavern_lava(Image.new('RGBA', (30, 30), rock), 0, state)
-            for point in ((12, 10), (12, 13), (13, 16)):
+            for point in ((12, 10), (12, 13)):
                 self.assertEqual(splash.getpixel(point), red)
+            self.assertEqual(splash.getpixel((13, 16)), (127, 0, 0, 255))
             self.assertEqual(splash.getpixel((12, 19)), rock)
 
     def test_splitting_an_effect_preserves_every_pixel_exactly_once(self):
@@ -357,16 +358,34 @@ class RecessedLavaArtworkTests(unittest.TestCase):
         pool = LavaPool(synthetic_tables(), enhanced=True)
         state = SimpleNamespace(lava=SimpleNamespace(pools={(0, 27): pool}))
         program = {'lava': {'rooms': {'0': [{'room': 0, 'cell': 27, 'x': 10, 'bottom': 20}]}}}
-        shapes = {('recessed', 3614): surface, 3616: bubble}
-        with (patch('pop2.caverns.cavern_assets', return_value=(program, {}, {}, shapes)),
-              patch.object(pool, 'drawings', return_value=[(3614, 0, 0, False), (3616, 0, 0, False)])):
-            frame = draw_cavern_lava(Image.new('RGBA', (30, 30)), 0, state)
-        self.assertEqual(frame.getpixel((12, 15)), rock)
-        self.assertEqual(frame.getpixel((12, 16)), crust)
-        self.assertEqual(frame.getpixel((12, 13)), rock)
-        for y in (14, 18):
-            self.assertEqual(frame.getpixel((12, y)), (255, 31, 0, 255))
+        shapes = {('recessed', 3614): surface, 3616: bubble, 3619: bubble}
+        for shape in (3616, 3619):
+            with (self.subTest(shape=shape),
+                  patch('pop2.caverns.cavern_assets', return_value=(program, {}, {}, shapes)),
+                  patch.object(pool, 'drawings', return_value=[(3614, 0, 0, False), (shape, 0, 0, False)])):
+                frame = draw_cavern_lava(Image.new('RGBA', (30, 30)), 0, state)
+            self.assertEqual(frame.getpixel((12, 15)), rock)
+            self.assertEqual(frame.getpixel((12, 16)), crust)
+            if shape == 3616:
+                self.assertEqual(frame.getpixel((12, 13)), rock)
+            else:
+                self.assertEqual(frame.getpixel((12, 13)), (255, 31, 0, 255))
+            for y in (14, 18):
+                self.assertEqual(frame.getpixel((12, y)), (255, 31, 0, 255))
         self.assertEqual(surface.tobytes(), unchanged)
+
+    def test_inset_mask_excludes_liquid_transparency_and_outer_rims(self):
+        from PIL import Image
+        from pop2.caverns import recessed_lava_inset_mask
+
+        surface = Image.new('RGBA', (3, 7), (60, 40, 30, 255))
+        for y in (1, 5):
+            surface.putpixel((1, y), (255, 127, 0, 255))
+        surface.putpixel((1, 3), (127, 0, 0, 255))
+        surface.putpixel((1, 4), (0, 0, 0, 0))
+        mask = recessed_lava_inset_mask(surface)
+        self.assertEqual({(x, y) for y in range(7) for x in range(3) if mask.getpixel((x, y))},
+                         {(1, 2), (1, 3)})
 
     def test_animation_is_behind_the_front_rock_but_not_the_back_rim(self):
         from PIL import Image
@@ -656,7 +675,8 @@ class ImportedLavaTests(unittest.TestCase):
 
     def test_raised_splash_pixels_are_preserved_above_and_in_front_of_rock(self):
         from pop2.caverns import (cavern_assets, cavern_room, draw_cavern_lava,
-                                 recessed_lava_liquid_mask, recessed_lava_surface, split_lava_bubble)
+                                 recessed_lava_inset_mask, recessed_lava_liquid_mask,
+                                 recessed_lava_surface, split_lava_bubble)
         from pop2.render_opening import decode_shap
         from pop2.cavern_state import CavernState
 
@@ -672,6 +692,7 @@ class ImportedLavaTests(unittest.TestCase):
         raised = split_lava_bubble(sprite, 3632)[1]
         surface = recessed_lava_surface(palette)
         liquid = recessed_lava_liquid_mask(surface)
+        inset = recessed_lava_inset_mask(surface)
         frame = draw_cavern_lava(cavern_room(5).flattened(), 5, state)
         x = record['x'] + 55 + ENHANCED_BUBBLE_OFFSET_X
         y = record['bottom'] - 15 + ENHANCED_BUBBLE_OFFSET_Y - sprite.height
@@ -681,22 +702,68 @@ class ImportedLavaTests(unittest.TestCase):
                 pixel = raised.getpixel((xx, yy))
                 if not pixel[3]:
                     continue
-                self.assertEqual(frame.getpixel((x + xx, y + yy)), pixel)
                 lx, ly = x + xx - record['x'], y + yy - (record['bottom'] - surface.height)
+                if 0 <= lx < inset.width and 0 <= ly < inset.height and inset.getpixel((lx, ly)):
+                    self.assertEqual(frame.getpixel((x + xx, y + yy)), surface.getpixel((lx, ly)))
+                    continue
+                self.assertEqual(frame.getpixel((x + xx, y + yy)), pixel)
                 outside += not (0 <= lx < liquid.width and 0 <= ly < liquid.height
                                 and liquid.getpixel((lx, ly)))
         self.assertGreater(outside, 0)
 
+    def test_reported_particle_frames_and_right_crust_stay_occluded(self):
+        from PIL import Image, ImageChops, ImageOps
+        from pop2.caverns import (cavern_assets, cavern_room, draw_cavern_lava,
+                                 recessed_lava_inset_mask, recessed_lava_surface)
+        from pop2.cavern_state import CavernState
+
+        program, _, palette, shapes = cavern_assets()
+        tables = program['lava']
+        state = CavernState()
+        state.configure_lava(tables)
+        state.lava.enter_room(5, tables['rooms']['5'])
+        record = tables['rooms']['5'][0]
+        surface = recessed_lava_surface(palette)
+        inset = recessed_lava_inset_mask(surface)
+        dx, dy = tables['piece_offsets']
+        position = record['x'] + dx, record['bottom'] + dy - surface.height
+        background = cavern_room(5).flattened()
+        allowed = Image.new('L', background.size)
+        allowed.paste(inset, position)
+        right_changes = 0
+        for tick in range(48):
+            with patch.dict(shapes, {('recessed-inset', 3614): Image.new('L', surface.size)}):
+                before = draw_cavern_lava(background.copy(), 5, state)
+            after = draw_cavern_lava(background.copy(), 5, state)
+            changed = ImageChops.difference(before.convert('RGB'), after.convert('RGB')).convert('L')
+            with self.subTest(gif_frame=tick + 1):
+                self.assertIsNone(ImageChops.multiply(changed, ImageOps.invert(allowed)).getbbox())
+                if tick in (18, 40):
+                    for x, y in ((43, 12), (45, 12), (47, 12), (44, 13), (46, 13), (48, 13)):
+                        point = position[0] + x, position[1] + y
+                        self.assertNotEqual(before.getpixel(point), surface.getpixel((x, y)))
+                        self.assertEqual(after.getpixel(point), surface.getpixel((x, y)))
+                for y in range(surface.height):
+                    for x in range(surface.width):
+                        if inset.getpixel((x, y)):
+                            point = position[0] + x, position[1] + y
+                            self.assertEqual(after.getpixel(point), surface.getpixel((x, y)))
+                            right_changes += x >= 70 and bool(changed.getpixel(point))
+            state.lava.advance()
+        self.assertGreater(right_changes, 0)
+
     def test_surface_clipping_and_airborne_order_across_all_pools_and_death_phases(self):
         from PIL import Image, ImageChops
         from pop2.caverns import (cavern_assets, cavern_room, draw_cavern_lava,
-                                 recessed_lava_foreground_mask, recessed_lava_surface)
+                                 recessed_lava_foreground_mask, recessed_lava_inset_mask,
+                                 recessed_lava_surface)
         from pop2.cavern_state import CavernState
 
         tables = self.scene.level_renderer.cavern_program['lava']
         _, _, palette, shapes = cavern_assets()
         sprite = recessed_lava_surface(palette)
         mask = recessed_lava_foreground_mask(sprite)
+        inset = recessed_lava_inset_mask(sprite)
         for point in ((41, 13), (83, 11), (36, 26)):
             self.assertEqual(mask.getpixel(point), 255)
         for point in ((75, 5), (80, 10)):
@@ -713,7 +780,8 @@ class ImportedLavaTests(unittest.TestCase):
                 static.paste(sprite, (record['x'] + dx, record['bottom'] + dy - sprite.height), sprite)
 
             def check_frame():
-                with patch.dict(shapes, {('recessed-front', 3614): Image.new('L', sprite.size)}):
+                with patch.dict(shapes, {('recessed-front', 3614): Image.new('L', sprite.size),
+                                         ('recessed-inset', 3614): Image.new('L', sprite.size)}):
                     uncut = draw_cavern_lava(background.copy(), room, state)
                 corrected = draw_cavern_lava(background.copy(), room, state)
                 expected = uncut.copy()
@@ -726,6 +794,9 @@ class ImportedLavaTests(unittest.TestCase):
                         if 3616 <= shape <= 3645:
                             raised = shapes['recessed-effect', shape][1]
                             expected.paste(raised, (record['x'] + x, record['bottom'] + y - raised.height), raised)
+                for record in records:
+                    x, y = record['x'] + dx, record['bottom'] + dy - sprite.height
+                    expected.paste(static.crop((x, y, x + sprite.width, y + sprite.height)), (x, y), inset)
                 self.assertIsNone(ImageChops.difference(corrected.convert('RGB'), expected.convert('RGB')).getbbox())
 
             for tick in range(100):

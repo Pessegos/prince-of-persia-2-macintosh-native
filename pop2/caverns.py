@@ -276,6 +276,19 @@ def recessed_lava_liquid_mask(surface):
     return mask
 
 
+def recessed_lava_inset_mask(surface):
+    """Keep embedded stone/crust in front of even the raised particles."""
+    liquid = recessed_lava_liquid_mask(surface)
+    mask = Image.new('L', surface.size)
+    for x in range(surface.width):
+        rows = [y for y in range(surface.height) if liquid.getpixel((x, y))]
+        if rows:
+            for y in range(rows[0] + 1, rows[-1]):
+                if surface.getpixel((x, y))[3] and not liquid.getpixel((x, y)):
+                    mask.putpixel((x, y), 255)
+    return mask
+
+
 # Upper seed bands identify raised bodies in the native SHAPs. Follow their
 # four-connected pixels, leaving the separate contact waves on the surface.
 # These seeds are port presentation metadata, not Macintosh logic.
@@ -310,7 +323,7 @@ def draw_cavern_lava(frame, room_id, state):
         pool = state.lava.pools.get((record['room'], record['cell']))
         if pool is None:
             continue
-        foreground = None
+        foreground = inset_foreground = None
         airborne = []
         if pool.enhanced:
             if ('recessed', 3614) not in shapes:
@@ -346,14 +359,20 @@ def draw_cavern_lava(frame, room_id, state):
                 mask_key = ('recessed-front', shape)
                 if mask_key not in shapes:
                     shapes[mask_key] = recessed_lava_foreground_mask(sprite)
+                inset_key = ('recessed-inset', shape)
+                if inset_key not in shapes:
+                    shapes[inset_key] = recessed_lava_inset_mask(sprite)
                 x, y = position
-                foreground = (frame.crop((x, y, x + sprite.width, y + sprite.height)),
-                              position, shapes[mask_key])
+                snapshot = frame.crop((x, y, x + sprite.width, y + sprite.height))
+                foreground = (snapshot, position, shapes[mask_key])
+                inset_foreground = (snapshot, position, shapes[inset_key])
         if foreground is not None:
             # Restore solid contours, never the liquid or rear rim.
             frame.paste(*foreground)
         for sprite, position in airborne:
             frame.paste(sprite, position, sprite)
+        if inset_foreground is not None and airborne:
+            frame.paste(*inset_foreground)
     return frame
 
 

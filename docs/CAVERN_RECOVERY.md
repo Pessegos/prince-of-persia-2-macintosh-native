@@ -173,8 +173,13 @@ it is a presentation adaptation to the new cavity, not a recovered native rule.
 Ripples, attached bubbles and the contact-wave parts of splashes are clipped
 against the bright-liquid pixels of the approved surface, excluding rock and
 dark-red crust around every side, including the rear perimeter. Raised drops
-and burst bodies are drawn after the solid contours without that spatial mask,
-so they can rise above the pool or pass in front of rock without being sliced.
+and burst bodies are drawn after the solid contours without the liquid mask,
+so they can rise above the pool or pass in front of the outer rim. The two
+inset contours remain in front of these raised effects: an additional mask
+selects opaque non-liquid pixels between liquid above and below in each column.
+Restoring only those pixels after the air pass prevents the small particles
+from flashing across the left inset stone or the right embedded dark-red crust.
+This presentation choice leaves every other raised pixel and source frame intact.
 No source shape, event timing or bubble count is changed. This offset
 is presentation-only; it moves the earlier six-pixel-right placement one pixel
 left and one pixel up.
