@@ -330,7 +330,7 @@ class RebirthSceneTests(unittest.TestCase):
             close()
             scene.dev_key_release(self.event(key))
         for key, modifier in (("Alt_L", 0),
-                              ("Return", 0x8), ("Return", 0x20000)):
+                              ("Return", 0x20008), ("Return", 0x20000)):
             self.assertIsNone(scene.dev_key_press(self.event(key, modifier)))
             self.assertFalse(scene.combat.player.alive)
             scene.dev_key_release(self.event(key))

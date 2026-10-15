@@ -462,7 +462,7 @@ class MenuSceneTests(unittest.TestCase):
         scene.canvas.configure(cursor="none")
         scene.open_dev_mode()
         self.assertEqual(scene.canvas.cget("cursor"), "")
-        for modifier in (0x8, 0x20000, 0x20008):
+        for modifier in (0x20000, 0x20008):
             self.assertIsNone(scene.dev_key_press(self.event("Return", state=modifier)))
             scene.dev_key_release(self.event("Return"))
         scene.close_dev_mode()
@@ -563,7 +563,7 @@ class MenuSceneTests(unittest.TestCase):
     def test_system_shortcuts_do_not_resume_but_shifted_text_does(self):
         scene = self.scene
         scene.set_paused(True)
-        for key, state in (("Tab", 0x8), ("Tab", 0x20000), ("a", 0x4), ("d", 0x40)):
+        for key, state in (("Tab", 0x20008), ("Tab", 0x20000), ("a", 0x4), ("d", 0x40)):
             with self.subTest(key=key, state=state):
                 event = self.event(key, state)
                 self.assertEqual(scene.dev_key_press(event), "break")

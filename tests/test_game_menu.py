@@ -214,7 +214,7 @@ class GameMenuSceneTests(unittest.TestCase):
         self.assertEqual(before, (scene.room_id, scene.player_x, scene.action))
         self.assertIs(scene.checkpoint, checkpoint)
         self.assertFalse(scene.paused)
-        self.press("N", 0x8)
+        self.press("N", 0x20000)
         self.press("Right")
         self.press("Return")
         self.assertIsNone(scene.game_menu)
@@ -239,11 +239,11 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_confirmation_cannot_be_bypassed_by_function_or_command_keys(self):
         scene = self.scene
-        self.press("n", 0x8)
+        self.press("n", 0x20000)
         with patch.object(scene, "restart_opening") as new, \
                 patch.object(scene, "restart_level") as restart:
-            for key, state in (("F1", 0), ("F2", 0), ("F3", 0), ("F5", 0), ("n", 8),
-                               ("r", 8), ("v", 8), ("t", 8)):
+            for key, state in (("F1", 0), ("F2", 0), ("F3", 0), ("F5", 0), ("n", 0x20000),
+                               ("r", 0x20000), ("v", 0x20000), ("t", 0x20000)):
                 self.assertEqual(self.press(key, state), "break")
                 self.assertEqual(scene.game_menu.page, "confirm")
                 self.assertIsNone(scene.dev_menu)
@@ -280,7 +280,7 @@ class GameMenuSceneTests(unittest.TestCase):
         snapshot = scene.checkpoint
         scene.combat.player.life = 1
         self.assertFalse(scene.death.can_restart)
-        self.press("r", 8)
+        self.press("r", 0x20000)
         point = snapshot.checkpoint
         self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.player_x),
                          (point.room, point.row, point.x))
@@ -292,9 +292,9 @@ class GameMenuSceneTests(unittest.TestCase):
         scene = self.scene
         scene.jump_to_screen("5")
         scene.combat.player.max_life = 5
-        self.press("r", 8)
+        self.press("r", 0x20000)
         self.assertEqual((scene.combat.player.max_life, scene.combat.player.life), (5, 5))
-        self.press("n", 8)
+        self.press("n", 0x20000)
         self.press("Right")
         self.press("Return")
         self.assertEqual((scene.combat.player.max_life, scene.combat.player.life), (3, 3))
@@ -322,7 +322,7 @@ class GameMenuSceneTests(unittest.TestCase):
             getattr(scene.audio, "set_" + field + "_enabled").assert_called_once_with(False)
             self.assertTrue(scene.paused)
             scene.dev_key_release(self.event(key))
-            self.press(key, 8)
+            self.press(key, 0x20000)
             self.assertTrue(getattr(scene, field + "_enabled"))
             self.assertTrue(scene.paused)
 
@@ -331,7 +331,7 @@ class GameMenuSceneTests(unittest.TestCase):
         scene.jump_to_screen("5")
         scene.dev_key_press(self.event("Left"))
         scene.horizontal_key(None, -1, True)
-        self.press("m", 8)
+        self.press("m", 0x20000)
         self.assertNotIn("Left", scene.pause_resume_keys)
         self.assertIsNone(scene.dev_key_release(self.event("Left")))
         scene.horizontal_key(None, -1, False)
@@ -339,27 +339,27 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_releasing_shift_during_a_shortcut_cannot_repeat_or_stick_the_command(self):
         scene = self.scene
-        scene.dev_key_press(self.event("T", 9))
+        scene.dev_key_press(self.event("T", 0x20001))
         self.assertFalse(scene.sound_enabled)
-        scene.dev_key_press(self.event("t", 8))
+        scene.dev_key_press(self.event("t", 0x20000))
         self.assertFalse(scene.sound_enabled)
         scene.dev_key_release(self.event("t"))
         self.assertNotIn("T", scene.window_keys_down)
         self.assertNotIn("T", scene.pause_resume_keys)
-        self.press("t", 8)
+        self.press("t", 0x20000)
         self.assertTrue(scene.sound_enabled)
 
     def test_menu_preferences_survive_new_game_and_restart(self):
         scene = self.scene
         scene.jump_to_screen("9")
         scene.peaceful = True
-        self.press("m", 8)
-        self.press("t", 8)
-        self.press("r", 8)
+        self.press("m", 0x20000)
+        self.press("t", 0x20000)
+        self.press("r", 0x20000)
         self.assertFalse(scene.music_enabled)
         self.assertFalse(scene.sound_enabled)
         self.assertTrue(scene.peaceful)
-        self.press("n", 8)
+        self.press("n", 0x20000)
         self.press("Right")
         self.press("Return")
         self.assertFalse(scene.music_enabled)
@@ -371,7 +371,7 @@ class GameMenuSceneTests(unittest.TestCase):
         scene.jump_to_screen("9")
         before = (scene.room_id, scene.player_x, scene.checkpoint)
         for key, action in (("s", "save"), ("o", "open"), ("h", "hall")):
-            self.press(key, 8)
+            self.press(key, 0x20000)
             item = scene.game_menu.items[scene.game_menu.focus]
             self.assertEqual(item.action, action)
             self.assertFalse(item.enabled)
@@ -385,7 +385,7 @@ class GameMenuSceneTests(unittest.TestCase):
         before = scene.room_id, scene.player_x, scene.checkpoint
         for paused in (False, True):
             scene.set_paused(paused)
-            self.press("e", 8)
+            self.press("e", 0x20000)
             self.assertIsNone(scene.game_menu)
             self.assertEqual(scene.paused, paused)
             self.assertEqual((scene.room_id, scene.player_x, scene.checkpoint), before)
@@ -413,7 +413,7 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_about_from_shortcut_and_menu_return_to_the_correct_parent(self):
         scene = self.scene
-        self.press("v", 8)
+        self.press("v", 0x20000)
         self.assertEqual(scene.game_menu.page, "about")
         self.press("Return")
         self.assertIsNone(scene.game_menu)
@@ -428,7 +428,7 @@ class GameMenuSceneTests(unittest.TestCase):
     def test_excluded_shortcuts_and_altgr_do_not_trigger_commands(self):
         scene = self.scene
         with patch.object(scene, "restart_opening") as restart:
-            for key, state in (("q", 8), ("f", 8), ("n", 0x20004)):
+            for key, state in (("q", 0x20000), ("f", 0x20000), ("n", 0x20004)):
                 self.press(key, state)
                 self.assertIsNone(scene.game_menu)
             restart.assert_not_called()
@@ -436,7 +436,7 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_alt_enter_is_available_in_confirmation_without_confirming(self):
         scene = self.scene
-        self.press("n", 8)
+        self.press("n", 0x20000)
         event = self.event("Return", 0x20000)
         self.assertIsNone(scene.dev_key_press(event))
         self.assertEqual(scene.dev_key_press(event), "break")
@@ -553,6 +553,7 @@ class GameMenuSceneTests(unittest.TestCase):
     def test_real_tk_bindings_route_alt_n_escape_f1_and_alt_enter(self):
         result = subprocess.run([sys.executable, "-c", textwrap.dedent("""
             from unittest.mock import patch
+            import sys
             from tests.test_game_menu import GameMenuSceneTests
 
             fixture = GameMenuSceneTests()
@@ -570,6 +571,32 @@ class GameMenuSceneTests(unittest.TestCase):
                     root.event_generate('<KeyPress>', keysym=symbol, state=state)
                     root.event_generate('<KeyRelease>', keysym=symbol, state=state)
 
+                if sys.platform == 'win32':
+                    scene.start_intro()
+                    intro = scene.intro
+                    key('s', 8)
+                    assert scene.game_menu is None and scene.intro is intro
+                    key('space', 8)
+                    assert scene.intro is None and scene.opening.active
+                    scene.jump_to_screen('5')
+                    scene.set_paused(True)
+                    root.event_generate('<KeyPress>', keysym='Right', state=8)
+                    assert not scene.paused and scene.horizontal_input == 1
+                    root.event_generate('<KeyRelease>', keysym='Right', state=8)
+                    assert scene.horizontal_input == 0
+                    key('F1', 8)
+                    assert scene.game_menu.page == 'menu'
+                    key('Return', 8)
+                    assert scene.game_menu is None and not scene.paused
+                    key('F2', 8)
+                    assert scene.game_menu.page == 'screenshots'
+                    key('Return', 8)
+                    assert scene.game_menu.dropdown and not scene.fullscreen
+                    key('Escape', 8)
+                    key('F2', 8)
+                    with patch.object(scene, 'capture_screenshot') as capture:
+                        key('F8', 8)
+                        capture.assert_called_once_with()
                 key('n', 0x20000)
                 assert scene.game_menu.page == 'confirm'
                 key('Escape')

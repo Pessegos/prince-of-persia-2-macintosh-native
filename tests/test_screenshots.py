@@ -130,7 +130,7 @@ class WindowScreenshotTests(unittest.TestCase):
             host.dev_key_press(event)
             self.assertEqual(capture.call_count, 2)
             host.dev_key_release(event)
-            host.dev_key_press(SimpleNamespace(keysym="F8", state=0x8))
+            host.dev_key_press(SimpleNamespace(keysym="F8", state=0x20000))
             self.assertEqual(capture.call_count, 2)
 
     def test_f2_toggles_screenshots_once_per_press_without_developer_availability(self):

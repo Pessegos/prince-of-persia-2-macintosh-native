@@ -17,10 +17,17 @@ PAUSE_GAMEPLAY_KEYS = frozenset({
 })
 
 
+def alt_pressed(event, held_keys=()):
+    # Tk's Mod1 (0x8) is Num Lock on Windows, but Alt on X11.
+    mask = (0x10 | 0x20000) if sys.platform == "win32" else (0x8 | 0x20000)
+    return bool(event.state & mask or {"Alt_L", "Alt_R"}.intersection(held_keys))
+
+
 def is_resume_key(event, held_keys=()):
     command_keys = {"Control_L", "Control_R", "Alt_L", "Alt_R", "Meta_L", "Meta_R",
                     "Super_L", "Super_R", "Win_L", "Win_R"}
-    if event.state & (0x4 | 0x8 | 0x40 | 0x20000) or command_keys.intersection(held_keys):
+    if (alt_pressed(event, held_keys) or event.state & (0x4 | 0x40)
+            or command_keys.intersection(held_keys)):
         return False
     key = event.keysym
     if (key in command_keys or key in {
@@ -562,7 +569,7 @@ class WindowControls:
             self.render()
 
     def dev_key_press(self, event):
-        alt = event.state & (0x8 | 0x20000) or {"Alt_L", "Alt_R"}.intersection(self.window_keys_down)
+        alt = alt_pressed(event, self.window_keys_down)
         # Closing the host window must bypass intro, pause and menu filters.
         if event.keysym == "F4" and alt:
             self.root.destroy()
@@ -590,7 +597,7 @@ class WindowControls:
             self.record_paused_key(event, True)
         if event.keysym in self.pause_resume_keys:
             return "break"
-        fullscreen_key = event.keysym == "Return" and event.state & (0x8 | 0x20000)
+        fullscreen_key = event.keysym == "Return" and alt
         if fullscreen_key:
             if repeated:
                 return "break"

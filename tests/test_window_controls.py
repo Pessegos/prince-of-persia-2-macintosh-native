@@ -10,7 +10,8 @@ from unittest.mock import Mock, patch
 from PIL import Image
 
 from pop2.game_ui import VISIBLE_VIEWPORT, fit_viewport, viewport_point
-from pop2.window_controls import WindowControls, is_resume_key
+from pop2.game_menu import GameMenu
+from pop2.window_controls import WindowControls, alt_pressed, is_resume_key
 
 
 class PresentationTests(unittest.TestCase):
@@ -95,7 +96,7 @@ class PresentationTests(unittest.TestCase):
 class CloseShortcutTests(unittest.TestCase):
     def test_alt_f4_closes_before_intro_pause_or_menu_input_filters(self):
         for mode in ("intro", "paused", "menu", "development", "gameplay"):
-            for state, held in ((0x8, set()), (0x20000, set()), (0, {"Alt_L"}), (0, {"Alt_R"})):
+            for state, held in ((0x20000, set()), (0x20008, set()), (0, {"Alt_L"}), (0, {"Alt_R"})):
                 with self.subTest(mode=mode, state=state, held=held):
                     host = WindowControls()
                     host.root = Mock()
@@ -119,6 +120,115 @@ class CloseShortcutTests(unittest.TestCase):
         host.intro = object()
         self.assertEqual(host.dev_key_press(SimpleNamespace(keysym="F4", state=0, char="")), "break")
         host.root.destroy.assert_not_called()
+
+
+class ModifierKeyTests(unittest.TestCase):
+    def setUp(self):
+        self.host = WindowControls()
+        self.host.root = Mock()
+        self.host.window_keys_down = set()
+        self.host.pause_resume_keys = set()
+        self.host.game_menu = self.host.dev_menu = None
+        self.host.paused = False
+        self.host.intro = object()
+        self.host.finish_intro = Mock()
+        self.host.apply_game_action = Mock()
+        self.host.open_game_menu = Mock()
+        self.host.capture_screenshot = Mock()
+
+    def press(self, key, state):
+        event = SimpleNamespace(keysym=key, state=state, char="")
+        result = self.host.dev_key_press(event)
+        self.host.dev_key_release(event)
+        return result
+
+    def test_alt_masks_are_platform_specific_and_held_alt_is_preserved(self):
+        for platform, states in (("win32", ((8, False), (16, True), (0x20000, True))),
+                                 ("linux", ((8, True), (16, False), (0x20000, True)))):
+            with patch("pop2.window_controls.sys.platform", platform):
+                for state, expected in states:
+                    with self.subTest(platform=platform, state=state):
+                        self.assertEqual(alt_pressed(SimpleNamespace(state=state)), expected)
+                for held in ({"Alt_L"}, {"Alt_R"}):
+                    self.assertTrue(alt_pressed(SimpleNamespace(state=0), held))
+
+    def test_windows_lock_states_allow_space_to_skip_and_never_turn_letters_into_commands(self):
+        with patch("pop2.window_controls.sys.platform", "win32"):
+            for state in (0x8, 0xA, 0x28, 0x2A):
+                with self.subTest(state=state):
+                    self.press("space", state)
+                    for key in ("s", "S", "n", "r", "t", "m", "o", "h", "v"):
+                        self.press(key, state)
+                    self.press("Return", state)
+                    self.press("F4", state)
+            self.assertEqual(self.host.finish_intro.call_count, 4)
+            self.host.apply_game_action.assert_not_called()
+            self.host.open_game_menu.assert_not_called()
+            self.host.root.destroy.assert_not_called()
+
+    def test_windows_numlock_allows_screenshots_and_menu_activation(self):
+        with patch("pop2.window_controls.sys.platform", "win32"):
+            self.press("F8", 8)
+            self.host.capture_screenshot.assert_called_once_with()
+            self.host.game_menu = GameMenu()
+            self.host.paused = True
+            self.assertEqual(self.press("Return", 8), "break")
+            self.host.apply_game_action.assert_called_once_with("resume")
+
+    def test_windows_numlock_does_not_prevent_pause_resume(self):
+        self.host.paused = True
+        self.host.set_paused = Mock(side_effect=lambda value: setattr(self.host, "paused", value))
+        with patch("pop2.window_controls.sys.platform", "win32"):
+            self.press("space", 8)
+        self.host.set_paused.assert_called_once_with(False)
+        self.host.finish_intro.assert_not_called()
+
+    def test_windows_real_alt_still_blocks_skip_and_invokes_shortcuts_with_numlock(self):
+        with patch("pop2.window_controls.sys.platform", "win32"):
+            for state in (0x10, 0x18, 0x20000, 0x20008):
+                self.press("space", state)
+                self.press("s", state)
+                self.assertIsNone(self.press("Return", state))
+        self.host.finish_intro.assert_not_called()
+        self.assertEqual(self.host.apply_game_action.call_count, 4)
+        self.host.apply_game_action.assert_called_with("save")
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows Tk modifier states")
+    def test_real_tk_events_distinguish_numlock_from_alt(self):
+        result = subprocess.run([sys.executable, "-c", textwrap.dedent("""
+            import tkinter as tk
+            from tests.test_window_controls import ModifierKeyTests
+
+            fixture = ModifierKeyTests()
+            fixture.setUp()
+            host = fixture.host
+            root = tk.Tk()
+            host.root = root
+            root.bind('<KeyPress>', host.dev_key_press)
+            root.bind('<KeyRelease>', host.dev_key_release)
+            try:
+                root.update()
+                root.focus_force()
+                root.update()
+                def key(symbol, state):
+                    root.event_generate('<KeyPress>', keysym=symbol, state=state)
+                    root.event_generate('<KeyRelease>', keysym=symbol, state=state)
+                for state in (0, 8, 0xA, 0x28, 0x2A):
+                    key('space', state)
+                    key('s', state)
+                assert host.finish_intro.call_count == 5
+                host.apply_game_action.assert_not_called()
+                for state in (0x20000, 0x20008):
+                    key('space', state)
+                    key('s', state)
+                assert host.finish_intro.call_count == 5
+                assert host.apply_game_action.call_count == 2
+                host.apply_game_action.assert_called_with('save')
+            finally:
+                root.destroy()
+        """)], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stderr, "")
 
 
 class ResumeKeyTests(unittest.TestCase):
@@ -210,6 +320,13 @@ class ResumeKeyTests(unittest.TestCase):
         with patch("pop2.window_controls.sys.platform", "linux"):
             self.assertTrue(is_resume_key(
                 SimpleNamespace(keysym="minus", char="-", keycode=0x2D, state=0)))
+
+    def test_windows_lock_flags_do_not_block_text_or_directional_resume(self):
+        with patch("pop2.window_controls.sys.platform", "win32"):
+            for key in ("space", "s", "Left", "Right", "Up", "Down"):
+                for state in (8, 0xA, 0x28, 0x2A):
+                    with self.subTest(key=key, state=state):
+                        self.assertTrue(is_resume_key(SimpleNamespace(keysym=key, char="", state=state)))
 
 
 class FocusPauseTests(unittest.TestCase):

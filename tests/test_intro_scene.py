@@ -298,7 +298,7 @@ class IntroSceneTests(unittest.TestCase):
     def test_removed_alt_e_does_not_restart_intro_or_skip_it(self):
         scene = self.scene
         before = scene.intro
-        self.key("e", 8)
+        self.key("e", 0x20000)
         self.assertIs(scene.intro, before)
         self.assertIsNone(scene.game_menu)
 
