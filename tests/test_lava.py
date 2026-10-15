@@ -417,6 +417,11 @@ class RecessedLavaArtworkTests(unittest.TestCase):
         edits = ((75, 5, 0xb9, 0xd4), (78, 5, 0xb9, 0xd4),
                  (56, 6, 0xb9, 0xd4), (43, 7, 0xb9, 0xaa),
                  (44, 7, 0xbb, 0xd4), (45, 8, 0xaa, 0xbb))
+        edits += tuple((x, 10, 0xd4, index) for x, index in enumerate(
+            (0xbc, 0xbb, 0xbc, 0xbc, 0xbb, 0xbc, 0xbb, 0xbc, 0xbc, 0xbb, 0xbb), 84))
+        edits += ((82, 11, 0xd4, 0xbc), (83, 11, 0xd4, 0xbc), (84, 11, 0xd4, 0xbb),
+                  (88, 11, 0xd4, 0xbb), (89, 11, 0xd4, 0xbb), (90, 11, 0xd4, 0xb9))
+        edits += ((85, 11, 0xa8, 0xbb),)
         for x, y, old, new in edits:
             self.assertEqual(sprite.getpixel((x, y)), palette[new])
             sprite.putpixel((x, y), palette[old])
@@ -745,7 +750,7 @@ class ImportedLavaTests(unittest.TestCase):
         changed = ImageChops.difference(before.convert('RGB'), after.convert('RGB')).convert('L')
         self.assertIsNone(ImageChops.multiply(changed, ImageOps.invert(allowed)).getbbox())
 
-    def test_reported_particle_frames_and_right_crust_stay_occluded(self):
+    def test_reported_particle_frames_and_remaining_inset_rock_stay_occluded(self):
         from PIL import Image, ImageChops, ImageOps
         from pop2.caverns import (cavern_assets, cavern_room, draw_cavern_lava,
                                  recessed_lava_foreground_mask, recessed_lava_inset_mask, recessed_lava_surface)
@@ -764,7 +769,6 @@ class ImportedLavaTests(unittest.TestCase):
         background = cavern_room(5).flattened()
         allowed = Image.new('L', background.size)
         allowed.paste(ImageChops.lighter(inset, recessed_lava_foreground_mask(surface)), position)
-        right_changes = 0
         for tick in range(48):
             with patch.dict(shapes, {('recessed-inset', 3614): Image.new('L', surface.size),
                                      ('recessed-front', 3614): Image.new('L', surface.size)}):
@@ -783,9 +787,38 @@ class ImportedLavaTests(unittest.TestCase):
                         if inset.getpixel((x, y)):
                             point = position[0] + x, position[1] + y
                             self.assertEqual(after.getpixel(point), surface.getpixel((x, y)))
-                            right_changes += x >= 70 and bool(changed.getpixel(point))
             state.lava.advance()
-        self.assertGreater(right_changes, 0)
+
+    def test_removed_right_crust_becomes_liquid_and_no_longer_hides_effects(self):
+        from pop2.caverns import (cavern_assets, cavern_room, draw_cavern_lava,
+                                 recessed_lava_foreground_mask, recessed_lava_inset_mask,
+                                 recessed_lava_liquid_mask, recessed_lava_surface)
+        from pop2.cavern_state import CavernState
+
+        program, _, palette, _ = cavern_assets()
+        tables = program['lava']
+        surface = recessed_lava_surface(palette)
+        liquid = recessed_lava_liquid_mask(surface)
+        foreground = recessed_lava_foreground_mask(surface)
+        inset = recessed_lava_inset_mask(surface)
+        points = [(x, 10) for x in range(84, 95)] + [(x, 11) for x in (82, 83, 84, 85, 88, 89, 90)]
+        for point in points:
+            self.assertEqual(liquid.getpixel(point), 255)
+            self.assertEqual(foreground.getpixel(point), 0)
+            self.assertEqual(inset.getpixel(point), 0)
+        state = CavernState()
+        state.configure_lava(tables)
+        state.lava.enter_room(5, tables['rooms']['5'])
+        record = tables['rooms']['5'][0]
+        dx, dy = tables['piece_offsets']
+        changed = set()
+        for _ in range(48):
+            frame = draw_cavern_lava(cavern_room(5).flattened(), 5, state)
+            for x, y in points:
+                if frame.getpixel((record['x'] + dx + x, record['bottom'] + dy - surface.height + y)) != surface.getpixel((x, y)):
+                    changed.add((x, y))
+            state.lava.advance()
+        self.assertGreater(len(changed), 0)
 
     def test_surface_clipping_and_airborne_order_across_all_pools_and_death_phases(self):
         from PIL import Image, ImageChops
@@ -799,9 +832,9 @@ class ImportedLavaTests(unittest.TestCase):
         sprite = recessed_lava_surface(palette)
         mask = recessed_lava_foreground_mask(sprite)
         inset = recessed_lava_inset_mask(sprite)
-        for point in ((41, 13), (83, 11), (36, 26)):
+        for point in ((41, 13), (89, 12), (36, 26)):
             self.assertEqual(mask.getpixel(point), 255)
-        for point in ((75, 5), (80, 10)):
+        for point in ((75, 5), (80, 10), (83, 11)):
             self.assertEqual(mask.getpixel(point), 0)
         dx, dy = tables['piece_offsets']
         for room, records in tables['rooms'].items():

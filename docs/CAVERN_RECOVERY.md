@@ -133,7 +133,12 @@ For presentation, enhanced mode substitutes a shallow recessed pool for the
 SHAP:3615 rock-cut cover. `pop2/lava_recess.json` contains the new artwork as
 sparse rows of cavern-palette indices, with transparent pixels outside the edit.
 It was adapted from the user-approved visual concept at the native pixel grid,
-retaining the irregular silhouette, dark-red crust and shallow rock cut faces.
+retaining the irregular silhouette, perimeter crust and shallow rock cut faces.
+The protruding interior dark-red strip on the right was replaced by liquid
+using 17 palette-index changes, plus the single brown pixel left isolated within
+that strip. The neighboring rock and all other pixels stay
+unchanged. The masks are derived from this artwork, so those pixels also admit
+the original effect frames without any sequence edits or per-position exceptions.
 It is port artwork, not an extracted or recovered Macintosh feature. The file
 does not include an original resource fork, palette or surrounding room image.
 No concept generator, external reference file or new asset import is needed at
@@ -176,11 +181,11 @@ dark-red crust around every side, including the rear perimeter. Raised drops
 and burst bodies are drawn after the solid contours without the liquid mask,
 so they can rise above the pool or pass in front of the rear rim. Near-side
 rock is restored after raised effects too, preventing the final small-particle
-frame from spilling two pixels onto the front perimeter. The two
-inset contours remain in front of these raised effects: an additional mask
+frame from spilling two pixels onto the front perimeter. The remaining
+inset rock contours remain in front of these raised effects: an additional mask
 selects opaque non-liquid pixels between liquid above and below in each column.
 Restoring only those pixels after the air pass prevents the small particles
-from flashing across the left inset stone or the right embedded dark-red crust.
+from flashing across the left inset stone or the small rock faces on the right.
 This presentation choice leaves every other raised pixel and source frame intact.
 No source shape, event timing or bubble count is changed. This offset
 is presentation-only; it moves the earlier six-pixel-right placement one pixel
@@ -189,19 +194,21 @@ left and one pixel up.
 Before raised effects, enhanced mode restores solid contours. A cached mask protects
 rock below each column's first molten pixel: both the near-side floor and the
 inset stone that separates upper and lower liquid along the left contour.
-Dark-red crust is restored only where bright liquid occurs both above and
-below it, preserving the right-hand inset without hiding bubbles that rise
-in front of the rear rim. The brighter orange shades count as liquid as well.
+Dark-red crust, where present, is restored only where bright liquid occurs both
+above and below it, without hiding bubbles that rise in front of the rear rim.
+The removed interior strip is now liquid and is not included in these masks.
+The brighter orange shades count as liquid as well.
 The saved pixels
 come from the frame immediately after painting the static pool, so transparent
 parts of the overlay retain the existing room floor as well. This also retains
 the existing occlusion of character-death drawings and their contact splashes.
-Raised bubble effects remain in front of this pass. The approved artwork is
-unchanged. Native reference mode has neither the split nor the additional masks.
+Raised bubble effects are then drawn, followed by restoration of the near-side
+rock and remaining inset contours. Native reference mode has neither the custom
+artwork nor the split or additional masks.
 Tests compare 100 boiling frames and both facings of all three Prince death
 branches for every pool and visible camera-border copy. Focused checks admit
 all three flat-ripple frames at every scheduled ripple position without a
-changed pixel outside liquid, and verify raised-splash pixels over rock intact.
+changed pixel outside liquid, and verify raised-splash pixels outside the protected rock intact.
 This retains the game's palette and bubble artwork without the cover's
 rock-cut gaps.
 Death body/splash triples and mirror flags remain unchanged. Surface edits
