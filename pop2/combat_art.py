@@ -117,7 +117,7 @@ class HitArtwork:
         # Keep rendering that pose until its next animation tick, not per paint.
         # SetupOpp 3:0994-09ce also draws the first mode-9 tumble pose.
         tumble_hit = state.actor_type == 2 and state.animation_state == 9 and state.action == 213
-        if state.animation_state != 10 and not tumble_hit:
+        if state.animation_state != 10 and not tumble_hit and not state.hit_flash:
             return
         is_player = state.actor_type == 0
         record = (self.player_frames[state.action] if is_player

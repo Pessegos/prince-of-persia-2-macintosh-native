@@ -431,6 +431,20 @@ def draw_cavern_falling(frame, room_id, state, level, art):
     return frame
 
 
+def draw_cavern_darts(frame, room_id, state):
+    _program, resources, palette, shapes = cavern_assets()
+    for dart in state.plates.darts.projectiles:
+        # 8:2e1a emits a type-2 object only in the current room and while
+        # flying. DrawObj 3:4032 passes shape 94 to AddMid, which subtracts
+        # one: SHAP 3593, with the character-style inclusive bottom anchor.
+        if dart.room != room_id or dart.dy in (-3, -1):
+            continue
+        sprite = cavern_command_sprite(['back', 3593, dart.x, dart.y, 16],
+                                        resources, palette, shapes)
+        frame.paste(sprite, (dart.x, dart.y - sprite.height + 1), sprite)
+    return frame
+
+
 def cavern_command_sprite(command, resources, palette, shapes):
     library = command[7] if len(command) >= 8 else 4
     index, flags = command[1], command[4]
@@ -452,7 +466,8 @@ def cavern_pressure_signature(program, room_id, state):
     for record in records:
         value = state.plates.foreground.get((record['room'], record['cell']), record['foreground'])
         phases.append(min(value & 255, 184) // 4 if record['kind'] == 4 else
-                      min(value & 255, 79) if record['kind'] == 17 else int(bool(value & 0x2000)))
+                      min(value & 255, 79) if record['kind'] == 17 else
+                      value & 7 if record['kind'] == 33 else int(bool(value & 0x2000)))
     return tuple(phases)
 
 
@@ -461,18 +476,27 @@ def pressure_drawing_commands(commands, records, phases, resources):
                  for key in record['commands']}
     # DrawHalf reuses the plate's drawing slot in its front-only climb repaint.
     for key, item in tuple(overrides.items()):
-        if item[0]['kind'] not in (4, 17):
+        if item[0]['kind'] in (5, 6, 34):
             overrides[('front', *key[1:])] = item
     result = []
     for source in commands:
         key = (source[0], 3554 if source[1] == 3555 else source[1], *source[7:10])
+        if 3591 <= source[1] <= 3593:
+            key = (source[0], 3591, *source[7:10])
         item = overrides.get(key)
         if item is None:
             result.append(source)
             continue
         record, phase = item
         command = list(source)
-        if record['kind'] in (4, 17):
+        if record['kind'] == 33:
+            # DrawCaveDart's DATA table at A5-2f3e. All three mouth
+            # shapes share the PIEC anchor, but have different dimensions.
+            command[1] = (3591, 3593, 3592, 3591, 3591, 3591, 3591)[phase]
+            width, height = struct.unpack_from('>hH', resources['SHAP'][command[1]]['data'], 4)
+            command[6] = [max(0, command[3] - height), max(0, command[2]),
+                          min(365, command[3]), min(510, command[2] + width)]
+        elif record['kind'] in (4, 17):
             # Stone gates move two pixels/quarter-phase; exits move one pixel.
             # Both keep their native row clip and the SHAP's bottom alignment.
             exit_door = record['kind'] == 17
@@ -494,7 +518,7 @@ def pressure_drawing_commands(commands, records, phases, resources):
 
 def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=()):
     program, resources, palette, shapes = cavern_assets()
-    if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13) and program.get('level') == 3:
+    if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14) and program.get('level') == 3:
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, 3, room_id):
         commands = program['commands']

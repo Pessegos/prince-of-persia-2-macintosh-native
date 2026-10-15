@@ -1,9 +1,10 @@
-"""Macintosh pressure links and cavern stone-gate/exit controllers."""
+"""Macintosh pressure links and cavern gate, exit and shooter controllers."""
 
 from dataclasses import dataclass, field, replace
 import struct
 
 from pop2.loose_floors import pressure_tile
+from pop2.darts import Darts
 
 
 @dataclass
@@ -13,6 +14,7 @@ class PressurePlates:
     timers: dict = field(default_factory=dict)
     triggered: list = field(default_factory=list)
     songs: list = field(default_factory=list)
+    darts: Darts = field(default_factory=Darts)
 
     def link(self, terrain, index):
         if not 0 <= index < 256:
@@ -56,20 +58,21 @@ class PressurePlates:
                 self.add(key, 1)
                 if action != 185:
                     cues.append(27)
-        self.trigger(terrain, index, tile.kind, bool(tile.foreground & 0x2000), impact)
+        cues.extend(self.trigger(terrain, index, tile.kind, bool(tile.foreground & 0x2000), impact))
         # PushPlate writes the depression bit after traversing the entire chain.
         self.foreground[key] = tile.foreground | 0x2000
         return tuple(cues)
 
     def trigger(self, terrain, index, how, depressed=False, impact=False):
         seen = set()
+        cues = []
         while index != -3:
             if index in seen:
                 raise ValueError('Cyclic pressure-plate link chain')
             seen.add(index)
             room, cell, _timer, _previous, following = self.link(terrain, index)
             if room == -2:
-                return
+                break
             if not 1 <= room <= 32 or not 0 <= cell < 30:
                 raise ValueError('Invalid pressure-plate destination')
             tile = terrain.tile(room - 1, cell % 10, cell // 10)
@@ -77,12 +80,20 @@ class PressurePlates:
             self.triggered.append((tile.kind, *key, how))
             if tile.kind == 4:
                 self.trigger_gate(key, tile.foreground, how, depressed, impact)
+            elif tile.kind == 33 and not depressed and not tile.foreground & 7:
+                # TriggerObject 5:1f8c and TriggerDart 5:49b6: a fresh plate
+                # and an idle shooter; the first mouth pose loads immediately.
+                self.add(key, 1)
+                self.foreground[key] = tile.foreground + 1
+                self.darts.spawn(*key)
+                cues.append(65)
             elif tile.kind == 17 and not tile.foreground & 255:
                 # TriggerObject 5:1f40: only a completely closed exit starts.
                 self.add(key, 1)
                 if 297 not in self.songs:
                     self.songs.append(297)
             index = following
+        return tuple(cues)
 
     def trigger_gate(self, key, foreground, how, depressed=False, impact=False):
         position = foreground & 255
@@ -120,6 +131,13 @@ class PressurePlates:
             room, cell = key
             tile = terrain.tile(room, cell % 10, cell // 10)
             value = tile.foreground
+            if tile.kind == 33:
+                if (value & 7) < 6:
+                    self.foreground[key] = value + 1
+                else:
+                    self.foreground[key] = value & 0xfff8
+                    del self.active[key]
+                continue
             if tile.kind in (5, 6, 34):
                 index = value & 255
                 timer = self.timer(terrain, index)

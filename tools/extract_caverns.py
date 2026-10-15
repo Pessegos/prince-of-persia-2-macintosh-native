@@ -295,7 +295,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
 def extract_caverns(program, caverns, prince, output):
     level = parse_resource_fork(prince)['LEVL'][2002]['data']
     scenes = {str(room): recover_room(program, caverns, level, room, prince) for room in range(32)}
-    result = {'version': 13, 'level': 3,
+    result = {'version': 14, 'level': 3,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     result['climb_redraw'] = {

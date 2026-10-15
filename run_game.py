@@ -94,7 +94,7 @@ def missing_assets(project=PROJECT):
     if cavern_path.is_file():
         try:
             cavern = json.loads(cavern_path.read_text(encoding='ascii'))
-            if (cavern.get('version'), cavern.get('level')) != (13, 3) or set(cavern['rooms']) != {
+            if (cavern.get('version'), cavern.get('level')) != (14, 3) or set(cavern['rooms']) != {
                     str(room) for room in range(32)}:
                 raise ValueError('Full level-three scenery needs reimport')
             plates = cavern['pressure_plates']

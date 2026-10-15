@@ -34,6 +34,7 @@ class SequenceState:
     vertical_velocity: int = 0
     selected_sequence_id: int | None = None
     death_song_method: int | None = None
+    hit_flash: bool = False
 
     @property
     def source_sequence_id(self):

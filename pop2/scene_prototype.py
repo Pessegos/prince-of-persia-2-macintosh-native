@@ -1966,6 +1966,10 @@ class ScenePrototype(WindowControls):
         caverns = self.game.caverns
         if caverns is None:
             return
+        for actor in (self.combat.player, *self.combat.active_guards()):
+            actor.state.hit_flash = False
+        self.sequence_state.sound_events.extend(caverns.plates.darts.advance(
+            self.level_map, self.room_id, self.player_collision_bounds(), self.sequence_state))
         # FrameAdv 2:622c-6230 moves existing debris before AnimTrobs.
         cues, blocks = caverns.loose.advance_falling(self.level_map, self.sequence_state,
                                                     self.terrain_motion, self.frames[self.action])
@@ -2003,6 +2007,54 @@ class ScenePrototype(WindowControls):
         caverns.loose.plate_events.clear()
         caverns.loose.advance_tiles(self.level_map)
         self.sequence_state.sound_events.extend(caverns.plates.advance(self.level_map))
+
+    def check_cavern_darts(self):
+        from pop2.darts import dart_death
+
+        darts = self.game.caverns.plates.darts
+        for actor in (self.combat.player, *self.combat.active_guards()):
+            state, motion = actor.state, actor.terrain_motion
+            if motion is None:
+                continue
+            player = actor is self.combat.player
+            bounds = (self.player_collision_bounds() if player else
+                      self.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
+            if not darts.contacts(motion.room, state, bounds) or not actor.alive:
+                continue
+            # DoCharHurt stores the maximum pending wound, not one life per
+            # projectile when multiple darts contact the actor in one update.
+            actor.life -= 1
+            state.hit_flash = True
+            if actor.alive:
+                # A nonfatal dart does not select a hurt pose or stop a run.
+                state.sound_events.extend((29 if player else 59, 66))
+                continue
+            record = (self.frames[state.action] if player else
+                      self.guard_art.frames[guard_frame_index(state.action)])
+            sequence, offset = dart_death(self.level_map, motion, state, record)
+            state.target_x += offset
+            state.current_x = state.target_x
+            state.current_y = state.vertical_velocity = 0
+            if sequence == 18:
+                motion.row += 1
+                state.current_y -= TILE_HEIGHT
+            motion.dead, motion.falling = sequence != 18, sequence == 18
+            motion.hit_fall = sequence == 18
+            actor.recovering = False
+            self.physics.select(actor.runtime, sequence)
+            if sequence == 98:
+                state.sound_events.append(12)
+            state.sound_events.append(66)
+            if player:
+                self.clear_keys(None)
+                self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
+                self.death.begin(0)
+                self.death.music_method = 0
+                self.action, self.player_x = state.action, state.target_x
+                self.status.set('Defeated')
+            else:
+                actor.row = motion.row
+                actor.targetable = False
 
     def advance_level_events(self):
         if self.game.caverns is not None:
@@ -2048,6 +2100,7 @@ class ScenePrototype(WindowControls):
                                                              state, motion, self.frames[state.action]))
                     for event in shakes:
                         state.sequence_events.remove(event)
+            self.check_cavern_darts()
             self.sequence_state.sound_events.extend(self.game.caverns.advance())
             self.game.caverns.advance_torches(
                 self.level_renderer.cavern_program.get('torches', {}).get(str(self.room_id), ()))

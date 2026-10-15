@@ -298,10 +298,10 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 5,Modular Set 2,MarkFRedraw,0x1990,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,2
 5,Modular Set 2,MarkBufsForRect,0x19f8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,42,3
 5,Modular Set 2,PoPDiffRect,0x1b5c,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,0
-5,Modular Set 2,Trigger,0x1c4c,decoded,partial,pop2/pressure_plates.py,"native linked target traversal; level-three stone gates dispatched, traps/exits identified but not activated",3,7
+5,Modular Set 2,Trigger,0x1c4c,decoded,partial,pop2/pressure_plates.py,"native linked target traversal; level-three stone gates, exits and all nine projectile traps dispatched",3,7
 5,Modular Set 2,TriggerFlask,0x1ce8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,2
 5,Modular Set 2,TriggerGate,0x1d50,decoded,partial,pop2/pressure_plates.py,level-three reverse-plate dispatch; special level/story and closing-on-actor branches missing,1,3
-5,Modular Set 2,TriggerObject,0x1ec8,decoded,partial,pop2/pressure_plates.py;pop2/scene_prototype.py,"level-three closed-exit admission, state 1 and OpenDoor song 297; projectile and other environment branches missing",1,6
+5,Modular Set 2,TriggerObject,0x1ec8,decoded,partial,pop2/pressure_plates.py;pop2/darts.py;pop2/scene_prototype.py,level-three closed exits and fresh-plate idle-shooter admission; other environment branches missing,1,6
 5,Modular Set 2,TriggerTorch,0x1ffa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,3
 5,Modular Set 2,AddTrob,0x20a0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,19,1
 5,Modular Set 2,Get1stWallColInDir,0x2198,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,2
@@ -476,7 +476,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,RedrawCaveBars,0x1632,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,2
 8,Caverns,TriggerCaveBars,0x1672,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 8,Caverns,DrawCaveBackWall,0x16ee,decoded,indexed-only,,No semantic review recorded in this prototype catalog,10,3
-8,Caverns,DrawCaveDart,0x1aba,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,3
+8,Caverns,DrawCaveDart,0x1aba,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,native mouth shapes and dimension-dependent clips; 315 whole room/floor/climb drawing-list comparisons for all nine shooters,0,3
 8,Caverns,DrawCaveExitMovable,0x1ba4,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,"level-three exit body, pixel-phase displacement and native clips; 226 room/floor/climb command-list comparisons; special actor draw pipeline incomplete",0,12
 8,Caverns,DrawCaveFloor,0x1da8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,12,4
 8,Caverns,DrawCaveGateMovable,0x1f40,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,"native two-layer shapes, quarter-phase displacement and clips; 636 individual and 504 combined room/floor/climb command-list comparisons including plates",2,8
@@ -486,8 +486,8 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,DrawCaveTorch,0x2ae8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,4
 8,Caverns,DrawObjCaveLoose,0x2bb4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
 8,Caverns,TriggerGateWithRevPlate,0x2c38,jump_table,partial,pop2/pressure_plates.py,"fresh versus held reverse plates, opening/fast close and debris permanence; 17280 native controller updates across all 16 gate buttons",2,3
-8,Caverns,CheckDartHit,0x2e82,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,3
-8,Caverns,MobDart,0x2f98,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,8
+8,Caverns,CheckDartHit,0x2e82,jump_table,partial,pop2/darts.py;pop2/scene_prototype.py,"rectangle/swept contact, SEQS 79 exemption, one-life wound and ordinary fatal response; 14280 native hit comparisons; special actors and cross-hazard pending damage incomplete",2,3
+8,Caverns,MobDart,0x2f98,jump_table,partial,pop2/darts.py;pop2/scene_prototype.py,"native diagonal velocity, ceiling/wall/gate collision and incoming neighbor rebasing; 3240 controller/projectile updates matched across all nine traps; shared MOB bank incomplete",0,8
 8,Caverns,AnimLava,0x31fe,jump_table,partial,pop2/lava.py,native reference phase/bubble/death branches: 6000 tick comparisons; visual QoL skips ordinary wrap hold without changing deaths,0,7
 8,Caverns,CheckLavaBoil,0x33fc,jump_table,partial,pop2/lava.py;pop2/scene_prototype.py,"supporting-foot column, 43/36 limits, physical row, FRAM bit 0x40 and surface Y; Prince integration only",2,3
 8,Caverns,GetLavaInfoHnd,0x34a6,jump_table,partial,pop2/lava.py;pop2/scene_prototype.py,"native death flags, Rnd(3), facing, SEQS 115/116 and cues 69/70; Prince death host, no Mac handles or skeleton host",2,13

@@ -61,10 +61,13 @@ class LevelRenderer:
 
     def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
         if self.level.number == 3 and caverns is not None and not front:
-            from pop2.caverns import draw_cavern_torches, draw_cavern_falling, draw_cavern_lava
+            from pop2.caverns import (
+                draw_cavern_torches, draw_cavern_falling, draw_cavern_lava, draw_cavern_darts,
+            )
 
             frame = draw_cavern_torches(frame, room_id, caverns)
             frame = draw_cavern_lava(frame, room_id, caverns)
+            frame = draw_cavern_darts(frame, room_id, caverns)
             return draw_cavern_falling(frame, room_id, caverns, self.level.data,
                                        self.room(room_id, caverns))
         if room_id in self.desert_rooms:

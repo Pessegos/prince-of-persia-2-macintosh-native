@@ -17,7 +17,7 @@ including side paths outside the shortest route.
 During import, `tools.extract_caverns` executes CODE:3/8 drawing routines against
 the original LEVL, Caverns PIEC and SHAP resources. It records background passes
 0/5 and foreground pass 1 for every tile of every room. The portable export
-retains the existing filename `caverns_entry.json`, now version 13:
+retains the existing filename `caverns_entry.json`, now version 14:
 
 ```text
 rooms[zero_based_room] = [layer, shape_id, x, bottom, draw_mode, row, clip_rect, library, draw_column, draw_row][]
@@ -301,8 +301,8 @@ not the entire native scheduler, crushing or the complete route. Integrated
 tests cover actual held-run pressure, blocked/open passage, bounded scenery
 caching, pause and restart. Resource-free controller tests also run on CI.
 
-The common pressure/link base and exit opening below are integrated, but the
-projectile controller is deliberately not activated yet. Native shared capacity/order
+The common pressure/link base, exit opening and projectile traps below are
+integrated. Native shared capacity/order
 between all animated objects and special actor interactions remain incomplete.
 
 ## Exit Buttons And Entry
@@ -343,6 +343,69 @@ SEQS:70's native -16 event now reaches the existing completion host. Level 4
 is not implemented: this deliberately stops at Level 3 Complete rather than
 loading an unsupported level or replaying the level-one boat cinematic. It
 does not claim the complete native next-level music/story/save pipeline.
+
+## Projectile Trap Buttons
+
+The reference `button trap.mp4` shows Room 16's two mid-row shooters, cells 12
+and 16, linked from plates 13 and 17 (zero-based cells). Level 3 has nine such
+links in Rooms 4, 5, 9, 13, 16, 21, 22 and 28. They use the same pressure/link
+controller as the gates and exits, not room-specific triggers.
+
+TriggerObject (5:1f8c) rejects an already depressed plate. TriggerDart
+(5:49b6-4aec) also requires shooter foreground `&7 == 0`, adds its animated
+object, loads mouth phase 1 immediately and requests sound 65. Its controller
+(8:2dea) advances through 2/3/4/5/6, then clears the low three bits and removes
+the animation. The plate must be released and the shooter idle to fire again;
+holding the plate does not repeat shots. Decoration bits remain intact.
+
+The new type-2 MOB starts at `(51*column+40, 120*row+95)` with constant velocity
+`(+27,-19)`. MobDart (8:2f98) has no gravity. Crossing a column checks IsWall or
+the native gate-clearance test; crossing `Y <= 120*row+5` checks the row above
+for solid floor. Impact requests 67 and marks velocity -3; the next update
+removes it. Crossing the viewport's right/top bounds can rebase from the
+visible left/lower neighbor into the current room. Otherwise the object is
+retired, with impact sound only if that outbound room link is absent. It does
+not chase every linked room indefinitely.
+
+CheckDartHit (8:2e82) uses an exclusive 9x7 rectangle at X+13/Y-7 and a separate
+swept test. Crouch poses 108-112 are exempt only in selected SEQS:79. Its active
+MOB indexing renumbers after a consumed projectile; the portable loop retains
+that behavior. A nonfatal hit requests 29/66 for the Prince (59/66 for an
+ordinary NPC), displays the existing damage burst, and deducts one life without
+interrupting movement or drawing the sword. Multiple darts in the same update
+do not stack their one-life wound. Dead actors can consume a projectile without
+another damage reaction.
+
+The fatal helper (8:3138-31e0) uses supporting-foot distance and the cell behind
+to select supported death (ordinary SEQS:85; Prince wall-jump poses use 98) or
+SEQS:18 at a ledge, with the original facing-relative displacement and floor-row
+increment. That last branch must keep the common falling/camera physics alive
+until landing. The helper's final Prince death-song method is 0.
+Special-actor death selection and the complete shared pending-damage arbitration
+with unrelated hazards remain outside this ordinary-actor implementation.
+
+DrawCaveDart (8:1aba) supplies mouth SHAPs 3591/3593/3592/3591. Export version
+14 binds those slots to each logical shooter and recomputes their different
+dimension-dependent clips. DrawObj (3:4032) passes shape 94 to AddMid, which
+subtracts one, so the flying stone is SHAP:3593 at its inclusive bottom anchor.
+No custom trap artwork or approximate replacement sprite is used.
+
+Native execution matched 3,240 controller/projectile updates across all nine
+buttons, with single presses, holding, release/repress and rapid attempts.
+Another 315 comparisons cover whole-room, floor-repaint and climb-repaint
+command lists at all seven phases. CheckDartHit matched 14,280 rectangle/swept
+and crouch cases. The diagnostic executes the native controllers and replaces
+unsupported 68020 address arithmetic with equivalent LEVL reads; it supplies
+QuickDraw rectangle intersection and stubs redraw bookkeeping and the hit
+reaction while testing contact. These are focused comparisons, not a claim of
+complete native scheduler or special-actor parity.
+
+Integrated tests run through both Room 16 buttons and one-life/fatal contact,
+including ledge-fall completion, continued run animation, pause and restart.
+The supplied video and a frame-by-frame port render were inspected for the
+mouth/stone/burst presentation. Resource-free rules run on CI; tests needing
+the original artwork are skipped there. The shared finite MOB/TROB bank across
+all debris, traps and other objects remains separate recovery work.
 
 ## Flasks And Entry Door
 
@@ -543,7 +606,7 @@ is shared with ordinary guards and other environments, without room overrides.
 
 This is the scenery foundation, not a completed playable level. Original room
 transitions and the common movement runtime are available. Cavern-specific
-floor classifications, projectile controllers, gate crushing, spikes,
+floor classifications, gate crushing, spikes,
 crushers, potion behavior and colors, special draw modes and
 skeleton enemies still require semantic recovery and integrated tests.
 The ordinary-guard decoder does not reinterpret skeleton spawn records; the
