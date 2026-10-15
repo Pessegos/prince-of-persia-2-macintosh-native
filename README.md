@@ -42,7 +42,7 @@ logic being recovered from the Macintosh executable through reverse engineering.
 - Automatic pause on focus loss; returning to the window, mouse clicks and system or multimedia keys do not resume the game.
 - You can pause cutscenes now without skipping them.
 - A 0.3-second filter for rapid repeated commands in the input queue, while preserving combinations of different commands.
-- Clouds keep moving during the intro's fades.
+- Clouds keep moving during the intro's fades, like the DOS version does.
 - The level 1 screen 7–8 drop preserves the full landing and stand-up animation, matching DOS behavior instead of the abrupt interruption in the Macintosh original.
 - Completely redesigned lava pools with detailed rocky edges, convincing depth like the DOS version, seamless bubbling, and properly layered splashes and particles.
 - Original copy protection is optional.
