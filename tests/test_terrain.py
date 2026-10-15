@@ -1212,6 +1212,65 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertEqual(scene.combat.player.life, 3)
         self.assertEqual(scene.terrain_motion.row, 1)
 
+    def test_queued_sword_draw_after_running_jump_keeps_native_landing_without_extra_run(self):
+        scene = self.scene
+        scene.peaceful = True
+        for facing, start_x in ((0, 450), (1, 60)):
+            with self.subTest(facing=facing):
+                direction = 1 if facing else -1
+                self.place(1, 1, start_x, facing)
+                scene.sword_drawn = scene.sword_sheathing = False
+                scene.combat.player.sword_drawn = False
+                scene.in_animation_tick = True
+                scene.run_active, scene.run_direction = True, direction
+                scene.held_directions, scene.horizontal_input = [direction], direction
+                scene.start_sequence(4)
+                self.tick()
+                self.assertEqual(scene.action, 34)
+                scene.set_key_state("ctrl", True)
+                scene.set_key_state("ctrl", False)
+                scene.horizontal_key(None, direction, False)
+                poses = [scene.action]
+                for _ in range(20):
+                    self.tick()
+                    poses.append(scene.action)
+                    self.assertFalse(scene.terrain_motion.falling)
+                    self.assertFalse(scene.terrain_motion.dead)
+                    self.assertEqual((scene.room_id, scene.terrain_motion.row), (1, 1))
+                    if scene.action == 207:
+                        self.assertEqual(scene.player_x, start_x + (236 - 6) * direction)
+                    if scene.sequence_state.sequence_id == 227:
+                        break
+                self.assertEqual(poses, [*range(34, 45), 7, 207, 208, 209, 210, 158])
+                self.assertTrue(scene.sword_drawn)
+                self.assertFalse(scene.run_active)
+                self.assertIsNone(scene.pending_action)
+
+    def test_queued_sword_draw_cannot_interrupt_running_jump_that_misses_the_floor(self):
+        scene = self.scene
+        scene.peaceful = True
+        self.place(0, 1, 450, 0)
+        scene.in_animation_tick = True
+        scene.run_active, scene.run_direction = True, -1
+        scene.held_directions, scene.horizontal_input = [-1], -1
+        scene.start_sequence(4)
+        self.tick()
+        scene.set_key_state("ctrl", True)
+        scene.set_key_state("ctrl", False)
+        scene.horizontal_key(None, -1, False)
+        for _ in range(30):
+            self.tick()
+            self.assertFalse(scene.sword_drawn)
+            self.assertNotEqual(scene.sequence_state.sequence_id, 55)
+            if scene.terrain_motion.falling:
+                break
+        else:
+            self.fail("Missed jump did not enter the falling controller")
+        for _ in range(5):
+            self.tick()
+            self.assertFalse(scene.sword_drawn)
+            self.assertNotEqual(scene.sequence_state.sequence_id, 55)
+
     def test_opening_hurt_turn_uses_native_recovery_offset_and_preserves_three_hits(self):
         scene = self.scene
         for seed in (1, 2):

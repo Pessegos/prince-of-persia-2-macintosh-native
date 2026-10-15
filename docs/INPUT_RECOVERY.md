@@ -224,7 +224,9 @@ All resumed gameplay-key releases reach the ordinary bindings rather than
 being swallowed by the resume-key filter. Menus, cutscenes, demos, copy
 protection, death and completion states retain their input filters. Focus loss
 still explicitly clears physical/logical holds; returning focus does not resume
-or restore them. This is a host pause QoL, not a recovered Macintosh pause rule.
+or restore them. This is host pause integration, not a recovered Macintosh pause
+rule or a claimed port-exclusive improvement; the user's Macintosh setup also
+preserves held inputs on resume.
 
 Ctrl pressed while running preserves a request to stop running and draw the
 sword once the current run segment reaches its transition. A short Ctrl tap
@@ -237,6 +239,17 @@ running poses 4-14, both facings and tapped/held Ctrl. It checks that the
 current pose is not immediately overwritten and that the original draw poses
 207-210 reach sword guard. Native-latch integration must preserve this explicit
 extension separately from ordinary attack buffering.
+
+The same request during a running jump is consumed at the first grounded
+controller pass after landing, rather than waiting for the following run loop.
+Original SEQS:4 poses 34-44, its final 11-unit landing step, callbacks and link
+to SEQS:201 pose 7 remain intact. `prepare_next_sequence` admits only a queued
+sword draw while the current run sequence still has SEQS:4 as its source;
+ordinary running, other commands and the falling controller retain their rules.
+This is an intentional timing refinement to the port extension, not a recovered
+Macintosh sword-draw rule. Regression tests cover Ctrl at all 11 jump poses,
+both facings, held/released movement and Ctrl, requests just after landing,
+the complete draw poses and a missed-floor jump with actual terrain.
 
 Forward + Up remains a standing jump in either key order. When Forward
 arrives first, the initial run pose (1) leaves one full animation interval

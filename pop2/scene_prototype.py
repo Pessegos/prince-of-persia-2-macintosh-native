@@ -1425,6 +1425,13 @@ class ScenePrototype(WindowControls):
         self.running_jump_controls_cleared = False
 
     def prepare_next_sequence(self, run_cycle_boundary=False):
+        state = self.sequence_state
+        if (self.pending_action is not None and self.pending_action.kind == "sword_draw"
+                and state.source_sequence_id == RUN_JUMP_SEQUENCE
+                and state.sequence_id in RUN_CYCLE_SEQUENCES):
+            # Port QoL: keep SEQS:4's landing step, but do not wait for the
+            # following run loop before honoring a buffered sword draw.
+            return self.dispatch_pending_action()
         if run_cycle_boundary:
             if self.pending_action is not None and self.dispatch_pending_action(
                 was_running=True
