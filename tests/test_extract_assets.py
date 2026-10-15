@@ -33,7 +33,7 @@ class AssetImportTests(unittest.TestCase):
         self.addCleanup(ending.stop)
         caverns = patch.object(extract_assets, "extract_caverns")
         self.caverns = caverns.start()
-        self.caverns.side_effect = lambda _program, _caverns, _prince, directory: (
+        self.caverns.side_effect = lambda _program, _caverns, _prince, directory, _progress: (
             directory / "caverns_entry.json").write_bytes(b"prepared cavern entrance")
         self.addCleanup(caverns.stop)
         attract = patch.object(extract_assets, "extract_attract")

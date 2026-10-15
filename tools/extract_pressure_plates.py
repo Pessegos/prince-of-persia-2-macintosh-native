@@ -13,12 +13,13 @@ def command_key(command):
     return command[0], shape, *command[7:10]
 
 
-def pressure_scenery(program, caverns, prince, level, base):
+def pressure_scenery(program, caverns, prince, level, base, progress=lambda _text: None):
     from tools.extract_caverns import recover_room
 
     terrain = LevelMap(level)
     result = {'schema': 1, 'rooms': {}}
     for room in range(32):
+        progress(f'Cavern buttons and doors: room {room + 1}/32')
         # A gate below the room can protrude through its lower drawing edge.
         visible = {(tile.room, tile.row * 10 + tile.column)
                    for row in range(-1, 4) for column in range(-1, 11)

@@ -95,7 +95,11 @@ global Python installation.
 
 Original game files are not bundled. At the first launch, select your Macintosh
 Prince of Persia 2 disk image. The importer extracts the resources, enemy data
-and audio, then starts the game. Subsequent launches use those local files without
+and audio, then starts the game. Preparing all scenery and music can take several
+minutes on the first import. The window shows the current recovery step and elapsed
+time; Cancel or closing the window stops the import and removes its temporary files.
+Import diagnostics are saved in `rendered/setup.log`.
+Subsequent launches use those local files without
 asking for the disk image again.
 
 Compatible images contain an HFS volume, the named resource files below,

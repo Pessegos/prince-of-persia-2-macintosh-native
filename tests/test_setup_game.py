@@ -17,11 +17,17 @@ class GameSetupTests(unittest.TestCase):
         self.setup.completed = False
         self.setup.importing = False
         self.setup.messages = Queue()
+        self.setup.progressbar = Mock()
+        self.setup.elapsed = Mock()
+        self.setup.started_at = None
+        self.setup.closing = False
+        self.setup.task = Mock()
 
     def test_import_uses_the_selected_project_directory(self):
-        with patch.object(setup_game, "extract_assets") as extract:
+        with patch.object(setup_game, 'AssetImport') as importer:
             setup_game.import_game("game.hfs", self.setup.project)
-        extract.assert_called_once_with("game.hfs", self.setup.project / "assets", ANY)
+        importer.assert_called_once_with(self.setup.project)
+        importer.return_value.run.assert_called_once_with('game.hfs', ANY)
 
     def test_cancelled_file_picker_does_not_import_or_close_setup(self):
         with (
@@ -41,7 +47,7 @@ class GameSetupTests(unittest.TestCase):
             thread.return_value.start.side_effect = lambda: self.setup.import_files("game.hfs")
             self.setup.choose()
             self.setup.poll_import()
-        importer.assert_called_once_with("game.hfs", self.setup.project, ANY)
+        importer.assert_called_once_with("game.hfs", self.setup.project, ANY, task=self.setup.task)
         self.assertTrue(self.setup.completed)
         self.setup.root.destroy.assert_called_once()
 
@@ -83,15 +89,39 @@ class GameSetupTests(unittest.TestCase):
         self.assertFalse(self.setup.completed)
         self.assertFalse(self.setup.run())
 
-    def test_progress_and_close_requests_keep_import_worker_safe(self):
+    def test_progress_keeps_the_ui_responsive_during_import(self):
         self.setup.importing = True
-        self.setup.close()
-        self.setup.root.destroy.assert_not_called()
         self.setup.messages.put(("progress", "Preparing music: RoofA"))
         self.setup.poll_import()
         self.setup.status.set.assert_called_with("Preparing music: RoofA")
         self.setup.root.after.assert_called_once_with(50, self.setup.poll_import)
         self.assertTrue(self.setup.importing)
+
+    def test_close_cancels_the_process_and_waits_for_staging_cleanup(self):
+        self.setup.importing = True
+        self.setup.close()
+        self.setup.task.cancel.assert_called_once()
+        self.setup.root.destroy.assert_not_called()
+        self.assertTrue(self.setup.closing)
+        self.setup.messages.put(('progress', 'Late progress'))
+        self.setup.messages.put(('cancelled', ''))
+        self.setup.poll_import()
+        self.setup.status.set.assert_called_with('Canceling import...')
+        self.setup.root.destroy.assert_called_once()
+        self.assertFalse(self.setup.completed)
+
+    def test_worker_cancellation_is_not_reported_as_an_import_error(self):
+        with patch.object(setup_game, 'import_game', side_effect=setup_game.ImportCancelled):
+            self.setup.import_files('game.hfs')
+        self.assertEqual(self.setup.messages.get_nowait(), ('cancelled', ''))
+
+    def test_busy_setup_keeps_cancel_available_and_does_not_set_a_permanent_wait_cursor(self):
+        with (patch.object(setup_game.filedialog, 'askopenfilename', return_value='game.hfs'),
+              patch.object(setup_game, 'Thread')):
+            self.setup.choose()
+        self.setup.cancel_button.state.assert_not_called()
+        self.setup.root.configure.assert_not_called()
+        self.setup.progressbar.start.assert_called_once()
 
 
 if __name__ == "__main__":

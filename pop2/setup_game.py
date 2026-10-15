@@ -3,14 +3,15 @@
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
+from time import monotonic
 import tkinter as tk
 from tkinter import filedialog, ttk
 
-from tools.extract_assets import extract_assets
+from pop2.asset_import import AssetImport, ImportCancelled
 
 
-def import_game(image_path, project, progress=lambda _text: None):
-    return extract_assets(image_path, Path(project) / "assets", progress)
+def import_game(image_path, project, progress=lambda _text: None, task=None):
+    return (task or AssetImport(project)).run(image_path, progress)
 
 
 class GameSetup:
@@ -18,6 +19,9 @@ class GameSetup:
         self.project = Path(project)
         self.completed = False
         self.importing = False
+        self.closing = False
+        self.task = None
+        self.started_at = None
         self.messages = Queue()
         self.root = tk.Tk()
         self.root.title("Prince of Persia 2 - Game Files")
@@ -37,6 +41,10 @@ class GameSetup:
         self.status = tk.StringVar()
         self.status_label = ttk.Label(panel, textvariable=self.status, wraplength=400)
         self.status_label.pack(anchor="w", fill="x", pady=(0, 18))
+        self.progressbar = ttk.Progressbar(panel, mode='indeterminate')
+        self.progressbar.pack(fill='x', pady=(0, 8))
+        self.elapsed = tk.StringVar()
+        ttk.Label(panel, textvariable=self.elapsed).pack(anchor='w', pady=(0, 12))
         buttons = ttk.Frame(panel)
         buttons.pack(fill="x")
         self.cancel_button = ttk.Button(buttons, text="Cancel", command=self.close)
@@ -66,9 +74,12 @@ class GameSetup:
             return
         self.status.set("Importing game files...")
         self.importing = True
+        self.closing = False
+        self.task = AssetImport(self.project)
+        self.started_at = monotonic()
+        self.elapsed.set('00:00')
+        self.progressbar.start(20)
         self.import_button.state(["disabled"])
-        self.cancel_button.state(["disabled"])
-        self.root.configure(cursor="watch")
         self.root.update_idletasks()
         Thread(target=self.import_files, args=(image_path,), daemon=True).start()
         self.root.after(50, self.poll_import)
@@ -76,22 +87,32 @@ class GameSetup:
     def import_files(self, image_path):
         try:
             import_game(image_path, self.project,
-                        lambda text: self.messages.put(("progress", text)))
+                        lambda text: self.messages.put(("progress", text)), task=self.task)
+        except ImportCancelled:
+            self.messages.put(('cancelled', ''))
         except Exception as error:
             self.messages.put(("error", str(error)))
         else:
             self.messages.put(("complete", ""))
 
     def poll_import(self):
+        if self.started_at is not None:
+            minutes, seconds = divmod(int(monotonic() - self.started_at), 60)
+            self.elapsed.set(f'{minutes:02}:{seconds:02}')
         while True:
             try:
                 kind, text = self.messages.get_nowait()
             except Empty:
                 break
             if kind == "progress":
-                self.status.set(text)
+                if not self.closing:
+                    self.status.set(text)
                 continue
             self.importing = False
+            self.progressbar.stop()
+            if self.closing or kind == 'cancelled':
+                self.close()
+                return
             if kind == "error":
                 self.status.set(text)
                 self.import_button.state(["!disabled"])
@@ -111,7 +132,12 @@ class GameSetup:
             self.choose()
 
     def close(self):
-        if not self.importing:
+        if self.importing:
+            self.closing = True
+            self.status.set('Canceling import...')
+            self.cancel_button.state(['disabled'])
+            self.task.cancel()
+        else:
             self.root.destroy()
 
     def run(self):

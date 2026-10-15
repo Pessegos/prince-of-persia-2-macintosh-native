@@ -17,7 +17,7 @@ from pop2.render_opening import (OpeningRoom, load_resource_file, decode_shap,
                                  decode_ctbl, native_buffer_cells)
 from pop2.terrain import LevelMap, Tile
 from tools.render_cavern_map import room_positions
-from tools.extract_caverns import exit_closing_frames, recover_room
+from tools.extract_caverns import exit_closing_frames, recover_room, recovery_inputs
 
 
 class CavernClipTests(unittest.TestCase):
@@ -183,6 +183,8 @@ class CavernDrawingTests(unittest.TestCase):
     def test_export_uses_clean_cut_flag_and_full_clip_for_every_cell(self):
         from unicorn import Uc
 
+        recovery_inputs.cache_clear()
+        self.addCleanup(recovery_inputs.cache_clear)
         code = bytearray(0x259a)
         for offset in (0x1ab0, 0x1ff4, 0x2598):
             code[offset:offset + 2] = bytes.fromhex('4e75')  # Synthetic RTS, no game assets.
@@ -197,8 +199,19 @@ class CavernDrawingTests(unittest.TestCase):
         level = bytearray(0x49ca)
         struct.pack_into('>H', level, 0x2198, 1)
         observed = []
+        released = []
 
         emulate = Uc.emu_start
+        remove_hook = Uc.hook_del
+        unmap = Uc.mem_unmap
+
+        def release(cpu, handle):
+            remove_hook(cpu, handle)
+            self.assertFalse(cpu._callbacks)
+
+        def free_memory(cpu, address, size):
+            unmap(cpu, address, size)
+            released.append(list(cpu.mem_regions()))
 
         def observe(cpu, *args, **kwargs):
             observed.append((struct.unpack('>h', cpu.mem_read(0x80000 - 0x4832, 2))[0],
@@ -206,10 +219,21 @@ class CavernDrawingTests(unittest.TestCase):
             return emulate(cpu, *args, **kwargs)
 
         with (patch.object(Uc, 'emu_start', observe),
-              patch('tools.extract_caverns.parse_resource_fork', side_effect=[resources, artwork]),
-              patch('tools.extract_caverns.expand_a5_data', return_value=bytes(data))):
-            recover_room(b'program', b'artwork', bytes(level))
-        self.assertEqual(len(observed), 134)
+              patch.object(Uc, 'hook_del', release),
+              patch.object(Uc, 'mem_unmap', free_memory),
+              patch('tools.extract_caverns.parse_resource_fork',
+                    side_effect=[resources, artwork]) as parse,
+              patch('tools.extract_caverns.expand_a5_data', return_value=bytes(data)) as expand):
+            for _ in range(2):
+                recover_room(b'program', b'artwork', bytes(level))
+            self.assertEqual(parse.call_count, 2)
+            expand.assert_called_once_with(resources)
+            self.assertEqual(released, [[], []])
+            with (patch.object(Uc, 'emu_start', side_effect=RuntimeError('native failure')),
+                  self.assertRaisesRegex(ValueError, 'Cavern renderer failed')):
+                recover_room(b'program', b'artwork', bytes(level))
+            self.assertEqual(released, [[], [], []])
+        self.assertEqual(len(observed), 268)
         self.assertEqual(set(observed), {(1, (0, 0, 365, 510))})
 
     def test_repaint_export_keeps_live_flames_out_of_static_scenery(self):

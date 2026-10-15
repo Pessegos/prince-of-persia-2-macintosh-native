@@ -3,6 +3,8 @@
 import json
 import struct
 from itertools import product
+from functools import lru_cache
+from math import prod
 
 from pop2.mac_resources import parse_resource_fork
 from pop2.terrain import LevelMap
@@ -12,6 +14,14 @@ from pop2.opponent_generation import EMPTY_TILES
 from tools.extract_lava import lava_tables
 
 
+@lru_cache(maxsize=1)
+def recovery_inputs(program, caverns, prince):
+    resources = parse_resource_fork(program)
+    return (resources, parse_resource_fork(caverns),
+            parse_resource_fork(prince) if prince is not None else None,
+            expand_a5_data(resources))
+
+
 def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=None, floor_redraw=False):
     from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE
     from unicorn.m68k_const import (
@@ -19,10 +29,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         UC_M68K_REG_A0, UC_M68K_REG_D0, UC_M68K_REG_PC,
     )
 
-    resources = parse_resource_fork(program)
-    artwork = parse_resource_fork(caverns)
-    flasks = parse_resource_fork(prince) if prince is not None else None
-    data = expand_a5_data(resources)
+    resources, artwork, flasks, data = recovery_inputs(program, caverns, prince)
     cpu = Uc(UC_ARCH_M68K, UC_MODE_BIG_ENDIAN)
     cpu.ctl_set_cpu_model(UC_CPU_M68K_M68000)
     cpu.mem_map(0, 0x1000000)
@@ -112,7 +119,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         segment = (address - 0x100000) // 0x10000
         offset = address - bases.get(segment, address)
         result = None
-        if opcode == bytes.fromhex('a8a8') and segment == 5 and offset == 0x21c:
+        if opcode == b'\xa8\xa8' and segment == 5 and offset == 0x21c:
             dy, dx, rect_pointer = word(sp), word(sp + 2), long(sp + 4)
             top, left, bottom, right = struct.unpack('>4h', cpu.mem_read(rect_pointer, 8))
             cpu.mem_write(rect_pointer, struct.pack('>4h', top + dy, left + dx, bottom + dy, right + dx))
@@ -216,7 +223,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         elif opcode[0] & 0xf0 == 0xa0:
             raise ValueError(f'Unexpected Macintosh trap in cavern renderer {segment}:{offset:x}')
 
-    cpu.hook_add(UC_HOOK_CODE, hook)
+    handle = cpu.hook_add(UC_HOOK_CODE, hook)
 
     def execute(segment, entry, argument=None):
         cpu.reg_write(UC_M68K_REG_A5, a5)
@@ -238,52 +245,60 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         passes = (('front', 0x3480, 2),)
     elif floor_redraw:
         passes = (('front', 0x371c, 2),)
-    for draw_row in (2, 1, 0, -1):
-        if draw_row == -1:
-            # RedrawCellFast 3:1cb6-1cda draws the upper room's last row,
-            # with the current room below it. Missing rooms use GetCells'
-            # scenery default (floor 1), not GetBlock's collision wall 20.
-            above = terrain.neighbor(room_id, 'up')
-            put_word(a5 - 0x4fc2, above + 1 if above is not None else 0)
-            execute(3, 0x1ab0)
-            put_word(a5 - 0x4fba, room_id + 1)
-            execute(5, 0x0b50)
-            put_word(a5 - 0x45f6, 2)
-            execute(5, 0x026a)
-            execute(5, 0x03bc)
-        for draw_column in range(10):
-            put_word(a5 - 0x45f8, draw_column)
-            put_word(a5 - 0x45f6, draw_row)
+    try:
+        for draw_row in (2, 1, 0, -1):
             if draw_row == -1:
-                # Obtain the native border cell/neighbor records; dirty clips
-                # remain supplied by the export pass below.
-                repaint = word(a5 - 0x4832)
-                put_word(a5 - 0x4832, 1)
-                execute(5, 0x0a4c)
-                put_word(a5 - 0x4832, repaint)
-            else:
-                tile, previous = (terrain.tile(room_id, draw_column, draw_row),
-                                  terrain.tile(room_id, draw_column - 1, draw_row))
-                put_word(a5 - 0x4814, tile.kind)
-                put_long(a5 - 0x4818, (tile.foreground << 16) | tile.background)
-                put_word(a5 - 0x49d6, previous.kind)
-                put_long(a5 - 0x49d4, (previous.foreground << 16) | previous.background)
-                for col in range(11):
-                    below = terrain.tile(room_id, col - 1, draw_row + 1)
-                    put_word(a5 - 0x4a84 + col * 6, below.kind)
-                    put_long(a5 - 0x4a82 + col * 6, (below.foreground << 16) | below.background)
-            for layer, entry, draw_pass in passes:
-                # GetCells 5:0abe-0ac8 copies fullclip during DoCleanCut;
-                # ComputeClipRect is only used for subsequent dirty cells.
-                # RedrawCellFast 3:1c64-1d38 visits bottom-up, then the border.
-                cpu.mem_write(a5 - 0x4600, bytes(cpu.mem_read(a5 - 0x4fec, 8)))
-                if floor_redraw:
-                    # GetCells/ComputeClipRect supplies the dirty cell clip;
-                    # RedrawCell intersects it with QuickFloor's actor rect.
-                    cpu.mem_write(a5 - 0x4600, struct.pack('>4h',
-                                  max(0, draw_row * 120 + 5), draw_column * 51,
-                                  (draw_row + 1) * 120 + 5, (draw_column + 1) * 51))
-                execute(3, entry, draw_pass)
+                # RedrawCellFast 3:1cb6-1cda draws the upper room's last row,
+                # with the current room below it. Missing rooms use GetCells'
+                # scenery default (floor 1), not GetBlock's collision wall 20.
+                above = terrain.neighbor(room_id, 'up')
+                put_word(a5 - 0x4fc2, above + 1 if above is not None else 0)
+                execute(3, 0x1ab0)
+                put_word(a5 - 0x4fba, room_id + 1)
+                execute(5, 0x0b50)
+                put_word(a5 - 0x45f6, 2)
+                execute(5, 0x026a)
+                execute(5, 0x03bc)
+            for draw_column in range(10):
+                put_word(a5 - 0x45f8, draw_column)
+                put_word(a5 - 0x45f6, draw_row)
+                if draw_row == -1:
+                    # Obtain the native border cell/neighbor records; dirty clips
+                    # remain supplied by the export pass below.
+                    repaint = word(a5 - 0x4832)
+                    put_word(a5 - 0x4832, 1)
+                    execute(5, 0x0a4c)
+                    put_word(a5 - 0x4832, repaint)
+                else:
+                    tile, previous = (terrain.tile(room_id, draw_column, draw_row),
+                                      terrain.tile(room_id, draw_column - 1, draw_row))
+                    put_word(a5 - 0x4814, tile.kind)
+                    put_long(a5 - 0x4818, (tile.foreground << 16) | tile.background)
+                    put_word(a5 - 0x49d6, previous.kind)
+                    put_long(a5 - 0x49d4, (previous.foreground << 16) | previous.background)
+                    for col in range(11):
+                        below = terrain.tile(room_id, col - 1, draw_row + 1)
+                        put_word(a5 - 0x4a84 + col * 6, below.kind)
+                        put_long(a5 - 0x4a82 + col * 6, (below.foreground << 16) | below.background)
+                for layer, entry, draw_pass in passes:
+                    # GetCells 5:0abe-0ac8 copies fullclip during DoCleanCut;
+                    # ComputeClipRect is only used for subsequent dirty cells.
+                    # RedrawCellFast 3:1c64-1d38 visits bottom-up, then the border.
+                    cpu.mem_write(a5 - 0x4600, bytes(cpu.mem_read(a5 - 0x4fec, 8)))
+                    if floor_redraw:
+                        # GetCells/ComputeClipRect supplies the dirty cell clip;
+                        # RedrawCell intersects it with QuickFloor's actor rect.
+                        cpu.mem_write(a5 - 0x4600, struct.pack('>4h',
+                                      max(0, draw_row * 120 + 5), draw_column * 51,
+                                      (draw_row + 1) * 120 + 5, (draw_column + 1) * 51))
+                    execute(3, entry, draw_pass)
+    finally:
+        # ctypes callbacks can survive until cyclic GC; do not leave their
+        # 16 MiB emulated address spaces allocated between scenery variants.
+        try:
+            cpu.hook_del(handle)
+        finally:
+            cpu.mem_unmap(0, 0x1000000)
     # DumpTable 3:2c1e-2c68 paints back-wall records (kind 0) before
     # floor/pillar bodies, regardless of their admission order.
     ordered = sorted(zip(commands, command_kinds),
@@ -292,19 +307,23 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             'commands': [command for command, _kind in ordered], 'torches': torches}
 
 
-def extract_caverns(program, caverns, prince, output):
+def extract_caverns(program, caverns, prince, output, progress=lambda _text: None):
     level = parse_resource_fork(prince)['LEVL'][2002]['data']
-    scenes = {str(room): recover_room(program, caverns, level, room, prince) for room in range(32)}
+    scenes = {}
+    for room in range(32):
+        progress(f'Cavern scenery: room {room + 1}/32')
+        scenes[str(room)] = recover_room(program, caverns, level, room, prince)
     result = {'version': 14, 'level': 3,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
-    result['climb_redraw'] = {
-        str(room): {str(action): recover_room(program, caverns, level, room, prince, action)['commands']
-                    for action in range(135, 145)}
-        for room in range(32)}
-    result['floor_redraw'] = {
-        str(room): recover_room(program, caverns, level, room, prince, floor_redraw=True)['commands']
-        for room in range(32)}
+    result['climb_redraw'], result['floor_redraw'] = {}, {}
+    for room in range(32):
+        progress(f'Cavern climbing layers: room {room + 1}/32')
+        result['climb_redraw'][str(room)] = {
+            str(action): recover_room(program, caverns, level, room, prince, action)['commands']
+            for action in range(135, 145)}
+        result['floor_redraw'][str(room)] = recover_room(
+            program, caverns, level, room, prince, floor_redraw=True)['commands']
     terrain = LevelMap(level)
     result['lava'] = lava_tables(program, caverns)
     result['lava']['rooms'] = lava_room_records(result, terrain)
@@ -317,13 +336,15 @@ def extract_caverns(program, caverns, prince, output):
         offset = 0x780 + terrain.start_room * 120 + cell * 4
         foreground = struct.unpack_from('>H', level, offset)[0] & 0xff00
         for frame in frames:
+            progress('Cavern entrance animation...')
             struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
             frame['commands'] = recover_room(program, caverns, bytes(mutable), terrain.start_room, prince)['commands']
         result['entry_exit'] = {'room': terrain.start_room, 'cell': cell, 'frames': frames}
-    result['loose_floors'] = extract_loose_floor_scenery(program, caverns, prince, level, result)
+    result['loose_floors'] = extract_loose_floor_scenery(program, caverns, prince, level, result, progress)
     from tools.extract_pressure_plates import pressure_scenery
 
-    result['pressure_plates'] = pressure_scenery(program, caverns, prince, level, result)
+    result['pressure_plates'] = pressure_scenery(program, caverns, prince, level, result, progress)
+    progress('Saving prepared cavern scenery...')
     (output / 'caverns_entry.json').write_text(json.dumps(result) + '\n', encoding='ascii')
 
 
@@ -378,7 +399,7 @@ def loose_floor_cells(terrain):
     return cells
 
 
-def extract_loose_floor_scenery(program, caverns, prince, level, base):
+def extract_loose_floor_scenery(program, caverns, prince, level, base, progress=lambda _text: None):
     terrain = LevelMap(level)
     choices = loose_floor_cells(terrain)
     data = expand_a5_data(parse_resource_fork(program))
@@ -398,9 +419,11 @@ def extract_loose_floor_scenery(program, caverns, prince, level, base):
         if not keys:
             continue
         variants = {}
-        for indices in product(*(range(len(choices[key])) for key in keys)):
+        total = prod(len(choices[key]) for key in keys) - 1
+        for number, indices in enumerate(product(*(range(len(choices[key])) for key in keys))):
             if not any(indices):
                 continue
+            progress(f'Cavern floor variants: room {room + 1}/32, variant {number}/{total}')
             mutable = bytearray(level)
             for key, index in zip(keys, indices):
                 kind, foreground = choices[key][index]

@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import shutil
@@ -36,8 +37,59 @@ class ImportedAudioTests(unittest.TestCase):
             env = os.environ.copy()
             env.pop("PYTHONPATH", None)
             env["SDL_AUDIODRIVER"] = "dummy"
-            for arguments in (
-                ["-m", "tools.extract_assets", str(image)],
+            setup_script = """
+from pathlib import Path
+import sys
+from time import monotonic
+import tkinter as tk
+from unittest.mock import patch
+from pop2.setup_game import GameSetup
+
+for cancel in (True, False):
+    root = tk.Tk()
+    root.withdraw()
+    with patch('pop2.setup_game.tk.Tk', return_value=root):
+        setup = GameSetup(Path.cwd())
+    messages = []
+    beats = []
+    started = monotonic()
+    cancelling = False
+
+    def progress(*_args):
+        global cancelling
+        text = setup.status.get()
+        messages.append(text)
+        if cancel and text.startswith('Cavern scenery:') and not cancelling:
+            cancelling = True
+            root.after_idle(setup.close)
+
+    def heartbeat():
+        beats.append(monotonic())
+        root.after(50, heartbeat)
+
+    setup.status.trace_add('write', progress)
+    root.after(0, heartbeat)
+    root.after(0, setup.choose)
+    with patch('pop2.setup_game.filedialog.askopenfilename', return_value=sys.argv[1]):
+        completed = setup.run()
+    assert completed == (not cancel), messages[-12:]
+    assert setup.task.process is None
+    assert not list(Path('assets').glob('.setup-*'))
+    assert not list(Path('assets').glob('.import-*'))
+    gap = max(b - a for a, b in zip(beats, beats[1:]))
+    assert gap < 2, gap
+    if cancel:
+        assert cancelling
+        assert not list(Path('assets').iterdir())
+    else:
+        assert 'Cavern scenery: room 1/32' in messages
+        assert 'Cavern scenery: room 32/32' in messages
+        assert any(text.startswith('Cavern floor variants:') for text in messages)
+    print(f'GUI import: cancel={cancel}, elapsed={monotonic()-started:.1f}s, '
+          f'maximum UI heartbeat gap={gap:.3f}s', flush=True)
+"""
+            for index, arguments in enumerate((
+                ["-c", setup_script, str(image)],
                 ["run_game.py", "--check"],
                 ["-c", "from unittest.mock import patch; import tkinter as tk; "
                  "from pop2.audio import AudioEngine; from pop2.scene_prototype import ScenePrototype; "
@@ -60,14 +112,19 @@ class ImportedAudioTests(unittest.TestCase):
                  "assert scene.intro.time == before and audio.paused; scene.set_paused(False); "
                  "scene.finish_intro(); assert scene.opening.active and audio.effect_busy; "
                  "audio.close(); root.destroy(); context.stop()"],
-            ):
+            )):
                 # Native scenery export can exceed two minutes on slower hosts.
-                timeout = 600 if arguments[:2] == ['-m', 'tools.extract_assets'] else 120
+                timeout = 900 if index == 0 else 120
                 result = subprocess.run([sys.executable, *arguments], cwd=fresh, env=env,
                                         capture_output=True, text=True, timeout=timeout)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                if index == 0:
+                    print(result.stdout, end='')
             self.assertTrue((fresh / "assets" / "audio" / "cue-43.wav").is_file())
             self.assertFalse((fresh / "assets" / "Prince of Persia 2").exists())
+            expected = json.loads((project / 'assets' / 'caverns_entry.json').read_text())
+            actual = json.loads((fresh / 'assets' / 'caverns_entry.json').read_text())
+            self.assertEqual(actual, expected)
 
     def test_all_prepared_cues_are_nonempty_pcm_with_headroom(self):
         audio = AudioEngine(playback=object())

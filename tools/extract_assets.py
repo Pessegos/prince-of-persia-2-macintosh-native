@@ -57,8 +57,8 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         progress("Recovering the original voyage scenes...")
         extract_ending(image, program, resources["NIS.rsrc"], staging, progress)
         resources["ending.json"] = (staging / "ending.json").read_bytes()
-        progress("Recovering the cavern entrance...")
-        extract_caverns(program, resources["Caverns.rsrc"], resources["Prince.rsrc"], staging)
+        progress("Preparing level-three scenery...")
+        extract_caverns(program, resources["Caverns.rsrc"], resources["Prince.rsrc"], staging, progress)
         resources["caverns_entry.json"] = (staging / "caverns_entry.json").read_bytes()
         progress("Recovering the original recorded demo and credits...")
         extract_attract(program, resources, staging, progress)
@@ -79,11 +79,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("image", type=Path, help="Path to the Macintosh PoP2 HFS image")
     parser.add_argument("--output", type=Path, default=ASSET_DIR)
+    parser.add_argument('--progress-json', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
-        resources = extract_assets(args.image, args.output, lambda message: print(message, flush=True))
+        def progress(message):
+            print(json.dumps({'event': 'progress', 'message': message}) if args.progress_json else message,
+                  flush=True)
+
+        resources = extract_assets(args.image, args.output, progress)
     except (OSError, ValueError) as error:
         parser.exit(1, f"Asset extraction failed: {error}\n")
+    if args.progress_json:
+        return
     for name, resource in resources.items():
         if not name.startswith("audio/"):
             print(f"{name}: {len(resource):,} bytes")
