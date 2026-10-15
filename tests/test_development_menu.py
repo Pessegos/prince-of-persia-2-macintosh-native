@@ -9,7 +9,6 @@ from PIL import Image
 from pop2.game_ui import DevelopmentMenu, fit_viewport, viewport_point
 from pop2.playback_navigation import PlaybackGroup
 from pop2.screenshots import ScreenshotSettings
-import tests.test_terrain as test_terrain
 
 
 SCREENS = ("1", "2", "3", "4", "5", "6", "7", "Secret (right)")
@@ -270,8 +269,13 @@ class MenuModelTests(unittest.TestCase):
 
 
 class MenuSceneTests(unittest.TestCase):
-    setUp = test_terrain.RooftopSceneTests.setUp
-    tick = test_terrain.RooftopSceneTests.tick
+    def setUp(self):
+        from tests.test_terrain import RooftopSceneTests
+        RooftopSceneTests.setUp(self)
+
+    def tick(self, count=1):
+        from tests.test_terrain import RooftopSceneTests
+        RooftopSceneTests.tick(self, count)
 
     @staticmethod
     def event(key, state=0):
