@@ -120,14 +120,20 @@ frame budget. A continuous zero-delay callback chain would defer painting until
 the fade or dissolve ended. Alt+F4 closes the host before modal input filters,
 including during the intro and while paused.
 
-Fullscreen intro playback on Windows uses Pillow's opaque DIB presentation
+Fullscreen intro and gameplay on Windows use Pillow's opaque DIB presentation
 instead of allocating a full-resolution Tk PhotoImage for every frame. The
 same cropped image is resized with Pillow's nearest-neighbor sampling before
 transfer, preserving the existing scale, pixels and letterboxing. Painting
 runs at idle, after Tk's exposure/resize clearing, and is repeated on exposure.
-Leaving the intro or fullscreen restores normal Tk presentation. Other hosts
-retain the Tk path. Fade/dissolve callbacks use absolute 60 Hz deadlines, so
-callback rounding does not accumulate. On a 3440x1440 desktop the measured
+Pause, modal menus and leaving fullscreen restore normal Tk presentation;
+unpaused fullscreen gameplay reuses the same DIB path as the intro. Other hosts
+retain the Tk path. Pixel comparisons cover playback, gameplay, exposure,
+window restoration and the Tk fallback. A local gameplay presentation benchmark
+at 2560x1440 measured median upload/idle-paint costs of about 31 ms through Tk
+and 4.4 ms through DIB; at 3840x2160 these were 66 ms and 9.6 ms. These isolate
+presentation work, not whole-game FPS, and are not hardware-independent claims.
+Fade/dissolve callbacks use absolute 60 Hz deadlines, so callback rounding does
+not accumulate. On a 3440x1440 desktop the measured
 fade interval was 16.69 ms at the median, with no intervals above 25 ms;
 viewport preparation took about 4.2 ms, excluding the idle bitmap draw.
 

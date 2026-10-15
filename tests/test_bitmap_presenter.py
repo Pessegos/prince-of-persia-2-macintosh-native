@@ -108,14 +108,19 @@ class CanvasBitmapIntegrationTests(unittest.TestCase):
             host.root.update()
             bitmap_resumed = matches() and host.bitmap_presenter is not None
             host.intro = None
+            host.native_viewport.paste('lime', (100, 100, 200, 200))
+            host.present_viewport()
+            host.root.update()
+            gameplay = matches() and host.bitmap_presenter is not None and host.image_ref is None
+            host.fullscreen = False
             host.present_viewport()
             host.root.update()
             fallback = matches() and host.bitmap_presenter is None and host.image_ref is not None
             host.root.destroy()
-            print(json.dumps([initial, exposed, restored, menu_fallback, bitmap_resumed, fallback]))
+            print(json.dumps([initial, exposed, restored, menu_fallback, bitmap_resumed, gameplay, fallback]))
         """)], capture_output=True, text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(json.loads(result.stdout), [True] * 6, result.stderr)
+        self.assertEqual(json.loads(result.stdout), [True] * 7, result.stderr)
 
 
 if __name__ == "__main__":

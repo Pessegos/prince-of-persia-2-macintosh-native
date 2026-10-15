@@ -15,7 +15,7 @@ from pop2.window_controls import WindowControls, alt_pressed, is_resume_key
 
 
 class PresentationTests(unittest.TestCase):
-    def test_fullscreen_intro_uses_opaque_bitmap_then_restores_tk_for_gameplay(self):
+    def test_fullscreen_intro_and_gameplay_reuse_bitmap_then_windowed_restores_tk(self):
         host = WindowControls()
         host.canvas = Mock()
         host.canvas.find_all.return_value = (1,)
@@ -34,6 +34,11 @@ class PresentationTests(unittest.TestCase):
             host.expose_viewport()
             bitmap.return_value.redraw.assert_called_once()
             host.intro = None
+            host.present_viewport()
+            self.assertEqual(bitmap.return_value.present.call_count, 2)
+            bitmap.return_value.close.assert_not_called()
+            self.assertIsNone(host.image_ref)
+            host.fullscreen = False
             host.present_viewport()
             bitmap.return_value.close.assert_called_once()
             self.assertIsNone(host.bitmap_presenter)

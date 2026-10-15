@@ -791,7 +791,6 @@ class WindowControls:
             width, height = VISIBLE_SIZE[0] * 2, VISIBLE_SIZE[1] * 2
         size, position = fit_viewport(width, height)
         if (sys.platform == "win32" and getattr(self, "fullscreen", False)
-                and getattr(self, "intro", None) is not None
                 and not getattr(self, "paused", False)
                 and getattr(self, "game_menu", None) is None
                 and getattr(self, "dev_menu", None) is None

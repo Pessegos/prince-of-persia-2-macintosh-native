@@ -111,6 +111,17 @@ class CavernClipTests(unittest.TestCase):
 
 
 class CavernDrawingTests(unittest.TestCase):
+    def test_recovery_index_keeps_a5_calls_traps_and_primitives_on_word_boundaries(self):
+        recovery_inputs.cache_clear()
+        self.addCleanup(recovery_inputs.cache_clear)
+        code = bytes.fromhex('4ead 4e75 4e71 a8a8 a123 4e90 4e71')
+        resources = {'CODE': {0: {'data': b''}, 3: {'data': code}}}
+        with (patch('tools.extract_caverns.parse_resource_fork', side_effect=[resources, {}]),
+              patch('tools.extract_caverns.expand_a5_data', return_value=b'')):
+            intercepts = recovery_inputs(b'program', b'artwork', None)[4]
+        self.assertEqual(intercepts, {0x130000: b'\x4e\xad', 0x130004: b'\x4e\x71',
+                                      0x130006: b'\xa8\xa8', 0x130008: b'\xa1\x23'})
+
     def test_floor_redraw_is_clipped_to_the_current_actor_rectangle(self):
         size = (510, 365)
         floor = Image.new('RGBA', (42, 25), (100, 80, 60, 255))

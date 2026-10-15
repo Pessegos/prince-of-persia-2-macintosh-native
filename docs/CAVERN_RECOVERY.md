@@ -31,6 +31,18 @@ both sprite pixels and actor-occlusion masks to those rectangles. Resources and
 decoded shapes are cached across room changes. No Macintosh executable is
 retained or executed by the game itself.
 
+The import-only instruction hook indexes the immutable, word-aligned CODE
+resources once. Only A5 calls, traps and modeled primitive entries read
+emulated memory or registers through Python; ordinary instructions return
+immediately to Unicorn. All original drawing passes still execute, including
+loose-floor combinations, gate phases and climbing recrops. A fresh-import
+integration test compares the complete exported JSON against the installed
+reference, rather than just checking the initial room. This optimization does
+not change the export format or require existing installations to reimport.
+On the local Python 3.10 test machine, a complete GUI import fell from about
+365 seconds to 124 seconds with the same HFS image and identical exported data.
+This is a local measurement, not a fixed import-time guarantee for other PCs.
+
 The exporter follows DoCleanCut (2:608c-6096): set A5-4832 to 1 before building
 a complete room. GetCells (5:0abe-0ac8) then copies the full-room clip instead
 of ComputeClipRect's dirty-cell bounds. The drawing routines still intersect

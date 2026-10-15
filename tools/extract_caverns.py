@@ -17,9 +17,24 @@ from tools.extract_lava import lava_tables
 @lru_cache(maxsize=1)
 def recovery_inputs(program, caverns, prince):
     resources = parse_resource_fork(program)
+    primitives = {(3, offset) for offset in (4, 0x29e2, 0x29b6, 0x2ac4, 0x06c4, 0x2324, 0x26e4)}
+    primitives.update((5, offset) for offset in (0x21c, 0x230, 0x08c4, 0x1990))
+    primitives.update((8, offset) for offset in (0x176c, 0x20a6, 0x1ca4, 0x1752, 0x1f86))
+    intercepts = {}
+    for segment, resource in resources['CODE'].items():
+        if not segment:
+            continue
+        code = resource['data']
+        base = 0x100000 + segment * 0x10000
+        # M68K instructions are word-aligned. Native code stays immutable;
+        # only A5 calls, traps and modeled primitives need Python handling.
+        for offset in range(0, len(code) - 1, 2):
+            opcode = code[offset:offset + 2]
+            if opcode == b'\x4e\xad' or opcode[0] & 0xf0 == 0xa0 or (segment, offset) in primitives:
+                intercepts[base + offset] = opcode
     return (resources, parse_resource_fork(caverns),
             parse_resource_fork(prince) if prince is not None else None,
-            expand_a5_data(resources))
+            expand_a5_data(resources), intercepts)
 
 
 def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=None, floor_redraw=False):
@@ -29,7 +44,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         UC_M68K_REG_A0, UC_M68K_REG_D0, UC_M68K_REG_PC,
     )
 
-    resources, artwork, flasks, data = recovery_inputs(program, caverns, prince)
+    resources, artwork, flasks, data, intercepts = recovery_inputs(program, caverns, prince)
     cpu = Uc(UC_ARCH_M68K, UC_MODE_BIG_ENDIAN)
     cpu.ctl_set_cpu_model(UC_CPU_M68K_M68000)
     cpu.mem_map(0, 0x1000000)
@@ -103,11 +118,13 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
 
     def hook(cpu, address, size, _user):
         nonlocal back_rect
-        history.append(hex(address))
-        del history[:-15]
         if not 0x110000 <= address < 0x300000:
             raise ValueError(f'Invalid cavern call: {history}')
-        opcode = bytes(cpu.mem_read(address, 2))
+        opcode = intercepts.get(address)
+        if opcode is None:
+            return
+        history.append(hex(address))
+        del history[:-15]
         sp = cpu.reg_read(UC_M68K_REG_A7)
         if opcode == b'\x4e\xad':
             displacement = word(address + 2)
