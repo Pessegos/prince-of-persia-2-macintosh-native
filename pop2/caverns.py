@@ -372,6 +372,8 @@ def draw_cavern_lava(frame, room_id, state):
         for sprite, position in airborne:
             frame.paste(sprite, position, sprite)
         if inset_foreground is not None and airborne:
+            # Raised drops may cross the rear rim, never the near-side rock.
+            frame.paste(*foreground)
             frame.paste(*inset_foreground)
     return frame
 

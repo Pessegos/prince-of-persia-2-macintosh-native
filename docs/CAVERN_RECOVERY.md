@@ -174,7 +174,9 @@ Ripples, attached bubbles and the contact-wave parts of splashes are clipped
 against the bright-liquid pixels of the approved surface, excluding rock and
 dark-red crust around every side, including the rear perimeter. Raised drops
 and burst bodies are drawn after the solid contours without the liquid mask,
-so they can rise above the pool or pass in front of the outer rim. The two
+so they can rise above the pool or pass in front of the rear rim. Near-side
+rock is restored after raised effects too, preventing the final small-particle
+frame from spilling two pixels onto the front perimeter. The two
 inset contours remain in front of these raised effects: an additional mask
 selects opaque non-liquid pixels between liquid above and below in each column.
 Restoring only those pixels after the air pass prevents the small particles

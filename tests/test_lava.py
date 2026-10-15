@@ -673,9 +673,11 @@ class ImportedLavaTests(unittest.TestCase):
                 self.assertNotEqual(airborne.getpixel(point)[3], 0)
                 self.assertEqual(surface.getpixel(point)[3], 0)
 
-    def test_raised_splash_pixels_are_preserved_above_and_in_front_of_rock(self):
+    def test_raised_splash_pixels_rise_above_pool_but_stay_behind_front_rock(self):
+        from PIL import ImageChops
         from pop2.caverns import (cavern_assets, cavern_room, draw_cavern_lava,
-                                 recessed_lava_inset_mask, recessed_lava_liquid_mask,
+                                 recessed_lava_foreground_mask, recessed_lava_inset_mask,
+                                 recessed_lava_liquid_mask,
                                  recessed_lava_surface, split_lava_bubble)
         from pop2.render_opening import decode_shap
         from pop2.cavern_state import CavernState
@@ -692,7 +694,7 @@ class ImportedLavaTests(unittest.TestCase):
         raised = split_lava_bubble(sprite, 3632)[1]
         surface = recessed_lava_surface(palette)
         liquid = recessed_lava_liquid_mask(surface)
-        inset = recessed_lava_inset_mask(surface)
+        occlusion = ImageChops.lighter(recessed_lava_inset_mask(surface), recessed_lava_foreground_mask(surface))
         frame = draw_cavern_lava(cavern_room(5).flattened(), 5, state)
         x = record['x'] + 55 + ENHANCED_BUBBLE_OFFSET_X
         y = record['bottom'] - 15 + ENHANCED_BUBBLE_OFFSET_Y - sprite.height
@@ -703,7 +705,7 @@ class ImportedLavaTests(unittest.TestCase):
                 if not pixel[3]:
                     continue
                 lx, ly = x + xx - record['x'], y + yy - (record['bottom'] - surface.height)
-                if 0 <= lx < inset.width and 0 <= ly < inset.height and inset.getpixel((lx, ly)):
+                if 0 <= lx < occlusion.width and 0 <= ly < occlusion.height and occlusion.getpixel((lx, ly)):
                     self.assertEqual(frame.getpixel((x + xx, y + yy)), surface.getpixel((lx, ly)))
                     continue
                 self.assertEqual(frame.getpixel((x + xx, y + yy)), pixel)
@@ -711,10 +713,42 @@ class ImportedLavaTests(unittest.TestCase):
                                 and liquid.getpixel((lx, ly)))
         self.assertGreater(outside, 0)
 
+    def test_small_particle_tail_does_not_cross_near_perimeter(self):
+        from PIL import Image, ImageChops, ImageOps
+        from pop2.caverns import (cavern_assets, cavern_room, draw_cavern_lava,
+                                 recessed_lava_foreground_mask, recessed_lava_surface)
+        from pop2.cavern_state import CavernState
+
+        program, _, palette, shapes = cavern_assets()
+        tables = program['lava']
+        state = CavernState()
+        state.configure_lava(tables)
+        state.lava.enter_room(5, tables['rooms']['5'])
+        pool = state.lava.pools[5, 27]
+        for bubble in pool.bubbles:
+            bubble[0] = 0
+        pool.bubbles[0] = [1, 5, 2, -7, 40, 1]
+        record = tables['rooms']['5'][0]
+        surface = recessed_lava_surface(palette)
+        dx, dy = tables['piece_offsets']
+        position = record['x'] + dx, record['bottom'] + dy - surface.height
+        background = cavern_room(5).flattened()
+        with patch.dict(shapes, {('recessed-front', 3614): Image.new('L', surface.size)}):
+            before = draw_cavern_lava(background.copy(), 5, state)
+        after = draw_cavern_lava(background.copy(), 5, state)
+        for x, y in ((48, 24), (50, 24)):
+            point = position[0] + x, position[1] + y
+            self.assertNotEqual(before.getpixel(point), surface.getpixel((x, y)))
+            self.assertEqual(after.getpixel(point), surface.getpixel((x, y)))
+        allowed = Image.new('L', background.size)
+        allowed.paste(recessed_lava_foreground_mask(surface), position)
+        changed = ImageChops.difference(before.convert('RGB'), after.convert('RGB')).convert('L')
+        self.assertIsNone(ImageChops.multiply(changed, ImageOps.invert(allowed)).getbbox())
+
     def test_reported_particle_frames_and_right_crust_stay_occluded(self):
         from PIL import Image, ImageChops, ImageOps
         from pop2.caverns import (cavern_assets, cavern_room, draw_cavern_lava,
-                                 recessed_lava_inset_mask, recessed_lava_surface)
+                                 recessed_lava_foreground_mask, recessed_lava_inset_mask, recessed_lava_surface)
         from pop2.cavern_state import CavernState
 
         program, _, palette, shapes = cavern_assets()
@@ -729,10 +763,11 @@ class ImportedLavaTests(unittest.TestCase):
         position = record['x'] + dx, record['bottom'] + dy - surface.height
         background = cavern_room(5).flattened()
         allowed = Image.new('L', background.size)
-        allowed.paste(inset, position)
+        allowed.paste(ImageChops.lighter(inset, recessed_lava_foreground_mask(surface)), position)
         right_changes = 0
         for tick in range(48):
-            with patch.dict(shapes, {('recessed-inset', 3614): Image.new('L', surface.size)}):
+            with patch.dict(shapes, {('recessed-inset', 3614): Image.new('L', surface.size),
+                                     ('recessed-front', 3614): Image.new('L', surface.size)}):
                 before = draw_cavern_lava(background.copy(), 5, state)
             after = draw_cavern_lava(background.copy(), 5, state)
             changed = ImageChops.difference(before.convert('RGB'), after.convert('RGB')).convert('L')
@@ -796,6 +831,7 @@ class ImportedLavaTests(unittest.TestCase):
                             expected.paste(raised, (record['x'] + x, record['bottom'] + y - raised.height), raised)
                 for record in records:
                     x, y = record['x'] + dx, record['bottom'] + dy - sprite.height
+                    expected.paste(static.crop((x, y, x + sprite.width, y + sprite.height)), (x, y), mask)
                     expected.paste(static.crop((x, y, x + sprite.width, y + sprite.height)), (x, y), inset)
                 self.assertIsNone(ImageChops.difference(corrected.convert('RGB'), expected.convert('RGB')).getbbox())
 
