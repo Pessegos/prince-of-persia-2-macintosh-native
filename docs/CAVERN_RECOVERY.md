@@ -139,10 +139,9 @@ using 17 palette-index changes, plus the single brown pixel left isolated within
 that strip. The neighboring rock and all other pixels stay
 unchanged. The masks are derived from this artwork, so those pixels also admit
 the original effect frames without any sequence edits or per-position exceptions.
-An eight-pixel follow-up uses the dark crust color along the actual right-hand
-rock edge (six horizontal pixels, one below the left end and one above the right
-end). This retains a narrow border without the former protruding interior strip;
-the neighboring brown rock pixel and the cleared isolated pixel are unchanged.
+The eight right-edge pixels briefly tried in dark crust were restored to their
+previous lava colors. The neighboring brown rock pixel and the cleared isolated
+pixel are unchanged.
 It is port artwork, not an extracted or recovered Macintosh feature. The file
 does not include an original resource fork, palette or surrounding room image.
 No concept generator, external reference file or new asset import is needed at
