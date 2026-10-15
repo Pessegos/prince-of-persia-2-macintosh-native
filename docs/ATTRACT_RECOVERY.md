@@ -34,6 +34,13 @@ from the selected image. The extraction has an instruction budget and checks
 that the original recording finishes with the Prince dead in room 10 (screen 5).
 No external disassembly directory is required.
 
+Import hooks are restricted to modeled service entries, supported Toolbox
+trap instructions and the unused display/device segments, rather than running
+Python for every gameplay instruction. The ranges are disjoint to avoid
+handling the same call twice. Original actor simulation, random state,
+instruction budgets and recorded frame/sound output are unchanged; fresh-import
+tests compare the entire trace and credits with the installed reference.
+
 The resulting `assets/attract.json` stores actor states, original five/six-VBL
 frame intervals and sound requests. Runtime playback uses the existing native
 scene renderer and audio engine; it does not run Macintosh code or the live AI.

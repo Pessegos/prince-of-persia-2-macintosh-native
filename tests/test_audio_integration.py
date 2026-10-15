@@ -122,9 +122,11 @@ for cancel in (True, False):
                     print(result.stdout, end='')
             self.assertTrue((fresh / "assets" / "audio" / "cue-43.wav").is_file())
             self.assertFalse((fresh / "assets" / "Prince of Persia 2").exists())
-            expected = json.loads((project / 'assets' / 'caverns_entry.json').read_text())
-            actual = json.loads((fresh / 'assets' / 'caverns_entry.json').read_text())
-            self.assertEqual(actual, expected)
+            for name in ('caverns_entry.json', 'attract.json', 'intro.json', 'ending.json', 'enemy_profiles.json'):
+                with self.subTest(export=name):
+                    expected = json.loads((project / 'assets' / name).read_text())
+                    actual = json.loads((fresh / 'assets' / name).read_text())
+                    self.assertEqual(actual, expected)
 
     def test_all_prepared_cues_are_nonempty_pcm_with_headroom(self):
         audio = AudioEngine(playback=object())

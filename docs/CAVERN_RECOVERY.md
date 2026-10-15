@@ -31,17 +31,27 @@ both sprite pixels and actor-occlusion masks to those rectangles. Resources and
 decoded shapes are cached across room changes. No Macintosh executable is
 retained or executed by the game itself.
 
-The import-only instruction hook indexes the immutable, word-aligned CODE
-resources once. Only A5 calls, traps and modeled primitive entries read
-emulated memory or registers through Python; ordinary instructions return
-immediately to Unicorn. All original drawing passes still execute, including
-loose-floor combinations, gate phases and climbing recrops. A fresh-import
-integration test compares the complete exported JSON against the installed
-reference, rather than just checking the initial room. This optimization does
-not change the export format or require existing installations to reimport.
-On the local Python 3.10 test machine, a complete GUI import fell from about
-365 seconds to 124 seconds with the same HFS image and identical exported data.
-This is a local measurement, not a fixed import-time guarantee for other PCs.
+Import reuses one bounded recovery machine, restoring its initial working RAM
+and CPU registers for each draw while retaining compiled CODE. Relocated A5
+jump-table stubs let Unicorn execute internal calls directly. Only modeled
+primitive entries invoke Python; unsupported instructions still fail and each
+native call retains its instruction budget.
+
+The ten climbing poses use the original DATA rectangles at A5-4b46.
+ComputeHalfRect (3:3690-36fc) varies their top/right bounds while retaining the
+same left/bottom edges. The widest native pose supplies the narrower recrops;
+its kind-6 bottom extension is preserved. Pose 141 still executes separately
+because DrawCaveLoose (8:25fa) has a special branch for it. Unrecognized table
+geometry or a changed branch signature falls back to executing all ten poses.
+Loose-floor combinations, gate states, ordering and original clip values are
+unchanged. Fresh-import tests compare the complete scenery, recorded demo,
+intro, ending and enemy-profile exports against the installed reference.
+
+These optimizations do not change the export format or require existing
+installations to reimport. On the local Python 3.10 test machine, complete GUI
+import fell from about 365 seconds to 124 seconds, then to about 28 seconds
+with the same HFS image and identical exported data. These are local
+measurements, not fixed import-time guarantees for other PCs.
 
 The exporter follows DoCleanCut (2:608c-6096): set A5-4832 to 1 before building
 a complete room. GetCells (5:0abe-0ac8) then copies the full-room clip instead

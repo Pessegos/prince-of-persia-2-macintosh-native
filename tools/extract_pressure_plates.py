@@ -13,8 +13,9 @@ def command_key(command):
     return command[0], shape, *command[7:10]
 
 
-def pressure_scenery(program, caverns, prince, level, base, progress=lambda _text: None):
+def pressure_scenery(program, caverns, prince, level, base, progress=lambda _text: None, *, recover=None):
     from tools.extract_caverns import recover_room
+    recover = recover or recover_room
 
     terrain = LevelMap(level)
     result = {'schema': 1, 'rooms': {}}
@@ -35,7 +36,7 @@ def pressure_scenery(program, caverns, prince, level, base, progress=lambda _tex
                      (tile.foreground & 0xff00) | (79 if tile.kind == 17 else 184)
                      if tile.kind in (4, 17) else tile.foreground ^ 0x2000)
             struct.pack_into('>H', mutable, 0x780 + source_room * 120 + cell * 4, value)
-            after = recover_room(program, caverns, bytes(mutable), room, prince)['commands']
+            after = recover(program, caverns, bytes(mutable), room, prince)['commands']
             old, new = {command_key(c): c for c in before}, {command_key(c): c for c in after}
             if new.keys() - old.keys():
                 raise ValueError('Unexpected new pressure/gate drawing slot')

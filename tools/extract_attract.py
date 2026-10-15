@@ -43,6 +43,29 @@ class RecordedSimulation:
     DEVICE_CALLS = {(2, 0x3a38), (2, 0x7194), (2, 0x51f4), (5, 0x4e76),
                     *((17, offset) for offset in (0x3032, 0x31b8, 0x3136, 0x31f2,
                                                   0x31d4, 0x4cf4, 0x4d4a, 0x685e, 0x67f4))}
+    SERVICE_CALLS = {(17, 0x330e), (4, 0x3098), (3, 0x5278), (3, 0x5f58),
+                     (17, 0x6e06), (2, 0x532c), (2, 0x55d2), (5, 0x4d84),
+                     (5, 0x4d58), (2, 0x0546), (17, 0x275a)}
+    TOOLBOX_TRAPS = {0xa029, 0xa02a, 0xa049, 0xa04a, 0xa069, 0xa06a,
+                     0xa893, 0xa894, 0xa898, 0xa8a8, 0xa8a9}
+
+    @classmethod
+    def hook_ranges(cls, resources):
+        points = {cls.SECT_RECT}
+        points.update(segment * 0x10000 + offset for segment, offset in
+                      cls.SERVICE_CALLS | cls.DEVICE_CALLS if segment not in cls.DEVICE_SEGMENTS)
+        for segment, resource in resources['CODE'].items():
+            if not segment or segment in cls.DEVICE_SEGMENTS:
+                continue
+            code = resource['data']
+            for offset in range(0, len(code) - 1, 2):
+                if struct.unpack_from('>H', code, offset)[0] in cls.TOOLBOX_TRAPS:
+                    points.add(segment * 0x10000 + offset)
+        # Device segments return immediately. Keep their ranges disjoint from
+        # service/trap points so a call cannot pop its return address twice.
+        return [(0, 0xffff), *((segment * 0x10000, (segment + 1) * 0x10000 - 1)
+                               for segment in sorted(cls.DEVICE_SEGMENTS)),
+                *((address, address) for address in sorted(points))]
 
     def __init__(self, program, banks):
         from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE
@@ -72,7 +95,8 @@ class RecordedSimulation:
         self.pool, self.handles, self.sounds = 0x500000, {}, []
         self.pen, self.credit_lines = [0, 0], None
         self.font = MacintoshFont(self.banks["Prince"]["NFNT"][24878]["data"])
-        self.cpu.hook_add(UC_HOOK_CODE, self.hook)
+        self.hooks = [self.cpu.hook_add(UC_HOOK_CODE, self.hook, begin=begin, end=end)
+                      for begin, end in self.hook_ranges(self.resources)]
 
     def word(self, address):
         return struct.unpack(">h", self.cpu.mem_read(address, 2))[0]

@@ -3,7 +3,7 @@ import struct
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 from PIL import Image
@@ -17,7 +17,8 @@ from pop2.render_opening import (OpeningRoom, load_resource_file, decode_shap,
                                  decode_ctbl, native_buffer_cells)
 from pop2.terrain import LevelMap, Tile
 from tools.render_cavern_map import room_positions
-from tools.extract_caverns import exit_closing_frames, recover_room, recovery_inputs
+from tools.extract_caverns import (CavernRecovery, clip_climbing, exit_closing_frames,
+                                   recover_climbing, recover_room, recovery_inputs)
 
 
 class CavernClipTests(unittest.TestCase):
@@ -111,7 +112,64 @@ class CavernClipTests(unittest.TestCase):
 
 
 class CavernDrawingTests(unittest.TestCase):
-    def test_recovery_index_keeps_a5_calls_traps_and_primitives_on_word_boundaries(self):
+    def test_shared_recovery_restores_ram_registers_and_releases_hooks_on_failure(self):
+        from unicorn.m68k_const import UC_M68K_REG_D1
+
+        recovery_inputs.cache_clear()
+        self.addCleanup(recovery_inputs.cache_clear)
+        resources = {'CODE': {0: {'data': bytes(16)}, 3: {'data': bytes(8)}}}
+        artwork = {'PIEC': {3500: {'data': b'piece'}}}
+        with (patch('tools.extract_caverns.parse_resource_fork', side_effect=[resources, artwork]),
+              patch('tools.extract_caverns.expand_a5_data', return_value=b'initial'),
+              self.assertRaisesRegex(RuntimeError, 'draw failure')):
+            with CavernRecovery(b'program', b'artwork', None) as machine:
+                cpu = machine.reset()
+                cpu.mem_write(0x93000, b'dirty')
+                cpu.reg_write(UC_M68K_REG_D1, 12345)
+                self.assertIs(machine.reset(), cpu)
+                self.assertEqual(bytes(cpu.mem_read(0x93000, 5)), bytes(5))
+                self.assertEqual(cpu.reg_read(UC_M68K_REG_D1), 0)
+                machine.callback = Mock()
+                with self.assertRaisesRegex(RuntimeError, 'already drawing'):
+                    machine.reset()
+                raise RuntimeError('draw failure')
+        self.assertIsNone(machine.callback)
+        self.assertFalse(cpu._callbacks)
+        self.assertEqual(list(cpu.mem_regions()), [])
+        machine.close()
+        with self.assertRaisesRegex(RuntimeError, 'closed'):
+            machine.reset()
+
+    def test_climb_recovery_reuses_rectangles_but_keeps_pose_141_native(self):
+        bounds = [(109, 0, 120, 26)] * 10
+        bounds[3], bounds[7] = (109, 0, 120, 31), (112, 0, 120, 22)
+        data = bytearray(0x6000)
+        for index, rect in enumerate(bounds):
+            struct.pack_into('>4h', data, len(data) - 0x4b46 + index * 8, *rect)
+        code = bytearray(0x2600)
+        code[0x25fa:0x2600] = bytes.fromhex('0c6d008daf38')
+        inputs = {'CODE': {8: {'data': bytes(code)}}}, {}, {}, bytes(data), {}
+        command = ['front', 3501, 102, 245, 16, 1, [229, 102, 241, 133], 4, 2, 1]
+        special = ['native pose 141']
+        recover = Mock(side_effect=[{'commands': [command]}, {'commands': special}])
+        with patch('tools.extract_caverns.recovery_inputs', return_value=inputs):
+            redraw = recover_climbing(b'program', b'art', b'prince', b'level', 0, recover)
+        self.assertEqual([call.args[-1] for call in recover.call_args_list], [138, 141])
+        self.assertEqual(redraw['141'], special)
+        self.assertEqual(redraw['142'][0][6], [232, 102, 241, 124])
+        self.assertEqual(redraw['135'][0][6], [229, 102, 241, 128])
+        self.assertEqual(command[6], [229, 102, 241, 133])
+        self.assertEqual(clip_climbing([command], (241, 0, 250, 31)), [])
+
+    def test_unrecognized_climb_geometry_falls_back_to_all_native_poses(self):
+        data = bytes(0x6000)
+        recover = Mock(return_value={'commands': []})
+        with patch('tools.extract_caverns.recovery_inputs', return_value=({'CODE': {}}, {}, {}, data, {})):
+            redraw = recover_climbing(b'program', b'art', b'prince', b'level', 0, recover)
+        self.assertEqual(list(redraw), [str(action) for action in range(135, 145)])
+        self.assertEqual([call.args[-1] for call in recover.call_args_list], list(range(135, 145)))
+
+    def test_recovery_index_hooks_only_modeled_primitive_entries(self):
         recovery_inputs.cache_clear()
         self.addCleanup(recovery_inputs.cache_clear)
         code = bytes.fromhex('4ead 4e75 4e71 a8a8 a123 4e90 4e71')
@@ -119,8 +177,7 @@ class CavernDrawingTests(unittest.TestCase):
         with (patch('tools.extract_caverns.parse_resource_fork', side_effect=[resources, {}]),
               patch('tools.extract_caverns.expand_a5_data', return_value=b'')):
             intercepts = recovery_inputs(b'program', b'artwork', None)[4]
-        self.assertEqual(intercepts, {0x130000: b'\x4e\xad', 0x130004: b'\x4e\x71',
-                                      0x130006: b'\xa8\xa8', 0x130008: b'\xa1\x23'})
+        self.assertEqual(intercepts, {0x130004: b'\x4e\x71'})
 
     def test_floor_redraw_is_clipped_to_the_current_actor_rectangle(self):
         size = (510, 365)
@@ -218,9 +275,9 @@ class CavernDrawingTests(unittest.TestCase):
 
         def release(cpu, handle):
             remove_hook(cpu, handle)
-            self.assertFalse(cpu._callbacks)
 
         def free_memory(cpu, address, size):
+            self.assertFalse(cpu._callbacks)
             unmap(cpu, address, size)
             released.append(list(cpu.mem_regions()))
 
