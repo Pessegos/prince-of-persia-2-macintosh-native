@@ -187,10 +187,12 @@ class ImportedPressurePlateTests(unittest.TestCase):
         records = [r for room in program['pressure_plates']['rooms'].values() for r in room]
         self.assertEqual(len({(r['room'], r['cell']) for r in records if r['kind'] == 4}), 9)
         self.assertEqual(len({(r['room'], r['cell']) for r in records if r['kind'] == 34}), 27)
+        self.assertEqual({(r['room'], r['cell']) for r in records if r['kind'] == 17},
+                         {(12, 16), (29, 25)})
         for record in records:
             self.assertTrue(record['commands'])
             for key in record['commands']:
-                self.assertIn(key[1], (3554, 3562, 3563))
+                self.assertIn(key[1], (3554, 3562, 3563, 3566))
         # Room 4 also shows the top of Room 23's gate at its lower edge.
         self.assertTrue(any((r['room'], r['cell'], r['kind']) == (22, 1, 4)
                             for r in program['pressure_plates']['rooms']['3']))

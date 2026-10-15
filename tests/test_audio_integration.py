@@ -61,8 +61,10 @@ class ImportedAudioTests(unittest.TestCase):
                  "scene.finish_intro(); assert scene.opening.active and audio.effect_busy; "
                  "audio.close(); root.destroy(); context.stop()"],
             ):
+                # Native scenery export can exceed two minutes on slower hosts.
+                timeout = 600 if arguments[:2] == ['-m', 'tools.extract_assets'] else 120
                 result = subprocess.run([sys.executable, *arguments], cwd=fresh, env=env,
-                                        capture_output=True, text=True, timeout=120)
+                                        capture_output=True, text=True, timeout=timeout)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue((fresh / "assets" / "audio" / "cue-43.wav").is_file())
             self.assertFalse((fresh / "assets" / "Prince of Persia 2").exists())

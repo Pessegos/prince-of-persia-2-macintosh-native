@@ -237,7 +237,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,PlayerCtrl,0x3b88,jump_table,partial,pop2/rebirth.py;pop2/scene_prototype.py;pop2/audio.py,ordinary dead-pose counter/retry gate with current/pending SDL audio completion,2,20
 4,Characters 2,IsLedge,0x3f44,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,2
 4,Characters 2,RemoveObj,0x406c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
-4,Characters 2,ClipChar,0x4146,jump_table,reference-only,pop2/render_opening.py,full native clipping pipeline not translated,2,13
+4,Characters 2,ClipChar,0x4146,jump_table,partial,pop2/caverns.py;pop2/scene_prototype.py,cavern ordinary top clipping and Prince exit top/right rectangle; full native clipping pipeline not translated,2,13
 4,Characters 2,MakeFCharClipRect,0x4432,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,2
 4,Characters 2,IndexChar,0x4558,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
 4,Characters 2,IsCharNonViewable,0x471e,jump_table,partial,pop2/render_opening.py,settled Prince/ordinary guard rooftop corpses except native rooms 15/16/19; guard variant 228 included,3,1
@@ -301,7 +301,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 5,Modular Set 2,Trigger,0x1c4c,decoded,partial,pop2/pressure_plates.py,"native linked target traversal; level-three stone gates dispatched, traps/exits identified but not activated",3,7
 5,Modular Set 2,TriggerFlask,0x1ce8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,2
 5,Modular Set 2,TriggerGate,0x1d50,decoded,partial,pop2/pressure_plates.py,level-three reverse-plate dispatch; special level/story and closing-on-actor branches missing,1,3
-5,Modular Set 2,TriggerObject,0x1ec8,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,6
+5,Modular Set 2,TriggerObject,0x1ec8,decoded,partial,pop2/pressure_plates.py;pop2/scene_prototype.py,"level-three closed-exit admission, state 1 and OpenDoor song 297; projectile and other environment branches missing",1,6
 5,Modular Set 2,TriggerTorch,0x1ffa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,3
 5,Modular Set 2,AddTrob,0x20a0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,19,1
 5,Modular Set 2,Get1stWallColInDir,0x2198,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,2
@@ -314,7 +314,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 5,Modular Set 2,LinkMore,0x238a,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 5,Modular Set 2,GetLinkRoom,0x23ce,decoded,partial,pop2/pressure_plates.py,native one-based target room converted at the terrain boundary,2,0
 5,Modular Set 2,PushPlate,0x240c,decoded,partial,pop2/pressure_plates.py,"link timer, depression after chain traversal, ordinary/permanent press and click cue; level-three reverse plates integrated",2,8
-5,Modular Set 2,CloseExit,0x25aa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,1
+5,Modular Set 2,CloseExit,0x25aa,jump_table,partial,pop2/cavern_state.py;tools/extract_caverns.py,native first-room 79/47/0 closure retained separately from pressure-driven exit opening,1,1
 5,Modular Set 2,MakeSpace,0x2606,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 5,Modular Set 2,BreakLoose,0x2710,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,3
 5,Modular Set 2,ShakeEm,0x2876,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,5
@@ -369,7 +369,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,JumpSeq,0x0006,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,166,4
 6,Characters 1,Falling,0x00a6,jump_table,partial,pop2/terrain.py,ordinary rooftop falls and grabs,1,14
 6,Characters 1,HitFloor,0x0280,decoded,partial,pop2/terrain.py,ordinary speed thresholds and sequences,1,19
-6,Characters 1,GenCtrl,0x0560,jump_table,partial,pop2/scene_prototype.py;pop2/terrain.py,"tested locomotion/sword/ledge branches; ordinary release 11/23, DoJumpHang/99 missing",2,23
+6,Characters 1,GenCtrl,0x0560,jump_table,partial,pop2/scene_prototype.py;pop2/terrain.py,"tested locomotion/sword/ledge and cavern Up exit admission/alignment to SEQS:70; ordinary release 11/23, DoJumpHang/99 missing",2,23
 6,Characters 1,StairClimbing,0x0e8e,jump_table,partial,pop2/scene_prototype.py,ordinary ledge entry and standing crouch fallback via 1068 only,4,20
 6,Characters 1,DoStepFwd,0x1276,jump_table,partial,pop2/mac_input.py;pop2/terrain.py,ordinary clearance/caution; dynamic tiles missing,8,3
 6,Characters 1,TryPickUp,0x1350,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,4
@@ -477,7 +477,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,TriggerCaveBars,0x1672,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 8,Caverns,DrawCaveBackWall,0x16ee,decoded,indexed-only,,No semantic review recorded in this prototype catalog,10,3
 8,Caverns,DrawCaveDart,0x1aba,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,3
-8,Caverns,DrawCaveExitMovable,0x1ba4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,12
+8,Caverns,DrawCaveExitMovable,0x1ba4,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,"level-three exit body, pixel-phase displacement and native clips; 226 room/floor/climb command-list comparisons; special actor draw pipeline incomplete",0,12
 8,Caverns,DrawCaveFloor,0x1da8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,12,4
 8,Caverns,DrawCaveGateMovable,0x1f40,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,"native two-layer shapes, quarter-phase displacement and clips; 636 individual and 504 combined room/floor/climb command-list comparisons including plates",2,8
 8,Caverns,DrawCaveLavaBubbles,0x219e,jump_table,partial,pop2/lava.py;pop2/caverns.py;tools/extract_lava.py,native reference cover/order/death triples compared; enhanced presentation uses continuous original surface,0,17

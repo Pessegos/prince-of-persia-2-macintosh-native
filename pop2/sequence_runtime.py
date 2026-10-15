@@ -164,7 +164,7 @@ class SequenceRuntime:
             elif opcode == -18:
                 self.state.sequence_mode = 0
             elif opcode == -16:
-                # AnimChar 4:2f2c requests the next level, after boarding.
+                # AnimChar 4:2f2c requests the next level after boarding or exiting.
                 self.state.sequence_events.append((opcode, ()))
             elif opcode == -19:
                 # 4:2f72 calls SetCharFloor, not ShakeEm. Terrain owns

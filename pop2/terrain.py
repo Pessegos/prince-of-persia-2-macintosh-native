@@ -300,6 +300,18 @@ class LevelMap:
             return (floor_edge_distance(contact, state.facing) - 21) * direction
         return None
 
+    def exit_door(self, room, row, state, record):
+        # Up handler 6:0e36: current, behind, then ahead; not the entry room.
+        if room == self.start_room or state.actor_type != 0:
+            return None
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        direction = 1 if state.facing else -1
+        for col in (column, column - direction, column + direction):
+            tile = self.tile(room, col, row)
+            if tile.kind == 17:
+                return tile if tile.foreground & 255 >= 79 else None
+        return None
+
     def vertical_jump(self, room, row, state, record, bounds):
         # DoJumpUp's ordinary fallback (6:1774-187c) tests the supporting
         # foot eight pixels forward before choosing low SEQS:14 / high 28.

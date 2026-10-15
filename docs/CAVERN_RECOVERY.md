@@ -17,7 +17,7 @@ including side paths outside the shortest route.
 During import, `tools.extract_caverns` executes CODE:3/8 drawing routines against
 the original LEVL, Caverns PIEC and SHAP resources. It records background passes
 0/5 and foreground pass 1 for every tile of every room. The portable export
-retains the existing filename `caverns_entry.json`, now version 12:
+retains the existing filename `caverns_entry.json`, now version 13:
 
 ```text
 rooms[zero_based_room] = [layer, shape_id, x, bottom, draw_mode, row, clip_rect, library, draw_column, draw_row][]
@@ -301,9 +301,48 @@ not the entire native scheduler, crushing or the complete route. Integrated
 tests cover actual held-run pressure, blocked/open passage, bounded scenery
 caching, pause and restart. Resource-free controller tests also run on CI.
 
-The common pressure/link base is integrated, but projectile and general exit
-controllers are deliberately not activated yet. Native shared capacity/order
+The common pressure/link base and exit opening below are integrated, but the
+projectile controller is deliberately not activated yet. Native shared capacity/order
 between all animated objects and special actor interactions remain incomplete.
+
+## Exit Buttons And Entry
+
+The two exit links are Room 13/cell 28 -> Room 13/cell 16 and Room 30/cell 8 ->
+Room 30/cell 25 (zero-based cells). TriggerObject (5:1f18-1f8a) starts state 1
+only when the exit's low foreground byte is zero. Further held or rearmed
+presses do not reverse or restart it. ATMExit (5:161c-168c) adds one per update,
+stops at 79 and retains the upper foreground flags. Cue 17 accompanies movement
+and cue 18 the final update. TriggerObject also requests AddSong(297), the
+original OpenDoor MIDI, subject to PrinceSndOn. Import now prepares it with the
+original instrument bank; the host uses the music bus, not the effect bus.
+
+Version 13 adds SHAP 3566 drawing bindings for both exits. DrawCaveExitMovable
+(8:1c58) clamps at 79, moves its bottom by one pixel per phase and clips its
+top to max(row*120+1, sprite top). These bindings compose with loose-floor and
+pressure states. The entrance's separate FirstFrame/CloseExit export is unchanged.
+
+The ordinary Up branch (6:0e36) excludes the starting room and non-Prince actors,
+then checks the current supporting-foot cell, the cell behind, and the one
+ahead for tile 17. Only a low byte >=79 admits entry. The helper at 6:0f58
+aligns scene X to 51*exit_column-3, faces left and selects the original SEQS:70.
+Controls remain locked while it runs; pause still freezes it. ClipChar's
+4:416a-420c exit branch takes effect below row*120+82, using cavern DATA's
+rectangle (17, 0, 364, 71), with the right-half column selected from tile 16/17.
+The portable actor layer applies its top/right limits before compositing.
+
+Native comparisons matched 1,080 exit-controller updates across both linked
+buttons (single, held, repeated), including ordered effects, song requests,
+foreground flags and timers. Admission/alignment matched 576 native cases.
+All 80 drawing heights and sampled floor/ten-pose climb repaints matched 226
+native command lists. Another 320 ClipChar cases matched top/right limits;
+that diagnostic supplies equivalent OffsetRect/SectRect platform bookkeeping.
+Integrated tests cover the music bus, pause, offscreen persistence, entry,
+completion and restart. Visual checks include the supplied Room 30 recording.
+
+SEQS:70's native -16 event now reaches the existing completion host. Level 4
+is not implemented: this deliberately stops at Level 3 Complete rather than
+loading an unsupported level or replaying the level-one boat cinematic. It
+does not claim the complete native next-level music/story/save pipeline.
 
 ## Flasks And Entry Door
 
@@ -333,7 +372,8 @@ ATMExit verified both updates, preservation of upper foreground flags and the
 final cue. Each phase's scenery is drawn by the native routines during import
 and stored under `entry_exit`; runtime only advances portable session state.
 Restart restores the initial phase. The two portal tiles are not pressure plates.
-This is entry closure only, not a general exit-opening controller.
+This remains the separate entry-closure controller; button-driven exit opening
+is described above.
 
 The rooftop waterline previously clipped actors in cavern Rooms 16 and 19
 because their room IDs matched the docks. Composition now requires environment
@@ -404,7 +444,7 @@ pose/mode/facing/bounds combinations produced the same selected floor cells;
 the integrated upper-platform test fails without the repaint. The first
 entrance-climb regression remains covered as well.
 
-Special entry/exit rectangles, projectile/special-actor drawing modes and
+Projectile/special-actor drawing modes and
 full dirty-buffer persistence remain separate recovery work. The two aligned
 video defects are addressed; complete level-three frame parity is not claimed.
 
@@ -503,7 +543,7 @@ is shared with ordinary guards and other environments, without room overrides.
 
 This is the scenery foundation, not a completed playable level. Original room
 transitions and the common movement runtime are available. Cavern-specific
-floor classifications, projectile/exit controllers, gate crushing, spikes,
+floor classifications, projectile controllers, gate crushing, spikes,
 crushers, potion behavior and colors, special draw modes and
 skeleton enemies still require semantic recovery and integrated tests.
 The ordinary-guard decoder does not reinterpret skeleton spawn records; the

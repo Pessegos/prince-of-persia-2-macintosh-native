@@ -22,14 +22,14 @@ class InstallationTests(unittest.TestCase):
         (assets / "audio" / "credits-10019.wav").touch()
         (assets / "audio" / "manifest.json").write_text(json.dumps({
             "schema": 1, "cues": dict.fromkeys(
-                ("10019", "32", "46", "47", "48", "49", "50"), self.credit_cue)}))
+                ("10019", "32", "46", "47", "48", "49", "50", "297"), self.credit_cue)}))
         (assets / "intro.json").write_text(json.dumps({
             "schema": 1, "audio": {}, "operations": [{"op": "wait", "args": [1]}],
         }))
         (assets / "attract.json").write_text(json.dumps(fixture()))
         (assets / "ending.json").write_bytes((assets / "intro.json").read_bytes())
         (assets / 'caverns_entry.json').write_text(json.dumps({
-            'version': 12, 'level': 3, 'rooms': {str(room): [] for room in range(32)},
+            'version': 13, 'level': 3, 'rooms': {str(room): [] for room in range(32)},
             'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}}}))
 
     def test_complete_installation_has_no_errors(self):
@@ -44,7 +44,7 @@ class InstallationTests(unittest.TestCase):
         manifest = self.project / "assets" / "audio" / "manifest.json"
         manifest.write_text(json.dumps({"schema": 1, "cues": {
             "40": {"file": "cue-40.wav"}, **dict.fromkeys(
-                ("10019", "32", "46", "47", "48", "49", "50"), self.credit_cue)}}))
+                ("10019", "32", "46", "47", "48", "49", "50", "297"), self.credit_cue)}}))
         self.assertEqual(run_game.missing_assets(self.project), ["audio/cue-40.wav"])
         manifest.write_text("invalid json")
         self.assertIn("needs reimport", " ".join(run_game.missing_assets(self.project)))
@@ -89,6 +89,14 @@ class InstallationTests(unittest.TestCase):
                 self.assertIn("audio/manifest.json (needs desert music)",
                               run_game.missing_assets(self.project))
 
+    def test_missing_exit_door_music_requests_reimport(self):
+        path = self.project / 'assets/audio/manifest.json'
+        manifest = json.loads(path.read_text())
+        del manifest['cues']['297']
+        path.write_text(json.dumps(manifest))
+        self.assertIn('audio/manifest.json (needs exit-door music)',
+                      run_game.missing_assets(self.project))
+
     def test_cavern_export_without_native_upper_border_requests_reimport(self):
         (self.project / 'assets/caverns_entry.json').write_text(json.dumps({
             'version': 9, 'level': 3, 'rooms': {str(room): [] for room in range(32)}}))
@@ -96,7 +104,7 @@ class InstallationTests(unittest.TestCase):
                       run_game.missing_assets(self.project))
 
     def test_cavern_export_without_pressure_bindings_requests_reimport(self):
-        for version in (11, 12):
+        for version in (11, 12, 13):
             with self.subTest(version=version):
                 (self.project / 'assets/caverns_entry.json').write_text(json.dumps({
                     'version': version, 'level': 3, 'rooms': {str(room): [] for room in range(32)}}))

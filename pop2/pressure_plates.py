@@ -1,4 +1,4 @@
-"""Macintosh pressure links and the ordinary cavern gate controller."""
+"""Macintosh pressure links and cavern stone-gate/exit controllers."""
 
 from dataclasses import dataclass, field, replace
 import struct
@@ -12,6 +12,7 @@ class PressurePlates:
     active: dict = field(default_factory=dict)
     timers: dict = field(default_factory=dict)
     triggered: list = field(default_factory=list)
+    songs: list = field(default_factory=list)
 
     def link(self, terrain, index):
         if not 0 <= index < 256:
@@ -76,6 +77,11 @@ class PressurePlates:
             self.triggered.append((tile.kind, *key, how))
             if tile.kind == 4:
                 self.trigger_gate(key, tile.foreground, how, depressed, impact)
+            elif tile.kind == 17 and not tile.foreground & 255:
+                # TriggerObject 5:1f40: only a completely closed exit starts.
+                self.add(key, 1)
+                if 297 not in self.songs:
+                    self.songs.append(297)
             index = following
 
     def trigger_gate(self, key, foreground, how, depressed=False, impact=False):
@@ -124,6 +130,16 @@ class PressurePlates:
                 if timer < 2:
                     self.foreground[key] = value & 0xdfff
                     del self.active[key]
+                continue
+            if tile.kind == 17:
+                # ATMExit 5:161c: one pixel/update, permanently open at 79.
+                position = (value & 255) + 1
+                self.foreground[key] = (value & 0xff00) | position
+                if position >= 79:
+                    del self.active[key]
+                    cues.append(18)
+                else:
+                    cues.append(17)
                 continue
             if tile.kind != 4:
                 del self.active[key]

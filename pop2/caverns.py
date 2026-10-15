@@ -11,7 +11,7 @@ from PIL import Image, ImageChops, ImageOps
 from pop2.paths import ASSET_DIR
 from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.render_opening import OpeningRoom, decode_ctbl, decode_shap, load_resource_file
-from pop2.terrain import character_row
+from pop2.terrain import character_row, floor_contact_x
 
 
 def drawn_actor_columns(bounds, facing):
@@ -95,6 +95,15 @@ class CavernRoom(OpeningRoom):
             cover = self.foreground.crop((x, y, x + sprite.width, y + sprite.height))
             frame.paste(cover, position, cover)
         return frame
+
+
+def cavern_exit_clip(terrain, room, row, state, record):
+    # ClipChar 4:416a-420c: cavern DATA rectangle (17, 0, 364, 71).
+    if state.actor_type != 0 or not 217 <= state.action <= 226 or state.current_y >= -24:
+        return None
+    column = character_column(floor_contact_x(state.target_x, state.facing, record))
+    column += int(terrain.tile(room, column, row).kind == 16)
+    return max(0, row * 120 + 17), min(510, column * 51 + 71)
 
 
 def cavern_clip_top(terrain, room, row, state, bounds):
@@ -442,7 +451,8 @@ def cavern_pressure_signature(program, room_id, state):
     phases = []
     for record in records:
         value = state.plates.foreground.get((record['room'], record['cell']), record['foreground'])
-        phases.append(min(value & 255, 184) // 4 if record['kind'] == 4 else int(bool(value & 0x2000)))
+        phases.append(min(value & 255, 184) // 4 if record['kind'] == 4 else
+                      min(value & 255, 79) if record['kind'] == 17 else int(bool(value & 0x2000)))
     return tuple(phases)
 
 
@@ -451,7 +461,7 @@ def pressure_drawing_commands(commands, records, phases, resources):
                  for key in record['commands']}
     # DrawHalf reuses the plate's drawing slot in its front-only climb repaint.
     for key, item in tuple(overrides.items()):
-        if item[0]['kind'] != 4:
+        if item[0]['kind'] not in (4, 17):
             overrides[('front', *key[1:])] = item
     result = []
     for source in commands:
@@ -462,13 +472,16 @@ def pressure_drawing_commands(commands, records, phases, resources):
             continue
         record, phase = item
         command = list(source)
-        if record['kind'] == 4:
-            # DrawCaveGateMovable 8:1f40: two pixels per quarter-phase,
-            # clamped at 46, clipped to the room and row*120 - 31.
-            command[3] -= 2 * (phase - min(record['foreground'] & 255, 184) // 4)
+        if record['kind'] in (4, 17):
+            # Stone gates move two pixels/quarter-phase; exits move one pixel.
+            # Both keep their native row clip and the SHAP's bottom alignment.
+            exit_door = record['kind'] == 17
+            initial = (min(record['foreground'] & 255, 79) if exit_door else
+                       min(record['foreground'] & 255, 184) // 4)
+            command[3] -= (1 if exit_door else 2) * (phase - initial)
             height = struct.unpack_from('>H', resources['SHAP'][command[1]]['data'], 6)[0]
             clip = list(command[6])
-            clip[0] = max(0, command[5] * 120 - 31, command[3] - height)
+            clip[0] = max(0, command[5] * 120 + (1 if exit_door else -31), command[3] - height)
             clip[2] = min(365, command[3])
             if clip[0] >= clip[2]:
                 continue
@@ -481,7 +494,7 @@ def pressure_drawing_commands(commands, records, phases, resources):
 
 def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=()):
     program, resources, palette, shapes = cavern_assets()
-    if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12) and program.get('level') == 3:
+    if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13) and program.get('level') == 3:
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, 3, room_id):
         commands = program['commands']

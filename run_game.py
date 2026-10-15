@@ -73,6 +73,8 @@ def missing_assets(project=PROJECT):
             if any(not manifest["cues"].get(str(cue), {}).get("file")
                    for cue in (46, 47, 48, 49, 50)):
                 missing.append("audio/manifest.json (needs desert music)")
+            if not manifest["cues"].get("297", {}).get("file"):
+                missing.append("audio/manifest.json (needs exit-door music)")
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append("audio/manifest.json (needs reimport)")
     for name in ("intro.json", "ending.json"):
@@ -92,7 +94,7 @@ def missing_assets(project=PROJECT):
     if cavern_path.is_file():
         try:
             cavern = json.loads(cavern_path.read_text(encoding='ascii'))
-            if (cavern.get('version'), cavern.get('level')) != (12, 3) or set(cavern['rooms']) != {
+            if (cavern.get('version'), cavern.get('level')) != (13, 3) or set(cavern['rooms']) != {
                     str(room) for room in range(32)}:
                 raise ValueError('Full level-three scenery needs reimport')
             plates = cavern['pressure_plates']

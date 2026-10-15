@@ -21,21 +21,22 @@ def pressure_scenery(program, caverns, prince, level, base):
         visible = {(tile.room, tile.row * 10 + tile.column)
                    for row in range(-1, 4) for column in range(-1, 11)
                    if (tile := terrain.tile(room, column, row)).room is not None
-                   and tile.kind in (4, 5, 6, 34)}
+                   and (tile.kind in (4, 5, 6, 34)
+                        or tile.kind == 17 and tile.room != terrain.start_room)}
         before = base['rooms'][str(room)]
         records = []
         for source_room, cell in sorted(visible):
             tile = terrain.tile(source_room, cell % 10, cell // 10)
             mutable = bytearray(level)
-            value = ((tile.foreground & 0xff00) | 184 if tile.kind == 4 else
-                     tile.foreground ^ 0x2000)
+            value = ((tile.foreground & 0xff00) | (79 if tile.kind == 17 else 184)
+                     if tile.kind in (4, 17) else tile.foreground ^ 0x2000)
             struct.pack_into('>H', mutable, 0x780 + source_room * 120 + cell * 4, value)
             after = recover_room(program, caverns, bytes(mutable), room, prince)['commands']
             old, new = {command_key(c): c for c in before}, {command_key(c): c for c in after}
             if new.keys() - old.keys():
                 raise ValueError('Unexpected new pressure/gate drawing slot')
             keys = [key for key in old if old[key] != new.get(key)]
-            expected = (3562, 3563) if tile.kind == 4 else (3554,)
+            expected = {4: (3562, 3563), 17: (3566,)}.get(tile.kind, (3554,))
             if any(key[1] not in expected for key in keys):
                 raise ValueError('Unsupported pressure/gate drawing dependency')
             if keys:

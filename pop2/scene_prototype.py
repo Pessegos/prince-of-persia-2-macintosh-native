@@ -49,7 +49,7 @@ from pop2.harbor import SHIP_CLIMB_SEQUENCE
 from pop2.rebirth import RebirthSnapshot
 from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
-from pop2.caverns import cavern_clip_top
+from pop2.caverns import cavern_clip_top, cavern_exit_clip
 from pop2.loose_floors import floor_hits_actor
 from pop2.render_opening import (
     OPENING_FLOOR_Y,
@@ -800,6 +800,8 @@ class ScenePrototype(WindowControls):
             self.run_start_x = None
             self.start_sequence(RUN_STOP_SEQUENCE)
             return True
+        if not command.direction and self.start_cavern_exit():
+            return True
         if not command.direction and self.start_upper_ledge_jump():
             return True
         if (
@@ -852,6 +854,26 @@ class ScenePrototype(WindowControls):
         if not self.in_animation_tick:
             self.advance_animation_now()
         self.start_queue_grace(command)
+        return True
+
+    def start_cavern_exit(self):
+        if (self.game.caverns is None or self.terrain_motion is None
+                or self.sword_drawn or not self.combat.player.alive):
+            return False
+        state = self.sequence_state
+        tile = self.level_map.exit_door(self.room_id, self.terrain_motion.row,
+                                        state, self.frames[state.action])
+        if tile is None:
+            return False
+        self.clear_keys(None)
+        self.run_active = self.run_stop_requested = False
+        self.run_direction = 0
+        # 6:0f58 aligns to the exit's column, faces left, then selects SEQS:70.
+        self.player_x = tile.column * TILE_WIDTH - 3
+        state.facing = 0
+        self.start_sequence(70)
+        if not self.in_animation_tick:
+            self.advance_animation_now()
         return True
 
     def dispatch_horizontal_action(self, command, was_running=False):
@@ -1751,6 +1773,8 @@ class ScenePrototype(WindowControls):
             return True
         if self.game.entry_active:
             return True
+        if self.sequence_state.source_sequence_id == 70:
+            return True
         motion = getattr(self, "terrain_motion", None)
         if motion is not None and (motion.falling or motion.sinking or motion.dead):
             return True
@@ -2188,6 +2212,11 @@ class ScenePrototype(WindowControls):
         if getattr(self, "intro", None) is not None:
             return
         audio = getattr(self, "audio", None)
+        if self.game.caverns is not None:
+            for cue in self.game.caverns.plates.songs:
+                if audio is not None and not audio.song_playing(cue):
+                    audio.add_song(cue)
+            self.game.caverns.plates.songs.clear()
         if audio is None:
             return
         if self.sequence_state.action == 167:
@@ -2697,6 +2726,11 @@ class ScenePrototype(WindowControls):
             clip_top = cavern_clip_top(self.level_map, self.room_id, row, state, bounds)
             if clip_top > 0:
                 layer.paste((0, 0, 0, 0), (0, 0, layer.width, clip_top))
+            exit_clip = cavern_exit_clip(self.level_map, self.room_id, row, state, record)
+            if exit_clip is not None:
+                top, right = exit_clip
+                layer.paste((0, 0, 0, 0), (0, 0, layer.width, top))
+                layer.paste((0, 0, 0, 0), (right, 0, layer.width, layer.height))
         # ClipChar 4:4218-4228 restricts the dock waterline to environment 5.
         if level_kind == 5 and self.room_id in (15, 18):
             water_y = 354 if state is not None and state.animation_state == 9 else 327
