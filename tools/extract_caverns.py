@@ -295,7 +295,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
 def extract_caverns(program, caverns, prince, output):
     level = parse_resource_fork(prince)['LEVL'][2002]['data']
     scenes = {str(room): recover_room(program, caverns, level, room, prince) for room in range(32)}
-    result = {'version': 11, 'level': 3,
+    result = {'version': 12, 'level': 3,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     result['climb_redraw'] = {
@@ -321,6 +321,9 @@ def extract_caverns(program, caverns, prince, output):
             frame['commands'] = recover_room(program, caverns, bytes(mutable), terrain.start_room, prince)['commands']
         result['entry_exit'] = {'room': terrain.start_room, 'cell': cell, 'frames': frames}
     result['loose_floors'] = extract_loose_floor_scenery(program, caverns, prince, level, result)
+    from tools.extract_pressure_plates import pressure_scenery
+
+    result['pressure_plates'] = pressure_scenery(program, caverns, prince, level, result)
     (output / 'caverns_entry.json').write_text(json.dumps(result) + '\n', encoding='ascii')
 
 

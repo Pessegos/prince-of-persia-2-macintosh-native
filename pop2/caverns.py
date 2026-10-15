@@ -437,9 +437,51 @@ def cavern_command_sprite(command, resources, palette, shapes):
     return shapes[key]
 
 
-def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key=''):
+def cavern_pressure_signature(program, room_id, state):
+    records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room_id), ())
+    phases = []
+    for record in records:
+        value = state.plates.foreground.get((record['room'], record['cell']), record['foreground'])
+        phases.append(min(value & 255, 184) // 4 if record['kind'] == 4 else int(bool(value & 0x2000)))
+    return tuple(phases)
+
+
+def pressure_drawing_commands(commands, records, phases, resources):
+    overrides = {tuple(key): (record, phase) for record, phase in zip(records, phases)
+                 for key in record['commands']}
+    # DrawHalf reuses the plate's drawing slot in its front-only climb repaint.
+    for key, item in tuple(overrides.items()):
+        if item[0]['kind'] != 4:
+            overrides[('front', *key[1:])] = item
+    result = []
+    for source in commands:
+        key = (source[0], 3554 if source[1] == 3555 else source[1], *source[7:10])
+        item = overrides.get(key)
+        if item is None:
+            result.append(source)
+            continue
+        record, phase = item
+        command = list(source)
+        if record['kind'] == 4:
+            # DrawCaveGateMovable 8:1f40: two pixels per quarter-phase,
+            # clamped at 46, clipped to the room and row*120 - 31.
+            command[3] -= 2 * (phase - min(record['foreground'] & 255, 184) // 4)
+            height = struct.unpack_from('>H', resources['SHAP'][command[1]]['data'], 6)[0]
+            clip = list(command[6])
+            clip[0] = max(0, command[5] * 120 - 31, command[3] - height)
+            clip[2] = min(365, command[3])
+            if clip[0] >= clip[2]:
+                continue
+            command[6] = clip
+        else:
+            command[1] = 3554 + phase
+        result.append(command)
+    return result
+
+
+def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=()):
     program, resources, palette, shapes = cavern_assets()
-    if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11) and program.get('level') == 3:
+    if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12) and program.get('level') == 3:
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, 3, room_id):
         commands = program['commands']
@@ -453,6 +495,9 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key=''):
     if entry is not None and room_id == entry['room']:
         commands = (variant['entry_frames'][entry_frame] if variant is not None else
                     entry['frames'][entry_frame]['commands'])
+    if pressure_key:
+        records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room_id), ())
+        commands = pressure_drawing_commands(commands, records, pressure_key, resources)
     background = Image.new('RGBA', (510, 365), (0, 0, 0, 255))
     foreground = Image.new('RGBA', background.size)
     masks = {row: Image.new('L', background.size) for row in range(-1, 5)}
@@ -482,6 +527,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key=''):
     climb_commands = (variant['climb_redraw'] if variant is not None else
                       program.get('climb_redraw', {}).get(str(room_id), {}))
     for action, redraw_commands in climb_commands.items():
+        if pressure_key:
+            redraw_commands = pressure_drawing_commands(redraw_commands, records, pressure_key, resources)
         for command in redraw_commands:
             clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
             if clipped is not None:
@@ -490,6 +537,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key=''):
     floors = {}
     floor_commands = (variant['floor_redraw'] if variant is not None else
                       program.get('floor_redraw', {}).get(str(room_id), ()))
+    if pressure_key:
+        floor_commands = pressure_drawing_commands(floor_commands, records, pressure_key, resources)
     for command in floor_commands:
         clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
         if clipped is not None:

@@ -17,7 +17,7 @@ including side paths outside the shortest route.
 During import, `tools.extract_caverns` executes CODE:3/8 drawing routines against
 the original LEVL, Caverns PIEC and SHAP resources. It records background passes
 0/5 and foreground pass 1 for every tile of every room. The portable export
-retains the existing filename `caverns_entry.json`, now version 11:
+retains the existing filename `caverns_entry.json`, now version 12:
 
 ```text
 rooms[zero_based_room] = [layer, shape_id, x, bottom, draw_mode, row, clip_rect, library, draw_column, draw_row][]
@@ -245,9 +245,65 @@ Room 17 barrier planes. Tests cover closed/open/partial phases, low versus
 standing poses, selected-sequence exceptions, both facings, all nine native
 level-three gates and running/Shift-walking at the recorded gate.
 
-This implements collision with the current gate phase. Gate buttons, timed
-opening/closing, and GateBarrToStandUp's separate crouch-rise controller are
-not recovered by this change.
+The pressure-plate controller below now supplies the current gate phase.
+GateBarrToStandUp's separate crouch-rise controller and closing-gate actor
+crushing remain outside this recovery.
+
+## Pressure Plates And Stone Gates
+
+All 27 level-three buttons are reverse plates (tile 34). Their low foreground
+byte indexes the original LEVL link table at 0x1680: 256 ten-byte records of
+five signed words (one-based target room, cell, timer, previous, next).
+Next index -3 ends a chain; room -2 marks an unused link. Sixteen buttons
+control nine stone gates (tile 4); the remaining buttons target projectile
+traps (33) or exit doors (17). Room 24's second plate controls two gates across
+rooms 24 and 23. These are data links, not inferred proximity or room overrides.
+
+CheckPress (5:127e), PushPlate (5:240c) and Trigger (5:1c4c) supply supporting-foot
+contact, FRAM/pose admission, cue 27 and the five-update release timer. PushPlate
+writes depression bit 0x2000 only after traversing the links. Holding a plate
+refreshes its timer without repeatedly clicking; stepping away rearms it.
+Actor-death and debris contacts can set timer 31 for permanent pressure.
+Debris uses the separate impact predicate when opening a gate permanently.
+
+TriggerGateWithRevPlate (8:2c38) distinguishes fresh from held pressure.
+The ordinary gate opens by four phase units per update, reaching 237 after
+46 updates. It waits by decrementing one, changes to closing at 183, then
+closes by four. A single initial press completes the cycle after 146 updates.
+Held pressure refreshes the open position. A fresh press during its open/closing
+states caps the position at 184 and requests fast closing: 124, 44, 0 on the
+next three updates. Holding that now-depressed plate cannot immediately reopen
+the gate. Native AnimGate (5:41aa) supplies cues 17/18/20 and the DATA speed
+tables; plate release is the native loop at 5:2554.
+
+Version 12 binds affected logical cells to original drawing commands, including
+fragments emitted from neighboring rooms/cells and the lower room's first row.
+DrawCaveGateMovable (8:1f40)
+moves SHAPs 3563/3562 by two pixels per quarter phase, clamped at 46, and retains
+the native top/bottom clips. Pressed plates change SHAP 3554 to 3555, including
+DrawHalf's separate front-only climb repaint. Runtime
+rebuilds their actor masks along with the room, retaining loose-floor variants
+but discarding obsolete gate-height images. Terrain collision reads the same
+current foreground byte. Pause freezes these controllers; room changes retain
+them and restarting creates fresh state.
+
+Direct execution of the original controller routines matched 17,280 portable
+updates across all 16 gate buttons (single, held and repeated presses), including
+ordered cues, timers, active states and foreground words. CheckPress also matched
+1,944 plate-contact cases across pose/mode/height, actor, selected sequence and
+alive/dead combinations. Original full-room drawing matched all 636 tested
+command lists: every visible gate at all 47 visual heights and every visible
+plate in both states. Another 504 native comparisons checked simultaneous
+gate/plate changes, floor repaint and all ten climb repaint poses at two gate
+heights. The diagnostic supplies
+redraw bookkeeping and ordinary actor/impact context; it tests these routines,
+not the entire native scheduler, crushing or the complete route. Integrated
+tests cover actual held-run pressure, blocked/open passage, bounded scenery
+caching, pause and restart. Resource-free controller tests also run on CI.
+
+The common pressure/link base is integrated, but projectile and general exit
+controllers are deliberately not activated yet. Native shared capacity/order
+between all animated objects and special actor interactions remain incomplete.
 
 ## Flasks And Entry Door
 
@@ -400,7 +456,8 @@ with a 365-unit physical cut, and uses the original impact classifications and
 sound cues 28/26. A falling actor strikes a loose floor with its own velocity;
 Falling (6:01ee) halves that velocity and retains the airborne state. Crushed
 (6:28f0) supplies the ordinary Prince's one-life damage and SEQS:52 recovery.
-Special actors and pressure-plate/gate responses remain separate recovery work.
+Special actors remain separate recovery work. Pressure-plate impacts now feed
+the controller described above; this older debris comparison did not test them.
 
 DrawMob (5:3128-32e0) also marks the next column's floor for repaint at the
 object's bottom row and, when different, its top row. ComputeMobRect uses
@@ -446,7 +503,7 @@ is shared with ordinary guards and other environments, without room overrides.
 
 This is the scenery foundation, not a completed playable level. Original room
 transitions and the common movement runtime are available. Cavern-specific
-floor classifications, gate and plate controllers, spikes,
+floor classifications, projectile/exit controllers, gate crushing, spikes,
 crushers, potion behavior and colors, special draw modes and
 skeleton enemies still require semantic recovery and integrated tests.
 The ordinary-guard decoder does not reinterpret skeleton spawn records; the

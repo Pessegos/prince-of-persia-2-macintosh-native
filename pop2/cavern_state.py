@@ -5,6 +5,7 @@ import random
 
 from pop2.loose_floors import LooseFloors
 from pop2.lava import Lava
+from pop2.pressure_plates import PressurePlates
 
 
 @dataclass
@@ -16,6 +17,7 @@ class CavernState:
     torches: dict = field(default_factory=dict)
     loose: LooseFloors = field(default_factory=LooseFloors)
     lava: Lava = field(default_factory=Lava)
+    plates: PressurePlates = field(default_factory=PressurePlates)
 
     def configure_lava(self, metadata, enhanced=True):
         self.lava = Lava(metadata, enhanced=enhanced)
@@ -47,11 +49,12 @@ class CavernState:
         self.entry_frame = 0
 
     def foreground(self, room, cell, value):
+        value = self.plates.foreground.get((room, cell), value)
         if (room, cell) in self.loose.tiles:
             kind, foreground = self.loose.tiles[room, cell]
             if kind == 19 and (room, cell) in self.torches:
                 foreground = (foreground & 0xfff0) | (self.torches[room, cell] & 15)
-            return foreground
+            return self.plates.foreground.get((room, cell), foreground)
         if (room, cell) == (self.entry_room, self.entry_cell) and self.entry_frames:
             return (value & 0xff00) | self.entry_frames[self.entry_frame][0]
         if (room, cell) in self.torches:

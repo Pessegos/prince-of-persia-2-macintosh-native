@@ -92,9 +92,12 @@ def missing_assets(project=PROJECT):
     if cavern_path.is_file():
         try:
             cavern = json.loads(cavern_path.read_text(encoding='ascii'))
-            if (cavern.get('version'), cavern.get('level')) != (11, 3) or set(cavern['rooms']) != {
+            if (cavern.get('version'), cavern.get('level')) != (12, 3) or set(cavern['rooms']) != {
                     str(room) for room in range(32)}:
                 raise ValueError('Full level-three scenery needs reimport')
+            plates = cavern['pressure_plates']
+            if plates.get('schema') != 1 or set(plates['rooms']) != {str(room) for room in range(32)}:
+                raise ValueError('Pressure-plate scenery needs reimport')
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append('caverns_entry.json (needs full level-three scenery)')
     attract_path = project / "assets" / "attract.json"

@@ -6,6 +6,27 @@ from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.terrain import floor_contact_x, floor_y
 
 
+def pressure_tile(terrain, motion, state, record):
+    """CheckPress supporting-foot/pose eligibility, shared by floors and plates."""
+    if state.actor_type in (10, 11):
+        return None
+    column = character_column(floor_contact_x(state.target_x, state.facing, record))
+    above = 87 <= state.action <= 99 or 135 <= state.action < 141
+    grounded = state.animation_state < 2 or state.animation_state in (5, 7, 8)
+    if not (above or grounded):
+        return None
+    tile = terrain.tile(motion.room, column, motion.row - 1)
+    if not above:
+        if state.action == 79 and tile.kind == 11:
+            return tile
+        if not record.aux & 0x40:
+            return None
+        tile = terrain.tile(motion.room, column, motion.row)
+    if floor_y(motion.row) + state.current_y < motion.row * 120 + 95:
+        return None
+    return tile
+
+
 def space_foreground(value, environment=3):
     # MakeSpace 5:2698-26b6 keeps the native decoration bits.
     return (value & (0x3080 if environment == 2 else 0x0f80)) | 3
@@ -69,25 +90,8 @@ class LooseFloors:
         return (28,)
 
     def press(self, terrain, motion, state, record):
-        # CheckPress 5:127e-13d6 uses the supporting foot and FRAM 0x40.
-        if state.actor_type in (10, 11):
-            return ()
-        column = character_column(floor_contact_x(state.target_x, state.facing, record))
-        above = 87 <= state.action <= 99 or 135 <= state.action < 141
-        grounded = state.animation_state < 2 or state.animation_state in (5, 7, 8)
-        if above or grounded:
-            tile = terrain.tile(motion.room, column, motion.row - 1)
-            if state.action == 79 and tile.kind == 11:
-                return self.trigger(tile)
-            if not above:
-                if not record.aux & 0x40:
-                    return ()
-                tile = terrain.tile(motion.room, column, motion.row)
-        else:
-            return ()
-        if floor_y(motion.row) + state.current_y < motion.row * 120 + 95:
-            return ()
-        return self.trigger(tile)
+        tile = pressure_tile(terrain, motion, state, record)
+        return self.trigger(tile) if tile is not None else ()
 
     def shake_row(self, terrain, room, row, state=None, motion=None, record=None):
         # ShakeEm 5:2876 and 27b4: a short warning, or a full collapse on

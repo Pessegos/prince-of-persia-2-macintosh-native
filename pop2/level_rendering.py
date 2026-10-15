@@ -25,7 +25,7 @@ class LevelRenderer:
         if not 0 <= room_id < 32:
             raise ValueError("Invalid scenery room")
         if self.level.number == 3:
-            from pop2.caverns import cavern_room, cavern_scene_signature
+            from pop2.caverns import cavern_room, cavern_scene_signature, cavern_pressure_signature
 
             if caverns is not None:
                 caverns.lava.enter_room(room_id,
@@ -33,10 +33,15 @@ class LevelRenderer:
             frame = caverns.entry_frame if caverns is not None else 0
             signature = (cavern_scene_signature(self.cavern_program, room_id, caverns)
                          if caverns is not None else '')
-            key = room_id, frame if room_id == self.level.start_room else 0, signature
+            pressure = cavern_pressure_signature(self.cavern_program, room_id, caverns) if caverns else ()
+            key = room_id, frame if room_id == self.level.start_room else 0, signature, pressure
             if key not in self.cavern_frames:
+                # Retain loose-floor variants, not every historical gate height.
+                for previous in tuple(self.cavern_frames):
+                    if previous[0] == room_id and previous[3] != pressure:
+                        del self.cavern_frames[previous]
                 self.cavern_frames[key] = cavern_room(room_id, entry_frame=key[1], animated=True,
-                                                    loose_key=signature)
+                                                    loose_key=signature, pressure_key=pressure)
             self.rooms[room_id] = self.cavern_frames[key]
             return self.rooms[room_id]
         if room_id not in self.rooms:

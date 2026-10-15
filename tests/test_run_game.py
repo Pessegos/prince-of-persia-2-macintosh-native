@@ -29,7 +29,8 @@ class InstallationTests(unittest.TestCase):
         (assets / "attract.json").write_text(json.dumps(fixture()))
         (assets / "ending.json").write_bytes((assets / "intro.json").read_bytes())
         (assets / 'caverns_entry.json').write_text(json.dumps({
-            'version': 11, 'level': 3, 'rooms': {str(room): [] for room in range(32)}}))
+            'version': 12, 'level': 3, 'rooms': {str(room): [] for room in range(32)},
+            'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}}}))
 
     def test_complete_installation_has_no_errors(self):
         self.assertEqual(run_game.installation_errors(self.project), [])
@@ -93,6 +94,14 @@ class InstallationTests(unittest.TestCase):
             'version': 9, 'level': 3, 'rooms': {str(room): [] for room in range(32)}}))
         self.assertIn('caverns_entry.json (needs full level-three scenery)',
                       run_game.missing_assets(self.project))
+
+    def test_cavern_export_without_pressure_bindings_requests_reimport(self):
+        for version in (11, 12):
+            with self.subTest(version=version):
+                (self.project / 'assets/caverns_entry.json').write_text(json.dumps({
+                    'version': version, 'level': 3, 'rooms': {str(room): [] for room in range(32)}}))
+                self.assertIn('caverns_entry.json (needs full level-three scenery)',
+                              run_game.missing_assets(self.project))
 
     def test_corrupt_voyage_requests_reimport(self):
         (self.project / "assets" / "ending.json").write_text("{}")

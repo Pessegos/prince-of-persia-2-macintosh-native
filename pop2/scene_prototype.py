@@ -1974,7 +1974,11 @@ class ScenePrototype(WindowControls):
                     self.run_active = self.run_stop_requested = self.run_cycle_boundary_pending = False
                     self.pending_action = None
                     self.action, self.player_x = state.action, state.target_x
+        for room, cell, kind in caverns.loose.plate_events:
+            self.sequence_state.sound_events.extend(caverns.plates.impact(self.level_map, room, cell, kind))
+        caverns.loose.plate_events.clear()
         caverns.loose.advance_tiles(self.level_map)
+        self.sequence_state.sound_events.extend(caverns.plates.advance(self.level_map))
 
     def advance_level_events(self):
         if self.game.caverns is not None:
@@ -2002,10 +2006,15 @@ class ScenePrototype(WindowControls):
             state, motion = self.sequence_state, self.terrain_motion
             if motion is not None:
                 state.sound_events.extend(loose.press(self.level_map, motion, state, self.frames[state.action]))
+                state.sound_events.extend(self.game.caverns.plates.press(
+                    self.level_map, motion, state, self.frames[state.action], self.combat.player.alive))
                 for guard in self.combat.active_guards():
                     if guard.terrain_motion is not None:
                         guard.state.sound_events.extend(loose.press(self.level_map, guard.terrain_motion,
                             guard.state, self.guard_art.frames[guard_frame_index(guard.state.action)]))
+                        guard.state.sound_events.extend(self.game.caverns.plates.press(
+                            self.level_map, guard.terrain_motion, guard.state,
+                            self.guard_art.frames[guard_frame_index(guard.state.action)], guard.alive))
                 shakes = [event for event in state.sequence_events if event[0] in (-12, -13)]
                 if shakes:
                     # CheckAlert 2:6c1c consumes one scalar request; a later
