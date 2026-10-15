@@ -422,7 +422,10 @@ class RecessedLavaArtworkTests(unittest.TestCase):
         edits += ((82, 11, 0xd4, 0xbc), (83, 11, 0xd4, 0xbc), (84, 11, 0xd4, 0xbb),
                   (88, 11, 0xd4, 0xbb), (89, 11, 0xd4, 0xbb), (90, 11, 0xd4, 0xb9))
         edits += ((85, 11, 0xa8, 0xbb),)
-        for x, y, old, new in edits:
+        edits += ((96, 9, 0xbd, 0xd4), (90, 10, 0xbb, 0xd4), (91, 10, 0xbc, 0xd4),
+                  (92, 10, 0xbc, 0xd4), (93, 10, 0xbb, 0xd4), (94, 10, 0xbb, 0xd4),
+                  (95, 10, 0xb9, 0xd4), (90, 11, 0xb9, 0xd4))
+        for x, y, old, new in reversed(edits):
             self.assertEqual(sprite.getpixel((x, y)), palette[new])
             sprite.putpixel((x, y), palette[old])
         self.assertEqual(hashlib.sha256(sprite.tobytes()).hexdigest(),
@@ -801,7 +804,7 @@ class ImportedLavaTests(unittest.TestCase):
         liquid = recessed_lava_liquid_mask(surface)
         foreground = recessed_lava_foreground_mask(surface)
         inset = recessed_lava_inset_mask(surface)
-        points = [(x, 10) for x in range(84, 95)] + [(x, 11) for x in (82, 83, 84, 85, 88, 89, 90)]
+        points = [(x, 10) for x in range(84, 90)] + [(x, 11) for x in (82, 83, 84, 85, 88, 89)]
         for point in points:
             self.assertEqual(liquid.getpixel(point), 255)
             self.assertEqual(foreground.getpixel(point), 0)
@@ -819,6 +822,20 @@ class ImportedLavaTests(unittest.TestCase):
                     changed.add((x, y))
             state.lava.advance()
         self.assertGreater(len(changed), 0)
+
+    def test_eight_right_edge_pixels_use_crust_color_without_extending_the_rock(self):
+        from pop2.caverns import cavern_assets, recessed_lava_liquid_mask, recessed_lava_surface
+
+        palette = cavern_assets()[2]
+        surface = recessed_lava_surface(palette)
+        liquid = recessed_lava_liquid_mask(surface)
+        points = [(96, 9)] + [(x, 10) for x in range(90, 96)] + [(90, 11)]
+        self.assertEqual(len(points), 8)
+        for point in points:
+            self.assertEqual(surface.getpixel(point), palette[0xd4])
+            self.assertEqual(liquid.getpixel(point), 0)
+        self.assertEqual(surface.getpixel((96, 10)), palette[0x83])
+        self.assertEqual(surface.getpixel((85, 11)), palette[0xbb])
 
     def test_surface_clipping_and_airborne_order_across_all_pools_and_death_phases(self):
         from PIL import Image, ImageChops
