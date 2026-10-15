@@ -10,11 +10,14 @@ from pop2.playback_navigation import PlaybackGroup
 # composition buffer centers the room with one padding column on each side.
 VISIBLE_VIEWPORT = (1, 0, 511, 384)
 VISIBLE_SIZE = (510, 384)
+# Menus are centered over the room, above the 19-pixel health/status strip.
+PLAYFIELD_VIEWPORT = (1, 0, 511, 365)
 
 
 def centered_panel(width, height):
-    left = VISIBLE_VIEWPORT[0] + (VISIBLE_SIZE[0] - width) // 2
-    top = VISIBLE_VIEWPORT[1] + (VISIBLE_SIZE[1] - height) // 2
+    left, top, right, bottom = PLAYFIELD_VIEWPORT
+    left += (right - left - width) // 2
+    top += (bottom - top - height) // 2
     return left, top, left + width, top + height
 
 

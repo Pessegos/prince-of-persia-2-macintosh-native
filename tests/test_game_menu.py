@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 from PIL import Image
 
 from pop2.game_menu import GameMenu
-from pop2.game_ui import fit_viewport, viewport_point
+from pop2.game_ui import PLAYFIELD_VIEWPORT, fit_viewport, viewport_point
 from pop2.screenshots import ScreenshotSettings
 
 
@@ -75,7 +75,7 @@ class GameMenuModelTests(unittest.TestCase):
         self.assertEqual(menu.key("space"), "changed")
         self.assertEqual(menu.page, "menu")
         menu = GameMenu(page="about", return_to_menu=False)
-        self.assertEqual(menu.click(256, 240), "close")
+        self.assertEqual(menu.click(256, menu.ABOUT_BUTTON[1] + 8), "close")
 
     def test_all_command_rows_fit_inside_the_panel(self):
         menu = GameMenu()
@@ -84,12 +84,13 @@ class GameMenuModelTests(unittest.TestCase):
             self.assertTrue(menu.PANEL[0] < left < right < menu.PANEL[2])
             self.assertTrue(menu.PANEL[1] < top < bottom < menu.PANEL[3])
 
-    def test_all_game_menu_pages_are_centered_in_the_visible_game(self):
+    def test_all_game_menu_pages_are_centered_above_the_health_strip(self):
         menu = GameMenu()
         for panel in (menu.PANEL, menu.SCREENSHOT_PANEL, menu.DIALOG, menu.ABOUT_DIALOG):
             with self.subTest(panel=panel):
                 self.assertEqual(panel[0] - 1, 511 - panel[2])
-                self.assertEqual(panel[1], 384 - panel[3])
+                self.assertLessEqual(abs(panel[1] - (PLAYFIELD_VIEWPORT[3] - panel[3])), 1)
+                self.assertLess(panel[3], PLAYFIELD_VIEWPORT[3])
 
     def test_centered_capture_controls_and_dropdown_share_mouse_geometry(self):
         menu = GameMenu(page="screenshots", return_to_menu=False)
@@ -494,7 +495,9 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_centered_panels_and_controls_are_drawn_at_their_mouse_coordinates(self):
         from pop2.game_ui import DevelopmentMenu
+        from pop2.render_opening import ROOM_HEIGHT
 
+        self.assertEqual(PLAYFIELD_VIEWPORT[3], ROOM_HEIGHT)
         viewport = Image.new("RGBA", (512, 384), (80, 80, 80, 255))
         menus = [(GameMenu(page=page), panel) for page, panel in (
             ("menu", GameMenu.PANEL), ("screenshots", GameMenu.SCREENSHOT_PANEL),
@@ -509,7 +512,8 @@ class GameMenuSceneTests(unittest.TestCase):
                 image = menu.draw(viewport, self.scene.ui_font)
                 for point in ((left, top), (right, top), (left, bottom), (right, bottom)):
                     self.assertEqual(image.getpixel(point), (133, 133, 133, 255))
-                self.assertEqual((left + right, top + bottom), (512, 384))
+                self.assertEqual(left + right, 512)
+                self.assertLessEqual(abs(top - (ROOM_HEIGHT - bottom)), 1)
                 if isinstance(menu, DevelopmentMenu):
                     rects = [menu.control_rect(i) for i in menu.controls]
                 else:
