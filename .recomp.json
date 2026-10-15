@@ -1,0 +1,17 @@
+{
+  "$schema": "https://recomp.fyi/schema/v1.json",
+  "game": "Prince of Persia 2: The Shadow & the Flame",
+  "system": "Mac",
+  "type": "port",
+  "project": "Prince of Persia 2 Macintosh Native",
+  "status": "in-progress",
+  "targets": ["Windows"],
+  "approach": "Native Windows port with gameplay logic recovered from the original Macintosh 68k executable, original game resources, and quality-of-life improvements.",
+  "maintainers": [
+    {
+      "name": "Pessegos",
+      "link": "https://github.com/Pessegos"
+    }
+  ],
+  "notes": "Levels 1 and 2 have playable routes. Level 3 gameplay is under active development, with scenery recovered for all 32 rooms. Original game resources are required and are not bundled. No Macintosh emulator is needed to play."
+}
