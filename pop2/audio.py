@@ -18,8 +18,9 @@ class MixerPlayback:
             mixer.init(frequency=48000, size=-16, channels=2, buffer=512)
         except mixer.error as error:
             raise RuntimeError(f"Cannot open the sound device. Check Windows audio settings: {error}") from error
-        mixer.set_num_channels(2)
+        mixer.set_num_channels(3)
         self.channels = {"effect": mixer.Channel(0), "music": mixer.Channel(1)}
+        self.gate_tail = mixer.Channel(2)
         self.sounds = {cue: mixer.Sound(str(Path(directory) / item["file"]))
                        for cue, item in cues.items() if item.get("file")}
 
@@ -34,6 +35,17 @@ class MixerPlayback:
                 self.stop(bus)
                 return
             sound = self.mixer.Sound(buffer=remaining)
+        if (bus == "effect" and cue == 18 and self.channels[bus].get_busy()
+                and self.channels[bus].get_sound() is self.sounds.get(17)):
+            # Gate movement can stop anywhere in its waveform. Keep a short
+            # fading tail instead of cutting it, without delaying the stop cue.
+            # Span several mixer buffers so the fade is not itself a hard step.
+            self.gate_tail.stop()
+            self.gate_tail.set_volume(self.channels[bus].get_volume())
+            self.channels[bus], self.gate_tail = self.gate_tail, self.channels[bus]
+            self.gate_tail.fadeout(80)
+        elif bus == "effect":
+            self.gate_tail.stop()
         self.channels[bus].play(sound)
 
     def busy(self, bus):
@@ -41,12 +53,18 @@ class MixerPlayback:
 
     def stop(self, bus):
         self.channels[bus].stop()
+        if bus == "effect":
+            self.gate_tail.stop()
 
     def set_volume(self, bus, volume):
         self.channels[bus].set_volume(volume)
+        if bus == "effect":
+            self.gate_tail.set_volume(volume)
+            if not volume:
+                self.gate_tail.stop()
 
     def pause(self, paused):
-        for channel in self.channels.values():
+        for channel in (*self.channels.values(), self.gate_tail):
             (channel.pause if paused else channel.unpause)()
 
     def close(self):

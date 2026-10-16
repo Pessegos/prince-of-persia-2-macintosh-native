@@ -370,6 +370,13 @@ next three updates. Holding that now-depressed plate cannot immediately reopen
 the gate. Native AnimGate (5:41aa) supplies cues 17/18/20 and the DATA speed
 tables; plate release is the native loop at 5:2554.
 
+Playback keeps the native cue requests and priority arbitration, but avoids a
+hard waveform cut when movement cue 17 is replaced by stop cue 18. The stop
+starts immediately while a separate channel fades the remaining movement over
+80 ms. This is a playback-only de-click improvement, not a recovered Macintosh
+rule. Pause, mute and reset also handle the short tail; other cue replacements
+and the imported samples are unchanged.
+
 Version 12 binds affected logical cells to original drawing commands, including
 fragments emitted from neighboring rooms/cells and the lower room's first row.
 DrawCaveGateMovable (8:1f40)

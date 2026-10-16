@@ -316,6 +316,40 @@ class FormatTests(unittest.TestCase):
 
 
 class SdlPlaybackTests(unittest.TestCase):
+    def test_gate_stop_starts_immediately_with_a_short_independent_movement_tail(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "sample.wav").write_bytes(Sample(b"\x90" * 1600, 8000).wav())
+            cues = {17: {"file": "sample.wav"}, 18: {"file": "sample.wav"}}
+            with patch.dict(os.environ, {"SDL_AUDIODRIVER": "dummy"}):
+                playback = MixerPlayback(directory, cues)
+                try:
+                    time.sleep(0.02)
+                    playback.set_volume("effect", 0.5)
+                    playback.play("effect", 17)
+                    movement = playback.channels["effect"]
+                    playback.play("effect", 18)
+                    self.assertIs(playback.gate_tail, movement)
+                    self.assertIs(playback.channels["effect"].get_sound(), playback.sounds[18])
+                    self.assertIs(playback.gate_tail.get_sound(), playback.sounds[17])
+                    self.assertEqual(playback.channels["effect"].get_volume(), 0.5)
+                    playback.pause(True)
+                    time.sleep(0.04)
+                    self.assertTrue(playback.busy("effect"))
+                    playback.pause(False)
+                    time.sleep(0.10)
+                    self.assertFalse(playback.gate_tail.get_busy())
+                    self.assertTrue(playback.busy("effect"))
+                    playback.stop("effect")
+                    self.assertFalse(playback.busy("effect"))
+                    playback.play("effect", 17)
+                    playback.play("effect", 18)
+                    playback.set_volume("effect", 0)
+                    self.assertFalse(playback.gate_tail.get_busy())
+                    self.assertEqual(playback.channels["effect"].get_volume(), 0)
+                    self.assertTrue(playback.busy("effect"))
+                finally:
+                    playback.close()
+
     def test_real_sdl_channels_pause_resume_and_stop_independently(self):
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, "sample.wav").write_bytes(Sample(b"\x90" * 800, 8000).wav())
@@ -360,6 +394,64 @@ class MixerSeekTests(unittest.TestCase):
         channel.play.assert_called_once_with(playback.mixer.Sound.return_value)
         playback.play("music", 40, offset=100)
         channel.stop.assert_called_once()
+
+
+class MixerGateTransitionTests(unittest.TestCase):
+    def setUp(self):
+        self.playback = MixerPlayback.__new__(MixerPlayback)
+        self.playback.sounds = {cue: Mock() for cue in (17, 18, 20)}
+        self.effect, self.music, self.tail = Mock(), Mock(), Mock()
+        self.playback.channels = {"effect": self.effect, "music": self.music}
+        self.playback.gate_tail = self.tail
+        self.effect.get_sound.return_value = self.playback.sounds[17]
+        self.effect.get_busy.return_value = True
+        self.effect.get_volume.return_value = 0.5
+
+    def test_only_a_playing_gate_movement_to_stop_transition_gets_a_fading_tail(self):
+        self.playback.play("effect", 18)
+        self.assertIs(self.playback.channels["effect"], self.tail)
+        self.assertIs(self.playback.gate_tail, self.effect)
+        self.effect.fadeout.assert_called_once_with(80)
+        self.tail.set_volume.assert_called_once_with(0.5)
+        self.tail.play.assert_called_once_with(self.playback.sounds[18])
+        self.tail.queue.assert_not_called()
+        self.effect.stop.assert_not_called()
+        self.effect.play.assert_not_called()
+
+    def test_unrelated_cue_replacement_is_unchanged(self):
+        self.playback.play("effect", 20)
+        self.effect.play.assert_called_once_with(self.playback.sounds[20])
+        self.effect.fadeout.assert_not_called()
+        self.tail.play.assert_not_called()
+
+    def test_finished_movement_does_not_leave_a_tail(self):
+        self.effect.get_busy.return_value = False
+        self.playback.play("effect", 18)
+        self.effect.play.assert_called_once_with(self.playback.sounds[18])
+        self.effect.fadeout.assert_not_called()
+
+    def test_stop_after_another_cue_does_not_leave_a_tail(self):
+        self.effect.get_sound.return_value = self.playback.sounds[20]
+        self.playback.play("effect", 18)
+        self.effect.play.assert_called_once_with(self.playback.sounds[18])
+        self.effect.fadeout.assert_not_called()
+
+    def test_pause_mute_and_reset_include_the_tail(self):
+        self.playback.play("effect", 18)
+        self.playback.pause(True)
+        for channel in (self.effect, self.music, self.tail):
+            channel.pause.assert_called_once()
+        self.playback.pause(False)
+        for channel in (self.effect, self.music, self.tail):
+            channel.unpause.assert_called_once()
+        self.playback.set_volume("effect", 0)
+        self.effect.set_volume.assert_called_once_with(0)
+        self.tail.set_volume.assert_called_with(0)
+        self.effect.stop.assert_called_once()
+        self.playback.stop("effect")
+        self.tail.stop.assert_called_with()
+        self.assertEqual(self.effect.stop.call_count, 2)
+        self.music.stop.assert_not_called()
 
 
 if __name__ == "__main__":
