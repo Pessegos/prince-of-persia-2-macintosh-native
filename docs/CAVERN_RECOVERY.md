@@ -354,6 +354,39 @@ it does not claim to execute the entire native movement loop. Integrated
 tests cover jumping under a partial gate, crouch-rise clearance, the full
 264/265/266 death, stopped gate and restart readiness.
 
+### Grabbing And Climbing Beside A Gate
+
+The later Room 23 recordings exposed two missing selectors. IsLedge
+(4:3fa4-3fc0) rejects a left-facing falling catch when the destination is
+tile 4 with phase zero. A nonzero opening can be caught; facing right is
+not vetoed by this branch. DoJumpUp deliberately supplies phase 184 for a
+gate (6:1620-162a), so its upward approach must not inherit the falling
+catch restriction. The portable catch now respects that distinction.
+
+The climb selector at 6:19d4-1a50 inspects the supporting tile ABOVE the
+actor. A cavern gate below quarter-phase 30 (phase 120) blocks a left-facing
+climb; the right-facing threshold is quarter-phase 12 (phase 48). It selects
+SEQS:73, not ordinary SEQS:10: poses 135/136/137/137/138/138/138/138/137/136/135
+recede into SEQS:11. The gate never becomes a walkable landing on the wrong
+side. Sufficiently open gates retain the complete ordinary climb. Actor 1
+and the native environment/facing exceptions remain in the selector.
+
+CheckGateInFore (3:2722-2762/2860) also peels the moving stone over actors
+on the same physical row, in the gate's own or preceding foot column,
+except hanging modes 2/6. CavernRoom now retains a positioned SHAP:3563
+alpha mask from the current gate-phase commands for this actor-specific
+foreground. The existing fixed frame, wall masks and collision-height
+formula are unchanged. This prevents the turban/body from painting over
+the moving stone at tight opening clearances, without hiding hanging poses.
+NPC-bank and special crushing redraw paths are not a complete translation.
+
+Original instruction execution confirmed 6,144 climb selections, 512 gate
+catch admissions and 80 foreground-admission cases. Real-terrain tests replay
+Room 23's run jump, an initially shut gate, a gate that closes after a valid
+grab, the complete failed climb/fall and the successful climb. Pixel checks
+cover the moving stone over an overlapping actor in both facings. This
+extends the focused gate audit, not a claim of complete movement-loop parity.
+
 ## Pressure Plates And Stone Gates
 
 All 27 level-three buttons are reverse plates (tile 34). Their low foreground

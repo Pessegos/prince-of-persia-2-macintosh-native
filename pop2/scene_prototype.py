@@ -1385,8 +1385,12 @@ class ScenePrototype(WindowControls):
             self.ledge_climbing = True
             ship = (self.harbor is not None
                     and self.harbor.hanging_from_ship(self.room_id, self.sequence_state))
-            self.start_sequence(SHIP_CLIMB_SEQUENCE if ship else 10)
-            self.status.set("Boarding the ship" if ship else "Climb: original SEQS:10 / 235")
+            sequence = (SHIP_CLIMB_SEQUENCE if ship else self.level_map.climb_sequence(
+                self.room_id, self.terrain_motion.row, self.sequence_state, self.frames[self.action]))
+            self.start_sequence(sequence)
+            self.status.set("Boarding the ship" if ship else
+                            "Blocked climb: original SEQS:73" if sequence == 73 else
+                            "Climb: original SEQS:10 / 235")
             if not self.in_animation_tick:
                 self.advance_animation_now()
             return True

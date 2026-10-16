@@ -121,7 +121,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 3,Modular Set 1,DrawCustomRoomImgs,0x2324,decoded,partial,pop2/render_opening.py,CUST:4350 static background/foreground passes,4,4
 3,Modular Set 1,DrawCustomRoomImg,0x2438,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,16,0
 3,Modular Set 1,DrawForeImg,0x2598,decoded,indexed-only,,No semantic review recorded in this prototype catalog,4,4
-3,Modular Set 1,CheckGateInFore,0x26e4,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,6
+3,Modular Set 1,CheckGateInFore,0x26e4,decoded,partial,pop2/caverns.py;pop2/scene_prototype.py,"ordinary moving-gate body masks by physical row, supporting column and mode; 80 native admission checks; full NPC-bank and special crush redraw paths partial",1,6
 3,Modular Set 1,CheckNextBFItem,0x29b6,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,1
 3,Modular Set 1,ResetNextBFItem,0x29e2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,16,0
 3,Modular Set 1,ResetNextBFItemWithPrevInfo,0x2ac4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,98,2
@@ -235,7 +235,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,GetCharCol,0x3ad6,jump_table,partial,pop2/terrain.py,ordinary signed coordinate conversion,23,1
 4,Characters 2,GetRow,0x3afa,jump_table,partial,pop2/terrain.py,signed row conversion,13,0
 4,Characters 2,PlayerCtrl,0x3b88,jump_table,partial,pop2/rebirth.py;pop2/scene_prototype.py;pop2/audio.py,ordinary dead-pose counter/retry gate with current/pending SDL audio completion,2,20
-4,Characters 2,IsLedge,0x3f44,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,2
+4,Characters 2,IsLedge,0x3f44,jump_table,partial,pop2/terrain.py,ordinary empty/floor catch geometry and left-facing phase-zero gate veto (512 native gate checks); DoJumpUp gate override retained; special floor branches partial,4,2
 4,Characters 2,RemoveObj,0x406c,jump_table,partial,pop2/potions.py;pop2/terrain.py,level-three potion removal to floor 1 retaining foreground 0x0f00 decoration; other environments/story objects omitted,2,1
 4,Characters 2,ClipChar,0x4146,jump_table,partial,pop2/caverns.py;pop2/scene_prototype.py,cavern ordinary top clipping and Prince exit top/right rectangle; full native clipping pipeline not translated,2,13
 4,Characters 2,MakeFCharClipRect,0x4432,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,2
@@ -369,7 +369,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,JumpSeq,0x0006,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,166,4
 6,Characters 1,Falling,0x00a6,jump_table,partial,pop2/terrain.py,ordinary rooftop falls and grabs,1,14
 6,Characters 1,HitFloor,0x0280,decoded,partial,pop2/terrain.py;pop2/lava.py;pop2/scene_prototype.py,ordinary speed thresholds and sequences; Prince lava-tile landing precedes impact damage and preserves airborne mode (120 native dispatch checks),1,19
-6,Characters 1,GenCtrl,0x0560,jump_table,partial,pop2/scene_prototype.py;pop2/terrain.py,tested locomotion/sword/ledge and cavern Up exit admission/alignment to SEQS:70; ordinary release 11/23/99 with DoJumpHang preview; hard-fall mode-5 directional reset/held-key resampling (72 native checks); full input latches/special levels partial,2,23
+6,Characters 1,GenCtrl,0x0560,jump_table,partial,pop2/scene_prototype.py;pop2/terrain.py,tested locomotion/sword/ledge and cavern Up exit admission/alignment to SEQS:70; ordinary release 11/23/99 with DoJumpHang preview; hard-fall mode-5 reset (72 native checks); gate climb clearance/SEQS:73 (6144 native checks); full input latches/special levels partial,2,23
 6,Characters 1,StairClimbing,0x0e8e,jump_table,partial,pop2/scene_prototype.py,ordinary ledge entry and standing crouch fallback via 1068 only,4,20
 6,Characters 1,DoStepFwd,0x1276,jump_table,partial,pop2/mac_input.py;pop2/terrain.py,ordinary clearance/caution; dynamic tiles missing,8,3
 6,Characters 1,TryPickUp,0x1350,decoded,partial,pop2/potions.py;pop2/scene_prototype.py,current/forward normal and mega flask selection; 644 native admission/alignment/sequence/removal cases; sword and special flask branches omitted,2,4

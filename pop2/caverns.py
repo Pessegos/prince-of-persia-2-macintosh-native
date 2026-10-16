@@ -55,6 +55,24 @@ class CavernRoom(OpeningRoom):
     climb_redraw: dict | None = None
     floor_redraw: dict | None = None
     retained_mask: Image.Image | None = None
+    gate_occlusion: dict | None = None
+
+    def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
+        mask = super().actor_mask(row, bottom, state, bounds, record)
+        # CheckGateInFore 3:2722-2762/2860 peels the movable gate over
+        # actors in its own/preceding column, except hanging modes 2/6.
+        if (not self.gate_occlusion or state is None or record is None
+                or state.actor_type == 11 or state.animation_state in (2, 6)):
+            return mask
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        mask = mask.copy()
+        for cell in ((column, row), (column + 1, row)):
+            positioned = self.gate_occlusion.get(cell)
+            if positioned is not None:
+                cover, (x, y) = positioned
+                rect = (x, y, x + cover.width, y + cover.height)
+                mask.paste(ImageChops.lighter(mask.crop(rect), cover), (x, y))
+        return mask
 
     def draw_actor_foreground(self, frame, state, bounds):
         # QuickFloor 2:69b6-69e2 marks DrawHalf only for right-facing
@@ -583,13 +601,16 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     if entry is not None and room_id == entry['room']:
         commands = (variant['entry_frames'][entry_frame] if variant is not None else
                     entry['frames'][entry_frame]['commands'])
+    records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room_id), ())
     if pressure_key:
-        records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room_id), ())
         commands = pressure_drawing_commands(commands, records, pressure_key, resources)
+    gate_cells = {tuple(key[-2:]) for record in records if record['kind'] == 4
+                  for key in record['commands']}
     background = Image.new('RGBA', (510, 365))
     foreground = Image.new('RGBA', background.size)
     masks = {row: Image.new('L', background.size) for row in range(-1, 5)}
     cell_masks = {} if program.get('version') >= 6 else None
+    gate_masks = {}
     for command in commands:
         layer, index, _, _, _, row = command[:6]
         library = command[7] if len(command) >= 8 else 4
@@ -603,6 +624,10 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         sprite, position = clipped
         destination = background if layer == 'back' else foreground
         destination.paste(sprite, position, sprite)
+        cell = tuple(command[8:10])
+        if layer == 'back' and library == 4 and index == 3563 and cell in gate_cells:
+            gate_masks[cell] = merge_positioned_mask(
+                gate_masks.get(cell), sprite.getchannel('A'), position)
         if layer == 'front':
             mask = Image.new('L', background.size)
             mask.paste(sprite.getchannel('A'), position)
@@ -641,4 +666,4 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         background.getchannel('A'), foreground.getchannel('A')))
     background = Image.alpha_composite(Image.new('RGBA', background.size, 'black'), background)
     return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
-                      redraw, floors, retained)
+                      redraw, floors, retained, gate_masks)

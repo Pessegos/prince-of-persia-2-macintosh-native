@@ -13,6 +13,8 @@ CATALOG = PROJECT_DIR / "docs" / "RECOVERY_CATALOG.csv"
 
 # These reviews cover specific ordinary branches, never an entire routine.
 REVIEWS = {
+    (3, "CheckGateInFore"): ("partial", "pop2/caverns.py;pop2/scene_prototype.py", "ordinary moving-gate body masks by physical row, supporting column and mode; 80 native admission checks; full NPC-bank and special crush redraw paths partial"),
+    (4, "IsLedge"): ("partial", "pop2/terrain.py", "ordinary empty/floor catch geometry and left-facing phase-zero gate veto (512 native gate checks); DoJumpUp gate override retained; special floor branches partial"),
     (2, "ReadKeyboard"): ("partial", "pop2/mac_input.py", "ordinary keyboard priority"),
     (2, "ResetFrameVars"): ("partial", "pop2/scene_prototype.py", "five/six-tick cadence only"),
     (2, "SaveRebirthPtStatus"): ("partial", "pop2/rebirth.py;pop2/scene_prototype.py", "level-1 opponent/generator snapshot; dynamic normalization and story state missing"),
@@ -90,7 +92,7 @@ REVIEWS = {
     (4, "IsCharNonViewable"): ("partial", "pop2/render_opening.py", "settled Prince/ordinary guard rooftop corpses except native rooms 15/16/19; guard variant 228 included"),
     (6, "Falling"): ("partial", "pop2/terrain.py", "ordinary rooftop falls and grabs"),
     (6, "HitFloor"): ("partial", "pop2/terrain.py;pop2/lava.py;pop2/scene_prototype.py", "ordinary speed thresholds and sequences; Prince lava-tile landing precedes impact damage and preserves airborne mode (120 native dispatch checks)"),
-    (6, "GenCtrl"): ("partial", "pop2/scene_prototype.py;pop2/terrain.py", "tested locomotion/sword/ledge and cavern Up exit admission/alignment to SEQS:70; ordinary release 11/23/99 with DoJumpHang preview; hard-fall mode-5 directional reset/held-key resampling (72 native checks); full input latches/special levels partial"),
+    (6, "GenCtrl"): ("partial", "pop2/scene_prototype.py;pop2/terrain.py", "tested locomotion/sword/ledge and cavern Up exit admission/alignment to SEQS:70; ordinary release 11/23/99 with DoJumpHang preview; hard-fall mode-5 reset (72 native checks); gate climb clearance/SEQS:73 (6144 native checks); full input latches/special levels partial"),
     (6, "StairClimbing"): ("partial", "pop2/scene_prototype.py", "ordinary ledge entry and standing crouch fallback via 1068 only"),
     (6, "DoStepFwd"): ("partial", "pop2/mac_input.py;pop2/terrain.py", "ordinary clearance/caution; dynamic tiles missing"),
     (6, "DoRunJump"): ("partial", "pop2/terrain.py", "ordinary two-cell takeoff alignment"),

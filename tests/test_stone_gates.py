@@ -1,7 +1,9 @@
 import struct
 import unittest
 from types import SimpleNamespace
+from PIL import Image, ImageChops
 
+from pop2.caverns import CavernRoom
 from pop2.paths import ASSET_DIR
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion, stone_gate_blocks
@@ -83,6 +85,66 @@ class StoneGateTests(unittest.TestCase):
             struct.pack_into('>H', self.level, 0x2186, environment)
             self.assertEqual(self.terrain.wall_correction(
                 0, 280, 300, (285, 155, 310, 226), (265, 155, 290, 226), 1, 1), 300)
+
+    def test_closed_gate_cannot_be_caught_from_its_right_side(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        for facing in (0, 1):
+            column = 6 if not facing else 4
+            struct.pack_into('>H', self.level, (10 + column) * 2, 0)
+            for phase in (0, 1, 47, 48, 119, 120, 184, 255):
+                self.phase(phase)
+                state = SequenceState(12, action=106, actor_type=0, level_kind=3,
+                                      target_x=column * 51 + 35 + (17 if facing else -17),
+                                      facing=facing, current_y=-20, vertical_velocity=30)
+                with self.subTest(facing=facing, phase=phase):
+                    before = vars(state).copy()
+                    caught = self.terrain.catch_ledge(0, 2, state, record)
+                    self.assertEqual(caught, bool(facing or phase))
+                    if not caught:
+                        self.assertEqual(vars(state), before)
+
+    def test_up_approach_keeps_native_closed_gate_exception(self):
+        # DoJumpUp 6:1620-162a supplies phase 184 to CanGrab; this is
+        # deliberately different from catching a gate during a free fall.
+        struct.pack_into('>H', self.level, 16 * 2, 0)
+        self.phase(0)
+        record = SimpleNamespace(offset_x=0, aux=0)
+        state = SequenceState(2, action=15, target_x=6 * 51 + 35, facing=0)
+        self.assertIsNotNone(self.terrain.upper_ledge(0, 2, state, record))
+
+    def test_gate_climb_selects_original_failed_climb_below_directional_clearance(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        for environment in (1, 3, 5, 6):
+            struct.pack_into('>H', self.level, 0x2186, environment)
+            for facing in (0, 1):
+                for actor in (0, 1, 2):
+                    for phase in range(256):
+                        self.phase(phase)
+                        state = SequenceState(9, action=91, actor_type=actor,
+                                              level_kind=environment, facing=facing,
+                                              target_x=5 * 51 + 35)
+                        threshold = 120 if environment == 3 and not facing else 48
+                        blocked = (actor != 1 and phase < threshold
+                                   and (not facing or environment == 3))
+                        self.assertEqual(self.terrain.climb_sequence(0, 2, state, record),
+                                         73 if blocked else 10)
+
+    def test_gate_foreground_uses_native_actor_column_row_and_hanging_exclusions(self):
+        blank = Image.new('RGBA', (510, 365))
+        cover = Image.new('L', (20, 30), 255)
+        room = CavernRoom(blank, blank, {row: Image.new('L', blank.size) for row in range(-1, 5)},
+                          (), (), 0, 3, gate_occlusion={(1, 0): (cover, (102, 20))})
+        record = SimpleNamespace(offset_x=0, aux=0)
+        for column in range(4):
+            for row in (0, 1):
+                for mode in range(10):
+                    state = SequenceState(2, action=15, target_x=column * 51 + 35,
+                                          facing=0, actor_type=0, animation_state=mode)
+                    mask = room.actor_mask(row, state=state, record=record,
+                                           bounds=(100, 10, 130, 106))
+                    expected = column in (0, 1) and row == 0 and mode not in (2, 6)
+                    self.assertEqual(mask.getpixel((110, 25)), 255 if expected else 0)
+        self.assertIsNone(room.actor_occlusion[0].getbbox())
 
     def test_body_height_is_clipped_to_the_native_viewport(self):
         self.assertEqual(stone_gate_blocks(64, (270, -20, 290, 25)),
@@ -166,6 +228,98 @@ class ImportedStoneGateTests(unittest.TestCase):
     def tick(self, count=1):
         from tests.test_terrain import RooftopSceneTests
         RooftopSceneTests.tick(self, count)
+
+    def run_jump_at_room_23_gate(self, phase):
+        scene = self.scene_at_gate()
+        scene.jump_to_room(22, row=0, x=410, facing=0)
+        scene.game.caverns.plates.foreground[22, 1] = 0x200 | phase
+        scene.horizontal_key(None, -1, True)
+        self.tick(6)
+        scene.up_key(None)
+        scene.shift_held = True
+        return scene
+
+    def test_room_23_closed_gate_rejects_running_jump_grab(self):
+        scene = self.run_jump_at_room_23_gate(0)
+        for _ in range(60):
+            self.tick()
+            self.assertFalse(scene.native_ledge or scene.ledge_hanging or scene.ledge_climbing)
+        self.assertTrue(scene.terrain_motion.dead)
+
+    def assert_failed_room_23_climb(self, phase):
+        scene = self.run_jump_at_room_23_gate(184)
+        for _ in range(25):
+            self.tick()
+            if scene.native_ledge:
+                break
+        self.assertTrue(scene.native_ledge)
+        scene.set_key_state('up', False)
+        scene.horizontal_key(None, -1, False)
+        self.tick(14)
+        self.assertEqual(scene.action, 91)
+        scene.game.caverns.plates.foreground[22, 1] = 0x200 | phase
+        scene.up_key(None)
+        self.tick()
+        self.assertEqual(scene.sequence_state.source_sequence_id, 73)
+        scene.set_key_state('up', False)
+        poses = [scene.action]
+        for _ in range(11):
+            self.tick()
+            poses.append(scene.action)
+            self.assertEqual(scene.terrain_motion.row, 1 if not scene.terrain_motion.falling else 2)
+            self.assertGreater(scene.player_x, 110)
+        self.assertEqual(poses[:11], [135, 136, 137, 137, 138, 138, 138, 138, 137, 136, 135])
+        self.tick(10)
+        self.assertFalse(scene.native_ledge or scene.ledge_hanging or scene.ledge_climbing)
+        self.assertTrue(scene.terrain_motion.falling or scene.terrain_motion.dead)
+
+    def test_room_23_low_gate_uses_complete_failed_climb_without_crossing_it(self):
+        self.assert_failed_room_23_climb(119)
+
+    def test_room_23_gate_closing_after_a_valid_grab_still_blocks_climbing(self):
+        self.assert_failed_room_23_climb(0)
+
+    def test_room_23_moving_stone_stays_in_front_of_overlapping_head_and_body(self):
+        from pop2.scene_prototype import ROOM_ORIGIN_X
+
+        scene = self.scene_at_gate()
+        scene.game.caverns.plates.foreground[22, 1] = 0x200 | 156
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                scene.jump_to_room(22, row=0, x=120, facing=facing)
+                room = scene.room_cache[22]
+                cover, position = room.gate_occlusion[1, 0]
+                mask = Image.new('L', scene.background.size)
+                mask.paste(cover, position)
+                self.assertIsNotNone(mask.crop(scene.player_bounds()).getbbox())
+                scenery = Image.alpha_composite(scene.background, scene.foreground)
+                type(scene).render(scene)
+                actual = scene.screenshot_viewport.crop((ROOM_ORIGIN_X, 0, ROOM_ORIGIN_X + 510, 365))
+                difference = ImageChops.difference(actual.convert('RGB'), scenery.convert('RGB'))
+                self.assertIsNone(ImageChops.multiply(difference, mask.convert('RGB')).getbbox())
+
+    def test_room_23_sufficiently_open_gate_still_allows_full_climb(self):
+        scene = self.run_jump_at_room_23_gate(184)
+        for _ in range(25):
+            self.tick()
+            if scene.native_ledge:
+                break
+        self.assertTrue(scene.native_ledge)
+        scene.set_key_state('up', False)
+        scene.horizontal_key(None, -1, False)
+        self.tick(14)
+        scene.up_key(None)
+        self.tick()
+        scene.set_key_state('up', False)
+        self.assertEqual(scene.sequence_state.source_sequence_id, 10)
+        poses = []
+        for _ in range(19):
+            self.tick()
+            poses.append(scene.action)
+        self.assertIn(141, poses)
+        self.assertIn(149, poses)
+        self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action), (22, 0, 15))
+        self.assertFalse(scene.native_ledge or scene.ledge_hanging or scene.ledge_climbing)
 
     def test_low_gate_keeps_crouched_prince_down_until_there_is_clearance(self):
         scene = self.scene_at_gate()

@@ -367,6 +367,18 @@ class LevelMap:
         return ((state.animation_state != 6 and tile.kind in WALL_TILES)
                 or (tile.kind == 4 and not state.facing))
 
+    def climb_sequence(self, room, row, state, record):
+        # GenCtrl 6:19d4-1a50 uses the upper supporting tile, not a body
+        # overlap. A low gate selects the failed climb (73), then SEQS:11.
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        tile = self.tile(room, column, row - 1)
+        threshold = 30 if state.level_kind == 3 and not state.facing else 12
+        if (tile.kind == 4 and state.actor_type != 1
+                and (tile.foreground & 255) >> 2 < threshold
+                and (not state.facing or state.level_kind == 3)):
+            return 73
+        return 10
+
     def release_ledge(self, room, row, state, record, *, next_action=None):
         # GenCtrl's release helper (6:1a84-1b7c), ordinary rooftop tiles.
         # A floor behind the hanging foot uses SEQS:11, not a free fall.
@@ -461,7 +473,9 @@ class LevelMap:
         above = self.tile(room, column, row - 1)
         ahead = self.tile(room, column + direction, row - 1)
         ordinary = (above.room is not None and ahead.room is not None
-                    and above.kind in EMPTY_TILES and ahead.kind not in EMPTY_TILES | WALL_TILES)
+                    and above.kind in EMPTY_TILES and ahead.kind not in EMPTY_TILES | WALL_TILES
+                    # IsLedge 4:3fa4-3fc0: a shut gate has no left-facing grip.
+                    and not (ahead.kind == 4 and not state.facing and not ahead.foreground & 255))
         ship = harbor is not None and harbor.can_grab_ship(room, row, trial_x)
         if not ordinary and not ship:
             return False
