@@ -349,6 +349,32 @@ geometry, queue Up at six recovery poses, and check that held Up climbs to
 the upper floor. A released tap reaches the ledge but does not invent a
 second climb request. Existing consumed-Up wall-bump regressions still pass.
 
+### Keeping The Original Up Held After Impact
+
+The previous recovery test released the takeoff Up and pressed it again.
+It did not cover keeping that same Up held and releasing only the horizontal
+key. The host never enqueued this change from a running-jump chord to vertical
+intent, so protecting an existing request at wall contact could not fix it.
+
+Releasing the last horizontal while Up remains held now buffers a vertical
+request during SEQS:4 or grounded impact recovery 46/47 (including their linked
+poses). It does not interrupt the current animation or rearm Up merely because
+a wall was hit. Released Up, locked controls, sword mode and native ledge
+sequences do not synthesize this request. Paused releases use the same rule.
+
+Original instruction execution confirms that mode-5 impact recovery clears
+the old consumed directions (6:0576-059c); sampling at 4:3e84 makes a held Up
+fresh, and the standing controller selects DoJumpUp (6:1600) with no horizontal
+held. Both facings and held/released Up were checked. The host buffer remains
+an approximation of those native latches, not a complete latch translation.
+
+Real-terrain regressions keep the takeoff Up continuously held, release the
+horizontal at 13 arc/recovery/rest poses, and reach the upper floor in room 26.
+Each case also runs with the release during pause. Controller tests cover both
+facings and released-Up negatives; the previous consumed-jump and climb-chord
+regressions remain separate. F3's room-21 entry now uses its lower floor instead
+of the isolated upper shelf; this is only a developer spawn hint, not physics.
+
 ## Buffered Chords After A Running Reversal
 
 SEQS:6 finishes every drift pose 53-65 before flipping facing and linking to

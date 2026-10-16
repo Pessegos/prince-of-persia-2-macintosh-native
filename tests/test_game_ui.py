@@ -762,6 +762,67 @@ class GameWindowTests(unittest.TestCase):
                         self.assertFalse(scene.terrain_motion.falling or scene.native_ledge)
                         self.assertIsNone(scene.pending_action)
 
+    def test_run_jump_keeps_held_up_when_only_horizontal_is_released(self):
+        scene = self.scene
+        with patch.object(scene, 'render'):
+            for release_pose in (34, 39, 40, 102, 107, 108, 109, 110, 111, 50, 51, 52, 15):
+                for paused_release in (False, True):
+                    with self.subTest(release_pose=release_pose, paused_release=paused_release):
+                        scene.load_level(3)
+                        scene.peaceful = True
+                        scene.jump_to_room(20, row=1, x=120, facing=0)
+                        scene.in_animation_tick = True
+                        scene.horizontal_key(None, -1, True)
+                        for _ in range(12):
+                            self.tick()
+                            if scene.action == 7:
+                                break
+                        scene.up_key(None)
+                        for _ in range(40):
+                            self.tick()
+                            if scene.action == release_pose:
+                                break
+                        self.assertEqual(scene.action, release_pose)
+                        before = (scene.sequence_state.sequence_id, scene.action, scene.player_x)
+                        if paused_release:
+                            scene.set_paused(True)
+                        scene.horizontal_key(None, -1, False)
+                        self.assertEqual((scene.sequence_state.sequence_id, scene.action,
+                                          scene.player_x), before)
+                        self.assertIsNotNone(scene.pending_action)
+                        self.assertEqual((scene.pending_action.kind, scene.pending_action.direction),
+                                         ('jump', 0))
+                        if paused_release:
+                            scene.set_paused(False)
+                        poses = []
+                        for _ in range(65):
+                            self.tick()
+                            poses.append(scene.action)
+                            if scene.ledge_climbing:
+                                scene.set_key_state('up', False)
+                            if 135 in poses and not scene.native_ledge:
+                                break
+                        self.assertIn(67, poses)
+                        self.assertIn(135, poses)
+                        self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action),
+                                         (25, 0, 15))
+                        self.assertFalse(scene.terrain_motion.falling or scene.native_ledge)
+                        self.assertIsNone(scene.pending_action)
+
+    def test_cavern_room_21_dev_warp_starts_on_the_lower_floor(self):
+        scene = self.scene
+        with patch.object(scene, 'render'):
+            scene.load_level(3)
+            scene.peaceful = True
+            scene.jump_to_screen('Room 21')
+            self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.player_x),
+                             (20, 2, 387))
+            self.tick(5)
+            self.assertFalse(scene.terrain_motion.dead or scene.terrain_motion.falling)
+            scene.horizontal_key(None, -1, True)
+            self.tick(4)
+            self.assertLess(scene.player_x, 387)
+
     def test_climb_releases_the_old_up_chord_into_the_still_held_run(self):
         scene = self.scene
         with patch.object(scene, 'render'):

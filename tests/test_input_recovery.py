@@ -137,6 +137,28 @@ class InputRecoveryTests(unittest.TestCase):
                             self.assertEqual((scene.sequence_state.sequence_id, scene.action), (3, 16))
                         self.assertIsNone(scene.pending_action)
 
+    def test_releasing_run_jump_horizontal_retargets_held_up_in_both_facings(self):
+        for facing in (0, 1):
+            direction = 1 if facing else -1
+            for sequence in (RUN_JUMP_SEQUENCE, 46, 47):
+                for held_up in (False, True):
+                    with self.subTest(facing=facing, sequence=sequence, held_up=held_up):
+                        scene = self.fixture.running_jump_scene(facing)
+                        if sequence != RUN_JUMP_SEQUENCE:
+                            scene.start_sequence(sequence)
+                            scene.advance_animation()
+                        if not held_up:
+                            scene.set_key_state('up', False)
+                        before = (scene.sequence_state.sequence_id, scene.action, scene.player_x)
+                        scene.horizontal_key(None, direction, False)
+                        self.assertEqual((scene.sequence_state.sequence_id, scene.action,
+                                          scene.player_x), before)
+                        if held_up:
+                            self.assertEqual((scene.pending_action.kind, scene.pending_action.direction,
+                                              scene.pending_action.running), ('jump', 0, False))
+                        else:
+                            self.assertIsNone(scene.pending_action)
+
     def test_climb_overlap_keeps_shift_steps_and_turn_only_behavior_after_releasing_up(self):
         for facing in (0, 1):
             for reverse in (False, True):

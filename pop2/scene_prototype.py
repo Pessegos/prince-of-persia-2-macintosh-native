@@ -602,6 +602,7 @@ class ScenePrototype(WindowControls):
     def horizontal_key(self, _event, direction, pressed):
         if self.paused:
             if self.gameplay_controls_available():
+                previous_direction = self.horizontal_input
                 if pressed and direction not in self.held_directions:
                     self.held_directions.append(direction)
                 elif not pressed and direction in self.held_directions:
@@ -611,6 +612,7 @@ class ScenePrototype(WindowControls):
                 if not pressed and getattr(self, "step_warning_direction", 0) == direction:
                     self.step_warning_direction = 0
                 self.sample_keyboard()
+                self.queue_released_jump_direction(previous_direction)
                 if self.run_active:
                     self.run_stop_requested = self.horizontal_input != self.run_direction
             return "break"
@@ -628,6 +630,8 @@ class ScenePrototype(WindowControls):
             if getattr(self, "step_warning_direction", 0) == direction:
                 self.step_warning_direction = 0
         self.sample_keyboard()
+
+        self.queue_released_jump_direction(previous_direction)
 
         if self._combat_controls_locked():
             return "break"
@@ -652,6 +656,17 @@ class ScenePrototype(WindowControls):
         if self.horizontal_input != previous_direction and self.horizontal_input:
             self.queue_sampled_horizontal_action(self.horizontal_input)
         return "break"
+
+    def queue_released_jump_direction(self, previous_direction):
+        if (not previous_direction or self.horizontal_input or not self.up_held
+                or self.sword_drawn or self._combat_controls_locked()
+                or self._opening_active() or self.native_ledge
+                or self.sequence_state.source_sequence_id not in (RUN_JUMP_SEQUENCE, 46, 47)):
+            return
+        # Releasing the horizontal half of a held jump chord requests Up next;
+        # wall contact alone must not replay the consumed takeoff command.
+        self.jump_started_for_press = True
+        self.buffer_input(BufferedCommand("jump"))
 
     def sample_keyboard(self):
         frame = read_keyboard(
@@ -2698,6 +2713,9 @@ class ScenePrototype(WindowControls):
         elif self.game.level.number == 3:
             candidates = [(row, column) for row in range(3) for column in range(10)
                           if self.level_map.tile(room, column, row).kind == 1]
+            if room == 20:
+                # Room 21's useful test entry is below the isolated upper shelf.
+                candidates = [cell for cell in candidates if cell[0] == 2]
             if not candidates:
                 raise ValueError("This room has no safe standing floor for a dev warp")
             row, column = min(candidates, key=lambda cell: abs(cell[1] - 5))
