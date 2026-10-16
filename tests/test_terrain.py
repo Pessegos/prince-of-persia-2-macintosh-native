@@ -256,6 +256,40 @@ class TerrainTests(unittest.TestCase):
                         self.assertEqual(self.map.release_ledge(9, 1, state, self.frames[91]),
                                          (sequence, offset * (1 if facing else -1)))
 
+    def test_empty_space_release_uses_the_next_swing_pose_without_advancing_it(self):
+        from copy import deepcopy
+        from pop2.terrain import Tile
+
+        # Native DoJumpHang 6:1b7e: equal/decreasing next poses select 99.
+        for facing in (0, 1):
+            runtime = self.runtime(210, x=230, facing=facing)
+            with patch.object(self.map, 'tile', return_value=Tile(0)):
+                for tick in range(43):
+                    with self.subTest(facing=facing, tick=tick):
+                        state = runtime.state
+                        before = deepcopy(state.__dict__)
+                        preview = runtime.peek_frame()
+                        self.assertEqual(state.__dict__, before)
+                        expected = 99 if preview.action <= state.action else 23
+                        self.assertEqual(self.map.release_ledge(0, 0, state, self.frames[state.action],
+                                                               next_action=preview.action), (expected, 0))
+                        self.assertEqual(runtime.next_frame(), preview)
+
+    def test_swing_phase_does_not_override_a_wall_or_supported_release(self):
+        from pop2.terrain import Tile
+
+        for facing in (0, 1):
+            state = SequenceState(25, action=91, target_x=225, facing=facing)
+            col = character_column(floor_contact_x(225, facing, self.frames[91]))
+            for current, behind, expected in ((20, 0, (23, -23)), (0, 1, (11, -12)),
+                                               (1, 0, (11, 10)), (0, 6, (23, 0))):
+                with self.subTest(facing=facing, current=current, behind=behind):
+                    def tile(_room, column, _row):
+                        return Tile(current if column == col else behind)
+                    with patch.object(self.map, 'tile', side_effect=tile):
+                        self.assertEqual(self.map.release_ledge(9, 1, state, self.frames[91], next_action=90),
+                                         (expected[0], expected[1] * (1 if facing else -1)))
+
     def test_cut_preserves_sequence_cursor_and_velocities(self):
         physics, motion = RooftopPhysics(self.map), TerrainMotion(3, 1)
         runtime = self.runtime(202, x=-22, facing=0)

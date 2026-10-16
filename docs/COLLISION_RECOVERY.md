@@ -139,8 +139,21 @@ supporting-foot cell and the cell behind. Ordinary wall/floor combinations
 select SEQS:11, with relative offsets -23 (current wall), -12 (floor behind),
 +10 (floor underfoot), or zero (both floor). No landing support selects
 SEQS:23, retaining the -23 adjustment when the current cell is a wall.
-The normal animation tick consumes the first pose exactly once. The empty-
-cell DoJumpHang/SEQS:99 variant and other-level exceptions remain pending.
+The normal animation tick consumes the first pose exactly once. When both
+cells satisfy native IsSpace, DoJumpHang (6:1b7e-1bbc) previews AnimChar:
+a next pose less than or equal to the current pose selects SEQS:99, otherwise
+SEQS:23. The preview uses an isolated sequence state, without consuming
+positions, callbacks, sounds or queued events. The original sequence data
+then supplies each release's different horizontal offsets and velocity.
+Wall/supported releases keep the existing SEQS:11/23 offsets; they do not
+use the swing-phase selector.
+
+Execution of the original release routine matches 86 swing/support cases
+across both facings. Integrated cavern regressions follow the actual room
+5-to-6 and 18-to-20 links (one-based labels): the ordinary initial descent
+selects 99 and lands on the intermediate platform rather than falling past
+it. Later releases can legitimately choose 23 at a different swing phase.
+The rule is shared across rooms, not a room-specific landing correction.
 Real-key scene regressions compare turns, drawing, post-retreat sheathing
 and wall release against the original resource interpreter; tile decision
 boundaries are checked in both facings.
@@ -247,7 +260,8 @@ ordinary native branches:
   catch directions, so they cannot validate only a wrong stationary pose.
 - Sequence row opcodes -3/-4 update the actual terrain row. Native climb
   10/235 reaches the upper floor; descent 68 reaches the lower row. The
-  controller protects the approach/climb from unrelated horizontal input.
+  controller protects the approach/climb poses while buffering inputs during
+  the climb for the next legal standing boundary.
 
 ## Jump Contact With Guards
 

@@ -259,6 +259,7 @@ class ScenePrototype(WindowControls):
         self.sequences = self.resources.sequences
         self.bind_level(self.game, self.level_renderer)
         self.held_directions = []
+        self.shift_turn_direction = 0
         self.pending_action = None
         self.queue_grace_remaining_ms = 0
         self.queue_grace_command = None
@@ -405,7 +406,13 @@ class ScenePrototype(WindowControls):
             setattr(self, f"{key}_held", pressed)
             return "break"
         if self.native_ledge:
+            previous = getattr(self, f"{key}_held")
             setattr(self, f"{key}_held", pressed)
+            if self.ledge_climbing and pressed and not previous:
+                if key == "ctrl":
+                    self.buffer_input(BufferedCommand("sword_draw"))
+                elif key == "down" and not self.up_held:
+                    self.buffer_input(BufferedCommand("crouch"))
             return "break"
         if key == "up":
             if (
@@ -599,6 +606,8 @@ class ScenePrototype(WindowControls):
                     self.held_directions.append(direction)
                 elif not pressed and direction in self.held_directions:
                     self.held_directions.remove(direction)
+                    if getattr(self, "shift_turn_direction", 0) == direction:
+                        self.shift_turn_direction = 0
                 if not pressed and getattr(self, "step_warning_direction", 0) == direction:
                     self.step_warning_direction = 0
                 self.sample_keyboard()
@@ -614,6 +623,8 @@ class ScenePrototype(WindowControls):
             self.held_directions.append(direction)
         elif direction in self.held_directions:
             self.held_directions.remove(direction)
+            if getattr(self, "shift_turn_direction", 0) == direction:
+                self.shift_turn_direction = 0
             if getattr(self, "step_warning_direction", 0) == direction:
                 self.step_warning_direction = 0
         self.sample_keyboard()
@@ -622,7 +633,7 @@ class ScenePrototype(WindowControls):
             return "break"
         if self._opening_active():
             return "break"
-        if self.native_ledge:
+        if self.native_ledge and not self.ledge_climbing:
             return "break"
 
         if self.sword_sheathing:
@@ -690,6 +701,8 @@ class ScenePrototype(WindowControls):
             self.buffer_input(BufferedCommand("crawl", direction))
             return False
         elif self.shift_held:
+            if getattr(self, "shift_turn_direction", 0) == direction:
+                return False
             return self.queue_horizontal_action(direction, "step")
         elif facing_for_direction(direction) != self.sequence_state.facing:
             return self.queue_horizontal_action(direction, "turn")
@@ -712,6 +725,9 @@ class ScenePrototype(WindowControls):
             self.queue_sword_action("sword_block")
             return "break"
         if self.ledge_hanging:
+            if self.ledge_climbing:
+                self.start_jump()
+                return "break"
             self.ledge_climb_requested = True
             if self.sequence_state.sequence_id == LEDGE_HANG_SEQUENCE:
                 self.start_ledge_climb()
@@ -899,7 +915,10 @@ class ScenePrototype(WindowControls):
 
         if command.mode == "step":
             if facing != self.sequence_state.facing:
-                self.pending_action = command
+                # StairClimbing 6:0d4c/10e8 consumes Backward on the turn;
+                # that same Shift+direction press is not a forward step.
+                self.shift_turn_direction = direction if direction in self.held_directions else 0
+                self.pending_action = None
                 self.start_standing_turn()
                 return True
             if getattr(self, "level_map", None) is not None:
@@ -1007,10 +1026,11 @@ class ScenePrototype(WindowControls):
             or self.down_held
         ):
             return False
-        if self.pending_action is not None and self.pending_action != BufferedCommand(
-            "horizontal", direction, "run"
-        ):
-            return False
+        if self.pending_action is not None:
+            command = self.pending_action
+            if (command.kind != "horizontal" or command.direction != direction
+                    or command.mode not in ("run", "turn")):
+                return False
 
         # GenCtrl 6:062c/1014 dispatches by pose, not sequence: both the
         # standing turn and long sheath can resume a held run on pose 48.
@@ -1030,17 +1050,9 @@ class ScenePrototype(WindowControls):
         ):
             return False
 
-        if command.kind == "jump":
-            if command.direction and facing_for_direction(command.direction) == state.facing:
-                return self.dispatch_pending_action()
-            return False
-        if (
-            command.kind == "horizontal"
-            and command.mode == "turn"
-            and facing_for_direction(command.direction) != state.facing
-        ):
-            return self.dispatch_pending_action()
-        return False
+        # GenCtrl 6:05fe-0618 admits the ordinary standing controller on
+        # poses 50-52, including the turn used when entering the caverns.
+        return self.dispatch_pending_action()
 
     def resume_drift_during_run(self):
         state = self.sequence_state
@@ -1398,10 +1410,11 @@ class ScenePrototype(WindowControls):
             self.start_ledge_climb()
         elif not self.shift_held or state.sequence_mode == 11:
             sequence, offset = self.level_map.release_ledge(
-                self.room_id, self.terrain_motion.row, state, self.frames[state.action])
+                self.room_id, self.terrain_motion.row, state, self.frames[state.action],
+                next_action=self.sequence_runtime.peek_frame().action)
             self.ledge_hanging = self.native_ledge = False
             self.ledge_climb_requested = False
-            self.terrain_motion.falling = sequence == 23
+            self.terrain_motion.falling = sequence in (23, 99)
             self.sequence_state.sequence_mode = 0
             self.player_x += offset
             self.start_sequence(sequence)
@@ -1419,6 +1432,9 @@ class ScenePrototype(WindowControls):
         state = self.sequence_state
         if state.sequence_id in REST_SEQUENCES:
             return True
+        if (state.sequence_id == STANDING_TURN_SEQUENCE and state.cursor > 0
+                and state.action in (50, 51, 52)):
+            return True
         if state.sequence_id == JUMP_LANDING_SEQUENCE and state.action == 15:
             return True
         return False
@@ -1429,6 +1445,7 @@ class ScenePrototype(WindowControls):
             self.window_keys_down.clear()
             self.escape_held = self.dev_toggle_held = False
         self.held_directions.clear()
+        self.shift_turn_direction = 0
         self.step_warning_direction = 0
         self.horizontal_input = 0
         self.up_held = False
@@ -1698,6 +1715,15 @@ class ScenePrototype(WindowControls):
             self.player_x = frame.target_x
             if self.prepare_next_sequence():
                 frame = self.sequence_runtime.next_frame()
+        climb_completed = self.ledge_climbing and frame.sequence_id == IDLE_SEQUENCE
+        if climb_completed:
+            self.ledge_hanging = self.ledge_climbing = self.native_ledge = False
+            self.sequence_state.current_y = 0
+            self.sequence_state.horizontal_velocity = self.sequence_state.vertical_velocity = 0
+            # Finish the protected climb before dispatching its queued input.
+            self.jump_started_for_press = self.up_held
+            self.jump_repeat_armed = self.up_held
+            self.status.set("Back on the rooftop")
         # Consume one buffered command at the transition, before drawing idle.
         if frame.action == 15 and frame.sequence_id in (
             JUMP_LANDING_SEQUENCE, IDLE_SEQUENCE
@@ -1710,6 +1736,7 @@ class ScenePrototype(WindowControls):
                 and self.jump_started_for_press
                 and self.jump_repeat_armed
                 and not self.ledge_hanging
+                and not climb_completed
             ):
                 self.jump_started_for_press = False
                 self.start_jump()
@@ -1732,18 +1759,6 @@ class ScenePrototype(WindowControls):
         ):
             self.jump_started_for_press = False
             self.jump_repeat_armed = False
-        if self.ledge_climbing and frame.sequence_id == IDLE_SEQUENCE:
-            self.ledge_hanging = False
-            self.ledge_climbing = False
-            self.native_ledge = False
-            self.sequence_state.current_y = 0
-            self.sequence_state.horizontal_velocity = 0
-            self.sequence_state.vertical_velocity = 0
-            # The climb's mode-5 pose clears native Up (6:059c), so a held
-            # key becomes fresh again. Repeat only after reaching the floor.
-            self.jump_started_for_press = self.up_held
-            self.jump_repeat_armed = self.up_held
-            self.status.set("Back on the rooftop")
         if (motion is not None and self.ledge_hanging and not self.ledge_climbing
                 and not self.shift_held and self.sequence_state.sequence_id == LEDGE_HANG_SEQUENCE):
             self.ledge_hanging = False
@@ -2584,6 +2599,7 @@ class ScenePrototype(WindowControls):
         self.run_cycle_boundary_pending = False
         self.sword_drawn = False
         self.step_cautious = True
+        self.shift_turn_direction = 0
         self.sword_sheathing = False
         self.ledge_hanging = False
         self.ledge_climbing = False

@@ -533,6 +533,191 @@ class GameWindowTests(unittest.TestCase):
         self.assertFalse(scene.terrain_motion.falling)
         self.assertIsNone(scene.pending_action)
 
+    def test_cavern_entry_accepts_horizontal_holds_through_every_turn_pose(self):
+        scene = self.scene
+        with patch.object(scene, 'render'):
+            for direction in (-1, 1):
+                for delay in range(8):
+                    with self.subTest(direction=direction, delay=delay):
+                        scene.load_level(3)
+                        scene.peaceful = True
+                        scene.in_animation_tick = True
+                        self.tick(delay)
+                        scene.horizontal_key(None, direction, True)
+                        for _ in range(14):
+                            if scene.run_active:
+                                break
+                            self.tick()
+                        self.assertTrue(scene.run_active)
+                        self.assertEqual(scene.run_direction, direction)
+                        self.assertFalse(scene.native_ledge)
+
+    def test_alt_restart_preserves_live_horizontal_holds_but_not_the_old_queue(self):
+        from types import SimpleNamespace
+        from pop2.scene_prototype import BufferedCommand
+
+        scene = self.scene
+        with patch.object(scene, 'render'):
+            for direction, key in ((-1, 'Left'), (1, 'Right')):
+                with self.subTest(direction=direction):
+                    scene.load_level(3)
+                    scene.peaceful = True
+                    scene.jump_to_room(0, row=1, x=234, facing=int(direction > 0))
+                    self.control_key(key)
+                    self.tick(2)
+                    scene.pending_action = BufferedCommand('sword_draw')
+                    event = SimpleNamespace(keysym='r', state=0x20000, char='r')
+                    self.assertEqual(scene.dev_key_press(event), 'break')
+                    scene.dev_key_release(event)
+                    self.assertFalse(scene.paused)
+                    self.assertEqual(scene.held_directions, [direction])
+                    self.assertNotIn(key, scene.pause_resume_keys)
+                    self.assertFalse(scene.sword_drawn)
+                    self.assertNotEqual(scene.pending_action, BufferedCommand('sword_draw'))
+                    for _ in range(14):
+                        if scene.run_active:
+                            break
+                        self.tick()
+                    self.assertTrue(scene.run_active)
+                    self.assertEqual(scene.run_direction, direction)
+                    self.control_key(key, False)
+                    self.assertEqual(scene.horizontal_input, 0)
+
+    def test_alt_restart_preserves_modifiers_and_vertical_chords(self):
+        from types import SimpleNamespace
+
+        scene = self.scene
+        with patch.object(scene, 'render'):
+            for modifier in ('Up', 'Shift_L'):
+                with self.subTest(modifier=modifier):
+                    scene.load_level(3)
+                    scene.peaceful = True
+                    self.control_key(modifier)
+                    self.control_key('Right')
+                    event = SimpleNamespace(keysym='r', state=0x20000, char='r')
+                    scene.dev_key_press(event)
+                    scene.dev_key_release(event)
+                    self.assertEqual(scene.held_directions, [1])
+                    self.assertTrue(scene.up_held if modifier == 'Up' else scene.shift_held)
+                    self.assertNotIn(modifier, scene.pause_resume_keys)
+                    self.assertEqual(scene.pending_action.kind, 'jump' if modifier == 'Up' else 'horizontal')
+                    for _ in range(10):
+                        self.tick()
+                        if scene.sequence_state.sequence_id != 5:
+                            break
+                    if modifier == 'Up':
+                        self.assertEqual(scene.sequence_state.sequence_id, 3)
+                    else:
+                        self.assertIn(scene.sequence_state.sequence_id, range(29, 43))
+                    self.control_key(modifier, False)
+                    self.control_key('Right', False)
+
+    def test_alt_restart_from_a_menu_does_not_restore_held_menu_keys(self):
+        from types import SimpleNamespace
+
+        scene = self.scene
+        scene.load_level(3)
+        scene.peaceful = True
+        self.control_key('Right')
+        scene.open_game_menu()
+        event = SimpleNamespace(keysym='r', state=0x20000, char='r')
+        scene.dev_key_press(event)
+        scene.dev_key_release(event)
+        self.assertEqual(scene.held_directions, [])
+        self.assertIsNone(scene.pending_action)
+        self.assertIn('Right', scene.pause_resume_keys)
+        self.tick(12)
+        self.assertFalse(scene.run_active)
+
+    def test_alt_restart_after_death_does_not_restore_the_old_movement_hold(self):
+        from types import SimpleNamespace
+
+        scene = self.scene
+        scene.load_level(3)
+        self.control_key('Right')
+        scene.combat.player.life = 0
+        scene.death.begin(0)
+        event = SimpleNamespace(keysym='r', state=0x20000, char='r')
+        scene.dev_key_press(event)
+        scene.dev_key_release(event)
+        self.assertEqual(scene.held_directions, [])
+        self.assertIsNone(scene.pending_action)
+        self.assertIn('Right', scene.pause_resume_keys)
+        self.assertTrue(scene.combat.player.alive)
+
+    def test_inputs_during_climb_wait_for_the_floor_and_do_not_leave_controls_protected(self):
+        scene = self.scene
+        with patch.object(scene, 'render'):
+            for facing in (0, 1):
+                for kind in ('turn', 'sword', 'crouch', 'jump'):
+                    with self.subTest(facing=facing, kind=kind):
+                        scene.load_level(3)
+                        scene.peaceful = True
+                        scene.jump_to_room(0, row=2, x=80 if facing else 330, facing=facing)
+                        scene.in_animation_tick = True
+                        scene.up_held = True
+                        scene.start_jump()
+                        for _ in range(35):
+                            self.tick()
+                            if scene.ledge_climbing:
+                                break
+                        self.assertTrue(scene.ledge_climbing)
+                        scene.set_key_state('up', False)
+                        action = scene.action
+                        if kind == 'turn':
+                            scene.set_key_state('shift', False)
+                            direction = -1 if facing else 1
+                            scene.horizontal_key(None, direction, True)
+                            scene.horizontal_key(None, direction, False)
+                        elif kind == 'jump':
+                            scene.up_key(None)
+                            scene.set_key_state('up', False)
+                        else:
+                            key = 'ctrl' if kind == 'sword' else 'down'
+                            scene.set_key_state(key, True)
+                            scene.set_key_state(key, False)
+                        self.assertIsNotNone(scene.pending_action)
+                        self.assertEqual(scene.action, action)
+                        for _ in range(30):
+                            self.tick()
+                            if not scene.ledge_climbing:
+                                break
+                        self.assertFalse(scene.ledge_climbing)
+                        self.assertIsNone(scene.pending_action)
+                        if kind == 'jump':
+                            self.assertIn(scene.sequence_state.sequence_id, (14, 24, 28))
+                            self.assertEqual(scene.native_ledge, scene.sequence_state.sequence_id == 24)
+                        else:
+                            self.assertEqual(scene.native_ledge, kind == 'crouch')
+                            self.assertEqual(scene.ledge_hanging, kind == 'crouch')
+                            self.assertEqual(scene.sequence_state.sequence_id,
+                                             {'turn': 5, 'sword': 55, 'crouch': 68}[kind])
+                        self.assertEqual(scene.terrain_motion.row, 1)
+
+    def test_cavern_swing_release_lands_on_the_intermediate_platform_in_both_room_routes(self):
+        scene = self.scene
+        with patch.object(scene, 'render'):
+            for room, row, x, destination, floor in ((4, 2, 240, 5, 1), (17, 1, 445, 19, 0)):
+                with self.subTest(room=room):
+                    scene.load_level(3)
+                    scene.peaceful = True
+                    scene.jump_to_room(room, row=row, x=x, facing=1)
+                    scene.in_animation_tick = True
+                    scene.set_key_state('down', True)
+                    scene.set_key_state('down', False)
+                    poses = []
+                    for _ in range(35):
+                        self.tick()
+                        poses.append(scene.sequence_state.sequence_id)
+                        if scene.action == 15 and not scene.native_ledge and not scene.terrain_motion.falling:
+                            break
+                    self.assertIn(99, poses)
+                    self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action),
+                                     (destination, floor, 15))
+                    self.assertFalse(scene.terrain_motion.falling or scene.terrain_motion.dead)
+                    self.tick(5)
+                    self.assertEqual((scene.room_id, scene.terrain_motion.row), (destination, floor))
+
     def test_fullscreen_remembers_normal_and_maximized_state(self):
         scene = self.scene
         for state in ("normal", "zoomed"):

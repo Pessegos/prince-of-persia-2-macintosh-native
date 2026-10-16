@@ -4,6 +4,7 @@ import sys
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from types import SimpleNamespace
 
 from PIL import Image, ImageTk
 
@@ -515,7 +516,7 @@ class WindowControls:
         self.pause_resume_keys.update(self.window_keys_down)
         self.render()
 
-    def apply_game_action(self, action):
+    def apply_game_action(self, action, *, preserve_controls=False):
         menu = self.game_menu
         if menu is not None and menu.page == "screenshots" and menu.screenshot_scale != self.screenshot_settings.scale:
             self.screenshot_settings.scale = menu.screenshot_scale
@@ -532,6 +533,8 @@ class WindowControls:
         elif action == "screenshot":
             self.capture_screenshot()
         elif action in ("new_game", "restart"):
+            held_controls = ((self.window_keys_down - self.pause_resume_keys) & PAUSE_GAMEPLAY_KEYS
+                             if action == "restart" and preserve_controls else set())
             self.set_paused(True)
             (getattr(self, "new_game", self.restart_opening) if action == "new_game" else self.restart_level)()
             if self.game_menu is not None:
@@ -542,6 +545,12 @@ class WindowControls:
                     self.close_dev_mode()
                 self.set_paused(False)
             self.pause_resume_keys.update(self.window_keys_down)
+            self.pause_resume_keys.difference_update(held_controls)
+            # Restore modifiers before directions so held chords reach the
+            # new level's normal controller, not a saved pre-restart command.
+            for key in ("Shift_L", "Shift_R", "Control_L", "Control_R", "Up", "Down", "Left", "Right"):
+                if key in held_controls:
+                    self.record_paused_key(SimpleNamespace(keysym=key), True)
         elif action in ("sound", "music"):
             name = action + "_enabled"
             enabled = not getattr(self, name)
@@ -612,7 +621,10 @@ class WindowControls:
                        event.keysym.lower()) if alt and not event.state & (0x4 | 0x40) else None
         if command is not None:
             if not repeated and (self.game_menu is None or self.game_menu.page != "confirm"):
-                self.apply_game_action(command)
+                if command == "restart" and self.gameplay_controls_available():
+                    self.apply_game_action(command, preserve_controls=True)
+                else:
+                    self.apply_game_action(command)
                 self.pause_resume_keys.add(event.keysym)
             return "break"
         if self.game_menu is not None:

@@ -369,7 +369,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,JumpSeq,0x0006,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,166,4
 6,Characters 1,Falling,0x00a6,jump_table,partial,pop2/terrain.py,ordinary rooftop falls and grabs,1,14
 6,Characters 1,HitFloor,0x0280,decoded,partial,pop2/terrain.py,ordinary speed thresholds and sequences,1,19
-6,Characters 1,GenCtrl,0x0560,jump_table,partial,pop2/scene_prototype.py;pop2/terrain.py,"tested locomotion/sword/ledge and cavern Up exit admission/alignment to SEQS:70; ordinary release 11/23, DoJumpHang/99 missing",2,23
+6,Characters 1,GenCtrl,0x0560,jump_table,partial,pop2/scene_prototype.py;pop2/terrain.py,tested locomotion/sword/ledge and cavern Up exit admission/alignment to SEQS:70; ordinary release 11/23/99 with DoJumpHang preview; full input latches/special levels partial,2,23
 6,Characters 1,StairClimbing,0x0e8e,jump_table,partial,pop2/scene_prototype.py,ordinary ledge entry and standing crouch fallback via 1068 only,4,20
 6,Characters 1,DoStepFwd,0x1276,jump_table,partial,pop2/mac_input.py;pop2/terrain.py,ordinary clearance/caution; dynamic tiles missing,8,3
 6,Characters 1,TryPickUp,0x1350,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,4

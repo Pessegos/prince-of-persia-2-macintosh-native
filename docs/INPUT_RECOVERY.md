@@ -90,9 +90,9 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 | --- | --- | --- | --- |
 | Rest/stop poses 15, 50-52 | Standing handler, after mode/sequence reset gate | 6:05fe-0618, 0c32 | Tested subset; mode-5 exception missing |
 | Standing without Shift | Fresh Forward + fresh Up: jump; otherwise fresh Forward, Backward, Up, Down; active Forward is final run fallback | 6:0db0-0e16 | Common chords tested; independent pending inputs missing |
-| Standing with Shift pending/consumed | Fresh Backward, Up, Down before a fresh Forward-only step | 6:0d4c-0db0 | Step/turn tested; buffered host modifier classification can be stale |
+| Standing with Shift pending/consumed | Fresh Backward, Up, Down before a fresh Forward-only step | 6:0d4c-0db0 | Opposite Shift+direction consumes a turn only; other buffered modifier classification remains partial |
 | Draw from rest | Fresh Ctrl and no directional latches; consume modifier, clear directions, DoEngarde | 6:0c90-0cb6, 1e78 | Draw implemented; simultaneous-input gates partial |
-| Turn poses 45-49 | Pose 48: active Forward, no Up/Down, modifier >= 0 resumes run; otherwise protected | 6:1014-1066 | Held-run transition tested; host-held state replaces latches |
+| Turn poses 45-49 | Pose 48: active Forward, no Up/Down, modifier >= 0 resumes run; otherwise protected | 6:1014-1066 | Held-run transition reinterprets direction after facing flips; host-held state replaces latches |
 | Run start poses 1-3 | Fresh Up AND fresh Forward: forward jump; clear directions | 6:15b6-15da | Forward + Up chord retained at pose 1; later forward startup buffers a run jump; see Intentional Port Extensions |
 | Vertical preparation 67-69 | Active Forward: standing forward jump | 6:15de-15e8 | Chord tested; 35 ms host chord delay is an approximation |
 | Running 4-14 | Both horizontals zero: brake only at 7/11; otherwise Backward before fresh Up, then fresh Down; finally consume fresh Forward | 6:11e4-1274 | Ordinary flow tested, including release at pose 8 waiting for 11; latest-command slot cannot reproduce every conflict |
@@ -208,6 +208,15 @@ before/on pose 109 and preservation of other pending commands.
 
 ## Intentional Port Extensions
 
+Alt+R during ordinary gameplay restores currently held gameplay keys after
+restarting, in modifier/vertical/horizontal order. The pre-restart command
+buffer is discarded; the new entry controller decides when the restored
+holds can act. This includes horizontal holds, Shift steps and Up+direction
+chords. Inputs already suppressed by a modal transition are not restored.
+Restarting through a menu, restarting after death and starting a new game
+retain their input clearing. This is a host QoL extension, not a recovered
+Macintosh restart rule.
+
 An arrow used to resume ordinary gameplay also reaches its normal control
 binding in that same press. Up/Down and horizontal jump chords are included,
 not only running. Ordinary pause freezes existing holds and repeat/queue state;
@@ -281,6 +290,30 @@ sequence. It keeps the press marked consumed until the next jump, so releasing
 between completion and that jump cannot trigger the short-tap release fallback.
 Tests cover repeated jumping, release during/immediately after climbing and two
 real cavern climbs across an upper-room link, without fabricated ledge geometry.
+
+## Climb And Turn Command Boundaries
+
+Horizontal commands, Ctrl draw and fresh Up/Down during the protected climb
+can now enter the host buffer without interrupting its poses. At the return
+to idle, the old climb's protection and floor-relative offsets are cleared
+before dispatching the queued command. A queued Down can deliberately begin
+a new ledge descent; it must not be mistaken for stale climb protection.
+The native mode-5 gate can clear released directional latches, so preserving
+all tapped host commands here remains an input-tolerance extension rather
+than a claim of complete native-latch parity.
+
+GenCtrl 6:05fe-0618 routes standing-turn poses 50-52 to the standing
+controller, not only after SEQS:5 links to idle. Ordinary buffered commands
+now share that gate. Pose 48 can resume a held run even if the host classified
+the direction as a turn before facing changed. The cavern entrance uses this
+same standing turn; its normal held-arrow behavior is regression-tested
+across every pose, independently of Alt+R's separate hold restoration.
+
+Shift plus the opposite direction consumes only the standing turn
+(6:0d4c/10e8). The port no longer carries its step request through the turn,
+nor synthesizes a forward step from that same held combination afterward.
+Releasing/repressing the direction permits a new step. Ordinary forward
+Shift-step repetition and the existing repeated-command filter are unchanged.
 
 ## Buffered Chords After A Running Reversal
 

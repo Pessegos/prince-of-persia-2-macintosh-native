@@ -344,13 +344,17 @@ class LevelMap:
         return ((state.animation_state != 6 and tile.kind in WALL_TILES)
                 or (tile.kind == 4 and not state.facing))
 
-    def release_ledge(self, room, row, state, record):
+    def release_ledge(self, room, row, state, record, *, next_action=None):
         # GenCtrl's release helper (6:1a84-1b7c), ordinary rooftop tiles.
         # A floor behind the hanging foot uses SEQS:11, not a free fall.
         column = character_column(floor_contact_x(state.target_x, state.facing, record))
         direction = 1 if state.facing else -1
         current = self.tile(room, column, row).kind
         behind = self.tile(room, column - direction, row).kind
+        if current in EMPTY_TILES and behind in EMPTY_TILES:
+            # DoJumpHang 6:1b7e previews AnimChar: the same/decreasing pose
+            # releases toward the ledge (99), an increasing pose away (23).
+            return (99 if next_action is not None and next_action <= state.action else 23), 0
         non_floor = EMPTY_TILES | WALL_TILES
         non_landable = non_floor | {11, 15, 26, 12, 13, 23, 24, 6, 34}
         current_floor, behind_floor = current not in non_landable, behind not in non_landable

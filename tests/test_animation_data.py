@@ -1577,11 +1577,12 @@ class AnimationDataTests(unittest.TestCase):
 
         scene.up_key(None)
         scene.horizontal_key(None, -1, True)
-        scene.advance_animation()
 
         self.assertEqual(scene.action, 16)
         self.assertEqual(scene.sequence_state.sequence_id, JUMP_FORWARD_SEQUENCE)
         self.assertIsNone(scene.pending_action)
+        scene.advance_animation()
+        self.assertEqual(scene.action, 17)
 
     def test_opposite_jump_chord_from_rest_only_turns(self):
         for facing in (0, 1):
@@ -1673,7 +1674,7 @@ class AnimationDataTests(unittest.TestCase):
         scene.set_key_state("up", False)
 
         self.assertEqual(scene.pending_action, BufferedCommand("jump"))
-        for _ in range(8):
+        for _ in range(6):
             scene.advance_animation()
         self.assertEqual(scene.sequence_state.sequence_id, JUMP_VERTICAL_SEQUENCE)
         self.assertEqual(scene.action, 67)

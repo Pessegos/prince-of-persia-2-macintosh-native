@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 
 class UnsupportedSequenceOpcode(ValueError):
@@ -75,6 +75,10 @@ class SequenceRuntime:
         word = sequence[self.state.cursor]
         self.state.cursor += 1
         return word
+
+    def peek_frame(self):
+        state = replace(self.state, sound_events=[], sequence_events=[])
+        return SequenceRuntime(self.sequences, state, self.max_operations_per_frame).next_frame()
 
     def _next_operand(self, opcode, opcode_cursor):
         try:

@@ -9,6 +9,7 @@ from pop2.game_session import GameResources, GameSession
 from pop2.level_data import LevelDefinition
 from pop2.paths import ASSET_DIR
 from pop2.rebirth import RebirthSnapshot
+from pop2.sequence_runtime import SequenceRuntime, SequenceState
 
 
 def level_bytes(number=1, kind=5, room=4, tile=2, facing=65535, opponent_type=0):
@@ -57,6 +58,21 @@ def session(source, number=1, terrain_enabled=True):
 
 
 class LevelDefinitionTests(unittest.TestCase):
+    def test_next_pose_preview_keeps_position_controls_and_events_untouched(self):
+        from copy import deepcopy
+
+        state = SequenceState(1, action=91, target_x=50, actor_type=0, level_kind=3,
+                              sound_events=[9], sequence_events=[(-19, ())])
+        runtime = SequenceRuntime({1: (-5, 3, -4, -15, 7, -16, -21, 11, 90, -1, 1)}, state)
+        original = deepcopy(state.__dict__)
+        preview = runtime.peek_frame()
+        self.assertEqual(state.__dict__, original)
+        self.assertEqual(runtime.peek_frame(), preview)
+        self.assertEqual(runtime.next_frame(), preview)
+        self.assertEqual(state.sound_events, [9, 7])
+        self.assertEqual(state.sequence_events, [(-19, ()), (-16, ())])
+        self.assertEqual((state.engine_counter, state.sequence_mode), (1, 11))
+
     def test_navigation_renderer_can_read_level_metadata_without_preparing_artwork(self):
         from pop2.level_rendering import LevelRenderer
 

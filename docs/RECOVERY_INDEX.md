@@ -64,7 +64,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Catch velocity <60 and height [-48,+3] | 4:37ca; 6:011e-0132 | T: ordinary rooftop catch | terrain / test_game_ui |
 | Wall-backed hang settles once, mode 6 bypass; free-air expiry | 6:18e0, 1926; SEQS:25 | T: tested wall/gate distinction and free-air branch | terrain, scene_prototype / test_game_ui, test_terrain |
 | Up climb takes priority over Shift release | 6:18e0; SEQS:10/235 | T: ordinary ledges | scene_prototype / test_game_ui |
-| Ledge release chooses floor return 11 / free fall 23 with relative offset | 6:1a84-1b7c; 3:4e32 | T: ordinary wall/floor/empty subset; empty-cell DoJumpHang/99 and special levels P | terrain, scene_prototype / test_terrain, test_game_ui |
+| Ledge release chooses floor return 11 / free fall 23/99 with relative offset and swing phase | 6:1a84-1bbc; 3:4e32, 4eb2 | T: ordinary wall/floor/space branches and DoJumpHang preview; special levels P | terrain, sequence_runtime, scene_prototype / test_terrain, test_game_ui |
 | Blocked climb destination / special-level grab variants | remaining GenCtrl/Catch branches | P | terrain / new recovery needed |
 | Horizontal cut bounds and exclusions; down-first rule | 6:4918, 4a26, 4dac | T: supported horizontal subset; full vertical timing P | terrain / test_terrain |
 | Per-actor near facade/parapet versus shaded side | 3:35bc; CODE:23; 4:4146 | T/A: row/mode masks; full native ClipChar R | render_opening / test_render_opening, test_game_ui |

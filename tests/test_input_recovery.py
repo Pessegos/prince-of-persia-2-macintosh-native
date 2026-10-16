@@ -4,9 +4,11 @@ import unittest
 
 from pop2.control_mapping import (
     CROUCH_RISE_SEQUENCE,
+    IDLE_SEQUENCE,
     JUMP_FORWARD_SEQUENCE,
     RUN_JUMP_SEQUENCE,
     STANDING_TURN_SEQUENCE,
+    SHIFT_STEP_SEQUENCE,
     SWORD_DRAW_SEQUENCE,
     SWORD_GUARD_SEQUENCE,
 )
@@ -41,6 +43,69 @@ class InputRecoveryTests(unittest.TestCase):
         scene.advance_animation()
         self.assertEqual(scene.action, 158)
         return scene
+
+    def test_shift_opposite_press_turns_without_adding_a_step(self):
+        for facing in (0, 1):
+            direction = -1 if facing else 1
+            for held in (False, True):
+                with self.subTest(facing=facing, held=held):
+                    scene = self.fixture.sword_scene()
+                    scene.sequence_state.facing = facing
+                    scene.set_key_state('shift', True)
+                    scene.horizontal_key(None, direction, True)
+                    self.assertEqual(scene.action, 45)
+                    self.assertIsNone(scene.pending_action)
+                    if not held:
+                        scene.horizontal_key(None, direction, False)
+                    poses = [scene.action]
+                    for _ in range(20):
+                        scene.advance_animation()
+                        poses.append(scene.action)
+                    self.assertEqual(poses[:8], list(range(45, 53)))
+                    self.assertEqual(set(poses[8:]), {15})
+                    self.assertEqual(scene.player_x, 116 + 9 * direction)
+                    self.assertEqual(scene.sequence_state.facing, 1 - facing)
+                    self.assertIsNone(scene.pending_action)
+                    if held:
+                        scene.horizontal_key(None, direction, False)
+                    scene.horizontal_key(None, direction, True)
+                    self.assertEqual(scene.sequence_state.sequence_id, SHIFT_STEP_SEQUENCE)
+
+    def test_turn_ready_poses_accept_all_ordinary_buffered_commands(self):
+        from pop2.scene_prototype import BufferedCommand
+
+        for facing in (0, 1):
+            for kind, expected in (('crouch', 50), ('jump', 28), ('sword_draw', 55)):
+                for pose in (50, 51, 52):
+                    with self.subTest(facing=facing, kind=kind, pose=pose):
+                        scene = self.fixture.sword_scene()
+                        scene.sequence_state.facing = facing
+                        scene.start_sequence(STANDING_TURN_SEQUENCE)
+                        while scene.sequence_state.action != pose:
+                            scene.advance_animation()
+                        scene.pending_action = BufferedCommand(kind)
+                        scene.advance_animation()
+                        self.assertEqual(scene.sequence_state.sequence_id, expected)
+                        self.assertIsNone(scene.pending_action)
+                        self.assertNotEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)
+
+    def test_held_direction_is_reinterpreted_after_the_turn_changes_facing(self):
+        from pop2.scene_prototype import BufferedCommand
+
+        for facing in (0, 1):
+            scene = self.fixture.sword_scene()
+            direction = -1 if facing else 1
+            scene.sequence_state.facing = facing
+            scene.start_sequence(STANDING_TURN_SEQUENCE)
+            scene.held_directions = [direction]
+            scene.pending_action = BufferedCommand('horizontal', direction, 'turn')
+            for _ in range(4):
+                scene.advance_animation()
+            self.assertEqual(scene.action, 48)
+            scene.advance_animation()
+            self.assertEqual(scene.action, 1)
+            self.assertTrue(scene.run_active)
+            self.assertIsNone(scene.pending_action)
 
     def test_ctrl_during_run_retains_intentional_stop_and_draw_extension(self):
         # Port QoL: preserve the draw request, unlike native modifier sampling.
