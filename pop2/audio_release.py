@@ -1,9 +1,22 @@
-"""Sample-accurate release on SDL_mixer's existing effect channel."""
+"""PCM loop joins and sample-accurate release for stone movement."""
 
 import ctypes
 from pathlib import Path
 
 import numpy as np
+
+
+def seamless_loop(raw, channels, overlap):
+    samples = np.frombuffer(raw, dtype=np.int16).reshape(-1, channels)
+    overlap = min(overlap, len(samples) // 4)
+    if overlap < 2:
+        return raw
+    gain = ((1 - np.cos(np.linspace(0, np.pi, overlap))) / 2)[:, None]
+    loop = samples[overlap:].copy()
+    loop[-overlap:] = np.rint(samples[-overlap:] * (1 - gain) + samples[:overlap] * gain)
+    # Start near zero without adding a fade or a quiet patch on each repeat.
+    start = np.abs(loop[:overlap].astype(np.int32)).max(axis=1).argmin()
+    return np.roll(loop, -start, axis=0).tobytes()
 
 
 class PcmRelease:
@@ -36,7 +49,10 @@ class PcmRelease:
         if not self.library.Mix_RegisterEffect(channel, self.callback, None, None):
             raise RuntimeError("Cannot apply the gate audio release")
         # The channel is silent after 12 ms; retire it after several buffers.
-        self.library.Mix_ExpireChannel(channel, 80)
+        self.expire(channel, 80)
+
+    def expire(self, channel, milliseconds):
+        self.library.Mix_ExpireChannel(channel, milliseconds)
 
     def cancel(self, channel):
         if channel in self.positions:

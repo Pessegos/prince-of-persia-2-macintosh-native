@@ -4,7 +4,39 @@ from unittest.mock import Mock
 
 import numpy as np
 
-from pop2.audio_release import PcmRelease
+from pop2.audio_release import PcmRelease, seamless_loop
+
+
+class SeamlessLoopTests(unittest.TestCase):
+    def test_join_replaces_only_the_overlap_and_preserves_the_source(self):
+        source = np.repeat(np.arange(128, dtype=np.int16)[:, None], 2, axis=1)
+        before = source.copy()
+        loop = np.frombuffer(seamless_loop(source.tobytes(), 2, 16), np.int16).reshape(-1, 2)
+        self.assertEqual(len(loop), 112)
+        np.testing.assert_array_equal(source, before)
+        np.testing.assert_array_equal(loop[:96], source[16:112])
+        np.testing.assert_array_equal(loop[-1], source[15])
+        self.assertEqual(int(loop[0, 0] - loop[-1, 0]), 1)
+
+    def test_constant_signal_does_not_gain_a_quiet_patch_or_overflow(self):
+        for values in ((32767,), (-32768,), (32767, -32768)):
+            with self.subTest(values=values):
+                source = np.tile(np.array(values, np.int16), (2000, 1))
+                loop = np.frombuffer(seamless_loop(source.tobytes(), len(values), 576),
+                                     np.int16).reshape(-1, len(values))
+                np.testing.assert_array_equal(loop, source[:len(loop)])
+
+    def test_start_is_the_quietest_frame_without_adding_a_fade_each_cycle(self):
+        source = np.full((128, 2), 1000, np.int16)
+        source[21] = (-1, 1)
+        loop = np.frombuffer(seamless_loop(source.tobytes(), 2, 16), np.int16).reshape(-1, 2)
+        np.testing.assert_array_equal(loop[0], (-1, 1))
+        self.assertEqual(np.count_nonzero(np.max(abs(loop), axis=1) < 500), 1)
+
+    def test_empty_and_tiny_clips_are_left_unchanged(self):
+        for frames in range(8):
+            source = np.arange(frames * 2, dtype=np.int16).tobytes()
+            self.assertEqual(seamless_loop(source, 2, 576), source)
 
 
 class PcmReleaseTests(unittest.TestCase):

@@ -76,6 +76,32 @@ class CueTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "import the game again"):
             self.audio.play_intro(25010, 0)
 
+    def test_repeated_gate_requests_extend_playback_without_restarting_the_sample(self):
+        self.audio.cues[17] = {"mode": 1, "priority": 110, "file": "17.wav"}
+        self.audio.add_sound(17)
+        self.audio.flush()
+        self.busy['effect'] = True
+        for _ in range(3):
+            self.audio.add_sound(17)
+            self.audio.flush()
+        self.playback.play.assert_called_once_with('effect', 17)
+        self.assertEqual(self.playback.sustain_gate.call_count, 3)
+
+    def test_gate_repeat_does_not_bypass_pause_or_other_effect_priorities(self):
+        self.audio.cues[17] = {"mode": 1, "priority": 110, "file": "17.wav"}
+        self.audio.add_sound(17)
+        self.audio.flush()
+        self.busy['effect'] = True
+        self.audio.add_sound(17)
+        self.audio.pause(True)
+        self.audio.flush()
+        self.playback.sustain_gate.assert_not_called()
+        self.audio.pause(False)
+        self.audio.add_sound(7)
+        self.audio.flush()
+        self.playback.play.assert_called_with('effect', 7)
+        self.playback.sustain_gate.assert_not_called()
+
     def test_song_playing_checks_pending_and_live_music_not_the_effect_channel(self):
         audio = self.audio
         self.assertFalse(audio.song_playing(40))
@@ -316,6 +342,46 @@ class FormatTests(unittest.TestCase):
 
 
 class SdlPlaybackTests(unittest.TestCase):
+    def test_gate_sustain_crosses_multiple_repeats_but_is_not_an_infinite_orphan(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, 'sample.wav').write_bytes(
+                Sample(bytes((128, 140, 160, 140, 128, 116, 96, 116)) * 80, 8000).wav())
+            cues = {17: {'file': 'sample.wav'}, 18: {'file': 'sample.wav'}}
+            with patch.dict(os.environ, {'SDL_AUDIODRIVER': 'dummy'}):
+                playback = MixerPlayback(directory, cues)
+                try:
+                    playback.play('effect', 17)
+                    sound = playback.channels['effect'].get_sound()
+                    for _ in range(12):
+                        time.sleep(.02)
+                        self.assertTrue(playback.busy('effect'))
+                        playback.sustain_gate()
+                        self.assertIs(playback.channels['effect'].get_sound(), sound)
+                    playback.pause(True)
+                    time.sleep(.12)
+                    playback.pause(False)
+                    self.assertTrue(playback.busy('effect'))
+                    playback.sustain_gate()
+                    time.sleep(.12)
+                    self.assertFalse(playback.busy('effect'))
+                finally:
+                    playback.close()
+
+    def test_clean_stop_release_also_crosses_a_loop_boundary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, 'sample.wav').write_bytes(Sample(b'\x90' * 40, 8000).wav())
+            cues = {17: {'file': 'sample.wav'}, 18: {'file': 'sample.wav'}}
+            with patch.dict(os.environ, {'SDL_AUDIODRIVER': 'dummy'}):
+                playback = MixerPlayback(directory, cues)
+                try:
+                    playback.gate_lifetime = 1000
+                    playback.play('effect', 17)
+                    playback.play('effect', 18)
+                    time.sleep(.04)
+                    self.assertEqual(playback.gate_release.positions[0], 576)
+                finally:
+                    playback.close()
+
     def test_mixer_can_close_while_a_gate_release_is_active(self):
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, "sample.wav").write_bytes(Sample(b"\x90" * 1600, 8000).wav())
@@ -426,9 +492,29 @@ class MixerGateTransitionTests(unittest.TestCase):
         self.playback.gate_tail = self.tail
         self.playback.effect_channel, self.playback.tail_channel = 0, 2
         self.playback.gate_release = Mock()
+        self.playback.gate_lifetime = 1045
         self.effect.get_sound.return_value = self.playback.sounds[17]
         self.effect.get_busy.return_value = True
         self.effect.get_volume.return_value = 0.5
+
+    def test_gate_movement_loops_in_the_mixer_without_a_queued_restart(self):
+        self.playback.play('effect', 17)
+        self.effect.play.assert_called_once_with(self.playback.sounds[17], loops=-1)
+        self.effect.queue.assert_not_called()
+        self.playback.gate_release.expire.assert_called_once_with(0, 1045)
+
+    def test_only_an_active_movement_sample_can_have_its_deadline_renewed(self):
+        self.effect.get_sound.return_value = self.playback.sounds[20]
+        self.playback.sustain_gate()
+        self.effect.get_sound.return_value = self.playback.sounds[17]
+        self.effect.get_busy.return_value = False
+        self.playback.sustain_gate()
+        self.playback.gate_release.expire.assert_not_called()
+
+    def test_music_playback_of_the_same_resource_is_not_looped(self):
+        self.playback.play('music', 17)
+        self.music.play.assert_called_once_with(self.playback.sounds[17])
+        self.playback.gate_release.expire.assert_not_called()
 
     def test_only_a_playing_gate_movement_to_stop_transition_gets_a_fading_tail(self):
         self.playback.play("effect", 18)

@@ -384,6 +384,16 @@ The callback only processes SDL's temporary channel buffer, never shared sound
 data, and remains owned until playback stops before mixer shutdown.
 See [SDL_mixer channel effects](https://wiki.libsdl.org/SDL2_mixer/Mix_RegisterEffect).
 
+Movement cue 17 now repeats on SDL's audio clock instead of waiting for the
+next game update after each roughly 1.045-second sample. A 12 ms raised-cosine
+overlap joins the end to the beginning in a private, in-memory loop; its start
+is rotated near zero without inserting a fade on every repetition. Imported
+WAVs are not rewritten. Repeated movement requests renew a playback deadline
+equal to the original sample duration, so a missing stop request cannot leave
+an infinite sound. Priorities and controller timing are unchanged; cue 18 keeps
+the sample-accurate release above, including across a loop boundary. Pause,
+mute, replacement and level reset continue to operate on the same channels.
+
 Version 12 binds affected logical cells to original drawing commands, including
 fragments emitted from neighboring rooms/cells and the lower room's first row.
 DrawCaveGateMovable (8:1f40)

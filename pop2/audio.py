@@ -6,7 +6,7 @@ from pathlib import Path
 import random
 
 from pop2.paths import ASSET_DIR
-from pop2.audio_release import PcmRelease
+from pop2.audio_release import PcmRelease, seamless_loop
 
 
 class MixerPlayback:
@@ -26,6 +26,20 @@ class MixerPlayback:
         self.sounds = {cue: mixer.Sound(str(Path(directory) / item["file"]))
                        for cue, item in cues.items() if item.get("file")}
         self.gate_release = PcmRelease(mixer) if 17 in self.sounds and 18 in self.sounds else None
+        if self.gate_release is not None:
+            rate, _bits, channels = mixer.get_init()
+            original = self.sounds[17]
+            self.gate_lifetime = max(1, round(original.get_length() * 1000))
+            self.sounds[17] = mixer.Sound(buffer=seamless_loop(
+                original.get_raw(), channels, rate * 12 // 1000))
+
+    def sustain_gate(self):
+        channel = self.channels["effect"]
+        if (self.gate_release is not None and channel.get_busy()
+                and channel.get_sound() is self.sounds[17]):
+            # Renew only while the controller still requests movement. A lost
+            # stop cue must not leave an infinite stone sound behind.
+            self.gate_release.expire(self.effect_channel, self.gate_lifetime)
 
     def play(self, bus, cue, offset=0):
         sound = self.sounds[cue]
@@ -50,7 +64,11 @@ class MixerPlayback:
             self.gate_tail.stop()
         if bus == "effect" and self.gate_release is not None:
             self.gate_release.cancel(self.effect_channel)
-        self.channels[bus].play(sound)
+        if bus == "effect" and cue == 17 and not offset and self.gate_release is not None:
+            self.channels[bus].play(sound, loops=-1)
+            self.sustain_gate()
+        else:
+            self.channels[bus].play(sound)
 
     def busy(self, bus):
         return self.channels[bus].get_busy()
@@ -183,6 +201,10 @@ class AudioEngine:
             if interrupt:
                 self.playback.play("effect", cue)
                 self.current_effect = cue
+            elif cue == current == 17:
+                sustain = getattr(self.playback, "sustain_gate", None)
+                if sustain is not None:
+                    sustain()
         if self.pending_song is not None:
             self.current_music = self.pending_song
             self.current_music_ambient = self.pending_song_ambient
