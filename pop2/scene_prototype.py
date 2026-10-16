@@ -945,7 +945,7 @@ class ScenePrototype(WindowControls):
                     return False
                 boundary = self.level_map.step_boundary(
                     self.room_id, self.terrain_motion.row, self.sequence_state,
-                    self.frames[self.sequence_state.action], self.player_bounds())
+                    self.frames[self.sequence_state.action], self.player_bounds(), cautious=True)
                 step, self.step_cautious = plan_cautious_step(
                     boundary, getattr(self, "step_cautious", True))
                 if step.sequence_id == 44 and direction in self.held_directions:

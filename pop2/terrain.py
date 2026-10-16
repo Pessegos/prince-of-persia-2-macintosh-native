@@ -160,7 +160,7 @@ class LevelMap:
             adjustment = -13
         return (13 + adjustment) * direction
 
-    def step_boundary(self, room, row, state, record, bounds):
+    def step_boundary(self, room, row, state, record, bounds, *, cautious=False):
         # GetBarrDistances (4:5eae): inspect the supporting foot's tile and
         # its immediate neighbor, not a geometric edge or a whole-room scan.
         contact = floor_contact_x(state.target_x, state.facing, record)
@@ -175,7 +175,7 @@ class LevelMap:
                           and stone_gate_blocks(tile.foreground, bounds, state))
             if tile.kind in WALL_TILES | {12} or stone_gate:
                 barrier = (5 if stone_gate else 6 if tile.kind == 12 else
-                           3 if tile.kind == 2 and (tile.foreground & 255) < 3 else 4)
+                           3 if cautious and tile.kind == 2 and (tile.foreground & 255) < 3 else 4)
                 left_offset = {3: -22, 4: 3, 5: 18, 6: 8}[barrier]
                 right_offset = {3: -22, 4: 0, 5: 0, 6: 16}[barrier]
                 # GetCharEdges / QuickDraw uses an exclusive right edge;

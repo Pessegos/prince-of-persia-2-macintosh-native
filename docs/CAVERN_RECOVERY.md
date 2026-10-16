@@ -843,6 +843,14 @@ foreground phase; blood survives room changes and is reset by level restart.
 GetBarrCode (4:52bc) uses extended type-3 spike clearance only when c944 is
 set inside DoStepFwd (6:1280-1336). Physical wall collision must use ordinary
 type 4; using type 3 there stopped a run before it could trigger the trap.
+The distance query also defaults to c944 clear. Only an actual cautious
+step enables it; GenCtrl's fresh run-start query (6:11a0) must not. At idle
+X=115 to the right of a retracted trap, native clearance is 39 for run
+startup, versus 17 inside DoStepFwd. Applying the latter to the former
+incorrectly selected SEQS:32 without Shift, granting cautious-step immunity
+and eventually replacing the attack with a wall bump. The user's recordings
+and new close-start regressions at all three traps cover this case separately
+from the earlier long-run tests.
 
 Native execution matched 23400 supplied-body-bound trigger/contact/Prince
 death-alignment cases across the three traps, all 256 phase-controller

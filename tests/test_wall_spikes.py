@@ -191,6 +191,15 @@ class WallSpikeTests(unittest.TestCase):
         self.assertEqual(self.terrain.wall_correction(
             0, 300, 270, (260, 280, 290, 346), (290, 280, 320, 346), 0, 2), 286)
 
+    def test_run_start_distance_does_not_enable_the_cautious_spike_margin(self):
+        self.state.action, self.state.target_x = 15, 319
+        bounds = 315, 268, 332, 346
+        normal = self.terrain.step_boundary(0, 2, self.state, self.record, bounds)
+        cautious = self.terrain.step_boundary(0, 2, self.state, self.record, bounds, cautious=True)
+        self.assertEqual((normal.clearance, cautious.clearance), (39, 17))
+        self.assertGreaterEqual(normal.clearance, 27)
+        self.assertLess(cautious.clearance, 27)
+
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class ImportedWallSpikeTests(unittest.TestCase):
@@ -249,6 +258,49 @@ class ImportedWallSpikeTests(unittest.TestCase):
                     self.assertEqual(scene.combat.player.alive, cautious)
                     self.assertEqual(scene.game.caverns.spikes.foreground[room, 20 + column],
                                      143 if cautious else 240)
+
+    def test_fresh_forward_press_already_near_each_trap_runs_into_it_without_a_wall_bump(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        for room, column in ((10, 2), (13, 0), (20, 4)):
+            with self.subTest(room=room + 1), patch.object(scene, 'render'):
+                scene.load_level(3)
+                scene.peaceful = True
+                # User's Macintosh recording: idle X=115 relative to the trap,
+                # then a fresh Left press with no Shift, rather than a long run.
+                scene.jump_to_room(room, row=2, x=column * 51 + 115, facing=0)
+                scene.in_animation_tick = True
+                scene.horizontal_key(None, -1, True)
+                selected = []
+                for _ in range(12):
+                    RooftopSceneTests.tick(self)
+                    selected.append(scene.sequence_state.source_sequence_id)
+                    if scene.terrain_motion.dead:
+                        break
+                self.assertTrue(scene.terrain_motion.dead, selected)
+                self.assertEqual(selected[0], 1)
+                self.assertFalse(set(selected) & (set(range(29, 45)) | {45, 46, 47}), selected)
+                self.assertEqual(scene.action, 186)
+                self.assertEqual(scene.player_x, column * 51 + 90)
+
+    def test_shift_still_selects_the_cautious_step_when_starting_near_the_spikes(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(3)
+        scene.peaceful = True
+        scene.jump_to_room(13, row=2, x=115, facing=0)
+        scene.in_animation_tick = True
+        scene.shift_held = True
+        scene.horizontal_key(None, -1, True)
+        with patch.object(scene, 'render'):
+            RooftopSceneTests.tick(self)
+            self.assertEqual(scene.sequence_state.source_sequence_id, 32)
+            RooftopSceneTests.tick(self, 30)
+        self.assertTrue(scene.combat.player.alive)
 
     def test_right_facing_death_turns_to_the_native_pose_and_restart_resets_the_trap(self):
         from tests.test_terrain import RooftopSceneTests

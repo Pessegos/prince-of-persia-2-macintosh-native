@@ -29,7 +29,7 @@ REVIEWS = {
     (5, "DrawObjSpikes"): ("partial", "pop2/wall_spikes.py;pop2/caverns.py;pop2/level_rendering.py", "cavern back/front and blood banks, DATA offsets and masked transfer; all 18 representative native draw commands matched; other environments omitted"),
     (5, "MobSpikes"): ("partial", "pop2/wall_spikes.py;pop2/scene_prototype.py", "outward phase 1/2 hit admission; native Prince trigger/hit/sequence/alignment comparisons over 23400 supplied-bound cases; temple/special actors omitted"),
     (5, "TriggerSpikes"): ("partial", "pop2/wall_spikes.py;pop2/scene_prototype.py", "cavern idle activation and held-pose renewal, shared MOB capacity not unified with other hazards"),
-    (4, "GetBarrCode"): ("partial", "pop2/terrain.py", "wall-spike type 3 reserved for cautious DoStepFwd distance query; ordinary collision keeps type 4; other barrier special cases partial"),
+    (4, "GetBarrCode"): ("partial", "pop2/terrain.py;pop2/scene_prototype.py", "wall-spike type 3 reserved for explicit DoStepFwd query; run startup and ordinary collision keep type 4; native close-start clearances 39/17 verified; other barrier special cases partial"),
     (5, "PushPlate"): ("partial", "pop2/pressure_plates.py", "link timer, depression after chain traversal, ordinary/permanent press and click cue; level-three reverse plates integrated"),
     (5, "Trigger"): ("partial", "pop2/pressure_plates.py", "native linked target traversal; level-three stone gates, exits and all nine projectile traps dispatched"),
     (5, "TriggerGate"): ("partial", "pop2/pressure_plates.py", "level-three reverse-plate dispatch; special level/story and closing-on-actor branches missing"),
