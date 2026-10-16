@@ -8,7 +8,7 @@ import tempfile
 import time
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 import wave
 
 from pop2.audio import AudioEngine, MixerPlayback
@@ -316,6 +316,19 @@ class FormatTests(unittest.TestCase):
 
 
 class SdlPlaybackTests(unittest.TestCase):
+    def test_mixer_can_close_while_a_gate_release_is_active(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "sample.wav").write_bytes(Sample(b"\x90" * 1600, 8000).wav())
+            cues = {17: {"file": "sample.wav"}, 18: {"file": "sample.wav"}}
+            with patch.dict(os.environ, {"SDL_AUDIODRIVER": "dummy"}):
+                playback = MixerPlayback(directory, cues)
+                try:
+                    playback.play("effect", 17)
+                    playback.play("effect", 18)
+                finally:
+                    playback.close()
+                self.assertIsNone(playback.mixer.get_init())
+
     def test_gate_stop_starts_immediately_with_a_short_independent_movement_tail(self):
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, "sample.wav").write_bytes(Sample(b"\x90" * 1600, 8000).wav())
@@ -327,17 +340,25 @@ class SdlPlaybackTests(unittest.TestCase):
                     playback.set_volume("effect", 0.5)
                     playback.play("effect", 17)
                     movement = playback.channels["effect"]
+                    movement_sound = movement.get_sound()
+                    original = playback.sounds[17].get_raw()
                     playback.play("effect", 18)
                     self.assertIs(playback.gate_tail, movement)
                     self.assertIs(playback.channels["effect"].get_sound(), playback.sounds[18])
-                    self.assertIs(playback.gate_tail.get_sound(), playback.sounds[17])
+                    self.assertIs(playback.gate_tail.get_sound(), movement_sound)
+                    self.assertIs(movement_sound, playback.sounds[17])
+                    self.assertEqual(playback.sounds[17].get_raw(), original)
                     self.assertEqual(playback.channels["effect"].get_volume(), 0.5)
                     playback.pause(True)
+                    position = playback.gate_release.positions[0]
                     time.sleep(0.04)
+                    self.assertEqual(playback.gate_release.positions[0], position)
                     self.assertTrue(playback.busy("effect"))
                     playback.pause(False)
                     time.sleep(0.10)
                     self.assertFalse(playback.gate_tail.get_busy())
+                    self.assertEqual(playback.gate_release.positions[0], 576)
+                    self.assertEqual(playback.sounds[17].get_raw(), original)
                     self.assertTrue(playback.busy("effect"))
                     playback.stop("effect")
                     self.assertFalse(playback.busy("effect"))
@@ -403,6 +424,8 @@ class MixerGateTransitionTests(unittest.TestCase):
         self.effect, self.music, self.tail = Mock(), Mock(), Mock()
         self.playback.channels = {"effect": self.effect, "music": self.music}
         self.playback.gate_tail = self.tail
+        self.playback.effect_channel, self.playback.tail_channel = 0, 2
+        self.playback.gate_release = Mock()
         self.effect.get_sound.return_value = self.playback.sounds[17]
         self.effect.get_busy.return_value = True
         self.effect.get_volume.return_value = 0.5
@@ -411,7 +434,9 @@ class MixerGateTransitionTests(unittest.TestCase):
         self.playback.play("effect", 18)
         self.assertIs(self.playback.channels["effect"], self.tail)
         self.assertIs(self.playback.gate_tail, self.effect)
-        self.effect.fadeout.assert_called_once_with(80)
+        self.playback.gate_release.start.assert_called_once_with(0)
+        self.assertEqual((self.playback.effect_channel, self.playback.tail_channel), (2, 0))
+        self.effect.fadeout.assert_not_called()
         self.tail.set_volume.assert_called_once_with(0.5)
         self.tail.play.assert_called_once_with(self.playback.sounds[18])
         self.tail.queue.assert_not_called()
@@ -423,18 +448,37 @@ class MixerGateTransitionTests(unittest.TestCase):
         self.effect.play.assert_called_once_with(self.playback.sounds[20])
         self.effect.fadeout.assert_not_called()
         self.tail.play.assert_not_called()
+        self.playback.gate_release.start.assert_not_called()
+
+    def test_consecutive_stops_release_the_correct_alternating_channel(self):
+        self.playback.play("effect", 18)
+        self.playback.play("effect", 17)
+        self.tail.get_sound.return_value = self.playback.sounds[17]
+        self.tail.get_busy.return_value = True
+        self.playback.play("effect", 18)
+        self.assertEqual(self.playback.gate_release.start.call_args_list, [call(0), call(2)])
+        self.assertEqual((self.playback.effect_channel, self.playback.tail_channel), (0, 2))
+        self.assertIs(self.playback.channels["effect"], self.effect)
+
+    def test_new_effect_clears_the_previous_release_tail(self):
+        self.playback.play("effect", 18)
+        self.playback.play("effect", 20)
+        self.effect.stop.assert_called_once_with()
+        self.tail.play.assert_called_with(self.playback.sounds[20])
 
     def test_finished_movement_does_not_leave_a_tail(self):
         self.effect.get_busy.return_value = False
         self.playback.play("effect", 18)
         self.effect.play.assert_called_once_with(self.playback.sounds[18])
         self.effect.fadeout.assert_not_called()
+        self.playback.gate_release.start.assert_not_called()
 
     def test_stop_after_another_cue_does_not_leave_a_tail(self):
         self.effect.get_sound.return_value = self.playback.sounds[20]
         self.playback.play("effect", 18)
         self.effect.play.assert_called_once_with(self.playback.sounds[18])
         self.effect.fadeout.assert_not_called()
+        self.playback.gate_release.start.assert_not_called()
 
     def test_pause_mute_and_reset_include_the_tail(self):
         self.playback.play("effect", 18)

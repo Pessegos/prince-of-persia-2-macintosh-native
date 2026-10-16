@@ -6,6 +6,7 @@ from pathlib import Path
 import random
 
 from pop2.paths import ASSET_DIR
+from pop2.audio_release import PcmRelease
 
 
 class MixerPlayback:
@@ -21,8 +22,10 @@ class MixerPlayback:
         mixer.set_num_channels(3)
         self.channels = {"effect": mixer.Channel(0), "music": mixer.Channel(1)}
         self.gate_tail = mixer.Channel(2)
+        self.effect_channel, self.tail_channel = 0, 2
         self.sounds = {cue: mixer.Sound(str(Path(directory) / item["file"]))
                        for cue, item in cues.items() if item.get("file")}
+        self.gate_release = PcmRelease(mixer) if 17 in self.sounds and 18 in self.sounds else None
 
     def play(self, bus, cue, offset=0):
         sound = self.sounds[cue]
@@ -37,15 +40,16 @@ class MixerPlayback:
             sound = self.mixer.Sound(buffer=remaining)
         if (bus == "effect" and cue == 18 and self.channels[bus].get_busy()
                 and self.channels[bus].get_sound() is self.sounds.get(17)):
-            # Gate movement can stop anywhere in its waveform. Keep a short
-            # fading tail instead of cutting it, without delaying the stop cue.
-            # Span several mixer buffers so the fade is not itself a hard step.
+            # Fade PCM samples, not SDL's stepped per-buffer channel volume.
             self.gate_tail.stop()
             self.gate_tail.set_volume(self.channels[bus].get_volume())
+            self.gate_release.start(self.effect_channel)
             self.channels[bus], self.gate_tail = self.gate_tail, self.channels[bus]
-            self.gate_tail.fadeout(80)
+            self.effect_channel, self.tail_channel = self.tail_channel, self.effect_channel
         elif bus == "effect":
             self.gate_tail.stop()
+        if bus == "effect" and self.gate_release is not None:
+            self.gate_release.cancel(self.effect_channel)
         self.channels[bus].play(sound)
 
     def busy(self, bus):
@@ -55,6 +59,9 @@ class MixerPlayback:
         self.channels[bus].stop()
         if bus == "effect":
             self.gate_tail.stop()
+            if self.gate_release is not None:
+                self.gate_release.cancel(self.effect_channel)
+                self.gate_release.cancel(self.tail_channel)
 
     def set_volume(self, bus, volume):
         self.channels[bus].set_volume(volume)
@@ -68,6 +75,11 @@ class MixerPlayback:
             (channel.pause if paused else channel.unpause)()
 
     def close(self):
+        for channel in (*self.channels.values(), self.gate_tail):
+            channel.stop()
+        if self.gate_release is not None:
+            self.gate_release.cancel(self.effect_channel)
+            self.gate_release.cancel(self.tail_channel)
         self.mixer.quit()
 
 

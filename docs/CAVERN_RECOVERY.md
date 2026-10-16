@@ -372,10 +372,17 @@ tables; plate release is the native loop at 5:2554.
 
 Playback keeps the native cue requests and priority arbitration, but avoids a
 hard waveform cut when movement cue 17 is replaced by stop cue 18. The stop
-starts immediately while a separate channel fades the remaining movement over
-80 ms. This is a playback-only de-click improvement, not a recovered Macintosh
-rule. Pause, mute and reset also handle the short tail; other cue replacements
-and the imported samples are unchanged.
+starts immediately while a separate channel releases the remaining movement.
+An SDL_mixer channel effect applies a 12 ms raised-cosine envelope sample by
+sample, carrying its position across mixer buffers. This replaces the former
+80 ms channel-volume fade, whose per-buffer gain steps could leave a brief buzz.
+It uses the audio sample clock, not an estimate of the play position from game
+timing. The silent channel expires after 80 ms. This is a playback-only de-click
+improvement, not a recovered Macintosh rule. Pause freezes the release; mute,
+reset and replacement stop it. Other cues and the imported samples are unchanged.
+The callback only processes SDL's temporary channel buffer, never shared sound
+data, and remains owned until playback stops before mixer shutdown.
+See [SDL_mixer channel effects](https://wiki.libsdl.org/SDL2_mixer/Mix_RegisterEffect).
 
 Version 12 binds affected logical cells to original drawing commands, including
 fragments emitted from neighboring rooms/cells and the lower room's first row.
