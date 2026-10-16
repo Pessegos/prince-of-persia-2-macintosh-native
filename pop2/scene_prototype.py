@@ -1982,7 +1982,7 @@ class ScenePrototype(WindowControls):
                 # StartFall 4:4ca8-4cb2 puts the drawn sword away immediately.
                 self.sword_drawn = self.combat.player.sword_drawn = False
                 self.combat.player.recovering = False
-            if event.kind in ("land", "death"):
+            if event.kind in ("land", "lava", "death"):
                 if getattr(self, "audio", None) is not None:
                     self.audio.stop_sound(8)
             if event.kind in ("fall", "wall", "gate", "death"):
@@ -2224,8 +2224,11 @@ class ScenePrototype(WindowControls):
             lava.enter_room(self.room_id, self.level_renderer.cavern_program.get(
                 'lava', {}).get('rooms', {}).get(str(self.room_id), ()))
             self.sequence_state.sound_events.extend(lava.advance())
-            pool = lava.contact(self.level_map, self.terrain_motion, self.sequence_state,
-                                self.frames[self.action]) if self.terrain_motion is not None else None
+            pool = (lava.contact(self.level_map, self.terrain_motion, self.sequence_state,
+                                 self.frames[self.action], landed=self.terrain_motion.lava_landing)
+                    if self.terrain_motion is not None else None)
+            if self.terrain_motion is not None:
+                self.terrain_motion.lava_landing = False
             if pool is not None:
                 state, motion = self.sequence_state, self.terrain_motion
                 sequence, cue = pool.begin_death(state.animation_state, state.facing)

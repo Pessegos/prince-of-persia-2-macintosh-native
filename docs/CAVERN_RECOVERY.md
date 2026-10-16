@@ -172,6 +172,17 @@ Native execution matched 3,420 contact cases. The predicate is shared by all
 five pools in the level, including camera-border copies; no room-specific
 death rectangle is introduced. Normal jumps above the surface remain safe.
 
+HitFloor (6:02aa-02b8/0326-0344) has a separate lava entry: landing on tile
+23/24 calls GetLavaInfoHnd before ordinary impact damage or landing alignment.
+It bypasses CheckLavaBoil's pose, surface-height and horizontal admission
+limits, preserving airborne mode 3/4 for the death variant. Native execution
+confirmed this dispatch in 120 cases across both halves of all five pools,
+both facings and six incoming velocities. The Prince host queues that contact
+for the same frame's lava update, without advancing the death animation early.
+This prevents maximum-speed falls from selecting flat impact death (SEQS:22)
+and leaving a corpse on the pool. Regression tests cover all five pools in
+both facings, a continuous Room 3 -> 10 fall and the eventual retry prompt.
+
 GetLavaInfoHnd (8:34a6-358e) selects SEQS:116 and cue 70 for the Prince.
 Airborne modes 3/4 use drawing sequence 0. Grounded entry uses sequence 1;
 Rnd(3)==0 additionally retains it for a longer continuation in which the

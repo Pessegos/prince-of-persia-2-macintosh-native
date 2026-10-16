@@ -147,19 +147,21 @@ class Lava:
     def advance(self):
         return tuple(cue for pool in self.pools.values() for cue in pool.advance())
 
-    def contact(self, terrain, motion, state, frame):
+    def contact(self, terrain, motion, state, frame, *, landed=False):
         # CheckLavaBoil 8:33fc-348c uses cached actor column/physical row,
         # supporting-foot X, and the FRAM floor-contact flag, not sprite overlap.
-        if motion.dead or not frame.aux & 0x40:
+        # HitFloor 6:0336 calls GetLavaInfoHnd directly: its lava-tile
+        # landing bypasses CheckLavaBoil's surface/pose admission limits.
+        if motion.dead or (not landed and not frame.aux & 0x40):
             return None
         y = floor_y(motion.row) + state.current_y
         foot = floor_contact_x(state.target_x, state.facing, frame)
         row, column = character_row(y), character_column(foot)
         tile = terrain.tile(motion.room, column, row)
-        if tile.kind not in (23, 24) or y <= row * 120 + 76:
+        if tile.kind not in (23, 24) or (not landed and y <= row * 120 + 76):
             return None
-        if (tile.kind == 23 and foot < column * 51 + 43
-                or tile.kind == 24 and foot > column * 51 + 36):
+        if not landed and (tile.kind == 23 and foot < column * 51 + 43
+                           or tile.kind == 24 and foot > column * 51 + 36):
             return None
         cell = tile.row * 10 + tile.column - int(tile.kind == 24)
         return self.pools.get((tile.room, cell))

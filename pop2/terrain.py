@@ -555,6 +555,7 @@ class TerrainMotion:
     scream_played: bool = False
     hit_fall: bool = False
     sinking: bool = False
+    lava_landing: bool = False
 
 
 @dataclass(frozen=True)
@@ -960,6 +961,14 @@ class RooftopPhysics:
                 tile = self.map.align_wall(motion.room, motion.row, state, frame_record)
             if tile.room is not None and tile.kind not in EMPTY_TILES | WALL_TILES:
                 velocity = state.vertical_velocity
+                if (tile.kind in (23, 24) and self.map.caverns is not None
+                        and state.actor_type in (0, None)):
+                    # HitFloor 6:02aa-02b8/0326-0344 dispatches lava before
+                    # impact damage, preserving the airborne death variant.
+                    state.current_y = 0
+                    motion.lava_landing = True
+                    events.append(TerrainEvent('lava'))
+                    break
                 if tile.kind == 11 and self.map.caverns is not None and velocity:
                     # Falling 6:01ee-0260: strike the slab, halve velocity and
                     # remain airborne just above the current floor.

@@ -6,7 +6,7 @@ from unittest.mock import patch
 from pop2.animation_data import FrameRecord
 from pop2.lava import ENHANCED_BUBBLE_OFFSET_X, ENHANCED_BUBBLE_OFFSET_Y, Lava, LavaPool
 from pop2.paths import ASSET_DIR
-from pop2.terrain import LevelMap, TerrainMotion
+from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.rebirth import DeathState
 from tools.extract_lava import lava_tables
@@ -125,6 +125,48 @@ class LavaRuleTests(unittest.TestCase):
         self.assertIsNotNone(self.contact(420, y=317))
         self.assertIsNone(self.contact(420, flags=0))
         self.assertIsNone(self.contact(420, dead=True))
+
+    def test_fast_lava_landing_defers_to_lava_instead_of_selecting_flat_impact_death(self):
+        from pop2.cavern_state import CavernState
+
+        level = bytearray(0x49ca)
+        struct.pack_into('>H', level, 0x2186, 3)
+        struct.pack_into('>H', level, 27 * 2, 23)
+        terrain = LevelMap(level)
+        terrain.caverns = CavernState()
+        state = SequenceState(12, action=106, animation_state=4, actor_type=0,
+                              target_x=420, current_y=-45, vertical_velocity=63)
+        runtime = SequenceRuntime({22: (-7, 1, 185, -23)}, state)
+        motion = TerrainMotion(0, 2, falling=True)
+        events = RooftopPhysics(terrain).advance(
+            motion, runtime, 420, (400, 220, 435, 301), cut_enabled=False,
+            frame_record=FrameRecord(106, 0, 0, 0, 0, 0x40))
+        self.assertEqual([event.kind for event in events], ['lava'])
+        self.assertTrue(motion.lava_landing)
+        self.assertFalse(motion.dead)
+        self.assertEqual((state.source_sequence_id, state.action, state.animation_state), (12, 106, 4))
+        self.assertEqual(state.current_y, 0)
+        self.assertNotIn(7, state.sound_events)
+
+    def test_lava_landing_uses_the_whole_tile_without_surface_contact_pose_or_edge_limits(self):
+        level = bytearray(0x49ca)
+        struct.pack_into('>H', level, 27 * 2, 23)
+        struct.pack_into('>H', level, 28 * 2, 24)
+        terrain = LevelMap(level)
+        lava = Lava(synthetic_tables())
+        lava.enter_room(0, [{'room': 0, 'cell': 27}])
+        state = SequenceState(23, action=77, target_x=399, facing=1)
+        motion = TerrainMotion(0, 2)
+        record = FrameRecord(77, 0, 0, 0, 0, 0)
+        for foot in (390, 399, 420, 445, 460):
+            state.target_x = foot
+            self.assertIsNone(lava.contact(terrain, motion, state, record))
+            self.assertIs(lava.contact(terrain, motion, state, record, landed=True), lava.pools[0, 27])
+        state.target_x = 350
+        self.assertIsNone(lava.contact(terrain, motion, state, record, landed=True))
+        motion.dead = True
+        state.target_x = 420
+        self.assertIsNone(lava.contact(terrain, motion, state, record, landed=True))
 
     def test_column_is_derived_from_supporting_foot_not_anchor(self):
         for facing in (0, 1):
@@ -539,6 +581,56 @@ class ImportedLavaTests(unittest.TestCase):
         scene.advance_level_events()
         self.assertFalse(scene.combat.player.alive)
         self.assertEqual(scene.game.caverns.lava.pools[5, 27].flags, 0x8000)
+
+    def test_fast_falls_into_all_five_pools_use_lava_death_and_finish_with_retry(self):
+        scene = self.scene
+        for room, cell in ((5, 27), (9, 23), (14, 22), (25, 23), (30, 23)):
+            for facing in (0, 1):
+                with self.subTest(room=room + 1, facing=facing), patch.object(scene, 'render'):
+                    scene.jump_to_room(room, row=2, x=cell % 10 * 51 + 60, facing=facing)
+                    state, motion = scene.sequence_state, scene.terrain_motion
+                    scene.physics.select(scene.sequence_runtime, 12)
+                    scene.action, scene.player_x = state.action, state.target_x
+                    state.current_y, state.vertical_velocity = -45, 63
+                    state.horizontal_velocity = 0
+                    state.sound_events.clear()
+                    motion.falling = True
+                    self.tick()
+                    self.assertEqual(scene.death.method, 5)
+                    self.assertEqual(state.source_sequence_id, 116)
+                    self.assertFalse(scene.combat.player.alive)
+                    self.assertTrue(motion.dead)
+                    self.assertFalse(motion.lava_landing)
+                    self.assertEqual(scene.game.caverns.lava.pools[room, cell].flags,
+                                     0x8000 if facing else 0x8800)
+                    self.assertIsNone(scene.player_sprite())
+                    self.assertNotIn(7, state.sound_events)
+                    self.tick(30)
+                    self.assertTrue(scene.death.prompt_visible)
+
+    def test_long_fall_from_room_3_into_room_10_enters_lava_death(self):
+        scene = self.scene
+        for facing in (0, 1):
+            with self.subTest(facing=facing), patch.object(scene, 'render'):
+                scene.jump_to_room(2, row=1, x=213, facing=facing)
+                state, motion = scene.sequence_state, scene.terrain_motion
+                scene.physics.select(scene.sequence_runtime, 12)
+                scene.action, scene.player_x = state.action, state.target_x
+                state.current_y, state.vertical_velocity = -45, 1
+                state.horizontal_velocity = 0
+                motion.falling = True
+                for _ in range(40):
+                    self.tick()
+                    if motion.dead:
+                        break
+                self.assertEqual(scene.room_id, 9)
+                self.assertEqual(scene.death.method, 5)
+                self.assertEqual(state.source_sequence_id, 116)
+                self.assertTrue(motion.dead)
+                self.assertEqual(scene.game.caverns.lava.pools[9, 23].flags,
+                                 0x8000 if facing else 0x8800)
+                self.tick(30)
+                self.assertTrue(scene.death.prompt_visible)
 
     def test_all_five_enhanced_pools_have_no_frozen_frames_at_loop_boundaries(self):
         from pop2.caverns import cavern_room, draw_cavern_lava
