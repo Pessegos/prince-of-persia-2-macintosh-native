@@ -387,6 +387,20 @@ grab, the complete failed climb/fall and the successful climb. Pixel checks
 cover the moving stone over an overlapping actor in both facings. This
 extends the focused gate audit, not a claim of complete movement-loop parity.
 
+CheckSquishedFingers (5:153c-15a2) supplies the original cue 29 when a gate
+finishes closing over a hanging Prince's hand. It requires the same room,
+animation mode 2 or 6, and a supporting-foot linear cell equal to the gate
+cell plus 10 or 11. Facing and a request to climb are not conditions; the
+routine does not damage the actor. ATMGate calls it after StopGate on slow
+closure (cues 18, 29), and before cue 20 on an ordinary fast closure (29, 20).
+The separate fast-close crush stop at position 56 does not call it. Once
+closed, the gate leaves the active list, so holding the ledge cannot repeat
+the voice. Original instruction execution matched 9,600 room/mode/cell
+comparisons, including room-edge linear cells. A real Room 23 running-jump
+catch verifies both closure speeds through the audio backend, one voice,
+continued hanging and unchanged life. StopGate's separate mode-2 pose
+selection is not included in this sound-only recovery.
+
 ## Pressure Plates And Stone Gates
 
 All 27 level-three buttons are reverse plates (tile 34). Their low foreground

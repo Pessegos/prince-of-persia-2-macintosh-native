@@ -288,7 +288,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 5,Modular Set 2,CheckPress,0x127e,jump_table,partial,pop2/loose_floors.py;pop2/pressure_plates.py,supporting-foot and pose/mode/height admission for loose floors and pressure plates; special actor host incomplete,2,9
 5,Modular Set 2,AnimTorch,0x13ec,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,2
 5,Modular Set 2,StopGate,0x14a8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,4
-5,Modular Set 2,CheckSquishedFingers,0x153c,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,2
+5,Modular Set 2,CheckSquishedFingers,0x153c,prologue,partial,pop2/pressure_plates.py,same-room modes 2/6 and supporting-foot linear-cell admission; cue 29 at slow/fast closure without damage; 9600 native comparisons; copied actor bank replaced by explicit state,0,2
 5,Modular Set 2,GetTorchFrame,0x168e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 5,Modular Set 2,MarkTop,0x16f2,decoded,indexed-only,,No semantic review recorded in this prototype catalog,5,2
 5,Modular Set 2,MarkMove,0x17e2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,2

@@ -26,6 +26,7 @@ REVIEWS = {
     (4, "CheckGateForKid"): ("partial", "pop2/terrain.py;pop2/scene_prototype.py", "cavern Prince consecutive overlap, forced crouch, nearest-side ejection and SEQS 118 crushing; 1920 native selection/displacement/damage checks with supplied masks"),
     (5, "AddKidDeathSong"): ("partial", "pop2/rebirth.py;pop2/audio.py;tools/extract_audio.py", "extracted death-method mapping, level-1 songs and actual playback completion"),
     (5, "AddSound"): ("partial", "pop2/audio.py;tools/extract_audio.py", "extracted cue priorities, pending arbitration and ordinary actor footstep suppression"),
+    (5, "CheckSquishedFingers"): ("partial", "pop2/pressure_plates.py", "same-room modes 2/6 and supporting-foot linear-cell admission; cue 29 at slow/fast closure without damage; 9600 native comparisons; copied actor bank replaced by explicit state"),
     (5, "CheckPress"): ("partial", "pop2/loose_floors.py;pop2/pressure_plates.py", "supporting-foot and pose/mode/height admission for loose floors and pressure plates; special actor host incomplete"),
     (5, "ATMSpikes"): ("partial", "pop2/wall_spikes.py", "cavern visible-room/left-neighbor MOB lifetime, retract/hold phases and cues 282/284; 256 native phase updates; shared MOB bank incomplete"),
     (5, "DrawObjSpikes"): ("partial", "pop2/wall_spikes.py;pop2/caverns.py;pop2/level_rendering.py", "cavern back/front and blood banks, DATA offsets and masked transfer; all 18 representative native draw commands matched; other environments omitted"),

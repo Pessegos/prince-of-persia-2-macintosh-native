@@ -100,6 +100,59 @@ class PressurePlateTests(unittest.TestCase):
             self.assertEqual(self.terrain.tile(0, 5, 1).foreground & 255, expected)
             self.assertNotIn((0, 15), self.plates.active)
 
+    def test_gate_closing_on_fingers_sounds_once_in_both_native_hanging_modes(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        for mode in (2, 6):
+            for facing in (0, 1):
+                for column in (5, 6):
+                    for phase, position, expected in ((1, 4, (18, 29)), (4, 40, (29, 20))):
+                        with self.subTest(mode=mode, facing=facing, column=column, phase=phase):
+                            state = SequenceState(25, action=91, animation_state=mode,
+                                                  target_x=column * 51 + 35, facing=facing)
+                            motion = TerrainMotion(0, 2)
+                            before = vars(state).copy(), vars(motion).copy()
+                            self.plates.foreground[0, 15] = 0x300 | position
+                            self.plates.active[0, 15] = phase
+                            self.assertEqual(self.plates.advance(self.terrain, state, motion, record),
+                                             expected)
+                            self.assertEqual(self.terrain.tile(0, 5, 1).foreground, 0x300)
+                            self.assertNotIn((0, 15), self.plates.active)
+                            self.assertEqual(self.plates.advance(self.terrain, state, motion, record), ())
+                            self.assertEqual((vars(state), vars(motion)), before)
+
+    def test_finger_contact_uses_native_room_mode_and_supporting_foot_cell(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        state = SequenceState(25, animation_state=6, target_x=5 * 51 + 35)
+        for room in (0, 1):
+            for row in (0, 1, 2, 3):
+                for column in range(10):
+                    for mode in range(10):
+                        state.target_x = column * 51 + 35
+                        state.animation_state = mode
+                        motion = TerrainMotion(room, row)
+                        self.assertEqual(self.plates.fingers_under_gate((0, 15), state, motion, record),
+                                         room == 0 and row == 2 and column in (5, 6) and mode in (2, 6))
+        state.animation_state = 6
+        state.target_x = 4 * 51 + 35
+        self.assertFalse(self.plates.fingers_under_gate((0, 15), state, TerrainMotion(0, 2), record))
+        record.offset_x = 51
+        state.facing = 1
+        self.assertTrue(self.plates.fingers_under_gate((0, 15), state, TerrainMotion(0, 2), record))
+        for missing in ((None, TerrainMotion(0, 2), record), (state, None, record),
+                        (state, TerrainMotion(0, 2), None)):
+            self.assertFalse(self.plates.fingers_under_gate((0, 15), *missing))
+
+    def test_gate_does_not_hurt_fingers_before_finishing_or_when_opening(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        state = SequenceState(25, animation_state=6, target_x=5 * 51 + 35)
+        motion = TerrainMotion(0, 2)
+        for phase, position, expected in ((1, 8, (17,)), (4, 80, ()),
+                                           (2, 180, (18,)), (3, 180, (18,)), (0, 255, (18,))):
+            with self.subTest(phase=phase, position=position):
+                self.plates.foreground[0, 15] = 0x300 | position
+                self.plates.active[0, 15] = phase
+                self.assertEqual(self.plates.advance(self.terrain, state, motion, record), expected)
+
     def test_crushing_proximity_crosses_horizontal_room_links_but_not_vertical_ones(self):
         struct.pack_into('>H', self.level, 0x2080, 2)
         struct.pack_into('>H', self.level, 0x2082, 3)

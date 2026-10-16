@@ -197,6 +197,41 @@ class SceneAudioTests(unittest.TestCase):
         return [call.args[1] for call in self.scene.audio.playback.play.call_args_list
                 if call.args[0] == "effect"]
 
+    def test_room_23_gate_closing_on_hanging_fingers_plays_ouch_without_damage(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.render = Mock()
+        for phase, position in ((1, 4), (4, 40)):
+            with self.subTest(phase=phase):
+                scene.jump_to_room(22, row=0, x=410, facing=0)
+                plates = scene.game.caverns.plates
+                plates.foreground[22, 1] = 0x200 | 184
+                scene.horizontal_key(None, -1, True)
+                self.tick(6)
+                scene.up_key(None)
+                scene.shift_held = True
+                for _ in range(25):
+                    self.tick()
+                    if scene.native_ledge:
+                        break
+                self.assertTrue(scene.native_ledge)
+                scene.set_key_state('up', False)
+                scene.horizontal_key(None, -1, False)
+                self.tick(14)
+                self.assertEqual(scene.action, 91)
+                scene.audio.reset()
+                scene.audio.playback.reset_mock()
+                life = scene.combat.player.life
+                plates.foreground[22, 1] = 0x200 | position
+                plates.active[22, 1] = phase
+                self.tick()
+                self.assertEqual(self.effects(), [29])
+                self.assertEqual(plates.foreground[22, 1], 0x200)
+                self.tick(12)
+                self.assertEqual(self.effects(), [29])
+                self.assertEqual(scene.combat.player.life, life)
+                self.assertTrue(scene.ledge_hanging)
+
     def test_window_escape_plays_glass_and_landing_without_buffered_events(self):
         self.scene.audio.add_sound = Mock(wraps=self.scene.audio.add_sound)
         self.scene.restart_opening()

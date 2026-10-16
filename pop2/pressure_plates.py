@@ -145,6 +145,18 @@ class PressurePlates:
         foot = character_column(floor_contact_x(state.target_x, state.facing, record))
         return row == motion.row and abs(column - foot) <= 1
 
+    @staticmethod
+    def fingers_under_gate(key, state, motion, record):
+        # CheckSquishedFingers 5:153c: compare linear cells in the copied
+        # player's room; neither facing nor a climb request is required.
+        if state is None or motion is None or record is None:
+            return False
+        room, cell = key
+        if room != motion.room or state.animation_state not in (2, 6):
+            return False
+        foot = character_column(floor_contact_x(state.target_x, state.facing, record))
+        return motion.row * 10 + foot in (cell + 10, cell + 11)
+
     def advance(self, terrain, state=None, motion=None, record=None):
         self.triggered.clear()
         cues = []
@@ -190,6 +202,8 @@ class PressurePlates:
                 position -= (0, 0, 0, 20, 40, 60, 80, 100, 120)[phase]
                 if position <= 0:
                     position, phase = 56 if squashing else 0, -1
+                    if not squashing and self.fingers_under_gate(key, state, motion, record):
+                        cues.append(29)
                     cues.append(20)
             elif position == 255:
                 phase = -1
@@ -200,6 +214,8 @@ class PressurePlates:
                     if position <= 0:
                         position, phase = 56 if squashing else 0, -1
                         cues.append(18)
+                        if self.fingers_under_gate(key, state, motion, record):
+                            cues.append(29)
                     elif position < 184:
                         phase = 1
                         cues.append(17)
