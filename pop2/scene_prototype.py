@@ -661,10 +661,12 @@ class ScenePrototype(WindowControls):
         if (not previous_direction or self.horizontal_input or not self.up_held
                 or self.sword_drawn or self._combat_controls_locked()
                 or self._opening_active() or self.native_ledge
-                or self.sequence_state.source_sequence_id not in (RUN_JUMP_SEQUENCE, 46, 47)):
+                or self.sequence_state.source_sequence_id not in (
+                    RUN_SEGMENT_SEQUENCES | {JUMP_FORWARD_SEQUENCE, RUN_JUMP_SEQUENCE, 46, 47})):
             return
-        # Releasing the horizontal half of a held jump chord requests Up next;
-        # wall contact alone must not replay the consumed takeoff command.
+        # Releasing the horizontal half of a held Up chord requests Up next,
+        # during either jump or a run. Wall contact alone must not replay
+        # the consumed takeoff command.
         self.jump_started_for_press = True
         self.buffer_input(BufferedCommand("jump"))
 
