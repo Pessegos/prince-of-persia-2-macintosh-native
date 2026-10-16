@@ -660,6 +660,30 @@ the actor-hit loop, and substitutes an equivalent LEVL read for one unsupported
 gate/plate mechanisms or complete collision parity. The user's entrance video
 was also checked visually for the shaking strip, opening and falling stone.
 
+### Collapsing Floors During Climb
+
+CheckFloor (4:35ba-3682) uses FRAM bit 0x40 during the late climb poses,
+not just after their link back to idle. The portable protected-ledge path
+now performs that same floor test while still bypassing ordinary free-fall
+movement and barrier bumps. StartFall also clears the portable climb/hang
+locks so the existing Shift/Catch controller can take over on later frames.
+The original RoofClimbingIntoShip exception (23:12ba), called at 4:3638,
+still exempts selected SEQS:59 in the ship room of environment 5; the moving
+ship is not represented by a supporting LEVL floor tile.
+
+In room 24, the loose floor disappears between poses 145 and 146. Previously
+the protected climb continued through pose 119, shifted X by another 12 pixels,
+and missed the next ledge. It now enters the fall at X=253, catches at X=219
+with Shift, and settles at X=223 before climbing the surviving platform.
+Without Shift it falls normally. No room-specific catch tolerance was added.
+
+Executing the original CheckFloor matched 120 combinations of pose, floor
+kind, facing and room used by the resource-free regression. That diagnostic
+intercepts StartFall at entry: it verifies floor-test dispatch, not the whole
+native fall/catch simulation. Integrated resource-backed tests cover the
+room-24 collapse, Shift catch, subsequent climb, no-Shift fall and an unchanged
+solid-platform climb. The two user recordings were also compared visually.
+
 ### Sword-Wall Contact
 
 The shared actor collision bounds now include the native attachment extension.

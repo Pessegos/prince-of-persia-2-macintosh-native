@@ -700,6 +700,66 @@ class RooftopSceneTests(unittest.TestCase):
         self.tick(3)
         self.assertFalse(self.scene.terrain_motion.falling)
 
+    def test_room_24_collapsing_climb_catches_the_next_ledge_with_shift(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.peaceful = True
+        scene.jump_to_room(23, row=1, x=285, facing=0)
+        scene.in_animation_tick = True
+        scene.up_held = scene.shift_held = True
+        self.assertTrue(scene.start_upper_ledge_jump())
+        with patch.object(scene, "render"):
+            self.tick(26)
+            self.assertEqual((scene.action, scene.player_x), (145, 253))
+            self.assertTrue(scene.ledge_climbing)
+            self.assertEqual(scene.level_map.tile(23, 4, 0).kind, 11)
+            self.tick()
+            self.assertEqual(scene.level_map.tile(23, 4, 0).kind, 0)
+            self.assertEqual((scene.action, scene.player_x), (102, 253))
+            self.assertTrue(scene.terrain_motion.falling)
+            self.assertFalse(scene.native_ledge or scene.ledge_hanging or scene.ledge_climbing)
+            self.assertFalse(scene.ledge_climb_requested)
+            self.tick(4)
+            self.assertEqual((scene.action, scene.player_x), (80, 219))
+            self.assertTrue(scene.native_ledge and scene.ledge_hanging)
+            self.assertFalse(scene.terrain_motion.falling)
+            self.assertEqual((scene.room_id, scene.terrain_motion.row), (23, 1))
+            # Holding Up can then finish climbing the surviving platform.
+            self.tick(30)
+        self.assertEqual((scene.action, scene.player_x, scene.terrain_motion.row), (15, 212, 0))
+        self.assertFalse(scene.terrain_motion.falling or scene.ledge_hanging)
+
+    def test_room_24_collapsing_climb_does_not_catch_without_shift(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.peaceful = True
+        scene.jump_to_room(23, row=1, x=285, facing=0)
+        scene.in_animation_tick = True
+        scene.up_held = True
+        self.assertTrue(scene.start_upper_ledge_jump())
+        with patch.object(scene, "render"):
+            self.tick(38)
+        self.assertTrue(scene.terrain_motion.falling)
+        self.assertFalse(scene.native_ledge or scene.ledge_hanging or scene.ledge_climbing)
+        self.assertEqual(scene.terrain_motion.row, 2)
+
+    def test_room_24_solid_platform_climb_still_finishes_normally(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.peaceful = True
+        scene.jump_to_room(23, row=1, x=285, facing=0)
+        # Same geometry with a permanent floor instead of the collapsing slab.
+        scene.game.caverns.loose.tiles[23, 4] = 1, 0
+        scene.in_animation_tick = True
+        scene.up_held = True
+        self.assertTrue(scene.start_upper_ledge_jump())
+        with patch.object(scene, "render"):
+            for _ in range(33):
+                self.tick()
+                self.assertFalse(scene.terrain_motion.falling)
+        self.assertEqual((scene.action, scene.player_x, scene.terrain_motion.row), (15, 265, 0))
+        self.assertFalse(scene.native_ledge or scene.ledge_hanging or scene.ledge_climbing)
+
     def test_cavern_late_down_matches_held_down_through_both_drops(self):
         traces = []
         scene = self.scene

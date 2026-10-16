@@ -168,13 +168,13 @@ class VerticalJumpTests(unittest.TestCase):
     def test_protected_climb_can_cut_without_running_free_fall_physics(self):
         struct.pack_into('>H', self.level, 0x2086, 2)
         for y, expected_row, expected_y in ((-14, 2, 0), (440, 0, -26)):
-            state = SequenceState(10, target_x=123, current_y=y-floor_y(-1),
+            state = SequenceState(10, action=135, target_x=123, current_y=y-floor_y(-1),
                                   vertical_velocity=8, actor_type=0)
             motion = TerrainMotion(0, -1)
             with patch.object(self.terrain, 'wall_correction') as wall:
                 events = RooftopPhysics(self.terrain).advance(
                     motion, SequenceRuntime({}, state), 123, (100, -80, 130, 10),
-                    protected=True)
+                    protected=True, frame_flags=0)
             self.assertEqual([event.kind for event in events], ['room'])
             self.assertEqual((motion.room, motion.row, state.current_y),
                              (1, expected_row, expected_y))
@@ -184,11 +184,11 @@ class VerticalJumpTests(unittest.TestCase):
 
     def test_protected_camera_cut_requires_live_player_and_enabled_cuts(self):
         for actor, dead, enabled in ((2, False, True), (0, True, True), (0, False, False)):
-            state = SequenceState(10, current_y=0, actor_type=actor)
+            state = SequenceState(10, action=135, current_y=0, actor_type=actor)
             motion = TerrainMotion(0, -1, dead=dead)
             events = RooftopPhysics(self.terrain).advance(
                 motion, SequenceRuntime({}, state), 123, (100, -80, 130, 10),
-                protected=True, cut_enabled=enabled)
+                protected=True, frame_flags=0, cut_enabled=enabled)
             self.assertEqual(events, ())
             self.assertEqual((motion.room, motion.row, state.current_y), (0, -1, 0))
 

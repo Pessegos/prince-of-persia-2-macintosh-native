@@ -7,7 +7,7 @@ from pop2.caverns import cavern_scene_signature, falling_floor_redraw_cells
 from pop2.loose_floors import FallingFloor, floor_hits_actor, rubble_tile
 from pop2.paths import ASSET_DIR
 from pop2.sequence_runtime import SequenceState, SequenceRuntime
-from pop2.terrain import LevelMap, TerrainMotion
+from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion
 from tools.extract_caverns import loose_floor_cells
 
 
@@ -54,6 +54,44 @@ class LooseFloorTests(unittest.TestCase):
         self.assertEqual(self.terrain.tile(0, 7, 0).foreground, 0x103)
         self.assertFalse(self.terrain.supports(0, 7, 0))
         self.assertEqual(self.loose.falling, [FallingFloor(0, 7, 0, 143)])
+
+    def test_protected_climb_checks_floor_flags_in_both_directions_and_other_rooms(self):
+        # CheckFloor 4:35ba does not exempt SEQS:10/235. Only FRAM bit 0x40
+        # makes late climb poses test their supporting floor.
+        physics = RooftopPhysics(self.terrain)
+        for room in (0, 5, 23, 31):
+            for facing in (0, 1):
+                for action, flags in ((91, 7), (135, 0), (140, 6), (141, 0x44), (146, 0xdc)):
+                    for kind in (0, 1, 11):
+                        with self.subTest(room=room, facing=facing, action=action, kind=kind):
+                            self.set_tile(room, 7, kind)
+                            record = SimpleNamespace(offset_x=flags & 63, aux=flags)
+                            state = SequenceState(10, action=action, facing=facing,
+                                                  target_x=383, current_x=383,
+                                                  animation_state=1, actor_type=0, level_kind=3)
+                            runtime = SequenceRuntime({7: (102,)}, state)
+                            motion = TerrainMotion(room, 0)
+                            events = physics.advance(motion, runtime, 383, (370, 20, 400, 106),
+                                                     protected=True, frame_record=record)
+                            falls = bool(flags & 0x40) and kind == 0
+                            self.assertEqual(motion.falling, falls)
+                            self.assertEqual([event.kind for event in events], ["fall"] if falls else [])
+                            self.assertEqual((state.action, motion.row, state.current_y),
+                                             (102, 1, -120) if falls else (action, 0, 0))
+
+    def test_floor_check_exempts_only_the_native_ship_boarding_sequence(self):
+        physics = RooftopPhysics(self.terrain)
+        for environment, room, selected in ((3, 18, 59), (5, 17, 59), (5, 18, 10), (5, 18, 59)):
+            for sequence in (selected, 235):
+                with self.subTest(environment=environment, room=room, selected=selected,
+                                  sequence=sequence):
+                    self.set_tile(room, 7, 0)
+                    state = SequenceState(sequence, action=141, selected_sequence_id=selected,
+                                          target_x=383, actor_type=0, level_kind=environment)
+                    motion = TerrainMotion(room, 0)
+                    runtime = SequenceRuntime({7: (102,)}, state)
+                    self.assertEqual(physics.check_floor(motion, runtime, 0x40, self.record),
+                                     (environment, room, selected) != (5, 18, 59))
 
     def test_native_falling_positions_and_lower_room_impact(self):
         # Executed CODE:5 FrameAdv order (MakeRubble, then AnimTrobs),

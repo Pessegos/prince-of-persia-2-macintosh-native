@@ -1910,6 +1910,8 @@ class ScenePrototype(WindowControls):
         self.combat.player.row = motion.row
         for event in events:
             if event.kind == "fall":
+                self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
+                self.ledge_climb_requested = False
                 # StartFall 4:4ca8-4cb2 puts the drawn sword away immediately.
                 self.sword_drawn = self.combat.player.sword_drawn = False
                 self.combat.player.recovering = False

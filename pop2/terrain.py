@@ -5,7 +5,7 @@ import struct
 
 from pop2.opponent_generation import character_column, EMPTY_TILES, WALL_TILES
 from pop2.mac_input import StepBoundary
-from pop2.harbor import WATER_ROOMS
+from pop2.harbor import SHIP_CLIMB_SEQUENCE, SHIP_ROOM, WATER_ROOMS
 
 
 TILE_WIDTH = 51
@@ -672,6 +672,26 @@ class RooftopPhysics:
         motion.falling = True
         self.select(runtime, sequence)
 
+    def check_floor(self, motion, runtime, frame_flags, frame_record):
+        # CheckFloor 4:35ba tests FRAM bit 0x40, including late climb poses.
+        if not frame_flags & 0x40:
+            return False
+        state = runtime.state
+        # CheckFloor 4:3638 / RoofClimbingIntoShip 23:12ba: the ship is
+        # moving scenery, not a supporting tile in the level map.
+        if (state.level_kind == 5 and motion.room == SHIP_ROOM
+                and state.source_sequence_id == SHIP_CLIMB_SEQUENCE):
+            return False
+        contact = (floor_contact_x(state.target_x, state.facing, frame_record)
+                   if frame_record is not None else state.target_x)
+        tile = self.map.tile(motion.room, character_column(contact), motion.row)
+        if frame_record is not None and tile.kind in WALL_TILES:
+            tile = self.map.align_wall(motion.room, motion.row, state, frame_record)
+        if tile.kind in EMPTY_TILES or (tile.kind == 30 and (tile.foreground & 15) < 2):
+            self.start_fall(motion, runtime)
+            return True
+        return False
+
     def advance(self, motion, runtime, old_x, bounds, sword_drawn=False, protected=False,
                 frame_flags=0x40, frame_record=None, bounds_for_state=None, cut_enabled=True,
                 alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None):
@@ -679,6 +699,12 @@ class RooftopPhysics:
         if motion.dead:
             return ()
         if protected:
+            # Hanging poses have no floor flag. Late climb poses do, and a
+            # disappearing slab must interrupt them before their idle link.
+            if frame_record is not None:
+                frame_flags = frame_record.aux
+            if self.check_floor(motion, runtime, frame_flags, frame_record):
+                return (TerrainEvent("fall"),)
             # A held/climbing ledge bypasses free-fall physics, not CutChar.
             if (cut_enabled and state.actor_type in (0, None)
                     and (self.cut_up(motion, state) or self.cut_down(motion, state))):
@@ -818,19 +844,9 @@ class RooftopPhysics:
             frame_record = self.frames[state.action]
         if frame_record is not None:
             frame_flags = frame_record.aux
-        contact_x = (floor_contact_x(state.target_x, state.facing, frame_record)
-                     if frame_record is not None else state.target_x)
-        column = character_column(contact_x)
         if not motion.falling:
-            # CheckFloor, CODE:4 0x35ba: FRAM bit 0x40 enables floor contact.
-            # In particular the jump's airborne poses must not test the ground.
-            if frame_flags & 0x40:
-                tile = self.map.tile(motion.room, column, motion.row)
-                if frame_record is not None and tile.kind in WALL_TILES:
-                    tile = self.map.align_wall(motion.room, motion.row, state, frame_record)
-                if tile.kind in EMPTY_TILES or (tile.kind == 30 and (tile.foreground & 15) < 2):
-                    self.start_fall(motion, runtime)
-                    events.append(TerrainEvent("fall"))
+            if self.check_floor(motion, runtime, frame_flags, frame_record):
+                events.append(TerrainEvent("fall"))
             return tuple(events)
 
         # FrameAdv 2:6372-63a6 runs AnimChar/Move before Falling/Catch.
