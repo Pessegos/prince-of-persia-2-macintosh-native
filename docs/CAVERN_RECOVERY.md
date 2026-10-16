@@ -95,6 +95,57 @@ corrected cell drawing and live torches, version 2 lacks flask library identity,
 and version 1 supplies only the entrance. F3 can preview each room, placing
 the Prince on a basic floor tile from LEVL rather than using per-room positions.
 
+## Retained Scenery And Whole-Level Audit
+
+The transparent pockets at the left edge of wall SHAP:3546 are not missing
+exported pieces. DoCleanCut (2:606e-60c2) builds and paints a new room without
+first erasing the scenery buffer. Draw mode 16 skips zero pixels, whereas mode
+0 copies black as well (17:5ae6-5b1a). Unpainted pockets can therefore show
+scenery from more than one room ago. A fresh black-backed preview is not a
+path-independent reference for those pixels.
+
+The user's Room 28 Macintosh capture matches a retained-scenery replay of
+Rooms 26 -> 27 -> 28. Its middle pocket retains the original SHAP:3502 texture;
+the upper pocket also retains part of Room 26's torch artwork. This explains
+why matching only the room's exported commands left black gaps in the port.
+It does not establish that this dependency was intentional artwork design.
+
+`CavernRoom.retained_mask` records pixels untouched by both scenery layers.
+`LevelRenderer.enter_room` fills only those pixels from the previous scenery
+snapshot. Ordinary room lookups and immutable art caches do not advance that
+history. The live snapshot includes animated scenery before drawing actors,
+menus or HUD. Within the same room, gate/floor variants keep the entry underlay
+instead of accumulating previous variant frames. Revisits use the newly
+preceding scene, not the room's first cached appearance. No room-specific
+texture placement, collision change or resource reimport is required.
+
+To repeat the static audit with the original executable resource fork:
+
+```powershell
+python -m tools.audit_caverns --program "path\to\Prince of Persia 2.bin"
+```
+
+The reference executes original CODE:3 1c64 as one whole-room traversal,
+including native GetCells/neighbor preparation and upper-border handling.
+It is separate from the optimized exporter's Python cell traversal. The
+audit checks admitted command order, IDs, coordinates, clips, transfer modes
+and libraries against the installed export, then compares static compositions
+and retained scenery on every directed LEVL room link.
+
+The current original resources match all 3,586 commands in 32 rooms and all
+86 directed cuts, with zero differing static pixels in the checked scope.
+Eleven rooms have some unpainted scenery pixels; retention is a general rule,
+not a Room 28 patch. Results and native/port/diff PNGs are written to
+`rendered/cavern-background-audit/`, with source hashes for reproducibility.
+
+Scope limits: the audit shares the SHAP decoder and modeled drawing primitives
+with import; it is not an independent Macintosh rasterizer. Actor sprites
+(including skeletons), flask rectangles, animated torches, live lava/its
+intentional overhaul and HUD are excluded from pixel comparison. Dynamic
+gate/floor states have separate tests; this audit does not certify every
+animation frame or gameplay state. The supplied Room 28 capture additionally
+checks the real-rendered retained pockets along the recorded approach.
+
 ## Lava
 
 The Macintosh/port lava recordings show native Room 6's bottom-row pool.

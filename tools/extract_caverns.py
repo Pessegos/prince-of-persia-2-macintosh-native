@@ -90,11 +90,11 @@ class CavernRecovery:
 
 
 def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=None,
-                 floor_redraw=False, *, _machine=None):
+                 floor_redraw=False, *, _machine=None, _native_scene=False):
     if _machine is None:
         with CavernRecovery(program, caverns, prince) as machine:
             return recover_room(program, caverns, level, room_id, prince, climb_action,
-                                floor_redraw, _machine=machine)
+                                floor_redraw, _machine=machine, _native_scene=_native_scene)
 
     from unicorn.m68k_const import (
         UC_M68K_REG_A5, UC_M68K_REG_A7,
@@ -151,7 +151,6 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     commands = []
     command_kinds = []
     torches = []
-    layer = 'back'
     history = []
     previous_items = {}
     back_items = []
@@ -216,6 +215,8 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             result = 0
         elif segment == 3 and offset == 4:
             fields = struct.unpack('>19h', cpu.mem_read(info, 38))
+            draw_column, draw_row = word(a5 - 0x45f8), word(a5 - 0x45f6)
+            layer = 'front' if fields[5] in (1, 2) else 'back'
             library = fields[0]
             if library not in (1, 4):
                 raise ValueError(f'Unsupported cavern shape library {library}')
@@ -290,7 +291,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         if argument is not None:
             put_word(stack + 4, argument)
         try:
-            cpu.emu_start(bases[segment] + entry, end, count=200000)
+            cpu.emu_start(bases[segment] + entry, end, count=1000000 if _native_scene else 200000)
         except Exception as error:
             pc = cpu.reg_read(UC_M68K_REG_PC)
             raise ValueError(f'Cavern renderer failed at {pc:#x}: {history}') from error
@@ -303,7 +304,12 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     elif floor_redraw:
         passes = (('front', 0x371c, 2),)
     try:
-        for draw_row in (2, 1, 0, -1):
+        if _native_scene:
+            if climb_action is not None or floor_redraw:
+                raise ValueError('The whole-scene audit requires a full repaint')
+            execute(3, 0x1ab0)
+            execute(3, 0x1c64)
+        for draw_row in (() if _native_scene else (2, 1, 0, -1)):
             if draw_row == -1:
                 # RedrawCellFast 3:1cb6-1cda draws the upper room's last row,
                 # with the current room below it. Missing rooms use GetCells'

@@ -346,7 +346,7 @@ class ScenePrototype(WindowControls):
             game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'))
             game.caverns.configure_torches(renderer.cavern_program.get('torches', {}))
             game.caverns.configure_lava(renderer.cavern_program.get('lava'))
-        room = renderer.room(game.room_id, game.caverns)
+        room = renderer.enter_room(game.room_id, game.caverns)
         self.game, self.level_renderer = game, renderer
         self.palette, self.sword_palette = palette, sword_palette
         self.guard_art, self.health_art, self.hit_art = guard_art, health_art, hit_art
@@ -1901,7 +1901,7 @@ class ScenePrototype(WindowControls):
             if self.run_start_x is not None:
                 self.run_start_x += dx
             self.room_id = motion.room
-            room = self.room_cache[self.room_id]
+            room = self.level_renderer.enter_room(self.room_id, self.game.caverns)
             self.background, self.foreground = room.background, room.foreground
             self.combat.enter_room(self.room_id, motion.row)
             if self.harbor is not None:
@@ -2141,7 +2141,7 @@ class ScenePrototype(WindowControls):
             self.sequence_state.sound_events.extend(self.game.caverns.advance())
             self.game.caverns.advance_torches(
                 self.level_renderer.cavern_program.get('torches', {}).get(str(self.room_id), ()))
-            room = self.level_renderer.room(self.room_id, self.game.caverns)
+            room = self.level_renderer.enter_room(self.room_id, self.game.caverns)
             self.background, self.foreground = room.background, room.foreground
         desert = getattr(self.game, "desert", None)
         if desert is not None and self.terrain_motion is not None:
@@ -2596,7 +2596,7 @@ class ScenePrototype(WindowControls):
             self.game.caverns.configure_torches(self.level_renderer.cavern_program.get('torches', {}))
             self.game.caverns.configure_lava(self.level_renderer.cavern_program.get('lava'))
         self.reset_level_controls()
-        room = (self.level_renderer.room(self.room_id, self.game.caverns)
+        room = (self.level_renderer.enter_room(self.room_id, self.game.caverns)
                 if hasattr(self, "level_renderer") else None)
         if room is not None:
             self.background, self.foreground = room.background, room.foreground
@@ -2640,7 +2640,7 @@ class ScenePrototype(WindowControls):
                      preserve_checkpoint=False):
         if self.level_map is None or not 0 <= room_id < 32 or not 0 <= row < 3:
             raise ValueError("Invalid level, room or floor")
-        room = self.level_renderer.room(room_id, self.game.caverns)
+        self.level_renderer.room(room_id, self.game.caverns)
         if x is None:
             columns = [column for column in range(10)
                        if self.level_map.tile(room_id, column, row).kind == 1]
@@ -2657,6 +2657,7 @@ class ScenePrototype(WindowControls):
                         self.sequence_state.facing if facing is None else facing,
                         reset_guards, preserve_checkpoint)
         self.reset_level_controls()
+        room = self.level_renderer.enter_room(room_id, self.game.caverns)
         self.background, self.foreground = room.background, room.foreground
         self.player_x, self.action = x, 15
         if getattr(self, "audio", None) is not None:
@@ -2909,6 +2910,7 @@ class ScenePrototype(WindowControls):
             ), curtain)
         combat = getattr(self, "combat", None)
         frame = Image.alpha_composite(frame, self.foreground)
+        self.level_renderer.remember_scenery(frame)
         hide_guards = getattr(self, "peaceful", False) and getattr(self, "demo", None) is None
         if combat is not None and not hide_guards:
             for guard in combat.visible_guards():

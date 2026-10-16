@@ -54,6 +54,7 @@ def falling_floor_redraw_cells(x, y):
 class CavernRoom(OpeningRoom):
     climb_redraw: dict | None = None
     floor_redraw: dict | None = None
+    retained_mask: Image.Image | None = None
 
     def draw_actor_foreground(self, frame, state, bounds):
         # QuickFloor 2:69b6-69e2 marks DrawHalf only for right-facing
@@ -448,13 +449,16 @@ def draw_cavern_darts(frame, room_id, state):
 def cavern_command_sprite(command, resources, palette, shapes):
     library = command[7] if len(command) >= 8 else 4
     index, flags = command[1], command[4]
-    key = (library, index, flags) if library == 1 else index
+    key = (library, index, flags) if library == 1 or flags == 0 else index
     if key not in shapes:
         if library == 1:
             source, colors = flask_assets()
             shapes[key] = flask_shape(source['SHAP'][index]['data'], colors, flags)
         elif library == 4:
             shapes[key] = decode_shap(resources['SHAP'][index]['data'], palette)
+            if flags == 0:
+                # Native transfer mode 0 copies zero/black too; mode 16 masks it.
+                shapes[key].putalpha(255)
         else:
             raise ValueError(f'Unsupported cavern shape library {library}')
     return shapes[key]
@@ -535,7 +539,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     if pressure_key:
         records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room_id), ())
         commands = pressure_drawing_commands(commands, records, pressure_key, resources)
-    background = Image.new('RGBA', (510, 365), (0, 0, 0, 255))
+    background = Image.new('RGBA', (510, 365))
     foreground = Image.new('RGBA', background.size)
     masks = {row: Image.new('L', background.size) for row in range(-1, 5)}
     cell_masks = {} if program.get('version') >= 6 else None
@@ -580,4 +584,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
         if clipped is not None:
             floors.setdefault(tuple(command[8:10]), []).append(clipped)
-    return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks, redraw, floors)
+    retained = ImageChops.invert(ImageChops.lighter(
+        background.getchannel('A'), foreground.getchannel('A')))
+    background = Image.alpha_composite(Image.new('RGBA', background.size, 'black'), background)
+    return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
+                      redraw, floors, retained)

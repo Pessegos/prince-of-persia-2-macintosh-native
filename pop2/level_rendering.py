@@ -1,5 +1,9 @@
 """Per-level scenery caches, separate from gameplay and the window host."""
 
+from dataclasses import replace
+
+from PIL import Image
+
 from pop2.render_opening import (
     ROOF_DECORATIONS, build_opening_room, draw_harbor, rooftop_scene_data,
 )
@@ -14,6 +18,9 @@ class LevelRenderer:
         self.desert_rooms = {}
         self.cavern_frames = {}
         self.cavern_program = None
+        self.cavern_display = None
+        self.cavern_underlay = None
+        self.cavern_scenery = None
         if self.level.number == 3:
             from pop2.caverns import cavern_assets
 
@@ -58,6 +65,32 @@ class LevelRenderer:
                 self.rooms[room_id] = build_opening_room(include_curtain=False, room_id=room_id,
                                                         level_resource_id=self.level.resource_id)
         return self.rooms[room_id]
+
+    def enter_room(self, room_id, caverns=None):
+        room = self.room(room_id, caverns)
+        if self.level.number != 3:
+            return room
+        display = self.cavern_display
+        if display is not None and display[0] == room_id and display[1] is room:
+            return display[2]
+        if display is None or display[0] != room_id:
+            # DoCleanCut (2:608c) repaints without erasing the scenery buffer.
+            # Only pixels untouched by BOTH new layers retain the previous room.
+            self.cavern_underlay = self.cavern_scenery
+        if self.cavern_underlay is not None and room.retained_mask is not None:
+            background = room.background.copy()
+            background.paste(self.cavern_underlay, (0, 0), room.retained_mask)
+            resolved = replace(room, background=background)
+        else:
+            resolved = room
+        self.cavern_display = room_id, room, resolved
+        self.cavern_scenery = Image.alpha_composite(resolved.background, resolved.foreground)
+        return resolved
+
+    def remember_scenery(self, frame):
+        if self.level.number == 3:
+            # Snapshot before actors/HUD; later drawing must not modify this image.
+            self.cavern_scenery = frame.copy()
 
     def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
         if self.level.number == 3 and caverns is not None and not front:

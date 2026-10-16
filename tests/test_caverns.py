@@ -6,12 +6,13 @@ import unittest
 from unittest.mock import Mock, patch
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 from pop2.caverns import (CavernRoom, cavern_clip_top, cavern_room, flask_shape,
                          flask_assets, floor_redraw_cells)
 from pop2.cavern_state import CavernState
 from pop2.level_data import LevelDefinition
+from pop2.level_rendering import LevelRenderer
 from pop2.paths import ASSET_DIR
 from pop2.render_opening import (OpeningRoom, load_resource_file, decode_shap,
                                  decode_ctbl, native_buffer_cells)
@@ -19,6 +20,7 @@ from pop2.terrain import LevelMap, Tile
 from tools.render_cavern_map import room_positions
 from tools.extract_caverns import (CavernRecovery, clip_climbing, exit_closing_frames,
                                    recover_climbing, recover_room, recovery_inputs)
+from tools.audit_caverns import pixel_difference
 
 
 class CavernClipTests(unittest.TestCase):
@@ -112,6 +114,73 @@ class CavernClipTests(unittest.TestCase):
 
 
 class CavernDrawingTests(unittest.TestCase):
+    def test_scenery_audit_counts_changed_pixels_and_excludes_only_requested_rectangles(self):
+        before = Image.new('RGBA', (4, 3), 'black')
+        after = before.copy()
+        after.putpixel((0, 0), (1, 0, 0, 255))
+        after.putpixel((2, 1), (0, 0, 1, 255))
+        self.assertEqual(pixel_difference(before, after)[0], 2)
+        count, difference = pixel_difference(before, after, [(1, 2, 2, 3)])
+        self.assertEqual(count, 1)
+        self.assertEqual(difference.getbbox(), (0, 0, 1, 1))
+
+    def test_unpainted_mask_distinguishes_transparency_from_native_black_copy(self):
+        def shape(index):
+            return {'data': struct.pack('>HhhHHH', 0xb000, 1, 1, 1, 0, 0) + bytes([index])}
+
+        commands = [['back', 3501, 0, 1, 16, 0],
+                    ['front', 3502, 1, 1, 16, 0],
+                    ['front', 3502, 2, 1, 0, 0]]
+        export = {'version': 14, 'level': 3, 'rooms': {'0': commands}}
+        resources = {'SHAP': {3501: shape(1), 3502: shape(0)}}
+        with patch('pop2.caverns.cavern_assets', return_value=(
+                export, resources, {1: (150, 100, 50, 255)}, {})):
+            room = cavern_room(0)
+        self.assertEqual([room.retained_mask.getpixel((x, 0)) for x in range(4)],
+                         [0, 255, 0, 255])
+        self.assertEqual(room.foreground.getpixel((1, 0)), (0, 0, 0, 0))
+        self.assertEqual(room.foreground.getpixel((2, 0)), (0, 0, 0, 255))
+
+    def test_room_cuts_keep_only_untouched_scenery_without_mutating_cached_art(self):
+        mask = Image.new('L', (4, 3))
+        mask.putpixel((1, 1), 255)
+        def room(color):
+            return CavernRoom(Image.new('RGBA', mask.size, color), Image.new('RGBA', mask.size),
+                              {}, (), (), 0, 3, retained_mask=mask)
+
+        blue, red, green = room('blue'), room('red'), room('green')
+        with patch('pop2.caverns.cavern_assets', return_value=({}, None, None, None)):
+            renderer = LevelRenderer(SimpleNamespace(number=3, kind=3), preload_room=False)
+        with patch.object(renderer, 'room', side_effect=[blue, red, red, green, red]):
+            renderer.enter_room(0)
+            first = renderer.enter_room(1)
+            self.assertEqual(first.background.getpixel((1, 1)), (0, 0, 255, 255))
+            self.assertEqual(first.background.getpixel((2, 1)), (255, 0, 0, 255))
+            self.assertEqual(red.background.getpixel((1, 1)), (255, 0, 0, 255))
+            self.assertIs(renderer.enter_room(1), first)
+            frame = green.background.copy()
+            renderer.enter_room(2)
+            renderer.remember_scenery(frame)
+            frame.putpixel((1, 1), (255, 255, 255, 255))
+            second = renderer.enter_room(1)
+            self.assertEqual(second.background.getpixel((1, 1)), (0, 128, 0, 255))
+            self.assertIsNot(first, second)
+
+    def test_same_room_variants_use_the_entry_underlay_not_the_previous_gate_frame(self):
+        def room(color, retained=False):
+            return CavernRoom(Image.new('RGBA', (4, 3), color), Image.new('RGBA', (4, 3)),
+                              {}, (), (), 0, 3,
+                              retained_mask=Image.new('L', (4, 3), 255 if retained else 0))
+
+        blue, closed, opened = room('blue'), room('red'), room('black', retained=True)
+        with patch('pop2.caverns.cavern_assets', return_value=({}, None, None, None)):
+            renderer = LevelRenderer(SimpleNamespace(number=3, kind=3), preload_room=False)
+        with patch.object(renderer, 'room', side_effect=[blue, closed, opened]):
+            renderer.enter_room(0)
+            renderer.enter_room(1)
+            result = renderer.enter_room(1)
+        self.assertEqual(result.background.getpixel((1, 1)), (0, 0, 255, 255))
+
     def test_shared_recovery_restores_ram_registers_and_releases_hooks_on_failure(self):
         from unicorn.m68k_const import UC_M68K_REG_D1
 
@@ -376,6 +445,47 @@ class CavernDrawingTests(unittest.TestCase):
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class OriginalCavernClimbTests(unittest.TestCase):
+    def test_live_scenery_retention_does_not_capture_the_prince_or_menu(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(3)
+        scene.peaceful = True
+        for room in (25, 26, 27):
+            scene.jump_to_room(room, row=2, x=147, facing=1)
+        snapshot = scene.level_renderer.cavern_scenery
+        self.assertEqual(snapshot.getpixel((257, 160)), (41, 16, 8, 255))
+        self.assertEqual(snapshot.getpixel((307, 40)), (82, 41, 24, 255))
+        capture = scene.screenshot_viewport.crop((1, 0, 511, 365))
+        self.assertIsNotNone(ImageChops.difference(snapshot.convert('RGB'),
+                                                  capture.convert('RGB')).getbbox())
+        before = snapshot.tobytes()
+        with self.assertRaises(ValueError):
+            scene.jump_to_room(25, row=2, x=510)
+        self.assertEqual(scene.level_renderer.cavern_scenery.tobytes(), before)
+        scene.open_game_menu()
+        self.assertEqual(scene.level_renderer.cavern_scenery.tobytes(), before)
+
+    def test_original_room_28_wall_holes_retain_the_room_26_scenery_on_the_native_route(self):
+        renderer = LevelRenderer(LevelDefinition.read(load_resource_file('Prince.rsrc'), 3),
+                                 preload_room=False)
+        snapshots = {room: renderer.room(room).background.tobytes() for room in (25, 26, 27)}
+        renderer.enter_room(25)
+        original_torch = cavern_room(25, animated=False)
+        renderer.remember_scenery(Image.alpha_composite(
+            original_torch.background, original_torch.foreground))
+        for room in (26, 27):
+            art = renderer.enter_room(room)
+        frame = Image.alpha_composite(art.background, art.foreground)
+        self.assertEqual(frame.getpixel((257, 160)), (41, 16, 8, 255))
+        self.assertEqual(frame.getpixel((307, 40)), (82, 41, 24, 255))
+        for room, pixels in snapshots.items():
+            self.assertEqual(renderer.room(room).background.tobytes(), pixels)
+        direct = LevelRenderer(renderer.level, preload_room=False).enter_room(27)
+        self.assertEqual(direct.background.getpixel((257, 160)), (0, 0, 0, 255))
+        self.assertEqual(direct.background.getpixel((307, 40)), (0, 0, 0, 255))
+
     def test_upper_platform_hides_the_turban_before_the_catch(self):
         from tests.test_terrain import RooftopSceneTests
 
