@@ -2,8 +2,9 @@ import random
 import struct
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
-from PIL import ImageChops
+from PIL import Image, ImageChops
 
 from pop2.cavern_state import CavernState
 from pop2.paths import ASSET_DIR
@@ -34,6 +35,21 @@ class PotionTests(unittest.TestCase):
         for kind in range(8):
             for phase in range(32):
                 self.assertEqual(potion_kind(0xab00 | kind << 5 | phase), kind)
+
+    def test_front_pass_draws_flasks_before_the_front_spikes(self):
+        from pop2.level_rendering import LevelRenderer
+
+        renderer = LevelRenderer.__new__(LevelRenderer)
+        renderer.level = SimpleNamespace(number=3)
+        renderer.cavern_map = self.terrain
+        actors = Image.new('RGBA', (2, 2), 'blue')
+        flasks = Image.new('RGBA', (2, 2), 'red')
+        with (patch('pop2.caverns.draw_cavern_flasks', return_value=flasks) as draw,
+              patch('pop2.caverns.draw_cavern_spikes', return_value=flasks) as spikes):
+            self.assertIs(renderer.animated_layer(actors, 0, None, front=True,
+                                                 caverns=self.caverns), flasks)
+        draw.assert_called_once_with(actors, 0, self.caverns, self.terrain)
+        spikes.assert_called_once_with(flasks, 0, self.caverns, self.terrain, front=True)
 
     def test_pickup_alignment_matches_native_standing_and_crouched_anchors(self):
         motion = SimpleNamespace(room=0, row=1)
@@ -136,6 +152,29 @@ class ImportedPotionTests(unittest.TestCase):
         for shape in (3001, 3002):
             sprite = flask_shape(resources['SHAP'][shape]['data'], colors, 16)
             self.assertNotIn((255, 0, 255, 255), [color for _count, color in sprite.getcolors()])
+
+    def test_all_flasks_and_particles_stay_in_front_of_overlapping_prince(self):
+        from pop2.caverns import draw_cavern_flasks
+        from pop2.scene_prototype import ROOM_ORIGIN_X
+
+        s = self.make_scene()
+        for room, cell in s.game.caverns.potions.phases:
+            row, column = divmod(cell, 10)
+            for facing in (0, 1):
+                s.jump_to_room(room, row=row, x=column * 51 + 35, facing=facing)
+                original = s.game.caverns.potions.phases[room, cell]
+                for phase in (0, 10, 14, 24):
+                    with self.subTest(room=room + 1, facing=facing, phase=phase):
+                        s.game.caverns.potions.phases[room, cell] = original & ~31 | phase
+                        expected = Image.new('RGBA', s.background.size)
+                        draw_cavern_flasks(expected, room, s.game.caverns, s.level_map)
+                        self.assertIsNotNone(expected.getbbox())
+                        s.render()
+                        actual = s.screenshot_viewport.crop((
+                            ROOM_ORIGIN_X, 0, ROOM_ORIGIN_X + expected.width, expected.height))
+                        difference = ImageChops.difference(actual.convert('RGB'), expected.convert('RGB'))
+                        self.assertIsNone(ImageChops.multiply(
+                            difference, expected.getchannel('A').convert('RGB')).getbbox())
 
     def test_each_real_potion_can_be_drunk_from_both_sides_with_native_timing(self):
         s = self.make_scene()
@@ -264,16 +303,14 @@ class ImportedPotionTests(unittest.TestCase):
             self.assertIsNone(ImageChops.difference(sprite, expected).convert('RGB').getbbox())
 
     def test_consumed_flask_is_removed_from_static_and_animated_scenery(self):
-        from pop2.caverns import draw_cavern_flasks
-
         s = self.make_scene()
         s.jump_to_room(9, row=1, x=430, facing=0)
         before = s.background.copy()
-        draw_cavern_flasks(before, 9, s.game.caverns, s.level_map)
+        s.level_renderer.animated_layer(before, 9, None, front=True, caverns=s.game.caverns)
         self.assertIsNotNone(ImageChops.difference(before, s.background).convert('RGB').getbbox())
         s.game.caverns.potions.take(s.level_map.tile(9, 7, 1))
         after = s.background.copy()
-        draw_cavern_flasks(after, 9, s.game.caverns, s.level_map)
+        s.level_renderer.animated_layer(after, 9, None, front=True, caverns=s.game.caverns)
         self.assertIsNone(ImageChops.difference(after, s.background).convert('RGB').getbbox())
 
 

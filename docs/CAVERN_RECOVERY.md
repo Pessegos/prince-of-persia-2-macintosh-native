@@ -790,6 +790,10 @@ uses Prince SHAPs 3001/3002 and two monochrome layers from 3003-3022. The
 second half is mirrored; phases 10-13 and 24-27 emit no particles. The native
 28-update cycle and TriggerFlask's inclusive Rnd(26)+1 initialization are
 retained. Static scenery and floor/climb repaints omit these dynamic items.
+The live flask bodies and particles are drawn in the front animation pass,
+after the Prince and hit effects, rather than underneath the actor. A pixel
+regression covers all seven flasks, both facings and active/quiet phases in
+both halves of the cycle; collection also removes them from this front pass.
 
 TryPickUp/PickItUp (6:1350/13d0) select the current or forward flask, align the
 standing/crouched Prince, then select SEQS 50/78. RemoveObj (4:406c) replaces

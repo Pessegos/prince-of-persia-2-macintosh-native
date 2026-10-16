@@ -104,11 +104,12 @@ class LevelRenderer:
             if self.cavern_map is None:
                 self.cavern_map = LevelMap(self.level.data)
             if front:
+                # Flask bodies and particles belong in front of actors.
+                frame = draw_cavern_flasks(frame, room_id, caverns, self.cavern_map)
                 return draw_cavern_spikes(frame, room_id, caverns, self.cavern_map, front=True)
             frame = draw_cavern_torches(frame, room_id, caverns)
             frame = draw_cavern_lava(frame, room_id, caverns)
             frame = draw_cavern_darts(frame, room_id, caverns)
-            frame = draw_cavern_flasks(frame, room_id, caverns, self.cavern_map)
             frame = draw_cavern_spikes(frame, room_id, caverns, self.cavern_map)
             return draw_cavern_falling(frame, room_id, caverns, self.level.data,
                                        self.room(room_id, caverns))
