@@ -318,9 +318,30 @@ Room 17 barrier planes. Tests cover closed/open/partial phases, low versus
 standing poses, selected-sequence exceptions, both facings, all nine native
 level-three gates and running/Shift-walking at the recorded gate.
 
-The pressure-plate controller below now supplies the current gate phase.
-GateBarrToStandUp's separate crouch-rise controller and closing-gate actor
-crushing remain outside this recovery.
+The pressure-plate controller below supplies the current gate phase.
+GateBarrToStandUp (4:5baa-5c56) now keeps a crouched Prince below a partially
+open gate. It tests the original directional anchor band for phases 1-183,
+not a fixed standing-height threshold; crawling away remains possible.
+
+CheckGateForKid (4:60e4-61ec) tests current/behind/ahead tiles and overlap in
+both consecutive collision buffers. Contact from below requests SEQS:50 on
+the next update. If the low pose no longer fits a partially closed cavern
+gate, CrushedByGate (6:2ac8) selects SEQS:118 and removes 100 life. A fully
+closed gate or drawn sword uses the original nearest-side ejection instead.
+Dead actors, selected descent 68 and an already selected crush are exempt.
+
+ATMGate (5:41c8-425e) and CaveMoveSquishingGate (8:3a58-3b32) also track the
+nearby player's selected crush sequence, including horizontal room neighbors.
+Slow closing follows pose 264 at one unit/update, sets position 56 for 265,
+then stops at 52 for 266 and stops sound 17. Fast closures reaching the floor
+stop at position 56 when the crushing player is nearby rather than at zero.
+
+Original execution matched 1,920 contact-selection/displacement/death cases,
+4,096 crouch-rise checks and 576 gate-controller updates with and without crush poses. The contact
+diagnostic supplies the overlap masks and intercepts sequence/damage calls;
+it does not claim to execute the entire native movement loop. Integrated
+tests cover jumping under a partial gate, crouch-rise clearance, the full
+264/265/266 death, stopped gate and restart readiness.
 
 ## Pressure Plates And Stone Gates
 
@@ -703,7 +724,7 @@ is shared with ordinary guards and other environments, without room overrides.
 
 This is the scenery foundation, not a completed playable level. Original room
 transitions and the common movement runtime are available. Cavern-specific
-floor classifications, gate crushing, spikes,
+floor classifications, spikes,
 crushers, potion behavior and colors, special draw modes and
 skeleton enemies still require semantic recovery and integrated tests.
 The ordinary-guard decoder does not reinterpret skeleton spawn records; the

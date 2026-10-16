@@ -335,6 +335,28 @@ class LevelMap:
             return 28, offset
         return 14, offset
 
+    def nearby_gate(self, room, row, state, record, *, behind_first=False):
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        direction = 1 if state.facing else -1
+        for offset in ((0, -1, 1) if behind_first else (0, 1, -1)):
+            col = column + offset * direction
+            tile = self.tile(room, col, row)
+            if tile.kind == 4:
+                return tile, col
+        return None
+
+    def gate_blocks_rise(self, room, row, state, record):
+        # GateBarrToStandUp 4:5baa-5c56 tests an anchor band, not body height.
+        if state.level_kind != 3:
+            return False
+        gate = self.nearby_gate(room, row, state, record)
+        if gate is None:
+            return False
+        tile, column = gate
+        anchor = state.target_x - 10 * (1 if state.facing else -1) - 22
+        return (0 < tile.foreground & 255 < 184
+                and column * TILE_WIDTH + 19 <= anchor <= column * TILE_WIDTH + 57)
+
     def wall_supported_hang(self, room, row, state, record):
         # GenCtrl 6:1920-1968 uses GetBlock under the supporting foot.
         column = character_column(floor_contact_x(state.target_x, state.facing, record))
@@ -692,6 +714,47 @@ class RooftopPhysics:
             return True
         return False
 
+    def check_gate(self, motion, runtime, bounds, old_bounds, record, alive, sword_drawn):
+        state = runtime.state
+        if (not alive or state.actor_type not in (0, None) or state.level_kind != 3
+                or state.source_sequence_id == 118 or record is None):
+            return None
+        gate = self.map.nearby_gate(motion.room, motion.row, state, record, behind_first=True)
+        if gate is None:
+            return None
+        tile, column = gate
+        left, right = column * TILE_WIDTH + 40, column * TILE_WIDTH + 72
+        # CheckGateForKid 4:613c-616e requires both CheckBarr masks to be
+        # 0xff: overlap on the previous frame as well as this one.
+        if (not all(body[0] < right and left < body[2] + 1
+                    for body in (bounds, old_bounds or bounds))
+                or not stone_gate_blocks(tile.foreground, bounds, state)):
+            return None
+        if state.action != 109 and tile.foreground and not sword_drawn:
+            if state.source_sequence_id == 50:
+                return None
+            # JumpSeq here does not run AnimChar until the next update.
+            distance = self.map.step_boundary(motion.room, motion.row, state, record, bounds).clearance
+            state.select(50)
+            if distance < 25:
+                state.target_x += (distance - 25) * (1 if state.facing else -1)
+            state.current_x = state.target_x
+            motion.falling = False
+            return TerrainEvent("gate")
+        if tile.foreground & 255 and not sword_drawn:
+            # CrushedByGate 6:2ac8 chooses SEQS:118 and removes 100 life.
+            state.select(118)
+            motion.dead, motion.falling = True, False
+            return TerrainEvent("death", death_method=0)
+        # A fully closed gate (or a drawn sword) ejects the actor to the
+        # nearer side, rather than using the cavern crushing animation.
+        front = left - (bounds[2] + 1) if state.facing else bounds[0] - right
+        back = bounds[0] - right if state.facing else left - (bounds[2] + 1)
+        offset = -(abs(front) + 3) if abs(front) < abs(back) else abs(back)
+        state.target_x += offset * (1 if state.facing else -1)
+        state.current_x = state.target_x
+        return TerrainEvent("gate")
+
     def advance(self, motion, runtime, old_x, bounds, sword_drawn=False, protected=False,
                 frame_flags=0x40, frame_record=None, bounds_for_state=None, cut_enabled=True,
                 alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None):
@@ -705,6 +768,9 @@ class RooftopPhysics:
                 frame_flags = frame_record.aux
             if self.check_floor(motion, runtime, frame_flags, frame_record):
                 return (TerrainEvent("fall"),)
+            gate = self.check_gate(motion, runtime, bounds, old_bounds, frame_record, alive, sword_drawn)
+            if gate is not None:
+                return (gate,)
             # A held/climbing ledge bypasses free-fall physics, not CutChar.
             if (cut_enabled and state.actor_type in (0, None)
                     and (self.cut_up(motion, state) or self.cut_down(motion, state))):
@@ -831,6 +897,11 @@ class RooftopPhysics:
                             bounds = (bounds[0] + shift, bounds[1],
                                       bounds[2] + shift, bounds[3])
             events.append(TerrainEvent("wall"))
+        record = self.frames[state.action] if self.frames is not None else frame_record
+        gate = self.check_gate(motion, runtime, collision_bounds, old_bounds, record, alive, sword_drawn)
+        if gate is not None:
+            events.append(gate)
+            return tuple(events)
         if (cut_enabled and state.actor_type in (0, None)
                 and self.cut_up(motion, state)):
             events.append(TerrainEvent("room"))

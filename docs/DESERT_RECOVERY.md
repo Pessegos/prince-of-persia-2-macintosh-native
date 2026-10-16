@@ -33,6 +33,13 @@ All fifteen combinations were compared with execution of CODE:18, including
 the complete opening sequence. Failure song 49 is requested on leaving the
 marked stone, after SinkDsrtStone succeeds (18:02c4-02e2), not on initial contact.
 
+A fresh controller audit compared 3,540 updates across thirty routes: all three
+symbols, all five marked-stone choices, and both stepping on and jumping over
+the marked stone. Stone phases, failure state, solution counter, gate position
+and puzzle/opening cues matched the original executable. Initial random rise
+delays were copied between simulations; drawing bookkeeping and ambient music
+were excluded. This confirms those puzzle rules, not every visual or audio state.
+
 CheckFloor (4:3616-3628) treats tile 30 as unsupported below phase 2.
 The live stone phases must therefore feed terrain queries, not just rendering.
 StartFall (4:4d94-4db2) selects SEQS:27 and death method 8 for desert falls,

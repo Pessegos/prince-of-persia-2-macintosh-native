@@ -5,6 +5,8 @@ import struct
 
 from pop2.loose_floors import pressure_tile
 from pop2.darts import Darts
+from pop2.terrain import floor_contact_x
+from pop2.opponent_generation import character_column
 
 
 @dataclass
@@ -14,6 +16,7 @@ class PressurePlates:
     timers: dict = field(default_factory=dict)
     triggered: list = field(default_factory=list)
     songs: list = field(default_factory=list)
+    stopped_sounds: list = field(default_factory=list)
     darts: Darts = field(default_factory=Darts)
 
     def link(self, terrain, index):
@@ -124,7 +127,25 @@ class PressurePlates:
             if phase != 4 and (phase is not None or position != 0):
                 self.add(key, 4)
 
-    def advance(self, terrain):
+    @staticmethod
+    def squashing_player(terrain, key, state, motion, record):
+        # ATMGate 5:41c8-425e uses the copied player's selected sequence,
+        # floor row and current/adjacent column, including horizontal cuts.
+        if state is None or motion is None or record is None or state.source_sequence_id != 118:
+            return False
+        room, cell = key
+        row, column = divmod(cell, 10)
+        if room != motion.room:
+            if room == terrain.neighbor(motion.room, 'left'):
+                column -= 10
+            elif room == terrain.neighbor(motion.room, 'right'):
+                column += 10
+            else:
+                return False
+        foot = character_column(floor_contact_x(state.target_x, state.facing, record))
+        return row == motion.row and abs(column - foot) <= 1
+
+    def advance(self, terrain, state=None, motion=None, record=None):
         self.triggered.clear()
         cues = []
         for key, phase in tuple(self.active.items()):
@@ -163,11 +184,12 @@ class PressurePlates:
                 del self.active[key]
                 continue
             position = value & 255
+            squashing = self.squashing_player(terrain, key, state, motion, record)
             if phase >= 4:
                 phase = min(8, phase + 1)
                 position -= (0, 0, 0, 20, 40, 60, 80, 100, 120)[phase]
                 if position <= 0:
-                    position, phase = 0, -1
+                    position, phase = 56 if squashing else 0, -1
                     cues.append(20)
             elif position == 255:
                 phase = -1
@@ -176,11 +198,21 @@ class PressurePlates:
                 position += (-1, -4, 4, 4)[phase]
                 if phase in (0, 1):
                     if position <= 0:
-                        position, phase = 0, -1
+                        position, phase = 56 if squashing else 0, -1
                         cues.append(18)
                     elif position < 184:
                         phase = 1
                         cues.append(17)
+                        # CaveMoveSquishingGate 8:3ad6-3b24: slow the first
+                        # crush pose to one unit/update, hold 56, then stop.
+                        if squashing:
+                            if state.action == 264:
+                                position += 3
+                            elif state.action == 265:
+                                position = 56
+                            elif state.action == 266:
+                                phase = -1
+                                self.stopped_sounds.append(17)
                 elif position < 184:
                     cues.append(17)
                 elif phase == 2:

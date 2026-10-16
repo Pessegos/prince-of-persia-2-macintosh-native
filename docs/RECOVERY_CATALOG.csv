@@ -254,9 +254,9 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,AdjustRoom,0x56e6,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,0
 4,Characters 2,Collide,0x5738,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,10
 4,Characters 2,GroundBump,0x5868,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,20
-4,Characters 2,GateBarrToStandUp,0x5baa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,4
+4,Characters 2,GateBarrToStandUp,0x5baa,jump_table,partial,pop2/terrain.py;pop2/scene_prototype.py,cavern phase 1-183 directional crouch-rise veto; 4096 native checks; other environments omitted,1,4
 4,Characters 2,GetCharEdges,0x5cbc,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,11,9
-4,Characters 2,CheckGateForKid,0x60e4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,10
+4,Characters 2,CheckGateForKid,0x60e4,jump_table,partial,pop2/terrain.py;pop2/scene_prototype.py,"cavern Prince consecutive overlap, forced crouch, nearest-side ejection and SEQS 118 crushing; 1920 native selection/displacement/damage checks with supplied masks",1,10
 4,Characters 2,EnemyCollide,0x62b0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,18
 4,Characters 2,GetBarrDistFromFace,0x6562,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,7,3
 4,Characters 2,GetBarrDistFromBack,0x6610,decoded,indexed-only,,No semantic review recorded in this prototype catalog,4,2
@@ -498,7 +498,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,TriggerLava,0x3844,jump_table,partial,pop2/lava.py;tools/extract_caverns.py,one pool per native tile 23 and visible upper-border copies; native handle/trob bank replaced,1,5
 8,Caverns,TriggerLavaBubble,0x38e4,decoded,partial,pop2/lava.py,"first inactive bubble reuse, event coordinates/sequence/layer and previous-phase activation",2,0
 8,Caverns,CaveClearFlawFromPieceBelow,0x39b8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
-8,Caverns,CaveMoveSquishingGate,0x3a58,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,5
+8,Caverns,CaveMoveSquishingGate,0x3a58,jump_table,partial,pop2/pressure_plates.py;pop2/scene_prototype.py,nearby Prince SEQS 118 poses 264-266 and gate stop/sound; 576 native gate updates including ordinary controls; other actor modes omitted,0,5
 8,Caverns,CaveGetTorchFrame,0x3b4e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
 9,Final Battle,FinlCheckDeadOpp,0x00e2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,8
 9,Final Battle,FinlCheckGenOpp,0x0202,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,3

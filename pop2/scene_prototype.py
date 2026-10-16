@@ -700,12 +700,12 @@ class ScenePrototype(WindowControls):
                 return False
             return self.start_jump_if_needed()
         elif (
-            self.down_held
-            and not self.shift_held
-            and self.sequence_state.sequence_id in (
+            self.sequence_state.sequence_id in (
                 CROUCH_LOWER_SEQUENCE, CROUCH_STANDING_LOWER_SEQUENCE,
                 CROUCH_HOLD_SEQUENCE, CROUCH_STEP_SEQUENCE
             )
+            and (self.down_held or self.gate_blocks_crouch_rise())
+            and not self.shift_held
             and facing_for_direction(direction) == self.sequence_state.facing
         ):
             # GenCtrl 6:06b4/099a accepts input on the first displayed low pose.
@@ -1252,6 +1252,12 @@ class ScenePrototype(WindowControls):
         self.start_sequence(CROUCH_RISE_SEQUENCE)
         self.status.set("Standing up: original SEQS:49")
 
+    def gate_blocks_crouch_rise(self):
+        state = self.sequence_state
+        return (getattr(self, "level_map", None) is not None
+                and self.level_map.gate_blocks_rise(
+                    self.room_id, self.terrain_motion.row, state, self.frames[state.action]))
+
     def resume_crouch(self):
         state = self.sequence_state
         if (state.sequence_id not in (
@@ -1268,7 +1274,7 @@ class ScenePrototype(WindowControls):
             self.pending_action = None
             self.start_crouch_step(direction)
             return True
-        if not self.down_held:
+        if not self.down_held and not self.gate_blocks_crouch_rise():
             self.start_crouch_rise()
             return True
         direction = self.horizontal_input
@@ -1918,7 +1924,10 @@ class ScenePrototype(WindowControls):
             if event.kind in ("land", "death"):
                 if getattr(self, "audio", None) is not None:
                     self.audio.stop_sound(8)
-            if event.kind in ("fall", "wall", "death"):
+            if event.kind in ("fall", "wall", "gate", "death"):
+                if event.kind in ("gate", "death"):
+                    self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
+                    self.ledge_climb_requested = False
                 # The collision/fall sequence has interrupted PutSwordAway.
                 # Its Python-side lock must not outlive that animation.
                 self.sword_sheathing = False
@@ -2045,7 +2054,16 @@ class ScenePrototype(WindowControls):
             self.sequence_state.sound_events.extend(caverns.plates.impact(self.level_map, room, cell, kind))
         caverns.loose.plate_events.clear()
         caverns.loose.advance_tiles(self.level_map)
-        self.sequence_state.sound_events.extend(caverns.plates.advance(self.level_map))
+        self.sequence_state.sound_events.extend(caverns.plates.advance(
+            self.level_map, self.sequence_state, self.terrain_motion, self.frames[self.action]))
+        stopped = set(caverns.plates.stopped_sounds)
+        if stopped:
+            self.sequence_state.sound_events[:] = [
+                cue for cue in self.sequence_state.sound_events if cue not in stopped]
+        if getattr(self, "audio", None) is not None:
+            for cue in caverns.plates.stopped_sounds:
+                self.audio.stop_sound(cue)
+        caverns.plates.stopped_sounds.clear()
 
     def check_cavern_darts(self):
         from pop2.darts import dart_death

@@ -3,8 +3,8 @@ import unittest
 from types import SimpleNamespace
 
 from pop2.paths import ASSET_DIR
-from pop2.sequence_runtime import SequenceState
-from pop2.terrain import LevelMap, stone_gate_blocks
+from pop2.sequence_runtime import SequenceRuntime, SequenceState
+from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion, stone_gate_blocks
 
 
 class StoneGateTests(unittest.TestCase):
@@ -90,9 +90,138 @@ class StoneGateTests(unittest.TestCase):
         self.assertEqual(stone_gate_blocks(64, (270, 340, 290, 400)),
                          stone_gate_blocks(64, (270, 340, 290, 364)))
 
+    def test_rise_veto_uses_native_phase_and_directional_anchor_band(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        for facing, minimum, maximum in ((0, 286, 324), (1, 306, 344)):
+            for phase in (0, 1, 104, 183, 184, 237, 255):
+                self.phase(phase)
+                for x in range(275, 351):
+                    state = SequenceState(117, action=109, target_x=x, facing=facing, level_kind=3)
+                    self.assertEqual(self.terrain.gate_blocks_rise(0, 1, state, record),
+                                     0 < phase < 184 and minimum <= x <= maximum)
+
+    def test_contact_crouches_first_then_crushes_when_low_pose_no_longer_fits(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        physics = RooftopPhysics(self.terrain)
+        for facing in (0, 1):
+            state = SequenceState(2, action=15, target_x=310, facing=facing, level_kind=3, actor_type=0)
+            runtime, motion = SequenceRuntime({}, state), TerrainMotion(0, 1)
+            self.phase(104)
+            standing = (298, 155, 323, 226)
+            event = physics.check_gate(motion, runtime, standing, standing, record, True, False)
+            self.assertEqual((event.kind, state.sequence_id, state.action, state.target_x),
+                             ('gate', 50, 15, 310))
+            state.action = 109
+            crouched = (298, 193, 323, 226)
+            self.assertIsNone(physics.check_gate(motion, runtime, crouched, crouched, record, True, False))
+            self.phase(64)
+            event = physics.check_gate(motion, runtime, crouched, crouched, record, True, False)
+            self.assertEqual((event.kind, event.death_method, state.sequence_id), ('death', 0, 118))
+            self.assertTrue(motion.dead)
+
+    def test_gate_contact_requires_previous_overlap_and_ignores_dead_or_descent(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        physics = RooftopPhysics(self.terrain)
+        self.phase(64)
+        body = (298, 193, 323, 226)
+        for alive, selected, previous in ((True, 117, (275, 193, 294, 226)),
+                                          (False, 117, body), (True, 68, body), (True, 118, body)):
+            state = SequenceState(selected, action=109, target_x=310, facing=1, level_kind=3, actor_type=0)
+            motion = TerrainMotion(0, 1)
+            self.assertIsNone(physics.check_gate(motion, SequenceRuntime({}, state), body,
+                                                previous, record, alive, False))
+            self.assertFalse(motion.dead)
+
+    def test_closed_gate_and_drawn_sword_eject_instead_of_crushing(self):
+        physics = RooftopPhysics(self.terrain)
+        record = SimpleNamespace(offset_x=0, aux=0)
+        body = (298, 193, 323, 226)
+        for phase, sword in ((0, False), (64, True)):
+            self.phase(phase)
+            for facing in (0, 1):
+                state = SequenceState(117, action=109, target_x=310, facing=facing, level_kind=3, actor_type=0)
+                motion = TerrainMotion(0, 1)
+                event = physics.check_gate(motion, SequenceRuntime({}, state), body, body, record, True, sword)
+                self.assertEqual(event.kind, 'gate')
+                self.assertEqual(state.target_x, 339 if facing else 281)
+                self.assertFalse(motion.dead)
+
 
 @unittest.skipUnless((ASSET_DIR / 'Prince.rsrc').is_file(), 'Imported game resources required')
 class ImportedStoneGateTests(unittest.TestCase):
+    def scene_at_gate(self, phase=104):
+        from tests.test_terrain import RooftopSceneTests
+        from unittest.mock import Mock
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(3)
+        scene.peaceful = True
+        scene.jump_to_room(16, row=2, x=412, facing=1)
+        scene.in_animation_tick = True
+        scene.game.caverns.plates.foreground[16, 27] = 0x300 | phase
+        scene.render = Mock()
+        return scene
+
+    def tick(self, count=1):
+        from tests.test_terrain import RooftopSceneTests
+        RooftopSceneTests.tick(self, count)
+
+    def test_low_gate_keeps_crouched_prince_down_until_there_is_clearance(self):
+        scene = self.scene_at_gate()
+        scene.start_sequence(117)
+        scene.sequence_runtime.next_frame()
+        scene.action = scene.sequence_state.action
+        self.tick(20)
+        self.assertEqual(scene.action, 109)
+        self.assertEqual(scene.combat.player.life, 3)
+        scene.game.caverns.plates.foreground[16, 27] = 0x300 | 184
+        self.tick()
+        self.assertEqual(scene.sequence_state.source_sequence_id, 49)
+        self.tick(12)
+        self.assertEqual(scene.action, 15)
+
+    def test_closing_gate_uses_full_native_crush_and_stops_on_the_body(self):
+        scene = self.scene_at_gate(144)
+        scene.game.caverns.plates.active[16, 27] = 0
+        trace = []
+        for _ in range(40):
+            self.tick()
+            trace.append(scene.action)
+        self.assertTrue(scene.terrain_motion.dead)
+        self.assertEqual(scene.combat.player.life, 0)
+        self.assertEqual(scene.sequence_state.source_sequence_id, 118)
+        self.assertEqual([pose for pose in trace if pose in (264, 265, 266)][:8],
+                         [264] * 6 + [265, 266])
+        self.assertNotIn((16, 27), scene.game.caverns.plates.active)
+        self.assertEqual(scene.level_map.tile(16, 7, 2).foreground & 255, 52)
+        self.assertTrue(scene.death.can_restart)
+        self.assertEqual(scene.death.method, 0)
+
+    def test_crouched_prince_can_crawl_out_without_holding_down(self):
+        scene = self.scene_at_gate()
+        scene.start_sequence(117)
+        scene.sequence_runtime.next_frame()
+        scene.action = scene.sequence_state.action
+        scene.horizontal_key(None, 1, True)
+        positions = []
+        for _ in range(30):
+            self.tick()
+            positions.append((scene.room_id, scene.player_x))
+        self.assertTrue(any(room != 16 or x > 450 for room, x in positions))
+        self.assertEqual(scene.combat.player.life, 3)
+        self.assertFalse(scene.terrain_motion.dead)
+
+    def test_jump_under_partial_gate_is_interrupted_by_contact(self):
+        scene = self.scene_at_gate(168)
+        scene.start_jump()
+        sources = []
+        for _ in range(25):
+            self.tick()
+            sources.append(scene.sequence_state.source_sequence_id)
+        self.assertIn(50, sources)
+        self.assertFalse(scene.terrain_motion.dead)
+
     def test_every_native_level_three_gate_uses_the_same_collision_planes(self):
         from pop2.render_opening import load_resource_file
 

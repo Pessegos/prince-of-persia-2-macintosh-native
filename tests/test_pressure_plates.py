@@ -71,6 +71,46 @@ class PressurePlateTests(unittest.TestCase):
                 self.assertEqual(self.terrain.tile(0, 5, 1).foreground & 255, 237)
         self.assertEqual(self.plates.timer(self.terrain, 1), 5)
 
+    def test_closing_gate_tracks_crush_poses_and_stops_with_the_native_clearance(self):
+        state = SequenceState(118, action=264, target_x=310, facing=1)
+        motion = TerrainMotion(0, 1, dead=True)
+        record = SimpleNamespace(offset_x=0, aux=0)
+        self.plates.foreground[0, 15] = 0x300 | 88
+        self.plates.active[0, 15] = 1
+        for phase in (87, 86, 85):
+            self.assertEqual(self.plates.advance(self.terrain, state, motion, record), (17,))
+            self.assertEqual(self.terrain.tile(0, 5, 1).foreground & 255, phase)
+        state.action = 265
+        self.plates.advance(self.terrain, state, motion, record)
+        self.assertEqual(self.terrain.tile(0, 5, 1).foreground & 255, 56)
+        state.action = 266
+        self.plates.advance(self.terrain, state, motion, record)
+        self.assertEqual(self.terrain.tile(0, 5, 1).foreground & 255, 52)
+        self.assertNotIn((0, 15), self.plates.active)
+        self.assertEqual(self.plates.stopped_sounds, [17])
+
+    def test_fast_gate_stops_at_fifty_six_only_for_nearby_crush_sequence(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        for sequence, row, x, expected in ((118, 1, 310, 56), (2, 1, 310, 0),
+                                           (118, 2, 310, 0), (118, 1, 100, 0)):
+            self.plates.foreground[0, 15] = 0x300 | 40
+            self.plates.active[0, 15] = 4
+            state = SequenceState(sequence, action=264, target_x=x, facing=1)
+            self.assertEqual(self.plates.advance(self.terrain, state, TerrainMotion(0, row), record), (20,))
+            self.assertEqual(self.terrain.tile(0, 5, 1).foreground & 255, expected)
+            self.assertNotIn((0, 15), self.plates.active)
+
+    def test_crushing_proximity_crosses_horizontal_room_links_but_not_vertical_ones(self):
+        struct.pack_into('>H', self.level, 0x2080, 2)
+        struct.pack_into('>H', self.level, 0x2082, 3)
+        record = SimpleNamespace(offset_x=0, aux=0)
+        state = SequenceState(118, action=264, target_x=20, facing=1)
+        motion = TerrainMotion(0, 1)
+        self.assertTrue(self.plates.squashing_player(self.terrain, (1, 19), state, motion, record))
+        self.assertFalse(self.plates.squashing_player(self.terrain, (1, 29), state, motion, record))
+        state.target_x = 525
+        self.assertTrue(self.plates.squashing_player(self.terrain, (2, 10), state, motion, record))
+
     def test_rearmed_reverse_plate_closes_an_open_gate_and_cannot_reopen_while_held(self):
         self.push()
         for _ in range(46):
