@@ -315,6 +315,40 @@ nor synthesizes a forward step from that same held combination afterward.
 Releasing/repressing the direction permits a new step. Ordinary forward
 Shift-step repetition and the existing repeated-command filter are unchanged.
 
+### Releasing Up Before The Climb Finishes
+
+The climb's mode-5 reset and the following keyboard sample (6:0576-059c,
+4:3e84-3f08) discard the old overlap: if only Forward remains held at the
+standing gate, 6:0db0-0dd0 selects running, not a forward jump. Executing
+the original reset, sample and facing-remapped controller confirms eight
+cases across both facings, held/released Up and pending/consumed old Up.
+
+At climb completion, a buffered directional jump is therefore reclassified
+as run/turn/Shift-step only when Up is now released and that same horizontal
+direction is still held. A still-held Up keeps its jump chord. A complete
+released tap chord, a vertical jump, and other buffered actions retain their
+existing host semantics. The rule also applies to releases during pause and
+does not rewrite jump buffers outside the protected climb.
+
+### A New Up After A Running-Jump Bump
+
+The host formerly kept a vertical request through a grounded wall contact
+only when the interrupted sequence was the run brake (13). A running-jump
+impact can instead enter 46, link to crouch rise, then contact the same wall
+again before standing. That second correction erased the new Up request.
+
+Any unfulfilled vertical jump now survives these grounded wall corrections;
+the recovery poses and collision offsets remain unchanged. This is separate
+from the already-consumed jump that hit the wall, which must not replay.
+Airborne falls, death and directional jump buffers keep their old clearing.
+As elsewhere in the host buffer, preserving a released Up tap is an input-
+tolerance extension, not a claim that native mode-5 latches preserve it.
+
+Integrated regressions run/jump from room 21 into room 26 using real cavern
+geometry, queue Up at six recovery poses, and check that held Up climbs to
+the upper floor. A released tap reaches the ledge but does not invent a
+second climb request. Existing consumed-Up wall-bump regressions still pass.
+
 ## Buffered Chords After A Running Reversal
 
 SEQS:6 finishes every drift pose 53-65 before flipping facing and linking to

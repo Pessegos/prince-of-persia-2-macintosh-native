@@ -1720,6 +1720,15 @@ class ScenePrototype(WindowControls):
             self.ledge_hanging = self.ledge_climbing = self.native_ledge = False
             self.sequence_state.current_y = 0
             self.sequence_state.horizontal_velocity = self.sequence_state.vertical_velocity = 0
+            command = self.pending_action
+            direction = self.horizontal_input
+            if (command is not None and command.kind == "jump" and direction
+                    and command.direction == direction and not self.up_held):
+                # A brief overlap with the climb's Up is not a latched jump
+                # when only the horizontal half of the chord remains held.
+                mode = ("step" if self.shift_held else
+                        "run" if facing_for_direction(direction) == self.sequence_state.facing else "turn")
+                self.pending_action = BufferedCommand("horizontal", direction, mode)
             # Finish the protected climb before dispatching its queued input.
             self.jump_started_for_press = self.up_held
             self.jump_repeat_armed = self.up_held
@@ -1847,9 +1856,6 @@ class ScenePrototype(WindowControls):
         old_room = self.room_id
         before_x = self.sequence_state.target_x
         command = self.pending_action
-        braking_for_jump = (self.sequence_state.sequence_id == RUN_STOP_SEQUENCE
-                            and command is not None and command.kind == "jump"
-                            and not command.direction)
         events = self.physics.advance(
             motion, self.sequence_runtime, old_x, self.player_bounds(),
             sword_drawn=self.sword_drawn, protected=self.ledge_hanging or self.ledge_climbing,
@@ -1902,10 +1908,11 @@ class ScenePrototype(WindowControls):
                 self.run_active = False
                 self.run_stop_requested = False
                 self.run_cycle_boundary_pending = False
-                # A grounded bump can replace braking without discarding the
-                # Up waiting for that brake. An airborne bump still cancels it.
-                self.pending_action = (command if event.kind == "wall" and braking_for_jump
-                                       and not motion.falling else None)
+                # Keep an unfulfilled Up through repeated grounded bumps,
+                # including recovery from a run jump. Do not replay its arc.
+                self.pending_action = (command if event.kind == "wall" and not motion.falling
+                                       and command is not None and command.kind == "jump"
+                                       and not command.direction else None)
                 self.jump_repeat_armed = False
                 # Do not re-arm a consumed Up on wall contact: releasing Up
                 # must not queue a second jump after an interrupted jump.

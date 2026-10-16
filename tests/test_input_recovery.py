@@ -107,6 +107,61 @@ class InputRecoveryTests(unittest.TestCase):
             self.assertTrue(scene.run_active)
             self.assertIsNone(scene.pending_action)
 
+    def test_climb_chord_resolves_current_holds_without_discarding_a_complete_tapped_chord(self):
+        for facing in (0, 1):
+            direction = 1 if facing else -1
+            for held_up in (False, True):
+                for held_direction in (False, True):
+                    with self.subTest(facing=facing, held_up=held_up, held_direction=held_direction):
+                        scene = self.fixture.sword_scene()
+                        scene.sequence_state.facing = facing
+                        scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = True
+                        scene.up_held = scene.jump_started_for_press = True
+                        scene.start_sequence(10)
+                        scene.advance_animation()
+                        self.assertEqual(scene.action, 135)
+                        scene.horizontal_key(None, direction, True)
+                        if not held_up:
+                            scene.set_key_state('up', False)
+                        if not held_direction:
+                            scene.horizontal_key(None, direction, False)
+                        for _ in range(30):
+                            scene.advance_animation()
+                            if not scene.ledge_climbing:
+                                break
+                        self.assertFalse(scene.native_ledge or scene.ledge_hanging)
+                        if not held_up and held_direction:
+                            self.assertTrue(scene.run_active)
+                            self.assertEqual(scene.action, 1)
+                        else:
+                            self.assertEqual((scene.sequence_state.sequence_id, scene.action), (3, 16))
+                        self.assertIsNone(scene.pending_action)
+
+    def test_climb_overlap_keeps_shift_steps_and_turn_only_behavior_after_releasing_up(self):
+        for facing in (0, 1):
+            for reverse in (False, True):
+                with self.subTest(facing=facing, reverse=reverse):
+                    scene = self.fixture.sword_scene()
+                    scene.sequence_state.facing = facing
+                    scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = True
+                    scene.up_held = scene.jump_started_for_press = scene.shift_held = True
+                    scene.start_sequence(10)
+                    scene.advance_animation()
+                    direction = (1 if facing else -1) * (-1 if reverse else 1)
+                    scene.horizontal_key(None, direction, True)
+                    scene.set_key_state('up', False)
+                    for _ in range(30):
+                        scene.advance_animation()
+                        if not scene.ledge_climbing:
+                            break
+                    self.assertEqual(scene.sequence_state.sequence_id,
+                                     STANDING_TURN_SEQUENCE if reverse else SHIFT_STEP_SEQUENCE)
+                    if reverse:
+                        for _ in range(12):
+                            scene.advance_animation()
+                        self.assertEqual((scene.sequence_state.sequence_id, scene.action), (IDLE_SEQUENCE, 15))
+                    self.assertIsNone(scene.pending_action)
+
     def test_ctrl_during_run_retains_intentional_stop_and_draw_extension(self):
         # Port QoL: preserve the draw request, unlike native modifier sampling.
         for facing in (0, 1):

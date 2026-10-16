@@ -718,6 +718,88 @@ class GameWindowTests(unittest.TestCase):
                     self.tick(5)
                     self.assertEqual((scene.room_id, scene.terrain_motion.row), (destination, floor))
 
+    def test_cavern_run_jump_bump_keeps_a_new_climb_request_through_later_wall_contact(self):
+        scene = self.scene
+        with patch.object(scene, 'render'):
+            for queue_pose in (102, 107, 108, 109, 110, 111):
+                for held in (False, True):
+                    with self.subTest(queue_pose=queue_pose, held=held):
+                        scene.load_level(3)
+                        scene.peaceful = True
+                        scene.jump_to_room(20, row=1, x=120, facing=0)
+                        scene.in_animation_tick = True
+                        scene.horizontal_key(None, -1, True)
+                        for _ in range(12):
+                            self.tick()
+                            if scene.action == 7:
+                                break
+                        scene.up_key(None)
+                        self.tick()
+                        scene.set_key_state('up', False)
+                        for _ in range(25):
+                            if scene.room_id == 25 and scene.action == queue_pose:
+                                break
+                            self.tick()
+                        self.assertEqual((scene.room_id, scene.action), (25, queue_pose))
+                        scene.horizontal_key(None, -1, False)
+                        scene.up_key(None)
+                        if not held:
+                            scene.set_key_state('up', False)
+                        self.assertIsNotNone(scene.pending_action)
+                        poses = []
+                        for _ in range(45):
+                            self.tick()
+                            poses.append(scene.action)
+                            if scene.ledge_climbing:
+                                scene.set_key_state('up', False)
+                            if 135 in poses and not scene.native_ledge:
+                                break
+                        self.assertIn(67, poses)
+                        self.assertIn(80, poses)
+                        self.assertEqual(135 in poses, held)
+                        self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action),
+                                         (25, 0 if held else 1, 15))
+                        self.assertFalse(scene.terrain_motion.falling or scene.native_ledge)
+                        self.assertIsNone(scene.pending_action)
+
+    def test_climb_releases_the_old_up_chord_into_the_still_held_run(self):
+        scene = self.scene
+        with patch.object(scene, 'render'):
+            for facing in (0, 1):
+                direction = 1 if facing else -1
+                for release_pose in (135, 138, 141, 148):
+                    for paused_release in (False, True):
+                        with self.subTest(facing=facing, release_pose=release_pose,
+                                          paused_release=paused_release):
+                            scene.load_level(3)
+                            scene.peaceful = True
+                            scene.jump_to_room(0, row=2, x=80 if facing else 330, facing=facing)
+                            scene.in_animation_tick = True
+                            scene.up_key(None)
+                            scene.start_jump_if_needed()
+                            for _ in range(45):
+                                self.tick()
+                                if scene.ledge_climbing and scene.action == release_pose:
+                                    break
+                            self.assertTrue(scene.ledge_climbing)
+                            self.assertEqual(scene.action, release_pose)
+                            scene.horizontal_key(None, direction, True)
+                            self.assertEqual(scene.pending_action.kind, 'jump')
+                            if paused_release:
+                                scene.set_paused(True)
+                            scene.set_key_state('up', False)
+                            if paused_release:
+                                scene.set_paused(False)
+                            for _ in range(25):
+                                self.tick()
+                                if not scene.ledge_climbing:
+                                    break
+                            self.assertTrue(scene.run_active)
+                            self.assertEqual(scene.run_direction, direction)
+                            self.assertEqual(scene.action, 1)
+                            self.assertFalse(scene.native_ledge)
+                            self.assertIsNone(scene.pending_action)
+
     def test_fullscreen_remembers_normal_and_maximized_state(self):
         scene = self.scene
         for state in ("normal", "zoomed"):
