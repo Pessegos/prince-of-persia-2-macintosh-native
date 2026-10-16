@@ -210,6 +210,17 @@ class GameSessionTests(unittest.TestCase):
         self.assertEqual(second.runtime.state.level_kind, 1)
         self.assertIsNone(second.harbor)
 
+    def test_dev_placement_preserves_capacity_and_still_heals_to_full(self):
+        game = session(resources())
+        for reset_guards in (True, False):
+            for capacity in (3, 4, 5, 12):
+                with self.subTest(reset_guards=reset_guards, capacity=capacity):
+                    game.combat.player.max_life = capacity
+                    game.combat.player.life = 1
+                    game.place(3, 1, 411, 1, reset_guards=reset_guards)
+                    self.assertEqual((game.combat.player.life, game.combat.player.max_life),
+                                     (capacity, capacity))
+
     def test_invalid_placement_leaves_the_running_world_untouched(self):
         game = session(resources())
         state = vars(game.runtime.state).copy()

@@ -151,7 +151,9 @@ class GameSession:
         self.room_id = room
         self.motion = TerrainMotion(room, row)
         if reset_guards:
+            max_life = self.combat.player.max_life
             self.combat.reset()
+            self.combat.player.max_life = max_life
         self.combat.player.terrain_motion = self.motion
         self.combat.enter_room(room, row)
         if self.harbor is not None:

@@ -212,6 +212,25 @@ class ImportedPotionTests(unittest.TestCase):
         s.restart_level()
         self.assertEqual((s.combat.player.life, s.combat.player.max_life), (5, 5))
 
+    def test_f3_preserves_mega_upgrades_and_consumed_flasks_until_restart(self):
+        s = self.make_scene()
+        for room, row, column, capacity in ((9, 1, 7, 4), (19, 0, 8, 5)):
+            with self.subTest(room=room + 1):
+                s.jump_to_room(room, row=row, x=column * 51 + 35, facing=0)
+                self.tick()
+                s.shift_held = True
+                self.tick(28)
+                self.assertEqual((s.combat.player.life, s.combat.player.max_life),
+                                 (capacity, capacity))
+                s.jump_to_room(9, row=1, x=430, facing=0)
+                self.assertEqual((s.combat.player.life, s.combat.player.max_life),
+                                 (capacity, capacity))
+                self.assertEqual(s.level_map.tile(room, column, row).kind, 1)
+        s.restart_level()
+        self.assertEqual((s.combat.player.life, s.combat.player.max_life), (3, 3))
+        self.assertEqual(s.level_map.tile(9, 7, 1).kind, 10)
+        self.assertEqual(s.level_map.tile(19, 8, 0).kind, 10)
+
     def test_pause_freezes_collection_animation_health_and_particle_phase(self):
         s = self.make_scene()
         s.jump_to_room(9, row=1, x=430, facing=0)
