@@ -21,6 +21,7 @@ class LevelRenderer:
         self.cavern_display = None
         self.cavern_underlay = None
         self.cavern_scenery = None
+        self.cavern_map = None
         if self.level.number == 3:
             from pop2.caverns import cavern_assets
 
@@ -94,13 +95,18 @@ class LevelRenderer:
 
     def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
         if self.level.number == 3 and caverns is not None and not front:
+            from pop2.terrain import LevelMap
             from pop2.caverns import (
                 draw_cavern_torches, draw_cavern_falling, draw_cavern_lava, draw_cavern_darts,
+                draw_cavern_flasks,
             )
 
             frame = draw_cavern_torches(frame, room_id, caverns)
+            if self.cavern_map is None:
+                self.cavern_map = LevelMap(self.level.data)
             frame = draw_cavern_lava(frame, room_id, caverns)
             frame = draw_cavern_darts(frame, room_id, caverns)
+            frame = draw_cavern_flasks(frame, room_id, caverns, self.cavern_map)
             return draw_cavern_falling(frame, room_id, caverns, self.level.data,
                                        self.room(room_id, caverns))
         if room_id in self.desert_rooms:

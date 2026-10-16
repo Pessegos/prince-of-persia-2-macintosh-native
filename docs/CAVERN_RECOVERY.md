@@ -735,7 +735,7 @@ is shared with ordinary guards and other environments, without room overrides.
 This is the scenery foundation, not a completed playable level. Original room
 transitions and the common movement runtime are available. Cavern-specific
 floor classifications, spikes,
-crushers, potion behavior and colors, special draw modes and
+crushers, special potion types from later levels, special draw modes and
 skeleton enemies still require semantic recovery and integrated tests.
 The ordinary-guard decoder does not reinterpret skeleton spawn records; the
 preview encounter host omits those actors until their implementation exists.
@@ -746,6 +746,47 @@ The flask-library defect exposed by the user's Macintosh recording is fixed.
 Static row masks still do not implement the complete native actor-clipping
 pipeline. See [Route audit](LEVEL3_ROUTE_AUDIT.md) for reference moments and
 the remaining recovery order. Room coverage alone is not visual fidelity.
+
+## Normal And Mega Potions
+
+LEVL:2002 contains five type-1 healing flasks (Rooms 7, 9, 12, 26 and 32)
+and two type-2 capacity upgrades (Rooms 10 and 20). Type comes from foreground
+bits 5-7, independently of the rock decoration and particle phase.
+
+The old flask palette relocation incorrectly added 224 to the stored indices
+1-15. Original RemapCTBL (17:6a78), called by LoadFlaskSet (3:5614), assigns
+224-238 in order instead. The portable palette now does the same, removing
+the missing-color magenta and correcting the flask and particle colors.
+DrawFlask (3:46fc, misleadingly named GetFlaskBubbleColor in the symbol index)
+uses Prince SHAPs 3001/3002 and two monochrome layers from 3003-3022. The
+second half is mirrored; phases 10-13 and 24-27 emit no particles. The native
+28-update cycle and TriggerFlask's inclusive Rnd(26)+1 initialization are
+retained. Static scenery and floor/climb repaints omit these dynamic items.
+
+TryPickUp/PickItUp (6:1350/13d0) select the current or forward flask, align the
+standing/crouched Prince, then select SEQS 50/78. RemoveObj (4:406c) replaces
+the flask with floor 1 while retaining foreground bits 0x0f00. AFRM attachment
+type 3 uses Prince's flask bank, not the sword bank. SEQS 78's -14 operation
+with operand 2 precedes the sip; ordinary healing waits for the later operand
+1 after the held pose. DoPickupEffect (4:45dc) adds one life for type 1, or
+adds one maximum life (capped at 12) and heals fully for type 2, requesting
+AddSong(24). The original drinking effect 23 and MIDI 24 are prepared at import.
+Restart restores entry capacity rather than permitting repeated collection
+of the same upgrade (2:61f2 and SetKidDefaults 2:5d82).
+
+Native execution matched 644 pickup admission/alignment/sequence/removal
+cases, 128 particle-controller states and 150 life/capacity/song effects.
+All 28 phases of each of the seven original flasks matched the native drawing
+routine pixel for pixel (196 full-room flask layers). Integrated tests cover
+both approaches to every flask, full/injured health, original effect timing,
+held attachments, pause, removal and restart with inherited entry capacity.
+
+Later-level types are identified, not implemented by this level-three work:
+type 3 starts slow fall (2:5a26), type 4 toggles vertical screen inversion
+(2:59f6), type 5 wounds or cures inversion if active, and type 6 selects the
+special SEQS 111 branch. LEVL:2011 (level 12) contains the type-6 flask in
+Room 23. These require their own later-level actor/story integration; they
+are not silently treated as healing flasks.
 
 `tests/test_caverns.py` checks clip pixels and masks, all 32 exports, every
 original map link, the generated map, F3 room placements, flask libraries and

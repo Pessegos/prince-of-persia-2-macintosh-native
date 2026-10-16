@@ -104,6 +104,8 @@ class GameSession:
         if self.level_map is not None:
             self.level_map.desert = self.desert
             self.level_map.caverns = self.caverns
+            if self.caverns is not None:
+                self.caverns.potions.configure(self.level_map)
         self.room_id = level.start_room
         if self.desert is not None:
             self.desert.enter_room(self.room_id)

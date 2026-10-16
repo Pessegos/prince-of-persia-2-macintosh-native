@@ -111,6 +111,7 @@ class LevelMap:
         fg, bg = struct.unpack_from(">2H", self.level, 0x780 + room * 120 + index * 4)
         if self.caverns is not None:
             kind = self.caverns.loose.tiles.get((room, index), (kind, fg))[0]
+            kind = self.caverns.potions.tiles.get((room, index), (kind, fg))[0]
             fg = self.caverns.foreground(room, index, fg)
         if kind == 4 and self.desert is not None:
             fg = (fg & 0xff00) | (104 if self.desert.exit_open else 0)

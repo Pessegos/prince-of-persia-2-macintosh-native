@@ -139,6 +139,8 @@ class SequenceRuntime:
                 # the death MUSIC selector, distinct from actor death cause.
                 if self.state.actor_type in (0, 1):
                     self.state.death_song_method = method
+            elif opcode == -14:
+                self.state.sequence_events.append((opcode, (self._next_operand(opcode, opcode_cursor),)))
             elif opcode in (-12, -13):
                 # AnimChar's dispatch table (4:2c70) maps these to the
                 # upper/current-row shake requests at 2f18/2f22.

@@ -192,8 +192,47 @@ def flask_shape(data, palette, draw_mode):
 def flask_assets():
     resources = load_resource_file('Prince.rsrc')
     # LoadFlaskSet 3:564c relocates CTBL:3000 to index 224.
-    palette = {224 + index: color for index, color in decode_ctbl(resources['CTBL'][3000]['data']).items()}
+    # RemapCTBL 17:6a78 starts at 224, not 224 + the original first index (1).
+    palette = {223 + index: color for index, color in decode_ctbl(resources['CTBL'][3000]['data']).items()}
     return resources, palette
+
+
+def cavern_flask_instances(program, room_id, terrain):
+    for command in program['rooms'][str(room_id)]:
+        if len(command) < 10 or command[7] != 1 or command[1] not in (3001, 3002):
+            continue
+        tile = terrain.tile(room_id, command[8], command[9])
+        if tile.room is not None and tile.kind == 10:
+            yield command, tile
+
+
+def draw_cavern_flasks(frame, room_id, state, terrain):
+    program, resources, palette, shapes = cavern_assets()
+    terrain.caverns = state
+    for command, tile in cavern_flask_instances(program, room_id, terrain):
+        value = tile.foreground
+        kind, phase = (value >> 5) & 7, value & 31
+        large = 2 <= kind < 5
+        body = list(command)
+        body[1] = 3002 if large else 3001
+        sprite = cavern_command_sprite(body, resources, palette, shapes)
+        frame.paste(sprite, (body[2], body[3] - sprite.height), sprite)
+        # DrawFlask 3:46fc draws two monochrome layers, mirrored in the
+        # second half of the cycle, with a quiet interval at phases 10-13/24-27.
+        if not kind or phase in range(10, 14) or phase >= 24:
+            continue
+        ink = 233 if kind in (1, 2) else 237 if kind == 5 else 235
+        mirrored = phase >= 14
+        phase -= 14 if mirrored else 0
+        x = body[2] - 4
+        bottom = body[3] - (22 if large else 18)
+        for shape, color in ((3003 + phase, ink), (3013 + phase, ink + 1)):
+            bubble = cavern_command_sprite(['front', shape, x, bottom, color, 0, [], 1],
+                                            resources, palette, shapes)
+            if mirrored:
+                bubble = ImageOps.mirror(bubble)
+            frame.paste(bubble, (x, bottom - bubble.height), bubble)
+    return frame
 
 
 def clipped_sprite(sprite, command):
@@ -546,6 +585,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     for command in commands:
         layer, index, _, _, _, row = command[:6]
         library = command[7] if len(command) >= 8 else 4
+        if animated and library == 1:
+            continue
         if animated and program.get('version') >= 4 and library == 4 and 3581 <= index <= 3589:
             continue
         clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
@@ -571,6 +612,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         if pressure_key:
             redraw_commands = pressure_drawing_commands(redraw_commands, records, pressure_key, resources)
         for command in redraw_commands:
+            if animated and len(command) >= 8 and command[7] == 1:
+                continue
             clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
             if clipped is not None:
                 cell = (int(action), command[8], command[9])
@@ -581,6 +624,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     if pressure_key:
         floor_commands = pressure_drawing_commands(floor_commands, records, pressure_key, resources)
     for command in floor_commands:
+        if animated and len(command) >= 8 and command[7] == 1:
+            continue
         clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
         if clipped is not None:
             floors.setdefault(tuple(command[8:10]), []).append(clipped)

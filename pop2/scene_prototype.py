@@ -685,6 +685,8 @@ class ScenePrototype(WindowControls):
     def queue_sampled_horizontal_action(self, direction):
         if self.sword_drawn and not self.sword_sheathing:
             return False
+        if self.shift_held and self._is_resting() and self.update_potion_controls():
+            return True
         if self.up_held:
             if self.jump_started_for_press:
                 if self.pending_action is not None and self.pending_action.kind == "jump":
@@ -1647,6 +1649,19 @@ class ScenePrototype(WindowControls):
         old_x = self.sequence_state.target_x
         motion = getattr(self, "terrain_motion", None)
         old_bounds = self.player_collision_bounds() if motion is not None else None
+        if self.update_potion_controls():
+            frame = self.sequence_runtime.next_frame()
+            self.action, self.player_x = frame.action, frame.target_x
+            self.sequence_state.current_x = self.player_x
+            self.advance_terrain(old_x, old_bounds)
+            self.advance_combat()
+            self.advance_level_events()
+            self.advance_rebirth()
+            self.advance_audio()
+            self.render()
+            self.in_animation_tick = False
+            self.schedule_next_animation()
+            return
         if motion is not None and (motion.falling or motion.sinking or motion.dead):
             self.sequence_runtime.next_frame()
             self.advance_terrain(old_x, old_bounds)
@@ -1812,6 +1827,50 @@ class ScenePrototype(WindowControls):
     def _opening_active(self):
         opening = getattr(self, "opening", None)
         return opening is not None and opening.active
+
+    def update_potion_controls(self):
+        caverns = self.game.caverns
+        if caverns is None:
+            return False
+        from pop2.potions import pickup_target
+
+        potions, state, motion = caverns.potions, self.sequence_state, self.terrain_motion
+        fresh_shift = self.shift_held and not potions.shift_was_held
+        potions.shift_was_held = self.shift_held
+        if (motion is None or motion.falling or motion.dead or self.sword_drawn
+                or not self.combat.player.alive or self.ledge_hanging):
+            potions.picking = None
+            potions.drinking = potions.effect_pending = False
+            return False
+        if potions.drinking:
+            if state.sequence_id == 78:
+                return True
+            potions.drinking = False
+            potions.held_kind = 0
+        crouched = state.action == 109 and state.source_sequence_id in (50, 117)
+        if potions.picking is not None and not crouched:
+            if state.sequence_id in (50, 117):
+                return True
+            potions.picking = None
+        if not (crouched and (potions.picking is not None or fresh_shift
+                             or state.source_sequence_id == 50)
+                or fresh_shift and self._is_resting() and not self._combat_controls_locked()):
+            return False
+        target = pickup_target(self.level_map, motion, state, self.frames[state.action])
+        if target is None:
+            potions.picking = None
+            return False
+        tile, delta = target
+        self.player_x = state.target_x + delta
+        self.pending_action = None
+        self.run_active = self.run_stop_requested = self.run_cycle_boundary_pending = False
+        if crouched:
+            potions.take(tile)
+            self.start_sequence(78)
+        else:
+            potions.picking = tile.room, tile.row * 10 + tile.column
+            self.start_sequence(50)
+        return True
 
     def _combat_controls_locked(self):
         if getattr(self, "level_complete", False):
@@ -2115,6 +2174,13 @@ class ScenePrototype(WindowControls):
 
     def advance_level_events(self):
         if self.game.caverns is not None:
+            from pop2.caverns import cavern_flask_instances
+
+            potions = self.game.caverns.potions
+            potions.consume_events(self.sequence_state, self.combat.player)
+            potions.advance((tile.room, tile.row * 10 + tile.column)
+                for _command, tile in cavern_flask_instances(
+                    self.level_renderer.cavern_program, self.room_id, self.level_map))
             lava = self.game.caverns.lava
             lava.enter_room(self.room_id, self.level_renderer.cavern_program.get(
                 'lava', {}).get('rooms', {}).get(str(self.room_id), ()))
@@ -2323,10 +2389,11 @@ class ScenePrototype(WindowControls):
             return
         audio = getattr(self, "audio", None)
         if self.game.caverns is not None:
-            for cue in self.game.caverns.plates.songs:
+            for cue in (*self.game.caverns.plates.songs, *self.game.caverns.potions.songs):
                 if audio is not None and not audio.song_playing(cue):
                     audio.add_song(cue)
             self.game.caverns.plates.songs.clear()
+            self.game.caverns.potions.songs.clear()
         if audio is None:
             return
         if self.sequence_state.action == 167:
@@ -2392,6 +2459,10 @@ class ScenePrototype(WindowControls):
         snapshot = self.checkpoint
         if snapshot is None:
             max_life = self.combat.player.max_life if self.combat is not None else None
+            if self.game.caverns is not None:
+                initial = self.game.caverns.potions.starting_max_life
+                if initial is not None:
+                    max_life = initial
             self.restart_opening()
             if max_life is not None:
                 self.combat.player.life = self.combat.player.max_life = max_life
@@ -2819,6 +2890,15 @@ class ScenePrototype(WindowControls):
         attachment_type, shape_index, dx, dy = self.attachment_frames[
             self.frames[self.action].afrm_index
         ]
+        if attachment_type == 3 and self.game.caverns is not None:
+            from pop2.caverns import flask_assets
+
+            resources, palette = flask_assets()
+            shape_id = 3001 + shape_index
+            key = 'flask', shape_id
+            if key not in self.sword_sprite_cache:
+                self.sword_sprite_cache[key] = decode_shap(resources['SHAP'][shape_id]['data'], palette)
+            return self.sword_sprite_cache[key], dx, dy
         if attachment_type != 1 or shape_index < 0:
             return None
         shape_id = self.first_sword_shape_id + shape_index

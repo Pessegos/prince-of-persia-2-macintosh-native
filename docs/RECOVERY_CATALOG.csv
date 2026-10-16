@@ -149,7 +149,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 3,Modular Set 1,GetHorseShape,0x44f0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
 3,Modular Set 1,GetHorsePtInPlane,0x4572,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 3,Modular Set 1,DrawHorse,0x4608,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
-3,Modular Set 1,GetFlaskBubbleColor,0x46fc,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,7
+3,Modular Set 1,GetFlaskBubbleColor,0x46fc,jump_table,partial,pop2/caverns.py,level-three normal/mega body and two mirrored monochrome particle layers; all 196 native phase/room layers pixel matched; other environments incomplete,0,7
 3,Modular Set 1,DrawKidMeter,0x4902,jump_table,partial,pop2/combat_art.py,ordinary health icons; upgrade effects missing,7,5
 3,Modular Set 1,DrawOppMeter,0x4a8e,jump_table,partial,pop2/combat_art.py,ordinary guard health icons,9,8
 3,Modular Set 1,DrawSword,0x4cd2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,2
@@ -170,7 +170,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 3,Modular Set 1,GetBGSetShapeItem,0x5414,decoded,indexed-only,,No semantic review recorded in this prototype catalog,4,1
 3,Modular Set 1,LoadBGSet,0x54d0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,4
 3,Modular Set 1,LoadFlameShapes,0x555e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,3
-3,Modular Set 1,LoadFlaskSet,0x5614,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,3
+3,Modular Set 1,LoadFlaskSet,0x5614,decoded,partial,pop2/caverns.py,original Prince SHPL 3000 and CTBL relocation to indices 224-238; verified native RemapCTBL; full handle pipeline omitted,1,3
 3,Modular Set 1,LoadLevel,0x5680,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,19
 3,Modular Set 1,LoadLevelMap,0x57fa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,3
 3,Modular Set 1,LoadLevelMinimum,0x585a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,7
@@ -219,7 +219,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,IndexCell1,0x2a38,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,8,1
 4,Characters 2,AddCharX,0x2bae,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,102,0
 4,Characters 2,AddFCharX,0x2bda,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,15,0
-4,Characters 2,AnimChar,0x2c0c,jump_table,partial,pop2/sequence_runtime.py,supported opcodes including -16 level-transition request; others fail explicitly,36,39
+4,Characters 2,AnimChar,0x2c0c,jump_table,partial,pop2/sequence_runtime.py,supported opcodes including -14 pickup-effect events and -16 level-transition request; others fail explicitly,36,39
 4,Characters 2,GetSeqOp,0x305e,decoded,indexed-only,,No semantic review recorded in this prototype catalog,20,0
 4,Characters 2,hGetSequence,0x3098,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,1
 4,Characters 2,AnimCharTap,0x30e0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,5
@@ -236,7 +236,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,GetRow,0x3afa,jump_table,partial,pop2/terrain.py,signed row conversion,13,0
 4,Characters 2,PlayerCtrl,0x3b88,jump_table,partial,pop2/rebirth.py;pop2/scene_prototype.py;pop2/audio.py,ordinary dead-pose counter/retry gate with current/pending SDL audio completion,2,20
 4,Characters 2,IsLedge,0x3f44,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,2
-4,Characters 2,RemoveObj,0x406c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
+4,Characters 2,RemoveObj,0x406c,jump_table,partial,pop2/potions.py;pop2/terrain.py,level-three potion removal to floor 1 retaining foreground 0x0f00 decoration; other environments/story objects omitted,2,1
 4,Characters 2,ClipChar,0x4146,jump_table,partial,pop2/caverns.py;pop2/scene_prototype.py,cavern ordinary top clipping and Prince exit top/right rectangle; full native clipping pipeline not translated,2,13
 4,Characters 2,MakeFCharClipRect,0x4432,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,2
 4,Characters 2,IndexChar,0x4558,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
@@ -299,7 +299,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 5,Modular Set 2,MarkBufsForRect,0x19f8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,42,3
 5,Modular Set 2,PoPDiffRect,0x1b5c,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 5,Modular Set 2,Trigger,0x1c4c,decoded,partial,pop2/pressure_plates.py,"native linked target traversal; level-three stone gates, exits and all nine projectile traps dispatched",3,7
-5,Modular Set 2,TriggerFlask,0x1ce8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,2
+5,Modular Set 2,TriggerFlask,0x1ce8,jump_table,partial,pop2/potions.py;pop2/game_session.py,"initial phase Rnd(26)+1, original 28-update visible flask cycle; native Trob bank replaced",2,2
 5,Modular Set 2,TriggerGate,0x1d50,decoded,partial,pop2/pressure_plates.py,level-three reverse-plate dispatch; special level/story and closing-on-actor branches missing,1,3
 5,Modular Set 2,TriggerObject,0x1ec8,decoded,partial,pop2/pressure_plates.py;pop2/darts.py;pop2/scene_prototype.py,level-three closed exits and fresh-plate idle-shooter admission; other environment branches missing,1,6
 5,Modular Set 2,TriggerTorch,0x1ffa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,3
@@ -372,8 +372,8 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,GenCtrl,0x0560,jump_table,partial,pop2/scene_prototype.py;pop2/terrain.py,tested locomotion/sword/ledge and cavern Up exit admission/alignment to SEQS:70; ordinary release 11/23/99 with DoJumpHang preview; full input latches/special levels partial,2,23
 6,Characters 1,StairClimbing,0x0e8e,jump_table,partial,pop2/scene_prototype.py,ordinary ledge entry and standing crouch fallback via 1068 only,4,20
 6,Characters 1,DoStepFwd,0x1276,jump_table,partial,pop2/mac_input.py;pop2/terrain.py,ordinary clearance/caution; dynamic tiles missing,8,3
-6,Characters 1,TryPickUp,0x1350,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,4
-6,Characters 1,PickItUp,0x13d0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,19
+6,Characters 1,TryPickUp,0x1350,decoded,partial,pop2/potions.py;pop2/scene_prototype.py,current/forward normal and mega flask selection; 644 native admission/alignment/sequence/removal cases; sword and special flask branches omitted,2,4
+6,Characters 1,PickItUp,0x13d0,decoded,partial,pop2/potions.py;pop2/scene_prototype.py,"ordinary standing/crouched alignment, SEQS 50/78, native late effect event and healing/capacity cap; other object types omitted",1,19
 6,Characters 1,DoJumpUp,0x1600,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,5,11
 6,Characters 1,DoJumpBack,0x16d8,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,9
 6,Characters 1,DoJumpHigh,0x1748,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,15

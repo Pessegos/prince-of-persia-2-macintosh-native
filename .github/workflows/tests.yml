@@ -24,6 +24,6 @@ jobs:
       - name: First-run import process and cancellation
         run: python -m unittest -q tests.test_asset_import
       - name: Desert and cavern rules without original game files
-        run: python -m unittest -q tests.test_desert tests.test_caverns tests.test_loose_floors tests.test_ceiling tests.test_stone_gates tests.test_lava tests.test_pressure_plates tests.test_cavern_exits tests.test_darts
+        run: python -m unittest -q tests.test_desert tests.test_caverns tests.test_loose_floors tests.test_ceiling tests.test_stone_gates tests.test_lava tests.test_pressure_plates tests.test_cavern_exits tests.test_darts tests.test_potions
       - name: Screenshot export and game-menu capture controls
         run: python -m unittest -q tests.test_screenshots tests.test_development_menu.MenuModelTests

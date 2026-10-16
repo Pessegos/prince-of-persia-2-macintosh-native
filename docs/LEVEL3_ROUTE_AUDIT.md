@@ -100,8 +100,9 @@ Macintosh-faithful level 3, even in the starting room.
 
 - Export version 3 preserves BF library identity. Flask bodies and colored
   monochrome masks now use Prince resources and their relocated palette;
-  large cavern rocks no longer substitute for potion pieces. Collection and
-  upgrades remain unimplemented.
+  large cavern rocks no longer substitute for potion pieces. Subsequent work
+  corrects the palette's one-index relocation error and implements the original
+  animated particles, pickup/drinking sequence, normal healing and both upgrades.
 - Room 1's entry door closes from native FirstFrame/CloseExit/ATMExit data,
   including the final impact cue. Restart resets it. Tiles 16/17 are the portal
   halves, not two pressure plates; general gate/plate recovery remains separate.
@@ -119,5 +120,5 @@ Macintosh-faithful level 3, even in the starting room.
 
 See [Cavern recovery](CAVERN_RECOVERY.md) for native addresses and validation.
 The next work remains terrain/object semantics and actor occlusion, followed by
-potion colors and behavior, skeletons, hazards, music and completion. These corrections do not
+special potion types in later levels, skeletons, hazards, music and completion. These corrections do not
 constitute a completed level-3 route.
