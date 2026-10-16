@@ -71,6 +71,62 @@ class InputRecoveryTests(unittest.TestCase):
                     scene.horizontal_key(None, direction, True)
                     self.assertEqual(scene.sequence_state.sequence_id, SHIFT_STEP_SEQUENCE)
 
+    def test_hard_fall_recovery_discards_up_tap_but_reads_still_held_keys(self):
+        for facing in (0, 1):
+            direction = 1 if facing else -1
+            for recovery_frame in (0, 1, 10, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30):
+                for held_up in (False, True):
+                    with self.subTest(facing=facing, recovery_frame=recovery_frame, held_up=held_up):
+                        scene = self.fixture.sword_scene()
+                        scene.sequence_state.facing = facing
+                        scene.held_directions = [direction]
+                        scene.start_sequence(20)
+                        scene.advance_animation()
+                        for _ in range(recovery_frame):
+                            scene.advance_animation()
+                        self.assertEqual(scene.sequence_state.animation_state, 5)
+                        scene.up_key(None)
+                        scene.advance_animation()
+                        if not held_up:
+                            scene.set_key_state('up', False)
+                        for _ in range(40):
+                            scene.advance_animation()
+                            if scene.sequence_state.source_sequence_id != 20:
+                                break
+                        self.assertEqual(scene.sequence_state.source_sequence_id,
+                                         JUMP_FORWARD_SEQUENCE if held_up else 1)
+                        self.assertEqual(scene.sequence_state.facing, facing)
+                        self.assertIsNone(scene.pending_action)
+
+    def test_up_tap_after_hard_fall_protected_recovery_still_queues_jump(self):
+        for facing in (0, 1):
+            scene = self.fixture.sword_scene()
+            scene.sequence_state.facing = facing
+            scene.held_directions = [1 if facing else -1]
+            scene.start_sequence(20)
+            for _ in range(32):
+                scene.advance_animation()
+            self.assertEqual((scene.action, scene.sequence_state.animation_state), (117, 1))
+            scene.up_key(None)
+            scene.set_key_state('up', False)
+            for _ in range(5):
+                scene.advance_animation()
+                if scene.sequence_state.source_sequence_id != 20:
+                    break
+            self.assertEqual(scene.sequence_state.source_sequence_id, JUMP_FORWARD_SEQUENCE)
+
+    def test_hard_fall_recovery_keeps_buffered_sword_draw(self):
+        scene = self.fixture.sword_scene()
+        scene.start_sequence(20)
+        scene.advance_animation()
+        scene.set_key_state('ctrl', True)
+        scene.set_key_state('ctrl', False)
+        for _ in range(40):
+            scene.advance_animation()
+            if scene.sequence_state.source_sequence_id != 20:
+                break
+        self.assertEqual(scene.sequence_state.source_sequence_id, SWORD_DRAW_SEQUENCE)
+
     def test_turn_ready_poses_accept_all_ordinary_buffered_commands(self):
         from pop2.scene_prototype import BufferedCommand
 

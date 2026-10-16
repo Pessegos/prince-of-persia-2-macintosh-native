@@ -789,6 +789,40 @@ class RooftopSceneTests(unittest.TestCase):
                 traces.append(trace)
         self.assertEqual(traces[1:], [traces[0], traces[0]])
 
+    def test_hurt_fall_with_held_run_ignores_a_released_up_during_recovery(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.peaceful = True
+        for facing in (0, 1):
+            traces = []
+            for tap_up in (False, True):
+                with self.subTest(facing=facing, tap_up=tap_up), patch.object(scene, 'render'):
+                    scene.jump_to_room(3, row=2, x=150, facing=facing)
+                    state, motion = scene.sequence_state, scene.terrain_motion
+                    scene.held_directions = [1 if facing else -1]
+                    scene.physics.select(scene.sequence_runtime, 12)
+                    scene.action, scene.player_x = state.action, state.target_x
+                    state.current_y, state.vertical_velocity = -45, 50
+                    motion.falling = True
+                    self.tick()
+                    self.assertEqual(state.source_sequence_id, 20)
+                    self.assertEqual(scene.combat.player.life, 2)
+                    trace = []
+                    for tick in range(40):
+                        if tap_up and tick == 8:
+                            scene.up_key(None)
+                        self.tick()
+                        if tap_up and tick == 8:
+                            scene.set_key_state('up', False)
+                        trace.append((state.sequence_id, state.action, state.target_x))
+                        if state.source_sequence_id != 20:
+                            break
+                    self.assertEqual(state.source_sequence_id, 1)
+                    self.assertTrue(scene.run_active)
+                    self.assertEqual(scene.combat.player.life, 2)
+                    traces.append(trace)
+            self.assertEqual(traces[0], traces[1])
+
     def test_cavern_landing_down_release_rises_once_without_replaying_crouch(self):
         scene = self.scene
         scene.load_level(3)

@@ -75,6 +75,10 @@ Examples from original SEQS data:
   not survive; a request sampled after that reset can survive.
 - Running jump: pose 44 clears; the next run pass samples held keys afresh.
   This subset is implemented in `update_running_jump_controls`.
+- Hard-fall recovery: SEQS:20 -> 212 -> 49 stays in mode 5 through pose 116.
+  `update_fall_recovery_controls` discards directional taps during that part;
+  held keys remain available afterward. This does not apply a global mode-5
+  reset to the port's separate wall-climb buffering extensions.
 - Vertical landing: pose 83 is mode 5; later landing poses return to mode 1.
 - Crouch rise: poses 110-116 are mode 5; 117-119 return to mode 1.
 - Ordinary climb: pose 149 is mode 5 before 118/119.
@@ -274,6 +278,29 @@ This is another intentional extension, not a recovered native timing rule.
 Drawing the sword still accepts a first queued attack, and block/counter,
 movement and sheathing commands are not delayed. Using animation poses keeps
 the window frozen while paused and avoids depending on OS key-repeat timing.
+
+## Hard-Fall Recovery Input
+
+HitFloor selects SEQS:20 for a surviving, damaging Prince fall. Its link to
+212 holds pose 109 for 21 frames, then rises through 49. GenCtrl's mode-5
+gate (6:0576-059c) clears directional latches during poses 108/109/110-116;
+pose 117 returns to mode 1. Original instruction execution confirmed 72
+reset/resampling cases across both facings, nine protected poses, held or
+released Up, and fresh or consumed old Up. With Forward still held, a
+released Up resumes running at rest; keeping Up held selects a jump instead.
+
+The host now clears pending horizontal/jump/crouch/crawl commands on each
+protected recovery pass, leaving physical key holds and Ctrl requests alone.
+Held Up uses the existing idle-transition repeat admission, marked consumed
+until then so releasing it cannot invoke the short-tap fallback. Released Up
+does not produce a delayed standing forward jump. Requests sampled after the
+mode-5 portion can still queue normally. Animation poses, recovery duration,
+impact damage, ordinary soft landings and wall-impact/climb queues are unchanged.
+
+Controller regressions cover taps and holds at 14 protected recovery updates
+in both facings, a late tap at pose 117 and buffered sword draw. A real-terrain
+fall checks that the complete recovery/run trace matches the no-Up baseline
+in both directions, with exactly one life lost.
 
 ## Holding Up After A Climb
 

@@ -1092,6 +1092,20 @@ class ScenePrototype(WindowControls):
         # An airborne reversal waits for the first run pose after landing.
         return self.dispatch_pending_action(was_running=True)
 
+    def update_fall_recovery_controls(self):
+        state = self.sequence_state
+        if state.source_sequence_id != 20 or state.animation_state != 5:
+            return
+        # GenCtrl 6:0576-059c clears directions throughout the hard-fall
+        # recovery (20 -> 212 -> 49), but not Ctrl. Re-read held Up at rest;
+        # a released tap must not outlive this protected part of the rise.
+        if self.pending_action is not None and self.pending_action.kind in (
+            "horizontal", "jump", "crouch", "crawl"
+        ):
+            self.pending_action = None
+        self.jump_started_for_press = self.up_held
+        self.jump_repeat_armed = self.up_held
+
     def update_running_jump_controls(self):
         state = self.sequence_state
         if state.sequence_id == RUN_JUMP_SEQUENCE and state.action == 44:
@@ -1703,6 +1717,7 @@ class ScenePrototype(WindowControls):
             self.in_animation_tick = False
             self.schedule_next_animation()
             return
+        self.update_fall_recovery_controls()
         self.update_running_jump_controls()
         if not self.resume_combat_turn():
             if not self.resume_sword_attack_after_block():
