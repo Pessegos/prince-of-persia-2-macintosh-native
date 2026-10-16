@@ -245,7 +245,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,LoadShad,0x4ac0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,31,0
 4,Characters 2,CheckBarr,0x4e34,jump_table,partial,pop2/terrain.py,standing-turn mode-7 exclusion; full barriers not translated,1,20
 4,Characters 2,InitColDetBufs,0x50da,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,9
-4,Characters 2,GetBarrCode,0x52bc,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,10,0
+4,Characters 2,GetBarrCode,0x52bc,jump_table,partial,pop2/terrain.py,wall-spike type 3 reserved for cautious DoStepFwd distance query; ordinary collision keeps type 4; other barrier special cases partial,10,0
 4,Characters 2,GetColDetData,0x536a,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
 4,Characters 2,GetLeftBarr,0x541a,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
 4,Characters 2,GetRightBarr,0x547c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
@@ -331,12 +331,12 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 5,Modular Set 2,GetTrobRoomCell,0x38a6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,13,0
 5,Modular Set 2,GetTrobId,0x3900,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,0
 5,Modular Set 2,IsVisibleRoomCell,0x3960,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,5,0
-5,Modular Set 2,ATMSpikes,0x39c8,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,4
-5,Modular Set 2,DrawObjSpikes,0x3e12,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
+5,Modular Set 2,ATMSpikes,0x39c8,prologue,partial,pop2/wall_spikes.py,"cavern visible-room/left-neighbor MOB lifetime, retract/hold phases and cues 282/284; 256 native phase updates; shared MOB bank incomplete",0,4
+5,Modular Set 2,DrawObjSpikes,0x3e12,jump_table,partial,pop2/wall_spikes.py;pop2/caverns.py;pop2/level_rendering.py,"cavern back/front and blood banks, DATA offsets and masked transfer; all 18 representative native draw commands matched; other environments omitted",1,2
 5,Modular Set 2,GetSpikeIdx,0x3f0c,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 5,Modular Set 2,GetSpikeMobRoomRow,0x3f42,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,1
-5,Modular Set 2,MobSpikes,0x3fa4,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
-5,Modular Set 2,TriggerSpikes,0x40a0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,2
+5,Modular Set 2,MobSpikes,0x3fa4,decoded,partial,pop2/wall_spikes.py;pop2/scene_prototype.py,outward phase 1/2 hit admission; native Prince trigger/hit/sequence/alignment comparisons over 23400 supplied-bound cases; temple/special actors omitted,1,0
+5,Modular Set 2,TriggerSpikes,0x40a0,decoded,partial,pop2/wall_spikes.py;pop2/scene_prototype.py,"cavern idle activation and held-pose renewal, shared MOB capacity not unified with other hazards",1,2
 5,Modular Set 2,AddKidDeathSong,0x4afc,jump_table,partial,pop2/rebirth.py;pop2/audio.py;tools/extract_audio.py,"extracted death-method mapping, level-1 songs and actual playback completion",1,2
 5,Modular Set 2,AddKidScream,0x4b5a,jump_table,partial,pop2/terrain.py,ordinary rooftop Prince long fall and harbor room exclusions,2,1
 5,Modular Set 2,AddSFX,0x4cde,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2

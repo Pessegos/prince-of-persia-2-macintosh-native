@@ -751,7 +751,7 @@ is shared with ordinary guards and other environments, without room overrides.
 
 This is the scenery foundation, not a completed playable level. Original room
 transitions and the common movement runtime are available. Cavern-specific
-floor classifications, spikes,
+floor classifications,
 crushers, special potion types from later levels, special draw modes and
 skeleton enemies still require semantic recovery and integrated tests.
 The ordinary-guard decoder does not reinterpret skeleton spawn records; the
@@ -815,3 +815,39 @@ not certify all hazards, object interactions or completion of level 3.
 room-link traversal, impacts, decoration changes, ordinary crushing, dynamic
 floor/climb repainting, pause and restart. Its imported-resource cases are
 skipped on CI; the pure controller cases run without proprietary game files.
+
+## Wall Spikes
+
+The three LEVL:2002 type-2 wall traps are in Rooms 11/14/21, cells 22/20/24.
+CheckSpikes (5:3c42) uses the physical row, supporting-foot column minus one,
+Y >= row*120+35, facing, body width and sword mode. CheckSpikeHit (5:3af8)
+checks the current and preceding column, Y >= row*120+56, the native left
+body edge and pose exemptions. MobSpikes (5:3fa4) makes only outward phases
+1 and 2 lethal. Cautious-step poses 121-132 and idle pose 15 are exempt;
+the extended hold is not a recurring damage zone.
+
+TriggerSpikes (5:40a0) starts at phase 1. The phase controller (5:3fda)
+advances to 2 with cue 282, then 143; it counts down through 129 before
+retracting through 4/5/6/0 with cue 284. Nearby actors renew the hold to 143,
+not the outward attack. An impalement latches 240, selects Prince SEQS 51
+or 54 according to facing, aligns to tile X+90, turns left, requests cue 281
+and death method 4. The original two death resources finish at poses 242/243.
+Ordinary supported NPCs use SEQS 188/189; skeleton mechanics remain separate.
+
+InitCaveSpikes (8:2c18) binds DATA banks 70/73/72/71/70/69/74 and
+76/79/78/77/76/75/80 to DrawObjSpikes (5:3e12). Original SHAPs and DATA
+offsets are drawn behind and in front of actors, including the blood bank.
+No new asset export or import is required. Offscreen live MOBs clear their
+foreground phase; blood survives room changes and is reset by level restart.
+
+GetBarrCode (4:52bc) uses extended type-3 spike clearance only when c944 is
+set inside DoStepFwd (6:1280-1336). Physical wall collision must use ordinary
+type 4; using type 3 there stopped a run before it could trigger the trap.
+
+Native execution matched 23400 supplied-body-bound trigger/contact/Prince
+death-alignment cases across the three traps, all 256 phase-controller
+inputs, and 18 back/front drawing-command cases. Resource-backed tests cover
+running and cautious approaches at all three traps, both Prince death
+sequences, pause and restart. Pure tests run on CI without game resources.
+Temple-specific behavior, skeleton interactions and a unified shared MOB
+bank are not claimed by this cavern implementation.

@@ -526,8 +526,9 @@ class LevelMap:
                     continue
                 # GetLeftBarr/GetRightBarr, code 4, DATA c9e0/c9f2[barrier].
                 barrier = (5 if stone_gate else 1 if desert_exit else
-                           2 if tile.kind == 7 and bottom - top + 1 <= 34 else
-                           3 if tile.kind == 2 and (tile.foreground & 255) < 3 else 4)
+                           2 if tile.kind == 7 and bottom - top + 1 <= 34 else 4)
+                # Tile 2's extended barrier (type 3) exists only while
+                # DoStepFwd queries clearance with c944 set, not in Collide.
                 left_offset, right_offset = {1: (40, 0), 2: (0, 50), 3: (-22, -22),
                                              4: (3, 0), 5: (18, 0)}[barrier]
                 wall_left = col * TILE_WIDTH + 22 + left_offset

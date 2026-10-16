@@ -2077,6 +2077,7 @@ class ScenePrototype(WindowControls):
             return
         for actor in (self.combat.player, *self.combat.active_guards()):
             actor.state.hit_flash = False
+        self.sequence_state.sound_events.extend(caverns.spikes.advance(self.level_map, self.room_id))
         self.sequence_state.sound_events.extend(caverns.plates.darts.advance(
             self.level_map, self.room_id, self.player_collision_bounds(), self.sequence_state))
         # FrameAdv 2:622c-6230 moves existing debris before AnimTrobs.
@@ -2125,6 +2126,42 @@ class ScenePrototype(WindowControls):
             for cue in caverns.plates.stopped_sounds:
                 self.audio.stop_sound(cue)
         caverns.plates.stopped_sounds.clear()
+
+    def check_cavern_spikes(self):
+        spikes = self.game.caverns.spikes
+        for actor in (self.combat.player, *self.combat.active_guards()):
+            state, motion = actor.state, actor.terrain_motion
+            if motion is None:
+                continue
+            player = actor is self.combat.player
+            record = (self.frames[state.action] if player else
+                      self.guard_art.frames[guard_frame_index(state.action)])
+            bounds = self.player_bounds() if player else self.guard_art.bounds(state, floor_y(motion.row))
+            spikes.approach(self.level_map, motion, state, record, bounds, actor.sword_drawn)
+            collision = (self.player_collision_bounds() if player else
+                         self.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
+            hit = spikes.contact(self.level_map, motion, state, record, collision,
+                                 actor.alive, actor.sword_drawn)
+            if hit is None:
+                continue
+            sequence, state.target_x = hit
+            state.current_x = state.target_x
+            state.current_y = state.horizontal_velocity = state.vertical_velocity = 0
+            state.facing = 0
+            actor.life, actor.recovering = 0, False
+            motion.dead, motion.falling = True, False
+            if not player:
+                sequence = 189 if sequence == 54 else 188
+                actor.targetable = False
+            self.physics.select(actor.runtime, sequence)
+            state.sound_events.append(281)
+            if player:
+                self.clear_keys(None)
+                self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
+                self.death.begin(4)
+                self.death.music_method = 4
+                self.action, self.player_x = state.action, state.target_x
+                self.status.set('Defeated')
 
     def check_cavern_darts(self):
         from pop2.darts import dart_death
@@ -2226,6 +2263,7 @@ class ScenePrototype(WindowControls):
                     for event in shakes:
                         state.sequence_events.remove(event)
             self.check_cavern_darts()
+            self.check_cavern_spikes()
             self.sequence_state.sound_events.extend(self.game.caverns.advance())
             self.game.caverns.advance_torches(
                 self.level_renderer.cavern_program.get('torches', {}).get(str(self.room_id), ()))
@@ -3081,7 +3119,8 @@ class ScenePrototype(WindowControls):
             layer.paste(glass, (glass_x, character_sprite_top(glass_y, glass.height)), glass)
             frame = self.composite_actor(frame, layer)
         frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor, front=True,
-                                                  desert=getattr(self.game, "desert", None))
+                                                  desert=getattr(self.game, "desert", None),
+                                                  caverns=self.game.caverns)
         viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
         viewport.paste(frame, (ROOM_ORIGIN_X, 0))
         if combat is not None and not self.death.prompt_visible:

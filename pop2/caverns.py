@@ -471,6 +471,14 @@ def draw_cavern_falling(frame, room_id, state, level, art):
     return frame
 
 
+def draw_cavern_spikes(frame, room_id, state, terrain, front=False):
+    _program, resources, palette, shapes = cavern_assets()
+    for command in state.spikes.drawing_commands(terrain, room_id, front):
+        sprite = cavern_command_sprite(command, resources, palette, shapes)
+        frame.paste(sprite, (command[2], command[3] - sprite.height + 1), sprite)
+    return frame
+
+
 def draw_cavern_darts(frame, room_id, state):
     _program, resources, palette, shapes = cavern_assets()
     for dart in state.plates.darts.projectiles:

@@ -7,6 +7,7 @@ from pop2.loose_floors import LooseFloors
 from pop2.lava import Lava
 from pop2.pressure_plates import PressurePlates
 from pop2.potions import Potions
+from pop2.wall_spikes import WallSpikes
 
 
 @dataclass
@@ -20,6 +21,7 @@ class CavernState:
     lava: Lava = field(default_factory=Lava)
     plates: PressurePlates = field(default_factory=PressurePlates)
     potions: Potions = field(default_factory=Potions)
+    spikes: WallSpikes = field(default_factory=WallSpikes)
 
     def configure_lava(self, metadata, enhanced=True):
         self.lava = Lava(metadata, enhanced=enhanced)
@@ -55,6 +57,7 @@ class CavernState:
             return self.potions.tiles[room, cell][1]
         value = self.potions.phases.get((room, cell), value)
         value = self.plates.foreground.get((room, cell), value)
+        value = self.spikes.foreground.get((room, cell), value)
         if (room, cell) in self.loose.tiles:
             kind, foreground = self.loose.tiles[room, cell]
             if kind == 19 and (room, cell) in self.torches:
