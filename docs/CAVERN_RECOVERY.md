@@ -480,9 +480,12 @@ with unrelated hazards remain outside this ordinary-actor implementation.
 
 DrawCaveDart (8:1aba) supplies mouth SHAPs 3591/3593/3592/3591. Export version
 14 binds those slots to each logical shooter and recomputes their different
-dimension-dependent clips. DrawObj (3:4032) passes shape 94 to AddMid, which
-subtracts one, so the flying stone is SHAP:3593 at its inclusive bottom anchor.
-No custom trap artwork or approximate replacement sprite is used.
+dimension-dependent clips. DrawObj (3:4032) passes one-based shape 94 to AddMid.
+Its stored slot is zero-based 93, but Caverns SHPL:3500 starts at resource
+3501, so DrawMidItem (3:3144-3152) resolves SHAP:3594, the orange/yellow 5x5
+projectile. The earlier portable 3593 selection was off by one and displayed
+the dark 5x3 mouth image instead. The inclusive bottom anchor, flight physics
+and damage rules are unchanged. No custom replacement artwork is used.
 
 Native execution matched 3,240 controller/projectile updates across all nine
 buttons, with single presses, holding, release/repress and rapid attempts.

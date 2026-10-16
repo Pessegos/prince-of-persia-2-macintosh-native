@@ -436,11 +436,11 @@ def draw_cavern_darts(frame, room_id, state):
     _program, resources, palette, shapes = cavern_assets()
     for dart in state.plates.darts.projectiles:
         # 8:2e1a emits a type-2 object only in the current room and while
-        # flying. DrawObj 3:4032 passes shape 94 to AddMid, which subtracts
-        # one: SHAP 3593, with the character-style inclusive bottom anchor.
+        # flying. DrawObj passes one-based shape 94. AddMid stores slot 93,
+        # but SHPL:3500 starts at 3501, so the resource is SHAP:3594.
         if dart.room != room_id or dart.dy in (-3, -1):
             continue
-        sprite = cavern_command_sprite(['back', 3593, dart.x, dart.y, 16],
+        sprite = cavern_command_sprite(['back', 3594, dart.x, dart.y, 16],
                                         resources, palette, shapes)
         frame.paste(sprite, (dart.x, dart.y - sprite.height + 1), sprite)
     return frame

@@ -2,9 +2,12 @@ import json
 import struct
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
+
+from PIL import Image, ImageChops
 
 from pop2.cavern_state import CavernState
-from pop2.caverns import pressure_drawing_commands
+from pop2.caverns import draw_cavern_darts, pressure_drawing_commands
 from pop2.darts import Dart, dart_death
 from pop2.paths import ASSET_DIR
 from pop2.sequence_runtime import SequenceState
@@ -149,6 +152,21 @@ class DartTests(unittest.TestCase):
         self.darts.spawn(0, 12)
         self.assertEqual(CavernState().plates.darts.projectiles, [])
 
+    def test_flying_projectile_uses_shape_3594_at_its_inclusive_bottom_anchor(self):
+        sprite = Image.new('RGBA', (5, 5), (255, 128, 0, 255))
+        sprite.putpixel((0, 0), (0, 0, 0, 0))
+        self.darts.projectiles = [Dart(0, 142, 196, 1), Dart(1, 160, 177, 1),
+                                 Dart(0, 180, 158, 1, dy=-3), Dart(0, 200, 139, 1, dy=-1)]
+        frame = Image.new('RGBA', (510, 365), (30, 20, 10, 255))
+        expected = frame.copy()
+        expected.paste(sprite, (142, 192), sprite)
+        with patch('pop2.caverns.cavern_assets', return_value=(None, {}, {}, {})), \
+                patch('pop2.caverns.cavern_command_sprite', return_value=sprite) as decode:
+            self.assertIs(draw_cavern_darts(frame, 0, self.caverns), frame)
+        decode.assert_called_once_with(['back', 3594, 142, 196, 16], {}, {}, {})
+        self.assertIsNone(ImageChops.difference(frame, expected).convert('RGB').getbbox())
+        self.assertEqual(self.darts.projectiles[0], Dart(0, 142, 196, 1))
+
     def test_shooter_mouth_replaces_only_its_native_slot_and_recomputes_the_clip(self):
         command = ['front', 3591, 127, 234, 16, 1, [228, 127, 234, 135], 4, 2, 1]
         record = {'kind': 33, 'foreground': 512, 'commands': [('front', 3591, 4, 2, 1)]}
@@ -160,6 +178,28 @@ class DartTests(unittest.TestCase):
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class ImportedDartTests(unittest.TestCase):
+    def test_projectile_pixels_match_native_one_based_shpl_lookup_not_the_mouth(self):
+        from pop2.render_opening import decode_shap, load_resource_file
+        from pop2.caverns import cavern_assets
+
+        resources = load_resource_file('Caverns.rsrc')
+        first, count = struct.unpack('>2H', resources['SHPL'][3500]['data'])
+        self.assertGreaterEqual(count, 94)
+        shape = first + 94 - 1
+        self.assertEqual(shape, 3594)
+        palette = cavern_assets()[2]
+        sprite = decode_shap(resources['SHAP'][shape]['data'], palette)
+        self.assertEqual(sprite.size, (5, 5))
+        self.assertTrue(any(r > 200 and g > 80 and b < 50 and a
+                            for _, (r, g, b, a) in sprite.getcolors()))
+        state = CavernState()
+        state.plates.darts.projectiles = [Dart(0, 142, 196, 1)]
+        expected = Image.new('RGBA', (510, 365), (30, 20, 10, 255))
+        frame = expected.copy()
+        expected.paste(sprite, (142, 192), sprite)
+        draw_cavern_darts(frame, 0, state)
+        self.assertIsNone(ImageChops.difference(frame, expected).convert('RGB').getbbox())
+
     def test_running_over_both_buttons_fires_and_hits_without_an_animation_break(self):
         from tests.test_terrain import RooftopSceneTests
 
