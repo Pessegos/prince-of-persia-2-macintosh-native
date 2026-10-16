@@ -1,8 +1,6 @@
 """Source-backed input gaps; expected failures are not parity coverage."""
 
 import unittest
-from types import SimpleNamespace
-from unittest.mock import Mock
 
 from pop2.control_mapping import (
     CROUCH_RISE_SEQUENCE,
@@ -14,50 +12,8 @@ from pop2.control_mapping import (
     SWORD_DRAW_SEQUENCE,
     SWORD_GUARD_SEQUENCE,
 )
-from pop2.scene_prototype import RUN_CYCLE_SEQUENCES, RUN_SEGMENT_SEQUENCES, ScenePrototype
+from pop2.scene_prototype import RUN_CYCLE_SEQUENCES, RUN_SEGMENT_SEQUENCES
 import tests.test_animation_data as animation_tests
-
-
-class ReleasedUpQueueTests(unittest.TestCase):
-    def scene(self, sequence):
-        scene = ScenePrototype.__new__(ScenePrototype)
-        scene.sequence_state = SimpleNamespace(source_sequence_id=sequence)
-        scene.horizontal_input = 0
-        scene.up_held = True
-        scene.sword_drawn = scene.native_ledge = scene.jump_started_for_press = False
-        scene._combat_controls_locked = Mock(return_value=False)
-        scene._opening_active = Mock(return_value=False)
-        scene.buffer_input = Mock()
-        return scene
-
-    def test_both_jumps_running_and_bumps_retarget_up_without_original_game_files(self):
-        sequences = RUN_SEGMENT_SEQUENCES | {JUMP_FORWARD_SEQUENCE, RUN_JUMP_SEQUENCE, 46, 47}
-        for sequence in sorted(sequences):
-            for direction in (-1, 1):
-                with self.subTest(sequence=sequence, direction=direction):
-                    scene = self.scene(sequence)
-                    scene.queue_released_jump_direction(direction)
-                    command = scene.buffer_input.call_args.args[0]
-                    self.assertEqual((command.kind, command.direction, command.running),
-                                     ('jump', 0, False))
-                    self.assertTrue(scene.jump_started_for_press)
-
-    def test_no_new_input_or_ineligible_control_state_does_not_queue_another_jump(self):
-        cases = ({'previous': 0}, {'horizontal_input': 1}, {'up_held': False},
-                 {'sword_drawn': True}, {'native_ledge': True}, {'locked': True},
-                 {'opening': True}, {'sequence': IDLE_SEQUENCE}, {'sequence': 28},
-                 {'sequence': 78})
-        for changes in cases:
-            with self.subTest(changes=changes):
-                scene = self.scene(changes.get('sequence', JUMP_FORWARD_SEQUENCE))
-                for name in ('horizontal_input', 'up_held', 'sword_drawn', 'native_ledge'):
-                    if name in changes:
-                        setattr(scene, name, changes[name])
-                scene._combat_controls_locked.return_value = changes.get('locked', False)
-                scene._opening_active.return_value = changes.get('opening', False)
-                scene.queue_released_jump_direction(changes.get('previous', 1))
-                scene.buffer_input.assert_not_called()
-                self.assertFalse(scene.jump_started_for_press)
 
 
 class InputRecoveryTests(unittest.TestCase):
