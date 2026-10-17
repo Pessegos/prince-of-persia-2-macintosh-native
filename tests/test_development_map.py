@@ -1,4 +1,6 @@
 import random
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -218,6 +220,24 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         self.assertIsNotNone(ImageChops.difference(high, enlarged).getbbox())
         atlas.detail((928, 388))
         self.assertEqual(len(atlas.scaled_images), 2)
+
+    def test_disk_cache_reuses_native_room_art_in_a_new_session_and_invalidates(self):
+        from pop2.development_map import cached_development_map
+
+        level = self.resources.level(3)
+        with TemporaryDirectory() as directory:
+            path = Path(directory)
+            first = cached_development_map(level, 'art-v1', path)
+            with patch('pop2.development_map.build_development_map',
+                       side_effect=AssertionError('Warm cache rebuilt artwork')):
+                second = cached_development_map(level, 'art-v1', path)
+            self.assertEqual(first.rooms, second.rooms)
+            self.assertEqual(first.positions, second.positions)
+            self.assertEqual(first.enemy_rooms, second.enemy_rooms)
+            self.assertEqual(first.detail((1830, 982)).tobytes(), second.detail((1830, 982)).tobytes())
+            with patch('pop2.development_map.build_development_map', return_value=first) as build:
+                cached_development_map(level, 'art-v2', path)
+                build.assert_called_once_with(level)
 
     def test_native_and_hd_redraws_reuse_both_images_without_resizing_rooms(self):
         atlas = build_development_map(self.resources.level(3))

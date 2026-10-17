@@ -204,3 +204,33 @@ def build_development_map(level, include_enemies=True):
     return DevelopmentMap(image, rooms, {labels[room]: point for room, point in positions.items()},
                           frozenset(labels[room] for room, actors in enemies[1].items() if actors)
                           if enemies is not None else frozenset(), frames)
+
+
+def cached_development_map(level, fingerprint, directory=None):
+    from pop2.paths import ASSET_DIR
+    from pop2.preview_cache import read_preview, write_preview
+
+    path = (directory or ASSET_DIR / '.developer-cache') / f'level-{level.number}.zip'
+    cached = read_preview(path, fingerprint)
+    if cached is not None:
+        try:
+            metadata, images = cached
+            rooms = {label: tuple(rect) for label, rect in metadata['rooms'].items()}
+            positions = {label: tuple(point) for label, point in metadata['positions'].items()}
+            frames = {label: images[label] for label in rooms}
+            if (images['overview'].size != MAP_SIZE or not rooms or set(rooms) != set(positions)
+                    or any(len(rect) != 4 or not 0 <= rect[0] < rect[2] <= MAP_SIZE[0]
+                           or not 0 <= rect[1] < rect[3] <= MAP_SIZE[1] for rect in rooms.values())
+                    or any(len(point) != 2 or any(type(v) is not int for v in point)
+                           for point in positions.values())
+                    or any(frame.size != ROOM_SIZE for frame in frames.values())):
+                raise ValueError('Invalid cached map geometry')
+            return DevelopmentMap(images['overview'], rooms, positions,
+                                  frozenset(metadata['enemies']), frames)
+        except (ValueError, KeyError, TypeError, IndexError, AttributeError):
+            pass
+    result = build_development_map(level)
+    write_preview(path, fingerprint,
+                  dict(rooms=result.rooms, positions=result.positions, enemies=sorted(result.enemy_rooms)),
+                  dict(overview=result.image, **result.source_frames))
+    return result

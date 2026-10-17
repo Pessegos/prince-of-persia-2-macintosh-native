@@ -3006,14 +3006,21 @@ class ScenePrototype(WindowControls):
         return self.development_level_options
 
     def development_map(self, number):
-        from pop2.development_map import build_development_map
+        from pop2.development_map import cached_development_map
 
         cache = getattr(self, 'development_maps', None)
         if cache is None:
             self.development_maps = cache = {}
         if number not in cache:
-            cache[number] = build_development_map(self.resources.level(number))
+            cache[number] = cached_development_map(self.resources.level(number), self.preview_fingerprint())
         return cache[number]
+
+    def preview_fingerprint(self):
+        from pop2.preview_cache import preview_fingerprint
+
+        if not hasattr(self, 'development_preview_fingerprint'):
+            self.development_preview_fingerprint = preview_fingerprint()
+        return self.development_preview_fingerprint
 
     def screen_label(self, room):
         return next((label for label, target in self.dev_screens().items() if target == room),

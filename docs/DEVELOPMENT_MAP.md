@@ -56,8 +56,14 @@ mapping. The level popup and toolbar tooltips are restored above the detailed
 map without changing the rest of the presented frame.
 
 Map creation waits for Open map, not F3 itself, with no startup precomputation
-or image-file dependency. Native room frames and the compact overview are
-reused. A bounded two-size cache retains both the native menu image and the HD
+or bundled image-file dependency. A disposable local archive in
+`assets/.developer-cache/level-N.zip` retains the lossless RGB room sources and
+overview between launches. A content fingerprint of imported resources/programs
+and Python rendering code rejects stale artwork after updates. Invalid or
+missing archives rebuild normally; write failures do not prevent use of the map.
+Only the first build after import or a relevant update needs full rendering.
+Native room frames and the compact overview are reused. A bounded two-size
+memory cache retains both the native menu image and the HD
 map, avoiding eviction/reconstruction as the two presentations alternate.
 
 Pointer changes redraw the developer overlay over the frozen clean game image,
