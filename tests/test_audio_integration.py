@@ -23,6 +23,15 @@ import tests.test_terrain as terrain_tests
 @unittest.skipUnless((ASSET_DIR / "audio" / "manifest.json").is_file(),
                      "Original audio has not been imported")
 class ImportedAudioTests(unittest.TestCase):
+    def test_level_three_environment_combat_and_death_cues_are_prepared(self):
+        audio = AudioEngine(playback=object())
+        self.assertEqual(audio.manifest['ambient'][3],
+                         {'starts': [73, 89, 105], 'counts': [15, 15, 3], 'combat_group': 2})
+        required = (*range(73, 109), 24, 62, 63, 71, 279, 285, 297,
+                    7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 20, 23, 26, 27, 28, 29,
+                    59, 60, 61, 65, 66, 67, 68, 69, 70, 281, 282, 284, 294, 295, 296, 300)
+        self.assertTrue(all(audio.available(cue) for cue in required))
+
     def test_fresh_import_and_launcher_work_without_sibling_research_folders(self):
         project = Path(__file__).resolve().parents[1]
         image = project.parent / "pop2.hfs"

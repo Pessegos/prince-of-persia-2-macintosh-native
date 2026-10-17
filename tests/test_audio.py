@@ -46,6 +46,29 @@ class TimedPlayback:
 
 
 class CueTests(unittest.TestCase):
+    def test_cavern_banks_switch_for_combat_without_interrupting_foreground_songs(self):
+        audio = self.audio
+        audio.manifest['ambient'] = [{'starts': [40, 41, 42], 'counts': [0, 0, 1],
+                                     'combat_group': 2}]
+        level = bytearray(0x49ca)
+        struct.pack_into('>h', level, 0x424a + (3 * 30 + 10 + 8) * 2, 1)
+        audio.configure_level(level)
+        audio.ambient(3, 1, 8)
+        audio.flush()
+        self.assertEqual((audio.current_music, audio.current_music_group), (41, 1))
+        self.busy['music'] = True
+        audio.ambient(3, 1, 8, fighting=True)
+        self.assertIn(audio.pending_song, (42, 43))
+        audio.flush()
+        self.assertEqual(audio.current_music_group, 2)
+        audio.ambient(3, 1, 8)
+        self.assertEqual(audio.pending_song, 41)
+        audio.flush()
+        audio.add_song(38)
+        audio.flush()
+        audio.ambient(3, 1, 8, fighting=True)
+        self.assertIsNone(audio.pending_song)
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)

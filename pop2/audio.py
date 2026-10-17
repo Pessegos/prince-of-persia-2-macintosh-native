@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import random
+import struct
 
 from pop2.paths import ASSET_DIR
 from pop2.audio_release import PcmRelease, seamless_loop
@@ -115,6 +116,12 @@ class AudioEngine:
         self.paused = False
         self.sound_enabled = self.music_enabled = True
         self.current_music_ambient = self.pending_song_ambient = False
+        self.current_music_group = self.pending_music_group = None
+        self.level_music = None
+
+    def configure_level(self, level):
+        self.level_music = {'bank': struct.unpack_from('>h', level, 0x2186)[0],
+                            'groups': struct.unpack_from('>960h', level, 0x424a)}
 
     def available(self, cue):
         return cue in self.cues and bool(self.cues[cue].get("file"))
@@ -150,6 +157,7 @@ class AudioEngine:
         if self.pending_song is None and self.available(cue):
             self.pending_song = cue
             self.pending_song_ambient = ambient
+            self.pending_music_group = None
 
     def drain(self, state, audible=True):
         for cue in state.sound_events:
@@ -208,14 +216,15 @@ class AudioEngine:
         if self.pending_song is not None:
             self.current_music = self.pending_song
             self.current_music_ambient = self.pending_song_ambient
+            self.current_music_group = self.pending_music_group
             self.pending_song = None
             self.pending_song_ambient = False
             self.playback.play("music", self.current_music)
 
     def ambient(self, room, row, column, fighting=False, alive=True):
-        if not self.music_enabled or not alive or self.music_busy:
+        if not self.music_enabled or not alive:
             return
-        level = self.manifest["level_one"]
+        level = self.level_music or self.manifest["level_one"]
         bank = self.manifest["ambient"][level["bank"]]
         # PlayAmbient 5:4fd0-4ff4 disables combat selection for bank 5.
         fighting = fighting and bank["combat_group"] != -1
@@ -224,6 +233,14 @@ class AudioEngine:
                  if 0 <= room < 32 and 0 <= row < 3 and 0 <= column < 10 else 0)
         if not 0 <= group < len(bank["starts"]):
             return
+        if self.music_busy:
+            # TimeForNewAmbient 5:557e-5634 changes between exploration and
+            # combat groups, but never interrupts a foreground song.
+            combat = bank['combat_group']
+            if (not self.current_music_ambient or self.pending_song is not None
+                    or self.current_music_group is None or combat < 0
+                    or (self.current_music_group >= combat) == (group >= combat)):
+                return
         first, count = bank["starts"][group], bank["counts"][group]
         # Rnd 17:6e06 is inclusive. PlayAmbient 5:50c2 skips a repeat by
         # advancing one song, wrapping at the last index rather than rerolling.
@@ -231,6 +248,8 @@ class AudioEngine:
         if cue == self.current_music:
             cue = first if cue == first + count else cue + 1
         self.add_song(cue, ambient=True)
+        if self.pending_song == cue:
+            self.pending_music_group = group
 
     def set_sound_enabled(self, enabled):
         self.sound_enabled = bool(enabled)
@@ -259,6 +278,7 @@ class AudioEngine:
         self.current_effect = self.current_music = None
         self.pending_effect = self.pending_song = None
         self.current_music_ambient = self.pending_song_ambient = False
+        self.current_music_group = self.pending_music_group = None
 
     def close(self):
         self.reset()

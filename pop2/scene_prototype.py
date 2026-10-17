@@ -332,6 +332,8 @@ class ScenePrototype(WindowControls):
         )
 
     def bind_level(self, game, renderer):
+        if self.audio is not None and hasattr(self.audio, 'configure_level'):
+            self.audio.configure_level(game.level.data)
         palette = kid_palette_for_level(self.kid, game.level.kind)
         sword_palette = sword_palette_for_level(self.resources.prince, game.level.kind)
         guard_art = health_art = hit_art = None
@@ -2429,7 +2431,8 @@ class ScenePrototype(WindowControls):
         )
         for event in events:
             self.sequence_state.sound_events.append(
-                11 if event.kind == "parry" else 12 if event.actor == "player" else 31)
+                11 if event.kind == "parry" else 12 if event.actor == "player" else
+                59 if self.game.level.kind == 3 else 31)
             if event.actor == "player" and event.kind in ("hit", "death"):
                 self.sword_drawn = combat.player.sword_drawn
                 self.pending_action = None
@@ -2502,12 +2505,21 @@ class ScenePrototype(WindowControls):
                         guard.state.sound_events.append(11)
                     audio.drain(guard.state, not self.peaceful and guard.room == self.room_id)
         motion = getattr(self, "terrain_motion", None)
-        if motion is not None and not self.level_complete and self.game.level.number == 1:
-            fighting = (self.sword_drawn and not self.peaceful
+        if motion is not None and not self.level_complete and self.game.level.number in (1, 3):
+            fighting = (not self.peaceful
                         and any(guard.alive and guard.row == motion.row
+                                and guard.alert_mode >= 2
                                 for guard in self.combat.active_guards()))
             contact = floor_contact_x(self.sequence_state.target_x,
                                      self.sequence_state.facing, self.frames[self.action])
+            if self.game.level.number == 3:
+                for guard in self.combat.guards:
+                    skeleton = guard.skeleton
+                    if (skeleton is not None and skeleton.victory_pending and not fighting
+                            and self.combat.player.alive and 0 < skeleton.timer < 116
+                            and not any(audio.sound_playing(cue) for cue in (61, 68, 69))):
+                        audio.add_song(63)
+                        skeleton.victory_pending = False
             audio.ambient(self.room_id, motion.row, max(0, min(9, int(contact // 51))),
                           fighting, self.combat.player.alive)
         elif motion is not None and self.game.level.number == 2:

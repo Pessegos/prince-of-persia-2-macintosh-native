@@ -11,6 +11,7 @@ class Skeleton:
     timer: int
     shakes: int
     phase: str = 'dormant'
+    victory_pending: bool = False
 
     @classmethod
     def from_spawn(cls, spawn):
@@ -68,6 +69,7 @@ class Skeleton:
             select_sequence(actor, 112)
         else:
             self.phase = 'rising'
+            self.victory_pending = False
             actor.life = actor.max_life
             actor.sword_drawn = True
             actor.targetable = True
@@ -92,6 +94,7 @@ class Skeleton:
         actor.targetable = False
         actor.recovering = False
         self.phase = 'collapsing'
+        self.victory_pending = True
         self.timer = 120
         self.shakes = (actor.skill + 1) & 1 if actor.skill else 3
         actor.state.current_y = actor.state.vertical_velocity = 0

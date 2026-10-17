@@ -1,4 +1,4 @@
-# Level-1 Audio
+# Gameplay Audio
 
 ## Import And Playback
 
@@ -10,7 +10,7 @@ applied. Fixed gain leaves headroom when effects and music overlap.
 
 Music is MIDI, not a recording. Application `INST` and `snd ` resources
 provide the original instrument samples, base notes, pitch/rate flags and
-sustain loops. Import renders level-1 songs with upstream `smssynth`, then
+sustain loops. Import renders supported gameplay songs with upstream `smssynth`, then
 stores conventional PCM WAVs under ignored `assets/audio/`. The application
 itself is not retained. No game content is stored in `vendor/`.
 
@@ -57,7 +57,8 @@ Actor type 1 suppresses footsteps; rooftop guards are type 2. `AddSong`
 `PlayAmbient` (5:4f92) waits for the current song. `Rnd` (17:6e06) includes
 both bounds. If it chooses the previous song, 5:50c2 advances one and wraps
 at the inclusive end, rather than rerolling or excluding that song before
-sampling. Later-level combat-group transitions are not implemented.
+sampling. Cavern exploration/combat-group transitions are implemented below;
+later special-music branches are not covered by that subset.
 
 Non-sequence events use their ordinary recovered cue sites:
 
@@ -111,6 +112,41 @@ Tests cover arbitration, the inclusive pool, event retiming, PCM preservation,
 headroom, real SDL pause/stop, scene cues, failed imports and playback-gated
 retry. The SDL unit test uses a dummy device and synthetic audio; original
 sample comparisons require locally imported game files.
+
+## Level-Three Audio Audit
+
+The importer now prepares all three bank-3 pools: cues 73-88 and 89-104
+for the LEVL cell groups 0/1, and 105-108 for combat group 2. Inclusive
+counts are 15, 15 and 3; these are 36 original MIDI tracks, not a guessed
+loop. `AudioEngine.configure_level` reads bank and cell groups from the
+current LEVL rather than reusing level one's rooftop selection everywhere.
+TimeForNewAmbient 5:557e-5634 permits exploration/combat transitions while
+an ambient track plays; foreground songs (potions, exits, victory and
+death) are never interrupted by that transition. Disabling ambient music
+does not suppress these foreground event songs.
+
+The remaining level-three foreground MIDI cues are prepared too: 24
+(drink), 62 (skeleton kills Prince), 63 (skeleton defeated), 71 (lava death),
+279 (the death-method-5 mapping), 285 (spike death) and 297 (exit opening).
+Existing cues 6/64 cover fatal falls and projectile/default deaths. The
+death-method table remains the native source of selection; the lava SEQS
+music-method override is distinct from the physical cause of death.
+
+Skeleton wounds use effect 59 (CheckStab 6:54e0-54ea), not guard voice 31.
+Their explicit sequences supply the shake/rise effect 60 and bone effect
+61. The post-collapse victory song follows AddSkelSong 5:4c4a-4cdc's local
+gates: after four death-counter updates, a living Prince, no engaged enemy
+and no playing bone/lava effects 61/68/69. Each collapse consumes that
+request only once. Exit-chasing skeleton music from later levels remains
+outside this level-three subset.
+
+The audit also checks availability of the current controller effects:
+movement/contact 7-14, gate 17/18/20/29, drink 23, loose floor 26/28,
+plate 27, trap 65-67, lava 68-70, spikes 281/282/284, footsteps 294/295,
+landing 296 and hurt 300. Import validation rejects installations missing
+the new prepared cavern MIDI cues. Tests cover all these files, actual
+PCM waveforms/headroom, level-dependent pools, inclusive selection,
+combat transitions, scene-level effects and protected foreground songs.
 
 ## Next: Intro
 
