@@ -9,6 +9,7 @@ from pop2.game_session import GameResources, GameSession
 from pop2.paths import ASSET_DIR
 from pop2.render_opening import load_resource_file
 from pop2.scene_prototype import sword_palette_for_level
+from pop2.sequence_runtime import SequenceRuntime, SequenceState
 
 
 @unittest.skipUnless((ASSET_DIR / 'Skeleton.rsrc').is_file(), 'Imported skeleton artwork required')
@@ -49,6 +50,48 @@ class SkeletonTests(unittest.TestCase):
             self.tick(combat, 200)
             self.assertEqual((actor.life, actor.state.action, actor.skeleton.phase),
                              (0, 206, 'dormant'))
+
+    def test_bone_poses_use_environment_shapes_and_matching_bounds(self):
+        from pop2.caverns import cavern_assets
+        from pop2.render_opening import decode_shap
+        _, resources, palette, _ = cavern_assets()
+        base = int.from_bytes(resources['SHPL'][3500]['data'][:2], 'big')
+        for action in range(206, 210):
+            for facing in (0, 1):
+                _, _, actor = self.encounter()
+                actor.state.action, actor.state.facing = action, facing
+                record = self.art.frames[action - 149]
+                expected = decode_shap(resources['SHAP'][base + 109 + record.shape_index]['data'], palette)
+                body = self.art.body(actor.state)
+                self.assertEqual(body.tobytes(), expected.tobytes())
+                self.assertLess(body.height, 24)
+                left, top, right, bottom = self.art.bounds(actor.state, 346)
+                self.assertEqual((right - left + 1, bottom - top + 1), body.size)
+
+    def test_rising_faces_prince_at_native_midpoint_once(self):
+        for side in (-1, 1):
+            _, combat, actor = self.encounter()
+            combat.player.state.target_x = actor.state.target_x + side * 51
+            for _ in range(120):
+                self.tick(combat)
+                if actor.skeleton.phase == 'rising' and actor.state.action == 182:
+                    break
+            self.assertEqual((actor.skeleton.phase, actor.state.action), ('rising', 182))
+            actor.state.facing = int(side < 0)
+            x = actor.state.target_x
+            actor.skeleton.control(combat, actor)
+            self.assertEqual(actor.state.facing, int(side > 0))
+            self.assertEqual(actor.state.target_x, x + side * 16)
+            actor.skeleton.control(combat, actor)
+            self.assertEqual(actor.state.target_x, x + side * 16)
+
+    def test_skeleton_running_steps_use_original_sound_callback(self):
+        state = SequenceState(1, actor_type=4, level_kind=3)
+        runtime = SequenceRuntime({1: (-15, 1, 150, -1, 1)}, state)
+        runtime.next_frame()
+        runtime.next_frame()
+        self.assertEqual(state.sound_events, [295, 294])
+        self.assertEqual(state.callback_flag, 0)
 
     def test_nearby_same_floor_awakes_using_original_pose_chain(self):
         game, combat, actor = self.encounter()
@@ -108,6 +151,18 @@ class SkeletonTests(unittest.TestCase):
         self.tick(combat, 200)
         self.assertEqual(actor.skeleton.phase, 'dormant')
         self.assertFalse(actor.alive)
+
+    def test_prince_death_also_interrupts_a_rising_skeleton(self):
+        _, combat, actor = self.encounter()
+        for _ in range(120):
+            self.tick(combat)
+            if actor.skeleton.phase == 'rising':
+                break
+        self.assertEqual(actor.skeleton.phase, 'rising')
+        combat.player.life = 0
+        combat.player_death_counter = 5
+        self.tick(combat)
+        self.assertEqual((actor.skeleton.phase, actor.state.source_sequence_id), ('collapsing', 120))
 
     def test_all_reached_original_frames_draw_without_replacing_artwork(self):
         for room in (10, 14, 19):

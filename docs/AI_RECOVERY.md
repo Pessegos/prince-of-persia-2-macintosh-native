@@ -269,6 +269,17 @@ sequence 112; lava uses 115 and the pool's original sinking-skeleton artwork
 with cue 69, not the Prince's drowning sequence. Room revisits retain each
 enemy's life, skill, sequence and recovery timer.
 
+SetupSword 3:0b76-0b98 switches actor-type-4 poses 206-209 to the
+environment shape bank, adding 109 to the FRAM shape index. The four piles
+of bones therefore use Caverns shapes, not Skeleton SHAP 0-3; those latter
+images are upright combat poses. Body drawing and collision bounds share
+this selection, including shaking, standby, collapse and the start of rising.
+AutoCtrl 4:16c0-16da / 1b9c-1be0 faces the Prince at rising pose 182 and
+applies the original 16-pixel anchor adjustment only when facing changes.
+The copied Prince death counter can interrupt rising as well as combat.
+AnimCharTap 4:30f8-315a accepts skeleton running footsteps without treating
+the ordinary sound callback as an unsupported opcode.
+
 Tests exercise actual resources, individual records, inert bones, activation,
 all reached sprite frames, strike range, collapse/recovery and persistence.
 Scene renders have also been checked in rooms 11, 15 and 20. This is the

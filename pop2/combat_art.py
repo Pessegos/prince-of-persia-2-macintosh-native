@@ -24,18 +24,32 @@ class GuardArtwork:
         self.cache = {}
         self.sword_cache = {}
 
+    def body(self, state, palette_variant=1):
+        index = guard_frame_index(state.action)
+        shape_id = shape_id_for_action(self.frames, self.base, index)
+        if shape_id is None:
+            return None
+        shapes, palette = self.shapes, self.palettes[palette_variant]
+        if state.actor_type == 4 and 206 <= state.action <= 209:
+            # SetupSword 3:0b76-0b98 switches bones to environment bank 4,
+            # adding 109 to the FRAM shape index, not to the skeleton bank.
+            from pop2.caverns import cavern_assets
+            _, resources, palette, _ = cavern_assets()
+            base = int.from_bytes(resources['SHPL'][3500]['data'][:2], 'big')
+            shape_id = base + 109 + self.frames[index].shape_index
+            shapes = resources['SHAP']
+        key = (shape_id, palette_variant)
+        if key not in self.cache:
+            self.cache[key] = decode_shap(shapes[shape_id]['data'], palette)
+        return self.cache[key]
+
     def draw(self, image, state, floor_y, palette_variant=1):
         if state.actor_type == 4 and state.source_sequence_id == 115:
             return  # The lava pool draws the sinking skeleton, CODE:8 34a6.
         index = guard_frame_index(state.action)
-        shape_id = shape_id_for_action(self.frames, self.base, index)
-        if shape_id is None:
+        body = self.body(state, palette_variant)
+        if body is None:
             return
-        key = (shape_id, palette_variant)
-        if key not in self.cache:
-            self.cache[key] = decode_shap(
-                self.shapes[shape_id]["data"], self.palettes[palette_variant])
-        body = self.cache[key]
         record = self.frames[index]
         anchor = record.offset_x
         if state.facing:
@@ -61,13 +75,10 @@ class GuardArtwork:
 
     def bounds(self, state, floor_y):
         index = guard_frame_index(state.action)
-        shape_id = shape_id_for_action(self.frames, self.base, index)
-        if shape_id is None:
+        body = self.body(state)
+        if body is None:
             return (state.target_x, floor_y, state.target_x, floor_y)
-        key = (shape_id, 1)
-        if key not in self.cache:
-            self.cache[key] = decode_shap(self.shapes[shape_id]["data"], self.palettes[1])
-        body, record = self.cache[key], self.frames[index]
+        record = self.frames[index]
         anchor = body.width - record.offset_x if state.facing else record.offset_x
         left = state.target_x - anchor
         bottom = floor_y + state.current_y + record.offset_y

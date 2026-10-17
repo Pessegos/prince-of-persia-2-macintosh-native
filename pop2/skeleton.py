@@ -52,16 +52,24 @@ class Skeleton:
     def control(self, encounter, actor):
         from pop2.combat import select_sequence
 
+        # Skeleton AutoCtrl 4:169e-16ba applies to rising actors too.
+        if (self.phase in ('active', 'rising') and not encounter.player.alive
+                and getattr(encounter, 'player_death_counter', -1) >= 5):
+            self.collapse(actor)
+            return True
         if self.phase == 'active':
-            # Skeleton AutoCtrl 4:169e-16ba waits until the Prince's copied
-            # death counter reaches five before returning the actor to bones.
-            if not encounter.player.alive and getattr(encounter, 'player_death_counter', -1) >= 5:
-                self.collapse(actor)
-                return True
             return False
         if self.timer > 0:
             self.timer -= 1
         if self.phase in ('rising', 'collapsing'):
+            if self.phase == 'rising' and actor.state.action == 182:
+                # Skel AutoCtrl 4:16c0-16da / 1b9c-1be0 faces the Prince
+                # at the midpoint of rising, preserving the foot anchor.
+                facing = int(actor.state.target_x < encounter.player.state.target_x)
+                if actor.state.facing != facing:
+                    actor.state.facing = facing
+                    actor.state.target_x += 16 if facing else -16
+                    actor.state.current_x = actor.state.target_x
             return True
         actor.targetable = False
         if not self.can_wake(encounter, actor):
