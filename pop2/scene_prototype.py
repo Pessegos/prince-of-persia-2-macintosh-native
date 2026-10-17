@@ -2286,6 +2286,8 @@ class ScenePrototype(WindowControls):
                         state.sequence_events.remove(event)
             self.check_cavern_darts()
             self.check_cavern_spikes()
+            self.game.caverns.crush.advance(self.level_map, motion, state,
+                                           self.frames[state.action], self.game.caverns.plates)
             self.sequence_state.sound_events.extend(self.game.caverns.advance())
             self.game.caverns.advance_torches(
                 self.level_renderer.cavern_program.get('torches', {}).get(str(self.room_id), ()))
@@ -3083,21 +3085,29 @@ class ScenePrototype(WindowControls):
                 frame = self.composite_actor(frame, layer, guard.row, bounds[3],
                                              guard.state, bounds, record)
         player_layer = Image.new("RGBA", frame.size)
-        sprite = self.player_sprite()
+        draw_state, draw_height = self.sequence_state, None
+        if self.game.caverns is not None:
+            draw_state, draw_height = self.game.caverns.crush.actor(draw_state)
+        draw_action = self.action if draw_height is None else draw_state.action
+        sprite = self.player_sprite(draw_action)
+        drawn_bounds = None
         if sprite is not None:
-            record = self.frames[self.action]
+            record = self.frames[draw_action]
+            if draw_height is not None and draw_height != sprite.height:
+                sprite = sprite.resize((sprite.width, draw_height), Image.Resampling.NEAREST)
             anchor_x = record.offset_x
-            if self.sequence_state.facing:
+            if draw_state.facing:
                 sprite = ImageOps.mirror(sprite)
                 anchor_x = sprite.width - anchor_x
-            x = self.player_x - anchor_x
+            x = (self.player_x if draw_height is None else draw_state.target_x) - anchor_x
             y = character_sprite_top(
                 self.player_floor_y()
                 + record.offset_y
-                + self.sequence_state.current_y,
+                + draw_state.current_y,
                 sprite.height,
             )
             player_layer.paste(sprite, (x, y), sprite)
+            drawn_bounds = (x, y, x + sprite.width - 1, y + sprite.height - 1)
             attachment = self.sword_sprite()
             if attachment is not None:
                 sword, dx, dy = attachment
@@ -3111,9 +3121,10 @@ class ScenePrototype(WindowControls):
 
         motion = getattr(self, "terrain_motion", None)
         player_bounds = self.player_bounds() if motion is not None else None
+        draw_bounds = drawn_bounds if draw_height is not None else player_bounds
         frame = self.composite_actor(frame, player_layer, motion.row if motion is not None else None,
-                                     player_bounds[3] if player_bounds is not None else None,
-                                     self.sequence_state, player_bounds, self.frames[self.action])
+                                     draw_bounds[3] if draw_bounds is not None else None,
+                                     draw_state, draw_bounds, self.frames[draw_action])
         if (motion is not None and self.sequence_state.level_kind == 1
                 and self.sequence_state.source_sequence_id == 27
                 and player_bounds[1] < 227):

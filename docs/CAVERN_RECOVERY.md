@@ -370,6 +370,27 @@ it does not claim to execute the entire native movement loop. Integrated
 tests cover jumping under a partial gate, crouch-rise clearance, the full
 264/265/266 death, stopped gate and restart readiness.
 
+### DOS-Inspired Crush Presentation
+
+The subsequent DOS recording requested a deliberate visual change, beyond
+Macintosh parity: sustained pressure instead of a nearly instantaneous pose
+change, with the stone visibly bearing down on the torso. GateCrush adds a
+seven-update drawing-only profile at the existing SEQS:118 mode-3 signal.
+It reuses Mac poses 264/265/266 with nearest-neighbor integer pixel heights,
+lowers the drawn gate to phase 28, and briefly rebounds to 32 before settling.
+This is an adaptation of the DOS effect, not a frame-exact DOS translation.
+No original artwork, sequence resources or collision records are changed.
+
+The native controller still finishes at phase 48 (56 for fast closures),
+with unchanged damage, audio arbitration and retry rules. Only the scenery
+signature and displayed corpse use the presentation state. The overlapping
+gate stays in front of the flattened body in both facings even when its foot
+anchor has moved beyond the ordinary column admission. Repainting cannot
+advance the animation, pause freezes it, F3/restart clears it, and reopening
+the gate releases its drawing override without restoring the corpse's height.
+Tests cover the profile, pixel overlap/foreground in both facings, stable
+resting pose, unmodified native gate values, pause, F3 and restart.
+
 ### Grabbing And Climbing Beside A Gate
 
 The later Room 23 recordings exposed two missing selectors. IsLedge

@@ -66,7 +66,12 @@ class CavernRoom(OpeningRoom):
             return mask
         column = character_column(floor_contact_x(state.target_x, state.facing, record))
         mask = mask.copy()
-        for cell in ((column, row), (column + 1, row)):
+        cells = ((column, row), (column + 1, row))
+        if state.source_sequence_id == 118 and 264 <= state.action <= 266:
+            # The flattened body's foot moves past the gate in one facing.
+            # Keep the actual overlapping stone in front throughout the crush.
+            cells = tuple(cell for cell in self.gate_occlusion if cell[1] == row)
+        for cell in cells:
             positioned = self.gate_occlusion.get(cell)
             if positioned is not None:
                 cover, (x, y) = positioned
@@ -534,6 +539,10 @@ def cavern_pressure_signature(program, room_id, state):
     phases = []
     for record in records:
         value = state.plates.foreground.get((record['room'], record['cell']), record['foreground'])
+        if record['kind'] == 4:
+            presentation = state.crush.gate_phase((record['room'], record['cell']))
+            if presentation is not None:
+                value = (value & 0xff00) | presentation
         phases.append(min(value & 255, 184) // 4 if record['kind'] == 4 else
                       min(value & 255, 79) if record['kind'] == 17 else
                       value & 7 if record['kind'] == 33 else int(bool(value & 0x2000)))

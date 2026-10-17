@@ -8,6 +8,7 @@ from pop2.lava import Lava
 from pop2.pressure_plates import PressurePlates
 from pop2.potions import Potions
 from pop2.wall_spikes import WallSpikes
+from pop2.gate_crush import GateCrush
 
 
 @dataclass
@@ -22,6 +23,7 @@ class CavernState:
     plates: PressurePlates = field(default_factory=PressurePlates)
     potions: Potions = field(default_factory=Potions)
     spikes: WallSpikes = field(default_factory=WallSpikes)
+    crush: GateCrush = field(default_factory=GateCrush)
 
     def configure_lava(self, metadata, enhanced=True):
         self.lava = Lava(metadata, enhanced=enhanced)

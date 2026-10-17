@@ -140,6 +140,8 @@ class GameSession:
         if self.desert is not None:
             self.desert.enter_room(room)
         self.level_map.desert = self.desert
+        if self.caverns is not None:
+            self.caverns.crush.reset()
         if self.opening is not None:
             self.opening.active = False
             self.opening.tick = len(GLASS_POSITIONS)

@@ -1,7 +1,7 @@
 import struct
 import unittest
 from types import SimpleNamespace
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageOps
 
 from pop2.caverns import CavernRoom
 from pop2.paths import ASSET_DIR
@@ -374,6 +374,72 @@ class ImportedStoneGateTests(unittest.TestCase):
                 self.assertNotIn((22, 1), plates.active)
                 self.assertEqual(scene.combat.player.life, 0)
                 self.assertTrue(scene.death.can_restart)
+
+    def test_dos_style_crush_stone_really_overlaps_the_flattened_body_in_both_facings(self):
+        from pop2.render_opening import character_sprite_top
+        from pop2.scene_prototype import ROOM_ORIGIN_X, ScenePrototype
+
+        scene = self.scene_at_gate()
+        for facing, x in ((0, 121), (1, 106)):
+            with self.subTest(facing=facing):
+                scene.jump_to_room(22, row=0, x=x, facing=facing)
+                plates = scene.game.caverns.plates
+                plates.foreground[22, 1] = 0x200 | 144
+                plates.active[22, 1] = 0
+                self.tick(40)
+                crush = scene.game.caverns.crush
+                actor, height = crush.actor(scene.sequence_state)
+                self.assertEqual((crush.frame, actor.action, height), (6, 266, 12))
+                self.assertEqual(plates.foreground[22, 1] & 255, 48)
+                self.assertEqual(crush.gate_phase((22, 1)), 28)
+                record = scene.frames[actor.action]
+                sprite = scene.player_sprite(actor.action).resize(
+                    (scene.player_sprite(actor.action).width, height), Image.Resampling.NEAREST)
+                anchor = record.offset_x
+                if facing:
+                    sprite = ImageOps.mirror(sprite)
+                    anchor = sprite.width - anchor
+                body = Image.new('L', scene.background.size)
+                y = character_sprite_top(scene.player_floor_y() + record.offset_y + actor.current_y, height)
+                body.paste(sprite.getchannel('A'), (actor.target_x - anchor, y))
+                room = scene.room_cache[22]
+                cover, position = room.gate_occlusion[1, 0]
+                stone = Image.new('L', body.size)
+                stone.paste(cover, position)
+                overlap = ImageChops.multiply(stone, body)
+                self.assertIsNotNone(overlap.getbbox())
+                ScenePrototype.render(scene)
+                actual = scene.screenshot_viewport.crop((ROOM_ORIGIN_X, 0, ROOM_ORIGIN_X + 510, 365))
+                scenery = Image.alpha_composite(scene.background, scene.foreground)
+                difference = ImageChops.difference(actual.convert('RGB'), scenery.convert('RGB'))
+                self.assertIsNone(ImageChops.multiply(difference, overlap.convert('RGB')).getbbox())
+
+    def test_crush_presentation_freezes_on_pause_and_clears_on_f3_and_restart(self):
+        from pop2.scene_prototype import ScenePrototype
+
+        scene = self.scene_at_gate(144)
+        scene.game.caverns.plates.active[16, 27] = 0
+        for _ in range(35):
+            self.tick()
+            crush = scene.game.caverns.crush
+            if crush.key is not None and crush.frame == 2:
+                break
+        self.assertEqual(crush.frame, 2)
+        before = vars(crush).copy()
+        ScenePrototype.render(scene)
+        ScenePrototype.render(scene)
+        self.assertEqual(vars(crush), before)
+        scene.set_paused(True)
+        self.tick(10)
+        self.assertEqual(vars(crush), before)
+        scene.set_paused(False)
+        self.tick()
+        self.assertEqual(crush.frame, 3)
+        scene.jump_to_room(16, row=2, x=450, facing=1)
+        self.assertIsNone(scene.game.caverns.crush.key)
+        self.assertEqual(scene.level_map.tile(16, 7, 2).foreground & 255, 48)
+        scene.restart_level()
+        self.assertIsNone(scene.game.caverns.crush.key)
 
     def test_crouched_prince_can_crawl_out_without_holding_down(self):
         scene = self.scene_at_gate()
