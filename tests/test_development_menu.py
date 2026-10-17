@@ -18,12 +18,12 @@ class MenuModelTests(unittest.TestCase):
     def setUp(self):
         self.menu = DevelopmentMenu(SCREENS, 4, False)
 
-    def test_all_tab_sizes_are_centered_with_matching_tab_and_control_hits(self):
+    def test_pages_are_centered_with_matching_control_hits(self):
         for levels in ((), ((1, "Level 1", SCREENS),)):
             menu = DevelopmentMenu(SCREENS, 0, False, sections=("First",), level_options=levels)
-            for tab in range(3):
-                menu.change_tab(tab)
-                with self.subTest(levels=bool(levels), tab=tab):
+            for page in ('tools', 'playback'):
+                menu.show_page(page)
+                with self.subTest(levels=bool(levels), page=page):
                     left, top, right, bottom = menu.panel_rect
                     self.assertEqual(left + right, 512)
                     self.assertLessEqual(abs(top - (PLAYFIELD_VIEWPORT[3] - bottom)), 1)
@@ -32,10 +32,6 @@ class MenuModelTests(unittest.TestCase):
                         self.assertTrue(left < x1 < x2 < right)
                         self.assertTrue(top < y1 < y2 < bottom)
                         self.assertEqual(menu.hit((x1 + x2) // 2, (y1 + y2) // 2), index)
-                    target = (tab + 1) % 3
-                    x1, y1, x2, y2 = menu.tab_rect(target)
-                    menu.click((x1 + x2) // 2, (y1 + y2) // 2)
-                    self.assertEqual(menu.tab, target)
 
     def test_screen_keys_wrap_and_popup_commits_only_on_selection(self):
         menu = self.menu
@@ -72,11 +68,7 @@ class MenuModelTests(unittest.TestCase):
         menu.key("Tab")
         self.assertEqual(menu.key("space"), "resume")
         menu.key("Tab")
-        self.assertEqual(menu.focus, -1)
-        menu.key("Tab")
         self.assertEqual(menu.focus, 0)
-        menu.key("Tab", backwards=True)
-        self.assertEqual(menu.focus, -1)
         menu.key("Tab", backwards=True)
         self.assertEqual(menu.focus, 3)
 
@@ -120,31 +112,32 @@ class MenuModelTests(unittest.TestCase):
         self.assertEqual(menu.option_index, 0)
         self.assertEqual(menu.screen, "5")
 
-    def test_tabs_and_display_checkbox_are_keyboard_accessible(self):
+    def test_playback_back_and_debug_checkbox_are_keyboard_accessible(self):
         menu = self.menu
-        menu.focus = -1
-        menu.key("Right")
-        self.assertEqual((menu.tab, menu.focus), (1, -1))
-        menu.key("Right")
-        menu.key("Down")
-        self.assertEqual((menu.tab, menu.focus), (2, 1))
+        menu.show_page('playback')
+        menu.focus = 8
         self.assertEqual(menu.key("space"), "debug_status")
         self.assertTrue(menu.debug_status)
-        menu.key("Down")
-        menu.key("Left")
-        self.assertEqual(menu.focus, 3)
+        menu.key('Tab')
+        self.assertEqual(menu.focus, 7)
+        self.assertEqual(menu.key('Return'), 'changed')
+        self.assertEqual(menu.page, 'tools')
+        menu.show_page('playback')
+        self.assertEqual(menu.key('Escape'), 'changed')
+        self.assertEqual(menu.page, 'tools')
+        self.assertEqual(menu.key('Escape'), 'resume')
 
     def test_playback_dropdown_scrolls_to_all_parts_without_covering_the_viewport(self):
         menu = self.menu
         menu.sections = tuple(f"Story {i}" for i in range(30))
-        menu.change_tab(1)
+        menu.show_page('playback')
         menu.focus = 4
         menu.open_dropdown()
         for _ in range(25):
             menu.key("Down")
         self.assertEqual(menu.option_index, 25)
-        self.assertEqual(menu.popup_start, 21)
-        self.assertEqual(menu.popup_count, 9)
+        self.assertEqual(menu.popup_start, 20)
+        self.assertEqual(menu.popup_count, 10)
         menu.click(220, menu.control_rect(4)[3] + (25 - menu.popup_start) * 19 + 8)
         self.assertEqual(menu.section_index, 25)
         menu.focus = 2
@@ -153,10 +146,10 @@ class MenuModelTests(unittest.TestCase):
     def test_disabled_level_controls_cannot_activate_or_receive_button_focus(self):
         menu = self.menu
         menu.level_available = False
-        menu.change_tab(0)
-        self.assertEqual(menu.focus, 3)
+        menu.show_page('tools')
+        self.assertEqual(menu.focus, 8)
         menu.key("Left")
-        self.assertEqual(menu.focus, 3)
+        self.assertEqual(menu.focus, 8)
         self.assertEqual(menu.click(150, menu.control_rect(1)[1] + 8), "changed")
         self.assertFalse(menu.peaceful)
 
@@ -180,7 +173,7 @@ class MenuModelTests(unittest.TestCase):
         menu = self.menu
         menu.sections = tuple(f"Story {i}" for i in range(30))
         menu.section_index = 15
-        menu.change_tab(1)
+        menu.show_page('playback')
         menu.focus = 4
         menu.open_dropdown()
         start = menu.popup_start
@@ -191,7 +184,7 @@ class MenuModelTests(unittest.TestCase):
         self.assertEqual(menu.section_index, start)
         menu.open_dropdown()
         menu.scroll(100)
-        self.assertEqual((menu.option_index, menu.popup_start), (29, 21))
+        self.assertEqual((menu.option_index, menu.popup_start), (29, 20))
         menu.scroll(-100)
         self.assertEqual((menu.option_index, menu.popup_start), (0, 0))
         self.assertEqual(menu.section_index, start)
@@ -203,7 +196,7 @@ class MenuModelTests(unittest.TestCase):
                                PlaybackGroup("Titles", (2,)),
                                PlaybackGroup("Level 1 demo", (3, 4)))
         menu.section_index = 4
-        menu.change_tab(1)
+        menu.show_page('playback')
         self.assertEqual(menu.group_index, 2)
         self.assertEqual(menu.options, ("Prologue", "Titles", "Level 1 demo"))
         self.assertEqual(menu.field_options(4), ("Screen 1", "Screen 2"))
@@ -224,7 +217,7 @@ class MenuModelTests(unittest.TestCase):
         menu = self.menu
         menu.sections = ("First", "Second")
         menu.section_groups = (PlaybackGroup("Intro", (0,)), PlaybackGroup("Demo", (1,)))
-        menu.change_tab(1)
+        menu.show_page('playback')
         menu.key("Return")
         menu.key("Down")
         self.assertEqual(menu.section_index, 0)
@@ -237,7 +230,7 @@ class MenuModelTests(unittest.TestCase):
     def test_playback_buttons_keep_horizontal_navigation_and_click_actions(self):
         menu = self.menu
         menu.sections = ("First", "Second")
-        menu.change_tab(1)
+        menu.show_page('playback')
         menu.click(220, menu.control_rect(4)[1] + 8)
         self.assertEqual(menu.dropdown_control, 4)
         menu.click(220, menu.control_rect(4)[3] + 19 + 8)
@@ -255,8 +248,8 @@ class MenuModelTests(unittest.TestCase):
         for dimensions in ((512, 384), (800, 900), (1920, 1080), (2560, 1440)):
             with self.subTest(dimensions=dimensions):
                 size, origin = fit_viewport(*dimensions)
-                for tab in range(3):
-                    self.menu.change_tab(tab)
+                for page in ('tools', 'playback'):
+                    self.menu.show_page(page)
                     for index in self.menu.controls:
                         left, top, right, bottom = self.menu.control_rect(index)
                         x, y = (left + right) / 2, (top + bottom) / 2
@@ -373,8 +366,8 @@ class MenuSceneTests(unittest.TestCase):
         self.assertFalse(scene.debug_status)
         self.assertEqual(scene.status_label.winfo_manager(), "")
         scene.open_dev_mode()
-        scene.dev_menu.change_tab(2)
-        scene.dev_menu.focus = 1
+        scene.dev_menu.show_page('playback')
+        scene.dev_menu.focus = 8
         scene.apply_dev_action(scene.dev_menu.activate())
         self.assertTrue(scene.debug_status)
         self.assertEqual(scene.status_label.winfo_manager(), "pack")
@@ -393,7 +386,7 @@ class MenuSceneTests(unittest.TestCase):
         self.assertIsNone(scene.dev_scroll(event))
         scene.open_dev_mode()
         scene.dev_menu.sections = tuple(f"Story {i}" for i in range(30))
-        scene.dev_menu.change_tab(1)
+        scene.dev_menu.show_page('playback')
         scene.dev_menu.focus = 4
         scene.dev_menu.open_dropdown()
         with patch.object(scene, "dev_pointer", return_value=(220, 214)):
@@ -523,13 +516,13 @@ class MenuSceneTests(unittest.TestCase):
     def test_playback_part_popup_fits_below_the_second_selector(self):
         scene = self.scene
         menu = DevelopmentMenu(SCREENS, 0, False, sections=tuple(f"Story {i}" for i in range(30)))
-        menu.change_tab(1)
+        menu.show_page('playback')
         menu.focus = 4
         menu.open_dropdown()
         viewport = Image.new("RGBA", (512, 384), (80, 80, 80, 255))
         result = menu.draw(viewport, scene.ui_font)
         bottom = menu.control_rect(4)[3] + menu.popup_count * menu.OPTION_HEIGHT
-        self.assertEqual(bottom, 362)
+        self.assertEqual(bottom, 370)
         left = menu.control_rect(4)[0]
         self.assertEqual(result.getpixel((left, bottom)), (244, 216, 115, 255))
         self.assertEqual(result.getpixel((left, bottom + 1)), result.getpixel((30, 20)))

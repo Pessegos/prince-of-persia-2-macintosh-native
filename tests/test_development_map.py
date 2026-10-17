@@ -40,7 +40,7 @@ class DevelopmentMapModelTests(unittest.TestCase):
 
     def test_open_map_is_a_separate_page_and_escape_returns_to_tools(self):
         menu = self.menu(opened=False)
-        self.assertEqual(menu.controls, (4, 1, 3))
+        self.assertEqual(menu.controls, (4, 8, 1, 3))
         self.assertFalse(menu.map_enabled)
         self.assertEqual(menu.key('Return'), 'changed')
         self.assertTrue(menu.map_enabled)
@@ -94,9 +94,10 @@ class DevelopmentMapModelTests(unittest.TestCase):
         menu.key('Escape')
         self.assertEqual(menu.focus, 4)
         menu.key('Tab', backwards=True)
-        self.assertEqual(menu.focus, -1)
-        menu.key('Right')
-        self.assertEqual(menu.tab, 1)
+        self.assertEqual(menu.focus, 3)
+        menu.focus = 8
+        menu.activate()
+        self.assertEqual(menu.page, 'playback')
 
     def test_spatial_keys_and_enter_select_without_numeric_room_order(self):
         menu = self.menu()
@@ -148,7 +149,7 @@ class DevelopmentMapModelTests(unittest.TestCase):
         menu.select(1)
         self.assertEqual((menu.level_number, menu.screen), (4, 'Other'))
         self.assertIsNone(menu.hovered_screen)
-        menu.change_tab(1)
+        menu.show_page('playback')
         self.assertFalse(menu.map_enabled)
 
     def test_map_panel_and_controls_remain_inside_playfield(self):
@@ -216,7 +217,87 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         enlarged = atlas.image.resize(high.size, Image.Resampling.NEAREST)
         self.assertIsNotNone(ImageChops.difference(high, enlarged).getbbox())
         atlas.detail((928, 388))
-        self.assertEqual(len(atlas.scaled_images), 1)
+        self.assertEqual(len(atlas.scaled_images), 2)
+
+    def test_native_and_hd_redraws_reuse_both_images_without_resizing_rooms(self):
+        atlas = build_development_map(self.resources.level(3))
+        sizes = ((488, 262), (1830, 982))
+        images = [atlas.detail(size) for size in sizes]
+        with patch.object(Image.Image, 'resize', side_effect=AssertionError('Map cache missed')):
+            for _ in range(5):
+                for size, image in zip(sizes, images):
+                    self.assertIs(atlas.detail(size), image)
+        for size in ((1020, 540), (1300, 680), (800, 430)):
+            atlas.detail(size)
+            self.assertEqual(len(atlas.scaled_images), 2)
+
+    def test_hub_playback_and_back_are_tabless_and_preserve_world_and_selection(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        s = self.scene
+        s.load_level(3)
+        s.open_dev_mode()
+        menu = s.dev_menu
+        before = s.game, s.room_id, s.player_x, s.combat.world_frame
+        selected = menu.screen, menu.section_index
+        menu.focus = 8
+        s.apply_dev_action(menu.activate())
+        self.assertEqual(menu.page, 'playback')
+        with patch.object(s.ui_font, 'text', wraps=s.ui_font.text) as text:
+            menu.draw(s.screenshot_viewport, s.ui_font)
+        labels = [call.args[0] for call in text.call_args_list]
+        self.assertIn('Playback', labels)
+        self.assertIn('Debug status bar', labels)
+        self.assertNotIn('Display', labels)
+        menu.focus = 7
+        s.apply_dev_action(menu.activate())
+        self.assertEqual(menu.page, 'tools')
+        self.assertEqual(menu.focus, 8)
+        self.assertEqual((menu.screen, menu.section_index), selected)
+        self.assertEqual(before, (s.game, s.room_id, s.player_x, s.combat.world_frame))
+
+    def test_hover_patches_existing_tk_photo_without_rendering_world_or_leaving_trails(self):
+        from PIL import ImageTk
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        s = self.scene
+        s.load_level(3)
+        s.open_dev_mode()
+        s.apply_dev_action(s.dev_menu.activate())
+        menu = s.dev_menu
+        before = (s.game, s.room_id, s.player_x, s.combat.world_frame,
+                  s.screenshot_viewport.tobytes(), random.getstate())
+        for width, height in ((1020, 768), (1920, 1080), (2560, 1440), (800, 602)):
+            with self.subTest(size=(width, height)), \
+                    patch.object(s.canvas, 'winfo_width', return_value=width), \
+                    patch.object(s.canvas, 'winfo_height', return_value=height):
+                s.present_viewport()
+                photo = s.image_ref
+                points = [room_point(menu, label) for label in ('Room 1', 'Room 32', 'Room 15')]
+                points += [(20, 20), (200, 20), (-1, -1)]
+                with patch.object(s, 'render', side_effect=AssertionError('Hover rendered world')):
+                    for point in points:
+                        with patch.object(s, 'dev_pointer', return_value=point):
+                            s.dev_hover(SimpleNamespace())
+                        self.assertIs(s.image_ref, photo)
+                        actual = ImageTk.getimage(photo).convert('RGB')
+                        native = menu.draw(s.screenshot_viewport, s.ui_font)
+                        low = native.crop((1, 0, 511, 384)).resize(actual.size, Image.Resampling.NEAREST)
+                        expected = menu.present_map(low, s.ui_font).convert('RGB')
+                        self.assertEqual(actual.tobytes(), expected.tobytes())
+        self.assertEqual(before, (s.game, s.room_id, s.player_x, s.combat.world_frame,
+                                  s.screenshot_viewport.tobytes(), random.getstate()))
+        menu.focus = 0
+        menu.open_dropdown()
+        s.redraw_dev_menu()
+        self.assertTrue(menu.dropdown)
+        menu.key('Escape')
+        s.redraw_dev_menu()
+        self.assertFalse(menu.dropdown)
+        s.close_dev_mode()
+        self.assertIsNone(s.dev_map_frame)
 
     def test_hub_has_no_level_labels_or_map_generation_and_map_has_one_title(self):
         from pop2.game_ui import MacintoshFont
@@ -230,7 +311,9 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
             menu.draw(Image.new('RGBA', (512, 384)), font)
         labels = [call.args[0] for call in text.call_args_list]
         self.assertIn('Open map', labels)
-        self.assertIn('Game', labels)
+        self.assertIn('Playback...', labels)
+        self.assertNotIn('Game', labels)
+        self.assertNotIn('Display', labels)
         self.assertNotIn('Level', labels)
         self.assertNotIn('Level 3', labels)
         provider.assert_not_called()

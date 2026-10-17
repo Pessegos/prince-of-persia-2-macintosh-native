@@ -46,7 +46,7 @@ class DevelopmentMenu:
     option_index: int = 0
     popup_start: int = 0
     error: str = ""
-    tab: int = 0
+    page: str = 'tools'
     sections: tuple = ()
     section_index: int = 0
     debug_status: bool = False
@@ -65,14 +65,14 @@ class DevelopmentMenu:
     LEVEL_CONTROLS = {0: (200, 138, 392, 166), 1: (120, 220, 392, 246),
                       2: (120, 282, 252, 314), 3: (264, 282, 392, 314),
                       4: (200, 179, 392, 207)}
-    # Control templates use this reference panel; each tab is positioned as a unit.
+    # Control templates use this reference panel; each page is positioned as a unit.
     PANEL = (100, 70, 412, 350)
     OPTION_HEIGHT = 19
-    TABS = ((120, 106, 207, 127), (211, 106, 298, 127), (302, 106, 392, 127))
     PLAYBACK_CONTROLS = {
         0: (212, 138, 392, 166), 4: (212, 180, 392, 208),
         1: (120, 220, 392, 248),
         2: (120, 269, 252, 301), 3: (264, 269, 392, 301),
+        7: (120, 80, 146, 106), 8: (120, 316, 392, 342),
     }
     MAP_CONTROLS = {
         7: (14, 14, 40, 40), 5: (130, 14, 156, 40),
@@ -80,16 +80,16 @@ class DevelopmentMenu:
         4: (12, 52, 500, 314), 1: (16, 329, 292, 353),
         2: (310, 329, 386, 353), 3: (394, 329, 494, 353),
     }
-    GAME_CONTROLS = {4: (120, 138, 392, 180), 1: (120, 192, 392, 222),
-                     3: (120, 244, 392, 274)}
+    GAME_CONTROLS = {4: (120, 126, 392, 166), 8: (120, 174, 392, 210),
+                     1: (120, 218, 392, 248), 3: (120, 270, 392, 300)}
 
     def __post_init__(self):
-        if self.map_available and self.focus not in self.controls:
+        if self.focus not in self.controls:
             self.focus = self.controls[0]
 
     @property
     def map_available(self):
-        return self.tab == 0 and self.level_available and self.map_provider is not None
+        return self.page == 'tools' and self.level_available and self.map_provider is not None
 
     @property
     def map_enabled(self):
@@ -145,10 +145,10 @@ class DevelopmentMenu:
         return (self.section_index + 1) % len(self.sections)
 
     def field_options(self, control):
-        if self.tab == 0 and self.level_options:
+        if self.page == 'tools' and self.level_options:
             return (tuple(option[1] for option in self.level_options) if control == 0
                     else self.screen_options)
-        if self.tab != 1:
+        if self.page != 'playback':
             return self.screens
         return (tuple(group.label for group in self.groups) if control == 0 else
                 tuple(self.sections[i] for i in self.part_indices))
@@ -162,9 +162,9 @@ class DevelopmentMenu:
         return self.level_options[self.level_index][0] if self.level_options else None
 
     def field_selected_index(self, control):
-        if self.tab == 0 and self.level_options:
+        if self.page == 'tools' and self.level_options:
             return self.level_index if control == 0 else self.screen_index
-        if self.tab != 1:
+        if self.page != 'playback':
             return self.screen_index
         return self.group_index if control == 0 else self.part_indices.index(self.section_index)
 
@@ -179,21 +179,21 @@ class DevelopmentMenu:
     def control_rect(self, index):
         if self.map_enabled:
             return self.MAP_CONTROLS[index]
-        if self.map_available:
+        if self.page == 'tools' and (self.map_available or not self.level_available):
             return self.position_rect(self.GAME_CONTROLS[index])
-        if self.tab == 0 and self.level_options:
+        if self.page == 'tools' and self.level_options:
             rect = self.LEVEL_CONTROLS[index]
         else:
-            rect = self.PLAYBACK_CONTROLS[index] if self.tab == 1 else self.CONTROLS[index]
+            rect = self.PLAYBACK_CONTROLS[index] if self.page == 'playback' else self.CONTROLS[index]
         return self.position_rect(rect)
 
     @property
     def panel_rect(self):
         if self.map_enabled:
             return PLAYFIELD_VIEWPORT
-        if self.map_available:
-            return centered_panel(312, 224)
-        return centered_panel(312, 280 if self.tab == 0 and self.level_options else 258)
+        if self.page == 'tools' and (self.map_available or not self.level_available):
+            return centered_panel(312, 250)
+        return centered_panel(312, 280)
 
     @property
     def layout_offset(self):
@@ -202,9 +202,6 @@ class DevelopmentMenu:
     def position_rect(self, rect):
         left, top, right, bottom = rect
         return left, top + self.layout_offset, right, bottom + self.layout_offset
-
-    def tab_rect(self, index):
-        return self.position_rect(self.TABS[index])
 
     @property
     def popup_count(self):
@@ -217,28 +214,26 @@ class DevelopmentMenu:
             return ((7, 5, 0, 6, 4, 1, 2, 3) if len(self.level_options) > 1
                     else (7, 0, 4, 1, 2, 3))
         if self.map_available:
-            return (4, 1, 3)
-        if self.tab == 2:
-            return (1, 3)
-        if ((self.tab == 0 and not self.level_available)
-                or (self.tab == 1 and not self.sections)):
-            return (3,)
-        if self.tab == 1:
-            return (0, 4, 1, 2, 3)
-        if self.tab == 0 and self.level_options:
+            return (4, 8, 1, 3)
+        if self.page == 'tools' and not self.level_available:
+            return (8, 3)
+        if self.page == 'playback':
+            return (7, 0, 4, 1, 2, 3, 8) if self.sections else (7, 3, 8)
+        if self.page == 'tools' and self.level_options:
             return (0, 4, 1, 2, 3)
         return (0, 1, 2, 3)
 
     @property
     def focus_order(self):
-        return self.controls if self.map_enabled else (-1, *self.controls)
+        return self.controls
 
-    def change_tab(self, index):
-        self.tab = index % 3
+    def show_page(self, page):
+        self.page = page
         self.map_open = False
         self.dropdown = False
         self.hovered_screen = None
-        self.focus = self.controls[0]
+        self.hovered_control = None
+        self.focus = 0 if page == 'playback' and self.sections else self.controls[0]
         self.error = ""
 
     @property
@@ -266,11 +261,11 @@ class DevelopmentMenu:
         return True
 
     def select(self, index):
-        if self.tab == 1:
+        if self.page == 'playback':
             control = self.dropdown_control if self.dropdown else self.focus
             self.section_index = (self.groups[index].part_indices[0] if control == 0
                                   else self.part_indices[index])
-        elif (self.tab == 0 and self.level_options
+        elif (self.page == 'tools' and self.level_options
               and (self.dropdown_control if self.dropdown else self.focus) == 0):
             self.level_index = index
             self.screens = self.screen_options
@@ -290,6 +285,11 @@ class DevelopmentMenu:
             if self.map_enabled:
                 self.close_map()
                 return "changed"
+            if self.page == 'playback':
+                self.show_page('tools')
+                if 8 in self.controls:
+                    self.focus = 8
+                return 'changed'
             return "resume"
         if key == "Tab":
             self.dropdown = False
@@ -310,9 +310,6 @@ class DevelopmentMenu:
         elif key in ("Up", "Down"):
             order = self.focus_order
             self.focus = order[(order.index(self.focus) + (-1 if key == "Up" else 1)) % len(order)]
-        elif key in ("Left", "Right") and self.focus == -1:
-            self.change_tab(self.tab + (-1 if key == "Left" else 1))
-            self.focus = -1
         elif key in ("Left", "Right") and self.focus in (0, 4) and not (
                 self.map_available and not self.map_enabled):
             self.select((self.selected_index + (-1 if key == "Left" else 1)) % len(self.options))
@@ -327,6 +324,16 @@ class DevelopmentMenu:
     def activate(self):
         if self.focus not in self.controls:
             return "changed"
+        if self.focus == 8:
+            if self.page == 'playback':
+                self.debug_status = not self.debug_status
+                return 'debug_status'
+            self.show_page('playback')
+            return 'changed'
+        if self.page == 'playback' and self.focus == 7:
+            self.show_page('tools')
+            self.focus = 8 if 8 in self.controls else self.controls[0]
+            return 'changed'
         if self.map_available and not self.map_enabled and self.focus == 4:
             self.open_map()
             return 'changed'
@@ -341,15 +348,12 @@ class DevelopmentMenu:
         if self.focus in (0, 4):
             self.open_dropdown()
         elif self.focus == 1:
-            if self.tab == 2:
-                self.debug_status = not self.debug_status
-                return "debug_status"
-            if self.tab == 1:
+            if self.page == 'playback':
                 return "next_part"
             self.peaceful = not self.peaceful
             return "peaceful"
         else:
-            return ("seek" if self.tab == 1 else "go") if self.focus == 2 else "resume"
+            return ("seek" if self.page == 'playback' else "go") if self.focus == 2 else "resume"
         return "changed"
 
     @staticmethod
@@ -383,12 +387,6 @@ class DevelopmentMenu:
         return changed
 
     def click(self, x, y):
-        if not self.dropdown and not self.map_enabled:
-            tab = next((i for i in range(len(self.TABS))
-                        if self.contains(self.tab_rect(i), x, y)), None)
-            if tab is not None:
-                self.change_tab(tab)
-                return "changed"
         index = self.hit(x, y)
         if self.map_enabled and not self.dropdown and index == 4:
             label = self.map_hit(x, y)
@@ -429,31 +427,35 @@ class DevelopmentMenu:
             self.draw_popup(draw, text)
             return image
         draw.rectangle(self.panel_rect, fill="#181818", outline="#858585")
-        text("Developer Tools", 256, 86 + offset, gold, centered=True)
-        for i, label in enumerate(("Game", "Playback", "Display")):
-            rect = self.tab_rect(i)
-            draw.rectangle(rect, fill="#353535" if i == self.tab else "#222222",
-                           outline=gold if i == self.tab and self.focus == -1 else "#626262")
-            text(label, (rect[0] + rect[2]) // 2, rect[1] + 6, gold if i == self.tab else muted,
-                 centered=True, max_width=rect[2] - rect[0] - 8)
-        if self.map_available:
+        text('Playback' if self.page == 'playback' else 'Developer Tools',
+             264 if self.page == 'playback' else 256, 86 + offset, gold, centered=True)
+        if self.page == 'tools' and (self.map_available or not self.level_available):
             self.draw_game_tools(draw, text)
             return image
-        available = len(self.controls) > 1
-        if self.tab == 0:
+        available = self.page != 'playback' or bool(self.sections)
+        if self.page == 'tools':
             text("Level" if self.level_options else "Screen", 120, 146 + offset)
             if self.level_options:
                 text("Screen", 120, 187 + offset)
-        elif self.tab == 1:
+        elif available:
             text("Sequence", 120, 146 + offset)
-            if available:
-                text("Part", 120, 188 + offset)
+            text("Part", 120, 188 + offset)
         for i in self.controls:
             rect = self.control_rect(i)
             draw.rectangle(rect, fill="#303030" if i == self.focus else "#222222",
                            outline=gold if i == self.focus else "#626262")
-        if available and self.tab != 2:
-            selectors = ((0, 4) if self.tab == 1 or self.tab == 0 and self.level_options
+        if self.page == 'playback':
+            left, top, right, bottom = self.control_rect(7)
+            cx, cy = (left + right) // 2, (top + bottom) // 2
+            draw.line(((cx + 7, cy), (cx - 6, cy), (cx, cy - 6)), fill=white, width=2)
+            draw.line(((cx - 6, cy), (cx, cy + 6)), fill=white, width=2)
+            top = self.control_rect(8)[1]
+            draw.rectangle((130, top + 7, 141, top + 18), fill='#121212', outline=muted)
+            if self.debug_status:
+                draw.line(((132, top + 12), (135, top + 15), (139, top + 9)), fill=gold, width=2)
+            text('Debug status bar', 151, top + 7, muted, max_width=231)
+        if available:
+            selectors = ((0, 4) if self.page == 'playback' or self.level_options
                          else (0,))
             for control in selectors:
                 left, top, right, _bottom = self.control_rect(control)
@@ -461,22 +463,21 @@ class DevelopmentMenu:
                      left + 10, top + 8, max_width=right - left - 34)
                 draw.polygon(((right - 15, top + 12), (right - 7, top + 12),
                               (right - 11, top + 16)), fill=white)
-            text("Go to part" if self.tab == 1 else "Go to screen", 186,
+            text("Go to part" if self.page == 'playback' else "Go to screen", 186,
                  self.control_rect(2)[1] + 10,
                  centered=True, max_width=118)
-        if available and self.tab in (0, 2):
-            checkbox_y = self.control_rect(1)[1] + (8 if self.tab == 0 and self.level_options else 9)
+        if available and self.page == 'tools':
+            checkbox_y = self.control_rect(1)[1] + (8 if self.level_options else 9)
             draw.rectangle((130, checkbox_y, 141, checkbox_y + 11), fill="#121212", outline=muted)
-            checked = self.debug_status if self.tab == 2 else self.peaceful
-            if checked:
+            if self.peaceful:
                 draw.line(((132, checkbox_y + 5), (135, checkbox_y + 8),
                            (139, checkbox_y + 2)), fill=gold, width=2)
-            text("Debug status bar" if self.tab == 2 else "Peaceful (no guards)",
-                 151, checkbox_y + (1 if self.tab == 0 and self.level_options else 0), max_width=231)
+            text("Peaceful (no guards)",
+                 151, checkbox_y + (1 if self.level_options else 0), max_width=231)
         elif available:
             text("Next part", 256, 230 + offset, centered=True)
         else:
-            text("Unavailable during playback" if self.tab == 0 else "No playback data",
+            text("No playback data",
                  256, 190 + offset, muted, centered=True, max_width=272)
         text("Resume", 328, self.control_rect(3)[1] + 10, centered=True)
         if self.error:
@@ -489,7 +490,7 @@ class DevelopmentMenu:
                 else:
                     line = candidate
             lines.append(line)
-            compact = self.tab == 0 and self.level_options
+            compact = self.page == 'tools' and self.level_options
             error_y = (318 if compact else 277) + offset
             line_limit = 2 if compact else 3
             for i, line in enumerate(lines[:line_limit]):
@@ -503,15 +504,20 @@ class DevelopmentMenu:
             draw.rectangle(self.control_rect(control),
                            fill='#303030' if self.focus == control else '#222222',
                            outline=gold if self.focus == control else '#626262')
-        left, top, right, _bottom = self.control_rect(4)
-        text('Open map', 246, top + 15, centered=True, max_width=220)
-        draw.line(((right - 23, top + 16), (right - 18, top + 21),
-                   (right - 23, top + 26)), fill=gold, width=2)
-        top = self.control_rect(1)[1]
-        draw.rectangle((130, top + 9, 141, top + 20), fill='#121212', outline='#b9b9b9')
-        if self.peaceful:
-            draw.line(((132, top + 14), (135, top + 17), (139, top + 11)), fill=gold, width=2)
-        text('Peaceful mode', 151, top + 9, max_width=231)
+        for control, label in ((4, 'Open map'), (8, 'Playback...')):
+            if control not in self.controls:
+                continue
+            left, top, right, bottom = self.control_rect(control)
+            cy = (top + bottom) // 2
+            text(label, 246, cy - 6, centered=True, max_width=220)
+            draw.line(((right - 23, cy - 5), (right - 18, cy),
+                       (right - 23, cy + 5)), fill=gold, width=2)
+        if 1 in self.controls:
+            top = self.control_rect(1)[1]
+            draw.rectangle((130, top + 9, 141, top + 20), fill='#121212', outline='#b9b9b9')
+            if self.peaceful:
+                draw.line(((132, top + 14), (135, top + 17), (139, top + 11)), fill=gold, width=2)
+            text('Peaceful mode', 151, top + 9, max_width=231)
         text('Resume', 256, self.control_rect(3)[1] + 10, centered=True)
 
     def draw_map(self, image, draw, font, text):

@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from types import SimpleNamespace
 
-from PIL import Image, ImageTk
+from PIL import Image, ImageChops, ImageTk
 
 from pop2.game_menu import GameMenu
 from pop2.game_ui import DevelopmentMenu, VISIBLE_SIZE, VISIBLE_VIEWPORT, fit_viewport, viewport_point
@@ -341,9 +341,7 @@ class WindowControls:
             level_options=level_options, level_index=level_index if level_options else 0,
             map_provider=self.development_map if level_options else None,
         )
-        if not self.dev_menu.level_available:
-            self.dev_menu.change_tab(1)
-        elif self.dev_menu.map_available:
+        if self.dev_menu.map_available:
             self.dev_menu.focus = 4
         self.dev_was_paused = was_paused
         self.set_paused(True)
@@ -358,6 +356,7 @@ class WindowControls:
         if self.dev_menu is None:
             return
         self.dev_menu = None
+        self.dev_map_frame = None
         self.clear_keys(None)
         self.update_cursor_visibility()
         self.set_paused(self.dev_was_paused)
@@ -826,17 +825,27 @@ class WindowControls:
         if menu is not None:
             point = self.dev_pointer(event)
             if menu.hover(*(point if point is not None else (-1, -1))):
-                self.render()
+                if menu is self.dev_menu:
+                    self.redraw_dev_menu()
+                else:
+                    self.render()
             if menu is self.dev_menu:
-                self.canvas.configure(cursor='hand2' if self.dev_menu.map_enabled
-                                      and self.dev_menu.hovered_screen is not None
-                                      and not self.dev_menu.dropdown else '')
+                cursor = ('hand2' if menu.map_enabled and menu.hovered_screen is not None
+                          and not menu.dropdown else '')
+                if self.canvas.cget('cursor') != cursor:
+                    self.canvas.configure(cursor=cursor)
+
+    def redraw_dev_menu(self):
+        # F3 pauses the world; pointer changes only need the frozen clean viewport.
+        self.native_viewport = self.draw_screenshot_notice(
+            self.dev_menu.draw(self.screenshot_viewport, self.ui_font))
+        self.present_viewport()
 
     def dev_pointer_leave(self, _event):
         menu = self.dev_menu
         if menu is not None and menu.map_enabled:
             if menu.hover(-1, -1):
-                self.render()
+                self.redraw_dev_menu()
             self.canvas.configure(cursor='')
 
     def dev_scroll(self, event):
@@ -890,8 +899,24 @@ class WindowControls:
         frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
         menu = getattr(self, 'dev_menu', None)
         if menu is not None and menu.map_enabled:
-            frame = menu.present_map(frame, self.ui_font)
+            frame = menu.present_map(frame, self.ui_font).convert('RGB')
+            previous = getattr(self, 'dev_map_frame', None)
+            if (previous is not None and previous[0] is menu and previous[1].size == frame.size
+                    and previous[2] is self.image_ref):
+                # Upload only changed rooms/labels instead of a full 1440p Tk photo.
+                damage = ImageChops.difference(previous[1], frame).getbbox()
+                if damage is not None:
+                    patch = ImageTk.PhotoImage(frame.crop(damage))
+                    self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch),
+                                           '-to', damage[0], damage[1])
+                self.dev_map_frame = (menu, frame, self.image_ref)
+                self.canvas.coords(self.canvas.find_all()[0], *position)
+                return
+        else:
+            self.dev_map_frame = None
         self.image_ref = ImageTk.PhotoImage(frame)
+        if menu is not None and menu.map_enabled:
+            self.dev_map_frame = (menu, frame, self.image_ref)
         if self.canvas.find_all():
             self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)
             self.canvas.coords(self.canvas.find_all()[0], *position)

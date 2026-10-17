@@ -73,13 +73,14 @@ class AttractSceneTests(unittest.TestCase):
         self.scene.demo.advance(self.scene.demo.next_update_delay())
         self.assertIn(audio.current_music, (40, 41, 42, 43))
 
-    def test_f3_opens_playback_controls_without_live_level_controls(self):
+    def test_f3_tools_offer_playback_without_live_level_controls(self):
         scene = self.scene
         for start in (lambda: None, scene.start_demo, scene.start_credits):
             start()
             self.assertEqual(self.key("F3"), "break")
             self.assertIsNotNone(scene.dev_menu)
-            self.assertEqual(scene.dev_menu.tab, 1)
+            self.assertEqual(scene.dev_menu.page, 'tools')
+            self.assertEqual(scene.dev_menu.controls, (8, 3))
             self.assertFalse(scene.dev_menu.level_available)
             self.assertTrue(scene.paused)
             before = scene.room_id, scene.player_x, scene.peaceful
@@ -93,7 +94,7 @@ class AttractSceneTests(unittest.TestCase):
             scene.dev_key_release(SimpleNamespace(keysym="F3"))
             self.key("F3")
             self.assertIsNotNone(scene.dev_menu)
-            self.assertEqual(scene.dev_menu.tab, 1)
+            self.assertEqual(scene.dev_menu.page, 'tools')
             scene.close_dev_mode()
             scene.dev_key_release(SimpleNamespace(keysym="F3"))
 
@@ -214,6 +215,7 @@ class AttractSceneTests(unittest.TestCase):
         scene = self.scene
         scene.set_paused(True)
         scene.open_dev_mode()
+        scene.dev_menu.show_page('playback')
         part = scene.development_parts()[scene.dev_menu.section_index + 1]
         scene.dev_menu.focus = 1
         self.key("Return")
@@ -234,7 +236,7 @@ class AttractSceneTests(unittest.TestCase):
         for group_index, group in enumerate(groups):
             with self.subTest(sequence=group.label):
                 scene.open_dev_mode()
-                scene.dev_menu.change_tab(1)
+                scene.dev_menu.show_page('playback')
                 before = scene.intro, scene.demo
                 scene.dev_menu.select(group_index)
                 self.assertEqual((scene.intro, scene.demo), before)
@@ -245,6 +247,7 @@ class AttractSceneTests(unittest.TestCase):
                 self.assertIsNone(scene.dev_menu)
                 self.assertEqual(parts[scene.current_playback_part()], parts[target_index])
                 scene.open_dev_mode()
+                scene.dev_menu.show_page('playback')
                 target_group = next(i for i, item in enumerate(groups) if target_index in item.part_indices)
                 self.assertEqual(scene.dev_menu.group_index, target_group)
                 self.assertEqual(scene.dev_menu.field_options(4),

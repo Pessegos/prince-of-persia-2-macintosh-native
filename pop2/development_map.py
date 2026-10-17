@@ -151,7 +151,9 @@ class DevelopmentMap:
                     source = self.image.crop(rect)
                 image.paste(source.resize((max(1, right - left), max(1, bottom - top)),
                                           Image.Resampling.LANCZOS), (left, top))
-            self.scaled_images.clear()
+            # Native menu and HD presentation alternate on every redraw.
+            if len(self.scaled_images) >= 2:
+                del self.scaled_images[next(iter(self.scaled_images))]
             self.scaled_images[size] = image
         return self.scaled_images[size]
 
