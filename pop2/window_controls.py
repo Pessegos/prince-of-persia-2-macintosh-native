@@ -232,6 +232,8 @@ class WindowControls:
             return
         now = time.perf_counter()
         self.paused = paused
+        if hasattr(self, 'pause_gate_presentation'):
+            self.pause_gate_presentation(paused, now)
         audio = getattr(self, "audio", None)
         if audio is not None:
             audio.pause(paused)

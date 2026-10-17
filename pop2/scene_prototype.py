@@ -2287,7 +2287,8 @@ class ScenePrototype(WindowControls):
             self.check_cavern_darts()
             self.check_cavern_spikes()
             self.game.caverns.crush.advance(self.level_map, motion, state,
-                                           self.frames[state.action], self.game.caverns.plates)
+                                           self.frames[state.action], self.game.caverns.plates,
+                                           now=time.perf_counter())
             self.sequence_state.sound_events.extend(self.game.caverns.advance())
             self.game.caverns.advance_torches(
                 self.level_renderer.cavern_program.get('torches', {}).get(str(self.room_id), ()))
@@ -2767,6 +2768,7 @@ class ScenePrototype(WindowControls):
         return "break"
 
     def reset_level_controls(self):
+        self.cancel_gate_presentation()
         self.queue_grace_remaining_ms = 0
         self.queue_grace_command = None
         self.run_active = False
@@ -2914,6 +2916,7 @@ class ScenePrototype(WindowControls):
         return interval_ms
 
     def schedule_next_animation(self):
+        self.schedule_gate_presentation()
         if self.paused or (getattr(self, "level_complete", False) and self.game.exit is None):
             return
         now = time.perf_counter()
@@ -2933,6 +2936,51 @@ class ScenePrototype(WindowControls):
                 interval_ms=self.current_animation_interval_ms(),
             )
         self.animation_after_id = self.root.after(delay_ms, self.advance_animation)
+
+    def cancel_gate_presentation(self):
+        pending = getattr(self, 'gate_presentation_after_id', None)
+        if pending is not None:
+            self.root.after_cancel(pending)
+        self.gate_presentation_after_id = None
+
+    def schedule_gate_presentation(self):
+        self.cancel_gate_presentation()
+        caverns = getattr(getattr(self, 'game', None), 'caverns', None)
+        if self.paused or caverns is None:
+            return
+        delay = caverns.crush.next_delay_ms()
+        if delay is not None:
+            if caverns.crush.last_updated_at is not None:
+                delay += (caverns.crush.last_updated_at - time.perf_counter()) * 1000
+            self.gate_presentation_after_id = self.root.after(
+                max(1, math.ceil(delay - 1e-6)), self.advance_gate_presentation)
+
+    def advance_gate_presentation(self):
+        self.gate_presentation_after_id = None
+        caverns = getattr(getattr(self, 'game', None), 'caverns', None)
+        if self.paused or caverns is None or caverns.crush.key is None:
+            return
+        state = self.sequence_state
+        caverns.crush.advance(self.level_map, self.terrain_motion, state,
+                              self.frames[state.action], caverns.plates,
+                              now=time.perf_counter())
+        room = self.level_renderer.enter_room(self.room_id, caverns)
+        self.background, self.foreground = room.background, room.foreground
+        self.render()
+        self.schedule_gate_presentation()
+
+    def pause_gate_presentation(self, paused, now):
+        self.cancel_gate_presentation()
+        caverns = getattr(getattr(self, 'game', None), 'caverns', None)
+        if caverns is None or caverns.crush.key is None:
+            return
+        if paused:
+            caverns.crush.update(now)
+            room = self.level_renderer.enter_room(self.room_id, caverns)
+            self.background, self.foreground = room.background, room.foreground
+        else:
+            caverns.crush.last_updated_at = now
+            self.schedule_gate_presentation()
 
     def player_sprite(self, action=None):
         # DrawKid/DrawChar 3:089e/09ea: death method 5 is drawn by lava.

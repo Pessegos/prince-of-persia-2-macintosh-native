@@ -375,7 +375,7 @@ class ImportedStoneGateTests(unittest.TestCase):
                 self.assertEqual(scene.combat.player.life, 0)
                 self.assertTrue(scene.death.can_restart)
 
-    def test_dos_style_crush_stone_really_overlaps_the_flattened_body_in_both_facings(self):
+    def test_crush_stone_overlaps_full_size_native_body_in_both_facings(self):
         from pop2.render_opening import character_sprite_top
         from pop2.scene_prototype import ROOM_ORIGIN_X, ScenePrototype
 
@@ -389,7 +389,8 @@ class ImportedStoneGateTests(unittest.TestCase):
                 self.tick(40)
                 crush = scene.game.caverns.crush
                 actor, height = crush.actor(scene.sequence_state)
-                self.assertEqual((crush.frame, actor.action, height), (6, 266, 12))
+                self.assertGreaterEqual(crush.elapsed_ms, 840)
+                self.assertEqual((actor.action, height), (266, 17))
                 self.assertEqual(plates.foreground[22, 1] & 255, 48)
                 self.assertEqual(crush.gate_phase((22, 1)), 28)
                 record = scene.frames[actor.action]
@@ -415,6 +416,7 @@ class ImportedStoneGateTests(unittest.TestCase):
                 self.assertIsNone(ImageChops.multiply(difference, overlap.convert('RGB')).getbbox())
 
     def test_crush_presentation_freezes_on_pause_and_clears_on_f3_and_restart(self):
+        from unittest.mock import patch
         from pop2.scene_prototype import ScenePrototype
 
         scene = self.scene_at_gate(144)
@@ -422,24 +424,49 @@ class ImportedStoneGateTests(unittest.TestCase):
         for _ in range(35):
             self.tick()
             crush = scene.game.caverns.crush
-            if crush.key is not None and crush.frame == 2:
+            if crush.key is not None and 640 <= crush.elapsed_ms < 720:
                 break
-        self.assertEqual(crush.frame, 2)
+        self.assertGreaterEqual(crush.elapsed_ms, 640)
+        self.assertLess(crush.elapsed_ms, 720)
         before = vars(crush).copy()
         ScenePrototype.render(scene)
         ScenePrototype.render(scene)
         self.assertEqual(vars(crush), before)
-        scene.set_paused(True)
+        with patch('pop2.window_controls.time.perf_counter', return_value=self.now):
+            scene.set_paused(True)
         self.tick(10)
         self.assertEqual(vars(crush), before)
-        scene.set_paused(False)
+        with patch('pop2.window_controls.time.perf_counter', return_value=self.now):
+            scene.set_paused(False)
         self.tick()
-        self.assertEqual(crush.frame, 3)
+        self.assertAlmostEqual(crush.elapsed_ms, before['elapsed_ms'] + 101)
         scene.jump_to_room(16, row=2, x=450, facing=1)
         self.assertIsNone(scene.game.caverns.crush.key)
         self.assertEqual(scene.level_map.tile(16, 7, 2).foreground & 255, 48)
         scene.restart_level()
         self.assertIsNone(scene.game.caverns.crush.key)
+
+    def test_gate_subframe_callback_draws_without_advancing_gameplay(self):
+        from unittest.mock import patch
+
+        scene = self.scene_at_gate(144)
+        plates = scene.game.caverns.plates
+        plates.active[16, 27] = 0
+        while scene.game.caverns.crush.key is None:
+            self.tick()
+        state = vars(scene.sequence_state).copy()
+        foreground, active = plates.foreground.copy(), plates.active.copy()
+        world_frame, life = scene.combat.world_frame, scene.combat.player.life
+        self.now += 0.640
+        with patch('pop2.scene_prototype.time.perf_counter', return_value=self.now):
+            scene.advance_gate_presentation()
+        self.assertEqual(vars(scene.sequence_state), state)
+        self.assertEqual((plates.foreground, plates.active), (foreground, active))
+        self.assertEqual((scene.combat.world_frame, scene.combat.player.life), (world_frame, life))
+        crush = scene.game.caverns.crush
+        self.assertEqual(crush.gate_phase((16, 27)), 12)
+        self.assertEqual(crush.actor(scene.sequence_state)[0].action, 265)
+        scene.cancel_gate_presentation()
 
     def test_crouched_prince_can_crawl_out_without_holding_down(self):
         scene = self.scene_at_gate()
