@@ -2488,6 +2488,7 @@ class ScenePrototype(WindowControls):
         combat = getattr(self, "combat", None)
         if combat is None:
             return
+        combat.player_death_counter = self.death.counter
         combat.player.sword_drawn = self.sword_drawn
         # CheckStrikes 6:58aa-592c uses row, height and actor/mode exclusions;
         # beginning a grab, climb or fall does not confer invulnerability.

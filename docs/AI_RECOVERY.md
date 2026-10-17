@@ -262,7 +262,9 @@ Ready skeletons use the recovered per-profile advance/block/reblock/counter/
 strike tables, not new aggression constants. GetStrikeRange 6:5c34-5c40
 adds three pixels to the Prince's upper strike bound against actor type 4.
 Fatal sword hits select the native collapse 120 with cue 61 and the
-120-update recovery timer from 4:170e-179e. Falling deaths use the bones
+120-update recovery timer from 4:170e-179e. AutoCtrl 4:169e-16ba also returns
+an active skeleton to bones once the Prince's copied death counter reaches
+five, rather than leaving it standing over the corpse. Falling deaths use the bones
 sequence 112; lava uses 115 and the pool's original sinking-skeleton artwork
 with cue 69, not the Prince's drowning sequence. Room revisits retain each
 enemy's life, skill, sequence and recovery timer.

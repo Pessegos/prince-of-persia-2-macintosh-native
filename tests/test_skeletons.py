@@ -94,6 +94,21 @@ class SkeletonTests(unittest.TestCase):
         actor.alert_mode = 3
         self.assertEqual(strike_range(combat.player, actor), (61, 102))
 
+    def test_skeleton_returns_to_bones_after_prince_death_counter_reaches_five(self):
+        game, combat, actor = self.encounter()
+        self.tick(combat, 100)
+        self.assertEqual(actor.skeleton.phase, 'active')
+        combat.player.life = 0
+        combat.player_death_counter = 4
+        self.tick(combat)
+        self.assertEqual(actor.skeleton.phase, 'active')
+        combat.player_death_counter = 5
+        self.tick(combat)
+        self.assertEqual((actor.skeleton.phase, actor.state.source_sequence_id), ('collapsing', 120))
+        self.tick(combat, 200)
+        self.assertEqual(actor.skeleton.phase, 'dormant')
+        self.assertFalse(actor.alive)
+
     def test_all_reached_original_frames_draw_without_replacing_artwork(self):
         for room in (10, 14, 19):
             game, combat, actor = self.encounter(room)

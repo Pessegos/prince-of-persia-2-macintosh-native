@@ -53,6 +53,11 @@ class Skeleton:
         from pop2.combat import select_sequence
 
         if self.phase == 'active':
+            # Skeleton AutoCtrl 4:169e-16ba waits until the Prince's copied
+            # death counter reaches five before returning the actor to bones.
+            if not encounter.player.alive and getattr(encounter, 'player_death_counter', -1) >= 5:
+                self.collapse(actor)
+                return True
             return False
         if self.timer > 0:
             self.timer -= 1
