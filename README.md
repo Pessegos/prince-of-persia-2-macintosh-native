@@ -1,11 +1,10 @@
 # Prince of Persia 2 Macintosh Native (WIP)
 
-A work-in-progress native Windows port of the Macintosh version of Prince of
-Persia 2. The goal is to preserve the original game's look, movement and gameplay
-without requiring a Macintosh emulator.
+I'm working on a native Windows reimplementation of the Macintosh version of *Prince of Persia 2: The Shadow & the Flame*. It uses the original game's graphics, animations, levels and sounds.
 
-It uses the original artwork, animation sequences and level data, with gameplay
-logic being recovered from the Macintosh executable through reverse engineering.
+The gameplay is being rebuilt in Python for now, with the help of Codex. To understand how the original game works, Codex is reverse-engineering the Macintosh executable and I'm doing a ton of side-by-side playtesting, comparing both versions and fixing differences as I find them.
+
+I'm trying to stay as close to the original as possible, while still making some changes and improvements where they make sense.
 
 ## Screenshots
 
