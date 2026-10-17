@@ -188,7 +188,7 @@ class RebirthSceneTests(unittest.TestCase):
             self.tick()
         self.fail("Death animation never reached the retry gate")
 
-    def test_any_key_restarts_before_the_prompt_and_consumes_that_key(self):
+    def test_gameplay_retry_key_remains_held_through_the_restarted_opening(self):
         scene = self.scene
         scene.peaceful = True
         scene.jump_to_screen("1")
@@ -200,11 +200,102 @@ class RebirthSceneTests(unittest.TestCase):
         self.assertEqual(scene.combat.player.life, 3)
         self.assertEqual(scene.room_id, 3)
         self.assertEqual(scene.death.counter, -1)
-        self.assertFalse(scene.up_held)
+        self.assertTrue(scene.up_held)
         self.assertIsNone(scene.pending_action)
-        self.assertIn("Up", scene.pause_resume_keys)
-        scene.dev_key_release(self.event("Up"))
         self.assertNotIn("Up", scene.pause_resume_keys)
+        for _ in range(90):
+            self.tick()
+            if not scene.opening.active and scene.jump_started_for_press:
+                break
+        self.assertFalse(scene.opening.active)
+        self.assertTrue(scene.jump_started_for_press)
+        self.assertIsNone(scene.dev_key_release(self.event("Up")))
+        scene.set_key_state('up', False)
+        self.assertFalse(scene.up_held)
+        self.assertNotIn("Up", scene.pause_resume_keys)
+
+    def test_each_direction_retries_and_reaches_the_normal_action_controller(self):
+        from tests.test_game_ui import GameWindowTests
+
+        scene = self.scene
+        with patch.object(scene, 'render'):
+            scene.in_animation_tick = True
+            for key in ('Left', 'Right', 'Up', 'Down'):
+                with self.subTest(key=key):
+                    self.checkpoint()
+                    self.die()
+                    self.eligible()
+                    self.assertEqual(GameWindowTests.control_key(self, key), 'break')
+                    self.assertTrue(scene.combat.player.alive)
+                    self.assertNotIn(key, scene.pause_resume_keys)
+                    for _ in range(18):
+                        self.tick()
+                        if key in ('Left', 'Right') and scene.run_active:
+                            break
+                        if key == 'Up' and scene.jump_started_for_press:
+                            break
+                        if key == 'Down' and scene.action == 109:
+                            break
+                    if key in ('Left', 'Right'):
+                        direction = -1 if key == 'Left' else 1
+                        self.assertTrue(scene.run_active)
+                        self.assertEqual((scene.horizontal_input, scene.run_direction), (direction, direction))
+                    elif key == 'Up':
+                        self.assertTrue(scene.up_held and scene.jump_started_for_press)
+                    else:
+                        self.assertTrue(scene.down_held)
+                        self.assertEqual(scene.action, 109)
+                    GameWindowTests.control_key(self, key, False)
+                    if key in ('Left', 'Right'):
+                        self.assertEqual(scene.horizontal_input, 0)
+                    else:
+                        self.assertFalse(scene.up_held if key == 'Up' else scene.down_held)
+
+    def test_shift_arrow_retry_preserves_the_chord_without_starting_a_run(self):
+        from tests.test_game_ui import GameWindowTests
+
+        scene = self.scene
+        self.checkpoint()
+        self.die()
+        self.eligible()
+        GameWindowTests.control_key(self, 'Shift_L')
+        self.assertFalse(scene.combat.player.alive)
+        GameWindowTests.control_key(self, 'Left')
+        self.assertTrue(scene.combat.player.alive and scene.shift_held)
+        self.assertFalse(scene.run_active)
+        self.assertEqual(scene.horizontal_input, -1)
+        self.assertIn(scene.sequence_state.sequence_id, range(29, 45))
+        self.assertFalse({'Shift_L', 'Left'} & scene.pause_resume_keys)
+        GameWindowTests.control_key(self, 'Left', False)
+        GameWindowTests.control_key(self, 'Shift_L', False)
+        self.assertFalse(scene.shift_held)
+
+    def test_held_space_poll_restores_a_live_direction_but_consumes_space(self):
+        scene = self.scene
+        self.checkpoint()
+        self.die()
+        scene.dev_key_press(self.event('Right'))
+        scene.dev_key_press(self.event('space'))
+        for _ in range(25):
+            self.tick()
+            if scene.combat.player.alive:
+                break
+        self.assertTrue(scene.combat.player.alive)
+        self.assertEqual(scene.horizontal_input, 1)
+        self.assertIn('space', scene.pause_resume_keys)
+        self.assertNotIn('Right', scene.pause_resume_keys)
+
+    def test_text_retry_key_does_not_become_a_gameplay_command(self):
+        scene = self.scene
+        self.checkpoint()
+        self.die()
+        self.eligible()
+        scene.dev_key_press(self.event('a'))
+        self.assertTrue(scene.combat.player.alive)
+        self.assertIn('a', scene.pause_resume_keys)
+        self.assertEqual(scene.horizontal_input, 0)
+        self.assertFalse(scene.up_held or scene.down_held or scene.ctrl_held or scene.shift_held)
+        self.assertIsNone(scene.pending_action)
 
     def test_held_space_restarts_at_the_first_eligible_poll(self):
         scene = self.scene

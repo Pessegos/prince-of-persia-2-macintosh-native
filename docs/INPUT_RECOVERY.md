@@ -217,9 +217,19 @@ restarting, in modifier/vertical/horizontal order. The pre-restart command
 buffer is discarded; the new entry controller decides when the restored
 holds can act. This includes horizontal holds, Shift steps and Up+direction
 chords. Inputs already suppressed by a modal transition are not restored.
-Restarting through a menu, restarting after death and starting a new game
-retain their input clearing. This is a host QoL extension, not a recovered
-Macintosh restart rule.
+Restarting through a menu, using Alt+R while dead and starting a new game
+retain their input clearing. This Alt+R behavior is a host QoL extension,
+not a recovered Macintosh restart rule.
+
+A normal death retry separately preserves currently held gameplay keys once
+the existing dead-pose/key gate accepts the retry. It uses the same ordered
+restoration, without replaying the old command buffer or restoring keys
+suppressed by a modal transition. This matches the reference's held-action
+continuation into the new life. Arrow, Up/Down and Shift+arrow retries have
+integrated regressions, including protected entry completion and key release.
+Modifiers alone still do not retry; an early held arrow is not a retry poll.
+Ordinary text/Space retry keys stay consumed until released. See
+[Death And Checkpoints](REBIRTH_RECOVERY.md) for the unchanged timing/filter.
 
 An arrow used to resume ordinary gameplay also reaches its normal control
 binding in that same press. Up/Down and horizontal jump chords are included,

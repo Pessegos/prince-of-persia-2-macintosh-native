@@ -229,6 +229,65 @@ class ImportedPotionTests(unittest.TestCase):
         self.tick(23)
         self.assertEqual(s.combat.player.max_life, 4)
 
+    def room_18_drop(self):
+        s = self.make_scene()
+        s.jump_to_room(17, row=1, x=445, facing=1)
+        s.in_animation_tick = True
+        s.combat.player.life = 1
+        s.set_key_state('down', True)
+        s.set_key_state('down', False)
+        for _ in range(25):
+            self.tick()
+            if s.terrain_motion.falling:
+                return s
+        self.fail('The room 18 ledge never released')
+
+    def test_shift_held_during_room_18_drop_drinks_mega_from_the_room_20_landing_crouch(self):
+        s = self.room_18_drop()
+        s.set_key_state('shift', True)
+        poses = []
+        for _ in range(25):
+            self.tick()
+            poses.append((s.action, s.sequence_state.source_sequence_id))
+            if s.game.caverns.potions.drinking:
+                break
+            self.assertEqual((s.combat.player.life, s.combat.player.max_life), (1, 3))
+            self.assertEqual(s.level_map.tile(19, 8, 0).kind, 10)
+        self.assertEqual((s.room_id, s.terrain_motion.row), (19, 0))
+        self.assertEqual(poses[-2:], [(109, 17), (191, 78)])
+        self.assertNotIn(110, [action for action, _sequence in poses])
+        self.tick(28)
+        self.assertEqual((s.combat.player.life, s.combat.player.max_life), (4, 4))
+        self.assertEqual(s.level_map.tile(19, 8, 0).kind, 1)
+
+    def test_releasing_queued_shift_before_landing_cancels_the_drink_request(self):
+        s = self.room_18_drop()
+        s.set_key_state('shift', True)
+        self.tick()
+        s.set_key_state('shift', False)
+        for _ in range(45):
+            self.tick()
+            self.assertFalse(s.game.caverns.potions.drinking)
+        self.assertEqual((s.room_id, s.terrain_motion.row), (19, 0))
+        self.assertEqual((s.combat.player.life, s.combat.player.max_life), (1, 3))
+        self.assertEqual(s.level_map.tile(19, 8, 0).kind, 10)
+
+    def test_hard_fall_crouch_does_not_consume_shift_or_interrupt_protected_recovery(self):
+        s = self.make_scene()
+        s.jump_to_room(9, row=1, x=400, facing=0)
+        s.start_sequence(20)
+        s.sequence_state.action = s.action = 109
+        s.sequence_state.animation_state = 5
+        s.set_key_state('shift', True)
+        self.assertFalse(s.update_potion_controls())
+        self.assertEqual(s.sequence_state.source_sequence_id, 20)
+        self.assertFalse(s.game.caverns.potions.shift_was_held)
+        s.start_sequence(2)
+        s.sequence_runtime.next_frame()
+        s.action = s.sequence_state.action
+        self.assertTrue(s.update_potion_controls())
+        self.assertEqual(s.sequence_state.source_sequence_id, 50)
+
     def test_restart_restores_consumed_flasks_without_leaving_a_pending_effect(self):
         s = self.make_scene()
         s.jump_to_room(9, row=1, x=430, facing=0)

@@ -71,7 +71,7 @@ from pop2.render_opening import (
 )
 from pop2.terrain import TerrainMotion, floor_y, floor_contact_x
 from pop2.game_ui import MacintoshFont
-from pop2.window_controls import WindowControls, RESUME_COMMAND_KEYS
+from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS
 
 
 SCALE = 2
@@ -1747,7 +1747,7 @@ class ScenePrototype(WindowControls):
         if RESUME_COMMAND_KEYS.intersection(self.window_keys_down):
             retry_held.clear()
         if self.death.can_restart and retry_held:
-            self.restart_after_death()
+            self.restart_after_death(preserve_controls=True)
             self.in_animation_tick = False
             self.schedule_next_animation()
             return
@@ -1950,7 +1950,8 @@ class ScenePrototype(WindowControls):
 
         potions, state, motion = caverns.potions, self.sequence_state, self.terrain_motion
         fresh_shift = self.shift_held and not potions.shift_was_held
-        potions.shift_was_held = self.shift_held
+        if not self.shift_held:
+            potions.shift_was_held = False
         if (motion is None or motion.falling or motion.dead or self.sword_drawn
                 or not self.combat.player.alive or self.ledge_hanging):
             potions.picking = None
@@ -1961,7 +1962,10 @@ class ScenePrototype(WindowControls):
                 return True
             potions.drinking = False
             potions.held_kind = 0
-        crouched = state.action == 109 and state.source_sequence_id in (50, 117)
+        # PickItUp 6:1466-1482 permits the ordinary landing crouch, but
+        # explicitly excludes SEQS:20's protected hard-fall recovery.
+        crouched = (state.action == 109 and state.source_sequence_id != 20
+                    and not self._combat_controls_locked())
         if potions.picking is not None and not crouched:
             if state.sequence_id in (50, 117):
                 return True
@@ -1970,6 +1974,9 @@ class ScenePrototype(WindowControls):
                              or state.source_sequence_id == 50)
                 or fresh_shift and self._is_resting() and not self._combat_controls_locked()):
             return False
+        # GenCtrl 6:0c50/0a0c reaches TryPickUp only at an eligible pose.
+        # A held Shift pressed in the air must survive until that handler.
+        potions.shift_was_held = self.shift_held
         target = pickup_target(self.level_map, motion, state, self.frames[state.action])
         if target is None:
             potions.picking = None
@@ -2641,10 +2648,13 @@ class ScenePrototype(WindowControls):
                 audio.add_song(50, ambient=True)
         audio.flush()
 
-    def restart_after_death(self):
+    def restart_after_death(self, *, preserve_controls=False):
         if not self.death.can_restart:
             return False
+        held = ((self.window_keys_down - self.pause_resume_keys) & PAUSE_GAMEPLAY_KEYS
+                if preserve_controls else set())
         self.restart_level()
+        self.restore_held_gameplay_controls(held)
         return True
 
     def restart_level(self):

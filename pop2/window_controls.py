@@ -233,6 +233,14 @@ class WindowControls:
                 pressed = bool(set(pair).intersection(self.window_keys_down))
             self.set_key_state(key, pressed)
 
+    def restore_held_gameplay_controls(self, keys):
+        self.pause_resume_keys.difference_update(keys)
+        # Restore modifiers before directions so chords reach the normal
+        # controller rather than replaying an old buffered command.
+        for key in ("Shift_L", "Shift_R", "Control_L", "Control_R", "Up", "Down", "Left", "Right"):
+            if key in keys:
+                self.record_paused_key(SimpleNamespace(keysym=key), True)
+
     def set_paused(self, paused):
         if self.paused == paused:
             return
@@ -554,12 +562,7 @@ class WindowControls:
                     self.close_dev_mode()
                 self.set_paused(False)
             self.pause_resume_keys.update(self.window_keys_down)
-            self.pause_resume_keys.difference_update(held_controls)
-            # Restore modifiers before directions so held chords reach the
-            # new level's normal controller, not a saved pre-restart command.
-            for key in ("Shift_L", "Shift_R", "Control_L", "Control_R", "Up", "Down", "Left", "Right"):
-                if key in held_controls:
-                    self.record_paused_key(SimpleNamespace(keysym=key), True)
+            self.restore_held_gameplay_controls(held_controls)
         elif action in ("sound", "music"):
             name = action + "_enabled"
             enabled = not getattr(self, name)
@@ -717,7 +720,7 @@ class WindowControls:
                     and not fullscreen_key):
                 if not repeated and (event.keysym == 'Escape'
                                      or is_resume_key(event, self.window_keys_down)):
-                    self.restart_after_death()
+                    self.restart_after_death(preserve_controls=True)
                 return "break"
             return None
         if event.keysym == "Escape":

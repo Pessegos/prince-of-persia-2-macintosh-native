@@ -1055,6 +1055,23 @@ routine pixel for pixel (196 full-room flask layers). Integrated tests cover
 both approaches to every flask, full/injured health, original effect timing,
 held attachments, pause, removal and restart with inherited entry capacity.
 
+Shift pickup requests are consumed only when the standing/low-pose handler
+can inspect a flask, not merely because Shift was sampled during a fall or
+protected animation. Holding a newly pressed Shift through the Room 18 -> 20
+drop therefore drinks the mega potion directly from landing pose 109, before
+the rise. Releasing Shift before the landing cancels this held request; it is
+not an indefinitely latched pickup command. Running/jumping still cannot
+collect a flask in mid-animation, and health effects retain their sip timing.
+
+GenCtrl (6:0c50/0a0c) and PickItUp (6:1466-1482) distinguish a pending Shift
+from a consumed one and explicitly reject the crouch of hard-fall SEQS:20.
+The ordinary SEQS:17 landing is allowed; hard-fall recovery must finish first.
+Original execution confirmed 30 crouched-pickup cases across selected
+sequences 17/20/26/50/117, both facings and modifier values -1/0/1. Integrated
+tests cover the real ledge drop, direct 109 -> 191 transition, cancellation
+and the protected recovery exception. No new save fields or asset import
+are needed.
+
 Later-level types are identified, not implemented by this level-three work:
 type 3 starts slow fall (2:5a26), type 4 toggles vertical screen inversion
 (2:59f6), type 5 wounds or cures inversion if active, and type 6 selects the

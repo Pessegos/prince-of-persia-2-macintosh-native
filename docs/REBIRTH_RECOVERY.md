@@ -24,8 +24,15 @@ lock keys, multimedia/system keys and unrelated function keys do not retry.
 Held Shift/Ctrl no longer act as retry buttons, and command-modified Space
 does not trigger the held-Space poll. Escape still retries, just as it can
 resume pause. A held arrow alone is not polled; a fresh arrow press is valid.
-Retry keys are consumed until release, rather than becoming a jump/attack
-in the new life. F2/F3 and Alt+Enter retain their host functions.
+After an accepted retry, currently held gameplay keys are restored in
+modifier/vertical/horizontal order. The new entry or checkpoint controller
+then handles running, turning, jumping, crouching or a Shift chord as soon
+as it permits input. An arrow used to retry therefore also requests its
+ordinary action, matching the reference behavior. Suppressed menu/pause keys
+and the old buffered command are not restored. Other retry keys, including
+Space/text keys, remain consumed until release; F2/F3 and Alt+Enter retain
+their host functions. Retry eligibility and the unpause-key filter are
+unchanged, including the lack of an early held-arrow retry poll.
 
 At counter 7, the native controller waits for both current and pending sound
 to finish before drawing `Press key to continue` (3:433a; DATA aa96). This is
