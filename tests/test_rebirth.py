@@ -15,6 +15,68 @@ from tests.test_audio import TimedPlayback
 
 
 class RebirthRulesTests(unittest.TestCase):
+    def test_all_cavern_death_songs_gate_prompt_by_prepared_playback_not_a_fixed_delay(self):
+        for rate in (10, 12):
+            for method, cue in ((0, 64), (1, 71), (2, 62), (3, 6), (4, 285), (5, 279)):
+                with self.subTest(rate=rate, method=method):
+                    audio = AudioEngine(playback=object())
+                    self.assertTrue(audio.available(cue))
+                    clocks = {key: {'duration': item.get('playback_duration', item.get('duration', 0))}
+                              for key, item in audio.cues.items()}
+                    backend = audio.playback = TimedPlayback(clocks)
+                    death = DeathState()
+                    death.begin(method)
+                    for _ in range(6):
+                        death.advance(185, 1 / rate, audio)
+                        self.assertFalse(death.can_restart)
+                    death.advance(185, 1 / rate, audio)
+                    self.assertEqual(audio.pending_song, cue)
+                    self.assertTrue(death.can_restart)
+                    self.assertFalse(death.prompt_visible)
+                    audio.flush()
+                    self.assertEqual(audio.current_music, cue)
+                    elapsed = 0
+                    while not death.prompt_visible:
+                        self.assertLess(elapsed, 30)
+                        backend.advance(1 / rate)
+                        elapsed += 1 / rate
+                        death.advance(185, 1 / rate, audio)
+                        if backend.busy('music'):
+                            self.assertFalse(death.prompt_visible)
+                    self.assertGreaterEqual(elapsed + 1e-9, clocks[cue]['duration'])
+                    self.assertLess(elapsed, clocks[cue]['duration'] + 1 / rate + 1e-9)
+
+    def test_lava_music_override_does_not_change_the_physical_death_cause(self):
+        audio = AudioEngine(playback=object())
+        audio.playback = TimedPlayback(audio.cues)
+        death = DeathState()
+        death.begin(5)
+        death.music_method = 1
+        for _ in range(7):
+            death.advance(185, 1 / 12, audio)
+        self.assertEqual((death.method, audio.pending_song), (5, 71))
+
+    def test_busy_initial_effect_and_pending_music_are_separate_retry_gates(self):
+        audio = AudioEngine(playback=object())
+        audio.playback = TimedPlayback(audio.cues)
+        death = DeathState()
+        death.begin(3)
+        audio.add_sound(7)
+        audio.flush()
+        for _ in range(20):
+            death.advance(185, 1 / 12, audio)
+        self.assertEqual(death.counter, 0)
+        audio.playback.stop('effect')
+        for _ in range(7):
+            death.advance(185, 1 / 12, audio)
+        self.assertEqual(death.counter, 7)
+        death.advance(185, 1 / 12, audio)
+        self.assertFalse(death.prompt_visible)
+        audio.flush()
+        audio.playback.stop('music')
+        death.advance(185, 1 / 12, audio)
+        self.assertTrue(death.prompt_visible)
+
     def test_checkpoint_slots_are_not_renumbered_when_disabled(self):
         level = bytearray(0x39ae)
         struct.pack_into(">4h", level, 0x39a6, 0, 90, 15, 5)

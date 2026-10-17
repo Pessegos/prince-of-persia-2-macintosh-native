@@ -42,6 +42,33 @@ Reference MIDI event durations:
 These durations come from the tempo/event tracks in `MIDISnd.dat`, resource
 ID `9752 + cue`, selected through DATA bc6a / `AddKidDeathSong` (5:4afc).
 The importer extracts that mapping and measures the rendered audio too.
+
+### Level-Three Timing Audit
+
+The 4:3c28-3ca2 branch was checked again for the cavern death cases. There
+is no per-cause fixed countdown before the prompt: six eligible updates
+increment 0 to 6, the seventh requests AddKidDeathSong and sets 7, and a
+later update draws the prompt only once both audio buses are idle. Thus
+the counter-to-song part takes 7/12 seconds at the unarmed 12 Hz cadence
+or 7/10 seconds at the armed 10 Hz cadence, measured from the update before
+the first eligible count. The preceding death animation and nonexempt
+initial effects add their own time. The song's actual playback then adds
+its duration, quantized to the next controller update.
+
+The runtime counter/order did not need a new fitted delay. The missing
+cavern songs did need importing: skeleton method 2 now waits for cue 62,
+lava's SEQS music-method override 1 waits for 71, spikes method 4 waits for
+285, and the separate physical method 5 mapping is 279. Methods 0 and 3
+retain cues 64 and 6. Regression tests cover all six mappings at both
+10 and 12 Hz, using the prepared WAV duration including the release tail,
+and require the prompt within one update of playback completion. They
+also check initial-effect blocking, pending-song blocking, and the
+distinction between lava's physical death cause and its music override.
+Early retry still becomes legal at counter 7, before the prompt.
+
+The 600-update prompt lifetime/blinking and frontend return described
+below remain an explicit host difference; this audit does not silently
+introduce an automatic restart or change the time available to retry.
 `DEATH_CUE_SECONDS` has been removed: native counter gates still advance on
 simulation frames, while final completion comes from SDL's playback state,
 including the prepared sampler's release tail. Pause/F3 freezes both. Tests
