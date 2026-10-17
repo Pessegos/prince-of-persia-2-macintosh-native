@@ -343,9 +343,25 @@ Dead actors, selected descent 68 and an already selected crush are exempt.
 
 ATMGate (5:41c8-425e) and CaveMoveSquishingGate (8:3a58-3b32) also track the
 nearby player's selected crush sequence, including horizontal room neighbors.
-Slow closing follows pose 264 at one unit/update, sets position 56 for 265,
-then stops at 52 for 266 and stops sound 17. Fast closures reaching the floor
+Slow closing follows pose 264 at one unit/update; without the sequence-mode
+signal it sets position 56 for 265, then stops at 52 for 266 and stops sound 17.
+The normal SEQS:118 path sets mode 3 on its last pose 264. The next gate
+update takes CaveMoveSquishingGate's earlier branch (8:3ab2-3ad4), jumps to
+position 48, queues cues 20 then 18 and deactivates the gate. Poses 265/266
+then flatten the body beneath the final slam without reopening to 56. This
+restores the closer Macintosh stop and the visible stone/body impact using
+the original sprites, rather than substituting or scaling DOS artwork.
+Fast closures reaching the floor
 stop at position 56 when the crushing player is nearby rather than at zero.
+
+CaveMoveSquishingGate also has a narrower linear-cell contact test than
+ATMGate's initial crush proximity: the supporting foot must occupy the gate
+cell or its predecessor, rebased across horizontal room links. A foot in
+the following cell must not apply the slow-pose corrections. Original
+instruction execution matched 480 additional complete ATMGate updates,
+including both closing phases, the mode-3 slam, pose controls and near misses.
+Real Room 23 tests verify both facings, the 264/mode-3 -> 265 -> 266 timing,
+the final position 48, death/retry and one additional cue-20 playback at impact.
 
 Original execution matched 1,920 contact-selection/displacement/death cases,
 4,096 crouch-rise checks and 576 gate-controller updates with and without crush poses. The contact

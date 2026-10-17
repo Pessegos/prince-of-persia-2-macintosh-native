@@ -498,7 +498,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,TriggerLava,0x3844,jump_table,partial,pop2/lava.py;tools/extract_caverns.py,one pool per native tile 23 and visible upper-border copies; native handle/trob bank replaced,1,5
 8,Caverns,TriggerLavaBubble,0x38e4,decoded,partial,pop2/lava.py,"first inactive bubble reuse, event coordinates/sequence/layer and previous-phase activation",2,0
 8,Caverns,CaveClearFlawFromPieceBelow,0x39b8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
-8,Caverns,CaveMoveSquishingGate,0x3a58,jump_table,partial,pop2/pressure_plates.py;pop2/scene_prototype.py,nearby Prince SEQS 118 poses 264-266 and gate stop/sound; 576 native gate updates including ordinary controls; other actor modes omitted,0,5
+8,Caverns,CaveMoveSquishingGate,0x3a58,jump_table,partial,pop2/pressure_plates.py;pop2/scene_prototype.py,"nearby Prince SEQS 118 poses 264-266, narrower linear-cell contact and mode-3 final slam to 48 with cues 20/18; 576 original plus 480 additional native gate updates; other actor modes omitted",0,5
 8,Caverns,CaveGetTorchFrame,0x3b4e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
 9,Final Battle,FinlCheckDeadOpp,0x00e2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,8
 9,Final Battle,FinlCheckGenOpp,0x0202,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,3

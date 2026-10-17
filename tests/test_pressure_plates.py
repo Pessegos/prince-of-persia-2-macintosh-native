@@ -100,6 +100,49 @@ class PressurePlateTests(unittest.TestCase):
             self.assertEqual(self.terrain.tile(0, 5, 1).foreground & 255, expected)
             self.assertNotIn((0, 15), self.plates.active)
 
+    def test_crush_sequence_final_slam_closes_to_forty_eight_and_stops_once(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        state = SequenceState(118, action=264, sequence_mode=3,
+                              target_x=5 * 51 + 35, facing=1)
+        motion = TerrainMotion(0, 1, dead=True)
+        self.plates.foreground[0, 15] = 0x300 | 82
+        self.plates.active[0, 15] = 1
+        self.assertEqual(self.plates.advance(self.terrain, state, motion, record), (17, 20, 18))
+        self.assertEqual(self.plates.foreground[0, 15], 0x300 | 48)
+        self.assertNotIn((0, 15), self.plates.active)
+        for action in (265, 266, 266):
+            state.action, state.sequence_mode = action, 0
+            self.assertEqual(self.plates.advance(self.terrain, state, motion, record), ())
+            self.assertEqual(self.plates.foreground[0, 15], 0x300 | 48)
+
+    def test_slow_crush_contact_is_narrower_than_fast_close_proximity(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        state = SequenceState(118, action=264, sequence_mode=3, facing=1)
+        motion = TerrainMotion(0, 1, dead=True)
+        for column, expected in ((4, 48), (5, 48), (6, 78), (7, 78)):
+            with self.subTest(column=column):
+                state.target_x = column * 51 + 35
+                self.plates.foreground[0, 15] = 0x300 | 82
+                self.plates.active[0, 15] = 1
+                cues = self.plates.advance(self.terrain, state, motion, record)
+                self.assertEqual(self.plates.foreground[0, 15] & 255, expected)
+                self.assertEqual(cues, (17, 20, 18) if expected == 48 else (17,))
+
+    def test_slow_crush_contact_rebases_horizontal_neighbors_not_distant_rooms(self):
+        struct.pack_into('>H', self.level, 0x2080, 2)
+        struct.pack_into('>H', self.level, 0x2082, 3)
+        record = SimpleNamespace(offset_x=0, aux=0)
+        state = SequenceState(118, action=264, sequence_mode=3, facing=1)
+        motion = TerrainMotion(0, 1, dead=True)
+        for room, cell, column, expected in ((1, 19, -1, True), (1, 19, -2, True),
+                                            (1, 19, 0, False), (2, 10, 10, True),
+                                            (2, 10, 9, True), (2, 10, 11, False),
+                                            (3, 15, 5, False)):
+            with self.subTest(room=room, cell=cell, column=column):
+                state.target_x = column * 51 + 35
+                self.assertEqual(self.plates.crushing_body_under_gate(
+                    self.terrain, (room, cell), state, motion, record), expected)
+
     def test_gate_closing_on_fingers_sounds_once_in_both_native_hanging_modes(self):
         record = SimpleNamespace(offset_x=0, aux=0)
         for mode in (2, 6):

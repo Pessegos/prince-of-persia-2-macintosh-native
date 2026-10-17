@@ -146,6 +146,22 @@ class PressurePlates:
         return row == motion.row and abs(column - foot) <= 1
 
     @staticmethod
+    def crushing_body_under_gate(terrain, key, state, motion, record):
+        # CaveMoveSquishingGate 8:3a60-3ab0 uses linear cells, with
+        # horizontal room rebasing, and only the gate/preceding foot cell.
+        room, cell = key
+        foot = character_column(floor_contact_x(state.target_x, state.facing, record))
+        player_cell = motion.row * 10 + foot
+        if room != motion.room:
+            if room == terrain.neighbor(motion.room, 'left'):
+                player_cell += 10
+            elif room == terrain.neighbor(motion.room, 'right'):
+                player_cell -= 10
+            else:
+                return False
+        return player_cell in (cell, cell - 1)
+
+    @staticmethod
     def fingers_under_gate(key, state, motion, record):
         # CheckSquishedFingers 5:153c: compare linear cells in the copied
         # player's room; neither facing nor a climb request is required.
@@ -219,10 +235,13 @@ class PressurePlates:
                     elif position < 184:
                         phase = 1
                         cues.append(17)
-                        # CaveMoveSquishingGate 8:3ad6-3b24: slow the first
-                        # crush pose to one unit/update, hold 56, then stop.
-                        if squashing:
-                            if state.action == 264:
+                        # SEQS:118 signals the final slam with mode 3 on
+                        # its last kneeling frame, before the flattened poses.
+                        if squashing and self.crushing_body_under_gate(terrain, key, state, motion, record):
+                            if state.sequence_mode == 3:
+                                position, phase = 48, -1
+                                cues.extend((20, 18))
+                            elif state.action == 264:
                                 position += 3
                             elif state.action == 265:
                                 position = 56

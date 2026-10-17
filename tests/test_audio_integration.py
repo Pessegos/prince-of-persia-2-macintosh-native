@@ -232,6 +232,27 @@ class SceneAudioTests(unittest.TestCase):
                 self.assertEqual(scene.combat.player.life, life)
                 self.assertTrue(scene.ledge_hanging)
 
+    def test_room_23_crush_slam_plays_once_at_the_flattening_frame(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.render = Mock()
+        scene.jump_to_room(22, row=0, x=121, facing=0)
+        plates = scene.game.caverns.plates
+        plates.foreground[22, 1] = 0x200 | 144
+        plates.active[22, 1] = 0
+        for _ in range(30):
+            self.tick()
+            if scene.sequence_state.sequence_mode == 3:
+                break
+        self.assertEqual(scene.sequence_state.sequence_mode, 3)
+        previous_slams = self.effects().count(20)
+        self.tick()
+        self.assertEqual(scene.action, 265)
+        self.assertEqual(self.effects()[-1], 20)
+        self.tick(15)
+        self.assertEqual(self.effects().count(20), previous_slams + 1)
+        self.assertEqual(plates.foreground[22, 1] & 255, 48)
+
     def test_window_escape_plays_glass_and_landing_without_buffered_events(self):
         self.scene.audio.add_sound = Mock(wraps=self.scene.audio.add_sound)
         self.scene.restart_opening()

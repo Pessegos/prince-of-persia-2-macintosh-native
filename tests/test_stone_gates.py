@@ -348,9 +348,32 @@ class ImportedStoneGateTests(unittest.TestCase):
         self.assertEqual([pose for pose in trace if pose in (264, 265, 266)][:8],
                          [264] * 6 + [265, 266])
         self.assertNotIn((16, 27), scene.game.caverns.plates.active)
-        self.assertEqual(scene.level_map.tile(16, 7, 2).foreground & 255, 52)
+        self.assertEqual(scene.level_map.tile(16, 7, 2).foreground & 255, 48)
         self.assertTrue(scene.death.can_restart)
         self.assertEqual(scene.death.method, 0)
+
+    def test_room_23_final_gate_slam_tracks_flattening_in_both_facings(self):
+        scene = self.scene_at_gate()
+        for facing, x in ((0, 121), (1, 106)):
+            with self.subTest(facing=facing):
+                scene.jump_to_room(22, row=0, x=x, facing=facing)
+                plates = scene.game.caverns.plates
+                plates.foreground[22, 1] = 0x200 | 144
+                plates.active[22, 1] = 0
+                trace = []
+                for _ in range(40):
+                    self.tick()
+                    trace.append((scene.action, scene.sequence_state.sequence_mode,
+                                  plates.foreground[22, 1] & 255))
+                signal = next(i for i, (_, mode, _) in enumerate(trace) if mode == 3)
+                self.assertEqual(trace[signal][0], 264)
+                self.assertGreater(trace[signal][2], 48)
+                self.assertEqual(trace[signal + 1], (265, 0, 48))
+                self.assertEqual(trace[signal + 2], (266, 0, 48))
+                self.assertEqual(trace[-1], (266, 0, 48))
+                self.assertNotIn((22, 1), plates.active)
+                self.assertEqual(scene.combat.player.life, 0)
+                self.assertTrue(scene.death.can_restart)
 
     def test_crouched_prince_can_crawl_out_without_holding_down(self):
         scene = self.scene_at_gate()
