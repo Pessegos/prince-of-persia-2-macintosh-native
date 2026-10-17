@@ -142,7 +142,10 @@ def _unpack(value, resources, lava_tables, depth=0):
     cls = CLASSES[value['record']]
     record = value['fields']
     allowed = {field.name for field in fields(cls)} - OMIT.get(cls, set())
-    if not isinstance(record, dict) or set(record) != allowed:
+    # Earlier version-1 saves predate the frozen turning-contact history.
+    optional = {'gate_contact_bounds'} if cls is TerrainMotion else set()
+    if (not isinstance(record, dict) or set(record) - allowed
+            or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')
     arguments = {name: decode(item) for name, item in record.items()}
     for name, annotation in get_type_hints(cls).items():

@@ -204,6 +204,18 @@ class LevelMap:
         # Ordinary clear floor returns 42 before DoStepFwd reserves four.
         return StepBoundary(42, 2, kind)
 
+    def standing_turn_offset(self, room, row, state, record, bounds):
+        # Standing Backward 6:10f6-1154 reserves eleven foot-space pixels
+        # before a blocking cavern gate, before SEQS:5 changes facing.
+        if state.level_kind != 3:
+            return 0
+        direction = 1 if state.facing else -1
+        contact = floor_contact_x(state.target_x, state.facing, record)
+        ahead = self.tile(room, character_column(contact) + direction, row)
+        if ahead.kind != 4 or not stone_gate_blocks(ahead.foreground, bounds, state):
+            return 0
+        return min(0, floor_edge_distance(contact, state.facing) - 11) * direction
+
     def combat_turn_offset(self, room, row, state, record):
         # DoTurn, CODE:6 0x26dc-0x276c, ordinary rooftop floor/wall subset.
         contact_x = floor_contact_x(state.target_x, state.facing, record)
@@ -597,6 +609,7 @@ class TerrainMotion:
     hit_fall: bool = False
     sinking: bool = False
     lava_landing: bool = False
+    gate_contact_bounds: tuple[int, int, tuple[int, int, int, int], tuple[int, int, int, int]] | None = None
 
 
 @dataclass(frozen=True)
@@ -763,6 +776,19 @@ class RooftopPhysics:
         if (not alive or state.actor_type not in (0, None) or state.level_kind != 3
                 or state.source_sequence_id == 118 or record is None):
             return None
+        # CheckBarr 4:4e46/4fce skips the ordinary collision-buffer update
+        # during mode 7. CheckGateForKid still reads the last two masks.
+        # A turning arm must not create contact that the standing body lacked.
+        context = (motion.room, motion.row)
+        if state.animation_state == 7:
+            cached = motion.gate_contact_bounds
+            if cached is None or cached[:2] != context:
+                cached = (*context, old_bounds or bounds, old_bounds or bounds)
+                motion.gate_contact_bounds = cached
+            contact_bounds = cached[2:]
+        else:
+            contact_bounds = (bounds, old_bounds or bounds)
+            motion.gate_contact_bounds = (*context, *contact_bounds)
         gate = self.map.nearby_gate(motion.room, motion.row, state, record, behind_first=True)
         if gate is None:
             return None
@@ -771,7 +797,7 @@ class RooftopPhysics:
         # CheckGateForKid 4:613c-616e requires both CheckBarr masks to be
         # 0xff: overlap on the previous frame as well as this one.
         if (not all(body[0] < right and left < body[2] + 1
-                    for body in (bounds, old_bounds or bounds))
+                    for body in contact_bounds)
                 or not stone_gate_blocks(tile.foreground, bounds, state)):
             return None
         if state.action != 109 and tile.foreground and not sword_drawn:

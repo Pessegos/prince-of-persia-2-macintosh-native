@@ -152,6 +152,21 @@ class StoneGateTests(unittest.TestCase):
         self.assertEqual(stone_gate_blocks(64, (270, 340, 290, 400)),
                          stone_gate_blocks(64, (270, 340, 290, 364)))
 
+    def test_standing_turn_reserves_native_eleven_pixel_foot_clearance_at_cavern_gate(self):
+        record = SimpleNamespace(offset_x=4, aux=70)
+        for facing, x, expected in ((0, 333, 5), (0, 338, 0), (1, 279, -11),
+                                    (1, 268, 0)):
+            state = SequenceState(2, action=15, target_x=x, facing=facing,
+                                  level_kind=3, actor_type=0)
+            for phase in (0, 104, 184):
+                self.phase(phase)
+                self.assertEqual(self.terrain.standing_turn_offset(
+                    0, 1, state, record, (x - 4, 148, x + 13, 226)),
+                    expected if phase < 168 else 0)
+        state.level_kind = 5
+        self.assertEqual(self.terrain.standing_turn_offset(
+            0, 1, state, record, (280, 148, 300, 226)), 0)
+
     def test_rise_veto_uses_native_phase_and_directional_anchor_band(self):
         record = SimpleNamespace(offset_x=0, aux=0)
         for facing, minimum, maximum in ((0, 286, 324), (1, 306, 344)):
@@ -194,6 +209,68 @@ class StoneGateTests(unittest.TestCase):
                                                 previous, record, alive, False))
             self.assertFalse(motion.dead)
 
+    def test_turn_keeps_pre_turn_gate_contact_instead_of_testing_each_arm_pose(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        physics = RooftopPhysics(self.terrain)
+        body = (298, 155, 323, 226)
+        for facing in (0, 1):
+            for previous, standing in (
+                    ((270, 155, 294, 226), (270, 155, 294, 226)),
+                    ((328, 155, 352, 226), (328, 155, 352, 226)),
+                    ((270, 155, 294, 226), body)):
+                with self.subTest(facing=facing, standing=standing, previous=previous):
+                    self.phase(184)
+                    state = SequenceState(2, action=15, target_x=310, facing=facing,
+                                          level_kind=3, actor_type=0)
+                    motion = TerrainMotion(0, 1)
+                    runtime = SequenceRuntime({}, state)
+                    self.assertIsNone(physics.check_gate(
+                        motion, runtime, standing, previous, record, True, False))
+                    cached = motion.gate_contact_bounds
+                    self.phase(104)
+                    state.select(5)
+                    state.animation_state = 7
+                    for action in range(45, 53):
+                        state.action = action
+                        self.assertIsNone(physics.check_gate(
+                            motion, runtime, body, body, record, True, False))
+                        self.assertEqual(motion.gate_contact_bounds, cached)
+                        self.assertEqual(state.source_sequence_id, 5)
+                    state.animation_state = 0
+                    self.assertEqual(physics.check_gate(
+                        motion, runtime, body, body, record, True, False).kind, 'gate')
+                    self.assertEqual(state.source_sequence_id, 50)
+
+    def test_gate_closing_on_an_already_overlapping_turn_still_forces_crouch(self):
+        record = SimpleNamespace(offset_x=0, aux=0)
+        physics = RooftopPhysics(self.terrain)
+        body = (298, 155, 323, 226)
+        for facing in (0, 1):
+            self.phase(184)
+            state = SequenceState(2, action=15, target_x=310, facing=facing,
+                                  level_kind=3, actor_type=0)
+            runtime, motion = SequenceRuntime({}, state), TerrainMotion(0, 1)
+            self.assertIsNone(physics.check_gate(motion, runtime, body, body, record, True, False))
+            state.select(5)
+            state.action, state.animation_state = 49, 7
+            self.phase(104)
+            event = physics.check_gate(motion, runtime, body, body, record, True, False)
+            self.assertEqual((event.kind, state.source_sequence_id), ('gate', 50))
+
+    def test_turn_contact_seed_and_room_or_row_change_do_not_reuse_stale_bounds(self):
+        physics = RooftopPhysics(self.terrain)
+        record = SimpleNamespace(offset_x=0, aux=0)
+        body = (298, 155, 323, 226)
+        outside = (270, 155, 294, 226)
+        self.phase(104)
+        for cached in (None, (1, 1, body, body), (0, 0, body, body)):
+            state = SequenceState(5, action=49, animation_state=7, target_x=310,
+                                  facing=1, level_kind=3, actor_type=0)
+            motion = TerrainMotion(0, 1, gate_contact_bounds=cached)
+            self.assertIsNone(physics.check_gate(
+                motion, SequenceRuntime({}, state), body, outside, record, True, False))
+            self.assertEqual(motion.gate_contact_bounds, (0, 1, outside, outside))
+
     def test_closed_gate_and_drawn_sword_eject_instead_of_crushing(self):
         physics = RooftopPhysics(self.terrain)
         record = SimpleNamespace(offset_x=0, aux=0)
@@ -211,6 +288,27 @@ class StoneGateTests(unittest.TestCase):
 
 @unittest.skipUnless((ASSET_DIR / 'Prince.rsrc').is_file(), 'Imported game resources required')
 class ImportedStoneGateTests(unittest.TestCase):
+    def test_room_four_repeated_turns_next_to_neighbor_gate_do_not_crouch_or_drift(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(3)
+        scene.jump_to_room(3, row=2, x=29, facing=0)
+        scene.in_animation_tick = True
+        for _ in range(3):
+            for direction, expected_x, expected_facing in ((1, 41, 1), (-1, 32, 0)):
+                scene.horizontal_key(None, direction, True)
+                scene.horizontal_key(None, direction, False)
+                for _ in range(14):
+                    self.assertEqual(scene.sequence_state.source_sequence_id, 5)
+                    self.assertNotIn(scene.action, (107, 108, 109))
+                    self.assertFalse(scene.terrain_motion.falling or scene.terrain_motion.dead)
+                    self.tick()
+                self.assertEqual((scene.player_x, scene.sequence_state.facing, scene.action),
+                                 (expected_x, expected_facing, 15))
+        self.assertEqual(scene.combat.player.life, 3)
+
     def scene_at_gate(self, phase=104):
         from tests.test_terrain import RooftopSceneTests
         from unittest.mock import Mock

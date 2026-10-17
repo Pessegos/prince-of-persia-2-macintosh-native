@@ -79,6 +79,35 @@ class SaveFormatTests(unittest.TestCase):
         self.assertTrue(saved['controls']['sword_drawn'])
         self.assertTrue(saved['copy_verified'])
 
+    def test_turning_gate_contact_survives_save_and_legacy_saves_use_empty_history(self):
+        original = GameSession.load(self.resources, 3)
+        original.place(3, 2, 35, 0)
+        bounds = (31, 268, 48, 346)
+        original.motion.gate_contact_bounds = (3, 2, bounds, bounds)
+        original.runtime.state.select(5)
+        original.runtime.next_frame()
+        write_save(self.path, capture(original))
+        loaded, _saved = read_save(self.path, self.resources)
+        self.assertEqual(loaded.motion.gate_contact_bounds, original.motion.gate_contact_bounds)
+        self.assertEqual(loaded.runtime.state.animation_state, 7)
+        self.assertEqual(vars(loaded.runtime.state), vars(original.runtime.state))
+        value = json.loads(self.path.read_text())
+
+        def remove_contact(item):
+            if isinstance(item, dict):
+                if item.get('record') == 'TerrainMotion':
+                    item['fields'].pop('gate_contact_bounds', None)
+                for child in item.values():
+                    remove_contact(child)
+            elif isinstance(item, list):
+                for child in item:
+                    remove_contact(child)
+
+        remove_contact(value)
+        self.path.write_text(json.dumps(value))
+        loaded, _saved = read_save(self.path, self.resources)
+        self.assertIsNone(loaded.motion.gate_contact_bounds)
+
     def test_failed_atomic_replace_preserves_previous_save_and_removes_temporary(self):
         self.path.write_bytes(b'old-save')
         with patch('pop2.save_game.os.replace', side_effect=OSError('Disk unavailable')):

@@ -1108,6 +1108,13 @@ class ScenePrototype(WindowControls):
         self.run_direction = 0
         self.run_stop_requested = False
         self.run_start_x = None
+        if getattr(self, 'level_map', None) is not None:
+            state = self.sequence_state
+            offset = self.level_map.standing_turn_offset(
+                self.room_id, self.terrain_motion.row, state,
+                self.frames[state.action], self.player_bounds())
+            self.player_x += offset
+            state.current_x = state.target_x = self.player_x
         self.start_sequence(STANDING_TURN_SEQUENCE)
         self.status.set("Standing turn: original SEQS:5")
         self.advance_animation_now()

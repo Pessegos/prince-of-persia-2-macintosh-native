@@ -510,6 +510,33 @@ catch verifies both closure speeds through the audio backend, one voice,
 continued hanging and unchanged life. StopGate's separate mode-2 pose
 selection is not included in this sound-only recovery.
 
+### Standing Turns Beside Gates
+
+The room-4 reference is not a position-invariant round trip. Standing
+Backward (6:10e4, specifically 10f6-1154) measures the supporting foot's
+distance to its cell edge. When the ahead tile is a blocking cavern gate,
+it reserves eleven pixels by moving backward before selecting SEQS:5.
+For example, a left-facing anchor at 29 moves to 32 first, then the
+ordinary turn finishes at 41; turning back finishes at 32. Repeating the
+turns does not keep shifting the Prince. Open gates need no adjustment.
+This is the cavern branch, not the separate six-pixel rule for other
+environments or the special level-8 branch.
+
+CheckBarr (4:4e46/4fce) also bypasses ordinary collision-buffer updates in
+turning mode 7. CheckGateForKid (4:613c-6164) consequently uses the previous
+pair of contact masks, not the turning arm's new rectangle. The port keeps
+that pair of gate-contact rectangles during the turn. Contact that already
+existed can still force a crouch as the gate closes; merely extending an
+arm into a neighboring gate cannot interrupt the turn. History is scoped
+to room and physical row, saved with the terrain motion, and defaults to
+empty when loading older version-1 saves.
+
+Original instruction execution matched 600 standing-turn offset cases in
+both facings and confirmed preserved mode-7 mask values 0/15/240/255.
+Tests cover the small initial offset, repeated real-input turns in room 4,
+no spurious crouch or cumulative drift, closure over an existing contact,
+context changes, save round trips and older saves without contact history.
+
 ## Pressure Plates And Stone Gates
 
 All 27 level-three buttons are reverse plates (tile 34). Their low foreground
