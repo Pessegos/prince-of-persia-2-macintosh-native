@@ -6,7 +6,25 @@ from pop2.animation_data import (
     character_collision_bounds, parse_aframe_records, parse_frame_records, shape_id_for_action,
 )
 from pop2.combat import guard_frame_index
-from pop2.render_opening import ROOM_ORIGIN_X, character_sprite_top, decode_ctbl, decode_shap
+from pop2.render_opening import (
+    ROOM_ORIGIN_X, actor_foreground_column, character_sprite_top, decode_ctbl, decode_shap,
+)
+from pop2.terrain import character_row
+
+
+def actor_draw_order(state, record, bounds, row):
+    """IndexChar/DrawObjs/CompareObj ordering for Prince and ordinary opponents."""
+    if state.animation_state == 1:
+        row = character_row(bounds[3])
+        if row == -1:
+            row = 3
+    column = actor_foreground_column(state, record, bounds)
+    # IndexCell1 assigns offscreen actors to bucket 30, visited first.
+    # Visible cells follow bottom-up, left-right. Ordinary character kinds
+    # share priority 127 and sort by shape bottom, then anchor within a cell.
+    cell = 1 + (2 - row) * 10 + column if 0 <= row < 3 and 0 <= column < 10 else 0
+    anchor = bounds[2] + 1 if state.facing else bounds[0]
+    return cell, bounds[3], anchor
 
 
 class GuardArtwork:

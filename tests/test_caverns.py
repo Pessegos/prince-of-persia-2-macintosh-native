@@ -394,6 +394,34 @@ class CavernDrawingTests(unittest.TestCase):
         self.assertEqual((cell_mask.getpixel((0, 0)), cell_mask.getpixel((4, 2))), (255, 255))
         self.assertNotIn((1, 1), art.actor_cell_occlusion)
 
+    def test_gate_masks_belong_to_the_stone_tile_not_the_repaint_callers(self):
+        sprite = Image.new('RGBA', (41, 146), 'gray')
+        commands = [
+            ['back', 3563, 408, 357, 16, 2, [211, 408, 357, 449], 4, 7, 2],
+            ['back', 3563, 408, 357, 16, 2, [211, 408, 357, 449], 4, 8, 2],
+            ['back', 3563, 0, 357, 16, 2, [211, 0, 357, 41], 4, 0, 2],
+            ['back', 3563, 102, 477, 16, 3, [331, 102, 365, 143], 4, 1, 2],
+        ]
+        record = {'kind': 4, 'commands': [['back', 3563, 4, *c[8:10]] for c in commands]}
+        program = {'version': 14, 'level': 3, 'rooms': {'0': commands},
+                   'pressure_plates': {'rooms': {'0': [record]}}}
+        with patch('pop2.caverns.cavern_assets',
+                   return_value=(program, {}, {}, {3563: sprite})):
+            art = cavern_room()
+        self.assertEqual(set(art.gate_occlusion), {(7, 2), (-1, 2), (1, 3)})
+        state = SimpleNamespace(actor_type=0, animation_state=0, action=15,
+                                source_sequence_id=2, target_x=35, facing=0)
+        record = SimpleNamespace(offset_x=4, aux=70)
+        mask = art.actor_mask(2, state=state, bounds=(31, 268, 48, 346), record=record)
+        self.assertEqual(mask.getpixel((35, 310)), 0)
+        self.assertEqual(mask.getpixel((120, 340)), 0)
+        state.target_x = 420
+        mask = art.actor_mask(2, state=state, bounds=(426, 268, 443, 346), record=record)
+        self.assertEqual(mask.getpixel((430, 310)), 255)
+        state.target_x = 440  # The column beyond the gate must not peel it.
+        mask = art.actor_mask(2, state=state, bounds=(436, 268, 453, 346), record=record)
+        self.assertEqual(mask.getpixel((430, 310)), 0)
+
     def test_monochrome_flask_uses_native_whole_bitmap_rle_and_ink_color(self):
         data = struct.pack('>HhhH2H', 0x9200, 2, 9, 2, 0, 0) + bytes([1, 128, 128, 0])
         colors = {233: (25, 112, 217, 255)}
@@ -445,6 +473,52 @@ class CavernDrawingTests(unittest.TestCase):
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class OriginalCavernClimbTests(unittest.TestCase):
+    def test_room_four_background_gates_do_not_hide_prince_or_feet(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(3)
+        for x in (35, 135):
+            with self.subTest(x=x):
+                scene.jump_to_room(3, row=2, x=x, facing=0)
+                expected = scene.player_sprite(scene.action)
+                record = scene.frames[scene.action]
+                left, top = x - record.offset_x, scene.player_bounds()[1]
+                actual = scene.screenshot_viewport
+                for sy in range(max(0, 280 - top), expected.height):
+                    for sx in range(expected.width):
+                        pixel = expected.getpixel((sx, sy))
+                        if pixel[3]:
+                            self.assertEqual(actual.getpixel((1 + left + sx, top + sy)), pixel)
+
+    def test_room_four_bones_cover_prince_feet_but_pillars_still_cover_him(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(3)
+        scene.jump_to_room(3, row=2, x=95, facing=0)
+        guard = scene.combat.visible_guards()[0]
+        layer = Image.new('RGBA', (510, 365))
+        scene.guard_art.draw(layer, guard.state, 346, guard.palette_variant)
+        prince = scene.player_sprite(scene.action)
+        left = 95 - scene.frames[scene.action].offset_x
+        top = scene.player_bounds()[1]
+        overlap = []
+        for y in range(top, 347):
+            for x in range(left, left + prince.width):
+                if layer.getpixel((x, y))[3] and prince.getpixel((x - left, y - top))[3]:
+                    overlap.append((x, y))
+                    self.assertEqual(scene.screenshot_viewport.getpixel((x + 1, y)),
+                                     layer.getpixel((x, y)))
+        self.assertTrue(overlap)
+        scene.jump_to_room(3, row=2, x=185, facing=0)
+        room = scene.room_cache[3]
+        mask = room.actor_mask(2, state=scene.sequence_state, bounds=scene.player_bounds(),
+                               record=scene.frames[scene.action])
+        self.assertEqual(mask.getpixel((183, 310)), 255)
+
     def test_live_scenery_retention_does_not_capture_the_prince_or_menu(self):
         from tests.test_terrain import RooftopSceneTests
 

@@ -13,7 +13,7 @@ from pop2.animation_data import (
 from pop2.combat import (
     PLAYER_COMBAT_TURN_SEQUENCE, contact_allowed, guard_frame_index,
 )
-from pop2.combat_art import GuardArtwork, HealthArtwork, HitArtwork
+from pop2.combat_art import GuardArtwork, HealthArtwork, HitArtwork, actor_draw_order
 from pop2.control_mapping import (
     IDLE_SEQUENCE,
     RUN_JUMP_SEQUENCE,
@@ -3245,14 +3245,14 @@ class ScenePrototype(WindowControls):
         frame = Image.alpha_composite(frame, self.foreground)
         self.level_renderer.remember_scenery(frame)
         hide_guards = getattr(self, "peaceful", False) and getattr(self, "demo", None) is None
+        actors = []
         if combat is not None and not hide_guards:
             for guard in combat.visible_guards():
                 layer = Image.new("RGBA", frame.size)
                 self.guard_art.draw(layer, guard.state, floor_y(guard.row), guard.palette_variant)
                 bounds = self.guard_art.bounds(guard.state, floor_y(guard.row))
                 record = self.guard_art.frames[guard_frame_index(guard.state.action)]
-                frame = self.composite_actor(frame, layer, guard.row, bounds[3],
-                                             guard.state, bounds, record)
+                actors.append((guard.state, record, bounds, guard.row, layer))
         player_layer = Image.new("RGBA", frame.size)
         draw_state, draw_height = self.sequence_state, None
         if self.game.caverns is not None:
@@ -3291,9 +3291,15 @@ class ScenePrototype(WindowControls):
         motion = getattr(self, "terrain_motion", None)
         player_bounds = self.player_bounds() if motion is not None else None
         draw_bounds = drawn_bounds if draw_height is not None else player_bounds
-        frame = self.composite_actor(frame, player_layer, motion.row if motion is not None else None,
-                                     draw_bounds[3] if draw_bounds is not None else None,
-                                     draw_state, draw_bounds, self.frames[draw_action])
+        if motion is not None and draw_bounds is not None:
+            actors.append((draw_state, self.frames[draw_action], draw_bounds, motion.row, player_layer))
+            actors.sort(key=lambda actor: actor_draw_order(*actor[:4]))
+            for state, record, bounds, row, layer in actors:
+                frame = self.composite_actor(frame, layer, row, bounds[3], state, bounds, record)
+        else:
+            for state, record, bounds, row, layer in actors:
+                frame = self.composite_actor(frame, layer, row, bounds[3], state, bounds, record)
+            frame = self.composite_actor(frame, player_layer)
         if (motion is not None and self.sequence_state.level_kind == 1
                 and self.sequence_state.source_sequence_id == 27
                 and player_bounds[1] < 227):

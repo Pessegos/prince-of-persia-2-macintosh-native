@@ -469,6 +469,26 @@ formula are unchanged. This prevents the turban/body from painting over
 the moving stone at tight opening clearances, without hiding hanging poses.
 NPC-bank and special crushing redraw paths are not a complete translation.
 
+The gate mask is keyed by the stone's actual tile, not the cell that
+requested its repaint. DrawCaveGateMovable (8:1f40) places SHAP:3563 one
+column right of that tile; its command's source row can differ from the
+repaint row too. Multiple repaint callers share that positioned mask. This
+keeps the left neighbor's gate and a gate from the room below behind the
+Prince in room 4, without removing the real foreground stone in rooms
+17/23. Static scenery and gate movement/collision rules are unchanged.
+
+Ordinary opponents and the Prince also follow IndexChar (4:4558),
+IndexCell1 (4:2a38) and DrawObjs (3:39d6), rather than always painting the
+Prince last. Offscreen bucket 30 precedes bottom-up, left-to-right visible
+cells. SortObjTable/CompareObj (3:3b62/3bec) assigns their ordinary object
+kinds the same priority 127, then orders by shape bottom and draw anchor.
+The inert skeleton pile's FRAM offset adds ten to its shape bottom, so
+its bones correctly cover the Prince's feet when they share a cell.
+Original instruction execution matched 512 ordinary actor pairs. Regression
+tests cover room 4's background gates, bones and foreground pillar, plus
+cell ordering and the offscreen bucket. Other special object priorities
+are outside this character-only ordering helper.
+
 Original instruction execution confirmed 6,144 climb selections, 512 gate
 catch admissions and 80 foreground-admission cases. Real-terrain tests replay
 Room 23's run jump, an initially shut gate, a gate that closes after a valid

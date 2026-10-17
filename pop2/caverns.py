@@ -635,8 +635,12 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         destination.paste(sprite, position, sprite)
         cell = tuple(command[8:10])
         if layer == 'back' and library == 4 and index == 3563 and cell in gate_cells:
-            gate_masks[cell] = merge_positioned_mask(
-                gate_masks.get(cell), sprite.getchannel('A'), position)
+            # DrawCaveGate anchors the stone one column right of its tile.
+            # The repaint caller may be a different cell, even on another row.
+            # CheckGateInFore tests the gate's tile, not that repaint caller.
+            gate_cell = (command[2] // 51 - 1, command[5])
+            gate_masks[gate_cell] = merge_positioned_mask(
+                gate_masks.get(gate_cell), sprite.getchannel('A'), position)
         if layer == 'front':
             mask = Image.new('L', background.size)
             mask.paste(sprite.getchannel('A'), position)
