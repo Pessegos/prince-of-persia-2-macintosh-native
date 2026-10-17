@@ -374,22 +374,53 @@ tests cover jumping under a partial gate, crouch-rise clearance, the full
 
 The subsequent DOS recording requested a deliberate visual change, beyond
 Macintosh parity: sustained pressure instead of a nearly instantaneous pose
-change, with the stone visibly bearing down on the torso. GateCrush adds a
-seven-update drawing-only profile at the existing SEQS:118 mode-3 signal.
-It reuses Mac poses 264/265/266 with nearest-neighbor integer pixel heights,
-lowers the drawn gate to phase 28, and briefly rebounds to 32 before settling.
-This is an adaptation of the DOS effect, not a frame-exact DOS translation.
-No original artwork, sequence resources or collision records are changed.
+change, with the stone visibly bearing down on the torso. GateCrush uses the
+approved drawing-only brake/slam/rebound profile, timed from the first native
+SEQS:118 kneeling pose 264. It does not wait for mode 3 or restart its clock
+when that mode arrives; the native controller may already have registered
+death before the first kneel.
+
+The drawing milestones are measured in elapsed milliseconds, independently
+of the 12 Hz gameplay updates:
+
+| Elapsed ms | Drawn gate phase | Displayed Mac pose | Original sprite height |
+| --- | --- | --- | --- |
+| 0 | 88 | 264 | 35 |
+| 300 | 84 | 264 | 35 |
+| 460 | 80 | 264 | 35 |
+| 640 | 12 | 265 | 22 |
+| 720 | 32 | 265 | 22 |
+| 800 | 28 | 265 | 22 |
+| 840 onward | 28 | 266 | 17 |
+
+The slam stops short of a fully closed gate, rebounds briefly and settles.
+Poses 265/266 retain their approved forward offsets of 4/6 pixels and floor
+offsets of -2/-1 pixels. All three sprites keep their original dimensions:
+the earlier progressive body shrinking has been removed. This is a
+DOS-inspired presentation using Macintosh artwork, not a frame-exact
+translation of the DOS actor or controller. No original artwork, sequence
+resources or collision records are changed.
 
 The native controller still finishes at phase 48 (56 for fast closures),
 with unchanged damage, audio arbitration and retry rules. Only the scenery
 signature and displayed corpse use the presentation state. The overlapping
-gate stays in front of the flattened body in both facings even when its foot
+gate stays in front of the full-size body in both facings even when its foot
 anchor has moved beyond the ordinary column admission. Repainting cannot
-advance the animation, pause freezes it, F3/restart clears it, and reopening
-the gate releases its drawing override without restoring the corpse's height.
-Tests cover the profile, pixel overlap/foreground in both facings, stable
-resting pose, unmodified native gate values, pause, F3 and restart.
+advance the animation. Dedicated presentation callbacks schedule the visual
+milestones without advancing movement, collision, life, world ticks or audio;
+normal gameplay updates continue animating the torch. Pause freezes the
+presentation clock, F3/restart clears it, and reopening the gate releases
+only its drawing override, retaining the original-size death pose. The time
+available to escape is still decided by the native controller.
+
+Tests cover elapsed-time boundaries, the first-kneel start, full sprite
+heights, pixel overlap/foreground in both facings, the stable resting pose,
+unmodified native gate values, presentation-only callbacks, pause, F3 and
+restart. Actual gameplay scheduling and rendering also matched all 132
+post-kneel samples of the approved preview in each facing, excluding the
+torch region that the old preview had frozen. New Room 17 exports use the
+live gameplay path throughout, verify continued torch animation after the
+slam, and preserve the previously approved media as separate files.
 
 ### Grabbing And Climbing Beside A Gate
 
