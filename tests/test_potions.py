@@ -242,6 +242,107 @@ class ImportedPotionTests(unittest.TestCase):
                 return s
         self.fail('The room 18 ledge never released')
 
+    def stop_at_room_10_potion(self, scene, direction, release_frame=7):
+        scene.load_level(3)
+        scene.jump_to_room(9, row=1, x=300 if direction > 0 else 460,
+                           facing=int(direction > 0))
+        scene.in_animation_tick = True
+        scene.horizontal_key(None, direction, True)
+        self.tick(release_frame)
+        scene.horizontal_key(None, direction, False)
+
+    def test_shift_tap_survives_run_braking_from_both_sides(self):
+        s = self.make_scene()
+        with patch.object(s, 'render'):
+            for direction in (-1, 1):
+                for release_frame in (6, 7):
+                    for delay in (0, 2, 6):
+                        with self.subTest(direction=direction, release_frame=release_frame, delay=delay):
+                            self.stop_at_room_10_potion(s, direction, release_frame)
+                            self.tick(delay)
+                            # Both events arrive before the next simulation tick.
+                            s.set_key_state('shift', True)
+                            s.set_key_state('shift', False)
+                            self.assertIsNotNone(s.pending_potion_pickup)
+                            previous = None
+                            for _ in range(16):
+                                previous = s.sequence_state.sequence_id, s.action
+                                self.tick()
+                                if s.sequence_state.sequence_id == 50:
+                                    break
+                            self.assertEqual(previous, (13, 50))
+                            self.assertEqual((s.sequence_state.sequence_id, s.action), (50, 107))
+                            self.assertFalse(s.shift_held)
+                            self.assertIsNone(s.pending_potion_pickup)
+                            self.assertEqual(s.combat.player.max_life, 3)
+                            self.tick(24)
+                            self.assertEqual((s.combat.player.life, s.combat.player.max_life), (4, 4))
+                            self.assertEqual(s.level_map.tile(9, 7, 1).kind, 1)
+
+    def test_held_shift_can_pick_up_at_first_braking_control_pose(self):
+        s = self.make_scene()
+        with patch.object(s, 'render'):
+            for direction in (-1, 1):
+                self.stop_at_room_10_potion(s, direction)
+                s.set_key_state('shift', True)
+                self.tick(6)
+                self.assertEqual((s.sequence_state.sequence_id, s.action), (13, 50))
+                self.tick()
+                self.assertEqual((s.sequence_state.sequence_id, s.action), (50, 107))
+
+    def test_grounded_shift_tap_also_survives_until_next_idle_tick(self):
+        s = self.make_scene()
+        s.jump_to_room(9, row=1, x=380, facing=1)
+        s.set_key_state('shift', True)
+        s.set_key_state('shift', False)
+        self.tick()
+        self.assertEqual((s.sequence_state.sequence_id, s.action), (50, 107))
+
+    def test_pickup_tap_is_cancelled_by_new_movement_warp_or_cleared_controls(self):
+        s = self.make_scene()
+        with patch.object(s, 'render'):
+            for cancel in ('run', 'up', 'ctrl', 'clear', 'warp', 'fall'):
+                with self.subTest(cancel=cancel):
+                    self.stop_at_room_10_potion(s, 1)
+                    s.set_key_state('shift', True)
+                    s.set_key_state('shift', False)
+                    if cancel == 'run':
+                        s.horizontal_key(None, 1, True)
+                    elif cancel in ('up', 'ctrl'):
+                        s.set_key_state(cancel, True)
+                    elif cancel == 'clear':
+                        s.clear_keys(None)
+                    elif cancel == 'warp':
+                        s.jump_to_room(9, row=1, x=380, facing=1)
+                    else:
+                        s.terrain_motion.falling = True
+                    s.update_potion_controls()
+                    self.assertIsNone(s.pending_potion_pickup)
+                    self.assertIsNone(s.game.caverns.potions.picking)
+                    self.assertFalse(s.game.caverns.potions.drinking)
+
+    def test_tap_without_reachable_flask_expires_and_does_not_latch_shift(self):
+        s = self.make_scene()
+        s.jump_to_room(9, row=1, x=300, facing=1)
+        s.set_key_state('shift', True)
+        s.set_key_state('shift', False)
+        self.tick()
+        self.assertIsNone(s.pending_potion_pickup)
+        self.assertFalse(s.shift_held)
+        s.player_x = s.sequence_state.target_x = s.sequence_state.current_x = 380
+        self.assertFalse(s.update_potion_controls())
+        self.assertEqual(s.level_map.tile(9, 7, 1).kind, 10)
+
+    def test_shift_does_not_interrupt_wall_bump_poses_that_resemble_braking(self):
+        s = self.make_scene()
+        s.jump_to_room(9, row=1, x=380, facing=1)
+        s.start_sequence(47)
+        s.sequence_runtime.next_frame()
+        s.set_key_state('shift', True)
+        self.assertEqual(s.sequence_state.action, 50)
+        self.assertFalse(s.update_potion_controls())
+        self.assertIsNone(s.game.caverns.potions.picking)
+
     def test_shift_held_during_room_18_drop_drinks_mega_from_the_room_20_landing_crouch(self):
         s = self.room_18_drop()
         s.set_key_state('shift', True)

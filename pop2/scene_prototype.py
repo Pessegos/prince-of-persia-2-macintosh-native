@@ -262,6 +262,7 @@ class ScenePrototype(WindowControls):
         self.held_directions = []
         self.shift_turn_direction = 0
         self.pending_action = None
+        self.pending_potion_pickup = None
         self.queue_grace_remaining_ms = 0
         self.queue_grace_command = None
         self.running_jump_controls_cleared = False
@@ -531,6 +532,8 @@ class ScenePrototype(WindowControls):
                     if queued and self.run_active and self.sequence_state.sequence_id not in RUN_CYCLE_SEQUENCES:
                         self.run_stop_requested = True
         elif key == "shift":
+            if pressed and not self.shift_held:
+                self.queue_potion_pickup()
             self.shift_held = pressed
             self.update_ledge_test_state()
         elif key == "ctrl":
@@ -565,6 +568,7 @@ class ScenePrototype(WindowControls):
         if (getattr(self, "queue_grace_remaining_ms", 0) > 0
                 and command == getattr(self, "queue_grace_command", None)):
             return False
+        self.pending_potion_pickup = None
         self.pending_action = command
         return True
 
@@ -1597,6 +1601,7 @@ class ScenePrototype(WindowControls):
             self.run_stop_requested = True
         self.pending_action = None
         self.running_jump_controls_cleared = False
+        self.pending_potion_pickup = None
 
     def prepare_next_sequence(self, run_cycle_boundary=False):
         state = self.sequence_state
@@ -1942,6 +1947,18 @@ class ScenePrototype(WindowControls):
         opening = getattr(self, "opening", None)
         return opening is not None and opening.active
 
+    def queue_potion_pickup(self):
+        state, motion = self.sequence_state, self.terrain_motion
+        if (self.game.caverns is None or motion is None or self.sword_drawn
+                or self._combat_controls_locked() or self.native_ledge
+                or self.horizontal_input or self.up_held or self.down_held
+                or not (self._is_resting() or state.sequence_id == RUN_STOP_SEQUENCE
+                        or self.run_stop_requested and state.sequence_id in RUN_CYCLE_SEQUENCES)):
+            return
+        # The remaining skid can bring the flask into reach. Try once at the
+        # first standing-control pose, without retaining Shift as a modifier.
+        self.pending_potion_pickup = motion.room, motion.row, state.facing
+
     def update_potion_controls(self):
         caverns = self.game.caverns
         if caverns is None:
@@ -1954,6 +1971,7 @@ class ScenePrototype(WindowControls):
             potions.shift_was_held = False
         if (motion is None or motion.falling or motion.dead or self.sword_drawn
                 or not self.combat.player.alive or self.ledge_hanging):
+            self.pending_potion_pickup = None
             potions.picking = None
             potions.drinking = potions.effect_pending = False
             return False
@@ -1962,6 +1980,14 @@ class ScenePrototype(WindowControls):
                 return True
             potions.drinking = False
             potions.held_kind = 0
+        queued = self.pending_potion_pickup
+        if queued is not None and (
+                self._combat_controls_locked() or self.horizontal_input or self.up_held or self.down_held
+                or (motion.room, motion.row, state.facing) != queued
+                or not (self._is_resting() or state.sequence_id in RUN_CYCLE_SEQUENCES
+                        or state.sequence_id == RUN_STOP_SEQUENCE)):
+            self.pending_potion_pickup = queued = None
+        requested = fresh_shift or queued is not None
         # PickItUp 6:1466-1482 permits the ordinary landing crouch, but
         # explicitly excludes SEQS:20's protected hard-fall recovery.
         crouched = (state.action == 109 and state.source_sequence_id != 20
@@ -1970,14 +1996,17 @@ class ScenePrototype(WindowControls):
             if state.sequence_id in (50, 117):
                 return True
             potions.picking = None
-        if not (crouched and (potions.picking is not None or fresh_shift
+        # GenCtrl also dispatches standing controls at braking poses 50-52.
+        stopping = state.sequence_id == RUN_STOP_SEQUENCE and state.action in (50, 51, 52)
+        if not (crouched and (potions.picking is not None or requested
                              or state.source_sequence_id == 50)
-                or fresh_shift and self._is_resting() and not self._combat_controls_locked()):
+                or requested and (self._is_resting() or stopping) and not self._combat_controls_locked()):
             return False
         # GenCtrl 6:0c50/0a0c reaches TryPickUp only at an eligible pose.
         # A held Shift pressed in the air must survive until that handler.
         potions.shift_was_held = self.shift_held
         target = pickup_target(self.level_map, motion, state, self.frames[state.action])
+        self.pending_potion_pickup = None
         if target is None:
             potions.picking = None
             return False
@@ -2907,6 +2936,7 @@ class ScenePrototype(WindowControls):
 
     def reset_level_controls(self):
         self.cancel_gate_presentation()
+        self.pending_potion_pickup = None
         self.queue_grace_remaining_ms = 0
         self.queue_grace_command = None
         self.run_active = False

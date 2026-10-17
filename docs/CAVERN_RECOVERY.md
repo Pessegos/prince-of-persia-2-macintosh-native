@@ -1072,6 +1072,23 @@ tests cover the real ledge drop, direct 109 -> 191 transition, cancellation
 and the protected recovery exception. No new save fields or asset import
 are needed.
 
+Run-stop pickup uses GenCtrl's standing dispatcher at poses 50-52
+(6:05fe-0618), rather than waiting for SEQS:13 to return to idle. The earlier
+skid poses still finish normally; wall-bump SEQS:47 and protected hard-fall
+recovery are not made interruptible by their similar poses.
+
+As a requested port QoL extension, a Shift press after releasing run also
+queues a one-shot pickup attempt through that stop, even if Shift is released
+before the next tick. An idle pickup tap receives the same treatment. This
+does not latch the Shift modifier itself: native modifier sampling otherwise
+cancels an unconsumed Shift on release (4:3f08-3f42). The attempt is restricted
+to the same room, row and facing and expires at the first eligible pose if
+no flask is reachable. New movement/commands, falling, drawing the sword,
+clearing controls and F3 placement cancel it. It is transient controller
+state, not a save-game field. Integrated Room 10 tests cover both approaches,
+two run-release poses, taps at several points through braking, held Shift,
+idle taps, cancellation and unchanged sip-effect timing.
+
 Later-level types are identified, not implemented by this level-three work:
 type 3 starts slow fall (2:5a26), type 4 toggles vertical screen inversion
 (2:59f6), type 5 wounds or cures inversion if active, and type 6 selects the
