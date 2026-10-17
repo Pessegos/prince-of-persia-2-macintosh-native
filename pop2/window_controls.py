@@ -16,6 +16,10 @@ from pop2.screenshots import ScreenshotSettings, save_screenshot
 PAUSE_GAMEPLAY_KEYS = frozenset({
     "Left", "Right", "Up", "Down", "Shift_L", "Shift_R", "Control_L", "Control_R",
 })
+RESUME_COMMAND_KEYS = frozenset({
+    'Control_L', 'Control_R', 'Alt_L', 'Alt_R', 'Meta_L', 'Meta_R',
+    'Super_L', 'Super_R', 'Win_L', 'Win_R',
+})
 
 
 def alt_pressed(event, held_keys=()):
@@ -25,8 +29,7 @@ def alt_pressed(event, held_keys=()):
 
 
 def is_resume_key(event, held_keys=()):
-    command_keys = {"Control_L", "Control_R", "Alt_L", "Alt_R", "Meta_L", "Meta_R",
-                    "Super_L", "Super_R", "Win_L", "Win_R"}
+    command_keys = RESUME_COMMAND_KEYS
     if (alt_pressed(event, held_keys) or event.state & (0x4 | 0x40)
             or command_keys.intersection(held_keys)):
         return False
@@ -158,6 +161,9 @@ class WindowControls:
         self.root.bind("<Alt-Return>", self.toggle_fullscreen)
         self.root.bind("<F2>", self.toggle_screenshot_menu)
         self.root.bind("<F3>", self.open_dev_mode)
+        from pop2.window_aspect import constrain_window
+        self.window_aspect = constrain_window(
+            self.root, self.canvas, lambda: not getattr(self, 'fullscreen', False))
 
     def focus_out(self, event):
         self.clear_keys(event)
@@ -709,7 +715,9 @@ class WindowControls:
             if (not self.paused and self.death.counter >= 0
                     and event.keysym not in ("F2", "F3", "Alt_L", "Alt_R")
                     and not fullscreen_key):
-                self.restart_after_death()
+                if not repeated and (event.keysym == 'Escape'
+                                     or is_resume_key(event, self.window_keys_down)):
+                    self.restart_after_death()
                 return "break"
             return None
         if event.keysym == "Escape":

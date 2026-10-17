@@ -71,7 +71,7 @@ from pop2.render_opening import (
 )
 from pop2.terrain import TerrainMotion, floor_y, floor_contact_x
 from pop2.game_ui import MacintoshFont
-from pop2.window_controls import WindowControls
+from pop2.window_controls import WindowControls, RESUME_COMMAND_KEYS
 
 
 SCALE = 2
@@ -1732,8 +1732,9 @@ class ScenePrototype(WindowControls):
             self.in_animation_tick = False
             self.schedule_next_animation()
             return
-        retry_held = ({"space", "Shift_L", "Shift_R", "Control_L", "Control_R"}
-                      & self.window_keys_down) - self.pause_resume_keys
+        retry_held = ({"space"} & self.window_keys_down) - self.pause_resume_keys
+        if RESUME_COMMAND_KEYS.intersection(self.window_keys_down):
+            retry_held.clear()
         if self.death.can_restart and retry_held:
             self.restart_after_death()
             self.in_animation_tick = False

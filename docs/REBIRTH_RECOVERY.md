@@ -19,7 +19,11 @@ the raw action-button state only when the copied counter is greater than 6.
 It does not require the restart message to be visible. A released early key
 is not a queued retry. The port also polls held Space, so holding it through
 the death animation works without depending on Windows key-repeat settings.
-Held Shift/Ctrl are polled as action buttons; a held arrow alone is not.
+The host deliberately uses the unpause key filter for retries: Shift/Ctrl,
+lock keys, multimedia/system keys and unrelated function keys do not retry.
+Held Shift/Ctrl no longer act as retry buttons, and command-modified Space
+does not trigger the held-Space poll. Escape still retries, just as it can
+resume pause. A held arrow alone is not polled; a fresh arrow press is valid.
 Retry keys are consumed until release, rather than becoming a jump/attack
 in the new life. F2/F3 and Alt+Enter retain their host functions.
 

@@ -408,7 +408,7 @@ class RebirthSceneTests(unittest.TestCase):
         self.assertTrue(scene.combat.player.alive)
         self.assertFalse(scene.paused)
 
-    def test_held_modifier_can_retry_but_held_direction_alone_cannot(self):
+    def test_held_modifiers_and_direction_cannot_trigger_retry(self):
         scene = self.scene
         self.checkpoint()
         self.die()
@@ -416,8 +416,36 @@ class RebirthSceneTests(unittest.TestCase):
         self.tick(20)
         self.assertFalse(scene.combat.player.alive)
         scene.dev_key_press(self.event("Control_L"))
-        self.assertTrue(scene.combat.player.alive)
+        self.tick(20)
+        self.assertFalse(scene.combat.player.alive)
         self.assertFalse(scene.ctrl_held)
+
+    def test_retry_prompt_uses_the_unpause_key_filter(self):
+        scene = self.scene
+        self.die()
+        self.eligible()
+        scene.death.prompt_visible = True
+        for key in ('Shift_L', 'Shift_R', 'Control_L', 'Control_R', 'Caps_Lock',
+                    'Num_Lock', 'Scroll_Lock', 'Print', 'Pause', 'Menu', 'Home',
+                    'End', 'Prior', 'Next', 'Insert', 'Delete', 'XF86AudioMute',
+                    'XF86AudioPlay', 'NoSymbol', '??', 'F12'):
+            scene.dev_key_press(self.event(key))
+            self.tick()
+            self.assertFalse(scene.combat.player.alive, key)
+            scene.dev_key_release(self.event(key))
+        scene.dev_key_press(self.event('a', 4))
+        self.assertFalse(scene.combat.player.alive)
+        scene.dev_key_release(self.event('a'))
+        scene.dev_key_press(self.event('a'))
+        self.assertTrue(scene.combat.player.alive)
+
+    def test_control_space_does_not_retry_on_the_held_key_poll(self):
+        scene = self.scene
+        self.die()
+        scene.dev_key_press(self.event('Control_L'))
+        scene.dev_key_press(self.event('space', 4))
+        self.tick(30)
+        self.assertFalse(scene.combat.player.alive)
 
     def test_combat_death_completes_its_sequence_before_retry(self):
         scene = self.scene
