@@ -70,6 +70,7 @@ class AttractDataTests(unittest.TestCase):
         self.assertEqual(encounter.visible_guards()[0].state.target_x, -10)
         self.assertEqual(encounter.guards[0].state.target_x, 500)
         self.assertEqual(guard[2], 707)
+        self.assertEqual(encounter.health_opponent().state.target_x, -10)
 
     def test_selected_opponent_is_not_replaced_by_nearer_corpse(self):
         frame = fixture()["frames"][0]
@@ -85,6 +86,18 @@ class AttractDataTests(unittest.TestCase):
         encounter.apply(frame, 0)
         self.assertEqual(encounter.guard.state.target_x, 193)
         self.assertTrue(encounter.guard.alive)
+        self.assertIs(encounter.health_opponent(), encounter.guard)
+
+    def test_demo_health_art_accepts_render_only_encounter(self):
+        from pop2.combat_art import HealthArtwork
+
+        level = SimpleNamespace(start_room=3, neighbor=lambda *_: None)
+        encounter = DemoEncounter(level, SequenceRuntime({}, SequenceState(2)))
+        encounter.apply(fixture()['frames'][0], 0)
+        art = HealthArtwork.__new__(HealthArtwork)
+        art.icons = {i: Image.new('RGBA', (8, 12), 'red') for i in range(297, 301)}
+        art.draw(Image.new('RGBA', (512, 384)), encounter)
+        self.assertIsNone(encounter.health_opponent())
 
 
 class DemoClockTests(unittest.TestCase):

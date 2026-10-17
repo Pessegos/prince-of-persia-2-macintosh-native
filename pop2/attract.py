@@ -115,6 +115,15 @@ class DemoEncounter:
     def visible_guards(self):
         return [view for guard in self.guards if (view := self.project_guard(guard)) is not None]
 
+    def health_opponent(self):
+        if (self.guard is not None and self.guard.alive
+                and self.guard.row == self.player.row):
+            return self.guard
+        return min((guard for guard in self.visible_guards()
+                    if guard.alive and guard.row == self.player.row),
+                   key=lambda guard: abs(guard.state.target_x - self.player.state.target_x),
+                   default=None)
+
 
 class DemoPlayer:
     def __init__(self, data, audio=None):
