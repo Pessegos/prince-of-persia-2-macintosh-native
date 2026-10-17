@@ -10,6 +10,9 @@ from pop2.paths import ASSET_DIR
 from pop2.audio_release import PcmRelease, seamless_loop
 
 
+GATE_SLAM_DELAY = 11 / 60
+
+
 class MixerPlayback:
     def __init__(self, directory, cues):
         os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
@@ -26,6 +29,12 @@ class MixerPlayback:
         self.effect_channel, self.tail_channel = 0, 2
         self.sounds = {cue: mixer.Sound(str(Path(directory) / item["file"]))
                        for cue, item in cues.items() if item.get("file")}
+        if 20 in self.sounds:
+            # Sample-clock delay: independent of the slower gameplay tick,
+            # and automatically paused/cancelled with the effect channel.
+            rate, bits, channels = mixer.get_init()
+            silence = bytes(round(rate * GATE_SLAM_DELAY) * (abs(bits) // 8) * channels)
+            self.sounds[20] = mixer.Sound(buffer=silence + self.sounds[20].get_raw())
         self.gate_release = PcmRelease(mixer) if 17 in self.sounds and 18 in self.sounds else None
         if self.gate_release is not None:
             rate, _bits, channels = mixer.get_init()
@@ -53,7 +62,7 @@ class MixerPlayback:
                 self.stop(bus)
                 return
             sound = self.mixer.Sound(buffer=remaining)
-        if (bus == "effect" and cue == 18 and self.channels[bus].get_busy()
+        if (bus == "effect" and cue in (18, 20) and self.channels[bus].get_busy()
                 and self.channels[bus].get_sound() is self.sounds.get(17)):
             # Fade PCM samples, not SDL's stepped per-buffer channel volume.
             self.gate_tail.stop()

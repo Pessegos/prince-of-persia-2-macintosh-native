@@ -60,6 +60,43 @@ class StoneGateTests(unittest.TestCase):
         self.assertEqual(self.terrain.wall_correction(
             0, 280, 300, (285, 155, 310, 226), (265, 155, 290, 226), 1, 1), 300)
 
+    def test_closing_gate_does_not_side_bump_a_body_already_underneath(self):
+        self.phase(104)
+        for facing, old_x, new_x, previous, current in (
+                (1, 310, 315, (290, 155, 310, 226), (290, 155, 320, 226)),
+                (0, 310, 305, (315, 155, 340, 226), (300, 155, 340, 226))):
+            self.assertEqual(self.terrain.wall_correction(
+                0, old_x, new_x, current, previous, facing, 1), new_x)
+
+    def test_gate_contact_uses_pre_collision_masks_but_current_body_height(self):
+        self.phase(104)
+        record = SimpleNamespace(offset_x=0, aux=0)
+        state = SequenceState(47, action=50, target_x=280, facing=1, level_kind=3, actor_type=0)
+        motion = TerrainMotion(0, 1)
+        contact = (298, 155, 323, 226)
+        corrected = (260, 155, 285, 226)
+        event = RooftopPhysics(self.terrain).check_gate(
+            motion, SequenceRuntime({}, state), corrected, corrected, record, True, False,
+            contact_bounds=(contact, contact))
+        self.assertEqual((event.kind, state.source_sequence_id), ('gate', 50))
+        self.assertEqual(motion.gate_contact_bounds, (0, 1, contact, contact))
+
+    def test_moving_low_body_under_closing_gate_is_crushed_not_pushed_out(self):
+        self.phase(64)
+        record = SimpleNamespace(offset_x=0, aux=64)
+        physics = RooftopPhysics(self.terrain)
+        for facing, old_x, x, previous, current in (
+                (1, 310, 315, (298, 193, 323, 226), (303, 193, 328, 226)),
+                (0, 310, 305, (315, 193, 340, 226), (310, 193, 335, 226))):
+            state = SequenceState(117, action=109, target_x=x, current_x=x,
+                                  facing=facing, level_kind=3, actor_type=0)
+            motion = TerrainMotion(0, 1)
+            events = physics.advance(motion, SequenceRuntime({47: (50, -1, 47)}, state),
+                                     old_x, current, old_bounds=previous, frame_record=record)
+            self.assertEqual([event.kind for event in events], ['death'])
+            self.assertEqual((state.source_sequence_id, state.target_x), (118, x))
+            self.assertTrue(motion.dead)
+
     def test_sweep_preserves_native_actor_and_selected_sequence_bypasses(self):
         for actor, selected in ((1, 2), (11, 2), (0, 68)):
             state = SequenceState(2, actor_type=actor, selected_sequence_id=selected)
@@ -326,6 +363,40 @@ class ImportedStoneGateTests(unittest.TestCase):
     def tick(self, count=1):
         from tests.test_terrain import RooftopSceneTests
         RooftopSceneTests.tick(self, count)
+
+    def test_releasing_run_through_room_10_gate_does_not_pull_prince_back_from_room_14(self):
+        scene = self.scene_at_gate()
+        for x in (477, 480, 489, 495):
+            with self.subTest(x=x):
+                plates = scene.game.caverns.plates
+                plates.foreground.clear()
+                plates.active.clear()
+                plates.timers.clear()
+                scene.jump_to_room(9, row=1, x=x, facing=1)
+                scene.in_animation_tick = True
+                plates.foreground[9, 19] = 0x300 | 237
+                plates.active[9, 19] = 2
+                scene.start_sequence(202)
+                scene.sequence_runtime.next_frame()
+                scene.player_x, scene.action = scene.sequence_state.target_x, scene.sequence_state.action
+                scene.held_directions = [1]
+                scene.sample_keyboard()
+                scene.run_active, scene.run_direction = True, 1
+                scene.horizontal_key(None, 1, False)
+                entered = False
+                poses = []
+                for _ in range(28):
+                    self.tick()
+                    entered |= scene.room_id == 13
+                    if entered:
+                        self.assertEqual(scene.room_id, 13)
+                    poses.append(scene.action)
+                    self.assertFalse(scene.terrain_motion.dead or scene.terrain_motion.falling)
+                    self.assertNotEqual(scene.sequence_state.source_sequence_id, 47)
+                self.assertTrue(entered)
+                self.assertIn(109, poses)
+                self.assertEqual((scene.action, scene.sequence_state.facing), (15, 1))
+                self.assertEqual(plates.foreground[9, 19] & 255, 0)
 
     def run_jump_at_room_23_gate(self, phase):
         scene = self.scene_at_gate()

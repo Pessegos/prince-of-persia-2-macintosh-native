@@ -586,6 +586,15 @@ class LevelMap:
                                              4: (3, 0), 5: (18, 0)}[barrier]
                 wall_left = col * TILE_WIDTH + 22 + left_offset
                 wall_right = col * TILE_WIDTH + 72 - right_offset
+                # CheckBarr 4:4f8a-4fb4 only raises a gate side collision
+                # when that edge's mask changes. Already underneath it,
+                # leave crouching/crushing to CheckGateForKid instead.
+                if stone_gate:
+                    if facing != 0 and old_right + 1 <= wall_left < right + 1:
+                        corrected = min(corrected, new_x + wall_left - right - 1)
+                    elif facing != 1 and left < wall_right <= old_left:
+                        corrected = max(corrected, new_x + wall_right - left)
+                    continue
                 # A landing/foot alignment may already overlap the barrier.
                 # Keep outward recovery legal, but do not require a clean
                 # previous edge before stopping further inward movement.
@@ -771,7 +780,8 @@ class RooftopPhysics:
             return True
         return False
 
-    def check_gate(self, motion, runtime, bounds, old_bounds, record, alive, sword_drawn):
+    def check_gate(self, motion, runtime, bounds, old_bounds, record, alive, sword_drawn,
+                   contact_bounds=None):
         state = runtime.state
         if (not alive or state.actor_type not in (0, None) or state.level_kind != 3
                 or state.source_sequence_id == 118 or record is None):
@@ -787,7 +797,7 @@ class RooftopPhysics:
                 motion.gate_contact_bounds = cached
             contact_bounds = cached[2:]
         else:
-            contact_bounds = (bounds, old_bounds or bounds)
+            contact_bounds = contact_bounds or (bounds, old_bounds or bounds)
             motion.gate_contact_bounds = (*context, *contact_bounds)
         gate = self.map.nearby_gate(motion.room, motion.row, state, record, behind_first=True)
         if gate is None:
@@ -912,6 +922,12 @@ class RooftopPhysics:
         collision_facing = None if sword_drawn else state.facing
         collision_bounds = (collision_bounds_for_state() if collision_bounds_for_state is not None
                             else bounds)
+        # CheckBarr samples before Collide displaces/reloads the actor.
+        # Its previous bank is the previous sample, not the corrected pose.
+        cached = motion.gate_contact_bounds
+        gate_contact = (collision_bounds,
+                        cached[2] if cached is not None and cached[:2] == (motion.room, motion.row)
+                        else old_bounds or collision_bounds)
         # Collide 4:5740-5746 returns before displacement or bump selection
         # for a dead actor. A death pose must never become a live wall bump.
         corrected = (state.target_x if not alive or state.animation_state == 7
@@ -968,7 +984,8 @@ class RooftopPhysics:
                                       bounds[2] + shift, bounds[3])
             events.append(TerrainEvent("wall"))
         record = self.frames[state.action] if self.frames is not None else frame_record
-        gate = self.check_gate(motion, runtime, collision_bounds, old_bounds, record, alive, sword_drawn)
+        gate = self.check_gate(motion, runtime, collision_bounds, old_bounds, record, alive,
+                               sword_drawn, contact_bounds=gate_contact)
         if gate is not None:
             events.append(gate)
             return tuple(events)

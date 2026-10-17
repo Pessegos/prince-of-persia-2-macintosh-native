@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import Mock, call, patch
 import wave
 
-from pop2.audio import AudioEngine, MixerPlayback
+from pop2.audio import AudioEngine, GATE_SLAM_DELAY, MixerPlayback
 from pop2.audio_formats import Sample, digitized_sound, mohawk_resources, standard_sound
 from pop2.rebirth import DeathState
 
@@ -365,6 +365,39 @@ class FormatTests(unittest.TestCase):
 
 
 class SdlPlaybackTests(unittest.TestCase):
+    def test_gate_slam_has_exact_eleven_frame_lead_in_without_changing_the_sample(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, 'sample.wav').write_bytes(Sample(b'\x90\x70' * 1000, 8000).wav())
+            cues = {20: {'file': 'sample.wav'}, 27: {'file': 'sample.wav'}}
+            with patch.dict(os.environ, {'SDL_AUDIODRIVER': 'dummy'}):
+                from pygame import mixer
+                make_sound = mixer.Sound
+                loaded = []
+
+                def load_sound(*args, **kwargs):
+                    sound = make_sound(*args, **kwargs)
+                    if args:
+                        loaded.append(sound.get_raw())
+                    return sound
+
+                with patch.object(mixer, 'Sound', side_effect=load_sound):
+                    playback = MixerPlayback(directory, cues)
+                try:
+                    delayed = playback.sounds[20].get_raw()
+                    self.assertEqual(GATE_SLAM_DELAY, 11 / 60)
+                    self.assertEqual(delayed, bytes(8800 * 4) + loaded[0])
+                    self.assertEqual(playback.sounds[27].get_raw(), loaded[1])
+                    playback.play('effect', 20)
+                    playback.pause(True)
+                    time.sleep(.2)
+                    self.assertTrue(playback.busy('effect'))
+                    self.assertIs(playback.channels['effect'].get_sound(), playback.sounds[20])
+                    playback.pause(False)
+                    playback.stop('effect')
+                    self.assertFalse(playback.busy('effect'))
+                finally:
+                    playback.close()
+
     def test_gate_sustain_crosses_multiple_repeats_but_is_not_an_infinite_orphan(self):
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, 'sample.wav').write_bytes(
@@ -509,7 +542,7 @@ class MixerSeekTests(unittest.TestCase):
 class MixerGateTransitionTests(unittest.TestCase):
     def setUp(self):
         self.playback = MixerPlayback.__new__(MixerPlayback)
-        self.playback.sounds = {cue: Mock() for cue in (17, 18, 20)}
+        self.playback.sounds = {cue: Mock() for cue in (7, 17, 18, 20)}
         self.effect, self.music, self.tail = Mock(), Mock(), Mock()
         self.playback.channels = {"effect": self.effect, "music": self.music}
         self.playback.gate_tail = self.tail
@@ -553,11 +586,19 @@ class MixerGateTransitionTests(unittest.TestCase):
         self.effect.play.assert_not_called()
 
     def test_unrelated_cue_replacement_is_unchanged(self):
-        self.playback.play("effect", 20)
-        self.effect.play.assert_called_once_with(self.playback.sounds[20])
+        self.playback.play("effect", 7)
+        self.effect.play.assert_called_once_with(self.playback.sounds[7])
         self.effect.fadeout.assert_not_called()
         self.tail.play.assert_not_called()
         self.playback.gate_release.start.assert_not_called()
+
+    def test_delayed_slam_releases_movement_smoothly_without_cutting_its_attack(self):
+        self.playback.play('effect', 20)
+        self.assertIs(self.playback.channels['effect'], self.tail)
+        self.playback.gate_release.start.assert_called_once_with(0)
+        self.effect.stop.assert_not_called()
+        self.tail.play.assert_called_once_with(self.playback.sounds[20])
+        self.playback.gate_release.cancel.assert_called_once_with(2)
 
     def test_consecutive_stops_release_the_correct_alternating_channel(self):
         self.playback.play("effect", 18)

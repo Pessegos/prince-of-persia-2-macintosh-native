@@ -537,6 +537,40 @@ Tests cover the small initial offset, repeated real-input turns in room 4,
 no spurious crouch or cumulative drift, closure over an existing contact,
 context changes, save round trips and older saves without contact history.
 
+### Closing Gates And Released Runs
+
+CheckBarr (4:4f8a-4fb4) raises a side-collision index only when the relevant
+mask nibble changes from clear to set. A body already overlapping the stone
+must not receive another lateral bump just because a new pose grows wider
+or the gate becomes low enough to touch it. The cavern gate sweep now uses
+these edge transitions; ordinary wall recovery is unchanged. CheckGateForKid
+still owns the existing crouch, crush and fully-closed/sword ejection rules.
+Its two contact samples are captured before Collide displaces or reloads the
+actor, with the previous sample retained independently of the corrected pose.
+The current body height remains the input to the gate-clearance predicate.
+
+This also fixes braking through the Room 10 -> 14 gate: the next room's
+reverse plate closes the stone behind the Prince. Previously, the widening
+stop pose caused a wall bump that pulled him back into Room 10 at X=477.
+The released run now stays in Room 14 and completes the native crouch/rise
+instead. No artificial held direction, altered stop sequence or input
+priority override is needed. Original CheckBarr execution confirmed the
+entry/retained-overlap distinction from both sides. Regressions cover both
+approaches, a moving low body crushed rather than ejected, pre-collision
+contact samples, and several release positions across that room transition.
+
+Gate impact cue 20 has a presentation-only delay of 11/60 seconds, matching
+the requested eleven frames at 60 fps. Playback prefixes 8,800 silent stereo
+frames at 48 kHz to the already loaded sample; the original impact PCM is
+otherwise unchanged. SDL's sample clock handles the delay, including pause,
+stop and reset, without quantizing it to gameplay updates or adding a late
+callback after restart. The outgoing gate-movement loop uses the existing
+short PCM release rather than an abrupt cut into this silent lead-in.
+Other effects, native gate movement/damage/escape rules and the approved
+crush drawing milestones are unchanged; retry still follows the original
+effect-completion rule. No resource reimport is required. SDL tests verify
+the exact prefix, unchanged PCM, release transition and cancellation.
+
 ## Pressure Plates And Stone Gates
 
 All 27 level-three buttons are reverse plates (tile 34). Their low foreground
