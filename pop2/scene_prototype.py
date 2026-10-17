@@ -13,7 +13,9 @@ from pop2.animation_data import (
 from pop2.combat import (
     PLAYER_COMBAT_TURN_SEQUENCE, contact_allowed, guard_frame_index,
 )
-from pop2.combat_art import GuardArtwork, HealthArtwork, HitArtwork, actor_draw_order
+from pop2.combat_art import (
+    GuardArtwork, HealthArtwork, HitArtwork, actor_draw_order, sword_palette_for_level,
+)
 from pop2.control_mapping import (
     IDLE_SEQUENCE,
     RUN_JUMP_SEQUENCE,
@@ -120,14 +122,6 @@ def animation_interval_for_frame(sequence_id, action):
     if sequence_id in SWORD_COMBAT_SEQUENCES:
         return COMBAT_ANIMATION_INTERVAL_MS
     return ANIMATION_INTERVAL_MS
-
-
-def sword_palette_for_level(prince, level_kind):
-    colors = decode_ctbl(prince["CTBL"][1000 + level_kind]["data"])
-    palette = {239 + index: color for index, color in colors.items()}
-    # A few sword SHAPs use index 250, absent from CTBL:1005; use a capture estimate.
-    palette[250] = (150, 69, 0, 255)
-    return palette
 
 
 @dataclass(frozen=True)
@@ -3010,6 +3004,16 @@ class ScenePrototype(WindowControls):
                 options.append((number, f"Level {number}", screens))
         self.development_level_options = tuple(options)
         return self.development_level_options
+
+    def development_map(self, number):
+        from pop2.development_map import build_development_map
+
+        cache = getattr(self, 'development_maps', None)
+        if cache is None:
+            self.development_maps = cache = {}
+        if number not in cache:
+            cache[number] = build_development_map(self.resources.level(number))
+        return cache[number]
 
     def screen_label(self, room):
         return next((label for label, target in self.dev_screens().items() if target == room),

@@ -90,6 +90,7 @@ class WindowControls:
         self.canvas.bind("<ButtonRelease-1>", self.dev_release)
         self.canvas.bind("<Motion>", self.dev_hover)
         self.canvas.bind("<B1-Motion>", self.dev_hover)
+        self.canvas.bind("<Leave>", self.dev_pointer_leave)
         self.canvas.bind("<MouseWheel>", self.dev_scroll)
         self.canvas.bind("<Button-4>", self.dev_scroll)
         self.canvas.bind("<Button-5>", self.dev_scroll)
@@ -338,9 +339,12 @@ class WindowControls:
             section_index=self.current_playback_part(), debug_status=self.debug_status,
             level_available=self.level_navigation_available(),
             level_options=level_options, level_index=level_index if level_options else 0,
+            map_provider=self.development_map if level_options else None,
         )
         if not self.dev_menu.level_available:
             self.dev_menu.change_tab(1)
+        elif self.dev_menu.map_enabled:
+            self.dev_menu.focus = 4
         self.dev_was_paused = was_paused
         self.set_paused(True)
         self.clear_keys(None)
@@ -390,6 +394,7 @@ class WindowControls:
             self.update_status_visibility()
             self.render()
         else:
+            self.update_cursor_visibility()
             self.render()
 
     def choose_screenshot_folder(self):
@@ -820,8 +825,19 @@ class WindowControls:
         menu = self.game_menu or self.dev_menu
         if menu is not None:
             point = self.dev_pointer(event)
-            if point is not None and menu.hover(*point):
+            if menu.hover(*(point if point is not None else (-1, -1))):
                 self.render()
+            if menu is self.dev_menu:
+                self.canvas.configure(cursor='hand2' if self.dev_menu.map_enabled
+                                      and self.dev_menu.hovered_screen is not None
+                                      and not self.dev_menu.dropdown else '')
+
+    def dev_pointer_leave(self, _event):
+        menu = self.dev_menu
+        if menu is not None and menu.map_enabled:
+            if menu.hover(-1, -1):
+                self.render()
+            self.canvas.configure(cursor='')
 
     def dev_scroll(self, event):
         if self.dev_menu is None or not self.dev_menu.dropdown:
@@ -872,6 +888,9 @@ class WindowControls:
             self.bitmap_presenter.close()
             self.bitmap_presenter = None
         frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+        menu = getattr(self, 'dev_menu', None)
+        if menu is not None and menu.map_enabled:
+            frame = menu.present_map(frame, self.ui_font)
         self.image_ref = ImageTk.PhotoImage(frame)
         if self.canvas.find_all():
             self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)

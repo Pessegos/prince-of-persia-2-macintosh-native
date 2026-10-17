@@ -12,6 +12,14 @@ from pop2.render_opening import (
 from pop2.terrain import character_row
 
 
+def sword_palette_for_level(prince, level_kind):
+    colors = decode_ctbl(prince['CTBL'][1000 + level_kind]['data'])
+    palette = {239 + index: color for index, color in colors.items()}
+    # A few sword SHAPs use index 250, absent from CTBL:1005.
+    palette[250] = (150, 69, 0, 255)
+    return palette
+
+
 def actor_draw_order(state, record, bounds, row):
     """IndexChar/DrawObjs/CompareObj ordering for Prince and ordinary opponents."""
     if state.animation_state == 1:

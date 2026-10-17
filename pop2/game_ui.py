@@ -1,7 +1,7 @@
 import struct
 from dataclasses import dataclass
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 
 from pop2.playback_navigation import PlaybackGroup
 
@@ -55,6 +55,8 @@ class DevelopmentMenu:
     dropdown_control: int = 0
     level_options: tuple = ()
     level_index: int = 0
+    map_provider: object = None
+    hovered_screen: str | None = None
 
     CONTROLS = ((200, 138, 392, 166), (120, 180, 392, 210),
                 (120, 231, 252, 263), (264, 231, 392, 263))
@@ -70,6 +72,22 @@ class DevelopmentMenu:
         1: (120, 220, 392, 248),
         2: (120, 269, 252, 301), 3: (264, 269, 392, 301),
     }
+    MAP_CONTROLS = {
+        0: (200, 69, 488, 93), 4: (24, 100, 488, 294),
+        1: (24, 306, 300, 330), 2: (310, 306, 392, 330), 3: (400, 306, 488, 330),
+    }
+
+    @property
+    def map_enabled(self):
+        return self.tab == 0 and self.level_available and self.map_provider is not None
+
+    @property
+    def map_preview(self):
+        return self.map_provider(self.level_number) if self.map_enabled else None
+
+    def map_hit(self, x, y):
+        left, top, _right, _bottom = self.control_rect(4)
+        return self.map_preview.hit(x - left, y - top)
 
     @property
     def groups(self):
@@ -122,6 +140,8 @@ class DevelopmentMenu:
         return self.field_selected_index(self.dropdown_control if self.dropdown else self.focus)
 
     def control_rect(self, index):
+        if self.map_enabled:
+            return self.MAP_CONTROLS[index]
         if self.tab == 0 and self.level_options:
             rect = self.LEVEL_CONTROLS[index]
         else:
@@ -130,6 +150,8 @@ class DevelopmentMenu:
 
     @property
     def panel_rect(self):
+        if self.map_enabled:
+            return centered_panel(488, 348)
         return centered_panel(312, 280 if self.tab == 0 and self.level_options else 258)
 
     @property
@@ -164,6 +186,7 @@ class DevelopmentMenu:
     def change_tab(self, index):
         self.tab = index % 3
         self.dropdown = False
+        self.hovered_screen = None
         self.focus = self.controls[0]
         self.error = ""
 
@@ -172,6 +195,9 @@ class DevelopmentMenu:
         return self.screen_options[self.screen_index]
 
     def open_dropdown(self):
+        if self.map_enabled and self.focus == 4:
+            return
+        self.hovered_screen = None
         self.dropdown_control = self.focus
         self.dropdown = True
         self.option_index = self.selected_index
@@ -198,6 +224,7 @@ class DevelopmentMenu:
             self.level_index = index
             self.screens = self.screen_options
             self.screen_index = 0
+            self.hovered_screen = None
         else:
             self.screen_index = index
         self.dropdown = False
@@ -220,6 +247,11 @@ class DevelopmentMenu:
                 self.center_popup()
             elif key in ("Return", "KP_Enter", "space"):
                 self.select(self.option_index)
+        elif self.map_enabled and self.focus == 4 and key in ("Up", "Down", "Left", "Right"):
+            label = self.map_preview.move(self.screen, key.lower())
+            self.screen_index = self.screen_options.index(label)
+            self.hovered_screen = None
+            self.error = ""
         elif key in ("Up", "Down"):
             order = (-1, *self.controls)
             self.focus = order[(order.index(self.focus) + (-1 if key == "Up" else 1)) % len(order)]
@@ -239,6 +271,8 @@ class DevelopmentMenu:
     def activate(self):
         if self.focus not in self.controls:
             return "changed"
+        if self.map_enabled and self.focus == 4:
+            return "go"
         if self.focus in (0, 4):
             self.open_dropdown()
         elif self.focus == 1:
@@ -269,6 +303,12 @@ class DevelopmentMenu:
 
     def hover(self, x, y):
         index = self.hit(x, y)
+        if self.map_enabled and not self.dropdown:
+            before = self.focus, self.hovered_screen
+            self.hovered_screen = self.map_hit(x, y) if index == 4 else None
+            if index is not None:
+                self.focus = index
+            return before != (self.focus, self.hovered_screen)
         if index is None:
             return False
         field = "option_index" if self.dropdown else "focus"
@@ -284,6 +324,15 @@ class DevelopmentMenu:
                 self.change_tab(tab)
                 return "changed"
         index = self.hit(x, y)
+        if self.map_enabled and not self.dropdown and index == 4:
+            label = self.map_hit(x, y)
+            if label is not None:
+                self.screen_index = self.screen_options.index(label)
+                self.hovered_screen = label
+                self.focus = 4
+                self.error = ""
+                return "go"
+            return "changed"
         if self.dropdown:
             if index is not None:
                 self.select(index)
@@ -317,6 +366,10 @@ class DevelopmentMenu:
                            outline=gold if i == self.tab and self.focus == -1 else "#626262")
             text(label, (rect[0] + rect[2]) // 2, rect[1] + 6, gold if i == self.tab else muted,
                  centered=True, max_width=rect[2] - rect[0] - 8)
+        if self.map_enabled:
+            self.draw_map(image, draw, font, text)
+            self.draw_popup(draw, text)
+            return image
         available = len(self.controls) > 1
         if self.tab == 0:
             text("Level" if self.level_options else "Screen", 120, 146 + offset)
@@ -372,6 +425,95 @@ class DevelopmentMenu:
             line_limit = 2 if compact else 3
             for i, line in enumerate(lines[:line_limit]):
                 text(line, 120, error_y + i * 14, "#ff9b9b", max_width=272)
+        self.draw_popup(draw, text)
+        return image
+
+    def draw_map(self, image, draw, font, text):
+        gold, white, muted = '#f4d873', '#eeeeee', '#b9b9b9'
+        text('Level', 24, 77)
+        for control in (0, 1, 2, 3):
+            rect = self.control_rect(control)
+            draw.rectangle(rect, fill='#303030' if self.focus == control else '#222222',
+                           outline=gold if self.focus == control else '#626262')
+        left, top, right, _bottom = self.control_rect(0)
+        text(self.field_options(0)[self.level_index], left + 10, top + 7,
+             max_width=right - left - 34)
+        draw.polygon(((right - 15, top + 10), (right - 7, top + 10),
+                      (right - 11, top + 14)), fill=white)
+        left, top, right, bottom = self.control_rect(4)
+        image.paste(self.map_layer(font), (left, top))
+        draw.rectangle((left - 1, top - 1, right, bottom),
+                       outline=muted if self.focus == 4 else '#454545')
+        checkbox_y = self.control_rect(1)[1] + 6
+        draw.rectangle((34, checkbox_y, 45, checkbox_y + 11), fill='#121212', outline=muted)
+        if self.peaceful:
+            draw.line(((36, checkbox_y + 5), (39, checkbox_y + 8),
+                       (43, checkbox_y + 2)), fill=gold, width=2)
+        text('Peaceful (no guards)', 55, checkbox_y + 1, max_width=235)
+        text('Go', 351, 313, centered=True, max_width=70)
+        text('Resume', 444, 313, centered=True, max_width=76)
+        if self.error:
+            text(self.error, 24, 338, '#ff9b9b', max_width=464)
+
+    def map_layer(self, font, size=None):
+        preview = self.map_preview
+        size = size or preview.image.size
+        image = preview.detail(size).convert('RGBA')
+        draw = ImageDraw.Draw(image)
+        sx, sy = size[0] / preview.image.width, size[1] / preview.image.height
+        gold = '#f4d873'
+
+        def room_rect(label):
+            x1, y1, x2, y2 = preview.rooms[label]
+            return round(x1 * sx), round(y1 * sy), round(x2 * sx) - 1, round(y2 * sy) - 1
+
+        if self.screen in preview.rooms:
+            draw.rectangle(room_rect(self.screen), outline='#63c8e5', width=max(1, round(min(sx, sy))))
+        if self.hovered_screen in preview.rooms:
+            label = self.hovered_screen
+            x1, y1, x2, y2 = room_rect(label)
+            rect = x1, y1, x2 + 1, y2 + 1
+            image.paste(ImageEnhance.Brightness(image.crop(rect)).enhance(1.35), (x1, y1))
+            draw.rectangle((x1, y1, x2, y2), outline=gold, width=max(1, round(2 * min(sx, sy))))
+            label = label if label.startswith('Room ') else f'Screen {label}'
+            glyphs = font.text(label, gold)
+            width = min(round((glyphs.width + 12) * sx), size[0] - 1)
+            tx = max(0, min((x1 + x2 - width) // 2, size[0] - width - 1))
+            ty = y1 - round(20 * sy) if y1 >= round(20 * sy) else y2 + round(3 * sy)
+            ty = min(ty, size[1] - round(19 * sy))
+            draw.rectangle((tx, ty, tx + width, ty + round(18 * sy)),
+                           fill='#181818', outline=gold, width=max(1, round(min(sx, sy))))
+            ink = glyphs.getbbox()
+            if ink:
+                glyphs = glyphs.crop((0, ink[1], glyphs.width, ink[3]))
+                glyphs = glyphs.resize((min(round(glyphs.width * sx), width - round(12 * sx)),
+                                        max(1, round(glyphs.height * sy))), Image.Resampling.NEAREST)
+                image.paste(glyphs, (tx + round(6 * sx), ty + round(4 * sy)), glyphs)
+        return image
+
+    def present_map(self, frame, font):
+        if not self.map_enabled:
+            return frame
+        sx, sy = frame.width / VISIBLE_SIZE[0], frame.height / VISIBLE_SIZE[1]
+
+        def projected(rect):
+            left, top, right, bottom = rect
+            return round((left - 1) * sx), round(top * sy), round((right - 1) * sx), round(bottom * sy)
+
+        popup = None
+        if self.dropdown:
+            x1, _y1, x2, y2 = self.control_rect(self.dropdown_control)
+            rect = (x1, y2, x2 + 1, y2 + self.popup_count * self.OPTION_HEIGHT + 1)
+            popup_rect = projected(rect)
+            popup = frame.crop(popup_rect)
+        left, top, right, bottom = projected(self.control_rect(4))
+        frame.paste(self.map_layer(font, (right - left, bottom - top)), (left, top))
+        if popup is not None:
+            frame.paste(popup, popup_rect[:2])
+        return frame
+
+    def draw_popup(self, draw, text):
+        gold, white, muted = '#f4d873', '#eeeeee', '#b9b9b9'
         if self.dropdown:
             left, _top, right, bottom = self.control_rect(self.dropdown_control)
             count = self.popup_count
@@ -391,7 +533,6 @@ class DevelopmentMenu:
                 top = bottom + 2 + (track - thumb) * self.popup_start // (len(self.options) - count)
                 draw.rectangle((right - 5, bottom + 2, right - 3, bottom + track + 1), fill="#454545")
                 draw.rectangle((right - 5, top, right - 3, top + thumb - 1), fill=muted)
-        return image
 
 
 class MacintoshFont:

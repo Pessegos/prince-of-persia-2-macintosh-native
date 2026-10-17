@@ -11,7 +11,9 @@ require the Tk window, and scenery caches belong to the selected level.
   terrain, combat, opening controller, harbor, death and checkpoint state.
   Restarting or placing the player does not create a window or play audio.
 - `pop2/level_rendering.py`: lazy room images, supported scenery and screen
-  labels. Room images are built only when requested, not when opening F3.
+  labels. Metadata alone does not build room images. F3's Level tab requests
+  a private stitched map lazily, once per selected level; other levels are not
+  pre-rendered at startup. See [F3 Level Map](DEVELOPMENT_MAP.md).
 - `pop2/scene_prototype.py`: keyboard controllers, frame ordering, audio,
   composition and the connection to `pop2/window_controls.py`.
 

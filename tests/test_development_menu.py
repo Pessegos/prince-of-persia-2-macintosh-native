@@ -328,6 +328,7 @@ class MenuSceneTests(unittest.TestCase):
             scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
             for start in (scene.start_intro, scene.start_demo):
                 with self.subTest(start=start.__name__):
+                    scene.clear_screenshot_toast()
                     scene.set_paused(False)
                     start()
                     scene.render()
@@ -485,7 +486,10 @@ class MenuSceneTests(unittest.TestCase):
             scene.dev_click(SimpleNamespace(x=240 + 150 * 1080 / 384, y=checkbox_y * 1080 / 384))
             self.assertTrue(scene.peaceful)
             resume_y = scene.dev_menu.control_rect(3)[1] + 8
-            scene.dev_hover(SimpleNamespace(x=240 + 290 * 1080 / 384, y=resume_y * 1080 / 384))
+            rect = scene.dev_menu.control_rect(3)
+            resume_x = (rect[0] + rect[2]) / 2
+            scene.dev_hover(SimpleNamespace(x=240 + (resume_x - 1) * 1080 / 384,
+                                           y=resume_y * 1080 / 384))
             self.assertEqual(scene.dev_menu.focus, 3)
 
     def test_invalid_destination_keeps_menu_and_scene_intact_with_inline_error(self):
@@ -648,7 +652,8 @@ class MenuSceneTests(unittest.TestCase):
             scene.dev_key_press(self.event(key))
         scene.set_peaceful(True)
         resume_y = scene.dev_menu.control_rect(3)[1] + 8
-        with patch.object(scene, "dev_pointer", return_value=(300, resume_y)):
+        rect = scene.dev_menu.control_rect(3)
+        with patch.object(scene, "dev_pointer", return_value=((rect[0] + rect[2]) / 2, resume_y)):
             scene.dev_click(SimpleNamespace(x=600, y=490, num=1))
         self.assertIsNone(scene.dev_menu)
         for key in keys:
