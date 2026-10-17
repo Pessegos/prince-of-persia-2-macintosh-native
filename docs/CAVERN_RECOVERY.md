@@ -188,8 +188,9 @@ Airborne modes 3/4 use drawing sequence 0. Grounded entry uses sequence 1;
 Rnd(3)==0 additionally retains it for a longer continuation in which the
 Prince re-emerges. Rnd(3) includes 0-3, so this branch has probability 1/4,
 not a separate emulator-dependent animation. Facing sets the native mirror
-flag. Non-Prince actors use drawing sequence 2, SEQS:115 and cue 69; those
-tables are recovered but skeleton gameplay is not yet integrated.
+flag. Non-Prince actors use drawing sequence 2, SEQS:115 and cue 69; the
+level-three skeleton host now uses these tables and suppresses its ordinary
+sprite while the pool draws its sinking body.
 
 Cue 68 occurs at the native sequence limit. DrawKid/DrawChar
 (3:089e/09ea) suppress the ordinary actor sprite for death cause 5, letting

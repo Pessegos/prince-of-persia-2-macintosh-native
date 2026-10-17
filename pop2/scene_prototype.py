@@ -1,7 +1,8 @@
 import argparse
 import math
+import random
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
@@ -331,7 +332,7 @@ class ScenePrototype(WindowControls):
             round(interval), self.advance_animation
         )
 
-    def bind_level(self, game, renderer):
+    def bind_level(self, game, renderer, initialize_world=True):
         if self.audio is not None and hasattr(self.audio, 'configure_level'):
             self.audio.configure_level(game.level.data)
         palette = kid_palette_for_level(self.kid, game.level.kind)
@@ -345,7 +346,7 @@ class ScenePrototype(WindowControls):
             hit_art = HitArtwork(self.kid, palette, self.first_shape_id,
                                  self.frames, guard_art.frames)
             game.combat.guard_art = guard_art
-        if game.caverns is not None:
+        if game.caverns is not None and initialize_world:
             game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'))
             game.caverns.configure_torches(renderer.cavern_program.get('torches', {}))
             game.caverns.configure_lava(renderer.cavern_program.get('lava'))
@@ -362,6 +363,83 @@ class ScenePrototype(WindowControls):
         self.sequence_runtime, self.sequence_state = game.runtime, game.runtime.state
         self.action, self.player_x = self.sequence_state.action, self.sequence_state.target_x
         self.sprite_cache, self.sword_sprite_cache = {}, {}
+
+    def can_save_game(self):
+        return (self.combat is not None and self.combat.player.alive
+                and self.intro is None and self.demo is None and self.copy_challenge is None
+                and not self.level_complete and self.game.exit is None)
+
+    def save_game_to(self, path):
+        from pop2.save_game import CONTROL_FIELDS, SaveGameError, capture, write_save
+
+        if not self.can_save_game():
+            raise SaveGameError('Save is unavailable during this scene')
+        controls = {name: getattr(self, name) for name in CONTROL_FIELDS}
+        document = capture(self.game, controls, self.copy_verified)
+        if self.game.caverns is not None:
+            room = self.level_renderer.rooms[self.room_id]
+            mask = room.retained_mask
+            if mask is not None and mask.getbbox() is not None:
+                left, top, right, bottom = mask.getbbox()
+                document['retained_background'] = [
+                    [x, y, *self.background.getpixel((x, y))]
+                    for y in range(top, bottom) for x in range(left, right)
+                    if mask.getpixel((x, y)) and self.background.getpixel((x, y)) != room.background.getpixel((x, y))]
+        write_save(path, document)
+        self.status.set(f'Game saved: {path}')
+
+    def load_game_from(self, path):
+        from pop2.save_game import SaveGameError, read_save
+
+        game, saved = read_save(path, self.resources)
+        # Decode and render the destination before replacing the live session.
+        try:
+            renderer = LevelRenderer(game.level, preload_room=False)
+            room = renderer.enter_room(game.room_id, game.caverns)
+            frame = renderer.animated_layer(room.background.copy(), game.room_id, game.harbor,
+                desert=game.desert, caverns=game.caverns)
+            renderer.animated_layer(Image.alpha_composite(frame, room.foreground), game.room_id,
+                game.harbor, front=True, desert=game.desert, caverns=game.caverns)
+            artwork = GuardArtwork(load_resource_file(
+                'Skeleton.rsrc' if game.level.kind == 3 else 'Guard.rsrc'), self.sword_shapes,
+                self.first_sword_shape_id, sword_palette_for_level(self.resources.prince, game.level.kind))
+            for guard in game.combat.visible_guards():
+                artwork.bounds(guard.state, floor_y(guard.row))
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
+            raise SaveGameError(f'Save cannot be rendered: {error}') from error
+        if saved['retained_background']:
+            background = room.background.copy()
+            for x, y, *rgba in saved['retained_background']:
+                if getattr(room, 'retained_mask', None) is None or not room.retained_mask.getpixel((x, y)):
+                    raise SaveGameError('Save contains scenery outside retained pixels')
+                background.putpixel((x, y), tuple(rgba))
+            room = replace(room, background=background)
+            renderer.cavern_display = game.room_id, renderer.rooms[game.room_id], room
+            renderer.cavern_scenery = Image.alpha_composite(background, room.foreground)
+        if self.animation_after_id is not None:
+            self.root.after_cancel(self.animation_after_id)
+            self.animation_after_id = None
+        self.cancel_gate_presentation()
+        self.demo = self.live_combat = self.intro = self.attract_stage = None
+        self.copy_challenge = None
+        self.clear_keys(None)
+        self.reset_level_controls()
+        self.bind_level(game, renderer, initialize_world=False)
+        self.terrain_enabled = True
+        for name, value in saved['controls'].items():
+            setattr(self, name, value)
+        self.pending_action = None
+        self.pause_resume_keys.update(self.window_keys_down)
+        self.copy_verified = saved['copy_verified']
+        random.setstate(saved['random'])
+        if self.audio is not None:
+            self.audio.reset()
+        self.next_animation_at = time.perf_counter()
+        self.pause_started_at = self.next_animation_at if self.paused else None
+        self.status.set(f'Game loaded: {path}')
+        self.render()
+        if not self.in_animation_tick:
+            self.schedule_next_animation()
 
     def load_level(self, number):
         # Prepare the complete destination before replacing a running session.

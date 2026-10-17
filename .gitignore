@@ -11,5 +11,6 @@ rendered/
 *.ROM
 .ruff_cache/
 /notas.txt
+*.pop2save
 /assets/*
 !/assets/README.md

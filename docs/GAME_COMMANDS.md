@@ -28,8 +28,8 @@ or a level jump actually needs it. Menu presentation remains synchronous.
 | --- | --- | --- |
 | New Game | Alt+N | Confirmation, default Cancel |
 | Restart Level | Alt+R | Latest checkpoint or level start |
-| Save Game | Alt+S | Disabled; save system not yet recovered |
-| Open Game | Alt+O | Disabled; save system not yet recovered |
+| Save Game | Alt+S | Native-port snapshot through a file picker |
+| Open Game | Alt+O | Validate and load a snapshot, with confirmation |
 | Sound | Alt+T | Master audio toggle |
 | Ambient Music | Alt+M | Ambient tracks only |
 | End Game | Not bound | New Game already returns to the introduction |
@@ -39,6 +39,14 @@ or a level jump actually needs it. Menu presentation remains synchronous.
 
 The version key is handled in CODE 2:4838-486a rather than relying on the
 Edit menu's V entry. Pause and gameplay bindings are unchanged.
+
+Save/Open use a versioned `.pop2save` format for the currently playable
+levels, not the original Macintosh save-file format. They preserve world
+changes, enemy state, checkpoints and maximum life as well as the current
+position. Default saves live outside the project directory. A cancelled or
+invalid load leaves the running game intact; cutscenes/death/transitions
+disable saving without disabling Open. Details and validation coverage are
+in [SAVE_GAME.md](SAVE_GAME.md).
 
 New Game is deliberately a host confirmation rather than an immediate
 restart. Confirming clears the checkpoint and replays the introduction;

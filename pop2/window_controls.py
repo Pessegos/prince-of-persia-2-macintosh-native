@@ -464,6 +464,7 @@ class WindowControls:
 
     def refresh_game_menu(self):
         if self.game_menu is not None:
+            self.game_menu.save_available = self.can_save_game() if hasattr(self, 'can_save_game') else False
             self.game_menu.sound = self.sound_enabled
             self.game_menu.music = self.music_enabled
             self.game_menu.fullscreen = self.fullscreen
@@ -570,7 +571,9 @@ class WindowControls:
                 self.copy_pointer_held = False
                 self.clear_keys(None)
             self.render()
-        elif action in ("save", "open", "hall"):
+        elif action in ("save", "open"):
+            self.choose_game_file(load=action == 'open')
+        elif action == "hall":
             if self.game_menu is None:
                 self.open_game_menu()
             self.game_menu.focus = next(i for i, item in enumerate(self.game_menu.items)
@@ -578,6 +581,41 @@ class WindowControls:
             self.render()
         else:
             self.render()
+
+    def choose_game_file(self, load=False):
+        from pop2.save_game import SAVE_DIRECTORY
+
+        if self.game_menu is None:
+            self.open_game_menu()
+        if not load and not self.can_save_game():
+            self.game_menu.focus = 3
+            self.render()
+            return
+        try:
+            SAVE_DIRECTORY.mkdir(parents=True, exist_ok=True)
+            options = {'parent': self.root, 'initialdir': str(SAVE_DIRECTORY),
+                       'filetypes': [('Prince of Persia 2 save', '*.pop2save'), ('All files', '*.*')]}
+            if load:
+                selected = filedialog.askopenfilename(title='Open game', **options)
+            else:
+                selected = filedialog.asksaveasfilename(
+                    title='Save game', defaultextension='.pop2save',
+                    initialfile=f'Level {self.game.level.number}.pop2save', **options)
+            if not selected:
+                return
+            if load:
+                if not messagebox.askyesno('Open game', 'Load this save and replace the current game?',
+                                          parent=self.root):
+                    return
+                self.load_game_from(selected)
+            else:
+                self.save_game_to(selected)
+        except (OSError, ValueError) as error:
+            messagebox.showerror('Open game' if load else 'Save game', str(error), parent=self.root)
+            return
+        finally:
+            self.pause_resume_keys.update(self.window_keys_down)
+        self.close_game_menu()
 
     def dev_key_press(self, event):
         alt = alt_pressed(event, self.window_keys_down)

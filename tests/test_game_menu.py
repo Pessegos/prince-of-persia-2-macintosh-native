@@ -27,7 +27,7 @@ class GameMenuModelTests(unittest.TestCase):
         self.assertNotIn("development", {item.action for item in items})
         self.assertNotIn("screenshots", {item.action for item in items})
         self.assertEqual({item.action for item in items if not item.enabled},
-                         {"save", "open", "hall"})
+                         {"hall"})
 
     def test_navigation_wraps_and_activation_is_explicit(self):
         menu = GameMenu()
@@ -370,7 +370,7 @@ class GameMenuSceneTests(unittest.TestCase):
         scene = self.scene
         scene.jump_to_screen("9")
         before = (scene.room_id, scene.player_x, scene.checkpoint)
-        for key, action in (("s", "save"), ("o", "open"), ("h", "hall")):
+        for key, action in (("h", "hall"),):
             self.press(key, 0x20000)
             item = scene.game_menu.items[scene.game_menu.focus]
             self.assertEqual(item.action, action)

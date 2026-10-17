@@ -31,6 +31,7 @@ class GameMenu:
     error: str = ""
     dropdown: bool = False
     option_index: int = 0
+    save_available: bool = True
 
     PANEL = centered_panel(384, 284)
     DIALOG = centered_panel(352, 166)
@@ -54,8 +55,8 @@ class GameMenu:
             MenuItem("resume", "Resume", "F1"),
             MenuItem("confirm_new", "New game", "Alt+N"),
             MenuItem("restart", "Restart level", "Alt+R"),
-            MenuItem("save", "Save game", "Alt+S", False),
-            MenuItem("open", "Open game", "Alt+O", False),
+            MenuItem("save", "Save game", "Alt+S", self.save_available),
+            MenuItem("open", "Open game", "Alt+O"),
             MenuItem("sound", "Sound", "Alt+T", checked=self.sound),
             MenuItem("music", "Ambient music", "Alt+M", checked=self.music),
             MenuItem("hall", "Hall of Fame", "Alt+H", False),
@@ -267,5 +268,6 @@ class GameMenu:
                 # The game's NFNT replaces '+' with a trademark glyph.
                 text(item.shortcut.replace("+", "-"), rect[2] - 10, y, color, "right", 100)
             if not self.items[self.focus].enabled:
-                text("Not implemented yet", 256, panel[3] + 5, muted, "center")
+                text("Save unavailable right now" if self.items[self.focus].action == 'save'
+                     else "Not implemented yet", 256, panel[3] + 5, muted, "center")
         return image

@@ -36,6 +36,27 @@ must remain explicitly distinguished.
 | Harbor, water and departing ship | CUST:4350; CODE:23 06fe/0b3e/0dce/1066/1120/1256/12ba/12f0/132c; SEQS:59/215 | `pop2/harbor.py`, `pop2/render_opening.py`, `pop2/terrain.py`, `pop2/scene_prototype.py` | Level-1 descent, dock and ship rooms, water deaths, native departure/catch bounds and boarding chain | Native shared splash slot, random wave seeding, conditional pillar passes and full obstacle bank missing |
 | End-of-level request | AnimChar 4:2f2c; SEQS opcode -16 | `pop2/sequence_runtime.py`, `pop2/game_session.py`, `pop2/scene_prototype.py` | Session consumes completion independently of harbor; boarding emits the original request; host completion screen stops gameplay and permits restart/dev navigation | Ending movie, playable next-level transition and later-level controllers missing |
 
+## Level-Three And Persistence Additions
+
+The focused subsystem notes supersede the older ordinary-rooftop scope in
+the overview above for these additions:
+
+- [Skeleton encounters](AI_RECOVERY.md#level-three-skeletons): original
+  actor-type-4 artwork, per-room profiles/life, inert bones, activation,
+  collapse and recovery. Later exit-chasing and complete inactive NPC-bank
+  behavior remain outside this level-three subset.
+- [Cavern audio](AUDIO_RECOVERY.md#level-three-audio-audit): all 36 ambient/
+  combat tracks, current controller effects and supported death/event MIDI.
+  The host sampler remains distinct from the Macintosh MIDI driver.
+- [Death timing](REBIRTH_RECOVERY.md#level-three-timing-audit): original
+  settled-pose/update gates and actual playback completion, with the
+  previously missing cavern death songs now available.
+- [Save/Open](SAVE_GAME.md): versioned native-port snapshots for levels 1-3,
+  including enemies and world state. This is a host feature, not the
+  recovered original Macintosh save-file format.
+- [Clean map](CAVERN_RECOVERY.md#clean-level-map): 32 linked rooms, current
+  scenery, native world pitch and no labels/HUD in the default local export.
+
 ## Boundaries To Preserve
 
 - Input chooses an action at its legal controller transition. It must not
