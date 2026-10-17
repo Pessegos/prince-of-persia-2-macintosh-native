@@ -127,11 +127,11 @@ class HealthArtwork:
             # DrawKidMeter coordinates belong to the visible 510-pixel game,
             # which is centered inside the host's 512-pixel composition buffer.
             viewport.paste(icon, (ROOM_ORIGIN_X + 3 + index * 12, 368), icon)
-        if (show_opponent and encounter.guard is not None and encounter.guard.alive
-                and encounter.guard.room == encounter.player.room
-                and encounter.guard.row == encounter.player.row):
-            for index in range(encounter.guard.max_life):
-                icon = self.icons[298 if index < encounter.guard.life else 297]
+        opponent = encounter.health_opponent() if show_opponent else None
+        if opponent is not None:
+            # DrawOppMeter draws current life only, unlike DrawKidMeter.
+            for index in range(opponent.life):
+                icon = self.icons[298]
                 viewport.paste(icon, (ROOM_ORIGIN_X + 495 - index * 12, 368), icon)
 
 

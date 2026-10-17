@@ -258,6 +258,24 @@ unobstructed floor path. SetSkelShakes (4:17fa) supplies three shakes for
 skill zero, otherwise `(skill + 1) & 1`; 4:1ab0 supplies inclusive Rnd(30)+15
 delays. The final activation uses 88 and restores the record's full life.
 
+The existing side-room coordinate view lets shaking finish and activation
+begin while the Prince has already crossed into the adjacent room, provided
+the original row/range/path tests still pass. The health meter now selects
+the nearest living same-floor actor in the current or horizontal side rooms,
+independently of the same-room sword-contact target. Dormant bones have no
+meter; their restored life appears immediately at the start of rising 88,
+even while the skeleton is still offscreen. A later move to a different
+floor or beyond the adjacent rooms does not retain a stale pursuit meter.
+This fixes HUD visibility without changing skeleton activation timers,
+shakes, combat decisions or physical room ownership.
+
+DrawOppMeter (3:4c08-4c38) draws one full shape 298 per current life point;
+lost enemy lives disappear rather than using empty shape 297. The Prince's
+separate DrawKidMeter still retains empty bottles and its one-life blink.
+Pixel tests cover progressive damage on both sides of a room boundary,
+nearest-target selection, hidden opponents, inert bones and a live run past
+the Room 15 skeleton into Room 17 before it finishes shaking and rises.
+
 Ready skeletons use the recovered per-profile advance/block/reblock/counter/
 strike tables, not new aggression constants. GetStrikeRange 6:5c34-5c40
 adds three pixels to the Prince's upper strike bound against actor type 4.

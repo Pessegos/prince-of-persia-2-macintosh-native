@@ -892,8 +892,8 @@ class GuardCombatTests(unittest.TestCase):
         for index in range(c.player.max_life):
             icon = art.icons[300 if index < c.player.life else 299]
             expected.paste(icon, (3 + index * 12, 368), icon)
-        for index in range(c.guard.max_life):
-            icon = art.icons[298 if index < c.guard.life else 297]
+        for index in range(c.guard.life):
+            icon = art.icons[298]
             expected.paste(icon, (495 - index * 12, 368), icon)
         self.assertEqual(visible.tobytes(), expected.tobytes())
         c.player.life = 1
@@ -902,6 +902,27 @@ class GuardCombatTests(unittest.TestCase):
         art.draw(viewport, c)
         self.assertIsNone(viewport.crop((495, 368, 512, 384)).getbbox())
         self.assertNotEqual(art.icons[299].tobytes(), art.icons[300].tobytes())
+
+    def test_enemy_damage_removes_bottles_but_player_damage_leaves_empty_bottles(self):
+        from pop2.render_opening import decode_ctbl
+        base = int.from_bytes(self.kid['SHPL'][25001]['data'][:2], 'big')
+        art = HealthArtwork(self.kid, decode_ctbl(self.kid['CTBL'][25001]['data']), base)
+        c = self.encounter()
+        c.player.life, c.player.max_life = 2, 4
+        c.guard.max_life = 4
+        for life in (4, 3, 2, 1, 0):
+            with self.subTest(life=life):
+                c.guard.life = life
+                viewport = Image.new('RGBA', (VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
+                art.draw(viewport, c)
+                expected = Image.new('RGBA', viewport.size)
+                for index in range(4):
+                    icon = art.icons[300 if index < 2 else 299]
+                    expected.paste(icon, (4 + index * 12, 368), icon)
+                for index in range(life):
+                    icon = art.icons[298]
+                    expected.paste(icon, (496 - index * 12, 368), icon)
+                self.assertEqual(viewport.tobytes(), expected.tobytes())
 
     def hit_art(self):
         base = int.from_bytes(self.kid["SHPL"][25001]["data"][:2], "big")

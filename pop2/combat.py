@@ -337,6 +337,19 @@ class CombatEncounter:
         return [view for guard in self.active_guards()
                 if (view := self._project_fighter(guard, self.player.room)) is not None]
 
+    def health_opponent(self):
+        # DrawOppMeter selects from the active NPC bank, including side-room
+        # actors. Keep HUD selection separate from same-room sword contact.
+        candidates = []
+        for guard in self.active_guards():
+            if not guard.alive or guard.row != self.player.row:
+                continue
+            offset = self._room_offset(guard.room, self.player.room)
+            if offset in (-510, 0, 510):
+                candidates.append((abs(guard.state.target_x + offset
+                                       - self.player.state.target_x), guard))
+        return min(candidates, key=lambda candidate: candidate[0])[1] if candidates else None
+
     @contextmanager
     def _local_opponents(self, guard):
         # Side-room actors use a rebased coordinate view, never a teleport or

@@ -1,13 +1,14 @@
 import random
 import unittest
+from unittest.mock import patch
 
 from PIL import Image
 
 from pop2.combat import GuardSpawn, strike_range
-from pop2.combat_art import GuardArtwork
+from pop2.combat_art import GuardArtwork, HealthArtwork
 from pop2.game_session import GameResources, GameSession
 from pop2.paths import ASSET_DIR
-from pop2.render_opening import load_resource_file
+from pop2.render_opening import decode_ctbl, load_resource_file
 from pop2.scene_prototype import sword_palette_for_level
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 
@@ -20,6 +21,9 @@ class SkeletonTests(unittest.TestCase):
         prince = cls.resources.prince
         cls.art = GuardArtwork(load_resource_file('Skeleton.rsrc'), prince['SHAP'], 1001,
                                sword_palette_for_level(prince, 3))
+        kid = cls.resources.kid
+        cls.health_art = HealthArtwork(kid, decode_ctbl(kid['CTBL'][25001]['data']),
+                                      cls.resources.first_shape_id)
 
     def encounter(self, room=10):
         game = GameSession.load(self.resources, 3)
@@ -50,6 +54,131 @@ class SkeletonTests(unittest.TestCase):
             self.tick(combat, 200)
             self.assertEqual((actor.life, actor.state.action, actor.skeleton.phase),
                              (0, 206, 'dormant'))
+            self.assertIsNone(combat.health_opponent())
+
+    def assert_enemy_meter(self, combat, life):
+        image = Image.new('RGBA', (512, 384))
+        self.health_art.draw(image, combat)
+        expected = Image.new('RGBA', image.size)
+        for index in range(life):
+            icon = self.health_art.icons[298]
+            expected.paste(icon, (496 - index * 12, 368), icon)
+        self.assertEqual(image.crop((256, 368, 512, 384)).tobytes(),
+                         expected.crop((256, 368, 512, 384)).tobytes())
+
+    def test_late_wake_shows_health_while_skeleton_is_still_in_previous_room(self):
+        _, combat, actor = self.encounter(14)
+        combat.player.state.target_x = combat.player.state.current_x = 300
+        self.tick(combat, 10)
+        self.assertEqual(actor.skeleton.phase, 'dormant')
+        self.assertGreater(actor.skeleton.timer, 0)
+        self.assert_enemy_meter(combat, 0)
+        combat.enter_room(16, 2)
+        combat.player.state.target_x = combat.player.state.current_x = 40
+        self.assertIsNone(combat.guard)
+        self.assert_enemy_meter(combat, 0)
+        for _ in range(60):
+            self.tick(combat)
+            if actor.skeleton.phase == 'rising':
+                break
+        self.assertEqual(actor.skeleton.phase, 'rising')
+        self.assertEqual((combat.player.room, actor.room, actor.life), (16, 14, 3))
+        self.assertIs(combat.health_opponent(), actor)
+        self.assertIsNone(combat.guard)
+        before = actor.state.target_x, actor.state.cursor, actor.skeleton.phase, actor.life
+        self.assert_enemy_meter(combat, 3)
+        self.assertEqual(before, (actor.state.target_x, actor.state.cursor,
+                                  actor.skeleton.phase, actor.life))
+        self.tick(combat, 22)
+        self.assertEqual(actor.skeleton.phase, 'active')
+        self.assertGreater(actor.state.target_x, 381)
+        self.assert_enemy_meter(combat, 3)
+
+    def test_live_run_past_skeleton_displays_meter_as_soon_as_it_rises_offscreen(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        s = self.scene
+        s.load_level(3)
+        s.peaceful = False
+        s.combat.rng = random.Random(17)
+        s.jump_to_room(14, row=2, x=300, facing=1)
+        s.in_animation_tick = True
+        actor = s.combat.guards[0]
+        s.horizontal_key(None, 1, True)
+        with patch.object(s, 'render'):
+            for _ in range(30):
+                RooftopSceneTests.tick(self)
+                if s.room_id == 16:
+                    s.horizontal_key(None, 1, False)
+                    break
+            self.assertEqual(s.room_id, 16)
+            self.assertFalse(actor.alive)
+            for _ in range(50):
+                RooftopSceneTests.tick(self)
+                if actor.alive:
+                    break
+        self.assertEqual((s.room_id, actor.room, actor.skeleton.phase), (16, 14, 'rising'))
+        self.assertIsNone(s.combat.guard)
+        self.assertIs(s.combat.health_opponent(), actor)
+        for life in (3, 2, 1, 0):
+            actor.life = life
+            s.render()
+            expected = Image.new('RGBA', (512, 384), (0, 0, 0, 255))
+            for index in range(life):
+                icon = s.health_art.icons[298]
+                expected.paste(icon, (496 - index * 12, 368), icon)
+            self.assertEqual(s.screenshot_viewport.crop((256, 368, 512, 384)).tobytes(),
+                             expected.crop((256, 368, 512, 384)).tobytes())
+
+    def test_side_room_meter_tracks_remaining_life_from_both_sides(self):
+        for room, x in ((13, 490), (16, 40)):
+            with self.subTest(room=room + 1):
+                _, combat, actor = self.encounter(14)
+                combat.player.state.target_x = actor.state.target_x - 51
+                self.tick(combat, 100)
+                self.assertEqual(actor.skeleton.phase, 'active')
+                combat.enter_room(room, 2)
+                combat.player.state.target_x = combat.player.state.current_x = x
+                for life in (3, 2, 1, 0):
+                    actor.life = life
+                    self.assert_enemy_meter(combat, life)
+
+    def test_meter_does_not_follow_pursuers_to_distant_rooms_or_other_floors(self):
+        _, combat, actor = self.encounter(14)
+        self.tick(combat, 100)
+        self.assertEqual(actor.skeleton.phase, 'active')
+        actor.pursuing = True
+        combat.enter_room(16, 1)
+        self.assertIsNone(combat.health_opponent())
+        self.assert_enemy_meter(combat, 0)
+        combat.enter_room(18, 2)
+        self.assertIn(actor, combat.active_guards())
+        self.assertIsNone(combat.health_opponent())
+        self.assert_enemy_meter(combat, 0)
+
+    def test_meter_chooses_nearest_living_actor_using_side_room_coordinates(self):
+        from dataclasses import replace
+
+        _, combat, actor = self.encounter(14)
+        self.tick(combat, 100)
+        combat.enter_room(16, 2)
+        combat.player.state.target_x = 40
+        actor.state.target_x = 381
+        state = replace(actor.state, target_x=100, current_x=100)
+        other = replace(actor, room=16, life=1, skeleton=None,
+                        runtime=SequenceRuntime(combat.sequences, state))
+        combat.guards.append(other)
+        self.assertIs(combat.health_opponent(), other)
+        self.assert_enemy_meter(combat, 1)
+        other.state.target_x = 400
+        self.assertIs(combat.health_opponent(), actor)
+        self.assert_enemy_meter(combat, 3)
+        other.state.target_x, other.life = 45, 0
+        self.assertIs(combat.health_opponent(), actor)
+        hidden = Image.new('RGBA', (512, 384))
+        self.health_art.draw(hidden, combat, show_opponent=False)
+        self.assertIsNone(hidden.crop((256, 368, 512, 384)).getbbox())
 
     def test_bone_poses_use_environment_shapes_and_matching_bounds(self):
         from pop2.caverns import cavern_assets
