@@ -2997,14 +2997,10 @@ class ScenePrototype(WindowControls):
                 raise ValueError("The stone screen has no supported entry")
             return self.jump_to_room(room, rows[0], 9 * TILE_WIDTH + 30, facing=0)
         elif self.game.level.number == 3:
-            candidates = [(row, column) for row in range(3) for column in range(10)
-                          if self.level_map.tile(room, column, row).kind == 1]
-            if room == 20:
-                # Room 21's useful test entry is below the isolated upper shelf.
-                candidates = [cell for cell in candidates if cell[0] == 2]
-            if not candidates:
-                raise ValueError("This room has no safe standing floor for a dev warp")
-            row, column = min(candidates, key=lambda cell: abs(cell[1] - 5))
+            from pop2.development_entry import cavern_entry
+
+            # Retain Room 21's useful lower-floor test entry.
+            row, column = cavern_entry(self.level_map, room, preferred_row=2 if room == 20 else None)
             return self.jump_to_room(room, row=row, x=column * TILE_WIDTH + 30, facing=0)
         else:
             rows = [row for row in range(3)

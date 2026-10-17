@@ -93,7 +93,32 @@ context, version 5 lacks per-command draw-cell
 metadata, version 4 lacks the full-room repaint mode, version 3 lacks the
 corrected cell drawing and live torches, version 2 lacks flask library identity,
 and version 1 supplies only the entrance. F3 can preview each room, placing
-the Prince on a basic floor tile from LEVL rather than using per-room positions.
+the Prince on accessible standing terrain from LEVL rather than using a
+table of room-specific coordinates.
+
+### Safe Developer Entries
+
+Some ordinary floor markers belong to sealed rock pockets, not the playable
+route. F3's level-three selector groups local non-wall space and checks for a
+real room-link opening before choosing a standing tile. Vertical connections
+require air or a loose floor in the upper cell, rather than passing through
+solid floor. Low closed gates and lava/spike obstacles do not connect regions.
+This is a developer-placement heuristic, not a gameplay pathfinder or a change
+to Macintosh collision rules.
+
+The selector prefers ordinary stable floor near the center. If all such floor
+is sealed, it can use stable decorated terrain, including the flask/torch
+platform in Room 32. It does not spawn on buttons, loose floors or hazards.
+Room 21 retains the previously requested lower-floor preference. Original
+sealed-pocket placements change in Rooms 3, 12, 15, 19, 28, 31 and 32.
+Live gate/loose-floor state is read without resetting or mutating the world;
+explicit-coordinate warps and level-1/2 entries remain unchanged.
+
+Tests cover sealed components, blocked room links, closed/open gates, loose
+floor openings, stable fallback tiles and deterministic read-only selection.
+Resource-backed checks audit all 32 destinations, idle stability and actual
+cautious-step movement after warping. The entrance keeps its normal level
+entry sequence rather than using the preview-placement heuristic.
 
 ## Retained Scenery And Whole-Level Audit
 

@@ -868,7 +868,8 @@ class OriginalCavernTests(unittest.TestCase):
                 self.assertEqual(image.size, (5610, 2160))
                 self.assertIsNotNone(image.getbbox())
 
-    def test_f2_can_load_every_room_and_place_on_original_standing_floor(self):
+    def test_f3_can_load_every_room_and_place_on_accessible_standing_floor(self):
+        from pop2.development_entry import STANDING_TILES
         from tests.test_terrain import RooftopSceneTests
 
         RooftopSceneTests.setUp(self)
@@ -884,7 +885,8 @@ class OriginalCavernTests(unittest.TestCase):
                 self.assertEqual(scene.room_cache[room].room_id, room)
                 if room != scene.game.level.start_room:
                     column = (scene.player_x - 30) // 51
-                    self.assertEqual(scene.level_map.tile(room, column, scene.terrain_motion.row).kind, 1)
+                    self.assertIn(scene.level_map.tile(room, column, scene.terrain_motion.row).kind,
+                                  STANDING_TILES)
                 self.assertGreater(len(scene.native_viewport.getcolors(512 * 384)), 20)
                 self.assertFalse(scene.terrain_motion.dead)
 
