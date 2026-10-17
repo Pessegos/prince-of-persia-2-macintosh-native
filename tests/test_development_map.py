@@ -31,7 +31,8 @@ class DevelopmentMapModelTests(unittest.TestCase):
         atlas = preview()
         return DevelopmentMenu(tuple(atlas.rooms), 0, False,
                                level_options=((3, 'Level 3', tuple(atlas.rooms)),),
-                               map_provider=lambda _number: atlas, focus=4, map_open=opened)
+                               map_provider=lambda _number: atlas, focus=4, map_open=opened,
+                               return_screens={3: 'Room 1'})
 
     def test_map_hits_are_half_open_and_do_not_select_gaps(self):
         atlas = preview()
@@ -164,6 +165,22 @@ class DevelopmentMapModelTests(unittest.TestCase):
             self.assertTrue(left < x1 < x2 < right)
             self.assertTrue(top < y1 < y2 < bottom)
 
+    def test_return_room_uses_history_for_selected_level_and_never_changes_peaceful(self):
+        menu = self.menu()
+        menu.focus = 1
+        self.assertEqual(menu.activate(), 'return_room')
+        self.assertEqual(menu.return_screen, 'Room 1')
+        self.assertFalse(menu.peaceful)
+        menu.return_screens.clear()
+        self.assertIsNone(menu.return_screen)
+        self.assertNotIn(1, menu.controls)
+        self.assertEqual(menu.activate(), 'changed')
+        menu.return_screens[4] = 'Room 2'
+        menu.level_options += ((4, 'Level 4', menu.screens),)
+        menu.focus = 6
+        menu.activate()
+        self.assertEqual(menu.return_screen, 'Room 2')
+
     def test_invalid_flat_map_links_are_rejected(self):
         links = {(0, 'right'): 1, (1, 'down'): 0}
         terrain = SimpleNamespace(start_room=0, neighbor=lambda room, side: links.get((room, side)))
@@ -177,6 +194,45 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
     def setUpClass(cls):
         from pop2.game_session import GameResources
         cls.resources = GameResources.load()
+
+    def test_return_remembers_room_before_restart_and_uses_safe_entry(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        s = self.scene
+        s.load_level(3)
+        s.jump_to_screen('Room 17')
+        s.restart_level()
+        self.assertEqual(s.development_return_screens[3], 'Room 17')
+        s.open_dev_mode()
+        s.apply_dev_action(s.dev_menu.activate())
+        self.assertEqual(s.dev_menu.return_screen, 'Room 17')
+        s.dev_menu.focus = 1
+        s.apply_dev_action(s.dev_menu.activate())
+        self.assertIsNone(s.dev_menu)
+        self.assertEqual(s.room_id, 16)
+        self.assertTrue(s.combat.player.alive)
+        self.assertFalse(s.paused)
+        self.assertEqual(s.development_return_screens[3], 'Room 17')
+
+    def test_dead_room_overrides_old_history_before_restart_and_pause_is_preserved(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        s = self.scene
+        s.load_level(3)
+        s.development_return_screens = {3: 'Room 17'}
+        s.jump_to_screen('Room 20')
+        s.combat.player.life = 0
+        s.set_paused(True)
+        s.open_dev_mode()
+        s.apply_dev_action(s.dev_menu.activate())
+        self.assertEqual(s.dev_menu.return_screen, 'Room 20')
+        s.dev_menu.focus = 1
+        s.apply_dev_action(s.dev_menu.activate())
+        self.assertEqual(s.room_id, 19)
+        self.assertTrue(s.combat.player.alive)
+        self.assertTrue(s.paused)
 
     def test_all_supported_levels_have_real_scenery_and_selectable_rooms(self):
         from pop2.level_rendering import LevelRenderer

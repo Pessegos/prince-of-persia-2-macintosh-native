@@ -333,6 +333,9 @@ class WindowControls:
         from pop2.playback_navigation import playback_groups
 
         parts = self.development_parts()
+        if (self.level_navigation_available() and self.combat is not None
+                and not self.combat.player.alive):
+            self.remember_development_room()
         self.dev_menu = DevelopmentMenu(
             screens, screen_index, self.peaceful,
             sections=tuple(part.label for part in parts), section_groups=playback_groups(parts),
@@ -340,6 +343,7 @@ class WindowControls:
             level_available=self.level_navigation_available(),
             level_options=level_options, level_index=level_index if level_options else 0,
             map_provider=self.development_map if level_options else None,
+            return_screens=dict(getattr(self, 'development_return_screens', {})),
         )
         if self.dev_menu.map_available:
             self.dev_menu.focus = 4
@@ -368,11 +372,14 @@ class WindowControls:
             return
         if action == "resume":
             self.close_dev_mode()
-        elif action == "go" and self.level_navigation_available():
+        elif action in ('go', 'return_room') and self.level_navigation_available():
+            destination = self.dev_menu.return_screen if action == 'return_room' else self.dev_menu.screen
+            if destination is None:
+                return
             try:
                 if self.dev_menu.level_number != self.game.level.number:
                     self.load_level(self.dev_menu.level_number)
-                self.jump_to_screen(self.dev_menu.screen)
+                self.jump_to_screen(destination)
             except ValueError as exc:
                 self.dev_menu.error = str(exc)
                 self.render()

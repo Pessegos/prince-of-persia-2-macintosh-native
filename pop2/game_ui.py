@@ -1,5 +1,5 @@
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from PIL import Image, ImageDraw, ImageEnhance
 
@@ -59,6 +59,7 @@ class DevelopmentMenu:
     hovered_screen: str | None = None
     map_open: bool = False
     hovered_control: int | None = None
+    return_screens: dict = field(default_factory=dict)
 
     CONTROLS = ((200, 138, 392, 166), (120, 180, 392, 210),
                 (120, 231, 252, 263), (264, 231, 392, 263))
@@ -98,6 +99,11 @@ class DevelopmentMenu:
     @property
     def map_preview(self):
         return self.map_provider(self.level_number) if self.map_available else None
+
+    @property
+    def return_screen(self):
+        label = self.return_screens.get(self.level_number)
+        return label if label in self.screen_options else None
 
     def map_hit(self, x, y):
         left, top, right, bottom = self.control_rect(4)
@@ -211,8 +217,9 @@ class DevelopmentMenu:
     @property
     def controls(self):
         if self.map_enabled:
-            return ((7, 5, 0, 6, 4, 1, 2, 3) if len(self.level_options) > 1
-                    else (7, 0, 4, 1, 2, 3))
+            return tuple(control for control in (7, 5, 0, 6, 4, 1, 2, 3)
+                         if (control not in (5, 6) or len(self.level_options) > 1)
+                         and (control != 1 or self.return_screen is not None))
         if self.map_available:
             return (4, 8, 1, 3)
         if self.page == 'tools' and not self.level_available:
@@ -345,6 +352,8 @@ class DevelopmentMenu:
             return 'changed'
         if self.map_enabled and self.focus == 4:
             return "go"
+        if self.map_enabled and self.focus == 1:
+            return 'return_room'
         if self.focus in (0, 4):
             self.open_dropdown()
         elif self.focus == 1:
@@ -526,7 +535,7 @@ class DevelopmentMenu:
         draw.line((12, 47, 500, 47), fill='#383838')
         draw.line((12, 321, 500, 321), fill='#383838')
         for control in (7, 5, 0, 6, 1, 2, 3):
-            if control not in self.controls:
+            if control not in self.controls and control != 1:
                 continue
             rect = self.control_rect(control)
             draw.rectangle(rect, fill='#303030' if self.focus == control else '#222222',
@@ -550,12 +559,10 @@ class DevelopmentMenu:
                 direction = 1 if control == 6 else -1
                 draw.line(((cx - direction * 3, cy - 5), (cx + direction * 3, cy),
                            (cx - direction * 3, cy + 5)), fill=white, width=2)
-        checkbox_y = self.control_rect(1)[1] + 6
-        draw.rectangle((26, checkbox_y, 37, checkbox_y + 11), fill='#121212', outline=muted)
-        if self.peaceful:
-            draw.line(((28, checkbox_y + 5), (31, checkbox_y + 8),
-                       (35, checkbox_y + 2)), fill=gold, width=2)
-        text('Peaceful mode', 47, checkbox_y + 1, max_width=235)
+        destination = self.return_screen
+        label = (f'Return to {destination}' if destination is not None else 'Return to last room')
+        text(label, 154, 336, white if destination is not None else '#777777',
+             centered=True, max_width=256)
         text('Go', 348, 336, centered=True, max_width=64)
         text('Resume', 444, 336, centered=True, max_width=88)
         if self.error:

@@ -31,8 +31,13 @@ the current room implementation, including overlap fixes. No AI ticks run.
 The map workspace removes the tools heading, tabs and floating panel frame.
 Its top bar contains a back arrow, a single level selector, and previous/next
 level arrows with pointer tooltips. Back returns to the compact tools without
-teleporting or resuming; the selected destination is retained. Peaceful mode,
-Go and Resume remain available in the map's lower command strip.
+teleporting or resuming; the selected destination is retained. The map's lower
+command strip contains Return to [room], Go and Resume. Peaceful mode remains
+only in the tools hub. Return is disabled until a room has been recorded for
+the selected level. Restart Level (including the death restart) records the
+room before resetting; opening F3 while dead also records the death room. Each
+level retains its own last room for this session. Return uses the ordinary
+safe-entry teleport, not a save-state restore, and preserves the prior pause.
 
 The selected destination has a cyan outline. Hovering brightens only the room
 under the pointer and shows a gold outline and transient room label. Blank

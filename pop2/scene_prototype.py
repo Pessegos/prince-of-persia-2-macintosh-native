@@ -2681,6 +2681,7 @@ class ScenePrototype(WindowControls):
         return True
 
     def restart_level(self):
+        self.remember_development_room()
         held = set(self.window_keys_down)
         snapshot = self.checkpoint
         if snapshot is None:
@@ -2705,6 +2706,13 @@ class ScenePrototype(WindowControls):
             if not self.in_animation_tick:
                 self.schedule_next_animation()
         self.pause_resume_keys.update(held)
+
+    def remember_development_room(self):
+        if not self.level_navigation_available():
+            return
+        if not hasattr(self, 'development_return_screens'):
+            self.development_return_screens = {}
+        self.development_return_screens[self.game.level.number] = self.screen_label(self.room_id)
 
     def start_intro(self, part_index=None):
         from pop2.intro import IntroAssets, IntroPlayer
