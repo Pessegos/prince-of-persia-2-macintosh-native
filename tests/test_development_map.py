@@ -1,7 +1,7 @@
 import random
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from PIL import Image, ImageChops
 
@@ -17,12 +17,19 @@ def preview():
                           {'Room 1': (0, 0), 'Room 2': (1, 0), 'Room 3': (1, 1)})
 
 
+def room_point(menu, label):
+    rect = menu.map_preview.rooms[label]
+    left, top, right, bottom = menu.control_rect(4)
+    scale, (ox, oy) = menu.map_preview.transform((right - left, bottom - top))
+    return left + ox + (rect[0] + rect[2]) / 2 * scale, top + oy + (rect[1] + rect[3]) / 2 * scale
+
+
 class DevelopmentMapModelTests(unittest.TestCase):
-    def menu(self):
+    def menu(self, opened=True):
         atlas = preview()
         return DevelopmentMenu(tuple(atlas.rooms), 0, False,
                                level_options=((3, 'Level 3', tuple(atlas.rooms)),),
-                               map_provider=lambda _number: atlas, focus=4)
+                               map_provider=lambda _number: atlas, focus=4, map_open=opened)
 
     def test_map_hits_are_half_open_and_do_not_select_gaps(self):
         atlas = preview()
@@ -30,6 +37,66 @@ class DevelopmentMapModelTests(unittest.TestCase):
                                 ((50, 0), 'Room 2'), ((50, 40), 'Room 3'),
                                 ((0, 40), None), ((100, 20), None), ((-1, 0), None)):
             self.assertEqual(atlas.hit(*point), expected)
+
+    def test_open_map_is_a_separate_page_and_escape_returns_to_tools(self):
+        menu = self.menu(opened=False)
+        self.assertEqual(menu.controls, (4, 1, 3))
+        self.assertFalse(menu.map_enabled)
+        self.assertEqual(menu.key('Return'), 'changed')
+        self.assertTrue(menu.map_enabled)
+        self.assertEqual(menu.focus, 4)
+        menu.key('Right')
+        self.assertEqual(menu.screen, 'Room 2')
+        self.assertEqual(menu.key('Escape'), 'changed')
+        self.assertFalse(menu.map_enabled)
+        self.assertEqual(menu.key('Return'), 'changed')
+        self.assertTrue(menu.map_enabled)
+        self.assertEqual(menu.screen, 'Room 2')
+        menu.key('Escape')
+        self.assertEqual(menu.key('Escape'), 'resume')
+
+    def test_popup_back_button_and_level_arrows_do_not_close_tools_or_teleport(self):
+        menu = self.menu()
+        menu.level_options += ((4, 'Level 4', tuple(menu.map_preview.rooms)),)
+        menu.focus = 6
+        self.assertEqual(menu.activate(), 'changed')
+        self.assertEqual(menu.level_number, 4)
+        self.assertTrue(menu.map_enabled)
+        self.assertEqual(menu.focus, 6)
+        menu.focus = 5
+        menu.activate()
+        self.assertEqual(menu.level_number, 3)
+        menu.focus = 0
+        menu.open_dropdown()
+        self.assertEqual(menu.key('Escape'), 'changed')
+        self.assertFalse(menu.dropdown)
+        self.assertTrue(menu.map_enabled)
+        rect = menu.control_rect(7)
+        self.assertEqual(menu.click(rect[0] + 4, rect[1] + 4), 'changed')
+        self.assertFalse(menu.map_enabled)
+
+    def test_map_preserves_aspect_ratio_and_hits_inside_taller_workspace(self):
+        menu = self.menu()
+        left, top, right, bottom = menu.control_rect(4)
+        scale, (ox, oy) = menu.map_preview.transform((right - left, bottom - top))
+        self.assertGreater(oy, 0)
+        self.assertEqual(ox, 0)
+        self.assertAlmostEqual(scale, (right - left) / MAP_SIZE[0])
+        self.assertIsNone(menu.map_hit(left + 1, top + 1))
+        for label in menu.map_preview.rooms:
+            self.assertEqual(menu.map_hit(*room_point(menu, label)), label)
+
+    def test_focus_order_never_visits_hidden_tabs_in_map(self):
+        menu = self.menu()
+        for _ in range(len(menu.controls) * 2):
+            menu.key('Tab')
+            self.assertIn(menu.focus, menu.controls)
+        menu.key('Escape')
+        self.assertEqual(menu.focus, 4)
+        menu.key('Tab', backwards=True)
+        self.assertEqual(menu.focus, -1)
+        menu.key('Right')
+        self.assertEqual(menu.tab, 1)
 
     def test_spatial_keys_and_enter_select_without_numeric_room_order(self):
         menu = self.menu()
@@ -47,15 +114,16 @@ class DevelopmentMapModelTests(unittest.TestCase):
 
     def test_hover_is_transient_and_click_is_direct_teleport(self):
         menu = self.menu()
-        self.assertTrue(menu.hover(84, 120))
+        point = room_point(menu, 'Room 2')
+        self.assertTrue(menu.hover(*point))
         self.assertEqual(menu.hovered_screen, 'Room 2')
         self.assertEqual(menu.screen, 'Room 1')
-        self.assertFalse(menu.hover(84, 120))
+        self.assertFalse(menu.hover(*point))
         self.assertTrue(menu.hover(200, 250))
         self.assertIsNone(menu.hovered_screen)
         self.assertEqual(menu.click(200, 250), 'changed')
         self.assertEqual(menu.screen, 'Room 1')
-        self.assertEqual(menu.click(84, 120), 'go')
+        self.assertEqual(menu.click(*point), 'go')
         self.assertEqual(menu.screen, 'Room 2')
         self.assertTrue(menu.hover(-1, -1))
         self.assertIsNone(menu.hovered_screen)
@@ -67,14 +135,15 @@ class DevelopmentMapModelTests(unittest.TestCase):
         menu.focus = 0
         menu.open_dropdown()
         self.assertTrue(menu.dropdown)
-        self.assertEqual(menu.click(220, 99), 'changed')
+        rect = menu.control_rect(0)
+        self.assertEqual(menu.click(220, rect[3] + 6), 'changed')
         self.assertFalse(menu.dropdown)
         self.assertEqual(menu.screen, 'Room 1')
 
     def test_level_changes_clear_hover_without_loading_or_teleporting_game(self):
         menu = self.menu()
         menu.level_options += ((4, 'Level 4', ('Other',)),)
-        menu.hover(84, 120)
+        menu.hover(*room_point(menu, 'Room 2'))
         menu.focus = 0
         menu.select(1)
         self.assertEqual((menu.level_number, menu.screen), (4, 'Other'))
@@ -149,6 +218,100 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         atlas.detail((928, 388))
         self.assertEqual(len(atlas.scaled_images), 1)
 
+    def test_hub_has_no_level_labels_or_map_generation_and_map_has_one_title(self):
+        from pop2.game_ui import MacintoshFont
+
+        atlas = build_development_map(self.resources.level(3))
+        font = MacintoshFont(self.resources.prince['NFNT'][23331]['data'])
+        provider = Mock(return_value=atlas)
+        menu = DevelopmentMenu(tuple(atlas.rooms), 0, False,
+                               level_options=((3, 'Level 3', tuple(atlas.rooms)),), map_provider=provider)
+        with patch.object(font, 'text', wraps=font.text) as text:
+            menu.draw(Image.new('RGBA', (512, 384)), font)
+        labels = [call.args[0] for call in text.call_args_list]
+        self.assertIn('Open map', labels)
+        self.assertIn('Game', labels)
+        self.assertNotIn('Level', labels)
+        self.assertNotIn('Level 3', labels)
+        provider.assert_not_called()
+        menu.activate()
+        with patch.object(font, 'text', wraps=font.text) as text:
+            menu.draw(Image.new('RGBA', (512, 384)), font)
+        labels = [call.args[0] for call in text.call_args_list]
+        self.assertEqual(labels.count('Level 3'), 1)
+        self.assertNotIn('Developer Tools', labels)
+        self.assertNotIn('Playback', labels)
+        self.assertNotIn('Level', labels)
+
+    def test_toolbar_tooltip_survives_display_resolution_map_layer(self):
+        from pop2.game_ui import MacintoshFont
+
+        atlas = build_development_map(self.resources.level(3))
+        font = MacintoshFont(self.resources.prince['NFNT'][23331]['data'])
+        menu = DevelopmentMenu(tuple(atlas.rooms), 0, False,
+                               level_options=((3, 'Level 3', tuple(atlas.rooms)),),
+                               map_provider=lambda _number: atlas, map_open=True)
+        rect = menu.control_rect(7)
+        menu.hover(rect[0] + 6, rect[1] + 6)
+        native = menu.draw(Image.new('RGBA', (512, 384)), font)
+        label, (x1, y1, x2, y2) = menu.map_tooltip(font)
+        self.assertEqual(label, 'Developer Tools')
+        frame = native.crop((1, 0, 511, 384)).resize((1912, 1440), Image.Resampling.NEAREST)
+        rect = (round((x1 - 1) * 1912 / 510), round(y1 * 1440 / 384),
+                round(x2 * 1912 / 510), round((y2 + 1) * 1440 / 384))
+        before = frame.crop(rect)
+        menu.present_map(frame, font)
+        self.assertEqual(before.tobytes(), frame.crop(rect).tobytes())
+
+    def test_held_enter_and_escape_do_not_skip_nested_map_page(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        s = self.scene
+        for paused in (False, True):
+            s.set_paused(paused)
+            s.open_dev_mode()
+            before = s.room_id, s.player_x, s.combat.world_frame
+            enter = SimpleNamespace(keysym='Return', state=0)
+            escape = SimpleNamespace(keysym='Escape', state=0)
+            s.dev_key_press(enter)
+            s.dev_key_press(enter)
+            self.assertTrue(s.dev_menu.map_enabled)
+            self.assertEqual(before, (s.room_id, s.player_x, s.combat.world_frame))
+            s.dev_key_release(enter)
+            s.dev_key_press(escape)
+            s.dev_key_press(escape)
+            self.assertIsNotNone(s.dev_menu)
+            self.assertFalse(s.dev_menu.map_enabled)
+            self.assertTrue(s.paused)
+            s.dev_key_release(escape)
+            s.dev_key_press(escape)
+            self.assertIsNone(s.dev_menu)
+            self.assertEqual(s.paused, paused)
+            s.dev_key_release(escape)
+
+    def test_browsing_another_level_and_back_does_not_replace_live_game(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        s = self.scene
+        s.load_level(3)
+        before = s.game, s.room_id, s.player_x, s.combat.world_frame
+        s.open_dev_mode()
+        s.apply_dev_action(s.dev_menu.activate())
+        s.dev_menu.focus = 5
+        s.apply_dev_action(s.dev_menu.activate())
+        self.assertEqual(s.dev_menu.level_number, 2)
+        self.assertEqual(before, (s.game, s.room_id, s.player_x, s.combat.world_frame))
+        s.dev_menu.focus = 7
+        s.apply_dev_action(s.dev_menu.activate())
+        self.assertFalse(s.dev_menu.map_enabled)
+        s.dev_menu.focus = 3
+        s.apply_dev_action(s.dev_menu.activate())
+        self.assertIsNone(s.dev_menu)
+        self.assertFalse(s.paused)
+        self.assertEqual(before, (s.game, s.room_id, s.player_x, s.combat.world_frame))
+
     def test_labels_only_render_on_hover_and_popup_survives_high_resolution(self):
         from pop2.game_ui import MacintoshFont
 
@@ -156,13 +319,12 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         font = MacintoshFont(self.resources.prince['NFNT'][23331]['data'])
         menu = DevelopmentMenu(tuple(atlas.rooms), 0, False,
                                level_options=((3, 'Level 3', tuple(atlas.rooms)),),
-                               map_provider=lambda _number: atlas)
+                               map_provider=lambda _number: atlas, map_open=True)
         native = Image.new('RGBA', (512, 384))
         with patch.object(font, 'text', wraps=font.text) as text:
             menu.draw(native, font)
         self.assertFalse(any(call.args[0].startswith('Room ') for call in text.call_args_list))
-        rect = atlas.rooms['Room 32']
-        menu.hover(24 + (rect[0] + rect[2]) / 2, 100 + (rect[1] + rect[3]) / 2)
+        menu.hover(*room_point(menu, 'Room 32'))
         with patch.object(font, 'text', wraps=font.text) as text:
             menu.draw(native, font)
         self.assertIn('Room 32', [call.args[0] for call in text.call_args_list])
@@ -174,7 +336,9 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
             before = frame.copy()
             menu.present_map(frame, font)
             sx, sy = size[0] / 510, size[1] / 384
-            rect = (round(199 * sx), round(93 * sy), round(488 * sx), round(113 * sy))
+            x1, _y1, x2, y2 = menu.control_rect(0)
+            rect = (round((x1 - 1) * sx), round(y2 * sy),
+                    round(x2 * sx), round((y2 + 20) * sy))
             self.assertEqual(frame.crop(rect).tobytes(), before.crop(rect).tobytes())
 
     def test_scene_map_cache_is_lazy_read_only_and_mouse_teleport_uses_safe_entry(self):
@@ -187,12 +351,14 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         before = (s.room_id, s.player_x, s.background.tobytes(), s.sequence_state.__dict__.copy(),
                   s.combat.world_frame, random.getstate())
         s.open_dev_mode()
+        self.assertFalse(hasattr(s, 'development_maps'))
+        self.assertFalse(s.dev_menu.map_enabled)
+        s.apply_dev_action(s.dev_menu.activate())
         atlas = s.dev_menu.map_preview
         self.assertIs(s.development_map(3), atlas)
         self.assertEqual(before, (s.room_id, s.player_x, s.background.tobytes(),
                                   s.sequence_state.__dict__, s.combat.world_frame, random.getstate()))
-        rect = atlas.rooms['Room 28']
-        point = 24 + (rect[0] + rect[2]) / 2, 100 + (rect[1] + rect[3]) / 2
+        point = room_point(s.dev_menu, 'Room 28')
         with patch.object(s, 'dev_pointer', return_value=point):
             s.dev_hover(SimpleNamespace())
             self.assertEqual(s.canvas.cget('cursor'), 'hand2')
@@ -212,6 +378,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         s = self.scene
         s.load_level(3)
         s.open_dev_mode()
+        s.apply_dev_action(s.dev_menu.activate())
         native = s.native_viewport.copy()
         for width, height in ((1020, 768), (1920, 1080), (2560, 1440)):
             with self.subTest(size=(width, height)), \

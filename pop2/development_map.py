@@ -132,15 +132,20 @@ class DevelopmentMap:
     source_frames: dict = field(default_factory=dict, repr=False, compare=False)
     scaled_images: dict = field(default_factory=dict, repr=False, compare=False)
 
+    def transform(self, size):
+        scale = min(size[0] / self.image.width, size[1] / self.image.height)
+        return scale, ((size[0] - self.image.width * scale) / 2,
+                       (size[1] - self.image.height * scale) / 2)
+
     def detail(self, size):
         if size == self.image.size:
             return self.image
         if size not in self.scaled_images:
             image = Image.new('RGB', size, '#101010')
-            sx, sy = size[0] / self.image.width, size[1] / self.image.height
+            scale, (ox, oy) = self.transform(size)
             for label, rect in self.rooms.items():
-                left, top, right, bottom = (round(value * scale) for value, scale
-                                            in zip(rect, (sx, sy, sx, sy)))
+                left, top, right, bottom = (round(value * scale + offset) for value, offset
+                                            in zip(rect, (ox, oy, ox, oy)))
                 source = self.source_frames.get(label)
                 if source is None:
                     source = self.image.crop(rect)

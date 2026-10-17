@@ -1,8 +1,9 @@
 # F3 Level Map
 
-The Level tab replaces its screen dropdown with a stitched, clickable map.
-This is a host development tool, not a recovered Macintosh gameplay feature.
-The existing level selector, peaceful mode, Playback and Display tabs remain.
+F3 opens a compact Developer Tools panel with Game, Playback and Display tabs.
+Game offers Open map, Peaceful mode and Resume; no level selectors or room
+dropdowns occupy this entry panel. Open map enters a separate full-playfield
+workspace. This is a host development tool, not a recovered Macintosh feature.
 
 ## Source And State
 
@@ -25,24 +26,34 @@ the current room implementation, including overlap fixes. No AI ticks run.
 
 ## Interaction And Presentation
 
+The map workspace removes the tools heading, tabs and floating panel frame.
+Its top bar contains a back arrow, a single level selector, and previous/next
+level arrows with pointer tooltips. Back returns to the compact tools without
+teleporting or resuming; the selected destination is retained. Peaceful mode,
+Go and Resume remain available in the map's lower command strip.
+
 The selected destination has a cyan outline. Hovering brightens only the room
 under the pointer and shows a gold outline and transient room label. Blank
 map space is not selectable; leaving the map clears the hover. Clicking a room
 uses the existing safe F3 entry path and restores the prior pause state.
 
 With map focus, arrows select spatially rather than by numeric room order;
-Enter activates the destination. Tab still moves between controls and Escape
-closes the level dropdown before closing F3. Playback controls are unchanged.
+Enter activates the destination. Tab moves only between visible controls.
+Escape closes the level dropdown first, then returns from the map to tools,
+then closes F3 on a new press. Held Enter cannot skip Open map and teleport;
+held Escape cannot dismiss both pages. Playback controls are unchanged.
 
 The native menu buffer retains the pixel-art font. At presentation time,
 the map is composed directly at the actual fitted window resolution from
 the original 510x360 room images, rather than enlarging the tiny native menu
 thumbnail. Room hit regions stay in native viewport coordinates. Hover
-outlines/tooltips scale with the map, and the level popup is restored above
-it without changing the rest of the presented frame.
+outlines/tooltips scale with the map. The overview is uniformly fitted inside
+the taller workspace, preserving room aspect ratios and inverse pointer
+mapping. The level popup and toolbar tooltips are restored above the detailed
+map without changing the rest of the presented frame.
 
-Map creation is lazy per level, with no startup precomputation or image-file
-dependency. Native room frames and the compact overview are reused; only the
+Map creation waits for Open map, not F3 itself, with no startup precomputation
+or image-file dependency. Native room frames and the compact overview are reused; only the
 most recent display-sized map image is cached, keeping resize memory bounded.
 F8 still captures the clean game, not the developer overlay.
 
@@ -54,7 +65,8 @@ at 5610x2160, without labels or actors. `--enemies` writes the separate
 `--output` and `--labels` remain available.
 
 `tests/test_development_map.py` covers topology, all selectable rooms, spatial
-keys, hover/click/gaps, popup priority, lazy caching, RNG and live-world
+keys, nested page/back/Escape navigation, key-repeat protection, uniform fit,
+hover/click/gaps, popup/tooltip priority, lazy caching, RNG and live-world
 isolation, original bone poses, actor-only pixel differences, native-source
 high-resolution presentation, bounded resize caching, and actual safe F3
 teleport. Existing menu, cavern map/export, screenshot and attract tests remain

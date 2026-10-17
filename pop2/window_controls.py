@@ -343,7 +343,7 @@ class WindowControls:
         )
         if not self.dev_menu.level_available:
             self.dev_menu.change_tab(1)
-        elif self.dev_menu.map_enabled:
+        elif self.dev_menu.map_available:
             self.dev_menu.focus = 4
         self.dev_was_paused = was_paused
         self.set_paused(True)

@@ -437,6 +437,7 @@ class MenuSceneTests(unittest.TestCase):
     def test_horizontal_button_navigation_stays_in_menu_without_teleporting_or_resuming(self):
         scene = self.scene
         scene.open_dev_mode()
+        scene.apply_dev_action(scene.dev_menu.activate())
         before = scene.room_id, scene.player_x, scene.sequence_state.__dict__.copy()
         scene.dev_menu.focus = 2
         for key, focus in (("Right", 3), ("Left", 2)):
@@ -495,6 +496,7 @@ class MenuSceneTests(unittest.TestCase):
     def test_invalid_destination_keeps_menu_and_scene_intact_with_inline_error(self):
         scene = self.scene
         scene.open_dev_mode()
+        scene.apply_dev_action(scene.dev_menu.activate())
         snapshot = scene.room_id, scene.player_x, scene.combat.guard
         with patch.object(scene, "jump_to_screen", side_effect=ValueError("This screen has no supported entry")):
             scene.apply_dev_action("go")
@@ -633,6 +635,7 @@ class MenuSceneTests(unittest.TestCase):
         scene = self.scene
         scene.jump_to_screen("1")
         scene.open_dev_mode()
+        scene.apply_dev_action(scene.dev_menu.activate())
         scene.dev_menu.focus = 2
         self.assertEqual(scene.dev_key_press(self.event("Right")), "break")
         self.assertEqual(scene.dev_menu.focus, 3)
