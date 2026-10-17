@@ -787,10 +787,11 @@ class OriginalCavernTests(unittest.TestCase):
     def test_map_tool_writes_a_nonblank_native_map(self):
         from tools.render_cavern_map import render_map
 
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, patch('PIL.ImageDraw.ImageDraw.text') as text:
             output = render_map(Path(directory) / 'map.png')
+            text.assert_not_called()
             with Image.open(output) as image:
-                self.assertEqual(image.size, (5610, 2304))
+                self.assertEqual(image.size, (5610, 2160))
                 self.assertIsNotNone(image.getbbox())
 
     def test_f2_can_load_every_room_and_place_on_original_standing_floor(self):

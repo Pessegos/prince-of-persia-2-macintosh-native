@@ -303,6 +303,17 @@ stay in the original pool bounds; raised effects retain their native extents
 at the shifted bubble anchor. Contact geometry, fatal Y,
 retry behavior and the 1/4 grounded-death continuation probability are intact.
 
+## Clean Level Map
+
+`python -m tools.render_cavern_map` writes the local, actor-free
+`rendered/level3-clean-map.png` (5610 x 2160). All 32 rooms are placed from
+their original links on a 510 x 360 world grid, with no room numbers or
+HUD bands between rooms. The current animated scenery pipeline supplies
+torches, enhanced lava and potion artwork at a deterministic snapshot.
+Retained background pixels come from an already rendered predecessor on
+a valid route, not an unrelated previous room. `--labels` remains available
+for diagnostics. The PNG is a local export, not redistributed game artwork.
+
 ## Skeleton Encounters
 
 Level-three skeleton artwork and encounters are now enabled. The three
