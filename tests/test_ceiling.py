@@ -40,6 +40,41 @@ class VerticalJumpTests(unittest.TestCase):
             self.put_tile(1, 7, 2, kind)
             self.assertEqual(self.choose(), (28, 0))
 
+    def test_back_ledge_high_jump_uses_native_alignment_in_both_facings(self):
+        for facing, x, column, offset in ((0, 149, 2, 17), (1, 253, 4, -17)):
+            self.level[:0x780] = bytes(0x780)
+            self.state.target_x, self.state.facing = x, facing
+            self.put_tile(0, column, 1, 34)
+            self.assertIsNone(self.terrain.upper_ledge(0, 2, self.state, self.record))
+            self.assertEqual(self.terrain.back_ledge_jump(0, 2, self.state, self.record), (16, offset))
+            self.assertEqual(self.state.target_x, x)
+            self.state.target_x += 1 if facing else -1
+            self.assertIsNone(self.terrain.back_ledge_jump(0, 2, self.state, self.record))
+
+    def test_supported_back_step_uses_the_forward_grab_sequence(self):
+        for facing, x, column, offset in ((0, 149, 2, 48), (1, 253, 4, -48)):
+            self.level[:0x780] = bytes(0x780)
+            self.state.target_x, self.state.facing = x, facing
+            self.put_tile(0, column, 1, 34)
+            self.put_tile(0, column + (1 if not facing else -1), 2, 1)
+            self.assertEqual(self.terrain.back_ledge_jump(0, 2, self.state, self.record), (24, offset))
+
+    def test_back_ledge_requires_open_space_and_a_still_usable_floor(self):
+        self.state.target_x, self.state.facing = 149, 0
+        self.put_tile(0, 2, 1, 34)
+        self.put_tile(0, 3, 1, 20)
+        self.assertIsNone(self.terrain.back_ledge_jump(0, 2, self.state, self.record))
+        self.put_tile(0, 3, 1, 0)
+        for kind in (0, 20, 2, 7, 25, 43):
+            self.put_tile(0, 2, 1, kind)
+            self.assertIsNone(self.terrain.back_ledge_jump(0, 2, self.state, self.record))
+        self.put_tile(0, 2, 1, 11)
+        fg = 0x780 + (10 + 2) * 4
+        struct.pack_into('>H', self.level, fg, 1)
+        self.assertIsNone(self.terrain.back_ledge_jump(0, 2, self.state, self.record))
+        struct.pack_into('>H', self.level, fg, 0)
+        self.assertEqual(self.terrain.back_ledge_jump(0, 2, self.state, self.record), (16, 17))
+
     def test_ceiling_probe_uses_the_eight_pixel_forward_foot_position(self):
         self.state.target_x = 376
         self.put_tile(1, 6, 2, 0)

@@ -1520,7 +1520,11 @@ class ScenePrototype(WindowControls):
         state = self.sequence_state
         offset = self.level_map.upper_ledge(
             self.room_id, self.terrain_motion.row, state, self.frames[state.action])
-        return offset is not None and self._begin_native_ledge(24, offset)
+        if offset is not None:
+            return self._begin_native_ledge(24, offset)
+        backward = self.level_map.back_ledge_jump(
+            self.room_id, self.terrain_motion.row, state, self.frames[state.action])
+        return backward is not None and self._begin_native_ledge(*backward)
 
     def update_native_ledge(self):
         if not self.native_ledge or self.ledge_climbing:

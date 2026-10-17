@@ -301,6 +301,33 @@ class LevelMap:
             return (floor_edge_distance(contact, state.facing) - 21) * direction
         return None
 
+    def back_ledge_jump(self, room, row, state, record):
+        # DoJumpUp 6:1684-16be tests space BEHIND the upper foot when
+        # the forward test failed. DoJumpBack/High then align SEQS:24/16.
+        contact = floor_contact_x(state.target_x, state.facing, record)
+        column = character_column(contact)
+        direction = 1 if state.facing else -1
+        space = self.tile(room, column - direction, row - 1)
+        ledge = self.tile(room, column, row - 1)
+        if (space.room is None or ledge.room is None or space.kind not in EMPTY_TILES
+                or ledge.kind in EMPTY_TILES | WALL_TILES
+                or ledge.kind in (11, 15) and ledge.foreground & 15):
+            return None
+        environment = struct.unpack_from('>H', self.level, 0x2186)[0]
+        if (environment == 2 and not space.foreground & 128
+                or environment == 5 and room == 14 and row != 0):
+            return None
+        distance = floor_edge_distance(contact, state.facing)
+        if distance < 24:
+            return None
+        if self.tile(room, column - direction, row).kind in EMPTY_TILES:
+            return 16, (distance - 41) * direction
+        backward = (distance - 51) * direction
+        aligned = floor_edge_distance(contact + backward, state.facing)
+        if aligned == 51:
+            aligned = 0
+        return 24, backward + (aligned - 21) * direction
+
     def exit_door(self, room, row, state, record):
         # Up handler 6:0e36: current, behind, then ahead; not the entry room.
         if room == self.start_room or state.actor_type != 0:

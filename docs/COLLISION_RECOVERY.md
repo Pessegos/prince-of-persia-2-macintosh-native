@@ -643,6 +643,29 @@ the reference recording; no room-specific camera trigger is introduced.
 See [HARBOR_RECOVERY.md](HARBOR_RECOVERY.md) for the source predicates, room
 route, rendering scope and integrated harbor regressions.
 
+### Upper Ledge Rear Probe
+
+DoJumpUp 6:1684-16be has a second IsLedge test after the forward test:
+space behind the upper supporting column, with floor immediately above the
+Prince. The port formerly fell back to a low ceiling jump without testing
+that edge. The level-3 room-17 button demonstrates it while facing left
+under the right end of the plate.
+
+DoJumpBack 6:16d8-1738 requires GetDist >=24. If the lower tile behind the
+foot is space, DoJumpHigh 6:1748-1772 aligns by `(distance - 41)` and selects
+SEQS:16. Otherwise it first backs up by `(distance - 51)`, reloads the foot
+column, and applies 1bbe's ordinary grab alignment before SEQS:24. The
+existing forward probe retains priority. Native IsLedge space/floor,
+loose-floor phase and environment exclusions are retained for the new probe.
+
+Executing original CODE:4/6 matched selection and X alignment for 666
+eligible positions sampled every three pixels in valid rooms of levels 1-3.
+This geometry comparison stubs the unrelated moving-obstacle proximity
+lookup and frame loading; it is not a certification of every DoJumpUp branch.
+Scene regressions climb the actual room-17 plate from both sides with Up,
+including releasing Up once climbing, and verify the final supported floor.
+No room-specific geometry or button activation change is introduced.
+
 No replacement artwork or generic physics library changes the recovered
 animation sequences. The prototype's 12 fps movement / 10 fps combat cadence
 is unchanged.

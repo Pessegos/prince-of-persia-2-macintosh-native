@@ -729,6 +729,43 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertEqual((scene.action, scene.player_x, scene.terrain_motion.row), (15, 212, 0))
         self.assertFalse(scene.terrain_motion.falling or scene.ledge_hanging)
 
+    def test_room_17_button_climbs_from_the_right_with_native_high_jump(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.peaceful = True
+        for x in (150, 165, 170):
+            scene.jump_to_room(16, row=2, x=x, facing=0)
+            scene.in_animation_tick = True
+            scene.up_key(None)
+            scene.start_jump_if_needed()
+            self.assertEqual((scene.sequence_state.sequence_id, scene.player_x), (16, 164))
+            self.assertFalse(scene.shift_held)
+            with patch.object(scene, 'render'):
+                self.tick(16)
+                self.assertTrue(scene.ledge_climbing)
+                self.assertEqual((scene.sequence_state.sequence_id, scene.player_x), (10, 173))
+                scene.set_key_state('up', False)
+                self.tick(25)
+            self.assertEqual((scene.action, scene.player_x, scene.terrain_motion.row), (15, 162, 1))
+            self.assertFalse(scene.ledge_hanging or scene.terrain_motion.falling)
+            self.assertEqual(scene.level_map.tile(16, 2, 1).kind, 34)
+
+    def test_room_17_button_also_climbs_from_the_left_with_supported_back_step(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.peaceful = True
+        scene.jump_to_room(16, row=2, x=130, facing=1)
+        scene.in_animation_tick = True
+        scene.up_key(None)
+        scene.start_jump_if_needed()
+        self.assertEqual((scene.sequence_state.sequence_id, scene.player_x), (24, 105))
+        with patch.object(scene, 'render'):
+            self.tick(20)
+            self.assertTrue(scene.ledge_climbing)
+            scene.set_key_state('up', False)
+            self.tick(25)
+        self.assertEqual((scene.action, scene.player_x, scene.terrain_motion.row), (15, 137, 1))
+
     def test_room_24_collapsing_climb_does_not_catch_without_shift(self):
         scene = self.scene
         scene.load_level(3)
