@@ -13,6 +13,7 @@ REQUIRED_ASSETS = (
     "Prince.rsrc",
     "Kid.rsrc",
     "Guard.rsrc",
+    "Skeleton.rsrc",
     "Rooftops.rsrc",
     "NIS.rsrc",
     "Title.rsrc",

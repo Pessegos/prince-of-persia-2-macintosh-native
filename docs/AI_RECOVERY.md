@@ -227,10 +227,52 @@ Ordinary same-floor target selection,
 flat-rooftop WaitingEngarde spacing and the first room's reinforcement now
 have their own implementation and tests, detailed below.
 
-Skeleton awakening/resurrection, bird controllers, actor type 10 and the final
-battle must be translated separately from their own original code. Their
-profiles/generators are recovered now, but those characters are not yet
-playable in this port. Do not route them through the ordinary guard controller.
+Level-three skeleton activation/collapse is now implemented separately as
+described below. Bird controllers, actor type 10 and the final battle still
+need their own translations; recovered generators alone do not implement them.
+
+## Level-Three Skeletons
+
+`pop2/skeleton.py` owns the actor-type-4 lifecycle, separately from the shared
+sword decisions in `CombatEncounter`. Import now includes `Skeleton.rsrc`;
+its original FRAM/AFRM/SHAP/CTBL resources replace the guard artwork for this
+environment. Existing installations without this resource request another
+disk-image import rather than drawing guard substitutes.
+
+The original LEVL:2002 initial records are retained, not homogenized:
+
+| Native room | Skill | Maximum-life field | Initial marker |
+| --- | --- | --- | --- |
+| 4 | 0 | 105 | -1 |
+| 6 | 0 | 3 | -1 |
+| 11 | 3 | 3 | 0 |
+| 15 | 2 | 3 | 0 |
+| 20 | 5 | 4 | 0 |
+
+SkelAddOpponent (4:198a) keeps the marker--1 bones dormant with no current
+life; in particular the raw 105 is not displayed as 105 live health bottles.
+The first slot with marker zero starts at 112, then 119. Activation follows
+the ordinary level-three branch of 4:14c6/13a4: a living Prince on the same
+floor, outside fall/recovery modes, within four columns and with an
+unobstructed floor path. SetSkelShakes (4:17fa) supplies three shakes for
+skill zero, otherwise `(skill + 1) & 1`; 4:1ab0 supplies inclusive Rnd(30)+15
+delays. The final activation uses 88 and restores the record's full life.
+
+Ready skeletons use the recovered per-profile advance/block/reblock/counter/
+strike tables, not new aggression constants. GetStrikeRange 6:5c34-5c40
+adds three pixels to the Prince's upper strike bound against actor type 4.
+Fatal sword hits select the native collapse 120 with cue 61 and the
+120-update recovery timer from 4:170e-179e. Falling deaths use the bones
+sequence 112; lava uses 115 and the pool's original sinking-skeleton artwork
+with cue 69, not the Prince's drowning sequence. Room revisits retain each
+enemy's life, skill, sequence and recovery timer.
+
+Tests exercise actual resources, individual records, inert bones, activation,
+all reached sprite frames, strike range, collapse/recovery and persistence.
+Scene renders have also been checked in rooms 11, 15 and 20. This is the
+level-three subset, not certification of every native NPC-bank update order:
+level-four exit-chasing skeletons (4:17aa), inactive-room bank reconstruction
+and later special opponents remain outside this implementation.
 
 Tests cover direct extraction from the originals, tables/thresholds, native RNG,
 conditional roll order, animation gates, range boundaries, anticipating attack,

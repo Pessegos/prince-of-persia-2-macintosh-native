@@ -303,6 +303,15 @@ stay in the original pool bounds; raised effects retain their native extents
 at the shifted bubble anchor. Contact geometry, fatal Y,
 retry behavior and the 1/4 grounded-death continuation probability are intact.
 
+## Skeleton Encounters
+
+Level-three skeleton artwork and encounters are now enabled. The three
+combat rooms retain their individual skill/life records; the other two
+skeleton records remain inert bones. Awakening, shaking, collapse and
+regeneration have their own controller rather than ordinary-guard startup.
+The native data, routines, tested scope and remaining bank-lifecycle limits
+are recorded in [AI_RECOVERY.md](AI_RECOVERY.md#level-three-skeletons).
+
 ## Stone Gate Collisions
 
 The supplied Macintosh/port door recordings show Room 17, row 2/column 7.

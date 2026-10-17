@@ -25,6 +25,8 @@ class GuardArtwork:
         self.sword_cache = {}
 
     def draw(self, image, state, floor_y, palette_variant=1):
+        if state.actor_type == 4 and state.source_sequence_id == 115:
+            return  # The lava pool draws the sinking skeleton, CODE:8 34a6.
         index = guard_frame_index(state.action)
         shape_id = shape_id_for_action(self.frames, self.base, index)
         if shape_id is None:

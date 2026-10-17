@@ -336,7 +336,8 @@ class ScenePrototype(WindowControls):
         sword_palette = sword_palette_for_level(self.resources.prince, game.level.kind)
         guard_art = health_art = hit_art = None
         if game.combat is not None:
-            guard_art = GuardArtwork(load_resource_file("Guard.rsrc"), self.sword_shapes,
+            guard_art = GuardArtwork(load_resource_file(
+                "Skeleton.rsrc" if game.level.kind == 3 else "Guard.rsrc"), self.sword_shapes,
                                      self.first_sword_shape_id, sword_palette)
             health_art = HealthArtwork(self.kid, palette, self.first_shape_id)
             hit_art = HitArtwork(self.kid, palette, self.first_shape_id,
@@ -2120,6 +2121,10 @@ class ScenePrototype(WindowControls):
                 state.current_y = 0
                 motion.falling = False
                 actor.recovering = actor.alive
+                if actor.skeleton is not None:
+                    actor.skeleton.collapse(actor)
+                    actor.runtime.next_frame()
+                    continue
                 self.physics.select(actor.runtime, 52 if actor.alive else 22)
                 if actor.alive:
                     state.sound_events.append(300)
@@ -2203,6 +2208,11 @@ class ScenePrototype(WindowControls):
                 # A nonfatal dart does not select a hurt pose or stop a run.
                 state.sound_events.extend((29 if player else 59, 66))
                 continue
+            if actor.skeleton is not None:
+                actor.skeleton.collapse(actor)
+                actor.runtime.next_frame()
+                state.sound_events.append(66)
+                continue
             record = (self.frames[state.action] if player else
                       self.guard_art.frames[guard_frame_index(state.action)])
             sequence, offset = dart_death(self.level_map, motion, state, record)
@@ -2263,6 +2273,21 @@ class ScenePrototype(WindowControls):
                 self.action, self.player_x = state.action, state.target_x
                 self.status.set('Defeated')
             loose = self.game.caverns.loose
+            for guard in self.combat.active_guards():
+                if guard.skeleton is None or not guard.alive or guard.terrain_motion is None:
+                    continue
+                state, motion = guard.state, guard.terrain_motion
+                pool = lava.contact(self.level_map, motion, state,
+                    self.guard_art.frames[guard_frame_index(state.action)], landed=motion.lava_landing)
+                motion.lava_landing = False
+                if pool is not None:
+                    sequence, cue = pool.begin_death(state.animation_state, state.facing, actor_type=4)
+                    guard.life, guard.targetable = 0, False
+                    guard.skeleton.phase = 'lava'
+                    motion.dead, motion.falling = True, False
+                    state.horizontal_velocity = state.vertical_velocity = 0
+                    self.physics.select(guard.runtime, sequence)
+                    state.sound_events.append(cue)
             state, motion = self.sequence_state, self.terrain_motion
             if motion is not None:
                 state.sound_events.extend(loose.press(self.level_map, motion, state, self.frames[state.action]))

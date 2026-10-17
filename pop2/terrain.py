@@ -976,7 +976,7 @@ class RooftopPhysics:
             if tile.room is not None and tile.kind not in EMPTY_TILES | WALL_TILES:
                 velocity = state.vertical_velocity
                 if (tile.kind in (23, 24) and self.map.caverns is not None
-                        and state.actor_type in (0, None)):
+                        and state.actor_type in (0, 4, None)):
                     # HitFloor 6:02aa-02b8/0326-0344 dispatches lava before
                     # impact damage, preserving the airborne death variant.
                     state.current_y = 0

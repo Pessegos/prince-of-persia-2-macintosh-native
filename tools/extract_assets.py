@@ -15,11 +15,12 @@ from pop2.mac_resources import get_resource_fork, parse_resource_fork
 from pop2.paths import ASSET_DIR
 
 
-RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc")
+RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Skeleton.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc")
 REQUIRED_RESOURCES = {
     "Prince.rsrc": {"LEVL", "SEQS", "SHAP", "SHPL", "CTBL", "NFNT"},
     "Kid.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
     "Guard.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
+    "Skeleton.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
     "Rooftops.rsrc": {"PIEC", "SHAP", "CTBL"},
     "NIS.rsrc": {"SHAP", "CTBL", "TEXT"},
     "Title.rsrc": {"SHAP", "CTBL", "SCRP", "ANI "},

@@ -38,6 +38,8 @@ class GuardSpawn:
     palette_variant: int = 1
     generation_flags: int = 0
     alternate_row: int | None = None
+    actor_type: int = 2
+    skeleton_words: tuple = ()
 
     @classmethod
     def from_level(cls, level, room):
@@ -54,7 +56,7 @@ class GuardSpawn:
             return []
         offset = 0x20E6 + (room + 1) * 0xC0
         count = struct.unpack_from(">H", level, offset)[0]
-        if opponent_type != 0:
+        if opponent_type not in (0, 2):
             if count == 0:
                 return []
             raise ValueError("Special opponent types are not implemented here")
@@ -68,7 +70,9 @@ class GuardSpawn:
                 raise ValueError(f"Unsupported guard skill {skill}")
             spawns.append(cls(room, fields[0] // 10, fields[1] - 207,
                               int(fields[2] == 0), skill, fields[4], fields[13] or 3,
-                              fields[6] or 1, fields[10], fields[16]))
+                              fields[6] or 1, fields[10], fields[16],
+                              4 if opponent_type == 2 else 2,
+                              tuple(fields) if opponent_type == 2 else ()))
         return spawns
 
 
@@ -93,6 +97,7 @@ class Fighter:
     pursuing: bool = False
     alternate_row: int | None = None
     death_registered: bool = False
+    skeleton: object | None = None
 
     @property
     def state(self):
@@ -146,7 +151,7 @@ def strike_range(attacker, defender):
             if not opposed:
                 low -= 37
                 high -= 22
-        return low, high
+        return low, high + (3 if defender.state.actor_type == 4 else 0)
     if opposed:
         return (61 if defender.sword_drawn else 35), 99
     return (45, 85) if defender.sword_drawn else (42, 83)
@@ -234,15 +239,14 @@ class CombatEncounter:
         if self.level is None:
             raise ValueError("Room changes require LEVL data")
         if room not in self.room_encounters:
-            # Scenery previews may visit skeleton rooms before that actor is recovered.
-            if struct.unpack_from(">h", self.level, 0x21a4)[0] != 0:
+            if struct.unpack_from(">h", self.level, 0x21a4)[0] not in (0, 2):
                 self.room_encounters[room] = ([], [])
                 return
             guards = []
             for spawn in GuardSpawn.all_from_level(self.level, room):
                 state = SequenceState(spawn.sequence_id, current_x=spawn.x,
                                       target_x=spawn.x, facing=spawn.facing,
-                                      actor_type=2, level_kind=self.level_kind)
+                                      actor_type=spawn.actor_type, level_kind=self.level_kind)
                 fighter = Fighter(SequenceRuntime(self.sequences, state),
                                   spawn.life, spawn.life, room, spawn.row,
                                   skill=spawn.skill, selected_sequence=spawn.sequence_id,
@@ -250,6 +254,10 @@ class CombatEncounter:
                                   generation_flags=spawn.generation_flags,
                                   alternate_row=spawn.alternate_row)
                 fighter.runtime.next_frame()
+                if spawn.skeleton_words:
+                    from pop2.skeleton import Skeleton
+                    fighter.skeleton = Skeleton.from_spawn(spawn)
+                    fighter.skeleton.initialize(fighter)
                 guards.append(fighter)
             points = (OpponentGenerationPoint.from_level(self.level, room)
                       if struct.unpack_from(">h", self.level, 0x21a4)[0] == 0 else [])
@@ -547,6 +555,8 @@ class CombatEncounter:
     def choose_guard_action(self, guard=None):
         guard, player = guard or self.guard, self.player
         state = guard.state
+        if guard.skeleton is not None and guard.skeleton.control(self, guard):
+            return
         if not guard.alive:
             # 4:3d64-3d6c registers life zero before AnimChar. A newly
             # stabbed actor is not counted in the previous NPC bank yet.
@@ -637,7 +647,7 @@ class CombatEncounter:
         state = fighter.state
         art = getattr(self, "guard_art", None)
         frames = getattr(self, "player_frames", None)
-        if state.actor_type == 2:
+        if state.actor_type in (2, 4):
             record = art.frames[guard_frame_index(state.action)] if art is not None else None
         else:
             record = frames[state.action] if frames is not None else None
@@ -831,6 +841,8 @@ class CombatEncounter:
                 with self._local_opponents(guard):
                     self.choose_guard_action(guard)
             guard.runtime.next_frame()
+            if guard.skeleton is not None:
+                guard.skeleton.after_frame(guard)
             self._select_guard_corpse_pose(guard)
             # Allow native offscreen entry; each room has its own floor extent.
             entry = guard.entry_x or 0
@@ -846,6 +858,8 @@ class CombatEncounter:
                 guard.recovering = False
 
     def _advance_guard_terrain(self, guard, old_x, old_bounds=None):
+        if guard.skeleton is not None and guard.skeleton.phase == 'lava':
+            return
         if guard.terrain_motion is None:
             guard.terrain_motion = TerrainMotion(guard.room, guard.row)
         motion = guard.terrain_motion
@@ -853,7 +867,8 @@ class CombatEncounter:
         old_room = guard.room
         if not hasattr(self, "guard_physics"):
             frames = {action: self.guard_art.frames[guard_frame_index(action)]
-                      for action in (*range(149, 255), *range(102, 107))}
+                      for action in (*range(149, 255), *range(102, 107))
+                      if guard_frame_index(action) < len(self.guard_art.frames)}
             self.guard_physics = RooftopPhysics(self.terrain, frames)
         bounds = lambda: self.guard_art.bounds(guard.state, floor_y(motion.row))
         collision_bounds = lambda: self.guard_art.collision_bounds(
@@ -867,6 +882,10 @@ class CombatEncounter:
         for event in events:
             if event.kind == "death":
                 guard.life = 0
+                if guard.skeleton is not None and not motion.falling:
+                    guard.skeleton.collapse(guard, landing=True)
+                    guard.runtime.next_frame()
+                    motion.dead = False
             elif event.kind == "land":
                 guard.life = max(0, guard.life - event.damage)
                 guard.sword_drawn = True
@@ -877,7 +896,7 @@ class CombatEncounter:
             self.room_encounters[guard.room][0].append(guard)
 
     def _select_guard_corpse_pose(self, guard):
-        if (guard.state.action != 185 or self.level is None
+        if (guard.state.actor_type == 4 or guard.state.action != 185 or self.level is None
                 or guard.state.level_kind == 6):
             return
         # GetOppDeadSeq 4:0074-010a / FrameAdv 2:6544: ordinary corpse
@@ -957,6 +976,10 @@ class CombatEncounter:
             elif name == "guard" and self._opponent_tumble(target):
                 # CheckStab 6:56ba-56d4 selects the native tumble, not 85.
                 sequence, offset = 185, -12
+            if target.skeleton is not None and fall_offset is None:
+                target.skeleton.collapse(target)
+                target.runtime.next_frame()
+                return CombatEvent("death", name)
         elif target.state.facing == attacker.state.facing:
             sequence, offset = 94, 0
         else:
