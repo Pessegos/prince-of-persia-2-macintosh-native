@@ -344,6 +344,7 @@ class WindowControls:
             level_options=level_options, level_index=level_index if level_options else 0,
             map_provider=self.development_map if level_options else None,
             return_screens=dict(getattr(self, 'development_return_screens', {})),
+            playback_provider=self.development_playback_preview if parts else None,
         )
         if self.dev_menu.map_available:
             self.dev_menu.focus = 4
@@ -837,8 +838,8 @@ class WindowControls:
                 else:
                     self.render()
             if menu is self.dev_menu:
-                cursor = ('hand2' if menu.map_enabled and menu.hovered_screen is not None
-                          and not menu.dropdown else '')
+                hovered = menu.hovered_screen if menu.map_enabled else menu.hovered_part
+                cursor = 'hand2' if menu.preview_enabled and hovered is not None and not menu.dropdown else ''
                 if self.canvas.cget('cursor') != cursor:
                     self.canvas.configure(cursor=cursor)
 
@@ -850,13 +851,23 @@ class WindowControls:
 
     def dev_pointer_leave(self, _event):
         menu = self.dev_menu
-        if menu is not None and menu.map_enabled:
+        if menu is not None and menu.preview_enabled:
             if menu.hover(-1, -1):
                 self.redraw_dev_menu()
             self.canvas.configure(cursor='')
 
     def dev_scroll(self, event):
-        if self.dev_menu is None or not self.dev_menu.dropdown:
+        if self.dev_menu is None:
+            return None
+        if self.dev_menu.gallery_enabled and not self.dev_menu.dropdown:
+            point = self.dev_pointer(event)
+            if (point is not None and self.dev_menu.hit(*point) == 4
+                    and self.dev_menu.gallery_count > 1):
+                delta = getattr(event, 'delta', 0)
+                self.dev_menu.turn_gallery_page(-1 if delta > 0 or getattr(event, 'num', None) == 4 else 1)
+                self.redraw_dev_menu()
+            return 'break'
+        if not self.dev_menu.dropdown:
             return None
         point = self.dev_pointer(event)
         if point is not None and self.dev_menu.hit(*point) is not None:
@@ -905,7 +916,7 @@ class WindowControls:
             self.bitmap_presenter = None
         frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
         menu = getattr(self, 'dev_menu', None)
-        if menu is not None and menu.map_enabled:
+        if menu is not None and menu.preview_enabled:
             frame = menu.present_map(frame, self.ui_font).convert('RGB')
             previous = getattr(self, 'dev_map_frame', None)
             if (previous is not None and previous[0] is menu and previous[1].size == frame.size
@@ -922,7 +933,7 @@ class WindowControls:
         else:
             self.dev_map_frame = None
         self.image_ref = ImageTk.PhotoImage(frame)
-        if menu is not None and menu.map_enabled:
+        if menu is not None and menu.preview_enabled:
             self.dev_map_frame = (menu, frame, self.image_ref)
         if self.canvas.find_all():
             self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)

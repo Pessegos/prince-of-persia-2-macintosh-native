@@ -237,6 +237,7 @@ class AttractSceneTests(unittest.TestCase):
             with self.subTest(sequence=group.label):
                 scene.open_dev_mode()
                 scene.dev_menu.show_page('playback')
+                scene.dev_menu.focus = 0
                 before = scene.intro, scene.demo
                 scene.dev_menu.select(group_index)
                 self.assertEqual((scene.intro, scene.demo), before)

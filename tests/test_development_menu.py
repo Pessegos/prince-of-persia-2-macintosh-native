@@ -386,8 +386,9 @@ class MenuSceneTests(unittest.TestCase):
         self.assertIsNone(scene.dev_scroll(event))
         scene.open_dev_mode()
         scene.dev_menu.sections = tuple(f"Story {i}" for i in range(30))
+        scene.dev_menu.section_groups = tuple(PlaybackGroup(f'Story {i}', (i,)) for i in range(30))
         scene.dev_menu.show_page('playback')
-        scene.dev_menu.focus = 4
+        scene.dev_menu.focus = 0
         scene.dev_menu.open_dropdown()
         with patch.object(scene, "dev_pointer", return_value=(220, 214)):
             for _ in range(20):

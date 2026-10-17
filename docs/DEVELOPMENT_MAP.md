@@ -3,8 +3,8 @@
 F3 opens a compact, tabless Developer Tools panel with Open map, Playback,
 Peaceful mode and Resume. No level selectors or room dropdowns occupy this
 entry panel. Open map enters a separate full-playfield workspace. Playback
-opens its own page with sequence/part controls, a back arrow and the optional
-debug status bar. During attract playback only Playback and Resume are offered.
+opens a [visual scene gallery](PLAYBACK_GALLERY.md), with a back arrow and the
+optional debug status bar. During attract playback only Playback and Resume are offered.
 These are host development tools, not recovered Macintosh features.
 
 ## Source And State

@@ -3030,6 +3030,14 @@ class ScenePrototype(WindowControls):
             self.development_preview_fingerprint = preview_fingerprint()
         return self.development_preview_fingerprint
 
+    def development_playback_preview(self, indices):
+        from pop2.playback_preview import PlaybackPreviews
+
+        if not hasattr(self, 'development_playback_previews'):
+            self.development_playback_previews = PlaybackPreviews(
+                self.resources, self.development_parts(), self.attract_data, self.preview_fingerprint())
+        return self.development_playback_previews.group(indices)
+
     def screen_label(self, room):
         return next((label for label, target in self.dev_screens().items() if target == room),
                     f"Room ID {room + 1}")

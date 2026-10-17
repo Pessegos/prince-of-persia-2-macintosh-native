@@ -387,7 +387,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
             menu.draw(Image.new('RGBA', (512, 384)), font)
         labels = [call.args[0] for call in text.call_args_list]
         self.assertIn('Open map', labels)
-        self.assertIn('Playback...', labels)
+        self.assertIn('Playback', labels)
         self.assertNotIn('Game', labels)
         self.assertNotIn('Display', labels)
         self.assertNotIn('Level', labels)
