@@ -6,6 +6,11 @@ Twelve numbered slots are available across two pages. Additional `.pop2save`
 files already in `~/Saved Games/PoP2 Macintosh Native` appear after those slots.
 Nothing is written merely by opening or navigating the browser.
 
+Importing save support and testing progress-only slots does not load original
+combat/AI resources. Fighter decoding and legacy RNG handling import those
+dependencies only when needed. A subprocess regression test runs the complete
+slot suite from a temporary copy with no imported game assets, matching CI.
+
 Each slot shows the level, resume point, banked life capacity, local save date
 and a full-colour screenshot thumbnail. The thumbnail depicts the room at the
 time of saving; it is not a promise to resume at those exact coordinates.

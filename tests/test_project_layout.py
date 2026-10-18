@@ -66,6 +66,28 @@ class ProjectLayoutTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse((project / "assets").exists())
 
+    def test_save_slot_suite_runs_without_original_game_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            shutil.copytree(PROJECT_DIR / 'pop2', project / 'pop2',
+                            ignore=shutil.ignore_patterns('__pycache__'))
+            (project / 'tests').mkdir()
+            for name in ('__init__.py', 'test_game_session.py', 'test_save_slots.py'):
+                shutil.copy2(PROJECT_DIR / 'tests' / name, project / 'tests' / name)
+            script = (
+                "import sys; sys.path.insert(0, '.'); "
+                "from pop2 import save_game, save_slots; "
+                "assert 'pop2.combat' not in sys.modules; "
+                "assert 'pop2.enemy_profiles' not in sys.modules; "
+                "import unittest; unittest.main(module=None, "
+                "argv=['unittest', '-q', 'tests.test_save_slots'])"
+            )
+            result = subprocess.run([sys.executable, '-I', '-c', script], cwd=project,
+                                    capture_output=True, text=True, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('OK', result.stderr)
+            self.assertFalse((project / 'assets').exists())
+
 
 if __name__ == "__main__":
     unittest.main()

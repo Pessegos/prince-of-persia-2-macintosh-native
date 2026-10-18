@@ -17,10 +17,8 @@ from typing import get_args, get_origin, get_type_hints
 from PIL import Image
 
 from pop2.cavern_state import CavernState
-from pop2.combat import Fighter
 from pop2.darts import Dart, Darts
 from pop2.desert_state import DesertState, Stone
-from pop2.enemy_profiles import QuickDrawRandom
 from pop2.game_session import GameSession
 from pop2.gate_crush import GateCrush
 from pop2.harbor import Harbor, WaterEntry
@@ -41,7 +39,7 @@ VERSION = 2
 MAX_BYTES = 2 * 1024 * 1024
 SAVE_DIRECTORY = Path.home() / 'Saved Games' / 'PoP2 Macintosh Native'
 CLASSES = {cls.__name__: cls for cls in (
-    CavernState, Fighter, Dart, Darts, DesertState, Stone, GateCrush, Harbor,
+    CavernState, Dart, Darts, DesertState, Stone, GateCrush, Harbor,
     WaterEntry, Lava, LavaPool, FallingFloor, LooseFloors, OpponentGenerationPoint,
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
     Skeleton, TerrainMotion, WallSpikes,
@@ -66,7 +64,7 @@ def _pack(value):
         return value
     if isinstance(value, SequenceRuntime):
         return {'runtime': _pack(value.state)}
-    if is_dataclass(value) and type(value).__name__ in CLASSES:
+    if is_dataclass(value) and (type(value).__name__ in CLASSES or type(value).__name__ == 'Fighter'):
         return {'record': type(value).__name__, 'fields': {
             field.name: _pack(getattr(value, field.name)) for field in fields(value)
             if field.name not in OMIT.get(type(value), ())}}
@@ -142,9 +140,15 @@ def _unpack(value, resources, lava_tables, depth=0):
                 raise SaveGameError('Duplicate save mapping entry')
             result[key] = item
         return result
-    if set(value) != {'record', 'fields'} or value['record'] not in CLASSES:
+    if set(value) != {'record', 'fields'} or value['record'] not in (*CLASSES, 'Fighter'):
         raise SaveGameError('Unknown save record')
-    cls = CLASSES[value['record']]
+    if value['record'] == 'Fighter':
+        # Actor records need imported AI data; progress-only saves and UI do not.
+        from pop2.combat import Fighter
+
+        cls = Fighter
+    else:
+        cls = CLASSES[value['record']]
     record = value['fields']
     allowed = {field.name for field in fields(cls)} - OMIT.get(cls, set())
     # Earlier version-1 saves predate the frozen turning-contact history.
@@ -162,6 +166,8 @@ def _unpack(value, resources, lava_tables, depth=0):
 
 
 def _fighter_valid(actor, resources):
+    from pop2.combat import Fighter
+
     if not isinstance(actor, Fighter) or not isinstance(actor.runtime, SequenceRuntime):
         raise SaveGameError('Invalid saved actor')
     state = actor.state
@@ -181,6 +187,8 @@ def _fighter_valid(actor, resources):
 
 def capture_snapshot(game, controls=None, copy_verified=False):
     """Version-one fixture/compatibility encoder; new saves use capture()."""
+    from pop2.enemy_profiles import QuickDrawRandom
+
     if (game.combat is None or not game.combat.player.alive or game.exit is not None
             or game.complete):
         raise SaveGameError('Save is unavailable during death or level transitions')
@@ -242,6 +250,7 @@ def read_snapshot(path, resources):
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
             raise SaveGameError('Save belongs to different original game files')
         from pop2.caverns import cavern_assets
+        from pop2.enemy_profiles import QuickDrawRandom
 
         tables = cavern_assets()[0]['lava'] if game.level.number == 3 else None
         saved = _unpack(document['state'], resources, tables)
