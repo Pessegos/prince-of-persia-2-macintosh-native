@@ -6,9 +6,9 @@ label has no ellipsis: its chevron already indicates another page. Part
 destinations still come from the imported programs.
 This is a host development aid, not a recovered Macintosh menu.
 
-The dropdown groups the narrative into Opening (prologue, titles and palace
-story) and After Level 1 (the voyage and arrival). Extras follows the story
-groups and contains the recorded demo and credits. Later level stories can
+The dropdown groups the narrative into Opening (prologue, cloud titles and palace
+story, followed by the recorded demo and credits) and After Level 1 (the voyage
+and arrival). Later level stories can
 add their own chronological groups without expanding every opening chapter
 into a top-level dropdown item. Absolute playback indices and timing remain
 unchanged. Descriptive part labels are host-authored navigation names based on
@@ -19,11 +19,14 @@ Voyage parts use Departure, Stowaway, Dream and Storm without repeated prefixes.
 
 The header contains Back, previous/next sequence, the sequence dropdown, and
 previous/next page when needed. Each page contains up to six real snapshots,
-with centered captions in reserved areas below the images. The original
-bitmap font wraps to two lines without overlapping another image or clipping
+with larger 152x114 thumbnails and compact centered captions just below the images.
+The original bitmap font is reduced to 75 percent and can wrap to two lines
+without overlapping another image or clipping
 descenders. Caption areas also accept hover/click. Cyan marks only the actual
 playing part, captured when F3 opens; browsing a new group/page does not invent
-a current scene. The keyboard's pending selection is white and hover is gold.
+a current scene. The pending selection becomes white only after explicit arrow-key
+navigation; opening a page or browsing a group does not highlight its first item.
+Mouse movement clears that keyboard marker, and hover is gold.
 Live gameplay has no fake current cutscene.
 Clicking a thumbnail seeks directly through the existing playback dispatcher.
 With gallery focus, Left/Right move one part and Up/Down move three; Enter
@@ -35,8 +38,9 @@ part, Play and Resume. Next part keeps the imported global playback order,
 including sequence boundaries. Tab visits only visible controls. Dropdowns
 take hit-test priority over thumbnails. Back/Escape returns to tools without
 playing; a further fresh Escape closes F3. Held activation cannot both open
-the gallery and seek. The previous explicit pause state is restored after
-playing or resuming.
+the gallery and seek. Play, thumbnail activation and Next part start the destination
+immediately, even if F3 was opened from pause. Resume/Escape without seeking restores
+the previous explicit pause state.
 
 ## Artwork And Isolation
 
@@ -64,8 +68,8 @@ F8 still captures the clean game instead of the developer overlay.
 `tests/test_playback_preview.py` covers lazy generation, every imported part,
 visible native artwork, lossless disk reuse, global RNG/live-world isolation,
 pagination/group selection, mouse/keyboard gaps and direct activation,
-Back/Escape, key-repeat protection, pause restoration, wheel paging and real
+Back/Escape, key-repeat protection, autoplay versus pause restoration, wheel paging and real
 Tk photo equivalence to full redraw at four viewport sizes. Caption/image
-regions, exact bitmap-ink preservation, full HUD coverage and actual-current
+regions, complete scaled caption ink, full HUD coverage and actual-current
 versus pending-selection colors have focused regression tests. Existing attract,
 playback-navigation, menu, map, screenshots and pause tests remain applicable.

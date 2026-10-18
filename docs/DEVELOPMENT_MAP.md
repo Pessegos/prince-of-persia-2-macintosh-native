@@ -42,8 +42,9 @@ level retains its own last room for this session. Return uses the ordinary
 safe-entry teleport, not a save-state restore, and preserves the prior pause.
 
 The actual current room has a cyan outline, shown only for the live level.
-Keyboard destination selection is white and does not move that current-room
-marker to a different room/level. Hovering brightens only the room
+Keyboard destination selection is white only after arrow-key navigation; opening
+the map, changing levels or moving the mouse clears that pending marker. It does
+not move the current-room marker to a different room/level. Hovering brightens only the room
 under the pointer and shows a gold outline and transient room label. Blank
 map space is not selectable; leaving the map clears the hover. Clicking a room
 uses the existing safe F3 entry path and restores the prior pause state.

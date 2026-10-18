@@ -35,10 +35,7 @@ def playback_groups(parts):
     for index, part in enumerate(parts):
         label = part.group or part.stage.title()
         groups.setdefault(label, []).append(index)
-    labels = [label for label in groups if label != 'Extras']
-    if 'Extras' in groups:
-        labels.append('Extras')
-    return tuple(PlaybackGroup(label, tuple(groups[label])) for label in labels)
+    return tuple(PlaybackGroup(label, tuple(indices)) for label, indices in groups.items())
 
 
 def playback_parts(intro_program, attract_data, screen_label):
@@ -57,10 +54,10 @@ def playback_parts(intro_program, attract_data, screen_label):
     for index, frame in enumerate(attract_data["frames"]):
         room = frame["room"] - 1
         if room not in seen:
-            parts.append(PlaybackPart(f'Demo - Screen {screen_label(room)}', 'demo', index, 'Extras'))
+            parts.append(PlaybackPart(f'Demo - Screen {screen_label(room)}', 'demo', index, 'Opening'))
             seen.add(room)
     for index in range(len(attract_data["credits"]["pages"])):
-        parts.append(PlaybackPart(f'Credits - Page {index + 1}', 'credits', index, 'Extras'))
+        parts.append(PlaybackPart(f'Credits - Page {index + 1}', 'credits', index, 'Opening'))
     return tuple(parts)
 
 

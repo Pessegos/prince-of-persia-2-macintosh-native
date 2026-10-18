@@ -211,7 +211,7 @@ class AttractSceneTests(unittest.TestCase):
         self.assertIsNone(scene.intro)
         self.assertIsNone(scene.demo)
 
-    def test_next_part_preserves_explicit_pause_and_consumes_activation_key(self):
+    def test_next_part_starts_playback_and_consumes_activation_key(self):
         scene = self.scene
         scene.set_paused(True)
         scene.open_dev_mode()
@@ -220,10 +220,10 @@ class AttractSceneTests(unittest.TestCase):
         scene.dev_menu.focus = 1
         self.key("Return")
         self.assertIsNone(scene.dev_menu)
-        self.assertTrue(scene.paused)
+        self.assertFalse(scene.paused)
         self.assertEqual(scene.development_parts()[scene.current_playback_part()], part)
         self.assertEqual(self.key("Return"), "break")
-        self.assertTrue(scene.paused)
+        self.assertFalse(scene.paused)
 
     def test_group_selection_seeks_only_after_activation_and_next_keeps_playback_order(self):
         scene = self.scene
@@ -232,7 +232,7 @@ class AttractSceneTests(unittest.TestCase):
         groups = scene.dev_menu.groups
         scene.close_dev_mode()
         self.assertEqual([group.label for group in groups],
-                         ['Opening', 'After Level 1', 'Extras'])
+                         ['Opening', 'After Level 1'])
         for group_index, group in enumerate(groups):
             with self.subTest(sequence=group.label):
                 scene.open_dev_mode()

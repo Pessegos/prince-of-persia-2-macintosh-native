@@ -20,9 +20,9 @@ class PlaybackNavigationTests(unittest.TestCase):
                          ['Scene 1', 'Titles', 'Scene 2', 'Demo - Screen 1',
                           'Demo - Screen 2', 'Demo - Screen 5', 'Credits - Page 1', 'Credits - Page 2'])
         self.assertEqual([(group.label, group.part_indices) for group in playback_groups(parts)],
-                         [('Opening', (0, 1, 2)), ('Extras', (3, 4, 5, 6, 7))])
+                         [('Opening', tuple(range(8)))])
 
-    def test_descriptive_labels_are_host_names_and_extras_follow_the_story(self):
+    def test_descriptive_labels_are_host_names_and_credits_finish_the_opening(self):
         from pop2.playback_navigation import ending_parts
 
         intro = {'operations': [dict(op='text', args=[27000, 1]),
@@ -35,7 +35,8 @@ class PlaybackNavigationTests(unittest.TestCase):
             'Ancient Persia', "He Won't Get Far", 'Credits - Page 1',
             'Departure', 'Stowaway', 'Dream', 'Storm', 'Arrival'])
         self.assertEqual([group.label for group in playback_groups(parts)],
-                         ['Opening', 'After Level 1', 'Extras'])
+                         ['Opening', 'After Level 1'])
+        self.assertEqual(playback_groups(parts)[0].part_indices, (0, 1, 2))
 
     def test_additional_sequences_keep_stable_part_indices_and_first_seen_order(self):
         parts = (PlaybackPart("Story 1", "intro", 2, "Prologue"),

@@ -155,6 +155,23 @@ class DevelopmentMapModelTests(unittest.TestCase):
         menu.show_page('playback')
         self.assertFalse(menu.map_enabled)
 
+    def test_destination_highlight_requires_keyboard_navigation_and_resets_on_level_change(self):
+        menu = self.menu()
+        self.assertFalse(menu.preview_keyboard_selection)
+        menu.key('Right')
+        self.assertTrue(menu.preview_keyboard_selection)
+        menu.hover(*room_point(menu, 'Room 2'))
+        self.assertFalse(menu.preview_keyboard_selection)
+        menu.key('Left')
+        self.assertTrue(menu.preview_keyboard_selection)
+        menu.level_options += ((4, 'Level 4', menu.screens),)
+        menu.cycle_level(1)
+        self.assertFalse(menu.preview_keyboard_selection)
+        menu.key('Right')
+        menu.close_map()
+        menu.open_map()
+        self.assertFalse(menu.preview_keyboard_selection)
+
     def test_map_panel_and_controls_remain_inside_playfield(self):
         menu = self.menu()
         left, top, right, bottom = menu.panel_rect

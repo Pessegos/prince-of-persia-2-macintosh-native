@@ -15,15 +15,14 @@ GALLERY_SIZE = (488, 278)
 def gallery_caption_rect(rect, single=False):
     x1, _y1, x2, y2 = rect
     center = (x1 + x2) // 2
-    half_width = 200 if single else 76
-    return center - half_width, y2 + 5, center + half_width, y2 + 37
+    half_width = 200 if single else 80
+    return center - half_width, y2 + 2, center + half_width, y2 + 22
 
 
-def gallery_caption(font, label, size, color):
+def gallery_caption(font, label, size, color, scale=0.75):
     width, height = size
     if not label.strip():
         return Image.new('RGBA', size)
-    scale = 1
     lines, line = [], ''
     for word in label.split():
         candidate = f'{line} {word}'.strip()
@@ -36,7 +35,8 @@ def gallery_caption(font, label, size, color):
     if len(lines) > 2:
         lines = [lines[0], ' '.join(lines[1:])]
     glyphs = [font.text(line, color) for line in lines]
-    scale = min(scale, (width - 4) / max(g.width for g in glyphs))
+    scale = min(scale, (width - 4) / max(g.width for g in glyphs),
+                (height - (len(lines) - 1) * 2) / (len(lines) * (font.height - 1)))
     line_height = max(1, round((font.height - 1) * scale))
     total = len(lines) * line_height + (len(lines) - 1) * 2
     image = Image.new('RGBA', size)
@@ -57,8 +57,8 @@ def gallery_preview(frames, indices):
     image = Image.new('RGB', GALLERY_SIZE, '#101010')
     rooms, sources = {}, {}
     for slot, index in enumerate(indices):
-        x, y = 14 + slot % 3 * 164, 2 + slot // 3 * 139
-        rect = (94, 2, 394, 228) if len(indices) == 1 else (x, y, x + 132, y + 99)
+        x, y = 4 + slot % 3 * 164, 2 + slot // 3 * 139
+        rect = (94, 2, 394, 228) if len(indices) == 1 else (x, y, x + 152, y + 114)
         rooms[str(index)] = rect
         sources[str(index)] = frames[index]
         image.paste(frames[index].resize((rect[2] - rect[0], rect[3] - rect[1]),

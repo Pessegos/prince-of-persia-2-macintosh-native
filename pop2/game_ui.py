@@ -67,6 +67,7 @@ class DevelopmentMenu:
     current_section: int | None = None
     current_level: int | None = None
     current_screen: str | None = None
+    preview_keyboard_selection: bool = False
 
     CONTROLS = ((200, 138, 392, 166), (120, 180, 392, 210),
                 (120, 231, 252, 263), (264, 231, 392, 263))
@@ -147,6 +148,7 @@ class DevelopmentMenu:
         self.gallery_page = (self.gallery_page + delta) % self.gallery_count
         self.section_index = self.part_indices[self.gallery_page * 6]
         self.hovered_part = None
+        self.preview_keyboard_selection = False
 
     @property
     def map_preview(self):
@@ -169,6 +171,7 @@ class DevelopmentMenu:
         self.hovered_screen = None
         self.hovered_control = None
         self.error = ''
+        self.preview_keyboard_selection = False
 
     def close_map(self):
         self.map_open = False
@@ -298,6 +301,7 @@ class DevelopmentMenu:
         self.hovered_screen = None
         self.hovered_control = None
         self.hovered_part = None
+        self.preview_keyboard_selection = False
         self.gallery_page = self.part_indices.index(self.section_index) // 6 if self.gallery_enabled else 0
         self.focus = (4 if self.gallery_enabled else
                       0 if page == 'playback' and self.sections else self.controls[0])
@@ -329,6 +333,7 @@ class DevelopmentMenu:
         return True
 
     def select(self, index):
+        self.preview_keyboard_selection = False
         if self.page == 'playback':
             control = self.dropdown_control if self.dropdown else self.focus
             self.section_index = (self.groups[index].part_indices[0] if control == 0
@@ -379,11 +384,13 @@ class DevelopmentMenu:
             self.section_index = self.part_indices[index]
             self.gallery_page = index // 6
             self.hovered_part = None
+            self.preview_keyboard_selection = True
         elif self.map_enabled and self.focus == 4 and key in ("Up", "Down", "Left", "Right"):
             label = self.map_preview.move(self.screen, key.lower())
             self.screen_index = self.screen_options.index(label)
             self.hovered_screen = None
             self.error = ""
+            self.preview_keyboard_selection = True
         elif key in ("Up", "Down"):
             order = self.focus_order
             self.focus = order[(order.index(self.focus) + (-1 if key == "Up" else 1)) % len(order)]
@@ -463,19 +470,21 @@ class DevelopmentMenu:
     def hover(self, x, y):
         index = self.hit(x, y)
         if self.gallery_enabled and not self.dropdown:
-            before = self.focus, self.hovered_part, self.hovered_control
+            before = self.focus, self.hovered_part, self.hovered_control, self.preview_keyboard_selection
+            self.preview_keyboard_selection = False
             self.hovered_part = self.gallery_hit(x, y) if index == 4 else None
             self.hovered_control = index if index in (5, 6, 7, 8, 9, 10) else None
             if index is not None:
                 self.focus = index
-            return before != (self.focus, self.hovered_part, self.hovered_control)
+            return before != (self.focus, self.hovered_part, self.hovered_control, self.preview_keyboard_selection)
         if self.map_enabled and not self.dropdown:
-            before = self.focus, self.hovered_screen, self.hovered_control
+            before = self.focus, self.hovered_screen, self.hovered_control, self.preview_keyboard_selection
+            self.preview_keyboard_selection = False
             self.hovered_screen = self.map_hit(x, y) if index == 4 else None
             self.hovered_control = index if index in (5, 6, 7) else None
             if index is not None:
                 self.focus = index
-            return before != (self.focus, self.hovered_screen, self.hovered_control)
+            return before != (self.focus, self.hovered_screen, self.hovered_control, self.preview_keyboard_selection)
         if index is None:
             return False
         field = "option_index" if self.dropdown else "focus"
@@ -750,19 +759,20 @@ class DevelopmentMenu:
             rect = (round(x1 * scale + ox), round(y1 * scale + oy),
                     round(x2 * scale + ox), round(y2 * scale + oy))
             hovered = index == self.hovered_part
-            selected = index == self.section_index
+            selected = (index == self.section_index and self.focus == 4
+                        and self.preview_keyboard_selection)
             current = index == self.current_section
             color = ('#f4d873' if hovered else '#63c8e5' if current else
-                     '#eeeeee' if selected and self.focus == 4 else '#b9b9b9')
+                     '#eeeeee' if selected else '#b9b9b9')
             if hovered:
                 image.paste(ImageEnhance.Brightness(image.crop(rect)).enhance(1.2), rect[:2])
-            if hovered or current or selected and self.focus == 4:
+            if hovered or current or selected:
                 draw.rectangle((rect[0], rect[1], rect[2] - 1, rect[3] - 1), outline=color,
                                width=max(1, round(2 * scale)))
             cx1, cy1, cx2, cy2 = gallery_caption_rect((x1, y1, x2, y2), len(preview.rooms) == 1)
-            caption = gallery_caption(font, self.sections[index], (cx2 - cx1, cy2 - cy1), color)
-            caption = caption.resize((max(1, round(caption.width * scale)),
-                                      max(1, round(caption.height * scale))), Image.Resampling.NEAREST)
+            caption_size = (max(1, round((cx2 - cx1) * scale)),
+                            max(1, round((cy2 - cy1) * scale)))
+            caption = gallery_caption(font, self.sections[index], caption_size, color, scale=0.75 * scale)
             image.paste(caption, (round(cx1 * scale + ox), round(cy1 * scale + oy)), caption)
         return image
 
@@ -781,7 +791,7 @@ class DevelopmentMenu:
             return (round(x1 * sx + ox), round(y1 * sy + oy),
                     round(x2 * sx + ox) - 1, round(y2 * sy + oy) - 1)
 
-        if self.screen in preview.rooms and self.focus == 4:
+        if self.screen in preview.rooms and self.focus == 4 and self.preview_keyboard_selection:
             draw.rectangle(room_rect(self.screen), outline='#eeeeee', width=max(1, round(min(sx, sy))))
         if self.current_level == self.level_number and self.current_screen in preview.rooms:
             draw.rectangle(room_rect(self.current_screen), outline='#63c8e5',

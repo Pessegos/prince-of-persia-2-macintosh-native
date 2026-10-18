@@ -398,6 +398,7 @@ class WindowControls:
             index = (self.dev_menu.next_section_index if action == "next_part"
                      else self.dev_menu.section_index)
             self.seek_playback_part(parts[index])
+            self.dev_was_paused = False
             self.close_dev_mode()
         elif action == "debug_status":
             self.debug_status = self.dev_menu.debug_status

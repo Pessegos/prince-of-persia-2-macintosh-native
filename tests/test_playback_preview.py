@@ -38,6 +38,7 @@ class GalleryModelTests(unittest.TestCase):
         menu.key('Down')
         menu.key('Down')
         self.assertEqual(menu.section_index, 6)
+        self.assertTrue(menu.preview_keyboard_selection)
         self.assertEqual(menu.gallery_page, 1)
         self.assertEqual(set(menu.gallery_preview.rooms), {str(i) for i in range(6, 12)})
         self.assertEqual(menu.key('Return'), 'seek')
@@ -45,12 +46,14 @@ class GalleryModelTests(unittest.TestCase):
         menu.activate()
         self.assertEqual(menu.gallery_page, 2)
         self.assertEqual(menu.section_index, 12)
+        self.assertFalse(menu.preview_keyboard_selection)
         menu.activate()
         self.assertEqual(menu.gallery_page, 0)
         menu.focus = 6
         menu.activate()
         self.assertEqual(menu.group_index, 1)
         self.assertEqual(menu.section_index, 16)
+        self.assertFalse(menu.preview_keyboard_selection)
         self.assertNotIn(9, menu.controls)
         self.assertNotIn(10, menu.controls)
 
@@ -103,6 +106,9 @@ class GalleryModelTests(unittest.TestCase):
             atlas = gallery_preview(frames, tuple(range(count)))
             for index, rect in atlas.rooms.items():
                 caption = gallery_caption_rect(rect, count == 1)
+                if count > 1:
+                    self.assertEqual((rect[2] - rect[0], rect[3] - rect[1]), (152, 114))
+                self.assertEqual(caption[1] - rect[3], 2)
                 self.assertTrue(0 <= caption[0] < caption[2] <= GALLERY_SIZE[0])
                 self.assertTrue(rect[3] < caption[1] < caption[3] <= GALLERY_SIZE[1])
                 for other in atlas.rooms.values():
@@ -124,24 +130,35 @@ class ImportedGalleryTests(unittest.TestCase):
         s.apply_dev_action(s.dev_menu.activate())
         return s.dev_menu
 
-    def test_wrapped_captions_preserve_every_bitmap_pixel_including_descenders(self):
+    def test_compact_captions_fit_without_clipping_the_scaled_bitmap(self):
         from pop2.playback_preview import gallery_caption
 
         font = self.scene.ui_font
-        for label, lines in (('Treachery Revealed', ('Treachery', 'Revealed')),
-                             ('Credits - Page 4', ('Credits - Page 4',))):
-            with self.subTest(label=label):
-                caption = gallery_caption(font, label, (152, 32), '#eeeeee')
-                expected = sum(font.text(line).getchannel('A').histogram()[255] for line in lines)
-                self.assertEqual(caption.getchannel('A').histogram()[255], expected)
-                self.assertGreater(caption.getbbox()[0], 0)
-                self.assertLess(caption.getbbox()[2], caption.width)
+        for density in (1, 3):
+            for label in ('Treachery Revealed', 'Credits - Page 4', 'The Sultan Leaves'):
+                with self.subTest(label=label, density=density):
+                    scale = 0.75 * density
+                    caption = gallery_caption(font, label, (160 * density, 20 * density),
+                                              '#eeeeee', scale=scale)
+                    glyph = font.text(label, '#eeeeee')
+                    glyph = glyph.crop(glyph.getbbox())
+                    glyph = glyph.resize((round(glyph.width * scale), round(glyph.height * scale)),
+                                         Image.Resampling.NEAREST)
+                    alpha = caption.getchannel('A')
+                    expected = glyph.getchannel('A')
+                    self.assertEqual(alpha.crop(alpha.getbbox()).tobytes(),
+                                     expected.crop(expected.getbbox()).tobytes())
+                    self.assertGreater(caption.getbbox()[0], 0)
+                    self.assertLess(caption.getbbox()[2], caption.width)
+                    self.assertLess(caption.getbbox()[3] - caption.getbbox()[1], font.height * density)
 
     def test_cyan_indicates_only_the_actual_part_not_the_browsed_group_or_keyboard_choice(self):
         menu, _provider = GalleryModelTests().menu()
         menu.current_section = 0
         menu.activate()
-        menu.section_index = 5
+        menu.key('Down')
+        menu.key('Right')
+        menu.key('Right')
         layer = menu.gallery_layer(self.scene.ui_font)
         first = menu.gallery_preview.rooms['0']
         selected = menu.gallery_preview.rooms['5']
@@ -157,12 +174,36 @@ class ImportedGalleryTests(unittest.TestCase):
         layer = menu.gallery_layer(self.scene.ui_font)
         self.assertEqual(layer.getpixel(menu.gallery_preview.rooms['0'][:2])[:3], (99, 200, 229))
 
+    def test_no_white_default_marker_on_open_group_page_or_mouse_hover(self):
+        menu, _provider = GalleryModelTests().menu()
+        menu.activate()
+
+        def no_white_marker():
+            menu.focus = 4
+            layer = menu.gallery_layer(self.scene.ui_font)
+            for index, rect in menu.gallery_preview.rooms.items():
+                self.assertNotEqual(layer.getpixel(rect[:2])[:3], (238, 238, 238), index)
+
+        no_white_marker()
+        menu.key('Right')
+        self.assertTrue(menu.preview_keyboard_selection)
+        menu.hover(*part_point(menu, 2))
+        self.assertFalse(menu.preview_keyboard_selection)
+        no_white_marker()
+        menu.key('Right')
+        menu.turn_gallery_page(1)
+        no_white_marker()
+        menu.key('Right')
+        menu.focus = 0
+        menu.select(1)
+        no_white_marker()
+
     def test_gallery_covers_the_entire_original_hud_even_when_browsing_credits(self):
         menu = self.open_gallery()
         native = Image.new('RGBA', (512, 384), '#ff00ff')
         menu.focus = 0
-        menu.select(2)
-        menu.turn_gallery_page(1)
+        menu.select(0)
+        menu.turn_gallery_page(menu.gallery_count - 1)
         result = menu.draw(native, self.scene.ui_font)
         self.assertEqual(menu.panel_rect, (1, 0, 511, 384))
         hud, footer = result.crop((1, 365, 511, 384)), result.crop((1, 373, 511, 384))
@@ -241,7 +282,7 @@ class ImportedGalleryTests(unittest.TestCase):
         s.redraw_dev_menu()
         self.assertFalse(menu.dropdown)
 
-    def test_held_activation_cannot_play_accidentally_and_click_uses_original_seek_with_pause_state(self):
+    def test_held_activation_cannot_play_accidentally_and_click_starts_playback(self):
         s = self.scene
         for paused in (False, True):
             s.set_paused(paused)
@@ -259,4 +300,16 @@ class ImportedGalleryTests(unittest.TestCase):
                 s.apply_dev_action(menu.click(*part_point(menu, 1)))
             seek.assert_called_once_with(selected)
             self.assertIsNone(s.dev_menu)
-            self.assertEqual(s.paused, paused)
+            self.assertFalse(s.paused)
+
+    def test_play_button_autoplays_but_resume_without_seeking_preserves_pause(self):
+        s = self.scene
+        s.set_paused(True)
+        menu = self.open_gallery()
+        s.apply_dev_action('resume')
+        self.assertTrue(s.paused)
+        menu = self.open_gallery()
+        menu.focus = 2
+        s.apply_dev_action(menu.activate())
+        self.assertIsNone(s.dev_menu)
+        self.assertFalse(s.paused)
