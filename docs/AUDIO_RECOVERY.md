@@ -38,8 +38,11 @@ before replacing installed resources; progress reaches Tk through a queue.
 
 F1, F2 and F3 use quiet, host-authored hover and click ticks, not recovered
 Macintosh cues. `pop2/ui_audio.py` prepares deterministic filtered-noise PCM
-with smooth zero-ended envelopes: 22 ms at 3.5 percent peak for hover and
-38 ms at 8.5 percent peak for activation. No additional assets, downloads or
+with smooth zero-ended envelopes: 20 ms at 1 percent peak for hover and
+30 ms at 2.5 percent peak for activation. Two low-pass stages at 700/1100 Hz
+remove the scratchy high end, and an 80 Hz DC filter avoids a bass thump.
+These are about 11 dB quieter than the first menu-sound revision.
+No additional assets, downloads or
 third-party libraries are required, and the gameplay RNG is untouched.
 
 Two separate SDL channels leave the game effect, music and gate-release

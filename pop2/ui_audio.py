@@ -8,16 +8,22 @@ import struct
 def menu_pcm(kind, rate, channels):
     if kind not in ('hover', 'click'):
         raise ValueError('Unknown menu sound')
-    duration, peak, smoothing = ((0.022, 0.035, 0.35) if kind == 'hover'
-                                 else (0.038, 0.085, 0.18))
+    duration, peak, cutoff = ((0.020, 0.010, 700) if kind == 'hover'
+                              else (0.030, 0.025, 1100))
     count = max(2, round(duration * rate))
     rng = random.Random(0x504F50 + (kind == 'click'))
-    filtered, samples = 0.0, []
+    smoothing = 1 - math.exp(-2 * math.pi * cutoff / rate)
+    dc_smoothing = 1 - math.exp(-2 * math.pi * 80 / rate)
+    filtered, rounded, dc = 0.0, 0.0, 0.0
+    samples = []
     for index in range(count):
         phase = index / (count - 1)
         filtered += smoothing * (rng.uniform(-1, 1) - filtered)
-        envelope = math.sin(math.pi * phase) ** 2 * math.exp(-5 * phase)
-        samples.append(filtered * envelope)
+        # Two low-pass stages soften the scratchy top without a pitched beep.
+        rounded += smoothing * (filtered - rounded)
+        dc += dc_smoothing * (rounded - dc)
+        envelope = math.sin(math.pi * phase) ** 2 * math.exp(-7 * phase)
+        samples.append((rounded - dc) * envelope)
     gain = peak * 32767 / max(abs(sample) for sample in samples)
     pcm = [round(sample * gain) for sample in samples]
     pcm[0] = pcm[-1] = 0

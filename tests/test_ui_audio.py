@@ -17,7 +17,7 @@ class MenuPcmTests(unittest.TestCase):
     def test_ticks_are_short_quiet_faded_deterministic_and_stereo_aligned(self):
         before = random.getstate()
         for rate in (16000, 44100, 48000):
-            for kind, duration, peak in (('hover', 0.022, 0.035), ('click', 0.038, 0.085)):
+            for kind, duration, peak in (('hover', 0.020, 0.010), ('click', 0.030, 0.025)):
                 with self.subTest(rate=rate, kind=kind):
                     pcm = menu_pcm(kind, rate, 2)
                     self.assertEqual(len(pcm), round(duration * rate) * 4)
@@ -31,6 +31,17 @@ class MenuPcmTests(unittest.TestCase):
         self.assertEqual(random.getstate(), before)
         with self.assertRaises(ValueError):
             menu_pcm('unknown', 48000, 2)
+
+    def test_soft_ticks_have_very_little_scratchy_high_frequency_energy(self):
+        import numpy as np
+
+        for rate in (16000, 44100, 48000):
+            for kind in ('hover', 'click'):
+                with self.subTest(rate=rate, kind=kind):
+                    samples = np.frombuffer(menu_pcm(kind, rate, 1), dtype='<i2').astype(float)
+                    energy = abs(np.fft.rfft(samples)) ** 2
+                    frequencies = np.fft.rfftfreq(len(samples), 1 / rate)
+                    self.assertLess(energy[frequencies >= 3000].sum() / energy.sum(), 0.06)
 
 
 class MenuAudioEngineTests(unittest.TestCase):
