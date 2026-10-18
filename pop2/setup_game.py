@@ -7,6 +7,7 @@ from time import monotonic
 import tkinter as tk
 from tkinter import filedialog, ttk
 
+from pop2.app_window import create_root
 from pop2.asset_import import AssetImport, ImportCancelled
 
 
@@ -23,7 +24,7 @@ class GameSetup:
         self.task = None
         self.started_at = None
         self.messages = Queue()
-        self.root = tk.Tk()
+        self.root = create_root()
         self.root.title("Prince of Persia 2 - Game Files")
         self.root.resizable(False, False)
         self.root.protocol("WM_DELETE_WINDOW", self.close)

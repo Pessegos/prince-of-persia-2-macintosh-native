@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 from PIL import Image, ImageChops, ImageTk
 
+from pop2.app_window import create_root
 from pop2.game_menu import GameMenu
 from pop2.game_ui import DevelopmentMenu, VISIBLE_SIZE, VISIBLE_VIEWPORT, fit_viewport, viewport_point
 from pop2.screenshots import ScreenshotSettings, save_screenshot
@@ -69,7 +70,7 @@ class WindowControls:
         audio = getattr(self, "audio", None)
         self.sound_enabled = audio.sound_enabled if audio is not None else True
         self.music_enabled = audio.music_enabled if audio is not None else True
-        self.root = tk.Tk()
+        self.root = create_root()
         self.root.title(title)
         self.root.resizable(True, True)
         self.root.minsize(*VISIBLE_SIZE)
