@@ -123,13 +123,15 @@ class DevelopmentMenu:
     def gallery_preview(self):
         from pop2.playback_preview import gallery_preview
 
-        key = self.group_index, self.gallery_page
+        key = tuple(self.part_indices[self.gallery_page * 6:(self.gallery_page + 1) * 6])
         if key not in self.gallery_pages:
-            frames = self.playback_provider(self.part_indices)
-            indices = self.part_indices[self.gallery_page * 6:(self.gallery_page + 1) * 6]
-            self.gallery_pages.clear()
-            self.gallery_pages[key] = gallery_preview(frames, indices)
-        return self.gallery_pages[key]
+            frames = self.playback_provider(key)
+            if len(self.gallery_pages) >= 4:
+                del self.gallery_pages[next(iter(self.gallery_pages))]
+            self.gallery_pages[key] = gallery_preview(frames, key)
+        preview = self.gallery_pages.pop(key)
+        self.gallery_pages[key] = preview
+        return preview
 
     def gallery_hit(self, x, y):
         from pop2.playback_preview import gallery_caption_rect

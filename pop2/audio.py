@@ -150,8 +150,10 @@ class AudioEngine:
             return
         now = time.perf_counter()
         if kind == 'hover':
-            if now - self.last_ui_hover_at < 0.065:
+            if now - self.last_ui_hover_at < 0.18:
                 return
+            self.last_ui_hover_at = now
+        elif kind == 'click':
             self.last_ui_hover_at = now
         play = getattr(self.playback, 'play_ui', None)
         if play is not None:

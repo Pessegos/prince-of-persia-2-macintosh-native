@@ -8,12 +8,12 @@ import struct
 def menu_pcm(kind, rate, channels):
     if kind not in ('hover', 'click'):
         raise ValueError('Unknown menu sound')
-    duration, peak, cutoff = ((0.020, 0.010, 700) if kind == 'hover'
-                              else (0.030, 0.025, 1100))
+    duration, peak, cutoff = ((0.012, 0.0025, 1600) if kind == 'hover'
+                              else (0.018, 0.0075, 2200))
     count = max(2, round(duration * rate))
     rng = random.Random(0x504F50 + (kind == 'click'))
     smoothing = 1 - math.exp(-2 * math.pi * cutoff / rate)
-    dc_smoothing = 1 - math.exp(-2 * math.pi * 80 / rate)
+    dc_smoothing = 1 - math.exp(-2 * math.pi * 500 / rate)
     filtered, rounded, dc = 0.0, 0.0, 0.0
     samples = []
     for index in range(count):

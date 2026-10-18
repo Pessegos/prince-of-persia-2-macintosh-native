@@ -56,12 +56,19 @@ private level scenery; the arrival destination uses its own level artwork.
 No live scene player, actor, gate, audio engine or game clock is reused. The
 global random state is restored after generation.
 
-Generation is lazy per sequence, not at application startup or F3 opening.
+Generation is lazy per visible page (at most six sources), not per entire
+sequence or at application startup/F3 opening. Neighboring program snapshots
+share one private forward replay; their results are pixel-identical to independent
+seeks, including reveals, captions and title animation.
 The same validated local RGB archive mechanism as the map stores previews in
 `assets/.developer-cache/playback-N.zip`. Its content fingerprint invalidates
 outdated program/artwork/code. Cache writes are atomic and optional; damaged
 or stale archives rebuild. Full 510x384 source frames supply the displayed
 thumbnails at fitted window resolution, not enlarged tiny menu screenshots.
+The four most recently used page atlases and their fitted images persist for
+the session, including across closing/reopening F3. Revisiting a page therefore
+does not reload sources or repeat Lanczos scaling. Least-recently-used pages
+are discarded to keep large-window image memory bounded.
 The map's bounded size cache and partial Tk photo uploads also serve gallery
 hover, including popup/tooltip restoration and removal of old highlights.
 F8 still captures the clean game instead of the developer overlay.
@@ -70,6 +77,7 @@ F8 still captures the clean game instead of the developer overlay.
 
 `tests/test_playback_preview.py` covers lazy generation, every imported part,
 visible native artwork, lossless disk reuse, global RNG/live-world isolation,
+page-only loading, bounded LRU reuse across reopenings, shared replay equivalence,
 pagination/group selection, mouse/keyboard gaps and direct activation,
 Back/Escape, key-repeat protection, autoplay versus pause restoration, wheel paging and real
 Tk photo equivalence to full redraw at four viewport sizes. Caption/image

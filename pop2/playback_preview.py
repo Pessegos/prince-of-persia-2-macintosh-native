@@ -87,24 +87,37 @@ class PlaybackPreviews:
         seed = random.getstate()
         try:
             random.seed(17)
-            frames = {i: self.snapshot(i) for i in indices}
+            players = {}
+            frames = {i: self.snapshot(i, players) for i in indices}
         finally:
             random.setstate(seed)
         write_preview(path, self.fingerprint, identity, {str(i): frame for i, frame in frames.items()})
         self.frames[indices] = frames
         return frames
 
-    def snapshot(self, index):
+    def snapshot(self, index, players=None):
         from pop2.intro import IntroAssets, IntroPlayer
 
         part = self.parts[index]
         if part.stage in ('intro', 'ending'):
             if part.stage not in self.assets:
                 self.assets[part.stage] = IntroAssets(self.directory, program_name=f'{part.stage}.json')
-            player = IntroPlayer(self.assets[part.stage])
-            player.seek_operation(part.index)
+            player = players.get(part.stage) if players is not None else None
+            if player is None:
+                player = IntroPlayer(self.assets[part.stage])
+                player.seek_operation(part.index)
+                if players is not None:
+                    players[part.stage] = player
+            elif player.done or player.position > part.index:
+                player.seek_operation(part.index)
+            else:
+                # Neighboring thumbnails share one private replay, rather than
+                # replaying the entire intro again for each picture on a page.
+                while not player.done and player.position <= part.index:
+                    player.advance(max(0, player.wait_until - player.time), stop_position=part.index + 1)
             following = next((other.index for other in self.parts[index + 1:]
                               if other.stage == part.stage), len(player.operations))
+            player.advance(0, stop_position=following)
             if player.operations[part.index]['op'] == 'title':
                 player.advance(6, stop_position=following)
                 return player.frame().crop((0, 0, 510, 384)).convert('RGB')

@@ -17,7 +17,7 @@ class MenuPcmTests(unittest.TestCase):
     def test_ticks_are_short_quiet_faded_deterministic_and_stereo_aligned(self):
         before = random.getstate()
         for rate in (16000, 44100, 48000):
-            for kind, duration, peak in (('hover', 0.020, 0.010), ('click', 0.030, 0.025)):
+            for kind, duration, peak in (('hover', 0.012, 0.0025), ('click', 0.018, 0.0075)):
                 with self.subTest(rate=rate, kind=kind):
                     pcm = menu_pcm(kind, rate, 2)
                     self.assertEqual(len(pcm), round(duration * rate) * 4)
@@ -32,7 +32,7 @@ class MenuPcmTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             menu_pcm('unknown', 48000, 2)
 
-    def test_soft_ticks_have_very_little_scratchy_high_frequency_energy(self):
+    def test_thin_clicks_keep_a_soft_top_end_without_bass_thump(self):
         import numpy as np
 
         for rate in (16000, 44100, 48000):
@@ -41,7 +41,10 @@ class MenuPcmTests(unittest.TestCase):
                     samples = np.frombuffer(menu_pcm(kind, rate, 1), dtype='<i2').astype(float)
                     energy = abs(np.fft.rfft(samples)) ** 2
                     frequencies = np.fft.rfftfreq(len(samples), 1 / rate)
-                    self.assertLess(energy[frequencies >= 3000].sum() / energy.sum(), 0.06)
+                    self.assertLess(energy[frequencies >= 7000].sum() / energy.sum(), 0.04)
+                    self.assertLess(energy[frequencies < 200].sum() / energy.sum(), 0.025)
+                    centroid = (energy * frequencies).sum() / energy.sum()
+                    self.assertTrue(1000 < centroid < 3000)
 
 
 class MenuAudioEngineTests(unittest.TestCase):
@@ -57,11 +60,11 @@ class MenuAudioEngineTests(unittest.TestCase):
 
     def test_hover_is_rate_limited_but_click_and_game_audio_state_are_independent(self):
         engine = self.engine()
-        with patch('pop2.audio.time.perf_counter', side_effect=(1, 1.01, 1.07, 1.08)):
-            for kind in ('hover', 'hover', 'hover', 'click'):
+        with patch('pop2.audio.time.perf_counter', side_effect=(1, 1.01, 1.21, 1.22, 1.23, 1.43)):
+            for kind in ('hover', 'hover', 'hover', 'click', 'hover', 'hover'):
                 engine.play_ui(kind)
         self.assertEqual(engine.playback.play_ui.call_args_list,
-                         [call('hover'), call('hover'), call('click')])
+                         [call('hover'), call('hover'), call('click'), call('hover')])
         engine.playback.play.assert_not_called()
         engine.playback.pause.assert_not_called()
         self.assertEqual((engine.current_effect, engine.current_music, engine.pending_effect,

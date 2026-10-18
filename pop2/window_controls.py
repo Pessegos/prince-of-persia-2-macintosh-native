@@ -336,6 +336,8 @@ class WindowControls:
 
         self.ui_hover_target = None
         parts = self.development_parts()
+        if not hasattr(self, 'development_gallery_pages'):
+            self.development_gallery_pages = {}
         if (self.level_navigation_available() and self.combat is not None
                 and not self.combat.player.alive):
             self.remember_development_room()
@@ -348,6 +350,7 @@ class WindowControls:
             map_provider=self.development_map if level_options else None,
             return_screens=dict(getattr(self, 'development_return_screens', {})),
             playback_provider=self.development_playback_preview if parts else None,
+            gallery_pages=self.development_gallery_pages,
             current_section=(self.current_playback_part() if self.attract_stage is not None
                              or self.game.level.number == 2 else None),
             current_level=self.game.level.number, current_screen=self.screen_label(self.room_id),

@@ -38,10 +38,10 @@ before replacing installed resources; progress reaches Tk through a queue.
 
 F1, F2 and F3 use quiet, host-authored hover and click ticks, not recovered
 Macintosh cues. `pop2/ui_audio.py` prepares deterministic filtered-noise PCM
-with smooth zero-ended envelopes: 20 ms at 1 percent peak for hover and
-30 ms at 2.5 percent peak for activation. Two low-pass stages at 700/1100 Hz
-remove the scratchy high end, and an 80 Hz DC filter avoids a bass thump.
-These are about 11 dB quieter than the first menu-sound revision.
+with smooth zero-ended envelopes: 12 ms at 0.25 percent peak for hover and
+18 ms at 0.75 percent peak for activation. Two low-pass stages at 1600/2200 Hz
+round off the high end, while a 500 Hz high-pass makes the ticks thin and
+clicky rather than bassy. Peaks are another 12/10.5 dB below the softened revision.
 No additional assets, downloads or
 third-party libraries are required, and the gameplay RNG is untouched.
 
@@ -50,7 +50,8 @@ channels alone. UI ticks remain audible during menu pause and finish naturally
 across scene changes; they never enter the original priority queue or affect
 death/retry timing. Sound off immediately stops the UI channels and suppresses
 new ticks. Hover is limited to a new enabled control, dropdown option, map room
-or gallery image/caption, with a 65 ms rate limit. Empty space, disabled rows,
+or gallery image/caption, with a 180 ms rate limit and a fresh cooldown after
+each click. Rapid hover requests are dropped, never queued. Empty space, disabled rows,
 repeated pointer motion within one target and held activation keys are silent.
 Keyboard selection, activation, page controls and wheel navigation also give
 feedback. `tests/test_ui_audio.py` checks PCM, hit targets, muting, rate limits

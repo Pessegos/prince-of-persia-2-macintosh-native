@@ -3,7 +3,7 @@ import random
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from PIL import Image, ImageStat, ImageTk
 
@@ -71,6 +71,46 @@ class GalleryModelTests(unittest.TestCase):
         self.assertEqual(menu.section_index, 2)
         self.assertTrue(menu.hover(-1, -1))
         self.assertIsNone(menu.hovered_part)
+
+    def test_only_visible_frames_load_and_recent_pages_reuse_their_hd_images(self):
+        menu, provider = self.menu()
+        menu.activate()
+        first = menu.gallery_preview
+        provider.assert_called_once_with(tuple(range(6)))
+        hd = first.detail((976, 556))
+        menu.turn_gallery_page(1)
+        menu.gallery_preview
+        self.assertEqual(provider.call_args_list, [call(tuple(range(6))), call(tuple(range(6, 12)))])
+        menu.turn_gallery_page(-1)
+        self.assertIs(menu.gallery_preview, first)
+        self.assertIs(menu.gallery_preview.detail((976, 556)), hd)
+        self.assertEqual(provider.call_count, 2)
+
+    def test_page_cache_is_bounded_and_keeps_the_most_recently_used_page(self):
+        menu, provider = self.menu()
+        menu.sections += tuple(f'Extra {i}' for i in range(6))
+        menu.section_groups += (PlaybackGroup('More', tuple(range(20, 26))),)
+        provider.side_effect = lambda indices: {i: Image.new('RGB', (510, 384)) for i in indices}
+        menu.activate()
+        first = menu.gallery_preview
+        for page in (1, 2):
+            menu.turn_gallery_page(page - menu.gallery_page)
+            menu.gallery_preview
+        menu.focus = 0
+        menu.select(1)
+        menu.gallery_preview
+        menu.focus = 0
+        menu.select(0)
+        self.assertIs(menu.gallery_preview, first)
+        menu.focus = 0
+        menu.select(2)
+        menu.gallery_preview
+        self.assertEqual(len(menu.gallery_pages), 4)
+        self.assertNotIn(tuple(range(6, 12)), menu.gallery_pages)
+        menu.focus = 0
+        menu.select(0)
+        self.assertIs(menu.gallery_preview, first)
+        self.assertEqual(provider.call_count, 5)
 
     def test_popup_back_escape_and_all_controls_fit_and_keep_selection(self):
         menu, _provider = self.menu()
@@ -238,6 +278,17 @@ class ImportedGalleryTests(unittest.TestCase):
         menu = self.open_gallery()
         self.assertIsNone(menu.current_section)
 
+    def test_reopening_gallery_reuses_prepared_pages_without_reloading_or_rescaling(self):
+        menu = self.open_gallery()
+        first = menu.gallery_preview
+        hd = first.detail((976, 556))
+        self.scene.close_dev_mode()
+        with patch.object(self.scene, 'development_playback_preview',
+                          side_effect=AssertionError('Reopening reloaded preview sources')):
+            reopened = self.open_gallery()
+            self.assertIs(reopened.gallery_preview, first)
+            self.assertIs(reopened.gallery_preview.detail((976, 556)), hd)
+
     def test_every_part_has_native_visible_art_and_disk_cache_is_lossless_without_live_state_changes(self):
         from pop2.playback_preview import PlaybackPreviews
 
@@ -294,6 +345,19 @@ class ImportedGalleryTests(unittest.TestCase):
                     player.advance(player.wait_until - player.time, stop_position=player.position)
                 expected = player.frame().crop((0, 0, 510, 384)).convert('RGB')
                 self.assertEqual(actual.tobytes(), expected.tobytes())
+
+    def test_shared_private_replay_matches_independent_snapshots_for_every_scene(self):
+        from pop2.playback_preview import PlaybackPreviews
+
+        s = self.scene
+        parts = s.development_parts()
+        provider = PlaybackPreviews(s.resources, parts, s.attract_data, 'test')
+        for group in self.open_gallery().groups:
+            players = {}
+            for index in group.part_indices:
+                with self.subTest(part=parts[index].label):
+                    self.assertEqual(provider.snapshot(index, players).tobytes(),
+                                     provider.snapshot(index).tobytes())
 
     def test_real_hover_updates_match_full_redraw_at_multiple_sizes_and_mouse_wheel_paginates(self):
         s = self.scene
