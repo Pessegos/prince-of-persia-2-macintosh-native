@@ -4,58 +4,54 @@
        width="1200">
 </p>
 
-
-
-# Prince of Persia 2 Macintosh Native (WIP)
-
+<br/>
 I'm working on a native Windows reimplementation of the Macintosh version of *Prince of Persia 2: The Shadow & the Flame*. It uses the original game's graphics, animations, levels and sounds.
 
 The gameplay is being rebuilt in Python for now, with the help of Codex. To understand how the original game works, Codex is reverse-engineering the Macintosh executable and I'm doing a ton of side-by-side playtesting, comparing both versions and fixing differences as I find them.
 
 I'm trying to stay as close to the original as possible, while still making some changes and improvements where they make sense.
 
-## Screenshots
+<br/>
 
-<table width="100%">
-  <tr>
-    <th width="50%" align="center">Title</th>
-    <th width="50%" align="center">You can pause cutscenes</th>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/screenshots/01-title.png" alt="Prince of Persia 2 title screen" width="100%"></td>
-    <td align="center"><img src="docs/screenshots/02-cutscene-pause.png" alt="A paused story cutscene" width="100%"></td>
-  </tr>
-  <tr>
-    <th align="center">Game Menu</th>
-    <th align="center">Screenshot Menu</th>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/screenshots/03-game-menu.png" alt="The in-game menu and keyboard shortcuts" width="100%"></td>
-    <td align="center"><img src="docs/screenshots/04-screenshot-menu.png" alt="Screenshot controls with the F8 hint" width="100%"></td>
-  </tr>
-  <tr>
-    <th colspan="2" align="center">Lava Overhaul comparison</th>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="docs/screenshots/lava-overhaul-comparison.gif" alt="Original Macintosh lava on the left and overhauled lava on the right" width="100%"></td>
-  </tr>
-  <tr>
-    <th align="center">Level 1</th>
-    <th align="center">Level 2</th>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/screenshots/05-level-1.png" alt="The Prince escaping the palace in level 1" width="100%"></td>
-    <td align="center"><img src="docs/screenshots/06-level-2.png" alt="The desert stone puzzle in level 2" width="100%"></td>
-  </tr>
-  <tr>
-    <th align="center">Copyright Screen</th>
-    <th align="center">Level 3</th>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/screenshots/07-copy-protection.png" alt="The original copy-protection symbol screen" width="100%"></td>
-    <td align="center"><img src="docs/screenshots/08-level-3.png" alt="The entrance room in level 3's caverns" width="100%"></td>
-  </tr>
-</table>
+# Features & Improvements
+
+## Developer Tools (F3)
+
+The F3 Developer Tools menu was originally made to help me with playtesting during development, rather than as a feature for players.
+
+But I think it turned out so well that I might just include it in the final release as an optional feature.
+The idea would be to add it to the cheat mode, like the original Macintosh has. Where you hold down the 1, 2 and 3 keys at the same time when starting the game and get the message "You are worthy of the powers of Jaffar!".
+
+### Game Map
+
+An interactive map that allows browsing through levels and teleporting directly to individual rooms, without having to play through the entire level.
+
+<img src="docs/screenshots/developer-map-preview-v2.gif" alt="Developer Tools - Game Map" width="700">
+
+### Playback
+
+The Playback tab provides quick access to cutscenes, making it easier to test individual sequences.
+
+<img src="docs/screenshots/developer-playback-preview-v3.gif" alt="Developer Tools - Playback" width="700">
+
+<br/>
+
+## Lava Overhaul
+
+The lava in the original Macintosh release looks pretty botched, especially around the upper edges. I've checked several playthroughs, including one reportedly recorded on real hardware, and they all have the same issue.
+
+I honestly think something went wrong with the rendering and somehow made it into the final release. Reconstructing the lava from the original Macintosh assets produces something that looks much closer to what I believe was intended, but even then, it still looks a bit plain and out of place compared to the rest of the game.
+
+So I decided to take it a step further and give the lava a proper overhaul, with more detailed edges, depth and animation, taking some inspiration from the DOS version.
+<br/>
+<sub>I'll add a better comparison gif later</sub>
+<br/>
+<img src="docs/screenshots/lava-overhaul-comparison.gif" alt="Comparison of the original Macintosh lava, reconstructed Macintosh lava, DOS lava and overhauled lava" width="800">
+
+
+
+
+
 
 ## Current Progress
 
@@ -86,11 +82,6 @@ I'm trying to stay as close to the original as possible, while still making some
 - Completely overhauled lava pools with detailed rocky edges, convincing depth like the DOS version, seamless bubbling, and properly layered splashes and particles.
 - Original copy protection is optional.
 
-## Developer Tools
-
-- Level and screen navigation through F3's Developer Tools.
-- Direct access to parts of cutscenes, the demo and credits.
-- Peaceful mode without guards and an optional debug status bar.
 
 ## Run
 
