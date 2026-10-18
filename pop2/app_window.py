@@ -22,7 +22,8 @@ def create_root():
     root = tk.Tk()
     if sys.platform == "win32":
         icon = str(ICON_DIR / "prince.ico")
-        root.iconbitmap(bitmap=icon, default=icon)
+        root.iconbitmap(default=icon)
+        root.iconbitmap(icon)
     else:
         source = tk.PhotoImage(master=root, file=str(ICON_DIR / "prince.png"))
         root._app_icon_images = tuple(source.subsample(scale) for scale in (8, 16))
