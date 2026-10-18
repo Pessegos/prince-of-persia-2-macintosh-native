@@ -17,11 +17,25 @@ class PlaybackNavigationTests(unittest.TestCase):
                           ("demo", 0), ("demo", 2), ("demo", 4),
                           ("credits", 0), ("credits", 1)])
         self.assertEqual([p.label for p in parts],
-                         ["Story 1", "Clouds / titles", "Story 1", "Demo: screen 1",
-                          "Demo: screen 2", "Demo: screen 5", "Credits: page 1", "Credits: page 2"])
+                         ['Scene 1', 'Titles', 'Scene 2', 'Demo - Screen 1',
+                          'Demo - Screen 2', 'Demo - Screen 5', 'Credits - Page 1', 'Credits - Page 2'])
         self.assertEqual([(group.label, group.part_indices) for group in playback_groups(parts)],
-                         [("Prologue", (0,)), ("Titles", (1,)), ("Opening story", (2,)),
-                          ("Level 1 demo", (3, 4, 5)), ("Credits", (6, 7))])
+                         [('Opening', (0, 1, 2)), ('Extras', (3, 4, 5, 6, 7))])
+
+    def test_descriptive_labels_are_host_names_and_extras_follow_the_story(self):
+        from pop2.playback_navigation import ending_parts
+
+        intro = {'operations': [dict(op='text', args=[27000, 1]),
+                                dict(op='text', args=[27000, 30])]}
+        data = {'frames': [], 'credits': {'pages': [[]]}}
+        parts = playback_parts(intro, data, str) + ending_parts({'operations': [
+            dict(op='palette', args=[28002]), dict(op='palette', args=[28004]),
+            dict(op='palette', args=[28008])]})
+        self.assertEqual([part.label for part in parts], [
+            'Ancient Persia', "He Won't Get Far", 'Credits - Page 1',
+            'Departure', 'Stowaway', 'Dream', 'Storm', 'Arrival'])
+        self.assertEqual([group.label for group in playback_groups(parts)],
+                         ['Opening', 'After Level 1', 'Extras'])
 
     def test_additional_sequences_keep_stable_part_indices_and_first_seen_order(self):
         parts = (PlaybackPart("Story 1", "intro", 2, "Prologue"),

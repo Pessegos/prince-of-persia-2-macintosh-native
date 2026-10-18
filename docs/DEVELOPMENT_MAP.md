@@ -2,7 +2,7 @@
 
 F3 opens a compact, tabless Developer Tools panel with Open map, Playback,
 Peaceful mode and Resume. No level selectors or room dropdowns occupy this
-entry panel. Open map enters a separate full-playfield workspace. Playback
+entry panel. Open map enters a separate full-viewport workspace. Playback
 opens a [visual scene gallery](PLAYBACK_GALLERY.md), with a back arrow and the
 optional debug status bar. During attract playback only Playback and Resume are offered.
 These are host development tools, not recovered Macintosh features.
@@ -28,7 +28,9 @@ the current room implementation, including overlap fixes. No AI ticks run.
 
 ## Interaction And Presentation
 
-The map workspace removes the tools heading, tabs and floating panel frame.
+The map workspace removes the tools heading, tabs and floating panel frame,
+and covers the full 510x384 viewport including the health/status strip. The
+compact tools hub remains centered over the playfield, excluding that strip.
 Its top bar contains a back arrow, a single level selector, and previous/next
 level arrows with pointer tooltips. Back returns to the compact tools without
 teleporting or resuming; the selected destination is retained. The map's lower
@@ -39,7 +41,9 @@ room before resetting; opening F3 while dead also records the death room. Each
 level retains its own last room for this session. Return uses the ordinary
 safe-entry teleport, not a save-state restore, and preserves the prior pause.
 
-The selected destination has a cyan outline. Hovering brightens only the room
+The actual current room has a cyan outline, shown only for the live level.
+Keyboard destination selection is white and does not move that current-room
+marker to a different room/level. Hovering brightens only the room
 under the pointer and shows a gold outline and transient room label. Blank
 map space is not selectable; leaving the map clears the hover. Clicking a room
 uses the existing safe F3 entry path and restores the prior pause state.

@@ -9,15 +9,56 @@ from pop2.paths import ASSET_DIR
 from pop2.preview_cache import read_preview, write_preview
 
 
-GALLERY_SIZE = (488, 262)
+GALLERY_SIZE = (488, 278)
+
+
+def gallery_caption_rect(rect, single=False):
+    x1, _y1, x2, y2 = rect
+    center = (x1 + x2) // 2
+    half_width = 200 if single else 76
+    return center - half_width, y2 + 5, center + half_width, y2 + 37
+
+
+def gallery_caption(font, label, size, color):
+    width, height = size
+    if not label.strip():
+        return Image.new('RGBA', size)
+    scale = 1
+    lines, line = [], ''
+    for word in label.split():
+        candidate = f'{line} {word}'.strip()
+        if line and font.text(candidate).width * scale > width - 4:
+            lines.append(line)
+            line = word
+        else:
+            line = candidate
+    lines.append(line)
+    if len(lines) > 2:
+        lines = [lines[0], ' '.join(lines[1:])]
+    glyphs = [font.text(line, color) for line in lines]
+    scale = min(scale, (width - 4) / max(g.width for g in glyphs))
+    line_height = max(1, round((font.height - 1) * scale))
+    total = len(lines) * line_height + (len(lines) - 1) * 2
+    image = Image.new('RGBA', size)
+    for index, glyph in enumerate(glyphs):
+        ink = glyph.getbbox()
+        if ink is None:
+            continue
+        glyph = glyph.crop(ink)
+        glyph = glyph.resize((max(1, round(glyph.width * scale)),
+                              max(1, round(glyph.height * scale))), Image.Resampling.NEAREST)
+        image.paste(glyph, ((width - glyph.width) // 2,
+                            (height - total) // 2 + index * (line_height + 2)
+                            + (line_height - glyph.height) // 2), glyph)
+    return image
 
 
 def gallery_preview(frames, indices):
     image = Image.new('RGB', GALLERY_SIZE, '#101010')
     rooms, sources = {}, {}
     for slot, index in enumerate(indices):
-        x, y = 4 + slot % 3 * 164, 2 + slot // 3 * 130
-        rect = (88, 2, 400, 237) if len(indices) == 1 else (x, y, x + 152, y + 114)
+        x, y = 14 + slot % 3 * 164, 2 + slot // 3 * 139
+        rect = (94, 2, 394, 228) if len(indices) == 1 else (x, y, x + 132, y + 99)
         rooms[str(index)] = rect
         sources[str(index)] = frames[index]
         image.paste(frames[index].resize((rect[2] - rect[0], rect[3] - rect[1]),

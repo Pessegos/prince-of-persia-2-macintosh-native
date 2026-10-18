@@ -345,6 +345,9 @@ class WindowControls:
             map_provider=self.development_map if level_options else None,
             return_screens=dict(getattr(self, 'development_return_screens', {})),
             playback_provider=self.development_playback_preview if parts else None,
+            current_section=(self.current_playback_part() if self.attract_stage is not None
+                             or self.game.level.number == 2 else None),
+            current_level=self.game.level.number, current_screen=self.screen_label(self.room_id),
         )
         if self.dev_menu.map_available:
             self.dev_menu.focus = 4

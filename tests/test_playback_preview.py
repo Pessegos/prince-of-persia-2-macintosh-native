@@ -82,7 +82,7 @@ class GalleryModelTests(unittest.TestCase):
             menu.key('Tab')
             self.assertIn(menu.focus, menu.controls)
             left, top, right, bottom = menu.control_rect(menu.focus)
-            self.assertTrue(1 < left < right < 511 and 0 < top < bottom < 365)
+            self.assertTrue(1 < left < right < 511 and 0 < top < bottom < 384)
         menu.focus = 0
         menu.open_dropdown()
         self.assertEqual(menu.key('Escape'), 'changed')
@@ -94,6 +94,20 @@ class GalleryModelTests(unittest.TestCase):
         self.assertEqual(menu.group_index, 1)
         self.assertEqual(menu.key('Escape'), 'changed')
         self.assertEqual(menu.key('Escape'), 'resume')
+
+    def test_caption_regions_stay_inside_the_gallery_and_separate_from_every_image(self):
+        from pop2.playback_preview import GALLERY_SIZE, gallery_caption_rect, gallery_preview
+
+        frames = {i: Image.new('RGB', (510, 384)) for i in range(6)}
+        for count in range(1, 7):
+            atlas = gallery_preview(frames, tuple(range(count)))
+            for index, rect in atlas.rooms.items():
+                caption = gallery_caption_rect(rect, count == 1)
+                self.assertTrue(0 <= caption[0] < caption[2] <= GALLERY_SIZE[0])
+                self.assertTrue(rect[3] < caption[1] < caption[3] <= GALLERY_SIZE[1])
+                for other in atlas.rooms.values():
+                    self.assertFalse(caption[0] < other[2] and caption[2] > other[0]
+                                     and caption[1] < other[3] and caption[3] > other[1], (index, other))
 
 
 @unittest.skipUnless((ASSET_DIR / 'attract.json').is_file(), 'Imported scene resources required')
@@ -109,6 +123,58 @@ class ImportedGalleryTests(unittest.TestCase):
         s.dev_menu.focus = 8
         s.apply_dev_action(s.dev_menu.activate())
         return s.dev_menu
+
+    def test_wrapped_captions_preserve_every_bitmap_pixel_including_descenders(self):
+        from pop2.playback_preview import gallery_caption
+
+        font = self.scene.ui_font
+        for label, lines in (('Treachery Revealed', ('Treachery', 'Revealed')),
+                             ('Credits - Page 4', ('Credits - Page 4',))):
+            with self.subTest(label=label):
+                caption = gallery_caption(font, label, (152, 32), '#eeeeee')
+                expected = sum(font.text(line).getchannel('A').histogram()[255] for line in lines)
+                self.assertEqual(caption.getchannel('A').histogram()[255], expected)
+                self.assertGreater(caption.getbbox()[0], 0)
+                self.assertLess(caption.getbbox()[2], caption.width)
+
+    def test_cyan_indicates_only_the_actual_part_not_the_browsed_group_or_keyboard_choice(self):
+        menu, _provider = GalleryModelTests().menu()
+        menu.current_section = 0
+        menu.activate()
+        menu.section_index = 5
+        layer = menu.gallery_layer(self.scene.ui_font)
+        first = menu.gallery_preview.rooms['0']
+        selected = menu.gallery_preview.rooms['5']
+        self.assertEqual(layer.getpixel(first[:2])[:3], (99, 200, 229))
+        self.assertEqual(layer.getpixel(selected[:2])[:3], (238, 238, 238))
+        menu.focus = 6
+        menu.activate()
+        layer = menu.gallery_layer(self.scene.ui_font)
+        self.assertNotIn((99, 200, 229, 255),
+                         {color for _count, color in layer.getcolors(layer.width * layer.height)})
+        menu.focus = 5
+        menu.activate()
+        layer = menu.gallery_layer(self.scene.ui_font)
+        self.assertEqual(layer.getpixel(menu.gallery_preview.rooms['0'][:2])[:3], (99, 200, 229))
+
+    def test_gallery_covers_the_entire_original_hud_even_when_browsing_credits(self):
+        menu = self.open_gallery()
+        native = Image.new('RGBA', (512, 384), '#ff00ff')
+        menu.focus = 0
+        menu.select(2)
+        menu.turn_gallery_page(1)
+        result = menu.draw(native, self.scene.ui_font)
+        self.assertEqual(menu.panel_rect, (1, 0, 511, 384))
+        hud, footer = result.crop((1, 365, 511, 384)), result.crop((1, 373, 511, 384))
+        self.assertNotIn((255, 0, 255, 255), {color for _count, color in hud.getcolors(10000)})
+        self.assertEqual(footer.getcolors(), [(footer.width * footer.height, (16, 16, 16, 255))])
+
+    def test_gameplay_has_no_fake_current_cutscene(self):
+        s = self.scene
+        s.finish_intro()
+        s.load_level(3)
+        menu = self.open_gallery()
+        self.assertIsNone(menu.current_section)
 
     def test_every_part_has_native_visible_art_and_disk_cache_is_lossless_without_live_state_changes(self):
         from pop2.playback_preview import PlaybackPreviews

@@ -232,7 +232,7 @@ class AttractSceneTests(unittest.TestCase):
         groups = scene.dev_menu.groups
         scene.close_dev_mode()
         self.assertEqual([group.label for group in groups],
-                         ["Prologue", "Titles", "Opening story", "Level 1 demo", "Credits", "After Level 1"])
+                         ['Opening', 'After Level 1', 'Extras'])
         for group_index, group in enumerate(groups):
             with self.subTest(sequence=group.label):
                 scene.open_dev_mode()

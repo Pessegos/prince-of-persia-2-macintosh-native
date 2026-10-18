@@ -159,7 +159,7 @@ class DevelopmentMapModelTests(unittest.TestCase):
         menu = self.menu()
         left, top, right, bottom = menu.panel_rect
         self.assertEqual(left + right, 512)
-        self.assertLessEqual(abs(top - (365 - bottom)), 1)
+        self.assertEqual((left, top, right, bottom), (1, 0, 511, 384))
         for control in menu.controls:
             x1, y1, x2, y2 = menu.control_rect(control)
             self.assertTrue(left < x1 < x2 < right)
@@ -276,6 +276,24 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         self.assertIsNotNone(ImageChops.difference(high, enlarged).getbbox())
         atlas.detail((928, 388))
         self.assertEqual(len(atlas.scaled_images), 2)
+
+    def test_map_covers_hud_and_current_room_is_distinct_from_selection(self):
+        from pop2.game_ui import MacintoshFont
+
+        font = MacintoshFont(self.resources.prince['NFNT'][23331]['data'])
+        menu = DevelopmentMapModelTests().menu()
+        menu.current_level, menu.current_screen = 3, 'Room 1'
+        menu.key('Right')
+        self.assertEqual(menu.screen, 'Room 2')
+        layer = menu.map_layer(font)
+        scale, (ox, oy) = menu.map_preview.transform(layer.size)
+        for label, color in (('Room 1', (99, 200, 229)), ('Room 2', (238, 238, 238))):
+            x, y = menu.map_preview.rooms[label][:2]
+            self.assertEqual(layer.getpixel((round(x * scale + ox), round(y * scale + oy)))[:3], color)
+        result = menu.draw(Image.new('RGBA', (512, 384), '#ff00ff'), font)
+        hud, footer = result.crop((1, 365, 511, 384)), result.crop((1, 373, 511, 384))
+        self.assertNotIn((255, 0, 255, 255), {color for _count, color in hud.getcolors(10000)})
+        self.assertEqual(footer.getcolors(), [(footer.width * footer.height, (16, 16, 16, 255))])
 
     def test_disk_cache_reuses_native_room_art_in_a_new_session_and_invalidates(self):
         from pop2.development_map import cached_development_map

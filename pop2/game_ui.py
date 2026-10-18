@@ -64,6 +64,9 @@ class DevelopmentMenu:
     gallery_page: int = 0
     hovered_part: int | None = None
     gallery_pages: dict = field(default_factory=dict, repr=False)
+    current_section: int | None = None
+    current_level: int | None = None
+    current_screen: str | None = None
 
     CONTROLS = ((200, 138, 392, 166), (120, 180, 392, 210),
                 (120, 231, 252, 263), (264, 231, 392, 263))
@@ -82,14 +85,14 @@ class DevelopmentMenu:
     MAP_CONTROLS = {
         7: (14, 14, 40, 40), 5: (130, 14, 156, 40),
         0: (164, 14, 348, 40), 6: (356, 14, 382, 40),
-        4: (12, 52, 500, 314), 1: (16, 329, 292, 353),
-        2: (310, 329, 386, 353), 3: (394, 329, 494, 353),
+        4: (12, 52, 500, 330), 1: (16, 348, 292, 372),
+        2: (310, 348, 386, 372), 3: (394, 348, 494, 372),
     }
     GAME_CONTROLS = {4: (120, 126, 392, 166), 8: (120, 174, 392, 210),
                      1: (120, 218, 392, 248), 3: (120, 270, 392, 300)}
     GALLERY_CONTROLS = {**MAP_CONTROLS, 9: (420, 14, 446, 40), 10: (460, 14, 486, 40),
-                        8: (14, 329, 40, 353), 1: (52, 329, 202, 353),
-                        2: (214, 329, 350, 353), 3: (362, 329, 498, 353)}
+                        8: (14, 348, 40, 372), 1: (52, 348, 202, 372),
+                        2: (214, 348, 350, 372), 3: (362, 348, 498, 372)}
 
     def __post_init__(self):
         if self.focus not in self.controls:
@@ -128,9 +131,16 @@ class DevelopmentMenu:
         return self.gallery_pages[key]
 
     def gallery_hit(self, x, y):
+        from pop2.playback_preview import gallery_caption_rect
+
         left, top, right, bottom = self.control_rect(4)
         scale, (ox, oy) = self.gallery_preview.transform((right - left, bottom - top))
-        label = self.gallery_preview.hit((x - left - ox) / scale, (y - top - oy) / scale)
+        px, py = (x - left - ox) / scale, (y - top - oy) / scale
+        label = self.gallery_preview.hit(px, py)
+        if label is None:
+            label = next((label for label, rect in self.gallery_preview.rooms.items()
+                          if self.contains(gallery_caption_rect(rect, len(self.gallery_preview.rooms) == 1),
+                                           px, py)), None)
         return int(label) if label is not None else None
 
     def turn_gallery_page(self, delta):
@@ -240,7 +250,7 @@ class DevelopmentMenu:
     @property
     def panel_rect(self):
         if self.preview_enabled:
-            return PLAYFIELD_VIEWPORT
+            return VISIBLE_VIEWPORT
         if self.page == 'tools' and (self.map_available or not self.level_available):
             return centered_panel(312, 250)
         return centered_panel(312, 280)
@@ -620,9 +630,9 @@ class DevelopmentMenu:
 
     def draw_map(self, image, draw, font, text):
         gold, white = '#f4d873', '#eeeeee'
-        draw.rectangle((1, 0, 510, 364), fill='#101010')
+        draw.rectangle((1, 0, 510, 383), fill='#101010')
         draw.line((12, 47, 500, 47), fill='#383838')
-        draw.line((12, 321, 500, 321), fill='#383838')
+        draw.line((12, 340, 500, 340), fill='#383838')
         for control in (7, 5, 0, 6, 1, 2, 3):
             if control not in self.controls and control != 1:
                 continue
@@ -650,12 +660,12 @@ class DevelopmentMenu:
                            (cx - direction * 3, cy + 5)), fill=white, width=2)
         destination = self.return_screen
         label = (f'Return to {destination}' if destination is not None else 'Return to last room')
-        text(label, 154, 336, white if destination is not None else '#777777',
+        text(label, 154, 355, white if destination is not None else '#777777',
              centered=True, max_width=256)
-        text('Go', 348, 336, centered=True, max_width=64)
-        text('Resume', 444, 336, centered=True, max_width=88)
+        text('Go', 348, 355, centered=True, max_width=64)
+        text('Resume', 444, 355, centered=True, max_width=88)
         if self.error:
-            text(self.error, 12, 315, '#ff9b9b', max_width=488)
+            text(self.error, 12, 332, '#ff9b9b', max_width=488)
         tooltip = self.map_tooltip(font)
         if tooltip is not None:
             label, rect = tooltip
@@ -678,9 +688,9 @@ class DevelopmentMenu:
 
     def draw_gallery(self, image, draw, font, text):
         gold, white = '#f4d873', '#eeeeee'
-        draw.rectangle((1, 0, 510, 364), fill='#101010')
+        draw.rectangle((1, 0, 510, 383), fill='#101010')
         draw.line((12, 47, 500, 47), fill='#383838')
-        draw.line((12, 321, 500, 321), fill='#383838')
+        draw.line((12, 340, 500, 340), fill='#383838')
         for control in self.controls:
             if control == 4:
                 continue
@@ -717,9 +727,9 @@ class DevelopmentMenu:
         if self.debug_status:
             draw.line(((left + 9, top + 11), (left + 12, top + 14), (left + 16, top + 8)),
                       fill=gold, width=2)
-        text('Next part', 127, 336, centered=True, max_width=138)
-        text('Play', 282, 336, centered=True, max_width=124)
-        text('Resume', 430, 336, centered=True, max_width=124)
+        text('Next part', 127, 355, centered=True, max_width=138)
+        text('Play', 282, 355, centered=True, max_width=124)
+        text('Resume', 430, 355, centered=True, max_width=124)
         tooltip = self.map_tooltip(font)
         if tooltip is not None:
             label, rect = tooltip
@@ -727,6 +737,8 @@ class DevelopmentMenu:
             text(label, rect[0] + 6, rect[1] + 4, gold)
 
     def gallery_layer(self, font, size=None):
+        from pop2.playback_preview import gallery_caption, gallery_caption_rect
+
         preview = self.gallery_preview
         left, top, right, bottom = self.control_rect(4)
         size = size or (right - left, bottom - top)
@@ -739,21 +751,19 @@ class DevelopmentMenu:
                     round(x2 * scale + ox), round(y2 * scale + oy))
             hovered = index == self.hovered_part
             selected = index == self.section_index
-            color = '#f4d873' if hovered else '#63c8e5' if selected else '#b9b9b9'
+            current = index == self.current_section
+            color = ('#f4d873' if hovered else '#63c8e5' if current else
+                     '#eeeeee' if selected and self.focus == 4 else '#b9b9b9')
             if hovered:
                 image.paste(ImageEnhance.Brightness(image.crop(rect)).enhance(1.2), rect[:2])
-            if hovered or selected:
+            if hovered or current or selected and self.focus == 4:
                 draw.rectangle((rect[0], rect[1], rect[2] - 1, rect[3] - 1), outline=color,
                                width=max(1, round(2 * scale)))
-            glyphs = font.text(self.sections[index], color)
-            ink = glyphs.getbbox()
-            if ink:
-                glyphs = glyphs.crop((0, ink[1], glyphs.width, ink[3]))
-                width = min(round(glyphs.width * scale), rect[2] - rect[0])
-                glyphs = glyphs.resize((max(1, width), max(1, round(glyphs.height * scale))),
-                                        Image.Resampling.NEAREST)
-                image.paste(glyphs, ((rect[0] + rect[2] - glyphs.width) // 2,
-                                    rect[3] + round(3 * scale)), glyphs)
+            cx1, cy1, cx2, cy2 = gallery_caption_rect((x1, y1, x2, y2), len(preview.rooms) == 1)
+            caption = gallery_caption(font, self.sections[index], (cx2 - cx1, cy2 - cy1), color)
+            caption = caption.resize((max(1, round(caption.width * scale)),
+                                      max(1, round(caption.height * scale))), Image.Resampling.NEAREST)
+            image.paste(caption, (round(cx1 * scale + ox), round(cy1 * scale + oy)), caption)
         return image
 
     def map_layer(self, font, size=None):
@@ -771,8 +781,11 @@ class DevelopmentMenu:
             return (round(x1 * sx + ox), round(y1 * sy + oy),
                     round(x2 * sx + ox) - 1, round(y2 * sy + oy) - 1)
 
-        if self.screen in preview.rooms:
-            draw.rectangle(room_rect(self.screen), outline='#63c8e5', width=max(1, round(min(sx, sy))))
+        if self.screen in preview.rooms and self.focus == 4:
+            draw.rectangle(room_rect(self.screen), outline='#eeeeee', width=max(1, round(min(sx, sy))))
+        if self.current_level == self.level_number and self.current_screen in preview.rooms:
+            draw.rectangle(room_rect(self.current_screen), outline='#63c8e5',
+                           width=max(1, round(min(sx, sy))))
         if self.hovered_screen in preview.rooms:
             label = self.hovered_screen
             x1, y1, x2, y2 = room_rect(label)
