@@ -47,8 +47,11 @@ the previous explicit pause state.
 `pop2/playback_preview.py` runs private, silent IntroPlayer/CreditsPlayer
 instances using the original resource bitmaps, palettes, strings and scene
 instructions. Sampling stops at the next part and selects a visible image
-rather than an intervening black fade. Titles are sampled during their own
-animation. Recorded demo thumbnails use the imported actor records and
+rather than an intervening black fade. Active reveals finish at the current
+operation boundary, before a later caption clear or animation can replace the
+scene. Only the actual title operation receives the six-second cloud sample;
+its retained animation object must not advance subsequent palace scenes.
+Recorded demo thumbnails use the imported actor records and
 private level scenery; the arrival destination uses its own level artwork.
 No live scene player, actor, gate, audio engine or game clock is reused. The
 global random state is restored after generation.
@@ -71,5 +74,6 @@ pagination/group selection, mouse/keyboard gaps and direct activation,
 Back/Escape, key-repeat protection, autoplay versus pause restoration, wheel paging and real
 Tk photo equivalence to full redraw at four viewport sizes. Caption/image
 regions, complete scaled caption ink, full HUD coverage and actual-current
-versus pending-selection colors have focused regression tests. Existing attract,
+versus pending-selection colors have focused regression tests. Synthetic reveal/clear
+boundaries and every post-title palace picture/caption also have regression coverage. Existing attract,
 playback-navigation, menu, map, screenshots and pause tests remain applicable.

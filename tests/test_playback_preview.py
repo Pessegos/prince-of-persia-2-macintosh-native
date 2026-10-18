@@ -115,6 +115,27 @@ class GalleryModelTests(unittest.TestCase):
                     self.assertFalse(caption[0] < other[2] and caption[2] > other[0]
                                      and caption[1] < other[3] and caption[3] > other[1], (index, other))
 
+    def test_snapshot_finishes_the_reveal_without_running_the_following_clear(self):
+        from pop2.playback_navigation import PlaybackPart
+        from pop2.playback_preview import PlaybackPreviews
+        from tests.test_intro import player
+
+        rect = (62, 64, 292, 448)
+        source = player(('palette', 1, 66, 0), ('shape', 1, 64, 62, 0),
+                        ('copy', rect), ('wait', 60), ('shape', 2, 64, 62, 0),
+                        ('dissolve', 60), ('fill', 3, rect), ('copy', rect), ('wait', 60))
+        source.assets.palettes[1] = {1: (180, 20, 20), 2: (20, 80, 180), 3: (240, 240, 240)}
+        source.assets.shapes = {
+            1: Image.frombytes('L', (384, 230), bytes((1, 3)) * (384 * 230 // 2)),
+            2: Image.frombytes('L', (384, 230), bytes((2, 3)) * (384 * 230 // 2)),
+        }
+        parts = (PlaybackPart('Reveal', 'intro', 5), PlaybackPart('Next', 'intro', 8))
+        previews = PlaybackPreviews(None, parts, None, 'test')
+        previews.assets['intro'] = source.assets
+        frame = previews.snapshot(0)
+        self.assertEqual(frame.getpixel((64, 62)), (20, 80, 180))
+        self.assertEqual(frame.getpixel((65, 62)), (240, 240, 240))
+
 
 @unittest.skipUnless((ASSET_DIR / 'attract.json').is_file(), 'Imported scene resources required')
 class ImportedGalleryTests(unittest.TestCase):
@@ -251,6 +272,28 @@ class ImportedGalleryTests(unittest.TestCase):
         self.assertEqual(seen, set(range(len(parts))))
         self.assertEqual(before, (s.game, s.room_id, s.player_x, s.combat.world_frame,
                                   s.intro, s.intro.time, s.intro.position, random.getstate()))
+
+    def test_palace_thumbnails_preserve_each_current_picture_and_caption_after_the_titles(self):
+        from pop2.intro import IntroPlayer
+        from pop2.playback_preview import PlaybackPreviews
+
+        s = self.scene
+        parts = s.development_parts()
+        previews = PlaybackPreviews(s.resources, parts, s.attract_data, 'test')
+        for index, part in enumerate(parts):
+            if part.stage != 'intro':
+                continue
+            operation = s.intro_assets.program['operations'][part.index]
+            if operation['op'] != 'text' or operation['args'][1] < 17:
+                continue
+            with self.subTest(scene=part.label):
+                actual = previews.snapshot(index)
+                player = IntroPlayer(previews.assets['intro'])
+                player.seek_operation(part.index)
+                while player.transition is not None:
+                    player.advance(player.wait_until - player.time, stop_position=player.position)
+                expected = player.frame().crop((0, 0, 510, 384)).convert('RGB')
+                self.assertEqual(actual.tobytes(), expected.tobytes())
 
     def test_real_hover_updates_match_full_redraw_at_multiple_sizes_and_mouse_wheel_paginates(self):
         s = self.scene

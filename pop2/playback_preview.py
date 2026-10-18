@@ -105,7 +105,7 @@ class PlaybackPreviews:
             player.seek_operation(part.index)
             following = next((other.index for other in self.parts[index + 1:]
                               if other.stage == part.stage), len(player.operations))
-            if player.title_animation is not None:
+            if player.operations[part.index]['op'] == 'title':
                 player.advance(6, stop_position=following)
                 return player.frame().crop((0, 0, 510, 384)).convert('RGB')
             first_copy = next((i for i in range(part.index, following)
@@ -114,6 +114,12 @@ class PlaybackPreviews:
             # Select a visible scene, not a black frame in an intervening fade.
             # The next part is a hard stop, so its imagery cannot leak backward.
             for _ in range(40):
+                if player.transition is not None:
+                    # Finish this reveal without executing the following text clear
+                    # or animation: the destination picture belongs to this caption.
+                    player.advance(max(0, player.wait_until - player.time),
+                                   stop_position=player.position)
+                    continue
                 frame = player.frame()
                 stats = ImageStat.Stat(frame.crop((64, 62, 448, 292)).convert('L'))
                 if ((part.stage == 'intro' or player.position > first_copy)
