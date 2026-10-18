@@ -5,7 +5,6 @@ from PIL import ImageOps
 from pop2.animation_data import (
     character_collision_bounds, parse_aframe_records, parse_frame_records, shape_id_for_action,
 )
-from pop2.combat import guard_frame_index
 from pop2.render_opening import (
     ROOM_ORIGIN_X, actor_foreground_column, character_sprite_top, decode_ctbl, decode_shap,
 )
@@ -51,6 +50,8 @@ class GuardArtwork:
         self.sword_cache = {}
 
     def body(self, state, palette_variant=1):
+        from pop2.combat import guard_frame_index
+
         index = guard_frame_index(state.action)
         shape_id = shape_id_for_action(self.frames, self.base, index)
         if shape_id is None:
@@ -70,6 +71,8 @@ class GuardArtwork:
         return self.cache[key]
 
     def draw(self, image, state, floor_y, palette_variant=1):
+        from pop2.combat import guard_frame_index
+
         if state.actor_type == 4 and state.source_sequence_id == 115:
             return  # The lava pool draws the sinking skeleton, CODE:8 34a6.
         index = guard_frame_index(state.action)
@@ -100,6 +103,8 @@ class GuardArtwork:
         image.paste(sword, (sword_x, y + body.height + dy - sword.height), sword)
 
     def bounds(self, state, floor_y):
+        from pop2.combat import guard_frame_index
+
         index = guard_frame_index(state.action)
         body = self.body(state)
         if body is None:
@@ -112,6 +117,8 @@ class GuardArtwork:
                 left + body.width - 1, bottom)
 
     def collision_bounds(self, state, floor_y, sword_drawn):
+        from pop2.combat import guard_frame_index
+
         record = self.frames[guard_frame_index(state.action)]
         return character_collision_bounds(state, self.bounds(state, floor_y),
                                           self.attachments[record.afrm_index], sword_drawn)
@@ -152,6 +159,8 @@ class HitArtwork:
         self.guard_frames = guard_frames
 
     def draw(self, image, state, floor_y):
+        from pop2.combat import guard_frame_index
+
         # SetupChar 0x07dc consumes state 10 on the first hurt/death pose.
         # Keep rendering that pose until its next animation tick, not per paint.
         # SetupOpp 3:0994-09ce also draws the first mode-9 tumble pose.

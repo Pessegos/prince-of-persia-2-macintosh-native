@@ -47,7 +47,7 @@ class ProjectLayoutTests(unittest.TestCase):
                 with self.subTest(owner=owner):
                     self.assertTrue((PROJECT_DIR / owner).is_file())
 
-    def test_death_and_column_rules_import_without_original_game_files(self):
+    def test_death_column_and_health_art_import_without_original_game_files(self):
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
             shutil.copytree(PROJECT_DIR / "pop2", project / "pop2",
@@ -56,6 +56,7 @@ class ProjectLayoutTests(unittest.TestCase):
                 "import sys; sys.path.insert(0, '.'); "
                 "from pop2.rebirth import Checkpoint, DeathState; "
                 "from pop2.opponent_generation import character_column; "
+                "from pop2.combat_art import HealthArtwork; "
                 "assert DeathState().counter == -1; "
                 "assert character_column(51) == 0; "
                 "assert Checkpoint(1, 0, 0).matches(0, 0, 51, 0, True)"

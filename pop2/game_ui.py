@@ -619,7 +619,7 @@ class DevelopmentMenu:
         text('Resume', 256, self.control_rect(3)[1] + 10, centered=True)
 
     def draw_map(self, image, draw, font, text):
-        gold, white, muted = '#f4d873', '#eeeeee', '#b9b9b9'
+        gold, white = '#f4d873', '#eeeeee'
         draw.rectangle((1, 0, 510, 364), fill='#101010')
         draw.line((12, 47, 500, 47), fill='#383838')
         draw.line((12, 321, 500, 321), fill='#383838')
