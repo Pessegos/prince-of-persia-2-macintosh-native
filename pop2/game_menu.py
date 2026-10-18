@@ -32,6 +32,7 @@ class GameMenu:
     dropdown: bool = False
     option_index: int = 0
     save_available: bool = True
+    save_browser: object = None
 
     PANEL = centered_panel(384, 284)
     DIALOG = centered_panel(352, 166)
@@ -56,7 +57,7 @@ class GameMenu:
             MenuItem("confirm_new", "New game", "Alt+N"),
             MenuItem("restart", "Restart level", "Alt+R"),
             MenuItem("save", "Save game", "Alt+S", self.save_available),
-            MenuItem("open", "Open game", "Alt+O"),
+            MenuItem("open", "Load game", "Alt+O"),
             MenuItem("sound", "Sound", "Alt+T", checked=self.sound),
             MenuItem("music", "Ambient music", "Alt+M", checked=self.music),
             MenuItem("hall", "Hall of Fame", "Alt+H", False),
@@ -81,6 +82,8 @@ class GameMenu:
         return "changed"
 
     def activate(self):
+        if self.page == 'saves':
+            return self.save_browser.activate()
         if self.page == "screenshots":
             if self.focus == 0:
                 self.dropdown = True
@@ -95,6 +98,8 @@ class GameMenu:
         return item.action if item.enabled else "changed"
 
     def key(self, key, backwards=False):
+        if self.page == 'saves':
+            return self.save_browser.key(key, backwards)
         if self.page == "screenshots":
             if key == "Escape":
                 if self.dropdown:
@@ -141,6 +146,8 @@ class GameMenu:
         return (80, top, 432, top + self.ROW_HEIGHT - 2)
 
     def hit(self, x, y):
+        if self.page == 'saves':
+            return self.save_browser.hit(x, y)
         if self.page == "screenshots":
             if self.dropdown:
                 left, _top, right, bottom = self.CAPTURE_CONTROLS[0]
@@ -156,6 +163,8 @@ class GameMenu:
                      if DevelopmentMenu.contains(rect, x, y)), None)
 
     def hover(self, x, y):
+        if self.page == 'saves':
+            return self.save_browser.hover(x, y)
         index = self.hit(x, y)
         field = "option_index" if self.page == "screenshots" and self.dropdown else "focus"
         if index is None or index == getattr(self, field):
@@ -164,6 +173,8 @@ class GameMenu:
         return True
 
     def click(self, x, y):
+        if self.page == 'saves':
+            return self.save_browser.click(x, y)
         index = self.hit(x, y)
         if self.page == "screenshots" and self.dropdown:
             if index is not None:
@@ -176,6 +187,8 @@ class GameMenu:
         return self.activate()
 
     def draw(self, viewport, font):
+        if self.page == 'saves':
+            return self.save_browser.draw(viewport, font)
         image = Image.alpha_composite(viewport, Image.new("RGBA", viewport.size, (0, 0, 0, 100)))
         draw = ImageDraw.Draw(image)
         gold, white, muted = "#f4d873", "#eeeeee", "#999999"

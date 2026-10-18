@@ -1,69 +1,62 @@
-# Native-Port Saves
+# Checkpoint Saves
 
-Save Game and Open Game are available in F1 and through Alt+S / Alt+O.
-The native file picker selects a `.pop2save` file. The default directory is
-`~/Saved Games/PoP2 Macintosh Native`, outside the downloaded project, so
-replacing the project directory does not remove those saves. The user can
-choose another destination. Opening a save asks before replacing progress;
-cancelling either dialog leaves the current game and menu pause intact.
+The Save/Load commands in F1, or Alt+S / Alt+O, open an in-game save browser,
+not a native file picker.
+Twelve numbered slots are available across two pages. Additional `.pop2save`
+files already in `~/Saved Games/PoP2 Macintosh Native` appear after those slots.
+Nothing is written merely by opening or navigating the browser.
 
-This is a versioned native-port snapshot format, not a claim to read or
-write the original Macintosh game's save-file format. It supports the
-currently playable levels 1-3. Save is unavailable during cutscenes,
-recorded demos, copy-protection dialogs, death and level-exit transitions;
-Open remains available from the menu. Live movement, including airborne
-positions, can be saved. Audio playback restarts naturally after loading;
-the file does not capture an SDL device, active sound buffers or host input.
+Each slot shows the level, resume point, banked life capacity, local save date
+and a full-colour screenshot thumbnail. The thumbnail depicts the room at the
+time of saving; it is not a promise to resume at those exact coordinates.
+Saving to an occupied slot, loading and deleting require an in-game confirmation
+which defaults to Cancel. Successful saving stays in the browser. Loading
+resumes play; Back preserves an existing user pause and returns to F1 when that
+was the entry point. File errors remain inside the browser.
 
-## Captured State
+## Resume Rules
 
-`pop2/save_game.py` stores the player sequence cursor, pose, coordinates,
-velocities, floor/room and movement state, current/maximum life, sword
-state, world frame, combat timers and enemy RNG. It retains all visited
-room encounters, individual enemy health/skill/animation, generation
-counters and skeleton recovery. Checkpoint snapshots remain usable after
-loading and a subsequent death.
+New version-two files record progress, not a live simulation snapshot:
 
-World data includes consumed potions, their animation/effect state, gate
-and plate phases/timers, loose floors and debris, wall spikes, projectiles,
-torches, lava animation, the desert puzzle and harbor/ship state. The
-opening animation retains its phase/tick and is reattached to the restored
-player runtime. Physical map/world references are rebuilt against the
-locally imported resources. Harbor water records are remapped to restored
-actor identities rather than retaining stale process object IDs.
+- Without an activated checkpoint, loading restarts the level's normal entry.
+- With a checkpoint, loading uses its native room/cell, saved facing and full
+  checkpoint life, restoring the rebirth opponent/generator snapshot.
+- Current X/Y, airborne motion, command queues, enemy combat timing, transient
+  gates/projectiles, consumed potions and retained background pixels are not
+  restored from the point where Save was pressed.
+- Life capacity is banked at the checkpoint or level entry. In level three,
+  upgrades collected during the replayed attempt are rolled back with its
+  potions, using the same starting capacity as Restart Level.
+- Copy-protection verification is retained. Audio/display/peaceful preferences
+  remain local preferences, and held keys never become movement after loading.
 
-The scene restores its non-input movement flags. Held keys and buffered
-commands are cleared/consumed rather than replaying the save/load shortcut
-as a jump or sword command. Display, audio and peaceful-mode preferences
-stay with the current session. Copy-protection verification is progress
-state and is included. Cavern retained-background pixels are saved only
-where the original renderer leaves holes, preserving route-dependent room
-28 scenery without storing complete background images or resource banks.
+This follows the recovered rebirth semantics, not the original save-file binary
+format. CODE 2:132c-1386 chooses the rebirth bank or initial save header;
+2:19ba-1a34 restores the LEVL checkpoint room/cell instead of current X/Y.
+See [REBIRTH_RECOVERY.md](REBIRTH_RECOVERY.md) for bank and checkpoint limits.
+The currently supported gameplay levels are 1-3; later levels are not claimed.
 
-## Validation And Writes
+## Compatibility And Safety
 
-The JSON header identifies the format, schema version and level resource
-SHA-256. The decoder accepts only a fixed list of game-state records and
-their declared fields. It never imports a class named by the file and does
-not use pickle. Field types, collection forms, current room, actor/sequence
-ranges, RNG and retained-pixel coordinates are checked. Input size is
-limited to 2 MiB and nested records to 48 levels. Unknown versions and
-different original level data are rejected rather than guessed at.
+Version-one native-port snapshot files remain readable. They are validated
+using the existing decoder and then converted in memory to the new resume
+rules. Loading does not rewrite them. New writes always use version two.
 
-A candidate session and its visible scenery/actor frames are prepared
-before replacing the running game. Parsing/preparation does not advance
-the current session or consume its random stream. Writes use a uniquely
-named temporary file in the destination directory, flush/fsync, then an
-atomic replacement. A failed replacement leaves the previous save intact
-and removes the temporary file. Save files are excluded from Git.
+Saves remain outside the project, surviving a fresh download. Writes use an
+fsynced temporary file and atomic replacement, preserving an existing save if
+replacement fails. JSON has a 2 MiB cap, an original-level SHA-256 and strict
+checkpoint/type validation. No pickle or executable deserialization is used.
+Preview PNGs are size-bounded and are not used to reconstruct gameplay.
+
+A candidate session and its art are prepared before replacing the live game.
+Invalid loads leave the current session intact. Slot metadata and thumbnails
+are read only when opening or updating the browser, never on pointer hover.
 
 ## Verification
 
-`tests/test_save_game.py` covers all three supported levels, shared runtime/
-world references, mega-potion health and consumption, gates/debris, skeleton
-recovery, checkpoint reuse, airborne continuation, retained cavern pixels,
-exact room rendering after roundtrip, invalid/truncated/oversized files,
-wrong versions/originals, failed writes, dialog cancellation, confirmation,
-held-key clearing and disabled save during death. F1 model and host-input
-tests also cover the newly enabled commands. No README changes accompany
-this implementation.
+`tests/test_save_slots.py` runs without original game files and covers resume
+rules, checkpoint anchoring, metadata, previews, paging, selection, confirmations,
+corrupt files and hover without disk access. `tests/test_save_game.py` covers the
+legacy decoder and real game scenes, fresh cavern initialization, potion
+rollback, repeated checkpoint retries, legacy conversion, in-game save/load/
+delete, pause restoration and failed/cancelled writes. No README changes.

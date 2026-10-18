@@ -28,8 +28,8 @@ or a level jump actually needs it. Menu presentation remains synchronous.
 | --- | --- | --- |
 | New Game | Alt+N | Confirmation, default Cancel |
 | Restart Level | Alt+R | Latest checkpoint or level start |
-| Save Game | Alt+S | Native-port snapshot through a file picker |
-| Open Game | Alt+O | Validate and load a snapshot, with confirmation |
+| Save Game | Alt+S | In-game slots; bank checkpoint or level-entry progress |
+| Load Game | Alt+O | Resume a slot at its checkpoint or level entry |
 | Sound | Alt+T | Master audio toggle |
 | Ambient Music | Alt+M | Ambient tracks only |
 | End Game | Not bound | New Game already returns to the introduction |
@@ -47,13 +47,15 @@ and reads cached dimensions without reentering Tcl from a native callback.
 The version key is handled in CODE 2:4838-486a rather than relying on the
 Edit menu's V entry. Pause and gameplay bindings are unchanged.
 
-Save/Open use a versioned `.pop2save` format for the currently playable
-levels, not the original Macintosh save-file format. They preserve world
-changes, enemy state, checkpoints and maximum life as well as the current
-position. Default saves live outside the project directory. A cancelled or
-invalid load leaves the running game intact; cutscenes/death/transitions
-disable saving without disabling Open. Details and validation coverage are
-in [SAVE_GAME.md](SAVE_GAME.md).
+Save/Load use an integrated slot browser and a versioned `.pop2save` progress
+format, not the original Macintosh save-file format. Loading resumes at the
+activated checkpoint or normal level entry, never the exact saved position.
+The browser includes previews, dates, twelve slots, paging and confirmation
+before overwriting/loading/deleting. Existing version-one snapshots remain
+readable with the new resume rules. Saves live outside the project directory.
+A cancelled or invalid load leaves the running game intact; cutscenes/death/
+transitions disable saving without disabling Load. Details and validation
+coverage are in [SAVE_GAME.md](SAVE_GAME.md).
 
 New Game is deliberately a host confirmation rather than an immediate
 restart. Confirming clears the checkpoint and replays the introduction;

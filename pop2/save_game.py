@@ -1,7 +1,10 @@
 """Versioned, resource-free native-port saves; never deserialize executable objects."""
 
 from dataclasses import fields, is_dataclass
+from datetime import datetime, timezone
+import base64
 import hashlib
+from io import BytesIO
 import json
 import math
 import os
@@ -10,6 +13,8 @@ import random
 import tempfile
 import types
 from typing import get_args, get_origin, get_type_hints
+
+from PIL import Image
 
 from pop2.cavern_state import CavernState
 from pop2.combat import Fighter
@@ -32,7 +37,7 @@ from pop2.wall_spikes import WallSpikes
 
 
 FORMAT = 'pop2-macintosh-native-save'
-VERSION = 1
+VERSION = 2
 MAX_BYTES = 2 * 1024 * 1024
 SAVE_DIRECTORY = Path.home() / 'Saved Games' / 'PoP2 Macintosh Native'
 CLASSES = {cls.__name__: cls for cls in (
@@ -174,7 +179,8 @@ def _fighter_valid(actor, resources):
         raise SaveGameError('Saved actor is out of range')
 
 
-def capture(game, controls=None, copy_verified=False):
+def capture_snapshot(game, controls=None, copy_verified=False):
+    """Version-one fixture/compatibility encoder; new saves use capture()."""
     if (game.combat is None or not game.combat.player.alive or game.exit is not None
             or game.complete):
         raise SaveGameError('Save is unavailable during death or level transitions')
@@ -196,7 +202,7 @@ def capture(game, controls=None, copy_verified=False):
              'npc_ids': {id(actor): (room, index) for room, (actors, _points) in combat.room_encounters.items()
                          for index, actor in enumerate(actors)},
              'controls': controls or {}, 'copy_verified': copy_verified}
-    return {'format': FORMAT, 'version': VERSION, 'level': game.level.number,
+    return {'format': FORMAT, 'version': 1, 'level': game.level.number,
             'level_sha256': hashlib.sha256(game.level.data).hexdigest(), 'state': _pack(state)}
 
 
@@ -220,7 +226,7 @@ def write_save(path, data):
     return path
 
 
-def read_save(path, resources):
+def read_snapshot(path, resources):
     random_before = random.getstate()
     try:
         with Path(path).open('rb') as stream:
@@ -229,7 +235,7 @@ def read_save(path, resources):
             raise SaveGameError('Save exceeds the size limit')
         document = json.loads(raw)
         if (not isinstance(document, dict) or document.get('format') != FORMAT
-                or type(document.get('version')) is not int or document['version'] != VERSION
+                or type(document.get('version')) is not int or document['version'] != 1
                 or type(document.get('level')) is not int or document['level'] not in (1, 2, 3)):
             raise SaveGameError('Unsupported save format or version')
         game = GameSession.load(resources, document['level'])
@@ -339,6 +345,113 @@ def read_save(path, resources):
                 raise SaveGameError('Invalid retained scenery pixel')
         saved['retained_background'] = retained
         return game, saved
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError, OverflowError, RecursionError) as error:
+        raise SaveGameError(f'Invalid or incompatible save: {error}') from error
+    finally:
+        random.setstate(random_before)
+
+
+def encode_preview(viewport):
+    output = BytesIO()
+    viewport.crop((1, 0, 511, 365)).convert('RGB').resize(
+        (224, 160), Image.Resampling.NEAREST).save(output, format='PNG')
+    return base64.b64encode(output.getvalue()).decode('ascii')
+
+
+def decode_preview(value):
+    if value is None:
+        return None
+    if not isinstance(value, str) or len(value) > 256 * 1024:
+        raise SaveGameError('Invalid save preview')
+    try:
+        with Image.open(BytesIO(base64.b64decode(value, validate=True))) as image:
+            if image.format != 'PNG' or image.size != (224, 160):
+                raise SaveGameError('Invalid save preview size')
+            return image.convert('RGB')
+    except (OSError, ValueError, Image.DecompressionBombError) as error:
+        raise SaveGameError('Invalid save preview') from error
+
+
+def capture(game, controls=None, copy_verified=False):
+    if (game.combat is None or not game.combat.player.alive or game.exit is not None
+            or game.complete):
+        raise SaveGameError('Save is unavailable during death or level transitions')
+    checkpoint = game.checkpoint
+    max_life = checkpoint.max_life if checkpoint is not None else game.combat.player.max_life
+    if checkpoint is None and game.caverns is not None:
+        initial = game.caverns.potions.starting_max_life
+        if initial is not None:
+            max_life = initial
+    return {'format': FORMAT, 'version': VERSION, 'level': game.level.number,
+            'level_sha256': hashlib.sha256(game.level.data).hexdigest(),
+            'created_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+            'resume': {'checkpoint': _pack(checkpoint), 'max_life': max_life},
+            'copy_verified': bool(copy_verified)}
+
+
+def read_document(path):
+    try:
+        with Path(path).open('rb') as stream:
+            raw = stream.read(MAX_BYTES + 1)
+        if len(raw) > MAX_BYTES:
+            raise SaveGameError('Save exceeds the size limit')
+        document = json.loads(raw)
+        if (not isinstance(document, dict) or document.get('format') != FORMAT
+                or type(document.get('version')) is not int or document['version'] not in (1, VERSION)
+                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3)):
+            raise SaveGameError('Unsupported save format or version')
+        return document
+    except (ValueError, RecursionError) as error:
+        raise SaveGameError(f'Invalid or incompatible save: {error}') from error
+
+
+def read_save(path, resources):
+    random_before = random.getstate()
+    try:
+        document = read_document(path)
+        if document['version'] == 1:
+            legacy, state = read_snapshot(path, resources)
+            document = capture(legacy, copy_verified=state['copy_verified'])
+        if set(document) - {'format', 'version', 'level', 'level_sha256', 'created_at',
+                            'resume', 'copy_verified', 'preview'}:
+            raise SaveGameError('Unknown saved progress fields')
+        game = GameSession.load(resources, document['level'])
+        if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
+            raise SaveGameError('Save belongs to different original game files')
+        resume = document['resume']
+        if (not isinstance(resume, dict) or set(resume) != {'checkpoint', 'max_life'}
+                or type(resume['max_life']) is not int or not 1 <= resume['max_life'] <= 12
+                or type(document['copy_verified']) is not bool):
+            raise SaveGameError('Invalid saved progress')
+        decode_preview(document.get('preview'))
+        snapshot = _unpack(resume['checkpoint'], resources, None)
+        if snapshot is not None:
+            if (not isinstance(snapshot, RebirthSnapshot)
+                    or snapshot.checkpoint not in game.level.checkpoints
+                    or type(snapshot.facing) is not int or snapshot.facing not in (0, 1)
+                    or snapshot.max_life != resume['max_life']):
+                raise SaveGameError('Invalid checkpoint')
+            # Reuse the rebirth world, never the Prince's live position or motion.
+            if not isinstance(snapshot.room_encounters, dict) or len(snapshot.room_encounters) > 32:
+                raise SaveGameError('Invalid checkpoint world')
+            for room, entry in snapshot.room_encounters.items():
+                if (type(room) is not int or not 0 <= room < 32 or not isinstance(entry, tuple)
+                        or len(entry) != 2 or not isinstance(entry[0], list) or len(entry[0]) > 5
+                        or not isinstance(entry[1], list) or len(entry[1]) > 3):
+                    raise SaveGameError('Invalid checkpoint room')
+                for actor in entry[0]:
+                    _fighter_valid(actor, resources)
+                    if actor.room != room or actor.state.actor_type not in (2, 4):
+                        raise SaveGameError('Invalid checkpoint opponent')
+                if any(not isinstance(point, OpponentGenerationPoint) for point in entry[1]):
+                    raise SaveGameError('Invalid checkpoint generation point')
+            game.checkpoint = snapshot
+            snapshot.restore_world(game.combat)
+            point = snapshot.checkpoint
+            game.place(point.room, point.row, point.x, snapshot.facing,
+                       reset_guards=False, preserve_checkpoint=True)
+        game.combat.player.life = game.combat.player.max_life = resume['max_life']
+        return game, {'copy_verified': document['copy_verified']}
     except (ValueError, TypeError, KeyError, IndexError, AttributeError, OverflowError, RecursionError) as error:
         raise SaveGameError(f'Invalid or incompatible save: {error}') from error
     finally:

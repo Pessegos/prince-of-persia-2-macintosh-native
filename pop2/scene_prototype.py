@@ -1,8 +1,7 @@
 import argparse
 import math
-import random
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
@@ -365,21 +364,12 @@ class ScenePrototype(WindowControls):
                 and not self.level_complete and self.game.exit is None)
 
     def save_game_to(self, path):
-        from pop2.save_game import CONTROL_FIELDS, SaveGameError, capture, write_save
+        from pop2.save_game import SaveGameError, capture, encode_preview, write_save
 
         if not self.can_save_game():
             raise SaveGameError('Save is unavailable during this scene')
-        controls = {name: getattr(self, name) for name in CONTROL_FIELDS}
-        document = capture(self.game, controls, self.copy_verified)
-        if self.game.caverns is not None:
-            room = self.level_renderer.rooms[self.room_id]
-            mask = room.retained_mask
-            if mask is not None and mask.getbbox() is not None:
-                left, top, right, bottom = mask.getbbox()
-                document['retained_background'] = [
-                    [x, y, *self.background.getpixel((x, y))]
-                    for y in range(top, bottom) for x in range(left, right)
-                    if mask.getpixel((x, y)) and self.background.getpixel((x, y)) != room.background.getpixel((x, y))]
+        document = capture(self.game, copy_verified=self.copy_verified)
+        document['preview'] = encode_preview(self.screenshot_viewport)
         write_save(path, document)
         self.status.set(f'Game saved: {path}')
 
@@ -390,6 +380,10 @@ class ScenePrototype(WindowControls):
         # Decode and render the destination before replacing the live session.
         try:
             renderer = LevelRenderer(game.level, preload_room=False)
+            if game.caverns is not None:
+                game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'))
+                game.caverns.configure_torches(renderer.cavern_program.get('torches', {}))
+                game.caverns.configure_lava(renderer.cavern_program.get('lava'))
             room = renderer.enter_room(game.room_id, game.caverns)
             frame = renderer.animated_layer(room.background.copy(), game.room_id, game.harbor,
                 desert=game.desert, caverns=game.caverns)
@@ -402,15 +396,6 @@ class ScenePrototype(WindowControls):
                 artwork.bounds(guard.state, floor_y(guard.row))
         except (ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
             raise SaveGameError(f'Save cannot be rendered: {error}') from error
-        if saved['retained_background']:
-            background = room.background.copy()
-            for x, y, *rgba in saved['retained_background']:
-                if getattr(room, 'retained_mask', None) is None or not room.retained_mask.getpixel((x, y)):
-                    raise SaveGameError('Save contains scenery outside retained pixels')
-                background.putpixel((x, y), tuple(rgba))
-            room = replace(room, background=background)
-            renderer.cavern_display = game.room_id, renderer.rooms[game.room_id], room
-            renderer.cavern_scenery = Image.alpha_composite(background, room.foreground)
         if self.animation_after_id is not None:
             self.root.after_cancel(self.animation_after_id)
             self.animation_after_id = None
@@ -421,12 +406,9 @@ class ScenePrototype(WindowControls):
         self.reset_level_controls()
         self.bind_level(game, renderer, initialize_world=False)
         self.terrain_enabled = True
-        for name, value in saved['controls'].items():
-            setattr(self, name, value)
         self.pending_action = None
         self.pause_resume_keys.update(self.window_keys_down)
         self.copy_verified = saved['copy_verified']
-        random.setstate(saved['random'])
         if self.audio is not None:
             self.audio.reset()
         self.next_animation_at = time.perf_counter()
