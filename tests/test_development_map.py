@@ -1,4 +1,5 @@
 import random
+from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -313,6 +314,8 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         from pop2.game_ui import MacintoshFont
 
         atlas = build_development_map(self.resources.level(3))
+        atlas = replace(atlas, image=Image.new('RGB', atlas.image.size, '#202020'),
+                        source_frames={}, scaled_images={})
         font = MacintoshFont(self.resources.prince['NFNT'][23331]['data'])
         menu = DevelopmentMenu(tuple(atlas.rooms), 0, False,
                                level_options=((3, 'Level 3', tuple(atlas.rooms)),),
@@ -321,15 +324,40 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         for size in ((488, 284), (1464, 852)):
             with self.subTest(size=size):
                 layer = menu.map_layer(font, size)
-                colors = dict((color, count) for count, color in layer.getcolors(layer.width * layer.height))
-                self.assertIn((127, 223, 170, 255), colors)
-                self.assertIn((255, 157, 122, 255), colors)
+                scale, (ox, oy) = atlas.transform(size)
+                for label, color in ((atlas.start, (127, 223, 170)), ('Room 13', (255, 157, 122))):
+                    left, top = atlas.rooms[label][:2]
+                    point = round(left * scale + ox), round(top * scale + oy)
+                    expected = Image.alpha_composite(Image.new('RGBA', (1, 1), '#202020'),
+                                                     Image.new('RGBA', (1, 1), (*color, 85)))
+                    self.assertEqual(layer.getpixel(point), expected.getpixel((0, 0)))
+                self.assertNotIn((127, 223, 170, 255),
+                                 {color for _count, color in layer.getcolors(layer.width * layer.height)})
                 self.assertEqual(layer.size, size)
-        for label, caption in ((atlas.start, 'Start'), ('Room 13', 'Exit'), ('Room 30', 'Exit')):
+        for label, caption in ((atlas.start, 'Entrance'), ('Room 13', 'Exit'), ('Room 30', 'Exit')):
             menu.hovered_screen = label
             with patch.object(font, 'text', wraps=font.text) as draw_text:
                 menu.map_layer(font)
             self.assertIn(label + ' - ' + caption, [call.args[0] for call in draw_text.call_args_list])
+
+    def test_landmark_borders_do_not_dim_current_hover_or_keyboard_selection(self):
+        from pop2.game_ui import MacintoshFont
+
+        atlas = build_development_map(self.resources.level(3))
+        font = MacintoshFont(self.resources.prince['NFNT'][23331]['data'])
+        menu = DevelopmentMenu(tuple(atlas.rooms), tuple(atlas.rooms).index(atlas.start), False,
+                               level_options=((3, 'Level 3', tuple(atlas.rooms)),),
+                               map_provider=lambda _: atlas, map_open=True, focus=4)
+        size = (1464, 852)
+        scale, (ox, oy) = atlas.transform(size)
+        left, top = atlas.rooms[atlas.start][:2]
+        point = round(left * scale + ox), round(top * scale + oy)
+        menu.preview_keyboard_selection = True
+        self.assertEqual(menu.map_layer(font, size).getpixel(point), (238, 238, 238, 255))
+        menu.current_level, menu.current_screen = 3, atlas.start
+        self.assertEqual(menu.map_layer(font, size).getpixel(point), (99, 200, 229, 255))
+        menu.hovered_screen = atlas.start
+        self.assertEqual(menu.map_layer(font, size).getpixel(point), (244, 216, 115, 255))
 
     def test_cavern_preview_includes_original_bones_without_touching_rng(self):
         level = self.resources.level(3)

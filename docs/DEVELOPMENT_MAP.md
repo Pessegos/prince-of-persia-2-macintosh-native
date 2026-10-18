@@ -48,9 +48,12 @@ level retains its own last room for this session. Return uses the ordinary
 safe-entry teleport, not a save-state restore, and preserves the prior pause.
 
 The actual current room has a cyan outline, shown only for the live level.
-Persistent mint Start and coral Exit borders and badges identify the native
+Persistent mint Entrance and coral Exit borders and badges identify the native
 entry and every usable exit, independently of hover/current-room selection.
-Hover labels include Start/Exit where applicable. Level 3 marks Room 1 as Start
+These secondary references use 62% text opacity, 85/255 border opacity and
+130/255 dark-label background opacity, without label outlines. Current, hover
+and keyboard-selection borders take priority over landmark borders.
+Hover labels include Entrance/Exit where applicable. Level 3 marks Room 1 as Entrance
 and Rooms 13 and 30 as Exit; the kind-17 entrance door is excluded, matching
 the native exit handler. Level 1 ends at the ship (screen 10), and level 2
 ends through the stone chamber (2 (Stones)), not the far-right shore.

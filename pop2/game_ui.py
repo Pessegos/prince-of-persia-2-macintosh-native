@@ -793,10 +793,10 @@ class DevelopmentMenu:
             return (round(x1 * sx + ox), round(y1 * sy + oy),
                     round(x2 * sx + ox) - 1, round(y2 * sy + oy) - 1)
 
-        markers = ([(preview.start, 'Start', '#7fdfaa')] if preview.start in preview.rooms else [])
-        markers += [(label, 'Exit', '#ff9d7a') for label in sorted(preview.exits) if label in preview.rooms]
-        for label, _caption, color in markers:
-            draw.rectangle(room_rect(label), outline=color, width=max(1, round(min(sx, sy))))
+        markers = ([(preview.start, 'Entrance', (127, 223, 170))]
+                   if preview.start in preview.rooms else [])
+        markers += [(label, 'Exit', (255, 157, 122))
+                    for label in sorted(preview.exits) if label in preview.rooms]
         if self.screen in preview.rooms and self.focus == 4 and self.preview_keyboard_selection:
             draw.rectangle(room_rect(self.screen), outline='#eeeeee', width=max(1, round(min(sx, sy))))
         if self.current_level == self.level_number and self.current_screen in preview.rooms:
@@ -811,7 +811,7 @@ class DevelopmentMenu:
             draw.rectangle((x1, y1, x2, y2), outline=gold, width=max(1, round(2 * min(sx, sy))))
             caption = label if label.startswith('Room ') else f'Screen {label}'
             if label == preview.start:
-                caption += ' - Start'
+                caption += ' - Entrance'
             if label in preview.exits:
                 caption += ' - Exit'
             glyphs = font.text(caption, gold)
@@ -825,22 +825,34 @@ class DevelopmentMenu:
                 glyphs = glyphs.resize((min(round(glyphs.width * sx), width - round(12 * sx)),
                                         max(1, round(glyphs.height * sy))), Image.Resampling.NEAREST)
                 tooltip = (tx, ty, width, glyphs)
+        overlay = Image.new('RGBA', size)
+        marker_draw = ImageDraw.Draw(overlay)
         for label, caption, color in markers:
             x1, y1, x2, y2 = room_rect(label)
-            glyphs = font.text(caption, color)
+            active = (label == self.hovered_screen or
+                      (self.current_level == self.level_number and label == self.current_screen) or
+                      (self.focus == 4 and self.preview_keyboard_selection and label == self.screen))
+            if not active:
+                marker_draw.rectangle((x1, y1, x2, y2), outline=(*color, 85),
+                                      width=max(1, round(scale)))
+            glyphs = font.text(caption, '#%02x%02x%02x' % color)
             ink = glyphs.getbbox()
             if ink is None:
                 continue
-            glyphs = glyphs.crop((0, ink[1], glyphs.width, ink[3]))
-            pad = max(1, round(2 * scale))
-            factor = min(0.65 * scale, max(1, x2 - x1 - pad * 2) / glyphs.width,
-                         max(1, (y2 - y1) / 2 - pad * 2) / glyphs.height)
+            glyphs = glyphs.crop(ink)
+            pad = max(1, round(1.5 * scale))
+            room_width = (preview.rooms[label][2] - preview.rooms[label][0]) * scale
+            factor = min(0.46 * scale, max(1, room_width - pad * 4) / glyphs.width)
             glyphs = glyphs.resize((max(1, round(glyphs.width * factor)),
                                     max(1, round(glyphs.height * factor))), Image.Resampling.NEAREST)
-            top = y2 - glyphs.height - pad * 2 if caption == 'Exit' else y1
-            draw.rectangle((x1, top, x1 + glyphs.width + pad * 2, top + glyphs.height + pad * 2),
-                           fill='#181818', outline=color, width=max(1, round(scale)))
-            image.paste(glyphs, (x1 + pad, top + pad), glyphs)
+            glyphs.putalpha(glyphs.getchannel('A').point(lambda alpha: round(alpha * 0.62)))
+            x1 += pad
+            top = y2 + 1 - glyphs.height - pad * 3 if caption == 'Exit' else y1 + pad
+            marker_draw.rectangle((x1, top, x1 + glyphs.width + pad * 2, top + glyphs.height + pad * 2),
+                                  fill=(12, 15, 13, 130))
+            overlay.alpha_composite(glyphs, (x1 + pad, top + pad))
+        image = Image.alpha_composite(image, overlay)
+        draw = ImageDraw.Draw(image)
         if tooltip is not None:
             tx, ty, width, glyphs = tooltip
             draw.rectangle((tx, ty, tx + width, ty + round(18 * sy)),
