@@ -48,8 +48,19 @@ So I decided to take it a step further and give the lava a proper overhaul, with
 <br/>
 <img src="docs/screenshots/lava-overhaul-comparison.gif" alt="Comparison of the original Macintosh lava, reconstructed Macintosh lava, DOS lava and overhauled lava" width="800">
 
+<br/>
 
+## Stone Gates
 
+The stone gate closing animation in the Macintosh version looks pretty rough, especially when crushing the Prince. The DOS version handles this much better, with a nice bouncing effect when the gate slams shut, so I recreated its closing animation frame by frame for the port and adjusted the timing of the original slam sound to match.
+
+I also improved the sound played while the gate opens. The original had noticeable gaps between each loop and a loud click at the end. Both issues have been fixed, allowing the sound to play continuously without those interruptions.
+
+<img src="docs/screenshots/stone-gate-room17-macintosh-dos-native-port-right.gif" alt="Stone gate closing animation comparison between Macintosh, DOS and the port" >
+
+**Opening Sound — Before & After**
+
+hold on im trying
 
 
 
