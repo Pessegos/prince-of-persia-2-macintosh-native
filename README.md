@@ -1,3 +1,11 @@
+<p align="center">
+  <img src="docs/screenshots/pop2-mac-banner.png"
+       alt="Prince of Persia 2 Macintosh"
+       width="1200">
+</p>
+
+
+
 # Prince of Persia 2 Macintosh Native (WIP)
 
 I'm working on a native Windows reimplementation of the Macintosh version of *Prince of Persia 2: The Shadow & the Flame*. It uses the original game's graphics, animations, levels and sounds.
