@@ -781,7 +781,7 @@ class RooftopPhysics:
         return False
 
     def check_gate(self, motion, runtime, bounds, old_bounds, record, alive, sword_drawn,
-                   contact_bounds=None):
+                   contact_bounds=None, invulnerable=False):
         state = runtime.state
         if (not alive or state.actor_type not in (0, None) or state.level_kind != 3
                 or state.source_sequence_id == 118 or record is None):
@@ -821,7 +821,7 @@ class RooftopPhysics:
             state.current_x = state.target_x
             motion.falling = False
             return TerrainEvent("gate")
-        if tile.foreground & 255 and not sword_drawn:
+        if tile.foreground & 255 and not sword_drawn and not invulnerable:
             # CrushedByGate 6:2ac8 chooses SEQS:118 and removes 100 life.
             state.select(118)
             motion.dead, motion.falling = True, False
@@ -837,7 +837,8 @@ class RooftopPhysics:
 
     def advance(self, motion, runtime, old_x, bounds, sword_drawn=False, protected=False,
                 frame_flags=0x40, frame_record=None, bounds_for_state=None, cut_enabled=True,
-                alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None):
+                alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None,
+                invulnerable=False):
         state = runtime.state
         if motion.dead:
             return ()
@@ -848,7 +849,8 @@ class RooftopPhysics:
                 frame_flags = frame_record.aux
             if self.check_floor(motion, runtime, frame_flags, frame_record):
                 return (TerrainEvent("fall"),)
-            gate = self.check_gate(motion, runtime, bounds, old_bounds, frame_record, alive, sword_drawn)
+            gate = self.check_gate(motion, runtime, bounds, old_bounds, frame_record, alive, sword_drawn,
+                                   invulnerable=invulnerable)
             if gate is not None:
                 return (gate,)
             # A held/climbing ledge bypasses free-fall physics, not CutChar.
@@ -985,7 +987,7 @@ class RooftopPhysics:
             events.append(TerrainEvent("wall"))
         record = self.frames[state.action] if self.frames is not None else frame_record
         gate = self.check_gate(motion, runtime, collision_bounds, old_bounds, record, alive,
-                               sword_drawn, contact_bounds=gate_contact)
+                               sword_drawn, contact_bounds=gate_contact, invulnerable=invulnerable)
         if gate is not None:
             events.append(gate)
             return tuple(events)
@@ -1023,7 +1025,7 @@ class RooftopPhysics:
             or not self.map.allows_down_cut(motion.room, state.actor_type)
         ):
             state.current_y = VOID_DEATH_Y - floor_y(motion.row)
-            if state.level_kind == 5 and motion.room in WATER_ROOMS:
+            if state.level_kind == 5 and motion.room in WATER_ROOMS and not invulnerable:
                 state.vertical_velocity = 0
                 state.animation_state = 1
                 return tuple(events)
@@ -1046,7 +1048,7 @@ class RooftopPhysics:
             if tile.room is not None and tile.kind not in EMPTY_TILES | WALL_TILES:
                 velocity = state.vertical_velocity
                 if (tile.kind in (23, 24) and self.map.caverns is not None
-                        and state.actor_type in (0, 4, None)):
+                        and state.actor_type in (0, 4, None) and not invulnerable):
                     # HitFloor 6:02aa-02b8/0326-0344 dispatches lava before
                     # impact damage, preserving the airborne death variant.
                     state.current_y = 0
@@ -1059,12 +1061,12 @@ class RooftopPhysics:
                     state.sound_events.extend(self.map.caverns.loose.trigger(tile, force=velocity))
                     state.vertical_velocity //= 2
                     state.current_y = -13
-                    if velocity >= 63 or state.actor_type == 2:
+                    if not invulnerable and (velocity >= 63 or state.actor_type == 2):
                         events.append(TerrainEvent('damage', 100))
                     break
                 # HitFloor 6:0348-0444 makes an ordinary NPC's >=50 fall
                 # fatal; the Prince can survive 50..62 with one life lost.
-                fatal = not alive or velocity >= (50 if state.actor_type == 2 else 63)
+                fatal = not alive or not invulnerable and velocity >= (50 if state.actor_type == 2 else 63)
                 sequence = (22 if fatal else 20 if velocity >= 50
                             else 187 if state.actor_type == 2 and state.sequence_id == 186
                             else 63 if sword_drawn or state.actor_type == 2 else 17)
@@ -1079,7 +1081,7 @@ class RooftopPhysics:
                 # HitFloor 6:039c/03fe/0436 distinguishes safe, hurt and fatal impacts.
                 state.sound_events.append(7 if fatal else 13 if velocity >= 50 else 296)
                 events.append(TerrainEvent("death" if motion.dead else "land",
-                                           int(not fatal and 50 <= velocity < 63)))
+                                           int(not invulnerable and not fatal and 50 <= velocity < 63)))
                 break
             motion.row += 1
             state.current_y -= TILE_HEIGHT

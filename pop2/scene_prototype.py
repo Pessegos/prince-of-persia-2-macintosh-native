@@ -217,6 +217,7 @@ class ScenePrototype(WindowControls):
         self.live_combat = None
         self.audio = audio
         self.peaceful = peaceful
+        self.god_mode = False
         self.terrain_enabled = with_guard
         self.resources = GameResources.load()
         self.game = GameSession.load(self.resources, level_number, terrain_enabled=with_guard)
@@ -2068,7 +2069,16 @@ class ScenePrototype(WindowControls):
             frame_record=self.frames[self.action], bounds_for_state=self.player_bounds,
             old_bounds=old_bounds, alive=self.combat.player.alive,
             collision_bounds_for_state=self.player_collision_bounds,
-            catch_ledge=self.catch_falling_ledge)
+            catch_ledge=self.catch_falling_ledge, invulnerable=getattr(self, 'god_mode', False))
+        if getattr(self, 'god_mode', False) and any(event.kind == 'death' for event in events):
+            # A bottomless fall has no safe floor: return to this room's F3 entry.
+            life, capacity = self.combat.player.life, self.combat.player.max_life
+            destination = self.screen_label(motion.room)
+            if destination not in self.dev_screens():
+                destination = self.screen_label(self.room_id)
+            self.jump_to_screen(destination)
+            self.combat.player.life, self.combat.player.max_life = life, capacity
+            return
         if motion.room != old_room:
             dx = self.sequence_state.target_x - before_x
             if motion.room not in self.room_cache:
@@ -2134,7 +2144,7 @@ class ScenePrototype(WindowControls):
                 self.death.begin(event.death_method if event.death_method is not None
                                  else 3 if not motion.falling else 0)
                 self.status.set("Defeated")
-            elif event.damage:
+            elif event.damage and not getattr(self, 'god_mode', False):
                 self.combat.player.life = max(0, self.combat.player.life - event.damage)
                 if not self.combat.player.alive:
                     motion.dead = True
@@ -2156,7 +2166,8 @@ class ScenePrototype(WindowControls):
             state.target_x -= 2
             state.current_x = state.target_x
         self.harbor.advance()
-        if not motion.dead and self.harbor.right_exit_is_fatal(motion.room, state):
+        if (not motion.dead and not getattr(self, 'god_mode', False)
+                and self.harbor.right_exit_is_fatal(motion.room, state)):
             self.clear_keys(None)
             motion.dead, motion.falling = True, False
             self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
@@ -2167,7 +2178,7 @@ class ScenePrototype(WindowControls):
             self.death.begin(14)
             self.status.set("Defeated")
         bounds = self.player_bounds()
-        if not motion.dead and self.harbor.watch_water(
+        if not motion.dead and not getattr(self, 'god_mode', False) and self.harbor.watch_water(
                 0, motion.room, motion.row, state, bounds[2] - bounds[0] + 1):
             self.clear_keys(None)
             self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
@@ -2215,6 +2226,7 @@ class ScenePrototype(WindowControls):
                 record = (self.frames[state.action] if actor is self.combat.player else
                           self.guard_art.frames[guard_frame_index(state.action)])
                 if (motion is None or not floor_hits_actor(block, motion, state, record, actor.alive)
+                        or actor is self.combat.player and getattr(self, 'god_mode', False)
                         or 5 <= state.action < 15 or state.action == 109
                         or state.animation_state >= 2 and state.animation_state != 7
                         or state.actor_type == 1):
@@ -2266,6 +2278,8 @@ class ScenePrototype(WindowControls):
                       self.guard_art.frames[guard_frame_index(state.action)])
             bounds = self.player_bounds() if player else self.guard_art.bounds(state, floor_y(motion.row))
             spikes.approach(self.level_map, motion, state, record, bounds, actor.sword_drawn)
+            if player and getattr(self, 'god_mode', False):
+                continue
             collision = (self.player_collision_bounds() if player else
                          self.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
             hit = spikes.contact(self.level_map, motion, state, record, collision,
@@ -2303,6 +2317,8 @@ class ScenePrototype(WindowControls):
             bounds = (self.player_collision_bounds() if player else
                       self.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
             if not darts.contacts(motion.room, state, bounds) or not actor.alive:
+                continue
+            if player and getattr(self, 'god_mode', False):
                 continue
             # DoCharHurt stores the maximum pending wound, not one life per
             # projectile when multiple darts contact the actor in one update.
@@ -2362,7 +2378,7 @@ class ScenePrototype(WindowControls):
                     if self.terrain_motion is not None else None)
             if self.terrain_motion is not None:
                 self.terrain_motion.lava_landing = False
-            if pool is not None:
+            if pool is not None and not getattr(self, 'god_mode', False):
                 state, motion = self.sequence_state, self.terrain_motion
                 sequence, cue = pool.begin_death(state.animation_state, state.facing)
                 self.clear_keys(None)
@@ -2513,6 +2529,7 @@ class ScenePrototype(WindowControls):
         if combat is None:
             return
         combat.player_death_counter = self.death.counter
+        combat.god_mode = getattr(self, 'god_mode', False)
         combat.player.sword_drawn = self.sword_drawn
         # CheckStrikes 6:58aa-592c uses row, height and actor/mode exclusions;
         # beginning a grab, climb or fall does not confer invulnerability.

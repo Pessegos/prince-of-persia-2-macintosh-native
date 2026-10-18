@@ -68,6 +68,7 @@ class DevelopmentMenu:
     current_level: int | None = None
     current_screen: str | None = None
     preview_keyboard_selection: bool = False
+    god_mode: bool = False
 
     CONTROLS = ((200, 138, 392, 166), (120, 180, 392, 210),
                 (120, 231, 252, 263), (264, 231, 392, 263))
@@ -90,7 +91,8 @@ class DevelopmentMenu:
         2: (310, 348, 386, 372), 3: (394, 348, 494, 372),
     }
     GAME_CONTROLS = {4: (120, 126, 392, 166), 8: (120, 174, 392, 210),
-                     1: (120, 218, 392, 248), 3: (120, 270, 392, 300)}
+                     1: (120, 218, 252, 248), 11: (264, 218, 392, 248),
+                     3: (120, 270, 392, 300)}
     GALLERY_CONTROLS = {**MAP_CONTROLS, 9: (420, 14, 446, 40), 10: (460, 14, 486, 40),
                         8: (14, 348, 40, 372), 1: (52, 348, 202, 372),
                         2: (214, 348, 350, 372), 3: (362, 348, 498, 372)}
@@ -283,7 +285,7 @@ class DevelopmentMenu:
                          if (control not in (5, 6) or len(self.level_options) > 1)
                          and (control != 1 or self.return_screen is not None))
         if self.map_available:
-            return (4, 8, 1, 3)
+            return (4, 8, 1, 11, 3)
         if self.page == 'tools' and not self.level_available:
             return (8, 3)
         if self.page == 'playback':
@@ -403,6 +405,8 @@ class DevelopmentMenu:
             destination = 2 if key == "Left" else 3
             if destination in self.controls:
                 self.focus = destination
+        elif key in ('Left', 'Right') and self.map_available and self.focus in (1, 11):
+            self.focus = 1 if key == 'Left' else 11
         elif key in ("Return", "KP_Enter", "space"):
             return self.activate()
         return "changed"
@@ -410,6 +414,9 @@ class DevelopmentMenu:
     def activate(self):
         if self.focus not in self.controls:
             return "changed"
+        if self.focus == 11 and self.map_available and not self.map_enabled:
+            self.god_mode = not self.god_mode
+            return 'god_mode'
         if self.gallery_enabled and self.focus == 4:
             return 'seek'
         if self.gallery_enabled and self.focus in (5, 6):
@@ -631,12 +638,16 @@ class DevelopmentMenu:
             text(label, 246, cy - 6, centered=True, max_width=220)
             draw.line(((right - 23, cy - 5), (right - 18, cy),
                        (right - 23, cy + 5)), fill=gold, width=2)
-        if 1 in self.controls:
-            top = self.control_rect(1)[1]
-            draw.rectangle((130, top + 9, 141, top + 20), fill='#121212', outline='#b9b9b9')
-            if self.peaceful:
-                draw.line(((132, top + 14), (135, top + 17), (139, top + 11)), fill=gold, width=2)
-            text('Peaceful mode', 151, top + 9, max_width=231)
+        for control, label, checked in ((1, 'Peaceful', self.peaceful), (11, 'God mode', self.god_mode)):
+            if control not in self.controls:
+                continue
+            left, top, right, _bottom = self.control_rect(control)
+            draw.rectangle((left + 10, top + 9, left + 21, top + 20),
+                           fill='#121212', outline='#b9b9b9')
+            if checked:
+                draw.line(((left + 12, top + 14), (left + 15, top + 17), (left + 19, top + 11)),
+                          fill=gold, width=2)
+            text(label, left + 31, top + 9, max_width=right - left - 39)
         text('Resume', 256, self.control_rect(3)[1] + 10, centered=True)
 
     def draw_map(self, image, draw, font, text):

@@ -62,7 +62,7 @@ class DevelopmentMapModelTests(unittest.TestCase):
 
     def test_open_map_is_a_separate_page_and_escape_returns_to_tools(self):
         menu = self.menu(opened=False)
-        self.assertEqual(menu.controls, (4, 8, 1, 3))
+        self.assertEqual(menu.controls, (4, 8, 1, 11, 3))
         self.assertFalse(menu.map_enabled)
         self.assertEqual(menu.key('Return'), 'changed')
         self.assertTrue(menu.map_enabled)

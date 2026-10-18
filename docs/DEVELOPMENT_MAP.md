@@ -1,11 +1,31 @@
 # F3 Level Map
 
 F3 opens a compact, tabless Developer Tools panel with Open map, Playback,
-Peaceful mode and Resume. No level selectors or room dropdowns occupy this
+side-by-side Peaceful and God mode checkboxes, and Resume. No level selectors or room dropdowns occupy this
 entry panel. Open map enters a separate full-viewport workspace. Playback
 opens a [visual scene gallery](PLAYBACK_GALLERY.md), with a back arrow and the
 optional debug status bar. During attract playback only Playback and Resume are offered.
 These are host development tools, not recovered Macintosh features.
+
+## Playtest Cheats
+
+God mode is independent of Peaceful mode: opponents keep their AI and sword
+contacts retain normal nonfatal hit reactions, but the Prince loses no life.
+Projectiles, falling slabs, wall spikes, lava and landing impacts cannot kill
+him. Closing gates eject instead of crushing. A bottomless fall (including
+water/sand failure) returns to the current room's safe F3 entry with the same
+life, rather than leaving an unplayable actor outside the world.
+
+While God mode is enabled, an unmodified K press during unpaused gameplay kills
+opponents currently in the displayed room. Dormant skeletons are disabled too;
+collapsed skeletons cannot reawaken until the level/world resets. Other rooms,
+future generated opponents and the Prince are untouched. Key repeat, menus,
+cutscenes and Ctrl/Alt chords cannot trigger the command.
+
+Both toggles last for the session, including restarts, loads and level changes;
+they are not written into saves or settings. God mode neither heals an injured
+Prince nor revives an already-dead one. F3 remains directly available for
+development; no startup 1+2+3 cheat-unlock gate is implemented here.
 
 ## Source And State
 

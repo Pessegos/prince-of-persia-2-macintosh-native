@@ -955,8 +955,10 @@ class CombatEncounter:
                 and terrain.tile(target.room, column - direction, target.row).kind not in (3, 8))
 
     def _hurt(self, name, target, attacker):
-        fatal_sequence = target.state.sequence_id in FATAL_STAB_SEQUENCES
-        target.life = 0 if fatal_sequence else max(0, target.life - 1)
+        protected = name == 'player' and getattr(self, 'god_mode', False)
+        fatal_sequence = not protected and target.state.sequence_id in FATAL_STAB_SEQUENCES
+        if not protected:
+            target.life = 0 if fatal_sequence else max(0, target.life - 1)
         if target.state.actor_type == 0 and not fatal_sequence:
             # CODE:6 0x53f8-0x5406 arms the Prince without replaying SEQS:55.
             target.sword_drawn = True
@@ -1036,6 +1038,21 @@ class CombatEncounter:
             # levels (LEVL 21a4 == 0) select 14, not skeleton method 2.
             death_method = 14 if attacker.state.actor_type == 2 else 2
         return CombatEvent("hit" if target.alive else "death", name, death_method)
+
+    def kill_room_enemies(self, room):
+        """Host playtest command, including dormant skeletons in this room only."""
+        actors = self.room_encounters.get(room, ((), ()))[0]
+        for actor in tuple(actors):
+            if actor.room != room:
+                continue
+            if actor.alive:
+                actor.life = 1
+                self._hurt('guard', actor, self.player)
+                actor.state.sound_events.append(59 if actor.state.level_kind == 3 else 31)
+            if actor.skeleton is not None:
+                actor.skeleton.marker = -1
+                actor.skeleton.timer = 0
+        self.refresh_target()
 
     def resolve_contacts(self):
         events, hits = [], {}

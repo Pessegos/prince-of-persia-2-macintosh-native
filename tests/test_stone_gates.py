@@ -233,6 +233,21 @@ class StoneGateTests(unittest.TestCase):
             self.assertEqual((event.kind, event.death_method, state.sequence_id), ('death', 0, 118))
             self.assertTrue(motion.dead)
 
+    def test_god_mode_ejects_instead_of_crushing_without_changing_the_gate(self):
+        self.phase(64)
+        record = SimpleNamespace(offset_x=0, aux=0)
+        state = SequenceState(117, action=109, target_x=310, facing=1, level_kind=3, actor_type=0)
+        motion = TerrainMotion(0, 1)
+        body = (298, 193, 323, 226)
+        before = bytes(self.level)
+        event = RooftopPhysics(self.terrain).check_gate(
+            motion, SequenceRuntime({}, state), body, body, record, True, False, invulnerable=True)
+        self.assertEqual(event.kind, 'gate')
+        self.assertFalse(motion.dead)
+        self.assertNotEqual(state.source_sequence_id, 118)
+        self.assertNotEqual(state.target_x, 310)
+        self.assertEqual(bytes(self.level), before)
+
     def test_gate_contact_requires_previous_overlap_and_ignores_dead_or_descent(self):
         record = SimpleNamespace(offset_x=0, aux=0)
         physics = RooftopPhysics(self.terrain)

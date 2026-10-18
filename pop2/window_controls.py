@@ -355,6 +355,7 @@ class WindowControls:
             current_section=(self.current_playback_part() if self.attract_stage is not None
                              or self.game.level.number == 2 else None),
             current_level=self.game.level.number, current_screen=self.screen_label(self.room_id),
+            god_mode=getattr(self, 'god_mode', False),
         )
         if self.dev_menu.map_available:
             self.dev_menu.focus = 4
@@ -399,6 +400,8 @@ class WindowControls:
             self.close_dev_mode()
         elif action == "peaceful" and self.level_navigation_available():
             self.set_peaceful(self.dev_menu.peaceful)
+        elif action == 'god_mode' and self.level_navigation_available():
+            self.set_god_mode(self.dev_menu.god_mode)
         elif action in ("seek", "next_part"):
             parts = self.development_parts()
             if not parts:
@@ -838,6 +841,14 @@ class WindowControls:
                                      or is_resume_key(event, self.window_keys_down)):
                     self.restart_after_death(preserve_controls=True)
                 return "break"
+            if (event.keysym.lower() == 'k' and getattr(self, 'god_mode', False)
+                    and not self.paused and self.gameplay_controls_available()
+                    and self.combat is not None and self.combat.player.alive
+                    and not alt and not event.state & (0x4 | 0x40)):
+                if not repeated:
+                    self.combat.kill_room_enemies(self.room_id)
+                    self.render()
+                return 'break'
             return None
         if event.keysym == "Escape":
             return self.escape_key(event)
@@ -1011,6 +1022,14 @@ class WindowControls:
         self.clear_keys(None)
         if self.combat is not None:
             self.combat.last_guard_at = time.perf_counter()
+        self.render()
+
+    def set_god_mode(self, enabled):
+        self.god_mode = bool(enabled)
+        if self.dev_menu is not None:
+            self.dev_menu.god_mode = self.god_mode
+        if self.combat is not None:
+            self.combat.god_mode = self.god_mode
         self.render()
 
     def present_viewport(self):

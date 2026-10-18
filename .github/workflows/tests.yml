@@ -35,4 +35,4 @@ jobs:
       - name: Screenshot export and game-menu capture controls
         run: python -m unittest -q tests.test_screenshots tests.test_development_menu.MenuModelTests
       - name: Developer preview models and cache without original game files
-        run: python -m unittest -q tests.test_preview_cache tests.test_development_map.DevelopmentMapModelTests tests.test_playback_preview.GalleryModelTests
+        run: python -m unittest -q tests.test_preview_cache tests.test_development_map.DevelopmentMapModelTests tests.test_playback_preview.GalleryModelTests tests.test_development_cheats
