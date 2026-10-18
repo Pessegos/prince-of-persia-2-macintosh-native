@@ -503,8 +503,8 @@ class GameMenuSceneTests(unittest.TestCase):
             ("menu", GameMenu.PANEL), ("screenshots", GameMenu.SCREENSHOT_PANEL),
             ("confirm", GameMenu.DIALOG), ("about", GameMenu.ABOUT_DIALOG))]
         for levels in ((), ((1, "Level 1", ("1", "2")),)):
-            for tab in range(3):
-                menu = DevelopmentMenu(("1", "2"), 0, False, tab=tab,
+            for page in ('tools', 'playback'):
+                menu = DevelopmentMenu(("1", "2"), 0, False, page=page,
                                        sections=("First", "Second"), level_options=levels)
                 menus.append((menu, menu.panel_rect))
         for menu, (left, top, right, bottom) in menus:

@@ -34,6 +34,25 @@ every step or generate diagnostic recordings. Pause/F3 pauses both channels.
 Restart/developer warps stop current and pending playback. Import is staged
 before replacing installed resources; progress reaches Tk through a queue.
 
+## Host Menu Feedback
+
+F1, F2 and F3 use quiet, host-authored hover and click ticks, not recovered
+Macintosh cues. `pop2/ui_audio.py` prepares deterministic filtered-noise PCM
+with smooth zero-ended envelopes: 22 ms at 3.5 percent peak for hover and
+38 ms at 8.5 percent peak for activation. No additional assets, downloads or
+third-party libraries are required, and the gameplay RNG is untouched.
+
+Two separate SDL channels leave the game effect, music and gate-release
+channels alone. UI ticks remain audible during menu pause and finish naturally
+across scene changes; they never enter the original priority queue or affect
+death/retry timing. Sound off immediately stops the UI channels and suppresses
+new ticks. Hover is limited to a new enabled control, dropdown option, map room
+or gallery image/caption, with a 65 ms rate limit. Empty space, disabled rows,
+repeated pointer motion within one target and held activation keys are silent.
+Keyboard selection, activation, page controls and wheel navigation also give
+feedback. `tests/test_ui_audio.py` checks PCM, hit targets, muting, rate limits
+and real SDL isolation while gameplay audio is paused.
+
 ## Recovered Rules
 
 Addresses are CODE segment:offset. `tools/extract_audio.py` expands DATA/ZERO

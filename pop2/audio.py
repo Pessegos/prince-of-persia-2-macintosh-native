@@ -5,9 +5,11 @@ import os
 from pathlib import Path
 import random
 import struct
+import time
 
 from pop2.paths import ASSET_DIR
 from pop2.audio_release import PcmRelease, seamless_loop
+from pop2.ui_audio import menu_pcm
 
 
 GATE_SLAM_DELAY = 11 / 60
@@ -23,10 +25,13 @@ class MixerPlayback:
             mixer.init(frequency=48000, size=-16, channels=2, buffer=512)
         except mixer.error as error:
             raise RuntimeError(f"Cannot open the sound device. Check Windows audio settings: {error}") from error
-        mixer.set_num_channels(3)
+        mixer.set_num_channels(5)
         self.channels = {"effect": mixer.Channel(0), "music": mixer.Channel(1)}
         self.gate_tail = mixer.Channel(2)
         self.effect_channel, self.tail_channel = 0, 2
+        rate, _bits, channels = mixer.get_init()
+        self.ui_channels = {kind: mixer.Channel(index) for index, kind in enumerate(('hover', 'click'), 3)}
+        self.ui_sounds = {kind: mixer.Sound(buffer=menu_pcm(kind, rate, channels)) for kind in self.ui_channels}
         self.sounds = {cue: mixer.Sound(str(Path(directory) / item["file"]))
                        for cue, item in cues.items() if item.get("file")}
         if 20 in self.sounds:
@@ -83,6 +88,16 @@ class MixerPlayback:
     def busy(self, bus):
         return self.channels[bus].get_busy()
 
+    def play_ui(self, kind):
+        if kind == 'hover' and any(channel.get_busy() for channel in self.ui_channels.values()):
+            return
+        if not self.ui_channels[kind].get_busy():
+            self.ui_channels[kind].play(self.ui_sounds[kind])
+
+    def stop_ui(self):
+        for channel in self.ui_channels.values():
+            channel.stop()
+
     def stop(self, bus):
         self.channels[bus].stop()
         if bus == "effect":
@@ -103,6 +118,7 @@ class MixerPlayback:
             (channel.pause if paused else channel.unpause)()
 
     def close(self):
+        self.stop_ui()
         for channel in (*self.channels.values(), self.gate_tail):
             channel.stop()
         if self.gate_release is not None:
@@ -127,6 +143,19 @@ class AudioEngine:
         self.current_music_ambient = self.pending_song_ambient = False
         self.current_music_group = self.pending_music_group = None
         self.level_music = None
+        self.last_ui_hover_at = float('-inf')
+
+    def play_ui(self, kind):
+        if not self.sound_enabled:
+            return
+        now = time.perf_counter()
+        if kind == 'hover':
+            if now - self.last_ui_hover_at < 0.065:
+                return
+            self.last_ui_hover_at = now
+        play = getattr(self.playback, 'play_ui', None)
+        if play is not None:
+            play(kind)
 
     def configure_level(self, level):
         self.level_music = {'bank': struct.unpack_from('>h', level, 0x2186)[0],
@@ -262,6 +291,10 @@ class AudioEngine:
 
     def set_sound_enabled(self, enabled):
         self.sound_enabled = bool(enabled)
+        if not self.sound_enabled:
+            stop = getattr(self.playback, 'stop_ui', None)
+            if stop is not None:
+                stop()
         # Keep the cue clock running while muted: death/retry waits on playback.
         for bus in ("effect", "music"):
             self.playback.set_volume(bus, 1.0 if self.sound_enabled else 0.0)

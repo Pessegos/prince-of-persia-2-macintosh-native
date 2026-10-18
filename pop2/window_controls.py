@@ -203,8 +203,10 @@ class WindowControls:
         if not self.escape_held:
             self.escape_held = True
             if self.game_menu is not None:
+                self.play_menu_sound('click')
                 self.apply_game_action(self.game_menu.key("Escape"))
             elif self.dev_menu is not None:
+                self.play_menu_sound('click')
                 self.apply_dev_action(self.dev_menu.key("Escape"))
             else:
                 self.set_paused(not self.paused)
@@ -332,6 +334,7 @@ class WindowControls:
         self.game_menu = None
         from pop2.playback_navigation import playback_groups
 
+        self.ui_hover_target = None
         parts = self.development_parts()
         if (self.level_navigation_available() and self.combat is not None
                 and not self.combat.player.alive):
@@ -364,6 +367,7 @@ class WindowControls:
         if self.dev_menu is None:
             return
         self.dev_menu = None
+        self.ui_hover_target = None
         self.dev_map_frame = None
         self.clear_keys(None)
         self.update_cursor_visibility()
@@ -520,6 +524,7 @@ class WindowControls:
         already_paused = self.paused
         self.game_was_paused = self.dev_was_paused if self.dev_menu is not None else self.paused
         self.dev_menu = None
+        self.ui_hover_target = None
         self.game_menu = GameMenu(page=page, return_to_menu=page == "menu",
                                   screenshot_scale=self.screenshot_settings.scale,
                                   screenshot_folder=str(self.screenshot_settings.folder))
@@ -543,6 +548,7 @@ class WindowControls:
         if self.game_menu is None:
             return
         self.game_menu = None
+        self.ui_hover_target = None
         self.clear_keys(None)
         self.update_cursor_visibility()
         self.set_paused(False if resume else self.game_was_paused)
@@ -642,6 +648,43 @@ class WindowControls:
             self.pause_resume_keys.update(self.window_keys_down)
         self.close_game_menu()
 
+    def play_menu_sound(self, kind):
+        audio = getattr(self, 'audio', None)
+        if audio is not None and getattr(self, 'sound_enabled', True):
+            audio.play_ui(kind)
+
+    def menu_sound_target(self, menu, point=None):
+        index = (menu.option_index if menu.dropdown else menu.focus) if point is None else menu.hit(*point)
+        if index is None:
+            return None
+        context = id(menu), menu.page, menu.dropdown
+        if menu.dropdown:
+            return (*context, 'option', getattr(menu, 'dropdown_control', 0), index)
+        if isinstance(menu, GameMenu) and menu.page == 'menu' and not menu.items[index].enabled:
+            return None
+        if isinstance(menu, DevelopmentMenu) and index not in menu.controls:
+            return None
+        if isinstance(menu, DevelopmentMenu) and menu.preview_enabled and index == 4:
+            if menu.map_enabled:
+                room = menu.screen if point is None else menu.map_hit(*point)
+                return (*context, 'room', menu.level_number, room) if room is not None else None
+            part = menu.section_index if point is None else menu.gallery_hit(*point)
+            return (*context, 'part', part) if part is not None else None
+        return (*context, 'control', index)
+
+    def menu_key_action(self, menu, event):
+        fields = ('page', 'focus', 'dropdown', 'option_index', 'level_index', 'screen_index',
+                  'section_index', 'gallery_page', 'screenshot_scale')
+        before = tuple(getattr(menu, name, None) for name in fields)
+        if event.keysym in ('Return', 'KP_Enter', 'space') and self.menu_sound_target(menu) is not None:
+            self.play_menu_sound('click')
+        action = menu.key(event.keysym, backwards=bool(event.state & 1))
+        if (event.keysym in ('Up', 'Down', 'Left', 'Right', 'Tab')
+                and before != tuple(getattr(menu, name, None) for name in fields)
+                and self.menu_sound_target(menu) is not None):
+            self.play_menu_sound('hover')
+        return action
+
     def dev_key_press(self, event):
         alt = alt_pressed(event, self.window_keys_down)
         # Closing the host window must bypass intro, pause and menu filters.
@@ -658,12 +701,14 @@ class WindowControls:
         if event.keysym == "F2":
             if not repeated:
                 self.toggle_screenshot_menu(event)
+                self.play_menu_sound('click')
             return "break"
         if event.keysym == "F5" or event.keysym == "F3" and not self.development_available():
             return "break"
         if event.keysym == "F3":
             if not repeated:
                 self.open_dev_mode(event)
+                self.play_menu_sound('click')
             return "break"
         if (self.paused and self.gameplay_controls_available()
                 and event.keysym in PAUSE_GAMEPLAY_KEYS
@@ -680,6 +725,7 @@ class WindowControls:
         if event.keysym == "F1":
             if not repeated:
                 self.open_game_menu()
+                self.play_menu_sound('click')
             return "break"
         command = {"n": "confirm_new", "r": "restart", "t": "sound", "m": "music",
                    "s": "save", "o": "open", "h": "hall", "v": "about"}.get(
@@ -700,7 +746,7 @@ class WindowControls:
             if repeated and event.keysym in ("Return", "KP_Enter", "space"):
                 return "break"
             page = self.game_menu.page
-            self.apply_game_action(self.game_menu.key(event.keysym, backwards=bool(event.state & 1)))
+            self.apply_game_action(self.menu_key_action(self.game_menu, event))
             if self.game_menu is None or self.game_menu.page != page:
                 self.pause_resume_keys.update(self.window_keys_down)
             return "break"
@@ -743,9 +789,7 @@ class WindowControls:
             return self.escape_key(event)
         if repeated and event.keysym in ("Return", "KP_Enter", "space"):
             return "break"
-        self.apply_dev_action(
-            self.dev_menu.key(event.keysym, backwards=bool(event.state & 1))
-        )
+        self.apply_dev_action(self.menu_key_action(self.dev_menu, event))
         if self.dev_menu is None:
             self.pause_resume_keys.add(event.keysym)
         return "break"
@@ -786,6 +830,8 @@ class WindowControls:
         point = self.dev_pointer(event)
         if point is not None:
             if self.game_menu is not None:
+                if self.menu_sound_target(self.game_menu, point) is not None:
+                    self.play_menu_sound('click')
                 self.apply_game_action(self.game_menu.click(*point))
                 self.pause_resume_keys.update(self.window_keys_down)
             elif getattr(self, "copy_challenge", None) is not None:
@@ -797,6 +843,8 @@ class WindowControls:
                         self.copy_challenge.focus = focus
                         self.render()
             else:
+                if self.menu_sound_target(self.dev_menu, point) is not None:
+                    self.play_menu_sound('click')
                 self.apply_dev_action(self.dev_menu.click(*point))
         return "break"
 
@@ -836,6 +884,10 @@ class WindowControls:
         menu = self.game_menu or self.dev_menu
         if menu is not None:
             point = self.dev_pointer(event)
+            target = self.menu_sound_target(menu, point if point is not None else (-1, -1))
+            if target is not None and target != getattr(self, 'ui_hover_target', None):
+                self.play_menu_sound('hover')
+            self.ui_hover_target = target
             if menu.hover(*(point if point is not None else (-1, -1))):
                 if menu is self.dev_menu:
                     self.redraw_dev_menu()
@@ -854,6 +906,7 @@ class WindowControls:
         self.present_viewport()
 
     def dev_pointer_leave(self, _event):
+        self.ui_hover_target = None
         menu = self.dev_menu
         if menu is not None and menu.preview_enabled:
             if menu.hover(-1, -1):
@@ -869,6 +922,7 @@ class WindowControls:
                     and self.dev_menu.gallery_count > 1):
                 delta = getattr(event, 'delta', 0)
                 self.dev_menu.turn_gallery_page(-1 if delta > 0 or getattr(event, 'num', None) == 4 else 1)
+                self.play_menu_sound('click')
                 self.redraw_dev_menu()
             return 'break'
         if not self.dev_menu.dropdown:
@@ -879,7 +933,10 @@ class WindowControls:
             steps = (-max(1, abs(delta) // 120) if delta > 0 else
                      max(1, abs(delta) // 120) if delta < 0 else
                      -1 if getattr(event, "num", None) == 4 else 1)
+            previous = self.dev_menu.option_index
             self.dev_menu.scroll(steps)
+            if self.dev_menu.option_index != previous:
+                self.play_menu_sound('hover')
             self.render()
         return "break"
 

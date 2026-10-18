@@ -14,6 +14,9 @@ These are host development tools, not recovered Macintosh features.
 overdraw. Shared rounded edges keep neighboring thumbnails stitched and their
 hit regions consistent. The level-three map includes all 32 rooms. Levels 1
 and 2 retain their existing supported teleport destinations and route labels.
+The Screen/Room wording is a host convention, not an original visible menu:
+level-one screen numbers follow the supported route, level two has hand-labelled
+destinations, and level-three Room N uses the original zero-based LEVL room ID + 1.
 
 Maps are regenerated from current `LevelRenderer` scenery, not loaded from an
 old `level3-clean-map.png`. A private cavern/harbor state supplies stationary
