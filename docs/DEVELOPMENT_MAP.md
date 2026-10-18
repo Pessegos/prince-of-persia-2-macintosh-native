@@ -19,9 +19,12 @@ level-one screen numbers follow the supported route, level two has hand-labelled
 destinations, and level-three Room N uses the original zero-based LEVL room ID + 1.
 
 Maps are regenerated from current `LevelRenderer` scenery, not loaded from an
-old `level3-clean-map.png`. A private cavern/harbor state supplies stationary
-torches, lava and flasks. Retained scenery uses the same deterministic route
-as the clean map exporter. Setup preserves the global RNG; no live actor,
+old `level3-clean-map.png`. Private cavern/harbor/desert states supply stationary
+torches, lava, flasks and the closed desert stone door with six settled, raised
+puzzle stones. The desert preview uses a fixed symbol and marked stone without
+calling the randomized live-room initializer. Separate original desert room
+pictures retain their native horizon/perspective seams. Retained scenery uses
+the same deterministic route as the clean map exporter. Setup preserves the global RNG; no live actor,
 gate, potion, animation clock or room buffer is borrowed or advanced.
 
 Original opponent records and artwork are included at their initial positions
@@ -45,6 +48,12 @@ level retains its own last room for this session. Return uses the ordinary
 safe-entry teleport, not a save-state restore, and preserves the prior pause.
 
 The actual current room has a cyan outline, shown only for the live level.
+Persistent mint Start and coral Exit borders and badges identify the native
+entry and every usable exit, independently of hover/current-room selection.
+Hover labels include Start/Exit where applicable. Level 3 marks Room 1 as Start
+and Rooms 13 and 30 as Exit; the kind-17 entrance door is excluded, matching
+the native exit handler. Level 1 ends at the ship (screen 10), and level 2
+ends through the stone chamber (2 (Stones)), not the far-right shore.
 Keyboard destination selection is white only after arrow-key navigation; opening
 the map, changing levels or moving the mouse clears that pending marker. It does
 not move the current-room marker to a different room/level. Hovering brightens only the room
@@ -99,8 +108,10 @@ at 5610x2160, without labels or actors. `--enemies` writes the separate
 `tests/test_development_map.py` covers topology, all selectable rooms, spatial
 keys, nested page/back/Escape navigation, key-repeat protection, uniform fit,
 hover/click/gaps, popup/tooltip priority, lazy caching, RNG and live-world
-isolation, original bone poses, actor-only pixel differences, native-source
-high-resolution presentation, alternating native/HD cache reuse, tabless
+isolation, all native entry/exit landmarks, persistent native/HD badges and
+cached marker metadata, settled desert puzzle scenery, original bone poses,
+actor-only pixel differences, native-source high-resolution presentation,
+alternating native/HD cache reuse, tabless
 tools/playback navigation and actual safe F3 teleport. Real Tk photo tests at
 four viewport sizes compare partial hover updates byte-for-byte against full
 redraws, including tooltips, blank-space/leave cleanup and unchanged live state.

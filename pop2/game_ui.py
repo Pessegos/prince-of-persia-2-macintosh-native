@@ -793,31 +793,59 @@ class DevelopmentMenu:
             return (round(x1 * sx + ox), round(y1 * sy + oy),
                     round(x2 * sx + ox) - 1, round(y2 * sy + oy) - 1)
 
+        markers = ([(preview.start, 'Start', '#7fdfaa')] if preview.start in preview.rooms else [])
+        markers += [(label, 'Exit', '#ff9d7a') for label in sorted(preview.exits) if label in preview.rooms]
+        for label, _caption, color in markers:
+            draw.rectangle(room_rect(label), outline=color, width=max(1, round(min(sx, sy))))
         if self.screen in preview.rooms and self.focus == 4 and self.preview_keyboard_selection:
             draw.rectangle(room_rect(self.screen), outline='#eeeeee', width=max(1, round(min(sx, sy))))
         if self.current_level == self.level_number and self.current_screen in preview.rooms:
             draw.rectangle(room_rect(self.current_screen), outline='#63c8e5',
                            width=max(1, round(min(sx, sy))))
+        tooltip = None
         if self.hovered_screen in preview.rooms:
             label = self.hovered_screen
             x1, y1, x2, y2 = room_rect(label)
             rect = x1, y1, x2 + 1, y2 + 1
             image.paste(ImageEnhance.Brightness(image.crop(rect)).enhance(1.35), (x1, y1))
             draw.rectangle((x1, y1, x2, y2), outline=gold, width=max(1, round(2 * min(sx, sy))))
-            label = label if label.startswith('Room ') else f'Screen {label}'
-            glyphs = font.text(label, gold)
+            caption = label if label.startswith('Room ') else f'Screen {label}'
+            if label == preview.start:
+                caption += ' - Start'
+            if label in preview.exits:
+                caption += ' - Exit'
+            glyphs = font.text(caption, gold)
             width = min(round((glyphs.width + 12) * sx), size[0] - 1)
             tx = max(0, min((x1 + x2 - width) // 2, size[0] - width - 1))
             ty = y1 - round(20 * sy) if y1 >= round(20 * sy) else y2 + round(3 * sy)
             ty = min(ty, size[1] - round(19 * sy))
-            draw.rectangle((tx, ty, tx + width, ty + round(18 * sy)),
-                           fill='#181818', outline=gold, width=max(1, round(min(sx, sy))))
             ink = glyphs.getbbox()
             if ink:
                 glyphs = glyphs.crop((0, ink[1], glyphs.width, ink[3]))
                 glyphs = glyphs.resize((min(round(glyphs.width * sx), width - round(12 * sx)),
                                         max(1, round(glyphs.height * sy))), Image.Resampling.NEAREST)
-                image.paste(glyphs, (tx + round(6 * sx), ty + round(4 * sy)), glyphs)
+                tooltip = (tx, ty, width, glyphs)
+        for label, caption, color in markers:
+            x1, y1, x2, y2 = room_rect(label)
+            glyphs = font.text(caption, color)
+            ink = glyphs.getbbox()
+            if ink is None:
+                continue
+            glyphs = glyphs.crop((0, ink[1], glyphs.width, ink[3]))
+            pad = max(1, round(2 * scale))
+            factor = min(0.65 * scale, max(1, x2 - x1 - pad * 2) / glyphs.width,
+                         max(1, (y2 - y1) / 2 - pad * 2) / glyphs.height)
+            glyphs = glyphs.resize((max(1, round(glyphs.width * factor)),
+                                    max(1, round(glyphs.height * factor))), Image.Resampling.NEAREST)
+            top = y2 - glyphs.height - pad * 2 if caption == 'Exit' else y1
+            draw.rectangle((x1, top, x1 + glyphs.width + pad * 2, top + glyphs.height + pad * 2),
+                           fill='#181818', outline=color, width=max(1, round(scale)))
+            image.paste(glyphs, (x1 + pad, top + pad), glyphs)
+        if tooltip is not None:
+            tx, ty, width, glyphs = tooltip
+            draw.rectangle((tx, ty, tx + width, ty + round(18 * sy)),
+                           fill='#181818', outline=gold, width=max(1, round(min(sx, sy))))
+            image.paste(glyphs, (tx + round(6 * sx), ty + round(4 * sy)), glyphs)
         return image
 
     def present_map(self, frame, font):

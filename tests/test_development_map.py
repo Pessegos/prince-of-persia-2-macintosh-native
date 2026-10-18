@@ -7,7 +7,8 @@ from unittest.mock import Mock, patch
 
 from PIL import Image, ImageChops
 
-from pop2.development_map import DevelopmentMap, MAP_SIZE, build_development_map, room_positions
+from pop2.development_map import (DevelopmentMap, MAP_SIZE, build_development_map,
+                                  level_landmarks, room_positions)
 from pop2.game_ui import DevelopmentMenu
 from pop2.paths import ASSET_DIR
 
@@ -27,6 +28,23 @@ def room_point(menu, label):
 
 
 class DevelopmentMapModelTests(unittest.TestCase):
+    def test_landmarks_use_native_start_and_all_exit_rooms_but_not_entrance(self):
+        labels = {0: 'Room 1', 12: 'Room 13', 29: 'Room 30', 31: 'Room 32'}
+        exits = {(0, 14), (12, 16), (29, 25)}
+        terrain = SimpleNamespace(tile=lambda room, column, row:
+                                  SimpleNamespace(kind=17 if (room, row * 10 + column) in exits else 1))
+        level = SimpleNamespace(number=3, start_room=0)
+        self.assertEqual(level_landmarks(level, terrain, labels),
+                         ('Room 1', frozenset({'Room 13', 'Room 30'})))
+
+    def test_custom_endings_are_the_ship_and_stone_chamber_not_the_far_shore(self):
+        terrain = SimpleNamespace(tile=lambda *_: SimpleNamespace(kind=1))
+        self.assertEqual(level_landmarks(SimpleNamespace(number=1, start_room=3), terrain,
+                                         {3: '1', 18: '10'}), ('1', frozenset({'10'})))
+        self.assertEqual(level_landmarks(SimpleNamespace(number=2, start_room=1), terrain,
+                                         {0: '2 (Stones)', 1: '1', 2: 'Right shore'}),
+                         ('1', frozenset({'2 (Stones)'})))
+
     def menu(self, opened=True):
         atlas = preview()
         return DevelopmentMenu(tuple(atlas.rooms), 0, False,
@@ -259,6 +277,9 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
             with self.subTest(level=number):
                 level = self.resources.level(number)
                 atlas = build_development_map(level)
+                expected = {1: ('1', {'10'}), 2: ('1', {'2 (Stones)'}),
+                            3: ('Room 1', {'Room 13', 'Room 30'})}[number]
+                self.assertEqual((atlas.start, atlas.exits), expected)
                 self.assertEqual(atlas.image.size, MAP_SIZE)
                 self.assertEqual(set(atlas.rooms), set(LevelRenderer(level).screen_entries()))
                 positions = room_positions(LevelMap(level.data))
@@ -267,6 +288,48 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
                 for label, (left, top, right, bottom) in atlas.rooms.items():
                     self.assertEqual(atlas.hit((left + right) / 2, (top + bottom) / 2), label)
                     self.assertEqual(atlas.source_frames[label].size, (510, 360))
+
+    def test_desert_map_includes_closed_door_and_settled_stones_without_changing_rng(self):
+        from pop2.desert import DesertScene
+        from pop2.desert_state import DesertState
+        from pop2.render_opening import load_resource_file
+
+        before = random.getstate()
+        atlas = build_development_map(self.resources.level(2))
+        self.assertEqual(random.getstate(), before)
+        scene = DesertScene.read(load_resource_file('Desert.rsrc'), 0)
+        world = DesertState(symbol=0, marked_stone=1)
+        for stone in world.stones:
+            stone.phase = 13
+        reference = scene.draw(scene.room.background.copy(), 0, world)
+        reference = Image.alpha_composite(reference, scene.room.foreground).crop((0, 0, 510, 360)).convert('RGB')
+        actual = atlas.source_frames['2 (Stones)']
+        self.assertEqual(actual.tobytes(), reference.tobytes())
+        old = Image.alpha_composite(scene.room.background, scene.room.foreground).convert('RGB')
+        for rect in ((13, 75, 86, 248), (100, 205, 440, 250)):
+            self.assertIsNotNone(ImageChops.difference(actual.crop(rect), old.crop(rect)).getbbox())
+
+    def test_landmark_badges_stay_visible_without_hover_and_at_high_resolution(self):
+        from pop2.game_ui import MacintoshFont
+
+        atlas = build_development_map(self.resources.level(3))
+        font = MacintoshFont(self.resources.prince['NFNT'][23331]['data'])
+        menu = DevelopmentMenu(tuple(atlas.rooms), 0, False,
+                               level_options=((3, 'Level 3', tuple(atlas.rooms)),),
+                               map_provider=lambda _: atlas, map_open=True,
+                               current_level=3, current_screen='Room 17')
+        for size in ((488, 284), (1464, 852)):
+            with self.subTest(size=size):
+                layer = menu.map_layer(font, size)
+                colors = dict((color, count) for count, color in layer.getcolors(layer.width * layer.height))
+                self.assertIn((127, 223, 170, 255), colors)
+                self.assertIn((255, 157, 122, 255), colors)
+                self.assertEqual(layer.size, size)
+        for label, caption in ((atlas.start, 'Start'), ('Room 13', 'Exit'), ('Room 30', 'Exit')):
+            menu.hovered_screen = label
+            with patch.object(font, 'text', wraps=font.text) as draw_text:
+                menu.map_layer(font)
+            self.assertIn(label + ' - ' + caption, [call.args[0] for call in draw_text.call_args_list])
 
     def test_cavern_preview_includes_original_bones_without_touching_rng(self):
         level = self.resources.level(3)
@@ -325,6 +388,8 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
             self.assertEqual(first.rooms, second.rooms)
             self.assertEqual(first.positions, second.positions)
             self.assertEqual(first.enemy_rooms, second.enemy_rooms)
+            self.assertEqual(first.start, second.start)
+            self.assertEqual(first.exits, second.exits)
             self.assertEqual(first.detail((1830, 982)).tobytes(), second.detail((1830, 982)).tobytes())
             with patch('pop2.development_map.build_development_map', return_value=first) as build:
                 cached_development_map(level, 'art-v2', path)

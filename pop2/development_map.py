@@ -74,10 +74,17 @@ def map_enemies(level, positions):
 def clean_room_frames(renderer, terrain, positions, enemies=None):
     """Use a private world/buffer so browsing cannot alter a running game."""
     from pop2.cavern_state import CavernState
+    from pop2.desert_state import DesertState
     from pop2.harbor import Harbor
 
     world = None
+    desert = None
     harbor = Harbor() if renderer.level.kind == 5 else None
+    if renderer.level.number == 2:
+        desert = DesertState(symbol=0, marked_stone=1)
+        # Show the settled puzzle, rather than omitting its animated pieces.
+        for stone in desert.stones:
+            stone.phase = 13
     if renderer.level.number == 3:
         world = CavernState()
         world.configure_entry(renderer.cavern_program.get('entry_exit'))
@@ -99,7 +106,7 @@ def clean_room_frames(renderer, terrain, positions, enemies=None):
                                    for direction in DIRECTIONS)), None)
         if parent is not None and getattr(art, 'retained_mask', None) is not None:
             frame.paste(scenery[parent], (0, 0), art.retained_mask)
-        frame = renderer.animated_layer(frame, room, harbor, caverns=world)
+        frame = renderer.animated_layer(frame, room, harbor, desert=desert, caverns=world)
         frame = Image.alpha_composite(frame, art.foreground)
         scenery[room] = frame.copy()
         if enemies is not None:
@@ -119,7 +126,7 @@ def clean_room_frames(renderer, terrain, positions, enemies=None):
                 frame = Image.alpha_composite(frame, layer)
                 if renderer.level.kind == 3:
                     frame = art.draw_actor_foreground(frame, actor.state, bounds)
-        frame = renderer.animated_layer(frame, room, harbor, front=True, caverns=world)
+        frame = renderer.animated_layer(frame, room, harbor, front=True, desert=desert, caverns=world)
         yield room, frame.crop((0, 0, *ROOM_SIZE)).convert('RGB')
 
 
@@ -131,6 +138,8 @@ class DevelopmentMap:
     enemy_rooms: frozenset = frozenset()
     source_frames: dict = field(default_factory=dict, repr=False, compare=False)
     scaled_images: dict = field(default_factory=dict, repr=False, compare=False)
+    start: str | None = None
+    exits: frozenset = frozenset()
 
     def transform(self, size):
         scale = min(size[0] / self.image.width, size[1] / self.image.height)
@@ -172,6 +181,20 @@ class DevelopmentMap:
                    default=(label, 0, 0))[0]
 
 
+def level_landmarks(level, terrain, labels):
+    """Native entry, all usable exit doors, and the two custom level endings."""
+    exits = {room for room in labels if room != level.start_room
+             and any(terrain.tile(room, cell % 10, cell // 10).kind == 17 for cell in range(30))}
+    if level.number == 1:
+        from pop2.harbor import SHIP_ROOM
+
+        exits.add(SHIP_ROOM)
+    elif level.number == 2:
+        # DesertFunc leaves through the left side of the stone chamber.
+        exits.add(0)
+    return labels.get(level.start_room), frozenset(labels[room] for room in exits if room in labels)
+
+
 def build_development_map(level, include_enemies=True):
     renderer = LevelRenderer(level, preload_room=False)
     terrain = LevelMap(level.data)
@@ -201,9 +224,10 @@ def build_development_map(level, include_enemies=True):
         image.paste(frame.resize((x2 - x1, y2 - y1), Image.Resampling.LANCZOS), (x1, y1))
         rooms[labels[room]] = x1, y1, x2, y2
         frames[labels[room]] = frame
+    start, exits = level_landmarks(level, terrain, {room: labels[room] for room in positions})
     return DevelopmentMap(image, rooms, {labels[room]: point for room, point in positions.items()},
                           frozenset(labels[room] for room, actors in enemies[1].items() if actors)
-                          if enemies is not None else frozenset(), frames)
+                          if enemies is not None else frozenset(), frames, start=start, exits=exits)
 
 
 def cached_development_map(level, fingerprint, directory=None):
@@ -218,19 +242,22 @@ def cached_development_map(level, fingerprint, directory=None):
             rooms = {label: tuple(rect) for label, rect in metadata['rooms'].items()}
             positions = {label: tuple(point) for label, point in metadata['positions'].items()}
             frames = {label: images[label] for label in rooms}
+            start, exits = metadata['start'], frozenset(metadata['exits'])
             if (images['overview'].size != MAP_SIZE or not rooms or set(rooms) != set(positions)
                     or any(len(rect) != 4 or not 0 <= rect[0] < rect[2] <= MAP_SIZE[0]
                            or not 0 <= rect[1] < rect[3] <= MAP_SIZE[1] for rect in rooms.values())
                     or any(len(point) != 2 or any(type(v) is not int for v in point)
                            for point in positions.values())
-                    or any(frame.size != ROOM_SIZE for frame in frames.values())):
+                    or any(frame.size != ROOM_SIZE for frame in frames.values())
+                    or start is not None and start not in rooms or not exits.issubset(rooms)):
                 raise ValueError('Invalid cached map geometry')
             return DevelopmentMap(images['overview'], rooms, positions,
-                                  frozenset(metadata['enemies']), frames)
+                                  frozenset(metadata['enemies']), frames, start=start, exits=exits)
         except (ValueError, KeyError, TypeError, IndexError, AttributeError):
             pass
     result = build_development_map(level)
     write_preview(path, fingerprint,
-                  dict(rooms=result.rooms, positions=result.positions, enemies=sorted(result.enemy_rooms)),
+                  dict(rooms=result.rooms, positions=result.positions, enemies=sorted(result.enemy_rooms),
+                       start=result.start, exits=sorted(result.exits)),
                   dict(overview=result.image, **result.source_frames))
     return result
