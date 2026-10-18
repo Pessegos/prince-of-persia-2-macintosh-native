@@ -793,9 +793,9 @@ class DevelopmentMenu:
             return (round(x1 * sx + ox), round(y1 * sy + oy),
                     round(x2 * sx + ox) - 1, round(y2 * sy + oy) - 1)
 
-        markers = ([(preview.start, 'Entrance', (127, 223, 170))]
+        markers = ([(preview.start, 'Start', (127, 223, 170))]
                    if preview.start in preview.rooms else [])
-        markers += [(label, 'Exit', (255, 157, 122))
+        markers += [(label, 'End', (255, 157, 122))
                     for label in sorted(preview.exits) if label in preview.rooms]
         if self.screen in preview.rooms and self.focus == 4 and self.preview_keyboard_selection:
             draw.rectangle(room_rect(self.screen), outline='#eeeeee', width=max(1, round(min(sx, sy))))
@@ -811,9 +811,9 @@ class DevelopmentMenu:
             draw.rectangle((x1, y1, x2, y2), outline=gold, width=max(1, round(2 * min(sx, sy))))
             caption = label if label.startswith('Room ') else f'Screen {label}'
             if label == preview.start:
-                caption += ' - Entrance'
+                caption += ' - Start'
             if label in preview.exits:
-                caption += ' - Exit'
+                caption += ' - End'
             glyphs = font.text(caption, gold)
             width = min(round((glyphs.width + 12) * sx), size[0] - 1)
             tx = max(0, min((x1 + x2 - width) // 2, size[0] - width - 1))
@@ -847,7 +847,7 @@ class DevelopmentMenu:
                                     max(1, round(glyphs.height * factor))), Image.Resampling.NEAREST)
             glyphs.putalpha(glyphs.getchannel('A').point(lambda alpha: round(alpha * 0.62)))
             x1 += pad
-            top = y2 + 1 - glyphs.height - pad * 3 if caption == 'Exit' else y1 + pad
+            top = y2 + 1 - glyphs.height - pad * 3 if caption == 'End' else y1 + pad
             marker_draw.rectangle((x1, top, x1 + glyphs.width + pad * 2, top + glyphs.height + pad * 2),
                                   fill=(12, 15, 13, 130))
             overlay.alpha_composite(glyphs, (x1 + pad, top + pad))

@@ -334,7 +334,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
                 self.assertNotIn((127, 223, 170, 255),
                                  {color for _count, color in layer.getcolors(layer.width * layer.height)})
                 self.assertEqual(layer.size, size)
-        for label, caption in ((atlas.start, 'Entrance'), ('Room 13', 'Exit'), ('Room 30', 'Exit')):
+        for label, caption in ((atlas.start, 'Start'), ('Room 13', 'End'), ('Room 30', 'End')):
             menu.hovered_screen = label
             with patch.object(font, 'text', wraps=font.text) as draw_text:
                 menu.map_layer(font)
