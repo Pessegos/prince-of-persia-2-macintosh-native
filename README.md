@@ -23,15 +23,14 @@ The idea isn't to turn it into a full settings menu, but simply to keep things c
 
 ### Original Macintosh
 
-|                                              File                                              |                                              Game                                              |
-| :--------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------: |
-| <img src="docs/screenshots/macintosh-file.png" alt="Original Macintosh File menu" width="350"> | <img src="docs/screenshots/macintosh-game.png" alt="Original Macintosh Game menu" width="350"> |
+<p>
+  <img src="docs/github readme/macintosh-file.png" alt="Original Macintosh File menu" width="350">
+  <img src="docs/github readme/macintosh-game.png" alt="Original Macintosh Game menu" width="350">
+</p>
 
 ### Windows Port (F1)
 
-<p align="center">
-  <img src="docs/screenshots/port-game-menu.png" alt="Windows port F1 game menu" width="700">
-</p>
+<img src="docs/github readme/game-menu.png" alt="Windows port F1 game menu" width="700">
 
 
 ## Developer Tools (F3)
