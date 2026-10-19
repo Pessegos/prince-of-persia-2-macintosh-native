@@ -339,7 +339,7 @@ class CombatEncounter:
 
     def health_opponent(self):
         # DrawOppMeter selects from the active NPC bank, including side-room
-        # actors. Keep HUD selection separate from same-room sword contact.
+        # actors. Keep HUD selection separate from the sword-control target.
         candidates = []
         for guard in self.active_guards():
             if not guard.alive or guard.row != self.player.row:
@@ -1058,18 +1058,23 @@ class CombatEncounter:
         events, hits = [], {}
         # CODE:6 0x581c/0x5856 tests NPC contact first, then Prince contact;
         # both wound marks are collected before CheckStab changes hurt poses.
-        pairs = [("guard", g, "player", self.player, "player") for g in self.guards]
+        guards = self.active_guards()
+        pairs = [("guard", g, "player", self.player, "player") for g in guards]
         pairs.extend(("player", self.player, "guard", g, index)
-                     for index, g in enumerate(self.guards))
-        for fighter in (self.player, *self.guards):
+                     for index, g in enumerate(guards))
+        for fighter in (self.player, *guards):
             if fighter.state.action not in STRIKE_POSES:
                 fighter.contact_consumed = False
-        consumed = {id(f): f.contact_consumed for f in (self.player, *self.guards)}
+        consumed = {id(f): f.contact_consumed for f in (self.player, *guards)}
         for name, attacker, target_name, defender, target_id in pairs:
-            if (attacker.state.action not in STRIKE_POSES or consumed[id(attacker)]
-                    or not contact_allowed(attacker, defender)):
+            if attacker.state.action not in STRIKE_POSES or consumed[id(attacker)]:
                 continue
-            distance = opponent_distance(attacker, defender)
+            # AI and drawing already rebase side-room actors. Use the same
+            # geometry for contact, but apply wounds/parries to real actors.
+            view = self._project_fighter(defender, attacker.room)
+            if view is None or not contact_allowed(attacker, view):
+                continue
+            distance = opponent_distance(attacker, view)
             if (attacker.state.facing != defender.state.facing
                     and 61 <= distance <= 99
                     and defender.sword_drawn and defender.state.action in BLOCK_POSES):

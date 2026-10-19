@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from pop2.combat import GuardSpawn, strike_range
+from pop2.combat import GuardSpawn, select_sequence, strike_range
 from pop2.combat_art import GuardArtwork, HealthArtwork
 from pop2.game_session import GameResources, GameSession
 from pop2.paths import ASSET_DIR
@@ -39,6 +39,145 @@ class SkeletonTests(unittest.TestCase):
             combat.update_guard_alerts()
             combat.advance_guard()
             combat.world_frame += 1
+
+    def boundary_encounter(self, side='left', armed=False):
+        game, combat, actor = self.encounter(14)
+        combat.enter_room(16 if side == 'left' else 13, 2)
+        combat.player.state.target_x = combat.player.state.current_x = (
+            40 if side == 'left' else 470)
+        combat.player.state.facing = int(side == 'right')
+        combat.player.state.action = 171 if armed else 15
+        combat.player.sword_drawn = armed
+        actor.skeleton.phase = 'active'
+        actor.life = actor.max_life
+        actor.sword_drawn = actor.targetable = True
+        actor.alert_mode = 3
+        actor.state.facing = int(side == 'left')
+        actor.state.target_x = actor.state.current_x = (473 if side == 'left' else 17)
+        select_sequence(actor, 227)
+        actor.runtime.next_frame()
+        return game, combat, actor
+
+    def test_unarmed_prince_is_hit_across_both_room_edges_without_god_mode(self):
+        for side in ('left', 'right'):
+            with self.subTest(side=side):
+                _, combat, actor = self.boundary_encounter(side)
+                self.assertFalse(getattr(combat, 'god_mode', False))
+                self.assertNotIn(actor, combat.guards)
+                actor.state.action = 154
+                position = actor.room, actor.state.target_x, actor.state.current_x
+                events = combat.resolve_contacts()
+                self.assertEqual([(e.kind, e.actor) for e in events], [('hit', 'player')])
+                self.assertEqual(combat.player.life, 2)
+                self.assertTrue(combat.player.sword_drawn)
+                self.assertTrue(combat.player.recovering)
+                self.assertEqual(position, (actor.room, actor.state.target_x, actor.state.current_x))
+                self.assertIs(combat.room_encounters[14][0][0], actor)
+                self.assertEqual(combat.resolve_contacts(), [])
+                self.assertEqual(combat.player.life, 2)
+
+    def test_side_room_contact_preserves_god_mode_protection(self):
+        _, combat, actor = self.boundary_encounter()
+        combat.god_mode = True
+        actor.state.action = 154
+        self.assertEqual(combat.resolve_contacts()[0].kind, 'hit')
+        self.assertEqual(combat.player.life, 3)
+        self.assertTrue(combat.player.recovering)
+
+    def test_prince_can_hit_and_collapse_the_real_side_room_skeleton(self):
+        for side in ('left', 'right'):
+            with self.subTest(side=side):
+                _, combat, actor = self.boundary_encounter(side, armed=True)
+                actor.life = 1
+                combat.player.state.action = 154
+                events = combat.resolve_contacts()
+                self.assertEqual([(e.kind, e.actor) for e in events], [('death', 'guard')])
+                self.assertEqual((actor.life, actor.room, actor.skeleton.phase),
+                                 (0, 14, 'collapsing'))
+                self.assertEqual(actor.skeleton.timer, 120)
+                self.assertIs(combat.room_encounters[14][0][0], actor)
+
+    def test_side_room_parries_update_real_actors_in_both_directions(self):
+        for side in ('left', 'right'):
+            for attacker_name in ('player', 'guard'):
+                with self.subTest(side=side, attacker=attacker_name):
+                    _, combat, actor = self.boundary_encounter(side, armed=True)
+                    attacker, defender = ((combat.player, actor) if attacker_name == 'player'
+                                          else (actor, combat.player))
+                    attacker.state.action, defender.state.action = 154, 150
+                    positions = [(f.room, f.state.target_x) for f in (attacker, defender)]
+                    positions[0] = (attacker.room, attacker.state.target_x
+                                    + (-6 if attacker.state.facing else 6))
+                    events = combat.resolve_contacts()
+                    self.assertEqual([(e.kind, e.actor) for e in events],
+                                     [('parry', 'guard' if attacker_name == 'player' else 'player')])
+                    self.assertEqual((attacker.state.sequence_id, defender.state.action), (69, 161))
+                    self.assertEqual((actor.life, combat.player.life), (3, 3))
+                    self.assertEqual(positions, [(f.room, f.state.target_x)
+                                                 for f in (attacker, defender)])
+
+    def test_simultaneous_boundary_hits_keep_prince_priority(self):
+        _, combat, actor = self.boundary_encounter(armed=True)
+        combat.player.state.action = actor.state.action = 154
+        self.assertEqual([(e.kind, e.actor) for e in combat.resolve_contacts()], [('hit', 'guard')])
+        self.assertEqual((combat.player.life, actor.life), (3, 2))
+
+    def test_boundary_contact_still_requires_range_floor_and_targetable_actors(self):
+        for condition in ('range', 'floor', 'hidden', 'dead', 'unlinked_room'):
+            with self.subTest(condition=condition):
+                _, combat, actor = self.boundary_encounter()
+                actor.state.action = 154
+                if condition == 'range':
+                    combat.player.state.target_x = 200
+                elif condition == 'floor':
+                    combat.player.row = 1
+                elif condition == 'hidden':
+                    actor.targetable = False
+                elif condition == 'dead':
+                    actor.life = 0
+                else:
+                    combat.enter_room(0, 2)
+                self.assertEqual(combat.resolve_contacts(), [])
+                self.assertEqual(combat.player.life, 3)
+
+    def test_late_waking_skeleton_can_hit_prince_waiting_in_room17_entry(self):
+        _, combat, actor = self.encounter(14)
+        combat.player.state.target_x = combat.player.state.current_x = 300
+        self.tick(combat, 10)
+        combat.enter_room(16, 2)
+        combat.player.state.target_x = combat.player.state.current_x = 40
+        combat.player.state.facing, combat.player.state.action = 0, 15
+        combat.player.sword_drawn = False
+        for _ in range(100):
+            self.tick(combat)
+            if combat.resolve_contacts():
+                break
+        self.assertEqual((actor.room, combat.player.room), (14, 16))
+        self.assertEqual(combat.player.life, 2)
+        self.assertTrue(combat.player.sword_drawn)
+
+    def test_live_boundary_hit_reaches_scene_health_and_sword_state(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(3)
+        scene.jump_to_room(14, row=2, x=300, facing=1)
+        scene.combat.rng = random.Random(17)
+        actor = scene.combat.guards[0]
+        with patch.object(scene, 'render'):
+            RooftopSceneTests.tick(self, 10)
+            scene.jump_to_room(16, row=2, x=40, facing=0, reset_guards=False)
+            self.assertFalse(scene.god_mode)
+            self.assertFalse(scene.peaceful)
+            for _ in range(100):
+                RooftopSceneTests.tick(self)
+                if scene.combat.player.life < 3:
+                    break
+        self.assertEqual((actor.room, scene.room_id), (14, 16))
+        self.assertEqual(scene.combat.player.life, 2)
+        self.assertTrue(scene.sword_drawn)
+        self.assertTrue(scene.combat.player.recovering)
 
     def test_native_generators_preserve_individual_skills_and_life_fields(self):
         level = self.resources.level(3).data

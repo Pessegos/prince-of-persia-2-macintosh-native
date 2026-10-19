@@ -295,7 +295,7 @@ The existing side-room coordinate view lets shaking finish and activation
 begin while the Prince has already crossed into the adjacent room, provided
 the original row/range/path tests still pass. The health meter now selects
 the nearest living same-floor actor in the current or horizontal side rooms,
-independently of the same-room sword-contact target. Dormant bones have no
+independently of the same-room sword-control target. Dormant bones have no
 meter; their restored life appears immediately at the start of rising 88,
 even while the skeleton is still offscreen. A later move to a different
 floor or beyond the adjacent rooms does not retain a stale pursuit meter.
@@ -308,6 +308,23 @@ separate DrawKidMeter still retains empty bottles and its one-life blink.
 Pixel tests cover progressive damage on both sides of a room boundary,
 nearest-target selection, hidden opponents, inert bones and a live run past
 the Room 15 skeleton into Room 17 before it finishes shaking and rises.
+
+Sword contact must also include the active side-room actors. Previously,
+AutoCtrl and drawing projected the Room 15 skeleton into Room 17, but
+`resolve_contacts` only visited Room 17's ownership list. A skeleton at
+X=473 could repeatedly strike an unarmed Prince waiting at X=40 in Room 17:
+the projected distance was 98 (inside its existing 35..99 range), yet no
+wound was ever processed. This was unrelated to God Mode.
+
+Contact now visits the same active actors as AutoCtrl and projects the
+defender into the attacker's coordinate space before the existing room,
+row, height, range and block tests. Hurt and parry changes still apply to
+the original actors, not their temporary views. Room ownership, activation
+delays, profile probabilities, animations and contact ranges are unchanged.
+Tests cover the recorded late-wake sequence through the live scene, both
+horizontal boundaries, damage and collapse of the real skeleton, parries
+in both directions, Prince priority for simultaneous hits, repeated-contact
+suppression, ineligible targets and explicit God Mode protection.
 
 Ready skeletons use the recovered per-profile advance/block/reblock/counter/
 strike tables, not new aggression constants. GetStrikeRange 6:5c34-5c40
