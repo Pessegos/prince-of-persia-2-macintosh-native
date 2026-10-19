@@ -1,8 +1,12 @@
+import base64
+from dataclasses import replace
+from io import BytesIO
 import json
 import os
 from pathlib import Path
 import random
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -99,8 +103,30 @@ class ProgressSaveTests(unittest.TestCase):
         frame = Image.new('RGBA', (512, 384), 'red')
         frame.paste('blue', (1, 365, 511, 384))
         preview = decode_preview(encode_preview(frame))
-        self.assertEqual(preview.size, (224, 160))
-        self.assertEqual(preview.getcolors(), [(224 * 160, (255, 0, 0))])
+        self.assertEqual(preview.size, (510, 365))
+        self.assertEqual(preview.getcolors(), [(510 * 365, (255, 0, 0))])
+
+    def test_preview_preserves_every_original_scene_pixel_and_legacy_previews_still_load(self):
+        frame = Image.frombytes('RGB', (512, 384), random.Random(17).randbytes(512 * 384 * 3))
+        expected = frame.crop((1, 0, 511, 365))
+        preview = decode_preview(encode_preview(frame))
+        self.assertEqual(preview.tobytes(), expected.tobytes())
+        legacy = expected.resize((224, 160), Image.Resampling.NEAREST)
+        output = BytesIO()
+        legacy.save(output, format='PNG')
+        decoded = decode_preview(base64.b64encode(output.getvalue()).decode('ascii'))
+        self.assertEqual(decoded.size, (224, 160))
+        self.assertEqual(decoded.tobytes(), legacy.tobytes())
+
+    def test_preview_decoder_rejects_unbounded_or_unexpected_image_dimensions(self):
+        for size in ((510, 384), (1020, 730), (223, 160), (0x1000, 1)):
+            with self.subTest(size=size):
+                output = BytesIO()
+                Image.new('RGB', size).save(output, format='PNG')
+                with self.assertRaises(SaveGameError):
+                    decode_preview(base64.b64encode(output.getvalue()).decode('ascii'))
+        with self.assertRaises(SaveGameError):
+            decode_preview('A' * (1024 * 1024 + 1))
 
 
 class SaveBrowserTests(unittest.TestCase):
@@ -180,6 +206,38 @@ class SaveBrowserTests(unittest.TestCase):
         menu = SaveBrowser(list_slots(self.folder), 'save', selected=2)
         menu.switch('load')
         self.assertEqual(menu.selected, 1)
+
+    def test_browser_renders_source_pixels_and_controls_directly_at_output_resolution(self):
+        def glyphs(value, color):
+            image = Image.new('RGBA', (len(value) * 7, 11))
+            for x in range(0, image.width, 2):
+                image.paste(color, (x, 0, x + 1, 11))
+            return image
+
+        font = SimpleNamespace(glyphs=dict.fromkeys(range(128)), text=glyphs)
+        preview = Image.frombytes('RGB', (510, 365), random.Random(31).randbytes(510 * 365 * 3))
+        current = replace(self.slots[0], level=1, resume='Level start', preview=preview)
+        browser = SaveBrowser(self.slots, 'save', current=current)
+        for visible, size in ((False, (512, 384)), (False, (1536, 1152)),
+                              (True, (1434, 1080)), (True, (1020, 768))):
+            with self.subTest(visible=visible, size=size):
+                source = Image.new('RGBA', size, '#0d1117')
+                before = source.tobytes()
+                frame = browser.draw(source, font, visible=visible)
+                self.assertEqual(source.tobytes(), before)
+                sx, sy = size[0] / (510 if visible else 512), size[1] / 384
+                left, top, right, bottom = browser.PREVIEW
+                rect = (round((left + 1 - visible) * sx), round((top + 1) * sy),
+                        round((right - 1 - visible) * sx), round((bottom - 1) * sy))
+                expected = preview.resize((rect[2] - rect[0], rect[3] - rect[1]), Image.Resampling.NEAREST)
+                self.assertEqual(frame.crop(rect).convert('RGB').tobytes(), expected.tobytes())
+                self.assertEqual(frame.getpixel((round((28 - visible) * sx), round(16 * sy))),
+                                 (133, 133, 133, 255))
+                browser.confirmation = 'save'
+                confirmed = browser.draw(source, font, visible=visible)
+                self.assertEqual(confirmed.getpixel((round((80 - visible) * sx), round(121 * sy))),
+                                 (133, 133, 133, 255))
+                browser.confirmation = None
 
 
 if __name__ == '__main__':

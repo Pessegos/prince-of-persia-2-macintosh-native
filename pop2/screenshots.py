@@ -46,12 +46,13 @@ class ScreenshotSettings:
 
 
 def save_screenshot(viewport, settings):
-    if viewport.size != (512, 384):
+    source_scale = viewport.width // 512
+    if not 1 <= source_scale <= 4 or viewport.size != (512 * source_scale, 384 * source_scale):
         raise ValueError("Screenshot requires the native composition buffer")
     if type(settings.scale) is not int or not 1 <= settings.scale <= 4:
         raise ValueError("Screenshot scale must be between 1 and 4")
-    image = viewport.crop(VISIBLE_VIEWPORT).convert("RGB")
-    if settings.scale != 1:
+    image = viewport.crop(tuple(value * source_scale for value in VISIBLE_VIEWPORT)).convert("RGB")
+    if settings.scale != source_scale:
         image = image.resize(tuple(value * settings.scale for value in VISIBLE_SIZE),
                              Image.Resampling.NEAREST)
     folder = Path(settings.folder).expanduser().resolve()

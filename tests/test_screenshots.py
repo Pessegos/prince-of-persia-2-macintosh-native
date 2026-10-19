@@ -48,6 +48,18 @@ class ScreenshotTests(unittest.TestCase):
             with Image.open(second) as image:
                 self.assertEqual(image.getpixel((0, 0)), (255, 0, 0))
 
+    def test_prescaled_composition_is_not_downsampled_before_export(self):
+        frame = Image.new('RGBA', (1536, 1152), 'blue')
+        frame.putpixel((101, 100), (255, 255, 255, 255))
+        with TemporaryDirectory() as directory:
+            path = save_screenshot(frame, ScreenshotSettings(Path(directory), 3))
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (1530, 1152))
+                self.assertEqual(image.tobytes(), frame.crop((3, 0, 1533, 1152)).convert('RGB').tobytes())
+            for size in ((510, 384), (1024, 384), (2560, 1920)):
+                with self.subTest(size=size), self.assertRaises(ValueError):
+                    save_screenshot(Image.new('RGBA', size), ScreenshotSettings(Path(directory), 3))
+
     def test_folder_and_size_persist_and_bad_settings_fall_back_to_defaults(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "settings" / "capture.json"

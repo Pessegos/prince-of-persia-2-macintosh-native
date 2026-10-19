@@ -1,4 +1,4 @@
-"""Local save slots and their native-resolution in-game browser."""
+"""Local save slots and their resolution-aware in-game browser."""
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -183,10 +183,22 @@ class SaveBrowser:
             self.confirmation, self.focus = 'delete', 30
         return 'changed'
 
-    def draw(self, viewport, font):
+    def draw(self, viewport, font, *, visible=False):
         image = Image.alpha_composite(viewport, Image.new('RGBA', viewport.size, (0, 0, 0, 150)))
         draw = ImageDraw.Draw(image)
         gold, white, muted, cyan = '#f4d873', '#eeeeee', '#999999', '#77c9dc'
+        sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
+
+        def point(x, y):
+            return round((x - int(visible)) * sx), round(y * sy)
+
+        def rectangle(rect, **colors):
+            draw.rectangle((*point(*rect[:2]), *point(*rect[2:])),
+                           width=max(1, round(min(sx, sy))), **colors)
+
+        def line(points, color, width=1):
+            draw.line([point(x, y) for x, y in points], fill=color,
+                      width=max(1, round(width * min(sx, sy))))
 
         def text(value, x, y, color=white, width=190, small=False):
             if not value:
@@ -197,37 +209,41 @@ class SaveBrowser:
             ink = glyph.getbbox()
             if ink:
                 glyph = glyph.crop((0, ink[1], glyph.width, ink[3]))
-            if small or glyph.width > width:
-                scale = min(0.7 if small else 1, width / max(1, glyph.width))
-                glyph = glyph.resize((max(1, round(glyph.width * scale)),
-                                      max(1, round(glyph.height * scale))), Image.Resampling.NEAREST)
-            image.paste(glyph, (x, y), glyph)
+            scale = min(0.7 if small else 1, width / max(1, glyph.width))
+            size = (max(1, round(glyph.width * scale * sx)),
+                    max(1, round(glyph.height * scale * sy)))
+            if glyph.size != size:
+                glyph = glyph.resize(size, Image.Resampling.NEAREST)
+            image.paste(glyph, point(x, y), glyph)
 
         def button(rect, label, index, enabled=True, active=False):
-            draw.rectangle(rect, fill='#303030' if self.focus == index else '#222222',
-                           outline=gold if self.focus == index else cyan if active else '#626262')
+            rectangle(rect, fill='#303030' if self.focus == index else '#222222',
+                      outline=gold if self.focus == index else cyan if active else '#626262')
             text(label, rect[0] + 10, rect[1] + 7, white if enabled else muted, rect[2] - rect[0] - 20)
 
-        draw.rectangle(self.PANEL, fill='#181818', outline='#858585')
+        rectangle(self.PANEL, fill='#181818', outline='#858585')
         text('Saved Games', 40, 29, gold)
         text(f'{self.selected + 1:02} / {len(self.slots):02}', 390, 32, muted, 82, True)
         for index, (rect, label) in enumerate(zip(self.TABS, ('Save', 'Load'))):
             button(rect, label, index, active=self.mode == label.lower())
-        draw.line((40, 88, 472, 88), fill='#404040')
+        line(((40, 88), (472, 88)), '#404040')
         for row, slot in enumerate(self.slots[self.page * 6:self.page * 6 + 6]):
             rect = self.row_rect(row)
             selected = self.selected == self.page * 6 + row
-            draw.rectangle(rect, fill='#253033' if selected else '#222222',
-                           outline=gold if self.focus == 10 + row else cyan if selected else '#404040')
+            rectangle(rect, fill='#253033' if selected else '#222222',
+                      outline=gold if self.focus == 10 + row else cyan if selected else '#404040')
             text(slot.name, rect[0] + 9, rect[1] + 7, cyan if selected else white, 112)
             text(f'L{slot.level}' if slot.level else '---' if slot.exists else 'Empty',
                  rect[2] - 48, rect[1] + 10, muted, 40, True)
         slot = self.current if self.mode == 'save' and not self.entry.exists and self.current else self.entry
         left, top, right, bottom = self.PREVIEW
-        draw.rectangle(self.PREVIEW, fill='#0c0c0c', outline='#626262')
+        rectangle(self.PREVIEW, fill='#0c0c0c', outline='#626262')
         if slot.preview is not None:
-            preview = slot.preview.resize((right - left - 2, bottom - top - 2), Image.Resampling.NEAREST)
-            image.paste(preview, (left + 1, top + 1))
+            origin = point(left + 1, top + 1)
+            edge = point(right - 1, bottom - 1)
+            preview = slot.preview.resize((max(1, edge[0] - origin[0]),
+                                           max(1, edge[1] - origin[1])), Image.Resampling.NEAREST)
+            image.paste(preview, origin)
         else:
             text(slot.error or ('No preview' if slot.exists else 'Empty slot'), left + 28, top + 74,
                  muted, right - left - 50)
@@ -241,16 +257,15 @@ class SaveBrowser:
         text(self.error or self.status or slot.date, 238, 315,
              '#ff9b9b' if self.error else muted, 234, True)
         for index, rect in zip((20, 21), self.PAGES):
-            draw.rectangle(rect, fill='#222222', outline=gold if self.focus == index else '#626262')
+            rectangle(rect, fill='#222222', outline=gold if self.focus == index else '#626262')
             x, y = (rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2
             delta = -1 if index == 20 else 1
-            draw.line(((x - delta * 3, y - 5), (x + delta * 3, y), (x - delta * 3, y + 5)),
-                      fill=white, width=2)
+            line(((x - delta * 3, y - 5), (x + delta * 3, y), (x - delta * 3, y + 5)), white, 2)
         text(f'{self.page + 1} / {(len(self.slots) + 5) // 6}', 108, 305, muted, 80, True)
         if self.confirmation:
             image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 140)))
             draw = ImageDraw.Draw(image)
-            draw.rectangle((80, 121, 432, 270), fill='#181818', outline='#858585')
+            rectangle((80, 121, 432, 270), fill='#181818', outline='#858585')
             title = {'save': 'Replace this save?', 'load': 'Load this game?', 'delete': 'Delete this save?'}[self.confirmation]
             text(title, 100, 142, gold, 312)
             text(slot.name, 100, 171, white, 312)

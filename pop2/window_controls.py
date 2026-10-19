@@ -451,6 +451,10 @@ class WindowControls:
             viewport = getattr(self, "native_viewport" if include_ui else "screenshot_viewport", None)
             if viewport is None:
                 raise ValueError("No game frame is available yet")
+            if include_ui and self.game_menu is not None and self.game_menu.page == 'saves':
+                scale = self.screenshot_settings.scale
+                source = self.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
+                viewport = self.draw_screenshot_notice(self.game_menu.save_browser.draw(source, self.ui_font))
             path = save_screenshot(viewport, self.screenshot_settings)
         except (OSError, ValueError) as exc:
             message = "Could not save PNG. Check the screenshot folder."
@@ -1069,6 +1073,11 @@ class WindowControls:
             self.bitmap_presenter.close()
             self.bitmap_presenter = None
         frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+        game_menu = getattr(self, 'game_menu', None)
+        if getattr(game_menu, 'page', None) == 'saves':
+            source = self.screenshot_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+            frame = self.draw_screenshot_notice(
+                game_menu.save_browser.draw(source, self.ui_font, visible=True), visible=True)
         menu = getattr(self, 'dev_menu', None)
         if menu is not None and menu.preview_enabled:
             frame = menu.present_map(frame, self.ui_font).convert('RGB')

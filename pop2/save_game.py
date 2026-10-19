@@ -375,19 +375,18 @@ def read_snapshot(path, resources):
 
 def encode_preview(viewport):
     output = BytesIO()
-    viewport.crop((1, 0, 511, 365)).convert('RGB').resize(
-        (224, 160), Image.Resampling.NEAREST).save(output, format='PNG')
+    viewport.crop((1, 0, 511, 365)).convert('RGB').save(output, format='PNG')
     return base64.b64encode(output.getvalue()).decode('ascii')
 
 
 def decode_preview(value):
     if value is None:
         return None
-    if not isinstance(value, str) or len(value) > 256 * 1024:
+    if not isinstance(value, str) or len(value) > 1024 * 1024:
         raise SaveGameError('Invalid save preview')
     try:
         with Image.open(BytesIO(base64.b64decode(value, validate=True))) as image:
-            if image.format != 'PNG' or image.size != (224, 160):
+            if image.format != 'PNG' or image.size not in ((224, 160), (510, 365)):
                 raise SaveGameError('Invalid save preview size')
             return image.convert('RGB')
     except (OSError, ValueError, Image.DecompressionBombError) as error:

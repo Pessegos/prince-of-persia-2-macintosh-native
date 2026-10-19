@@ -3294,7 +3294,7 @@ class ScenePrototype(WindowControls):
         viewport.paste(text, (x, y), text)
         return viewport
 
-    def draw_screenshot_notice(self, viewport):
+    def draw_screenshot_notice(self, viewport, *, visible=False):
         message = getattr(self, "screenshot_toast", None)
         showing_toast = message is not None
         if not showing_toast and (self.game_menu is None or self.game_menu.page != "screenshots"):
@@ -3302,21 +3302,30 @@ class ScenePrototype(WindowControls):
         if not showing_toast:
             message = "Take Screenshots with F8"
         text = self.ui_font.text(message, (253, 255, 168, 255))
+        sx = viewport.width / (510 if visible else VIEWPORT_WIDTH)
+        sy = viewport.height / VIEWPORT_HEIGHT
         x = 8 if showing_toast else VIEWPORT_WIDTH - text.width - 8
+
+        def point(x, y):
+            return round((x - int(visible)) * sx), round(y * sy)
+
         if showing_toast:
             plate_height = text.height + 8
             plate_top = ROOM_HEIGHT - 2 - plate_height
             y = plate_top + (plate_height - text.height) // 2
             plate = Image.new("RGBA", viewport.size, (0, 0, 0, 0))
             ImageDraw.Draw(plate).rectangle(
-                (x - 4, plate_top, x + text.width + 4, ROOM_HEIGHT - 3),
+                (*point(x - 4, plate_top), *point(x + text.width + 4, ROOM_HEIGHT - 3)),
                 fill=(0, 0, 0, 128),
             )
             viewport = Image.alpha_composite(viewport, plate)
         else:
             y = ROOM_HEIGHT - self.ui_font.height - 6
-        viewport.paste((0, 0, 0, 255), (x + 1, y + 1), text)
-        viewport.paste(text, (x, y), text)
+        size = max(1, round(text.width * sx)), max(1, round(text.height * sy))
+        if text.size != size:
+            text = text.resize(size, Image.Resampling.NEAREST)
+        viewport.paste((0, 0, 0, 255), point(x + 1, y + 1), text)
+        viewport.paste(text, point(x, y), text)
         return viewport
 
     def render(self):

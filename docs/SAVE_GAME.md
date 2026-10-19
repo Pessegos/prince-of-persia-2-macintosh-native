@@ -14,6 +14,12 @@ slot suite from a temporary copy with no imported game assets, matching CI.
 Each slot shows the level, resume point, banked life capacity, local save date
 and a full-colour screenshot thumbnail. The thumbnail depicts the room at the
 time of saving; it is not a promise to resume at those exact coordinates.
+The browser is drawn at the fitted window resolution: font glyphs and previews
+are scaled directly from their sources, not from an enlarged 512x384 menu.
+New thumbnails retain all 510x365 scene pixels, without the HUD. Older 224x160
+thumbnails remain readable but cannot recover previously discarded detail.
+Shift+F8 renders the browser and confirmations at the selected PNG scale;
+ordinary F8 still exports only the clean game.
 Saving to an occupied slot, loading and deleting require an in-game confirmation
 which defaults to Cancel. Successful saving stays in the browser. Loading
 resumes play; Back preserves an existing user pause and returns to F1 when that

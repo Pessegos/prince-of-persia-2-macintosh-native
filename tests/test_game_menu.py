@@ -7,7 +7,7 @@ import textwrap
 import unittest
 from unittest.mock import Mock, patch
 
-from PIL import Image
+from PIL import Image, ImageTk
 
 from pop2.game_menu import GameMenu
 from pop2.game_ui import PLAYFIELD_VIEWPORT, fit_viewport, viewport_point
@@ -246,6 +246,54 @@ class GameMenuSceneTests(unittest.TestCase):
                     path, = set(Path(directory).glob('*.png')) - before
                     with Image.open(path) as image:
                         self.assertEqual(image.tobytes(), clean.tobytes())
+
+    def test_save_browser_presentation_keeps_source_detail_at_fitted_window_resolution(self):
+        scene = self.scene
+        scene.apply_game_action('save')
+        browser = scene.game_menu.save_browser
+        preview = browser.current.preview
+        self.assertEqual(preview.size, (510, 365))
+        for width, height in ((1020, 768), (1920, 1080), (3440, 1440), (800, 900)):
+            with self.subTest(window=(width, height)), \
+                    patch.object(scene.canvas, 'winfo_width', return_value=width), \
+                    patch.object(scene.canvas, 'winfo_height', return_value=height), \
+                    patch('pop2.window_controls.ImageTk.PhotoImage', wraps=ImageTk.PhotoImage) as photo:
+                scene.present_viewport()
+                frame = photo.call_args.args[0]
+                size, _origin = fit_viewport(width, height)
+                self.assertEqual(frame.size, size)
+                sx, sy = size[0] / 510, size[1] / 384
+                left, top, right, bottom = browser.PREVIEW
+                rect = (round(left * sx), round((top + 1) * sy),
+                        round((right - 2) * sx), round((bottom - 1) * sy))
+                expected = preview.resize((rect[2] - rect[0], rect[3] - rect[1]), Image.Resampling.NEAREST)
+                self.assertEqual(frame.crop(rect).convert('RGB').tobytes(), expected.tobytes())
+                old = scene.native_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
+                self.assertNotEqual(frame.crop(rect).tobytes(), old.crop(rect).tobytes())
+                panel = browser.PANEL
+                self.assertEqual(frame.getpixel((round((panel[0] - 1) * sx), round(panel[1] * sy))),
+                                 (133, 133, 133, 255))
+
+    def test_shift_f8_saves_refined_browser_and_confirmations_at_selected_scale(self):
+        scene = self.scene
+        scene.apply_game_action('save')
+        browser = scene.game_menu.save_browser
+        with TemporaryDirectory() as directory:
+            for confirmation in (None, 'save', 'load', 'delete'):
+                for scale in (1, 2, 3, 4):
+                    with self.subTest(confirmation=confirmation, scale=scale):
+                        scene.clear_screenshot_toast()
+                        browser.confirmation = confirmation
+                        scene.screenshot_settings = ScreenshotSettings(Path(directory), scale)
+                        scene.render()
+                        source = scene.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
+                        expected = browser.draw(source, scene.ui_font).crop((scale, 0, 511 * scale, 384 * scale)).convert('RGB')
+                        path = scene.capture_screenshot(include_ui=True)
+                        with Image.open(path) as image:
+                            self.assertEqual(image.size, (510 * scale, 384 * scale))
+                            self.assertEqual(image.tobytes(), expected.tobytes())
+                        self.assertEqual(browser.confirmation, confirmation)
+                        self.assertTrue(scene.paused)
 
     def test_alt_n_never_restarts_until_explicit_confirmation(self):
         scene = self.scene
