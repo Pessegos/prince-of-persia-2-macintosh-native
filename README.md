@@ -15,6 +15,25 @@ I'm trying to stay as close to the original as possible, while still making some
 
 # Features & Improvements
 
+## Game Menu (F1)
+
+The original Macintosh version uses the system menu bar for its File and Game options. Since that isn't available in the Windows port, I added a small F1 menu to provide similar functionality.
+
+The idea isn't to turn it into a full settings menu, but simply to keep things close to how they worked on the original Macintosh.
+
+### Original Macintosh
+
+|                                              File                                              |                                              Game                                              |
+| :--------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------: |
+| <img src="docs/screenshots/macintosh-file.png" alt="Original Macintosh File menu" width="350"> | <img src="docs/screenshots/macintosh-game.png" alt="Original Macintosh Game menu" width="350"> |
+
+### Windows Port (F1)
+
+<p align="center">
+  <img src="docs/screenshots/port-game-menu.png" alt="Windows port F1 game menu" width="700">
+</p>
+
+
 ## Developer Tools (F3)
 
 The F3 Developer Tools menu was originally made to help me with playtesting during development, rather than as a feature for players.
