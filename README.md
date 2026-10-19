@@ -26,7 +26,7 @@ The idea would be to add it to the cheat mode, like the original Macintosh has. 
 
 An interactive map that allows browsing through levels and teleporting directly to individual rooms, without having to play through the entire level.
 
-<img src="docs/screenshots/developer-map-preview-v7.gif" alt="Developer Tools - Game Map" width="700">
+<img src="docs/screenshots/developer-map-preview-v8.gif" alt="Developer Tools - Game Map" width="700">
 
 ### Playback
 
