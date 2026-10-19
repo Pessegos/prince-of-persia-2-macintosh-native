@@ -26,7 +26,7 @@ The idea would be to add it to the cheat mode, like the original Macintosh has. 
 
 An interactive map that allows browsing through levels and teleporting directly to individual rooms, without having to play through the entire level.
 
-<img src="docs/screenshots/developer-map-preview-v2.gif" alt="Developer Tools - Game Map" width="700">
+<img src="docs/screenshots/developer-map-preview-v7.gif" alt="Developer Tools - Game Map" width="700">
 
 ### Playback
 
@@ -43,10 +43,9 @@ The lava in the original Macintosh release looks pretty botched, especially arou
 I honestly think something went wrong with the rendering and somehow made it into the final release. Reconstructing the lava from the original Macintosh assets produces something that looks much closer to what I believe was intended, but even then, it still looks a bit plain and out of place compared to the rest of the game.
 
 So I decided to take it a step further and give the lava a proper overhaul, with more detailed edges, depth and animation, taking some inspiration from the DOS version.
+
 <br/>
-<sub>I'll add a better comparison gif later</sub>
-<br/>
-<img src="docs/screenshots/lava-overhaul-comparison.gif" alt="Comparison of the original Macintosh lava, reconstructed Macintosh lava, DOS lava and overhauled lava" width="800">
+<img src="docs/screenshots/lava-macintosh-reconstructed-dos-port.gif" alt="Comparison of the original Macintosh lava, reconstructed Macintosh lava, DOS lava and overhauled lava" width="800">
 
 <br/>
 
@@ -56,7 +55,8 @@ The stone gate closing animation in the Macintosh version looks pretty rough, es
 
 I also improved the sound played while the gate opens. The original had noticeable gaps between each loop and a loud click at the end. Both issues have been fixed, allowing the sound to play continuously without those interruptions.
 
-<img src="docs/screenshots/stone-gate-room17-macintosh-dos-native-port-right.gif" alt="Stone gate closing animation comparison between Macintosh, DOS and the port" >
+<br/>
+<img src="docs/screenshots/stone-gate-macintosh-dos-port.gif" alt="Stone gate closing animation comparison between Macintosh, DOS and the port" >
 
 **Opening Sound — Before & After**
 
