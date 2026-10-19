@@ -76,16 +76,15 @@ The stone gate closing animation in the Macintosh version looks pretty rough, es
 <img src="docs/github readme/stone-gate-macintosh-dos-port.gif" alt="Stone gate closing animation comparison between Macintosh, DOS and the port" >
 <br/>
 I also improved the sound played while the gate opens. The original had noticeable gaps between each loop and a loud click at the end. Both issues have been fixed, allowing the sound to play continuously without those interruptions.
-<br/>
-<br/>
+
 <table>
   <tr>
     <th width="50%">Original</th>
     <th width="50%">Corrected</th>
   </tr>
   <tr>
-    <td><video controls src="https://github.com/user-attachments/assets/e4d45297-1ab2-4a05-8ee8-74f344e50603"></video></td>
-    <td><video controls src="https://github.com/user-attachments/assets/48ae6652-4cd0-40f9-a2fd-520b1de31fed"></video></td>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/4795163d-3da8-4984-bbb2-cd1056430c07"></video></td>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/91e55849-6567-40c0-a99b-661c59452855"></video></td>
   </tr>
 </table>
 
