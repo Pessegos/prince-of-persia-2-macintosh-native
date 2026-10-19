@@ -111,6 +111,37 @@ class RooftopPursuitTests(unittest.TestCase):
         encounter._choose_guard_jump(guard)
         self.assertEqual((guard.state.sequence_id, guard.state.target_x), (100, 404))
 
+    def test_takeoff_pit_floor_exception_counts_as_clear_without_changing_scan(self):
+        from types import SimpleNamespace
+        from pop2.combat import guard_frame_index
+
+        for facing in (0, 1):
+            results = []
+            for first in (Tile(1), Tile(11)):
+                encounter = self.encounter(0)
+                guard = self.runner(encounter, 0, 250, facing=facing)
+                guard.state.action = 192
+                step = 1 if facing else -1
+                look = character_column(250 + 13 * step)
+                record = self.art.frames[guard_frame_index(192)]
+                support = character_column(floor_contact_x(250, facing, record))
+                gap = {support + 3 * step, support + 4 * step}
+                encounter.terrain = SimpleNamespace(tile=lambda _room, col, _row:
+                                                    first if col == look + step else
+                                                    Tile(0) if col in gap else Tile(1))
+                encounter._choose_guard_jump(guard)
+                results.append((guard.selected_sequence, guard.state.target_x))
+            self.assertEqual(results[0], results[1])
+            self.assertEqual(results[0][0], 100)
+
+    def test_committed_guard_takeoff_is_not_cancelled_by_prince_death(self):
+        encounter = self.encounter(0)
+        guard = self.runner(encounter, 0, 405)
+        guard.state.action = 192
+        encounter.player.life = 0
+        encounter._choose_guard_jump(guard)
+        self.assertEqual((guard.selected_sequence, guard.state.target_x), (100, 404))
+
     def test_guard_jump_also_crosses_gap_to_the_right(self):
         encounter = self.encounter(2, player_x=480, facing=1)
         guard = self.runner(encounter, 2, 50, facing=1)

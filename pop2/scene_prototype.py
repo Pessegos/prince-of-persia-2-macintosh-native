@@ -2276,7 +2276,7 @@ class ScenePrototype(WindowControls):
                 motion.falling = False
                 actor.recovering = actor.alive
                 if actor.skeleton is not None:
-                    actor.skeleton.collapse(actor)
+                    actor.skeleton.collapse(actor, encounter=self.combat)
                     actor.runtime.next_frame()
                     continue
                 self.physics.select(actor.runtime, 52 if actor.alive else 22)
@@ -2367,7 +2367,7 @@ class ScenePrototype(WindowControls):
                 state.sound_events.extend((29 if player else 59, 66))
                 continue
             if actor.skeleton is not None:
-                actor.skeleton.collapse(actor)
+                actor.skeleton.collapse(actor, encounter=self.combat)
                 actor.runtime.next_frame()
                 state.sound_events.append(66)
                 continue

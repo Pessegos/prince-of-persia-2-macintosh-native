@@ -308,8 +308,84 @@ modifier flag bits, live cavern gate opening/closing, safe/unsafe rear cells,
 the 50/51 look-ahead boundary, dynamic floor changes and attack-pose vetoes.
 Existing pursuit, multiple-enemy spacing, skeleton lifecycle, damage, audio,
 terrain and player-control tests remain the regression scope. This audit
-does not certify untranslated special actors, bridge rules, every room-bank
-selection case or the complete unarmed controller.
+does not certify untranslated special actors, bridge rules or the complete
+room-bank lifecycle. The following audit extends ordinary selection and
+unarmed control for the playable rooftop/cavern levels.
+
+## Playable-Level Transition Audit
+
+The scope is ordinary guards in level 1 and skeletons in level 3, not future
+special opponents. Decisions were compared by executing original Macintosh
+CODE resources in a 68k emulator. The harness supplies actor banks, terrain
+queries and random results, then observes native input requests, JumpSeq,
+alert modes and displacement. It does not substitute the C translation for
+the original decisions. The probability profiles above are unchanged.
+
+- GetOppIdxClosestToKid `6:36f2-3918` compares actual absolute Y distances,
+  not equal row IDs. A vertical-distance difference greater than 80 prefers
+  the vertically closer actor; less than 80 prefers the horizontally closer
+  actor. Exactly 80, and horizontal ties, retain bank order. This also refines
+  the enemy meter while the Prince is above or below the opponent. Dead and
+  wrong-room candidates remain excluded; side-room coordinate views preserve
+  the real actor's identity.
+- Unarmed running AutoCtrl `4:057c-07d6` tests the live front cell before
+  deciding spacing. A jump-capable runner can continue toward its takeoff
+  pose when GetDist1 is at least 39, but not through a low gate. Alternate
+  rows bypass same-floor spacing, not the passed-Prince, dead-Prince or
+  special-13 checks. Braking at pose 212 adds the native forward 12 pixels
+  only when the rear cell is not advancable. The movement bucket includes
+  pose 44; the separate anticipating-strike bucket still ends at 43.
+- Standing AutoCtrl `4:04fc-057a` and GenCtrl `4:4996-49ec` preserve the
+  close-behind draw, engagement-3 turn, selected-sheathing veto and dead-target
+  checks. AnimCharTap's existing step/noise flag participates in the decision;
+  it is consumed by the last unarmed bank record, including across a rebased
+  side-room view, and cleared when a skeleton wakes. Player hurt also sets
+  it. DoEngarde retains the unsafe-rear forward-eight correction and the
+  18-pixel barrier reserve (`6:1ebe-1eda`).
+- DoOppRunJump `4:0834-0974` and DoRunJump `6:1c14-1d58` retain gap width,
+  capability rolls, alternate rows and takeoff alignment. The takeoff scan
+  allows tile 11 even though ordinary IsAdvancableId rejects it. A committed
+  takeoff is not cancelled merely because the Prince died.
+- Resume-run helper `4:011e-0150` selects 84 for ordinary guards and 102 for
+  skeletons, retaining the alert-mode-1 veto. This does not implement the
+  special exit-chasing skeleton controller from later levels.
+- Skeleton OpponentClose `4:13a4-14b0` rejects all native impassable tiles,
+  including 23, and uses supporting columns. Its gate query uses the current
+  body rectangle and the shared physical barrier rule, not a fixed 120
+  opening. The game supplies the original skeleton artwork; art-free callers
+  retain the former conservative clearance. Shadow, timer, special-5 and
+  already-living exclusions are preserved.
+- Skeleton control `4:165c-170c` resumes ordinary decisions below rising pose
+  179, not only after idle 227. The existing mode/pose gates still prevent an
+  invented attack during the rising animation. Collapse `4:170e-17a8` aligns
+  a right-facing heap when the cached rear cell is space: GetDist1 >= -3 adds
+  GetDist1 + 3 pixels. Left-facing and fall-landing collapses do not receive
+  this standing correction. Sword death retains its cached supporting column.
+
+Native differential coverage for this pass:
+
+| Routine | Cases | Observed |
+| --- | ---: | --- |
+| Closest opponent | 5,000 | Selection, height, bank order, left/right filter |
+| Running AutoCtrl | 10,000 | Front/rear tiles, 38/39 edge, spacing, alternate floor, brake/X |
+| Gap jump | 3,000 | Both facings, 192/196, map queries, rolls, selected sequence/X |
+| Standing AutoCtrl + GenCtrl | 18,432 | Noise, alert, distance, row, life, sheathing, rear floor, clearance |
+| Skeleton proximity | 3,000 | 50 tile kinds, ten openings, three body poses, both facings |
+| Standing collapse | 40 | Facing, rear tile, signed edge distance and X |
+| Rising dispatch | 14 | Every pose in the rising chain before idle |
+
+All 39,486 comparisons agree. Another 40 landing-collapse regressions confirm
+that the standing correction is not applied to landing sequence 112. Tracked
+tests cover the boundary cases and actual scene flows; the native probes use
+locally supplied original resources and are not an asset-free CI requirement.
+
+This is stronger evidence for the tested branches, not a claim that all enemy
+AI is now proven identical. Complete CutOpponent/CheckSideRoomsForVisibleOpps
+bank scheduling, all noise producers, the shared random stream's other game
+consumers and every terrain/contact combination still need differential
+coverage. In particular, a matching decision given a supplied barrier query
+does not prove every upstream geometry query. Later-level special actors and
+bridge/exit exceptions remain outside this playable-level audit.
 
 ## Level-Three Skeletons
 
@@ -341,8 +417,8 @@ delays. The final activation uses 88 and restores the record's full life.
 The existing side-room coordinate view lets shaking finish and activation
 begin while the Prince has already crossed into the adjacent room, provided
 the original row/range/path tests still pass. The health meter now selects
-the nearest living same-floor actor in the current or horizontal side rooms,
-with DrawOppMeter's first-opponent fallback when no same-floor target exists,
+the nearest living actor in the current or horizontal side rooms using the
+original horizontal/vertical distance comparison described above,
 independently of the same-room sword-control target. Dormant bones have no
 meter; their restored life appears immediately at the start of rising 88,
 even while the skeleton is still offscreen. Climbing onto another floor
@@ -376,9 +452,10 @@ suppression, ineligible targets and explicit God Mode protection.
 
 The meter is not a combat-music gate. DrawOppMeter 3:4a9e-4ae6 first tries
 GetOppIdxClosestToKid, then falls back to slot zero of the active NPC bank;
-it does not require that fallback to be on the Prince's floor. The port
-therefore retains the first living nearby actor as its fallback, preferring
-a same-floor target whenever one is available. Pixel tests retain the
+it does not require the selected actor to be on the Prince's floor. The
+original closest-opponent routine itself accepts ordinary off-floor actors;
+the port no longer substitutes a same-row-only search and first-living
+fallback for that routine. Pixel tests retain the
 three bottles above the Room 15 skeleton while the Prince is on Room 17's
 upper ledge, independently of that skeleton's alert mode.
 

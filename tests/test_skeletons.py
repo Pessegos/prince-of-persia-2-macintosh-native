@@ -11,6 +11,7 @@ from pop2.paths import ASSET_DIR
 from pop2.render_opening import decode_ctbl, load_resource_file
 from pop2.scene_prototype import sword_palette_for_level
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
+from pop2.terrain import Tile
 
 
 @unittest.skipUnless((ASSET_DIR / 'Skeleton.rsrc').is_file(), 'Imported skeleton artwork required')
@@ -207,6 +208,112 @@ class SkeletonTests(unittest.TestCase):
                              (0, 206, 'dormant'))
             self.assertIsNone(combat.health_opponent())
 
+    def test_waking_rejects_native_impassable_tiles_including23(self):
+        from types import SimpleNamespace
+
+        _, c, actor = self.encounter(14)
+        c.player.state.target_x = actor.state.target_x - 51
+        actor.skeleton.timer = 0
+        for kind in (0, 9, 11, 12, 13, 15, 20, 23, 24, 26, 27, 47, 49):
+            with self.subTest(kind=kind):
+                c.terrain = SimpleNamespace(tile=lambda *_args: Tile(kind))
+                self.assertFalse(actor.skeleton.can_wake(c, actor))
+        c.terrain = SimpleNamespace(tile=lambda *_args: Tile(1))
+        self.assertTrue(actor.skeleton.can_wake(c, actor))
+
+    def test_waking_gate_uses_bone_pose_height_not_fixed120_threshold(self):
+        from types import SimpleNamespace
+
+        _, c, actor = self.encounter(14)
+        actor.state.action = 206
+        actor.skeleton.timer = 0
+        c.player.state.target_x = actor.state.target_x - 51
+        for opening, expected in ((0, False), (47, False), (48, True),
+                                  (103, True), (119, True), (120, True)):
+            with self.subTest(opening=opening):
+                c.terrain = SimpleNamespace(tile=lambda *_args: Tile(4, 0x200 | opening))
+                self.assertEqual(actor.skeleton.can_wake(c, actor), expected)
+
+    def test_wake_distance_uses_supporting_feet_and_rejects_shadow(self):
+        from types import SimpleNamespace
+
+        _, c, actor = self.encounter(14)
+        actor.skeleton.timer = 0
+        c.terrain = SimpleNamespace(tile=lambda *_args: Tile(1))
+        with patch.object(c, '_supporting_column', side_effect=(5, 0)):
+            self.assertFalse(actor.skeleton.can_wake(c, actor))
+        with patch.object(c, '_supporting_column', side_effect=(5, 1)):
+            self.assertTrue(actor.skeleton.can_wake(c, actor))
+        c.player.state.actor_type = 1
+        self.assertFalse(actor.skeleton.can_wake(c, actor))
+
+    def test_collapse_edge_alignment_only_faces_right_and_uses_cached_column(self):
+        from types import SimpleNamespace
+
+        for facing in (0, 1):
+            for kind in (0, 1, 4, 9):
+                for distance in (-4, -3, 0, 25, 50):
+                    with self.subTest(facing=facing, kind=kind, distance=distance):
+                        _, c, actor = self.encounter(14)
+                        actor.state.target_x = actor.state.current_x = 300
+                        actor.state.facing = facing
+                        c.terrain = SimpleNamespace(tile=lambda *_args: Tile(kind))
+                        with patch.object(c, '_guard_front_edge_distance', return_value=distance), \
+                                patch.object(c, '_guard_tile', return_value=Tile(kind)) as tile:
+                            actor.skeleton.collapse(actor, encounter=c, column=8)
+                        offset = distance + 3 if facing and kind in (0, 9) and distance >= -3 else 0
+                        self.assertEqual((actor.state.target_x, actor.state.current_x), (300 + offset,) * 2)
+                        if facing:
+                            tile.assert_called_once_with(actor, 7)
+                        else:
+                            tile.assert_not_called()
+                        self.assertEqual((actor.selected_sequence, actor.life, actor.skeleton.timer),
+                                         (120, 0, 120))
+
+    def test_landing_collapse_does_not_apply_standing_edge_alignment(self):
+        _, c, actor = self.encounter(14)
+        actor.state.facing = 1
+        x = actor.state.target_x
+        with patch.object(c, '_guard_tile', side_effect=AssertionError('landing queried rear')):
+            actor.skeleton.collapse(actor, landing=True, encounter=c)
+        self.assertEqual((actor.selected_sequence, actor.state.target_x), (112, x))
+
+    def test_noise_consumed_in_adjacent_room_updates_real_player_not_only_view(self):
+        _, c, actor = self.boundary_encounter()
+        actor.skeleton = None
+        actor.sword_drawn = False
+        actor.state.action = 166
+        c.player.state.callback_flag = 1
+        position = c.player.room, c.player.state.target_x
+        with c._local_opponents(actor):
+            c.choose_guard_action(actor)
+        self.assertEqual(c.player.state.callback_flag, 0)
+        self.assertEqual((c.player.room, c.player.state.target_x), position)
+
+    def test_waking_clears_original_pending_player_noise(self):
+        from types import SimpleNamespace
+
+        _, c, actor = self.encounter(14)
+        c.terrain = SimpleNamespace(tile=lambda *_args: Tile(1))
+        actor.skeleton.timer = actor.skeleton.shakes = 0
+        select_sequence(actor, 119)
+        actor.runtime.next_frame()
+        c.player.state.target_x = actor.state.target_x - 51
+        c.player.state.callback_flag = 1
+        actor.skeleton.control(c, actor)
+        self.assertEqual(actor.selected_sequence, 88)
+        self.assertEqual(c.player.state.callback_flag, 0)
+
+    def test_last_rising_poses_resume_native_decisions_before_idle(self):
+        _, c, actor = self.encounter(14)
+        actor.life = actor.max_life
+        actor.skeleton.phase = 'rising'
+        actor.sword_drawn = True
+        for pose in (206, 184, 182, 179, 178, 177, 176, 173):
+            with self.subTest(pose=pose):
+                actor.state.action = pose
+                self.assertEqual(actor.skeleton.control(c, actor), pose >= 179)
+
     def assert_enemy_meter(self, combat, life):
         image = Image.new('RGBA', (512, 384))
         self.health_art.draw(image, combat)
@@ -343,7 +450,7 @@ class SkeletonTests(unittest.TestCase):
                     actor.state.actor_type = 11
                 self.assertFalse(combat.opponent_to_fight())
 
-    def test_meter_prefers_same_floor_but_falls_back_without_combat_music(self):
+    def test_meter_uses_vertical_distance_even_without_combat_music(self):
         from dataclasses import replace
 
         _, combat, actor = self.boundary_encounter()
@@ -356,8 +463,8 @@ class SkeletonTests(unittest.TestCase):
         self.assertIs(combat.health_opponent(), other)
         combat.player.row = 0
         actor.alert_mode = other.alert_mode = 0
-        self.assertIs(combat.health_opponent(), actor)
-        self.assert_enemy_meter(combat, 3)
+        self.assertIs(combat.health_opponent(), other)
+        self.assert_enemy_meter(combat, 1)
         self.assertFalse(combat.opponent_to_fight())
 
     def test_meter_chooses_nearest_living_actor_using_side_room_coordinates(self):

@@ -1437,11 +1437,13 @@ class RooftopSceneTests(unittest.TestCase):
             self.assertNotEqual(scene.sequence_state.sequence_id, 55)
 
     def test_opening_hurt_turn_uses_native_recovery_offset_and_preserves_three_hits(self):
+        from pop2.enemy_profiles import QuickDrawRandom
+
         scene = self.scene
         for seed in (1, 2):
             with self.subTest(seed=seed), patch.object(scene, "render"):
                 scene.restart_opening()
-                scene.combat.rng.seed = seed
+                scene.combat.rng = QuickDrawRandom(seed)
                 lives, turn_x = [], None
                 previous = 3
                 for _ in range(300):

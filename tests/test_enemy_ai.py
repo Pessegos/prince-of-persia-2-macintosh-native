@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 from pop2.animation_data import sequence_words
 from pop2.combat import (
-    CombatEncounter, GuardIntent, GuardSpawn, advancable_tile, select_sequence, strike_range,
+    CombatEncounter, GuardIntent, GuardSpawn, advancable_tile, moving_fight_pose,
+    nearest_opponent, select_sequence, strike_range,
 )
 from pop2.enemy_profiles import (
     ENEMY_DATA, PROFILES, ADVANCE_CHANCE, BLOCK_CHANCE, PARRY_BLOCK_CHANCE,
@@ -126,6 +127,196 @@ class GuardDecisionTests(unittest.TestCase):
         c.guard.state.target_x = c.guard.state.current_x = 200
         c.guard.state.action = action
         return c
+
+    def test_nearest_opponent_compares_height_difference_then_horizontal_distance(self):
+        c = self.encounter()
+        c.player.row = 1
+        c.player.state.target_x = 200
+        far = c.guard
+        far.row = 1
+        far.state.target_x = 80
+        near = replace(far, runtime=SequenceRuntime(c.sequences, replace(far.state, target_x=199)))
+        for dy, expected in ((79, near), (80, far), (81, far)):
+            with self.subTest(dy=dy):
+                near.state.current_y = dy
+                self.assertIs(nearest_opponent(c.player, [far, near]), expected)
+        # The exact-80 tie retains bank order, even when the first is higher.
+        near.state.current_y = 80
+        self.assertIs(nearest_opponent(c.player, [near, far]), near)
+        near.row, near.state.current_y = 0, 120
+        self.assertIs(nearest_opponent(c.player, [far, near]), near)
+
+    def test_nearest_opponent_filters_dead_rooms_and_direction_but_not_row(self):
+        c = self.encounter()
+        c.player.state.target_x = 200
+        left = c.guard
+        left.state.target_x = 200
+        right = replace(left, runtime=SequenceRuntime(c.sequences, replace(left.state, target_x=201)))
+        self.assertIs(nearest_opponent(c.player, [right, left]), left)
+        self.assertIs(nearest_opponent(c.player, [right, left], -1), left)
+        self.assertIs(nearest_opponent(c.player, [right, left], 1), right)
+        left.life = 0
+        right.room += 1
+        self.assertIsNone(nearest_opponent(c.player, [left, right]))
+        right.room = c.player.room
+        right.row += 1
+        self.assertIs(nearest_opponent(c.player, [left, right]), right)
+
+    def test_movement_buckets_include_pose44_but_not45(self):
+        for pose in range(60):
+            self.assertEqual(moving_fight_pose(pose),
+                             1 <= pose <= 14 or 34 <= pose <= 44 or 49 <= pose <= 56)
+
+    def runner(self, front=Tile(1), rear=Tile(1), facing=1, pose=195):
+        c = self.encounter(distance=300, rolls=())
+        c.level = self.prince['LEVL'][2000]['data']
+        g = c.guard
+        g.sword_drawn = False
+        g.state.action, g.state.facing = pose, facing
+        c.player.state.target_x = 200 + 300 * (1 if facing else -1)
+        c.player.row = g.row
+        column = character_column(g.state.target_x)
+        step = 1 if facing else -1
+        c.terrain = SimpleNamespace(tile=lambda _room, col, _row:
+                                    front if col == column + step else rear)
+        return c, g
+
+    def test_runner_checks_live_front_obstacle_before_spacing(self):
+        for tile, brakes in ((Tile(1), False), (Tile(0), True), (Tile(11), True),
+                             (Tile(20), True), (Tile(4, 103), True), (Tile(4, 104), False)):
+            for facing in (0, 1):
+                with self.subTest(tile=tile, facing=facing):
+                    c, g = self.runner(tile, facing=facing)
+                    c._choose_unarmed_guard_action(g)
+                    self.assertEqual(g.selected_sequence == 101, brakes)
+                    if brakes:
+                        self.assertEqual(g.alert_mode, 0)
+
+    def test_jump_capable_runner_reaches_takeoff_but_not_through_low_gate(self):
+        for flags in (0, 1, 2):
+            for edge in (38, 39, 50):
+                for tile in (Tile(0), Tile(20), Tile(4, 103)):
+                    with self.subTest(flags=flags, edge=edge, tile=tile):
+                        c, g = self.runner(tile)
+                        g.generation_flags = flags
+                        c._guard_front_edge_distance = lambda _guard: edge
+                        c._choose_unarmed_guard_action(g)
+                        self.assertEqual(g.selected_sequence == 101,
+                                         not (flags >= 1 and edge >= 39 and tile.kind != 4))
+
+    def test_alternate_floor_skips_spacing_but_not_passing_death_or_special13(self):
+        for condition in ('close', 'passed', 'dead', 'special13'):
+            with self.subTest(condition=condition):
+                c, g = self.runner()
+                c.player.row = g.alternate_row = 0
+                c.player.state.target_x = 230 if condition != 'passed' else 100
+                if condition == 'dead':
+                    c.player.life = 0
+                elif condition == 'special13':
+                    c.player.state.special_flag = 13
+                c._choose_unarmed_guard_action(g)
+                self.assertEqual(g.selected_sequence == 101, condition != 'close')
+                if condition != 'close':
+                    self.assertEqual(g.alert_mode, 2 if condition == 'passed' else 0)
+
+    def test_final_jump_brake_moves_forward12_only_when_rear_cannot_support(self):
+        for facing in (0, 1):
+            for pose in (195, 212):
+                for rear in (Tile(0), Tile(1), Tile(4, 103), Tile(4, 104)):
+                    with self.subTest(facing=facing, pose=pose, rear=rear):
+                        c, g = self.runner(Tile(4, 103), rear, facing, pose)
+                        c._choose_unarmed_guard_action(g)
+                        shift = (12 if facing else -12) if pose == 212 and rear in (
+                            Tile(0), Tile(4, 103)) else 0
+                        self.assertEqual(g.selected_sequence, 101)
+                        self.assertEqual((g.state.target_x, g.state.current_x), (200 + shift,) * 2)
+
+    def test_skeleton_resume_uses_its_native_run_sequence(self):
+        for actor_type, sequence in ((2, 84), (4, 102)):
+            c = self.encounter()
+            c.guard.state.actor_type = actor_type
+            c._resume_guard_run(c.guard)
+            self.assertEqual((c.guard.selected_sequence, c.guard.sword_drawn,
+                              c.guard.alert_mode), (sequence, False, 0))
+            select_sequence(c.guard, 227)
+            c.guard.alert_mode = 1
+            c._resume_guard_run(c.guard)
+            self.assertEqual(c.guard.selected_sequence, 227)
+
+    def test_unarmed_standing_turn_requires_engagement_and_preserves_sheathing(self):
+        for alert in range(4):
+            for selected in (77, 101):
+                for distance in (-28, -27, -1, 0, 663, 664):
+                    with self.subTest(alert=alert, selected=selected, distance=distance):
+                        c, g = self.runner()
+                        g.state.action = 166
+                        g.selected_sequence = selected
+                        g.alert_mode = alert
+                        c.player.state.facing = g.state.facing
+                        c.player.state.target_x = 200 + distance
+                        c._choose_unarmed_guard_action(g)
+                        if -27 <= distance < 0 and alert >= 2:
+                            expected = 90
+                        elif distance < -27 and alert == 3 and selected != 77:
+                            expected = 80
+                        elif 0 <= distance <= 663 and alert:
+                            expected = 90
+                        else:
+                            expected = selected
+                        self.assertEqual(g.selected_sequence, expected)
+
+    def test_standing_guard_does_not_draw_or_turn_toward_dead_prince(self):
+        for distance in (-40, -10, 50):
+            c, g = self.runner()
+            g.state.action = 166
+            c.player.state.target_x = 200 + distance
+            c.player.life = 0
+            c._choose_unarmed_guard_action(g)
+            self.assertEqual(g.selected_sequence, 227)
+            self.assertFalse(g.sword_drawn)
+
+    def test_unarmed_draw_has_native_eight_pixel_unsafe_rear_correction(self):
+        for facing in (0, 1):
+            for rear in (Tile(0), Tile(1), Tile(4, 103), Tile(4, 104)):
+                with self.subTest(facing=facing, rear=rear):
+                    c, g = self.runner(rear=rear, facing=facing)
+                    g.state.action = 166
+                    c.player.state.facing = facing
+                    c._choose_unarmed_guard_action(g)
+                    shift = (8 if facing else -8) if rear in (Tile(0), Tile(4, 103)) else 0
+                    self.assertEqual((g.selected_sequence, g.sword_drawn), (90, True))
+                    self.assertEqual((g.state.target_x, g.state.current_x), (200 + shift,) * 2)
+
+    def test_step_noise_turns_waiting_guard_but_does_not_override_close_draw(self):
+        for distance, expected in ((-40, 80), (-27, 90), (-6, 90), (100, 227)):
+            c, g = self.runner()
+            g.state.action, g.alert_mode = 166, 2
+            c.player.state.facing = g.state.facing
+            c.player.state.target_x = 200 + distance
+            c.player.state.callback_flag = 1
+            c._choose_unarmed_guard_action(g)
+            self.assertEqual(g.selected_sequence, expected, distance)
+        c, g = self.runner()
+        g.state.action = 166
+        c.player.state.callback_flag = 1
+        c.choose_guard_action(g)
+        self.assertEqual(c.player.state.callback_flag, 0)
+        c.choose_guard_action(g)
+        self.assertEqual(g.selected_sequence, 90)
+
+    def test_drawing_reserves18_pixels_after_native_rear_correction(self):
+        for facing in (0, 1):
+            for clearance in (0, 1, 17, 18, 42):
+                with self.subTest(facing=facing, clearance=clearance):
+                    c, g = self.runner(facing=facing)
+                    g.state.action = 166
+                    c.guard_art = SimpleNamespace(frames=[None] * 256,
+                                                  bounds=lambda *_args: (0, 0, 0, 0))
+                    c.terrain.step_boundary = lambda *_args: SimpleNamespace(clearance=clearance)
+                    c._choose_unarmed_guard_action(g)
+                    shift = (clearance - 18) * (1 if facing else -1) if 0 < clearance < 18 else 0
+                    self.assertEqual((g.state.target_x, g.state.current_x), (200 + shift,) * 2)
+                    self.assertEqual(g.selected_sequence, 90)
 
     def test_native_advancable_gate_boundary_and_actor_exceptions(self):
         for actor in (2, 4, 7, 8, 10):

@@ -37,6 +37,35 @@ def advancable_tile(tile, actor_type):
     return (tile.kind not in OBSTACLE_TILES
             and (actor_type in (7, 8) or tile.kind not in EMPTY_TILES))
 
+
+def moving_fight_pose(action):
+    return 1 <= action <= 14 or 49 <= action <= 56 or 34 <= action <= 44
+
+
+def nearest_opponent(player, guards, side=None):
+    # GetOppIdxClosestToKid 6:36f2-3918 compares absolute Y, not row IDs.
+    # At exactly 80 pixels of vertical-distance difference, bank order wins.
+    best = None
+    best_dx = best_dy = 0
+    player_y = floor_y(player.row) + player.state.current_y
+    for guard in guards:
+        if not guard.alive or guard.room != player.room:
+            continue
+        delta = guard.state.target_x - player.state.target_x
+        if side is not None and (delta > 0 if side < 0 else delta <= 0):
+            continue
+        dx = abs(delta)
+        dy = abs(floor_y(guard.row) + guard.state.current_y - player_y)
+        if best is not None and guard.state.actor_type == 11:
+            continue
+        change_y = abs(dy - best_dy)
+        if (best is None or best.state.actor_type == 11
+                or change_y > 80 and dy < best_dy
+                or change_y < 80 and dx < best_dx):
+            best, best_dx, best_dy = guard, dx, dy
+    return best
+
+
 @dataclass(frozen=True)
 class GuardSpawn:
     room: int
@@ -357,14 +386,9 @@ class CombatEncounter:
                 continue
             offset = self._room_offset(guard.room, self.player.room)
             if offset in (-510, 0, 510):
-                candidates.append((abs(guard.state.target_x + offset
-                                       - self.player.state.target_x), guard))
-        same_floor = [candidate for candidate in candidates if candidate[1].row == self.player.row]
-        if same_floor:
-            return min(same_floor, key=lambda candidate: candidate[0])[1]
-        # DrawOppMeter 3:4a9e-4ae6 falls back to the active bank's first
-        # opponent when GetOppIdxClosestToKid cannot find a same-floor one.
-        return candidates[0][1] if candidates else None
+                candidates.append((guard, self._project_fighter(guard, self.player.room)))
+        selected = nearest_opponent(self.player, [view for _guard, view in candidates])
+        return next((guard for guard, view in candidates if view is selected), None)
 
     def opponent_to_fight(self):
         # OppToFight 6:2392-2492, used by PlayAmbient/TimeForNewAmbient.
@@ -390,6 +414,9 @@ class CombatEncounter:
                            if (view := self._project_fighter(other, guard.room)) is not None]
             yield
         finally:
+            # AnimCharTap's movement/noise flag is global, including views
+            # rebased into a side room. Ordinary AutoCtrl consumes it.
+            player.state.callback_flag = self.player.state.callback_flag
             self.player, self.guards = player, guards
 
     def _chance(self, table, guard=None):
@@ -490,8 +517,7 @@ class CombatEncounter:
                    in EMPTY_TILES for n in (1, 2)):
                 return GuardIntent(retreat=True)
             other = self.player.state
-            moving = (1 <= other.action <= 14 or 49 <= other.action <= 56
-                      or 34 <= other.action <= 44)
+            moving = moving_fight_pose(other.action)
             if (guard.generation_flags and moving and guard.state.facing == other.facing
                     and other.animation_state != 7):
                 self._resume_guard_run(guard)
@@ -605,6 +631,9 @@ class CombatEncounter:
             return
         if self.level is not None and not guard.sword_drawn:
             self._choose_unarmed_guard_action(guard)
+            bank = self.room_encounters.get(guard.room, ([], []))[0]
+            if bank and guard is bank[-1]:
+                self.player.state.callback_flag = 0
             return
         if not player.alive:
             guard.alert_mode = 0
@@ -636,13 +665,7 @@ class CombatEncounter:
         self.apply_guard_intent(self.decide_guard_intent(guard), guard)
 
     def _nearest_guard(self, side=None):
-        # GetOppIdxClosestToKid 0x36f2: ordinary same-floor candidates.
-        candidates = [g for g in self.guards if g.alive and g.room == self.player.room
-                      and g.row == self.player.row and (side is None or
-                      (g.state.target_x <= self.player.state.target_x if side < 0 else
-                       g.state.target_x > self.player.state.target_x))]
-        return min(candidates, key=lambda g: abs(g.state.target_x - self.player.state.target_x),
-                   default=None)
+        return nearest_opponent(self.player, self.guards, side)
 
     def refresh_target(self):
         # Main CODE:2 0x6300-0x633c retains an opposing-facing target;
@@ -703,32 +726,45 @@ class CombatEncounter:
             self._choose_guard_jump(guard)
             return
         if state.action == 166:
+            if not self.player.alive:
+                return
             distance = opponent_distance(guard, self.player)
-            # AutoCtrl 0x04fc / GenCtrl 0x4996, supported floor only.
-            if distance < -27:
-                if guard.alert_mode >= 2:
+            # AutoCtrl 4:04fc and GenCtrl 4:4996; the step/noise flag can
+            # request a turn but never overrides the close-behind draw.
+            if guard.row == self.player.row and -27 <= distance < 0:
+                draw = guard.alert_mode >= 2
+            elif (other.callback_flag
+                  or guard.alert_mode == 3 and distance < 0 and guard.selected_sequence != 77):
+                if distance < -6:
                     select_sequence(guard, 80)
-            elif (distance < 0 and guard.alert_mode >= 2
-                  or 0 <= distance <= 663 and guard.alert_mode > 0):
+                return
+            else:
+                draw = 0 <= distance <= 663 and guard.alert_mode != 0
+            if draw:
+                direction = 1 if state.facing else -1
+                rear = self._guard_tile(guard, character_column(state.target_x) - direction)
+                if not advancable_tile(rear, state.actor_type):
+                    state.target_x += 8 * direction
+                    state.current_x = state.target_x
                 guard.sword_drawn = True
+                art = getattr(self, 'guard_art', None)
+                terrain = getattr(self, 'terrain', None)
+                if art is not None and terrain is not None:
+                    record = art.frames[guard_frame_index(state.action)]
+                    clearance = terrain.step_boundary(
+                        guard.room, guard.row, state, record,
+                        art.bounds(state, floor_y(guard.row))).clearance
+                    # DoEngarde 6:1ebe-1eda reserves eighteen pixels.
+                    if 0 < clearance < 18:
+                        state.target_x += (clearance - 18) * direction
+                        state.current_x = state.target_x
                 select_sequence(guard, 90)
             return
         # CODE:4 057c tests odd running poses and the final jump pose 212.
         if not (194 <= state.action <= 199 and state.action & 1 or state.action == 212):
             return
-        # AutoCtrl 4:0674-06d0 runs even when the Kid is on another floor.
-        # Losing that floor selects the existing brake, not a frozen run loop.
-        if (guard.room != self.player.room
-                or self.player.row not in (guard.row, guard.alternate_row)):
-            guard.alert_mode = 0
-            select_sequence(guard, 101)
-            return
-        # 4:06da-06e2 skips same-floor spacing while +0x20 permits pursuit
-        # on another row; poses 192/196 still select the native gap jump.
-        if guard.row != self.player.row:
-            return
         distance = abs(state.target_x - other.target_x)
-        moving = 1 <= other.action <= 14 or 49 <= other.action <= 56 or 34 <= other.action <= 44
+        moving = moving_fight_pose(other.action)
         if moving:
             distance += 51 if state.facing == other.facing else -51
         elif not self.player.sword_drawn:
@@ -736,6 +772,20 @@ class CombatEncounter:
         nearest = self._nearest_guard(-1 if state.facing else 1)
         crowd_distance = (127 if nearest is guard else
                           abs(state.target_x - nearest.state.target_x) if nearest else 0)
+        direction = 1 if state.facing else -1
+        column = character_column(state.target_x)
+        front = self._guard_tile(guard, column + direction)
+        target_row = (guard.room == self.player.room
+                      and self.player.row in (guard.row, guard.alternate_row))
+        if not target_row or not advancable_tile(front, state.actor_type):
+            # AutoCtrl 4:0696-06d4 lets jump-capable runners reach their
+            # takeoff poses, but never run into a low gate to do so.
+            if (target_row and guard.generation_flags >= 1
+                    and self._guard_front_edge_distance(guard) >= 39
+                    and front.kind != 4):
+                return
+            self._brake_guard(guard, 0)
+            return
         same_direction_run = moving and state.facing == other.facing and other.animation_state != 7
         # CODE:4 0x071e-0x0722 bypasses the spacing brake at >=102 while
         # chasing a same-facing run, but still checks passing/death below.
@@ -744,14 +794,28 @@ class CombatEncounter:
         passed_player = (character_column(state.target_x) > character_column(other.target_x)
                          if state.facing else
                          character_column(state.target_x) < character_column(other.target_x))
-        if spacing_brake or passed_player or not self.player.alive:
-            guard.alert_mode = 2 if self.player.alive else 0
-            select_sequence(guard, 101)
+        if (guard.row == self.player.row and spacing_brake) or passed_player:
+            self._brake_guard(guard, 2)
+        elif not self.player.alive or other.special_flag == 13:
+            self._brake_guard(guard, 0)
+
+    def _brake_guard(self, guard, alert_mode):
+        state = guard.state
+        guard.alert_mode = alert_mode
+        select_sequence(guard, 101)
+        # AutoCtrl 4:07ae-07d6: the last jump pose gets a forward 12-pixel
+        # correction if the cell behind cannot support the braking pose.
+        column = character_column(state.target_x)
+        direction = 1 if state.facing else -1
+        rear = self._guard_tile(guard, column - direction)
+        if state.action == 212 and not advancable_tile(rear, state.actor_type):
+            state.target_x += 12 * direction
+            state.current_x = state.target_x
 
     def _choose_guard_jump(self, guard):
         # AutoCtrl 4:0834 and DoRunJump 6:1c14, ordinary rooftop gaps.
         art = getattr(self, "guard_art", None)
-        if art is None or not self.player.alive:
+        if art is None:
             return
         state = guard.state
         record = art.frames[guard_frame_index(state.action)]
@@ -778,7 +842,7 @@ class CombatEncounter:
         clear = 0
         for n in range(1, 3):
             tile = self.terrain.tile(guard.room, col + direction * n, guard.row)
-            if not advancable_tile(tile, state.actor_type):
+            if not advancable_tile(tile, state.actor_type) and tile.kind != 11:
                 break
             clear += 1
         if clear < 2:
@@ -817,8 +881,7 @@ class CombatEncounter:
         close = (distance <= clearance + 24
                  and (front.state.facing != guard.state.facing or front.selected_sequence != 84))
         other = self.player.state
-        moving = (1 <= other.action <= 14 or 49 <= other.action <= 56
-                  or 34 <= other.action <= 44)
+        moving = moving_fight_pose(other.action)
         same_direction_run = (moving and guard.state.facing == other.facing
                               and other.animation_state != 7)
         if close:
@@ -840,7 +903,7 @@ class CombatEncounter:
     def _resume_guard_run(self, guard):
         # CODE:4 0x011e does not run across alert-mode-1 obstacles.
         if guard.alert_mode != 1:
-            select_sequence(guard, 84)
+            select_sequence(guard, 102 if guard.state.actor_type == 4 else 84)
             guard.sword_drawn = False
             guard.alert_mode = 0
 
@@ -943,7 +1006,7 @@ class CombatEncounter:
             if event.kind == "death":
                 guard.life = 0
                 if guard.skeleton is not None and not motion.falling:
-                    guard.skeleton.collapse(guard, landing=True)
+                    guard.skeleton.collapse(guard, landing=True, encounter=self)
                     guard.runtime.next_frame()
                     motion.dead = False
             elif event.kind == "land":
@@ -1009,6 +1072,7 @@ class CombatEncounter:
         if target.state.actor_type == 0 and not fatal_sequence:
             # CODE:6 0x53f8-0x5406 arms the Prince without replaying SEQS:55.
             target.sword_drawn = True
+            target.state.callback_flag = 1
         target.contact_consumed = True
         target.recovering = target.alive
         if name == "guard":
@@ -1039,7 +1103,7 @@ class CombatEncounter:
                 # CheckStab 6:56ba-56d4 selects the native tumble, not 85.
                 sequence, offset = 185, -12
             if target.skeleton is not None and fall_offset is None:
-                target.skeleton.collapse(target)
+                target.skeleton.collapse(target, encounter=self, column=column)
                 target.runtime.next_frame()
                 return CombatEvent("death", name)
         elif target.state.facing == attacker.state.facing:

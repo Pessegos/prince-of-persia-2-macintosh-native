@@ -222,6 +222,18 @@ class OpponentGenerationTests(unittest.TestCase):
         c.refresh_target()
         self.assertIs(c.guard, right)
 
+    def test_player_noise_survives_until_last_unarmed_record_checks_it(self):
+        c = self.encounter(first_alive=True)
+        second = self.second_guard(c, x=100)
+        for guard in c.guards:
+            guard.sword_drawn = False
+            guard.state.action = 166
+        c.player.state.callback_flag = 1
+        c.choose_guard_action(c.guards[0])
+        self.assertEqual(c.player.state.callback_flag, 1)
+        c.choose_guard_action(second)
+        self.assertEqual(c.player.state.callback_flag, 0)
+
     def test_same_facing_run_spacing_exception_still_checks_passed_player(self):
         for raw_distance, brakes in ((50, True), (51, False)):
             c = self.encounter()
