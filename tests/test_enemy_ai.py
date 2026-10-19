@@ -8,7 +8,9 @@ import unittest
 from unittest.mock import patch
 
 from pop2.animation_data import sequence_words
-from pop2.combat import CombatEncounter, GuardIntent, GuardSpawn, select_sequence, strike_range
+from pop2.combat import (
+    CombatEncounter, GuardIntent, GuardSpawn, advancable_tile, select_sequence, strike_range,
+)
 from pop2.enemy_profiles import (
     ENEMY_DATA, PROFILES, ADVANCE_CHANCE, BLOCK_CHANCE, PARRY_BLOCK_CHANCE,
     COUNTER_CHANCE, STRIKE_CHANCE, QuickDrawRandom,
@@ -16,6 +18,8 @@ from pop2.enemy_profiles import (
 from pop2.render_opening import load_resource_file
 from tools.extract_enemy_profiles import expand_a5_data, extract
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
+from pop2.terrain import LevelMap, Tile
+from pop2.opponent_generation import character_column
 
 
 class Rolls:
@@ -122,6 +126,89 @@ class GuardDecisionTests(unittest.TestCase):
         c.guard.state.target_x = c.guard.state.current_x = 200
         c.guard.state.action = action
         return c
+
+    def test_native_advancable_gate_boundary_and_actor_exceptions(self):
+        for actor in (2, 4, 7, 8, 10):
+            for foreground in (0, 103, 104, 255, 0x200 | 103, 0x200 | 104):
+                with self.subTest(actor=actor, foreground=foreground):
+                    self.assertEqual(advancable_tile(Tile(4, foreground), actor),
+                                     foreground & 255 >= 104)
+            self.assertFalse(advancable_tile(Tile(20), actor))
+            self.assertTrue(advancable_tile(Tile(23), actor))
+            self.assertEqual(advancable_tile(Tile(11), actor), actor == 10)
+            self.assertEqual(advancable_tile(Tile(0), actor), actor in (7, 8, 10))
+
+    def test_close_steps_read_current_gate_state_in_both_directions(self):
+        for facing in (0, 1):
+            for source in (227, 57):
+                for opening in (103, 104):
+                    with self.subTest(facing=facing, source=source, opening=opening):
+                        c = self.encounter(distance=20, rolls=())
+                        c.level = self.prince['LEVL'][2000]['data']
+                        c.guard.state.facing = facing
+                        c.guard.state.selected_sequence_id = source
+                        c.player.state.facing = 1 - facing
+                        c.player.state.target_x = 200 + (20 if facing else -20)
+                        c.terrain = SimpleNamespace(tile=lambda *_: Tile(4, 0x200 | opening))
+                        intent = c.decide_guard_intent()
+                        self.assertEqual(intent, GuardIntent(
+                            advance=opening == 104 and source == 227,
+                            retreat=opening == 104 and source == 57))
+                        self.assertEqual(c.rng.calls, [])
+
+    def test_alert_changes_with_gate_height_and_dynamic_floor(self):
+        for kind, foreground, expected in ((4, 103, 1), (4, 104, 3),
+                                           (0, 0, 1), (20, 0, 0)):
+            with self.subTest(kind=kind, foreground=foreground):
+                c = self.encounter(distance=160, rolls=())
+                c.level = self.prince['LEVL'][2000]['data']
+                column = character_column(c.guard.state.target_x) + 1
+                c.terrain = LevelMap(c.level)
+                c.terrain.tile = lambda _room, col, _row: (
+                    Tile(kind, foreground) if col == column else Tile(1))
+                c.update_guard_alerts()
+                self.assertEqual(c.guard.alert_mode, expected)
+                self.assertEqual(c.rng.calls, [])
+
+    def test_raw_level_gate_modifier_is_used_without_a_live_map(self):
+        c = self.encounter(rolls=())
+        level = bytearray(self.prince['LEVL'][2000]['data'])
+        room, row = c.guard.room, c.guard.row
+        column = character_column(c.guard.state.target_x) + 1
+        struct.pack_into('>H', level, room * 60 + (row * 10 + column) * 2, 4)
+        c.level = bytes(level)
+        self.assertFalse(c._guard_floor_clear(c.guard, 1, 1))
+        struct.pack_into('>H', level, 0x780 + room * 120 + (row * 10 + column) * 4, 104)
+        c.level = bytes(level)
+        self.assertTrue(c._guard_floor_clear(c.guard, 1, 1))
+        self.assertEqual(LevelMap(c.level).tile(room, column, row).foreground, 104)
+
+    def test_nearest_waiting_guard_retreats_from_obstacles_with_safe_rear(self):
+        for facing in (0, 1):
+            for distance in (50, 51):
+                for front, rear, retreat in ((Tile(0), Tile(1), True),
+                                              (Tile(11), Tile(1), True),
+                                              (Tile(23), Tile(1), True),
+                                              (Tile(4, 103), Tile(1), True),
+                                              (Tile(4, 104), Tile(1), False),
+                                              (Tile(20), Tile(1), False),
+                                              (Tile(0), Tile(0), False),
+                                              (Tile(0), Tile(4, 103), False),
+                                              (Tile(0), Tile(4, 104), True)):
+                    with self.subTest(facing=facing, distance=distance, front=front, rear=rear):
+                        c = self.encounter(distance=distance, rolls=())
+                        c.level = self.prince['LEVL'][2000]['data']
+                        c.guard.state.facing = facing
+                        c.guard.alert_mode = 1
+                        c.player.state.target_x = 200 + (distance if facing else -distance)
+                        direction = 1 if facing else -1
+                        column = character_column(200)
+                        query = column + direction * (1 if distance < 51 else 2)
+                        c.terrain = SimpleNamespace(tile=lambda _r, col, _y: (
+                            front if col == query else rear))
+                        c.choose_guard_action()
+                        self.assertEqual(c.guard.selected_sequence, 57 if retreat else 227)
+                        self.assertEqual(c.rng.calls, [])
 
     def test_random_roll_includes_the_upper_bound(self):
         for roll, advances in ((254, True), (255, False)):

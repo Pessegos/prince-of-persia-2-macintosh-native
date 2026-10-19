@@ -13,7 +13,7 @@ from pop2.combat_art import GuardArtwork, HealthArtwork
 from pop2.render_opening import decode_ctbl, load_resource_file
 from pop2.scene_prototype import sword_palette_for_level
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
-from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion, floor_contact_x, floor_y
+from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion, Tile, floor_contact_x, floor_y
 from pop2.opponent_generation import WALL_TILES, character_column
 
 
@@ -74,7 +74,7 @@ class RooftopPursuitTests(unittest.TestCase):
         guard.runtime.next_frame()
         guard.sword_drawn, guard.alert_mode = True, 3
         # Native 4:0fd4-0fea only vetoes when BOTH cells are empty.
-        with patch('pop2.combat.tile_kind', side_effect=(1, 20)):
+        with patch.object(encounter, '_guard_tile', side_effect=(Tile(1), Tile(20))):
             encounter.choose_guard_action(guard)
         self.assertEqual(guard.state.sequence_id, 84)
         self.assertFalse(guard.sword_drawn)
@@ -85,7 +85,7 @@ class RooftopPursuitTests(unittest.TestCase):
         select_sequence(guard, 227)
         guard.runtime.next_frame()
         guard.sword_drawn, guard.alert_mode = True, 3
-        with patch('pop2.combat.tile_kind', side_effect=(0, 0)):
+        with patch.object(encounter, '_guard_tile', side_effect=(Tile(0), Tile(0))):
             encounter.choose_guard_action(guard)
         self.assertEqual(guard.state.sequence_id, 57)
 

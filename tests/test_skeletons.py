@@ -186,6 +186,18 @@ class SkeletonTests(unittest.TestCase):
                          [(4, 4, 0, 105), (6, 4, 0, 3), (11, 4, 3, 3),
                           (15, 4, 2, 3), (20, 4, 5, 4)])
 
+    def test_skeleton_clearance_follows_live_cavern_gate_opening_and_closing(self):
+        game, combat, actor = self.encounter(14)
+        actor.room, actor.row = 16, 2
+        actor.state.target_x = actor.state.current_x = 330
+        actor.state.facing = 1
+        self.assertEqual(game.level_map.tile(16, 7, 2).kind, 4)
+        for opening, expected in ((0, False), (103, False), (104, True),
+                                  (188, True), (103, False)):
+            with self.subTest(opening=opening):
+                game.caverns.plates.foreground[16, 27] = 0x200 | opening
+                self.assertEqual(combat._guard_floor_clear(actor, 1, 1), expected)
+
     def test_inert_bones_never_awaken_or_display_105_lives(self):
         for room in (3, 5):
             game, combat, actor = self.encounter(room)

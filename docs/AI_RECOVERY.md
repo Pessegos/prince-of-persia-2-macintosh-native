@@ -250,11 +250,12 @@ This is not a complete translation of every enemy controller. The default
 prototype now loads guards and reinforcement points per visited room, and
 grounded NPC clearance reads the current room's tiles. Ordinary falls and
 horizontal pursuit are implemented for the supported rooftops. Full
-front/behind obstacle/gate branching, different-floor target selection,
+unarmed front/behind obstacle branching, different-floor target selection,
 native NPC bank/candidate filtering and full alert acquisition still need
-recovery. WaitingEngarde's self-nearest obstacle retreat (`4:0e94-0f0e`)
-and unarmed AutoCtrl's obstacle/distance branches (`4:0664-06d4`) are not
-fully translated. Level-5 bridge helpers `8:02ae/04a2` are identified, not
+recovery. Unarmed AutoCtrl's obstacle/distance branches (`4:0664-06d4`) are
+not fully translated. WaitingEngarde's self-nearest obstacle retreat and the
+shared live gate/tile classification are now covered by the audit below.
+Level-5 bridge helpers `8:02ae/04a2` are identified, not
 implemented; they must not be enabled just because the environment is rooftops.
 Ordinary same-floor target selection,
 flat-rooftop WaitingEngarde spacing and the first room's reinforcement now
@@ -263,6 +264,52 @@ have their own implementation and tests, detailed below.
 Level-three skeleton activation/collapse is now implemented separately as
 described below. Bird controllers, actor type 10 and the final battle still
 need their own translations; recovered generators alone do not implement them.
+
+## Obstacle And Waiting-AI Audit
+
+The secondary C translation in
+[dmucli/pop2-port](https://github.com/dmucli/pop2-port/blob/master/src/game/seg04a_characters2.c)
+(reviewed local revision `8caa5df`) helps locate EnGarde, WaitingEngarde and
+the skeleton controller. Its translated function count is not evidence that
+either port is behaviorally complete. The original CODE instructions remain
+the authority for these corrections.
+
+- IsAdvancableId (`6:5eca-5f54`) rejects a stone gate only while its low-byte
+  opening is below 104, not every tile of kind 4. This AI threshold does not
+  replace sprite-height-based physical gate collision. Close spacing, safe
+  retreats and NPC jump takeoff now use the live tile and modifier. Ordinary
+  guards/skeletons avoid walls, space and impassable tiles, with tile 23's
+  original exception. The helper also preserves the classifier's actor-type
+  7/8/10 exceptions without implementing those actors' controllers.
+- Alert acquisition (`2:7026-7038`) downgrades engagement to mode 1 across
+  a gate below the same 104 threshold; it no longer ignores closed gates.
+  It uses the current LevelMap, including removed loose floors, rather than
+  looking only at the immutable LEVL tile IDs. The existing first-obstruction
+  scan order, wall mode 0 and clear-path nearest/waiting modes are retained.
+- WaitingEngarde (`4:0e94-0f0e`) has a branch for an NPC that is itself the
+  nearest candidate. At Prince distance <51 it checks one cell ahead,
+  otherwise two. An impassable tile, empty cell or gate below 104 requests a
+  retreat if the rear cell is advancable. A wall alone does not satisfy this
+  particular branch. The port previously returned without evaluating it.
+  The original ready-pose gate still decides whether that retreat can start;
+  this is not a new random retreat or a blanket edge push.
+
+Direct execution of IsAdvancableId matched 1,020 type/tile/modifier cases.
+Executing the self-nearest branch of WaitingEngarde matched 672 combinations
+of facing, distance, front/rear tile and gate opening, with only cell lookup
+and the self-nearest fixture supplied by the harness. Original OnAlert/DoBlock
+instructions also matched the existing NPC attack/block dispatch in 12,696
+cases across actor types 2/4, both facings, distances 73/74/90, poses 149-171
+on both actors, and attack absent/present with block requested. Those dispatch
+rules and all twelve probability profiles were left unchanged.
+
+Regressions cover both movement directions, the 103/104 gate boundary,
+modifier flag bits, live cavern gate opening/closing, safe/unsafe rear cells,
+the 50/51 look-ahead boundary, dynamic floor changes and attack-pose vetoes.
+Existing pursuit, multiple-enemy spacing, skeleton lifecycle, damage, audio,
+terrain and player-control tests remain the regression scope. This audit
+does not certify untranslated special actors, bridge rules, every room-bank
+selection case or the complete unarmed controller.
 
 ## Level-Three Skeletons
 

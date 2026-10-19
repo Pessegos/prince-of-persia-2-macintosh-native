@@ -11,11 +11,11 @@ from pop2.enemy_profiles import (
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.opponent_generation import (
-    OpponentGenerationPoint, character_column, tile_kind,
+    OpponentGenerationPoint, character_column,
     WALL_TILES, OBSTACLE_TILES, EMPTY_TILES,
 )
 from pop2.terrain import (
-    RooftopPhysics, TerrainMotion, TILE_HEIGHT, floor_contact_x, floor_edge_distance, floor_y,
+    LevelMap, RooftopPhysics, TerrainMotion, TILE_HEIGHT, floor_contact_x, floor_edge_distance, floor_y,
 )
 
 
@@ -25,6 +25,17 @@ BLOCK_POSES = {150, 161}
 PLAYER_COMBAT_TURN_SEQUENCE = 127
 # CheckStab, CODE:6 0x523e-0x5268; these are sequence IDs, not poses.
 FATAL_STAB_SEQUENCES = frozenset((10, 16, 28, 14))
+
+
+def advancable_tile(tile, actor_type):
+    # IsAdvancableId 6:5eca-5f54. The AI gate threshold is distinct from
+    # body collision, which uses the current sprite's actual height.
+    if tile.kind in WALL_TILES or tile.kind == 4 and tile.foreground & 255 < 104:
+        return False
+    if actor_type == 10:
+        return True
+    return (tile.kind not in OBSTACLE_TILES
+            and (actor_type in (7, 8) or tile.kind not in EMPTY_TILES))
 
 @dataclass(frozen=True)
 class GuardSpawn:
@@ -475,7 +486,7 @@ class CombatEncounter:
         if self.level is not None:
             column = character_column(guard.state.target_x)
             direction = 1 if guard.state.facing else -1
-            if all(tile_kind(self.level, guard.room, column + n * direction, guard.row)
+            if all(self._guard_tile(guard, column + n * direction).kind
                    in EMPTY_TILES for n in (1, 2)):
                 return GuardIntent(retreat=True)
             other = self.player.state
@@ -657,14 +668,15 @@ class CombatEncounter:
             return
         low, high = sorted((self._supporting_column(guard), self._supporting_column(self.player)))
         # CODE:2 0x6fce skips the scan for actors in the same column.
-        terrain = ([tile_kind(self.level, guard.room, col, self.player.row)
+        terrain = ([self._guard_tile(guard, col)
                     for col in range(low, high + 1)] if low < high else [])
         guard.alert_mode = 3
-        for kind in terrain:
-            if kind in WALL_TILES:
+        for tile in terrain:
+            if tile.kind in WALL_TILES:
                 guard.alert_mode = 0
                 break
-            if kind in EMPTY_TILES or kind in OBSTACLE_TILES:
+            if (tile.kind in EMPTY_TILES or tile.kind in OBSTACLE_TILES
+                    or tile.kind == 4 and tile.foreground & 255 < 104):
                 guard.alert_mode = 1
                 break
         if guard.alert_mode == 3 and not any(g is guard for g in primary):
@@ -766,7 +778,7 @@ class CombatEncounter:
         clear = 0
         for n in range(1, 3):
             tile = self.terrain.tile(guard.room, col + direction * n, guard.row)
-            if tile.kind in EMPTY_TILES | WALL_TILES | OBSTACLE_TILES | {4}:
+            if not advancable_tile(tile, state.actor_type):
                 break
             clear += 1
         if clear < 2:
@@ -782,7 +794,20 @@ class CombatEncounter:
         front = self._nearest_guard(-1 if guard.state.facing else 1)
         if front is None:
             front = self._nearest_guard()
-        if front is None or front is guard:
+        if front is None:
+            return
+        if front is guard:
+            # WaitingEngarde 4:0e94-0f0e: the nearest waiting opponent
+            # backs away from an obstacle/gap/low gate if the rear is safe.
+            if self.level is not None:
+                distance = abs(self.player.state.target_x - guard.state.target_x)
+                direction = 1 if guard.state.facing else -1
+                column = character_column(guard.state.target_x)
+                tile = self._guard_tile(guard, column + direction * (1 if distance < 51 else 2))
+                if (tile.kind in OBSTACLE_TILES | EMPTY_TILES | {23}
+                        or tile.kind == 4 and tile.foreground & 255 < 104):
+                    if self._guard_floor_clear(guard, -1, 1):
+                        self.apply_guard_intent(GuardIntent(retreat=True), guard)
             return
         distance = abs(front.state.target_x - guard.state.target_x)
         # GenFight 0x0f28 includes later NPC records, even corpses.
@@ -824,10 +849,15 @@ class CombatEncounter:
         # LoadFrame 4:2a7c updates the supporting-foot cell later, for physics.
         column = character_column(guard.state.target_x)
         step = direction if guard.state.facing else -direction
-        # CODE:6 0x5eca, supported flat rooftop (no gate modifiers here).
-        return all(tile_kind(self.level, guard.room, column + step * n, guard.row)
-                   not in WALL_TILES | OBSTACLE_TILES | EMPTY_TILES | {4}
+        return all(advancable_tile(self._guard_tile(guard, column + step * n),
+                                  guard.state.actor_type)
                    for n in range(1, count + 1))
+
+    def _guard_tile(self, guard, column):
+        terrain = getattr(self, 'terrain', None)
+        if terrain is None:
+            terrain = LevelMap(self.level)
+        return terrain.tile(guard.room, column, guard.row)
 
     def generate_opponents(self):
         # Count living NPCs in the generator's corridor, including offscreen
