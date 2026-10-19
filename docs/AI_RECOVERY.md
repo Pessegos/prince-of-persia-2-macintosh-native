@@ -117,6 +117,39 @@ No new animation assets, guessed aggression constants, or output audio filters
 are introduced by this change. Opening/movement cadence and player controls
 retain their existing tests.
 
+## Prince Held Defence And Late Blocks
+
+PlayerCtrl samples and saves the input bank before GenCtrl consumes it
+(`4:3cd2-3d0a`, save/restore `4:3e50/3e60`). Held Up is therefore read on
+subsequent control cycles, not only on the Windows key-down event. OnAlert
+`6:250c-255e` gives a pending strike priority over Up; it does not make the
+whole attack an active block. Successful block/counter and forced-recoil
+priority remain unchanged.
+
+Prince DoBlock `6:2844-28e6` accepts poses 158/170/171/168/165. Opponent pose
+168 vetoes that ordinary block. Against opponent pose 153, DoBlock calls
+AnimChar once immediately, before the frame's normal AnimChar; sequence 62
+thus reaches protected pose 150 without showing startup pose 169 first.
+Own blocked-attack pose 167 can select sequence 61 directly, without waiting
+for idle guard. This is important when held Up follows a strike that the
+enemy parries. Sequence 61 keeps its original retreat offsets and poses
+159/160/150. Attack poses 152/153/154/162 do not acquire extra immunity.
+
+Executing original OnAlert instructions agrees across 2,116 combinations
+(23 own poses, 23 opponent poses, both facings, attack absent/present).
+The probe observes JumpSeq selection and the extra AnimChar call, rather
+than substituting guessed block timing. Original input save/restore also
+confirms that consuming Up during GenCtrl does not erase the next saved
+sample. Unit tests cover these block gates, continuous Up/release, recovery
+from a parried attack, preserved buffered attacks, and late-block contact
+followed by a counter against guards and skeletons in both directions.
+
+The C translation in
+[dmucli/pop2-port](https://github.com/dmucli/pop2-port/blob/master/src/game/seg06a_characters1.c)
+was reviewed as a secondary cross-reference for OnAlert/DoStrike/DoBlock.
+No AI probabilities or external runtime were imported; the Macintosh
+opcodes remain the reference. This does not establish full enemy-AI parity.
+
 ## Close Spacing After Retreats And Turns
 
 EnGarde `4:0a82-0c08` distinguishes the selected sequence at A5 `-0x502e`

@@ -2590,7 +2590,7 @@ class AnimationDataTests(unittest.TestCase):
                             [start_x + sign * dx for dx in (1, 2, -4, 0, 0, 0, 0, 0, 0, 0)],
                         )
                         self.assertIsNone(scene.pending_action)
-                        for expected in (170, 171, 171):
+                        for expected in ((169, 150, 158) if held else (170, 171, 171)):
                             scene.advance_animation()
                             self.assertEqual(scene.action, expected)
 

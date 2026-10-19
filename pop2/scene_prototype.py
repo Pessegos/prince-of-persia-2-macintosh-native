@@ -537,7 +537,8 @@ class ScenePrototype(WindowControls):
             and self.sequence_state.sequence_id == SWORD_GUARD_SEQUENCE
         ):
             self.pending_action = None
-            return self.start_sword_action(kind)
+            if self.start_sword_action(kind):
+                return True
         self.buffer_input(BufferedCommand(kind))
         return False
 
@@ -554,6 +555,24 @@ class ScenePrototype(WindowControls):
         self.queue_grace_remaining_ms = QUEUE_GRACE_MS
 
     def start_sword_action(self, kind, sequence_id=None):
+        fast_block = False
+        if kind == "sword_block":
+            # DoBlock 6:2844-28e6: a parried swing can recover through 61;
+            # against pose 153, skip the unprotected block-start pose 169.
+            state = self.sequence_state
+            if state.animation_state >= 2:
+                return False
+            if state.action == 167:
+                sequence_id = 61
+            elif state.action in (158, 170, 171, 168, 165):
+                combat = getattr(self, "combat", None)
+                other = (combat.guard.state.action
+                         if combat is not None and combat.guard is not None else None)
+                if other == 168:
+                    return False
+                fast_block = other == 153
+            else:
+                return False
         if kind == "sword_draw":
             motion = getattr(self, "terrain_motion", None)
             if motion is not None:
@@ -582,6 +601,8 @@ class ScenePrototype(WindowControls):
         self.run_stop_requested = False
         self.run_direction = 0
         self.start_sequence(SWORD_SEQUENCES[kind] if sequence_id is None else sequence_id)
+        if fast_block:
+            self.sequence_runtime.next_frame()
         self.status.set({
             "sword_draw": "Drawing sword",
             "sword_advance": "Advancing with sword",
@@ -634,14 +655,28 @@ class ScenePrototype(WindowControls):
         if not self.sword_drawn or self.sword_sheathing:
             return False
         state = self.sequence_state
+        if state.animation_state >= 2 or state.cursor == 0:
+            return False
         command = self.pending_action
-        if state.sequence_id in SWORD_STEP_SEQUENCES:
-            # CODE:6 0x279a and 0x2844 allow these commands on the final step pose.
-            if command is not None and (
-                (command.kind == "sword_attack" and state.action in (165, 157))
-                or (command.kind == "sword_block" and state.action == 165)
-            ):
+        # OnAlert gives a pending strike priority, even at a pose where it
+        # cannot yet execute. Held Up must not replace that counter request.
+        if command is not None and command.kind == "sword_attack":
+            if (state.sequence_id in SWORD_STEP_SEQUENCES | {SWORD_GUARD_SEQUENCE}
+                    and state.action in (157, 158, 170, 171, 165)):
                 return self.dispatch_pending_action()
+            return False
+        if command is not None and command.kind == "sword_sheathe":
+            if state.action in (158, 170, 171):
+                return self.dispatch_pending_action()
+            return False
+        if (command is not None and command.kind == "sword_block"
+                or self.up_held and not self.down_held):
+            if self.start_sword_action("sword_block"):
+                if command is not None and command.kind == "sword_block":
+                    self.pending_action = None
+                return True
+            return False
+        if state.sequence_id in SWORD_STEP_SEQUENCES:
             return False
         # DoAdvance/DoRetreat accept only guard actions 158, 170 and 171.
         if state.sequence_id != SWORD_GUARD_SEQUENCE or state.action not in (158, 170, 171):
@@ -1627,7 +1662,10 @@ class ScenePrototype(WindowControls):
             return False
         self.pending_action = None
         if command.kind in SWORD_SEQUENCES:
-            return self.start_sword_action(command.kind)
+            started = self.start_sword_action(command.kind)
+            if not started:
+                self.pending_action = command
+            return started
         if command.kind == "crouch":
             if self.start_native_descent() or (
                     self.down_held and self.shift_held and self._try_start_ledge_hang()):

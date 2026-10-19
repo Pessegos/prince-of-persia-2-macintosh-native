@@ -399,6 +399,123 @@ class GuardCombatTests(unittest.TestCase):
             self.assertEqual(c.player.state.action, 161)
             self.assertEqual(c.parry_timer, 4)
 
+    def test_player_block_uses_native_pose_gates_and_late_animation_step(self):
+        for facing in (0, 1):
+            scene = self.scene()
+            scene.sword_drawn = True
+            scene.in_animation_tick = True
+            state = scene.sequence_state
+            state.facing, state.animation_state = facing, 1
+            for pose in range(149, 172):
+                for other in range(149, 172):
+                    with self.subTest(facing=facing, pose=pose, other=other):
+                        state.action = pose
+                        scene.combat.guard.state.action = other
+                        allowed = pose == 167 or (
+                            pose in (158, 170, 171, 168, 165) and other != 168)
+                        self.assertEqual(scene.start_sword_action("sword_block"), allowed)
+                        if allowed:
+                            self.assertEqual(state.sequence_id, 61 if pose == 167 else 62)
+                            fast = other == 153 and pose != 167
+                            self.assertEqual(state.cursor > 0, fast)
+                            self.assertEqual(scene.sequence_runtime.next_frame().action,
+                                             150 if fast else 159 if pose == 167 else 169)
+
+    def test_held_up_recovers_from_a_parried_attack_before_returning_to_guard(self):
+        for facing in (0, 1):
+            scene = self.scene()
+            scene.sword_drawn, scene.up_held = True, True
+            scene.sequence_state.facing = facing
+            scene.advance_combat = lambda *args: None
+            scene.start_sequence(69)
+            scene.sequence_runtime.next_frame()
+            self.assertEqual(scene.sequence_state.action, 167)
+            scene.pending_action = None
+            poses = []
+            for _ in range(4):
+                scene.advance_animation()
+                poses.append(scene.action)
+            self.assertEqual(poses, [159, 160, 150, 158])
+            scene.advance_animation()
+            self.assertEqual(scene.action, 169)
+
+    def test_held_up_repeats_blocks_and_release_stops_repetition(self):
+        scene = self.scene()
+        scene.sword_drawn = True
+        scene.advance_combat = lambda *args: None
+        scene.start_sequence(227)
+        scene.advance_animation()
+        scene.up_key(None)
+        poses = [scene.action]
+        for _ in range(8):
+            scene.advance_animation()
+            poses.append(scene.action)
+        self.assertEqual(poses, [169, 150, 158] * 3)
+        scene.set_key_state('up', False)
+        for pose in (170, 171, 171):
+            scene.advance_animation()
+            self.assertEqual(scene.action, pose)
+
+    def test_late_up_block_parries_before_buffered_counter_in_both_directions(self):
+        for actor_type, facing in ((2, 0), (2, 1), (4, 0), (4, 1)):
+            with self.subTest(actor_type=actor_type, facing=facing):
+                scene = self.scene()
+                scene.sword_drawn = True
+                scene.start_sequence(227)
+                scene.sequence_runtime.next_frame()
+                state, guard = scene.sequence_state, scene.combat.guard
+                guard.state.actor_type = actor_type
+                state.facing = facing
+                state.current_x = state.target_x = scene.player_x = 260
+                guard.state.facing = 1 - facing
+                guard.state.current_x = guard.state.target_x = 260 + (60 if facing else -60)
+                guard.sword_drawn, guard.alert_mode = True, 3
+                select_sequence(guard, 58)
+                for _ in range(4):
+                    guard.runtime.next_frame()
+                self.assertEqual(guard.state.action, 153)
+                with patch('pop2.scene_prototype.time.perf_counter', return_value=10):
+                    scene.up_key(None)
+                self.assertEqual(scene.action, 161)
+                self.assertEqual(guard.state.action, 167)
+                self.assertEqual(scene.combat.player.life, 3)
+                scene.set_key_state('ctrl', True)
+                self.assertEqual(scene.pending_action, BufferedCommand('sword_attack'))
+                with patch('pop2.scene_prototype.time.perf_counter', return_value=10.1):
+                    scene.advance_animation()
+                self.assertEqual(scene.action, 162)
+                self.assertEqual(scene.sequence_state.source_sequence_id, 66)
+                self.assertEqual(scene.combat.player.life, 3)
+
+    def test_held_up_does_not_interrupt_attack_or_recovery_with_an_invalid_pose(self):
+        for pose, mode in ((151, 1), (152, 1), (153, 1), (154, 1),
+                           (162, 1), (158, 2), (167, 2)):
+            with self.subTest(pose=pose, mode=mode):
+                scene = self.scene()
+                scene.sword_drawn = scene.up_held = True
+                scene.start_sequence(75)
+                scene.sequence_runtime.next_frame()
+                scene.sequence_state.action = pose
+                scene.sequence_state.animation_state = mode
+                before = vars(scene.sequence_state).copy()
+                self.assertFalse(scene.resume_sword_controls())
+                self.assertEqual(vars(scene.sequence_state), before)
+
+    def test_enemy_startup_veto_preserves_the_buffered_block(self):
+        scene = self.scene()
+        scene.sword_drawn, scene.in_animation_tick = True, True
+        scene.start_sequence(227)
+        scene.sequence_runtime.next_frame()
+        scene.combat.guard.state.action = 168
+        self.assertFalse(scene.queue_sword_action('sword_block'))
+        self.assertEqual(scene.pending_action, BufferedCommand('sword_block'))
+        self.assertFalse(scene.resume_sword_controls())
+        self.assertEqual(scene.pending_action, BufferedCommand('sword_block'))
+        scene.combat.guard.state.action = 151
+        self.assertTrue(scene.resume_sword_controls())
+        self.assertEqual(scene.sequence_state.sequence_id, 62)
+        self.assertIsNone(scene.pending_action)
+
     def test_successful_player_parry_recoils_nine_pixels_before_retreat(self):
         for facing in (0, 1):
             with self.subTest(facing=facing):
