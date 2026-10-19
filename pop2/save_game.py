@@ -44,7 +44,8 @@ CLASSES = {cls.__name__: cls for cls in (
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
     Skeleton, TerrainMotion, WallSpikes,
 )}
-OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'}}
+OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
+        LooseFloors: {'shake_events'}}
 GAME_FIELDS = ('room_id', 'checkpoint', 'death', 'complete', 'harbor', 'desert', 'caverns')
 CONTROL_FIELDS = (
     'run_active', 'run_stop_requested', 'run_direction', 'run_start_x',

@@ -75,6 +75,7 @@ class LooseFloors:
     falling: list = field(default_factory=list)
     cleared: set = field(default_factory=set)
     plate_events: list = field(default_factory=list)
+    shake_events: list = field(default_factory=list)
 
     def trigger(self, tile, force=False):
         if tile.room is None or tile.kind != 11:
@@ -96,6 +97,7 @@ class LooseFloors:
     def shake_row(self, terrain, room, row, state=None, motion=None, record=None):
         # ShakeEm 5:2876 and 27b4: a short warning, or a full collapse on
         # the third shake / when the actor is in the native nearby column.
+        self.shake_events.append((room, row))
         sounds = []
         column = (character_column(floor_contact_x(state.target_x, state.facing, record))
                   if state is not None and record is not None else None)

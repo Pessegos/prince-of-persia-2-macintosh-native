@@ -2257,6 +2257,9 @@ class ScenePrototype(WindowControls):
         cues, blocks = caverns.loose.advance_falling(self.level_map, self.sequence_state,
                                                     self.terrain_motion, self.frames[self.action])
         self.sequence_state.sound_events.extend(cues)
+        for room, row in caverns.loose.shake_events:
+            self.combat.shake_bones(room, row)
+        caverns.loose.shake_events.clear()
         actors = (self.combat.player, *self.combat.active_guards())
         for block in blocks:
             for actor in actors:
@@ -2467,6 +2470,9 @@ class ScenePrototype(WindowControls):
                                                              state, motion, self.frames[state.action]))
                     for event in shakes:
                         state.sequence_events.remove(event)
+            for room, row in loose.shake_events:
+                self.combat.shake_bones(room, row)
+            loose.shake_events.clear()
             self.check_cavern_darts()
             self.check_cavern_spikes()
             self.game.caverns.crush.advance(self.level_map, motion, state,

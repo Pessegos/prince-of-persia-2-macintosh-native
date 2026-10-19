@@ -387,6 +387,64 @@ coverage. In particular, a matching decision given a supplied barrier query
 does not prove every upstream geometry query. Later-level special actors and
 bridge/exit exceptions remain outside this playable-level audit.
 
+## Skeleton Lifecycle Scheduling
+
+FrameAdv `2:6224-6258` evaluates skeleton proximity (`4:14c6`) before alert
+acquisition and the ordinary NPC control/animation pass. The port previously
+combined awakening and the dead timer decrement inside Skeleton.control,
+and waited for sequence 119 before allowing a response. It now separates
+the proximity pass from AutoCtrl:
+
+- A timer of one prevents awakening in that pass, then becomes zero during
+  dead AutoCtrl (`4:16e8-1708`). Proximity can succeed on the following pass.
+- SkelDoneShaking (`4:1ab0`) consumes a remaining shake and sets inclusive
+  Rnd(30)+15. The same frame's dead AutoCtrl decrements that new timer once.
+- Proximity calls AnimChar even when an unfinished shake already has selected
+  sequence 112. It does not restart that sequence; neither does it require
+  the idle continuation 119 before selecting rising sequence 88.
+- A successful rising selection advances once during proximity and once in
+  the ordinary animation pass. The first completed frame is pose 207, not
+  a newly invented hold at 206. Life, sword, alert 3 and the shared attack/noise
+  resets are restored in the proximity phase.
+- Living skeletons do not decrement their dead recovery timer. Rising's
+  midpoint turn is gated by selected sequence 88, so being hurt during rising
+  cannot apply another midpoint turn merely because the hurt pose is 182.
+- EnGarde `4:09d4-09de` does not sheath a skeleton's sword when the Prince
+  dies. It remains armed until copied death counter five triggers collapse;
+  the ordinary human guard's sheathing branch is unchanged.
+
+Executing original proximity, shaking/timer, and skeleton AutoCtrl routines
+agrees over 72 complete 320-frame scenarios (23,040 snapshots): skills
+0/2/3/5, starting timers 0/1/120, sequences 112/119/120, two random seeds,
+leaving/re-entering range, excluded player modes, death counter 4/5 and return.
+Snapshots compare selected/current sequence, pose, visible life, timer,
+remaining shakes, cues and RNG seed. The harness advances the shared recovered
+SEQS interpreter when native code requests AnimChar and supplies flat-floor
+geometry; ordinary sword AI and floor physics are isolated. This verifies
+the lifecycle schedule, not an independent reimplementation of AnimChar or
+all physics/room-bank behavior.
+
+ShakeEm `5:2876-28fe` also calls ShakeBones (`4:1898-197a`). A matching row,
+pose 206, marker zero and special flag other than five select 112, without
+advancing it immediately or resetting the recovery timer/remaining shakes.
+Row notifications now come from both player shake requests and loose-floor
+impacts, including rows without any loose tiles. Only the final player shake
+request in an update is consumed. The new notification queue is transient
+and omitted from saves, retaining compatibility with earlier saved records.
+Original ShakeBones agrees in 48 marker/pose/row/special/timer combinations.
+
+CheckSideRoomsForVisibleOpps is the routine at `6:2f4e-308e`, called by the
+initialization entry at `6:2b7e`; some recovered symbol labels conflate them.
+Its ordinary visibility thresholds are native X >585 in the left neighbor
+and X <331 in the right neighbor, or port X >378 / <124. Execution agrees
+across 1,824 position/side cases, including the copied +/-510 coordinates.
+Cavern room entry now initializes such neighboring skeleton records even
+without a previous visit. In particular, entering room 17 directly exposes
+room 15's X=381 skeleton to the existing side-room simulation. The same actor
+is retained on revisits; this is not a duplicate enemy or a spatial teleport.
+This extends initial visibility, not the complete CutAllOpponents/UpdateOppInfo
+bank scheduler, which remains a separate fidelity audit.
+
 ## Level-Three Skeletons
 
 `pop2/skeleton.py` owns the actor-type-4 lifecycle, separately from the shared

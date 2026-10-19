@@ -300,7 +300,7 @@ class SkeletonTests(unittest.TestCase):
         actor.runtime.next_frame()
         c.player.state.target_x = actor.state.target_x - 51
         c.player.state.callback_flag = 1
-        actor.skeleton.control(c, actor)
+        actor.skeleton.try_wake(c, actor)
         self.assertEqual(actor.selected_sequence, 88)
         self.assertEqual(c.player.state.callback_flag, 0)
 
@@ -309,6 +309,7 @@ class SkeletonTests(unittest.TestCase):
         actor.life = actor.max_life
         actor.skeleton.phase = 'rising'
         actor.sword_drawn = True
+        select_sequence(actor, 88)
         for pose in (206, 184, 182, 179, 178, 177, 176, 173):
             with self.subTest(pose=pose):
                 actor.state.action = pose
@@ -571,6 +572,196 @@ class SkeletonTests(unittest.TestCase):
         self.assertEqual(actor.skeleton.phase, 'active')
         self.assertEqual((actor.life, actor.skill), (4, 5))
 
+    def stationary_bones(self, sequence=119, timer=0, shakes=0):
+        from types import SimpleNamespace
+        from pop2.combat import GuardIntent
+        from pop2.enemy_profiles import QuickDrawRandom
+
+        _, combat, actor = self.encounter(14)
+        actor.state.target_x = actor.state.current_x = 300
+        combat.player.state.target_x = combat.player.state.current_x = 250
+        combat.player.state.animation_state = 1
+        actor.skeleton.phase = 'dormant'
+        actor.skeleton.timer, actor.skeleton.shakes = timer, shakes
+        select_sequence(actor, sequence)
+        actor.runtime.next_frame()
+        actor.state.sound_events.clear()
+        combat.terrain = SimpleNamespace(tile=lambda *_args: Tile(1), neighbor=lambda *_args: None)
+        combat.rng = QuickDrawRandom(1)
+        combat.decide_guard_intent = lambda *_args: GuardIntent()
+        combat.apply_guard_intent = lambda *_args: None
+        combat._advance_guard_terrain = lambda *_args: None
+        return combat, actor
+
+    def test_timer_one_expires_after_proximity_check_not_before_it(self):
+        combat, actor = self.stationary_bones(timer=1)
+        self.tick(combat)
+        self.assertEqual((actor.life, actor.skeleton.timer, actor.selected_sequence), (0, 0, 119))
+        self.tick(combat)
+        self.assertEqual((actor.life, actor.skeleton.phase, actor.state.action), (3, 'rising', 207))
+
+    def test_shake_roll_precedes_the_same_frames_dead_timer_decrement(self):
+        combat, actor = self.stationary_bones(shakes=1)
+        self.tick(combat)
+        # QuickDraw seed 1: Rnd(30) == 5; 15+5 is decremented by AutoCtrl.
+        self.assertEqual((actor.skeleton.shakes, actor.skeleton.timer), (0, 19))
+        self.assertEqual((actor.state.source_sequence_id, actor.state.action), (112, 208))
+        self.assertEqual(actor.state.sound_events, [61])
+
+    def test_unfinished_shake_advances_without_restarting_when_timer_is_zero(self):
+        combat, actor = self.stationary_bones(sequence=112, shakes=1)
+        self.assertEqual(actor.state.action, 207)
+        self.tick(combat)
+        self.assertEqual((actor.skeleton.shakes, actor.skeleton.timer), (0, 19))
+        self.assertEqual((actor.state.action, actor.state.cursor), (206, 7))
+        self.assertEqual(actor.state.sound_events, [])
+
+    def test_finished_shakes_can_rise_before_waiting_sequence119(self):
+        combat, actor = self.stationary_bones(sequence=112)
+        combat.attack_pause = 9
+        combat.player.state.callback_flag = 1
+        self.tick(combat)
+        self.assertEqual((actor.selected_sequence, actor.state.action, actor.life), (88, 207, 3))
+        self.assertEqual((actor.skeleton.phase, actor.alert_mode), ('rising', 3))
+        self.assertTrue(actor.sword_drawn)
+        self.assertEqual((combat.attack_pause, combat.player.state.callback_flag), (0, 0))
+        self.assertEqual(actor.state.sound_events, [60])
+
+    def test_alive_skeleton_does_not_decrement_dead_recovery_timer(self):
+        combat, actor = self.stationary_bones(timer=7)
+        actor.life = actor.max_life
+        actor.skeleton.phase = 'rising'
+        select_sequence(actor, 88)
+        actor.state.action = 180
+        self.assertTrue(actor.skeleton.control(combat, actor))
+        self.assertEqual(actor.skeleton.timer, 7)
+
+    def test_hurt_during_rising_does_not_reapply_rising_midpoint_turn(self):
+        combat, actor = self.stationary_bones()
+        actor.life = actor.max_life
+        actor.skeleton.phase = 'rising'
+        select_sequence(actor, 183)
+        actor.state.action = 182
+        actor.state.facing = 1
+        before = actor.state.target_x, actor.state.facing
+        self.assertFalse(actor.skeleton.control(combat, actor))
+        self.assertEqual((actor.state.target_x, actor.state.facing), before)
+
+    def test_repeated_input_callbacks_do_not_repeat_waking_or_speed_up_recovery(self):
+        combat, actor = self.stationary_bones(timer=1)
+        combat.step(10, .1)
+        snapshot = (actor.state.cursor, actor.skeleton.timer, actor.life)
+        for _ in range(20):
+            combat.step(10, .1)
+            self.assertEqual((actor.state.cursor, actor.skeleton.timer, actor.life), snapshot)
+        combat.step(10.1, .1)
+        self.assertEqual((actor.state.action, actor.life), (207, 3))
+
+    def test_live_scene_wakes_after_timer_expiry_and_displays_second_rising_pose(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(3)
+        scene.jump_to_room(14, row=2, x=300, facing=1)
+        actor = scene.combat.guards[0]
+        actor.skeleton.timer, actor.skeleton.shakes = 1, 0
+        select_sequence(actor, 119)
+        actor.runtime.next_frame()
+        with patch.object(scene, 'render'):
+            RooftopSceneTests.tick(self)
+            self.assertEqual((actor.life, actor.skeleton.timer), (0, 0))
+            RooftopSceneTests.tick(self)
+        self.assertEqual((actor.life, actor.skeleton.phase, actor.state.action), (3, 'rising', 207))
+        self.assertIs(scene.combat.health_opponent(), actor)
+
+    def test_room17_loads_nearby_room15_skeleton_without_a_previous_visit(self):
+        game = GameSession.load(self.resources, 3)
+        combat = game.combat
+        self.assertNotIn(14, combat.room_encounters)
+        game.place(16, 2, 40, 0)
+        combat.guard_art = self.art
+        actor, = combat.room_encounters[14][0]
+        self.assertEqual((actor.room, actor.state.target_x), (14, 381))
+        self.assertIn(actor, combat.active_guards())
+        self.tick(combat, 100)
+        self.assertTrue(actor.alive)
+        self.assertIs(combat.health_opponent(), actor)
+        combat.enter_room(14, 2)
+        self.assertIs(combat.room_encounters[14][0][0], actor)
+
+    def test_invisible_neighbor_is_not_initialized_by_room_entry(self):
+        game = GameSession.load(self.resources, 3)
+        game.place(12, 2, 40, 0)
+        self.assertNotIn(10, game.combat.room_encounters)
+
+    def test_shake_bones_obeys_marker_pose_row_and_special_flag_without_reset(self):
+        for marker in (-1, 0, 1):
+            for pose in (206, 207):
+                for row in (1, 2):
+                    for special in (0, 5):
+                        with self.subTest(marker=marker, pose=pose, row=row, special=special):
+                            combat, actor = self.stationary_bones(timer=120, shakes=1)
+                            actor.skeleton.marker = marker
+                            actor.state.action, actor.state.special_flag = pose, special
+                            combat.shake_bones(actor.room, row)
+                            changes = marker == 0 and pose == 206 and row == 2 and special != 5
+                            self.assertEqual(actor.selected_sequence, 112 if changes else 119)
+                            self.assertEqual((actor.skeleton.timer, actor.skeleton.shakes), (120, 1))
+
+    def test_row_shake_reaches_visible_side_room_bones_but_not_distant_bones(self):
+        _, combat, actor = self.encounter(14)
+        actor.skeleton.timer = 120
+        combat.enter_room(16, 2)
+        select_sequence(actor, 119)
+        actor.runtime.next_frame()
+        actor.state.target_x = 378
+        combat.shake_bones(16, 2)
+        self.assertEqual(actor.selected_sequence, 119)
+        actor.state.target_x = 379
+        combat.shake_bones(16, 2)
+        self.assertEqual(actor.selected_sequence, 112)
+        self.assertEqual(actor.skeleton.timer, 120)
+
+    def test_player_shake_request_reaches_bones_and_only_last_row_is_used(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(3)
+        scene.jump_to_room(14, row=2, x=300, facing=1)
+        actor = scene.combat.guards[0]
+        actor.skeleton.timer = 120
+        for requests, expected in (((-12,), 119), ((-13,), 112), ((-13, -12), 119),
+                                   ((-12, -13), 112)):
+            with self.subTest(requests=requests):
+                select_sequence(actor, 119)
+                actor.runtime.next_frame()
+                scene.sequence_state.sequence_events = [(opcode, ()) for opcode in requests]
+                scene.advance_level_events()
+                self.assertEqual(actor.selected_sequence, expected)
+                self.assertEqual(actor.skeleton.timer, 120)
+                self.assertEqual(scene.game.caverns.loose.shake_events, [])
+                self.assertEqual(scene.sequence_state.sequence_events, [])
+
+    def test_falling_floor_impact_shakes_bones_without_resetting_recovery(self):
+        from pop2.loose_floors import FallingFloor
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(3)
+        scene.jump_to_room(14, row=2, x=300, facing=1)
+        actor = scene.combat.guards[0]
+        actor.skeleton.timer = 120
+        select_sequence(actor, 119)
+        actor.runtime.next_frame()
+        column = next(col for col in range(10) if scene.level_map.tile(14, col, 2).kind == 1)
+        scene.game.caverns.loose.falling = [FallingFloor(14, column, 2, 359)]
+        scene.advance_cavern_floors()
+        self.assertEqual((actor.selected_sequence, actor.skeleton.timer), (112, 120))
+        self.assertEqual(scene.game.caverns.loose.shake_events, [])
+
     def test_player_has_native_extra_three_pixel_skeleton_strike_range(self):
         game, combat, actor = self.encounter()
         actor.alert_mode = 3
@@ -584,6 +775,8 @@ class SkeletonTests(unittest.TestCase):
         combat.player_death_counter = 4
         self.tick(combat)
         self.assertEqual(actor.skeleton.phase, 'active')
+        self.assertTrue(actor.sword_drawn)
+        self.assertNotEqual(actor.state.source_sequence_id, 77)
         combat.player_death_counter = 5
         self.tick(combat)
         self.assertEqual((actor.skeleton.phase, actor.state.source_sequence_id), ('collapsing', 120))

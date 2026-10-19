@@ -57,6 +57,13 @@ class SaveFormatTests(unittest.TestCase):
             self.assertEqual(vars(original.combat.guards[0].state), vars(loaded.combat.guards[0].state))
             self.assertEqual(original.combat.rng.seed, loaded.combat.rng.seed)
 
+    def test_transient_bone_shake_notifications_are_not_replayed_after_loading(self):
+        original = GameSession.load(self.resources, 3)
+        original.caverns.loose.shake_events.append((14, 2))
+        write_save(self.path, capture(original))
+        restored, _saved = read_save(self.path, self.resources)
+        self.assertEqual(restored.caverns.loose.shake_events, [])
+
     def test_cavern_potions_gates_debris_and_skeleton_recovery_survive_roundtrip(self):
         original = GameSession.load(self.resources, 3)
         original.place(19, 2, 200, 1)

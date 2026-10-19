@@ -55,6 +55,15 @@ class LooseFloorTests(unittest.TestCase):
         self.assertFalse(self.terrain.supports(0, 7, 0))
         self.assertEqual(self.loose.falling, [FallingFloor(0, 7, 0, 143)])
 
+    def test_row_shake_reports_bone_notification_without_a_loose_tile(self):
+        self.assertEqual(self.loose.shake_row(self.terrain, 0, 2), ())
+        self.assertEqual(self.loose.shake_events, [(0, 2)])
+
+    def test_debris_impact_reports_the_shaken_room_and_row(self):
+        self.loose.falling = [FallingFloor(3, 7, 0, 119)]
+        self.loose.advance_falling(self.terrain)
+        self.assertEqual(self.loose.shake_events, [(3, 0)])
+
     def test_protected_climb_checks_floor_flags_in_both_directions_and_other_rooms(self):
         # CheckFloor 4:35ba does not exempt SEQS:10/235. Only FRAM bit 0x40
         # makes late climb poses test their supporting floor.

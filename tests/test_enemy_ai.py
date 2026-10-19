@@ -11,6 +11,7 @@ from pop2.animation_data import sequence_words
 from pop2.combat import (
     CombatEncounter, GuardIntent, GuardSpawn, advancable_tile, moving_fight_pose,
     nearest_opponent, select_sequence, strike_range,
+    visible_side_opponent,
 )
 from pop2.enemy_profiles import (
     ENEMY_DATA, PROFILES, ADVANCE_CHANCE, BLOCK_CHANCE, PARRY_BLOCK_CHANCE,
@@ -166,6 +167,12 @@ class GuardDecisionTests(unittest.TestCase):
         for pose in range(60):
             self.assertEqual(moving_fight_pose(pose),
                              1 <= pose <= 14 or 34 <= pose <= 44 or 49 <= pose <= 56)
+
+    def test_side_room_visibility_uses_strict_original_position_boundaries(self):
+        self.assertFalse(visible_side_opponent(378, 'left'))
+        self.assertTrue(visible_side_opponent(379, 'left'))
+        self.assertTrue(visible_side_opponent(123, 'right'))
+        self.assertFalse(visible_side_opponent(124, 'right'))
 
     def runner(self, front=Tile(1), rear=Tile(1), facing=1, pose=195):
         c = self.encounter(distance=300, rolls=())

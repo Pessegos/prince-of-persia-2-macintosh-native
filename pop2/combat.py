@@ -42,6 +42,11 @@ def moving_fight_pose(action):
     return 1 <= action <= 14 or 49 <= action <= 56 or 34 <= action <= 44
 
 
+def visible_side_opponent(x, side):
+    # CheckSideRoomsForVisibleOpps 6:2f4e: native X includes the 207 origin.
+    return x > 378 if side == 'left' else x < 124
+
+
 def nearest_opponent(player, guards, side=None):
     # GetOppIdxClosestToKid 6:36f2-3918 compares absolute Y, not row IDs.
     # At exactly 80 pixels of vertical-distance difference, bank order wins.
@@ -310,6 +315,13 @@ class CombatEncounter:
         self.player.room, self.player.row = room, row
         self.guards, self.generation_points = self.room_encounters[room]
         terrain = getattr(self, "terrain", None)
+        if terrain is not None and self.level_kind == 3:
+            for side in ('left', 'right'):
+                neighbor = terrain.neighbor(room, side)
+                if (neighbor is not None and neighbor not in self.room_encounters
+                        and any(visible_side_opponent(spawn.x, side)
+                                for spawn in GuardSpawn.all_from_level(self.level, neighbor))):
+                    self._load_room(neighbor)
         if terrain is not None and previous_room in (
                 terrain.neighbor(room, "left"), terrain.neighbor(room, "right")):
             offset = self._room_offset(previous_room, room)
@@ -637,7 +649,8 @@ class CombatEncounter:
             return
         if not player.alive:
             guard.alert_mode = 0
-            if state.action in GUARD_POSES and state.animation_state < 2:
+            if (state.actor_type != 4 and state.action in GUARD_POSES
+                    and state.animation_state < 2):
                 # EnGarde 4:09c0-09e2 -> OnAlert 6:2536-254c ->
                 # 6:2592/25ee: lower the sword only at a ready pose.
                 guard.sword_drawn = False
@@ -675,9 +688,26 @@ class CombatEncounter:
             self.guard = self._nearest_guard() or self.guard
 
     def update_guard_alerts(self):
+        self.wake_skeletons()
         for guard in self.active_guards():
             with self._local_opponents(guard):
                 self._update_guard_alert(guard)
+
+    def wake_skeletons(self):
+        for guard in self.active_guards():
+            if guard.skeleton is not None:
+                with self._local_opponents(guard):
+                    guard.skeleton.try_wake(self, guard)
+
+    def shake_bones(self, room, row):
+        for guard in self.active_guards():
+            if guard.skeleton is None or guard.row != row:
+                continue
+            offset = self._room_offset(guard.room, room)
+            if (offset == 0 or offset in (-510, 510)
+                    and visible_side_opponent(guard.state.target_x,
+                                              'left' if offset < 0 else 'right')):
+                guard.skeleton.shake(guard)
 
     def _update_guard_alert(self, guard):
         # CODE:2 0x6e7e: nearest living enemy on either side can engage (3).

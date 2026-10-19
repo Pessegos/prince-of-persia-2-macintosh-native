@@ -58,47 +58,52 @@ class Skeleton:
         return True
 
     def control(self, encounter, actor):
-        from pop2.combat import select_sequence
-
+        if not actor.alive:
+            if self.timer > 0:
+                self.timer -= 1
+            return True
         # Skeleton AutoCtrl 4:169e-16ba applies to rising actors too.
-        if (self.phase in ('active', 'rising') and not encounter.player.alive
+        if (not encounter.player.alive
                 and getattr(encounter, 'player_death_counter', -1) >= 5):
             self.collapse(actor, encounter=encounter)
             return True
-        if self.phase == 'active':
-            return False
-        if self.timer > 0:
-            self.timer -= 1
-        if self.phase in ('rising', 'collapsing'):
-            if self.phase == 'rising' and actor.state.action == 182:
-                # Skel AutoCtrl 4:16c0-16da / 1b9c-1be0 faces the Prince
-                # at the midpoint of rising, preserving the foot anchor.
+        if actor.state.source_sequence_id == 88 and actor.state.action >= 179:
+            if actor.state.action == 182:
                 facing = int(actor.state.target_x < encounter.player.state.target_x)
                 if actor.state.facing != facing:
                     actor.state.facing = facing
                     actor.state.target_x += 16 if facing else -16
                     actor.state.current_x = actor.state.target_x
-            return self.phase == 'collapsing' or actor.state.action >= 179
-        actor.targetable = False
-        if not self.can_wake(encounter, actor):
             return True
-        if self.timer or actor.state.sequence_id != 119:
-            return True
+        return False
+
+    def try_wake(self, encounter, actor):
+        from pop2.combat import select_sequence
+
+        # FrameAdv 2:624a runs proximity before alert/control and the normal
+        # AnimChar. Even an unfinished shake can react once its timer is zero.
+        if self.phase not in ('dormant', 'collapsing') or not self.can_wake(encounter, actor):
+            return False
         if self.shakes:
             self.shakes -= 1
             self.timer = 15 + encounter.rng.randrange(31)
-            select_sequence(actor, 112)
+            if actor.state.source_sequence_id != 112:
+                select_sequence(actor, 112)
+            actor.runtime.next_frame()
         else:
+            select_sequence(actor, 88)
+            actor.runtime.next_frame()
             self.phase = 'rising'
             self.victory_pending = False
             actor.life = actor.max_life
             actor.sword_drawn = True
             actor.targetable = True
             actor.death_registered = False
+            actor.alert_mode = 3
             encounter.player.state.callback_flag = 0
+            encounter.attack_pause = 0
             if actor.terrain_motion is not None:
                 actor.terrain_motion.dead = False
-            select_sequence(actor, 88)
         return True
 
     def after_frame(self, actor):
@@ -106,6 +111,15 @@ class Skeleton:
             self.phase = 'active'
         elif self.phase == 'collapsing' and actor.state.sequence_id == 119:
             self.phase = 'dormant'
+
+    def shake(self, actor):
+        from pop2.combat import select_sequence
+
+        # ShakeBones 4:1900-1946 does not reset recovery or remaining shakes.
+        if self.marker != 0 or actor.state.action != 206 or actor.state.special_flag == 5:
+            return False
+        select_sequence(actor, 112)
+        return True
 
     def collapse(self, actor, landing=False, *, encounter=None, column=None):
         from pop2.combat import select_sequence
