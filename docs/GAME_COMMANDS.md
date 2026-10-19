@@ -12,6 +12,10 @@ pause, then briefly displays `Saved screenshot as <filename>` in the game's bitm
 font. F2's screenshot controls show an F8 reminder and offer `Save PNG`, a native
 folder picker (including typed/pasted paths), and 1x-4x integer sizes. The original 510x384
 viewport and HUD are retained; host padding, menus and pause overlays are not.
+Shift+F8 instead saves the presented game framebuffer, including visible menus,
+Developer Tools, pause overlays and existing notices. It uses the same folder,
+native viewport crop and integer scale. The new capture notification is drawn
+only after the PNG is saved, and neither shortcut closes menus or resumes play.
 Local preferences and the default output folder live under ignored `rendered/`.
 Capture does not require Developer Tools; F3 remains separate development UI.
 Neither screenshot controls nor Developer Tools add a command row to F1.

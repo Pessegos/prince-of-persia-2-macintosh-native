@@ -146,6 +146,34 @@ class WindowScreenshotTests(unittest.TestCase):
             host.dev_key_press(event)
             self.assertEqual(toggle.call_count, 2)
 
+    def test_shift_f8_captures_ui_once_without_resuming_or_changing_menu(self):
+        host = self.host
+        menu = host.game_menu
+        with patch.object(host, "capture_screenshot") as capture:
+            event = SimpleNamespace(keysym="F8", state=0x1)
+            self.assertEqual(host.dev_key_press(event), "break")
+            host.dev_key_press(event)
+            capture.assert_called_once_with(include_ui=True)
+            host.dev_key_release(event)
+            for modifier in (0x4, 0x40, 0x20000):
+                blocked = SimpleNamespace(keysym="F8", state=0x1 | modifier)
+                host.dev_key_press(blocked)
+                host.dev_key_release(blocked)
+            capture.assert_called_once_with(include_ui=True)
+        self.assertIs(host.game_menu, menu)
+        self.assertTrue(host.paused)
+
+    def test_shift_f8_with_windows_lock_keys_still_selects_ui_capture(self):
+        with patch("pop2.window_controls.sys.platform", "win32"), \
+                patch.object(self.host, "capture_screenshot") as capture:
+            for state in (0x1, 0x3, 0x9, 0xB):
+                event = SimpleNamespace(keysym="F8", state=state)
+                self.host.dev_key_press(event)
+                self.host.dev_key_release(event)
+            self.assertEqual(capture.call_count, 4)
+            for call in capture.call_args_list:
+                self.assertEqual(call.kwargs, {'include_ui': True})
+
     def test_capture_uses_clean_buffer_and_keeps_menu_and_pause(self):
         host = self.host
         host.native_viewport = Image.new("RGBA", (512, 384), "red")
@@ -165,6 +193,30 @@ class WindowScreenshotTests(unittest.TestCase):
         self.assertIn("Could not save", host.game_menu.error)
         self.assertTrue(host.paused)
         host.render.assert_called_once_with()
+
+    def test_ui_capture_saves_presented_buffer_before_showing_new_toast(self):
+        host = self.host
+        host.native_viewport = Image.new("RGBA", (512, 384), "red")
+        host.native_viewport.putpixel((100, 100), (255, 255, 255, 255))
+        before = host.native_viewport.tobytes()
+        host.render.side_effect = lambda: host.native_viewport.paste("green", (0, 0, 512, 384))
+        with TemporaryDirectory() as directory:
+            host.screenshot_settings = ScreenshotSettings(Path(directory), 2)
+            path = host.capture_screenshot(include_ui=True)
+            with Image.open(path) as image:
+                expected = Image.frombytes("RGBA", (512, 384), before).crop(VISIBLE_VIEWPORT).convert("RGB")
+                expected = expected.resize((1020, 768), Image.Resampling.NEAREST)
+                self.assertEqual(image.tobytes(), expected.tobytes())
+        self.assertTrue(host.paused)
+        self.assertIsNotNone(host.game_menu)
+        self.assertEqual(host.screenshot_viewport.getpixel((100, 100)), (0, 0, 255, 255))
+
+    def test_ui_capture_without_presented_frame_does_not_silently_save_clean_buffer(self):
+        self.host.native_viewport = None
+        with patch("pop2.window_controls.save_screenshot") as save:
+            self.assertIsNone(self.host.capture_screenshot(include_ui=True))
+        save.assert_not_called()
+        self.assertIn("Could not save", self.host.game_menu.error)
 
     def test_folder_dialog_cancel_and_success_preserve_pause_state(self):
         host = self.host

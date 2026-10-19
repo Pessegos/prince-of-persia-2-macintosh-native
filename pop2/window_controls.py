@@ -445,10 +445,10 @@ class WindowControls:
             self.pause_resume_keys.update(held_keys)
             self.render()
 
-    def capture_screenshot(self):
+    def capture_screenshot(self, *, include_ui=False):
         menu = self.game_menu if self.game_menu is not None and self.game_menu.page == "screenshots" else None
         try:
-            viewport = getattr(self, "screenshot_viewport", None)
+            viewport = getattr(self, "native_viewport" if include_ui else "screenshot_viewport", None)
             if viewport is None:
                 raise ValueError("No game frame is available yet")
             path = save_screenshot(viewport, self.screenshot_settings)
@@ -756,7 +756,10 @@ class WindowControls:
         self.window_keys_down.add(event.keysym)
         if event.keysym == "F8":
             if not repeated and not alt and not event.state & (0x4 | 0x40):
-                self.capture_screenshot()
+                if event.state & 0x1:
+                    self.capture_screenshot(include_ui=True)
+                else:
+                    self.capture_screenshot()
             return "break"
         if event.keysym == "F2":
             if not repeated:

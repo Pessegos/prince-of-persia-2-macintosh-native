@@ -399,6 +399,11 @@ class ExternalCaptureKeyTests(unittest.TestCase):
                 root.event_generate('<KeyPress>', keysym='F8')
                 root.event_generate('<KeyRelease>', keysym='F8')
                 host.capture_screenshot.assert_called_once_with()
+                host.capture_screenshot.reset_mock()
+                root.event_generate('<KeyPress>', keysym='F8', state=1)
+                root.event_generate('<KeyRelease>', keysym='F8', state=1)
+                host.capture_screenshot.assert_called_once_with(include_ui=True)
+                assert not host.window_keys_down, host.window_keys_down
             finally:
                 root.destroy()
         ''')], capture_output=True, text=True, timeout=15)

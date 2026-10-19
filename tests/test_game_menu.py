@@ -201,6 +201,52 @@ class GameMenuSceneTests(unittest.TestCase):
                 self.assertIsNone(scene.game_menu)
                 self.assertEqual(scene.paused, paused)
 
+    def test_shift_f8_preserves_visible_pause_menus_and_cutscene_overlay(self):
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
+            for overlay in ('pause', 'menu', 'saves', 'screenshots', 'tools', 'playback', 'intro'):
+                with self.subTest(overlay=overlay):
+                    if scene.game_menu is not None:
+                        scene.close_game_menu(resume=True)
+                    if scene.dev_menu is not None:
+                        scene.close_dev_mode()
+                    scene.clear_screenshot_toast()
+                    scene.set_paused(False)
+                    if overlay == 'pause':
+                        scene.set_paused(True)
+                    elif overlay in ('menu', 'saves', 'screenshots'):
+                        if overlay == 'saves':
+                            scene.apply_game_action('save')
+                        else:
+                            scene.open_game_menu(overlay)
+                    elif overlay in ('tools', 'playback'):
+                        scene.open_dev_mode()
+                        scene.dev_menu.show_page(overlay)
+                    else:
+                        scene.start_intro()
+                        scene.set_paused(True)
+                    scene.render()
+                    expected = scene.native_viewport.crop((1, 0, 511, 384)).convert('RGB')
+                    clean = scene.screenshot_viewport.crop((1, 0, 511, 384)).convert('RGB')
+                    self.assertNotEqual(expected.tobytes(), clean.tobytes())
+                    menus = scene.game_menu, scene.dev_menu
+                    position = scene.player_x, scene.action, scene.combat.world_frame
+                    before = set(Path(directory).glob('*.png'))
+                    self.assertEqual(self.press('F8', 0x1), 'break')
+                    path, = set(Path(directory).glob('*.png')) - before
+                    with Image.open(path) as image:
+                        self.assertEqual(image.tobytes(), expected.tobytes())
+                    self.assertTrue(scene.paused)
+                    self.assertIs(scene.game_menu, menus[0])
+                    self.assertIs(scene.dev_menu, menus[1])
+                    self.assertEqual(position, (scene.player_x, scene.action, scene.combat.world_frame))
+                    before.add(path)
+                    self.press('F8')
+                    path, = set(Path(directory).glob('*.png')) - before
+                    with Image.open(path) as image:
+                        self.assertEqual(image.tobytes(), clean.tobytes())
+
     def test_alt_n_never_restarts_until_explicit_confirmation(self):
         scene = self.scene
         scene.jump_to_screen("9")
