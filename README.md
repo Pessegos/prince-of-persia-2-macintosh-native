@@ -83,8 +83,8 @@ I also improved the sound played while the gate opens. The original had noticeab
     <th width="50%">Corrected</th>
   </tr>
   <tr>
-    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/4795163d-3da8-4984-bbb2-cd1056430c07"></video></td>
-    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/91e55849-6567-40c0-a99b-661c59452855"></video></td>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/4317da04-6744-4e5b-93b4-4ef28e1bbf03"></video></td>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/b3781b50-ab51-4524-b676-8aecd7824b79"></video></td>
   </tr>
 </table>
 
