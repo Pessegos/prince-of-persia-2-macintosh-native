@@ -103,6 +103,58 @@ class SaveFormatTests(unittest.TestCase):
                          (None, 0))
         self.assertIn(loaded.combat.guards[0], loaded.combat.active_guards())
 
+    def test_inactive_skeleton_room_record_survives_snapshot_and_resumes_native_reload(self):
+        original = GameSession.load(self.resources, 3)
+        original.place(10, 2, 230, 1)
+        actor = original.combat.guards[0]
+        actor.life, actor.sword_drawn, actor.skeleton.phase = 2, True, 'active'
+        original.combat.enter_room(0, 2)
+        original.room_id = original.motion.room = 0
+        self.assertEqual(actor.skeleton.room_record.cursor, 0)
+        write_save(self.path, capture(original))
+        loaded, _saved = read_save(self.path, self.resources)
+        restored = loaded.combat.room_encounters[10][0][0]
+        self.assertEqual(restored.skeleton.room_record, actor.skeleton.room_record)
+        loaded.combat.enter_room(10, 2)
+        self.assertEqual((restored.life, restored.selected_sequence, restored.skeleton.timer), (0, 112, 0))
+        self.assertIsNone(restored.skeleton.room_record)
+
+    def test_legacy_skeleton_records_default_to_no_pending_reload(self):
+        original = GameSession.load(self.resources, 3)
+        original.place(10, 2, 230, 1)
+        value = capture(original)
+
+        def remove_fields(item):
+            if isinstance(item, dict):
+                if item.get('record') == 'Skeleton':
+                    item['fields'].pop('room_record', None)
+                    item['fields'].pop('native_alive', None)
+                for child in item.values():
+                    remove_fields(child)
+            elif isinstance(item, list):
+                for child in item:
+                    remove_fields(child)
+
+        remove_fields(value)
+        write_save(self.path, value)
+        loaded, _saved = read_save(self.path, self.resources)
+        skeleton = loaded.combat.guards[0].skeleton
+        self.assertIsNone(skeleton.room_record)
+        self.assertFalse(skeleton.native_alive)
+
+    def test_corrupt_skeleton_room_record_fields_are_rejected(self):
+        from pop2.skeleton import SkeletonRoomRecord
+
+        for sequence, cursor, life in ((99999, 0, 0), (119, -1, 0), (119, 999, 0), (119, 1, 4)):
+            with self.subTest(sequence=sequence, cursor=cursor, life=life):
+                original = GameSession.load(self.resources, 3)
+                original.place(10, 2, 230, 1)
+                original.combat.guards[0].skeleton.room_record = SkeletonRoomRecord(
+                    sequence, cursor, life, False)
+                write_save(self.path, capture(original))
+                with self.assertRaises(SaveGameError):
+                    read_save(self.path, self.resources)
+
     def test_cavern_potions_gates_debris_and_skeleton_recovery_survive_roundtrip(self):
         original = GameSession.load(self.resources, 3)
         original.place(19, 2, 200, 1)

@@ -307,7 +307,7 @@ class CombatEncounter:
                 self.room_encounters[room] = ([], [])
                 return
             guards = []
-            for spawn in GuardSpawn.all_from_level(self.level, room):
+            for slot, spawn in enumerate(GuardSpawn.all_from_level(self.level, room)):
                 state = SequenceState(spawn.sequence_id, current_x=spawn.x,
                                       target_x=spawn.x, facing=spawn.facing,
                                       actor_type=spawn.actor_type, level_kind=self.level_kind)
@@ -321,7 +321,7 @@ class CombatEncounter:
                 if spawn.skeleton_words:
                     from pop2.skeleton import Skeleton
                     fighter.skeleton = Skeleton.from_spawn(spawn)
-                    fighter.skeleton.initialize(fighter)
+                    fighter.skeleton.initialize(fighter, slot)
                 guards.append(fighter)
             points = (OpponentGenerationPoint.from_level(self.level, room)
                       if struct.unpack_from(">h", self.level, 0x21a4)[0] == 0 else [])
@@ -331,6 +331,14 @@ class CombatEncounter:
         """Keep the Prince and the visited room's NPC/generator objects intact."""
         previous_room = self.player.room
         previous_active = self.active_guards()
+        skeleton_records = []
+        if previous_room != room:
+            for actor in previous_active:
+                if actor.skeleton is not None:
+                    view = self._project_fighter(actor, previous_room)
+                    if view is not None:
+                        inside = 0 <= self._supporting_column(view) < 10 and 0 <= view.row < 3
+                        skeleton_records.append((actor, inside))
         self._load_room(room)
         self.player.room, self.player.row = room, row
         self.guards, self.generation_points = self.room_encounters[room]
@@ -354,7 +362,18 @@ class CombatEncounter:
                 if opponent_follows_cut(view, direction, len(self.guards),
                                         in_destination=self._position_room(guard) == room):
                     self._carry_opponent(guard, room, previous_room, direction)
+        for actor, inside in skeleton_records:
+            if actor.room != room and actor.skeleton.removed_on_room_save(actor):
+                self.room_encounters[actor.room][0].remove(actor)
+                continue
+            actor.skeleton.store_room(actor, restart_living=actor.room != room and inside)
         self._select_skeleton_bank(room)
+        for actor in self.active_guards():
+            if actor.skeleton is not None:
+                restored = actor.skeleton.restore_room(actor, actor.bank_slot)
+                if restored and actor.skeleton.native_alive:
+                    self.player.state.callback_flag = 0
+                    self.advance_pause = self.attack_pause = 0
         self.guard = self._nearest_guard() or (self.guards[0] if self.guards else None)
 
     def _position_room(self, guard):

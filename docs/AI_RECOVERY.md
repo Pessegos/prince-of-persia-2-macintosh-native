@@ -539,8 +539,9 @@ Fatal sword hits select the native collapse 120 with cue 61 and the
 an active skeleton to bones once the Prince's copied death counter reaches
 five, rather than leaving it standing over the corpse. Falling deaths use the bones
 sequence 112; lava uses 115 and the pool's original sinking-skeleton artwork
-with cue 69, not the Prince's drowning sequence. Room revisits retain each
-enemy's life, skill, sequence and recovery timer.
+with cue 69, not the Prince's drowning sequence. Room revisits use the
+record-save/reload rules below, rather than freezing every animation and
+recovery timer exactly where the actor was left.
 
 SetupSword 3:0b76-0b98 switches actor-type-4 poses 206-209 to the
 environment shape bank, adding 109 to the FRAM shape index. The four piles
@@ -557,8 +558,8 @@ Tests exercise actual resources, individual records, inert bones, activation,
 all reached sprite frames, strike range, collapse/recovery and persistence.
 Scene renders have also been checked in rooms 11, 15 and 20. This is the
 level-three subset, not certification of every native NPC-bank update order:
-level-four exit-chasing skeletons (4:17aa), inactive-room bank reconstruction
-and later special opponents remain outside this implementation.
+level-four exit-chasing skeletons (4:17aa), complete inactive-room bank
+reconstruction and later special opponents remain outside this implementation.
 
 Tests cover direct extraction from the originals, tables/thresholds, native RNG,
 conditional roll order, animation gates, range boundaries, anticipating attack,
@@ -703,12 +704,61 @@ distant former pursuers no longer consume AI cycles or resurrection timers.
 Full snapshots preserve selection/order; older actor records without these
 fields remain readable. Current-room actor lists retain existing object identity.
 
-Remaining differences include UpdateOppInfo's complete persistence record,
-InitOpps' living-record sequence reinitialization on revisit, special actor
-types, and the full ordinary-rooftop active-bank conversion. The port also
-retains an actor when a full destination cannot accept it rather than reproducing
-the original unconditional runner transfer's possible record loss. Do not read
-this scoped validation as complete lifecycle equivalence.
+### Skeleton Room Records And Reload
+
+UpdateOppInfo `6:30b0` distinguishes an in-bounds living record from a dead
+or transferred actor. The living record restarts with cursor zero on its next
+load; dead and carried records retain their current resource and cursor, not
+the last explicitly selected sequence. Terminal special states 4/5 and selected
+sequences 154/196 remove the room record rather than leaving revivable bones.
+Room ownership, actor identity, skill and the existing bank-selection rules
+remain separate from this animation record.
+
+InitOpps' actual entry is `6:2b7e`. A zero cursor delegates to
+SkelAddOpponent `4:198a`: marker 1 starts armed sequence 63 at full life;
+marker 0 in slot zero starts 112; other dormant slots start 119. Dormant
+initialization restores the marker timer and skill-dependent shake count.
+Marker 1 instead retains its existing timer/shakes. A nonzero cursor restores
+saved life/sword and resumes the current SEQS resource. Both paths execute
+one AnimChar step during loading, align to the current floor and clear
+velocities, stale control flags and old queued events. This load step follows
+the already-validated transfer; it is not a change to its coordinate arithmetic.
+
+IsDeadPos then treats skeleton poses 185/206/207 as dead, clearing life and
+the resurrection timer. Other poses receive the native living flag even when
+their saved health is zero, as can happen partway through a shake. Skeleton
+activation/timer scheduling retains that distinction instead of treating HP
+alone as the native alive word. A living reload also clears the Prince's
+noise flag and shared approach/attack pauses, but not the parry timer.
+
+Two local original-code probes extend the preceding cut tests:
+
+- 240 UpdateOppInfo combinations compare native alive state, HP, armed state,
+  cursor saving and terminal-record removal. Current SEQS is compared when
+  the cursor is nonzero; a zero-cursor record's unused sequence header is
+  not asserted to be identical.
+- 9,504 InitOpps/SkelAddOpponent combinations compare marker, skill, slot,
+  saved life/sword, timer and reachable cursors across sequences 88, 112,
+  119, 120 and 227. Outputs include current/selected SEQS, next pose/cursor,
+  life, native alive state, sword, height, X, animation mode, timer and shakes.
+
+These execute the original 68k save/load branches with controlled records.
+Record lookup, side-room import and graphics setup are harness endpoints;
+AnimChar uses the shared original SEQS interpreter. The load fixture supplies
+flat floor, deliberately excluding SkelAddOpponent's ledge-position adjustment.
+The existing 72 lifecycle scenarios still match all 23,040 frame snapshots.
+Regression tests cover repeated departures, same-room refresh, carried and
+reinitialized actors, terminal removal, stale-event clearing, reload pauses,
+legacy snapshots and validation of saved room records. Normal player saves
+remain checkpoint-based; this does not turn them into exact-state saves.
+
+Remaining differences include UpdateOppInfo's complete out-of-bounds record
+normalization, SkelAddOpponent's ledge alignment, invisible-face removal,
+all zero-HP/native-alive combat interactions, special actor types and the
+full ordinary-rooftop active-bank conversion. The port also retains an actor
+when a full destination cannot accept it rather than reproducing the original
+unconditional runner transfer's possible record loss. Do not read this scoped
+validation as complete lifecycle equivalence.
 
 ### Progress Accounting
 

@@ -4,6 +4,15 @@ from dataclasses import dataclass
 
 from pop2.opponent_generation import EMPTY_TILES, WALL_TILES, OBSTACLE_TILES
 from pop2.terrain import floor_y, stone_gate_blocks
+from pop2.sequence_runtime import SequenceState
+
+
+@dataclass
+class SkeletonRoomRecord:
+    sequence: int
+    cursor: int
+    life: int
+    armed: bool
 
 
 @dataclass
@@ -13,6 +22,8 @@ class Skeleton:
     shakes: int
     phase: str = 'dormant'
     victory_pending: bool = False
+    room_record: SkeletonRoomRecord | None = None
+    native_alive: bool = False
 
     @classmethod
     def from_spawn(cls, spawn):
@@ -20,7 +31,7 @@ class Skeleton:
         shakes = (spawn.skill + 1) & 1 if spawn.skill else 3
         return cls(words[14], words[14], shakes)
 
-    def initialize(self, actor):
+    def initialize(self, actor, slot=0):
         from pop2.combat import select_sequence
 
         active = self.marker == 1
@@ -28,12 +39,70 @@ class Skeleton:
         actor.life = actor.max_life if active else 0
         actor.sword_drawn = active
         actor.targetable = active
-        select_sequence(actor, 63 if active else 112 if self.marker == 0 else 119)
+        select_sequence(actor, 63 if active else 112 if self.marker == 0 and slot == 0 else 119)
         actor.runtime.next_frame()
+
+    def store_room(self, actor, *, restart_living):
+        # UpdateOppInfo 6:30b0 resets the cursor of an in-bounds living actor.
+        # Transfer/out-of-bounds records instead retain the current SEQS cursor.
+        self.room_record = SkeletonRoomRecord(
+            actor.state.sequence_id,
+            0 if restart_living and (actor.alive or self.native_alive) else actor.state.cursor,
+            actor.life, actor.sword_drawn)
+
+    def removed_on_room_save(self, actor):
+        # UpdateOppInfo removes these terminal/hidden records instead of
+        # leaving a heap that could be revived by re-entering the room.
+        return actor.state.special_flag in (4, 5) or actor.state.source_sequence_id in (154, 196)
+
+    def restore_room(self, actor, slot):
+        record = self.room_record
+        if record is None:
+            return False
+        state = actor.state
+        state.__dict__.update(SequenceState(
+            record.sequence, current_x=state.target_x, target_x=state.target_x,
+            facing=state.facing, actor_type=4, level_kind=state.level_kind).__dict__)
+        actor.alert_mode = 0
+        actor.recovering = actor.contact_consumed = actor.death_registered = False
+        self.victory_pending = False
+        if record.cursor == 0:
+            # InitOpps 6:2cd4 / SkelAddOpponent 4:198a starts fresh from
+            # the marker and slot, not from the last combat animation.
+            if self.marker != 1:
+                self.timer = self.marker
+                self.shakes = (actor.skill + 1) & 1 if actor.skill else 3
+            self.initialize(actor, slot)
+        else:
+            actor.life, actor.sword_drawn = record.life, record.armed
+            state.select(record.sequence)
+            state.cursor = record.cursor
+            actor.selected_sequence = record.sequence
+            actor.runtime.next_frame()
+            self.phase = ('rising' if state.source_sequence_id == 88 and actor.alive else
+                          'active' if actor.alive else 'collapsing')
+        # InitOpps calls IsDeadPos after AnimChar, then clears a heap's timer.
+        if state.action in (185, 206, 207):
+            actor.life = 0
+            actor.death_registered = True
+            self.phase, self.timer = 'dormant', 0
+            self.native_alive = False
+        else:
+            self.native_alive = True
+        actor.targetable = actor.alive
+        state.animation_state = 1
+        state.horizontal_velocity = state.vertical_velocity = 0
+        state.current_x = state.target_x
+        if actor.terrain_motion is not None:
+            from pop2.terrain import TerrainMotion
+
+            actor.terrain_motion = TerrainMotion(actor.room, actor.row)
+        self.room_record = None
+        return True
 
     def can_wake(self, encounter, actor):
         player = encounter.player
-        if (self.marker == -1 or self.timer or actor.alive or not player.alive
+        if (self.marker == -1 or self.timer or actor.alive or self.native_alive or not player.alive
                 or player.state.actor_type != 0 or actor.state.special_flag == 5
                 or player.state.animation_state in (3, 4, 5)
                 or actor.room != player.room or actor.row != player.row):
@@ -58,7 +127,7 @@ class Skeleton:
         return True
 
     def control(self, encounter, actor):
-        if not actor.alive:
+        if not actor.alive and not self.native_alive:
             if self.timer > 0:
                 self.timer -= 1
             return True
@@ -96,6 +165,7 @@ class Skeleton:
             self.phase = 'rising'
             self.victory_pending = False
             actor.life = actor.max_life
+            self.native_alive = True
             actor.sword_drawn = True
             actor.targetable = True
             actor.death_registered = False
@@ -126,6 +196,7 @@ class Skeleton:
 
         # Skeleton death selects 120, cue 61 and a 120-update recovery timer.
         actor.life = 0
+        self.native_alive = False
         actor.sword_drawn = False
         actor.targetable = False
         actor.recovering = False

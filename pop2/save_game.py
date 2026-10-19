@@ -29,7 +29,7 @@ from pop2.potions import Potions
 from pop2.pressure_plates import PressurePlates
 from pop2.rebirth import Checkpoint, DeathState, RebirthSnapshot
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
-from pop2.skeleton import Skeleton
+from pop2.skeleton import Skeleton, SkeletonRoomRecord
 from pop2.terrain import TerrainMotion
 from pop2.wall_spikes import WallSpikes
 
@@ -42,7 +42,7 @@ CLASSES = {cls.__name__: cls for cls in (
     CavernState, Dart, Darts, DesertState, Stone, GateCrush, Harbor,
     WaterEntry, Lava, LavaPool, FallingFloor, LooseFloors, OpponentGenerationPoint,
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
-    Skeleton, TerrainMotion, WallSpikes,
+    Skeleton, SkeletonRoomRecord, TerrainMotion, WallSpikes,
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
         LooseFloors: {'shake_events'}}
@@ -156,6 +156,8 @@ def _unpack(value, resources, lava_tables, depth=0):
     optional = {'gate_contact_bounds'} if cls is TerrainMotion else set()
     if cls.__name__ == 'Fighter':
         optional.update(('bank_room', 'bank_slot'))
+    if cls is Skeleton:
+        optional.update(('room_record', 'native_alive'))
     if (not isinstance(record, dict) or set(record) - allowed
             or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')
@@ -188,6 +190,12 @@ def _fighter_valid(actor, resources):
             or state.actor_type != 0 and not (149 <= state.action or 102 <= state.action <= 106)
             or abs(state.target_x) > 10000 or abs(state.current_y) > 10000):
         raise SaveGameError('Saved actor is out of range')
+    record = actor.skeleton.room_record if actor.skeleton is not None else None
+    if record is not None and (
+            record.sequence not in resources.sequences
+            or not 0 <= record.cursor < len(resources.sequences[record.sequence])
+            or not 0 <= record.life <= actor.max_life):
+        raise SaveGameError('Saved skeleton room record is out of range')
 
 
 def capture_snapshot(game, controls=None, copy_verified=False):
