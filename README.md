@@ -60,9 +60,16 @@ I also improved the sound played while the gate opens. The original had noticeab
 
 **Opening Sound — Before & After**
 
-hold on im trying
-
-
+<table>
+  <tr>
+    <th width="50%">Original</th>
+    <th width="50%">Corrected</th>
+  </tr>
+  <tr>
+    <td><video controls src="https://github.com/user-attachments/assets/e4d45297-1ab2-4a05-8ee8-74f344e50603"></video></td>
+    <td><video controls src="https://github.com/user-attachments/assets/48ae6652-4cd0-40f9-a2fd-520b1de31fed"></video></td>
+  </tr>
+</table>
 
 ## Current Progress
 
