@@ -152,8 +152,10 @@ def _unpack(value, resources, lava_tables, depth=0):
         cls = CLASSES[value['record']]
     record = value['fields']
     allowed = {field.name for field in fields(cls)} - OMIT.get(cls, set())
-    # Earlier version-1 saves predate the frozen turning-contact history.
+    # Earlier snapshots predate turning-contact history and explicit NPC banks.
     optional = {'gate_contact_bounds'} if cls is TerrainMotion else set()
+    if cls.__name__ == 'Fighter':
+        optional.update(('bank_room', 'bank_slot'))
     if (not isinstance(record, dict) or set(record) - allowed
             or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')
@@ -173,6 +175,8 @@ def _fighter_valid(actor, resources):
         raise SaveGameError('Invalid saved actor')
     state = actor.state
     if (type(actor.room) is not int or not 0 <= actor.room < 32 or not -2 <= actor.row <= 8
+            or actor.bank_room is not None and not 0 <= actor.bank_room < 32
+            or not 0 <= actor.bank_slot < 5
             or not 0 <= actor.life <= actor.max_life <= 120 or not 0 <= actor.skill < 12
             or actor.skeleton is not None and not isinstance(actor.skeleton, Skeleton)
             or state.facing not in (0, 1) or state.actor_type not in (0, 2, 4)

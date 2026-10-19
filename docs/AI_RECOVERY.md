@@ -646,13 +646,14 @@ reuses its NPC objects, corpse poses, remaining life and generation counters.
 The Prince's life and sword state are not reset by a screen change. New Game clears
 these encounters and restores the opening.
 
-NPCs now use the rooftop physics and transfer between visited horizontal
-rooms, preserving the original actor object. Adjacent visited rooms and
-already engaged pursuers keep simulating; other rooms remain inactive.
+NPCs use the rooftop physics and transfer between rooms, preserving the
+original actor object. Ordinary rooftop pursuit still simulates adjacent
+visited rooms and already engaged pursuers. Skeletons instead use explicit
+active-bank membership; see the room-cut validation below.
 Coordinate views rebase a distant target for AI/rendering without moving its
 actual actor. On the Prince's horizontal room cut, CutAllOpponents
-`6:44c8-450a` carries ordinary NPC running poses 186-201 with nonzero
-movement flags and jump poses 202-212 with flag 1. TransferOppInfo
+`6:44c8-450a` carries ordinary NPC and skeleton running poses 186-201 with
+nonzero movement flags and jump poses 202-212 with flag 1. TransferOppInfo
 `6:3304/4864` changes ownership and rebases X by 510 without restarting
 the animation or moving the actor in world space. The carried NPC belongs
 to the new target bank even while outside the image, so the Prince can
@@ -660,9 +661,71 @@ turn toward it after killing the first screen-5 opponent. Non-carried NPCs
 still transfer on their own room cut; the port retains its five-record cap.
 Generated offscreen entrants retain ownership of their spawn room until they
 enter it or are carried by a subsequent Prince room cut. This lifecycle is
-not a complete translation of all `CutOpponent`,
-`CheckSideRoomsForVisibleOpps` and special-actor branches. Player movement is documented in
+not a complete translation of all `CutOpponent`, room-record reinitialization
+and special-actor branches. Player movement is documented in
 [COLLISION_RECOVERY.md](COLLISION_RECOVERY.md).
+
+### Room-Cut Decisions And Skeleton Active Banks
+
+The executable's actual per-NPC decision loop starts at CODE:6 `0x4476`,
+not the wrapper labeled `CutAllOpponents` at `0x4382`. Its ordinary/type-4
+branches now cover running/jumping carry, a supporting cell already inside
+the destination, and living armed followers. For the last branch the new
+room must contain fewer than five records. Leftward cuts require port X <124;
+rightward cuts require X >=385 (native X includes the 207-pixel origin).
+Upward/downward cuts require cached row <0 / >=3. Carry preserves life,
+sequence, cursor and actor identity. Vertical carry uses the native 360-pixel
+cut and recalculates row from absolute height, including mid-fall offsets.
+
+A local Unicorn probe executed that original decision loop for 46,080
+combinations of actor type, life, sword, destination occupancy, direction,
+position, row, pose, movement flags and destination-cell membership. The
+ordinary/skeleton decisions matched. LoadShad supplies a controlled actor;
+IsCharInKidRoom is an independent boolean input in this decision test;
+UpdateOppInfo/TransferOppInfo are observed rather than executed. This proves
+the tested selection branches, not all room serialization or collision logic.
+Separate original-code probes check 21,504 supporting-cell/room-link target
+queries (IsCharInKidRoom) and 192 TransferOppInfo/Cut coordinate, row, facing,
+sequence/cursor, sword and life outputs. The latter observes the emitted
+record while substituting its storage endpoints; it executes the original
+Cut arithmetic. The position query preserves the actor and follows a horizontal
+link before retrying a missing vertical corner link, as the executable does.
+
+On room entry, skeleton-bank selection keeps the room's own actors first,
+then eligible left/right imports in that order, up to five slots.
+CheckSideRoomsForVisibleOpps `6:2f4e` uses source X >378 on the left and
+X <124 on the right; these are distinct from the armed-follow thresholds.
+Import selection happens on room entry, not on every frame. Imported actors
+keep their slot while moving, even if they leave that initial import region.
+Their physical ownership/coordinate views remain separate from bank membership,
+so damage still reaches the real actor. Unselected adjacent skeletons and
+distant former pursuers no longer consume AI cycles or resurrection timers.
+Full snapshots preserve selection/order; older actor records without these
+fields remain readable. Current-room actor lists retain existing object identity.
+
+Remaining differences include UpdateOppInfo's complete persistence record,
+InitOpps' living-record sequence reinitialization on revisit, special actor
+types, and the full ordinary-rooftop active-bank conversion. The port also
+retains an actor when a full destination cannot accept it rather than reproducing
+the original unconditional runner transfer's possible record loss. Do not read
+this scoped validation as complete lifecycle equivalence.
+
+### Progress Accounting
+
+The local `dmucli/pop2-port` reference documents 2,161 translated functions
+out of 2,165 CODE 1-23 functions. Its four untranslated THINK C helpers are
+three unused switch-table dispatchers and a return-path helper superseded by
+the translated caller. That inventory includes compiler/runtime and Mohawk
+functions, not just gameplay rules. Its function-for-function C architecture
+differs from this higher-level Python implementation.
+
+Consequently neither that denominator nor this project's named-routine marker
+count is a completion percentage. A useful progress ledger must map original
+rules/routines to their implementation, applicable levels/actors, regression
+tests and native-comparison coverage, with explicit partial and not-applicable
+states. Function size and significance also differ greatly. The validation
+sections here record evidence and remaining scope instead of inventing a
+numerical fidelity score.
 
 IsTimeToGenOpp `6:3e56-3e68` divides the unsigned 16-bit frame counter
 by three, swaps its quotient/remainder halves, then tests the entire long

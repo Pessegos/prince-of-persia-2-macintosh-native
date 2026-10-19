@@ -43,6 +43,7 @@ class SkeletonTests(unittest.TestCase):
 
     def boundary_encounter(self, side='left', armed=False):
         game, combat, actor = self.encounter(14)
+        actor.state.target_x = actor.state.current_x = (473 if side == 'left' else 17)
         combat.enter_room(16 if side == 'left' else 13, 2)
         combat.player.state.target_x = combat.player.state.current_x = (
             40 if side == 'left' else 470)
@@ -397,6 +398,7 @@ class SkeletonTests(unittest.TestCase):
                 combat.player.state.target_x = actor.state.target_x - 51
                 self.tick(combat, 100)
                 self.assertEqual(actor.skeleton.phase, 'active')
+                actor.state.target_x = actor.state.current_x = (381 if room == 16 else 17)
                 combat.enter_room(room, 2)
                 combat.player.state.target_x = combat.player.state.current_x = x
                 for life in (3, 2, 1, 0):
@@ -408,11 +410,12 @@ class SkeletonTests(unittest.TestCase):
         self.tick(combat, 100)
         self.assertEqual(actor.skeleton.phase, 'active')
         actor.pursuing = True
+        actor.state.target_x = actor.state.current_x = 381
         combat.enter_room(16, 1)
         self.assertIs(combat.health_opponent(), actor)
         self.assert_enemy_meter(combat, 3)
         combat.enter_room(18, 2)
-        self.assertIn(actor, combat.active_guards())
+        self.assertNotIn(actor, combat.active_guards())
         self.assertIsNone(combat.health_opponent())
         self.assert_enemy_meter(combat, 0)
 
@@ -473,6 +476,7 @@ class SkeletonTests(unittest.TestCase):
 
         _, combat, actor = self.encounter(14)
         self.tick(combat, 100)
+        actor.state.target_x = actor.state.current_x = 381
         combat.enter_room(16, 2)
         combat.player.state.target_x = 40
         actor.state.target_x = 381
@@ -694,6 +698,183 @@ class SkeletonTests(unittest.TestCase):
         game = GameSession.load(self.resources, 3)
         game.place(12, 2, 40, 0)
         self.assertNotIn(10, game.combat.room_encounters)
+
+    def test_armed_skeleton_follows_at_native_horizontal_cut_thresholds(self):
+        from pop2.terrain import TerrainMotion
+
+        for room, x, follows in ((13, 123, True), (13, 124, False),
+                                  (16, 384, False), (16, 385, True)):
+            with self.subTest(room=room, x=x):
+                _, combat, actor = self.encounter(14)
+                actor.life, actor.sword_drawn, actor.skeleton.phase = 2, True, 'active'
+                actor.state.target_x = actor.state.current_x = x
+                actor.terrain_motion = TerrainMotion(14, 2)
+                select_sequence(actor, 227)
+                actor.runtime.next_frame()
+                pose = actor.state.action, actor.state.sequence_id, actor.state.cursor
+                combat.enter_room(room, 2)
+                self.assertEqual(actor.room, room if follows else 14)
+                expected = x + (510 if room == 13 else -510) if follows else x
+                self.assertEqual((actor.state.target_x, actor.state.current_x), (expected, expected))
+                self.assertEqual((actor.life, actor.max_life), (2, 3))
+                self.assertEqual((actor.state.action, actor.state.sequence_id, actor.state.cursor), pose)
+                self.assertEqual(actor.terrain_motion.room, actor.room)
+                self.assertEqual(sum(g is actor for guards, _ in combat.room_encounters.values()
+                                     for g in guards), 1)
+
+    def test_cut_priority_matches_native_runner_life_sword_and_capacity_gates(self):
+        from pop2.combat import opponent_follows_cut
+
+        _, _combat, actor = self.encounter(14)
+        actor.state.target_x = 400
+        for pose, flags, life, sword, count, inside, follows in (
+                (158, 0, 3, True, 4, False, True),
+                (158, 0, 3, True, 5, False, False),
+                (158, 0, 3, False, 0, False, False),
+                (158, 0, 0, True, 0, False, False),
+                (158, 0, 0, False, 5, True, True),
+                (186, -1, 0, False, 5, False, True),
+                (201, 2, 3, False, 0, False, True),
+                (201, 0, 3, False, 0, False, False),
+                (202, 1, 3, False, 0, False, True),
+                (212, 1, 0, False, 0, False, True),
+                (212, 2, 3, False, 0, False, False),
+                (213, 1, 3, False, 0, False, False)):
+            with self.subTest(pose=pose, flags=flags, life=life, sword=sword, count=count):
+                actor.state.action, actor.generation_flags = pose, flags
+                actor.life, actor.sword_drawn = life, sword
+                self.assertEqual(opponent_follows_cut(actor, 'right', count,
+                                                      in_destination=inside), follows)
+
+    def test_full_destination_keeps_skeleton_record_instead_of_losing_actor(self):
+        from dataclasses import replace
+
+        _, combat, actor = self.encounter(14)
+        actor.life, actor.sword_drawn = 2, True
+        actor.state.target_x = actor.state.current_x = 400
+        select_sequence(actor, 227)
+        actor.runtime.next_frame()
+        combat._load_room(16)
+        residents = combat.room_encounters[16][0]
+        for _ in range(5):
+            residents.append(replace(actor, room=16, runtime=SequenceRuntime(
+                combat.sequences, SequenceState(119, actor_type=4)), skeleton=replace(actor.skeleton)))
+        combat.enter_room(16, 2)
+        self.assertEqual((actor.room, actor.life), (14, 2))
+        self.assertNotIn(actor, combat.active_guards())
+        self.assertEqual(len(residents), 5)
+
+    def test_dead_skeleton_is_not_carried_merely_for_being_near_the_cut(self):
+        _, combat, actor = self.encounter(14)
+        actor.state.target_x = actor.state.current_x = 400
+        actor.life, actor.sword_drawn = 0, True
+        select_sequence(actor, 119)
+        actor.runtime.next_frame()
+        combat.enter_room(16, 2)
+        self.assertEqual(actor.room, 14)
+        self.assertIn(actor, combat.active_guards())
+        self.assertEqual(actor.bank_room, 16)
+
+    def test_armed_skeleton_cut_rebases_vertical_row_without_restarting_pose(self):
+        from types import SimpleNamespace
+        from pop2.terrain import TerrainMotion, floor_y
+
+        for direction, row, destination in (('up', -1, 11), ('down', 3, 12)):
+            with self.subTest(direction=direction):
+                _, combat, actor = self.encounter(10)
+                combat.terrain = SimpleNamespace(neighbor=lambda room, side: (
+                    destination if room == 10 and side == direction else None))
+                del combat.guard_art
+                actor.life, actor.sword_drawn, actor.skeleton.phase = 2, True, 'active'
+                actor.row = row
+                actor.terrain_motion = TerrainMotion(10, row, falling=True)
+                select_sequence(actor, 227)
+                actor.runtime.next_frame()
+                actor.state.current_y = 7
+                before = floor_y(row) + 7
+                pose = actor.state.sequence_id, actor.state.cursor, actor.state.action
+                combat.enter_room(destination, 2 if direction == 'up' else 0)
+                self.assertEqual(actor.room, destination)
+                self.assertEqual(actor.row, row + (3 if direction == 'up' else -3))
+                self.assertEqual(floor_y(actor.row) + actor.state.current_y,
+                                 before + (360 if direction == 'up' else -360))
+                self.assertEqual((actor.terrain_motion.room, actor.terrain_motion.row),
+                                 (actor.room, actor.row))
+                self.assertEqual((actor.life, actor.state.target_x), (2, 353))
+                self.assertEqual((actor.state.sequence_id, actor.state.cursor, actor.state.action), pose)
+
+    def test_unselected_neighbor_bones_and_distant_pursuers_do_not_tick(self):
+        from copy import deepcopy
+
+        for room in (16, 0):
+            with self.subTest(room=room):
+                _, combat, actor = self.encounter(14)
+                actor.state.target_x = actor.state.current_x = 300
+                actor.skeleton.timer = 99
+                actor.pursuing = True
+                combat.enter_room(room, 2)
+                self.assertNotIn(actor, combat.active_guards())
+                before = deepcopy((vars(actor.state), vars(actor.skeleton)))
+                self.tick(combat, 30)
+                self.assertEqual((vars(actor.state), vars(actor.skeleton)), before)
+                self.assertIsNone(combat.health_opponent())
+
+    def test_vertical_cut_reindexes_row_from_absolute_height_during_a_fall(self):
+        from types import SimpleNamespace
+        from pop2.terrain import TerrainMotion, floor_y
+
+        _, combat, actor = self.encounter(10)
+        combat.terrain = SimpleNamespace(neighbor=lambda room, side: (
+            12 if room == 10 and side == 'down' else None))
+        del combat.guard_art
+        actor.life, actor.sword_drawn = 2, True
+        actor.row, actor.state.current_y = 2, 100
+        actor.terrain_motion = TerrainMotion(10, 2, falling=True)
+        actor.state.action, actor.generation_flags = 202, 1
+        combat.enter_room(12, 0)
+        self.assertEqual((actor.room, actor.row, actor.state.current_y), (12, 0, -20))
+        self.assertEqual(floor_y(actor.row) + actor.state.current_y, 86)
+        self.assertEqual((actor.terrain_motion.row, actor.terrain_motion.falling), (0, True))
+
+    def test_position_lookup_uses_horizontal_link_when_vertical_corner_link_is_missing(self):
+        _, combat, actor = self.encounter(14)
+        actor.state.target_x = actor.state.current_x = -100
+        actor.row, actor.state.action, actor.state.facing = -1, 158, 0
+        before = actor.room, actor.row, actor.state.target_x, actor.state.current_y
+        self.assertIsNone(combat.terrain.neighbor(14, 'up'))
+        self.assertEqual(combat._position_room(actor), 1)
+        self.assertEqual((actor.room, actor.row, actor.state.target_x, actor.state.current_y), before)
+
+    def test_imported_skeleton_keeps_bank_membership_after_leaving_import_region(self):
+        _, combat, actor = self.encounter(14)
+        combat.enter_room(16, 2)
+        self.assertEqual(actor.bank_room, 16)
+        actor.state.target_x = actor.state.current_x = 300
+        self.assertIn(actor, combat.active_guards())
+        actor.skeleton.timer = 99
+        self.tick(combat)
+        self.assertEqual(actor.skeleton.timer, 98)
+        combat.enter_room(0, 2)
+        self.assertNotIn(actor, combat.active_guards())
+
+    def test_current_room_bank_precedes_side_imports_and_has_five_slots(self):
+        from dataclasses import replace
+
+        _, combat, actor = self.encounter(14)
+        combat._load_room(16)
+        residents = combat.room_encounters[16][0]
+        for index in range(4):
+            residents.append(replace(actor, room=16, runtime=SequenceRuntime(
+                combat.sequences, SequenceState(119, actor_type=4)), skeleton=replace(actor.skeleton)))
+        combat.enter_room(16, 2)
+        self.assertEqual(combat.active_guards(), residents + [actor])
+        self.assertEqual(actor.bank_slot, 4)
+        combat.enter_room(0, 2)
+        residents.append(replace(residents[0], runtime=SequenceRuntime(
+            combat.sequences, SequenceState(119, actor_type=4)), skeleton=replace(actor.skeleton)))
+        combat.enter_room(16, 2)
+        self.assertEqual(combat.active_guards(), residents)
+        self.assertNotIn(actor, combat.active_guards())
 
     def test_shake_bones_obeys_marker_pose_row_and_special_flag_without_reset(self):
         for marker in (-1, 0, 1):

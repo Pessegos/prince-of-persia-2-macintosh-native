@@ -15,7 +15,8 @@ from pop2.opponent_generation import (
     WALL_TILES, OBSTACLE_TILES, EMPTY_TILES,
 )
 from pop2.terrain import (
-    LevelMap, RooftopPhysics, TerrainMotion, TILE_HEIGHT, floor_contact_x, floor_edge_distance, floor_y,
+    LevelMap, RooftopPhysics, TerrainMotion, TILE_HEIGHT, character_row,
+    floor_contact_x, floor_edge_distance, floor_y,
 )
 
 
@@ -45,6 +46,22 @@ def moving_fight_pose(action):
 def visible_side_opponent(x, side):
     # CheckSideRoomsForVisibleOpps 6:2f4e: native X includes the 207 origin.
     return x > 378 if side == 'left' else x < 124
+
+
+def opponent_follows_cut(guard, direction, count, *, in_destination=False):
+    # CutAllOpponents 6:4476-4626, ordinary guards and skeletons only.
+    state = guard.state
+    running = (186 <= state.action <= 201 and guard.generation_flags != 0
+               or 202 <= state.action <= 212 and guard.generation_flags == 1)
+    if running or in_destination:
+        return True
+    if not guard.alive or not guard.sword_drawn or count >= 5:
+        return False
+    if direction == 'left':
+        return state.target_x < 124
+    if direction == 'right':
+        return state.target_x >= 385
+    return guard.row < 0 if direction == 'up' else guard.row >= 3
 
 
 def nearest_opponent(player, guards, side=None):
@@ -143,6 +160,8 @@ class Fighter:
     alternate_row: int | None = None
     death_registered: bool = False
     skeleton: object | None = None
+    bank_room: int | None = None
+    bank_slot: int = 0
 
     @property
     def state(self):
@@ -311,6 +330,7 @@ class CombatEncounter:
     def enter_room(self, room, row):
         """Keep the Prince and the visited room's NPC/generator objects intact."""
         previous_room = self.player.room
+        previous_active = self.active_guards()
         self._load_room(room)
         self.player.room, self.player.row = room, row
         self.guards, self.generation_points = self.room_encounters[room]
@@ -322,28 +342,90 @@ class CombatEncounter:
                         and any(visible_side_opponent(spawn.x, side)
                                 for spawn in GuardSpawn.all_from_level(self.level, neighbor))):
                     self._load_room(neighbor)
-        if terrain is not None and previous_room in (
-                terrain.neighbor(room, "left"), terrain.neighbor(room, "right")):
-            offset = self._room_offset(previous_room, room)
-            previous_guards = self.room_encounters[previous_room][0]
-            for guard in list(previous_guards):
-                state = guard.state
-                # CutAllOpponents 6:44c8-450a carries ordinary runners;
-                # TransferOppInfo 6:3304/4864 rebases the existing actor.
-                running = (186 <= state.action <= 201 and guard.generation_flags != 0
-                           or 202 <= state.action <= 212 and guard.generation_flags == 1)
-                if (not guard.alive or state.actor_type != 2
-                        or not running or len(self.guards) >= 5):
+        direction = next((side for side in ('left', 'right', 'up', 'down')
+                          if terrain is not None and previous_room != room
+                          and terrain.neighbor(previous_room, side) == room), None)
+        if direction is not None:
+            for guard in previous_active:
+                view = self._project_fighter(guard, previous_room)
+                if (view is None or guard.room == room or guard.state.actor_type not in (2, 4)
+                        or len(self.guards) >= 5):
                     continue
-                state.current_x += offset
-                state.target_x += offset
-                guard.room = room
-                guard.entry_x = state.target_x if not 0 <= state.target_x < 510 else None
-                if guard.terrain_motion is not None:
-                    guard.terrain_motion.room = room
-                previous_guards.remove(guard)
-                self.guards.append(guard)
+                if opponent_follows_cut(view, direction, len(self.guards),
+                                        in_destination=self._position_room(guard) == room):
+                    self._carry_opponent(guard, room, previous_room, direction)
+        self._select_skeleton_bank(room)
         self.guard = self._nearest_guard() or (self.guards[0] if self.guards else None)
+
+    def _position_room(self, guard):
+        # IsCharInKidRoom 6:46ca uses the cached supporting cell, not the
+        # visible sprite's edge. Work on coordinates without moving the actor.
+        terrain = getattr(self, 'terrain', None)
+        art = getattr(self, 'guard_art', None)
+        x = guard.state.target_x
+        if art is not None:
+            record = art.frames[guard_frame_index(guard.state.action)]
+            x = floor_contact_x(x, guard.state.facing, record)
+        column, row, room = character_column(x), guard.row, guard.room
+        seen = set()
+        while not (0 <= column < 10 and 0 <= row < 3):
+            if terrain is None or (room, column, row) in seen:
+                return None
+            seen.add((room, column, row))
+            missing_vertical = False
+            if row < 0 or row >= 3:
+                neighbor = terrain.neighbor(room, 'up' if row < 0 else 'down')
+                if neighbor is not None:
+                    room, row = neighbor, row + (3 if row < 0 else -3)
+                else:
+                    missing_vertical = True
+            if column < 0 or column >= 10:
+                neighbor = terrain.neighbor(room, 'left' if column < 0 else 'right')
+                if neighbor is None:
+                    return None
+                room, column = neighbor, column + (10 if column < 0 else -10)
+            elif missing_vertical:
+                return None
+        return room
+
+    def _carry_opponent(self, guard, room, previous_room, direction):
+        # TransferOppInfo preserves the current pose/cursor and world position.
+        state = guard.state
+        offset = self._room_offset(guard.room, previous_room)
+        offset += 510 if direction == 'left' else -510 if direction == 'right' else 0
+        state.current_x += offset
+        state.target_x += offset
+        if direction in ('up', 'down'):
+            y = floor_y(guard.row) + state.current_y + (360 if direction == 'up' else -360)
+            guard.row = character_row(y)
+            state.current_y = y - floor_y(guard.row)
+        self.room_encounters[guard.room][0].remove(guard)
+        guard.room = room
+        guard.entry_x = state.target_x if not 0 <= state.target_x < 510 else None
+        if guard.terrain_motion is not None:
+            guard.terrain_motion.room, guard.terrain_motion.row = room, guard.row
+        self.guards.append(guard)
+
+    def _select_skeleton_bank(self, room):
+        if self.level_kind != 3:
+            return
+        terrain = getattr(self, 'terrain', None)
+        for actors, _points in self.room_encounters.values():
+            for actor in actors:
+                if actor.skeleton is not None:
+                    actor.bank_room = None
+        count = len(self.guards)
+        for index, actor in enumerate(self.guards):
+            if actor.skeleton is not None:
+                actor.bank_room, actor.bank_slot = room, index
+        for side in ('left', 'right'):
+            neighbor = terrain.neighbor(room, side) if terrain is not None else None
+            for actor in self.room_encounters.get(neighbor, ([], []))[0]:
+                if actor.skeleton is not None and count < 5 and visible_side_opponent(
+                        actor.state.target_x, side):
+                    actor.bank_room = room
+                    actor.bank_slot = count
+                    count += 1
 
     def active_guards(self):
         terrain = getattr(self, "terrain", None)
@@ -352,8 +434,12 @@ class CombatEncounter:
         rooms = {self.player.room}
         rooms.update(terrain.neighbor(self.player.room, direction)
                      for direction in ("left", "right"))
-        return [guard for room, (guards, _points) in self.room_encounters.items()
-                for guard in guards if room in rooms or guard.alive and guard.pursuing]
+        active = [guard for room, (guards, _points) in self.room_encounters.items()
+                for guard in guards
+                if ((room == self.player.room or guard.bank_room == self.player.room)
+                    if guard.skeleton is not None else
+                    (room in rooms or guard.alive and guard.pursuing))]
+        return sorted(active, key=lambda guard: guard.bank_slot) if self.level_kind == 3 else active
 
     def _room_offset(self, source, destination):
         if source == destination:
