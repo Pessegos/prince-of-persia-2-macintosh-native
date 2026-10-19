@@ -21,6 +21,7 @@ RESUME_COMMAND_KEYS = frozenset({
     'Control_L', 'Control_R', 'Alt_L', 'Alt_R', 'Meta_L', 'Meta_R',
     'Super_L', 'Super_R', 'Win_L', 'Win_R',
 })
+EXTERNAL_CAPTURE_KEYS = frozenset({'F9', 'F10'})
 
 
 def alt_pressed(event, held_keys=()):
@@ -746,6 +747,10 @@ class WindowControls:
         if event.keysym == "F4" and alt:
             self.root.destroy()
             return "break"
+        if event.keysym in EXTERNAL_CAPTURE_KEYS:
+            # Windows Tk binds F10 to WinMenuKey even without a menu bar.
+            # Stop that local menu action, not the OS/recorder's global hotkey.
+            return "break"
         repeated = event.keysym in self.window_keys_down or (
             len(event.keysym) == 1 and event.keysym.swapcase() in self.window_keys_down)
         self.window_keys_down.add(event.keysym)
@@ -860,6 +865,8 @@ class WindowControls:
         return "break"
 
     def dev_key_release(self, event):
+        if event.keysym in EXTERNAL_CAPTURE_KEYS:
+            return "break"
         self.window_keys_down.discard(event.keysym)
         released = {event.keysym}
         if len(event.keysym) == 1:

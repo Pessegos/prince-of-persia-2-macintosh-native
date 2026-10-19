@@ -499,6 +499,31 @@ or 3/5 (environment 6), while room 12 (environment 5) cuts down normally.
 NPCs use the separate Cut routine (6:472a) and retain their lower-link behavior;
 the camera veto is not applied to guard falls.
 
+## Windows External Capture Keys
+
+F9 and F10 are reserved for external capture tools in the host input layer.
+Press/release and auto-repeat do not change gameplay, retry after death,
+skip the intro, operate a modal menu, or resume an intentional pause. This
+does not register a global hotkey or invoke NVIDIA capture; F8 remains the
+port's own screenshot command.
+
+Windows Tk 8.6.10 installs `tk::WinMenuKey %W %N` on the `all` bindtag for
+F10, even when the application has no native menu bar. Allowing F10 through
+the host bindtag can therefore invoke native menu activation and interfere
+with focus/pause while starting an external recording. The host now stops
+that Tk fallback without changing focus-loss pause or recording settings.
+Tests exercise all host modes/modifiers, real Tk bindtag dispatch and the
+unchanged F8 screenshot command.
+
+A separate NVIDIA screenshot failure remains unresolved in fullscreen,
+including paused gameplay and F3 (which use Tk rather than the live bitmap
+presenter). Local CaptureCore logs received `CAPTURE_SCREENSHOT` from the
+hotkey, then timed out waiting for the DWM capture event (status 258), ending
+with `0x80004005`. This establishes that the hotkey reached NVIDIA, not the
+cause of its fullscreen capture failure. No renderer replacement, layered
+window workaround, screenshot-key remapping or NVIDIA setting change is
+claimed as a verified fix.
+
 ## Implementation Order
 
 1. Translate five native latches, sampling, facing remap and consume/reset

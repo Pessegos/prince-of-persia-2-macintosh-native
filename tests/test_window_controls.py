@@ -334,6 +334,77 @@ class ResumeKeyTests(unittest.TestCase):
                         self.assertTrue(is_resume_key(SimpleNamespace(keysym=key, char="", state=state)))
 
 
+class ExternalCaptureKeyTests(unittest.TestCase):
+    def test_f9_f10_do_not_change_gameplay_pause_death_or_modal_state(self):
+        for mode in ('gameplay', 'paused', 'death', 'intro', 'demo', 'menu', 'development'):
+            for key in ('F9', 'F10'):
+                for modifiers in (0, 8, 0x4, 0x20000):
+                    with self.subTest(mode=mode, key=key, modifiers=modifiers):
+                        host = WindowControls()
+                        host.window_keys_down = {'Right'}
+                        host.pause_resume_keys = {'space'}
+                        host.paused = mode == 'paused'
+                        host.game_menu = object() if mode == 'menu' else None
+                        host.dev_menu = object() if mode == 'development' else None
+                        host.intro = object() if mode == 'intro' else None
+                        host.demo = object() if mode == 'demo' else None
+                        host.death = SimpleNamespace(counter=20 if mode == 'death' else -1)
+                        host.set_paused = Mock()
+                        host.finish_intro = Mock()
+                        host.restart_after_death = Mock()
+                        host.apply_game_action = Mock()
+                        host.apply_dev_action = Mock()
+                        host.capture_screenshot = Mock()
+                        event = SimpleNamespace(keysym=key, state=modifiers, char='')
+                        for _ in range(2):
+                            self.assertEqual(host.dev_key_press(event), 'break')
+                        self.assertEqual(host.dev_key_release(event), 'break')
+                        self.assertEqual(host.window_keys_down, {'Right'})
+                        self.assertEqual(host.pause_resume_keys, {'space'})
+                        for callback in (host.set_paused, host.finish_intro, host.restart_after_death,
+                                         host.apply_game_action, host.apply_dev_action, host.capture_screenshot):
+                            callback.assert_not_called()
+
+    def test_real_tk_capture_keys_do_not_reach_the_default_menu_binding(self):
+        result = subprocess.run([sys.executable, '-c', textwrap.dedent('''
+            import tkinter as tk
+            from types import SimpleNamespace
+            from unittest.mock import Mock
+            from pop2.window_controls import WindowControls
+
+            root = tk.Tk()
+            host = WindowControls()
+            host.root = root
+            host.window_keys_down = set()
+            host.pause_resume_keys = set()
+            host.game_menu = host.dev_menu = host.intro = host.demo = None
+            host.paused = False
+            host.death = SimpleNamespace(counter=-1)
+            host.capture_screenshot = Mock()
+            reached = []
+            root.bindtags(('DevelopmentInput', *root.bindtags()))
+            root.bind_class('DevelopmentInput', '<KeyPress>', host.dev_key_press)
+            root.bind_class('DevelopmentInput', '<KeyRelease>', host.dev_key_release)
+            for key in ('F9', 'F10'):
+                root.bind_class('all', '<KeyPress-' + key + '>', lambda e: reached.append(e.keysym))
+            try:
+                root.update()
+                root.focus_force()
+                root.update()
+                for key in ('F9', 'F10', 'F9', 'F10'):
+                    root.event_generate('<KeyPress>', keysym=key)
+                    root.event_generate('<KeyRelease>', keysym=key)
+                assert not reached, reached
+                assert not host.window_keys_down, host.window_keys_down
+                root.event_generate('<KeyPress>', keysym='F8')
+                root.event_generate('<KeyRelease>', keysym='F8')
+                host.capture_screenshot.assert_called_once_with()
+            finally:
+                root.destroy()
+        ''')], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
 class FocusPauseTests(unittest.TestCase):
     def setUp(self):
         self.host = WindowControls()
