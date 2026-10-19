@@ -206,6 +206,64 @@ class SceneAudioTests(unittest.TestCase):
         return [call.args[1] for call in self.scene.audio.playback.play.call_args_list
                 if call.args[0] == "effect"]
 
+    def test_skeleton_meter_stays_above_while_music_returns_across_the_gap(self):
+        from pop2.combat import select_sequence
+
+        scene = self.scene
+        scene.load_level(3)
+        scene.render = Mock()
+        scene.jump_to_room(14, row=2, x=300, facing=1)
+        actor = scene.combat.guards[0]
+        actor.skeleton.phase = 'active'
+        actor.life = actor.max_life
+        actor.sword_drawn = actor.targetable = True
+        select_sequence(actor, 227)
+        actor.runtime.next_frame()
+        actor.state.target_x = actor.state.current_x = 473
+        actor.state.facing = 1
+        scene.peaceful = False
+        scene.jump_to_room(16, row=2, x=350, facing=1, reset_guards=False)
+        self.tick()
+        self.assertEqual(actor.alert_mode, 1)
+        self.assertEqual(scene.audio.current_music_group, 2)
+
+        scene.jump_to_room(16, row=1, x=145, facing=1, reset_guards=False)
+        self.tick()
+        self.assertEqual(actor.alert_mode, 0)
+        self.assertIn(scene.audio.current_music_group, (0, 1))
+        self.assertIs(scene.combat.health_opponent(), actor)
+
+        scene.jump_to_room(16, row=2, x=350, facing=1, reset_guards=False)
+        scene.start_sequence(4)
+        self.tick()
+        self.assertEqual(scene.sequence_state.animation_state, 1)
+        self.assertEqual(actor.alert_mode, 1)
+        self.assertEqual(scene.audio.current_music_group, 2)
+        self.assertIs(scene.combat.health_opponent(), actor)
+
+    def test_gap_combat_music_can_interrupt_exploration_but_not_a_foreground_song(self):
+        scene = self.scene
+        scene.load_level(3)
+        scene.jump_to_room(10, row=2, x=300, facing=1)
+        scene.peaceful = False
+        actor = scene.combat.guards[0]
+        actor.life = actor.max_life
+        actor.alert_mode = 1
+        scene.audio.add_song(24)
+        scene.audio.flush()
+        scene.advance_audio()
+        self.assertEqual(scene.audio.current_music, 24)
+        self.assertFalse(scene.audio.current_music_ambient)
+        self.backend.advance(scene.audio.cues[24]['duration'] + 1)
+        scene.advance_audio()
+        self.assertEqual(scene.audio.current_music_group, 2)
+        scene.peaceful = True
+        scene.advance_audio()
+        self.assertIn(scene.audio.current_music_group, (0, 1))
+        scene.peaceful = False
+        scene.advance_audio()
+        self.assertEqual(scene.audio.current_music_group, 2)
+
     def test_room_23_gate_closing_on_hanging_fingers_plays_ouch_without_damage(self):
         scene = self.scene
         scene.load_level(3)

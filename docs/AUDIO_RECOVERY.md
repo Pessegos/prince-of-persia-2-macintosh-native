@@ -148,6 +148,17 @@ an ambient track plays; foreground songs (potions, exits, victory and
 death) are never interrupted by that transition. Disabling ambient music
 does not suppress these foreground event songs.
 
+Both routines use OppToFight (6:2392-2492). For the implemented ordinary
+guards and skeletons this means a living, alerted NPC, including alert 1
+when a gap separates it from the Prince; it is not limited to alert >=2 or
+attack distance. The predicate also preserves the original Prince mode
+3/4, shadow, special-flag-13 and dead-pose exclusions. Changing floors
+clears ordinary NPC alert acquisition, but does not independently hide the
+enemy's health meter. The Room 17 ledge/jump regression checks exploration
+above the skeleton, then combat music returning across the lower gap, with
+its health still displayed. Native instruction execution confirmed 120
+mode/row/alert combinations; no music delays or special room IDs were added.
+
 The remaining level-three foreground MIDI cues are prepared too: 24
 (drink), 62 (skeleton kills Prince), 63 (skeleton defeated), 71 (lava death),
 279 (the death-method-5 mapping), 285 (spike death) and 297 (exit opening).

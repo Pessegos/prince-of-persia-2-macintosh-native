@@ -283,18 +283,70 @@ class SkeletonTests(unittest.TestCase):
                     actor.life = life
                     self.assert_enemy_meter(combat, life)
 
-    def test_meter_does_not_follow_pursuers_to_distant_rooms_or_other_floors(self):
+    def test_meter_remains_above_skeleton_but_does_not_follow_to_distant_rooms(self):
         _, combat, actor = self.encounter(14)
         self.tick(combat, 100)
         self.assertEqual(actor.skeleton.phase, 'active')
         actor.pursuing = True
         combat.enter_room(16, 1)
-        self.assertIsNone(combat.health_opponent())
-        self.assert_enemy_meter(combat, 0)
+        self.assertIs(combat.health_opponent(), actor)
+        self.assert_enemy_meter(combat, 3)
         combat.enter_room(18, 2)
         self.assertIn(actor, combat.active_guards())
         self.assertIsNone(combat.health_opponent())
         self.assert_enemy_meter(combat, 0)
+
+    def test_combat_music_matches_native_modes_rows_and_alert_levels(self):
+        _, combat, actor = self.encounter(14)
+        actor.life = actor.max_life
+        combat.player.state.action = 15
+        for row in range(3):
+            for mode in range(10):
+                for alert in range(4):
+                    with self.subTest(row=row, mode=mode, alert=alert):
+                        combat.player.row = row
+                        combat.player.state.animation_state = mode
+                        actor.alert_mode = alert
+                        self.assertEqual(combat.opponent_to_fight(),
+                                         mode not in (3, 4) and alert > 0)
+
+    def test_combat_music_excludes_native_player_and_opponent_states(self):
+        for condition in ('dead_player', 'shadow', 'special13', 'dead_pose',
+                          'dead_guard', 'no_alert', 'special_guard'):
+            with self.subTest(condition=condition):
+                _, combat, actor = self.boundary_encounter()
+                if condition == 'dead_player':
+                    combat.player.life = 0
+                elif condition == 'shadow':
+                    combat.player.state.actor_type = 1
+                elif condition == 'special13':
+                    combat.player.state.special_flag = 13
+                elif condition == 'dead_pose':
+                    combat.player.state.action = 185
+                elif condition == 'dead_guard':
+                    actor.life = 0
+                elif condition == 'no_alert':
+                    actor.alert_mode = 0
+                else:
+                    actor.state.actor_type = 11
+                self.assertFalse(combat.opponent_to_fight())
+
+    def test_meter_prefers_same_floor_but_falls_back_without_combat_music(self):
+        from dataclasses import replace
+
+        _, combat, actor = self.boundary_encounter()
+        other = replace(actor, room=16, row=1, life=1, skeleton=None,
+                        runtime=SequenceRuntime(combat.sequences,
+                                                replace(actor.state, target_x=40)))
+        combat.guards.append(other)
+        self.assertIs(combat.health_opponent(), actor)
+        combat.player.row = 1
+        self.assertIs(combat.health_opponent(), other)
+        combat.player.row = 0
+        actor.alert_mode = other.alert_mode = 0
+        self.assertIs(combat.health_opponent(), actor)
+        self.assert_enemy_meter(combat, 3)
+        self.assertFalse(combat.opponent_to_fight())
 
     def test_meter_chooses_nearest_living_actor_using_side_room_coordinates(self):
         from dataclasses import replace

@@ -295,10 +295,11 @@ The existing side-room coordinate view lets shaking finish and activation
 begin while the Prince has already crossed into the adjacent room, provided
 the original row/range/path tests still pass. The health meter now selects
 the nearest living same-floor actor in the current or horizontal side rooms,
+with DrawOppMeter's first-opponent fallback when no same-floor target exists,
 independently of the same-room sword-control target. Dormant bones have no
 meter; their restored life appears immediately at the start of rising 88,
-even while the skeleton is still offscreen. A later move to a different
-floor or beyond the adjacent rooms does not retain a stale pursuit meter.
+even while the skeleton is still offscreen. Climbing onto another floor
+does not hide its meter; moving beyond the adjacent rooms still removes it.
 This fixes HUD visibility without changing skeleton activation timers,
 shakes, combat decisions or physical room ownership.
 
@@ -325,6 +326,28 @@ Tests cover the recorded late-wake sequence through the live scene, both
 horizontal boundaries, damage and collapse of the real skeleton, parries
 in both directions, Prince priority for simultaneous hits, repeated-contact
 suppression, ineligible targets and explicit God Mode protection.
+
+The meter is not a combat-music gate. DrawOppMeter 3:4a9e-4ae6 first tries
+GetOppIdxClosestToKid, then falls back to slot zero of the active NPC bank;
+it does not require that fallback to be on the Prince's floor. The port
+therefore retains the first living nearby actor as its fallback, preferring
+a same-floor target whenever one is available. Pixel tests retain the
+three bottles above the Room 15 skeleton while the Prince is on Room 17's
+upper ledge, independently of that skeleton's alert mode.
+
+PlayAmbient and TimeForNewAmbient call OppToFight 6:2392-2492, not a sword
+reach test. For ordinary guards and skeletons, a living actor with alert
+mode greater than zero qualifies, including mode 1 across a gap. The Prince
+is excluded in animation modes 3/4, shadow form, special flag 13 and native
+dead poses. There is no additional distance or row test in this predicate:
+alert acquisition already clears an ordinary enemy's alert on another
+floor. The former port expression incorrectly required alert >=2, so a
+distant alerted skeleton could not restore combat music after the jump.
+Direct execution of the original routine matched 120 combinations of
+Prince row, animation mode and NPC alert, including alert 1. Scene tests
+cover combat -> upper ledge/exploration -> jump/combat, preserved enemy
+health, Peaceful Mode and foreground-song priority. AI decisions and the
+existing animation/room-cut rules are unchanged.
 
 Ready skeletons use the recovered per-profile advance/block/reblock/counter/
 strike tables, not new aggression constants. GetStrikeRange 6:5c34-5c40

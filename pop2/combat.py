@@ -342,13 +342,30 @@ class CombatEncounter:
         # actors. Keep HUD selection separate from the sword-control target.
         candidates = []
         for guard in self.active_guards():
-            if not guard.alive or guard.row != self.player.row:
+            if not guard.alive:
                 continue
             offset = self._room_offset(guard.room, self.player.room)
             if offset in (-510, 0, 510):
                 candidates.append((abs(guard.state.target_x + offset
                                        - self.player.state.target_x), guard))
-        return min(candidates, key=lambda candidate: candidate[0])[1] if candidates else None
+        same_floor = [candidate for candidate in candidates if candidate[1].row == self.player.row]
+        if same_floor:
+            return min(same_floor, key=lambda candidate: candidate[0])[1]
+        # DrawOppMeter 3:4a9e-4ae6 falls back to the active bank's first
+        # opponent when GetOppIdxClosestToKid cannot find a same-floor one.
+        return candidates[0][1] if candidates else None
+
+    def opponent_to_fight(self):
+        # OppToFight 6:2392-2492, used by PlayAmbient/TimeForNewAmbient.
+        # Alert 1 (separated by a gap) qualifies too; sword reach is irrelevant.
+        player = self.player
+        if (not player.alive or player.state.actor_type == 1
+                or player.state.special_flag == 13
+                or player.state.animation_state in (3, 4)
+                or player.state.action in (185, 242, 243, 266, 271)):
+            return False
+        return any(guard.alive and guard.alert_mode > 0
+                   and guard.state.actor_type != 11 for guard in self.active_guards())
 
     @contextmanager
     def _local_opponents(self, guard):

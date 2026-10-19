@@ -2664,10 +2664,7 @@ class ScenePrototype(WindowControls):
                     audio.drain(guard.state, not self.peaceful and guard.room == self.room_id)
         motion = getattr(self, "terrain_motion", None)
         if motion is not None and not self.level_complete and self.game.level.number in (1, 3):
-            fighting = (not self.peaceful
-                        and any(guard.alive and guard.row == motion.row
-                                and guard.alert_mode >= 2
-                                for guard in self.combat.active_guards()))
+            fighting = not self.peaceful and self.combat.opponent_to_fight()
             contact = floor_contact_x(self.sequence_state.target_x,
                                      self.sequence_state.facing, self.frames[self.action])
             if self.game.level.number == 3:
