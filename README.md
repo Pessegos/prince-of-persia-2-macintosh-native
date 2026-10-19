@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/screenshots/pop2-mac-banner.png"
+  <img src="docs/github readme/pop2-mac-banner.png"
        alt="Prince of Persia 2 Macintosh"
        width="1200">
 </p>
@@ -26,13 +26,13 @@ The idea would be to add it to the cheat mode, like the original Macintosh has. 
 
 An interactive map that allows browsing through levels and teleporting directly to individual rooms, without having to play through the entire level.
 
-<img src="docs/screenshots/developer-map-preview-v9.gif" alt="Developer Tools - Game Map" width="700">
+<img src="docs/github readme/developer-map-preview-v9.gif" alt="Developer Tools - Game Map" width="700">
 
 ### Playback
 
 The Playback tab provides quick access to cutscenes, making it easier to test individual sequences.
 
-<img src="docs/screenshots/developer-playback-preview-v3.gif" alt="Developer Tools - Playback" width="700">
+<img src="docs/github readme/developer-playback-preview-v3.gif" alt="Developer Tools - Playback" width="700">
 
 <br/>
 
@@ -45,7 +45,7 @@ I honestly think something went wrong with the rendering and somehow made it int
 So I decided to take it a step further and give the lava a proper overhaul, with more detailed edges, depth and animation, taking some inspiration from the DOS version.
 
 <br/>
-<img src="docs/screenshots/lava-macintosh-reconstructed-dos-port.gif" alt="Comparison of the original Macintosh lava, reconstructed Macintosh lava, DOS lava and overhauled lava" width="800">
+<img src="docs/github readme/lava-macintosh-reconstructed-dos-port.gif" alt="Comparison of the original Macintosh lava, reconstructed Macintosh lava, DOS lava and overhauled lava" width="800">
 
 <br/>
 
@@ -56,7 +56,7 @@ The stone gate closing animation in the Macintosh version looks pretty rough, es
 I also improved the sound played while the gate opens. The original had noticeable gaps between each loop and a loud click at the end. Both issues have been fixed, allowing the sound to play continuously without those interruptions.
 
 <br/>
-<img src="docs/screenshots/stone-gate-macintosh-dos-port.gif" alt="Stone gate closing animation comparison between Macintosh, DOS and the port" >
+<img src="docs/github readme/stone-gate-macintosh-dos-port.gif" alt="Stone gate closing animation comparison between Macintosh, DOS and the port" >
 
 **Opening Sound — Before & After**
 
