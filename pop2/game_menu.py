@@ -97,9 +97,9 @@ class GameMenu:
         item = self.items[self.focus]
         return item.action if item.enabled else "changed"
 
-    def key(self, key, backwards=False):
+    def key(self, key, backwards=False, char='', control=False):
         if self.page == 'saves':
-            return self.save_browser.key(key, backwards)
+            return self.save_browser.key(key, backwards, char, control)
         if self.page == "screenshots":
             if key == "Escape":
                 if self.dropdown:

@@ -180,6 +180,14 @@ class ModifierKeyTests(unittest.TestCase):
             self.assertEqual(self.press("Return", 8), "break")
             self.host.apply_game_action.assert_called_once_with("resume")
 
+    def test_alt_l_and_alt_o_are_load_aliases_without_changing_f1_label(self):
+        for key in ('l', 'L', 'o', 'O'):
+            self.press(key, 0x20000)
+        self.assertEqual(self.host.apply_game_action.call_count, 4)
+        for call in self.host.apply_game_action.call_args_list:
+            self.assertEqual(call.args, ('open',))
+        self.assertEqual(next(item.shortcut for item in GameMenu().items if item.action == 'open'), 'Alt+O')
+
     def test_windows_numlock_does_not_prevent_pause_resume(self):
         self.host.paused = True
         self.host.set_paused = Mock(side_effect=lambda value: setattr(self.host, "paused", value))

@@ -562,6 +562,7 @@ class WindowControls:
         if self.game_menu is None:
             return
         self.game_menu = None
+        self.save_scroll_dragging = False
         self.ui_hover_target = None
         self.clear_keys(None)
         self.update_cursor_visibility()
@@ -623,7 +624,7 @@ class WindowControls:
                 self.close_game_menu()
             else:
                 self.render()
-        elif action in ('slot_save', 'slot_load', 'slot_delete'):
+        elif action in ('slot_save', 'slot_load', 'slot_delete', 'slot_create', 'slot_rename'):
             self.apply_save_action(action)
         elif action == "hall":
             if self.game_menu is None:
@@ -632,6 +633,7 @@ class WindowControls:
                                         if item.action == action)
             self.render()
         else:
+            self.schedule_save_scroll()
             self.render()
 
     def open_save_browser(self, load=False):
@@ -647,32 +649,40 @@ class WindowControls:
             slots = list_slots(SAVE_DIRECTORY)
         except OSError:
             slots = tuple()
-        if not slots:
-            slots = (SaveSlot(SAVE_DIRECTORY / 'slot-01.pop2save', 'Slot 01'),)
         if load:
             selected = max((i for i, slot in enumerate(slots) if slot.exists and not slot.error),
                            key=lambda i: slots[i].modified, default=0)
         else:
-            selected = next((i for i, slot in enumerate(slots) if not slot.exists), 0)
+            selected = 0
         current = None
         if self.can_save_game():
             from pop2.save_game import capture
 
-            progress = capture(self.game)['resume']
-            current = SaveSlot(slots[selected].path, 'Current game', level=self.game.level.number,
+            document = capture(self.game)
+            progress = document['resume']
+            current = SaveSlot(SAVE_DIRECTORY, 'New save', level=self.game.level.number,
                                resume='Checkpoint' if progress['checkpoint'] else 'Level start',
-                               capacity=progress['max_life'], preview=self.screenshot_viewport.crop(
-                                   (1, 0, 511, 365)).convert('RGB'))
+                               capacity=progress['max_life'], document=document)
         self.game_menu.save_browser = SaveBrowser(slots, 'load' if load else 'save', selected,
-                                                  focus=10 + selected % 6,
-                                                  save_available=self.can_save_game(), current=current)
+                                                  focus=100 + selected,
+                                                  save_available=self.can_save_game(), current=current,
+                                                  preview_provider=self.save_slot_preview)
+        self.game_menu.save_browser.ensure_visible(immediate=True)
         self.pause_resume_keys.update(self.window_keys_down)
         self.render()
 
     def apply_save_action(self, action):
         from pop2.save_slots import SAVE_DIRECTORY, list_slots
+        from pop2.save_game import read_document, save_name, write_save
+        from uuid import uuid4
 
         browser = self.game_menu.save_browser
+        if action == 'slot_save' and not browser.entry.exists:
+            browser.edit_name('create')
+            self.render()
+            return
+        if action in ('slot_load', 'slot_delete', 'slot_rename') and not browser.entry.exists:
+            return
         path = browser.entry.path
         try:
             if action == 'slot_load':
@@ -682,18 +692,28 @@ class WindowControls:
             if action == 'slot_delete':
                 path.unlink()
                 browser.status = 'Save deleted'
+            elif action == 'slot_rename':
+                document = read_document(path)
+                document['name'] = save_name(browser.draft)
+                write_save(path, document)
+                browser.status = 'Save renamed'
             else:
-                self.save_game_to(path)
+                if action == 'slot_create':
+                    path = SAVE_DIRECTORY / (uuid4().hex + '.pop2save')
+                self.save_game_to(path, save_name(browser.draft) if action == 'slot_create' else browser.entry.name)
                 browser.status = 'Game saved'
             browser.slots = list_slots(SAVE_DIRECTORY)
-            browser.selected = next((i for i, slot in enumerate(browser.slots) if slot.path == path),
-                                    min(browser.selected, len(browser.slots) - 1))
+            offset = int(browser.mode == 'save')
+            browser.selected = next((i + offset for i, slot in enumerate(browser.slots) if slot.path == path),
+                                    max(0, min(browser.selected, len(browser.items) - 1)))
+            browser.ensure_visible(immediate=True)
             browser.error = ''
+            browser.editing = None
         except (OSError, ValueError) as error:
             browser.error = 'Could not ' + action[5:] + ' this save.'
             self.status.set(str(error))
         browser.confirmation = None
-        browser.focus = 27
+        browser.focus = 32 if browser.editing else 27
         self.pause_resume_keys.update(self.window_keys_down)
         self.render()
 
@@ -710,9 +730,12 @@ class WindowControls:
             return None
         context = id(menu), menu.page, menu.dropdown
         if browser is not None:
+            if index >= 100 and (index >= 100 + len(browser.items)
+                                 or not browser.items[index - 100].exists and not browser.save_available):
+                return None
             if index == 27 and not browser.primary_enabled or index == 26 and not browser.entry.exists:
                 return None
-            return (*context, browser.page, browser.confirmation, index)
+            return (*context, browser.selected, browser.confirmation, browser.editing, index)
         if menu.dropdown:
             return (*context, 'option', getattr(menu, 'dropdown_control', 0), index)
         if isinstance(menu, GameMenu) and menu.page == 'menu' and not menu.items[index].enabled:
@@ -738,7 +761,11 @@ class WindowControls:
         before = state()
         if event.keysym in ('Return', 'KP_Enter', 'space') and self.menu_sound_target(menu) is not None:
             self.play_menu_sound('click')
-        action = menu.key(event.keysym, backwards=bool(event.state & 1))
+        if isinstance(menu, GameMenu):
+            action = menu.key(event.keysym, backwards=bool(event.state & 1),
+                              char=getattr(event, 'char', ''), control=bool(event.state & 4))
+        else:
+            action = menu.key(event.keysym, backwards=bool(event.state & 1))
         if (event.keysym in ('Up', 'Down', 'Left', 'Right', 'Tab')
                 and before != state()
                 and self.menu_sound_target(menu) is not None):
@@ -765,6 +792,32 @@ class WindowControls:
                 else:
                     self.capture_screenshot()
             return "break"
+        if (self.game_menu is not None and self.game_menu.page == 'saves'
+                and self.game_menu.save_browser.editing):
+            browser = self.game_menu.save_browser
+            if alt:
+                return 'break'
+            char = getattr(event, 'char', '')
+            control = bool(event.state & 4)
+            key = event.keysym.lower()
+            if control and key in ('c', 'x', 'v'):
+                start, end = sorted((browser.anchor, browser.caret))
+                try:
+                    if key == 'v':
+                        browser.edit_text('', self.root.clipboard_get())
+                    elif start != end:
+                        self.root.clipboard_clear()
+                        self.root.clipboard_append(browser.draft[start:end])
+                        if key == 'x':
+                            browser.edit_text('Delete')
+                except tk.TclError:
+                    pass
+                action = 'changed'
+            else:
+                action = self.game_menu.key(event.keysym, bool(event.state & 1),
+                                            '' if control else char, control)
+            self.apply_game_action(action)
+            return 'break'
         if event.keysym == "F2":
             if not repeated:
                 self.toggle_screenshot_menu(event)
@@ -795,7 +848,7 @@ class WindowControls:
                 self.play_menu_sound('click')
             return "break"
         command = {"n": "confirm_new", "r": "restart", "t": "sound", "m": "music",
-                   "s": "save", "o": "open", "h": "hall", "v": "about"}.get(
+                   "s": "save", "o": "open", "l": "open", "h": "hall", "v": "about"}.get(
                        event.keysym.lower()) if alt and not event.state & (0x4 | 0x40) else None
         if command is not None:
             confirming_save = (self.game_menu is not None and self.game_menu.page == 'saves'
@@ -909,6 +962,8 @@ class WindowControls:
         point = self.dev_pointer(event)
         if point is not None:
             if self.game_menu is not None:
+                self.save_scroll_dragging = (self.game_menu.page == 'saves'
+                    and self.game_menu.save_browser.hit(*point) == 24)
                 if self.menu_sound_target(self.game_menu, point) is not None:
                     self.play_menu_sound('click')
                 self.apply_game_action(self.game_menu.click(*point))
@@ -928,6 +983,9 @@ class WindowControls:
         return "break"
 
     def dev_release(self, event):
+        if getattr(self, 'save_scroll_dragging', False):
+            self.save_scroll_dragging = False
+            return 'break'
         challenge = getattr(self, "copy_challenge", None)
         if challenge is None:
             self.copy_pointer_held = False
@@ -950,6 +1008,15 @@ class WindowControls:
         return "break"
 
     def dev_hover(self, event):
+        if (getattr(self, 'save_scroll_dragging', False) and self.game_menu is not None
+                and self.game_menu.page == 'saves'):
+            point = self.dev_pointer(event)
+            if point is not None:
+                browser = self.game_menu.save_browser
+                browser.scroll_target = max(0, min(browser.max_scroll, browser.max_scroll *
+                    (point[1] - browser.LIST[1]) / (browser.LIST[3] - browser.LIST[1])))
+                self.schedule_save_scroll()
+            return 'break'
         challenge = getattr(self, "copy_challenge", None)
         if challenge is not None:
             if not self.copy_pointer_held or self.paused:
@@ -996,12 +1063,11 @@ class WindowControls:
         if getattr(self, 'game_menu', None) is not None and self.game_menu.page == 'saves':
             browser = self.game_menu.save_browser
             point = self.dev_pointer(event)
-            if (not browser.confirmation and point is not None
-                    and 40 <= point[0] < 228 and 99 <= point[1] < 291):
-                direction = 'Up' if getattr(event, 'delta', 0) > 0 or getattr(event, 'num', None) == 4 else 'Down'
-                browser.key(direction)
-                self.play_menu_sound('hover')
-                self.render()
+            if point is not None and browser.contains(browser.LIST, *point):
+                delta = getattr(event, 'delta', 0)
+                steps = -delta / 120 if delta else -1 if getattr(event, 'num', None) == 4 else 1
+                if browser.wheel(steps):
+                    self.schedule_save_scroll()
             return 'break'
         if self.dev_menu is None:
             return None
@@ -1028,6 +1094,35 @@ class WindowControls:
                 self.play_menu_sound('hover')
             self.render()
         return "break"
+
+    def schedule_save_scroll(self):
+        menu = getattr(self, 'game_menu', None)
+        pending = getattr(self, 'save_scroll_after_id', None)
+        if pending is not None and getattr(self, 'save_scroll_menu', None) is not menu:
+            self.root.after_cancel(pending)
+            self.save_scroll_after_id = None
+        if (menu is None or menu.page != 'saves'
+                or abs(menu.save_browser.scroll - menu.save_browser.scroll_target) < 0.1
+                or getattr(self, 'save_scroll_after_id', None) is not None):
+            return
+        browser = menu.save_browser
+        self.save_scroll_menu = menu
+        previous = time.perf_counter()
+
+        def animate():
+            nonlocal previous
+            self.save_scroll_after_id = None
+            if self.game_menu is not menu or menu.page != 'saves' or menu.save_browser is not browser:
+                return
+            now = time.perf_counter()
+            moving = browser.animate(now - previous)
+            previous = now
+            self.native_viewport = self.draw_screenshot_notice(menu.draw(self.screenshot_viewport, self.ui_font))
+            self.present_viewport()
+            if moving:
+                self.save_scroll_after_id = self.root.after(16, animate)
+
+        self.save_scroll_after_id = self.root.after(16, animate)
 
     def set_peaceful(self, peaceful):
         self.peaceful = peaceful

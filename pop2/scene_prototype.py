@@ -364,15 +364,66 @@ class ScenePrototype(WindowControls):
                 and self.intro is None and self.demo is None and self.copy_challenge is None
                 and not self.level_complete and self.game.exit is None)
 
-    def save_game_to(self, path):
-        from pop2.save_game import SaveGameError, capture, encode_preview, write_save
+    def save_game_to(self, path, name=None):
+        from pop2.save_game import SaveGameError, capture, encode_preview, save_name, write_save
 
         if not self.can_save_game():
             raise SaveGameError('Save is unavailable during this scene')
         document = capture(self.game, copy_verified=self.copy_verified)
-        document['preview'] = encode_preview(self.screenshot_viewport)
+        document['name'] = save_name(f'Level {document["level"]}' if name is None else name)
+        document['preview'] = encode_preview(self.resume_preview(document))
+        document['preview_at_resume'] = True
         write_save(path, document)
         self.status.set(f'Game saved: {path}')
+
+    def resume_preview(self, document):
+        from copy import copy
+        import hashlib
+        import json
+        import random
+        from pop2.save_game import restore_progress
+
+        key = hashlib.sha256(json.dumps({name: document.get(name) for name in
+            ('level', 'level_sha256', 'resume')}, sort_keys=True).encode()).hexdigest()
+        cache = getattr(self, 'save_preview_cache', None)
+        if cache is None:
+            cache = self.save_preview_cache = {}
+        if key not in cache:
+            before = random.getstate()
+            try:
+                game, _saved = restore_progress(document, self.resources)
+                preview = copy(self)
+                preview.audio = None
+                preview.game = game
+                preview.intro = preview.demo = preview.attract_stage = None
+                preview.game_menu = preview.dev_menu = preview.copy_challenge = None
+                preview.screenshot_toast = None
+                preview.paused = False
+                preview.present_viewport = lambda: None
+                preview.bind_level(game, LevelRenderer(game.level, preload_room=False))
+                preview.render()
+                if len(cache) >= 12:
+                    del cache[next(iter(cache))]
+                cache[key] = preview.screenshot_viewport.copy()
+            finally:
+                random.setstate(before)
+        return cache[key]
+
+    def save_slot_preview(self, slot):
+        if slot.document['version'] == 1:
+            from pop2.save_game import capture, read_save
+
+            cache = getattr(self, 'legacy_save_previews', None)
+            if cache is None:
+                cache = self.legacy_save_previews = {}
+            key = slot.path, slot.modified
+            if key not in cache:
+                game, _saved = read_save(slot.path, self.resources)
+                if len(cache) >= 12:
+                    del cache[next(iter(cache))]
+                cache[key] = self.resume_preview(capture(game)).crop((1, 0, 511, 365)).convert('RGB')
+            return cache[key]
+        return self.resume_preview(slot.document).crop((1, 0, 511, 365)).convert('RGB')
 
     def load_game_from(self, path):
         from pop2.save_game import SaveGameError, read_save

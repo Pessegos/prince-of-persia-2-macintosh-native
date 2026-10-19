@@ -33,7 +33,7 @@ or a level jump actually needs it. Menu presentation remains synchronous.
 | New Game | Alt+N | Confirmation, default Cancel |
 | Restart Level | Alt+R | Latest checkpoint or level start |
 | Save Game | Alt+S | In-game slots; bank checkpoint or level-entry progress |
-| Load Game | Alt+O | Resume a slot at its checkpoint or level entry |
+| Load Game | Alt+O (also Alt+L) | Resume a save at its checkpoint or level entry; F1 shows Alt+O |
 | Sound | Alt+T | Master audio toggle |
 | Ambient Music | Alt+M | Ambient tracks only |
 | End Game | Not bound | New Game already returns to the introduction |

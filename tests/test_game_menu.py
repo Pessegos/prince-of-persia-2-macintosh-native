@@ -251,7 +251,7 @@ class GameMenuSceneTests(unittest.TestCase):
         scene = self.scene
         scene.apply_game_action('save')
         browser = scene.game_menu.save_browser
-        preview = browser.current.preview
+        preview = browser.preview_provider(browser.current)
         self.assertEqual(preview.size, (510, 365))
         for width, height in ((1020, 768), (1920, 1080), (3440, 1440), (800, 900)):
             with self.subTest(window=(width, height)), \

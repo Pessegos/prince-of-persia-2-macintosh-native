@@ -266,6 +266,19 @@ class SaveSceneTests(unittest.TestCase):
     def tick(self, count=1):
         terrain_tests.RooftopSceneTests.tick(self, count)
 
+    def create_save(self, name='My journey'):
+        scene = self.scene
+        if scene.game_menu is None or scene.game_menu.page != 'saves':
+            scene.apply_game_action('save')
+        browser = scene.game_menu.save_browser
+        browser.selected, browser.focus = 0, 27
+        scene.apply_game_action(browser.activate())
+        self.assertEqual(browser.editing, 'create')
+        browser.draft = name
+        scene.apply_game_action(browser.key('Return'))
+        self.assertFalse(browser.error, browser.error)
+        return browser.entry.path
+
     def test_loading_restarts_level_and_rolls_back_unbanked_mega_potion(self):
         scene = self.scene
         scene.load_level(3)
@@ -383,8 +396,7 @@ class SaveSceneTests(unittest.TestCase):
         scene = self.scene
         scene.set_paused(True)
         scene.apply_game_action('save')
-        path = scene.game_menu.save_browser.entry.path
-        scene.apply_game_action('slot_save')
+        path = self.create_save()
         self.assertTrue(path.is_file())
         self.assertTrue(scene.paused)
         scene.apply_game_action(scene.game_menu.key('Escape'))
@@ -393,8 +405,7 @@ class SaveSceneTests(unittest.TestCase):
     def test_save_and_load_slots_use_integrated_confirmation_and_resume_play(self):
         scene = self.scene
         scene.apply_game_action('save')
-        path = scene.game_menu.save_browser.entry.path
-        scene.apply_game_action(scene.game_menu.key('Return'))
+        path = self.create_save()
         self.assertTrue(path.is_file())
         self.assertEqual(scene.game_menu.save_browser.status, 'Game saved')
         scene.close_game_menu(resume=True)
@@ -412,8 +423,9 @@ class SaveSceneTests(unittest.TestCase):
         scene = self.scene
         before = scene.game
         scene.apply_game_action('save')
+        scene.game_menu.save_browser.edit_name('create')
         with patch.object(scene, 'save_game_to', side_effect=OSError('Read only')):
-            scene.apply_game_action('slot_save')
+            scene.apply_game_action('slot_create')
         self.assertIs(scene.game, before)
         self.assertTrue(scene.game_menu.save_browser.error)
         self.assertTrue(scene.paused)
@@ -441,7 +453,7 @@ class SaveSceneTests(unittest.TestCase):
     def test_failed_or_cancelled_overwrite_does_not_change_existing_save(self):
         scene = self.scene
         scene.apply_game_action('save')
-        scene.apply_game_action('slot_save')
+        self.create_save()
         browser = scene.game_menu.save_browser
         path = browser.entry.path
         original = path.read_bytes()
@@ -457,7 +469,7 @@ class SaveSceneTests(unittest.TestCase):
     def test_delete_works_in_browser_and_does_not_touch_current_game(self):
         scene = self.scene
         scene.apply_game_action('save')
-        scene.apply_game_action('slot_save')
+        self.create_save()
         browser = scene.game_menu.save_browser
         path, current = browser.entry.path, scene.game
         browser.key('Delete')
@@ -470,7 +482,7 @@ class SaveSceneTests(unittest.TestCase):
     def test_save_confirmation_blocks_alt_new_game_shortcut(self):
         scene = self.scene
         scene.apply_game_action('save')
-        scene.apply_game_action('slot_save')
+        self.create_save()
         browser = scene.game_menu.save_browser
         browser.focus = 27
         browser.activate()
@@ -483,7 +495,7 @@ class SaveSceneTests(unittest.TestCase):
     def test_file_changed_since_opening_browser_cannot_replace_live_game(self):
         scene = self.scene
         scene.apply_game_action('save')
-        scene.apply_game_action('slot_save')
+        self.create_save()
         browser = scene.game_menu.save_browser
         current = scene.game
         browser.entry.path.write_text('now corrupt')
@@ -500,6 +512,140 @@ class SaveSceneTests(unittest.TestCase):
         scene.load_game_from(self.path)
         self.assertFalse(scene.up_held or scene.shift_held)
         self.assertIsNone(scene.pending_action)
+
+    def test_saved_preview_matches_real_resume_and_never_mutates_live_world(self):
+        from pop2.save_game import decode_preview, read_document
+
+        scene = self.scene
+        for level, checkpoint in ((1, False), (1, True), (2, False), (3, False)):
+            with self.subTest(level=level, checkpoint=checkpoint):
+                scene.load_level(level)
+                if checkpoint:
+                    scene.jump_to_room(14, row=0, x=277, facing=0)
+                    self.tick()
+                    self.assertIsNotNone(scene.checkpoint)
+                scene.sequence_state.target_x += 30
+                scene.render()
+                before = capture(scene.game)['state']
+                game = scene.game
+                rng = random.getstate()
+                scene.save_game_to(self.path, 'My destination')
+                self.assertIs(scene.game, game)
+                self.assertEqual(capture(scene.game)['state'], before)
+                self.assertEqual(random.getstate(), rng)
+                document = read_document(self.path)
+                self.assertTrue(document['preview_at_resume'])
+                self.assertEqual(document['name'], 'My destination')
+                preview = decode_preview(document['preview'])
+                scene.load_game_from(self.path)
+                expected = scene.screenshot_viewport.crop((1, 0, 511, 365)).convert('RGB')
+                self.assertEqual(preview.tobytes(), expected.tobytes())
+
+    def test_create_duplicate_names_and_rename_preserve_distinct_saves_and_progress(self):
+        scene = self.scene
+        first = self.create_save('My journey')
+        second = self.create_save('My journey')
+        self.assertNotEqual(first, second)
+        self.assertTrue(first.is_file())
+        original = json.loads(second.read_text())
+        browser = scene.game_menu.save_browser
+        browser.focus = 25
+        scene.apply_game_action(browser.activate())
+        browser.draft = 'Renamed journey'
+        scene.apply_game_action(browser.key('Return'))
+        changed = json.loads(second.read_text())
+        self.assertEqual(changed.pop('name'), 'Renamed journey')
+        original.pop('name')
+        self.assertEqual(changed, original)
+        self.assertEqual(browser.entry.path, second)
+        self.assertEqual(browser.entry.name, 'Renamed journey')
+
+    def test_name_editing_supports_paste_and_blocks_game_shortcuts(self):
+        scene = self.scene
+        scene.apply_game_action('save')
+        browser = scene.game_menu.save_browser
+        scene.apply_game_action(browser.key('Return'))
+        with patch.object(scene.root, 'clipboard_get', return_value='Caverns / second try'), \
+                patch.object(scene, 'new_game') as new_game:
+            for key, state, char in (('a', 4, ''), ('v', 4, ''), ('n', 0x20000, 'n')):
+                event = SimpleNamespace(keysym=key, state=state, char=char)
+                scene.dev_key_press(event)
+                scene.dev_key_release(event)
+            new_game.assert_not_called()
+        self.assertEqual(browser.draft, 'Caverns / second try')
+        scene.apply_game_action(browser.key('Return'))
+        self.assertEqual(browser.entry.name, 'Caverns / second try')
+        self.assertEqual(browser.entry.path.parent, self.path.parent)
+
+    def test_editor_handles_empty_long_and_non_macintosh_characters_without_new_widgets(self):
+        scene = self.scene
+        scene.apply_game_action('save')
+        browser = scene.game_menu.save_browser
+        children = scene.root.winfo_children()
+        for name in ('', 'A' * 48, 'N\u00edvel 3 \U0001f31f'):
+            with self.subTest(name=name):
+                browser.edit_name('create')
+                browser.draft, browser.caret, browser.anchor = name, len(name), 0
+                scene.render()
+                self.assertEqual(scene.root.winfo_children(), children)
+                self.assertEqual(browser.draft, name)
+                self.assertTrue(scene.paused)
+                if not name:
+                    self.assertEqual(browser.key('Return'), 'changed')
+
+    def test_old_thumbnail_is_reconstructed_from_progress_without_rewriting_file(self):
+        from pop2.save_game import encode_preview
+        from PIL import Image
+
+        scene = self.scene
+        scene.save_game_to(self.path)
+        document = json.loads(self.path.read_text())
+        document.pop('preview_at_resume')
+        document['preview'] = encode_preview(Image.new('RGB', (512, 384), 'magenta'))
+        self.path.write_text(json.dumps(document))
+        before = self.path.read_bytes()
+        scene.apply_game_action('open')
+        slot = scene.game_menu.save_browser.entry
+        self.assertIsNone(slot.preview)
+        image = scene.save_slot_preview(slot)
+        self.assertNotEqual(image.getcolors(), [(510 * 365, (255, 0, 255))])
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_scroll_animation_redraws_only_the_menu_and_cancels_after_it_closes(self):
+        from dataclasses import replace
+
+        scene = self.scene
+        self.create_save()
+        browser = scene.game_menu.save_browser
+        browser.slots = tuple(replace(browser.entry, name=f'Journey {i}') for i in range(20))
+        pending = []
+        clock = iter(i / 60 for i in range(200))
+        before = capture(scene.game)['state']
+        with patch.object(scene.root, 'after', side_effect=lambda delay, fn: pending.append(fn) or 'scroll'), \
+                patch.object(scene, 'dev_pointer', return_value=(100, 140)), \
+                patch.object(scene, 'present_viewport') as present, \
+                patch('pop2.window_controls.time.perf_counter', side_effect=lambda: next(clock)):
+            scene.dev_scroll(SimpleNamespace(delta=-240))
+            self.assertEqual(browser.scroll_target, 84)
+            while pending:
+                pending.pop(0)()
+            self.assertEqual(browser.scroll, 84)
+            self.assertGreater(present.call_count, 1)
+            self.assertEqual(capture(scene.game)['state'], before)
+            scene.dev_scroll(SimpleNamespace(delta=-120))
+            scene.game_menu = None
+            pending.pop(0)()
+            self.assertIsNone(scene.save_scroll_after_id)
+
+    def test_old_snapshot_preview_is_a_resume_image_and_keeps_the_file_untouched(self):
+        scene = self.scene
+        write_save(self.path, capture(scene.game))
+        before = self.path.read_bytes()
+        scene.apply_game_action('open')
+        slot = scene.game_menu.save_browser.entry
+        image = scene.save_slot_preview(slot)
+        self.assertEqual(image.size, (510, 365))
+        self.assertEqual(self.path.read_bytes(), before)
 
 
 if __name__ == '__main__':

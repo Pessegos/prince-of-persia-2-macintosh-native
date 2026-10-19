@@ -1,5 +1,4 @@
 import base64
-from dataclasses import replace
 from io import BytesIO
 import json
 import os
@@ -16,7 +15,7 @@ from pop2.game_session import GameSession
 from pop2.rebirth import RebirthSnapshot
 from pop2.save_game import (SaveGameError, capture, decode_preview, encode_preview,
                            read_save, write_save)
-from pop2.save_slots import SaveBrowser, list_slots
+from pop2.save_slots import SaveBrowser, SaveSlot, list_slots
 from tests.test_game_session import EmptyEncounter, resources
 
 
@@ -90,7 +89,9 @@ class ProgressSaveTests(unittest.TestCase):
         for field, value in (('level_sha256', 'wrong'), ('version', 999),
                              ('resume', {'checkpoint': 4, 'max_life': 3}),
                              ('resume', {'checkpoint': None, 'max_life': True}),
-                             ('copy_verified', 1), ('preview', 'invalid base64')):
+                             ('copy_verified', 1), ('preview', 'invalid base64'),
+                             ('name', ''), ('name', 'x' * 49), ('name', 'bad\nname'),
+                             ('preview_at_resume', 'yes')):
             with self.subTest(field=field, value=value):
                 data = dict(original, **{field: value})
                 write_save(self.path, data)
@@ -136,33 +137,43 @@ class SaveBrowserTests(unittest.TestCase):
         self.folder = Path(self.directory.name)
         self.slots = list_slots(self.folder)
 
-    def test_empty_directory_has_twelve_slots_without_creating_files(self):
-        self.assertEqual(len(self.slots), 12)
-        self.assertTrue(all(not slot.exists for slot in self.slots))
+    def test_empty_directory_has_no_placeholder_slots_and_one_new_save_action(self):
+        self.assertEqual(self.slots, ())
+        self.assertEqual(len(SaveBrowser(self.slots, 'save').items), 1)
+        self.assertFalse(SaveBrowser(self.slots).primary_enabled)
         self.assertEqual(list(self.folder.iterdir()), [])
 
-    def test_slot_selection_is_not_an_accidental_save_and_navigation_wraps(self):
-        menu = SaveBrowser(self.slots, 'save')
+    def test_selection_is_not_an_accidental_load_and_keyboard_scrolls_without_pages(self):
+        slots = tuple(SaveSlot(self.folder / str(i), f'Journey {i}', True) for i in range(20))
+        menu = SaveBrowser(slots)
         rect = menu.row_rect(2)
         self.assertEqual(menu.click(rect[0] + 2, rect[1] + 2), 'changed')
         self.assertEqual(menu.selected, 2)
-        self.assertEqual(menu.key('Return'), 'slot_save')
+        self.assertEqual(menu.key('Return'), 'changed')
+        self.assertEqual(menu.confirmation, 'load')
+        menu.key('Escape')
         menu.selected = 0
         menu.key('Up')
-        self.assertEqual((menu.selected, menu.page), (11, 1))
-        menu.key('Right')
-        self.assertEqual((menu.selected, menu.page), (0, 0))
+        self.assertEqual(menu.selected, 0)
+        menu.key('Next')
+        self.assertEqual(menu.selected, 5)
+        self.assertGreater(menu.scroll_target, 0)
+        self.assertEqual(menu.scroll, 0)
+        menu.animate(1 / 60)
+        self.assertGreater(menu.scroll, 0)
+        self.assertLess(menu.scroll, menu.scroll_target)
 
     def test_load_empty_disabled_and_overwrite_delete_load_require_confirmation(self):
         menu = SaveBrowser(self.slots)
         self.assertFalse(menu.primary_enabled)
         self.assertEqual(menu.key('Return'), 'changed')
-        path = self.slots[0].path
+        path = self.folder / 'slot-01.pop2save'
         path.write_text(json.dumps({'format': 'pop2-macintosh-native-save', 'version': 2, 'level': 3,
                                    'resume': {'checkpoint': None, 'max_life': 4}}))
         menu.slots = list_slots(self.folder)
         for action in ('load', 'save', 'delete'):
             menu.mode = 'save' if action == 'save' else 'load'
+            menu.selected = int(action == 'save')
             menu.focus = 26 if action == 'delete' else 27
             self.assertEqual(menu.activate(), 'changed')
             self.assertEqual(menu.confirmation, action)
@@ -178,34 +189,105 @@ class SaveBrowserTests(unittest.TestCase):
     def test_legacy_files_and_corrupt_files_remain_visible_and_can_be_deleted(self):
         (self.folder / 'my old save.pop2save').write_text(json.dumps({
             'format': 'pop2-macintosh-native-save', 'version': 1, 'level': 1}))
-        self.slots[0].path.write_text('corrupt')
+        (self.folder / 'broken.pop2save').write_text('corrupt')
         slots = list_slots(self.folder)
-        self.assertEqual(len(slots), 13)
-        self.assertEqual(slots[-1].resume, 'Legacy save')
-        self.assertTrue(slots[0].error)
+        self.assertEqual(len(slots), 2)
+        self.assertTrue(any(slot.resume == 'Legacy save' for slot in slots))
+        broken = next(i for i, slot in enumerate(slots) if slot.error)
         menu = SaveBrowser(slots)
+        menu.selected = broken
         self.assertFalse(menu.primary_enabled)
         menu.key('Delete')
         self.assertEqual(menu.confirmation, 'delete')
 
     def test_hover_never_changes_selected_slot_or_performs_file_io(self):
-        menu = SaveBrowser(self.slots)
+        menu = SaveBrowser(tuple(SaveSlot(self.folder / str(i), str(i), True) for i in range(8)))
         rect = menu.row_rect(4)
         with patch('pop2.save_slots.read_document', side_effect=AssertionError('hover IO')):
             self.assertTrue(menu.hover(rect[0] + 2, rect[1] + 2))
         self.assertEqual(menu.selected, 0)
-        self.assertEqual(menu.focus, 14)
+        self.assertEqual(menu.focus, 104)
 
     def test_load_tab_selects_most_recent_valid_save_when_current_slot_is_empty(self):
         document = {'format': 'pop2-macintosh-native-save', 'version': 2, 'level': 3,
                     'resume': {'checkpoint': None, 'max_life': 3}}
         for index, modified in ((0, 1000), (1, 2000)):
-            path = self.slots[index].path
+            path = self.folder / f'save-{index}.pop2save'
             path.write_text(json.dumps(document))
             os.utime(path, (modified, modified))
         menu = SaveBrowser(list_slots(self.folder), 'save', selected=2)
         menu.switch('load')
-        self.assertEqual(menu.selected, 1)
+        self.assertEqual(menu.selected, 0)
+        self.assertEqual(menu.entry.path.name, 'save-1.pop2save')
+
+    def test_new_save_requires_a_name_and_cancel_never_creates_files(self):
+        menu = SaveBrowser((), 'save')
+        menu.key('Return')
+        self.assertEqual(menu.editing, 'create')
+        menu.key('a', control=True)
+        menu.key('x', char='Adventure')
+        self.assertEqual(menu.draft, 'Adventure')
+        menu.key('Left')
+        menu.key('BackSpace')
+        self.assertEqual(menu.draft, 'Adventue')
+        menu.key('a', control=True)
+        menu.key('x', char='  ')
+        self.assertEqual(menu.key('Return'), 'changed')
+        menu.key('Escape')
+        self.assertIsNone(menu.editing)
+        self.assertEqual(list(self.folder.iterdir()), [])
+
+    def test_new_save_action_opens_name_editor_on_single_click(self):
+        menu = SaveBrowser((), 'save')
+        left, top, _right, _bottom = menu.row_rect(0)
+        menu.click(left + 3, top + 3)
+        self.assertEqual(menu.editing, 'create')
+
+    def test_cancel_button_keeps_its_meaning_with_enter_and_space(self):
+        for key in ('Return', 'space'):
+            with self.subTest(key=key):
+                menu = SaveBrowser((), 'save')
+                menu.edit_name('create')
+                menu.key('Tab')
+                self.assertEqual(menu.focus, 30)
+                self.assertEqual(menu.key(key), 'changed')
+                self.assertIsNone(menu.editing)
+
+    def test_name_input_limits_length_and_hover_does_not_steal_keyboard_focus(self):
+        menu = SaveBrowser((), 'save')
+        menu.edit_name('create')
+        menu.key('x', char='A' * 100)
+        self.assertEqual(len(menu.draft), 48)
+        menu.hover(300, 230)
+        self.assertEqual(menu.focus, 32)
+        menu.key('a', control=True)
+        menu.key('x', char='My\njourney\t')
+        self.assertEqual(menu.draft, 'Myjourney')
+        self.assertEqual(menu.key('Return'), 'slot_create')
+
+    def test_wheel_is_smooth_bounded_and_does_not_select_or_write_saves(self):
+        menu = SaveBrowser(tuple(SaveSlot(self.folder / str(i), str(i), True) for i in range(30)))
+        self.assertTrue(menu.wheel(3))
+        self.assertEqual(menu.selected, 0)
+        self.assertEqual(menu.scroll, 0)
+        for _ in range(120):
+            menu.animate(1 / 60)
+        self.assertEqual(menu.scroll, menu.scroll_target)
+        menu.wheel(10000)
+        self.assertEqual(menu.scroll_target, menu.max_scroll)
+        menu.wheel(-10000)
+        self.assertEqual(menu.scroll_target, 0)
+        menu.edit_name('rename')
+        self.assertFalse(menu.wheel(1))
+
+    def test_names_come_from_metadata_and_do_not_change_file_paths(self):
+        path = self.folder / 'slot-01.pop2save'
+        path.write_text(json.dumps({'format': 'pop2-macintosh-native-save', 'version': 2,
+            'level': 3, 'name': 'Caverns - second try', 'resume': {'checkpoint': None, 'max_life': 3}}))
+        slot, = list_slots(self.folder)
+        self.assertEqual(slot.name, 'Caverns - second try')
+        self.assertEqual(slot.path, path)
+        self.assertIsNone(slot.preview)
 
     def test_browser_renders_source_pixels_and_controls_directly_at_output_resolution(self):
         def glyphs(value, color):
@@ -216,7 +298,7 @@ class SaveBrowserTests(unittest.TestCase):
 
         font = SimpleNamespace(glyphs=dict.fromkeys(range(128)), text=glyphs)
         preview = Image.frombytes('RGB', (510, 365), random.Random(31).randbytes(510 * 365 * 3))
-        current = replace(self.slots[0], level=1, resume='Level start', preview=preview)
+        current = SaveSlot(self.folder / 'new.pop2save', 'New save', level=1, resume='Level start', preview=preview)
         browser = SaveBrowser(self.slots, 'save', current=current)
         for visible, size in ((False, (512, 384)), (False, (1536, 1152)),
                               (True, (1434, 1080)), (True, (1020, 768))):

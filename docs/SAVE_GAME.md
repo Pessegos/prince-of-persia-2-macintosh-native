@@ -1,23 +1,40 @@
 # Checkpoint Saves
 
-The Save/Load commands in F1, or Alt+S / Alt+O, open an in-game save browser,
+The Save/Load commands in F1, or Alt+S / Alt+O / Alt+L, open an in-game save browser,
 not a native file picker.
-Twelve numbered slots are available across two pages. Additional `.pop2save`
-files already in `~/Saved Games/PoP2 Macintosh Native` appear after those slots.
+Only existing `.pop2save` files in `~/Saved Games/PoP2 Macintosh Native` appear
+in the library, newest first. Save mode adds a single `New save` action.
+The list scrolls continuously using the wheel, scrollbar or keyboard, with a
+short menu-only animation rather than discrete pages. Scrolling does not
+advance gameplay, select another save or perform disk reads on hover.
 Nothing is written merely by opening or navigating the browser.
+
+New saves ask for a name in an integrated text field, with selection, keyboard
+editing and clipboard support. Names are optional metadata in the version-two
+format, not filenames: new files receive independent UUID names, so duplicate
+display names and path separators cannot overwrite or escape another save.
+The limit is 48 printable characters; blank names cannot be confirmed.
+The pencil control renames a save without changing its progress or path.
+Existing numbered slots and older named files remain visible and loadable.
 
 Importing save support and testing progress-only slots does not load original
 combat/AI resources. Fighter decoding and legacy RNG handling import those
 dependencies only when needed. A subprocess regression test runs the complete
 slot suite from a temporary copy with no imported game assets, matching CI.
 
-Each slot shows the level, resume point, banked life capacity, local save date
-and a full-colour screenshot thumbnail. The thumbnail depicts the room at the
-time of saving; it is not a promise to resume at those exact coordinates.
+Each entry shows its name, full `Level N` label and local save date; the detail
+pane adds the resume point, banked life capacity and a full-colour preview.
+The preview is rendered from the same restored progress used by Load, showing
+the level entry or activated checkpoint, not the Prince's position at Save.
+It uses an isolated session/renderer and preserves the live world, actor
+identity, input, audio and random state. A bounded in-memory cache avoids
+rebuilding the same destination on redraw. Old point-of-save thumbnails are
+ignored and their progress-based preview is reconstructed without rewriting
+the file. New preview metadata explicitly records `preview_at_resume: true`.
 The browser is drawn at the fitted window resolution: font glyphs and previews
 are scaled directly from their sources, not from an enlarged 512x384 menu.
-New thumbnails retain all 510x365 scene pixels, without the HUD. Older 224x160
-thumbnails remain readable but cannot recover previously discarded detail.
+New previews retain all 510x365 scene pixels, without the HUD. Both old
+224x160 and full-resolution PNG fields remain accepted by the file decoder.
 Shift+F8 renders the browser and confirmations at the selected PNG scale;
 ordinary F8 still exports only the clean game.
 Saving to an occupied slot, loading and deleting require an in-game confirmation
@@ -66,8 +83,11 @@ are read only when opening or updating the browser, never on pointer hover.
 ## Verification
 
 `tests/test_save_slots.py` runs without original game files and covers resume
-rules, checkpoint anchoring, metadata, previews, paging, selection, confirmations,
+rules, checkpoint anchoring, names, previews, scroll bounds, selection, confirmations,
 corrupt files and hover without disk access. `tests/test_save_game.py` covers the
 legacy decoder and real game scenes, fresh cavern initialization, potion
 rollback, repeated checkpoint retries, legacy conversion, in-game save/load/
-delete, pause restoration and failed/cancelled writes. No README changes.
+delete, pause restoration and failed/cancelled writes. Scene tests compare the
+preview pixels with the actual loaded destination across levels 1-3 and a
+checkpoint, check isolation and exercise creation, rename, clipboard input,
+old previews and menu-only scroll animation. No README changes.

@@ -433,9 +433,27 @@ def read_save(path, resources):
         if document['version'] == 1:
             legacy, state = read_snapshot(path, resources)
             document = capture(legacy, copy_verified=state['copy_verified'])
+        return restore_progress(document, resources)
+    finally:
+        random.setstate(random_before)
+
+
+def save_name(value):
+    if not isinstance(value, str) or not value.strip() or len(value) > 48 or not value.isprintable():
+        raise SaveGameError('Invalid save name')
+    return value.strip()
+
+
+def restore_progress(document, resources):
+    random_before = random.getstate()
+    try:
         if set(document) - {'format', 'version', 'level', 'level_sha256', 'created_at',
-                            'resume', 'copy_verified', 'preview'}:
+                            'resume', 'copy_verified', 'preview', 'name', 'preview_at_resume'}:
             raise SaveGameError('Unknown saved progress fields')
+        if 'name' in document:
+            save_name(document['name'])
+        if 'preview_at_resume' in document and type(document['preview_at_resume']) is not bool:
+            raise SaveGameError('Invalid save preview location')
         game = GameSession.load(resources, document['level'])
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
             raise SaveGameError('Save belongs to different original game files')
