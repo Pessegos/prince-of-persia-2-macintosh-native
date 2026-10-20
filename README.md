@@ -71,7 +71,9 @@ The lava in the original Macintosh release looks pretty botched, especially arou
 
 I honestly think something went wrong with the rendering and somehow made it into the final release. Reconstructing the lava from the original Macintosh assets produces something that looks much closer to what I believe was intended, but even then, it still looks a bit plain and out of place compared to the rest of the game.
 
-So I decided to take it a step further and give the lava a proper overhaul, with more detailed edges, depth and animation, taking some inspiration from the DOS version.
+So I decided to take it a step further and give the lava a proper overhaul, with more detailed edges and depth, taking some inspiration from the DOS version.
+
+The new animation also required some careful masking to prevent overlapping, and I fixed a brief pause in the original animation loop.
 
 <br/>
 <img src="docs/github readme/lava-macintosh-reconstructed-dos-port.gif" alt="Comparison of the original Macintosh lava, reconstructed Macintosh lava, DOS lava and overhauled lava" width="800">
