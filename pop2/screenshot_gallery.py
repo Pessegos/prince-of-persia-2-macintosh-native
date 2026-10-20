@@ -2,11 +2,14 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from functools import lru_cache
 import math
 import os
 from pathlib import Path
 from queue import Empty, PriorityQueue, Queue
 from threading import Thread
+import subprocess
+import sys
 
 from PIL import Image, ImageDraw, ImageOps
 
@@ -67,6 +70,24 @@ def scan_folders(folder):
     with os.scandir(folder) as directory:
         return tuple(sorted((Path(entry.path) for entry in directory if entry.is_dir()),
                             key=lambda path: path.name.casefold()))
+
+
+@lru_cache(maxsize=1)
+def lava_delete_icon():
+    from pop2.caverns import cavern_assets, recessed_lava_surface
+
+    sprite = recessed_lava_surface(cavern_assets()[2])
+    return sprite.crop(sprite.getbbox())
+
+
+def open_capture_folder(folder):
+    if not folder.is_dir():
+        raise NotADirectoryError(str(folder))
+    if sys.platform == 'win32':
+        os.startfile(str(folder))
+    else:
+        subprocess.Popen(['open' if sys.platform == 'darwin' else 'xdg-open', str(folder)],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 class GalleryReads:
@@ -133,26 +154,26 @@ class GalleryReads:
 
 
 class ScreenshotGallery:
-    PANEL = (20, 12, 492, 372)
-    LIST = (36, 88, 160, 336)
-    PREVIEW = (174, 88, 474, 303)
-    SCALES = tuple((84 + i * 36, 52, 118 + i * 36, 74) for i in range(4))
-    INCLUDE_UI = (358, 52, 474, 74)
-    FOOTER = ((36, 344, 110, 368), (118, 344, 226, 368), (234, 344, 474, 368))
+    PANEL = (20, 12, 492, 328)
+    LIST = (36, 84, 188, 296)
+    PREVIEW = (202, 84, 474, 272)
+    SCALES = tuple((84 + i * 36, 48, 118 + i * 36, 70) for i in range(4))
+    INCLUDE_UI = (358, 48, 474, 70)
+    FOOTER = ((36, 300, 106, 322), (114, 300, 234, 322), (362, 300, 474, 322))
+    OPEN_FOLDER = (242, 300, 354, 322)
     PATH = (64, 88, 448, 116)
     FOLDER_LIST = (64, 156, 448, 280)
     FOLDER_TOOLS = ((64, 124, 156, 148), (164, 124, 252, 148), (260, 124, 348, 148), (356, 124, 448, 148))
     FOLDER_BUTTONS = ((64, 296, 242, 324), (254, 296, 448, 324))
     CONFIRM_BUTTONS = ((100, 220, 246, 256), (258, 220, 412, 256))
-    DELETE = (450, 310, 474, 334)
+    DELETE = (432, 274, 474, 298)
     REFRESH = (386, 24, 474, 44)
-    VIEWS = ((240, 24, 264, 44), (270, 24, 294, 44))
-    ROW_HEIGHT = 98
+    COLUMNS = 2
+    ROW_HEIGHT = 64
 
-    def __init__(self, folder, scale=3, include_ui=False, columns=2):
+    def __init__(self, folder, scale=3, include_ui=False):
         self.folder, self.scale, self.include_ui = Path(folder), scale, include_ui
         self.entries, self.selected, self.focus = (), 0, 12
-        self.columns = columns if columns in (1, 2) else 2
         self.error = self.status = ''
         self.scroll = self.scroll_target = self.velocity = 0.0
         self.choosing = self.deleting = False
@@ -168,6 +189,7 @@ class ScreenshotGallery:
         self.scan_key = self.folder_key = None
         self.applied_scan = self.applied_folder = None
         self.commit_key = self.delete_key = None
+        self.open_key = None
         self.committed_folder = None
         self.refresh()
 
@@ -181,12 +203,12 @@ class ScreenshotGallery:
 
     @property
     def max_scroll(self):
-        rows = math.ceil(len(self.entries) / self.columns)
+        rows = math.ceil(len(self.entries) / self.COLUMNS)
         return max(0, rows * self.row_height - (self.LIST[3] - self.LIST[1]))
 
     @property
     def row_height(self):
-        return 64 if self.columns == 2 else self.ROW_HEIGHT
+        return self.ROW_HEIGHT
 
     @staticmethod
     def image_key(entry, thumb=False):
@@ -194,17 +216,17 @@ class ScreenshotGallery:
 
     @property
     def visible_indices(self):
-        start = max(0, int(self.scroll // self.row_height)) * self.columns
-        end = (math.ceil((self.scroll + self.LIST[3] - self.LIST[1]) / self.row_height) + 1) * self.columns
+        start = max(0, int(self.scroll // self.row_height)) * self.COLUMNS
+        end = (math.ceil((self.scroll + self.LIST[3] - self.LIST[1]) / self.row_height) + 1) * self.COLUMNS
         return range(start, min(len(self.entries), end))
 
     @property
     def surface_state(self):
         main_image = self.reads.cache.get(self.image_key(self.entry)) if self.entry else None
-        return (self.folder, id(self.entries), self.selected, self.columns, self.scale, self.include_ui,
+        return (self.folder, id(self.entries), self.selected, self.scale, self.include_ui,
                 self.error, self.status, -1 if self.choosing or self.deleting else min(self.focus, 100),
                 id(main_image), self.applied_scan == self.scan_key, self.choosing, self.deleting,
-                self.hovered if self.hovered in (13, 16, 17) else None)
+                self.hovered == 13, id(self.reads.cache.get(('icon', 'lava'))))
 
     def refresh(self, selected_path=None):
         self.revision += 1
@@ -236,6 +258,11 @@ class ScreenshotGallery:
             self.error = 'Could not delete this PNG. It may have changed.' if result.error else ''
             self.status = '' if result.error else 'PNG deleted'
             self.refresh()
+        result = self.reads.cache.get(self.open_key)
+        if result is not None:
+            self.open_key = None
+            self.error = 'Could not open this folder. Capture a PNG first if it does not exist.' if result.error else ''
+            self.status = '' if result.error else 'Folder opened'
         result = self.reads.cache.get(self.scan_key)
         if result is not None and self.applied_scan != self.scan_key:
             self.applied_scan = self.scan_key
@@ -309,7 +336,7 @@ class ScreenshotGallery:
         self.surface_cache.clear()
 
     def ensure_visible(self, immediate=False):
-        row = self.selected // self.columns
+        row = self.selected // self.COLUMNS
         top, bottom = row * self.row_height, (row + 1) * self.row_height
         height = self.LIST[3] - self.LIST[1]
         self.scroll_target = max(0, min(self.max_scroll,
@@ -342,9 +369,9 @@ class ScreenshotGallery:
         return True
 
     def row_rect(self, index):
-        top = 88 + (index // self.columns) * self.row_height - self.scroll
-        left = 36 + (index % self.columns) * 62
-        return left, top, left + (58 if self.columns == 2 else 120), top + self.row_height - 3
+        top = self.LIST[1] + (index // self.COLUMNS) * self.row_height - self.scroll
+        left = self.LIST[0] + (index % self.COLUMNS) * 76
+        return left, top, left + 70, top + self.row_height - 3
 
     def hit(self, x, y):
         if self.deleting:
@@ -360,14 +387,14 @@ class ScreenshotGallery:
         else:
             controls = {**dict(enumerate(self.SCALES)), 4: self.INCLUDE_UI,
                         **dict(enumerate(self.FOOTER, 10)), 13: self.DELETE, 15: self.REFRESH,
-                        **dict(enumerate(self.VIEWS, 16))}
+                        18: self.OPEN_FOLDER}
             if self.contains(self.LIST, x, y):
-                if x >= 157 and self.max_scroll:
+                if x >= 185 and self.max_scroll:
                     return 14
                 row = int((y - self.LIST[1] + self.scroll) // self.row_height)
-                column = int((x - self.LIST[0]) // 62) if self.columns == 2 else 0
-                index = row * self.columns + column
-                return 100 + index if index < len(self.entries) and column < self.columns and self.contains(
+                column = int((x - self.LIST[0]) // 76)
+                index = row * self.COLUMNS + column
+                return 100 + index if index < len(self.entries) and column < self.COLUMNS and self.contains(
                     self.row_rect(index), x, y) else None
         return next((i for i, rect in controls.items() if self.contains(rect, x, y)), None)
 
@@ -428,10 +455,12 @@ class ScreenshotGallery:
         elif self.focus == 15:
             self.error = self.status = ''
             self.refresh()
-        elif self.focus in (16, 17):
-            self.columns = self.focus - 15
-            self.scroll = self.scroll_target = self.velocity = 0
-            self.ensure_visible(immediate=True)
+        elif self.focus == 18:
+            if self.open_key is None:
+                self.revision += 1
+                self.open_key = ('open', self.revision)
+                folder = self.folder
+                self.reads.request(self.open_key, lambda: open_capture_folder(folder), -20)
         elif 100 <= self.focus < 100 + len(self.entries):
             self.selected = self.focus - 100
             self.ensure_visible()
@@ -493,7 +522,7 @@ class ScreenshotGallery:
                 self.focus = 61 if self.focus == 60 else 60
         elif key == 'Tab':
             controls = ((40, 41, 42, 43, 44, 1000 + self.folder_selected, 45, 46) if self.choosing else
-                        (16, 17, 15, 0, 1, 2, 3, 4, 100 + self.selected, 13, 10, 11, 12))
+                        (15, 0, 1, 2, 3, 4, 100 + self.selected, 13, 10, 11, 18, 12))
             index = controls.index(self.focus) if self.focus in controls else -1
             self.focus = controls[(index + (-1 if backwards else 1)) % len(controls)]
         elif self.choosing and key in ('Up', 'Down') and self.folders:
@@ -502,9 +531,9 @@ class ScreenshotGallery:
             self.folder_offset = max(0, min(self.folder_selected, max(self.folder_offset, self.folder_selected - 5)))
             self.focus = 1000 + self.folder_selected
         elif not self.choosing and key in ('Up', 'Down', 'Prior', 'Next', 'Left', 'Right') and self.entries:
-            step = (-self.columns if key == 'Up' else self.columns if key == 'Down' else
-                    -1 if key == 'Left' else -3 * self.columns if key == 'Prior' else
-                    3 * self.columns if key == 'Next' else 1)
+            step = (-self.COLUMNS if key == 'Up' else self.COLUMNS if key == 'Down' else
+                    -1 if key == 'Left' else -3 * self.COLUMNS if key == 'Prior' else
+                    3 * self.COLUMNS if key == 'Next' else 1)
             self.selected = max(0, min(len(self.entries) - 1, self.selected + step))
             self.focus = 100 + self.selected
             self.ensure_visible()
@@ -522,7 +551,7 @@ class ScreenshotGallery:
         surface = self.surface_cache.get(surface_key) if not modal else None
         key = (viewport.size, visible, id(font), background_key or id(viewport), id(self.entries),
                self.selected, self.scroll, self.scale, self.include_ui, self.error, self.status,
-               self.art_revision, self.choosing, self.deleting, self.columns)
+               self.art_revision, self.choosing, self.deleting)
         cached = self.modal_cache.get(key) if modal else None
         if not modal:
             self.modal_cache.clear()
@@ -625,20 +654,20 @@ class ScreenshotGallery:
             for index in self.visible_indices:
                 entry = self.entries[index]
                 rect = self.row_rect(index)
-                height = 44 if self.columns == 2 else 82
+                height = 50
                 outline = gold if self.focus == 100 + index and not modal else cyan if self.selected == index else '#626262'
                 picture(entry, (rect[0], rect[1], rect[2], rect[1] + height), True, outline)
                 text(entry.date.replace('  ', ' '), rect[0] + 2, rect[1] + height + 5,
                      rect[2] - rect[0] - 4, cyan if self.selected == index else muted,
-                     0.4 if self.columns == 2 else 0.55)
+                     0.4)
             base.paste(image, clip[:2])
             image, draw, origin = base, base_draw, (0, 0)
             if self.max_scroll:
                 height = self.LIST[3] - self.LIST[1]
-                thumb = max(16, height * height / (math.ceil(len(self.entries) / self.columns) * self.row_height))
+                thumb = max(16, height * height / (math.ceil(len(self.entries) / self.COLUMNS) * self.row_height))
                 top = self.LIST[1] + (height - thumb) * self.scroll / self.max_scroll
-                box((157, self.LIST[1], 159, self.LIST[3]), '#303030', None)
-                box((157, top, 159, top + thumb), '#858585', None)
+                box((185, self.LIST[1], 187, self.LIST[3]), '#303030', None)
+                box((185, top, 187, top + thumb), '#858585', None)
 
         if surface is not None:
             draw_list()
@@ -647,57 +676,51 @@ class ScreenshotGallery:
         if cached is None:
             box(self.PANEL, '#181818', '#858585')
             text('Screenshots', 36, 26, 250, gold, 1)
-            text('Take screenshots with F8', 36, 43, 190, muted, 0.5)
             text(f'{len(self.entries)} PNG', 374, 29, 70, muted, right=True)
-            for i, rect in enumerate(self.VIEWS):
-                box(rect, '#253033' if self.columns == i + 1 else '#222222',
-                    gold if self.focus == 16 + i else cyan if self.columns == i + 1 else '#626262')
-                for column in range(i + 1):
-                    for row in range(2):
-                        x = rect[0] + 6 + column * 7
-                        box((x, rect[1] + 5 + row * 6, x + (10 if i == 0 else 5), rect[1] + 9 + row * 6),
-                            '#eeeeee', None)
-            if not modal and self.hovered in (16, 17):
-                text('Large thumbnails' if self.hovered == 16 else 'Small thumbnails', 238, 45, 114, muted, 0.4)
             button(self.REFRESH, 'Refresh', 15)
-            text('Size', 36, 58, 44, muted)
+            text('Size', 36, 54, 44, muted)
             for i, rect in enumerate(self.SCALES):
                 button(rect, f'{i + 1}x', i, active=self.scale == i + 1)
-            text(f'{510 * self.scale} x {384 * self.scale}', 238, 58, 114, muted, 0.6)
+            text(f'{510 * self.scale} x {384 * self.scale}', 238, 54, 114, muted, 0.6)
             box(self.INCLUDE_UI, '#222222', gold if self.focus == 4 else '#626262')
-            box((366, 58, 374, 66), cyan if self.include_ui else '#181818')
+            box((366, 54, 374, 62), cyan if self.include_ui else '#181818')
             if self.include_ui:
-                draw.line([point(367, 62), point(369, 64), point(373, 59)], fill='#181818', width=max(1, round(sx)))
-            text('With menus', 380, 58, 88)
-            text(str(self.folder).replace('\\', '/'), 36, 77, 438, muted, 0.55, tail=True)
+                draw.line([point(367, 58), point(369, 60), point(373, 55)], fill='#181818', width=max(1, round(sx)))
+            text('With menus', 380, 54, 88)
+            text(str(self.folder).replace('\\', '/'), 36, 75, 438, muted, 0.45, tail=True)
             draw_list()
             if self.entry:
                 dimensions = picture(self.entry, self.PREVIEW)
-                text(self.entry.path.name.replace('_', ' '), 174, 311, 268, gold, 0.6)
+                text(self.entry.path.name.replace('_', ' '), 202, 277, 222, gold, 0.55)
                 if dimensions:
-                    text(f'{dimensions[0]} x {dimensions[1]}', 174, 326, 175, muted, 0.6)
-                text(f'{self.entry.size / 1024:.0f} KB', 440, 326, 80, muted, 0.6, right=True)
+                    text(f'{dimensions[0]} x {dimensions[1]}', 202, 290, 145, muted, 0.55)
+                text(f'{self.entry.size / 1024:.0f} KB', 424, 290, 70, muted, 0.55, right=True)
                 box(self.DELETE, '#303030' if self.focus == 13 else '#222222',
                     gold if self.focus == 13 else '#626262')
-                draw.line([point(458, 318), point(459, 329), point(465, 329), point(466, 318)],
-                          fill=white, width=max(1, round(sx)))
-                draw.line([point(457, 315), point(467, 315)], fill=white, width=max(1, round(sx)))
-                draw.line([point(460, 315), point(460, 313), point(464, 313), point(464, 315)],
-                          fill=white, width=max(1, round(sx)))
-                for x in (461, 464):
-                    draw.line([point(x, 320), point(x, 326)], fill=white, width=max(1, round(sx)))
+                icon = self.reads.request(('icon', 'lava'), lava_delete_icon, -5)
+                if icon is not None and not icon.error:
+                    icon_key = 'lava-icon', sx, sy
+                    if icon_key not in self.image_cache:
+                        remember(self.image_cache, icon_key, ImageOps.contain(icon.value,
+                            (max(1, round(36 * sx)), max(1, round(16 * sy))), Image.Resampling.NEAREST), 48)
+                    sprite = self.image_cache[icon_key]
+                    x, y = point(453, 286)
+                    image.paste(sprite, (x - sprite.width // 2, y - sprite.height // 2), sprite)
+                else:
+                    text('Del', 440, 282, 30, white, 0.6)
             else:
                 box(self.PREVIEW, '#0c0c0c')
                 text('Reading folder...' if self.applied_scan != self.scan_key else 'No screenshots yet',
-                     206, 186, 240, muted)
-            for i, (rect, label) in enumerate(zip(self.FOOTER, ('Close', 'Folder', 'Capture PNG'))):
-                button(rect, label, 10 + i, active=i == 2)
+                     220, 174, 240, muted)
+            for i, (rect, label) in enumerate(zip(self.FOOTER, ('Close', 'Change folder', 'Capture PNG'))):
+                button(rect, label, 10 + i, active=i == 2, scale=0.6)
+            button(self.OPEN_FOLDER, 'Open folder', 18, scale=0.6)
             if self.error or self.status:
-                box((174, 323, 444, 339), '#181818', None)
-                text(self.error or self.status, 174, 326, 270, '#ff9b9b' if self.error else gold, 0.6)
+                box((202, 286, 426, 298), '#181818', None)
+                text(self.error or self.status, 202, 289, 222, '#ff9b9b' if self.error else gold, 0.5)
             if not modal and self.hovered == 13:
-                box((350, 292, 474, 307), '#303030', '#858585')
-                text('Delete screenshot', 356, 296, 112, white, 0.6)
+                box((350, 256, 474, 271), '#303030', '#858585')
+                text('Delete screenshot', 356, 260, 112, white, 0.6)
             if modal:
                 image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 150)))
                 draw = ImageDraw.Draw(image)

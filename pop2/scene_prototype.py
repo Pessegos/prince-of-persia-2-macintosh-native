@@ -3379,10 +3379,11 @@ class ScenePrototype(WindowControls):
         return viewport
 
     def draw_screenshot_notice(self, viewport, *, visible=False):
-        if (self.game_menu is not None and self.game_menu.page == 'screenshots'
-                and self.game_menu.screenshot_gallery is not None):
+        gallery = (self.game_menu.screenshot_gallery if self.game_menu is not None
+                   and self.game_menu.page == 'screenshots' else None)
+        if gallery is not None and (gallery.choosing or gallery.deleting):
             return viewport
-        message = getattr(self, "screenshot_toast", None)
+        message = None if gallery is not None else getattr(self, "screenshot_toast", None)
         showing_toast = message is not None
         if not showing_toast and (self.game_menu is None or self.game_menu.page != "screenshots"):
             return viewport

@@ -357,9 +357,10 @@ class MenuSceneTests(unittest.TestCase):
             scene.render()
         labels = [call.args[0] for call in text.call_args_list]
         self.assertIn("Capture PNG", labels)
-        self.assertIn("Folder", labels)
+        self.assertIn("Change folder", labels)
+        self.assertIn("Open folder", labels)
         self.assertIn("PNG saved", labels)
-        for left, top, right, bottom in (*gallery.FOOTER, *gallery.SCALES, gallery.INCLUDE_UI):
+        for left, top, right, bottom in (*gallery.FOOTER, *gallery.SCALES, gallery.INCLUDE_UI, gallery.OPEN_FOLDER):
             self.assertTrue(gallery.PANEL[0] < left < right < gallery.PANEL[2])
             self.assertTrue(gallery.PANEL[1] < top < bottom < gallery.PANEL[3])
 

@@ -91,11 +91,11 @@ scene tests exercise imported resources and actual Tk event bindings.
 The gallery shows PNGs from the selected destination folder, newest first, with
 a scrolling two-column thumbnail grid, an aspect-preserving large preview, dimensions and
 file size. Capture selects the new PNG after it is successfully written; Refresh
-discovers external file changes. The two view controls switch between small paired
-thumbnails and larger single-column thumbnails, retaining the selected image and
-remembering the view for the session. Preview borders follow the fitted image,
+discovers external file changes. Thumbnails always appear in pairs; the large
+preview is slightly smaller to leave room for the original F8 hint below the panel.
+Preview borders follow the fitted image,
 without adding black letterboxing, cropping or stretching the screenshot. The
-small header hint retains the F8 reminder. A trash control requires explicit confirmation,
+lava-asset delete control has a hover label and requires explicit confirmation,
 defaults to Cancel and verifies the file's timestamp/size before deleting it.
 Damaged, missing or oversized images report an unavailable preview without
 closing the menu. Decoding is limited to PNGs of at most 32 million pixels / 128 MiB.
@@ -114,6 +114,11 @@ the displayed directory. Browsing and cancellation do not create directories or
 write preferences. Only `Use folder` creates a missing destination and remembers
 it; failures keep the original destination. Default navigates to the original
 output folder and still requires `Use folder` to confirm.
+`Change folder` chooses the destination inside the game; `Open folder` opens the
+current destination in the Windows Explorer for sharing or managing PNGs. Opening
+is an explicit asynchronous command, does not change preferences or create a
+missing folder, and reports failures inside the gallery. The F8 hint stays hidden
+while a folder or deletion confirmation is open.
 Folder and file labels compose missing Latin accents using the native bitmap
 letters, with a system-font fallback for other Unicode characters. This is local
 to the screenshot gallery and does not modify the original Macintosh font assets.

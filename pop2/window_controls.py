@@ -434,8 +434,7 @@ class WindowControls:
 
         self.dispose_screenshot_gallery()
         self.game_menu.screenshot_gallery = ScreenshotGallery(self.screenshot_settings.folder,
-            self.screenshot_settings.scale, getattr(self, 'screenshot_include_ui', False),
-            getattr(self, 'screenshot_gallery_columns', 2))
+            self.screenshot_settings.scale, getattr(self, 'screenshot_include_ui', False))
         self.schedule_screenshot_gallery()
 
     def dispose_screenshot_gallery(self):
@@ -512,7 +511,6 @@ class WindowControls:
                 gallery.scale = self.screenshot_settings.scale
                 gallery.error = 'Could not remember PNG size.'
         self.screenshot_include_ui = gallery.include_ui
-        self.screenshot_gallery_columns = gallery.columns
         self.redraw_screenshot_gallery()
         self.schedule_screenshot_gallery()
 

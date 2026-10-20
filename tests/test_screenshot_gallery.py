@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from pop2.screenshot_gallery import GalleryReads, ScreenshotGallery, read_capture, scan_captures
+from pop2.screenshot_gallery import GalleryReads, ScreenshotGallery, open_capture_folder, read_capture, scan_captures
 from pop2.screenshots import ScreenshotSettings
 
 
@@ -260,44 +260,39 @@ class ScreenshotGalleryTests(unittest.TestCase):
                     self.assertLessEqual(len(gallery.text_cache), 256)
                     self.assertLessEqual(len(gallery.image_cache), 48)
 
-    def test_grid_hit_testing_and_view_switch_preserve_selection(self):
+    def test_fixed_grid_hit_testing_and_navigation_keep_selection_visible(self):
         for i in range(40):
             self.png(f'{i}.png', size=(20, 20))
         gallery = self.gallery()
-        self.assertEqual(gallery.columns, 2)
+        self.assertEqual(gallery.COLUMNS, 2)
         self.assertEqual(gallery.hit(40, 95), 100)
-        self.assertEqual(gallery.hit(105, 95), 101)
+        self.assertEqual(gallery.hit(120, 95), 101)
         self.assertEqual(gallery.hit(40, 160), 102)
         gallery.selected = 29
         gallery.ensure_visible(immediate=True)
         self.assertLessEqual(len(gallery.visible_indices), 12)
-        gallery.click(250, 30)
-        self.assertEqual(gallery.columns, 1)
+        self.assertIsNone(gallery.hit(250, 30))
+        self.assertIsNone(gallery.hit(280, 30))
         self.assertEqual(gallery.selected, 29)
         self.assertLess(gallery.row_rect(29)[1], gallery.LIST[3])
         self.assertGreaterEqual(gallery.row_rect(29)[1], gallery.LIST[1])
-        gallery.click(280, 30)
-        self.assertEqual(gallery.columns, 2)
-        self.assertEqual(gallery.selected, 29)
         self.assertLessEqual(gallery.scroll, gallery.max_scroll)
 
-    def test_scroll_surface_cache_matches_full_redraw_in_both_views(self):
+    def test_scroll_surface_cache_matches_full_redraw_at_each_resolution(self):
         for i in range(16):
             self.png(f'{i}.png', color=(i * 15, 100, 200), size=(51, 38))
         gallery = self.gallery()
         font = self.font()
-        for columns in (1, 2):
-            gallery.columns = columns
-            for size, visible in (((512, 384), False), ((1434, 1080), True)):
-                source = Image.new('RGBA', size, '#0d1117')
-                for offset in (0, 24, 108, 380, 12):
-                    gallery.scroll = min(offset, gallery.max_scroll)
-                    gallery.draw(source, font, visible=visible)
-                    self.drain(gallery)
-                    cached = gallery.draw(source, font, visible=visible)
-                    gallery.surface_cache.clear()
-                    fresh = gallery.draw(source, font, visible=visible)
-                    self.assertEqual(cached.tobytes(), fresh.tobytes(), (columns, size, offset))
+        for size, visible in (((512, 384), False), ((1434, 1080), True)):
+            source = Image.new('RGBA', size, '#0d1117')
+            for offset in (0, 24, 108, 380, 12):
+                gallery.scroll = min(offset, gallery.max_scroll)
+                gallery.draw(source, font, visible=visible)
+                self.drain(gallery)
+                cached = gallery.draw(source, font, visible=visible)
+                gallery.surface_cache.clear()
+                fresh = gallery.draw(source, font, visible=visible)
+                self.assertEqual(cached.tobytes(), fresh.tobytes(), (size, offset))
 
     def test_visible_thumbnails_do_not_thrash_the_preview_cache(self):
         for i in range(12):
@@ -330,7 +325,7 @@ class ScreenshotGalleryTests(unittest.TestCase):
         gallery.draw(source, font)
         self.drain(gallery)
         frame = gallery.draw(source, font)
-        self.assertEqual(frame.getpixel((175, 190)), (24, 24, 24, 255))
+        self.assertEqual(frame.getpixel((203, 190)), (24, 24, 24, 255))
         self.assertEqual(frame.getpixel((324, 190)), (255, 0, 0, 255))
 
     def test_image_cache_budgets_and_obsolete_jobs(self):
@@ -349,6 +344,57 @@ class ScreenshotGalleryTests(unittest.TestCase):
             time.sleep(0.001)
         self.assertFalse(reads.pending)
         self.assertNotIn(('thumb', 'obsolete'), reads.cache)
+
+    def test_open_folder_is_explicit_async_and_does_not_change_destination(self):
+        gallery = self.gallery()
+        caller = get_ident()
+        calls = []
+        with patch('pop2.screenshot_gallery.open_capture_folder',
+                   side_effect=lambda folder: calls.append((folder, get_ident()))), \
+                patch.object(ScreenshotSettings, 'save') as save:
+            gallery.hover(280, 310)
+            self.assertEqual(calls, [])
+            gallery.click(280, 310)
+            self.drain(gallery)
+            self.assertEqual(calls[0][0], self.folder)
+            self.assertNotEqual(calls[0][1], caller)
+            save.assert_not_called()
+        self.assertEqual(gallery.folder, self.folder)
+        self.assertEqual(gallery.status, 'Folder opened')
+        with patch('pop2.screenshot_gallery.open_capture_folder', side_effect=OSError()):
+            gallery.click(280, 310)
+            self.drain(gallery)
+        self.assertIn('Could not open', gallery.error)
+
+    def test_lava_icon_replaces_placeholder_and_keeps_confirmation_safety(self):
+        path = self.png()
+        gallery = self.gallery()
+        source, font = Image.new('RGBA', (512, 384)), self.font()
+        with patch('pop2.screenshot_gallery.lava_delete_icon', return_value=Image.new('RGBA', (36, 10), '#ff8000')):
+            gallery.draw(source, font)
+            self.drain(gallery)
+            frame = gallery.draw(source, font)
+        self.assertEqual(frame.getpixel((453, 286)), (255, 128, 0, 255))
+        gallery.hover(453, 286)
+        self.assertTrue(path.exists())
+        gallery.click(453, 286)
+        self.assertTrue(gallery.deleting)
+        self.assertEqual(gallery.focus, 60)
+        self.assertEqual(gallery.delete_target.path, path)
+        gallery.key('Return')
+        self.assertTrue(path.exists())
+
+    def test_explorer_accepts_unicode_paths_and_never_creates_missing_folders(self):
+        folder = self.folder / 'Grava\u00e7\u00f5es de Ecr\u00e3'
+        with patch('pop2.screenshot_gallery.sys.platform', 'win32'), \
+                patch('pop2.screenshot_gallery.os.startfile', create=True) as start:
+            with self.assertRaises(NotADirectoryError):
+                open_capture_folder(folder)
+            self.assertFalse(folder.exists())
+            start.assert_not_called()
+            folder.mkdir()
+            open_capture_folder(folder)
+            start.assert_called_once_with(str(folder))
 
 
 if __name__ == '__main__':

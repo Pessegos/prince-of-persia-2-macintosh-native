@@ -8,7 +8,7 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from PIL import Image, ImageTk
+from PIL import Image, ImageChops, ImageTk
 
 from pop2.game_menu import GameMenu
 from pop2.game_ui import PLAYFIELD_VIEWPORT, fit_viewport, viewport_point
@@ -277,7 +277,8 @@ class GameMenuSceneTests(unittest.TestCase):
             with Image.open(gallery.entry.path) as image:
                 self.assertEqual(image.tobytes(), clean.tobytes())
             gallery.include_ui = True
-            expected = gallery.draw(scene.screenshot_viewport, scene.ui_font).crop((1, 0, 511, 384)).convert('RGB')
+            expected = scene.draw_screenshot_notice(gallery.draw(scene.screenshot_viewport, scene.ui_font))
+            expected = expected.crop((1, 0, 511, 384)).convert('RGB')
             scene.apply_game_action('gallery_capture')
             self.settle_screenshot_gallery()
             self.assertEqual(len(gallery.entries), 2)
@@ -340,7 +341,7 @@ class GameMenuSceneTests(unittest.TestCase):
                 self.assertIs(scene.image_ref, photo)
                 self.assertTrue(gallery.choosing)
 
-    def test_gallery_scroll_and_grid_toggle_upload_exact_pixels_without_gameplay_redraw(self):
+    def test_gallery_scroll_uploads_exact_pixels_without_gameplay_redraw(self):
         scene = self.scene
         with TemporaryDirectory() as directory:
             folder = Path(directory)
@@ -355,27 +356,36 @@ class GameMenuSceneTests(unittest.TestCase):
                     scene.redraw_screenshot_gallery()
                     photo = scene.image_ref
                     with patch.object(scene, 'render') as gameplay:
-                        for columns in (2, 1, 2):
-                            gallery.focus = 15 + columns
-                            scene.apply_gallery_action(gallery.activate())
+                        for offset in (23.7, 108.1, 380.9, 0):
+                            gallery.scroll = min(offset, gallery.max_scroll)
+                            scene.redraw_screenshot_gallery()
+                            scene.schedule_screenshot_gallery()
                             self.settle_screenshot_gallery()
-                            for offset in (23.7, 108.1, 380.9, 0):
-                                gallery.scroll = min(offset, gallery.max_scroll)
-                                scene.redraw_screenshot_gallery()
-                                self.settle_screenshot_gallery()
-                                actual = ImageTk.getimage(scene.image_ref).convert('RGB')
-                                self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
-                        gallery.hover(460, 320)
+                            actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                            self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                        gallery.hover(450, 285)
                         scene.redraw_screenshot_gallery()
                         actual = ImageTk.getimage(scene.image_ref).convert('RGB')
                         self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
                         gameplay.assert_not_called()
                     self.assertIs(scene.image_ref, photo)
-            gallery.focus = 16
-            scene.apply_gallery_action(gallery.activate())
+
+    def test_gallery_restores_original_f8_hint_below_panel_and_hides_it_in_dialogs(self):
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
             self.press('F2')
-            self.press('F2')
-            self.assertEqual(scene.game_menu.screenshot_gallery.columns, 1)
+            gallery = self.settle_screenshot_gallery()
+            plain = gallery.draw(scene.screenshot_viewport, scene.ui_font)
+            hint = scene.draw_screenshot_notice(plain.copy())
+            bounds = ImageChops.difference(plain.convert('RGB'), hint.convert('RGB')).getbbox()
+            self.assertIsNotNone(bounds)
+            self.assertGreater(bounds[1], gallery.PANEL[3])
+            self.assertLess(bounds[3], 360)
+            for modal in ('choosing', 'deleting'):
+                setattr(gallery, modal, True)
+                self.assertIs(scene.draw_screenshot_notice(plain), plain)
+                setattr(gallery, modal, False)
 
     def test_holding_escape_cannot_cancel_folder_picker_and_close_gallery_together(self):
         scene = self.scene
@@ -407,7 +417,8 @@ class GameMenuSceneTests(unittest.TestCase):
                     with self.subTest(choosing=choosing, scale=scale):
                         scene.screenshot_settings.scale = scale
                         source = scene.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
-                        expected = gallery.draw(source, scene.ui_font).crop((scale, 0, 511 * scale, 384 * scale)).convert('RGB')
+                        expected = scene.draw_screenshot_notice(gallery.draw(source, scene.ui_font))
+                        expected = expected.crop((scale, 0, 511 * scale, 384 * scale)).convert('RGB')
                         path = scene.capture_screenshot(include_ui=True)
                         with Image.open(path) as image:
                             self.assertEqual(image.tobytes(), expected.tobytes())
