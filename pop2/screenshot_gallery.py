@@ -441,7 +441,7 @@ class ScreenshotGallery:
     @property
     def animation_running(self):
         icon = self.reads.cache.get(('icon', 'lava'))
-        return bool((self.entry or self.burn_seconds is not None) and not (self.choosing or self.deleting)
+        return bool(not (self.choosing or self.deleting)
                     and icon is not None and not icon.error and len(icon.value) > 1)
 
     @property
@@ -805,8 +805,6 @@ class ScreenshotGallery:
                 box((185, top, 187, top + thumb), '#858585', None)
 
         def draw_delete(clear=True):
-            if self.entry is None and self.burn_seconds is None:
-                return
             highlighted = self.hovered == 13 or self.focus == 13 and self.keyboard_navigation
             if clear:
                 box(self.DELETE, '#422622' if self.deleting or self.dragging and self.hovered == 13 else
@@ -894,11 +892,11 @@ class ScreenshotGallery:
                 if dimensions:
                     text(f'{dimensions[0]} x {dimensions[1]}', 202, 290, 145, muted, 0.55)
                 text(f'{self.entry.size / 1024:.0f} KB', 424, 290, 70, muted, 0.55, right=True)
-                draw_delete()
             else:
                 box(self.PREVIEW, '#0c0c0c')
                 text('Reading folder...' if self.applied_scan != self.scan_key else 'No screenshots yet',
                      220, 174, 240, muted)
+            draw_delete()
             for i, (rect, label) in enumerate(zip(self.FOOTER, ('Close', 'Change folder', 'Capture PNG'))):
                 button(rect, label, 10 + i, active=i == 2, scale=0.6)
             button(self.OPEN_FOLDER, 'Open folder', 18, scale=0.6)

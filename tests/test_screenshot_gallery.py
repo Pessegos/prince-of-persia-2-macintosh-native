@@ -433,6 +433,33 @@ class ScreenshotGalleryTests(unittest.TestCase):
             self.assertEqual(drawings(), records[phase])
         self.assertIn((3616, 63, -12, False), records[0])
 
+    def test_lava_stays_visible_and_animated_before_first_capture_and_after_last_delete(self):
+        gallery = self.gallery()
+        source, font = Image.new('RGBA', (512, 384)), self.font()
+        frames = (Image.new('RGBA', (36, 10), '#ff8000'), Image.new('RGBA', (36, 10), '#ffff00'))
+        with patch('pop2.screenshot_gallery.lava_delete_frames', return_value=frames):
+            gallery.draw(source, font)
+            self.drain(gallery)
+        self.assertEqual(gallery.entries, ())
+        self.assertTrue(gallery.animation_running)
+        self.assertEqual(gallery.draw(source, font).getpixel((453, 286)), (255, 128, 0, 255))
+        gallery.animate(1 / 12)
+        self.assertEqual(gallery.draw(source, font).getpixel((453, 286)), (255, 255, 0, 255))
+        gallery.click(453, 286)
+        self.assertFalse(gallery.deleting)
+        self.assertIsNone(gallery.delete_key)
+        path = self.png()
+        gallery.refresh(path)
+        self.drain(gallery)
+        gallery.click(453, 286)
+        gallery.delete_capture()
+        self.drain(gallery)
+        self.assertFalse(path.exists())
+        self.assertEqual(gallery.entries, ())
+        self.assertTrue(gallery.animation_running)
+        gallery.animate(1 / 12)
+        self.assertEqual(gallery.draw(source, font).getpixel((453, 286)), (255, 128, 0, 255))
+
     def test_drag_threshold_cancel_and_drop_elsewhere_never_delete(self):
         path = self.png()
         gallery = self.gallery()

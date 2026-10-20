@@ -114,6 +114,8 @@ confirmed deletion, the frozen thumbnail shrinks and sinks into the lava for
 0.65 seconds. Failed deletions never play the effect. The animation also works
 for the last PNG in the folder, does not advance gameplay and is discarded when
 the gallery closes. The normal click/keyboard delete path is still available.
+The lava remains visible and animated even before the first capture or after the
+last PNG is deleted. Clicking it with no selected screenshot is a harmless no-op.
 Damaged, missing or oversized images report an unavailable preview without
 closing the menu. Decoding is limited to PNGs of at most 32 million pixels / 128 MiB.
 
