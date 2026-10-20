@@ -480,6 +480,28 @@ class ScreenshotGalleryTests(unittest.TestCase):
         self.assertFalse(gallery.deleting)
         self.assertFalse(gallery.begin_drag(250, 150))
 
+    def test_held_thumbnail_is_in_front_of_lava_but_confirmed_sinking_is_behind_it(self):
+        self.png(color='blue')
+        gallery = self.gallery()
+        font = self.font()
+        with patch('pop2.screenshot_gallery.lava_delete_frames',
+                   return_value=(Image.new('RGBA', (36, 10), '#ff8000'),)):
+            gallery.draw(Image.new('RGBA', (512, 384)), font)
+            self.drain(gallery)
+        for size, visible in (((512, 384), False), ((1434, 1080), True)):
+            gallery.burn_seconds = None
+            gallery.begin_drag(70, 100)
+            gallery.move_drag(453, 286)
+            source = Image.new('RGBA', size)
+            pixel = round((453 - int(visible)) * size[0] / (510 if visible else 512)), round(286 * size[1] / 384)
+            self.assertEqual(gallery.draw(source, font, visible=visible).getpixel(pixel), (0, 0, 255, 255))
+            self.assertEqual(gallery.draw(source, font, visible=visible).getpixel(pixel), (0, 0, 255, 255))
+            gallery.cancel_drag()
+            gallery.burn_seconds = 0.65 * 0.65
+            gallery.burn_image = gallery.reads.cache[gallery.image_key(gallery.entry, True)].value[0]
+            gallery.burn_target = gallery.entry
+            self.assertEqual(gallery.draw(source, font, visible=visible).getpixel(pixel), (255, 128, 0, 255))
+
     def test_dropping_confirms_original_capture_and_burns_only_after_success(self):
         original = self.png('original.png')
         gallery = self.gallery()

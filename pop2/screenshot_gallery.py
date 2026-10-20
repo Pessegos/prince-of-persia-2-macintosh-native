@@ -861,8 +861,9 @@ class ScreenshotGallery:
                 if self.dragging:
                     draw.rectangle((left - 1, top - 1, left + sprite.width, top + sprite.height), outline=gold,
                                    width=max(1, round(sx)))
-            # Let the liquid cover the falling thumbnail, not the rectangular hit area.
-            draw_delete(clear=False)
+            if not self.dragging:
+                # Only confirmed sinking goes behind the liquid; held thumbnails stay in front.
+                draw_delete(clear=False)
 
         if surface is not None:
             draw_list()

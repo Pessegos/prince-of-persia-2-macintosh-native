@@ -109,6 +109,8 @@ that fill. The original hit area, hover label and confirmation remain unchanged.
 Drag a thumbnail onto the lava to request deletion. A small movement threshold
 keeps ordinary thumbnail clicks unchanged, and dropping elsewhere, Escape or
 leaving the canvas cancels the drag. The confirmation retains the dragged file
+and the held thumbnail draws above the lava until deletion is confirmed. The
+liquid occludes it only during the subsequent sinking animation. The target stays fixed
 even if another capture arrives. Cancel never changes files; after successful
 confirmed deletion, the frozen thumbnail shrinks and sinks into the lava for
 0.65 seconds. Failed deletions never play the effect. The animation also works
