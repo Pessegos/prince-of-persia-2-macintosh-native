@@ -31,7 +31,7 @@ The idea isn't to turn it into a full settings menu, but simply to keep things c
 
 ### Windows Port (F1)
 
-<img src="docs/github readme/game-menu.png" alt="Windows port F1 game menu" width="700">
+<img src="docs/github readme/game-menu-v2.png" alt="Windows port F1 game menu" width="700">
 
 <br/>
 
