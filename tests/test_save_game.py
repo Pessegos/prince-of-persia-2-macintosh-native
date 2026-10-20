@@ -722,6 +722,32 @@ class SaveSceneTests(unittest.TestCase):
             pending.pop(0)()
             self.assertIsNone(scene.save_scroll_after_id)
 
+    def test_rename_tooltip_is_erased_from_the_real_tk_image_after_leaving_hover(self):
+        from PIL import ImageChops, ImageTk
+
+        scene = self.scene
+        scene.save_game_to(self.path, 'My journey')
+        scene.open_save_browser()
+        browser = scene.game_menu.save_browser
+        for width, height in ((1020, 768), (3440, 1440), (800, 900)):
+            with self.subTest(window=(width, height)), \
+                    patch.object(scene.canvas, 'winfo_width', return_value=width), \
+                    patch.object(scene.canvas, 'winfo_height', return_value=height):
+                scene.redraw_save_menu()
+                photo = scene.image_ref
+                for point in ((300, 302), (-1, -1), (60, 60)):
+                    self.assertTrue(browser.hover(258, 280))
+                    scene.redraw_save_menu()
+                    hovered = ImageTk.getimage(photo).convert('RGB')
+                    self.assertIsNone(ImageChops.difference(hovered, scene.save_menu_frame[1]).getbbox())
+                    self.assertFalse(browser.hover(350, 280))
+                    self.assertTrue(browser.hover(*point))
+                    scene.redraw_save_menu()
+                    actual = ImageTk.getimage(photo).convert('RGB')
+                    self.assertIsNone(ImageChops.difference(actual, scene.save_menu_frame[1]).getbbox())
+                    self.assertNotEqual(actual.tobytes(), hovered.tobytes())
+                self.assertIs(scene.image_ref, photo)
+
     def test_old_snapshot_preview_is_a_resume_image_and_keeps_the_file_untouched(self):
         scene = self.scene
         write_save(self.path, capture(scene.game))

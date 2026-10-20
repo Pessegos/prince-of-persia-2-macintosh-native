@@ -1245,6 +1245,10 @@ class WindowControls:
                 cursor = 'hand2' if menu.preview_enabled and hovered is not None and not menu.dropdown else ''
                 if self.canvas.cget('cursor') != cursor:
                     self.canvas.configure(cursor=cursor)
+            elif menu.page == 'saves':
+                cursor = 'hand2' if menu.save_browser.hovered == 25 else ''
+                if self.canvas.cget('cursor') != cursor:
+                    self.canvas.configure(cursor=cursor)
 
     def redraw_dev_menu(self):
         # F3 pauses the world; pointer changes only need the frozen clean viewport.
@@ -1254,6 +1258,10 @@ class WindowControls:
 
     def dev_pointer_leave(self, _event):
         self.ui_hover_target = None
+        if self.game_menu is not None and self.game_menu.page == 'saves':
+            if self.game_menu.hover(-1, -1):
+                self.redraw_save_menu()
+            self.canvas.configure(cursor='')
         gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
         if gallery is not None and gallery.drag_target is not None:
             gallery.cancel_drag()
@@ -1441,7 +1449,7 @@ class WindowControls:
                      id(browser.slots), id(browser.current), browser.error, browser.status,
                      browser.save_available, browser.editing, browser.confirmation,
                      None if browser.editing or browser.confirmation else browser.focus,
-                     getattr(self, 'screenshot_toast', None), browser.active_path)
+                     getattr(self, 'screenshot_toast', None), browser.active_path, browser.hovered == 25)
             previous = getattr(self, 'save_menu_frame', None)
             if (previous is not None and previous[0] is game_menu and previous[1].size == frame.size
                     and previous[2] is self.image_ref):

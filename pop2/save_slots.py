@@ -2,12 +2,21 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import lru_cache
 import math
 from pathlib import Path
 
 from PIL import Image, ImageDraw
 
 from pop2.save_game import SAVE_DIRECTORY, decode_preview, read_document, save_name
+
+
+@lru_cache(maxsize=1)
+def rename_quill():
+    with Image.open(Path(__file__).with_name('save_quill.png')) as source:
+        feather = source.convert('RGBA')
+    feather.putalpha(feather.getchannel('A').point(lambda value: 255 if value >= 128 else 0))
+    return feather.crop(feather.getbbox())
 
 
 def remember(cache, key, value, limit=256):
@@ -89,6 +98,7 @@ class SaveBrowser:
     preview_cache: dict = field(default_factory=dict, repr=False, compare=False)
     modal_cache: dict = field(default_factory=dict, repr=False, compare=False)
     list_base_cache: dict = field(default_factory=dict, repr=False, compare=False)
+    icon_cache: dict = field(default_factory=dict, repr=False, compare=False)
 
     PANEL = (28, 16, 484, 368)
     TABS = ((40, 53, 144, 79), (150, 53, 254, 79))
@@ -97,7 +107,7 @@ class SaveBrowser:
               (204, 328, 324, 356), (332, 328, 472, 356))
     LIST = (40, 99, 228, 321)
     ROW_HEIGHT = 42
-    RENAME = (442, 274, 472, 294)
+    RENAME = (238, 270, 472, 296)
     NAME_FIELD = (100, 166, 412, 199)
     CONFIRM = ((100, 222, 246, 252), (258, 222, 412, 252))
 
@@ -196,12 +206,14 @@ class SaveBrowser:
 
     def hover(self, x, y):
         index = self.hit(x, y)
+        changed = (index == 25) != (self.hovered == 25)
         if self.editing:
             changed = index != self.hovered
             self.hovered = index
             return changed
+        self.hovered = index
         if index is None or index == self.focus:
-            return False
+            return changed
         self.focus = index
         return True
 
@@ -265,7 +277,7 @@ class SaveBrowser:
             return 'save_back'
         elif self.focus == 29 and self.mode == 'save' and self.save_available:
             self.edit_name('create')
-        elif self.focus == 25 and self.entry.exists:
+        elif self.focus == 25 and self.entry.exists and not self.entry.error:
             self.edit_name('rename')
         elif self.focus == 26 and self.entry.exists:
             self.confirmation, self.focus = 'delete', 30
@@ -326,7 +338,9 @@ class SaveBrowser:
             self.focus = 100 + self.selected
             self.ensure_visible()
         elif key == 'Tab':
-            controls = (0, 1, 100 + self.selected, 25, 28, 26, 27) + ((29,) if self.mode == 'save' else ())
+            controls = (0, 1, 100 + self.selected) + (
+                (25,) if self.entry.exists and not self.entry.error else ()) + (
+                28, 26, 27) + ((29,) if self.mode == 'save' else ())
             position = controls.index(self.focus) if self.focus in controls else 2
             self.focus = controls[(position + (-1 if backwards else 1)) % len(controls)]
         elif key == 'Delete' and self.entry.exists:
@@ -337,7 +351,8 @@ class SaveBrowser:
         modal = self.confirmation or self.editing
         key = (viewport.size, visible, id(font), background_key if background_key is not None else id(viewport),
                self.mode, self.selected, id(self.slots), id(self.current), self.scroll,
-               self.error, self.status, self.save_available, self.editing, self.active_path)
+               self.error, self.status, self.save_available, self.editing, self.active_path,
+               self.hovered == 25)
         cached = self.modal_cache.get(key) if modal else None
         list_key = key[:8] + key[9:] + (self.focus,)
         list_base = self.list_base_cache.get(list_key) if not modal else None
@@ -471,7 +486,21 @@ class SaveBrowser:
             else:
                 text(slot.error or ('No preview' if self.items else 'No saved games'), left + 28, top + 74,
                      muted, right - left - 50)
-            name_width = 194
+            can_rename = self.entry.exists and not self.entry.error
+            highlighted = can_rename and self.focus == 25 and not modal
+            name_x, name_width = (262, 210) if can_rename else (238, 234)
+            name_color = cyan if highlighted else gold
+            if highlighted:
+                rectangle(self.RENAME, fill='#202a2d')
+            if can_rename:
+                feather = rename_quill()
+                # Fit the detailed source directly to the output pixels, not a
+                # tiny intermediate icon that loses detail before upscaling.
+                scale = min(16 / feather.width, 20 / feather.height)
+                size = max(1, round(feather.width * scale * sx)), max(1, round(feather.height * scale * sy))
+                if size not in self.icon_cache:
+                    remember(self.icon_cache, size, feather.resize(size, Image.Resampling.NEAREST), 8)
+                image.paste(self.icon_cache[size], point(239, 271), self.icon_cache[size])
             name_lines = [slot.name]
             if glyphs(slot.name, gold).width * 0.7 > name_width:
                 positions = range(1, len(slot.name))
@@ -482,23 +511,27 @@ class SaveBrowser:
                     glyphs(slot.name[i:].lstrip(), gold).width))
                 name_lines = [slot.name[:split].rstrip(), slot.name[split:].lstrip()]
             for index, value in enumerate(name_lines):
-                text(value, 238, 276 + index * 11, gold, name_width, True)
-            if self.entry.exists and not self.entry.error:
-                rectangle(self.RENAME, fill='#222222', outline=gold if self.focus == 25 else '#626262')
-                line(((451, 288), (461, 278)), white, 2)
-                line(((450, 290), (454, 289)), white)
+                y = 276 + index * 11
+                text(value, name_x, y, name_color, name_width, True)
+                if highlighted:
+                    width = min(name_width, glyphs(value, name_color).width * 0.7)
+                    line(((name_x, y + 10), (name_x + width, y + 10)), cyan)
+            if can_rename and self.hovered == 25 and not modal:
+                rectangle((362, 251, 472, 268), fill='#303030')
+                text('Rename save', 370, 256, white, 94, True)
             resume = {'Level start': 'Resumes at level start',
                       'Checkpoint': 'Resumes at checkpoint'}.get(slot.resume, slot.resume)
-            text(resume, 238, 300, muted, 234, True)
+            text(resume, name_x, 299, muted, name_width, True)
             if slot.capacity is not None:
-                text(f'Life {slot.capacity}', 472, 315, muted, 64, True, align='right')
+                text(f'Life {slot.capacity}', 472, 313, muted, 64, True, align='right')
             for index, (rect, label) in zip((28, 26, 27, 29), zip(self.footer_rects,
                     ('Back', 'Delete', 'Overwrite' if self.mode == 'save' else 'Load game', 'New save'))):
                 enabled = (self.entry.exists if index == 26 else self.primary_enabled if index == 27
                            else self.save_available if index == 29 else True)
                 button(rect, label, index, enabled, active=index == 29 and enabled)
-            text(self.error or self.status or slot.date, 238, 315,
-                 '#ff9b9b' if self.error else muted, 164 if slot.capacity is not None else 234, True)
+            text(self.error or self.status or slot.date, name_x, 313,
+                 '#ff9b9b' if self.error else muted,
+                 name_width - 70 if slot.capacity is not None else name_width, True)
             if not modal:
                 remember(self.list_base_cache, list_key, image.copy(), 3)
         if self.confirmation or self.editing:

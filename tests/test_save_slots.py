@@ -15,7 +15,7 @@ from pop2.game_session import GameSession
 from pop2.rebirth import RebirthSnapshot
 from pop2.save_game import (SaveGameError, capture, decode_preview, encode_preview,
                            read_save, write_save)
-from pop2.save_slots import SaveBrowser, SaveSlot, list_slots
+from pop2.save_slots import SaveBrowser, SaveSlot, list_slots, rename_quill
 from tests.test_game_session import EmptyEncounter, resources
 
 
@@ -243,6 +243,86 @@ class SaveBrowserTests(unittest.TestCase):
         left, top, _right, _bottom = menu.FOOTER[3]
         menu.click(left + 3, top + 3)
         self.assertEqual(menu.editing, 'create')
+
+    def test_entire_name_strip_renames_in_both_modes_without_loading_or_saving(self):
+        slot = SaveSlot(self.folder / 'journey.pop2save', 'My journey', True)
+        for mode in ('save', 'load'):
+            for point in ((238, 273), (258, 280), (470, 292)):
+                with self.subTest(mode=mode, point=point):
+                    menu = SaveBrowser((slot,), mode)
+                    self.assertEqual(menu.hit(*point), 25)
+                    self.assertEqual(menu.click(*point), 'changed')
+                    self.assertEqual(menu.editing, 'rename')
+                    self.assertEqual(menu.draft, slot.name)
+                    self.assertIsNone(menu.confirmation)
+                    self.assertEqual(menu.focus, 32)
+                    self.assertEqual(list(self.folder.iterdir()), [])
+
+    def test_rename_is_keyboard_accessible_but_unavailable_for_empty_or_broken_saves(self):
+        slot = SaveSlot(self.folder / 'journey.pop2save', 'My journey', True)
+        menu = SaveBrowser((slot,))
+        menu.key('Tab')
+        self.assertEqual(menu.focus, 25)
+        menu.key('Return')
+        self.assertEqual(menu.editing, 'rename')
+        menu.key('Escape')
+        self.assertIsNone(menu.editing)
+        for entries in ((), (SaveSlot(slot.path, 'Broken', True, error='Save unavailable'),)):
+            menu = SaveBrowser(entries)
+            self.assertIsNone(menu.hit(258, 280))
+            menu.key('Tab')
+            self.assertNotEqual(menu.focus, 25)
+            menu.focus = 25
+            menu.activate()
+            self.assertIsNone(menu.editing)
+
+    def test_quill_is_pixel_sharp_and_loaded_once_across_hover_and_resize(self):
+        rename_quill.cache_clear()
+        self.addCleanup(rename_quill.cache_clear)
+        with patch('pop2.save_slots.Image.open', wraps=Image.open) as read:
+            feather = rename_quill()
+            self.assertGreater(feather.width, 100)
+            self.assertGreater(feather.height, 100)
+            self.assertEqual(set(feather.getchannel('A').tobytes()), {0, 255})
+            font = SimpleNamespace(glyphs=dict.fromkeys(range(128)), text=lambda value, color:
+                Image.new('RGBA', (max(1, len(value)) * 7, 11), color))
+            menu = SaveBrowser((SaveSlot(self.folder / 'save', 'My journey', True),))
+            for size in ((512, 384), (1020, 768), (1434, 1080)):
+                frame = Image.new('RGBA', size, '#0d1117')
+                menu.draw(frame, font)
+                menu.hover(258, 280)
+                menu.draw(frame, font)
+                icon = next(reversed(menu.icon_cache.values()))
+                scale = min(16 / feather.width, 20 / feather.height)
+                expected = feather.resize((round(feather.width * scale * size[0] / 512),
+                                           round(feather.height * scale * size[1] / 384)),
+                                          Image.Resampling.NEAREST)
+                self.assertEqual(icon.tobytes(), expected.tobytes())
+                menu.hover(-1, -1)
+                menu.draw(frame, font)
+            read.assert_called_once()
+            self.assertEqual(len(menu.icon_cache), 3)
+
+    def test_rename_hover_tooltip_clears_and_cached_frames_match_full_redraw(self):
+        words = []
+        def glyphs(value, color):
+            words.append(value)
+            return Image.new('RGBA', (max(1, len(value)) * 7, 11), color)
+
+        font = SimpleNamespace(glyphs=dict.fromkeys(range(128)), text=glyphs)
+        menu = SaveBrowser((SaveSlot(self.folder / 'save', 'My journey', True),))
+        frame = Image.new('RGBA', (1020, 768), '#0d1117')
+        menu.draw(frame, font, visible=True)
+        self.assertTrue(menu.hover(258, 280))
+        hover = menu.draw(frame, font, visible=True)
+        self.assertIn('Rename save', words)
+        self.assertFalse(menu.hover(260, 280))
+        self.assertEqual(menu.draw(frame, font, visible=True).tobytes(), hover.tobytes())
+        self.assertTrue(menu.hover(-1, -1))
+        cleared = menu.draw(frame, font, visible=True)
+        self.assertNotEqual(cleared.tobytes(), hover.tobytes())
+        menu.list_base_cache.clear()
+        self.assertEqual(cleared.tobytes(), menu.draw(frame, font, visible=True).tobytes())
 
     def test_cancel_button_keeps_its_meaning_with_enter_and_space(self):
         for key in ('Return', 'space'):

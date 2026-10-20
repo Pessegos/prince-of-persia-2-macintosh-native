@@ -98,6 +98,30 @@ class PresentationTests(unittest.TestCase):
                                         3440, 1440), (256, 192))
 
 
+class SaveRenamePointerTests(unittest.TestCase):
+    def test_name_hover_uses_hand_cursor_and_clears_tooltip_on_window_leave(self):
+        from pathlib import Path
+        from pop2.save_slots import SaveBrowser, SaveSlot
+
+        browser = SaveBrowser((SaveSlot(Path('journey.pop2save'), 'My journey', True),))
+        host = WindowControls()
+        host.game_menu = GameMenu(page='saves', save_browser=browser)
+        host.dev_menu = None
+        host.canvas = Mock()
+        host.canvas.cget.return_value = ''
+        host.dev_pointer = Mock(return_value=(258, 280))
+        host.menu_sound_target = Mock(return_value=None)
+        host.redraw_save_menu = Mock()
+        host.dev_hover(None)
+        self.assertEqual(browser.hovered, 25)
+        host.canvas.configure.assert_called_with(cursor='hand2')
+        host.redraw_save_menu.assert_called_once()
+        host.dev_pointer_leave(None)
+        self.assertIsNone(browser.hovered)
+        host.canvas.configure.assert_called_with(cursor='')
+        self.assertEqual(host.redraw_save_menu.call_count, 2)
+
+
 class CloseShortcutTests(unittest.TestCase):
     def test_alt_f4_closes_before_intro_pause_or_menu_input_filters(self):
         for mode in ("intro", "paused", "menu", "development", "gameplay"):
