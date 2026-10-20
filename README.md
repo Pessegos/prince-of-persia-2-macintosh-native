@@ -41,7 +41,7 @@ The F1 menu includes a Save & Load system with named saves, previews, and option
 
 Saving follows the original game's checkpoint system. Loading a save takes you back to the beginning of the level or the last activated checkpoint, and the preview shows exactly where you'll resume.
 
-<img src="docs/github readme/save-load-preview-v3.gif" alt="Save & Load menu" width="700">
+<img src="docs/github readme/save-load-preview-v8.gif" alt="Save & Load menu" width="700">
 
 <br/>
 
