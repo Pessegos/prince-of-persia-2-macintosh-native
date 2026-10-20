@@ -215,6 +215,7 @@ class ScreenshotGallery:
         self.choosing = self.deleting = False
         self.delete_target = None
         self.hovered = None
+        self.keyboard_navigation = False
         self.draft, self.caret, self.anchor = '', 0, 0
         self.browsing, self.folders, self.folder_selected, self.folder_offset = self.folder, (), 0, 0
         self.folder_error, self.revision = '', 0
@@ -265,7 +266,8 @@ class ScreenshotGallery:
         return (self.folder, id(self.entries), self.selected, self.scale, self.include_ui,
                 self.error, self.status, -1 if self.choosing or self.deleting else min(self.focus, 100),
                 id(main_image), self.applied_scan == self.scan_key, self.choosing, self.deleting,
-                self.hovered == 13, id(self.reads.cache.get(('icon', 'lava'))))
+                self.hovered == 13, self.focus == 13 and self.keyboard_navigation,
+                id(self.reads.cache.get(('icon', 'lava'))))
 
     def refresh(self, selected_path=None):
         self.revision += 1
@@ -456,7 +458,8 @@ class ScreenshotGallery:
 
     def hover(self, x, y):
         index = self.hit(x, y)
-        changed = index != self.hovered
+        changed = index != self.hovered or self.keyboard_navigation and self.focus == 13
+        self.keyboard_navigation = False
         self.hovered = index
         if self.choosing:
             return changed
@@ -527,6 +530,7 @@ class ScreenshotGallery:
         return value if value.is_absolute() else self.browsing / value
 
     def click(self, x, y):
+        self.keyboard_navigation = False
         if self.commit_key is not None or self.delete_key is not None:
             return 'changed'
         index = self.hit(x, y)
@@ -559,6 +563,7 @@ class ScreenshotGallery:
             self.caret = self.anchor = start + len(char)
 
     def key(self, key, backwards=False, char='', control=False):
+        self.keyboard_navigation = True
         if self.commit_key is not None or self.delete_key is not None:
             return 'changed'
         if key == 'Escape':
@@ -728,8 +733,8 @@ class ScreenshotGallery:
         def draw_delete():
             if self.entry is None:
                 return
-            box(self.DELETE, '#303030' if self.focus == 13 else '#222222',
-                gold if self.focus == 13 else '#626262')
+            highlighted = self.hovered == 13 or self.focus == 13 and self.keyboard_navigation
+            box(self.DELETE, '#422622' if self.deleting else '#2b1d1b' if highlighted else '#181818', None)
             icon = self.reads.request(('icon', 'lava'), lava_delete_frames, -5)
             if icon is not None and not icon.error:
                 icon_key = sx, sy

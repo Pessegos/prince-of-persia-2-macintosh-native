@@ -433,6 +433,30 @@ class ScreenshotGalleryTests(unittest.TestCase):
             self.assertEqual(drawings(), records[phase])
         self.assertIn((3616, 63, -12, False), records[0])
 
+    def test_lava_control_is_borderless_and_highlight_clears_after_pointer_leaves(self):
+        self.png()
+        gallery = self.gallery()
+        source, font = Image.new('RGBA', (512, 384)), self.font()
+        frames = (Image.new('RGBA', (36, 10), '#ff8000'),)
+        with patch('pop2.screenshot_gallery.lava_delete_frames', return_value=frames):
+            gallery.draw(source, font)
+            self.drain(gallery)
+        idle = gallery.draw(source, font)
+        self.assertEqual(idle.getpixel((432, 274)), (24, 24, 24, 255))
+        gallery.hover(453, 286)
+        hovered = gallery.draw(source, font)
+        self.assertEqual(hovered.getpixel((432, 274)), (43, 29, 27, 255))
+        gallery.hover(-1, -1)
+        self.assertEqual(gallery.focus, 13)
+        self.assertEqual(gallery.draw(source, font).getpixel((432, 274)), (24, 24, 24, 255))
+        gallery.focus = 100
+        gallery.key('Tab')
+        self.assertEqual(gallery.focus, 13)
+        self.assertEqual(gallery.draw(source, font).getpixel((432, 274)), (43, 29, 27, 255))
+        gallery.click(453, 286)
+        self.assertTrue(gallery.deleting)
+        self.assertEqual(gallery.focus, 60)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -103,6 +103,9 @@ than the in-level rock rim. Its 22-frame, 12 fps loop uses an independent enhanc
 once on the worker and cached at the display size. Only the button's changed pixels
 are uploaded during idle animation; gameplay stays paused, and dialogs freeze the
 icon. Closing the gallery cancels its timer. In-level artwork and lava rules are unchanged.
+The lava sits directly on the panel without a visible button border. Pointer hover
+or keyboard focus adds a muted dark-red fill; opening the confirmation brightens
+that fill. The original hit area, hover label and confirmation remain unchanged.
 Damaged, missing or oversized images report an unavailable preview without
 closing the menu. Decoding is limited to PNGs of at most 32 million pixels / 128 MiB.
 
