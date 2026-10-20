@@ -478,6 +478,77 @@ class SaveSceneTests(unittest.TestCase):
         self.assertFalse(path.exists())
         self.assertIs(scene.game, current)
         self.assertEqual(browser.status, 'Save deleted')
+        self.assertIsNone(scene.active_save_path)
+        self.assertIsNone(browser.active_path)
+
+    def test_active_save_is_selected_and_scrolled_into_view_in_both_modes(self):
+        scene = self.scene
+        paths = [self.path.with_name(f'journey-{i:02}.pop2save') for i in range(20)]
+        for i, path in enumerate(paths):
+            scene.save_game_to(path, f'Journey {i}')
+        scene.load_game_from(paths[0])
+        self.assertEqual(scene.active_save_path, paths[0])
+        for load in (False, True):
+            scene.open_save_browser(load=load)
+            browser = scene.game_menu.save_browser
+            self.assertEqual(browser.entry.path, paths[0])
+            self.assertEqual(browser.active_path, paths[0])
+            self.assertEqual(browser.focus, 100 + browser.selected)
+            self.assertGreater(browser.scroll, 0)
+            rect = browser.row_rect(browser.selected)
+            self.assertGreaterEqual(rect[1], browser.LIST[1])
+            self.assertLessEqual(rect[3], browser.LIST[3])
+            browser.selected = 0
+            browser.switch('save' if load else 'load')
+            self.assertEqual(browser.entry.path, paths[0])
+            self.assertGreater(browser.scroll, 0)
+
+    def test_active_save_changes_only_after_successful_save_or_load(self):
+        scene = self.scene
+        first = self.create_save('First journey')
+        self.assertEqual(scene.active_save_path, first)
+        second = self.create_save('Second journey')
+        self.assertEqual(scene.active_save_path, second)
+        scene.close_game_menu(resume=True)
+        scene.load_game_from(first)
+        self.assertEqual(scene.active_save_path, first)
+        with patch('pop2.save_game.os.replace', side_effect=OSError('Unavailable')):
+            with self.assertRaises(OSError):
+                scene.save_game_to(second)
+        self.assertEqual(scene.active_save_path, first)
+        second.write_text('corrupt')
+        with self.assertRaises(SaveGameError):
+            scene.load_game_from(second)
+        self.assertEqual(scene.active_save_path, first)
+        scene.open_save_browser()
+        browser = scene.game_menu.save_browser
+        browser.edit_name('rename')
+        browser.draft = 'Renamed journey'
+        scene.apply_save_action('slot_rename')
+        self.assertEqual(scene.active_save_path, first)
+        self.assertEqual(browser.active_path, first)
+
+    def test_restarts_keep_active_save_but_new_game_clears_it(self):
+        scene = self.scene
+        scene.save_game_to(self.path)
+        scene.restart_level()
+        self.assertEqual(scene.active_save_path, self.path)
+        scene.new_game()
+        self.assertIsNone(scene.active_save_path)
+        scene.open_save_browser()
+        self.assertIsNone(scene.game_menu.save_browser.active_path)
+
+    def test_missing_active_save_does_not_select_an_unrelated_row_as_current(self):
+        scene = self.scene
+        self.create_save('My journey')
+        self.path = scene.active_save_path
+        scene.close_game_menu(resume=True)
+        self.path.unlink()
+        scene.open_save_browser()
+        browser = scene.game_menu.save_browser
+        self.assertFalse(browser.entry.exists)
+        self.assertEqual(browser.focus, 29)
+        self.assertFalse(any(slot.path == browser.active_path for slot in browser.slots))
 
     def test_save_confirmation_blocks_alt_new_game_shortcut(self):
         scene = self.scene

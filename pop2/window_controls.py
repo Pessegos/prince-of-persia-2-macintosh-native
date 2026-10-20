@@ -664,6 +664,11 @@ class WindowControls:
                            key=lambda i: slots[i].modified, default=0)
         else:
             selected = 0
+        active_path = getattr(self, 'active_save_path', None)
+        active_index = next((i for i, slot in enumerate(slots)
+                             if slot.path == active_path and not slot.error), None)
+        if active_index is not None:
+            selected = active_index
         current = None
         if self.can_save_game():
             from pop2.save_game import capture
@@ -674,8 +679,9 @@ class WindowControls:
                                resume='Checkpoint' if progress['checkpoint'] else 'Level start',
                                capacity=progress['max_life'], document=document)
         self.game_menu.save_browser = SaveBrowser(slots, 'load' if load else 'save', selected,
-                                                  focus=100 + selected if load else 29,
+                                                  focus=100 + selected if load or active_index is not None else 29,
                                                   save_available=self.can_save_game(), current=current,
+                                                  active_path=active_path,
                                                   preview_provider=self.save_slot_preview)
         self.game_menu.save_browser.ensure_visible(immediate=True)
         self.pause_resume_keys.update(self.window_keys_down)
@@ -701,6 +707,8 @@ class WindowControls:
                 return
             if action == 'slot_delete':
                 path.unlink()
+                if path == getattr(self, 'active_save_path', None):
+                    self.active_save_path = None
                 browser.status = 'Save deleted'
             elif action == 'slot_rename':
                 document = read_document(path)
@@ -713,6 +721,7 @@ class WindowControls:
                 self.save_game_to(path, save_name(browser.draft) if action == 'slot_create' else browser.entry.name)
                 browser.status = 'Game saved'
             browser.slots = list_slots(SAVE_DIRECTORY)
+            browser.active_path = getattr(self, 'active_save_path', None)
             browser.selected = next((i for i, slot in enumerate(browser.slots) if slot.path == path),
                                     max(0, min(browser.selected, len(browser.items) - 1)))
             browser.ensure_visible(immediate=True)
@@ -1197,7 +1206,7 @@ class WindowControls:
                      id(browser.slots), id(browser.current), browser.error, browser.status,
                      browser.save_available, browser.editing, browser.confirmation,
                      None if browser.editing or browser.confirmation else browser.focus,
-                     getattr(self, 'screenshot_toast', None))
+                     getattr(self, 'screenshot_toast', None), browser.active_path)
             previous = getattr(self, 'save_menu_frame', None)
             if (previous is not None and previous[0] is game_menu and previous[1].size == frame.size
                     and previous[2] is self.image_ref):

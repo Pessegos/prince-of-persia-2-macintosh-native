@@ -4,7 +4,8 @@ The Save/Load commands in F1, or Alt+S / Alt+O / Alt+L, open an in-game save bro
 not a native file picker.
 Only existing `.pop2save` files in `~/Saved Games/PoP2 Macintosh Native` appear
 in the library, newest first. Save mode adds a separate `New save` footer button,
-beside `Save game`; no empty or action-only rows occupy the list.
+beside `Overwrite`; no empty or action-only rows occupy the list. `New save`
+is the primary action; overwriting the selected file still requires confirmation.
 The list scrolls continuously using the wheel, scrollbar or keyboard, with a
 critically damped, frame-rate-independent menu animation rather than discrete pages.
 The animation targets 120 Hz, accounting for drawing time. Scrolling does not
@@ -19,13 +20,24 @@ The limit is 48 printable characters; blank names cannot be confirmed.
 The pencil control renames a save without changing its progress or path.
 Existing numbered slots and older named files remain visible and loadable.
 
+The last successfully saved or loaded file is the current session's active save.
+Opening either tab selects it and scrolls it fully into view, with keyboard focus
+on its row. A subtle stripe and `Current` label distinguish it from another
+selected or hovered entry. Switching tabs returns to it too. Browsing, renaming,
+cancelled actions and failed writes/loads do not change the active file. Death,
+level restart and level changes preserve it; New Game or deleting that file clears
+it. The association is session-only and does not imply that a save was loaded
+when starting the application. Missing files never mark an unrelated save current.
+
 Importing save support and testing progress-only slots does not load original
 combat/AI resources. Fighter decoding and legacy RNG handling import those
 dependencies only when needed. A subprocess regression test runs the complete
 slot suite from a temporary copy with no imported game assets, matching CI.
 
 Each entry shows its name, right-aligned `Level N` label and local save date; the detail
-pane adds the resume point, banked life capacity and a full-colour preview.
+pane shows the complete name on up to two lines, an explicit `Resumes at level
+start` / `Resumes at checkpoint` destination, banked life capacity and a full-colour
+preview. Legacy files retain their legacy label until converted on a new save.
 The preview is rendered from the same restored progress used by Load, showing
 the level entry or activated checkpoint, not the Prince's position at Save.
 For cavern entrances, only the isolated entry script advances until the door
@@ -100,4 +112,5 @@ rollback, repeated checkpoint retries, legacy conversion, in-game save/load/
 delete, pause restoration and failed/cancelled writes. Scene tests compare the
 preview pixels with the actual loaded destination across levels 1-3 and a
 checkpoint, check isolation and exercise creation, rename, clipboard input,
-old previews and menu-only scroll animation. No README changes.
+old previews, menu-only scroll animation and active-save selection/visibility,
+including failure, rename, deletion and New Game transitions. No README changes.

@@ -74,6 +74,7 @@ class SaveBrowser:
     error: str = ''
     status: str = ''
     current: SaveSlot | None = None
+    active_path: Path | None = None
     preview_provider: object = field(default=None, repr=False)
     scroll: float = 0.0
     scroll_target: float = 0.0
@@ -211,9 +212,12 @@ class SaveBrowser:
             self.selected = max((index for index, slot in enumerate(self.slots)
                                  if slot.exists and not slot.error),
                                 key=lambda index: self.slots[index].modified, default=self.selected)
+        self.selected = next((i for i, slot in enumerate(self.slots)
+                              if slot.path == self.active_path and not slot.error), self.selected)
         self.error = self.status = ''
         self.scroll = self.scroll_target = 0
         self.scroll_velocity = 0
+        self.ensure_visible(immediate=True)
 
     def edit_name(self, mode):
         self.editing = mode
@@ -333,7 +337,7 @@ class SaveBrowser:
         modal = self.confirmation or self.editing
         key = (viewport.size, visible, id(font), background_key if background_key is not None else id(viewport),
                self.mode, self.selected, id(self.slots), id(self.current), self.scroll,
-               self.error, self.status, self.save_available, self.editing)
+               self.error, self.status, self.save_available, self.editing, self.active_path)
         cached = self.modal_cache.get(key) if modal else None
         list_key = key[:8] + key[9:] + (self.focus,)
         list_base = self.list_base_cache.get(list_key) if not modal else None
@@ -408,12 +412,17 @@ class SaveBrowser:
                 if rect[3] <= self.LIST[1] or rect[1] >= self.LIST[3]:
                     continue
                 selected = self.selected == row
+                current = slot.path == self.active_path
                 rectangle(rect, fill='#253033' if selected else '#222222',
                           outline=gold if self.focus == 100 + row else cyan if selected else '#404040')
                 text(slot.name, rect[0] + 8, rect[1] + 7, cyan if selected else white, 100, True, True)
                 text(f'Level {slot.level}' if slot.level else '---', rect[2] - 8, rect[1] + 7,
                      muted, 59, True, align='right')
-                text(slot.error or slot.date, rect[2] - 8, rect[1] + 25, muted, 164, True, align='right')
+                if current:
+                    line(((rect[0] + 2, rect[1] + 3), (rect[0] + 2, rect[3] - 3)), cyan)
+                    text('Current', rect[0] + 8, rect[1] + 25, cyan, 42, True)
+                text(slot.error or slot.date, rect[2] - 8, rect[1] + 25,
+                     muted, 120 if current else 164, True, align='right')
             background.alpha_composite(image, origin)
             image, origin = background, (0, 0)
             draw = ImageDraw.Draw(image)
@@ -462,21 +471,34 @@ class SaveBrowser:
             else:
                 text(slot.error or ('No preview' if self.items else 'No saved games'), left + 28, top + 74,
                      muted, right - left - 50)
-            text(slot.name, 238, 278, gold, 194, True, True)
+            name_width = 194
+            name_lines = [slot.name]
+            if glyphs(slot.name, gold).width * 0.7 > name_width:
+                positions = range(1, len(slot.name))
+                word_breaks = [i for i in positions if slot.name[i].isspace()]
+                candidates = word_breaks or positions
+                split = min(candidates, key=lambda i: max(
+                    glyphs(slot.name[:i].rstrip(), gold).width,
+                    glyphs(slot.name[i:].lstrip(), gold).width))
+                name_lines = [slot.name[:split].rstrip(), slot.name[split:].lstrip()]
+            for index, value in enumerate(name_lines):
+                text(value, 238, 276 + index * 11, gold, name_width, True)
             if self.entry.exists and not self.entry.error:
                 rectangle(self.RENAME, fill='#222222', outline=gold if self.focus == 25 else '#626262')
                 line(((451, 288), (461, 278)), white, 2)
                 line(((450, 290), (454, 289)), white)
-            text(slot.resume, 238, 300, muted, 124, True)
+            resume = {'Level start': 'Resumes at level start',
+                      'Checkpoint': 'Resumes at checkpoint'}.get(slot.resume, slot.resume)
+            text(resume, 238, 300, muted, 234, True)
             if slot.capacity is not None:
-                text(f'Life {slot.capacity}', 400, 300, muted, 72, True)
+                text(f'Life {slot.capacity}', 472, 315, muted, 64, True, align='right')
             for index, (rect, label) in zip((28, 26, 27, 29), zip(self.footer_rects,
-                    ('Back', 'Delete', 'Save game' if self.mode == 'save' else 'Load game', 'New save'))):
+                    ('Back', 'Delete', 'Overwrite' if self.mode == 'save' else 'Load game', 'New save'))):
                 enabled = (self.entry.exists if index == 26 else self.primary_enabled if index == 27
                            else self.save_available if index == 29 else True)
-                button(rect, label, index, enabled)
+                button(rect, label, index, enabled, active=index == 29 and enabled)
             text(self.error or self.status or slot.date, 238, 315,
-                 '#ff9b9b' if self.error else muted, 234, True)
+                 '#ff9b9b' if self.error else muted, 164 if slot.capacity is not None else 234, True)
             if not modal:
                 remember(self.list_base_cache, list_key, image.copy(), 3)
         if self.confirmation or self.editing:

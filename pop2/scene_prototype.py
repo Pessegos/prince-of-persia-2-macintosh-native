@@ -2,6 +2,7 @@ import argparse
 import math
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
@@ -301,6 +302,7 @@ class ScenePrototype(WindowControls):
         self.dev_was_paused = False
         self.dev_toggle_held = False
         self.game_menu = None
+        self.active_save_path = None
         self.game_was_paused = False
         self.native_viewport = None
         self.copy_protection_enabled = True
@@ -375,6 +377,7 @@ class ScenePrototype(WindowControls):
         document['preview_at_resume'] = True
         document['preview_version'] = 2
         write_save(path, document)
+        self.active_save_path = Path(path).absolute()
         self.status.set(f'Game saved: {path}')
 
     def resume_preview(self, document):
@@ -493,6 +496,7 @@ class ScenePrototype(WindowControls):
             self.audio.reset()
         self.next_animation_at = time.perf_counter()
         self.pause_started_at = self.next_animation_at if self.paused else None
+        self.active_save_path = Path(path).absolute()
         self.status.set(f'Game loaded: {path}')
         self.render()
         if not self.in_animation_tick:
@@ -2971,6 +2975,7 @@ class ScenePrototype(WindowControls):
         self.status.set("Credits")
 
     def new_game(self):
+        self.active_save_path = None
         self.copy_verified = False
         self.copy_challenge = None
         if self.game.level.number != 1:

@@ -339,6 +339,33 @@ class SaveBrowserTests(unittest.TestCase):
                     full = browser.draw(source, font)
                     self.assertEqual(cached.tobytes(), full.tobytes())
 
+    def test_clear_actions_current_marker_and_complete_wrapped_name(self):
+        words = []
+        def glyphs(value, color):
+            words.append(value)
+            return Image.new('RGBA', (max(1, len(value)) * 10, 11), color)
+
+        font = SimpleNamespace(glyphs=dict.fromkeys(range(128)), text=glyphs)
+        name = 'Beyond the gate and into the lower caverns'
+        slot = SaveSlot(self.folder / 'journey.pop2save', name, True, level=3,
+                        resume='Checkpoint', date='20 Oct 2026  12:00')
+        browser = SaveBrowser((slot,), 'save', active_path=slot.path)
+        source = Image.new('RGBA', (512, 384), '#0d1117')
+        marked = browser.draw(source, font)
+        self.assertIn('Overwrite', words)
+        self.assertIn('New save', words)
+        self.assertNotIn('Save game', words)
+        self.assertIn('Current', words)
+        self.assertIn('Resumes at checkpoint', words)
+        self.assertIn('Beyond the gate and', words)
+        self.assertIn('into the lower caverns', words)
+        browser.active_path = None
+        unmarked = browser.draw(source, font)
+        browser.list_base_cache.clear()
+        full = browser.draw(source, font)
+        self.assertEqual(unmarked.tobytes(), full.tobytes())
+        self.assertNotEqual(marked.tobytes(), unmarked.tobytes())
+
     def test_names_come_from_metadata_and_do_not_change_file_paths(self):
         path = self.folder / 'slot-01.pop2save'
         path.write_text(json.dumps({'format': 'pop2-macintosh-native-save', 'version': 2,
