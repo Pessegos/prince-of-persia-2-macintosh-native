@@ -214,6 +214,11 @@ class ScreenshotGallery:
         self.scroll = self.scroll_target = self.velocity = 0.0
         self.choosing = self.deleting = False
         self.delete_target = None
+        self.delete_from_drop, self.delete_art = False, None
+        self.drag_target = self.drag_origin = self.drag_point = None
+        self.dragging = False
+        self.burn_seconds, self.burn_image = None, None
+        self.burn_target = None
         self.hovered = None
         self.keyboard_navigation = False
         self.draft, self.caret, self.anchor = '', 0, 0
@@ -270,6 +275,7 @@ class ScreenshotGallery:
                 id(self.reads.cache.get(('icon', 'lava'))))
 
     def refresh(self, selected_path=None):
+        self.cancel_drag()
         self.revision += 1
         self.preferred_path = selected_path or (self.entry.path if self.entry else None)
         self.scan_key = ('scan', self.folder, self.revision)
@@ -294,10 +300,15 @@ class ScreenshotGallery:
                 self.refresh()
         result = self.reads.cache.get(self.delete_key)
         if result is not None:
+            target = self.delete_target
             self.delete_key, self.deleting = None, False
             self.delete_target = None
             self.error = 'Could not delete this PNG. It may have changed.' if result.error else ''
             self.status = '' if result.error else 'PNG deleted'
+            if not result.error and self.delete_from_drop:
+                self.burn_seconds, self.burn_image = 0.0, self.delete_art
+                self.burn_target = target
+            self.delete_from_drop, self.delete_art = False, None
             self.refresh()
         result = self.reads.cache.get(self.open_key)
         if result is not None:
@@ -335,6 +346,7 @@ class ScreenshotGallery:
         self.reads.request(self.folder_key, lambda: scan_folders(path), -10)
 
     def choose_folder(self):
+        self.cancel_drag()
         self.choosing, self.focus = True, 40
         self.browse(self.folder)
 
@@ -364,12 +376,61 @@ class ScreenshotGallery:
         self.delete_key = ('delete', self.revision)
         self.reads.request(self.delete_key, delete, -20)
 
-    def confirm_delete(self):
-        if self.entry is not None:
-            self.delete_target = self.entry
+    def confirm_delete(self, entry=None, *, dropped=False):
+        entry = entry or self.entry
+        if entry is not None:
+            self.delete_target = entry
+            self.delete_from_drop = dropped
+            result = self.reads.cache.get(self.image_key(entry, True))
+            self.delete_art = result.value[0] if result is not None and not result.error else None
             self.deleting, self.focus = True, 60
 
+    def begin_drag(self, x, y):
+        self.cancel_drag()
+        if self.choosing or self.deleting or self.commit_key is not None or self.delete_key is not None:
+            return False
+        index = self.hit(x, y)
+        if index is None or not 100 <= index < 100 + len(self.entries):
+            return False
+        self.drag_target = self.entries[index - 100]
+        self.drag_origin = self.drag_point = (x, y)
+        self.dragging = False
+        return True
+
+    def move_drag(self, x, y):
+        if self.drag_target is None:
+            return False
+        if not self.dragging and math.dist(self.drag_origin, (x, y)) < 4:
+            return False
+        self.dragging = True
+        self.drag_point = (x, y)
+        self.scroll_target, self.velocity = self.scroll, 0
+        self.hovered = 13 if self.contains(self.DELETE, x, y) else None
+        return True
+
+    def cancel_drag(self):
+        active = self.dragging
+        self.drag_target = self.drag_origin = self.drag_point = None
+        self.dragging = False
+        if active:
+            self.hovered = None
+
+    def release_drag(self, x, y):
+        target = self.drag_target
+        dropped = self.dragging and self.contains(self.DELETE, x, y)
+        self.cancel_drag()
+        if dropped and target is not None:
+            self.confirm_delete(target, dropped=True)
+        return 'changed'
+
+    @property
+    def overlay_active(self):
+        return self.dragging or self.burn_seconds is not None
+
     def close(self):
+        self.cancel_drag()
+        self.burn_seconds, self.burn_image = None, None
+        self.burn_target = None
         self.reads.close()
         self.text_cache.clear()
         self.image_cache.clear()
@@ -380,7 +441,7 @@ class ScreenshotGallery:
     @property
     def animation_running(self):
         icon = self.reads.cache.get(('icon', 'lava'))
-        return bool(self.entry and not (self.choosing or self.deleting)
+        return bool((self.entry or self.burn_seconds is not None) and not (self.choosing or self.deleting)
                     and icon is not None and not icon.error and len(icon.value) > 1)
 
     @property
@@ -400,11 +461,16 @@ class ScreenshotGallery:
     def animate(self, seconds):
         if self.choosing or self.deleting:
             return False
-        icon_changed = False
+        icon_changed = self.burn_seconds is not None
+        if self.burn_seconds is not None:
+            self.burn_seconds += max(0, seconds)
+            if self.burn_seconds >= 0.65:
+                self.burn_seconds, self.burn_image = None, None
+                self.burn_target = None
         if self.animation_running:
             self.icon_seconds += max(0, seconds)
             frame = math.floor(self.icon_seconds * 12 + 1e-9) % len(self.reads.cache['icon', 'lava'].value)
-            icon_changed = frame != self.icon_frame
+            icon_changed = icon_changed or frame != self.icon_frame
             self.icon_frame = frame
         distance = self.scroll_target - self.scroll
         if abs(distance) < 0.025 and abs(self.velocity) < 0.1:
@@ -476,6 +542,7 @@ class ScreenshotGallery:
                 return 'gallery_delete'
             self.deleting, self.focus = False, 13
             self.delete_target = None
+            self.delete_from_drop, self.delete_art = False, None
         elif self.choosing:
             if self.focus == 40:
                 self.browse(self.path_value())
@@ -563,6 +630,10 @@ class ScreenshotGallery:
             self.caret = self.anchor = start + len(char)
 
     def key(self, key, backwards=False, char='', control=False):
+        if self.drag_target is not None:
+            self.cancel_drag()
+            if key == 'Escape':
+                return 'changed'
         self.keyboard_navigation = True
         if self.commit_key is not None or self.delete_key is not None:
             return 'changed'
@@ -570,6 +641,7 @@ class ScreenshotGallery:
             if self.deleting:
                 self.deleting, self.focus = False, 13
                 self.delete_target = None
+                self.delete_from_drop, self.delete_art = False, None
             elif self.choosing:
                 self.choosing, self.focus = False, 11
             else:
@@ -605,6 +677,8 @@ class ScreenshotGallery:
     def draw(self, viewport, font, *, visible=False, background_key=None):
         modal = self.choosing or self.deleting
         wanted = {self.image_key(self.entries[i], True) for i in self.visible_indices}
+        if self.drag_target is not None:
+            wanted.add(self.image_key(self.drag_target, True))
         if self.entry:
             wanted.add(self.image_key(self.entry))
         self.reads.wanted = frozenset(wanted)
@@ -730,11 +804,13 @@ class ScreenshotGallery:
                 box((185, self.LIST[1], 187, self.LIST[3]), '#303030', None)
                 box((185, top, 187, top + thumb), '#858585', None)
 
-        def draw_delete():
-            if self.entry is None:
+        def draw_delete(clear=True):
+            if self.entry is None and self.burn_seconds is None:
                 return
             highlighted = self.hovered == 13 or self.focus == 13 and self.keyboard_navigation
-            box(self.DELETE, '#422622' if self.deleting else '#2b1d1b' if highlighted else '#181818', None)
+            if clear:
+                box(self.DELETE, '#422622' if self.deleting or self.dragging and self.hovered == 13 else
+                    '#2b1d1b' if highlighted else '#181818', None)
             icon = self.reads.request(('icon', 'lava'), lava_delete_frames, -5)
             if icon is not None and not icon.error:
                 icon_key = sx, sy
@@ -749,9 +825,51 @@ class ScreenshotGallery:
             else:
                 text('Del', 440, 282, 30, white, 0.6)
 
+        def draw_held_image():
+            if modal or not self.overlay_active:
+                return
+            if self.dragging:
+                entry = self.drag_target
+                result = self.reads.request(self.image_key(entry, True), lambda: read_capture(entry, (510, 384)))
+                raw = result.value[0] if result is not None and not result.error else None
+                width, height = 56, 42
+                x, y = self.drag_point
+                x, y = max(30, min(480, x)), max(24, min(358, y - 12))
+                progress = 0
+            else:
+                raw = self.burn_image
+                progress = min(1, self.burn_seconds / 0.65)
+                fall = min(1, progress / 0.65)
+                dissolve = max(0, (progress - 0.65) / 0.35)
+                scale = (1 - 0.45 * fall) * (1 - dissolve)
+                width, height = max(1, round(56 * scale)), max(1, round(42 * scale))
+                x, y = 453 + math.sin(progress * math.pi * 2) * 2, 250 + 36 * fall * fall + 3 * dissolve
+            size = max(1, round(width * sx)), max(1, round(height * sy))
+            fit_key = 'held', self.drag_target if self.dragging else self.burn_target, size
+            if fit_key not in self.image_cache:
+                sprite = (ImageOps.contain(raw, size, Image.Resampling.NEAREST).convert('RGBA') if raw is not None
+                          else Image.new('RGBA', size, '#999999'))
+                remember(self.image_cache, fit_key, sprite, 48)
+            sprite = self.image_cache[fit_key]
+            left, top = point(x, y)
+            left, top = left - sprite.width // 2, top - sprite.height // 2
+            if progress > 0.65:
+                sprite = sprite.copy()
+                sprite.putalpha(round(255 * (1 - progress) / 0.35))
+            if not self.dragging:
+                sprite = sprite.crop((0, 0, sprite.width, max(0, min(sprite.height, point(0, 287)[1] - top))))
+            if sprite.height:
+                image.paste(sprite, (left, top), sprite)
+                if self.dragging:
+                    draw.rectangle((left - 1, top - 1, left + sprite.width, top + sprite.height), outline=gold,
+                                   width=max(1, round(sx)))
+            # Let the liquid cover the falling thumbnail, not the rectangular hit area.
+            draw_delete(clear=False)
+
         if surface is not None:
             draw_list()
             draw_delete()
+            draw_held_image()
             return image
 
         if cached is None:
@@ -846,4 +964,5 @@ class ScreenshotGallery:
             text('This cannot be undone.', 100, 197, 312, muted)
             for i, (rect, label) in enumerate(zip(self.CONFIRM_BUTTONS, ('Cancel', 'Delete'))):
                 button(rect, label, 60 + i, scale=1, centered=True)
+        draw_held_image()
         return image

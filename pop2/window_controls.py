@@ -442,6 +442,10 @@ class WindowControls:
         gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
         if gallery is not None:
             gallery.close()
+            try:
+                self.canvas.configure(cursor='')
+            except tk.TclError:
+                pass
             self.game_menu.screenshot_gallery = None
         pending = getattr(self, 'screenshot_gallery_after_id', None)
         if pending is not None:
@@ -476,14 +480,20 @@ class WindowControls:
                 gallery.committed_folder = None
             if changed or moving:
                 self.redraw_screenshot_gallery()
-            if gallery.reads.pending or gallery.scrolling or gallery.animation_running:
-                delay = (max(1, round(1000 / 120 - (time.perf_counter() - now) * 1000)) if gallery.scrolling else
-                         12 if gallery.reads.pending else
-                         max(1, round((1 - (gallery.icon_seconds * 12) % 1) * 1000 / 12)))
+            if gallery.reads.pending or gallery.scrolling or gallery.animation_running or gallery.burn_seconds is not None:
+                if gallery.scrolling or gallery.burn_seconds is not None:
+                    fps = 120 if gallery.scrolling else 60
+                    delay = max(1, round(1000 / fps - (time.perf_counter() - now) * 1000))
+                elif gallery.reads.pending:
+                    delay = 12
+                else:
+                    delay = max(1, round((1 - (gallery.icon_seconds * 12) % 1) * 1000 / 12))
                 self.screenshot_gallery_after_id = self.root.after(delay, tick)
         self.screenshot_gallery_after_id = self.root.after(12, tick)
 
     def redraw_screenshot_gallery(self):
+        if self.game_menu.screenshot_gallery.drag_target is None and self.canvas.cget('cursor'):
+            self.canvas.configure(cursor='')
         self.native_viewport = self.draw_screenshot_notice(
             self.game_menu.draw(self.screenshot_viewport, self.ui_font))
         self.present_viewport()
@@ -1117,6 +1127,9 @@ class WindowControls:
         point = self.dev_pointer(event)
         if point is not None:
             if self.game_menu is not None:
+                gallery = self.game_menu.screenshot_gallery if self.game_menu.page == 'screenshots' else None
+                if gallery is not None:
+                    gallery.begin_drag(*point)
                 self.save_scroll_dragging = (self.game_menu.page == 'saves'
                     and self.game_menu.save_browser.hit(*point) == 24)
                 self.screenshot_scroll_dragging = (self.game_menu.page == 'screenshots'
@@ -1141,6 +1154,12 @@ class WindowControls:
         return "break"
 
     def dev_release(self, event):
+        gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
+        if gallery is not None and gallery.drag_target is not None and getattr(event, 'num', 1) == 1:
+            point = self.dev_pointer(event)
+            self.apply_game_action(gallery.release_drag(*(point if point is not None else (-1, -1))))
+            self.canvas.configure(cursor='')
+            return 'break'
         if getattr(self, 'screenshot_scroll_dragging', False):
             self.screenshot_scroll_dragging = False
             return 'break'
@@ -1169,6 +1188,14 @@ class WindowControls:
         return "break"
 
     def dev_hover(self, event):
+        gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
+        if gallery is not None and gallery.drag_target is not None:
+            point = self.dev_pointer(event)
+            if gallery.move_drag(*(point if point is not None else (-1, -1))):
+                self.canvas.configure(cursor='hand2' if gallery.hovered == 13 else 'fleur')
+                self.redraw_screenshot_gallery()
+                self.schedule_screenshot_gallery()
+            return 'break'
         if getattr(self, 'screenshot_scroll_dragging', False) and self.game_menu is not None:
             gallery = self.game_menu.screenshot_gallery
             point = self.dev_pointer(event)
@@ -1227,6 +1254,11 @@ class WindowControls:
 
     def dev_pointer_leave(self, _event):
         self.ui_hover_target = None
+        gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
+        if gallery is not None and gallery.drag_target is not None:
+            gallery.cancel_drag()
+            self.canvas.configure(cursor='')
+            self.redraw_screenshot_gallery()
         menu = self.dev_menu
         if menu is not None and menu.preview_enabled:
             if menu.hover(-1, -1):
@@ -1365,9 +1397,9 @@ class WindowControls:
                 source = cached[2]
             frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True), visible=True).convert('RGB')
             previous = getattr(self, 'screenshot_gallery_frame', None)
-            state = id(self.screenshot_viewport), id(self.ui_font), gallery.surface_state
+            state = id(self.screenshot_viewport), id(self.ui_font), gallery.surface_state, gallery.overlay_active
             if previous is not None and previous[0] is gallery and previous[1].size == size and previous[2] is self.image_ref:
-                if previous[3] == state and not (gallery.choosing or gallery.deleting):
+                if previous[3] == state and not (gallery.choosing or gallery.deleting or gallery.overlay_active):
                     # Only the thumbnail strip and animated delete button can change.
                     damages = []
                     for left, top, right, bottom in (gallery.LIST, gallery.DELETE):

@@ -381,6 +381,76 @@ class GameMenuSceneTests(unittest.TestCase):
                         gameplay.assert_not_called()
                     self.assertIs(scene.image_ref, photo)
 
+    def test_gallery_drag_drop_confirmation_and_burn_present_exact_pixels(self):
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'drop.png'
+            Image.new('RGB', (510, 384), '#ab3456').save(path)
+            scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+            game = scene.player_x, scene.action, scene.combat.world_frame
+            with patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)):
+                for size in ((3440, 1440), (900, 1100)):
+                    with patch.object(scene.canvas, 'winfo_width', return_value=size[0]), \
+                            patch.object(scene.canvas, 'winfo_height', return_value=size[1]):
+                        scene.redraw_screenshot_gallery()
+                        photo = scene.image_ref
+                        scene.dev_click(SimpleNamespace(x=70, y=100, num=1))
+                        for x, y in ((72, 100), (250, 160), (400, 230), (453, 286)):
+                            scene.dev_hover(SimpleNamespace(x=x, y=y))
+                            actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                            self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                        scene.dev_release(SimpleNamespace(x=453, y=286, num=1))
+                        self.assertTrue(gallery.deleting)
+                        self.assertEqual(gallery.focus, 60)
+                        self.assertTrue(path.exists())
+                        self.press('Escape')
+                        self.assertFalse(gallery.deleting)
+                        self.assertTrue(path.exists())
+                        self.assertIs(scene.image_ref, photo)
+                scene.dev_click(SimpleNamespace(x=70, y=100, num=1))
+                scene.dev_hover(SimpleNamespace(x=453, y=286))
+                scene.dev_release(SimpleNamespace(x=453, y=286, num=1))
+                scene.dev_click(SimpleNamespace(x=330, y=238, num=1))
+                self.settle_screenshot_gallery()
+                self.assertFalse(path.exists())
+                self.assertIsNotNone(gallery.burn_seconds)
+                self.assertTrue(gallery.animation_running)
+                for _ in range(45):
+                    gallery.animate(1 / 60)
+                    scene.redraw_screenshot_gallery()
+                    actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                    self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                self.assertFalse(gallery.overlay_active)
+                self.assertEqual((scene.player_x, scene.action, scene.combat.world_frame), game)
+
+    def test_gallery_drag_escape_leave_and_close_cancel_without_deleting(self):
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'keep.png'
+            Image.new('RGB', (510, 384), 'red').save(path)
+            scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+            with patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)):
+                for cancellation in ('Escape', 'leave', 'F2'):
+                    scene.dev_click(SimpleNamespace(x=70, y=100, num=1))
+                    scene.dev_hover(SimpleNamespace(x=300, y=180))
+                    self.assertTrue(gallery.dragging)
+                    if cancellation == 'leave':
+                        scene.dev_pointer_leave(SimpleNamespace())
+                    else:
+                        self.press(cancellation)
+                    self.assertIsNone(gallery.drag_target)
+                    self.assertFalse(gallery.dragging)
+                    self.assertEqual(scene.canvas.cget('cursor'), '')
+                    self.assertTrue(path.exists())
+                    if cancellation == 'Escape':
+                        self.assertIsNotNone(scene.game_menu)
+            self.assertIsNone(scene.game_menu)
+            self.assertIsNone(scene.screenshot_gallery_after_id)
+
     def test_gallery_restores_original_f8_hint_below_panel_and_hides_it_in_dialogs(self):
         scene = self.scene
         with TemporaryDirectory() as directory:

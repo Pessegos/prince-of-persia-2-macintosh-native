@@ -106,6 +106,14 @@ icon. Closing the gallery cancels its timer. In-level artwork and lava rules are
 The lava sits directly on the panel without a visible button border. Pointer hover
 or keyboard focus adds a muted dark-red fill; opening the confirmation brightens
 that fill. The original hit area, hover label and confirmation remain unchanged.
+Drag a thumbnail onto the lava to request deletion. A small movement threshold
+keeps ordinary thumbnail clicks unchanged, and dropping elsewhere, Escape or
+leaving the canvas cancels the drag. The confirmation retains the dragged file
+even if another capture arrives. Cancel never changes files; after successful
+confirmed deletion, the frozen thumbnail shrinks and sinks into the lava for
+0.65 seconds. Failed deletions never play the effect. The animation also works
+for the last PNG in the folder, does not advance gameplay and is discarded when
+the gallery closes. The normal click/keyboard delete path is still available.
 Damaged, missing or oversized images report an unavailable preview without
 closing the menu. Decoding is limited to PNGs of at most 32 million pixels / 128 MiB.
 
