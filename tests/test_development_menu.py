@@ -336,9 +336,9 @@ class MenuSceneTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             scene.screenshot_settings = ScreenshotSettings(Path(directory), 2)
             scene.toggle_screenshot_menu()
-            scene.game_menu.screenshot_scale = 4
+            scene.game_menu.screenshot_gallery.scale = 4
             with patch.object(ScreenshotSettings, "save") as save:
-                scene.apply_game_action("changed")
+                scene.apply_game_action("gallery_scale")
                 save.assert_called_once_with()
             scene.close_game_menu()
             scene.toggle_screenshot_menu()
@@ -349,17 +349,19 @@ class MenuSceneTests(unittest.TestCase):
         scene = self.scene
         scene.toggle_screenshot_menu()
         menu = scene.game_menu
-        menu.screenshot_folder = "C:/[a very long folder name]/\u65e5\u672c/" * 8
-        menu.screenshot_status = "PNG saved"
+        gallery = menu.screenshot_gallery
+        gallery.folder = Path("C:/[a very long folder name]/\u65e5\u672c/" * 8)
+        gallery.status = "PNG saved"
+        gallery.text_cache.clear()
         with patch.object(scene.ui_font, "text", wraps=scene.ui_font.text) as text:
             scene.render()
         labels = [call.args[0] for call in text.call_args_list]
-        self.assertIn("Save PNG", labels)
-        self.assertIn("Choose folder...", labels)
+        self.assertIn("Capture PNG", labels)
+        self.assertIn("Folder", labels)
         self.assertIn("PNG saved", labels)
-        for left, top, right, bottom in menu.CAPTURE_CONTROLS:
-            self.assertTrue(80 <= left < right <= 432)
-            self.assertTrue(menu.SCREENSHOT_PANEL[1] < top < bottom < menu.SCREENSHOT_PANEL[3])
+        for left, top, right, bottom in (*gallery.FOOTER, *gallery.SCALES, gallery.INCLUDE_UI):
+            self.assertTrue(gallery.PANEL[0] < left < right < gallery.PANEL[2])
+            self.assertTrue(gallery.PANEL[1] < top < bottom < gallery.PANEL[3])
 
     def test_debug_status_is_hidden_by_default_and_restored_only_when_enabled(self):
         scene = self.scene

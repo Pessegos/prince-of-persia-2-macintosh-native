@@ -33,6 +33,7 @@ class GameMenu:
     option_index: int = 0
     save_available: bool = True
     save_browser: object = None
+    screenshot_gallery: object = None
 
     PANEL = centered_panel(384, 284)
     DIALOG = centered_panel(352, 166)
@@ -82,6 +83,8 @@ class GameMenu:
         return "changed"
 
     def activate(self):
+        if self.page == 'screenshots' and self.screenshot_gallery is not None:
+            return self.screenshot_gallery.activate()
         if self.page == 'saves':
             return self.save_browser.activate()
         if self.page == "screenshots":
@@ -98,6 +101,8 @@ class GameMenu:
         return item.action if item.enabled else "changed"
 
     def key(self, key, backwards=False, char='', control=False):
+        if self.page == 'screenshots' and self.screenshot_gallery is not None:
+            return self.screenshot_gallery.key(key, backwards, char, control)
         if self.page == 'saves':
             return self.save_browser.key(key, backwards, char, control)
         if self.page == "screenshots":
@@ -146,6 +151,8 @@ class GameMenu:
         return (80, top, 432, top + self.ROW_HEIGHT - 2)
 
     def hit(self, x, y):
+        if self.page == 'screenshots' and self.screenshot_gallery is not None:
+            return self.screenshot_gallery.hit(x, y)
         if self.page == 'saves':
             return self.save_browser.hit(x, y)
         if self.page == "screenshots":
@@ -163,6 +170,8 @@ class GameMenu:
                      if DevelopmentMenu.contains(rect, x, y)), None)
 
     def hover(self, x, y):
+        if self.page == 'screenshots' and self.screenshot_gallery is not None:
+            return self.screenshot_gallery.hover(x, y)
         if self.page == 'saves':
             return self.save_browser.hover(x, y)
         index = self.hit(x, y)
@@ -173,6 +182,8 @@ class GameMenu:
         return True
 
     def click(self, x, y):
+        if self.page == 'screenshots' and self.screenshot_gallery is not None:
+            return self.screenshot_gallery.click(x, y)
         if self.page == 'saves':
             return self.save_browser.click(x, y)
         index = self.hit(x, y)
@@ -187,6 +198,8 @@ class GameMenu:
         return self.activate()
 
     def draw(self, viewport, font):
+        if self.page == 'screenshots' and self.screenshot_gallery is not None:
+            return self.screenshot_gallery.draw(viewport, font)
         if self.page == 'saves':
             return self.save_browser.draw(viewport, font)
         image = Image.alpha_composite(viewport, Image.new("RGBA", viewport.size, (0, 0, 0, 100)))

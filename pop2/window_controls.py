@@ -3,7 +3,6 @@
 import sys
 import time
 import tkinter as tk
-from tkinter import filedialog, messagebox
 from types import SimpleNamespace
 
 from PIL import Image, ImageChops, ImageTk
@@ -158,6 +157,7 @@ class WindowControls:
         self.focus_pause_after_id = None
         self.root.bind("<FocusOut>", self.focus_out)
         self.root.bind("<Destroy>", self.cancel_focus_pause)
+        self.root.bind("<Destroy>", self.destroy_screenshot_gallery, add="+")
         self.root.bind("<Destroy>", self.close_bitmap_presenter, add="+")
         self.root.bind("<KeyPress-Escape>", self.escape_key)
         self.root.bind("<KeyRelease-Escape>", self.escape_release)
@@ -333,6 +333,7 @@ class WindowControls:
             screens = tuple(entries)
             screen_index = screens.index(current) if current in entries else 0
         was_paused = self.game_was_paused if self.game_menu is not None else self.paused
+        self.dispose_screenshot_gallery()
         self.game_menu = None
         from pop2.playback_navigation import playback_groups
 
@@ -421,29 +422,96 @@ class WindowControls:
             self.render()
 
     def choose_screenshot_folder(self):
-        settings = self.screenshot_settings
-        menu = self.game_menu
-        held_keys = self.window_keys_down.copy()
-        self.screenshot_dialog_active = True
-        try:
-            initial = settings.folder if settings.folder.is_dir() else settings.folder.parent
-            folder = filedialog.askdirectory(parent=self.root, title="Screenshot folder",
-                                             initialdir=str(initial), mustexist=True)
-            if folder:
-                from pathlib import Path
+        if self.game_menu.screenshot_gallery is None:
+            self.install_screenshot_gallery()
+        self.game_menu.screenshot_gallery.choose_folder()
+        self.pause_resume_keys.update(self.window_keys_down)
+        self.redraw_screenshot_gallery()
+        self.schedule_screenshot_gallery()
 
-                selected = Path(folder).resolve()
-                ScreenshotSettings(selected, settings.scale).save()
-                settings.folder = selected
-                menu.screenshot_folder = str(selected)
-                menu.error = menu.screenshot_status = ""
-        except (OSError, tk.TclError):
-            menu.error = "Could not remember the screenshot folder."
-        finally:
-            self.screenshot_dialog_active = False
-            self.clear_keys(None)
-            self.pause_resume_keys.update(held_keys)
-            self.render()
+    def install_screenshot_gallery(self):
+        from pop2.screenshot_gallery import ScreenshotGallery
+
+        self.dispose_screenshot_gallery()
+        self.game_menu.screenshot_gallery = ScreenshotGallery(self.screenshot_settings.folder,
+            self.screenshot_settings.scale, getattr(self, 'screenshot_include_ui', False))
+        self.schedule_screenshot_gallery()
+
+    def dispose_screenshot_gallery(self):
+        self.screenshot_scroll_dragging = False
+        gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
+        if gallery is not None:
+            gallery.close()
+            self.game_menu.screenshot_gallery = None
+        pending = getattr(self, 'screenshot_gallery_after_id', None)
+        if pending is not None:
+            try:
+                self.root.after_cancel(pending)
+            except tk.TclError:
+                pass
+            self.screenshot_gallery_after_id = None
+
+    def destroy_screenshot_gallery(self, event):
+        if event.widget is self.root:
+            self.dispose_screenshot_gallery()
+
+    def schedule_screenshot_gallery(self):
+        menu = getattr(self, 'game_menu', None)
+        gallery = getattr(menu, 'screenshot_gallery', None)
+        if gallery is None or menu.page != 'screenshots' or getattr(self, 'screenshot_gallery_after_id', None) is not None:
+            return
+        previous = time.perf_counter()
+        def tick():
+            nonlocal previous
+            self.screenshot_gallery_after_id = None
+            if self.game_menu is not menu or menu.page != 'screenshots' or menu.screenshot_gallery is not gallery:
+                return
+            now = time.perf_counter()
+            changed = gallery.poll()
+            moving = gallery.animate(now - previous)
+            previous = now
+            if gallery.committed_folder is not None:
+                self.screenshot_settings.folder = gallery.committed_folder
+                menu.screenshot_folder = str(gallery.committed_folder)
+                gallery.committed_folder = None
+            if changed or moving:
+                self.redraw_screenshot_gallery()
+            if gallery.reads.pending or moving:
+                self.screenshot_gallery_after_id = self.root.after(12, tick)
+        self.screenshot_gallery_after_id = self.root.after(12, tick)
+
+    def redraw_screenshot_gallery(self):
+        self.native_viewport = self.draw_screenshot_notice(
+            self.game_menu.draw(self.screenshot_viewport, self.ui_font))
+        self.present_viewport()
+
+    def apply_gallery_action(self, action):
+        gallery = self.game_menu.screenshot_gallery
+        if action == 'gallery_back':
+            self.dispose_screenshot_gallery()
+            if self.game_menu.back() == 'close':
+                self.close_game_menu()
+            else:
+                self.render()
+            return
+        if action == 'gallery_capture':
+            self.capture_screenshot(include_ui=gallery.include_ui)
+            return
+        if action == 'gallery_folder':
+            gallery.commit_folder()
+        elif action == 'gallery_delete':
+            gallery.delete_capture()
+        elif action == 'gallery_scale':
+            try:
+                ScreenshotSettings(self.screenshot_settings.folder, gallery.scale).save()
+                self.screenshot_settings.scale = self.game_menu.screenshot_scale = gallery.scale
+                gallery.error = ''
+            except OSError:
+                gallery.scale = self.screenshot_settings.scale
+                gallery.error = 'Could not remember PNG size.'
+        self.screenshot_include_ui = gallery.include_ui
+        self.redraw_screenshot_gallery()
+        self.schedule_screenshot_gallery()
 
     def capture_screenshot(self, *, include_ui=False):
         menu = self.game_menu if self.game_menu is not None and self.game_menu.page == "screenshots" else None
@@ -456,24 +524,37 @@ class WindowControls:
                 source = self.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
                 viewport = self.draw_screenshot_notice(self.game_menu.save_browser.draw(
                     source, self.ui_font, background_key=id(self.screenshot_viewport)))
+            elif include_ui and menu is not None and menu.screenshot_gallery is not None:
+                scale = self.screenshot_settings.scale
+                source = self.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
+                viewport = self.draw_screenshot_notice(menu.screenshot_gallery.draw(source, self.ui_font))
             path = save_screenshot(viewport, self.screenshot_settings)
         except (OSError, ValueError) as exc:
             message = "Could not save PNG. Check the screenshot folder."
             if menu is not None:
-                menu.error = message
+                if menu.screenshot_gallery is not None:
+                    menu.screenshot_gallery.error = message
+                else:
+                    menu.error = message
                 self.render()
             else:
-                messagebox.showerror("Screenshot", f"{message}\n\n{exc}", parent=self.root)
+                self.status.set(str(exc))
+                self.show_screenshot_toast(message, error=True)
             return None
         self.status.set(f"Screenshot saved: {path}")
         if menu is not None:
             menu.error = ""
             menu.screenshot_status = "PNG saved"
+            if menu.screenshot_gallery is not None:
+                menu.screenshot_gallery.error = ''
+                menu.screenshot_gallery.status = 'PNG saved'
+                menu.screenshot_gallery.refresh(path)
+                self.schedule_screenshot_gallery()
         self.show_screenshot_toast(path.name)
         return path
 
-    def show_screenshot_toast(self, filename):
-        self.screenshot_toast = f"Saved screenshot as {filename}"
+    def show_screenshot_toast(self, filename, *, error=False):
+        self.screenshot_toast = filename if error else f"Saved screenshot as {filename}"
         after_id = getattr(self, "screenshot_toast_after_id", None)
         if after_id is not None:
             try:
@@ -524,15 +605,18 @@ class WindowControls:
             if self.game_menu.page != "confirm":
                 if page == "menu":
                     if self.game_menu.page in ("screenshots", "saves"):
+                        self.dispose_screenshot_gallery()
                         self.game_menu.show_page("menu")
                         self.pause_resume_keys.update(self.window_keys_down)
                         self.render()
                     else:
                         self.close_game_menu()
                 else:
+                    self.dispose_screenshot_gallery()
                     self.game_menu.show_page(page)
                     if page == "screenshots":
                         self.game_menu.return_to_menu = False
+                        self.install_screenshot_gallery()
                     self.pause_resume_keys.update(self.window_keys_down)
                     self.render()
             return
@@ -543,6 +627,8 @@ class WindowControls:
         self.game_menu = GameMenu(page=page, return_to_menu=page == "menu",
                                   screenshot_scale=self.screenshot_settings.scale,
                                   screenshot_folder=str(self.screenshot_settings.folder))
+        if page == 'screenshots':
+            self.install_screenshot_gallery()
         self.set_paused(True)
         self.clear_keys(None)
         self.pause_resume_keys.update(self.window_keys_down)
@@ -562,6 +648,7 @@ class WindowControls:
     def close_game_menu(self, resume=False):
         if self.game_menu is None:
             return
+        self.dispose_screenshot_gallery()
         self.game_menu = None
         self.save_scroll_dragging = False
         self.ui_hover_target = None
@@ -573,6 +660,10 @@ class WindowControls:
 
     def apply_game_action(self, action, *, preserve_controls=False):
         menu = self.game_menu
+        if (menu is not None and menu.page == 'screenshots' and menu.screenshot_gallery is not None
+                and (action.startswith('gallery_') or action == 'changed')):
+            self.apply_gallery_action(action)
+            return
         if menu is not None and menu.page == "screenshots" and menu.screenshot_scale != self.screenshot_settings.scale:
             self.screenshot_settings.scale = menu.screenshot_scale
             try:
@@ -653,6 +744,7 @@ class WindowControls:
         if self.game_menu is None:
             self.open_game_menu()
         parent = self.game_menu.return_to_menu if self.game_menu.page == 'saves' else self.game_menu.page == 'menu'
+        self.dispose_screenshot_gallery()
         self.game_menu.show_page('saves')
         self.game_menu.return_to_menu = parent and not direct
         try:
@@ -741,6 +833,12 @@ class WindowControls:
             audio.play_ui(kind)
 
     def menu_sound_target(self, menu, point=None):
+        gallery = getattr(menu, 'screenshot_gallery', None) if menu.page == 'screenshots' else None
+        if gallery is not None:
+            index = gallery.focus if point is None else gallery.hit(*point)
+            if index is None or index == 13 and gallery.entry is None:
+                return None
+            return id(menu), menu.page, gallery.choosing, gallery.deleting, index
         browser = getattr(menu, 'save_browser', None) if menu.page == 'saves' else None
         index = ((browser.focus if browser is not None else menu.option_index if menu.dropdown else menu.focus)
                  if point is None else menu.hit(*point))
@@ -812,6 +910,40 @@ class WindowControls:
                 else:
                     self.capture_screenshot()
             return "break"
+        gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
+        if self.game_menu is not None and self.game_menu.page == 'screenshots' and gallery is not None and gallery.choosing:
+            if repeated and event.keysym in ('Return', 'KP_Enter', 'space') and gallery.focus != 40:
+                return 'break'
+            if repeated and event.keysym in ('Return', 'KP_Enter'):
+                return 'break'
+            if gallery.commit_key is not None:
+                return 'break'
+            if event.keysym == 'F2' and not repeated:
+                self.toggle_screenshot_menu(event)
+                return 'break'
+            if alt:
+                return 'break'
+            key, control = event.keysym.lower(), bool(event.state & 4)
+            if gallery.focus == 40 and control and key in ('c', 'x', 'v'):
+                start, end = sorted((gallery.caret, gallery.anchor))
+                try:
+                    if key == 'v':
+                        gallery.edit_text('', self.root.clipboard_get())
+                    elif start != end:
+                        self.root.clipboard_clear()
+                        self.root.clipboard_append(gallery.draft[start:end])
+                        if key == 'x':
+                            gallery.edit_text('Delete')
+                except tk.TclError:
+                    pass
+                action = 'changed'
+            else:
+                action = self.game_menu.key(event.keysym, bool(event.state & 1),
+                                            getattr(event, 'char', ''), control)
+            self.apply_game_action(action)
+            if event.keysym == 'Escape':
+                self.pause_resume_keys.add('Escape')
+            return 'break'
         if (self.game_menu is not None and self.game_menu.page == 'saves'
                 and self.game_menu.save_browser.editing):
             browser = self.game_menu.save_browser
@@ -984,6 +1116,9 @@ class WindowControls:
             if self.game_menu is not None:
                 self.save_scroll_dragging = (self.game_menu.page == 'saves'
                     and self.game_menu.save_browser.hit(*point) == 24)
+                self.screenshot_scroll_dragging = (self.game_menu.page == 'screenshots'
+                    and self.game_menu.screenshot_gallery is not None
+                    and self.game_menu.screenshot_gallery.hit(*point) == 14)
                 if self.menu_sound_target(self.game_menu, point) is not None:
                     self.play_menu_sound('click')
                 self.apply_game_action(self.game_menu.click(*point))
@@ -1003,6 +1138,9 @@ class WindowControls:
         return "break"
 
     def dev_release(self, event):
+        if getattr(self, 'screenshot_scroll_dragging', False):
+            self.screenshot_scroll_dragging = False
+            return 'break'
         if getattr(self, 'save_scroll_dragging', False):
             self.save_scroll_dragging = False
             return 'break'
@@ -1028,6 +1166,15 @@ class WindowControls:
         return "break"
 
     def dev_hover(self, event):
+        if getattr(self, 'screenshot_scroll_dragging', False) and self.game_menu is not None:
+            gallery = self.game_menu.screenshot_gallery
+            point = self.dev_pointer(event)
+            if gallery is not None and point is not None and not gallery.choosing and not gallery.deleting:
+                gallery.scroll_target = max(0, min(gallery.max_scroll, gallery.max_scroll *
+                    (point[1] - gallery.LIST[1]) / (gallery.LIST[3] - gallery.LIST[1])))
+                self.redraw_screenshot_gallery()
+                self.schedule_screenshot_gallery()
+            return 'break'
         if (getattr(self, 'save_scroll_dragging', False) and self.game_menu is not None
                 and self.game_menu.page == 'saves'):
             point = self.dev_pointer(event)
@@ -1059,6 +1206,8 @@ class WindowControls:
                     self.redraw_dev_menu()
                 elif menu.page == 'saves':
                     self.redraw_save_menu()
+                elif menu.page == 'screenshots' and menu.screenshot_gallery is not None:
+                    self.redraw_screenshot_gallery()
                 else:
                     self.render()
             if menu is self.dev_menu:
@@ -1082,6 +1231,18 @@ class WindowControls:
             self.canvas.configure(cursor='')
 
     def dev_scroll(self, event):
+        menu = getattr(self, 'game_menu', None)
+        if menu is not None and menu.page == 'screenshots' and menu.screenshot_gallery is not None:
+            gallery = menu.screenshot_gallery
+            point = self.dev_pointer(event)
+            rect = gallery.FOLDER_LIST if gallery.choosing else gallery.LIST
+            if point is not None and gallery.contains(rect, *point):
+                delta = getattr(event, 'delta', 0)
+                steps = -delta / 120 if delta else -1 if getattr(event, 'num', None) == 4 else 1
+                gallery.wheel(steps)
+                self.redraw_screenshot_gallery()
+                self.schedule_screenshot_gallery()
+            return 'break'
         if getattr(self, 'game_menu', None) is not None and self.game_menu.page == 'saves':
             browser = self.game_menu.save_browser
             point = self.dev_pointer(event)
@@ -1191,6 +1352,32 @@ class WindowControls:
             self.bitmap_presenter.close()
             self.bitmap_presenter = None
         game_menu = getattr(self, 'game_menu', None)
+        gallery = getattr(game_menu, 'screenshot_gallery', None) if getattr(game_menu, 'page', None) == 'screenshots' else None
+        if gallery is not None:
+            cached = getattr(self, 'screenshot_gallery_source', None)
+            if cached is None or cached[0] is not self.screenshot_viewport or cached[1] != size:
+                source = self.screenshot_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+                self.screenshot_gallery_source = self.screenshot_viewport, size, source
+            else:
+                source = cached[2]
+            frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True), visible=True).convert('RGB')
+            previous = getattr(self, 'screenshot_gallery_frame', None)
+            if previous is not None and previous[0] is gallery and previous[1].size == size and previous[2] is self.image_ref:
+                damage = ImageChops.difference(previous[1], frame).getbbox()
+                if damage is not None:
+                    patch = ImageTk.PhotoImage(frame.crop(damage))
+                    self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', damage[0], damage[1])
+                self.canvas.coords(self.canvas.find_all()[0], *position)
+            else:
+                self.image_ref = ImageTk.PhotoImage(frame)
+                if self.canvas.find_all():
+                    self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)
+                    self.canvas.coords(self.canvas.find_all()[0], *position)
+                else:
+                    self.canvas.create_image(*position, image=self.image_ref, anchor='nw')
+            self.screenshot_gallery_frame = gallery, frame, self.image_ref
+            return
+        self.screenshot_gallery_frame = self.screenshot_gallery_source = None
         if getattr(game_menu, 'page', None) == 'saves':
             source_cache = getattr(self, 'save_menu_source', None)
             if source_cache is None or source_cache[0] is not self.screenshot_viewport or source_cache[1] != size:

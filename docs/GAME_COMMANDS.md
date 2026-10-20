@@ -4,13 +4,13 @@ The Macintosh application resource fork lists the normal game commands in
 MENU 401 (File) and MENU 403 (Game). The Windows port uses Alt in place of
 Command, with the requested exception of Alt+Enter for fullscreen. It does
 not bind Alt+Q, Alt+F or the redundant Alt+E. F1 opens the in-game command menu,
-F2 opens standalone screenshot controls, and F3 opens Developer Tools.
+F2 opens the integrated screenshot gallery, and F3 opens Developer Tools.
 
 Screenshots are a port-only feature, not a recovered Macintosh command.
 F8 saves the current clean game framebuffer as PNG without altering playback or
 pause, then briefly displays `Saved screenshot as <filename>` in the game's bitmap
-font. F2's screenshot controls show an F8 reminder and offer `Save PNG`, a native
-folder picker (including typed/pasted paths), and 1x-4x integer sizes. The original 510x384
+font. F2's gallery offers `Capture PNG`, an in-game folder picker (including
+typed/pasted paths), and 1x-4x integer sizes. The original 510x384
 viewport and HUD are retained; host padding, menus and pause overlays are not.
 Shift+F8 instead saves the presented game framebuffer, including visible menus,
 Developer Tools, pause overlays and existing notices. It uses the same folder,
@@ -19,7 +19,8 @@ only after the PNG is saved, and neither shortcut closes menus or resumes play.
 Local preferences and the default output folder live under ignored `rendered/`.
 Capture does not require Developer Tools; F3 remains separate development UI.
 Neither screenshot controls nor Developer Tools add a command row to F1.
-F2 toggles the screenshot controls, and Escape closes them; both restore the
+F2 toggles the screenshot gallery, and Escape closes it after cancelling any
+folder/deletion dialog; both restore the
 previous pause state. Switching among F1, F2 and F3 also preserves that state.
 
 Developer Tools prepares its level and playback lists before the animation
@@ -54,7 +55,7 @@ Edit menu's V entry. Pause and gameplay bindings are unchanged.
 Save/Load use an integrated slot browser and a versioned `.pop2save` progress
 format, not the original Macintosh save-file format. Loading resumes at the
 activated checkpoint or normal level entry, never the exact saved position.
-The browser includes previews, dates, twelve slots, paging and confirmation
+The browser includes named saves, previews, dates, smooth scrolling and confirmation
 before overwriting/loading/deleting. Existing version-one snapshots remain
 readable with the new resume rules. Saves live outside the project directory.
 A cancelled or invalid load leaves the running game intact; cutscenes/death/
@@ -84,3 +85,41 @@ Regression coverage: `tests.test_game_menu`, `tests.test_audio`,
 `tests.test_development_menu`, `tests.test_window_controls` and
 `tests.test_rebirth`. Menu-model and audio tests run without game assets;
 scene tests exercise imported resources and actual Tk event bindings.
+
+## Screenshot Gallery
+
+The gallery shows PNGs from the selected destination folder, newest first, with
+a scrolling thumbnail strip, an aspect-preserving large preview, dimensions and
+file size. Capture selects the new PNG after it is successfully written; Refresh
+discovers external file changes. A trash control requires explicit confirmation,
+defaults to Cancel and verifies the file's timestamp/size before deleting it.
+Damaged, missing or oversized images report an unavailable preview without
+closing the menu. Decoding is limited to PNGs of at most 32 million pixels / 128 MiB.
+
+`Include UI` changes the gallery's Capture command only. F8 always remains clean,
+and Shift+F8 always includes the displayed UI. The checkbox is remembered within
+the session; scale and folder retain their existing persisted settings. Both
+shortcuts work during menus, intros and paused play. Gallery capture feedback is
+inline, so it never covers the preview or footer; errors outside F2 use an in-game
+notice instead of a Windows message box.
+
+The folder picker supports Home, parent navigation, Windows drives, Default,
+scrollable child folders, keyboard focus and a selectable path field with
+Ctrl+A/C/X/V, Shift selection and Home/End. Relative paths are resolved against
+the displayed directory. Browsing and cancellation do not create directories or
+write preferences. Only `Use folder` creates a missing destination and remembers
+it; failures keep the original destination. Default navigates to the original
+output folder and still requires `Use folder` to confirm.
+
+Directory reads, image decoding and explicit folder/deletion operations run on a
+single daemon worker; Tk state and presentation are updated on the UI thread.
+Stale directory results cannot replace the currently requested directory. Caches
+bound decoded images, fitted previews, glyphs and dimmed modal backgrounds.
+Pointer hover does not rescan folders, and menu redraws never advance gameplay.
+Closing F2, changing menus or destroying the game closes the worker and cancels
+its polling callback. The renderer draws directly at the fitted window/PNG size
+and reuses the Tk photo, uploading only changed pixels.
+
+`tests.test_screenshot_gallery` covers this library without imported assets;
+scene tests additionally cover real capture pixels, clipboard paths, persistence,
+pause isolation, HD presentation and worker/callback cleanup.

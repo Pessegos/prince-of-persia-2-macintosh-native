@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 import subprocess
 import sys
 import textwrap
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -246,6 +247,134 @@ class GameMenuSceneTests(unittest.TestCase):
                     path, = set(Path(directory).glob('*.png')) - before
                     with Image.open(path) as image:
                         self.assertEqual(image.tobytes(), clean.tobytes())
+
+    def settle_screenshot_gallery(self):
+        gallery = self.scene.game_menu.screenshot_gallery
+        deadline = time.monotonic() + 5
+        while gallery.reads.pending:
+            pending = self.scene.screenshot_gallery_after_id
+            if pending is not None:
+                script, _kind = self.scene.root.tk.call('after', 'info', pending)
+                self.scene.root.tk.call('after', 'cancel', pending)
+                self.scene.root.tk.call(script)
+            if time.monotonic() >= deadline:
+                self.fail('Screenshot gallery did not settle')
+            time.sleep(0.002)
+        return gallery
+
+    def test_screenshot_gallery_capture_selects_new_png_and_preserves_live_game(self):
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
+            position = scene.player_x, scene.action, scene.combat.world_frame
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+            self.assertEqual(gallery.entries, ())
+            clean = scene.screenshot_viewport.crop((1, 0, 511, 384)).convert('RGB')
+            self.press('F8')
+            self.settle_screenshot_gallery()
+            self.assertEqual(len(gallery.entries), 1)
+            with Image.open(gallery.entry.path) as image:
+                self.assertEqual(image.tobytes(), clean.tobytes())
+            gallery.include_ui = True
+            expected = gallery.draw(scene.screenshot_viewport, scene.ui_font).crop((1, 0, 511, 384)).convert('RGB')
+            scene.apply_game_action('gallery_capture')
+            self.settle_screenshot_gallery()
+            self.assertEqual(len(gallery.entries), 2)
+            with Image.open(gallery.entry.path) as image:
+                self.assertEqual(image.tobytes(), expected.tobytes())
+            self.assertTrue(scene.paused)
+            self.assertEqual(position, (scene.player_x, scene.action, scene.combat.world_frame))
+
+    def test_gallery_folder_accepts_clipboard_paths_and_persists_only_on_confirmation(self):
+        scene = self.scene
+        with TemporaryDirectory() as directory, patch.object(ScreenshotSettings, 'save') as save:
+            original = Path(directory)
+            scene.screenshot_settings = ScreenshotSettings(original, 2)
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+            scene.choose_screenshot_folder()
+            self.settle_screenshot_gallery()
+            destination = original / 'Capturas de teste'
+            scene.root.clipboard_clear()
+            scene.root.clipboard_append(str(destination))
+            self.press('a', 4)
+            self.press('v', 4)
+            self.assertEqual(gallery.draft, str(destination))
+            self.assertEqual(scene.screenshot_settings.folder, original)
+            save.assert_not_called()
+            gallery.focus = 46
+            scene.apply_game_action(gallery.activate())
+            self.settle_screenshot_gallery()
+            self.assertFalse(gallery.choosing)
+            self.assertEqual(scene.screenshot_settings.folder, destination.resolve())
+            save.assert_called_once_with()
+            self.assertTrue(destination.is_dir())
+            self.press('F2')
+            self.assertTrue(gallery.reads.closed)
+            self.assertIsNone(scene.screenshot_gallery_after_id)
+            self.press('F2')
+            self.assertEqual(scene.game_menu.screenshot_gallery.folder, destination.resolve())
+
+    def test_gallery_folder_typing_reuses_tk_photo_and_never_redraws_gameplay(self):
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            scene.screenshot_settings = ScreenshotSettings(Path(directory), 3)
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+            scene.choose_screenshot_folder()
+            self.settle_screenshot_gallery()
+            with patch.object(scene.canvas, 'winfo_width', return_value=3440), \
+                    patch.object(scene.canvas, 'winfo_height', return_value=1440):
+                scene.redraw_screenshot_gallery()
+                photo = scene.image_ref
+                with patch.object(scene, 'render') as gameplay, patch.object(scene.canvas, 'itemconfigure') as configure:
+                    for char in 'new path':
+                        event = SimpleNamespace(keysym='space' if char == ' ' else char, char=char, state=0)
+                        scene.dev_key_press(event)
+                        scene.dev_key_release(event)
+                        actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                        self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                    gameplay.assert_not_called()
+                    configure.assert_not_called()
+                self.assertIs(scene.image_ref, photo)
+                self.assertTrue(gallery.choosing)
+
+    def test_holding_escape_cannot_cancel_folder_picker_and_close_gallery_together(self):
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
+            self.press('F2')
+            scene.choose_screenshot_folder()
+            gallery = scene.game_menu.screenshot_gallery
+            event = self.event('Escape')
+            scene.dev_key_press(event)
+            self.assertFalse(gallery.choosing)
+            scene.dev_key_press(event)
+            self.assertIsNotNone(scene.game_menu)
+            scene.dev_key_release(event)
+            self.press('Escape')
+            self.assertIsNone(scene.game_menu)
+
+    def test_shift_f8_gallery_and_folder_picker_use_output_resolution_at_every_scale(self):
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+            for choosing in (False, True):
+                if choosing:
+                    scene.choose_screenshot_folder()
+                    self.settle_screenshot_gallery()
+                for scale in (1, 2, 3, 4):
+                    with self.subTest(choosing=choosing, scale=scale):
+                        scene.screenshot_settings.scale = scale
+                        source = scene.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
+                        expected = gallery.draw(source, scene.ui_font).crop((scale, 0, 511 * scale, 384 * scale)).convert('RGB')
+                        path = scene.capture_screenshot(include_ui=True)
+                        with Image.open(path) as image:
+                            self.assertEqual(image.tobytes(), expected.tobytes())
+                        self.assertTrue(scene.paused)
 
     def test_save_browser_presentation_keeps_source_detail_at_fitted_window_resolution(self):
         scene = self.scene
@@ -718,8 +847,10 @@ class GameMenuSceneTests(unittest.TestCase):
                     assert scene.game_menu is None and not scene.paused
                     key('F2', 8)
                     assert scene.game_menu.page == 'screenshots'
+                    gallery = scene.game_menu.screenshot_gallery
+                    gallery.focus = 11
                     key('Return', 8)
-                    assert scene.game_menu.dropdown and not scene.fullscreen
+                    assert gallery.choosing and not scene.fullscreen
                     key('Escape', 8)
                     key('F2', 8)
                     with patch.object(scene, 'capture_screenshot') as capture:

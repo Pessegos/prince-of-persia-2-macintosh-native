@@ -382,7 +382,7 @@ class SaveSceneTests(unittest.TestCase):
     def test_browser_uses_no_native_dialog_and_cancel_preserves_progress(self):
         scene = self.scene
         before = scene.game
-        with patch('pop2.window_controls.filedialog.asksaveasfilename') as picker:
+        with patch('tkinter.filedialog.asksaveasfilename') as picker:
             scene.apply_game_action('save')
         picker.assert_not_called()
         self.assertIs(scene.game, before)

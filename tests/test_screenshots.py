@@ -230,30 +230,29 @@ class WindowScreenshotTests(unittest.TestCase):
         save.assert_not_called()
         self.assertIn("Could not save", self.host.game_menu.error)
 
-    def test_folder_dialog_cancel_and_success_preserve_pause_state(self):
+    def test_folder_picker_is_internal_and_cancel_preserves_pause_and_settings(self):
         host = self.host
         host.game_was_paused = False
         host.window_keys_down.add("Return")
         original = host.screenshot_settings.folder
 
-        def dialog(**kwargs):
-            self.assertIs(kwargs["parent"], host.root)
-            host.pause_if_unfocused()
-            self.assertFalse(host.game_was_paused)
-            return ""
-
-        with patch("pop2.window_controls.filedialog.askdirectory", side_effect=dialog):
-            host.choose_screenshot_folder()
-        self.assertEqual(host.screenshot_settings.folder, original)
-        self.assertFalse(host.screenshot_dialog_active)
-        self.assertIn("Return", host.pause_resume_keys)
         with TemporaryDirectory() as directory:
-            with patch("pop2.window_controls.filedialog.askdirectory", return_value=directory), \
-                    patch.object(ScreenshotSettings, "save") as save:
+            host.screenshot_settings.folder = Path(directory)
+            with patch.object(host, 'redraw_screenshot_gallery'), \
+                    patch.object(ScreenshotSettings, 'save') as save:
                 host.choose_screenshot_folder()
-                save.assert_called_once_with()
-            self.assertEqual(host.screenshot_settings.folder, Path(directory).resolve())
-            self.assertEqual(host.game_menu.screenshot_folder, str(Path(directory).resolve()))
+                gallery = host.game_menu.screenshot_gallery
+                self.addCleanup(gallery.close)
+                self.assertTrue(gallery.choosing)
+                self.assertIn('Return', host.pause_resume_keys)
+                gallery.draft = str(Path(directory) / 'not-created')
+                gallery.key('Escape')
+                self.assertFalse(gallery.choosing)
+                self.assertFalse((Path(directory) / 'not-created').exists())
+                save.assert_not_called()
+                self.assertEqual(host.screenshot_settings.folder, Path(directory))
+                self.assertFalse(host.game_was_paused)
+            self.assertNotEqual(original, Path(directory))
         self.assertTrue(host.paused)
 
 
