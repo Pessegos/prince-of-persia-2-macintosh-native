@@ -34,6 +34,16 @@ The idea isn't to turn it into a full settings menu, but simply to keep things c
 <img src="docs/github readme/game-menu.png" alt="Windows port F1 game menu" width="700">
 
 
+## Save & Load
+
+The F1 menu includes a Save & Load system with named saves, previews, and options to rename, overwrite or delete them.
+
+Saving follows the original game's checkpoint system. Loading a save takes you back to the beginning of the level or the last activated checkpoint, and the preview shows exactly where you'll resume.
+
+<img src="docs/github readme/save-load-preview-v3.gif" alt="Save & Load menu" width="700">
+
+
+
 ## Developer Tools (F3)
 
 The F3 Developer Tools menu was originally made to help me with playtesting during development, rather than as a feature for players.
