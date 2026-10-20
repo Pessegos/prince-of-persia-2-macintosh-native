@@ -370,15 +370,25 @@ class ScreenshotGalleryTests(unittest.TestCase):
         path = self.png()
         gallery = self.gallery()
         source, font = Image.new('RGBA', (512, 384)), self.font()
-        with patch('pop2.screenshot_gallery.lava_delete_icon', return_value=Image.new('RGBA', (36, 10), '#ff8000')):
+        frames = (Image.new('RGBA', (36, 10), '#ff8000'), Image.new('RGBA', (36, 10), '#ffff00'))
+        with patch('pop2.screenshot_gallery.lava_delete_frames', return_value=frames):
             gallery.draw(source, font)
             self.drain(gallery)
             frame = gallery.draw(source, font)
         self.assertEqual(frame.getpixel((453, 286)), (255, 128, 0, 255))
+        state = gallery.surface_state
+        self.assertTrue(gallery.animation_running)
+        self.assertTrue(gallery.animate(1 / 12))
+        self.assertEqual(gallery.surface_state, state)
+        frame = gallery.draw(source, font)
+        self.assertEqual(frame.getpixel((453, 286)), (255, 255, 0, 255))
+        self.assertLessEqual(len(gallery.icon_cache), 3)
         gallery.hover(453, 286)
         self.assertTrue(path.exists())
         gallery.click(453, 286)
         self.assertTrue(gallery.deleting)
+        self.assertFalse(gallery.animation_running)
+        self.assertFalse(gallery.animate(1))
         self.assertEqual(gallery.focus, 60)
         self.assertEqual(gallery.delete_target.path, path)
         gallery.key('Return')
@@ -395,6 +405,33 @@ class ScreenshotGalleryTests(unittest.TestCase):
             folder.mkdir()
             open_capture_folder(folder)
             start.assert_called_once_with(str(folder))
+
+    def test_lava_frames_use_native_offsets_and_repeat_without_an_extra_hold(self):
+        from pop2.lava import LavaPool
+        from pop2.screenshot_gallery import lava_delete_frames
+        from tests.test_lava import synthetic_tables
+
+        pool = LavaPool(synthetic_tables(), enhanced=True)
+        resources = {'SHAP': {shape: {'data': b'fake'} for shape in range(3616, 3622)}}
+        records = []
+        drawings = pool.drawings
+        def record():
+            result = drawings()
+            records.append(result)
+            return result
+        lava_delete_frames.cache_clear()
+        self.addCleanup(lava_delete_frames.cache_clear)
+        with patch('pop2.caverns.cavern_assets', return_value=({'lava': pool.tables}, resources, {}, {})), \
+                patch('pop2.lava.LavaPool', return_value=pool), \
+                patch.object(pool, 'drawings', side_effect=record), \
+                patch('pop2.render_opening.decode_shap', return_value=Image.new('RGBA', (5, 5), '#ff8000')):
+            frames = lava_delete_frames()
+        self.assertEqual(len(frames), 22)
+        self.assertEqual(len({frame.size for frame in frames}), 1)
+        for phase in range(22):
+            pool.advance()
+            self.assertEqual(drawings(), records[phase])
+        self.assertIn((3616, 63, -12, False), records[0])
 
 
 if __name__ == '__main__':

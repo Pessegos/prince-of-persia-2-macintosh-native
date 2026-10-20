@@ -367,6 +367,17 @@ class GameMenuSceneTests(unittest.TestCase):
                         scene.redraw_screenshot_gallery()
                         actual = ImageTk.getimage(scene.image_ref).convert('RGB')
                         self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                        gallery.scroll_target, gallery.velocity = gallery.scroll, 0
+                        for _ in range(3):
+                            before = actual
+                            gallery.animate(1 / 12)
+                            scene.redraw_screenshot_gallery()
+                            actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                            self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                            changed = ImageChops.difference(before, actual).getbbox()
+                            self.assertIsNotNone(changed)
+                            self.assertGreater(changed[0], actual.width * 0.8)
+                            self.assertLess(changed[3], actual.height * 0.79)
                         gameplay.assert_not_called()
                     self.assertIs(scene.image_ref, photo)
 

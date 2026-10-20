@@ -11,7 +11,7 @@ from threading import Thread
 import subprocess
 import sys
 
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageOps
 
 from pop2.bitmap_labels import label_text
 from pop2.save_slots import remember
@@ -73,11 +73,47 @@ def scan_folders(folder):
 
 
 @lru_cache(maxsize=1)
-def lava_delete_icon():
-    from pop2.caverns import cavern_assets, recessed_lava_surface
+def lava_delete_frames():
+    from pop2.caverns import cavern_assets, split_lava_bubble
+    from pop2.lava import LavaPool
+    from pop2.render_opening import decode_shap
 
-    sprite = recessed_lava_surface(cavern_assets()[2])
-    return sprite.crop(sprite.getbbox())
+    program, resources, palette, _shapes = cavern_assets()
+    with Image.open(Path(__file__).with_name('screenshot_lava.png')) as image:
+        edited = image.convert('RGBA')
+    # The edited PNG trims (22, 3) from the native 140 x 33 surface.
+    base = Image.new('RGBA', (140, 60))
+    base.paste(edited, (22, 30))
+    liquid = base.getchannel('A')
+    pool = LavaPool(program['lava'], enhanced=True)
+    pool.initialize(0)
+    for _ in range(44):
+        pool.advance()
+    frames, shapes = [], {}
+    for _ in range(22):
+        pool.advance()
+        frame = base.copy()
+        raised = []
+        for shape, x, bottom, _mirrored in pool.drawings():
+            if shape == 3614:
+                continue
+            if shape not in shapes:
+                shapes[shape] = split_lava_bubble(decode_shap(resources['SHAP'][shape]['data'], palette), shape)
+            surface, airborne = shapes[shape]
+            y = bottom - surface.height + 60
+            clipped = surface.copy()
+            clipped.putalpha(ImageChops.multiply(surface.getchannel('A'),
+                liquid.crop((x, y, x + surface.width, y + surface.height))))
+            frame.alpha_composite(clipped, (x, y))
+            raised.append((airborne, (x, y)))
+        for airborne, position in raised:
+            frame.alpha_composite(airborne, position)
+        frames.append(frame)
+    bounds = frames[0].getbbox()
+    for frame in frames[1:]:
+        left, top, right, bottom = frame.getbbox()
+        bounds = min(bounds[0], left), min(bounds[1], top), max(bounds[2], right), max(bounds[3], bottom)
+    return tuple(frame.crop(bounds) for frame in frames)
 
 
 def open_capture_folder(folder):
@@ -186,6 +222,9 @@ class ScreenshotGallery:
         self.text_cache, self.image_cache = {}, {}
         self.modal_cache, self.art_revision = {}, 0
         self.surface_cache = {}
+        self.icon_cache = {}
+        self.icon_seconds = 0.0
+        self.icon_frame = 0
         self.scan_key = self.folder_key = None
         self.applied_scan = self.applied_folder = None
         self.commit_key = self.delete_key = None
@@ -334,6 +373,17 @@ class ScreenshotGallery:
         self.image_cache.clear()
         self.modal_cache.clear()
         self.surface_cache.clear()
+        self.icon_cache.clear()
+
+    @property
+    def animation_running(self):
+        icon = self.reads.cache.get(('icon', 'lava'))
+        return bool(self.entry and not (self.choosing or self.deleting)
+                    and icon is not None and not icon.error and len(icon.value) > 1)
+
+    @property
+    def scrolling(self):
+        return abs(self.scroll_target - self.scroll) >= 0.025 or abs(self.velocity) >= 0.1
 
     def ensure_visible(self, immediate=False):
         row = self.selected // self.COLUMNS
@@ -348,10 +398,16 @@ class ScreenshotGallery:
     def animate(self, seconds):
         if self.choosing or self.deleting:
             return False
+        icon_changed = False
+        if self.animation_running:
+            self.icon_seconds += max(0, seconds)
+            frame = math.floor(self.icon_seconds * 12 + 1e-9) % len(self.reads.cache['icon', 'lava'].value)
+            icon_changed = frame != self.icon_frame
+            self.icon_frame = frame
         distance = self.scroll_target - self.scroll
         if abs(distance) < 0.025 and abs(self.velocity) < 0.1:
             self.scroll, self.velocity = self.scroll_target, 0
-            return False
+            return icon_changed
         seconds = max(0, seconds)
         decay = math.exp(-24 * seconds)
         change = (self.velocity - 24 * distance) * seconds
@@ -551,7 +607,7 @@ class ScreenshotGallery:
         surface = self.surface_cache.get(surface_key) if not modal else None
         key = (viewport.size, visible, id(font), background_key or id(viewport), id(self.entries),
                self.selected, self.scroll, self.scale, self.include_ui, self.error, self.status,
-               self.art_revision, self.choosing, self.deleting)
+               self.art_revision, self.choosing, self.deleting, self.icon_frame)
         cached = self.modal_cache.get(key) if modal else None
         if not modal:
             self.modal_cache.clear()
@@ -669,8 +725,28 @@ class ScreenshotGallery:
                 box((185, self.LIST[1], 187, self.LIST[3]), '#303030', None)
                 box((185, top, 187, top + thumb), '#858585', None)
 
+        def draw_delete():
+            if self.entry is None:
+                return
+            box(self.DELETE, '#303030' if self.focus == 13 else '#222222',
+                gold if self.focus == 13 else '#626262')
+            icon = self.reads.request(('icon', 'lava'), lava_delete_frames, -5)
+            if icon is not None and not icon.error:
+                icon_key = sx, sy
+                if icon_key not in self.icon_cache:
+                    size = max(1, round(36 * sx)), max(1, round(16 * sy))
+                    remember(self.icon_cache, icon_key, tuple(ImageOps.contain(frame, size,
+                        Image.Resampling.NEAREST) for frame in icon.value), 3)
+                frames = self.icon_cache[icon_key]
+                sprite = frames[self.icon_frame % len(frames)]
+                x, y = point(453, 286)
+                image.paste(sprite, (x - sprite.width // 2, y - sprite.height // 2), sprite)
+            else:
+                text('Del', 440, 282, 30, white, 0.6)
+
         if surface is not None:
             draw_list()
+            draw_delete()
             return image
 
         if cached is None:
@@ -695,19 +771,7 @@ class ScreenshotGallery:
                 if dimensions:
                     text(f'{dimensions[0]} x {dimensions[1]}', 202, 290, 145, muted, 0.55)
                 text(f'{self.entry.size / 1024:.0f} KB', 424, 290, 70, muted, 0.55, right=True)
-                box(self.DELETE, '#303030' if self.focus == 13 else '#222222',
-                    gold if self.focus == 13 else '#626262')
-                icon = self.reads.request(('icon', 'lava'), lava_delete_icon, -5)
-                if icon is not None and not icon.error:
-                    icon_key = 'lava-icon', sx, sy
-                    if icon_key not in self.image_cache:
-                        remember(self.image_cache, icon_key, ImageOps.contain(icon.value,
-                            (max(1, round(36 * sx)), max(1, round(16 * sy))), Image.Resampling.NEAREST), 48)
-                    sprite = self.image_cache[icon_key]
-                    x, y = point(453, 286)
-                    image.paste(sprite, (x - sprite.width // 2, y - sprite.height // 2), sprite)
-                else:
-                    text('Del', 440, 282, 30, white, 0.6)
+                draw_delete()
             else:
                 box(self.PREVIEW, '#0c0c0c')
                 text('Reading folder...' if self.applied_scan != self.scan_key else 'No screenshots yet',

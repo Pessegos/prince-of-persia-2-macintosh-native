@@ -476,8 +476,10 @@ class WindowControls:
                 gallery.committed_folder = None
             if changed or moving:
                 self.redraw_screenshot_gallery()
-            if gallery.reads.pending or moving:
-                delay = max(1, round(1000 / 120 - (time.perf_counter() - now) * 1000)) if moving else 12
+            if gallery.reads.pending or gallery.scrolling or gallery.animation_running:
+                delay = (max(1, round(1000 / 120 - (time.perf_counter() - now) * 1000)) if gallery.scrolling else
+                         12 if gallery.reads.pending else
+                         max(1, round((1 - (gallery.icon_seconds * 12) % 1) * 1000 / 12)))
                 self.screenshot_gallery_after_id = self.root.after(delay, tick)
         self.screenshot_gallery_after_id = self.root.after(12, tick)
 
@@ -1366,16 +1368,19 @@ class WindowControls:
             state = id(self.screenshot_viewport), id(self.ui_font), gallery.surface_state
             if previous is not None and previous[0] is gallery and previous[1].size == size and previous[2] is self.image_ref:
                 if previous[3] == state and not (gallery.choosing or gallery.deleting):
-                    # Scrolling only changes the clipped thumbnail strip, not the large preview.
-                    left, top, right, bottom = gallery.LIST
-                    region = (round((left - 1) * size[0] / 510), round(top * size[1] / 384),
-                              round((right - 1) * size[0] / 510) + 1, round(bottom * size[1] / 384) + 1)
-                    local = ImageChops.difference(previous[1].crop(region), frame.crop(region)).getbbox()
-                    damage = (local[0] + region[0], local[1] + region[1],
-                              local[2] + region[0], local[3] + region[1]) if local else None
+                    # Only the thumbnail strip and animated delete button can change.
+                    damages = []
+                    for left, top, right, bottom in (gallery.LIST, gallery.DELETE):
+                        region = (round((left - 1) * size[0] / 510), round(top * size[1] / 384),
+                                  round((right - 1) * size[0] / 510) + 1, round(bottom * size[1] / 384) + 1)
+                        local = ImageChops.difference(previous[1].crop(region), frame.crop(region)).getbbox()
+                        if local:
+                            damages.append((local[0] + region[0], local[1] + region[1],
+                                            local[2] + region[0], local[3] + region[1]))
                 else:
                     damage = ImageChops.difference(previous[1], frame).getbbox()
-                if damage is not None:
+                    damages = [damage] if damage else []
+                for damage in damages:
                     patch = ImageTk.PhotoImage(frame.crop(damage))
                     self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', damage[0], damage[1])
                 self.canvas.coords(self.canvas.find_all()[0], *position)

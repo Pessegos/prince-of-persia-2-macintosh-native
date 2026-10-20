@@ -97,6 +97,12 @@ Preview borders follow the fitted image,
 without adding black letterboxing, cropping or stretching the screenshot. The
 lava-asset delete control has a hover label and requires explicit confirmation,
 defaults to Cancel and verifies the file's timestamp/size before deleting it.
+The button uses the edited, transparent `pop2/screenshot_lava.png` surface rather
+than the in-level rock rim. Its 22-frame, 12 fps loop uses an independent enhanced
+`LavaPool`, preserving the +5/-1 bubble offset and gapless wrap. Frames are prepared
+once on the worker and cached at the display size. Only the button's changed pixels
+are uploaded during idle animation; gameplay stays paused, and dialogs freeze the
+icon. Closing the gallery cancels its timer. In-level artwork and lava rules are unchanged.
 Damaged, missing or oversized images report an unavailable preview without
 closing the menu. Decoding is limited to PNGs of at most 32 million pixels / 128 MiB.
 
