@@ -33,6 +33,7 @@ The idea isn't to turn it into a full settings menu, but simply to keep things c
 
 <img src="docs/github readme/game-menu.png" alt="Windows port F1 game menu" width="700">
 
+<br/>
 
 ## Save & Load
 
@@ -42,7 +43,15 @@ Saving follows the original game's checkpoint system. Loading a save takes you b
 
 <img src="docs/github readme/save-load-preview-v3.gif" alt="Save & Load menu" width="700">
 
+<br/>
 
+### Cutscene Pausing
+
+Cutscenes can now be paused and resumed at any time.
+
+<img src="docs/github readme/cutscene-pause.png" alt="Paused cutscene" width="700">
+
+<br/>
 
 ## Developer Tools (F3)
 
@@ -73,7 +82,7 @@ I honestly think something went wrong with the rendering and somehow made it int
 
 So I decided to take it a step further and give the lava a proper overhaul, with more detailed edges and depth, taking some inspiration from the DOS version.
 
-The new animation also required some careful masking to prevent overlapping, and I fixed a brief pause in the original animation loop.
+The animation also required some careful masking to prevent overlapping, and I fixed a brief pause in the original animation loop.
 
 <br/>
 <img src="docs/github readme/lava-macintosh-reconstructed-dos-port.gif" alt="Comparison of the original Macintosh lava, reconstructed Macintosh lava, DOS lava and overhauled lava" width="800">
@@ -100,6 +109,8 @@ I also improved the sound played while the gate opens. The original had noticeab
     <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/527207f5-1f7b-48de-88c3-cde732a694ec"></video></td>
   </tr>
 </table>
+
+<br/>
 
 ## Current Progress
 
