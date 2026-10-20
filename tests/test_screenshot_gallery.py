@@ -88,13 +88,13 @@ class ScreenshotGalleryTests(unittest.TestCase):
             gallery.draw(source, font)
             self.drain(gallery)
             ready = gallery.draw(source, font)
-            self.assertEqual(decode.call_count, 1)
+            self.assertEqual(decode.call_count, 2)
             with patch('pop2.screenshot_gallery.os.scandir', side_effect=AssertionError('Hover read disk')):
                 for index in range(20):
                     gallery.hover(90, 55)
                     gallery.hover(130, 350)
                     gallery.draw(source, font)
-            self.assertEqual(decode.call_count, 1)
+            self.assertEqual(decode.call_count, 2)
         self.assertEqual(ready.size, source.size)
         self.assertEqual(source.getpixel((0, 0)), (0, 0, 255, 255))
 
@@ -103,7 +103,8 @@ class ScreenshotGalleryTests(unittest.TestCase):
             self.png(f'{i}.png', size=(20, 20))
         gallery = self.gallery()
         gallery.key('Next')
-        self.assertEqual(gallery.selected, 3)
+        self.assertEqual(gallery.selected, 6)
+        gallery.key('Next')
         self.assertEqual(gallery.scroll, 0)
         gallery.animate(1 / 60)
         self.assertGreater(gallery.scroll, 0)
@@ -257,7 +258,97 @@ class ScreenshotGalleryTests(unittest.TestCase):
                     frame = gallery.draw(Image.new('RGBA', size), font, visible=visible)
                     self.assertEqual(frame.size, size)
                     self.assertLessEqual(len(gallery.text_cache), 256)
-                    self.assertLessEqual(len(gallery.image_cache), 16)
+                    self.assertLessEqual(len(gallery.image_cache), 48)
+
+    def test_grid_hit_testing_and_view_switch_preserve_selection(self):
+        for i in range(40):
+            self.png(f'{i}.png', size=(20, 20))
+        gallery = self.gallery()
+        self.assertEqual(gallery.columns, 2)
+        self.assertEqual(gallery.hit(40, 95), 100)
+        self.assertEqual(gallery.hit(105, 95), 101)
+        self.assertEqual(gallery.hit(40, 160), 102)
+        gallery.selected = 29
+        gallery.ensure_visible(immediate=True)
+        self.assertLessEqual(len(gallery.visible_indices), 12)
+        gallery.click(250, 30)
+        self.assertEqual(gallery.columns, 1)
+        self.assertEqual(gallery.selected, 29)
+        self.assertLess(gallery.row_rect(29)[1], gallery.LIST[3])
+        self.assertGreaterEqual(gallery.row_rect(29)[1], gallery.LIST[1])
+        gallery.click(280, 30)
+        self.assertEqual(gallery.columns, 2)
+        self.assertEqual(gallery.selected, 29)
+        self.assertLessEqual(gallery.scroll, gallery.max_scroll)
+
+    def test_scroll_surface_cache_matches_full_redraw_in_both_views(self):
+        for i in range(16):
+            self.png(f'{i}.png', color=(i * 15, 100, 200), size=(51, 38))
+        gallery = self.gallery()
+        font = self.font()
+        for columns in (1, 2):
+            gallery.columns = columns
+            for size, visible in (((512, 384), False), ((1434, 1080), True)):
+                source = Image.new('RGBA', size, '#0d1117')
+                for offset in (0, 24, 108, 380, 12):
+                    gallery.scroll = min(offset, gallery.max_scroll)
+                    gallery.draw(source, font, visible=visible)
+                    self.drain(gallery)
+                    cached = gallery.draw(source, font, visible=visible)
+                    gallery.surface_cache.clear()
+                    fresh = gallery.draw(source, font, visible=visible)
+                    self.assertEqual(cached.tobytes(), fresh.tobytes(), (columns, size, offset))
+
+    def test_visible_thumbnails_do_not_thrash_the_preview_cache(self):
+        for i in range(12):
+            self.png(f'{i}.png', size=(51, 38))
+        gallery = self.gallery()
+        source, font = Image.new('RGBA', (512, 384)), self.font()
+        with patch('pop2.screenshot_gallery.read_capture', wraps=read_capture) as decode:
+            for _ in range(4):
+                gallery.draw(source, font)
+                self.drain(gallery)
+            initial = decode.call_count
+            self.assertGreater(initial, 6)
+            for _ in range(3):
+                gallery.scroll = gallery.max_scroll
+                gallery.draw(source, font)
+                self.drain(gallery)
+                gallery.scroll = 0
+                gallery.draw(source, font)
+                self.drain(gallery)
+            self.assertEqual(decode.call_count, 13)
+
+    def test_thumbnail_decode_keeps_original_dimensions_and_fitted_previews_have_no_black_frame(self):
+        self.png(size=(2040, 1536))
+        entry, = scan_captures(self.folder)
+        image, dimensions = read_capture(entry, (510, 384))
+        self.assertEqual(image.size, (510, 384))
+        self.assertEqual(dimensions, (2040, 1536))
+        gallery = self.gallery()
+        source, font = Image.new('RGBA', (512, 384)), self.font()
+        gallery.draw(source, font)
+        self.drain(gallery)
+        frame = gallery.draw(source, font)
+        self.assertEqual(frame.getpixel((175, 190)), (24, 24, 24, 255))
+        self.assertEqual(frame.getpixel((324, 190)), (255, 0, 0, 255))
+
+    def test_image_cache_budgets_and_obsolete_jobs(self):
+        reads = GalleryReads()
+        self.addCleanup(reads.close)
+        for kind, count, quota in (('thumb', 80, 64), ('image', 5, 3)):
+            for i in range(count):
+                reads.results.put(((kind, i), SimpleNamespace(value=i, error='')))
+            reads.poll()
+            self.assertEqual(sum(key[0] == kind for key in reads.cache), quota)
+        reads.wanted = frozenset()
+        reads.request(('thumb', 'obsolete'), lambda: self.fail('Obsolete image decoded'))
+        deadline = time.monotonic() + 5
+        while reads.pending and time.monotonic() < deadline:
+            reads.poll()
+            time.sleep(0.001)
+        self.assertFalse(reads.pending)
+        self.assertNotIn(('thumb', 'obsolete'), reads.cache)
 
 
 if __name__ == '__main__':

@@ -434,7 +434,8 @@ class WindowControls:
 
         self.dispose_screenshot_gallery()
         self.game_menu.screenshot_gallery = ScreenshotGallery(self.screenshot_settings.folder,
-            self.screenshot_settings.scale, getattr(self, 'screenshot_include_ui', False))
+            self.screenshot_settings.scale, getattr(self, 'screenshot_include_ui', False),
+            getattr(self, 'screenshot_gallery_columns', 2))
         self.schedule_screenshot_gallery()
 
     def dispose_screenshot_gallery(self):
@@ -477,7 +478,8 @@ class WindowControls:
             if changed or moving:
                 self.redraw_screenshot_gallery()
             if gallery.reads.pending or moving:
-                self.screenshot_gallery_after_id = self.root.after(12, tick)
+                delay = max(1, round(1000 / 120 - (time.perf_counter() - now) * 1000)) if moving else 12
+                self.screenshot_gallery_after_id = self.root.after(delay, tick)
         self.screenshot_gallery_after_id = self.root.after(12, tick)
 
     def redraw_screenshot_gallery(self):
@@ -510,6 +512,7 @@ class WindowControls:
                 gallery.scale = self.screenshot_settings.scale
                 gallery.error = 'Could not remember PNG size.'
         self.screenshot_include_ui = gallery.include_ui
+        self.screenshot_gallery_columns = gallery.columns
         self.redraw_screenshot_gallery()
         self.schedule_screenshot_gallery()
 
@@ -1362,8 +1365,18 @@ class WindowControls:
                 source = cached[2]
             frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True), visible=True).convert('RGB')
             previous = getattr(self, 'screenshot_gallery_frame', None)
+            state = id(self.screenshot_viewport), id(self.ui_font), gallery.surface_state
             if previous is not None and previous[0] is gallery and previous[1].size == size and previous[2] is self.image_ref:
-                damage = ImageChops.difference(previous[1], frame).getbbox()
+                if previous[3] == state and not (gallery.choosing or gallery.deleting):
+                    # Scrolling only changes the clipped thumbnail strip, not the large preview.
+                    left, top, right, bottom = gallery.LIST
+                    region = (round((left - 1) * size[0] / 510), round(top * size[1] / 384),
+                              round((right - 1) * size[0] / 510) + 1, round(bottom * size[1] / 384) + 1)
+                    local = ImageChops.difference(previous[1].crop(region), frame.crop(region)).getbbox()
+                    damage = (local[0] + region[0], local[1] + region[1],
+                              local[2] + region[0], local[3] + region[1]) if local else None
+                else:
+                    damage = ImageChops.difference(previous[1], frame).getbbox()
                 if damage is not None:
                     patch = ImageTk.PhotoImage(frame.crop(damage))
                     self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', damage[0], damage[1])
@@ -1375,7 +1388,7 @@ class WindowControls:
                     self.canvas.coords(self.canvas.find_all()[0], *position)
                 else:
                     self.canvas.create_image(*position, image=self.image_ref, anchor='nw')
-            self.screenshot_gallery_frame = gallery, frame, self.image_ref
+            self.screenshot_gallery_frame = gallery, frame, self.image_ref, state
             return
         self.screenshot_gallery_frame = self.screenshot_gallery_source = None
         if getattr(game_menu, 'page', None) == 'saves':

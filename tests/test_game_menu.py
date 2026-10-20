@@ -340,6 +340,43 @@ class GameMenuSceneTests(unittest.TestCase):
                 self.assertIs(scene.image_ref, photo)
                 self.assertTrue(gallery.choosing)
 
+    def test_gallery_scroll_and_grid_toggle_upload_exact_pixels_without_gameplay_redraw(self):
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            for index in range(16):
+                Image.new('RGB', (510, 384), (index * 15, 100, 200)).save(folder / f'{index}.png')
+            scene.screenshot_settings = ScreenshotSettings(folder, 1)
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+            for size in ((3440, 1440), (900, 1100)):
+                with patch.object(scene.canvas, 'winfo_width', return_value=size[0]), \
+                        patch.object(scene.canvas, 'winfo_height', return_value=size[1]):
+                    scene.redraw_screenshot_gallery()
+                    photo = scene.image_ref
+                    with patch.object(scene, 'render') as gameplay:
+                        for columns in (2, 1, 2):
+                            gallery.focus = 15 + columns
+                            scene.apply_gallery_action(gallery.activate())
+                            self.settle_screenshot_gallery()
+                            for offset in (23.7, 108.1, 380.9, 0):
+                                gallery.scroll = min(offset, gallery.max_scroll)
+                                scene.redraw_screenshot_gallery()
+                                self.settle_screenshot_gallery()
+                                actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                                self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                        gallery.hover(460, 320)
+                        scene.redraw_screenshot_gallery()
+                        actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                        self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                        gameplay.assert_not_called()
+                    self.assertIs(scene.image_ref, photo)
+            gallery.focus = 16
+            scene.apply_gallery_action(gallery.activate())
+            self.press('F2')
+            self.press('F2')
+            self.assertEqual(scene.game_menu.screenshot_gallery.columns, 1)
+
     def test_holding_escape_cannot_cancel_folder_picker_and_close_gallery_together(self):
         scene = self.scene
         with TemporaryDirectory() as directory:

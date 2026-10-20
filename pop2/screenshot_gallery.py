@@ -10,6 +10,7 @@ from threading import Thread
 
 from PIL import Image, ImageDraw, ImageOps
 
+from pop2.bitmap_labels import label_text
 from pop2.save_slots import remember
 from pop2.screenshots import ScreenshotSettings
 
@@ -49,14 +50,14 @@ def scan_captures(folder):
     return tuple(sorted(entries, key=lambda entry: (-entry.modified, entry.path.name.casefold())))
 
 
-def read_capture(entry):
+def read_capture(entry, bounds=(2040, 1536)):
     if entry.size > 128 * 1024 * 1024:
         raise ValueError('Image is too large')
     with Image.open(entry.path) as image:
         if image.format != 'PNG' or image.width * image.height > 32_000_000:
             raise ValueError('Unsupported image')
         original_size = image.size
-        image.thumbnail((2040, 1536), Image.Resampling.NEAREST)
+        image.thumbnail(bounds, Image.Resampling.NEAREST)
         return image.convert('RGB'), original_size
 
 
@@ -73,11 +74,15 @@ class GalleryReads:
         self.jobs, self.results = PriorityQueue(), Queue()
         self.pending, self.cache = set(), {}
         self.closed, self.serial, self.thread = False, 0, None
+        self.wanted = None
 
     def request(self, key, function, priority=0):
         if key in self.cache:
-            return self.cache[key]
-        if not self.closed and key not in self.pending and (key[0] != 'image' or len(self.pending) < 12):
+            result = self.cache.pop(key)
+            self.cache[key] = result
+            return result
+        if not self.closed and key not in self.pending and (
+                key[0] not in ('image', 'thumb') or priority < 0 or len(self.pending) < 12):
             self.pending.add(key)
             self.serial += 1
             self.jobs.put((priority, self.serial, key, function))
@@ -91,6 +96,9 @@ class GalleryReads:
             _priority, _serial, key, function = self.jobs.get()
             if self.closed or function is None:
                 return
+            if key[0] in ('image', 'thumb') and self.wanted is not None and key not in self.wanted:
+                self.results.put((key, None))
+                continue
             try:
                 result = ReadResult(function())
             except (OSError, ValueError, SyntaxError, OverflowError, MemoryError, Image.DecompressionBombError):
@@ -106,10 +114,15 @@ class GalleryReads:
             except Empty:
                 return changed
             self.pending.discard(key)
-            images = [item for item in self.cache if item[0] == 'image']
-            if key[0] == 'image' and len(images) >= 6:
-                del self.cache[images[0]]
-            remember(self.cache, key, result, 12)
+            if result is None:
+                changed = True
+                continue
+            kind = key[0]
+            quota = 3 if kind == 'image' else 64 if kind == 'thumb' else 8
+            category = [item for item in self.cache if item[0] == kind]
+            if len(category) >= quota:
+                del self.cache[category[0]]
+            remember(self.cache, key, result, 96)
             changed = True
 
     def close(self):
@@ -130,14 +143,16 @@ class ScreenshotGallery:
     FOLDER_LIST = (64, 156, 448, 280)
     FOLDER_TOOLS = ((64, 124, 156, 148), (164, 124, 252, 148), (260, 124, 348, 148), (356, 124, 448, 148))
     FOLDER_BUTTONS = ((64, 296, 242, 324), (254, 296, 448, 324))
-    CONFIRM_BUTTONS = ((100, 222, 246, 252), (258, 222, 412, 252))
+    CONFIRM_BUTTONS = ((100, 220, 246, 256), (258, 220, 412, 256))
     DELETE = (450, 310, 474, 334)
     REFRESH = (386, 24, 474, 44)
+    VIEWS = ((240, 24, 264, 44), (270, 24, 294, 44))
     ROW_HEIGHT = 98
 
-    def __init__(self, folder, scale=3, include_ui=False):
+    def __init__(self, folder, scale=3, include_ui=False, columns=2):
         self.folder, self.scale, self.include_ui = Path(folder), scale, include_ui
         self.entries, self.selected, self.focus = (), 0, 12
+        self.columns = columns if columns in (1, 2) else 2
         self.error = self.status = ''
         self.scroll = self.scroll_target = self.velocity = 0.0
         self.choosing = self.deleting = False
@@ -149,6 +164,7 @@ class ScreenshotGallery:
         self.reads = GalleryReads()
         self.text_cache, self.image_cache = {}, {}
         self.modal_cache, self.art_revision = {}, 0
+        self.surface_cache = {}
         self.scan_key = self.folder_key = None
         self.applied_scan = self.applied_folder = None
         self.commit_key = self.delete_key = None
@@ -165,7 +181,30 @@ class ScreenshotGallery:
 
     @property
     def max_scroll(self):
-        return max(0, len(self.entries) * self.ROW_HEIGHT - (self.LIST[3] - self.LIST[1]))
+        rows = math.ceil(len(self.entries) / self.columns)
+        return max(0, rows * self.row_height - (self.LIST[3] - self.LIST[1]))
+
+    @property
+    def row_height(self):
+        return 64 if self.columns == 2 else self.ROW_HEIGHT
+
+    @staticmethod
+    def image_key(entry, thumb=False):
+        return 'thumb' if thumb else 'image', entry.path, entry.modified, entry.size
+
+    @property
+    def visible_indices(self):
+        start = max(0, int(self.scroll // self.row_height)) * self.columns
+        end = (math.ceil((self.scroll + self.LIST[3] - self.LIST[1]) / self.row_height) + 1) * self.columns
+        return range(start, min(len(self.entries), end))
+
+    @property
+    def surface_state(self):
+        main_image = self.reads.cache.get(self.image_key(self.entry)) if self.entry else None
+        return (self.folder, id(self.entries), self.selected, self.columns, self.scale, self.include_ui,
+                self.error, self.status, -1 if self.choosing or self.deleting else min(self.focus, 100),
+                id(main_image), self.applied_scan == self.scan_key, self.choosing, self.deleting,
+                self.hovered if self.hovered in (13, 16, 17) else None)
 
     def refresh(self, selected_path=None):
         self.revision += 1
@@ -267,9 +306,11 @@ class ScreenshotGallery:
         self.text_cache.clear()
         self.image_cache.clear()
         self.modal_cache.clear()
+        self.surface_cache.clear()
 
     def ensure_visible(self, immediate=False):
-        top, bottom = self.selected * self.ROW_HEIGHT, (self.selected + 1) * self.ROW_HEIGHT
+        row = self.selected // self.columns
+        top, bottom = row * self.row_height, (row + 1) * self.row_height
         height = self.LIST[3] - self.LIST[1]
         self.scroll_target = max(0, min(self.max_scroll,
             top if top < self.scroll_target else bottom - height if bottom > self.scroll_target + height
@@ -297,12 +338,13 @@ class ScreenshotGallery:
         if self.choosing:
             self.folder_offset = max(0, min(max(0, len(self.folders) - 6), self.folder_offset + round(steps * 3)))
             return True
-        self.scroll_target = max(0, min(self.max_scroll, self.scroll_target + steps * self.ROW_HEIGHT))
+        self.scroll_target = max(0, min(self.max_scroll, self.scroll_target + steps * self.row_height))
         return True
 
     def row_rect(self, index):
-        top = 88 + index * self.ROW_HEIGHT - self.scroll
-        return 36, top, 156, top + 91
+        top = 88 + (index // self.columns) * self.row_height - self.scroll
+        left = 36 + (index % self.columns) * 62
+        return left, top, left + (58 if self.columns == 2 else 120), top + self.row_height - 3
 
     def hit(self, x, y):
         if self.deleting:
@@ -317,22 +359,26 @@ class ScreenshotGallery:
                 return 1000 + index if index < len(self.folders) else None
         else:
             controls = {**dict(enumerate(self.SCALES)), 4: self.INCLUDE_UI,
-                        **dict(enumerate(self.FOOTER, 10)), 13: self.DELETE, 15: self.REFRESH}
+                        **dict(enumerate(self.FOOTER, 10)), 13: self.DELETE, 15: self.REFRESH,
+                        **dict(enumerate(self.VIEWS, 16))}
             if self.contains(self.LIST, x, y):
                 if x >= 157 and self.max_scroll:
                     return 14
-                return next((100 + i for i in range(len(self.entries))
-                             if self.contains(self.row_rect(i), x, y)), None)
+                row = int((y - self.LIST[1] + self.scroll) // self.row_height)
+                column = int((x - self.LIST[0]) // 62) if self.columns == 2 else 0
+                index = row * self.columns + column
+                return 100 + index if index < len(self.entries) and column < self.columns and self.contains(
+                    self.row_rect(index), x, y) else None
         return next((i for i, rect in controls.items() if self.contains(rect, x, y)), None)
 
     def hover(self, x, y):
         index = self.hit(x, y)
+        changed = index != self.hovered
+        self.hovered = index
         if self.choosing:
-            changed = index != self.hovered
-            self.hovered = index
             return changed
         if index is None or index == self.focus:
-            return False
+            return changed
         self.focus = index
         return True
 
@@ -382,6 +428,10 @@ class ScreenshotGallery:
         elif self.focus == 15:
             self.error = self.status = ''
             self.refresh()
+        elif self.focus in (16, 17):
+            self.columns = self.focus - 15
+            self.scroll = self.scroll_target = self.velocity = 0
+            self.ensure_visible(immediate=True)
         elif 100 <= self.focus < 100 + len(self.entries):
             self.selected = self.focus - 100
             self.ensure_visible()
@@ -443,7 +493,7 @@ class ScreenshotGallery:
                 self.focus = 61 if self.focus == 60 else 60
         elif key == 'Tab':
             controls = ((40, 41, 42, 43, 44, 1000 + self.folder_selected, 45, 46) if self.choosing else
-                        (15, 0, 1, 2, 3, 4, 100 + self.selected, 13, 10, 11, 12))
+                        (16, 17, 15, 0, 1, 2, 3, 4, 100 + self.selected, 13, 10, 11, 12))
             index = controls.index(self.focus) if self.focus in controls else -1
             self.focus = controls[(index + (-1 if backwards else 1)) % len(controls)]
         elif self.choosing and key in ('Up', 'Down') and self.folders:
@@ -452,7 +502,9 @@ class ScreenshotGallery:
             self.folder_offset = max(0, min(self.folder_selected, max(self.folder_offset, self.folder_selected - 5)))
             self.focus = 1000 + self.folder_selected
         elif not self.choosing and key in ('Up', 'Down', 'Prior', 'Next', 'Left', 'Right') and self.entries:
-            step = -1 if key in ('Up', 'Left') else -3 if key == 'Prior' else 3 if key == 'Next' else 1
+            step = (-self.columns if key == 'Up' else self.columns if key == 'Down' else
+                    -1 if key == 'Left' else -3 * self.columns if key == 'Prior' else
+                    3 * self.columns if key == 'Next' else 1)
             self.selected = max(0, min(len(self.entries) - 1, self.selected + step))
             self.focus = 100 + self.selected
             self.ensure_visible()
@@ -462,13 +514,19 @@ class ScreenshotGallery:
 
     def draw(self, viewport, font, *, visible=False, background_key=None):
         modal = self.choosing or self.deleting
+        wanted = {self.image_key(self.entries[i], True) for i in self.visible_indices}
+        if self.entry:
+            wanted.add(self.image_key(self.entry))
+        self.reads.wanted = frozenset(wanted)
+        surface_key = (viewport.size, visible, id(font), background_key or id(viewport), self.surface_state)
+        surface = self.surface_cache.get(surface_key) if not modal else None
         key = (viewport.size, visible, id(font), background_key or id(viewport), id(self.entries),
                self.selected, self.scroll, self.scale, self.include_ui, self.error, self.status,
-               self.art_revision, self.choosing, self.deleting)
+               self.art_revision, self.choosing, self.deleting, self.columns)
         cached = self.modal_cache.get(key) if modal else None
         if not modal:
             self.modal_cache.clear()
-        image = cached.copy() if cached is not None else Image.alpha_composite(
+        image = cached.copy() if cached is not None else surface.copy() if surface is not None else Image.alpha_composite(
             viewport, Image.new('RGBA', viewport.size, (0, 0, 0, 150)))
         draw = ImageDraw.Draw(image)
         sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
@@ -483,11 +541,9 @@ class ScreenshotGallery:
                            width=max(1, round(min(sx, sy))))
 
         def glyph(value, color=white):
-            encoded = str(value).encode('mac_roman', errors='replace')
-            value = bytes(code if code in font.glyphs else 63 for code in encoded).decode('mac_roman')
-            key = id(font), value, color
+            key = id(font), str(value), color
             if key not in self.text_cache:
-                remember(self.text_cache, key, font.text(value, color))
+                remember(self.text_cache, key, label_text(font, value, color))
             return self.text_cache[key]
 
         def text(value, x, y, width=200, color=white, scale=0.7, right=False, tail=False):
@@ -518,20 +574,28 @@ class ScreenshotGallery:
             x, y = point(x, y)
             image.paste(raw, (x - raw.width if right else x, y), raw)
 
-        def button(rect, label, index, enabled=True, active=False):
+        def button(rect, label, index, enabled=True, active=False, scale=0.7, centered=False):
             highlighted = self.focus == index or self.choosing and self.hovered == index
             box(rect, '#303030' if highlighted else '#222222',
                 gold if highlighted else cyan if active else '#626262')
-            text(label, rect[0] + 8, rect[1] + 7, rect[2] - rect[0] - 16, white if enabled else muted)
+            x, y = rect[0] + 8, rect[1] + 7
+            if centered:
+                raw = glyph(label)
+                ink = raw.getbbox()
+                x = (rect[0] + rect[2] - raw.width * scale) / 2
+                y = (rect[1] + rect[3] - ((ink[3] - ink[1]) if ink else raw.height) * scale) / 2
+            text(label, x, y, rect[2] - rect[0] - 16, white if enabled else muted, scale)
 
-        def picture(entry, rect):
-            key = ('image', entry.path, entry.modified, entry.size)
-            result = self.reads.request(key, lambda: read_capture(entry))
-            box(rect, '#0c0c0c', '#626262')
+        def picture(entry, rect, thumb=False, outline='#626262'):
+            key = self.image_key(entry, thumb)
+            result = self.reads.request(key, lambda: read_capture(entry,
+                (510, 384) if thumb else (2040, 1536)), 0 if thumb else -5)
             if result is None:
+                box(rect, '#222222', outline)
                 text('...', (rect[0] + rect[2]) / 2 - 6, (rect[1] + rect[3]) / 2, 30, muted)
                 return None
             if result.error:
+                box(rect, '#222222', outline)
                 text('Unavailable', rect[0] + 8, (rect[1] + rect[3]) / 2, rect[2] - rect[0] - 16, muted)
                 return None
             left, top = point(rect[0] + 1, rect[1] + 1)
@@ -540,15 +604,61 @@ class ScreenshotGallery:
             fit_key = key, size
             if fit_key not in self.image_cache:
                 remember(self.image_cache, fit_key, ImageOps.contain(result.value[0], size,
-                    method=Image.Resampling.NEAREST), 16)
+                    method=Image.Resampling.NEAREST).convert('RGBA'), 48)
             fitted = self.image_cache[fit_key]
-            image.paste(fitted, (left + (size[0] - fitted.width) // 2, top + (size[1] - fitted.height) // 2))
+            pos = left + (size[0] - fitted.width) // 2, top + (size[1] - fitted.height) // 2
+            image.paste(fitted, pos)
+            border = max(1, round(min(sx, sy)))
+            draw.rectangle((pos[0] - border, pos[1] - border,
+                            pos[0] + fitted.width + border - 1, pos[1] + fitted.height + border - 1),
+                           outline=outline, width=border)
             return result.value[1]
+
+        def draw_list():
+            nonlocal image, draw, origin
+            box(self.LIST, '#181818', None)
+            base, base_draw = image, draw
+            clip = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))
+            origin = clip[:2]
+            image = Image.new('RGBA', (clip[2] - clip[0], clip[3] - clip[1]), '#181818')
+            draw = ImageDraw.Draw(image)
+            for index in self.visible_indices:
+                entry = self.entries[index]
+                rect = self.row_rect(index)
+                height = 44 if self.columns == 2 else 82
+                outline = gold if self.focus == 100 + index and not modal else cyan if self.selected == index else '#626262'
+                picture(entry, (rect[0], rect[1], rect[2], rect[1] + height), True, outline)
+                text(entry.date.replace('  ', ' '), rect[0] + 2, rect[1] + height + 5,
+                     rect[2] - rect[0] - 4, cyan if self.selected == index else muted,
+                     0.4 if self.columns == 2 else 0.55)
+            base.paste(image, clip[:2])
+            image, draw, origin = base, base_draw, (0, 0)
+            if self.max_scroll:
+                height = self.LIST[3] - self.LIST[1]
+                thumb = max(16, height * height / (math.ceil(len(self.entries) / self.columns) * self.row_height))
+                top = self.LIST[1] + (height - thumb) * self.scroll / self.max_scroll
+                box((157, self.LIST[1], 159, self.LIST[3]), '#303030', None)
+                box((157, top, 159, top + thumb), '#858585', None)
+
+        if surface is not None:
+            draw_list()
+            return image
 
         if cached is None:
             box(self.PANEL, '#181818', '#858585')
             text('Screenshots', 36, 26, 250, gold, 1)
-            text(f'{len(self.entries)} PNG', 374, 29, 88, muted, right=True)
+            text('Take screenshots with F8', 36, 43, 190, muted, 0.5)
+            text(f'{len(self.entries)} PNG', 374, 29, 70, muted, right=True)
+            for i, rect in enumerate(self.VIEWS):
+                box(rect, '#253033' if self.columns == i + 1 else '#222222',
+                    gold if self.focus == 16 + i else cyan if self.columns == i + 1 else '#626262')
+                for column in range(i + 1):
+                    for row in range(2):
+                        x = rect[0] + 6 + column * 7
+                        box((x, rect[1] + 5 + row * 6, x + (10 if i == 0 else 5), rect[1] + 9 + row * 6),
+                            '#eeeeee', None)
+            if not modal and self.hovered in (16, 17):
+                text('Large thumbnails' if self.hovered == 16 else 'Small thumbnails', 238, 45, 114, muted, 0.4)
             button(self.REFRESH, 'Refresh', 15)
             text('Size', 36, 58, 44, muted)
             for i, rect in enumerate(self.SCALES):
@@ -558,32 +668,9 @@ class ScreenshotGallery:
             box((366, 58, 374, 66), cyan if self.include_ui else '#181818')
             if self.include_ui:
                 draw.line([point(367, 62), point(369, 64), point(373, 59)], fill='#181818', width=max(1, round(sx)))
-            text('Include UI', 380, 58, 88)
+            text('With menus', 380, 58, 88)
             text(str(self.folder).replace('\\', '/'), 36, 77, 438, muted, 0.55, tail=True)
-            # Rows are clipped independently so scrolling never paints over controls.
-            base, base_draw = image, draw
-            clip = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))
-            origin = clip[:2]
-            image = Image.new('RGBA', (clip[2] - clip[0], clip[3] - clip[1]))
-            draw = ImageDraw.Draw(image)
-            for index, entry in enumerate(self.entries):
-                rect = self.row_rect(index)
-                if rect[3] < self.LIST[1] or rect[1] >= self.LIST[3]:
-                    continue
-                picture(entry, (rect[0], rect[1], rect[2], rect[1] + 82))
-                box((rect[0], rect[1], rect[2], rect[1] + 82), None,
-                    gold if self.focus == 100 + index else cyan if self.selected == index else '#626262')
-                text(entry.date,
-                     rect[0] + 3, rect[1] + 85, 114, cyan if self.selected == index else muted, 0.55)
-            base.alpha_composite(image, clip[:2])
-            image, draw = base, base_draw
-            origin = (0, 0)
-            if self.max_scroll:
-                height = self.LIST[3] - self.LIST[1]
-                thumb = max(16, height * height / (len(self.entries) * self.ROW_HEIGHT))
-                top = self.LIST[1] + (height - thumb) * self.scroll / self.max_scroll
-                box((157, self.LIST[1], 159, self.LIST[3]), '#303030', None)
-                box((157, top, 159, top + thumb), '#858585', None)
+            draw_list()
             if self.entry:
                 dimensions = picture(self.entry, self.PREVIEW)
                 text(self.entry.path.name.replace('_', ' '), 174, 311, 268, gold, 0.6)
@@ -592,9 +679,13 @@ class ScreenshotGallery:
                 text(f'{self.entry.size / 1024:.0f} KB', 440, 326, 80, muted, 0.6, right=True)
                 box(self.DELETE, '#303030' if self.focus == 13 else '#222222',
                     gold if self.focus == 13 else '#626262')
-                box((458, 317, 466, 328), '#222222', white)
+                draw.line([point(458, 318), point(459, 329), point(465, 329), point(466, 318)],
+                          fill=white, width=max(1, round(sx)))
                 draw.line([point(457, 315), point(467, 315)], fill=white, width=max(1, round(sx)))
-                draw.line([point(460, 313), point(464, 313)], fill=white, width=max(1, round(sx)))
+                draw.line([point(460, 315), point(460, 313), point(464, 313), point(464, 315)],
+                          fill=white, width=max(1, round(sx)))
+                for x in (461, 464):
+                    draw.line([point(x, 320), point(x, 326)], fill=white, width=max(1, round(sx)))
             else:
                 box(self.PREVIEW, '#0c0c0c')
                 text('Reading folder...' if self.applied_scan != self.scan_key else 'No screenshots yet',
@@ -604,10 +695,15 @@ class ScreenshotGallery:
             if self.error or self.status:
                 box((174, 323, 444, 339), '#181818', None)
                 text(self.error or self.status, 174, 326, 270, '#ff9b9b' if self.error else gold, 0.6)
+            if not modal and self.hovered == 13:
+                box((350, 292, 474, 307), '#303030', '#858585')
+                text('Delete screenshot', 356, 296, 112, white, 0.6)
             if modal:
                 image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 150)))
                 draw = ImageDraw.Draw(image)
                 remember(self.modal_cache, key, image.copy(), 3)
+            else:
+                remember(self.surface_cache, surface_key, image.copy(), 2)
         if self.choosing:
             box((48, 44, 464, 338), '#181818', '#858585')
             text('Screenshot folder', 64, 62, 384, gold, 1)
@@ -657,5 +753,5 @@ class ScreenshotGallery:
             text(target.path.name.replace('_', ' ') if target is not None else 'Unavailable', 100, 174, 312)
             text('This cannot be undone.', 100, 197, 312, muted)
             for i, (rect, label) in enumerate(zip(self.CONFIRM_BUTTONS, ('Cancel', 'Delete'))):
-                button(rect, label, 60 + i)
+                button(rect, label, 60 + i, scale=1, centered=True)
         return image

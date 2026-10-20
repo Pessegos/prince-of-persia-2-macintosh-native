@@ -89,14 +89,18 @@ scene tests exercise imported resources and actual Tk event bindings.
 ## Screenshot Gallery
 
 The gallery shows PNGs from the selected destination folder, newest first, with
-a scrolling thumbnail strip, an aspect-preserving large preview, dimensions and
+a scrolling two-column thumbnail grid, an aspect-preserving large preview, dimensions and
 file size. Capture selects the new PNG after it is successfully written; Refresh
-discovers external file changes. A trash control requires explicit confirmation,
+discovers external file changes. The two view controls switch between small paired
+thumbnails and larger single-column thumbnails, retaining the selected image and
+remembering the view for the session. Preview borders follow the fitted image,
+without adding black letterboxing, cropping or stretching the screenshot. The
+small header hint retains the F8 reminder. A trash control requires explicit confirmation,
 defaults to Cancel and verifies the file's timestamp/size before deleting it.
 Damaged, missing or oversized images report an unavailable preview without
 closing the menu. Decoding is limited to PNGs of at most 32 million pixels / 128 MiB.
 
-`Include UI` changes the gallery's Capture command only. F8 always remains clean,
+`With menus` changes the gallery's Capture command only. F8 always remains clean,
 and Shift+F8 always includes the displayed UI. The checkbox is remembered within
 the session; scale and folder retain their existing persisted settings. Both
 shortcuts work during menus, intros and paused play. Gallery capture feedback is
@@ -110,11 +114,18 @@ the displayed directory. Browsing and cancellation do not create directories or
 write preferences. Only `Use folder` creates a missing destination and remembers
 it; failures keep the original destination. Default navigates to the original
 output folder and still requires `Use folder` to confirm.
+Folder and file labels compose missing Latin accents using the native bitmap
+letters, with a system-font fallback for other Unicode characters. This is local
+to the screenshot gallery and does not modify the original Macintosh font assets.
 
 Directory reads, image decoding and explicit folder/deletion operations run on a
 single daemon worker; Tk state and presentation are updated on the UI thread.
 Stale directory results cannot replace the currently requested directory. Caches
 bound decoded images, fitted previews, glyphs and dimmed modal backgrounds.
+Small thumbnails and full previews have separate decoding budgets (64 and 3);
+queued thumbnails that are no longer visible are skipped. Smooth scrolling only
+redraws visible rows and compares/uploads the thumbnail strip, reusing the static
+panel and large preview. Neither rendering nor hit testing loops over the full library.
 Pointer hover does not rescan folders, and menu redraws never advance gameplay.
 Closing F2, changing menus or destroying the game closes the worker and cancels
 its polling callback. The renderer draws directly at the fitted window/PNG size
