@@ -7,7 +7,7 @@ import random
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from PIL import Image
 
@@ -139,7 +139,8 @@ class SaveBrowserTests(unittest.TestCase):
 
     def test_empty_directory_has_no_placeholder_slots_and_one_new_save_action(self):
         self.assertEqual(self.slots, ())
-        self.assertEqual(len(SaveBrowser(self.slots, 'save').items), 1)
+        self.assertEqual(len(SaveBrowser(self.slots, 'save').items), 0)
+        self.assertEqual(SaveBrowser(self.slots, 'save').hit(350, 340), 29)
         self.assertFalse(SaveBrowser(self.slots).primary_enabled)
         self.assertEqual(list(self.folder.iterdir()), [])
 
@@ -173,7 +174,7 @@ class SaveBrowserTests(unittest.TestCase):
         menu.slots = list_slots(self.folder)
         for action in ('load', 'save', 'delete'):
             menu.mode = 'save' if action == 'save' else 'load'
-            menu.selected = int(action == 'save')
+            menu.selected = 0
             menu.focus = 26 if action == 'delete' else 27
             self.assertEqual(menu.activate(), 'changed')
             self.assertEqual(menu.confirmation, action)
@@ -239,7 +240,7 @@ class SaveBrowserTests(unittest.TestCase):
 
     def test_new_save_action_opens_name_editor_on_single_click(self):
         menu = SaveBrowser((), 'save')
-        left, top, _right, _bottom = menu.row_rect(0)
+        left, top, _right, _bottom = menu.FOOTER[3]
         menu.click(left + 3, top + 3)
         self.assertEqual(menu.editing, 'create')
 
@@ -279,6 +280,64 @@ class SaveBrowserTests(unittest.TestCase):
         self.assertEqual(menu.scroll_target, 0)
         menu.edit_name('rename')
         self.assertFalse(menu.wheel(1))
+
+    def test_scroll_motion_is_frame_rate_independent_and_starts_gently(self):
+        entries = tuple(SaveSlot(self.folder / str(i), str(i), True) for i in range(30))
+        slow, fast = SaveBrowser(entries), SaveBrowser(entries)
+        slow.wheel(3)
+        fast.wheel(3)
+        slow.animate(1 / 60)
+        self.assertLess(slow.scroll, slow.scroll_target * 0.1)
+        for _ in range(29):
+            slow.animate(1 / 60)
+        for _ in range(120):
+            fast.animate(1 / 240)
+        self.assertAlmostEqual(slow.scroll, fast.scroll, places=8)
+        self.assertAlmostEqual(slow.scroll_velocity, fast.scroll_velocity, places=8)
+
+    def test_preview_and_font_work_are_cached_across_dialog_typing(self):
+        font = SimpleNamespace(glyphs=dict.fromkeys(range(128)), text=Mock(side_effect=lambda value, color:
+            Image.new('RGBA', (max(1, len(value)) * 7, 11), color)))
+        provider = Mock(return_value=Image.new('RGB', (510, 365), 'blue'))
+        current = SaveSlot(self.folder, 'Current', document={'test': True})
+        browser = SaveBrowser((), 'save', current=current, preview_provider=provider)
+        source = Image.new('RGBA', (1536, 1152), '#0d1117')
+        browser.draw(source, font, background_key=1)
+        provider.assert_called_once()
+        calls = font.text.call_count
+        browser.draw(source, font, background_key=1)
+        self.assertEqual(font.text.call_count, calls)
+        browser.edit_name('create')
+        browser.draw(source, font, background_key=1)
+        browser.edit_text('x', 'Another name')
+        browser.draw(source, font, background_key=1)
+        provider.assert_called_once()
+        self.assertEqual(len(browser.modal_cache), 1)
+        self.assertLessEqual(len(browser.text_cache), 256)
+
+    def test_old_instant_resume_preview_is_not_trusted_after_entry_preview_update(self):
+        path = self.folder / 'old.pop2save'
+        path.write_text(json.dumps({'format': 'pop2-macintosh-native-save', 'version': 2,
+            'level': 3, 'preview_at_resume': True, 'preview': encode_preview(Image.new('RGB', (512, 384), 'red')),
+            'resume': {'checkpoint': None, 'max_life': 3}}))
+        self.assertIsNone(list_slots(self.folder)[0].preview)
+
+    def test_cached_scroll_frames_match_full_redraws_at_multiple_sizes(self):
+        font = SimpleNamespace(glyphs=dict.fromkeys(range(128)), text=lambda value, color:
+            Image.new('RGBA', (max(1, len(value)) * 7, 11), color))
+        entries = tuple(SaveSlot(self.folder / str(i), f'Save {i}', True, level=i % 3 + 1,
+                                date='20 Oct 2026  12:00') for i in range(20))
+        browser = SaveBrowser(entries)
+        for size in ((512, 384), (1434, 1080)):
+            source = Image.new('RGBA', size, '#0d1117')
+            browser.draw(source, font)
+            for scroll in (17.3, 114.5, browser.max_scroll, 0):
+                with self.subTest(size=size, scroll=scroll):
+                    browser.scroll = scroll
+                    cached = browser.draw(source, font)
+                    browser.list_base_cache.clear()
+                    full = browser.draw(source, font)
+                    self.assertEqual(cached.tobytes(), full.tobytes())
 
     def test_names_come_from_metadata_and_do_not_change_file_paths(self):
         path = self.folder / 'slot-01.pop2save'

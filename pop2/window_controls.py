@@ -454,7 +454,8 @@ class WindowControls:
             if include_ui and self.game_menu is not None and self.game_menu.page == 'saves':
                 scale = self.screenshot_settings.scale
                 source = self.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
-                viewport = self.draw_screenshot_notice(self.game_menu.save_browser.draw(source, self.ui_font))
+                viewport = self.draw_screenshot_notice(self.game_menu.save_browser.draw(
+                    source, self.ui_font, background_key=id(self.screenshot_viewport)))
             path = save_screenshot(viewport, self.screenshot_settings)
         except (OSError, ValueError) as exc:
             message = "Could not save PNG. Check the screenshot folder."
@@ -634,7 +635,16 @@ class WindowControls:
             self.render()
         else:
             self.schedule_save_scroll()
-            self.render()
+            if self.game_menu is not None and self.game_menu.page == 'saves':
+                self.redraw_save_menu()
+            else:
+                self.render()
+
+    def redraw_save_menu(self):
+        self.refresh_game_menu()
+        self.native_viewport = self.draw_screenshot_notice(
+            self.game_menu.draw(self.screenshot_viewport, self.ui_font))
+        self.present_viewport()
 
     def open_save_browser(self, load=False):
         from pop2.save_slots import SAVE_DIRECTORY, SaveBrowser, SaveSlot, list_slots
@@ -664,7 +674,7 @@ class WindowControls:
                                resume='Checkpoint' if progress['checkpoint'] else 'Level start',
                                capacity=progress['max_life'], document=document)
         self.game_menu.save_browser = SaveBrowser(slots, 'load' if load else 'save', selected,
-                                                  focus=100 + selected,
+                                                  focus=100 + selected if load else 29,
                                                   save_available=self.can_save_game(), current=current,
                                                   preview_provider=self.save_slot_preview)
         self.game_menu.save_browser.ensure_visible(immediate=True)
@@ -703,8 +713,7 @@ class WindowControls:
                 self.save_game_to(path, save_name(browser.draft) if action == 'slot_create' else browser.entry.name)
                 browser.status = 'Game saved'
             browser.slots = list_slots(SAVE_DIRECTORY)
-            offset = int(browser.mode == 'save')
-            browser.selected = next((i + offset for i, slot in enumerate(browser.slots) if slot.path == path),
+            browser.selected = next((i for i, slot in enumerate(browser.slots) if slot.path == path),
                                     max(0, min(browser.selected, len(browser.items) - 1)))
             browser.ensure_visible(immediate=True)
             browser.error = ''
@@ -730,6 +739,8 @@ class WindowControls:
             return None
         context = id(menu), menu.page, menu.dropdown
         if browser is not None:
+            if index == 29 and not browser.save_available:
+                return None
             if index >= 100 and (index >= 100 + len(browser.items)
                                  or not browser.items[index - 100].exists and not browser.save_available):
                 return None
@@ -1037,6 +1048,8 @@ class WindowControls:
             if menu.hover(*(point if point is not None else (-1, -1))):
                 if menu is self.dev_menu:
                     self.redraw_dev_menu()
+                elif menu.page == 'saves':
+                    self.redraw_save_menu()
                 else:
                     self.render()
             if menu is self.dev_menu:
@@ -1102,6 +1115,7 @@ class WindowControls:
             self.root.after_cancel(pending)
             self.save_scroll_after_id = None
         if (menu is None or menu.page != 'saves'
+                or menu.save_browser.editing or menu.save_browser.confirmation
                 or abs(menu.save_browser.scroll - menu.save_browser.scroll_target) < 0.1
                 or getattr(self, 'save_scroll_after_id', None) is not None):
             return
@@ -1117,12 +1131,12 @@ class WindowControls:
             now = time.perf_counter()
             moving = browser.animate(now - previous)
             previous = now
-            self.native_viewport = self.draw_screenshot_notice(menu.draw(self.screenshot_viewport, self.ui_font))
-            self.present_viewport()
+            self.redraw_save_menu()
             if moving:
-                self.save_scroll_after_id = self.root.after(16, animate)
+                delay = max(1, round(1000 / 120 - (time.perf_counter() - now) * 1000))
+                self.save_scroll_after_id = self.root.after(delay, animate)
 
-        self.save_scroll_after_id = self.root.after(16, animate)
+        self.save_scroll_after_id = self.root.after(8, animate)
 
     def set_peaceful(self, peaceful):
         self.peaceful = peaceful
@@ -1167,12 +1181,44 @@ class WindowControls:
         if getattr(self, "bitmap_presenter", None) is not None:
             self.bitmap_presenter.close()
             self.bitmap_presenter = None
-        frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
         game_menu = getattr(self, 'game_menu', None)
         if getattr(game_menu, 'page', None) == 'saves':
-            source = self.screenshot_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+            source_cache = getattr(self, 'save_menu_source', None)
+            if source_cache is None or source_cache[0] is not self.screenshot_viewport or source_cache[1] != size:
+                source = self.screenshot_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+                self.save_menu_source = (self.screenshot_viewport, size, source)
+            else:
+                source = source_cache[2]
+            browser = game_menu.save_browser
             frame = self.draw_screenshot_notice(
-                game_menu.save_browser.draw(source, self.ui_font, visible=True), visible=True)
+                browser.draw(source, self.ui_font, visible=True,
+                                            background_key=id(self.screenshot_viewport)), visible=True).convert('RGB')
+            state = (id(self.screenshot_viewport), id(self.ui_font), browser.mode, browser.selected,
+                     id(browser.slots), id(browser.current), browser.error, browser.status,
+                     browser.save_available, browser.editing, browser.confirmation,
+                     None if browser.editing or browser.confirmation else browser.focus,
+                     getattr(self, 'screenshot_toast', None))
+            previous = getattr(self, 'save_menu_frame', None)
+            if (previous is not None and previous[0] is game_menu and previous[1].size == frame.size
+                    and previous[2] is self.image_ref):
+                rect = (0, 0, *frame.size)
+                if previous[3] == state:
+                    native = (80, 121, 433, 271) if browser.editing or browser.confirmation else browser.LIST
+                    rect = (round((native[0] - 1) * size[0] / 510), round(native[1] * size[1] / 384),
+                            round((native[2] - 1) * size[0] / 510), round(native[3] * size[1] / 384))
+                damage = ImageChops.difference(previous[1].crop(rect), frame.crop(rect)).getbbox()
+                if damage is not None:
+                    damage = (damage[0] + rect[0], damage[1] + rect[1],
+                              damage[2] + rect[0], damage[3] + rect[1])
+                    patch = ImageTk.PhotoImage(frame.crop(damage))
+                    self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', damage[0], damage[1])
+                self.save_menu_frame = (game_menu, frame, self.image_ref, state)
+                self.canvas.coords(self.canvas.find_all()[0], *position)
+                return
+        else:
+            self.save_menu_frame = None
+            self.save_menu_source = None
+            frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
         menu = getattr(self, 'dev_menu', None)
         if menu is not None and menu.preview_enabled:
             frame = menu.present_map(frame, self.ui_font).convert('RGB')
@@ -1191,6 +1237,8 @@ class WindowControls:
         else:
             self.dev_map_frame = None
         self.image_ref = ImageTk.PhotoImage(frame)
+        if getattr(game_menu, 'page', None) == 'saves':
+            self.save_menu_frame = (game_menu, frame, self.image_ref, state)
         if menu is not None and menu.preview_enabled:
             self.dev_map_frame = (menu, frame, self.image_ref)
         if self.canvas.find_all():

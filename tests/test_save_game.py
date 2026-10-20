@@ -271,7 +271,7 @@ class SaveSceneTests(unittest.TestCase):
         if scene.game_menu is None or scene.game_menu.page != 'saves':
             scene.apply_game_action('save')
         browser = scene.game_menu.save_browser
-        browser.selected, browser.focus = 0, 27
+        browser.selected, browser.focus = 0, 29
         scene.apply_game_action(browser.activate())
         self.assertEqual(browser.editing, 'create')
         browser.draft = name
@@ -538,6 +538,20 @@ class SaveSceneTests(unittest.TestCase):
                 self.assertEqual(document['name'], 'My destination')
                 preview = decode_preview(document['preview'])
                 scene.load_game_from(self.path)
+                if level == 3 and not checkpoint:
+                    self.assertEqual(scene.action, 45)
+                    # Advance only the same native entry script, without
+                    # independently randomizing torch/ambient animation.
+                    for _ in range(8):
+                        scene.sequence_runtime.next_frame()
+                        scene.game.caverns.advance()
+                    self.assertEqual(scene.sequence_state.action, 15)
+                    scene.action = scene.sequence_state.action
+                    scene.player_x = scene.sequence_state.target_x
+                    scene.sequence_state.current_x = scene.player_x
+                    room = scene.level_renderer.enter_room(scene.room_id, scene.game.caverns)
+                    scene.background, scene.foreground = room.background, room.foreground
+                    scene.render()
                 expected = scene.screenshot_viewport.crop((1, 0, 511, 365)).convert('RGB')
                 self.assertEqual(preview.tobytes(), expected.tobytes())
 

@@ -448,12 +448,15 @@ def restore_progress(document, resources):
     random_before = random.getstate()
     try:
         if set(document) - {'format', 'version', 'level', 'level_sha256', 'created_at',
-                            'resume', 'copy_verified', 'preview', 'name', 'preview_at_resume'}:
+                            'resume', 'copy_verified', 'preview', 'name', 'preview_at_resume', 'preview_version'}:
             raise SaveGameError('Unknown saved progress fields')
         if 'name' in document:
             save_name(document['name'])
         if 'preview_at_resume' in document and type(document['preview_at_resume']) is not bool:
             raise SaveGameError('Invalid save preview location')
+        if 'preview_version' in document and (type(document['preview_version']) is not int
+                                              or not 1 <= document['preview_version'] <= 1000):
+            raise SaveGameError('Invalid save preview version')
         game = GameSession.load(resources, document['level'])
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
             raise SaveGameError('Save belongs to different original game files')

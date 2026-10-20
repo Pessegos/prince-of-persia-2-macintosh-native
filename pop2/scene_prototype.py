@@ -373,6 +373,7 @@ class ScenePrototype(WindowControls):
         document['name'] = save_name(f'Level {document["level"]}' if name is None else name)
         document['preview'] = encode_preview(self.resume_preview(document))
         document['preview_at_resume'] = True
+        document['preview_version'] = 2
         write_save(path, document)
         self.status.set(f'Game saved: {path}')
 
@@ -401,6 +402,7 @@ class ScenePrototype(WindowControls):
                 preview.paused = False
                 preview.present_viewport = lambda: None
                 preview.bind_level(game, LevelRenderer(game.level, preload_room=False))
+                preview.settle_save_preview_entry()
                 preview.render()
                 if len(cache) >= 12:
                     del cache[next(iter(cache))]
@@ -408,6 +410,32 @@ class ScenePrototype(WindowControls):
             finally:
                 random.setstate(before)
         return cache[key]
+
+    def settle_save_preview_entry(self):
+        # Only finish the scripted door entry in the isolated preview. No
+        # combat, hazards, world clock or live-session controls are advanced.
+        game = self.game
+        cavern = game.caverns
+        if game.checkpoint is not None or cavern is None or not cavern.entry_frames:
+            return
+        if game.room_id != cavern.entry_room:
+            return
+        for _ in range(120):
+            if (game.runtime.state.sequence_id == IDLE_SEQUENCE
+                    and cavern.entry_frame == len(cavern.entry_frames) - 1):
+                break
+            if game.runtime.state.sequence_id != IDLE_SEQUENCE:
+                game.runtime.next_frame()
+            cavern.advance()
+        else:
+            raise ValueError('Door-entry preview did not reach idle')
+        state = game.runtime.state
+        state.current_x = state.target_x
+        state.sound_events.clear()
+        state.sequence_events.clear()
+        self.action, self.player_x = state.action, state.target_x
+        room = self.level_renderer.enter_room(game.room_id, cavern)
+        self.background, self.foreground = room.background, room.foreground
 
     def save_slot_preview(self, slot):
         if slot.document['version'] == 1:

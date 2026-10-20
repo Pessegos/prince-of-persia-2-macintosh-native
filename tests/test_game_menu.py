@@ -251,15 +251,15 @@ class GameMenuSceneTests(unittest.TestCase):
         scene = self.scene
         scene.apply_game_action('save')
         browser = scene.game_menu.save_browser
-        preview = browser.preview_provider(browser.current)
+        preview = browser.preview_provider(browser.detail)
         self.assertEqual(preview.size, (510, 365))
         for width, height in ((1020, 768), (1920, 1080), (3440, 1440), (800, 900)):
             with self.subTest(window=(width, height)), \
                     patch.object(scene.canvas, 'winfo_width', return_value=width), \
                     patch.object(scene.canvas, 'winfo_height', return_value=height), \
-                    patch('pop2.window_controls.ImageTk.PhotoImage', wraps=ImageTk.PhotoImage) as photo:
+                    patch('pop2.window_controls.ImageTk.PhotoImage', wraps=ImageTk.PhotoImage):
                 scene.present_viewport()
-                frame = photo.call_args.args[0]
+                frame = scene.save_menu_frame[1].convert('RGBA')
                 size, _origin = fit_viewport(width, height)
                 self.assertEqual(frame.size, size)
                 sx, sy = size[0] / 510, size[1] / 384
@@ -273,6 +273,40 @@ class GameMenuSceneTests(unittest.TestCase):
                 panel = browser.PANEL
                 self.assertEqual(frame.getpixel((round((panel[0] - 1) * sx), round(panel[1] * sy))),
                                  (133, 133, 133, 255))
+
+    def test_save_dialog_and_scroll_update_pixels_without_redrawing_gameplay(self):
+        scene = self.scene
+        scene.apply_game_action('save')
+        browser = scene.game_menu.save_browser
+        with patch.object(scene.canvas, 'winfo_width', return_value=3440), \
+                patch.object(scene.canvas, 'winfo_height', return_value=1440):
+            scene.present_viewport()
+            photo = scene.image_ref
+            clean = scene.screenshot_viewport
+            position = scene.player_x, scene.action, scene.combat.world_frame
+            browser.edit_name('create')
+            scene.apply_game_action('changed')
+            with patch.object(scene, 'render') as gameplay_render, \
+                    patch.object(scene.canvas, 'itemconfigure') as configure:
+                for character in 'Cavern run':
+                    browser.edit_text(character, character)
+                    scene.apply_game_action('changed')
+                    actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                    self.assertEqual(actual.tobytes(), scene.save_menu_frame[1].tobytes())
+                browser.key('Escape')
+                browser.slots = browser.slots * 20
+                scene.redraw_save_menu()
+                browser.wheel(3)
+                for _ in range(8):
+                    browser.animate(1 / 120)
+                    scene.redraw_save_menu()
+                    actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                    self.assertEqual(actual.tobytes(), scene.save_menu_frame[1].tobytes())
+                gameplay_render.assert_not_called()
+                configure.assert_not_called()
+            self.assertIs(scene.image_ref, photo)
+            self.assertIs(scene.screenshot_viewport, clean)
+            self.assertEqual(position, (scene.player_x, scene.action, scene.combat.world_frame))
 
     def test_shift_f8_saves_refined_browser_and_confirmations_at_selected_scale(self):
         scene = self.scene

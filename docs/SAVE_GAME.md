@@ -3,9 +3,11 @@
 The Save/Load commands in F1, or Alt+S / Alt+O / Alt+L, open an in-game save browser,
 not a native file picker.
 Only existing `.pop2save` files in `~/Saved Games/PoP2 Macintosh Native` appear
-in the library, newest first. Save mode adds a single `New save` action.
+in the library, newest first. Save mode adds a separate `New save` footer button,
+beside `Save game`; no empty or action-only rows occupy the list.
 The list scrolls continuously using the wheel, scrollbar or keyboard, with a
-short menu-only animation rather than discrete pages. Scrolling does not
+critically damped, frame-rate-independent menu animation rather than discrete pages.
+The animation targets 120 Hz, accounting for drawing time. Scrolling does not
 advance gameplay, select another save or perform disk reads on hover.
 Nothing is written merely by opening or navigating the browser.
 
@@ -22,21 +24,29 @@ combat/AI resources. Fighter decoding and legacy RNG handling import those
 dependencies only when needed. A subprocess regression test runs the complete
 slot suite from a temporary copy with no imported game assets, matching CI.
 
-Each entry shows its name, full `Level N` label and local save date; the detail
+Each entry shows its name, right-aligned `Level N` label and local save date; the detail
 pane adds the resume point, banked life capacity and a full-colour preview.
 The preview is rendered from the same restored progress used by Load, showing
 the level entry or activated checkpoint, not the Prince's position at Save.
+For cavern entrances, only the isolated entry script advances until the door
+has closed and the Prince is idle. Checkpoint previews remain immediate.
+This does not change Load timing or advance live actors, hazards or audio.
 It uses an isolated session/renderer and preserves the live world, actor
 identity, input, audio and random state. A bounded in-memory cache avoids
 rebuilding the same destination on redraw. Old point-of-save thumbnails are
 ignored and their progress-based preview is reconstructed without rewriting
-the file. New preview metadata explicitly records `preview_at_resume: true`.
+the file. New preview metadata explicitly records `preview_at_resume: true`
+and `preview_version: 2`; older instant-entry previews are regenerated in memory.
 The browser is drawn at the fitted window resolution: font glyphs and previews
 are scaled directly from their sources, not from an enlarged 512x384 menu.
 New previews retain all 510x365 scene pixels, without the HUD. Both old
 224x160 and full-resolution PNG fields remain accepted by the file decoder.
 Shift+F8 renders the browser and confirmations at the selected PNG scale;
 ordinary F8 still exports only the clean game.
+Bounded glyph, text, thumbnail and modal-background caches avoid repeated
+rendering while editing names. Menu input does not redraw gameplay. Presentation
+reuses the frozen game background, static menu regions and Tk image, uploading only changed pixels;
+typing and scrolling restrict damage checks to the dialog or list respectively.
 Saving to an occupied slot, loading and deleting require an in-game confirmation
 which defaults to Cancel. Successful saving stays in the browser. Loading
 resumes play; Back preserves an existing user pause and returns to F1 when that

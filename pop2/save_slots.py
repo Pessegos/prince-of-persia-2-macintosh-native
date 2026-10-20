@@ -2,11 +2,19 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
+import math
 from pathlib import Path
 
 from PIL import Image, ImageDraw
 
 from pop2.save_game import SAVE_DIRECTORY, decode_preview, read_document, save_name
+
+
+def remember(cache, key, value, limit=256):
+    if len(cache) >= limit:
+        del cache[next(iter(cache))]
+    cache[key] = value
+    return value
 
 
 @dataclass(frozen=True)
@@ -42,7 +50,8 @@ def read_slot(path, name):
         return SaveSlot(path, name, True, document['level'],
                         'Legacy save' if legacy else 'Checkpoint' if progress['checkpoint'] else 'Level start',
                         progress.get('max_life'), date.strftime('%d %b %Y  %H:%M'),
-                        decode_preview(document.get('preview')) if document.get('preview_at_resume') else None,
+                        decode_preview(document.get('preview')) if document.get('preview_at_resume')
+                        and document.get('preview_version') == 2 else None,
                         modified=path.stat().st_mtime, document=document)
     except (OSError, ValueError, TypeError, KeyError, OverflowError):
         return SaveSlot(path, name, True, error='Save unavailable')
@@ -68,25 +77,40 @@ class SaveBrowser:
     preview_provider: object = field(default=None, repr=False)
     scroll: float = 0.0
     scroll_target: float = 0.0
+    scroll_velocity: float = 0.0
     editing: str | None = None
     draft: str = ''
     caret: int = 0
     anchor: int = 0
     hovered: int | None = None
+    glyph_cache: dict = field(default_factory=dict, repr=False, compare=False)
+    text_cache: dict = field(default_factory=dict, repr=False, compare=False)
+    preview_cache: dict = field(default_factory=dict, repr=False, compare=False)
+    modal_cache: dict = field(default_factory=dict, repr=False, compare=False)
+    list_base_cache: dict = field(default_factory=dict, repr=False, compare=False)
 
     PANEL = (28, 16, 484, 368)
     TABS = ((40, 53, 144, 79), (150, 53, 254, 79))
     PREVIEW = (238, 99, 472, 267)
-    FOOTER = ((40, 328, 140, 356), (148, 328, 248, 356), (260, 328, 472, 356))
+    FOOTER = ((40, 328, 108, 356), (116, 328, 196, 356),
+              (204, 328, 324, 356), (332, 328, 472, 356))
     LIST = (40, 99, 228, 321)
     ROW_HEIGHT = 42
     RENAME = (442, 274, 472, 294)
     NAME_FIELD = (100, 166, 412, 199)
     CONFIRM = ((100, 222, 246, 252), (258, 222, 412, 252))
 
+    def __post_init__(self):
+        if self.mode == 'save' and not self.slots and self.focus == 100:
+            self.focus = 29
+
     @property
     def items(self):
-        return ((SaveSlot(Path(), 'New save'),) + self.slots) if self.mode == 'save' else self.slots
+        return self.slots
+
+    @property
+    def footer_rects(self):
+        return self.FOOTER if self.mode == 'save' else (*self.FOOTER[:2], (204, 328, 472, 356))
 
     @property
     def entry(self):
@@ -94,7 +118,8 @@ class SaveBrowser:
 
     @property
     def detail(self):
-        return self.current if not self.entry.exists and self.mode == 'save' and self.current else self.entry
+        return self.current if self.mode == 'save' and self.current and (
+            not self.entry.exists or self.editing == 'create') else self.entry
 
     @property
     def max_scroll(self):
@@ -108,6 +133,7 @@ class SaveBrowser:
             else self.scroll_target))
         if immediate:
             self.scroll = self.scroll_target
+            self.scroll_velocity = 0
 
     def wheel(self, steps):
         if self.confirmation or self.editing:
@@ -118,16 +144,29 @@ class SaveBrowser:
         return changed
 
     def animate(self, seconds):
-        distance = self.scroll_target - self.scroll
-        if abs(distance) < 0.1:
-            self.scroll = self.scroll_target
+        if self.editing or self.confirmation:
             return False
-        self.scroll += distance * min(1, seconds * 18)
+        distance = self.scroll_target - self.scroll
+        if abs(distance) < 0.025 and abs(self.scroll_velocity) < 0.1:
+            self.scroll = self.scroll_target
+            self.scroll_velocity = 0
+            return False
+        # Exact critically damped motion keeps both position and velocity
+        # continuous when the wheel changes direction or frame rate varies.
+        seconds = max(0, seconds)
+        decay = math.exp(-24 * seconds)
+        offset = -distance
+        change = (self.scroll_velocity + 24 * offset) * seconds
+        self.scroll = self.scroll_target + (offset + change) * decay
+        self.scroll_velocity = (self.scroll_velocity - 24 * change) * decay
+        if self.scroll < 0 or self.scroll > self.max_scroll:
+            self.scroll = max(0, min(self.max_scroll, self.scroll))
+            self.scroll_velocity = 0
         return True
 
     @property
     def primary_enabled(self):
-        return self.save_available if self.mode == 'save' else self.entry.exists and not self.entry.error
+        return self.entry.exists and (self.save_available if self.mode == 'save' else not self.entry.error)
 
     @staticmethod
     def contains(rect, x, y):
@@ -151,7 +190,7 @@ class SaveBrowser:
                          if self.contains(self.row_rect(row), x, y)), None)
         if self.entry.exists and not self.entry.error:
             controls[25] = self.RENAME
-        controls.update(zip((28, 26, 27), self.FOOTER))
+        controls.update(zip((28, 26, 27, 29), self.footer_rects))
         return next((index for index, rect in controls.items() if self.contains(rect, x, y)), None)
 
     def hover(self, x, y):
@@ -174,6 +213,7 @@ class SaveBrowser:
                                 key=lambda index: self.slots[index].modified, default=self.selected)
         self.error = self.status = ''
         self.scroll = self.scroll_target = 0
+        self.scroll_velocity = 0
 
     def edit_name(self, mode):
         self.editing = mode
@@ -219,6 +259,8 @@ class SaveBrowser:
             self.switch('save' if self.focus == 0 else 'load')
         elif self.focus == 28:
             return 'save_back'
+        elif self.focus == 29 and self.mode == 'save' and self.save_available:
+            self.edit_name('create')
         elif self.focus == 25 and self.entry.exists:
             self.edit_name('rename')
         elif self.focus == 26 and self.entry.exists:
@@ -280,21 +322,32 @@ class SaveBrowser:
             self.focus = 100 + self.selected
             self.ensure_visible()
         elif key == 'Tab':
-            controls = (0, 1, 100 + self.selected, 25, 28, 26, 27)
+            controls = (0, 1, 100 + self.selected, 25, 28, 26, 27) + ((29,) if self.mode == 'save' else ())
             position = controls.index(self.focus) if self.focus in controls else 2
             self.focus = controls[(position + (-1 if backwards else 1)) % len(controls)]
         elif key == 'Delete' and self.entry.exists:
             self.confirmation, self.focus = 'delete', 30
         return 'changed'
 
-    def draw(self, viewport, font, *, visible=False):
-        image = Image.alpha_composite(viewport, Image.new('RGBA', viewport.size, (0, 0, 0, 150)))
+    def draw(self, viewport, font, *, visible=False, background_key=None):
+        modal = self.confirmation or self.editing
+        key = (viewport.size, visible, id(font), background_key if background_key is not None else id(viewport),
+               self.mode, self.selected, id(self.slots), id(self.current), self.scroll,
+               self.error, self.status, self.save_available, self.editing)
+        cached = self.modal_cache.get(key) if modal else None
+        list_key = key[:8] + key[9:] + (self.focus,)
+        list_base = self.list_base_cache.get(list_key) if not modal else None
+        if not modal:
+            self.modal_cache.clear()
+        image = (cached.copy() if cached is not None else list_base.copy() if list_base is not None else
+                 Image.alpha_composite(viewport, Image.new('RGBA', viewport.size, (0, 0, 0, 150))))
         draw = ImageDraw.Draw(image)
         gold, white, muted, cyan = '#f4d873', '#eeeeee', '#999999', '#77c9dc'
         sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
+        origin = (0, 0)
 
         def point(x, y):
-            return round((x - int(visible)) * sx), round(y * sy)
+            return round((x - int(visible)) * sx) - origin[0], round(y * sy) - origin[1]
 
         def rectangle(rect, **colors):
             draw.rectangle((*point(*rect[:2]), *point(*rect[2:])),
@@ -307,25 +360,33 @@ class SaveBrowser:
         def glyphs(value, color):
             encoded = str(value).encode('mac_roman', errors='replace')
             value = bytes(code if code in font.glyphs else 63 for code in encoded).decode('mac_roman')
-            return font.text(value, color)
+            key = id(font), value, color
+            if key not in self.glyph_cache:
+                remember(self.glyph_cache, key, font.text(value, color))
+            return self.glyph_cache[key]
 
-        def text(value, x, y, color=white, width=190, small=False, ellipsize=False):
+        def text(value, x, y, color=white, width=190, small=False, ellipsize=False, align='left'):
             if not value:
                 return
-            if ellipsize and glyphs(value, color).width * 0.7 > width:
-                while value and glyphs(value + '...', color).width * 0.7 > width:
-                    value = value[:-1]
-                value += '...'
-            glyph = glyphs(value, color)
-            ink = glyph.getbbox()
-            if ink:
-                glyph = glyph.crop((0, ink[1], glyph.width, ink[3]))
-            scale = min(0.7 if small else 1, width / max(1, glyph.width))
-            size = (max(1, round(glyph.width * scale * sx)),
-                    max(1, round(glyph.height * scale * sy)))
-            if glyph.size != size:
-                glyph = glyph.resize(size, Image.Resampling.NEAREST)
-            image.paste(glyph, point(x, y), glyph)
+            key = id(font), str(value), color, width, small, ellipsize, sx, sy
+            glyph = self.text_cache.get(key)
+            if glyph is None:
+                if ellipsize and glyphs(value, color).width * 0.7 > width:
+                    while value and glyphs(value + '...', color).width * 0.7 > width:
+                        value = value[:-1]
+                    value += '...'
+                glyph = glyphs(value, color)
+                ink = glyph.getbbox()
+                if ink:
+                    glyph = glyph.crop((0, ink[1], glyph.width, ink[3]))
+                scale = min(0.7 if small else 1, width / max(1, glyph.width))
+                size = (max(1, round(glyph.width * scale * sx)),
+                        max(1, round(glyph.height * scale * sy)))
+                if glyph.size != size:
+                    glyph = glyph.resize(size, Image.Resampling.NEAREST)
+                remember(self.text_cache, key, glyph)
+            x, y = point(x, y)
+            image.paste(glyph, (x - glyph.width if align == 'right' else x, y), glyph)
 
         def button(rect, label, index, enabled=True, active=False):
             highlighted = self.focus == index or self.editing and self.hovered == index
@@ -333,75 +394,95 @@ class SaveBrowser:
                       outline=gold if highlighted else cyan if active else '#626262')
             text(label, rect[0] + 10, rect[1] + 7, white if enabled else muted, rect[2] - rect[0] - 20)
 
-        rectangle(self.PANEL, fill='#181818', outline='#858585')
-        text('Saved Games', 40, 29, gold)
-        text(f'{len(self.slots)} {"save" if len(self.slots) == 1 else "saves"}', 390, 32, muted, 82, True)
-        for index, (rect, label) in enumerate(zip(self.TABS, ('Save', 'Load'))):
-            button(rect, label, index, active=self.mode == label.lower())
-        line(((40, 88), (472, 88)), '#404040')
-        # Moving rows are clipped separately from the fixed controls/preview.
-        background = image
-        image = Image.new('RGBA', image.size)
-        draw = ImageDraw.Draw(image)
-        for row, slot in enumerate(self.items):
-            rect = self.row_rect(row)
-            if rect[3] <= self.LIST[1] or rect[1] >= self.LIST[3]:
-                continue
-            selected = self.selected == row
-            rectangle(rect, fill='#253033' if selected else '#222222',
-                      outline=gold if self.focus == 100 + row else cyan if selected else '#404040')
-            text(slot.name, rect[0] + 8, rect[1] + 7, cyan if selected else white,
-                 100 if slot.exists else 160, slot.exists, True)
-            if slot.exists:
-                text(f'Level {slot.level}' if slot.level else '---', rect[2] - 65, rect[1] + 7,
-                     muted, 59, True)
-                text(slot.error or slot.date, rect[0] + 8, rect[1] + 25, muted, 164, True)
-        clip = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))
-        background.alpha_composite(image.crop(clip), clip[:2])
-        image = background
-        draw = ImageDraw.Draw(image)
-        if not self.items:
-            text('No saved games', 50, 181, muted, 168, True)
-        if self.max_scroll:
-            height = self.LIST[3] - self.LIST[1]
-            thumb = max(16, height * height / (len(self.items) * self.ROW_HEIGHT))
-            top = self.LIST[1] + (height - thumb) * self.scroll / self.max_scroll
-            rectangle((225, self.LIST[1], 227, self.LIST[3]), fill='#303030')
-            rectangle((225, top, 227, top + thumb), fill='#858585')
-        slot = self.detail
-        if slot.document is not None and self.preview_provider is not None and slot.preview is None:
-            try:
-                preview = self.preview_provider(slot)
-            except (OSError, ValueError):
-                preview = None
-        else:
-            preview = slot.preview
-        left, top, right, bottom = self.PREVIEW
-        rectangle(self.PREVIEW, fill='#0c0c0c', outline='#626262')
-        if preview is not None:
-            origin = point(left + 1, top + 1)
-            edge = point(right - 1, bottom - 1)
-            preview = preview.resize((max(1, edge[0] - origin[0]),
-                                      max(1, edge[1] - origin[1])), Image.Resampling.NEAREST)
-            image.paste(preview, origin)
-        else:
-            text(slot.error or ('No preview' if self.items else 'No saved games'), left + 28, top + 74,
-                 muted, right - left - 50)
-        text(slot.name, 238, 278, gold, 194, True, True)
-        if self.entry.exists and not self.entry.error:
-            rectangle(self.RENAME, fill='#222222', outline=gold if self.focus == 25 else '#626262')
-            line(((451, 288), (461, 278)), white, 2)
-            line(((450, 290), (454, 289)), white)
-        text(slot.resume, 238, 300, muted, 124, True)
-        if slot.capacity is not None:
-            text(f'Life {slot.capacity}', 400, 300, muted, 72, True)
-        for index, (rect, label) in zip((28, 26, 27), zip(self.FOOTER,
-                ('Back', 'Delete', 'Save game' if self.mode == 'save' else 'Load game'))):
-            button(rect, label, index, self.entry.exists if index == 26 else self.primary_enabled if index == 27 else True)
-        text(self.error or self.status or slot.date, 238, 315,
-             '#ff9b9b' if self.error else muted, 234, True)
+        def draw_list():
+            nonlocal image, draw, origin
+            rectangle(self.LIST, fill='#181818')
+            # Allocate only the clipped list, not another full-window layer.
+            background = image
+            clip = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))
+            origin = clip[:2]
+            image = Image.new('RGBA', (clip[2] - clip[0], clip[3] - clip[1]))
+            draw = ImageDraw.Draw(image)
+            for row, slot in enumerate(self.items):
+                rect = self.row_rect(row)
+                if rect[3] <= self.LIST[1] or rect[1] >= self.LIST[3]:
+                    continue
+                selected = self.selected == row
+                rectangle(rect, fill='#253033' if selected else '#222222',
+                          outline=gold if self.focus == 100 + row else cyan if selected else '#404040')
+                text(slot.name, rect[0] + 8, rect[1] + 7, cyan if selected else white, 100, True, True)
+                text(f'Level {slot.level}' if slot.level else '---', rect[2] - 8, rect[1] + 7,
+                     muted, 59, True, align='right')
+                text(slot.error or slot.date, rect[2] - 8, rect[1] + 25, muted, 164, True, align='right')
+            background.alpha_composite(image, origin)
+            image, origin = background, (0, 0)
+            draw = ImageDraw.Draw(image)
+            if not self.items:
+                text('No saved games', 50, 181, muted, 168, True)
+            if self.max_scroll:
+                height = self.LIST[3] - self.LIST[1]
+                thumb = max(16, height * height / (len(self.items) * self.ROW_HEIGHT))
+                top = self.LIST[1] + (height - thumb) * self.scroll / self.max_scroll
+                rectangle((225, self.LIST[1], 227, self.LIST[3]), fill='#303030')
+                rectangle((225, top, 227, top + thumb), fill='#858585')
+
+        if list_base is not None:
+            draw_list()
+            return image
+
+        if cached is None:
+            rectangle(self.PANEL, fill='#181818', outline='#858585')
+            text('Saved Games', 40, 29, gold)
+            text(f'{len(self.slots)} {"save" if len(self.slots) == 1 else "saves"}', 472, 32,
+                 muted, 82, True, align='right')
+            for index, (rect, label) in enumerate(zip(self.TABS, ('Save', 'Load'))):
+                button(rect, label, index, active=self.mode == label.lower())
+            line(((40, 88), (472, 88)), '#404040')
+            draw_list()
+            slot = self.detail
+            source_key = ('source', slot.path, slot.modified, id(slot.document), id(slot.preview), id(self.preview_provider))
+            if source_key not in self.preview_cache:
+                try:
+                    preview = (self.preview_provider(slot) if slot.document is not None
+                        and self.preview_provider is not None and slot.preview is None else slot.preview)
+                except (OSError, ValueError):
+                    preview = None
+                remember(self.preview_cache, source_key, preview, 8)
+            preview = self.preview_cache[source_key]
+            left, top, right, bottom = self.PREVIEW
+            rectangle(self.PREVIEW, fill='#0c0c0c', outline='#626262')
+            if preview is not None:
+                pos = point(left + 1, top + 1)
+                edge = point(right - 1, bottom - 1)
+                size = max(1, edge[0] - pos[0]), max(1, edge[1] - pos[1])
+                fit_key = ('fit', source_key, size)
+                if fit_key not in self.preview_cache:
+                    remember(self.preview_cache, fit_key, preview.resize(size, Image.Resampling.NEAREST), 8)
+                image.paste(self.preview_cache[fit_key], pos)
+            else:
+                text(slot.error or ('No preview' if self.items else 'No saved games'), left + 28, top + 74,
+                     muted, right - left - 50)
+            text(slot.name, 238, 278, gold, 194, True, True)
+            if self.entry.exists and not self.entry.error:
+                rectangle(self.RENAME, fill='#222222', outline=gold if self.focus == 25 else '#626262')
+                line(((451, 288), (461, 278)), white, 2)
+                line(((450, 290), (454, 289)), white)
+            text(slot.resume, 238, 300, muted, 124, True)
+            if slot.capacity is not None:
+                text(f'Life {slot.capacity}', 400, 300, muted, 72, True)
+            for index, (rect, label) in zip((28, 26, 27, 29), zip(self.footer_rects,
+                    ('Back', 'Delete', 'Save game' if self.mode == 'save' else 'Load game', 'New save'))):
+                enabled = (self.entry.exists if index == 26 else self.primary_enabled if index == 27
+                           else self.save_available if index == 29 else True)
+                button(rect, label, index, enabled)
+            text(self.error or self.status or slot.date, 238, 315,
+                 '#ff9b9b' if self.error else muted, 234, True)
+            if not modal:
+                remember(self.list_base_cache, list_key, image.copy(), 3)
         if self.confirmation or self.editing:
-            image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 140)))
+            if cached is None:
+                image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 140)))
+                remember(self.modal_cache, key, image.copy(), 3)
             draw = ImageDraw.Draw(image)
             rectangle((80, 121, 432, 270), fill='#181818', outline='#858585')
             title = ('New save' if self.editing == 'create' else 'Rename save') if self.editing else {
