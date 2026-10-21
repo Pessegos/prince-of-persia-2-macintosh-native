@@ -427,9 +427,9 @@ class InputRecoveryTests(unittest.TestCase):
         self.assertEqual((scene.sequence_state.sequence_id, scene.action),
                          (SWORD_GUARD_SEQUENCE, 158))
 
-    @unittest.expectedFailure
     def test_shift_suppresses_backward_sword_step(self):
-        # OnAlert 6:256e-257c requires cb80 == 0 for ordinary retreat.
+        # OnAlert 6:256e-257c requires cb80 == 0 for ordinary retreat; Shift
+        # requests the voluntary turn (6:22f2) instead.
         scene = self.sword_guard()
         scene.set_key_state("shift", True)
         scene.horizontal_key(None, -1, True)
