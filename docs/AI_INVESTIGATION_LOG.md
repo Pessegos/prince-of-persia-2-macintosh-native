@@ -488,3 +488,14 @@ GitHub Tests run before handoff; the first run is already green.
 The user's current request authorizes exactly these two updates. Leave the
 larger AI recovery unfinished and resumable; do not claim full parity or
 start a third implementation block without a renewed request.
+
+## Parallel Research Onboarding
+
+The user now requests preparation for a separate Claude research session,
+not a third gameplay implementation block. Read AGENTS.md, CLAUDE.md,
+docs/PARALLEL_WORK.md and docs/AI_RESEARCH_HANDOFF.md for the current entry
+point. Earlier per-turn commit limits in this chronological log are not
+standing instructions for a newly assigned task. The corrected target-cache
+interpretation above supersedes the earlier initial Main-only interpretation.
+The c2d561c GitHub Tests run 39599875981 completed successfully. Native files
+remain private read-only references; ignored local setup is not in Git.

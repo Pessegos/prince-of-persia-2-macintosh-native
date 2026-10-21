@@ -14,3 +14,4 @@ rendered/
 *.pop2save
 /assets/*
 !/assets/README.md
+/CLAUDE.local.md
