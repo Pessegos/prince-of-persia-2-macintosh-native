@@ -45,11 +45,13 @@ Saving follows the original game's checkpoint system. Loading a save takes you b
 
 <br/>
 
-### Cutscene Pausing
+## Screenshot Gallery (F2)
 
-Cutscenes can now be paused and resumed at any time.
+The F2 menu lets you browse and manage your screenshots directly in-game, with previews, resolution and folder options. You can even delete screenshots by tossing them into the lava.
 
-<img src="docs/github readme/cutscene-pause.png" alt="Paused cutscene" width="700">
+Pressing F8 takes a clean PNG screenshot without menus or overlays, while Shift+F8 captures the screen as it appears, including menus and paused scenes. A small notification also appears whenever a screenshot is saved.
+
+<img src="docs/github readme/screenshots-preview-v3.gif" alt="Screenshot Gallery (F2)" width="700">
 
 <br/>
 
@@ -71,6 +73,14 @@ An interactive map that allows browsing through levels and teleporting directly 
 The Playback tab provides quick access to cutscenes, making it easier to test individual sequences.
 
 <img src="docs/github readme/developer-playback-preview-v3.gif" alt="Developer Tools - Playback" width="700">
+
+<br/>
+
+## Cutscene Pausing
+
+Cutscenes can now be paused and resumed at any time.
+
+<img src="docs/github readme/cutscene-pause.png" alt="Paused cutscene" width="700">
 
 <br/>
 
