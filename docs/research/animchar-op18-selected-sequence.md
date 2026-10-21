@@ -1,6 +1,26 @@
 # AnimChar Opcode -18 Clears The Selected Sequence
 
-Research note, 2026-10-21, `claude/ai-research`. No runtime code changed.
+Research note, 2026-10-21, `claude/ai-research`.
+
+**Implemented in `a33dec9`, with the user's authorization while Codex was
+unavailable; not yet in `main`.**
+- `-18` now sets `selected_sequence_id = 0`. The extra `sequence_mode` clear
+  is kept because it is inert.
+- `save_game.py` accepts a selected ID of 0.
+- Three regressions fail on the previous code: the runtime link case, the
+  skeleton second shake, and the save round trip.
+- Rerunning the native probe gives 0 selected-ID mismatches in 3,438 frames.
+- **Consequence found by the full suite (`143d972`).** The port hid the sunk
+  Prince (pose 185 after `-18`) only through its selected-27 sand clip. The
+  original hides him because `-21 7` makes IsCharNonViewable (`4:4724`)
+  true, so ClipChar (`4:4152`) skips the character. `composite_actor` now
+  skips actors whose `sequence_mode` is 4, 5, 6, 7, 10 or 12. In ordinary
+  play only `SEQS:27` sets one of these values. The environment-5 dead-pose
+  branch of IsCharNonViewable (`4:474c-477c`) is not modelled.
+- The quicksand test now expects the native state: selected 0, pose 185,
+  mode 7. A rendered check (local, not committed) shows the sand without
+  the corpse.
+
 It started from a limit of the Prince target patch: the SwordCtrl gate
 excludes sequences 27 and 110 (`proposed-prince-target-layers.md`).
 

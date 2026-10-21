@@ -1,6 +1,16 @@
 # Prince Sword Turn Routine `6:26b8`
 
-Research note, 2026-10-21, `claude/ai-research`. No runtime code changed.
+Research note, 2026-10-21, `claude/ai-research`.
+
+**Implemented in `1e45090`, with the user's authorization; not yet in
+`main`.**
+- `combat_turn_offset` takes optional bounds and counts a tile-4 cell as a
+  barrier when `stone_gate_blocks` holds in environment 3.
+- `choose_player_turn` forwards the bounds. The only `scene_prototype.py`
+  change is the call site, which passes `player_bounds()`.
+- The regression compares a closed gate with a wall, an open gate with clear
+  floor, and the case without bounds.
+
 Earlier notes treated this routine as a decision endpoint only. This note
 decodes it and compares it with `LevelMap.combat_turn_offset`
 (`pop2/terrain.py`). Labels: **[D]** direct reading; **[I]** inference.
