@@ -150,7 +150,68 @@ generation/skeleton/harbor/save/slots/rebirth/terrain scope passed 561 tests
 (one optional skip); subsequent focused validation passed 97 tests including
 the final negative-offset helper, extended snapshot validation and reload.
 
-Before commit, rerun lint/catalog/diff checks and verify the GitHub workflow.
-Pending follow-on
+Committed as `9aa7f9c`, GitHub Tests run 39552814145 passed. Lint, catalog and
+diff checks passed. Final isolated asset-free run: 24 tests, two optional
+integration skips. Pending follow-on
 fronts remain the cached-FRAM initialization provenance, hidden-facing removal,
 ordinary rooftop bank scheduling, noise producers and later special actors.
+
+## Ordinary Guard Room-Bank Investigation
+
+The current rooftop active set still includes neighboring/distant pursuers
+without the explicit five-slot room-bank selection used by skeletons. Before
+changing this, recover ordinary InitOpps reload and its native alive word;
+otherwise restricting updates alone would preserve the wrong room lifecycle.
+Static review: a zero cursor normally chooses unarmed sequence 77 (except
+saved sequence 22) and restores full life. A nonzero cursor restores current
+sequence/cursor, stored sword and HP, then executes one AnimChar. Source flags,
+jump-height metadata and corpse-slot selection are additional dependencies.
+
+Local `rendered/guard_reload_native_probe_v1.py` audits this path. Its first
+version used the shared decoder and exposed a missing -23 rule before any
+bank conversion was attempted. Do not interpret its preliminary counts as a
+completed ordinary-guard bank implementation.
+
+## Terminal Pose Recovery: Implementation In Verification
+
+Original `4:2f00-2f14` rewinds to max(0, entry_cursor - 1) and continues
+decoding. The old interpreter just returned the cached action, which can be
+zero after reload. Implemented the original reread in SequenceRuntime; this
+is a prerequisite correction for both skeleton and ordinary guard records.
+
+Independent original AnimChar execution matched all 867 final cases versus
+861 baseline mismatches. The probe supplies only resource lookup and Toolbox
+handle locking, not a replacement animation decoder. Reports are local
+`rendered/sequence-hold-native-v1.json` and
+`rendered/sequence-hold-native-baseline-v1.json`.
+
+Eight focused tests pass, including a real held skeleton combat reload.
+Replaying the previous method yields six failures and no test errors. In a
+clean temporary project, the seven asset-free checks pass and the single
+original-resource integration skips. The prior 9,504 InitOpps/SkelAddOpponent
+audit still agrees after this correction.
+
+The ordinary guard InitOpps comparison now uses native AnimChar independently:
+all 1,280 observed reload outputs agree with the corrected shared decoder.
+This includes 416 cases with negative native ALIVE but zero HP, and 240
+zero-cursor sequence reinitializations. It does not prove the full room bank.
+
+Full discovery ran 1,906 tests: four failures (the four window sizes in one
+save-browser pixel test), one skip and four expected failures. Replaying the
+previous interpreter reproduces all four failures. The test reads a real
+user save with an embedded preview, but compares it with a newly rebuilt
+preview; these need not agree. Isolate its save list rather than changing
+production rendering or user data. Focused animation/skeleton/save-format
+validation passed 92 tests; lint, catalog and diff checks passed.
+
+## Zero-HP Reload: Next Proven Lifecycle Difference
+
+`rendered/zero_hp_reload_native_probe_v1.py` executes PlayerCtrl's original
+4:3d24-3d70 prefix before skeleton AutoCtrl. A resumed held pose can have
+native ALIVE=-1 with HP=0. PlayerCtrl registers death before AutoCtrl and the
+recovery timer counts down: 99 -> 98/97/96/95 over four frames. The port keeps
+native_alive=True and timer=99 throughout. This is not a reason to alter
+reload semantics: the missing operation belongs to the control phase.
+The probe retains the existing cycle harness's flat-map, RNG and shared-SEQS
+limitations. Implement and test this scheduling correction separately.
+Keep ordinary rooftop bank conversion open; do not claim complete AI.

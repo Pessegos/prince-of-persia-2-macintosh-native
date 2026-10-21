@@ -150,6 +150,37 @@ was reviewed as a secondary cross-reference for OnAlert/DoStrike/DoBlock.
 No AI probabilities or external runtime were imported; the Macintosh
 opcodes remain the reference. This does not establish full enemy-AI parity.
 
+## Terminal Animation Poses During Reload
+
+AnimChar's opcode -23 (`4:2f00-2f14`) rewinds to one word before the cursor
+saved at function entry, then continues interpreting until a pose is read.
+It is not simply a return of the actor's cached pose. The previous port
+appeared correct during uninterrupted playback because that cache already
+contained the terminal frame, but a room reload can start with action zero.
+In that case, the held combat resource 227 must yield pose 171 again.
+
+SequenceRuntime now follows the original rewind/read path. Its operation
+limit also bounds malformed streams that never yield a pose. The selected
+sequence history, offsets, callbacks and normal animation cadence remain
+separate; the rewind does not replay earlier movement before the held pose.
+
+An independent original AnimChar probe supplies original SEQS bytes and
+observes the actual 68k interpreter, rather than substituting SequenceRuntime.
+Across 867 checks, the baseline mismatched 861 times with deliberately stale
+pose caches; the correction has no mismatches. Inputs cover terminal holds
+across the original resource set, actor types 0/2/4, both facings, four cached
+poses and an intervening-mode-operation fixture. Resource lookup and Toolbox
+handle locking are supplied endpoints. This validates this opcode path, not
+every instruction or external callback in every animation.
+
+Asset-free tests cover fresh/stale cached poses, the entry-cursor distinction,
+selected sequence history, repeated holds, movement/callback preservation,
+peek isolation and malformed-stream limits. A resource-backed skeleton room
+reload confirms a visible pose 171 and retained health rather than action
+zero. The preceding InitOpps audits intentionally used the shared SEQS
+interpreter; they were not independent proof of this instruction. Local
+probe: `rendered/sequence_hold_native_probe_v1.py`.
+
 ## Close Spacing After Retreats And Turns
 
 EnGarde `4:0a82-0c08` distinguishes the selected sequence at A5 `-0x502e`

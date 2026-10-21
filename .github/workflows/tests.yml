@@ -20,6 +20,8 @@ jobs:
       - run: python run_game.py --check-dependencies
       - name: Bundled application icon and native window identity
         run: python -m unittest -q tests.test_app_window
+      - name: Native terminal animation pose and reload semantics
+        run: python -m unittest -q tests.test_sequence_holds
       - name: Checkpoint saves and integrated save-slot browser
         run: python -m unittest -q tests.test_save_slots
       - run: python -m unittest -q tests.test_audio_release

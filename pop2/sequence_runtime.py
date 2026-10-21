@@ -90,6 +90,7 @@ class SequenceRuntime:
             ) from error
 
     def next_frame(self):
+        entry_cursor = self.state.cursor
         if self.state.selected_sequence_id is None:
             self.state.selected_sequence_id = self.state.sequence_id
         for _ in range(self.max_operations_per_frame):
@@ -180,15 +181,9 @@ class SequenceRuntime:
             elif opcode == -21:
                 self.state.sequence_mode = self._next_operand(opcode, opcode_cursor)
             elif opcode == -23:
-                self.state.cursor = max(0, self.state.cursor - 1)
-                return SequenceFrame(
-                    self.state.sequence_id,
-                    self.state.action,
-                    self.state.current_x,
-                    self.state.target_x,
-                    self.state.current_y,
-                    self.state.animation_state,
-                )
+                # AnimChar 4:2f00-2f14 rewinds from the call's entry cursor,
+                # then reads that word again; a reload may have no cached pose.
+                self.state.cursor = max(0, entry_cursor - 1)
             elif opcode == -4:
                 self.state.engine_counter += 1
             elif opcode == -3:
