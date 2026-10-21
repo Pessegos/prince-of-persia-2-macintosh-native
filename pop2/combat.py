@@ -791,7 +791,8 @@ class CombatEncounter:
             return
         if self.level is not None and not guard.sword_drawn:
             self._choose_unarmed_guard_action(guard)
-            bank = self.room_encounters.get(guard.room, ([], []))[0]
+            bank = (self.guards if getattr(self, '_local_opponent_bank', False)
+                    else self.active_guards())
             if bank and guard is bank[-1]:
                 self.player.state.callback_flag = 0
             return
@@ -834,11 +835,12 @@ class CombatEncounter:
         return next((actor for actor, view in candidates if view is selected), None)
 
     def refresh_target(self):
-        # Main CODE:2 0x6300-0x633c retains an opposing-facing target;
-        # otherwise GetOppIdxClosestToKid supplies a target, or bank slot zero.
+        # Main retains an opposing-facing frame target, but SwordCtrl
+        # 6:2174-21fa also rejects a cached target with zero HP. This port's
+        # target is shared with player control, not a separate FrameAdv copy.
         # Physical source-room ownership is not active-bank membership.
         active = self.active_guards()
-        if (not any(actor is self.guard for actor in active)
+        if (not any(actor is self.guard for actor in active) or not self.guard.alive
                 or self.guard.state.facing == self.player.state.facing):
             self.guard = self._nearest_guard() or next(iter(active), None)
 
@@ -1214,24 +1216,32 @@ class CombatEncounter:
         terrain, art = getattr(self, "terrain", None), getattr(self, "guard_art", None)
         if terrain is None or art is None:
             return False
-        state = target.state
+        # Native imported records belong to the current bank and are already
+        # rebased. The port retains physical ownership, so use read-only views.
+        room = self.player.room
+        view = self._project_fighter(target, room)
+        if view is None:
+            return False
+        state = view.state
         record = art.frames[guard_frame_index(state.action)]
         if state.level_kind == 5 and terrain.forced_opponent_tumble(
-                target.room, target.row, state, record):
+                room, target.row, state, record):
             return True
         if self.level is None:
             return False
-        guards, points = self.room_encounters[target.room]
+        points = self.generation_points
+        guards = [view for other in self.active_guards() if other is not target
+                  if (view := self._project_fighter(other, room)) is not None]
         if not any(point.tumble_enabled for point in points):
             return False
         # DoOppTumbleSeq 4:03f4 counts the bank's death-state word at
         # +0x1c, not life or slot occupancy. Rnd(3) includes zero and three.
-        dead_count = sum(other.death_registered for other in guards if other is not target)
+        dead_count = sum(other.death_registered for other in guards)
         candidate = self.rng.randrange(4) <= dead_count
         column = character_column(floor_contact_x(state.target_x, state.facing, record))
         if not candidate and dead_count:
             candidate = any(
-                other is not target and other.row == target.row
+                other.row == target.row
                 and other.state.action in (185, 228)
                 and character_column(floor_contact_x(
                     other.state.target_x, other.state.facing,
@@ -1241,8 +1251,8 @@ class CombatEncounter:
         if not candidate or state.facing == self.player.state.facing:
             return False
         direction = 1 if state.facing else -1
-        return (terrain.tile(target.room, column, target.row).kind not in (3, 8, 4)
-                and terrain.tile(target.room, column - direction, target.row).kind not in (3, 8))
+        return (terrain.tile(room, column, target.row).kind not in (3, 8, 4)
+                and terrain.tile(room, column - direction, target.row).kind not in (3, 8))
 
     def _hurt(self, name, target, attacker):
         protected = name == 'player' and getattr(self, 'god_mode', False)

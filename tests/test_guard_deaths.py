@@ -79,6 +79,59 @@ class GuardDeathTests(unittest.TestCase):
                     self.corpse(encounter, 400 if same_cell else 280, pose=pose)
                     self.assertEqual(encounter._opponent_tumble(guard), same_cell)
 
+    def side_corpse(self, combat, x=20, registered=True):
+        guard = self.fixture.runner(combat, 0, x)
+        guard.life, guard.death_registered = 0, registered
+        select_sequence(guard, 213)
+        guard.runtime.next_frame()
+        guard.state.action = 185
+        return guard
+
+    def test_tumble_counts_imported_registered_death_not_unselected_source_corpse(self):
+        for visible in (False, True):
+            for registered in (False, True):
+                with self.subTest(visible=visible, registered=registered):
+                    combat, target = self.encounter(roll=1)
+                    corpse = self.side_corpse(combat, 20 if visible else 250, registered)
+                    self.assertEqual(corpse in combat.active_guards(), visible)
+                    self.assertEqual(combat._opponent_tumble(target), visible and registered)
+
+    def test_overlap_uses_rebased_imported_corpse_supporting_column(self):
+        from pop2.terrain import Tile
+
+        combat, target = self.encounter(roll=3, x=530)
+        corpse = self.side_corpse(combat, x=56)
+        with patch.object(combat.terrain, 'forced_opponent_tumble', return_value=False), \
+                patch.object(combat.terrain, 'tile', return_value=Tile(1)):
+            self.assertTrue(combat._opponent_tumble(target))
+            corpse.state.target_x = 110
+            self.assertFalse(combat._opponent_tumble(target))
+        self.assertEqual((corpse.room, corpse.state.target_x), (0, 110))
+
+    def test_imported_target_uses_current_bank_generator_flag_and_geometry(self):
+        from copy import copy
+        from pop2.terrain import Tile
+
+        combat, _resident = self.encounter(roll=0)
+        target = self.fixture.runner(combat, 0, 20, facing=0)
+        target.state.level_kind = 5
+        source_points = combat.room_encounters[0][1]
+        source_points[:] = [copy(combat.generation_points[0])]
+        source_points[0].life_word &= ~0x80
+        before = dict(vars(target.state))
+        with patch.object(combat.terrain, 'forced_opponent_tumble', return_value=False) as forced, \
+                patch.object(combat.terrain, 'tile', return_value=Tile(1)) as tile:
+            self.assertTrue(combat._opponent_tumble(target))
+            self.assertEqual(forced.call_args.args[:2], (9, target.row))
+            self.assertEqual(forced.call_args.args[2].target_x, 530)
+            self.assertTrue(all(call.args[0] == 9 for call in tile.call_args_list))
+            combat.generation_points[0].life_word &= ~0x80
+            source_points[0].life_word |= 0x80
+            combat.rng.reset_mock()
+            self.assertFalse(combat._opponent_tumble(target))
+            combat.rng.randrange.assert_not_called()
+        self.assertEqual(vars(target.state), before)
+
     def test_same_facing_kill_rejects_random_tumble_after_consuming_roll(self):
         encounter, guard = self.encounter()
         encounter.player.state.facing = guard.state.facing

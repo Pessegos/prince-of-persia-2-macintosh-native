@@ -427,3 +427,64 @@ Eight resource-free ordering tests run in CI; six integration regressions
 cover imports, canonical identity, retention, fallback, turns, bumps and error
 restoration. Focused combat/skeleton/pursuit/snapshot run: 317 tests pass,
 one optional skip. Second update audits group consumers of the same bank.
+
+## Renewed Request: Group Consumers (Second Update)
+
+First update committed as 7c9b249; Tests run 39597163076 passed. The second
+block corrects two remaining physical-owner-list consumers. Unarmed noise
+consumption now checks the last selected bank slot, retaining rebased local
+views during control. A resident no longer clears the signal before an
+imported actor can react, and an unselected later source record cannot keep
+it pending. Armed/dead trailing slots retain the original branch behavior.
+
+Tumble selection counts registered deaths and overlapping corpses from the
+active bank. It projects the struck actor and corpse foot columns into the
+current room, uses that bank's generator permission and tile/forced-tumble
+queries, and leaves physical actors unchanged. The newly struck actor is
+still excluded from the registered-death count, as native control has not
+registered its death yet. Six new integration tests cover noise ordering,
+imported/unselected corpses, projected overlap and current-versus-source
+generator flags. Focused run: 258 tests pass, one optional skip.
+
+rendered/active_group_native_probe_v1.py executes original DoOppTumbleSeq,
+LoadShad, dead-pose predicate, death-count scan and unarmed noise consumer.
+All 4,000 tumble decisions and 90 noise cases match. The first diagnostic
+used the helper's default cavern controller header with ordinary guard
+poses, producing six pose-228 mismatches; supplying the actual level-one
+controller header fixes that fixture inconsistency without a production
+change. Special-environment corpse predicates are explicitly NOT validated.
+Generator permission, RNG outputs, cached supporting columns, tile queries
+and the separately audited unarmed decision are supplied endpoints. This
+does not prove forced-rooftop tumble, random-stream order or all scheduling.
+
+Regression check: all five targeted tests fail against the previous owner-
+list methods, with no fixture errors. Initial full discovery (1,957 tests)
+found a real integration mistake in block one's interpretation of Main:
+Main retains an opposing dead FrameAdv target, but SwordCtrl 6:2174-21fa
+validates a separate cached target using HP. The port shares that target.
+Restore its HP validation while retaining whole-bank selection. Do not
+describe the isolated Main audit as the combined scheduler's proof. The
+revised target probe matches 8,000 selectors and 7,070 scoped Main cases;
+930 dead-cache cases are explicitly excluded from Main and independently
+match original SwordCtrl 6:2174-21fa, with HP words supplied in the native
+bank. This still does not prove the combined frame/control scheduler.
+Two alert fixtures also need
+their manually constructed room banks initialized.
+
+The fast carried-guard turn regression previously assumed immediate HP-based
+reselection. Its trace now shows kill -> pending native ALIVE -> registration
+during player mode-5 pose 155 -> ready pose 156 -> turn, three ticks rather
+than one. This delay follows the independently verified ALIVE selector and
+existing uninterruptible-pose gate. A new integration test ensures a pending
+zero-HP nearest candidate ceases obstructing selection after NPC control.
+The broad opening/combat regressions pass again with the HP cache validation.
+Final focused runs pass: 168 room/terrain/generation/alert tests and 298
+combat/death/skeleton/recorded-snapshot tests (one optional skip in the latter).
+Final full discovery passed 1,958 tests in 365.818 seconds, one optional skip
+and four expected failures, no unexpected failures. Full output is retained
+in rendered/unittest-full-active-banks-v2.log (including existing Tk teardown
+warnings). Ruff, catalog and diff checks pass. Verify the second commit's
+GitHub Tests run before handoff; the first run is already green.
+The user's current request authorizes exactly these two updates. Leave the
+larger AI recovery unfinished and resumable; do not claim full parity or
+start a third implementation block without a renewed request.

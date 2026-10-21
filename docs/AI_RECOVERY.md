@@ -1072,6 +1072,16 @@ stabbed in this pass is not registered until 4:3d64-3d6c runs next frame.
 Rnd(3) returns 0..3 inclusive; a roll <= that count selects a candidate.
 If the roll fails and the count is nonzero, another actor at the same
 supporting-foot column/row with dead pose 185 or 228 also selects it.
+These group scans now use selected active records, including rebased side
+imports but excluding unselected records still owned by the source room.
+The struck actor's geometry and generator permission use the current bank's
+room, without moving its canonical object. Original ordinary-controller
+DoOppTumbleSeq/LoadShad/death-count instructions match 4,000 supplied bank
+cases; 90 original 6:4f60 noise-consumption cases confirm that only the last
+active unarmed slot consumes the signal. A later armed/dead slot does not
+cause an earlier unarmed actor to clear it. Generator lookup, cached support
+columns, tile queries, random results and unarmed decisions are supplied
+endpoints in this audit. Special-environment corpse predicates remain open.
 Same-facing kills and specific tiles under/behind reject the tumble. This
 flag is separate from the NPC's jump capability. These ordinary selection
 branches are now implemented, with tests for roll/count boundaries, the
@@ -1108,11 +1118,18 @@ real actor. Local NPC control retains its already rebased bank and identity.
 GetOppIdxClosestToKid uses ordinary NPC native ALIVE independently of HP;
 old snapshots without the flag retain their HP fallback. Skeleton selection
 retains the existing HP-or-resume-flag compatibility until initialization is
-fully unified. Main 2:6300-633e retains any opposing-facing active target,
-including a dead one; reselection with no living candidate uses slot zero.
+fully unified. Main 2:6300-633e retains an opposing-facing FrameAdv target,
+including a dead one, but SwordCtrl 6:2174-21fa separately rejects a cached
+target with zero HP. The port's shared combat target must retain this HP
+validation; merging the two caches would strand player control on a corpse.
+Reselection with no native-live candidate uses slot zero. A pending zero-HP
+actor can still win that selector until NPC control registers its death.
 The pure ordering helper is tested without imported resources. Original
-instructions agree in 8,000 ordinary selector cases and 8,000 retained-target
-cases, including side imports and independent HP/ALIVE. Special type 7/8
+instructions agree in 8,000 ordinary selector cases and 7,070 scoped Main
+retention cases, including side imports and independent HP/ALIVE. Another
+930 dead-cache cases are excluded from the isolated Main comparison and
+instead match original SwordCtrl 6:2174-21fa independently. These branch
+checks are not combined SwordCtrl/FrameAdv scheduling equivalence. Special type 7/8
 metadata filtering and full sub-frame contact scheduling remain open.
 
 SwordCtrl (6:2258-22ea) can turn toward a live opponent at a ready pose

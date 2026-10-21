@@ -126,17 +126,28 @@ class GuardRoomTests(unittest.TestCase):
             self.assertIs(combat._nearest_guard(), side)
         self.assertIs(combat._nearest_guard(), side)
 
-    def test_opposing_target_is_retained_even_if_zero_hp_or_owned_by_side_room(self):
+    def test_opposing_side_target_is_retained_until_its_control_hit_points_reach_zero(self):
         combat = self.fixture.encounter(0, player_x=500, running=False)
         resident = self.fixture.runner(combat, 0, 500)
         side = self.fixture.runner(combat, 2, 20, facing=1 - combat.player.state.facing)
         combat.guard = side
-        side.life, side.native_alive = 0, False
         combat.refresh_target()
         self.assertIs(combat.guard, side)
-        side.state.facing = combat.player.state.facing
+        side.life, side.native_alive = 0, False
         combat.refresh_target()
         self.assertIs(combat.guard, resident)
+
+    def test_pending_zero_hp_candidate_stops_obstructing_selection_after_control_registration(self):
+        combat = self.fixture.encounter(0, player_x=500, running=False)
+        dying = self.fixture.runner(combat, 0, 500)
+        side = self.fixture.runner(combat, 2, 20)
+        dying.life, dying.native_alive = 0, True
+        combat.guard = dying
+        combat.refresh_target()
+        self.assertIs(combat.guard, dying)
+        combat.choose_guard_action(dying)
+        combat.refresh_target()
+        self.assertIs(combat.guard, side)
 
     def test_target_refresh_discards_stale_actor_and_falls_back_to_slot_zero(self):
         combat = self.fixture.encounter(0, player_x=500, running=False)
@@ -178,6 +189,50 @@ class GuardRoomTests(unittest.TestCase):
         self.assertIs(combat.guards, guards)
         self.assertFalse(combat._local_opponent_bank)
         self.assertIs(combat._nearest_guard(), side)
+
+    def standing(self, combat, room, x):
+        from pop2.combat import select_sequence
+
+        actor = self.fixture.runner(combat, room, x, facing=1)
+        select_sequence(actor, 77)
+        actor.runtime.next_frame()
+        actor.sword_drawn = False
+        return actor
+
+    def test_noise_reaches_imported_guard_before_last_active_slot_consumes_it(self):
+        combat = self.fixture.encounter(0, player_x=150, running=False)
+        resident = self.standing(combat, 0, 350)
+        side = self.standing(combat, 2, 20)
+        combat.player.state.callback_flag = 1
+        with combat._local_opponents(resident):
+            combat.choose_guard_action(resident)
+        self.assertEqual((resident.selected_sequence, combat.player.state.callback_flag), (80, 1))
+        with combat._local_opponents(side):
+            combat.choose_guard_action(side)
+        self.assertEqual((side.selected_sequence, combat.player.state.callback_flag), (80, 0))
+
+    def test_unselected_later_source_record_does_not_prevent_noise_consumption(self):
+        combat = self.fixture.encounter(0, player_x=150, running=False)
+        side = self.standing(combat, 2, 20)
+        hidden = self.standing(combat, 2, 250)
+        self.assertNotIn(hidden, combat.active_guards())
+        combat.player.state.callback_flag = 1
+        with combat._local_opponents(side):
+            combat.choose_guard_action(side)
+        self.assertEqual(combat.player.state.callback_flag, 0)
+
+    def test_last_dead_or_armed_slot_does_not_consume_unarmed_noise(self):
+        for dead in (False, True):
+            with self.subTest(dead=dead):
+                combat = self.fixture.encounter(0, player_x=150, running=False)
+                resident = self.standing(combat, 0, 350)
+                side = self.standing(combat, 2, 20)
+                side.sword_drawn, side.life = not dead, 0 if dead else 3
+                combat.player.state.callback_flag = 1
+                for actor in (resident, side):
+                    with combat._local_opponents(actor):
+                        combat.choose_guard_action(actor)
+                self.assertEqual(combat.player.state.callback_flag, 1)
 
 
 if __name__ == '__main__':

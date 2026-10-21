@@ -126,6 +126,7 @@ class EnemyAlertIntegrationTests(unittest.TestCase):
         combat.player = fighter(7, 0)
         combat.guard = fighter(2, 4)
         combat.guards, combat.rooftop_escape = [combat.guard], False
+        combat.room_encounters = {0: (combat.guards, [])}
         return combat
 
     def test_excluded_endpoint_does_not_promote_a_waiting_non_primary_enemy(self):

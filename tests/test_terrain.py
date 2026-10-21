@@ -1016,7 +1016,10 @@ class RooftopSceneTests(unittest.TestCase):
                     break
         self.assertIsNotNone(killed_at)
         self.assertIsNotNone(turned_at)
-        self.assertEqual(turned_at, killed_at + 1)
+        # The zero-HP guard remains native-ALIVE until next NPC control.
+        # Reselection then occurs during attack pose 155 (mode 5), which
+        # cannot turn. Pose 156 returns to mode 1 before the facing flips.
+        self.assertEqual(turned_at, killed_at + 3)
         self.assertIs(scene.combat.guard, incoming)
         self.assertEqual(scene.combat.player.life, 3)
         self.assertTrue(incoming.alive)
