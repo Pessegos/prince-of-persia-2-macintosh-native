@@ -16,7 +16,8 @@ unavailable; not yet in `main`.**
   true, so ClipChar (`4:4152`) skips the character. `composite_actor` now
   skips actors whose `sequence_mode` is 4, 5, 6, 7, 10 or 12. In ordinary
   play only `SEQS:27` sets one of these values. The environment-5 dead-pose
-  branch of IsCharNonViewable (`4:474c-477c`) is not modelled.
+  branch of IsCharNonViewable (`4:474c-477c`) was already implemented in
+  `render_opening.py` (`actor_mask`).
 - The quicksand test now expects the native state: selected 0, pose 185,
   mode 7. A rendered check (local, not committed) shows the sand without
   the corpse.
