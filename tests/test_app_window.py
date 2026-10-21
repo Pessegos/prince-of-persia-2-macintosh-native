@@ -81,13 +81,14 @@ class ApplicationIconTests(unittest.TestCase):
         root = create_root()
         try:
             self.assertFalse(root.winfo_ismapped())
-            root.geometry('1020x768')
+            # Fit the CI desktop work area; Windows clamps taller windows.
+            root.geometry('510x384')
             mapped = []
             root.bind('<Map>', lambda event: mapped.append(
                 (root.winfo_width(), root.winfo_height())) if event.widget is root else None, add='+')
             root.update()
             self.assertTrue(mapped)
-            self.assertEqual(mapped[0], (1020, 768))
+            self.assertEqual(mapped, [(510, 384)])
         finally:
             root.destroy()
 
