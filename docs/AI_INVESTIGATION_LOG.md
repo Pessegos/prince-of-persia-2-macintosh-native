@@ -321,3 +321,26 @@ heights are included. Report: `rendered/guard_height_native_probe_v1.json`.
 Graphics, resource handles and record lookup remain supplied endpoints.
 This is evidence for the upcoming guard-bank implementation, not a claim
 that ordinary reload/persistence has already been implemented.
+
+## Two-Commit Follow-Up Requested By The User
+
+The silent callback change is `1260554`; GitHub Tests run 39557010449 passed.
+This continuation began with a clean worktree and is concrete progress, not
+a repeated status-only turn. The user subsequently requested two more commit
+blocks. Finish those two blocks, verify CI and leave a resumable handoff.
+
+Block one introduces the ordinary GuardRoomRecord codec before wiring its
+consumer. It preserves the generator's existing resource header when a live
+in-bounds save clears its cursor, preserves selected-sequence height metadata,
+restores a resumed pose versus cold sequence 77/22, applies the native odd-slot
+corpse variant and retains zero-HP/native-ALIVE distinction until control.
+Pending records are consumed once, while header metadata remains available
+for the next room save. Eight resource-independent tests cover these rules.
+
+The real codec agrees with independent native InitOpps/AnimChar in all 1,280
+prior guard reload cases, not just with a shared decoder. Its height also
+matches all 510 original height reloads; the 384 metadata-write comparisons
+remain unchanged. Native reports retain their scoped graphics/resource/record
+lookup exclusions. Block two must integrate records, active-bank membership,
+normalization, carried actors and snapshot compatibility together; the codec
+alone is not a claim that the game's room scheduling has changed.
