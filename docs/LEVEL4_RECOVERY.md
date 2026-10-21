@@ -186,8 +186,17 @@ tree stage back to -1, and FrameAdv returns -1, which ends RestartGame's loop
 - progress saves store them in an optional `story` field, omitted for an
   untouched campaign. Older saves without it still load.
 
+**Time messages.** KeepTime requests a message:
+- when a minute below five or a multiple of five begins;
+- in the last minute, every twelfth update, replacing the message on screen.
+
+It formats "%d Minutes Left", "%d Seconds Left" with `(frames + 1) / 12`,
+"1 Second Left" or "Time has expired!" from the A5 strings `0x558c-0x55aa`.
+The text is shown for 24 steps and erased at 1 (FrameAdv `2:67e8`, `6834`);
+FirstFrame clears it at each level start. The host draws it in the HUD line
+with the existing interface font. The native DrawMessage `3:4252` shadow
+colours are not reproduced.
+
 **Not yet implemented:**
-- KeepTime's "minutes left" messages (`2:5226-5266`, `2:5288` onwards) and
-  the time message after each death (`4:3c8a-3c9e`), so the remaining time
-  is not shown;
-- the 4->5 tree selection, since the campaign still ends at level four.
+- the 4->5 tree selection, since the campaign still ends at level four;
+- the death message's 600-frame game-over timeout (`2:67fa-6806`).

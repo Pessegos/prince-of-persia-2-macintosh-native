@@ -50,7 +50,7 @@ from pop2.mac_input import plan_cautious_step, plan_step, read_keyboard
 from pop2.opening_animation import GLASS_POSITIONS
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
 from pop2.rebirth import RebirthSnapshot
-from pop2.story_progress import StoryProgress
+from pop2.story_progress import MESSAGE_FRAMES, StoryProgress
 from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
 from pop2.caverns import cavern_clip_top, cavern_exit_clip
@@ -246,7 +246,7 @@ class ScenePrototype(WindowControls):
         prince = self.resources.prince
         self.ui_font = MacintoshFont(prince["NFNT"][23331]["data"])
         # DrawRestartMessage uses palette index 6; match its displayed RGB.
-        hud_text_color = (253, 255, 168, 255)
+        hud_text_color = self.hud_text_color = (253, 255, 168, 255)
         self.pause_text = self.ui_font.text("Game Paused", hud_text_color)
         self.cutscene_pause_text = self.ui_font.text("Cutscene Paused", hud_text_color)
         self.restart_text = self.ui_font.text("Press key to continue", hud_text_color)
@@ -512,6 +512,7 @@ class ScenePrototype(WindowControls):
             # The campaign clock and tree stage survive level changes (2:5af2).
             game.story = previous.story
         renderer = LevelRenderer(game.level)
+        self.time_message, self.time_message_frames = None, 0
         self.bind_level(game, renderer)
         self.copy_challenge = None
         self.demo = self.live_combat = None
@@ -2847,6 +2848,8 @@ class ScenePrototype(WindowControls):
             self.start_tree(scene - 19)
 
     def restart_level_now(self):
+        # FirstFrame 2:601e-6024 removes a time message at every level start.
+        self.time_message, self.time_message_frames = None, 0
         self.remember_development_room()
         held = set(self.window_keys_down)
         snapshot = self.checkpoint
@@ -3139,8 +3142,22 @@ class ScenePrototype(WindowControls):
         story = self.game.story
         if story.advance_frame(self.combat is not None and self.combat.player.alive) and story.expired:
             story.tree_stage = -1
+            self.time_message = None
             self.start_tree(9)
             return True
+        frames = getattr(self, 'time_message_frames', 0)
+        if story.message_pending == 'seconds':
+            frames = 0
+        if story.message_pending and not frames:
+            self.time_message = story.message_text()
+            frames = MESSAGE_FRAMES
+            story.message_pending = None
+        elif frames:
+            # FrameAdv 2:6834 counts the message down; at 1 it is erased (67e8).
+            frames -= 1
+            if frames <= 1:
+                frames, self.time_message = 0, None
+        self.time_message_frames = frames
         return False
 
     def finish_discovery(self):
@@ -3676,8 +3693,10 @@ class ScenePrototype(WindowControls):
             ink = text.getbbox()
             y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
             self.screenshot_viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, y), text)
+        message = getattr(self, 'time_message', None)
         hud_text = (self.pause_text if self.paused else
-                    self.restart_text if self.death.prompt_visible else None)
+                    self.restart_text if self.death.prompt_visible else
+                    self.ui_font.text(message, self.hud_text_color) if message else None)
         demo_paused = self.paused and getattr(self, "demo", None) is not None
         if (hud_text is not None and not demo_paused
                 and self.dev_menu is None and self.game_menu is None):

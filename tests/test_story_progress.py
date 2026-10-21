@@ -73,6 +73,38 @@ class StoryProgressTests(unittest.TestCase):
             self.assertFalse(story.advance_frame())
         self.assertEqual(story.minutes, 0)
 
+    def test_minute_messages_follow_keep_time_thresholds(self):
+        # KeepTime 2:5226-5242: every fifth minute and each of the last four.
+        shown = []
+        for minutes in range(75, 1, -1):
+            story = StoryProgress(minutes=minutes, frames_remaining=1, tree_stage=0)
+            story.advance_frame()
+            if story.message_pending:
+                shown.append(story.message_text())
+        # Reaching the last minute formats seconds: (719 + 1) / 12 = 60.
+        self.assertEqual(shown, [f'{m} Minutes Left' for m in
+                                 (70, 65, 60, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10, 5, 4, 3, 2)]
+                         + ['60 Seconds Left'])
+
+    def test_last_minute_counts_seconds_every_twelve_updates(self):
+        # 2:5244-526c and 2:529c-52d4: (frames + 1) / 12 seconds.
+        story = StoryProgress(minutes=1, frames_remaining=FRAMES_PER_MINUTE, tree_stage=0)
+        messages = []
+        while story.frames_remaining > 1:
+            story.advance_frame()
+            if story.message_pending:
+                messages.append(story.message_text())
+                story.message_pending = None
+        self.assertEqual(messages[0], '59 Seconds Left')
+        self.assertEqual(messages[-1], '1 Second Left')
+        self.assertEqual(len(messages), 59)
+
+    def test_expired_message_and_presentation_state_is_not_campaign_state(self):
+        story = StoryProgress(minutes=0, tree_stage=0)
+        self.assertEqual(story.message_text(), 'Time has expired!')
+        story.message_pending = 'minutes'
+        self.assertEqual(story, StoryProgress(minutes=0, tree_stage=0))
+
 
 if __name__ == '__main__':
     unittest.main()

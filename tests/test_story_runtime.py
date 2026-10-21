@@ -97,6 +97,20 @@ class StoryHostTests(unittest.TestCase):
         self.tick(5)
         self.assertEqual(scene.game.story.frames_remaining, before)
 
+    def test_time_message_appears_in_the_hud_for_twenty_four_steps(self):
+        scene = self.scene
+        scene.game.story = StoryProgress(minutes=11, frames_remaining=1, tree_stage=0)
+        self.tick()
+        self.assertEqual((scene.time_message, scene.time_message_frames), ('10 Minutes Left', 24))
+        self.tick(21)
+        self.assertEqual(scene.time_message, '10 Minutes Left')
+        self.tick(2)
+        self.assertIsNone(scene.time_message)
+        scene.game.story = StoryProgress(minutes=11, frames_remaining=1, tree_stage=0)
+        self.tick()
+        scene.restart_level()
+        self.assertIsNone(scene.time_message)
+
     def test_time_threshold_selects_the_next_tree_variant_on_restart(self):
         scene = self.scene
         scene.game.story = StoryProgress(minutes=63, tree_stage=0)

@@ -1,9 +1,11 @@
 """Original inter-level scene selection and the deferred campaign clock."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 FRAMES_PER_MINUTE = 719
+# KeepTime 2:5308-530e and FrameAdv 2:6834 show a time message this long.
+MESSAGE_FRAMES = 24
 
 
 @dataclass
@@ -11,6 +13,9 @@ class StoryProgress:
     minutes: int = 75
     frames_remaining: int = FRAMES_PER_MINUTE
     tree_stage: int = -1
+    # KeepTime's a5-0x4fa2 request: 'minutes', 'seconds' or None. It is
+    # presentation state only, not part of the saved campaign.
+    message_pending: str | None = field(default=None, compare=False)
 
     @property
     def clock_started(self):
@@ -43,7 +48,23 @@ class StoryProgress:
             return False
         self.frames_remaining -= 1
         if self.frames_remaining:
+            # 2:5244-526c: every twelfth update of the last minute, replacing
+            # the message already on screen.
+            if self.minutes == 1 and self.frames_remaining % 12 == 0:
+                self.message_pending = 'seconds'
             return False
         self.frames_remaining = FRAMES_PER_MINUTE
         self.minutes -= 1
+        # 2:5226-5242: below five minutes, and on every fifth minute.
+        if self.minutes and (self.minutes < 5 or self.minutes % 5 == 0):
+            self.message_pending = 'minutes'
         return True
+
+    def message_text(self):
+        """KeepTime 2:5290-52fe formats against the A5 strings 0x558c-0x55aa."""
+        if self.minutes <= 0:
+            return 'Time has expired!'
+        if self.minutes != 1:
+            return f'{self.minutes} Minutes Left'
+        seconds = (self.frames_remaining + 1) // 12
+        return '1 Second Left' if seconds == 1 else f'{seconds} Seconds Left'
