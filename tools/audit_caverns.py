@@ -53,7 +53,7 @@ def audit_caverns(program_path, output=OUTPUT_DIR / 'cavern-background-audit'):
     export, resources, palette, shapes = cavern_assets()
     native = {}
     rooms = []
-    renderer = LevelRenderer(level, preload_room=False)
+    renderer = LevelRenderer(level, preload_room=False, retouch_caverns=False)
     with CavernRecovery(original, artwork, prince) as machine:
         for room in range(32):
             commands = recover_room(original, artwork, level.data, room, prince,
@@ -78,7 +78,7 @@ def audit_caverns(program_path, output=OUTPUT_DIR / 'cavern-background-audit'):
             target = terrain.neighbor(source, side)
             if target is None:
                 continue
-            renderer = LevelRenderer(level, preload_room=False)
+            renderer = LevelRenderer(level, preload_room=False, retouch_caverns=False)
             renderer.enter_room(source)
             art = renderer.enter_room(target)
             actual = Image.alpha_composite(art.background, art.foreground)

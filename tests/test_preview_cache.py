@@ -53,3 +53,18 @@ class PreviewCacheTests(unittest.TestCase):
             with (root / 'renderer.py').open('w') as stream:
                 stream.write('changed = True')
             self.assertNotEqual(second, preview_fingerprint(root, root))
+
+    def test_fingerprint_tracks_bundled_cavern_retouch_artwork(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            assets = root / 'assets'
+            assets.mkdir()
+            first = preview_fingerprint(assets, root)
+            Image.new('RGBA', (2, 2), 'red').save(root / 'cavern_retouch.png')
+            second = preview_fingerprint(assets, root)
+            self.assertNotEqual(first, second)
+            Image.new('RGBA', (2, 2), 'blue').save(root / 'cavern_retouch.png')
+            third = preview_fingerprint(assets, root)
+            self.assertNotEqual(second, third)
+            (root / 'cavern_retouch.json').write_text('{"schema":1}', encoding='ascii')
+            self.assertNotEqual(third, preview_fingerprint(assets, root))

@@ -10,10 +10,11 @@ from pop2.render_opening import (
 
 
 class LevelRenderer:
-    def __init__(self, level, preload_room=True):
+    def __init__(self, level, preload_room=True, retouch_caverns=True):
         if level.kind != 5 and level.number not in (2, 3):
             raise ValueError(f"Level {level.number} scenery is not implemented (environment {level.kind})")
         self.level = level
+        self.retouch_caverns = retouch_caverns
         self.rooms = {}
         self.desert_rooms = {}
         self.cavern_frames = {}
@@ -49,7 +50,8 @@ class LevelRenderer:
                     if previous[0] == room_id and previous[3] != pressure:
                         del self.cavern_frames[previous]
                 self.cavern_frames[key] = cavern_room(room_id, entry_frame=key[1], animated=True,
-                                                    loose_key=signature, pressure_key=pressure)
+                                                    loose_key=signature, pressure_key=pressure,
+                                                    retouched=self.retouch_caverns)
             self.rooms[room_id] = self.cavern_frames[key]
             return self.rooms[room_id]
         if room_id not in self.rooms:

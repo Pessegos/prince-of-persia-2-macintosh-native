@@ -9,6 +9,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageOps
 
 from pop2.paths import ASSET_DIR
+from pop2.cavern_retouch import retouched_sprite
 from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.render_opening import OpeningRoom, decode_ctbl, decode_shap, load_resource_file
 from pop2.terrain import character_row, floor_contact_x
@@ -594,8 +595,13 @@ def pressure_drawing_commands(commands, records, phases, resources):
     return result
 
 
-def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=()):
+def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=(), retouched=False):
     program, resources, palette, shapes = cavern_assets()
+
+    def scenery_sprite(command):
+        sprite = cavern_command_sprite(command, resources, palette, shapes)
+        return retouched_sprite(room_id, command, sprite) if retouched else sprite
+
     if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14) and program.get('level') == 3:
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, 3, room_id):
@@ -627,7 +633,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             continue
         if animated and program.get('version') >= 4 and library == 4 and 3581 <= index <= 3589:
             continue
-        clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
+        clipped = clipped_sprite(scenery_sprite(command), command)
         if clipped is None:
             continue
         sprite, position = clipped
@@ -660,7 +666,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         for command in redraw_commands:
             if animated and len(command) >= 8 and command[7] == 1:
                 continue
-            clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
+            clipped = clipped_sprite(scenery_sprite(command), command)
             if clipped is not None:
                 cell = (int(action), command[8], command[9])
                 redraw.setdefault(cell, []).append(clipped)
@@ -672,7 +678,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     for command in floor_commands:
         if animated and len(command) >= 8 and command[7] == 1:
             continue
-        clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
+        clipped = clipped_sprite(scenery_sprite(command), command)
         if clipped is not None:
             floors.setdefault(tuple(command[8:10]), []).append(clipped)
     retained = ImageChops.invert(ImageChops.lighter(

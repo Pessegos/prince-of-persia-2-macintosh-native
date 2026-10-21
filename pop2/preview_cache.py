@@ -16,7 +16,7 @@ def preview_fingerprint(directory=ASSET_DIR, code_directory=None):
     code_directory = Path(code_directory or Path(__file__).parent)
     digest = hashlib.sha256(b'pop2-developer-preview-1')
     for root, patterns in ((Path(directory), ('*.rsrc', '*.json')),
-                           (code_directory, ('*.py',))):
+                           (code_directory, ('*.py', 'cavern_retouch.json', 'cavern_retouch.png'))):
         for path in sorted({path for pattern in patterns for path in root.glob(pattern)}):
             digest.update(path.name.encode('utf-8'))
             digest.update(hashlib.sha256(path.read_bytes()).digest())
