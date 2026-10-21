@@ -383,7 +383,10 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_gallery_drag_drop_confirmation_and_burn_present_exact_pixels(self):
         scene = self.scene
-        with TemporaryDirectory() as directory:
+        # Pixel checks advance burn frames explicitly; real setup/render time
+        # must not consume the short animation before those checks begin.
+        with TemporaryDirectory() as directory, \
+                patch('pop2.window_controls.time.perf_counter', return_value=100.0):
             path = Path(directory) / 'drop.png'
             Image.new('RGB', (510, 384), '#ab3456').save(path)
             scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
