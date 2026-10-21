@@ -160,6 +160,34 @@ NISTree.rsrc. The launcher requires them, so existing installations need a
 reimport. A fresh import of the reference HFS image reproduced every other
 prepared file byte for byte.
 
-Not yet connected:
-- StoryProgress does not select these scenes at run time;
-- there is no live countdown and no story-state save.
+## Story Clock At Run Time
+
+RestartGame `2:5b66` calls CheckPlayNIS for every restart, and its loop
+(`2:5c7e-5cc2`) re-enters it whenever FrameAdv returns the same level after a
+death. The host therefore asks `StoryProgress.select_scene(level, level)` in
+`restart_level` from level four onwards and plays the selected tree variant
+over the restarted level. The first restart plays variant 1 and starts the
+clock; later restarts play a variant only when a minute threshold raises the
+stage. Discovery on 3->4 still does not start it.
+
+KeepTime `2:51f4` runs once per FrameAdv for a native-alive Prince. The host
+advances the clock once per gameplay step:
+- not during cutscenes, pause, copy protection, the door entry or level
+  completion;
+- frozen while the Prince is dead.
+
+At zero, FrameAdv calls TimeUp `2:7194`: PlayNIS 28 (tree variant 9), the
+tree stage back to -1, and FrameAdv returns -1, which ends RestartGame's loop
+(`2:5c86`). The host plays variant 9 and then starts a new game.
+
+**Persistence:**
+- the clock and tree stage are campaign state on GameSession;
+- level loads carry them over and New Game resets them;
+- progress saves store them in an optional `story` field, omitted for an
+  untouched campaign. Older saves without it still load.
+
+**Not yet implemented:**
+- KeepTime's "minutes left" messages (`2:5226-5266`, `2:5288` onwards) and
+  the time message after each death (`4:3c8a-3c9e`), so the remaining time
+  is not shown;
+- the 4->5 tree selection, since the campaign still ends at level four.

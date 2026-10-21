@@ -29,6 +29,7 @@ from pop2.opponent_records import GuardRoomRecord
 from pop2.potions import Potions
 from pop2.pressure_plates import PressurePlates
 from pop2.rebirth import Checkpoint, DeathState, RebirthSnapshot
+from pop2.story_progress import FRAMES_PER_MINUTE, StoryProgress
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.skeleton import Skeleton, SkeletonRoomRecord
 from pop2.terrain import TerrainMotion
@@ -417,11 +418,27 @@ def capture(game, controls=None, copy_verified=False):
         initial = game.caverns.potions.starting_max_life
         if initial is not None:
             max_life = initial
-    return {'format': FORMAT, 'version': VERSION, 'level': game.level.number,
-            'level_sha256': hashlib.sha256(game.level.data).hexdigest(),
-            'created_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
-            'resume': {'checkpoint': _pack(checkpoint), 'max_life': max_life},
-            'copy_verified': bool(copy_verified)}
+    document = {'format': FORMAT, 'version': VERSION, 'level': game.level.number,
+                'level_sha256': hashlib.sha256(game.level.data).hexdigest(),
+                'created_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                'resume': {'checkpoint': _pack(checkpoint), 'max_life': max_life},
+                'copy_verified': bool(copy_verified)}
+    story = game.story
+    if story.clock_started or story != StoryProgress():
+        # Optional: older saves and untouched campaigns omit the story clock.
+        document['story'] = {'minutes': story.minutes, 'frames_remaining': story.frames_remaining,
+                             'tree_stage': story.tree_stage}
+    return document
+
+
+def _story(value):
+    if (not isinstance(value, dict) or set(value) != {'minutes', 'frames_remaining', 'tree_stage'}
+            or any(type(item) is not int for item in value.values())
+            or not 0 <= value['minutes'] <= 75
+            or not 1 <= value['frames_remaining'] <= FRAMES_PER_MINUTE
+            or not -1 <= value['tree_stage'] <= 7):
+        raise SaveGameError('Invalid saved story clock')
+    return StoryProgress(**value)
 
 
 def read_document(path):
@@ -462,7 +479,8 @@ def restore_progress(document, resources):
     random_before = random.getstate()
     try:
         if set(document) - {'format', 'version', 'level', 'level_sha256', 'created_at',
-                            'resume', 'copy_verified', 'preview', 'name', 'preview_at_resume', 'preview_version'}:
+                            'resume', 'copy_verified', 'preview', 'name', 'preview_at_resume', 'preview_version',
+                            'story'}:
             raise SaveGameError('Unknown saved progress fields')
         if 'name' in document:
             save_name(document['name'])
@@ -507,6 +525,8 @@ def restore_progress(document, resources):
             game.place(point.room, point.row, point.x, snapshot.facing,
                        reset_guards=False, preserve_checkpoint=True)
         game.combat.player.life = game.combat.player.max_life = resume['max_life']
+        if 'story' in document:
+            game.story = _story(document['story'])
         return game, {'copy_verified': document['copy_verified']}
     except (ValueError, TypeError, KeyError, IndexError, AttributeError, OverflowError, RecursionError) as error:
         raise SaveGameError(f'Invalid or incompatible save: {error}') from error

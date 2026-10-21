@@ -50,6 +50,7 @@ from pop2.mac_input import plan_cautious_step, plan_step, read_keyboard
 from pop2.opening_animation import GLASS_POSITIONS
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
 from pop2.rebirth import RebirthSnapshot
+from pop2.story_progress import StoryProgress
 from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
 from pop2.caverns import cavern_clip_top, cavern_exit_clip
@@ -506,6 +507,10 @@ class ScenePrototype(WindowControls):
     def load_level(self, number):
         # Prepare the complete destination before replacing a running session.
         game = GameSession.load(self.resources, number, self.terrain_enabled)
+        previous = getattr(self, 'game', None)
+        if previous is not None:
+            # The campaign clock and tree stage survive level changes (2:5af2).
+            game.story = previous.story
         renderer = LevelRenderer(game.level)
         self.bind_level(game, renderer)
         self.copy_challenge = None
@@ -1865,6 +1870,11 @@ class ScenePrototype(WindowControls):
             self.schedule_next_animation()
             return
         self.advance_cavern_floors()
+        if self.advance_story_clock():
+            self.render()
+            self.in_animation_tick = False
+            self.schedule_next_animation()
+            return
         if self.combat is not None and not self.combat.player.alive:
             self.death.begin(0)
             # PlayerCtrl runs before AnimChar: count the previous dead pose,
@@ -2828,6 +2838,15 @@ class ScenePrototype(WindowControls):
         return True
 
     def restart_level(self):
+        level = self.game.level.number
+        # RestartGame 2:5b66 asks CheckPlayNIS (2:0180) before every restart;
+        # from level four it may select a tree scene (20..27 -> variants 1..8).
+        scene = self.game.story.select_scene(level, level) if level >= 4 else None
+        self.restart_level_now()
+        if scene is not None and 20 <= scene <= 28:
+            self.start_tree(scene - 19)
+
+    def restart_level_now(self):
         self.remember_development_room()
         held = set(self.window_keys_down)
         snapshot = self.checkpoint
@@ -2948,6 +2967,8 @@ class ScenePrototype(WindowControls):
             self.finish_ending()
         elif self.attract_stage == "discovery":
             self.finish_discovery()
+        elif self.attract_stage == "tree":
+            self.finish_tree()
         elif self.attract_stage == "credits":
             self.start_intro()
         else:
@@ -3010,6 +3031,7 @@ class ScenePrototype(WindowControls):
         self.copy_challenge = None
         if self.game.level.number != 1:
             self.load_level(1)
+        self.game.story = StoryProgress()
         self.restart_opening(play_sound=not self.with_intro)
         if self.with_intro:
             self.start_intro()
@@ -3021,6 +3043,8 @@ class ScenePrototype(WindowControls):
             self.finish_ending()
         elif self.attract_stage == "discovery":
             self.finish_discovery()
+        elif self.attract_stage == "tree":
+            self.finish_tree()
         else:
             if self.game.level.number != 1:
                 self.load_level(1)
@@ -3075,6 +3099,49 @@ class ScenePrototype(WindowControls):
             self.intro.seek_operation(part_index)
         self.last_intro_at = time.perf_counter()
         self.status.set('Discovery')
+
+    def start_tree(self, variant):
+        from pop2.intro import IntroAssets, IntroPlayer
+
+        cache = getattr(self, 'tree_assets', None)
+        if cache is None:
+            cache = self.tree_assets = {}
+        if variant not in cache:
+            cache[variant] = IntroAssets(program_name=f'tree-{variant}.json')
+        self.end_demo()
+        self.clear_keys(None)
+        self.attract_stage = 'tree'
+        self.tree_variant = variant
+        if self.audio is not None:
+            self.audio.reset()
+        self.intro = IntroPlayer(cache[variant], self.audio)
+        self.last_intro_at = time.perf_counter()
+        self.status.set('Tree')
+
+    def finish_tree(self):
+        held = set(self.window_keys_down)
+        self.intro = self.attract_stage = None
+        if self.audio is not None:
+            self.audio.reset()
+        if getattr(self, 'tree_variant', None) == 9:
+            # TimeUp 2:7194: after NIS 20 FrameAdv returns -1 (2:62ba-62c0),
+            # ending RestartGame's loop: the campaign is over.
+            self.new_game()
+            return
+        self.clear_keys(None)
+        self.pause_resume_keys.update(held)
+        self.next_animation_at = time.perf_counter()
+        self.render()
+
+    def advance_story_clock(self):
+        # KeepTime 2:51f4 runs once per FrameAdv for a living Prince; at zero
+        # FrameAdv calls TimeUp 2:7194 (PlayNIS 28 -> tree variant 9).
+        story = self.game.story
+        if story.advance_frame(self.combat is not None and self.combat.player.alive) and story.expired:
+            story.tree_stage = -1
+            self.start_tree(9)
+            return True
+        return False
 
     def finish_discovery(self):
         max_life = self.combat.player.max_life if self.combat is not None else None

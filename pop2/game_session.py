@@ -14,6 +14,7 @@ from pop2.opening_animation import GLASS_POSITIONS, OpeningEscape
 from pop2.rebirth import DeathState, RebirthSnapshot
 from pop2.render_opening import load_resource_file
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
+from pop2.story_progress import StoryProgress
 from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion
 
 if TYPE_CHECKING:
@@ -58,6 +59,8 @@ class GameSession:
     death: DeathState = field(default_factory=DeathState)
     complete: bool = False
     exit: LevelExit | None = None
+    # Campaign clock and tree stage; carried across level loads by the host.
+    story: StoryProgress = field(default_factory=StoryProgress)
     desert: DesertState | None = None
     caverns: CavernState | None = None
 
