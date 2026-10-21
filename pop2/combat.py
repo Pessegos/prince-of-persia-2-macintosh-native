@@ -52,6 +52,13 @@ def visible_side_opponent(x, side):
     return x > 378 if side == 'left' else x < 124
 
 
+def _native_alive(guard):
+    # Native ALIVE as used by GetOppIdxClosestToKid, not HP.
+    if guard.skeleton is not None:
+        return guard.alive or guard.skeleton.native_alive
+    return guard.alive if guard.native_alive is None else guard.native_alive
+
+
 def opponent_follows_cut(guard, direction, count, *, in_destination=False):
     # CutAllOpponents 6:4476-4626, ordinary guards and skeletons only.
     state = guard.state
@@ -698,7 +705,7 @@ class CombatEncounter:
             elif intent.retreat:
                 select_sequence(guard, 57)
 
-    def choose_player_turn(self, frame_record=None):
+    def choose_player_turn(self, frame_record=None, bounds=None):
         player, guard = self.player, self.guard
         guard = self._project_fighter(guard, player.room) if guard is not None else None
         state = player.state
@@ -713,7 +720,7 @@ class CombatEncounter:
         if opponent_distance(player, guard) >= -15:
             return False
         terrain = getattr(self, "terrain", None)
-        offset = (terrain.combat_turn_offset(player.room, player.row, state, frame_record)
+        offset = (terrain.combat_turn_offset(player.room, player.row, state, frame_record, bounds)
                   if terrain is not None and frame_record is not None else 0)
         select_sequence(player, PLAYER_COMBAT_TURN_SEQUENCE, offset=offset)
         return True
@@ -834,15 +841,49 @@ class CombatEncounter:
         selected = nearest_opponent(self.player, [view for _actor, view in candidates], side)
         return next((actor for actor, view in candidates if view is selected), None)
 
+    @property
+    def guard(self):
+        # Effective Prince opponent for this frame (the native Opp record).
+        return self.__dict__.get('_effective_guard')
+
+    @guard.setter
+    def guard(self, actor):
+        # Explicit assignments (setup, room change, save load) set both the
+        # persistent Prince target (native +0x3a) and the effective opponent.
+        self._effective_guard = actor
+        self.target_cache = actor
+
+    def _sword_control_selects(self):
+        # GenCtrl 6:056c-05e6 reaches SwordCtrl only for a living Prince with
+        # sword state 1, outside animation modes 4/5/9.
+        player = self.player
+        return (player.alive and player.sword_drawn
+                and player.state.animation_state not in (4, 5, 9))
+
     def refresh_target(self):
-        # Main retains an opposing-facing frame target, but SwordCtrl
-        # 6:2174-21fa also rejects a cached target with zero HP. This port's
-        # target is shared with player control, not a separate FrameAdv copy.
+        # The native Prince target (+0x3a) persists. Its writers here:
+        # removal from the active bank (2:66e8-672e) and the GenCtrl dead
+        # branch for a registered death (6:0762-077c) both store the nearest
+        # native-ALIVE actor; SwordCtrl 6:2174-21fa keeps a target with
+        # positive HP regardless of facing, otherwise stores a found nearest.
+        # The effective opponent is SwordCtrl's while it runs, else FrameAdv
+        # Main 2:62f8-633e: an opposing-facing target is kept even if dead.
         # Physical source-room ownership is not active-bank membership.
         active = self.active_guards()
-        if (not any(actor is self.guard for actor in active) or not self.guard.alive
-                or self.guard.state.facing == self.player.state.facing):
-            self.guard = self._nearest_guard() or next(iter(active), None)
+        cache = getattr(self, 'target_cache', None)
+        if cache is not None and (not any(actor is cache for actor in active)
+                                  or not _native_alive(cache)):
+            cache = self._nearest_guard()
+        if self._sword_control_selects():
+            if cache is None or not cache.alive:
+                cache = self._nearest_guard() or cache
+            effective = cache if cache is not None and cache.alive else None
+        elif cache is not None and cache.state.facing != self.player.state.facing:
+            effective = cache
+        else:
+            effective = self._nearest_guard()
+        self.target_cache = cache
+        self._effective_guard = effective or next(iter(active), None)
 
     def update_guard_alerts(self):
         self.wake_skeletons()
@@ -1387,12 +1428,19 @@ class CombatEncounter:
                 defender.state.action = 161
                 if name == "guard":
                     self.parry_timer = 4
+                else:
+                    # TestStrike 6:5a48: a blocked Prince targets the blocker.
+                    self.target_cache = defender
                 events.append(CombatEvent("parry", target_name))
             elif attacker.state.action == 154:
                 attacker.contact_consumed = True
                 low, high = strike_range(attacker, defender)
                 if low <= distance <= high:
                     hits.setdefault(target_id, (target_name, defender, attacker))
+                    if name == "player":
+                        # TestStrike 6:5a06: the last struck slot becomes the
+                        # Prince target, before CheckStab applies the wound.
+                        self.target_cache = defender
         # CheckStab 0x50ec-0x50f6 clears the Prince's pending wound when an
         # NPC is wounded in the same cycle, including a fatal NPC hit.
         if any(key != "player" for key in hits):

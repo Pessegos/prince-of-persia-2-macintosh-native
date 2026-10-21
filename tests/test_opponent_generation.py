@@ -268,7 +268,9 @@ class OpponentGenerationTests(unittest.TestCase):
             c.choose_guard_action(second)
         self.assertEqual(second.selected_sequence, 57)
 
-    def test_living_opposing_target_retained_same_facing_target_reselected(self):
+    def test_armed_prince_keeps_living_target_regardless_of_facing(self):
+        # SwordCtrl 6:2174-21de keeps a cached target with positive HP and
+        # never tests facing (native probe: 720/720 same-facing cases).
         c = self.encounter(first_alive=True)
         original = c.guard
         closer = self.second_guard(c, x=240)
@@ -276,7 +278,24 @@ class OpponentGenerationTests(unittest.TestCase):
         self.assertIs(c.guard, original)
         c.player.state.facing = 1
         c.refresh_target()
+        self.assertIs(c.guard, original)
+        self.assertIs(c.target_cache, original)
+        self.assertIsNot(c.guard, closer)
+
+    def test_unarmed_same_facing_target_is_replaced_only_for_the_frame(self):
+        # Main 2:62f8-633e picks the nearest actor for a same-facing cache
+        # without storing it; the cached target returns once facing differs.
+        c = self.encounter(first_alive=True)
+        original = c.guard
+        closer = self.second_guard(c, x=240)
+        c.player.sword_drawn = False
+        c.player.state.facing = 1
+        c.refresh_target()
         self.assertIs(c.guard, closer)
+        self.assertIs(c.target_cache, original)
+        c.player.state.facing = 0
+        c.refresh_target()
+        self.assertIs(c.guard, original)
 
     def test_waiting_guard_far_advance_uses_original_step_gate(self):
         for pose, expected in ((171, 86), (152, 227)):

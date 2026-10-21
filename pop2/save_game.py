@@ -186,7 +186,7 @@ def _fighter_valid(actor, resources):
             or actor.skeleton is not None and not isinstance(actor.skeleton, Skeleton)
             or state.facing not in (0, 1) or state.actor_type not in (0, 2, 4)
             or state.sequence_id not in resources.sequences
-            or state.source_sequence_id not in resources.sequences
+            or state.source_sequence_id not in resources.sequences and state.source_sequence_id != 0
             or not 0 <= state.cursor <= len(resources.sequences[state.sequence_id])
             or not 0 <= state.action <= (len(resources.frames) - 1 if state.actor_type == 0 else
                                          229 if state.actor_type == 4 else 254)
@@ -228,7 +228,9 @@ def capture_snapshot(game, controls=None, copy_verified=False):
                if game.opening is not None else None)
     state = {'game': {name: getattr(game, name) for name in GAME_FIELDS},
              'player': combat.player, 'rooms': combat.room_encounters,
-             'target': next((i for i, actor in enumerate(combat.guards) if actor is combat.guard), None),
+             # Persistent Prince target (native +0x3a), not the frame opponent.
+             'target': next((i for i, actor in enumerate(combat.guards)
+                             if actor is getattr(combat, 'target_cache', combat.guard)), None),
              'clock': {name: getattr(combat, name)
                        for name in ('world_frame', 'parry_timer', 'advance_pause', 'attack_pause')},
              'rng': rng, 'random': random.getstate(), 'opening': opening,

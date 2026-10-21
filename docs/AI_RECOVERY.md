@@ -1250,3 +1250,28 @@ native alive word. The port also retains hit provenance throughout the shared
 fall loop: a fall entered from hurt sequences 74/94 cannot be caught, matching
 the recorded knockback behavior. A new voluntary retreat retains the catch;
 this does not prevent either fighter from being knocked off an edge.
+
+## Target And Animation Integration
+
+The ordinary Prince target layers are now implemented: SwordCtrl maintains a
+persistent target, Main can choose a temporary unarmed opponent, and hit/block
+contacts write the persistent target in bank order. Snapshot saves retain that
+persistent index without changing the format. See
+[Prince target layers](research/proposed-prince-target-layers.md) for the
+branch-specific evidence and exclusions.
+
+AnimChar opcode -18 clears the selected sequence ID to zero, including across
+linked sequences; JumpSeq establishes the next selection. This fixes the second
+skeleton shake and saves accept the native zero selection. The existing extra
+sequence-mode clear is retained as inert in the audited ordinary paths. See
+[opcode -18](research/animchar-op18-selected-sequence.md).
+
+Sword turns reserve space against blocking cavern gates using current body
+bounds passed by the scene host. Native non-viewable animation modes also hide
+the fully sunk Prince; the quicksand regression expects current sequence 27,
+selected sequence 0, pose 185 and mode 7. Level-four entry, map navigation,
+restart and save/load remain covered alongside these integrations.
+
+Voluntary Back+Shift sword turning and its proposed toggle remain pending a
+user decision. These changes do not certify special actors or complete native
+frame scheduling.

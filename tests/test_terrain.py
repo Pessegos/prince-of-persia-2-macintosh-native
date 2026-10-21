@@ -223,6 +223,34 @@ class TerrainTests(unittest.TestCase):
         # Hurt sequence 94 uses 22 instead of the drawing pose's 51.
         self.assertEqual(self.map.combat_turn_offset(3, 1, state, self.frames[207]), -41)
 
+    def test_combat_turn_treats_only_a_blocking_cavern_gate_as_a_barrier(self):
+        # DoTurn 6:26f6/6:2720: a gate cell counts only when 4:5b0e blocks.
+        import struct
+
+        def cavern(kind, phase=0):
+            level = bytearray(0x49ca)
+            struct.pack_into('>H', level, 0x2186, 3)
+            for cell in range(30):
+                struct.pack_into('>H', level, cell * 2, 1)
+            struct.pack_into('>H', level, 15 * 2, kind)
+            struct.pack_into('>H', level, 0x780 + 15 * 4, 0x300 | phase)
+            return LevelMap(level)
+
+        record, bounds = self.frames[158], (270, 155, 290, 226)
+        foot = record.offset_x - (record.aux & 0x3f)
+        for contact, ahead in ((250, 1), (200, 2)):
+            with self.subTest(ahead=ahead):
+                x = contact - foot
+                state = SequenceState(227, action=158, target_x=x, facing=1, level_kind=3)
+                column = character_column(floor_contact_x(x, 1, record))
+                self.assertEqual(column + ahead, 5)
+                wall = cavern(20).combat_turn_offset(0, 1, state, record, bounds)
+                self.assertLess(wall, 0)
+                closed, opened = cavern(4, 0), cavern(4, 255)
+                self.assertEqual(closed.combat_turn_offset(0, 1, state, record, bounds), wall)
+                self.assertEqual(opened.combat_turn_offset(0, 1, state, record, bounds), 0)
+                self.assertEqual(closed.combat_turn_offset(0, 1, state, record), 0)
+
     def test_drawing_sword_reserves_native_distance_before_an_immediate_gap(self):
         state = SequenceState(2, action=15, target_x=411, facing=1)
         self.assertEqual(self.map.combat_draw_offset(

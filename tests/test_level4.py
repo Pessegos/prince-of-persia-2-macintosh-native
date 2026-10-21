@@ -184,6 +184,16 @@ class LevelFourHostTests(unittest.TestCase):
         self.assertEqual((scene.game.level.number, scene.room_id, scene.terrain_motion.row), (4, 0, 2))
         self.assertTrue(scene.combat.player.alive)
 
+    def test_cavern_turn_consumer_passes_current_body_bounds_to_combat(self):
+        scene = self.scene
+        scene.load_level(4)
+        self.tick(16)
+        scene.sword_drawn = True
+        bounds = scene.player_bounds()
+        with patch.object(scene.combat, 'choose_player_turn', return_value=False) as turn:
+            self.assertFalse(scene.resume_combat_turn())
+        turn.assert_called_once_with(scene.frames[scene.sequence_state.action], bounds)
+
 
 if __name__ == '__main__':
     unittest.main()

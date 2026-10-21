@@ -26,6 +26,20 @@ class SequenceHoldTests(unittest.TestCase):
         self.assertEqual((state.sequence_id, state.source_sequence_id, state.action, state.cursor),
                          (12, 99, 106, 2))
 
+    def test_minus18_clears_selected_sequence_across_a_link_until_jumpseq(self):
+        # AnimChar 4:2d7e clears +0x28; the -1 link only changes +0x26.
+        sequences = {7: (150, -18, -1, 8), 8: (171, -23)}
+        state = SequenceState(7, actor_type=2)
+        runtime = SequenceRuntime(sequences, state)
+        runtime.next_frame()
+        self.assertEqual(state.source_sequence_id, 7)
+        runtime.next_frame()
+        self.assertEqual((state.sequence_id, state.source_sequence_id, state.action), (8, 0, 171))
+        runtime.next_frame()
+        self.assertEqual(state.source_sequence_id, 0)
+        state.select(7)
+        self.assertEqual(state.source_sequence_id, 7)
+
     def test_repeated_hold_does_not_replay_earlier_offsets_or_callbacks(self):
         state = SequenceState(1, actor_type=0, facing=1)
         runtime = SequenceRuntime({1: (-5, 10, -15, 30, 171, -23)}, state)
