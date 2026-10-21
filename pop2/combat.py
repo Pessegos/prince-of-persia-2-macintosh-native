@@ -759,12 +759,17 @@ class CombatEncounter:
     def choose_guard_action(self, guard=None):
         guard, player = guard or self.guard, self.player
         state = guard.state
+        if not guard.alive:
+            # PlayerCtrl 4:3d64-3d6c registers zero HP before AutoCtrl,
+            # including a reload whose visible pose initially sets ALIVE=-1.
+            guard.death_registered = True
+            if guard.skeleton is not None:
+                guard.skeleton.native_alive = False
+                if guard.skeleton.phase in ('active', 'rising'):
+                    guard.skeleton.phase = 'collapsing'
         if guard.skeleton is not None and guard.skeleton.control(self, guard):
             return
         if not guard.alive:
-            # 4:3d64-3d6c registers life zero before AnimChar. A newly
-            # stabbed actor is not counted in the previous NPC bank yet.
-            guard.death_registered = True
             return
         if self.rooftop_escape:
             # Port cinematic improvement: once the Prince catches the ship,

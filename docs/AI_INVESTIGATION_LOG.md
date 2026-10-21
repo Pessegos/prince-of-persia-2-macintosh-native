@@ -220,4 +220,55 @@ The save-browser presentation regression now supplies an empty save list,
 so it always exercises the fresh current-run preview it asserts, regardless
 of the user's existing files. All four fitted window sizes pass; no game
 rendering or user save was modified. Terminal pose correction committed as
-`8fa923e`; GitHub Tests run 39555076890 is being checked.
+`8fa923e`; GitHub Tests run 39555076890 passed. Test isolation committed as
+`f5b7767`; GitHub Tests run 39555171263 also passed.
+
+## Zero-HP Registration: Implementation In Verification
+
+`choose_guard_action` now registers zero HP before skeleton AutoCtrl, not
+after its early return. A resumed native living flag is cleared; active or
+rising bookkeeping becomes collapsing without replaying the collapse
+sequence, reset timer or sound. Existing dormant/collapsing/lava bookkeeping
+is retained. The wake-before-control order and skipped-control Y limit are
+unchanged.
+
+The new held room-record regression verifies timer one expires on the first
+control pass and resurrection starts on the next frame. A second regression
+covers five phase states and verifies no collapse replay or timer reset.
+They produce six assertion failures under the old control order, then pass
+with the correction; all 78 skeleton/terminal-pose tests pass.
+
+Extended original-prefix/lifecycle comparison: 128 scenarios, 25,600 frame
+snapshots, no mismatches in native living flag, life, sequence/history,
+pose/cursor, timer, shakes, sounds or RNG state. Varies skill, timer, shakes,
+facing and seed with temporary player range/mode interruptions. The shared
+decoder/flat-map/ordinary-combat exclusions remain explicit. Report:
+`rendered/zero_hp_reload_native_probe_v1.json`.
+
+Broader combat/persistence validation passed 345 tests. Full discovery passed
+1,908 tests in 364 seconds (one optional skip, four expected failures, no
+unexpected failures). The preceding 72 lifecycle scenarios also retain
+23,040 matching frame snapshots. Ruff, catalog and diff checks pass.
+Next investigation: ordinary guard reload/bank scheduling, jump-height
+metadata, hidden-facing records and upstream cached-FRAM provenance. These
+remain open; there is no complete-AI claim and no reason to skip to level 4
+merely because individual recovered branches now agree.
+
+## Follow-On Findings While Full Verification Runs
+
+Initial generator inventory (`rendered/hidden_facing_inventory_v1.py`): none
+of the 105 stored records across LEVL 2000..2013 starts with facing 0x56.
+This does not dismiss dynamic hidden-slot removal. Static references at
+4:4d0e/4d58 are sequence/range constants, not writes to the facing field;
+the actual removal write at 4:493e-494e also clears mode, ALIVE and HP.
+Trace callers and existing port removals before adding a third direction.
+
+Another independently proven omission is AnimCharTap(0), 4:30e0-30f6 and
+314e-315a: it silently sets the Prince's movement/noise flag without
+incrementing the footstep counter or scheduling sound. SequenceRuntime
+currently ignores it. The direct original routine agrees in 72 supplied
+actor/environment/counter/flag combinations except the 12 Prince cases
+where a clear flag should become one. Original SEQS 11 and 227 contain
+(-15, 0). Probe/report: `rendered/silent_callback_native_probe_v1.py/.json`.
+Implement separately with asset-free tests and an AI consumption regression;
+do not accidentally make an NPC set the global player flag.

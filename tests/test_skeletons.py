@@ -603,6 +603,41 @@ class SkeletonTests(unittest.TestCase):
         self.tick(combat)
         self.assertEqual((actor.life, actor.skeleton.phase, actor.state.action), (3, 'rising', 207))
 
+    def test_zero_hp_held_reload_registers_death_before_recovery_and_can_rise_again(self):
+        from pop2.skeleton import SkeletonRoomRecord
+
+        combat, actor = self.stationary_bones(timer=1)
+        actor.skeleton.room_record = SkeletonRoomRecord(227, 10, 0, True, 27)
+        actor.skeleton.restore_room(actor, 0)
+        self.assertTrue(actor.skeleton.native_alive)
+        self.assertFalse(actor.death_registered)
+        self.tick(combat)
+        self.assertEqual((actor.life, actor.state.action, actor.skeleton.timer), (0, 171, 0))
+        self.assertFalse(actor.skeleton.native_alive)
+        self.assertTrue(actor.death_registered)
+        self.tick(combat)
+        self.assertEqual((actor.life, actor.skeleton.phase, actor.state.action), (3, 'rising', 207))
+        self.assertTrue(actor.skeleton.native_alive)
+        self.assertFalse(actor.death_registered)
+
+    def test_zero_hp_control_does_not_restart_collapse_or_reset_recovery_timer(self):
+        for phase in ('active', 'rising', 'collapsing', 'dormant', 'lava'):
+            with self.subTest(phase=phase):
+                combat, actor = self.stationary_bones(timer=99)
+                select_sequence(actor, 227)
+                for _ in range(3):
+                    actor.runtime.next_frame()
+                actor.skeleton.native_alive = True
+                actor.skeleton.phase = phase
+                actor.state.sound_events.clear()
+                combat.choose_guard_action(actor)
+                self.assertFalse(actor.skeleton.native_alive)
+                self.assertTrue(actor.death_registered)
+                self.assertEqual((actor.selected_sequence, actor.skeleton.timer), (227, 98))
+                self.assertEqual(actor.state.sound_events, [])
+                self.assertEqual(actor.skeleton.phase,
+                                 'collapsing' if phase in ('active', 'rising') else phase)
+
     def test_shake_roll_precedes_the_same_frames_dead_timer_decrement(self):
         combat, actor = self.stationary_bones(shakes=1)
         self.tick(combat)

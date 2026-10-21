@@ -831,6 +831,32 @@ when a full destination cannot accept it rather than reproducing the original
 unconditional runner transfer's possible record loss. Do not read this scoped
 validation as complete lifecycle equivalence.
 
+### Zero-HP Reload Control Order
+
+PlayerCtrl `4:3d64-3d6c` registers death when a negative native ALIVE word
+has zero HP, before calling AutoCtrl. This is distinct from InitOpps'
+pose-based initialization above: a resumed combat pose can initially have
+ALIVE=-1 and HP=0, but must enter dead recovery during its first control
+pass. Previously skeleton control ran before that registration and could
+leave its recovery timer frozen indefinitely.
+
+The port now registers zero HP before skeleton control, clears its native
+living flag, and makes active/rising bookkeeping eligible for later waking
+without restarting collapse, emitting a sound or resetting the timer. The
+existing wake-before-control order is unchanged: timer one expires in the
+control pass and waking is possible on the following frame, not earlier.
+Control skipped below the native no-lower-room Y limit remains skipped.
+
+The original PlayerCtrl prefix plus skeleton proximity/AutoCtrl match
+128 scenarios and 25,600 frame snapshots, varying skill, timer, shakes,
+facing and RNG seed with temporary range/mode interruptions. This uses the
+existing cycle harness's shared SEQS decoder, flat floor and supplied RNG;
+ordinary combat decisions are excluded. It does not prove every zero-HP
+target-selection or alert interaction. Local probe:
+`rendered/zero_hp_reload_native_probe_v1.py`. Integration regressions cover
+an actual held-pose room-record reload through resurrection, plus phase,
+sound and timer preservation at death registration.
+
 ### Non-Following Skeleton Record Normalization
 
 UpdateOppInfo `6:3104-3118` tests GetCellI `4:29d8-2a22`, not the stricter
