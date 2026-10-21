@@ -98,15 +98,43 @@ no SEQS writes 4 or 5. The split is therefore latent, not a demonstrated
 defect. The native non-AnimChar writers of `+0x34` (`2:5e82`, `3:07fa`,
 `4:1e94`, `6:1916`, `6:29cc`, `6:2cc2`, `6:2e7a`) were not audited.
 
+### Writers of `+0x34` in the ordinary segments (2, 3, 4, 6) [D]
+
+| Writer | Value | Port |
+| --- | --- | --- |
+| Prince init `2:5e82` (level start and rebirth) | 0 | — |
+| ResetFrameVars `2:68f0-6906`, saved Prince | clears 8, except in current sequence 52 with `+0x24` = 0 | — |
+| Opponent1 `3:07e4-07fa` | clears 8 | — |
+| TriggerJinnee `4:1e94` | from `d4` | — |
+| DoJumpHigh `6:1906-1916` | 0 when releasing: modifier 0, or value 11 | `scene_prototype.py` sets `sequence_mode = 0` on release |
+| CrushChar `6:29ca` | 8 | — |
+| Side-room load `6:2cc2`; GenerateOpponent `6:3c48` | 0 | — |
+| `6:2e7a` (type 11, pose 264) | 6 | — |
+| AnimChar `-21` | operand | `sequence_mode` |
+
+Segments 7-10 (special levels) also write it and were not reviewed.
+
+Following `-1` links from every `-21` with a non-zero operand:
+- values 1, 2 and 3 are rewritten to 0 by the same sequence before any
+  `-18`;
+- 7, 12 and 13 end in a hold;
+- 11 (`SEQS:210`) links through 11 to 2 without a `-18`.
+
+So no link chain carries a non-zero `+0x34` into a `-18`. Only a later
+JumpSeq could do so, which needs 11 to survive the hang. That happens only
+when the climb is taken in the two frames after `-21 11`, and the port
+already resets `sequence_mode` when a hang starts. The port's extra clear of
+`sequence_mode` at `-18` is therefore inert in ordinary play [I]. Removing it
+is optional.
+
 ## Proposed change (needs coordination)
 
 `sequence_runtime.py` is a shared interface.
 - **Proposal:** `-18` sets `selected_sequence_id = 0`.
 - **Save validation:** `save_game.py` currently rejects a selected ID that is
   not a `SEQS` resource. It must accept 0 without changing the format.
-- **`sequence_mode`:** whether `-18` should stop clearing it needs a
-  separate audit of the scene writers. The native evidence says it should,
-  but the port may rely on the clear to approximate other `+0x34` writers.
+- **`sequence_mode`:** the extra clear at `-18` is inert (audit above).
+  Removing it is optional and can be a separate commit.
 - **Regressions:**
   - a runtime test that `-18` yields selected 0 across a following `-1`
     link;
