@@ -18,7 +18,8 @@ comparisons establish their stated branch subsets, not whole-game parity.
 
 ## Starting State
 
-Base: `62589be`, clean `main`, latest GitHub Tests successful. The previous
+Base: `97189fd`, clean `main`; this includes the user's README status update
+after `62589be`. Latest GitHub Tests successful. The previous
 ledge-release fix is committed and approved in game.
 
 The existing implementation already includes ordinary guard decisions,
@@ -53,8 +54,9 @@ scheduling or upstream supporting-foot geometry. The matrix uses actor type
 plus a same-column case.
 
 The shared alert method now implements those two limits. Ten asset-free
-regression tests pass; the old method produces 18 assertion failures in
-those tests. Broader AI/combat/pursuit/generation/skeleton/harbor coverage:
+regression tests initially passed locally; the old method produced 18
+assertion failures in that first test version. Broader
+AI/combat/pursuit/generation/skeleton/harbor coverage:
 318 tests pass, one optional source-validation test skips. Ruff passes.
 
 Final comparison: all 19,200 cases match after the fix. Another 480 original
@@ -63,8 +65,33 @@ walls, tile 24 and gates with low-byte/flag combinations. Reports remain in
 `rendered/alert-native-probe-v1.json` and the baseline file above. New tests
 are included in CI. No full-AI parity claim.
 
-Next independent investigation is the
-previously excluded SkelAddOpponent ledge alignment (`4:19f0-1a54`). Review
-its input-frame provenance before integrating: InitOpps has not loaded the
-new pose when it invokes this adjustment. Do not blindly reuse the visible
-heap's supporting foot and assume that matches the original call site.
+Commit `e9a29a1` contains this rule. Its first GitHub run exposed an asset
+dependency in the test module: importing combat loads extracted probability
+profiles. Follow-up extracts the path rule into `pop2/enemy_alerts.py` and
+splits nine genuinely asset-free path tests from two optional integration
+tests. The whole module also passes in an isolated temporary project without
+an assets directory (only the two integration checks skip). The 480 native
+endpoint comparisons still match after extraction.
+
+## Skeleton Edge Initialization: Input-Provenance Audit
+
+The next branch, SkelAddOpponent `4:19f0-1a54`, demonstrably uses the caller's
+cached FRAM supporting-foot fields, not a newly decoded heap pose. InitOpps
+sets anchor/row/facing before the call but does not call LoadFrame there.
+The appearance-loading path changes resource handles, not these cached
+FRAM values. This dependency matters; do not silently choose a heap frame.
+
+Local `rendered/skeleton_edge_native_probe_v1.py` extends the previous
+InitOpps harness by executing its real front/rear tile queries and alignment
+arithmetic. With the same dormant record at X=180 and an empty left cell,
+four supplied prior-FRAM pairs produce X=230/214/198/223 when facing left,
+or X=229/194/210/185 when facing right. Marker-1 living initialization stays
+at X=180 for all eight controls. Results are in
+`rendered/skeleton-edge-native-v1.json` (16 cases).
+
+No alignment change is justified yet. The previous InitOpps probe explicitly
+excluded this geometry; reusing the visible heap's foot would invent an
+upstream input. Next: trace the last native LoadFrame before room entry and
+establish how this cache is initialized for actual supported room records.
+If this requires unavailable full-runtime state, keep the limitation explicit
+and advance another independent AI branch rather than hardcoding positions.

@@ -2,35 +2,24 @@
 
 from dataclasses import replace
 import struct
+from types import SimpleNamespace
 import unittest
 
-from pop2.combat import CombatEncounter, Fighter
-from pop2.sequence_runtime import SequenceRuntime, SequenceState
+from pop2.enemy_alerts import alert_path_mode
+from pop2.paths import ASSET_DIR
 from pop2.terrain import LevelMap
 
 
 class EnemyAlertTests(unittest.TestCase):
-    def encounter(self, player_column=7, guard_column=2, environment=3, actor=4):
+    def encounter(self, player_column=7, guard_column=2, environment=3):
         self.level = bytearray(0x49ca)
         struct.pack_into('>H', self.level, 0x2180, 32)
         struct.pack_into('>H', self.level, 0x2198, 1)
         struct.pack_into('>H', self.level, 0x2186, environment)
         self.level[:60] = struct.pack('>30H', *([1] * 30))
 
-        def fighter(column, actor_type):
-            x = column * 51 + 30
-            state = SequenceState(227, actor_type=actor_type, action=171,
-                                  current_x=x, target_x=x, facing=1, animation_state=1,
-                                  level_kind=environment)
-            return Fighter(SequenceRuntime({}, state), 3, 3, 0, 1)
-
-        combat = CombatEncounter.__new__(CombatEncounter)
-        combat.level, combat.level_kind = self.level, environment
-        combat.terrain = LevelMap(self.level)
-        combat.player = fighter(player_column, 0)
-        combat.guard = fighter(guard_column, actor)
-        combat.guards, combat.rooftop_escape = [combat.guard], False
-        return combat
+        return SimpleNamespace(terrain=LevelMap(self.level), level_kind=environment,
+                               player_column=player_column, guard_column=guard_column)
 
     def tile(self, column, kind, modifier=0, *, room=0):
         cell = 10 + column
@@ -38,18 +27,16 @@ class EnemyAlertTests(unittest.TestCase):
         struct.pack_into('>H', self.level, 0x780 + room * 120 + cell * 4, modifier)
 
     def alert(self, combat):
-        combat._update_guard_alert(combat.guard)
-        return combat.guard.alert_mode
+        return alert_path_mode(lambda col: combat.terrain.tile(0, col, 1),
+                               combat.guard_column, combat.player_column, combat.level_kind)
 
     def test_right_endpoint_gate_is_excluded_regardless_of_actor_order_or_opening(self):
-        for actor in (2, 4):
-            for player, guard in ((7, 2), (2, 7)):
-                for modifier in (0, 103, 104, 255, 0x200 | 103):
-                    with self.subTest(actor=actor, player=player, modifier=modifier):
-                        combat = self.encounter(player, guard, actor=actor)
-                        self.tile(7, 4, modifier)
-                        self.assertEqual(self.alert(combat), 3)
-                        self.assertTrue(combat.guard.pursuing)
+        for player, guard in ((7, 2), (2, 7)):
+            for modifier in (0, 103, 104, 255, 0x200 | 103):
+                with self.subTest(player=player, modifier=modifier):
+                    combat = self.encounter(player, guard)
+                    self.tile(7, 4, modifier)
+                    self.assertEqual(self.alert(combat), 3)
 
     def test_adjacent_endpoint_gate_skips_the_remaining_single_cell(self):
         for player, guard in ((2, 3), (3, 2)):
@@ -92,32 +79,11 @@ class EnemyAlertTests(unittest.TestCase):
                 self.tile(5, second)
                 self.assertEqual(self.alert(combat), expected)
 
-    def test_same_column_skips_terrain_but_not_the_actor_exclusions(self):
+    def test_same_column_skips_all_terrain(self):
         for kind in range(50):
             combat = self.encounter(2, 2)
             self.tile(2, kind)
             self.assertEqual(self.alert(combat), 3)
-        for condition in ('dead_player', 'dead_guard', 'other_row', 'shadow', 'escape'):
-            combat = self.encounter(2, 2)
-            if condition == 'dead_player':
-                combat.player.life = 0
-            elif condition == 'dead_guard':
-                combat.guard.life = 0
-            elif condition == 'other_row':
-                combat.guard.row = 2
-            elif condition == 'shadow':
-                combat.player.state.actor_type = 1
-            else:
-                combat.rooftop_escape = True
-            self.assertEqual(self.alert(combat), 0)
-
-    def test_excluded_endpoint_does_not_promote_a_waiting_non_primary_enemy(self):
-        combat = self.encounter()
-        nearer_state = replace(combat.guard.state, current_x=4 * 51 + 30, target_x=4 * 51 + 30)
-        nearer = replace(combat.guard, runtime=SequenceRuntime({}, nearer_state))
-        combat.guards.append(nearer)
-        self.tile(7, 4)
-        self.assertEqual(self.alert(combat), 2)
 
     def test_live_gate_and_removed_floor_are_queried_again(self):
         combat = self.encounter()
@@ -134,8 +100,65 @@ class EnemyAlertTests(unittest.TestCase):
         self.tile(2, 24, room=1)
         self.assertEqual(self.alert(combat), 3)
         self.tile(3, 24, room=1)
-        combat.player.state.current_x = combat.player.state.target_x = 13 * 51 + 30
+        combat.player_column = 13
         self.assertEqual(self.alert(combat), 1)
+
+
+@unittest.skipUnless((ASSET_DIR / 'enemy_profiles.json').is_file(), 'Imported enemy profiles required')
+class EnemyAlertIntegrationTests(unittest.TestCase):
+    def encounter(self):
+        from pop2.combat import CombatEncounter, Fighter
+        from pop2.sequence_runtime import SequenceRuntime, SequenceState
+
+        self.fixture = EnemyAlertTests()
+        self.fixture.encounter()
+        self.fixture.tile(7, 4)
+
+        def fighter(column, actor):
+            x = column * 51 + 30
+            return Fighter(SequenceRuntime({}, SequenceState(
+                227, actor_type=actor, action=171, current_x=x, target_x=x,
+                facing=1, animation_state=1, level_kind=3)), 3, 3, 0, 1)
+
+        combat = CombatEncounter.__new__(CombatEncounter)
+        combat.level, combat.level_kind = self.fixture.level, 3
+        combat.terrain = LevelMap(combat.level)
+        combat.player = fighter(7, 0)
+        combat.guard = fighter(2, 4)
+        combat.guards, combat.rooftop_escape = [combat.guard], False
+        return combat
+
+    def test_excluded_endpoint_does_not_promote_a_waiting_non_primary_enemy(self):
+        from pop2.sequence_runtime import SequenceRuntime
+
+        combat = self.encounter()
+        nearer_state = replace(combat.guard.state, current_x=4 * 51 + 30, target_x=4 * 51 + 30)
+        nearer = replace(combat.guard, runtime=SequenceRuntime({}, nearer_state))
+        combat.guards.append(nearer)
+        combat._update_guard_alert(combat.guard)
+        self.assertEqual(combat.guard.alert_mode, 2)
+
+    def test_geometry_exception_preserves_exclusions_and_pursuit(self):
+        for actor in (2, 4):
+            combat = self.encounter()
+            combat.guard.state.actor_type = actor
+            combat._update_guard_alert(combat.guard)
+            self.assertEqual(combat.guard.alert_mode, 3)
+            self.assertTrue(combat.guard.pursuing)
+        for condition in ('dead_player', 'dead_guard', 'other_row', 'shadow', 'escape'):
+            combat = self.encounter()
+            if condition == 'dead_player':
+                combat.player.life = 0
+            elif condition == 'dead_guard':
+                combat.guard.life = 0
+            elif condition == 'other_row':
+                combat.guard.row = 2
+            elif condition == 'shadow':
+                combat.player.state.actor_type = 1
+            else:
+                combat.rooftop_escape = True
+            combat._update_guard_alert(combat.guard)
+            self.assertEqual(combat.guard.alert_mode, 0)
 
 
 if __name__ == '__main__':

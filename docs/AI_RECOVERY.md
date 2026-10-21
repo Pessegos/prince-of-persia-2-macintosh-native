@@ -334,8 +334,12 @@ non-primary enemy still receives waiting mode 2 after a clear scan.
 gate openings/flag bits, adjacent/equal endpoints, every tile at a shared
 column, cavern-only behavior, first-obstruction ordering, live terrain,
 waiting selection, linked-room normalization and existing actor exclusions.
-It needs no original assets and is included in CI. Applying these tests to
-the previous alert method produces 18 assertion failures and no test errors.
+The nine path tests need no original assets and are included in CI; two
+additional combat-integration tests run when imported enemy profiles exist.
+The path rule lives in `pop2/enemy_alerts.py`, so CI does not import combat's
+asset-backed probability tables merely to validate geometry. A clean
+temporary project with no assets runs the path tests and skips only the two
+explicitly resource-backed integration checks.
 
 Direct execution of the original alert loop, GetBlock and tile classifiers
 found 24 mismatches in a 19,200-case baseline matrix and none after these
