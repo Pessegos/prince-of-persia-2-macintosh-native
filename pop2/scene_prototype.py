@@ -2646,7 +2646,7 @@ class ScenePrototype(WindowControls):
         combat.player.targetable = not self._opening_active()
         record = (self.frames[self.sequence_state.action]
                   if getattr(self, "level_map", None) is not None else None)
-        if combat.choose_player_turn(record):
+        if combat.choose_player_turn(record, self.player_bounds() if record is not None else None):
             self.status.set("Turning toward opponent")
             return True
         return False

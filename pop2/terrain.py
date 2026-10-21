@@ -216,15 +216,19 @@ class LevelMap:
             return 0
         return min(0, floor_edge_distance(contact, state.facing) - 11) * direction
 
-    def combat_turn_offset(self, room, row, state, record):
-        # DoTurn, CODE:6 0x26dc-0x276c, ordinary rooftop floor/wall subset.
+    def combat_turn_offset(self, room, row, state, record, bounds=None):
+        # DoTurn, CODE:6 0x26dc-0x276c. A gate cell is a barrier only when
+        # the gate collision 4:5b0e blocks the current body (0x26f6/0x2720).
         contact_x = floor_contact_x(state.target_x, state.facing, record)
         column = character_column(contact_x)
         direction = 1 if state.facing else -1
         allowance = None
         for ahead in (1, 2):
-            kind = self.tile(room, column + direction * ahead, row).kind
-            if kind in EMPTY_TILES | WALL_TILES:
+            tile = self.tile(room, column + direction * ahead, row)
+            kind = tile.kind
+            gate = (kind == 4 and bounds is not None and state.level_kind == 3
+                    and stone_gate_blocks(tile.foreground, bounds, state))
+            if kind in EMPTY_TILES | WALL_TILES or gate:
                 allowance = (ahead - 1) * TILE_WIDTH
                 break
         if allowance is None:

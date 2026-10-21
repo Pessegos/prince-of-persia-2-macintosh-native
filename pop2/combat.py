@@ -705,7 +705,7 @@ class CombatEncounter:
             elif intent.retreat:
                 select_sequence(guard, 57)
 
-    def choose_player_turn(self, frame_record=None):
+    def choose_player_turn(self, frame_record=None, bounds=None):
         player, guard = self.player, self.guard
         guard = self._project_fighter(guard, player.room) if guard is not None else None
         state = player.state
@@ -720,7 +720,7 @@ class CombatEncounter:
         if opponent_distance(player, guard) >= -15:
             return False
         terrain = getattr(self, "terrain", None)
-        offset = (terrain.combat_turn_offset(player.room, player.row, state, frame_record)
+        offset = (terrain.combat_turn_offset(player.room, player.row, state, frame_record, bounds)
                   if terrain is not None and frame_record is not None else 0)
         select_sequence(player, PLAYER_COMBAT_TURN_SEQUENCE, offset=offset)
         return True
