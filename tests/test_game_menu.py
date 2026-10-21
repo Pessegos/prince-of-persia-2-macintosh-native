@@ -507,7 +507,9 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_save_browser_presentation_keeps_source_detail_at_fitted_window_resolution(self):
         scene = self.scene
-        scene.apply_game_action('save')
+        # Embedded previews in a user's saves may differ from a fresh render.
+        with patch('pop2.save_slots.list_slots', return_value=()):
+            scene.apply_game_action('save')
         browser = scene.game_menu.save_browser
         preview = browser.preview_provider(browser.detail)
         self.assertEqual(preview.size, (510, 365))

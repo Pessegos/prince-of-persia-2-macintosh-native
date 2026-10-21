@@ -215,3 +215,9 @@ reload semantics: the missing operation belongs to the control phase.
 The probe retains the existing cycle harness's flat-map, RNG and shared-SEQS
 limitations. Implement and test this scheduling correction separately.
 Keep ordinary rooftop bank conversion open; do not claim complete AI.
+
+The save-browser presentation regression now supplies an empty save list,
+so it always exercises the fresh current-run preview it asserts, regardless
+of the user's existing files. All four fitted window sizes pass; no game
+rendering or user save was modified. Terminal pose correction committed as
+`8fa923e`; GitHub Tests run 39555076890 is being checked.
