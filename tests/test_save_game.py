@@ -64,6 +64,60 @@ class SaveFormatTests(unittest.TestCase):
         restored, _saved = read_save(self.path, self.resources)
         self.assertEqual(restored.caverns.loose.shake_events, [])
 
+    def test_inactive_guard_record_roundtrip_resumes_native_cold_reload(self):
+        from pop2.combat import select_sequence
+
+        original = GameSession.load(self.resources, 1)
+        original.place(3, 1, 250, 0)
+        actor = original.combat.guards[0]
+        actor.max_life, actor.life, actor.sword_drawn = 3, 2, True
+        select_sequence(actor, 227)
+        actor.runtime.next_frame()
+        original.combat.enter_room(31, 1)
+        original.room_id = original.motion.room = 31
+        write_save(self.path, capture(original))
+        loaded, _saved = read_save(self.path, self.resources)
+        restored = loaded.combat.room_encounters[3][0][0]
+        self.assertEqual(restored.guard_record, actor.guard_record)
+        loaded.combat.enter_room(3, 1)
+        self.assertEqual((restored.life, restored.selected_sequence, restored.sword_drawn), (3, 77, False))
+        self.assertFalse(restored.guard_record.pending)
+
+    def test_legacy_guard_actor_without_record_or_native_alive_still_loads(self):
+        original = GameSession.load(self.resources, 1)
+        value = capture(original)
+
+        def remove_fields(item):
+            if isinstance(item, dict):
+                if item.get('record') == 'Fighter':
+                    item['fields'].pop('guard_record', None)
+                    item['fields'].pop('native_alive', None)
+                for child in item.values():
+                    remove_fields(child)
+            elif isinstance(item, list):
+                for child in item:
+                    remove_fields(child)
+
+        remove_fields(value)
+        write_save(self.path, value)
+        loaded, _saved = read_save(self.path, self.resources)
+        self.assertIsNone(loaded.combat.guards[0].guard_record)
+        self.assertIsNone(loaded.combat.guards[0].native_alive)
+
+    def test_corrupt_guard_room_records_are_rejected(self):
+        from dataclasses import replace
+        from pop2.opponent_records import GuardRoomRecord
+
+        for invalid in ({'sequence': 99999}, {'cursor': 999}, {'life': 2},
+                        {'height': 10001}, {'cell': 90}):
+            with self.subTest(invalid=invalid):
+                original = GameSession.load(self.resources, 1)
+                original.combat.guards[0].guard_record = replace(
+                    GuardRoomRecord(77, 0, 1, False, 12), **invalid)
+                write_save(self.path, capture(original))
+                with self.assertRaises(SaveGameError):
+                    read_save(self.path, self.resources)
+
     def test_side_room_skeleton_bank_roundtrip_keeps_selection_and_order(self):
         original = GameSession.load(self.resources, 3)
         original.place(16, 2, 40, 0)

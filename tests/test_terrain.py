@@ -1591,11 +1591,13 @@ class RooftopSceneTests(unittest.TestCase):
         scene = self.scene
         guards = scene.combat.guards
         guards[0].life = 0
+        scene.combat.choose_guard_action(guards[0])
         point = scene.combat.generation_points[0]
         point.remaining = 0
         scene.combat.player.life = 2
         scene.combat.enter_room(1, 1)
         scene.combat.guards[0].life = 0
+        scene.combat.choose_guard_action(scene.combat.guards[0])
         scene.combat.enter_room(3, 1)
         self.assertIs(scene.combat.guards, guards)
         self.assertEqual(scene.combat.guards[0].life, 0)

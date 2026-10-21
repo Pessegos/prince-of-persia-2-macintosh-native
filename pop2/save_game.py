@@ -25,6 +25,7 @@ from pop2.harbor import Harbor, WaterEntry
 from pop2.lava import Lava, LavaPool
 from pop2.loose_floors import FallingFloor, LooseFloors
 from pop2.opponent_generation import OpponentGenerationPoint
+from pop2.opponent_records import GuardRoomRecord
 from pop2.potions import Potions
 from pop2.pressure_plates import PressurePlates
 from pop2.rebirth import Checkpoint, DeathState, RebirthSnapshot
@@ -42,7 +43,7 @@ CLASSES = {cls.__name__: cls for cls in (
     CavernState, Dart, Darts, DesertState, Stone, GateCrush, Harbor,
     WaterEntry, Lava, LavaPool, FallingFloor, LooseFloors, OpponentGenerationPoint,
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
-    Skeleton, SkeletonRoomRecord, TerrainMotion, WallSpikes,
+    Skeleton, SkeletonRoomRecord, GuardRoomRecord, TerrainMotion, WallSpikes,
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
         LooseFloors: {'shake_events'}}
@@ -155,7 +156,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     # Earlier snapshots predate turning-contact history and explicit NPC banks.
     optional = {'gate_contact_bounds'} if cls is TerrainMotion else set()
     if cls.__name__ == 'Fighter':
-        optional.update(('bank_room', 'bank_slot'))
+        optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive'))
     if cls is Skeleton:
         optional.update(('room_record', 'native_alive'))
     if cls is SkeletonRoomRecord:
@@ -199,6 +200,14 @@ def _fighter_valid(actor, resources):
             or not 0 <= record.life <= actor.max_life
             or record.cell is not None and not -19 <= record.cell < 90):
         raise SaveGameError('Saved skeleton room record is out of range')
+    record = actor.guard_record
+    if record is not None and (
+            actor.state.actor_type != 2 or record.sequence not in resources.sequences
+            or not 0 <= record.cursor < len(resources.sequences[record.sequence])
+            or not 0 <= record.life <= actor.max_life
+            or record.cell is not None and not -19 <= record.cell < 90
+            or abs(record.height) > 10000):
+        raise SaveGameError('Saved guard room record is out of range')
 
 
 def capture_snapshot(game, controls=None, copy_verified=False):

@@ -9,6 +9,7 @@ from pop2.enemy_profiles import (
     STRIKE_CHANCE, HIT_PAUSE, QuickDrawRandom,
 )
 from pop2.enemy_alerts import alert_path_mode
+from pop2.opponent_records import GuardRoomRecord, removed_on_room_save
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.opponent_generation import (
@@ -57,7 +58,10 @@ def opponent_follows_cut(guard, direction, count, *, in_destination=False):
                or 202 <= state.action <= 212 and guard.generation_flags == 1)
     if running or in_destination:
         return True
-    if not guard.alive or not guard.sword_drawn or count >= 5:
+    native_alive = guard.alive if guard.native_alive is None else guard.native_alive
+    if guard.skeleton is not None:
+        native_alive = guard.alive or guard.skeleton.native_alive
+    if not native_alive or not guard.sword_drawn or count >= 5:
         return False
     if direction == 'left':
         return state.target_x < 124
@@ -104,6 +108,7 @@ class GuardSpawn:
     alternate_row: int | None = None
     actor_type: int = 2
     skeleton_words: tuple = ()
+    guard_words: tuple = ()
 
     @classmethod
     def from_level(cls, level, room):
@@ -136,7 +141,8 @@ class GuardSpawn:
                               int(fields[2] == 0), skill, fields[4], fields[13] or 3,
                               fields[6] or 1, fields[10], fields[16],
                               4 if opponent_type == 2 else 2,
-                              tuple(fields) if opponent_type == 2 else ()))
+                              tuple(fields) if opponent_type == 2 else (),
+                              tuple(fields) if opponent_type == 0 else ()))
         return spawns
 
 
@@ -164,6 +170,8 @@ class Fighter:
     skeleton: object | None = None
     bank_room: int | None = None
     bank_slot: int = 0
+    guard_record: GuardRoomRecord | None = None
+    native_alive: bool | None = None
 
     @property
     def state(self):
@@ -280,6 +288,9 @@ class CombatEncounter:
         self.attack_pause = 0
         self.last_guard_at = None
         self.rooftop_escape = False
+        if self.spawn is None:
+            self._select_opponent_bank(self.player.room)
+            self._restore_opponent_records()
 
     def _reset_initial_guard(self):
         self.player = Fighter(self.player_runtime, 3, 3,
@@ -297,6 +308,9 @@ class CombatEncounter:
                              generation_flags=self.spawn.generation_flags,
                              alternate_row=self.spawn.alternate_row)
         self.guard.runtime.next_frame()
+        self.guard.guard_record = GuardRoomRecord(
+            self.spawn.sequence_id, 0, self.spawn.life, False,
+            self.spawn.row * 10, pending=False)
         self.guards = [self.guard]
         self.generation_points = (OpponentGenerationPoint.from_level(self.level, self.spawn.room)
                                   if self.level is not None else [])
@@ -325,6 +339,11 @@ class CombatEncounter:
                     from pop2.skeleton import Skeleton
                     fighter.skeleton = Skeleton.from_spawn(spawn)
                     fighter.skeleton.initialize(fighter, slot)
+                else:
+                    words = spawn.guard_words
+                    fighter.guard_record = (GuardRoomRecord(
+                        words[4], words[5], words[9], bool(words[8]), words[0], words[14])
+                        if words else GuardRoomRecord(spawn.sequence_id, 0, spawn.life, False, spawn.row * 10))
                 guards.append(fighter)
             points = (OpponentGenerationPoint.from_level(self.level, room)
                       if struct.unpack_from(">h", self.level, 0x21a4)[0] == 0 else [])
@@ -334,24 +353,17 @@ class CombatEncounter:
         """Keep the Prince and the visited room's NPC/generator objects intact."""
         previous_room = self.player.room
         previous_active = self.active_guards()
-        skeleton_records = []
+        room_records = []
         if previous_room != room:
             for actor in previous_active:
-                if actor.skeleton is not None:
+                if actor.state.actor_type in (2, 4):
                     view = self._project_fighter(actor, previous_room)
                     if view is not None:
-                        skeleton_records.append((actor, view))
+                        room_records.append((actor, view))
         self._load_room(room)
         self.player.room, self.player.row = room, row
         self.guards, self.generation_points = self.room_encounters[room]
         terrain = getattr(self, "terrain", None)
-        if terrain is not None and self.level_kind == 3:
-            for side in ('left', 'right'):
-                neighbor = terrain.neighbor(room, side)
-                if (neighbor is not None and neighbor not in self.room_encounters
-                        and any(visible_side_opponent(spawn.x, side)
-                                for spawn in GuardSpawn.all_from_level(self.level, neighbor))):
-                    self._load_room(neighbor)
         direction = next((side for side in ('left', 'right', 'up', 'down')
                           if terrain is not None and previous_room != room
                           and terrain.neighbor(previous_room, side) == room), None)
@@ -364,22 +376,37 @@ class CombatEncounter:
                 if opponent_follows_cut(view, direction, len(self.guards),
                                         in_destination=self._position_room(guard) == room):
                     self._carry_opponent(guard, room, previous_room, direction)
-        for actor, view in skeleton_records:
-            if actor.room != room and actor.skeleton.removed_on_room_save(actor):
+        for actor, view in room_records:
+            if actor.room != room and removed_on_room_save(actor):
                 self.room_encounters[actor.room][0].remove(actor)
                 continue
             if actor.room != room:
-                self._store_skeleton_record(actor, view)
+                self._store_opponent_record(actor, view)
             else:
-                actor.skeleton.store_room(actor, restart_living=False, cell=opponent_row_cell(actor.row))
-        self._select_skeleton_bank(room)
+                self._capture_opponent_record(actor, restart_living=False, cell=opponent_row_cell(actor.row))
+        self._select_opponent_bank(room)
+        self._restore_opponent_records()
+        self.guard = self._nearest_guard() or (self.guards[0] if self.guards else None)
+
+    def _restore_opponent_records(self):
         for actor in self.active_guards():
             if actor.skeleton is not None:
                 restored = actor.skeleton.restore_room(actor, actor.bank_slot)
-                if restored and actor.skeleton.native_alive:
-                    self.player.state.callback_flag = 0
-                    self.advance_pause = self.attack_pause = 0
-        self.guard = self._nearest_guard() or (self.guards[0] if self.guards else None)
+                living = actor.skeleton.native_alive
+            else:
+                restored = actor.guard_record is not None and actor.guard_record.restore(actor, actor.bank_slot)
+                living = actor.native_alive
+            if restored and living:
+                self.player.state.callback_flag = 0
+                self.advance_pause = self.attack_pause = 0
+
+    @staticmethod
+    def _capture_opponent_record(actor, *, restart_living, cell=None, update_height=True):
+        if actor.skeleton is not None:
+            actor.skeleton.store_room(actor, restart_living=restart_living, cell=cell)
+        else:
+            actor.guard_record = GuardRoomRecord.capture(
+                actor, restart_living=restart_living, cell=cell, update_height=update_height)
 
     def _position_room(self, guard):
         # IsCharInKidRoom 6:46ca uses the cached supporting cell, not the
@@ -394,7 +421,7 @@ class CombatEncounter:
                                          guard.state.target_x, floor_y(guard.row) + guard.state.current_y)
         return position[0] if position is not None else None
 
-    def _store_skeleton_record(self, actor, view):
+    def _store_opponent_record(self, actor, view):
         # UpdateOppInfo 6:3186-3268 stores a non-following actor through
         # Cut, retaining its cursor rather than restarting a living record.
         column = self._supporting_column(view)
@@ -414,7 +441,7 @@ class CombatEncounter:
             # Preserve the existing port safeguard against a full bank losing
             # an actor. Native AddOpp can discard its incoming room record.
             if len(destination) >= 5:
-                actor.skeleton.store_room(actor, restart_living=False)
+                self._capture_opponent_record(actor, restart_living=False, update_height=False)
                 return True
             source.remove(actor)
             destination.append(actor)
@@ -424,7 +451,7 @@ class CombatEncounter:
         if actor.terrain_motion is not None:
             actor.terrain_motion.room, actor.terrain_motion.row = room, row
         cell = opponent_record_cell(column, row) if inside else opponent_row_cell(row)
-        actor.skeleton.store_room(actor, restart_living=inside, cell=cell)
+        self._capture_opponent_record(actor, restart_living=inside, cell=cell, update_height=inside)
         return True
 
     def _carry_opponent(self, guard, room, previous_room, direction):
@@ -445,22 +472,24 @@ class CombatEncounter:
             guard.terrain_motion.room, guard.terrain_motion.row = room, guard.row
         self.guards.append(guard)
 
-    def _select_skeleton_bank(self, room):
-        if self.level_kind != 3:
-            return
+    def _select_opponent_bank(self, room):
         terrain = getattr(self, 'terrain', None)
+        for side in ('left', 'right'):
+            neighbor = terrain.neighbor(room, side) if terrain is not None else None
+            if (neighbor is not None and neighbor not in self.room_encounters
+                    and any(visible_side_opponent(spawn.x, side)
+                            for spawn in GuardSpawn.all_from_level(self.level, neighbor))):
+                self._load_room(neighbor)
         for actors, _points in self.room_encounters.values():
             for actor in actors:
-                if actor.skeleton is not None:
-                    actor.bank_room = None
+                actor.bank_room = None
         count = len(self.guards)
         for index, actor in enumerate(self.guards):
-            if actor.skeleton is not None:
-                actor.bank_room, actor.bank_slot = room, index
+            actor.bank_room, actor.bank_slot = room, index
         for side in ('left', 'right'):
             neighbor = terrain.neighbor(room, side) if terrain is not None else None
             for actor in self.room_encounters.get(neighbor, ([], []))[0]:
-                if actor.skeleton is not None and count < 5 and visible_side_opponent(
+                if count < 5 and visible_side_opponent(
                         actor.state.target_x, side):
                     actor.bank_room = room
                     actor.bank_slot = count
@@ -470,15 +499,10 @@ class CombatEncounter:
         terrain = getattr(self, "terrain", None)
         if terrain is None:
             return list(self.guards)
-        rooms = {self.player.room}
-        rooms.update(terrain.neighbor(self.player.room, direction)
-                     for direction in ("left", "right"))
         active = [guard for room, (guards, _points) in self.room_encounters.items()
                 for guard in guards
-                if ((room == self.player.room or guard.bank_room == self.player.room)
-                    if guard.skeleton is not None else
-                    (room in rooms or guard.alive and guard.pursuing))]
-        return sorted(active, key=lambda guard: guard.bank_slot) if self.level_kind == 3 else active
+                if room == self.player.room or guard.bank_room == self.player.room]
+        return sorted(active, key=lambda guard: guard.bank_slot)
 
     def _room_offset(self, source, destination):
         if source == destination:
@@ -763,6 +787,7 @@ class CombatEncounter:
             # PlayerCtrl 4:3d64-3d6c registers zero HP before AutoCtrl,
             # including a reload whose visible pose initially sets ALIVE=-1.
             guard.death_registered = True
+            guard.native_alive = False
             if guard.skeleton is not None:
                 guard.skeleton.native_alive = False
                 if guard.skeleton.phase in ('active', 'rising'):
@@ -1103,6 +1128,10 @@ class CombatEncounter:
                             selected_sequence=state.sequence_id, generation_flags=point.flags,
                             alternate_row=point.alternate_row)
             guard.runtime.next_frame()
+            guard.guard_record = GuardRoomRecord(
+                state.sequence_id, 0, point.life, armed, point.row * 10, pending=False)
+            guard.native_alive = True
+            guard.bank_room, guard.bank_slot = self.player.room, len(self.active_guards())
             self.guards.append(guard)
             blockers.append(guard)
         self.refresh_target()
@@ -1186,7 +1215,8 @@ class CombatEncounter:
         # GetOppDeadSeq 4:0074-010a / FrameAdv 2:6544: ordinary corpse
         # variant follows slot parity, not a random choice.
         guards = self.room_encounters[guard.room][0]
-        index = next(i for i, other in enumerate(guards) if other is guard)
+        index = (guard.bank_slot if guard.bank_room == self.player.room else
+                 next(i for i, other in enumerate(guards) if other is guard))
         if index % 2:
             select_sequence(guard, 195)
             guard.runtime.next_frame()

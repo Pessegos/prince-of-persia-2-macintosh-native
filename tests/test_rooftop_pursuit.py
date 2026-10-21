@@ -1,4 +1,5 @@
 import random
+from dataclasses import replace
 import struct
 import unittest
 from unittest.mock import patch
@@ -49,6 +50,7 @@ class RooftopPursuitTests(unittest.TestCase):
         guard = Fighter(runtime, 3, 3, room, 1, generation_flags=flags,
                         selected_sequence=84)
         encounter.room_encounters[room][0].append(guard)
+        encounter._select_opponent_bank(encounter.player.room)
         return guard
 
     def tick(self, encounter):
@@ -433,6 +435,9 @@ class RooftopPursuitTests(unittest.TestCase):
                 guard.terrain_motion = TerrainMotion(0, 1)
                 old_state = (guard.state.cursor, guard.state.sequence_id,
                              guard.state.action, guard.state.facing)
+                resumed = replace(guard.state, sound_events=[], sequence_events=[],
+                                  selected_sequence_id=guard.state.sequence_id)
+                SequenceRuntime(self.sequences, resumed).next_frame()
                 encounter.enter_room(9, 1)
                 self.assertEqual(guard.room, 9 if carried else 0)
                 self.assertEqual(guard.state.target_x, 910 if carried else 400)
@@ -440,7 +445,9 @@ class RooftopPursuitTests(unittest.TestCase):
                 self.assertEqual(guard.terrain_motion.room, guard.room)
                 self.assertEqual((guard.life, guard.palette_variant), (2, 3))
                 self.assertEqual((guard.state.cursor, guard.state.sequence_id,
-                                  guard.state.action, guard.state.facing), old_state)
+                                  guard.state.action, guard.state.facing),
+                                 (resumed.cursor, resumed.sequence_id, resumed.action, resumed.facing)
+                                 if carried else old_state)
                 self.assertEqual(sum(g is guard for guards, _ in encounter.room_encounters.values()
                                      for g in guards), 1)
                 if carried:

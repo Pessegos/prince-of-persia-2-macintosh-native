@@ -133,6 +133,7 @@ class OpponentGenerationTests(unittest.TestCase):
         self.assertIs(c.guards[0], corpse)
         self.assertEqual((corpse.state.action, corpse.state.target_x, corpse.state.facing), corpse_state)
         self.assertFalse(incoming.contact_consumed)
+        self.assertTrue(incoming.native_alive)
         self.assertEqual(c.generation_points[0].remaining, 0)
         for frame in range(7, 150):
             c.step(frame / 10, 0.1)

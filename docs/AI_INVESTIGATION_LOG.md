@@ -344,3 +344,58 @@ remain unchanged. Native reports retain their scoped graphics/resource/record
 lookup exclusions. Block two must integrate records, active-bank membership,
 normalization, carried actors and snapshot compatibility together; the codec
 alone is not a claim that the game's room scheduling has changed.
+
+Block one committed as `4aa8b56`; GitHub Tests run 39591195930 passed.
+The extended height fixture initially omitted level_kind, making its sound
+callback unsupported; supplying the actual ordinary environment fixed the
+fixture and all 510 real-codec comparisons passed without a production edit.
+
+## Ordinary Banks: Second Block In Verification
+
+Ordinary guards now share explicit current-room/visible-side active-bank
+selection with skeletons, retaining current records before side imports and
+five active slots. Membership persists until the next room entry; a distant
+unselected pursuer no longer advances indefinitely. On departure, ordinary
+actors save native records through the shared position-normalization path;
+carried actors retain their cursor and receive InitOpps' next animation step.
+Current-room refresh does not restart them. New generation records receive
+bank slots, and corpse parity uses the active slot rather than source-room
+list order. The approved boat stand-down remains in the normal controller.
+
+New original UpdateOppInfo/Cut audit matches 1,600 integrated guard record
+outputs, including the unchanged live resource header, cursor, stored life,
+sword, facing, normalized room/cell/X and conditional height. Supplied support
+cells/lookup and the preexisting full-bank retention safeguard are explicitly
+excluded. Existing skeleton normalization still matches all 1,200 cases.
+All 46,080 earlier CutAllOpponents decisions pass, plus 512 new comparisons
+that independently vary HP and native ALIVE. Armed followers use native ALIVE
+rather than prematurely treating a pending zero-HP death as registered.
+
+Snapshots serialize GuardRoomRecord and optional Fighter fields, accept older
+records without them, and reject invalid resource/cursor/life/cell/height.
+New integration tests cover frozen distant actors, cold healed/unarmed return,
+same-room continuity, resumed zero-HP control order, normalized ownership,
+five-slot priority, persistent side membership, terminal removal and snapshot
+roundtrips. Replaying the previous active_guards method fails both the distant
+pursuer and bank-cap regressions, with no fixture errors.
+
+The first broad run (1,934 tests) found two outdated fixtures: one assigned HP
+zero without the native control registration, and one reordered its manually
+inserted corpses without updating bank slots. Both fixtures now model those
+explicit phases; focused checks pass. Final full discovery passed 1,937 tests
+in 365 seconds (one optional skip, four expected failures, no unexpected
+failures). The final explicit generated-actor ALIVE initialization follows
+6:3c20-3c22 and is covered by a subsequent-code 249-test focused run. Ruff,
+catalog and diff checks pass. Verify CI for the second requested commit.
+No further commits are
+authorized by the user's latest two-block request without continuation.
+
+Remaining recovery fronts are not closed by these banks: full HP/ALIVE
+sub-frame target/contact scheduling, complete candidate/type filtering and
+obstacle braking, cached-FRAM skeleton ledge initialization, dynamic hidden
+slot removal, the shared global step counter/random stream, full-capacity
+native record loss and later special controllers/level-four progression.
+The current scoped equivalence is not full enemy-AI parity.
+Source-room actor ownership is still represented with stable objects and
+rebased views, not literal native bank-memory copies. Audit all target/group-
+count consumers before claiming complete equivalence of that representation.

@@ -45,6 +45,15 @@ class GuardRecordTests(unittest.TestCase):
         self.assertEqual((actor.life, actor.state.action, actor.native_alive, actor.death_registered),
                          (0, 171, True, False))
 
+    def test_save_before_zero_hp_control_uses_the_still_living_native_word(self):
+        actor = self.actor()
+        actor.life, actor.native_alive = 0, True
+        actor.guard_record = GuardRoomRecord(77, 0, 3, False, pending=False)
+        record = GuardRoomRecord.capture(actor, restart_living=True, cell=12)
+        self.assertEqual((record.cursor, record.life), (0, 0))
+        record.restore(actor, 0)
+        self.assertEqual((actor.life, actor.selected_sequence), (3, 77))
+
     def test_cold_corpse_and_alternate_slot_do_not_resurrect(self):
         for slot in range(5):
             actor = self.actor()

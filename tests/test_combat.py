@@ -50,7 +50,12 @@ class GuardCombatTests(unittest.TestCase):
         return scene
 
     def test_guard_generator_decodes_actual_first_room(self):
-        self.assertEqual(self.spawn, GuardSpawn(3, 1, 149, 1, 0, 77, 1, alternate_row=0))
+        from dataclasses import replace
+
+        self.assertEqual(replace(self.spawn, guard_words=()),
+                         GuardSpawn(3, 1, 149, 1, 0, 77, 1, alternate_row=0))
+        self.assertEqual(len(self.spawn.guard_words), 19)
+        self.assertEqual(self.spawn.guard_words[:6], (12, 356, 0, 0, 77, 0))
 
     def test_rooftop_escape_lowers_swords_without_rearming_or_combat_music(self):
         combat = self.encounter()

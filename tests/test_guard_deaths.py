@@ -134,6 +134,7 @@ class GuardDeathTests(unittest.TestCase):
                     corpse = self.corpse(encounter, 280, registered=False)
                     encounter.guards.remove(corpse)
                     encounter.guards.insert(0, corpse)
+                encounter._select_opponent_bank(encounter.player.room)
                 encounter.player.state.facing = guard.state.facing
                 encounter._hurt("guard", guard, encounter.player)
                 encounter.rng.reset_mock()

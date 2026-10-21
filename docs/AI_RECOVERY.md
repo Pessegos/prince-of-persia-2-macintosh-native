@@ -738,28 +738,71 @@ the initial NPC and the unconsumed reinforcement point.
 `CombatEncounter.enter_room` reads that room's initial generators and
 reinforcement points on its first visit. Rooms with no initial NPC are valid;
 the active target and enemy health display can be absent. Returning to a room
-reuses its NPC objects, corpse poses, remaining life and generation counters.
+reuses its NPC identities and generation counters. Animation and life follow
+the cold/resumed record rules below, rather than always freezing live actors.
 The Prince's life and sword state are not reset by a screen change. New Game clears
 these encounters and restores the opening.
 
 NPCs use the rooftop physics and transfer between rooms, preserving the
-original actor object. Ordinary rooftop pursuit still simulates adjacent
-visited rooms and already engaged pursuers. Skeletons instead use explicit
-active-bank membership; see the room-cut validation below.
+original actor object. Ordinary guards and skeletons both use an explicit
+active bank: current-room records first, then visible left/right imports,
+up to five records. Unselected neighboring or distant pursuers do not keep
+simulating. An imported actor remains selected until the next room entry,
+even if it moves away from the original import threshold.
 Coordinate views rebase a distant target for AI/rendering without moving its
 actual actor. On the Prince's horizontal room cut, CutAllOpponents
 `6:44c8-450a` carries ordinary NPC and skeleton running poses 186-201 with
 nonzero movement flags and jump poses 202-212 with flag 1. TransferOppInfo
 `6:3304/4864` changes ownership and rebases X by 510 without restarting
-the animation or moving the actor in world space. The carried NPC belongs
+the animation. The subsequent InitOpps reload consumes its next pose, which
+may itself move the actor; this is separate from transfer arithmetic. The carried NPC belongs
 to the new target bank even while outside the image, so the Prince can
 turn toward it after killing the first screen-5 opponent. Non-carried NPCs
 still transfer on their own room cut; the port retains its five-record cap.
 Generated offscreen entrants retain ownership of their spawn room until they
 enter it or are carried by a subsequent Prince room cut. This lifecycle is
-not a complete translation of all `CutOpponent`, room-record reinitialization
-and special-actor branches. Player movement is documented in
+not a complete translation of every special-actor or full-capacity branch.
+Player movement is documented in
 [COLLISION_RECOVERY.md](COLLISION_RECOVERY.md).
+
+### Ordinary Guard Room Records
+
+`GuardRoomRecord` now implements ordinary type-2 UpdateOppInfo/InitOpps.
+For an in-bounds native living actor, saving clears the cursor but retains
+the generator's existing resource header. Reloading cursor zero starts
+unarmed sequence 77 at full maximum life, except preserved corpse sequence
+22. Nonzero cursors resume the saved current resource with saved life/sword
+and one AnimChar step. Dead poses remain dead, including the native odd-bank-
+slot corpse variant. Same-room refresh does not heal or restart an actor.
+
+Absolute jump Y is saved only for selected sequences 100/186 and loaded only
+when the record's current resource is 100. Other reloads start at their
+decoded row floor before animation. In-bounds living cursor resets do not
+overwrite that header. Non-following out-of-bounds records use the separate
+365-pixel Cut normalization; carried records retain the 360-pixel transfer.
+Terminal records are removed rather than respawned. Snapshots preserve both
+pending reloads and active bank slots; older snapshots default missing fields.
+
+The native ALIVE flag is distinct from HP during reload/control. A zero-HP
+non-dead pose initially gets the native living flag, which PlayerCtrl clears
+before the next decision. Record saving and armed-following decisions retain
+that distinction. Other existing HP-based contact/target paths are not claimed
+to reproduce every native sub-frame interaction.
+
+The port retains stable source-room ownership plus rebased actor views rather
+than copying/removing native bank memory literally. Complete target selection
+and group-count consumers of those views remain separate recovery work; this
+active scheduling/record change does not establish their full equivalence.
+
+Independent original InitOpps/AnimChar agrees with the codec in 1,280 reloads
+and 510 height-specific reloads. Another 384 SetSpecialOppInfo comparisons
+cover metadata writes, and 1,600 original UpdateOppInfo/Cut comparisons cover
+integrated storage, including retained live headers and normalized ownership.
+The previous 46,080 room-cut decisions still match, plus 512 explicit HP versus
+native-ALIVE cases. Resource/graphics lookup, supplied support cells and full-
+capacity record loss remain outside these comparisons. Local probes are
+`guard_reload_native_probe_v1.py`, `guard_height_native_probe_v1.py` and
+`guard_record_native_probe_v1.py` in `rendered/`.
 
 ### Room-Cut Decisions And Skeleton Active Banks
 
@@ -850,7 +893,7 @@ remain checkpoint-based; this does not turn them into exact-state saves.
 Remaining differences include special-actor record normalization,
 SkelAddOpponent's ledge alignment, invisible-face removal,
 all zero-HP/native-alive combat interactions, special actor types and the
-full ordinary-rooftop active-bank conversion. The port also retains an actor
+remaining bank/target scheduler interactions. The port also retains an actor
 when a full destination cannot accept it rather than reproducing the original
 unconditional runner transfer's possible record loss. Do not read this scoped
 validation as complete lifecycle equivalence.
