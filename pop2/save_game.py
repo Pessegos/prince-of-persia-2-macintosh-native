@@ -269,7 +269,7 @@ def read_snapshot(path, resources):
         document = json.loads(raw)
         if (not isinstance(document, dict) or document.get('format') != FORMAT
                 or type(document.get('version')) is not int or document['version'] != 1
-                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3)):
+                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4)):
             raise SaveGameError('Unsupported save format or version')
         game = GameSession.load(resources, document['level'])
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
@@ -277,7 +277,7 @@ def read_snapshot(path, resources):
         from pop2.caverns import cavern_assets
         from pop2.enemy_profiles import QuickDrawRandom
 
-        tables = cavern_assets()[0]['lava'] if game.level.number == 3 else None
+        tables = cavern_assets(game.level.number)[0]['lava'] if game.level.kind == 3 else None
         saved = _unpack(document['state'], resources, tables)
         if set(saved) != {'game', 'player', 'rooms', 'target', 'clock', 'rng', 'random',
                           'opening', 'npc_ids', 'controls', 'copy_verified'}:
@@ -431,7 +431,7 @@ def read_document(path):
         document = json.loads(raw)
         if (not isinstance(document, dict) or document.get('format') != FORMAT
                 or type(document.get('version')) is not int or document['version'] not in (1, VERSION)
-                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3)):
+                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4)):
             raise SaveGameError('Unsupported save format or version')
         return document
     except (ValueError, RecursionError) as error:

@@ -23,7 +23,7 @@ class SaveFormatTests(unittest.TestCase):
         self.path = Path(directory.name) / 'roundtrip.pop2save'
 
     def test_all_supported_levels_restore_live_player_runtime_and_world_references(self):
-        for number in (1, 2, 3):
+        for number in (1, 2, 3, 4):
             with self.subTest(level=number):
                 original = GameSession.load(self.resources, number)
                 original.combat.player.max_life = 5

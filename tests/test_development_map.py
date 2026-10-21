@@ -274,12 +274,13 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         from pop2.level_rendering import LevelRenderer
         from pop2.terrain import LevelMap
 
-        for number in (1, 2, 3):
+        for number in (1, 2, 3, 4):
             with self.subTest(level=number):
                 level = self.resources.level(number)
                 atlas = build_development_map(level)
                 expected = {1: ('1', {'10'}), 2: ('1', {'2 (Stones)'}),
-                            3: ('Room 1', {'Room 13', 'Room 30'})}[number]
+                            3: ('Room 1', {'Room 13', 'Room 30'}),
+                            4: ('Room 1', {'Room 22'})}[number]
                 self.assertEqual((atlas.start, atlas.exits), expected)
                 self.assertEqual(atlas.image.size, MAP_SIZE)
                 self.assertEqual(set(atlas.rooms), set(LevelRenderer(level).screen_entries()))

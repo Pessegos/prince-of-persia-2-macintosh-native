@@ -40,16 +40,19 @@ class PotionTests(unittest.TestCase):
         from pop2.level_rendering import LevelRenderer
 
         renderer = LevelRenderer.__new__(LevelRenderer)
-        renderer.level = SimpleNamespace(number=3)
         renderer.cavern_map = self.terrain
         actors = Image.new('RGBA', (2, 2), 'blue')
         flasks = Image.new('RGBA', (2, 2), 'red')
-        with (patch('pop2.caverns.draw_cavern_flasks', return_value=flasks) as draw,
-              patch('pop2.caverns.draw_cavern_spikes', return_value=flasks) as spikes):
-            self.assertIs(renderer.animated_layer(actors, 0, None, front=True,
-                                                 caverns=self.caverns), flasks)
-        draw.assert_called_once_with(actors, 0, self.caverns, self.terrain)
-        spikes.assert_called_once_with(flasks, 0, self.caverns, self.terrain, front=True)
+        for number in (3, 4):
+            renderer.level = SimpleNamespace(number=number, kind=3)
+            with (self.subTest(level=number),
+                  patch('pop2.caverns.draw_cavern_flasks', return_value=flasks) as draw,
+                  patch('pop2.caverns.draw_cavern_spikes', return_value=flasks) as spikes):
+                self.assertIs(renderer.animated_layer(actors, 0, None, front=True,
+                                                     caverns=self.caverns), flasks)
+            draw.assert_called_once_with(actors, 0, self.caverns, self.terrain, level_number=number)
+            spikes.assert_called_once_with(flasks, 0, self.caverns, self.terrain, front=True,
+                                           level_number=number)
 
     def test_pickup_alignment_matches_native_standing_and_crouched_anchors(self):
         motion = SimpleNamespace(room=0, row=1)

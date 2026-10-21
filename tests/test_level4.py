@@ -9,6 +9,7 @@ from PIL import Image
 
 from pop2.cavern_state import CavernState
 from pop2.caverns import _cavern_assets, cavern_assets, cavern_room
+from pop2.game_session import GameResources, GameSession
 from pop2.level_data import LevelDefinition
 from pop2.level_rendering import LevelRenderer
 from pop2.paths import ASSET_DIR
@@ -75,6 +76,38 @@ class CavernLevelIsolationTests(unittest.TestCase):
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported level-four resources required')
 class LevelFourSceneryTests(unittest.TestCase):
+    def test_level_four_session_restarts_its_own_cavern_world_and_entry(self):
+        game = GameSession.load(GameResources.load(), 4)
+        self.assertIsNone(game.opening)
+        self.assertIsNone(game.harbor)
+        self.assertIsNotNone(game.caverns)
+        self.assertEqual((game.runtime.state.source_sequence_id, game.motion.room, game.motion.row),
+                         (5, 0, 2))
+        old = game.caverns
+        game.place(16, 1, 270, 1)
+        game.restart()
+        self.assertIsNot(game.caverns, old)
+        self.assertEqual(game.level.number, 4)
+        self.assertEqual((game.motion.room, game.motion.row, game.runtime.state.source_sequence_id),
+                         (0, 2, 5))
+        self.assertIs(game.level_map.caverns, game.caverns)
+
+    def test_progress_save_resumes_level_four_at_its_real_entry(self):
+        from pop2.save_game import capture, read_save, write_save
+
+        resources = GameResources.load()
+        game = GameSession.load(resources, 4)
+        game.place(16, 1, 270, 1)
+        game.combat.player.life = game.combat.player.max_life = 5
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'level4.pop2save'
+            write_save(path, capture(game, copy_verified=True))
+            restored, saved = read_save(path, resources)
+        self.assertEqual(restored.level.number, 4)
+        self.assertEqual((restored.motion.room, restored.motion.row), (0, 2))
+        self.assertEqual(restored.combat.player.max_life, 5)
+        self.assertTrue(saved['copy_verified'])
+
     def test_level_four_export_has_its_own_start_and_all_room_layers(self):
         level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 4)
         program = cavern_assets(4)[0]
@@ -100,8 +133,8 @@ class LevelFourSceneryTests(unittest.TestCase):
         world.configure_entry(renderer.cavern_program.get('entry_exit'))
         world.configure_torches(renderer.cavern_program.get('torches', {}))
         world.configure_lava(renderer.cavern_program.get('lava'))
-        self.assertEqual(renderer.supported_rooms(), list(range(32)))
-        self.assertEqual(len(renderer.screen_entries()), 32)
+        self.assertEqual(set(renderer.supported_rooms()), set(range(32)) - {7, 29, 30, 31})
+        self.assertEqual(len(renderer.screen_entries()), 28)
         for room_id in range(32):
             with self.subTest(room=room_id):
                 room = renderer.enter_room(room_id, world)
@@ -110,6 +143,46 @@ class LevelFourSceneryTests(unittest.TestCase):
                 frame = renderer.animated_layer(frame, room_id, None, front=True, caverns=world)
                 self.assertEqual(frame.size, (510, 365))
                 self.assertEqual(frame.getchannel('A').getextrema(), (255, 255))
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported level-four resources required')
+class LevelFourHostTests(unittest.TestCase):
+    def setUp(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+
+    def tick(self, count):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.tick(self, count)
+
+    def test_f3_load_restart_and_room_warp_keep_level_four_and_close_the_entrance(self):
+        scene = self.scene
+        self.assertIn(4, [option[0] for option in scene.development_levels()])
+        scene.load_level(4)
+        self.assertEqual(scene.level_renderer.cavern_program['level'], 4)
+        self.tick(16)
+        self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action), (0, 2, 15))
+        self.assertEqual(scene.game.caverns.entry_frame, len(scene.game.caverns.entry_frames) - 1)
+        self.assertIsNotNone(scene.native_viewport.getbbox())
+        scene.jump_to_screen('Room 19')
+        self.assertEqual((scene.game.level.number, scene.room_id), (4, 18))
+        self.assertTrue(scene.combat.player.alive)
+        scene.restart_level()
+        self.assertEqual((scene.game.level.number, scene.room_id, scene.terrain_motion.row), (4, 0, 2))
+
+    def test_host_save_preview_and_load_keep_level_four(self):
+        scene = self.scene
+        scene.load_level(4)
+        self.tick(16)
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'level4.pop2save'
+            scene.save_game_to(path, 'Cavern four')
+            scene.load_level(1)
+            scene.load_game_from(path)
+        self.assertEqual((scene.game.level.number, scene.room_id, scene.terrain_motion.row), (4, 0, 2))
+        self.assertTrue(scene.combat.player.alive)
 
 
 if __name__ == '__main__':

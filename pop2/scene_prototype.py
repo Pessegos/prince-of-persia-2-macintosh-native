@@ -2757,11 +2757,11 @@ class ScenePrototype(WindowControls):
                         guard.state.sound_events.append(11)
                     audio.drain(guard.state, not self.peaceful and guard.room == self.room_id)
         motion = getattr(self, "terrain_motion", None)
-        if motion is not None and not self.level_complete and self.game.level.number in (1, 3):
+        if motion is not None and not self.level_complete and self.game.level.kind in (3, 5):
             fighting = not self.peaceful and self.combat.opponent_to_fight()
             contact = floor_contact_x(self.sequence_state.target_x,
                                      self.sequence_state.facing, self.frames[self.action])
-            if self.game.level.number == 3:
+            if self.game.level.kind == 3:
                 for guard in self.combat.guards:
                     skeleton = guard.skeleton
                     if (skeleton is not None and skeleton.victory_pending and not fighting
@@ -3132,7 +3132,7 @@ class ScenePrototype(WindowControls):
         from pop2.level_data import LevelDefinition
 
         options = []
-        for number in (1, 2, 3):
+        for number in (1, 2, 3, 4):
             renderer = (self.level_renderer if self.game.level.number == number else
                         LevelRenderer(LevelDefinition.read(self.resources.prince, number),
                                       preload_room=False))
@@ -3192,11 +3192,12 @@ class ScenePrototype(WindowControls):
             if not rows:
                 raise ValueError("The stone screen has no supported entry")
             return self.jump_to_room(room, rows[0], 9 * TILE_WIDTH + 30, facing=0)
-        elif self.game.level.number == 3:
+        elif self.game.level.kind == 3:
             from pop2.development_entry import cavern_entry
 
             # Retain Room 21's useful lower-floor test entry.
-            row, column = cavern_entry(self.level_map, room, preferred_row=2 if room == 20 else None)
+            preferred = 2 if self.game.level.number == 3 and room == 20 else None
+            row, column = cavern_entry(self.level_map, room, preferred_row=preferred)
             return self.jump_to_room(room, row=row, x=column * TILE_WIDTH + 30, facing=0)
         else:
             rows = [row for row in range(3)

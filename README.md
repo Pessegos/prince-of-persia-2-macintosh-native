@@ -18,6 +18,11 @@ I'm trying to stay as close to the original as possible, while still making some
 
 Levels 1-3 are playable from start to finish.
 
+Level 4 is available for playtesting through F3, including its map, cavern
+mechanisms, restart and saves. The level-3-to-4 cutscene and the story
+countdown are still being integrated; normal campaign progression currently
+stops at the end of level 3.
+
 A lot of the work so far has gone into building and refining the core gameplay systems rather than just moving through the levels. I'm hoping this groundwork will make the remaining levels quicker to implement.
 
 Enemy AI is already working well, but there's still ongoing research into the original Macintosh executable to better understand and reproduce its more subtle behaviors.
@@ -247,7 +252,7 @@ executable. Demo recovery adds time to the first import, not to later launches.
 | Alt + M | Toggle ambient music |
 | Alt + V | About the port |
 | F2 | Screenshot controls: folder, PNG size and capture |
-| F3 | Developer Tools: levels 1-3, intro/demo playback and debug display |
+| F3 | Developer Tools: levels 1-4, intro/demo playback and debug display |
 | F8 | Save a clean PNG screenshot to the configured folder |
 | Any key after death | Retry from the checkpoint or level start |
 
@@ -260,9 +265,8 @@ The original manual-symbol challenge is enabled by default. The F1 option
 `Copy protection` disables only that challenge, not the stone puzzle.
 
 The developer menu accepts mouse, Tab/Shift+Tab and arrow navigation.
-Its `Level` and `Screen` selectors include the playable routes in levels 1-2
-and scenery previews of all 32 level-3 rooms. Level-3 mechanisms and skeletons
-are not implemented yet. Choose `2 (Stones)` to jump directly to the level-2
+Its level/map tools include levels 1-3 and the level-4 playtest, including
+cavern mechanisms and skeletons. Choose `2 (Stones)` to jump directly to the level-2
 puzzle without replaying the beach arrival. Left/Right moves between `Go to screen`
 and `Resume`; Enter/Space activates
 a control. Focus the tab row to switch between `Level`, `Playback` and `Display`

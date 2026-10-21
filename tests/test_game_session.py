@@ -136,10 +136,16 @@ class LevelDefinitionTests(unittest.TestCase):
             LevelDefinition.decode(1, data)
 
     def test_unknown_entry_controller_is_not_silently_the_palace_window(self):
-        level = LevelDefinition.decode(4, level_bytes(4, 3, 1, 14))
+        level = LevelDefinition.decode(5, level_bytes(5, 2, 1, 14))
         self.assertFalse(level.window_escape)
         with self.assertRaisesRegex(ValueError, "entry controller"):
             _ = level.entry_sequence
+
+    def test_level_four_uses_the_native_standing_entry_not_a_window_or_ship(self):
+        level = LevelDefinition.decode(4, level_bytes(4, 3, 1, 25, facing=0))
+        self.assertEqual((level.entry_sequence, level.start_row, level.start_x, level.facing),
+                         (5, 2, 277, 0))
+        self.assertFalse(level.window_escape)
 
 
 class GameSessionTests(unittest.TestCase):
@@ -313,7 +319,7 @@ class OriginalLevelSessionTests(unittest.TestCase):
         from pop2.level_rendering import LevelRenderer
 
         with self.assertRaisesRegex(ValueError, "scenery is not implemented"):
-            LevelRenderer(self.resources.level(4))
+            LevelRenderer(self.resources.level(5))
 
     def test_initial_visited_and_generated_guards_inherit_the_player_environment(self):
         data = bytearray(self.resources.level(1).data)
@@ -351,7 +357,7 @@ class LevelHostTests(unittest.TestCase):
         viewport = scene.native_viewport.tobytes()
         with patch.object(scene, "render") as render, \
                 self.assertRaisesRegex(ValueError, "entry controller is not implemented"):
-            scene.load_level(4)
+            scene.load_level(5)
         render.assert_not_called()
         self.assertIs(scene.game, game)
         self.assertIs(scene.level_renderer, renderer)

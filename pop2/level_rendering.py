@@ -130,7 +130,10 @@ class LevelRenderer:
         if self.level.kind == 1:
             return [0, 1, 2]
         if self.level.kind == 3:
-            return list(range(32))
+            from pop2.development_map import room_positions
+            from pop2.terrain import LevelMap
+
+            return sorted(room_positions(LevelMap(self.level.data)))
         scenery_map, _shapes, _pieces = rooftop_scene_data(self.level.resource_id)
         supported_kinds = {0, 1, 20, 47, 48, 49}
         rooms = []

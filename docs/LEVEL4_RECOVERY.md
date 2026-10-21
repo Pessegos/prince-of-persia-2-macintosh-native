@@ -50,8 +50,38 @@ layer replay, excluding actors, animated torches/lava, flask rectangles and
 HUD. It shares the SHAP decoder and is not an independent Macintosh
 rasterizer or a complete dynamic-gameplay test.
 
+## Playtest Entry
+
+Level 4 is now selectable in F3's level/map tools, using the fresh ordinary
+sequence-5 entry. Its menu/map expose the 28 connected rooms; unlinked
+scenery-only rooms 8, 30, 31 and 32 remain in the export/audit, not in the
+teleport list. A bounded original `2:5d98-5e36` dispatch execution confirms
+sequence 5 with no extra animation frames for both levels 3 and 4; it stops
+before JumpSeq and is not a full initializer comparison. Existing cavern
+controllers handle the entrance door, mechanisms, skeletons and ambience.
+Host tests cover entrance settlement, a room-19 warp, restart, a save preview
+and progress load back at the level-four entrance. Snapshot loading uses
+level-four lava tables rather than borrowing level-three room records.
+
+This is a level-four playtest, not a completed campaign transition: level 3
+still stops at completion, and Discovery/tree playback, live countdown,
+story-state persistence and onward progression are not yet connected.
+
 Discovery uses NIS.rsrc's original 29000-range resources. The tree scenes
 also require NISTree.rsrc, which was not needed by the opening/voyage importer.
 Their ANI/SCRP playback and callbacks must be recovered along with drawing,
 voices, MIDI markers and palette changes. A fixed captured video is not the
 source of the port's scenes.
+
+The bounded Discovery coordinator probe now reaches its end with the three
+animation bodies supplied as successful returns, preserving 142 coordinator
+operations/call markers. Original call sites `15:237c`, `15:23f6`, `15:2456`
+use base 29000, ANI/SCRP 1/2/3, flags 6, position (63, 61), and no callback.
+This does not execute PlayTheAnimation or establish playback timing.
+
+The last script includes a sound-control command for 29100. Original
+KBAnimation soundControl `16:0f34-0f52` starts it in sound bank 1, while the
+coordinator also uses 29100 in MIDI bank 0. Both resources actually exist.
+The current intro audio metadata/files are keyed only by numeric resource
+ID, so Discovery support must distinguish these two sounds before import;
+silently overwriting one would break the music/effect sequence.
