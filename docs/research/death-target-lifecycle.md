@@ -71,10 +71,6 @@ regression unchanged.
 
 ## Open [?]
 
-- Who sets the NPC word `+0x18` in ordinary deaths (writers include
-  `4:59d8` and `6:2db6`), and what `5:4bb8` does for a dead type-2 actor
-  (it dispatches through an undecoded jump table by actor type).
-- Removal adjustment `2:66e8-672e` after RemoveOppFromRoom is not executed. The
-  port holds object references, so index shifting is structurally absent; the
-  reselection when the removed slot was the target is not compared.
+- Resolved: `+0x18` and `5:4bb8` are described in `death-counter-kill-song.md`;
+  the removal adjustment is in `removal-target-adjust.md`.
 - Side-room imports, skeletons and special actors are outside this audit.
