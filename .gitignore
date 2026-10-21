@@ -15,3 +15,7 @@ rendered/
 /assets/*
 !/assets/README.md
 /CLAUDE.local.md
+/CLAUDE.md
+/AGENTS.md
+/docs/AI_RESEARCH_HANDOFF.md
+/docs/PARALLEL_WORK.md
