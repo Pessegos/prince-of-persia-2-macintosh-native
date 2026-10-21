@@ -30,7 +30,7 @@ Writers of the persistent cache:
 | --- | --- | --- |
 | `choose_player_turn` (automatic sword turn) | SwordCtrl `6:2252-22ea`, after the reload at `6:2200` | SwordCtrl |
 | `start_sword_action` fast-block check (target pose 168/153) | DoBlock `6:2844`, reached from SwordCtrl control | SwordCtrl [I] |
-| `choose_player_bump` (unarmed overlap) | FrameAdv `2:6c64`. Sword ≠ 1, so SwordCtrl did not run | Main |
+| `choose_player_bump` (unarmed overlap) | FrameAdv `2:6c64`. Sword ≠ 1, so SwordCtrl did not run | Main; reading the persistent cache is adequate (rule 3) |
 | Save target index (`save_game.py`) | Prince record `+0x3a` | Persistent cache |
 
 ## Proposed rules
@@ -42,11 +42,14 @@ Writers of the persistent cache:
 2. **Contact writes.** In `resolve_contacts()`, a Prince hit (action 154 within
    range) or a parry against the Prince sets the cache to that guard, using
    the last contacted guard in active-bank order.
-3. **Main frame Opp.** For `choose_player_bump`, compute a temporary target
-   that is not stored. Keep the cache when its facing differs from the
-   Prince's, even if it is dead; otherwise use the nearest guard, else slot 0.
-   A dead Main Opp yields no bump: the port bump already requires
-   `guard.alive`, and the original GetDist returns 999 for HP 0.
+3. **Main frame Opp: not recommended as a separate layer.** The original bump
+   `2:6c64-6daa` rejects a dead Opp only through GetDist (`4:49ee`, which
+   returns 999 for HP 0); it never tests ALIVE [D]. The GenCtrl dead branch
+   runs on every frame for a registered corpse in the NPC loop and moves the
+   cache off it (executed in `death-target-lifecycle.md`). A corpse cache can
+   therefore last at most about one frame for an unarmed Prince [I]. The
+   port's `choose_player_bump` should simply read the persistent cache.
+   Its existing `guard.alive` test mirrors GetDist.
 4. **Keep unchanged:** the HP rejection, native-ALIVE selection and the
    pending-ALIVE behaviour (verified to match in 180 executed death frames),
    active-bank membership and side-room projection.
@@ -62,9 +65,8 @@ Writers of the persistent cache:
 - **Contact write:** cached A out of reach and B hit (or blocking). After
   `resolve_contacts()` the target is B, and with two hits it is the later
   slot.
-- **Unarmed bump (Main layer):** a cached dead opposing guard plus a live guard
-  overlapping. No bump is produced while the Main Opp is the corpse. This
-  needs one more native check before being asserted, see Open.
+- **Unarmed bump:** a cached live opposing guard keeps driving the bump after
+  a nearer same-facing guard appears.
 
 ## Existing regressions that must stay green
 
@@ -76,9 +78,11 @@ Writers of the persistent cache:
 
 ## Open before implementation
 
-- **Main-layer bump:** confirm by executing `2:6c64` with a corpse frame Opp
-  and a live overlapping guard. That an unarmed Prince does not bump while the
-  Main Opp is the corpse is an inference so far.
+- **Main-layer facing reselection for an unarmed Prince:** when the cache
+  shares the Prince's facing, the original picks the nearest guard for that
+  frame only. Reading the persistent cache there differs from the original,
+  but only through the bump (rule 3). A dedicated check could quantify this
+  later.
 - **DoBlock fast-block Opp:** confirm that it reads the Opp reloaded by
   SwordCtrl.
 - **Save compatibility:** the save index already exists. The rule change does
