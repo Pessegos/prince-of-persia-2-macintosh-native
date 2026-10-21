@@ -335,7 +335,7 @@ class SkeletonTests(unittest.TestCase):
         self.assert_enemy_meter(combat, 0)
         combat.enter_room(16, 2)
         combat.player.state.target_x = combat.player.state.current_x = 40
-        self.assertIsNone(combat.guard)
+        self.assertIs(combat.guard, actor)  # Native no-live-target fallback is bank slot zero.
         self.assert_enemy_meter(combat, 0)
         for _ in range(60):
             self.tick(combat)
@@ -344,7 +344,7 @@ class SkeletonTests(unittest.TestCase):
         self.assertEqual(actor.skeleton.phase, 'rising')
         self.assertEqual((combat.player.room, actor.room, actor.life), (16, 14, 3))
         self.assertIs(combat.health_opponent(), actor)
-        self.assertIsNone(combat.guard)
+        self.assertIs(combat.guard, actor)
         before = actor.state.target_x, actor.state.cursor, actor.skeleton.phase, actor.life
         self.assert_enemy_meter(combat, 3)
         self.assertEqual(before, (actor.state.target_x, actor.state.cursor,
@@ -381,7 +381,7 @@ class SkeletonTests(unittest.TestCase):
                 if actor.alive:
                     break
         self.assertEqual((s.room_id, actor.room, actor.skeleton.phase), (16, 14, 'rising'))
-        self.assertIsNone(s.combat.guard)
+        self.assertIs(s.combat.guard, actor)
         self.assertIs(s.combat.health_opponent(), actor)
         for life in (3, 2, 1, 0):
             actor.life = life

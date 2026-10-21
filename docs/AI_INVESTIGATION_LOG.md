@@ -399,3 +399,31 @@ The current scoped equivalence is not full enemy-AI parity.
 Source-room actor ownership is still represented with stable objects and
 rebased views, not literal native bank-memory copies. Audit all target/group-
 count consumers before claiming complete equivalence of that representation.
+
+## Renewed Two-Update Request: Active Targets
+
+The user explicitly requested two further updates. This is the first of those
+two blocks, not a continuation beyond an exhausted authorization. The prior
+second block was b483f41, with Tests run 39593459507 successful.
+
+Original selector 6:36f2 and Main 2:62f8-633e confirm that target selection
+operates on the whole current bank. The port instead searched the physical
+owner list, losing imported targets. Selection now projects active actors,
+returns their canonical identity, and preserves local-control views. Player
+turn/bump comparisons likewise project the selected target without mutation.
+Native ordinary ALIVE is distinct from HP. Main retains opposing-facing
+targets even after death and falls back to bank slot zero if reselection
+finds none. Empty banks clear stale references. Two old skeleton tests
+expected no target for a selected side actor; their HUD assertions remain
+unchanged, while target expectations now match the verified native rule.
+
+rendered/active_target_native_probe_v1.py executes the original selector and
+retention branches: 8,000 cases each, zero mismatches. The owner-only selector
+still fails 2,164 cases even with the corrected ALIVE helper. The probe varies
+HP/ALIVE independently, resident/side coordinates, bank order, facing, height
+and directional selection. Bank input and coordinates are supplied; type 7/8
+metadata filtering, skeleton initialization and contact dispatch are excluded.
+Eight resource-free ordering tests run in CI; six integration regressions
+cover imports, canonical identity, retention, fallback, turns, bumps and error
+restoration. Focused combat/skeleton/pursuit/snapshot run: 317 tests pass,
+one optional skip. Second update audits group consumers of the same bank.

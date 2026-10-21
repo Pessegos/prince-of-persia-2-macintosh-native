@@ -10,6 +10,7 @@ from pop2.enemy_profiles import (
 )
 from pop2.enemy_alerts import alert_path_mode
 from pop2.opponent_records import GuardRoomRecord, removed_on_room_save
+from pop2.opponent_selection import nearest_opponent
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.opponent_generation import (
@@ -68,30 +69,6 @@ def opponent_follows_cut(guard, direction, count, *, in_destination=False):
     if direction == 'right':
         return state.target_x >= 385
     return guard.row < 0 if direction == 'up' else guard.row >= 3
-
-
-def nearest_opponent(player, guards, side=None):
-    # GetOppIdxClosestToKid 6:36f2-3918 compares absolute Y, not row IDs.
-    # At exactly 80 pixels of vertical-distance difference, bank order wins.
-    best = None
-    best_dx = best_dy = 0
-    player_y = floor_y(player.row) + player.state.current_y
-    for guard in guards:
-        if not guard.alive or guard.room != player.room:
-            continue
-        delta = guard.state.target_x - player.state.target_x
-        if side is not None and (delta > 0 if side < 0 else delta <= 0):
-            continue
-        dx = abs(delta)
-        dy = abs(floor_y(guard.row) + guard.state.current_y - player_y)
-        if best is not None and guard.state.actor_type == 11:
-            continue
-        change_y = abs(dy - best_dy)
-        if (best is None or best.state.actor_type == 11
-                or change_y > 80 and dy < best_dy
-                or change_y < 80 and dx < best_dx):
-            best, best_dx, best_dy = guard, dx, dy
-    return best
 
 
 @dataclass(frozen=True)
@@ -386,7 +363,7 @@ class CombatEncounter:
                 self._capture_opponent_record(actor, restart_living=False, cell=opponent_row_cell(actor.row))
         self._select_opponent_bank(room)
         self._restore_opponent_records()
-        self.guard = self._nearest_guard() or (self.guards[0] if self.guards else None)
+        self.guard = self._nearest_guard() or next(iter(self.active_guards()), None)
 
     def _restore_opponent_records(self):
         for actor in self.active_guards():
@@ -568,17 +545,20 @@ class CombatEncounter:
         # Side-room actors use a rebased coordinate view, never a teleport or
         # a replacement NPC. Restore the ownership lists even on an error.
         player, guards = self.player, self.guards
+        local_bank = getattr(self, '_local_opponent_bank', False)
         active = self.active_guards()
         try:
             self.player = self._project_fighter(player, guard.room) or player
             self.guards = [view for other in active
                            if (view := self._project_fighter(other, guard.room)) is not None]
+            self._local_opponent_bank = True
             yield
         finally:
             # AnimCharTap's movement/noise flag is global, including views
             # rebased into a side room. Ordinary AutoCtrl consumes it.
             player.state.callback_flag = self.player.state.callback_flag
             self.player, self.guards = player, guards
+            self._local_opponent_bank = local_bank
 
     def _chance(self, table, guard=None):
         # Rnd(255) includes 255; even a table entry of 255 can fail.
@@ -720,6 +700,7 @@ class CombatEncounter:
 
     def choose_player_turn(self, frame_record=None):
         player, guard = self.player, self.guard
+        guard = self._project_fighter(guard, player.room) if guard is not None else None
         state = player.state
         if (guard is None or not player.alive or not guard.alive
                 or not player.sword_drawn or not player.targetable
@@ -741,6 +722,7 @@ class CombatEncounter:
         # FrameAdv 2:6c64-6daa interrupts unarmed overlap with an engaged,
         # opposing, grounded ordinary NPC. Running jumps reserve 63 pixels.
         player, guard = self.player, self.guard
+        guard = self._project_fighter(guard, player.room) if guard is not None else None
         state = player.state
         if (guard is None or not player.alive or not guard.alive
                 or not player.targetable or player.sword_drawn
@@ -844,14 +826,21 @@ class CombatEncounter:
         self.apply_guard_intent(self.decide_guard_intent(guard), guard)
 
     def _nearest_guard(self, side=None):
-        return nearest_opponent(self.player, self.guards, side)
+        if getattr(self, '_local_opponent_bank', False):
+            return nearest_opponent(self.player, self.guards, side)
+        candidates = [(actor, view) for actor in self.active_guards()
+                      if (view := self._project_fighter(actor, self.player.room)) is not None]
+        selected = nearest_opponent(self.player, [view for _actor, view in candidates], side)
+        return next((actor for actor, view in candidates if view is selected), None)
 
     def refresh_target(self):
         # Main CODE:2 0x6300-0x633c retains an opposing-facing target;
-        # otherwise GetOppIdxClosestToKid supplies the nearest living NPC.
-        if (self.guard is None or not self.guard.alive or self.guard.room != self.player.room
+        # otherwise GetOppIdxClosestToKid supplies a target, or bank slot zero.
+        # Physical source-room ownership is not active-bank membership.
+        active = self.active_guards()
+        if (not any(actor is self.guard for actor in active)
                 or self.guard.state.facing == self.player.state.facing):
-            self.guard = self._nearest_guard() or self.guard
+            self.guard = self._nearest_guard() or next(iter(active), None)
 
     def update_guard_alerts(self):
         self.wake_skeletons()

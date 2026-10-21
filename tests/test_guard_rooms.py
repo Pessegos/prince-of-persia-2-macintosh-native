@@ -112,6 +112,73 @@ class GuardRoomTests(unittest.TestCase):
         combat.enter_room(3, 1)
         self.assertNotIn(actor, combat.guards)
 
+    def test_target_selection_returns_real_side_actor_not_its_rebased_view(self):
+        combat = self.fixture.encounter(0, player_x=500, running=False)
+        side = self.fixture.runner(combat, 2, 20)
+        self.assertIs(combat._nearest_guard(), side)
+        self.assertIsNone(combat._nearest_guard(-1))
+        self.assertIs(combat._nearest_guard(1), side)
+        self.assertEqual((side.room, side.state.target_x), (2, 20))
+        combat.guard = None
+        combat.refresh_target()
+        self.assertIs(combat.guard, side)
+        with combat._local_opponents(side):
+            self.assertIs(combat._nearest_guard(), side)
+        self.assertIs(combat._nearest_guard(), side)
+
+    def test_opposing_target_is_retained_even_if_zero_hp_or_owned_by_side_room(self):
+        combat = self.fixture.encounter(0, player_x=500, running=False)
+        resident = self.fixture.runner(combat, 0, 500)
+        side = self.fixture.runner(combat, 2, 20, facing=1 - combat.player.state.facing)
+        combat.guard = side
+        side.life, side.native_alive = 0, False
+        combat.refresh_target()
+        self.assertIs(combat.guard, side)
+        side.state.facing = combat.player.state.facing
+        combat.refresh_target()
+        self.assertIs(combat.guard, resident)
+
+    def test_target_refresh_discards_stale_actor_and_falls_back_to_slot_zero(self):
+        combat = self.fixture.encounter(0, player_x=500, running=False)
+        resident = self.fixture.runner(combat, 0, 300)
+        stale = self.fixture.runner(combat, 31, 200)
+        resident.life, resident.native_alive = 0, False
+        combat.guard = stale
+        combat.refresh_target()
+        self.assertIs(combat.guard, resident)
+        combat.guards.clear()
+        combat.refresh_target()
+        self.assertIsNone(combat.guard)
+
+    def test_player_turn_uses_projected_side_target_without_moving_it(self):
+        combat = self.fixture.encounter(0, player_x=500, facing=0, running=False)
+        side = self.fixture.runner(combat, 2, 20, facing=1)
+        combat.guard = side
+        combat.player.sword_drawn = True
+        side.alert_mode = 3
+        self.assertTrue(combat.choose_player_turn())
+        self.assertEqual((side.room, side.state.target_x), (2, 20))
+
+    def test_player_bump_uses_projected_side_target_without_moving_it(self):
+        combat = self.fixture.encounter(0, player_x=500, facing=1, running=False)
+        side = self.fixture.runner(combat, 2, -10, facing=0)
+        combat.guard = side
+        side.alert_mode = 3
+        self.assertTrue(combat.choose_player_bump())
+        self.assertEqual((side.room, side.state.target_x), (2, -10))
+
+    def test_local_bank_context_is_restored_on_error(self):
+        combat = self.fixture.encounter(0, player_x=500, running=False)
+        side = self.fixture.runner(combat, 2, 20)
+        player, guards = combat.player, combat.guards
+        with self.assertRaisesRegex(RuntimeError, 'probe'):
+            with combat._local_opponents(side):
+                raise RuntimeError('probe')
+        self.assertIs(combat.player, player)
+        self.assertIs(combat.guards, guards)
+        self.assertFalse(combat._local_opponent_bank)
+        self.assertIs(combat._nearest_guard(), side)
+
 
 if __name__ == '__main__':
     unittest.main()

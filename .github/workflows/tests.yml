@@ -21,7 +21,7 @@ jobs:
       - name: Bundled application icon and native window identity
         run: python -m unittest -q tests.test_app_window
       - name: Native terminal animation pose and reload semantics
-        run: python -m unittest -q tests.test_sequence_holds tests.test_sequence_noise tests.test_opponent_records tests.test_guard_rooms
+        run: python -m unittest -q tests.test_sequence_holds tests.test_sequence_noise tests.test_opponent_records tests.test_guard_rooms tests.test_opponent_selection
       - name: Checkpoint saves and integrated save-slot browser
         run: python -m unittest -q tests.test_save_slots
       - run: python -m unittest -q tests.test_audio_release

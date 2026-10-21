@@ -1101,6 +1101,20 @@ unchanged.
 
 ## Hurt Recovery And Facing
 
+Target selection now consumes the complete active bank, not just records
+physically owned by the Prince's room. Side-room coordinates are projected
+for comparison and player turn/bump checks; the selected target remains the
+real actor. Local NPC control retains its already rebased bank and identity.
+GetOppIdxClosestToKid uses ordinary NPC native ALIVE independently of HP;
+old snapshots without the flag retain their HP fallback. Skeleton selection
+retains the existing HP-or-resume-flag compatibility until initialization is
+fully unified. Main 2:6300-633e retains any opposing-facing active target,
+including a dead one; reselection with no living candidate uses slot zero.
+The pure ordering helper is tested without imported resources. Original
+instructions agree in 8,000 ordinary selector cases and 8,000 retained-target
+cases, including side imports and independent HP/ALIVE. Special type 7/8
+metadata filtering and full sub-frame contact scheduling remain open.
+
 SwordCtrl (6:2258-22ea) can turn toward a live opponent at a ready pose
 (animation state 0/1), including the end of an unfinished hurt sequence. It
 does not wait for the port's recovery lock to expire. DoTurn's existing edge
