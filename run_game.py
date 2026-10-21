@@ -23,6 +23,7 @@ REQUIRED_ASSETS = (
     "caverns_level4.json",
     "intro.json",
     "ending.json",
+    "discovery.json",
     "attract.json",
     "enemy_profiles.json",
     "audio/manifest.json",
@@ -67,7 +68,7 @@ def missing_assets(project=PROJECT):
             manifest = json.loads(manifest_path.read_text(encoding="ascii"))
             if manifest["schema"] != 1 or not isinstance(manifest["cues"], dict):
                 raise ValueError("Unsupported audio schema")
-            for item in manifest["cues"].values():
+            for item in (*manifest["cues"].values(), *manifest.get('scene_cues', {}).values()):
                 if item.get("file") and not (manifest_path.parent / item["file"]).is_file():
                     missing.append("audio/" + item["file"])
             if not manifest["cues"].get("32", {}).get("file"):
@@ -84,7 +85,7 @@ def missing_assets(project=PROJECT):
                 missing.append("audio/manifest.json (needs cavern ambience and death music)")
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append("audio/manifest.json (needs reimport)")
-    for name in ("intro.json", "ending.json"):
+    for name in ("intro.json", "ending.json", "discovery.json"):
         scene_path = project / "assets" / name
         if scene_path.is_file():
             from pop2.intro import read_program
@@ -92,7 +93,8 @@ def missing_assets(project=PROJECT):
             try:
                 scene = read_program(scene_path)
                 if manifest_path.is_file():
-                    cues = json.loads(manifest_path.read_text(encoding="ascii"))["cues"]
+                    audio = json.loads(manifest_path.read_text(encoding="ascii"))
+                    cues = {**audio["cues"], **audio.get('scene_cues', {})}
                     if any(not cues.get(key, {}).get("file") for key in scene["audio"]):
                         raise ValueError("Scene audio is incomplete")
             except (OSError, ValueError, KeyError, TypeError, AttributeError):

@@ -599,7 +599,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 15,NISs,NISCarpet,0x1630,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,48
 15,NISs,TransFunc1,0x19c2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,3
 15,NISs,TransFunc3,0x1a44,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
-15,NISs,Discovery,0x1a76,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,143
+15,NISs,Discovery,0x1a76,prologue,partial,tools/extract_intro.py;pop2/intro.py;docs/LEVEL4_RECOVERY.md,original coordinator exported to portable operations and level 3-to-4 host wiring; three callback-free flags-6 animations; native host stall parity omitted,0,143
 15,NISs,SetNISCTAB,0x24a0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,43,14
 15,NISs,GetSetFadeCTAB,0x26fc,decoded,indexed-only,,No semantic review recorded in this prototype catalog,66,13
 15,NISs,FadeInBothCTBLs,0x29a0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,15,2
@@ -648,11 +648,11 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 16,Anim & Audio,__sd__10tAnimationFUi,0x00d6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,2
 16,Anim & Audio,__dt__10tAnimationFv,0x011e,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,1
 16,Anim & Audio,create__10tAnimationFii,0x0154,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,0
-16,Anim & Audio,draw__10tAnimationFv,0x01f8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,2
+16,Anim & Audio,draw__10tAnimationFv,0x01f8,jump_table,partial,tools/extract_intro.py,"69 Discovery frames and 144 native drawing calls agree in order/coordinates/flags; shape dimensions supplied, not independent pixel rasterization",0,2
 16,Anim & Audio,free__10tAnimationFv,0x030e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 16,Anim & Audio,maintain__10tAnimationFUl,0x0366,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 16,Anim & Audio,seekFrame__10tAnimationFi,0x0498,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
-16,Anim & Audio,setPos__10tAnimationFii,0x0538,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
+16,Anim & Audio,setPos__10tAnimationFii,0x0538,jump_table,partial,tools/extract_intro.py,Discovery absolute origin replaces ANI bounds origin; original execution with supplied OffsetRect; other animation uses omitted,0,0
 16,Anim & Audio,startAnim__10tAnimationFv,0x0586,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 16,Anim & Audio,stop__10tAnimationFv,0x05c4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 16,Anim & Audio,testPixel__10tAnimationFii,0x05f0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
@@ -665,7 +665,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 16,Anim & Audio,shapeDraw__10tAnimationFiiii,0x084a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 16,Anim & Audio,shapeTestPixel__10tAnimationFiiii,0x0878,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 16,Anim & Audio,soundControl__10tAnimationFP23tAnimationScriptCommand,0x08aa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
-16,Anim & Audio,runScript__10tAnimationFiUs,0x08ee,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
+16,Anim & Audio,runScript__10tAnimationFiUs,0x08ee,jump_table,partial,pop2/intro.py;tools/extract_intro.py,12 Discovery/tree scripts and 481 native incremental steps; carried layers/events/interval/end checked; tree callbacks and maintain cadence not executed,0,0
 16,Anim & Audio,__ct__11KBAnimationFv,0x0b00,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,1
 16,Anim & Audio,__sd__11KBAnimationFUi,0x0b38,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,2
 16,Anim & Audio,maintain__11KBAnimationFUl,0x0b80,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
@@ -675,7 +675,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 16,Anim & Audio,prepare__11KBAnimationFv,0x0c84,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,11
 16,Anim & Audio,soundControl__11KBAnimationFP23tAnimationScriptCommand,0x0f34,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
 16,Anim & Audio,shapeDraw__11KBAnimationFiiii,0x0f96,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
-16,Anim & Audio,PlayTheAnimation,0x100c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,17,29
+16,Anim & Audio,PlayTheAnimation,0x100c,jump_table,partial,tools/extract_intro.py;pop2/intro.py,"Discovery flags 6/no callback/no background fill only; portable nominal intervals, no Macintosh event-loop or stall parity; other modes fail explicitly",17,29
 16,Anim & Audio,CombineBounds__Fv,0x15b6,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,2
 16,Anim & Audio,RectArea__FP4Rect,0x16ea,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,1
 16,Anim & Audio,MohawkInit,0x1738,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,30

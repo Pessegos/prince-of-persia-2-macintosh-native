@@ -13,9 +13,10 @@ import mido
 import numpy as np
 
 from pop2.audio_formats import Sample, digitized_sound, mohawk_resources
+from pop2.audio import scene_sound_key
 from pop2.mac_resources import get_data_fork, parse_resource_fork
 from pop2.mac_resources import get_resource_fork
-from pop2.intro import STORY_RECT
+from pop2.intro import STORY_RECT, ScriptAnimation
 from tools.extract_audio import render_midi
 from tools.extract_enemy_profiles import expand_a5_data
 
@@ -209,6 +210,10 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8)):
                     emit("cue", w())
                 elif target == 0x100a:
                     emit("wait_sound", w(), w(2))
+                elif target == 0xf5a:
+                    if l(6) or w(16) != 6 or w(18):
+                        raise ValueError("Unsupported scene animation callback or flags")
+                    emit("animation", w(), w(2), w(20), w(22))
                 elif target in (0x1332, 0x133a):
                     emit("fade", palettes.get(l(), 0), target == 0x1332, l(8))
                 elif target == 0xfc2:
@@ -231,7 +236,52 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8)):
     return scenes
 
 
-def extract_scene_audio(image, operations, directory, progress=lambda _text: None):
+def expand_animations(operations, nis):
+    """Flatten callback-free, persistent-background PlayTheAnimation flags 6."""
+    resources = parse_resource_fork(nis)
+    result = []
+    for item in operations:
+        if item['op'] != 'animation':
+            result.append(item)
+            continue
+        base, index, x, y = item['args']
+        header = resources['ANI '][base + index]['data']
+        if len(header) != 18:
+            raise ValueError('Unsupported scene ANI header')
+        _top, _left, _bottom, _right, layers, script_id, *_rest = struct.unpack('>9h', header)
+        if not 1 <= layers <= 24:
+            raise ValueError('Unsupported scene animation layer count')
+        animation = ScriptAnimation(resources['SCRP'][script_id]['data'], layers)
+
+        def emit(op, *args):
+            result.append({'op': op, 'args': list(args), 'pc': item['pc']})
+
+        while not animation.done:
+            animation.step()
+            for opcode, argument in animation.events:
+                if opcode == 3 and argument:
+                    emit('sound', argument, 1)
+                elif opcode == 2:
+                    raise ValueError('Scene animation notify requires a callback')
+            animation.events.clear()
+            if animation.done:
+                break
+            rectangles = []
+            for shape, dx, dy, flags in animation.layers:
+                if not shape:
+                    continue
+                shape_id = base + shape
+                data = resources['SHAP'][shape_id]['data']
+                _encoding, _stride, width, height = struct.unpack_from('>HhhH', data)
+                emit('shape', shape_id, x + dx, y + dy, flags)
+                rectangles.append([y + dy, x + dx, y + dy + height, x + dx + width])
+            for rectangle in rectangles:
+                emit('copy', rectangle)
+            emit('wait', animation.interval)
+    return result
+
+
+def extract_scene_audio(image, operations, directory, progress=lambda _text: None, *, banked=False):
     directory = Path(directory).resolve()
     banks = {
         0: mohawk_resources(get_data_fork(image, "NISMIDI.dat"))["MIDI"],
@@ -245,7 +295,9 @@ def extract_scene_audio(image, operations, directory, progress=lambda _text: Non
     audio = {}
     for resource_id, kind in sorted({tuple(item["args"]) for item in operations if item["op"] == "sound"}):
         progress(f"Preparing intro audio {resource_id}...")
-        filename = f"intro-{resource_id}.wav"
+        key = scene_sound_key(resource_id, kind) if banked else str(resource_id)
+        stem = key if banked else f"intro-{resource_id}"
+        filename = f"{stem}.wav"
         output = directory / "audio" / filename
         data = banks[kind][resource_id]
         markers = {}
@@ -259,7 +311,7 @@ def extract_scene_audio(image, operations, directory, progress=lambda _text: Non
                 elapsed += event.time
                 if event.type == "cue_marker":
                     markers[event.text.strip()] = elapsed
-            midi_path = directory / "audio" / f"intro-{resource_id}.mid"
+            midi_path = directory / "audio" / f"{stem}.mid"
             midi_path.write_bytes(data)
             duration = render_midi(directory / "audio", midi_path.name, output)
             entry["playback_duration"] = duration
@@ -270,8 +322,8 @@ def extract_scene_audio(image, operations, directory, progress=lambda _text: Non
             duration = len(sample.pcm) / sample.channels / sample.rate
             entry.update(duration=duration, source_archive=(
                 "NISDIGI.dat" if resource_id in native_voices else "DigiSnd.dat"))
-        audio[str(resource_id)] = {"duration": duration, "markers": markers, "kind": kind}
-        manifest["cues"][str(resource_id)] = entry
+        audio[key] = {"duration": duration, "markers": markers, "kind": kind}
+        manifest.setdefault('scene_cues' if banked else 'cues', {})[key] = entry
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="ascii")
     (directory / "audio/playback.mid").unlink(missing_ok=True)
     return audio
@@ -297,3 +349,12 @@ def extract_ending(image, program, nis, directory, progress=lambda _text: None):
     audio = extract_scene_audio(image, operations, directory, progress)
     result = {"schema": 1, "operations": operations, "audio": audio}
     (directory / "ending.json").write_text(json.dumps(result, indent=2) + "\n", encoding="ascii")
+
+
+def extract_discovery(image, program, nis, directory, progress=lambda _text: None):
+    """CheckPlayNIS selects Discovery (NIS 10) when leaving level 3."""
+    directory = Path(directory)
+    operations = expand_animations(recover_scenes(program, nis, entries=(0x1a76,)), nis)
+    audio = extract_scene_audio(image, operations, directory, progress, banked=True)
+    result = {'schema': 1, 'operations': operations, 'audio': audio}
+    (directory / 'discovery.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')

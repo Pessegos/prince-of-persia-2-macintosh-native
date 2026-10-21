@@ -36,6 +36,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 
 | Rule / condition | Source | Status and scope | Owner / tests |
 | --- | --- | --- | --- |
+| Discovery after level three and fresh level-four arrival | 2:0180-027e; 15:1a76 | T: native coordinator import, three callback-free flags-6 animations, bank-separated audio, pause/skip/F3 and life retention; tree/live clock/onward progression P | extract_intro, intro, scene_prototype / test_discovery |
 | Keyboard sample priority; ordinary Forward + Up selection | 2:55d2; 6:0dbe-0dca | T: directional priority and ordinary chord subset; not a native single-command buffer | mac_input / test_animation_data |
 | Host single-command buffer; legal pose transitions; held repeat | 6:0c32, 1014, 11e4; 4:3e84 | T/A: tested transitions; host buffer is not the complete native per-direction -1/0/1 input state | scene_prototype / test_animation_data |
 | Five unarmed / six armed Macintosh ticks | 2:68c8 | T: timer branch | scene_prototype / test_animation_data |

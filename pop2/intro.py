@@ -9,6 +9,7 @@ import struct
 import numpy as np
 from PIL import Image
 
+from pop2.audio import scene_sound_key
 from pop2.game_ui import MacintoshFont
 from pop2.mac_resources import parse_resource_fork
 from pop2.paths import ASSET_DIR
@@ -231,10 +232,14 @@ class IntroPlayer:
         self.frame_cache = None
 
     def sound(self, resource_id, kind):
-        metadata = self.sounds[str(resource_id)]
+        metadata = self.sound_metadata(resource_id, kind)
         self.playing[kind] = (resource_id, self.time, metadata["duration"])
         if self.audio:
             self.audio.play_intro(resource_id, kind)
+
+    def sound_metadata(self, resource_id, kind):
+        key = scene_sound_key(resource_id, kind)
+        return self.sounds[key] if key in self.sounds else self.sounds[str(resource_id)]
 
     def sound_end(self, kind, resource_id=None):
         playing = self.playing.get(kind)
@@ -290,7 +295,7 @@ class IntroPlayer:
         if kind == "title":
             tick = (self.time - start) * MAC_TICKS_PER_SECOND
             music = self.playing[0]
-            markers = self.sounds[str(music[0])]["markers"]
+            markers = self.sound_metadata(music[0], 0)["markers"]
             elapsed = self.time - music[1]
             overlay = 0
             if markers["e"] <= elapsed < markers["f"]:
@@ -362,7 +367,7 @@ class IntroPlayer:
         self.title_text_positions = [(rect[1], rect[0]) for rect in self.assets.program["title_rects"]]
         self.loaded[2] = self.assets.title_palette
         music = self.playing[0]
-        markers = self.sounds[str(music[0])]["markers"]
+        markers = self.sound_metadata(music[0], 0)["markers"]
         # Preserve the Mac scene/audio deadlines, including its blocking fade's
         # delay, independently of the continuously moving cloud clock.
         end = ScriptAnimation(self.assets.title_script)
@@ -410,7 +415,7 @@ class IntroPlayer:
             playing = self.playing.get(0)
             if playing is None:
                 raise ValueError("Intro cue without music")
-            marker = self.sounds[str(playing[0])]["markers"].get(chr(args[0]))
+            marker = self.sound_metadata(playing[0], 0)["markers"].get(chr(args[0]))
             if marker is None:
                 raise ValueError(f"Missing cue {args[0]} in intro music {playing[0]}")
             self.wait_until = max(self.time, playing[1] + marker)
@@ -499,7 +504,7 @@ class IntroPlayer:
                 next_tick = self.title_animation.next_tick
                 deadline = min(start + next_tick / MAC_TICKS_PER_SECOND, self.wait_until)
                 music = self.playing[0]
-                markers = self.sounds[str(music[0])]["markers"]
+                markers = self.sound_metadata(music[0], 0)["markers"]
                 for key in ("e", "f", "g", "h", "i"):
                     cue = music[1] + markers[key]
                     if cue > self.time + 1e-9:
