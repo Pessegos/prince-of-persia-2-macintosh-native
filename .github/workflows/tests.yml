@@ -24,7 +24,7 @@ jobs:
         run: python -m unittest -q tests.test_sequence_holds tests.test_sequence_noise tests.test_opponent_records tests.test_guard_rooms tests.test_opponent_selection
       - name: Checkpoint saves and integrated save-slot browser
         run: python -m unittest -q tests.test_save_slots
-      - run: python -m unittest -q tests.test_audio_release
+      - run: python -m unittest -q tests.test_audio_release tests.test_story_progress
       - name: Host menu audio and isolated SDL UI channels
         run: python -m unittest -q tests.test_ui_audio
       - name: Tests without original game files

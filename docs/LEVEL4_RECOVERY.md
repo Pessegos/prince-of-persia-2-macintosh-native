@@ -1,0 +1,44 @@
+# Level Four And The Story Clock
+
+## Scene Selection
+
+The supplied Macintosh transition capture agrees with original selector
+`2:0180-027e`: leaving level 3 selects NIS 10 (Discovery). It does not start
+the countdown. The first restart of level 4, or reaching level 5 without a
+level-four death, selects scene 20 and sets the tree stage from -1 to 0.
+Later restarts do not repeat that first tree scene or reset time.
+
+`pop2/story_progress.py` translates this selection after the existing
+load/copy-protection admission. Specific level transitions take priority over
+the timed tree check. The original tree stage advances only when the new
+stage exceeds the previously shown one, using `7 - trunc((minutes - 1)/9)`.
+Following the first tree scene, the positive-minute thresholds are 63, 54,
+45, 36, 27, 18 and 9. The timeout sequence is a separate original path.
+
+The countdown prefix at `2:51f4-5270` requires a nonnegative tree stage, a
+native-alive Prince and positive minutes. It decrements the frame counter;
+on zero it reloads 719 and decrements minutes. This is an eligible original
+simulation update, not a repaint or a wall-clock second. Native host cadence
+must be respected when connecting it to live gameplay.
+
+The pure model passes 3,024 original selector comparisons and 192 original
+countdown-prefix cases, with no differences. The selector fixture supplies
+copy-protection success and bypasses queued-load admission. The clock probe
+stops before HUD work. These checks establish the rules, not the complete
+runtime transition, saves, cutscene playback or timer presentation.
+
+## Level Data And Scenery
+
+LEVL 2003 identifies level 4 as cavern environment 3, starting in native
+room 1, tile 25, row 2, port X=277, decoded facing 0. The entry dispatch
+`2:5d98-5e36` reaches the ordinary sequence-5 branch for a fresh level-four
+start. Level-three scenery is currently prepared specifically from LEVL
+2002; the level-four scene program must be generated from its own resource.
+The existing runtime rejects unsupported entry/scenery rather than reusing
+the wrong room or resetting the live game.
+
+Discovery uses NIS.rsrc's original 29000-range resources. The tree scenes
+also require NISTree.rsrc, which was not needed by the opening/voyage importer.
+Their ANI/SCRP playback and callbacks must be recovered along with drawing,
+voices, MIDI markers and palette changes. A fixed captured video is not the
+source of the port's scenes.
