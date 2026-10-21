@@ -14,6 +14,16 @@ I'm trying to stay as close to the original as possible, while still making some
 
 <br/>
 
+## Gameplay Status
+
+Levels 1-3 are playable from start to finish.
+
+A lot of the work so far has gone into building and refining the core gameplay systems rather than just moving through the levels. I'm hoping this groundwork will make the remaining levels quicker to implement.
+
+Enemy AI is already working well, but there's still ongoing research into the original Macintosh executable to better understand and reproduce its more subtle behaviors.
+
+<br/>
+
 # Features & Improvements
 
 ## Game Menu (F1)
@@ -121,21 +131,6 @@ I also improved the sound played while the gate opens. The original had noticeab
 </table>
 
 <br/>
-
-## Current Progress
-
-- **Level 1:** Fully playable route, including combat, the checkpoint, boat
-  escape and voyage to level 2.
-- **Level 2:** Playable beach, shore and stone puzzle, with quicksand and the
-  optional original copy protection.
-- **Level 3:** Scenery recovered for all 32 rooms, including animated torches
-  and entrance-door closure. Loose floors now shake and fall; the remaining
-  gameplay is still under development.
-- **Presentation and Systems:** Original intro, demo and credits with music
-  and sound effects; movement, sword combat, checkpoints, retry, fullscreen
-  and menus.
-- **Remaining Work:** Level-3 gameplay, potion rendering, guard-AI refinement
-  and remaining differences from the Macintosh original.
 
 ## Quality of Life
 
