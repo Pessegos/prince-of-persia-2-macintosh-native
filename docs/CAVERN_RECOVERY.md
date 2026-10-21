@@ -1048,6 +1048,21 @@ AddSong(24). The original drinking effect 23 and MIDI 24 are prepared at import.
 Restart restores entry capacity rather than permitting repeated collection
 of the same upgrade (2:61f2 and SetKidDefaults 2:5d82).
 
+PickItUp (6:1576-1596) takes a flask of any type: RemoveObj (4:406c) stores
+the type (foreground bits 5-7), and DoPickupEffect dispatches on it:
+- types 1 and 2 behave as described above;
+- type 5, the harmful flask, calls DecLifePts(1) and plays sound 12
+  (4:4678-46b0). A fatal sip selects SEQS:71 with death method 3.
+  Level 4 has type-5 flasks in rooms 14 and 29, and the port now drinks them.
+- type 3 (float, 2:5a26: a 228-update slow fall used by StartFall, ConvertX
+  and CheckBarr) is in level-four room 6. Type 4 (flip, 2:59f6) and type 6
+  come later. These are not modelled yet and stay on the floor rather than
+  being consumed without their effect.
+
+In the original data, room 14 places a dormant skeleton on that room's
+harmful flask, the same cell (15). Level 8 room 25 has the same arrangement;
+the overlap is not a port error.
+
 Native execution matched 644 pickup admission/alignment/sequence/removal
 cases, 128 particle-controller states and 150 life/capacity/song effects.
 All 28 phases of each of the seven original flasks matched the native drawing

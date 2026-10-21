@@ -6,6 +6,9 @@ import random
 from pop2.terrain import character_column, floor_contact_x, floor_edge_distance
 
 
+DRINKABLE = (1, 2, 5)
+
+
 def potion_kind(foreground):
     return (foreground >> 5) & 7
 
@@ -16,7 +19,9 @@ def pickup_target(terrain, motion, state, record):
     current = terrain.tile(motion.room, column, motion.row)
     target = current if current.kind == 10 else terrain.tile(
         motion.room, column + (1 if state.facing else -1), motion.row)
-    if target.room is None or target.kind != 10 or potion_kind(target.foreground) not in (1, 2):
+    # PickItUp 6:1576-1596 takes every flask; types 3, 4 and 6 (float, flip,
+    # 4:466c-4672/46b2) are not modelled yet and stay on the floor.
+    if target.room is None or target.kind != 10 or potion_kind(target.foreground) not in DRINKABLE:
         return None
     distance = floor_edge_distance(contact, state.facing)
     same = current.kind == 10
@@ -40,6 +45,7 @@ class Potions:
     effect_pending: bool = False
     shift_was_held: bool = False
     songs: list = field(default_factory=list)
+    fatal: bool = False
 
     def configure(self, terrain, rng=None):
         rng = rng or random
@@ -81,6 +87,13 @@ class Potions:
                 actor.life = actor.max_life
             elif self.held_kind == 1:
                 actor.life = min(actor.max_life, actor.life + 1)
+            elif self.held_kind == 5:
+                # 4:4678-46b0: DecLifePts(1) and sound 12; a fatal sip selects
+                # SEQS:71 with death method 3, which the host applies.
+                actor.life = max(0, actor.life - 1)
+                state.sound_events.append(12)
+                self.fatal = actor.life == 0
+                continue
             else:
                 continue
             self.songs.append(24)

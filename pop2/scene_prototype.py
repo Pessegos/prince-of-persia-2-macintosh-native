@@ -2513,6 +2513,17 @@ class ScenePrototype(WindowControls):
 
             potions = self.game.caverns.potions
             potions.consume_events(self.sequence_state, self.combat.player)
+            if potions.fatal:
+                potions.fatal = False
+                motion = self.terrain_motion
+                self.clear_keys(None)
+                self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
+                if motion is not None:
+                    motion.dead, motion.falling = True, False
+                self.sequence_state.horizontal_velocity = self.sequence_state.vertical_velocity = 0
+                self.physics.select(self.sequence_runtime, 71)
+                self.death.begin(3)
+                self.status.set("Defeated")
             potions.advance((tile.room, tile.row * 10 + tile.column)
                 for _command, tile in cavern_flask_instances(
                     self.level_renderer.cavern_program, self.room_id, self.level_map))

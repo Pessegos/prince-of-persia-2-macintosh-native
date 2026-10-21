@@ -162,6 +162,8 @@ def _unpack(value, resources, lava_tables, depth=0):
         optional.update(('room_record', 'native_alive', 'rise_song_pending'))
     if cls is SkeletonRoomRecord:
         optional.add('cell')
+    if cls is Potions:
+        optional.add('fatal')
     if (not isinstance(record, dict) or set(record) - allowed
             or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')

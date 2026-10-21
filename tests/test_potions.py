@@ -111,6 +111,31 @@ class PotionTests(unittest.TestCase):
         self.assertEqual((actor.life, actor.max_life), (0, 3))
         self.assertEqual(p.songs, [])
 
+    def test_poison_costs_one_life_with_sound_twelve_and_no_song(self):
+        # DoPickupEffect 4:4678-46b0: DecLifePts(1), AddSound(12).
+        p = Potions(held_kind=5, effect_pending=True)
+        actor = SimpleNamespace(life=3, max_life=3, alive=True)
+        state = SequenceState(78, sequence_events=[(-14, (1,))])
+        p.consume_events(state, actor)
+        self.assertEqual((actor.life, actor.max_life, state.sound_events, p.songs, p.fatal),
+                         (2, 3, [12], [], False))
+
+    def test_poison_on_the_last_life_requests_the_native_death(self):
+        p = Potions(held_kind=5, effect_pending=True)
+        actor = SimpleNamespace(life=1, max_life=3, alive=True)
+        p.consume_events(SequenceState(78, sequence_events=[(-14, (1,))]), actor)
+        self.assertEqual((actor.life, p.fatal), (0, True))
+
+    def test_poison_flask_can_be_picked_up_but_unmodelled_types_cannot(self):
+        motion = SimpleNamespace(room=0, row=1)
+        record = FrameRecord(15, 14, 0, 4, 0, 70)
+        state = SequenceState(2, action=15, facing=1, target_x=188)
+        for kind, drinkable in ((1, True), (2, True), (3, False), (4, False), (5, True), (6, False)):
+            with self.subTest(kind=kind):
+                self.place(0, 13, kind << 5)
+                terrain = LevelMap(bytes(self.data))
+                self.assertEqual(pickup_target(terrain, motion, state, record) is not None, drinkable)
+
     def test_sequence_pickup_operations_are_emitted_at_their_original_boundaries(self):
         state = SequenceState(78)
         runtime = SequenceRuntime({78: (196, -14, 2, 197, 205, -14, 1, 205)}, state)
@@ -205,6 +230,26 @@ class ImportedPotionTests(unittest.TestCase):
                     self.assertEqual(s.level_map.tile(room, column, row).kind, 1)
                     self.assertFalse(s.game.caverns.potions.effect_pending)
                     self.assertIn(s.action, (15,))
+
+    def test_level_four_poison_flasks_cost_a_life_and_can_kill(self):
+        # Rooms 14 and 29 hold type-5 flasks (4:4678-46b0).
+        s = self.make_scene()
+        for room, cell, life in ((28, 25, 3), (13, 15, 1)):
+            with self.subTest(room=room + 1):
+                s.load_level(4)
+                row, column = divmod(cell, 10)
+                self.assertEqual(potion_kind(s.level_map.tile(room, column, row).foreground), 5)
+                s.jump_to_room(room, row=row, x=column * 51 + 35, facing=1)
+                s.combat.player.life = life
+                s.shift_held = True
+                for _ in range(28):
+                    self.tick()
+                s.shift_held = False
+                self.assertEqual(s.level_map.tile(room, column, row).kind, 1)
+                self.assertEqual(s.combat.player.life, life - 1)
+                if life == 1:
+                    self.assertTrue(s.terrain_motion.dead)
+                    self.assertEqual(s.death.method, 3)
 
     def test_running_jumping_and_wrong_row_do_not_pick_up_a_flask(self):
         s = self.make_scene()
