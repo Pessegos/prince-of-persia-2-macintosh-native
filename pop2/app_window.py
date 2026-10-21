@@ -23,7 +23,14 @@ def create_root():
     if sys.platform == "win32":
         icon = str(ICON_DIR / "prince.ico")
         root.iconbitmap(default=icon)
-        root.iconbitmap(icon)
+        # Applying the root icon before its first map forces a 200x200 window.
+        # Keep the exact native-sized icons, but wait for the finished layout.
+        def apply_window_icon(event):
+            if event.widget is root:
+                root.iconbitmap(icon)
+                root.unbind('<Map>', icon_binding)
+
+        icon_binding = root.bind('<Map>', apply_window_icon, add='+')
     else:
         source = tk.PhotoImage(master=root, file=str(ICON_DIR / "prince.png"))
         root._app_icon_images = tuple(source.subsample(scale) for scale in (8, 16))

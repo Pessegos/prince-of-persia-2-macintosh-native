@@ -3,6 +3,7 @@ import struct
 import subprocess
 import sys
 import textwrap
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
@@ -62,11 +63,33 @@ class ApplicationIconTests(unittest.TestCase):
             calls.attach_mock(tk_root, "root")
             root = create_root()
             self.assertEqual([call[0] for call in calls.mock_calls],
-                             ["identity", "root", "root().iconbitmap", "root().iconbitmap"])
+                             ["identity", "root", "root().iconbitmap", "root().bind"])
             identity.assert_called_once_with("Pessegos.PrinceOfPersia2.MacintoshNative")
             icon = str(ICON_DIR / "prince.ico")
             self.assertEqual(root.iconbitmap.call_args_list,
-                             [((), {"default": icon}), ((icon,), {})])
+                             [((), {"default": icon})])
+            event, apply_icon = root.bind.call_args.args
+            self.assertEqual(event, '<Map>')
+            apply_icon(SimpleNamespace(widget=object()))
+            self.assertEqual(root.iconbitmap.call_count, 1)
+            apply_icon(SimpleNamespace(widget=root))
+            self.assertEqual(root.iconbitmap.call_args.args, (icon,))
+            root.unbind.assert_called_once_with('<Map>', root.bind.return_value)
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows root mapping")
+    def test_icon_setup_does_not_map_a_provisional_small_window(self):
+        root = create_root()
+        try:
+            self.assertFalse(root.winfo_ismapped())
+            root.geometry('1020x768')
+            mapped = []
+            root.bind('<Map>', lambda event: mapped.append(
+                (root.winfo_width(), root.winfo_height())) if event.widget is root else None, add='+')
+            root.update()
+            self.assertTrue(mapped)
+            self.assertEqual(mapped[0], (1020, 768))
+        finally:
+            root.destroy()
 
     def test_windows_sizes_preserve_source_pixels_and_transparency(self):
         with Image.open(ICON_DIR / "prince.png") as source, \
@@ -139,6 +162,8 @@ class ApplicationIconTests(unittest.TestCase):
                 source = source.convert('RGBA')
             for _ in range(2):
                 root = create_root()
+                root.geometry('1020x768')
+                root.update()
                 root.withdraw()
                 try:
                     identity = ctypes.c_wchar_p()
