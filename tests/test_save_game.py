@@ -57,6 +57,19 @@ class SaveFormatTests(unittest.TestCase):
             self.assertEqual(vars(original.combat.guards[0].state), vars(loaded.combat.guards[0].state))
             self.assertEqual(original.combat.rng.seed, loaded.combat.rng.seed)
 
+    def test_saved_target_is_the_persistent_prince_target_not_the_frame_opponent(self):
+        # The native Prince target (+0x3a) persists while Main may use a
+        # different opponent for one frame; only the persistent one is saved.
+        original = GameSession.load(self.resources, 3)
+        original.place(10, 2, 230, 1)
+        cached = original.combat.guards[0]
+        original.combat.guard = cached
+        original.combat._effective_guard = None
+        write_save(self.path, capture(original))
+        loaded, _saved = read_save(self.path, self.resources)
+        self.assertIs(loaded.combat.target_cache, loaded.combat.guards[0])
+        self.assertIs(loaded.combat.guard, loaded.combat.guards[0])
+
     def test_transient_bone_shake_notifications_are_not_replayed_after_loading(self):
         original = GameSession.load(self.resources, 3)
         original.caverns.loose.shake_events.append((14, 2))

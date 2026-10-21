@@ -228,7 +228,9 @@ def capture_snapshot(game, controls=None, copy_verified=False):
                if game.opening is not None else None)
     state = {'game': {name: getattr(game, name) for name in GAME_FIELDS},
              'player': combat.player, 'rooms': combat.room_encounters,
-             'target': next((i for i, actor in enumerate(combat.guards) if actor is combat.guard), None),
+             # Persistent Prince target (native +0x3a), not the frame opponent.
+             'target': next((i for i, actor in enumerate(combat.guards)
+                             if actor is getattr(combat, 'target_cache', combat.guard)), None),
              'clock': {name: getattr(combat, name)
                        for name in ('world_frame', 'parry_timer', 'advance_pause', 'attack_pause')},
              'rng': rng, 'random': random.getstate(), 'opening': opening,
