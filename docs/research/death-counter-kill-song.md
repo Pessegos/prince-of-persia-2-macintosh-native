@@ -72,3 +72,27 @@ Level environments and opponent types (LEVL `0x2186`/`0x21a4`):
   never sets `+0x18` (no CheckStab) would stop at ALIVE 0. Then neither the
   song nor the target clear fires; GenCtrl's dead branch still reselects.
   This was not executed.
+
+## OppToFight `6:2392-2492`, which gates the songs [D]
+
+The routine loads the Prince and returns false when any of these holds:
+- the Prince's `+0x34` is 13;
+- the Prince's type is 1;
+- the Prince's mode is 3 or 4;
+- IsDeadPos(pose) holds. For type 0 this is pose 185, 242, 243, 266 or 271,
+  plus level-specific checks from `4:4810`.
+
+Otherwise it returns true when any bank slot in the Prince's room has native
+ALIVE < 0, alert > 0 and type other than 11. Types 7/8 also need the
+generator info `+0x1c` to be 1 or 3.
+
+`CombatEncounter.opponent_to_fight` matches this with three differences:
+- it adds a Prince HP test, which the original lacks; the original relies on
+  the dead poses;
+- it uses guard HP instead of native ALIVE, so a pending death (HP 0, ALIVE
+  -1) counts in the original for that frame;
+- it applies the intentional rooftop-escape stand-down.
+
+The first two last only a few frames around a death, and the port's tests
+state them explicitly (`test_combat_music_excludes_native_player_and_opponent_states`).
+No change is proposed.
