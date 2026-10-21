@@ -61,7 +61,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Body touches exclusive wall edge without overlap; right-facing step clearance conversion | 4:53b8-53ca, 65d8-65ea | T/A: native edge semantics within port body sweep; short steps and actual bumps retained | terrain / test_terrain, test_game_ui |
 | Fall preparation uses old supporting foot/column | 4:4b16-4d90 | T: ordinary rooftop preparation | terrain / test_terrain |
 | Gravity +6 capped at 63; landing thresholds 50/63 | 4:341a, 3464; 6:00a6, 0280 | T: ordinary player/NPC falls | terrain / test_terrain |
-| Catch velocity <60 and height [-48,+3] | 4:37ca; 6:011e-0132 | T: ordinary rooftop catch | terrain / test_game_ui |
+| Catch velocity <60, height [-48,+3], source-99 release look-behind 24 instead of 17 | 4:37ca/3882-3894; 6:011e-0132 | T: ordinary catch and release admission (11,304 native comparisons) | terrain / test_game_ui / test_ledge_catch |
 | Wall-backed hang settles once, mode 6 bypass; free-air expiry | 6:18e0, 1926; SEQS:25 | T: tested wall/gate distinction and free-air branch | terrain, scene_prototype / test_game_ui, test_terrain |
 | Up climb takes priority over Shift release | 6:18e0; SEQS:10/235 | T: ordinary ledges | scene_prototype / test_game_ui |
 | Ledge release chooses floor return 11 / free fall 23/99 with relative offset and swing phase | 6:1a84-1bbc; 3:4e32, 4eb2 | T: ordinary wall/floor/space branches and DoJumpHang preview; special levels P | terrain, sequence_runtime, scene_prototype / test_terrain, test_game_ui |

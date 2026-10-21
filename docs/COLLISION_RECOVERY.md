@@ -245,6 +245,11 @@ ordinary native branches:
   Y in [-48, 3] permit the original 17-pixel look-behind tile check. A real
   ledge selects 15 and aligns using its first caught pose 80; an empty pair
   of cells can never hold the Prince. The original grip delay is 12 ticks.
+  After the toward-ledge release selected as `SEQS:99`, `4:3882-3894`
+  applies another seven facing-relative pixels before testing the tiles:
+  the look-behind is 24, not 17. This uses the selected/source sequence,
+  which remains 99 after the animation links into the generic fall loop 12.
+  The away release 23 and ordinary falls retain the 17-pixel test.
 - GenCtrl, CODE:6 `0x18e0`-`0x1998`: Up selects 10 after the grip delay,
   before testing Shift release. Otherwise hanging actions 87-99 fall through
   23 when Shift is released or sequence 210 sets mode 11. A wall under the
@@ -482,6 +487,26 @@ buffered or held horizontal input at poses 50-52 (GenCtrl 6:0c32); the
 short sheath retains all five poses before locomotion without an idle gap.
 For a held forward run, the long sheath also uses the earlier pose-48
 transition to SEQS:43 (GenCtrl 6:062c/1014), like the standing turn.
+
+### Catch After Releasing A Ledge
+
+The `second ledge.mp4` report exposed the missing `4:3882-3894` branch above.
+In level 3 room 22, dropping after the first catch could incorrectly select
+another `SEQS:15` on the lower, offset ledge. With the original source-99
+look-behind, the first catch is unchanged and the later fall reaches the
+lower floor instead. This is a shared rule, not a room or level exception,
+and a genuinely reachable ledge can still be caught after release 99.
+
+Executing the original Catch routine through its admission branch matched
+11,304 portable cases across six real rooms, two rows, both facings, three
+source sequences and 157 X positions. The diagnostic stops before the
+successful catch's animation/sound side effects: it checks admission,
+trial-X arithmetic and restoration of X after rejection, not complete
+native animation timing. Resource-free regressions also exercise four
+environment kinds, different rooms, release history, valid post-release
+catches, unchanged ordinary falls, and height/velocity limits. The real-room
+regression follows the collapse, first grip, release, attempted second grip
+and safe landing through the actual scene controller.
 
 The `mac correct.mp4` / `port bug.mp4` comparison exposed a missing Catch
 alignment branch (4:38da-3928). After SEQS:15 loads pose 80, its supporting

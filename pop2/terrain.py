@@ -503,11 +503,13 @@ class LevelMap:
 
     def catch_ledge(self, room, row, state, record, harbor=None):
         # Falling 6:011e-0132 / Catch 4:37ca: velocity <60 and feet within
-        # [-48,+3] of the lower floor. Test the native 17-pixel look-behind.
+        # [-48,+3] of the lower floor. Catch 4:3882-3894 extends the
+        # 17-pixel look-behind by seven after the toward-ledge release (99).
         if state.vertical_velocity >= 60 or not -48 <= state.current_y <= 3:
             return False
         direction = 1 if state.facing else -1
-        trial_x = state.target_x - 17 * direction
+        look_behind = 24 if state.source_sequence_id == 99 else 17
+        trial_x = state.target_x - look_behind * direction
         column = character_column(floor_contact_x(trial_x, state.facing, record))
         above = self.tile(room, column, row - 1)
         ahead = self.tile(room, column + direction, row - 1)
