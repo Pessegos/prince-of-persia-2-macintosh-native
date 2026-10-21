@@ -12,7 +12,8 @@ from pop2.enemy_alerts import alert_path_mode
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.opponent_generation import (
-    OpponentGenerationPoint, character_column,
+    OpponentGenerationPoint, character_column, cut_opponent_position, opponent_record_in_bounds,
+    opponent_record_cell, opponent_row_cell,
     WALL_TILES, OBSTACLE_TILES, EMPTY_TILES,
 )
 from pop2.terrain import (
@@ -339,8 +340,7 @@ class CombatEncounter:
                 if actor.skeleton is not None:
                     view = self._project_fighter(actor, previous_room)
                     if view is not None:
-                        inside = 0 <= self._supporting_column(view) < 10 and 0 <= view.row < 3
-                        skeleton_records.append((actor, inside))
+                        skeleton_records.append((actor, view))
         self._load_room(room)
         self.player.room, self.player.row = room, row
         self.guards, self.generation_points = self.room_encounters[room]
@@ -364,11 +364,14 @@ class CombatEncounter:
                 if opponent_follows_cut(view, direction, len(self.guards),
                                         in_destination=self._position_room(guard) == room):
                     self._carry_opponent(guard, room, previous_room, direction)
-        for actor, inside in skeleton_records:
+        for actor, view in skeleton_records:
             if actor.room != room and actor.skeleton.removed_on_room_save(actor):
                 self.room_encounters[actor.room][0].remove(actor)
                 continue
-            actor.skeleton.store_room(actor, restart_living=actor.room != room and inside)
+            if actor.room != room:
+                self._store_skeleton_record(actor, view)
+            else:
+                actor.skeleton.store_room(actor, restart_living=False, cell=opponent_row_cell(actor.row))
         self._select_skeleton_bank(room)
         for actor in self.active_guards():
             if actor.skeleton is not None:
@@ -387,27 +390,42 @@ class CombatEncounter:
         if art is not None:
             record = art.frames[guard_frame_index(guard.state.action)]
             x = floor_contact_x(x, guard.state.facing, record)
-        column, row, room = character_column(x), guard.row, guard.room
-        seen = set()
-        while not (0 <= column < 10 and 0 <= row < 3):
-            if terrain is None or (room, column, row) in seen:
-                return None
-            seen.add((room, column, row))
-            missing_vertical = False
-            if row < 0 or row >= 3:
-                neighbor = terrain.neighbor(room, 'up' if row < 0 else 'down')
-                if neighbor is not None:
-                    room, row = neighbor, row + (3 if row < 0 else -3)
-                else:
-                    missing_vertical = True
-            if column < 0 or column >= 10:
-                neighbor = terrain.neighbor(room, 'left' if column < 0 else 'right')
-                if neighbor is None:
-                    return None
-                room, column = neighbor, column + (10 if column < 0 else -10)
-            elif missing_vertical:
-                return None
-        return room
+        position = cut_opponent_position(terrain, guard.room, guard.row, character_column(x),
+                                         guard.state.target_x, floor_y(guard.row) + guard.state.current_y)
+        return position[0] if position is not None else None
+
+    def _store_skeleton_record(self, actor, view):
+        # UpdateOppInfo 6:3186-3268 stores a non-following actor through
+        # Cut, retaining its cursor rather than restarting a living record.
+        column = self._supporting_column(view)
+        inside = opponent_record_in_bounds(column, view.row)
+        position = (view.room, view.row, column, view.state.target_x,
+                    floor_y(view.row) + view.state.current_y)
+        if not inside:
+            position = cut_opponent_position(getattr(self, 'terrain', None), *position)
+        source = self.room_encounters[actor.room][0]
+        if position is None:
+            source.remove(actor)
+            return False
+        room, row, _column, x, y = position
+        self._load_room(room)
+        destination = self.room_encounters[room][0]
+        if destination is not source:
+            # Preserve the existing port safeguard against a full bank losing
+            # an actor. Native AddOpp can discard its incoming room record.
+            if len(destination) >= 5:
+                actor.skeleton.store_room(actor, restart_living=False)
+                return True
+            source.remove(actor)
+            destination.append(actor)
+        actor.room, actor.row = room, row
+        actor.state.target_x = actor.state.current_x = x
+        actor.state.current_y = y - floor_y(row)
+        if actor.terrain_motion is not None:
+            actor.terrain_motion.room, actor.terrain_motion.row = room, row
+        cell = opponent_record_cell(column, row) if inside else opponent_row_cell(row)
+        actor.skeleton.store_room(actor, restart_living=inside, cell=cell)
+        return True
 
     def _carry_opponent(self, guard, room, previous_room, direction):
         # TransferOppInfo preserves the current pose/cursor and world position.

@@ -19,6 +19,55 @@ def character_column(scene_x):
     return quotient - 4 - int(value < 0)
 
 
+def opponent_record_in_bounds(column, row):
+    # GetCellI 4:29d8 accepts row -1, encoded as -(column + 1).
+    return 0 <= column < 10 and -1 <= row < 3
+
+
+def opponent_row_cell(row):
+    # GetRowOffset 4:322a-325a: negative rows end at -1, -11, -21.
+    return row * 10 + (9 if row < 0 else 0)
+
+
+def opponent_record_cell(column, row):
+    # GetCellI 4:29d8-2a22; 30 selects UpdateOppInfo's Cut branch.
+    if not opponent_record_in_bounds(column, row):
+        return 30
+    return -(column + 1) if row == -1 else opponent_row_cell(row) + column
+
+
+def cut_opponent_position(terrain, room, row, column, x, y):
+    """Cut 6:472a-485c; return (room, row, column, x, absolute_y), or None."""
+    seen = set()
+    while not (0 <= column < 10 and 0 <= row < 3):
+        if terrain is None or (room, column, row) in seen:
+            return None
+        seen.add((room, column, row))
+        missing_vertical = False
+        if row < 0 or row >= 3:
+            upward = row < 0
+            neighbor = terrain.neighbor(room, 'up' if upward else 'down')
+            if neighbor is None:
+                missing_vertical = True
+            else:
+                room = neighbor
+                row += 3 if upward else -3
+                # Cut normalizes stored records by 365, unlike the 360-pixel
+                # TransferOppInfo/Cut path used by a following live actor.
+                y += 365 if upward else -365
+        if column < 0 or column >= 10:
+            leftward = column < 0
+            neighbor = terrain.neighbor(room, 'left' if leftward else 'right')
+            if neighbor is None:
+                return None
+            room = neighbor
+            column += 10 if leftward else -10
+            x += 510 if leftward else -510
+        elif missing_vertical:
+            return None
+    return room, row, column, x, y
+
+
 def tile_kind(level, room, column, row):
     while not 0 <= column < 10 or not 0 <= row < 3:
         if row < 0:

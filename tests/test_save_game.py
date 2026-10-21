@@ -155,6 +155,34 @@ class SaveFormatTests(unittest.TestCase):
                 with self.assertRaises(SaveGameError):
                     read_save(self.path, self.resources)
 
+    def test_saved_skeleton_cell_is_validated_without_breaking_older_snapshots(self):
+        from pop2.skeleton import SkeletonRoomRecord
+
+        for cell in (-20, 90, 999):
+            with self.subTest(cell=cell):
+                original = GameSession.load(self.resources, 3)
+                original.place(10, 2, 230, 1)
+                original.combat.guards[0].skeleton.room_record = SkeletonRoomRecord(119, 1, 0, False, cell)
+                write_save(self.path, capture(original))
+                with self.assertRaises(SaveGameError):
+                    read_save(self.path, self.resources)
+
+    def test_valid_saved_skeleton_cells_survive_snapshot_and_restore_the_native_row(self):
+        from pop2.skeleton import SkeletonRoomRecord
+
+        for cell in (-19, -10, -1, 0, 29, 30, 89):
+            with self.subTest(cell=cell):
+                original = GameSession.load(self.resources, 3)
+                original.place(10, 2, 230, 1)
+                original.combat.guards[0].skeleton.room_record = SkeletonRoomRecord(119, 1, 0, False, cell)
+                write_save(self.path, capture(original))
+                loaded, _saved = read_save(self.path, self.resources)
+                actor = loaded.combat.guards[0]
+                self.assertEqual(actor.skeleton.room_record.cell, cell)
+                actor.skeleton.restore_room(actor, 0)
+                expected = abs(cell) // 10 * (-1 if cell < 0 else 1) - int(cell < 0)
+                self.assertEqual(actor.row, expected)
+
     def test_cavern_potions_gates_debris_and_skeleton_recovery_survive_roundtrip(self):
         original = GameSession.load(self.resources, 3)
         original.place(19, 2, 200, 1)

@@ -764,7 +764,8 @@ class SkeletonTests(unittest.TestCase):
         residents = combat.room_encounters[16][0]
         for _ in range(5):
             residents.append(replace(actor, room=16, bank_room=None, runtime=SequenceRuntime(
-                combat.sequences, SequenceState(119, actor_type=4, action=206, cursor=1)),
+                combat.sequences, SequenceState(119, actor_type=4, action=206, cursor=1,
+                                                current_x=250, target_x=250)),
                 skeleton=replace(actor.skeleton)))
         combat.enter_room(16, 2)
         self.assertEqual((actor.room, actor.life), (14, 2))
@@ -867,6 +868,90 @@ class SkeletonTests(unittest.TestCase):
         combat.enter_room(0, 2)
         self.assertNotIn(actor, combat.active_guards())
 
+    def test_non_following_skeleton_record_moves_to_its_physical_side_room(self):
+        _, combat, actor = self.encounter(14)
+        select_sequence(actor, 112)
+        actor.runtime.next_frame()
+        actor.state.current_x = actor.state.target_x = 560
+        cursor = actor.state.cursor
+        combat.enter_room(0, 2)
+        self.assertEqual((actor.room, actor.row, actor.state.target_x), (16, 2, 50))
+        self.assertNotIn(actor, combat.room_encounters[14][0])
+        self.assertIn(actor, combat.room_encounters[16][0])
+        self.assertEqual(actor.skeleton.room_record.cursor, cursor)
+        self.assertEqual(actor.skeleton.room_record.sequence, 112)
+        self.assertEqual(sum(g is actor for guards, _ in combat.room_encounters.values()
+                             for g in guards), 1)
+        combat.enter_room(16, 2)
+        self.assertIs(combat.guards[0], actor)
+        self.assertIsNone(actor.skeleton.room_record)
+        self.assertNotEqual(actor.state.cursor, cursor)
+
+    def test_non_following_vertical_record_uses365_without_changing_live_carry(self):
+        import struct
+        from pop2.terrain import LevelMap, TerrainMotion
+
+        _, combat, actor = self.encounter(14)
+        level = bytearray(combat.level)
+        struct.pack_into('>H', level, 0x2080 + 14 * 8 + 6, 1)
+        combat.terrain = LevelMap(level)
+        actor.state.current_x = actor.state.target_x = 300
+        actor.row, actor.state.current_y = 3, -10
+        actor.terrain_motion = TerrainMotion(14, 3, falling=True)
+        cursor = actor.state.cursor
+        combat.enter_room(2, 1)
+        self.assertEqual((actor.room, actor.row, actor.state.target_x, actor.state.current_y),
+                         (0, 0, 300, -15))
+        self.assertEqual((actor.terrain_motion.room, actor.terrain_motion.row), (0, 0))
+        self.assertEqual(actor.skeleton.room_record.cursor, cursor)
+        self.assertNotIn(actor, combat.active_guards())
+
+    def test_record_without_a_destination_is_removed_instead_of_reappearing(self):
+        import struct
+        from pop2.terrain import LevelMap
+
+        _, combat, actor = self.encounter(14)
+        level = bytearray(combat.level)
+        struct.pack_into('>H', level, 0x2080 + 14 * 8 + 2, 0)
+        combat.terrain = LevelMap(level)
+        actor.state.current_x = actor.state.target_x = 560
+        combat.enter_room(0, 2)
+        self.assertFalse(any(g is actor for guards, _ in combat.room_encounters.values() for g in guards))
+        combat.enter_room(14, 2)
+        self.assertNotIn(actor, combat.active_guards())
+        self.assertEqual(combat.guards, [])
+
+    def test_imported_record_normalization_does_not_accumulate_coordinate_drift(self):
+        _, combat, actor = self.encounter(14)
+        for _ in range(4):
+            combat.enter_room(16, 2)
+            self.assertIn(actor, combat.active_guards())
+            combat.enter_room(0, 2)
+            self.assertEqual((actor.room, actor.row, actor.state.target_x), (14, 2, 381))
+            combat.enter_room(14, 2)
+            self.assertIs(combat.guards[0], actor)
+
+    def test_record_in_row_minus_one_does_not_cut_to_upper_room(self):
+        _, combat, actor = self.encounter(14)
+        actor.state.current_x = actor.state.target_x = 300
+        actor.row, actor.life = -1, 2
+        column = combat._supporting_column(actor)
+        combat.enter_room(0, 2)
+        self.assertEqual((actor.room, actor.row), (14, -1))
+        self.assertEqual(actor.skeleton.room_record.cell, -(column + 1))
+        self.assertEqual(actor.skeleton.room_record.cursor, 0)
+        combat.enter_room(14, 2)
+        self.assertEqual(actor.row, -1)
+
+    def test_negative_tenth_cell_reloads_with_native_signed_division(self):
+        from pop2.skeleton import SkeletonRoomRecord
+
+        _, combat, actor = self.encounter(14)
+        actor.skeleton.room_record = SkeletonRoomRecord(119, 1, 0, False, -10)
+        actor.skeleton.restore_room(actor, 0)
+        self.assertEqual(actor.row, -2)
+        self.assertEqual(actor.state.current_y, 0)
+
     def test_current_room_bank_precedes_side_imports_and_has_five_slots(self):
         from dataclasses import replace
 
@@ -875,14 +960,16 @@ class SkeletonTests(unittest.TestCase):
         residents = combat.room_encounters[16][0]
         for index in range(4):
             residents.append(replace(actor, room=16, bank_room=None, runtime=SequenceRuntime(
-                combat.sequences, SequenceState(119, actor_type=4, action=206, cursor=1)),
+                combat.sequences, SequenceState(119, actor_type=4, action=206, cursor=1,
+                                                current_x=250, target_x=250)),
                 skeleton=replace(actor.skeleton)))
         combat.enter_room(16, 2)
         self.assertEqual(combat.active_guards(), residents + [actor])
         self.assertEqual(actor.bank_slot, 4)
         combat.enter_room(0, 2)
         residents.append(replace(residents[0], runtime=SequenceRuntime(
-            combat.sequences, SequenceState(119, actor_type=4, action=206, cursor=1)),
+            combat.sequences, SequenceState(119, actor_type=4, action=206, cursor=1,
+                                            current_x=250, target_x=250)),
             skeleton=replace(actor.skeleton)))
         combat.enter_room(16, 2)
         self.assertEqual(combat.active_guards(), residents)

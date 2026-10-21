@@ -73,6 +73,10 @@ tests. The whole module also passes in an isolated temporary project without
 an assets directory (only the two integration checks skip). The 480 native
 endpoint comparisons still match after extraction.
 
+Follow-up `9fe69cb` passes GitHub Tests (run 39550717111). Final local scope
+was 319 tests, one optional skip. The full 19,200-case matrix was also
+repeated after extraction and still has zero mismatches.
+
 ## Skeleton Edge Initialization: Input-Provenance Audit
 
 The next branch, SkelAddOpponent `4:19f0-1a54`, demonstrably uses the caller's
@@ -95,3 +99,58 @@ upstream input. Next: trace the last native LoadFrame before room entry and
 establish how this cache is initialized for actual supported room records.
 If this requires unavailable full-runtime state, keep the limitation explicit
 and advance another independent AI branch rather than hardcoding positions.
+
+Initial-record inventory: all eight level-three skeletons have a nonempty
+left anchor cell, so this initialization branch is inactive for those fixed
+spawns. Level-four room 14 has a dormant record whose left cell is space.
+This does not establish what happens after a moved skeleton is reloaded.
+
+## WaitingEngarde Group Audit
+
+`rendered/waiting_group_native_probe_v1.py` executes the full WaitingEngarde
+decision routine and GenFight with actual GetBlock/IsAdvancableId. All 6,000
+seeded synthetic group cases matched; no behavioral edit was warranted.
+Cases vary 2..5 bank records, corpses in later slots, facings, selected run
+history, flags, alert 1/2, Prince movement poses/mode, spacing thresholds and
+front/rear tiles. Nearest-candidate indices are supplied from the existing
+selector and input-to-animation acceptance is isolated at ready pose 171.
+This does not independently revalidate target selection or the entire frame
+scheduler. Report: `rendered/waiting-group-native-v1.json`.
+
+## Skeleton Record Normalization: Implementation In Verification
+
+The non-following UpdateOppInfo path was missing physical room normalization.
+`cut_opponent_position` now reproduces the separate 365-pixel persistent Cut;
+the existing live follower's 360-pixel path is unchanged. Type-4 actors are
+stored from their previous bank view, moved to their real room without a
+duplicate, or removed if no room link can receive them. Existing full-bank
+retention is deliberately preserved rather than reproducing native loss.
+
+Direct original Cut matches all 8,000 random graph/position cases, including
+2,386 missing destinations. The combined original UpdateOppInfo probe then
+exposed another important distinction: GetCellI accepts row -1 without Cut.
+Implemented that predicate and the negative cell encoding instead of hiding
+the mismatch in the fixture. An optional room-record cell preserves InitOpps'
+signed decode, including cell -10 -> row -2. Earlier snapshots still decode
+without that field. TransferOppInfo uses negative row offsets -1/-11, not
+row*10; the stored cell now preserves that distinction too.
+
+Final original comparisons: 1,200 complete observed record outputs
+and 1,308 cell/marker/facing/cursor reloads match, in addition to the 8,000 Cut
+cases. Endpoints supplied by the harness and excluded geometry are documented
+in AI_RECOVERY.md. Local probes use the three `*_native_probe_v1.py` files
+named there. Asset-free position/record-format tests pass in an isolated
+temporary project; only the two asset-backed alert integrations skip.
+
+The earlier 21,504 supporting-cell/room-link queries still match, and the
+192 follower transfer cases now also compare their emitted encoded cells.
+Four new integration regressions fail under the old enter_room method and
+pass under the new one, with no fixture errors. Broad AI/combat/pursuit/
+generation/skeleton/harbor/save/slots/rebirth/terrain scope passed 561 tests
+(one optional skip); subsequent focused validation passed 97 tests including
+the final negative-offset helper, extended snapshot validation and reload.
+
+Before commit, rerun lint/catalog/diff checks and verify the GitHub workflow.
+Pending follow-on
+fronts remain the cached-FRAM initialization provenance, hidden-facing removal,
+ordinary rooftop bank scheduling, noise producers and later special actors.

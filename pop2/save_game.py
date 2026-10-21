@@ -158,6 +158,8 @@ def _unpack(value, resources, lava_tables, depth=0):
         optional.update(('bank_room', 'bank_slot'))
     if cls is Skeleton:
         optional.update(('room_record', 'native_alive'))
+    if cls is SkeletonRoomRecord:
+        optional.add('cell')
     if (not isinstance(record, dict) or set(record) - allowed
             or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')
@@ -194,7 +196,8 @@ def _fighter_valid(actor, resources):
     if record is not None and (
             record.sequence not in resources.sequences
             or not 0 <= record.cursor < len(resources.sequences[record.sequence])
-            or not 0 <= record.life <= actor.max_life):
+            or not 0 <= record.life <= actor.max_life
+            or record.cell is not None and not -19 <= record.cell < 90):
         raise SaveGameError('Saved skeleton room record is out of range')
 
 

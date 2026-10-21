@@ -13,6 +13,7 @@ class SkeletonRoomRecord:
     cursor: int
     life: int
     armed: bool
+    cell: int | None = None
 
 
 @dataclass
@@ -42,13 +43,13 @@ class Skeleton:
         select_sequence(actor, 63 if active else 112 if self.marker == 0 and slot == 0 else 119)
         actor.runtime.next_frame()
 
-    def store_room(self, actor, *, restart_living):
+    def store_room(self, actor, *, restart_living, cell=None):
         # UpdateOppInfo 6:30b0 resets the cursor of an in-bounds living actor.
         # Transfer/out-of-bounds records instead retain the current SEQS cursor.
         self.room_record = SkeletonRoomRecord(
             actor.state.sequence_id,
             0 if restart_living and (actor.alive or self.native_alive) else actor.state.cursor,
-            actor.life, actor.sword_drawn)
+            actor.life, actor.sword_drawn, cell)
 
     def removed_on_room_save(self, actor):
         # UpdateOppInfo removes these terminal/hidden records instead of
@@ -60,6 +61,11 @@ class Skeleton:
         if record is None:
             return False
         state = actor.state
+        if record.cell is not None:
+            # InitOpps 6:2c26-2c3a uses signed truncation, then decrements
+            # negative cells (including the exact -10 boundary).
+            cell = record.cell
+            actor.row = abs(cell) // 10 * (-1 if cell < 0 else 1) - int(cell < 0)
         state.__dict__.update(SequenceState(
             record.sequence, current_x=state.target_x, target_x=state.target_x,
             facing=state.facing, actor_type=4, level_kind=state.level_kind).__dict__)

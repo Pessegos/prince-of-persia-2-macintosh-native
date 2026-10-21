@@ -792,13 +792,68 @@ reinitialized actors, terminal removal, stale-event clearing, reload pauses,
 legacy snapshots and validation of saved room records. Normal player saves
 remain checkpoint-based; this does not turn them into exact-state saves.
 
-Remaining differences include UpdateOppInfo's complete out-of-bounds record
-normalization, SkelAddOpponent's ledge alignment, invisible-face removal,
+Remaining differences include special-actor record normalization,
+SkelAddOpponent's ledge alignment, invisible-face removal,
 all zero-HP/native-alive combat interactions, special actor types and the
 full ordinary-rooftop active-bank conversion. The port also retains an actor
 when a full destination cannot accept it rather than reproducing the original
 unconditional runner transfer's possible record loss. Do not read this scoped
 validation as complete lifecycle equivalence.
+
+### Non-Following Skeleton Record Normalization
+
+UpdateOppInfo `6:3104-3118` tests GetCellI `4:29d8-2a22`, not the stricter
+on-screen rectangle used by IsCharInKidRoom. Columns 0..9 in rows -1..2
+can stay in the current room record. Row -1 is encoded as `-(column + 1)`.
+Other cells return sentinel 30 and execute Cut `6:472a-485c` before storing
+the actor in its physical destination and removing its former room record.
+No destination means removal, not revivable off-map bones in the old room.
+
+The port now applies this to non-following skeletons on room departure,
+including actors imported into the previous active bank from a side room.
+Normalization uses the old bank's coordinate view, preserves actor identity,
+and retains the current animation cursor when Cut was required. It follows
+vertical links before horizontal ones and retries a missing vertical corner
+after a horizontal cut. Persistent Cut adds/subtracts **365** from absolute
+Y and three from the cached row. Live follower TransferOppInfo/Cut still
+uses its distinct **360**-pixel rule and recomputes the row from height.
+
+An optional encoded `cell` in SkeletonRoomRecord preserves the native reload
+row. InitOpps `6:2c26-2c3a` truncates signed cell/10 and then decrements for
+negative cells, including -10, which reloads at row -2. TransferOppInfo uses
+GetRowOffset `4:322a-325a`: -1/-11 for rows -1/-2, not row*10. Old snapshots
+without `cell` retain their previous row behavior. Cell validation follows
+the existing saved actor row range; new player saves remain checkpoints.
+
+Original-code checks for this extension:
+
+- 8,000 direct Cut inputs compare destination, cached row/column, X and
+  absolute Y across generated room-link graphs: 5,614 valid destinations
+  and 2,386 missing destinations, with no mismatches.
+- 1,200 UpdateOppInfo inputs compare persisted destination, encoded cell,
+  X, facing, current sequence/cursor, HP, sword and record removal. Record
+  lookup/add/remove endpoints are observed fixtures; Cut/GetCellI execute
+  original instructions. A zero-cursor record's unused sequence is not
+  compared. This is not a full AddOpp capacity/bank scheduler trace.
+- 1,308 InitOpps reloads cover cells -19..89 (the saved actor row domain),
+  both facings, markers -1/0/1,
+  and zero/nonzero cursors. They compare row and the existing animation,
+  life/sword/timer/shake outputs. This retains the earlier shared SEQS
+  interpreter and flat-floor fixture; ledge placement remains excluded.
+- The earlier IsCharInKidRoom audit still matches all 21,504 room-link/foot
+  queries after sharing Cut's traversal. Another 192 live follower transfers
+  still match, now also checking the emitted record's row-offset cell.
+
+Local probes are `rendered/opponent_position_native_probe_v1.py`,
+`rendered/skeleton_normalization_native_probe_v1.py` and
+`rendered/skeleton_cell_reload_native_probe_v1.py --extended`. Asset-free CI tests cover
+the Cut boundaries, negative cell encodings and snapshot compatibility.
+Resource-backed regressions cover real room ownership/re-entry, preserved
+cursor, missing links, vertical height, repeated side imports, existing live
+carry and full-bank retention. Bank-capacity fixtures now use actual in-room
+anchors rather than their former default X=0 (whose supporting cell was
+outside the room). The approved port safeguard against a full destination
+discarding an incoming actor remains unchanged.
 
 ### Progress Accounting
 
