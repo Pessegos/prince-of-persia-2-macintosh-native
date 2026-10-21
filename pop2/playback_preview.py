@@ -99,7 +99,7 @@ class PlaybackPreviews:
         from pop2.intro import IntroAssets, IntroPlayer
 
         part = self.parts[index]
-        if part.stage in ('intro', 'ending'):
+        if part.stage in ('intro', 'ending', 'discovery'):
             if part.stage not in self.assets:
                 self.assets[part.stage] = IntroAssets(self.directory, program_name=f'{part.stage}.json')
             player = players.get(part.stage) if players is not None else None

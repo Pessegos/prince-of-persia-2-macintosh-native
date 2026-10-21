@@ -13,6 +13,11 @@ CATALOG = PROJECT_DIR / "docs" / "RECOVERY_CATALOG.csv"
 
 # These reviews cover specific ordinary branches, never an entire routine.
 REVIEWS = {
+    (15, "Discovery"): ("partial", "tools/extract_intro.py;pop2/intro.py;docs/LEVEL4_RECOVERY.md", "original coordinator exported to portable operations and level 3-to-4 host wiring; three callback-free flags-6 animations; native host stall parity omitted"),
+    (16, "runScript__10tAnimationFiUs"): ("partial", "pop2/intro.py;tools/extract_intro.py", "12 Discovery/tree scripts and 481 native incremental steps; carried layers/events/interval/end checked; tree callbacks and maintain cadence not executed"),
+    (16, "draw__10tAnimationFv"): ("partial", "tools/extract_intro.py", "69 Discovery frames and 144 native drawing calls agree in order/coordinates/flags; shape dimensions supplied, not independent pixel rasterization"),
+    (16, "setPos__10tAnimationFii"): ("partial", "tools/extract_intro.py", "Discovery absolute origin replaces ANI bounds origin; original execution with supplied OffsetRect; other animation uses omitted"),
+    (16, "PlayTheAnimation"): ("partial", "tools/extract_intro.py;pop2/intro.py", "Discovery flags 6/no callback/no background fill only; portable nominal intervals, no Macintosh event-loop or stall parity; other modes fail explicitly"),
     (3, "CheckGateInFore"): ("partial", "pop2/caverns.py;pop2/scene_prototype.py", "ordinary moving-gate body masks by physical row, supporting column and mode; 80 native admission checks; full NPC-bank and special crush redraw paths partial"),
     (4, "IsLedge"): ("partial", "pop2/terrain.py", "ordinary empty/floor catch geometry and left-facing phase-zero gate veto (512 native gate checks); DoJumpUp gate override retained; special floor branches partial"),
     (2, "ReadKeyboard"): ("partial", "pop2/mac_input.py", "ordinary keyboard priority"),

@@ -18,10 +18,10 @@ I'm trying to stay as close to the original as possible, while still making some
 
 Levels 1-3 are playable from start to finish.
 
-Level 4 is available for playtesting through F3, including its map, cavern
-mechanisms, restart and saves. The level-3-to-4 cutscene and the story
-countdown are still being integrated; normal campaign progression currently
-stops at the end of level 3.
+Level 3 now leads into the original Discovery cutscene and then level 4.
+Level 4 is available for playtesting, including its F3 map, cavern mechanisms,
+restart and saves. The tree cutscenes, story countdown and progression beyond
+level 4 are still being integrated.
 
 A lot of the work so far has gone into building and refining the core gameplay systems rather than just moving through the levels. I'm hoping this groundwork will make the remaining levels quicker to implement.
 

@@ -63,9 +63,10 @@ Host tests cover entrance settlement, a room-19 warp, restart, a save preview
 and progress load back at the level-four entrance. Snapshot loading uses
 level-four lava tables rather than borrowing level-three room records.
 
-This is a level-four playtest, not a completed campaign transition: level 3
-still stops at completion, and Discovery/tree playback, live countdown,
-story-state persistence and onward progression are not yet connected.
+This is a level-four playtest, not a complete later campaign. The level-three
+completion now plays Discovery and enters level four, retaining maximum life.
+Tree playback, live countdown, story-state persistence and onward progression
+are not yet connected.
 
 Discovery uses NIS.rsrc's original 29000-range resources. The tree scenes
 also require NISTree.rsrc, which was not needed by the opening/voyage importer.
@@ -82,6 +83,46 @@ This does not execute PlayTheAnimation or establish playback timing.
 The last script includes a sound-control command for 29100. Original
 KBAnimation soundControl `16:0f34-0f52` starts it in sound bank 1, while the
 coordinator also uses 29100 in MIDI bank 0. Both resources actually exist.
-The current intro audio metadata/files are keyed only by numeric resource
-ID, so Discovery support must distinguish these two sounds before import;
-silently overwriting one would break the music/effect sequence.
+Discovery audio is now imported under bank-qualified `scene-kind-id` keys
+and filenames, separate from legacy gameplay/opening cues. IntroPlayer resolves
+both formats; the audio engine passes both bank entries to SDL. The same ID
+can therefore play on the music and effect channels without overwriting either
+file, duration or MIDI markers. The launcher checks both sets of files.
+
+## Discovery Playback
+
+The importer now executes the original Discovery coordinator, expands its
+three callback-free ANI/SCRP calls into portable drawing/sound/wait operations,
+and writes `discovery.json`. No Macintosh CPU or captured video runs during
+gameplay. Only PlayTheAnimation flags 6 with zero background fill and no
+callback are admitted here; other callback/restore modes fail explicitly.
+ANI header position is replaced by SetPos, not added to it. The shape bank
+starts at base+1 and layer shape N resolves to base+N. Layers draw in ascending
+order over the persistent target; their rectangles are copied to the display.
+Sound command zero is ignored, as in KBAnimation soundControl `16:0f42`.
+
+A fresh local probe executes original runScript `16:08ee`, SetPos `16:0538`
+and draw `16:01f8` with carried state. All 69 displayed frames and 144 draw
+calls agree on order, coordinates, flags, interval and nonzero sound events.
+The probe supplies OffsetRect/division, memory locks, RTD adaptation and shape
+dimensions; callbacks are recorded and shape rasterization is not original.
+It does not execute the full PlayTheAnimation event loop or real audio.
+The earlier independent runScript probe also covers 12 Discovery/tree scripts
+and 481 incremental steps, without differences; this is not tree callback
+or timing certification. Native maintain `16:0454-0464` schedules from the
+current tick; portable playback uses the nominal resource intervals and the
+existing deadline-based cutscene host, not Macintosh stall/catch-up parity.
+
+Host regressions cover level-three completion, automatic arrival in level
+four, health retention, pause, skip-key suppression, F3 seeking and isolated
+gallery previews. F3 exposes the new sequence under After Level 3. Fresh
+imports stage the scene and all audio before replacing installed files.
+Existing installs need reimport; the new scene/audio files are not bundled.
+
+Before playback, GetEndSong `5:4e0c` selects cue 32 for cavern environment 3,
+just as for rooftops. AddEndSong `5:4b40` requests it, and FrameAdv
+`2:6134-6168` waits for the song/effect gates before admitting the transition.
+The port reuses its existing LevelExit gate; the frozen room remains visible
+until the cue ends, then Discovery starts once. Silent playback uses the
+imported cue duration. This does not implement every exceptional native
+effect exclusion or the Macintosh window/fade pipeline.

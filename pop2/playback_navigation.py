@@ -71,3 +71,13 @@ def ending_parts(program):
             names.pop(item["args"][0])
     parts.append(PlaybackPart('Arrival', 'level', 2, 'After Level 1'))
     return tuple(parts)
+
+
+def discovery_parts(program):
+    parts = [PlaybackPart('Meanwhile', 'discovery', 0, 'After Level 3')]
+    names = {29002: 'The Letter', 29006: 'The Impostor', 29009: 'The Spell'}
+    for index, item in enumerate(program['operations']):
+        if item['op'] == 'palette' and item['args'][0] in names:
+            parts.append(PlaybackPart(names.pop(item['args'][0]), 'discovery', index, 'After Level 3'))
+    parts.append(PlaybackPart('Caverns', 'level', 4, 'After Level 3'))
+    return tuple(parts)

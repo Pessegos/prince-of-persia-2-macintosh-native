@@ -15,6 +15,10 @@ from pop2.ui_audio import menu_pcm
 GATE_SLAM_DELAY = 11 / 60
 
 
+def scene_sound_key(resource_id, kind):
+    return f"scene-{kind}-{resource_id}"
+
+
 class MixerPlayback:
     def __init__(self, directory, cues):
         os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
@@ -134,7 +138,8 @@ class AudioEngine:
         if self.manifest.get("schema") != 1:
             raise ValueError("Game audio needs to be imported again")
         self.cues = {int(key): value for key, value in self.manifest["cues"].items()}
-        self.playback = playback or MixerPlayback(directory, self.cues)
+        self.scene_cues = self.manifest.get("scene_cues", {})
+        self.playback = playback or MixerPlayback(directory, {**self.cues, **self.scene_cues})
         self.rng = rng or random.Random()
         self.current_effect = self.current_music = None
         self.pending_effect = self.pending_song = None
@@ -167,7 +172,10 @@ class AudioEngine:
         return cue in self.cues and bool(self.cues[cue].get("file"))
 
     def play_intro(self, resource_id, kind, offset=0):
-        if not self.available(resource_id):
+        banked = scene_sound_key(resource_id, kind)
+        cue = banked if banked in self.scene_cues else resource_id
+        metadata = self.scene_cues.get(banked) if cue == banked else self.cues.get(cue)
+        if not metadata or not metadata.get('file'):
             raise ValueError(f"Intro audio {resource_id} is missing; import the game again")
         bus = "music" if kind == 0 else "effect"
         if kind == 0:
@@ -178,9 +186,9 @@ class AudioEngine:
             self.current_effect = resource_id
             self.pending_effect = None
         if offset:
-            self.playback.play(bus, resource_id, offset=offset)
+            self.playback.play(bus, cue, offset=offset)
         else:
-            self.playback.play(bus, resource_id)
+            self.playback.play(bus, cue)
         if self.paused:
             self.playback.pause(True)
 

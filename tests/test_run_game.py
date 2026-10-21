@@ -32,6 +32,7 @@ class InstallationTests(unittest.TestCase):
         }))
         (assets / "attract.json").write_text(json.dumps(fixture()))
         (assets / "ending.json").write_bytes((assets / "intro.json").read_bytes())
+        (assets / 'discovery.json').write_bytes((assets / 'intro.json').read_bytes())
         (assets / 'caverns_entry.json').write_text(json.dumps({
             'version': 15, 'level': 3, 'rooms': {str(room): [] for room in range(32)},
             'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}}}))
@@ -155,6 +156,25 @@ class InstallationTests(unittest.TestCase):
     def test_corrupt_voyage_requests_reimport(self):
         (self.project / "assets" / "ending.json").write_text("{}")
         self.assertIn("ending.json (needs reimport)", run_game.missing_assets(self.project))
+
+    def test_discovery_checks_banked_audio_and_missing_prepared_files(self):
+        assets = self.project / 'assets'
+        path = assets / 'discovery.json'
+        scene = json.loads(path.read_text())
+        scene['audio'] = {'scene-0-29100': {}, 'scene-1-29100': {}}
+        path.write_text(json.dumps(scene))
+        self.assertIn('discovery.json (needs reimport)', run_game.missing_assets(self.project))
+        manifest_path = assets / 'audio/manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['scene_cues'] = {key: {'file': f'{key}.wav'} for key in scene['audio']}
+        manifest_path.write_text(json.dumps(manifest))
+        for key in scene['audio']:
+            (assets / 'audio' / f'{key}.wav').touch()
+        self.assertEqual(run_game.missing_assets(self.project), [])
+        (assets / 'audio/scene-1-29100.wav').unlink()
+        self.assertIn('audio/scene-1-29100.wav', run_game.missing_assets(self.project))
+        path.unlink()
+        self.assertIn('discovery.json', run_game.missing_assets(self.project))
 
     def test_missing_credits_music_requests_reimport(self):
         (self.project / "assets" / "audio" / "manifest.json").write_text(json.dumps({"schema": 1, "cues": {}}))

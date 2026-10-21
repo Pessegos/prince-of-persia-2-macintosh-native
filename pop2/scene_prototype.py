@@ -212,6 +212,7 @@ class ScenePrototype(WindowControls):
         self.intro = None
         self.intro_assets = None
         self.ending_assets = None
+        self.discovery_assets = None
         self.demo = None
         self.attract_data = self.credits_assets = None
         self.attract_stage = None
@@ -1807,7 +1808,10 @@ class ScenePrototype(WindowControls):
                 if self.harbor is not None:
                     self.harbor.advance()
                 if self.game.exit.advance(self.current_animation_interval_ms() / 1000, self.audio):
-                    self.start_ending()
+                    if self.game.level.number == 3:
+                        self.start_discovery()
+                    else:
+                        self.start_ending()
                 self.render()
             self.in_animation_tick = False
             self.schedule_next_animation()
@@ -2603,12 +2607,12 @@ class ScenePrototype(WindowControls):
                 self.clear_keys(None)
                 self.start_sequence(IDLE_SEQUENCE)
         if self.game.consume_completion():
-            if self.game.level.number == 1:
+            if self.game.level.number in (1, 3):
                 import json
                 from pop2.level_transition import LevelExit
                 from pop2.paths import ASSET_DIR
 
-                # GetEndSong 5:4e0c selects 32 for the rooftop environment.
+                # GetEndSong 5:4e0c selects 32 for rooftop and cavern exits.
                 cues = (self.audio.cues if self.audio is not None else
                         {int(key): item for key, item in json.loads(
                             (ASSET_DIR / "audio/manifest.json").read_text(encoding="ascii"))["cues"].items()})
@@ -2869,7 +2873,7 @@ class ScenePrototype(WindowControls):
         from pop2.attract import read_attract
         from pop2.intro import read_program
         from pop2.paths import ASSET_DIR
-        from pop2.playback_navigation import playback_parts, ending_parts
+        from pop2.playback_navigation import playback_parts, ending_parts, discovery_parts
 
         if self.attract_data is None:
             self.attract_data = read_attract(ASSET_DIR / "attract.json")
@@ -2877,6 +2881,8 @@ class ScenePrototype(WindowControls):
                          read_program(ASSET_DIR / "intro.json"))
         ending_program = (self.ending_assets.program if self.ending_assets is not None else
                           read_program(ASSET_DIR / "ending.json"))
+        discovery_program = (self.discovery_assets.program if self.discovery_assets is not None else
+                             read_program(ASSET_DIR / "discovery.json"))
         if self.game.level.number == 1:
             screen_label = self.screen_label
         else:
@@ -2886,16 +2892,16 @@ class ScenePrototype(WindowControls):
             labels = {room: label for label, room in entries.items()}
             screen_label = lambda room: labels.get(room, f"Room ID {room + 1}")
         self.development_playback_parts = (playback_parts(intro_program, self.attract_data, screen_label)
-                                           + ending_parts(ending_program))
+                                           + ending_parts(ending_program) + discovery_parts(discovery_program))
         return self.development_playback_parts
 
     def current_playback_part(self):
         stage = self.attract_stage
-        if stage is None and self.game.level.number == 2:
+        if stage is None and self.game.level.number in (2, 4):
             return next((index for index, part in enumerate(self.development_parts())
-                         if part.stage == "level" and part.index == 2), 0)
+                         if part.stage == "level" and part.index == self.game.level.number), 0)
         position = (self.demo.index if stage == "demo" else
-                    self.intro.position - 1 if stage in ("intro", "ending") else
+                    self.intro.position - 1 if stage in ("intro", "ending", "discovery") else
                     self.intro.page_index if stage == "credits" else -1)
         matches = [index for index, part in enumerate(self.development_parts())
                    if part.stage == stage and part.index <= position]
@@ -2913,6 +2919,8 @@ class ScenePrototype(WindowControls):
             self.start_credits(part.index)
         elif part.stage == "ending":
             self.start_ending(part.index)
+        elif part.stage == "discovery":
+            self.start_discovery(part.index)
         elif part.stage == "level":
             self.load_level(part.index)
         else:
@@ -2923,6 +2931,8 @@ class ScenePrototype(WindowControls):
     def finish_attract_stage(self):
         if self.attract_stage == "ending":
             self.finish_ending()
+        elif self.attract_stage == "discovery":
+            self.finish_discovery()
         elif self.attract_stage == "credits":
             self.start_intro()
         else:
@@ -2994,6 +3004,8 @@ class ScenePrototype(WindowControls):
         held = set(self.window_keys_down)
         if self.attract_stage == "ending":
             self.finish_ending()
+        elif self.attract_stage == "discovery":
+            self.finish_discovery()
         else:
             if self.game.level.number != 1:
                 self.load_level(1)
@@ -3026,6 +3038,32 @@ class ScenePrototype(WindowControls):
     def finish_ending(self):
         max_life = self.combat.player.max_life if self.combat is not None else None
         self.load_level(2)
+        if max_life is not None:
+            self.combat.player.life = self.combat.player.max_life = max_life
+            self.render()
+
+    def start_discovery(self, part_index=None):
+        from pop2.intro import IntroAssets, IntroPlayer
+
+        self.end_demo()
+        if self.discovery_assets is None:
+            self.discovery_assets = IntroAssets(program_name='discovery.json')
+        self.clear_keys(None)
+        self.game.exit = None
+        self.level_complete = False
+        self.attract_stage = 'discovery'
+        if self.audio is not None:
+            self.audio.reset()
+        self.intro = IntroPlayer(self.discovery_assets, self.audio if part_index is None else None)
+        if part_index is not None:
+            self.intro.audio = self.audio
+            self.intro.seek_operation(part_index)
+        self.last_intro_at = time.perf_counter()
+        self.status.set('Discovery')
+
+    def finish_discovery(self):
+        max_life = self.combat.player.max_life if self.combat is not None else None
+        self.load_level(4)
         if max_life is not None:
             self.combat.player.life = self.combat.player.max_life = max_life
             self.render()

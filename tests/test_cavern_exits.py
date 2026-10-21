@@ -104,8 +104,9 @@ class ImportedCavernExitTests(unittest.TestCase):
 
         RooftopSceneTests.setUp(self)
         scene = self.scene
-        cues = json.loads((ASSET_DIR / 'audio/manifest.json').read_text(encoding='ascii'))['cues']
-        scene.audio = AudioEngine(playback=TimedPlayback({int(k): v for k, v in cues.items()}))
+        manifest = json.loads((ASSET_DIR / 'audio/manifest.json').read_text(encoding='ascii'))
+        cues = {int(k): v for k, v in manifest['cues'].items()}
+        scene.audio = AudioEngine(playback=TimedPlayback({**cues, **manifest.get('scene_cues', {})}))
         scene.load_level(3)
         scene.jump_to_room(29, row=0, x=455, facing=1)
         record = scene.frames[scene.sequence_state.action]
@@ -133,8 +134,10 @@ class ImportedCavernExitTests(unittest.TestCase):
         self.assertEqual(scene.sequence_state.facing, 0)
         self.assertTrue(scene._combat_controls_locked())
         RooftopSceneTests.tick(self, 35)
+        # The native completion waits for end song 32 before entering NIS 10.
         self.assertTrue(scene.level_complete)
-        self.assertIsNone(scene.game.exit)
+        self.assertEqual(scene.game.exit.song, 32)
+        self.assertIsNone(scene.intro)
         self.assertEqual(scene.game.level.number, 3)
         scene.restart_level()
         self.assertFalse(scene.level_complete)

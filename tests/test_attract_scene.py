@@ -187,9 +187,13 @@ class AttractSceneTests(unittest.TestCase):
         scene = self.scene
         live = scene.combat
         parts = scene.development_parts()
-        self.assertEqual({part.stage for part in parts}, {"intro", "demo", "credits", "ending", "level"})
+        self.assertEqual({part.stage for part in parts},
+                         {"intro", "demo", "credits", "ending", "discovery", "level"})
         for part in parts:
             with self.subTest(part=part.label), patch.object(scene, "render"):
+                # After each arrival, cinematics retain that level's live bank;
+                # leaving a demo restores its saved live bank instead.
+                expected_live = scene.live_combat if scene.live_combat is not None else scene.combat
                 scene.seek_playback_part(part)
                 if part.stage == "level":
                     self.assertIsNone(scene.attract_stage)
@@ -201,7 +205,7 @@ class AttractSceneTests(unittest.TestCase):
                     self.assertIsNot(scene.combat, live)
                 else:
                     self.assertEqual(scene.attract_stage, part.stage)
-                    self.assertIs(scene.combat, live)
+                    self.assertIs(scene.combat, expected_live)
                 self.assertEqual(parts[scene.current_playback_part()], part)
                 self.assertFalse(scene.held_directions)
         scene.finish_intro()
@@ -232,7 +236,7 @@ class AttractSceneTests(unittest.TestCase):
         groups = scene.dev_menu.groups
         scene.close_dev_mode()
         self.assertEqual([group.label for group in groups],
-                         ['Opening', 'After Level 1'])
+                         ['Opening', 'After Level 1', 'After Level 3'])
         for group_index, group in enumerate(groups):
             with self.subTest(sequence=group.label):
                 scene.open_dev_mode()
@@ -256,22 +260,23 @@ class AttractSceneTests(unittest.TestCase):
                 scene.close_dev_mode()
 
     def test_seeking_does_not_briefly_play_the_destination_stages_initial_cues(self):
-        from pop2.audio import AudioEngine
+        from pop2.audio import AudioEngine, scene_sound_key
 
         scene = self.scene
         playback = Mock()
         playback.busy.return_value = False
         scene.audio = AudioEngine(playback=playback)
         parts = scene.development_parts()
-        for stage in ("intro", "demo", "credits", "ending"):
+        for stage in ("intro", "demo", "credits", "ending", "discovery"):
             part = [part for part in parts if part.stage == stage][-1]
             playback.play.reset_mock()
             with self.subTest(stage=stage), patch.object(scene, "render"):
                 scene.seek_playback_part(part)
                 calls = playback.play.call_args_list
                 self.assertNotIn(("effect", 36), [call.args for call in calls])
-                if stage in ("intro", "ending"):
-                    active = [cue for cue, start, duration in scene.intro.playing.values()
+                if stage in ("intro", "ending", "discovery"):
+                    active = [scene_sound_key(cue, kind) if scene_sound_key(cue, kind) in scene.audio.scene_cues
+                              else cue for kind, (cue, start, duration) in scene.intro.playing.items()
                               if scene.intro.time - start < duration]
                     self.assertEqual([call.args[1] for call in calls], active)
                 else:

@@ -31,6 +31,11 @@ class AssetImportTests(unittest.TestCase):
         self.ending.side_effect = lambda _image, _program, _nis, directory, _progress: (
             directory / "ending.json").write_bytes(b"prepared voyage")
         self.addCleanup(ending.stop)
+        discovery = patch.object(extract_assets, 'extract_discovery')
+        self.discovery = discovery.start()
+        self.discovery.side_effect = lambda _image, _program, _nis, directory, _progress: (
+            directory / 'discovery.json').write_bytes(b'prepared discovery')
+        self.addCleanup(discovery.stop)
         caverns = patch.object(extract_assets, "extract_caverns")
         self.caverns = caverns.start()
         self.caverns.side_effect = lambda _program, _caverns, _prince, directory, _progress, level_number: (
@@ -61,7 +66,8 @@ class AssetImportTests(unittest.TestCase):
         ):
             files = extract_assets.extract_assets(self.image, self.output)
         self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json",
-                                     "ending.json", "attract.json", "caverns_entry.json", "caverns_level4.json"})
+                                     "ending.json", "discovery.json", "attract.json",
+                                     "caverns_entry.json", "caverns_level4.json"})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
         for name in extract_assets.RESOURCE_FILES:
             self.assertEqual((self.output / name).read_bytes(), self.forks[name])
@@ -224,6 +230,19 @@ class AssetImportTests(unittest.TestCase):
         ):
             extract_assets.extract_assets(self.image, self.output)
         self.assertEqual(old.read_bytes(), b"existing game")
+        self.assertEqual(list(self.output.iterdir()), [old])
+
+    def test_discovery_failure_preserves_existing_installation(self):
+        self.output.mkdir()
+        old = self.output / 'Prince.rsrc'
+        old.write_bytes(b'existing game')
+        self.discovery.side_effect = ValueError('Unsupported scene animation callback or flags')
+        with (patch.object(extract_assets, 'get_resource_fork', side_effect=self.fork),
+              patch.object(extract_assets, 'parse_resource_fork', side_effect=self.resource_types),
+              patch.object(extract_assets, 'extract_bytes', return_value=self.profiles),
+              self.assertRaisesRegex(ValueError, 'Unsupported scene animation')):
+            extract_assets.extract_assets(self.image, self.output)
+        self.assertEqual(old.read_bytes(), b'existing game')
         self.assertEqual(list(self.output.iterdir()), [old])
 
 
