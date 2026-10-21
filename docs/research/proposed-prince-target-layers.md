@@ -51,7 +51,8 @@ ready for review. It is not yet integrated into `main`.
 
 **Limits:**
 - The animation mode is used as the native mode in the SwordCtrl gate. The
-  sequence-27/110 exclusion is not modelled.
+  sequence-27/110 exclusion is not modelled. For the ordinary Prince, it
+  is not reachable with the sword drawn (`animchar-op18-selected-sequence.md`).
 - The voluntary sword turn and the `a5-0x5010` flag are not implemented.
 - Side-room, skeleton and special-actor targets keep their previous inputs
   through the same rules.
