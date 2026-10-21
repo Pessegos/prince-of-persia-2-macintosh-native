@@ -2801,6 +2801,11 @@ class ScenePrototype(WindowControls):
                             and not any(audio.sound_playing(cue) for cue in (61, 68, 69))):
                         audio.add_song(63)
                         skeleton.victory_pending = False
+                    if skeleton is not None and skeleton.rise_song_pending:
+                        # SkelDoneShaking 4:1b1c-1b30: AddSong(112) unless playing.
+                        if not audio.song_playing(112):
+                            audio.add_song(112)
+                        skeleton.rise_song_pending = False
             audio.ambient(self.room_id, motion.row, max(0, min(9, int(contact // 51))),
                           fighting, self.combat.player.alive)
         elif motion is not None and self.game.level.number == 2:

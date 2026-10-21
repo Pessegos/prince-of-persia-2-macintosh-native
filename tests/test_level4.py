@@ -197,3 +197,55 @@ class LevelFourHostTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LevelFourExitGuardedSkeletonTests(unittest.TestCase):
+    """4:17aa / SkelDoneShaking 4:1ae0-1b34 for rooms 22 and 24-28."""
+
+    def setUp(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        self.scene.load_level(4)
+        self.tick(16)
+
+    def tick(self, count=1):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.tick(self, count)
+
+    def open_exit(self):
+        door = self.scene.level_map.tile(21, 4, 2)
+        self.assertEqual(door.kind, 17)
+        self.scene.game.caverns.plates.foreground[21, 24] = (door.foreground & 0xff00) | 79
+
+    def visit(self, room, x, count=40):
+        scene = self.scene
+        scene.jump_to_room(room, 2, x, 1)
+        guards = [guard for guard in scene.combat.active_guards() if guard.room == room]
+        self.tick(count)
+        return guards
+
+    def test_closed_exit_keeps_the_bones_shaking_even_beside_the_prince(self):
+        for room in (25, 27):
+            with self.subTest(room=room + 1):
+                guards = self.visit(room, 100 if room == 27 else 60)
+                self.assertEqual({guard.skeleton.phase for guard in guards}, {'dormant'})
+                self.assertFalse(any(guard.alive for guard in guards))
+
+    def test_open_exit_raises_bones_only_when_the_prince_is_to_their_left(self):
+        self.open_exit()
+        right = self.visit(25, 300)
+        self.assertEqual(right[0].skeleton.phase, 'dormant')
+        left = self.visit(25, 60)
+        self.assertIn(left[0].skeleton.phase, ('rising', 'active'))
+        self.assertTrue(left[0].alive)
+
+    def test_rooms_outside_the_exit_group_keep_the_ordinary_wake(self):
+        from pop2.skeleton import exit_guarded
+
+        combat = self.scene.combat
+        for room, guards in ((room, guards) for room, (guards, _points)
+                             in combat.room_encounters.items() if guards):
+            for guard in guards:
+                self.assertEqual(exit_guarded(combat, guard), room in (21, 23, 24, 25, 26, 27))

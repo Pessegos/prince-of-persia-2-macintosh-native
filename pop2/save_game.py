@@ -159,7 +159,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     if cls.__name__ == 'Fighter':
         optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive'))
     if cls is Skeleton:
-        optional.update(('room_record', 'native_alive'))
+        optional.update(('room_record', 'native_alive', 'rise_song_pending'))
     if cls is SkeletonRoomRecord:
         optional.add('cell')
     if (not isinstance(record, dict) or set(record) - allowed

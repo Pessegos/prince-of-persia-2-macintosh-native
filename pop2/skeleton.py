@@ -1,10 +1,27 @@
 """Level-three skeleton activation and collapse, CODE:4 14c6-1b86."""
 
 from dataclasses import dataclass
+import struct
 
 from pop2.opponent_generation import EMPTY_TILES, WALL_TILES, OBSTACLE_TILES
 from pop2.terrain import floor_y, stone_gate_blocks
 from pop2.sequence_runtime import SequenceState
+
+
+# 4:17aa: level-four rooms 22 and 24-28 (zero-based 21, 23-27) wait for the
+# level exit. SkelDoneShaking 4:1ae0-1b34 then reads room 22 cell 24
+# (ReadCell 4:27ee) and rises only once that door is fully open (>= 79,
+# 5:168e), with the Prince in the room to the skeleton's left.
+EXIT_GUARDED_ROOMS = frozenset((21, 23, 24, 25, 26, 27))
+EXIT_DOOR = 21, 4, 2
+EXIT_OPEN = 0x4f
+RISE_SONG = 112
+
+
+def exit_guarded(encounter, actor):
+    level = getattr(encounter, 'level', None)
+    return (level is not None and struct.unpack_from('>H', level, 0x218a)[0] == 4
+            and actor.room in EXIT_GUARDED_ROOMS)
 
 
 @dataclass
@@ -23,6 +40,7 @@ class Skeleton:
     shakes: int
     phase: str = 'dormant'
     victory_pending: bool = False
+    rise_song_pending: bool = False
     room_record: SkeletonRoomRecord | None = None
     native_alive: bool = False
 
@@ -108,7 +126,10 @@ class Skeleton:
 
     def can_wake(self, encounter, actor):
         player = encounter.player
-        if (self.marker == -1 or self.timer or actor.alive or self.native_alive or not player.alive
+        # 4:13ee-1400: a running shake timer only defers the exit-guarded rooms'
+        # check to SkelDoneShaking; elsewhere it blocks proximity.
+        timer_blocks = self.timer and not exit_guarded(encounter, actor)
+        if (self.marker == -1 or timer_blocks or actor.alive or self.native_alive or not player.alive
                 or player.state.actor_type != 0 or actor.state.special_flag == 5
                 or player.state.animation_state in (3, 4, 5)
                 or actor.room != player.room or actor.row != player.row):
@@ -159,6 +180,8 @@ class Skeleton:
         # AnimChar. Even an unfinished shake can react once its timer is zero.
         if self.phase not in ('dormant', 'collapsing') or not self.can_wake(encounter, actor):
             return False
+        if exit_guarded(encounter, actor):
+            return self.exit_guarded_wake(encounter, actor)
         if self.shakes:
             self.shakes -= 1
             self.timer = 15 + encounter.rng.randrange(31)
@@ -166,20 +189,47 @@ class Skeleton:
                 select_sequence(actor, 112)
             actor.runtime.next_frame()
         else:
-            select_sequence(actor, 88)
+            self.rise(encounter, actor)
+        return True
+
+    def exit_guarded_wake(self, encounter, actor):
+        from pop2.combat import select_sequence
+
+        terrain = getattr(encounter, 'terrain', None)
+        door = terrain.tile(*EXIT_DOOR) if terrain is not None else None
+        player = encounter.player
+        if (door is not None and door.kind == 17 and door.foreground & 255 >= EXIT_OPEN
+                and player.room == actor.room
+                and player.state.target_x < actor.state.target_x):
+            self.rise_song_pending = True
+            return self.rise(encounter, actor)
+        timer = self.timer
+        # 4:1b36-1b4c then 1b62-1b78: a finished shake waits Rnd(30)+15 again;
+        # 4:15c2-15d6 starts a new shake when the timer was already zero.
+        if not timer and actor.state.source_sequence_id == 112:
+            self.timer = 15 + encounter.rng.randrange(31)
+        if not timer and actor.state.source_sequence_id != 112:
+            select_sequence(actor, 112)
             actor.runtime.next_frame()
-            self.phase = 'rising'
-            self.victory_pending = False
-            actor.life = actor.max_life
-            self.native_alive = True
-            actor.sword_drawn = True
-            actor.targetable = True
-            actor.death_registered = False
-            actor.alert_mode = 3
-            encounter.player.state.callback_flag = 0
-            encounter.attack_pause = 0
-            if actor.terrain_motion is not None:
-                actor.terrain_motion.dead = False
+        return True
+
+    def rise(self, encounter, actor):
+        from pop2.combat import select_sequence
+
+        select_sequence(actor, 88)
+        actor.runtime.next_frame()
+        self.phase = 'rising'
+        self.victory_pending = False
+        actor.life = actor.max_life
+        self.native_alive = True
+        actor.sword_drawn = True
+        actor.targetable = True
+        actor.death_registered = False
+        actor.alert_mode = 3
+        encounter.player.state.callback_flag = 0
+        encounter.attack_pause = 0
+        if actor.terrain_motion is not None:
+            actor.terrain_motion.dead = False
         return True
 
     def after_frame(self, actor):
