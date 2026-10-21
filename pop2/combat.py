@@ -836,8 +836,13 @@ class CombatEncounter:
                 or self.player.state.actor_type == 1):
             guard.alert_mode = 0
             return
-        low, high = sorted((self._supporting_column(guard), self._supporting_column(self.player)))
-        # CODE:2 0x6fce skips the scan for actors in the same column.
+        guard_column = self._supporting_column(guard)
+        player_column = self._supporting_column(self.player)
+        low, high = sorted((guard_column, player_column))
+        # CODE:2 0x6fc2-6fce excludes a gate at the right endpoint, then
+        # skips the scan entirely if its endpoints meet.
+        if low < high and self._guard_tile(guard, high).kind == 4:
+            high -= 1
         terrain = ([self._guard_tile(guard, col)
                     for col in range(low, high + 1)] if low < high else [])
         guard.alert_mode = 3
@@ -847,6 +852,11 @@ class CombatEncounter:
                 break
             if (tile.kind in EMPTY_TILES or tile.kind in OBSTACLE_TILES
                     or tile.kind == 4 and tile.foreground & 255 < 104):
+                # 2:7084-709c uses GetBlock's normalized column. Cavern
+                # tile 24 is not between actors both at or to its right.
+                if (self.level_kind == 3 and tile.kind == 24
+                        and player_column >= tile.column and guard_column >= tile.column):
+                    continue
                 guard.alert_mode = 1
                 break
         if guard.alert_mode == 3 and not any(g is guard for g in primary):

@@ -283,7 +283,9 @@ the authority for these corrections.
   7/8/10 exceptions without implementing those actors' controllers.
 - Alert acquisition (`2:7026-7038`) downgrades engagement to mode 1 across
   a gate below the same 104 threshold; it no longer ignores closed gates.
-  It uses the current LevelMap, including removed loose floors, rather than
+  This threshold applies to gates inside the scanned interval; the right
+  endpoint exclusion is documented below. It uses the current LevelMap,
+  including removed loose floors, rather than
   looking only at the immutable LEVL tile IDs. The existing first-obstruction
   scan order, wall mode 0 and clear-path nearest/waiting modes are retained.
 - WaitingEngarde (`4:0e94-0f0e`) has a branch for an NPC that is itself the
@@ -311,6 +313,40 @@ terrain and player-control tests remain the regression scope. This audit
 does not certify untranslated special actors, bridge rules or the complete
 room-bank lifecycle. The following audit extends ordinary selection and
 unarmed control for the playable rooftop/cavern levels.
+
+### Alert Scan Endpoints
+
+CODE:2 `6fc2-6fce` queries the larger supporting column before scanning.
+If that cell is a gate (tile 4), the upper endpoint moves one column left,
+regardless of gate opening or which actor is on the right. Equal endpoints
+then skip the scan altogether, including when that equality results from
+the gate adjustment. Interior and left-endpoint gates retain the original
+low-byte 104 threshold; no physical collision rule changes.
+
+In cavern environments only, `7084-709c` also permits obstacle tile 24 when
+both cached supporting columns are at or to the right of GetBlock's returned,
+room-normalized column. An interior tile 24 is still an obstruction. This
+exception does not alter IsObstacle or IsAdvancableId for other callers.
+Scanning still stops at the first obstruction from left to right, and a
+non-primary enemy still receives waiting mode 2 after a clear scan.
+
+`tests/test_enemy_alerts.py` exercises both actor orders, guards and skeletons,
+gate openings/flag bits, adjacent/equal endpoints, every tile at a shared
+column, cavern-only behavior, first-obstruction ordering, live terrain,
+waiting selection, linked-room normalization and existing actor exclusions.
+It needs no original assets and is included in CI. Applying these tests to
+the previous alert method produces 18 assertion failures and no test errors.
+
+Direct execution of the original alert loop, GetBlock and tile classifiers
+found 24 mismatches in a 19,200-case baseline matrix and none after these
+corrections. It varies four environments, 50 tile kinds, four modifiers,
+both actor orders and a same-column placement for a type-4 enemy. Another
+480 comparisons cover ordinary guards and skeletons, adjacent endpoints,
+linked-room normalized cells and modifier flag bits. Actor load/save and
+nearest-candidate selection are supplied endpoints: these comparisons do
+not establish full bank scheduling, supporting-foot derivation or special
+actor parity. Local probe: `rendered/alert_native_probe_v1.py` (also accepts
+`--boundaries`); original resources and Unicorn are research-only inputs.
 
 ## Playable-Level Transition Audit
 
