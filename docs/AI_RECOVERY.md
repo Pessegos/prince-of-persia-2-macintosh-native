@@ -713,9 +713,10 @@ The additional ordinary first-rooftop controller paths are:
   217-225/death disable engagement. The first room and its left neighbor
   have unobstructed floor along the entry path; special gate/modifier and
   non-rooftop terrain exceptions are not implemented by this subset.
-- Main CODE:2 `0x6300`-`0x633c`: retain an opposing-facing living target;
-  otherwise select the closest living ordinary same-floor target. Death
-  changes the active target without deleting the old NPC record.
+- Main CODE:2 `0x6300`-`0x633c`: retain an opposing-facing frame target,
+  including one with zero HP. SwordCtrl validates its persistent target
+  separately using HP. See Native Target Cache And Turn Decision Audit below
+  for the recovered distinction and remaining integration gaps.
 - AutoCtrl CODE:4 `0x057c`: startup poses finish; odd running poses test
   native distance/spacing before braking with `101`. Same-facing moving
   targets change the distance by +51; opposite-facing ones by -51. The
@@ -1145,6 +1146,70 @@ the combat target and prevented the Prince from turning after the first hit.
 The opening regression checks three stabs through death for fixed guard seeds,
 without input. Different attack timings can put the supporting foot outside
 the roof sooner; neither health nor the hit count overrides floor contact.
+
+## Native Target Cache And Turn Decision Audit
+
+Research on baseline `d96184b` distinguishes the temporary Main opponent from
+the Prince's persistent target field. These are recovered reference rules;
+the port still uses one shared target. No gameplay change accompanies this
+audit.
+
+- Main `2:62f8-6340` selects a temporary opponent by facing. This path does
+  not write the cached target or validate HP/count before retaining it.
+- GenCtrl `6:0560-05e6` reaches SwordCtrl when the working actor has negative
+  native ALIVE, the mode is outside 4/5/9, the sequence word is outside 27/110 and
+  the sword state is 1. Prince-specific selection requires character ID 10.
+- SwordCtrl `6:2174-21fa` retains a non-sentinel cached index below the room
+  count when the bank record has positive HP. It does not test that target's
+  facing or native ALIVE. Otherwise it calls GetOppIdxClosestToKid(1), which
+  selects using native ALIVE independently of HP.
+- A found replacement is written to the cache. If no candidate is found,
+  the effective opponent is slot zero and the old cache remains unchanged.
+  An effective fallback and a persistent replacement are distinct results.
+- Selection also runs in modes 2/3, before the later ordinary-control gate.
+
+The local `rendered/sword_target_cache_native_probe_v1.py` enters original
+GenCtrl and stops at `6:21fe`, before loading Opp. It checks 10,662 positive
+fixtures against the cache rule and 1,254 negative dispatch exits, with zero
+harness failures. In the 720 positive-HP same-facing-cache cases where the selector
+chooses another candidate, native SwordCtrl keeps the cache and the current
+port reselects. All 2,357 cached-HP-zero cases agree on the effective target;
+the existing corpse-target HP safeguard remains required. Supplied side-room
+projection is not independent evidence of projection correctness.
+
+A separate local `rendered/sword_turn_trace_native_probe_v1.py` carries the
+actual selection through LoadShadAsOpp `6:2200` and the later SwordCtrl gates.
+It uses 24 resident fixtures in both facing directions. Eight decisions
+differ: a cached ordinary guard A is 60 pixels behind with the Prince's
+facing and alert 2, while B is 40 pixels ahead, opposing and nearer. With
+`a5-0x5010 = 1` supplied, the original keeps A and reaches the Prince turn
+routine at `6:26b8`; the port chooses B and does not request a turn. The
+covered arrangements are mode 0 on rows 0/1/2 and mode 1 on row 1, in both
+facings. They are not a complete mode/row cross-product.
+
+The native `6:22a6-22aa` gate bypasses that automatic turn when `a5-0x5010`
+is zero. Static inspection locates a write of 1 at `2:5e5c` in the Prince
+setup called from RestartGame, and a toggle at `6:2344-2350` in the voluntary
+sword-turn input branch. The static A5 image starts at zero. Those writers
+were not executed by the trace, and the complete input/restart lifecycle is
+not established by these supplied states. The matching non-turn controls
+do not certify parity of all damage/input gates: the isolated port call does
+not model every supplied native field.
+
+Both probes were reviewed and rerun with separate reports. Each rerun was
+byte-identical to its submitted report. Their address allow-lists exclude
+inherited graphics/audio stubs; reached A5 jump-table calls are supplied
+dispatches to original instructions. This is reproducibility of the local
+harness, not a second independent emulator. Scripts/reports require private
+local original data and are not bundled in the public checkout.
+
+Remaining work: prove ordinary gameplay reachability of the cached-target
+and turn-flag state; execute the `6:26b8` floor checks, position adjustment
+and JumpSeq(127); then test combined frame/cache persistence and any proposed
+port change. Reaching the routine proves a control decision, not a completed
+visible turn. Special actors, skeletons, global cadence and full scheduling
+remain outside this audit. Preserve the zero-HP/death-registration regression
+when implementing the separate target layers.
 
 ## Player Parry Recoil
 
