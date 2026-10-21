@@ -732,6 +732,11 @@ class ScenePrototype(WindowControls):
             if facing_for_direction(direction) == self.sequence_state.facing
             else "sword_retreat"
         )
+        if kind == "sword_retreat" and self.shift_held:
+            # SwordCtrl 6:22f2-2312: fresh Backward with Shift requests the
+            # voluntary turn; DoRetreat requires a zero modifier (6:256e).
+            self.voluntary_turn_requested = True
+            return False
         return self.queue_sword_action(kind)
 
     def resume_sword_controls(self):
@@ -1680,6 +1685,7 @@ class ScenePrototype(WindowControls):
             self.escape_held = self.dev_toggle_held = False
         self.held_directions.clear()
         self.shift_turn_direction = 0
+        self.voluntary_turn_requested = False
         self.step_warning_direction = 0
         self.horizontal_input = 0
         self.up_held = False
@@ -2646,10 +2652,19 @@ class ScenePrototype(WindowControls):
         combat.player.targetable = not self._opening_active()
         record = (self.frames[self.sequence_state.action]
                   if getattr(self, "level_map", None) is not None else None)
-        if combat.choose_player_turn(record, self.player_bounds() if record is not None else None):
+        if not self.sword_drawn:
+            self.voluntary_turn_requested = False
+        bounds = self.player_bounds() if record is not None else None
+        turned = combat.choose_player_turn(record, bounds)
+        if turned:
             self.status.set("Turning toward opponent")
+        # SwordCtrl reaches the voluntary branch after its automatic part.
+        if (getattr(self, "voluntary_turn_requested", False)
+                and combat.choose_voluntary_turn(record, bounds)):
+            self.voluntary_turn_requested = False
+            self.status.set("Turning with sword")
             return True
-        return False
+        return turned
 
     def advance_combat(self, old_x=None):
         combat = getattr(self, "combat", None)

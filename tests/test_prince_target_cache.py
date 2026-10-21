@@ -126,6 +126,40 @@ class PrinceTargetCacheTests(unittest.TestCase):
         c.resolve_contacts()
         self.assertIs(c.guard, cached)
 
+    def test_voluntary_turn_targets_the_nearest_guard_on_the_new_side(self):
+        # SwordCtrl 6:2332-2362: DoTurn, then GetOppIdxClosestToKid(~facing).
+        for facing in (1, 0):
+            c, rear, front = self.d1(facing)
+            c.guard = front
+            self.assertTrue(c.choose_voluntary_turn())
+            self.assertEqual(c.player.state.sequence_id, PLAYER_COMBAT_TURN_SEQUENCE)
+            self.assertIs(c.target_cache, rear, facing)
+
+    def test_voluntary_turn_without_a_guard_behind_clears_the_target(self):
+        c, rear, front = self.d1(1)
+        c.guards.remove(rear)
+        c.guard = front
+        self.assertTrue(c.choose_voluntary_turn())
+        self.assertIsNone(c.target_cache)
+
+    def test_voluntary_turn_needs_a_drawn_sword_and_a_ready_mode(self):
+        c, _rear, _front = self.d1(1)
+        c.player.state.animation_state = 2
+        self.assertFalse(c.choose_voluntary_turn())
+        c.player.state.animation_state = 1
+        c.player.sword_drawn = False
+        self.assertFalse(c.choose_voluntary_turn())
+
+    def test_automatic_turn_stays_enabled_after_voluntary_turns(self):
+        # Port exception: the native toggle of a5-0x5010 (6:2344) is omitted.
+        c, rear, _front = self.d1(1)
+        for _ in range(2):
+            c.choose_voluntary_turn()
+        c.player.state.facing = 1
+        c.player.state.animation_state = 1
+        c.guard = rear
+        self.assertTrue(c.choose_player_turn())
+
     def test_cached_corpse_is_released_after_registration_even_when_unarmed(self):
         # GenCtrl 6:0762-077c reselects once the death is registered.
         c, _rear, front = self.d1(1)

@@ -725,6 +725,28 @@ class CombatEncounter:
         select_sequence(player, PLAYER_COMBAT_TURN_SEQUENCE, offset=offset)
         return True
 
+    def choose_voluntary_turn(self, frame_record=None, bounds=None):
+        # SwordCtrl 6:22f2-2366: fresh Backward with Shift turns through the
+        # same DoTurn (6:2638 -> 26b8) and stores the nearest native-ALIVE
+        # candidate on the new side (6:2354-2362), or none. Port exception:
+        # the toggle of the automatic-turn flag a5-0x5010 (6:2344) is not
+        # reproduced; the automatic turn stays enabled.
+        player = self.player
+        state = player.state
+        if (not player.alive or not player.sword_drawn or not player.targetable
+                or state.animation_state >= 2):
+            return False
+        terrain = getattr(self, "terrain", None)
+        offset = (terrain.combat_turn_offset(player.room, player.row, state, frame_record, bounds)
+                  if terrain is not None and frame_record is not None else 0)
+        select_sequence(player, PLAYER_COMBAT_TURN_SEQUENCE, offset=offset)
+        target = self._nearest_guard(-1 if state.facing else 1)
+        if target is not None:
+            self.guard = target
+        else:
+            self.target_cache = None
+        return True
+
     def choose_player_bump(self, old_x=None):
         # FrameAdv 2:6c64-6daa interrupts unarmed overlap with an engaged,
         # opposing, grounded ordinary NPC. Running jumps reserve 63 pixels.

@@ -1,6 +1,21 @@
 # Voluntary Sword Turn (Back + Shift)
 
-Research note, 2026-10-21, `claude/ai-research`. No runtime code changed.
+Research note, 2026-10-21, `claude/ai-research`.
+
+**Implemented with a user-chosen port exception (`claude/ai-research`).**
+- Shift + fresh Back with the sword turns through the same DoTurn and
+  `combat_turn_offset`. It stores the nearest native-ALIVE guard on the new
+  side, or none.
+- Shift + Back no longer retreats. Back without Shift still does.
+- **Intentional exception:** the a5-0x5010 toggle is not reproduced, so the
+  automatic turn always stays enabled. The user preferred this to the
+  original behaviour, in which every voluntary turn switches the automatic
+  turn on or off.
+- Code: `CombatEncounter.choose_voluntary_turn`; in `scene_prototype.py`,
+  `queue_sword_step` and `resume_combat_turn`.
+- **Not modelled:** the level-5 room-10 exception, which depends on
+  a5-0x3130; the meter-delta gate (inert in ordinary frames); and peaceful
+  development mode, where `resume_combat_turn` returns early.
 It continues `prince-turn-flag-and-rear-target.md`, which located the toggle
 branch, and specifies the missing port feature.
 

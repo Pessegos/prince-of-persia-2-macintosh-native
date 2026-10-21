@@ -1170,6 +1170,31 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertEqual(scene.player_x, before + 6)
         self.assertFalse(scene.terrain_motion.falling)
 
+    def test_shift_back_with_sword_turns_instead_of_retreating(self):
+        # SwordCtrl 6:22f2-2366: Shift + fresh Backward turns (SEQS:127);
+        # DoRetreat needs a zero modifier. Without Shift it still retreats.
+        from pop2.combat import PLAYER_COMBAT_TURN_SEQUENCE
+
+        for shift, expected in ((True, PLAYER_COMBAT_TURN_SEQUENCE), (False, 160)):
+            with self.subTest(shift=shift):
+                scene = self.scene
+                self.place(scene.level_map.start_room, 1, 250, facing=0)
+                scene.sword_drawn = scene.combat.player.sword_drawn = True
+                scene.sequence_state.sequence_id, scene.sequence_state.cursor = 227, 0
+                scene.sequence_runtime.next_frame()
+                scene.set_key_state("shift", shift)
+                scene.horizontal_key(None, 1, True)
+                seen = set()
+                for _ in range(4):
+                    self.tick()
+                    seen.add(scene.sequence_state.source_sequence_id)
+                    seen.add(scene.sequence_state.action)
+                self.assertIn(expected, seen)
+                if shift:
+                    self.assertNotIn(160, seen)
+                scene.horizontal_key(None, 1, False)
+                scene.set_key_state("shift", False)
+
     def test_sword_retreat_fall_can_catch_initial_roof_with_shift(self):
         scene = self.scene
         scene.peaceful = True
