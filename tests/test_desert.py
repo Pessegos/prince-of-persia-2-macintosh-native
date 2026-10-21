@@ -630,9 +630,26 @@ class OriginalDesertTests(unittest.TestCase):
         scene.horizontal_key(None, 1, True)
         scene.set_key_state('ctrl', True)
         RooftopSceneTests.tick(self, 26)
-        self.assertEqual(scene.sequence_state.source_sequence_id, 27)
+        # SEQS:27 ends -18, -21 7, 185: AnimChar 4:2d7e clears the selected
+        # ID, and +0x34 = 7 makes ClipChar skip the sunk Prince (4:4724).
+        state = scene.sequence_state
+        self.assertEqual((state.sequence_id, state.source_sequence_id, state.action,
+                          state.sequence_mode), (27, 0, 185, 7))
         self.assertTrue(scene.terrain_motion.dead)
         self.assertEqual(scene.death.method, 8)
+
+    def test_non_viewable_sequence_mode_hides_the_actor_layer(self):
+        from dataclasses import replace
+        from PIL import Image
+
+        frame = Image.new('RGBA', (64, 64), (10, 20, 30, 255))
+        state = replace(self.scene.sequence_state, sequence_mode=0, level_kind=2)
+        for mode, hidden in ((0, False), (7, True), (11, False)):
+            with self.subTest(mode=mode):
+                layer = Image.new('RGBA', (64, 64), (255, 0, 0, 255))
+                state.sequence_mode = mode
+                result = self.scene.composite_actor(frame, layer, state=state)
+                self.assertEqual(result.getpixel((5, 5)) == frame.getpixel((5, 5)), hidden)
 
     def test_live_stone_phase_drives_the_native_two_phase_support_threshold(self):
         from tests.test_terrain import RooftopSceneTests

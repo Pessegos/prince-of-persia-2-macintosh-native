@@ -3341,6 +3341,10 @@ class ScenePrototype(WindowControls):
         return self.sword_sprite_cache[shape_id], dx, dy
 
     def composite_actor(self, frame, layer, row=None, bottom=None, state=None, bounds=None, record=None):
+        # ClipChar 4:4152 skips an actor that IsCharNonViewable (4:4724)
+        # marks by +0x34, e.g. the Prince after SEQS:27 sinks him (-21 7).
+        if getattr(state, 'sequence_mode', 0) in (4, 5, 6, 7, 10, 12):
+            return frame
         # An upper roof's foreground must not erase a lower-row fall.
         rooms = getattr(self, "room_cache", {})
         room = rooms.get(getattr(self, "room_id", None))
