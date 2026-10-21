@@ -24,6 +24,8 @@ REQUIRED_ASSETS = (
     "intro.json",
     "ending.json",
     "discovery.json",
+    *(f"tree-{variant}.json" for variant in range(1, 10)),
+    "NISTree.rsrc",
     "attract.json",
     "enemy_profiles.json",
     "audio/manifest.json",
@@ -85,7 +87,8 @@ def missing_assets(project=PROJECT):
                 missing.append("audio/manifest.json (needs cavern ambience and death music)")
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append("audio/manifest.json (needs reimport)")
-    for name in ("intro.json", "ending.json", "discovery.json"):
+    for name in ("intro.json", "ending.json", "discovery.json",
+                 *(f"tree-{variant}.json" for variant in range(1, 10))):
         scene_path = project / "assets" / name
         if scene_path.is_file():
             from pop2.intro import read_program

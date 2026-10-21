@@ -128,6 +128,11 @@ class IntroAssets:
         directory = Path(directory)
         self.program = read_program(directory / program_name)
         resources = parse_resource_fork((directory / "NIS.rsrc").read_bytes())
+        tree = directory / "NISTree.rsrc"
+        if tree.is_file():
+            # Tree scenes overlay their SHAP/CTBL on NIS; TEXT 26000 stays there.
+            for kind, items in parse_resource_fork(tree.read_bytes()).items():
+                resources.setdefault(kind, {}).update(items)
         self.shapes = {key: indexed_shape(value["data"]) for key, value in resources["SHAP"].items()}
         self.palettes = {key: palette_colors(value["data"]) for key, value in resources["CTBL"].items()}
         self.strings = {key: text_strings(value["data"]) for key, value in resources["TEXT"].items()}

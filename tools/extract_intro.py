@@ -65,17 +65,22 @@ def extract_dissolve(image):
     return None
 
 
-def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8)):
+def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_words=None,
+                   callbacks=None):
+    """Run CODE 15 coordinators. ``arguments`` are the Pascal word arguments
+    after the return address, ``a5_words`` preset A5-relative globals and
+    ``callbacks`` maps an A5 jump-table offset to an animation callback name."""
     from unicorn import Uc, UcError, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE
     from unicorn.m68k_const import (
         UC_M68K_REG_A5, UC_M68K_REG_A7, UC_M68K_REG_PC, UC_M68K_REG_D0,
-        UC_CPU_M68K_M68000,
+        UC_M68K_REG_D1, UC_CPU_M68K_M68000,
     )
 
     resources = parse_resource_fork(program)
     code = resources["CODE"][15]["data"]
     data = expand_a5_data(resources)
-    shapes = parse_resource_fork(nis)["SHAP"]
+    shapes = (nis if isinstance(nis, dict) else parse_resource_fork(nis))["SHAP"]
+    callbacks = callbacks or {}
     scenes = []
     for entry in entries:
         if code[entry:entry + 2] != b"\x4e\x56":
@@ -91,6 +96,10 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8)):
         cpu.mem_write(a5 - len(data), data)
         cpu.mem_write(a5 - 0x521e, b"\1")
         cpu.mem_write(stack, struct.pack(">I", end))
+        for index, value in enumerate(arguments):
+            cpu.mem_write(stack + 4 + index * 2, struct.pack(">h", value))
+        for offset, value in (a5_words or {}).items():
+            cpu.mem_write(a5 - offset, struct.pack(">h", value))
         cpu.reg_write(UC_M68K_REG_A5, a5)
         cpu.reg_write(UC_M68K_REG_A7, stack)
         pointers, handles, palettes = {}, {}, {0x900000 + 25001 * 8: 25001}
@@ -211,16 +220,28 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8)):
                 elif target == 0x100a:
                     emit("wait_sound", w(), w(2))
                 elif target == 0xf5a:
-                    if l(6) or w(16) != 6 or w(18):
+                    callback = callbacks.get(l(6) - a5) if l(6) else None
+                    if (l(6) and callback is None) or w(16) != 6 or w(18):
                         raise ValueError("Unsupported scene animation callback or flags")
-                    emit("animation", w(), w(2), w(20), w(22))
+                    emit("animation", w(), w(2), w(20), w(22), *([callback] if callback else []))
                 elif target in (0x1332, 0x133a):
                     emit("fade", palettes.get(l(), 0), target == 0x1332, l(8))
                 elif target == 0xfc2:
                     emit("stop", w())
                 elif target == 0xfb2:
                     emit("stop", 1)
-                elif target not in (0xf8a, 0xfea, 0x1012, 0x11fa, 0x1202):
+                elif target == 0x13d2:
+                    # Runtime signed long division 19:4bb0: d0 / d1 -> d0.
+                    signed = lambda value: value - (1 << 32) if value & (1 << 31) else value
+                    dividend = signed(cpu.reg_read(UC_M68K_REG_D0))
+                    divisor = signed(cpu.reg_read(UC_M68K_REG_D1))
+                    quotient = abs(dividend) // abs(divisor)
+                    result = (-quotient if (dividend < 0) != (divisor < 0) else quotient) & 0xffffffff
+                elif target == 0x132a:
+                    # SetSHAPColors 17:0a52 prepares the offscreen colour
+                    # table; indexed drawing is unaffected by it.
+                    pass
+                elif target not in (0xf8a, 0xfea, 0x1012, 0x11fa, 0x1202, 0x11a2, 0x119a):
                     raise ValueError(f"Unrecognized opening API {target:#x}")
             cpu.reg_write(UC_M68K_REG_D0, result)
             cpu.reg_write(UC_M68K_REG_PC, address + 4)
@@ -236,15 +257,23 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8)):
     return scenes
 
 
-def expand_animations(operations, nis):
-    """Flatten callback-free, persistent-background PlayTheAnimation flags 6."""
-    resources = parse_resource_fork(nis)
+def expand_animations(operations, nis, callbacks=None):
+    """Flatten persistent-background PlayTheAnimation flags 6.
+
+    PlayTheAnimation 16:13d4-13f8 draws a frame, then calls the callback with
+    the displayed frame number before copying it to the screen (16:140a).
+    ``callbacks`` maps a callback name to {frame: operations}; frames without
+    operations return zero, as TreeFunc does for every frame except two."""
+    resources = nis if isinstance(nis, dict) else parse_resource_fork(nis)
+    callbacks = callbacks or {}
     result = []
     for item in operations:
         if item['op'] != 'animation':
             result.append(item)
             continue
-        base, index, x, y = item['args']
+        base, index, x, y, *callback = item['args']
+        frame_operations = callbacks[callback[0]] if callback else {}
+        frame = 0
         header = resources['ANI '][base + index]['data']
         if len(header) != 18:
             raise ValueError('Unsupported scene ANI header')
@@ -275,6 +304,8 @@ def expand_animations(operations, nis):
                 _encoding, _stride, width, height = struct.unpack_from('>HhhH', data)
                 emit('shape', shape_id, x + dx, y + dy, flags)
                 rectangles.append([y + dy, x + dx, y + dy + height, x + dx + width])
+            frame += 1
+            result.extend(frame_operations.get(frame, ()))
             for rectangle in rectangles:
                 emit('copy', rectangle)
             emit('wait', animation.interval)
@@ -358,3 +389,43 @@ def extract_discovery(image, program, nis, directory, progress=lambda _text: Non
     audio = extract_scene_audio(image, operations, directory, progress, banked=True)
     result = {'schema': 1, 'operations': operations, 'audio': audio}
     (directory / 'discovery.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')
+
+
+TREE_VARIANTS = range(1, 10)
+
+
+def tree_resources(nis, nistree):
+    """Overlay NISTree's SHAP/CTBL/ANI/SCRP on NIS; TEXT 26000 stays in NIS."""
+    merged = {kind: dict(items) for kind, items in parse_resource_fork(nis).items()}
+    for kind, items in parse_resource_fork(nistree).items():
+        overlap = set(merged.get(kind, {})) & set(items)
+        if overlap:
+            raise ValueError(f"NISTree {kind} resources collide with NIS: {sorted(overlap)}")
+        merged.setdefault(kind, {}).update(items)
+    return merged
+
+
+def recover_tree(program, resources, variant):
+    """TreeCheck 15:0568 for one variant (NIS 12..20 -> 1..9, 15:0102).
+
+    TreeFunc 15:04d0 runs from PlayTheAnimation with the displayed frame
+    number. Only frame 2 does work, reading the variant from a5-0x245c."""
+    a5_words = {0x245c: variant}
+    callback = recover_scenes(program, resources, entries=(0x04d0,), arguments=(2,),
+                              a5_words=a5_words)
+    operations = recover_scenes(program, resources, entries=(0x0568,), arguments=(variant,),
+                                a5_words=a5_words, callbacks={0xf02: 'tree'})
+    return expand_animations(operations, resources, {'tree': {2: callback}})
+
+
+def extract_trees(image, program, nis, nistree, directory, progress=lambda _text: None):
+    """Write the nine native tree scenes as portable scene programs."""
+    directory = Path(directory)
+    resources = tree_resources(nis, nistree)
+    for variant in TREE_VARIANTS:
+        progress(f'Preparing tree scene {variant}...')
+        operations = recover_tree(program, resources, variant)
+        audio = extract_scene_audio(image, operations, directory, progress, banked=True)
+        result = {'schema': 1, 'operations': operations, 'audio': audio}
+        (directory / f'tree-{variant}.json').write_text(json.dumps(result, indent=2) + '\n',
+                                                         encoding='ascii')

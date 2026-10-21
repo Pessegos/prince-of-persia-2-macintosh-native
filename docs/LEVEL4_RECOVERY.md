@@ -126,3 +126,40 @@ The port reuses its existing LevelExit gate; the frozen room remains visible
 until the cue ends, then Discovery starts once. Silent playback uses the
 imported cue duration. This does not implement every exceptional native
 effect exclusion or the Macintosh window/fade pipeline.
+
+## Tree Scenes
+
+PlayNIS `2:0308-0322` maps public scenes 20 or above to NIS `scene - 8`, and
+the NIS dispatcher `15:0102` calls TreeCheck `15:0568` with `NIS - 11`. Tree
+scenes 20..27 are therefore variants 1..8. Variant 9 (NIS 20) is the
+separate timeout path.
+
+The importer runs TreeCheck for each variant with the same CODE 15 harness
+as Discovery. It overlays NISTree.rsrc (SHAP/CTBL/ANI/SCRP) on NIS.rsrc
+(TEXT 26000 and the border remain there) and rejects any ID collision.
+- **Variant selection:** the palette is CTBL `26000 + (v + 2) / 3`, through
+  the runtime division `19:4bb0`, which the harness reproduces; the music is
+  MIDI `26010 + v`.
+- **Callback timing:** PlayTheAnimation `16:13d4-13f8` draws a frame and
+  calls the callback with the displayed frame number before copying it
+  (`16:140a`). TreeFunc `15:04d0` acts only for frame 2.
+- **Callback expansion:** its operations are recovered separately, by
+  running `15:04d0` with argument 2 and a5-0x245c set to the variant. They
+  are inserted between frame 2's drawing and its copy:
+  - all variants: the fade-in;
+  - variant 1: captions 1 and 2 with voices 26001, 26002 and 26004, a
+    60-tick timer, and caption 3 with voice 26005;
+  - variant 9: waits on MIDI markers a, b and c, then CTBL 26028.
+- **Calls treated as no-ops:**
+  - SetSHAPColors `17:0a52` prepares an offscreen colour table that indexed
+    drawing does not use [I];
+  - the port save/restore calls `17:3260`/`17:322e`.
+
+The importer writes `tree-1.json` ... `tree-9.json` and installs
+NISTree.rsrc. The launcher requires them, so existing installations need a
+reimport. A fresh import of the reference HFS image reproduced every other
+prepared file byte for byte.
+
+Not yet connected:
+- StoryProgress does not select these scenes at run time;
+- there is no live countdown and no story-state save.

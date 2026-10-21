@@ -33,6 +33,8 @@ class InstallationTests(unittest.TestCase):
         (assets / "attract.json").write_text(json.dumps(fixture()))
         (assets / "ending.json").write_bytes((assets / "intro.json").read_bytes())
         (assets / 'discovery.json').write_bytes((assets / 'intro.json').read_bytes())
+        for variant in range(1, 10):
+            (assets / f'tree-{variant}.json').write_bytes((assets / 'intro.json').read_bytes())
         (assets / 'caverns_entry.json').write_text(json.dumps({
             'version': 15, 'level': 3, 'rooms': {str(room): [] for room in range(32)},
             'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}}}))

@@ -36,6 +36,14 @@ class AssetImportTests(unittest.TestCase):
         self.discovery.side_effect = lambda _image, _program, _nis, directory, _progress: (
             directory / 'discovery.json').write_bytes(b'prepared discovery')
         self.addCleanup(discovery.stop)
+        trees = patch.object(extract_assets, 'extract_trees')
+        self.trees = trees.start()
+
+        def write_trees(_image, _program, _nis, _tree, directory, _progress):
+            for variant in extract_assets.TREE_VARIANTS:
+                (directory / f'tree-{variant}.json').write_bytes(b'prepared tree')
+        self.trees.side_effect = write_trees
+        self.addCleanup(trees.stop)
         caverns = patch.object(extract_assets, "extract_caverns")
         self.caverns = caverns.start()
         self.caverns.side_effect = lambda _program, _caverns, _prince, directory, _progress, level_number: (
@@ -67,7 +75,8 @@ class AssetImportTests(unittest.TestCase):
             files = extract_assets.extract_assets(self.image, self.output)
         self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json",
                                      "ending.json", "discovery.json", "attract.json",
-                                     "caverns_entry.json", "caverns_level4.json"})
+                                     "caverns_entry.json", "caverns_level4.json",
+                                     *(f"tree-{n}.json" for n in extract_assets.TREE_VARIANTS)})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
         for name in extract_assets.RESOURCE_FILES:
             self.assertEqual((self.output / name).read_bytes(), self.forks[name])
