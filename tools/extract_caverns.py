@@ -304,10 +304,12 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     elif floor_redraw:
         passes = (('front', 0x371c, 2),)
     try:
+        # Room setup 3:1ab0 supplies the upper-room ID used by cavern
+        # decorations beneath loose floors, including first-row foreground.
+        execute(3, 0x1ab0)
         if _native_scene:
             if climb_action is not None or floor_redraw:
                 raise ValueError('The whole-scene audit requires a full repaint')
-            execute(3, 0x1ab0)
             execute(3, 0x1c64)
         for draw_row in (() if _native_scene else (2, 1, 0, -1)):
             if draw_row == -1:
@@ -361,23 +363,28 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     # floor/pillar bodies, regardless of their admission order.
     ordered = sorted(zip(commands, command_kinds),
                      key=lambda item: (item[0][0] == 'front', item[1] != 0 if item[0][0] == 'back' else False))
-    return {'version': 1, 'level': 3, 'room': room_id,
+    return {'version': 1, 'level': struct.unpack_from('>H', level, 0x218a)[0], 'room': room_id,
             'commands': [command for command, _kind in ordered], 'torches': torches}
 
 
-def extract_caverns(program, caverns, prince, output, progress=lambda _text: None):
+def extract_caverns(program, caverns, prince, output, progress=lambda _text: None, *, level_number=3):
     with CavernRecovery(program, caverns, prince) as machine:
         recover = partial(recover_room, _machine=machine)
-        _extract_caverns(program, caverns, prince, output, progress, recover)
+        _extract_caverns(program, caverns, prince, output, progress, recover, level_number=level_number)
 
 
-def _extract_caverns(program, caverns, prince, output, progress, recover):
-    level = parse_resource_fork(prince)['LEVL'][2002]['data']
+def _extract_caverns(program, caverns, prince, output, progress, recover, *, level_number=3):
+    from pop2.level_data import LevelDefinition
+
+    definition = LevelDefinition.read(parse_resource_fork(prince), level_number)
+    if definition.kind != 3 or level_number not in (3, 4):
+        raise ValueError(f'Unsupported cavern scenery level {level_number}')
+    level = definition.data
     scenes = {}
     for room in range(32):
         progress(f'Cavern scenery: room {room + 1}/32')
         scenes[str(room)] = recover(program, caverns, level, room, prince)
-    result = {'version': 14, 'level': 3,
+    result = {'version': 15, 'level': level_number,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     result['climb_redraw'], result['floor_redraw'] = {}, {}
@@ -409,7 +416,8 @@ def _extract_caverns(program, caverns, prince, output, progress, recover):
     result['pressure_plates'] = pressure_scenery(program, caverns, prince, level, result,
                                                progress, recover=recover)
     progress('Saving prepared cavern scenery...')
-    (output / 'caverns_entry.json').write_text(json.dumps(result) + '\n', encoding='ascii')
+    name = 'caverns_entry.json' if level_number == 3 else f'caverns_level{level_number}.json'
+    (output / name).write_text(json.dumps(result) + '\n', encoding='ascii')
 
 
 def clip_climbing(commands, rect):

@@ -131,7 +131,8 @@ for cancel in (True, False):
                     print(result.stdout, end='')
             self.assertTrue((fresh / "assets" / "audio" / "cue-43.wav").is_file())
             self.assertFalse((fresh / "assets" / "Prince of Persia 2").exists())
-            for name in ('caverns_entry.json', 'attract.json', 'intro.json', 'ending.json', 'enemy_profiles.json'):
+            for name in ('caverns_entry.json', 'caverns_level4.json', 'attract.json', 'intro.json',
+                         'ending.json', 'enemy_profiles.json'):
                 with self.subTest(export=name):
                     expected = json.loads((project / 'assets' / name).read_text())
                     actual = json.loads((fresh / 'assets' / name).read_text())

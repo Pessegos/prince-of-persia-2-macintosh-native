@@ -1,4 +1,4 @@
-"""Portable drawing commands for the recovered level-three scenery."""
+"""Portable drawing commands for the recovered cavern levels."""
 
 import json
 import struct
@@ -167,9 +167,18 @@ def cavern_clip_top(terrain, room, row, state, bounds):
     return boundary
 
 
-@lru_cache(maxsize=1)
-def cavern_assets():
-    program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
+def cavern_assets(level_number=3):
+    if type(level_number) is not int or level_number not in (3, 4):
+        raise ValueError(f'Unsupported cavern scenery level {level_number}')
+    return _cavern_assets(level_number)
+
+
+@lru_cache(maxsize=2)
+def _cavern_assets(level_number):
+    name = 'caverns_entry.json' if level_number == 3 else f'caverns_level{level_number}.json'
+    program = json.loads((ASSET_DIR / name).read_text(encoding='ascii'))
+    if program.get('level') != level_number:
+        raise ValueError('Cavern scenery belongs to a different level')
     resources = load_resource_file('Caverns.rsrc')
     return program, resources, decode_ctbl(resources['CTBL'][3500]['data']), {}
 
@@ -230,8 +239,8 @@ def cavern_flask_instances(program, room_id, terrain):
             yield command, tile
 
 
-def draw_cavern_flasks(frame, room_id, state, terrain):
-    program, resources, palette, shapes = cavern_assets()
+def draw_cavern_flasks(frame, room_id, state, terrain, *, level_number=3):
+    program, resources, palette, shapes = cavern_assets(level_number)
     terrain.caverns = state
     for command, tile in cavern_flask_instances(program, room_id, terrain):
         value = tile.foreground
@@ -292,8 +301,8 @@ def merge_positioned_mask(existing, source, position):
     return ImageChops.lighter(combined, added), (left, top)
 
 
-def draw_cavern_torches(frame, room_id, state):
-    program, resources, palette, shapes = cavern_assets()
+def draw_cavern_torches(frame, room_id, state, *, level_number=3):
+    program, resources, palette, shapes = cavern_assets(level_number)
     for record in program.get('torches', {}).get(str(room_id), ()):
         tile = state.loose.tiles.get((record['room'], record['cell']))
         if tile is not None and tile[0] != 19:
@@ -390,8 +399,8 @@ def split_lava_bubble(sprite, shape):
     return surface, airborne
 
 
-def draw_cavern_lava(frame, room_id, state):
-    program, resources, palette, shapes = cavern_assets()
+def draw_cavern_lava(frame, room_id, state, *, level_number=3):
+    program, resources, palette, shapes = cavern_assets(level_number)
     for record in program.get('lava', {}).get('rooms', {}).get(str(room_id), ()):
         pool = state.lava.pools.get((record['room'], record['cell']))
         if pool is None:
@@ -469,10 +478,10 @@ def cavern_scene_signature(program, room_id, state):
     return ''.join(indices)
 
 
-def draw_cavern_falling(frame, room_id, state, level, art):
+def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3):
     from pop2.terrain import LevelMap
 
-    _program, resources, palette, shapes = cavern_assets()
+    _program, resources, palette, shapes = cavern_assets(level_number)
     terrain = LevelMap(level)
     redraw = []
     for block in state.loose.falling:
@@ -495,16 +504,16 @@ def draw_cavern_falling(frame, room_id, state, level, art):
     return frame
 
 
-def draw_cavern_spikes(frame, room_id, state, terrain, front=False):
-    _program, resources, palette, shapes = cavern_assets()
+def draw_cavern_spikes(frame, room_id, state, terrain, front=False, *, level_number=3):
+    _program, resources, palette, shapes = cavern_assets(level_number)
     for command in state.spikes.drawing_commands(terrain, room_id, front):
         sprite = cavern_command_sprite(command, resources, palette, shapes)
         frame.paste(sprite, (command[2], command[3] - sprite.height + 1), sprite)
     return frame
 
 
-def draw_cavern_darts(frame, room_id, state):
-    _program, resources, palette, shapes = cavern_assets()
+def draw_cavern_darts(frame, room_id, state, *, level_number=3):
+    _program, resources, palette, shapes = cavern_assets(level_number)
     for dart in state.plates.darts.projectiles:
         # 8:2e1a emits a type-2 object only in the current room and while
         # flying. DrawObj passes one-based shape 94. AddMid stores slot 93,
@@ -595,16 +604,18 @@ def pressure_drawing_commands(commands, records, phases, resources):
     return result
 
 
-def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=(), retouched=False):
-    program, resources, palette, shapes = cavern_assets()
+def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=(), retouched=False,
+                *, level_number=3):
+    program, resources, palette, shapes = cavern_assets(level_number)
 
     def scenery_sprite(command):
         sprite = cavern_command_sprite(command, resources, palette, shapes)
-        return retouched_sprite(room_id, command, sprite) if retouched else sprite
+        return retouched_sprite(room_id, command, sprite) if retouched and level_number == 3 else sprite
 
-    if program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14) and program.get('level') == 3:
+    if (program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+            and program.get('level') == level_number):
         commands = program['rooms'][str(room_id)]
-    elif (program.get('version'), program.get('level'), program.get('room')) == (1, 3, room_id):
+    elif (program.get('version'), program.get('level'), program.get('room')) == (1, level_number, room_id):
         commands = program['commands']
     else:
         raise ValueError('Unsupported cavern drawing export')

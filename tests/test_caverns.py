@@ -370,7 +370,7 @@ class CavernDrawingTests(unittest.TestCase):
                   self.assertRaisesRegex(ValueError, 'Cavern renderer failed')):
                 recover_room(b'program', b'artwork', bytes(level))
             self.assertEqual(released, [[], [], []])
-        self.assertEqual(len(observed), 268)
+        self.assertEqual(len(observed), 270)
         self.assertEqual(set(observed), {(1, (0, 0, 365, 510))})
 
     def test_repaint_export_keeps_live_flames_out_of_static_scenery(self):
@@ -764,7 +764,7 @@ class OriginalCavernTests(unittest.TestCase):
 
     def test_all_native_rooms_render_with_recorded_clip_rectangles(self):
         program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
-        self.assertEqual(program['version'], 14)
+        self.assertEqual(program['version'], 15)
         self.assertEqual(set(program['rooms']), {str(room) for room in range(32)})
         for room in range(32):
             with self.subTest(room=room):

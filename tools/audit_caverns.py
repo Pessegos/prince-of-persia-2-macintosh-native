@@ -42,15 +42,16 @@ def pixel_difference(reference, actual, ignored=()):
     return pixels, difference
 
 
-def audit_caverns(program_path, output=OUTPUT_DIR / 'cavern-background-audit'):
+def audit_caverns(program_path, output=None, *, level_number=3):
+    output = output or OUTPUT_DIR / f'level{level_number}-cavern-background-audit'
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     original = Path(program_path).read_bytes()
     artwork = (ASSET_DIR / 'Caverns.rsrc').read_bytes()
     prince = (ASSET_DIR / 'Prince.rsrc').read_bytes()
-    level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 3)
+    level = LevelDefinition.read(load_resource_file('Prince.rsrc'), level_number)
     terrain = LevelMap(level.data)
-    export, resources, palette, shapes = cavern_assets()
+    export, resources, palette, shapes = cavern_assets(level_number)
     native = {}
     rooms = []
     renderer = LevelRenderer(level, preload_room=False, retouch_caverns=False)
@@ -93,6 +94,7 @@ def audit_caverns(program_path, output=OUTPUT_DIR / 'cavern-background-audit'):
               and all(not cut['different_pixels'] for cut in transitions))
     report = {
         'passed': passed,
+        'level': level_number,
         'reference': 'Original CODE 3:1c64 whole-room traversal; native scenery transfers',
         'scope': 'Initial static scenery and all directed LEVL room links, at 510x365',
         'excluded': ['actors (including skeletons)', 'flask rectangles',
@@ -111,11 +113,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--program', type=Path, required=True,
                         help='Original Macintosh executable resource fork')
-    parser.add_argument('--output', type=Path, default=OUTPUT_DIR / 'cavern-background-audit')
+    parser.add_argument('--output', type=Path)
+    parser.add_argument('--level', type=int, choices=(3, 4), default=3)
     args = parser.parse_args()
-    report = audit_caverns(args.program, args.output)
+    output = args.output or OUTPUT_DIR / f'level{args.level}-cavern-background-audit'
+    report = audit_caverns(args.program, output, level_number=args.level)
     print(f"{'PASS' if report['passed'] else 'FAIL'}: {len(report['rooms'])} rooms, "
-          f"{len(report['transitions'])} directed room cuts; report: {args.output / 'report.json'}")
+          f"{len(report['transitions'])} directed room cuts; report: {output / 'report.json'}")
     raise SystemExit(0 if report['passed'] else 1)
 
 

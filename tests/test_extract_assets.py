@@ -33,8 +33,9 @@ class AssetImportTests(unittest.TestCase):
         self.addCleanup(ending.stop)
         caverns = patch.object(extract_assets, "extract_caverns")
         self.caverns = caverns.start()
-        self.caverns.side_effect = lambda _program, _caverns, _prince, directory, _progress: (
-            directory / "caverns_entry.json").write_bytes(b"prepared cavern entrance")
+        self.caverns.side_effect = lambda _program, _caverns, _prince, directory, _progress, level_number: (
+            directory / ('caverns_entry.json' if level_number == 3 else f'caverns_level{level_number}.json')
+            ).write_bytes(b"prepared cavern entrance")
         self.addCleanup(caverns.stop)
         attract = patch.object(extract_assets, "extract_attract")
         self.attract = attract.start()
@@ -60,7 +61,7 @@ class AssetImportTests(unittest.TestCase):
         ):
             files = extract_assets.extract_assets(self.image, self.output)
         self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json",
-                                     "ending.json", "attract.json", "caverns_entry.json"})
+                                     "ending.json", "attract.json", "caverns_entry.json", "caverns_level4.json"})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
         for name in extract_assets.RESOURCE_FILES:
             self.assertEqual((self.output / name).read_bytes(), self.forks[name])
@@ -68,6 +69,27 @@ class AssetImportTests(unittest.TestCase):
                          self.profiles)
         profiles.assert_called_once_with(self.forks["Prince of Persia 2"],
                                          self.forks["Prince.rsrc"])
+        self.assertEqual([call.kwargs['level_number'] for call in self.caverns.call_args_list], [3, 4])
+
+    def test_level_four_scenery_failure_preserves_installed_resources(self):
+        self.output.mkdir()
+        original = self.output / 'Prince.rsrc'
+        original.write_bytes(b'existing game')
+        prepare = self.caverns.side_effect
+
+        def caverns(*args, level_number):
+            if level_number == 4:
+                raise ValueError('Unsupported level-four scenery')
+            return prepare(*args, level_number=level_number)
+
+        self.caverns.side_effect = caverns
+        with (patch.object(extract_assets, 'get_resource_fork', side_effect=self.fork),
+              patch.object(extract_assets, 'parse_resource_fork', side_effect=self.resource_types),
+              patch.object(extract_assets, 'extract_bytes', return_value=self.profiles),
+              self.assertRaisesRegex(ValueError, 'Unsupported level-four scenery')):
+            extract_assets.extract_assets(self.image, self.output)
+        self.assertEqual(original.read_bytes(), b'existing game')
+        self.assertEqual(list(self.output.iterdir()), [original])
 
     def test_invalid_image_is_rejected_before_creating_output(self):
         self.image.write_bytes(b"not HFS")

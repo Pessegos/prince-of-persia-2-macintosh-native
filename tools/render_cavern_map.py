@@ -1,4 +1,4 @@
-"""Render the Macintosh level-three map from LEVL links and recovered scenery."""
+"""Render a Macintosh cavern map from LEVL links and recovered scenery."""
 
 from pathlib import Path
 import argparse
@@ -13,8 +13,8 @@ from pop2.render_opening import load_resource_file
 from pop2.terrain import LevelMap
 
 
-def render_map(output=None, labels=False, enemies=False):
-    level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 3)
+def render_map(output=None, labels=False, enemies=False, *, level_number=3):
+    level = LevelDefinition.read(load_resource_file('Prince.rsrc'), level_number)
     terrain = LevelMap(level.data)
     positions = room_positions(terrain)
     renderer = LevelRenderer(level, preload_room=False)
@@ -34,7 +34,7 @@ def render_map(output=None, labels=False, enemies=False):
         if labels:
             draw.text((x + 8, y + 345), f'Room {room + 1}', fill='white')
     output = Path(output) if output is not None else OUTPUT_DIR / (
-        'level3-map-with-enemies.png' if enemies else 'level3-clean-map.png')
+        f'level{level_number}-map-with-enemies.png' if enemies else f'level{level_number}-clean-map.png')
     output.parent.mkdir(parents=True, exist_ok=True)
     image.save(output)
     return output
@@ -45,8 +45,9 @@ def main():
     parser.add_argument('--output', type=Path)
     parser.add_argument('--labels', action='store_true')
     parser.add_argument('--enemies', action='store_true')
+    parser.add_argument('--level', type=int, choices=(3, 4), default=3)
     args = parser.parse_args()
-    print(render_map(args.output, labels=args.labels, enemies=args.enemies))
+    print(render_map(args.output, labels=args.labels, enemies=args.enemies, level_number=args.level))
 
 
 if __name__ == '__main__':

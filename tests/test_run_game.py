@@ -33,11 +33,32 @@ class InstallationTests(unittest.TestCase):
         (assets / "attract.json").write_text(json.dumps(fixture()))
         (assets / "ending.json").write_bytes((assets / "intro.json").read_bytes())
         (assets / 'caverns_entry.json').write_text(json.dumps({
-            'version': 14, 'level': 3, 'rooms': {str(room): [] for room in range(32)},
+            'version': 15, 'level': 3, 'rooms': {str(room): [] for room in range(32)},
+            'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}}}))
+        (assets / 'caverns_level4.json').write_text(json.dumps({
+            'version': 15, 'level': 4, 'rooms': {str(room): [] for room in range(32)},
             'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}}}))
 
     def test_complete_installation_has_no_errors(self):
         self.assertEqual(run_game.installation_errors(self.project), [])
+
+    def test_level_four_scenery_cannot_reuse_the_level_three_export(self):
+        assets = self.project / 'assets'
+        (assets / 'caverns_level4.json').write_bytes((assets / 'caverns_entry.json').read_bytes())
+        self.assertIn('caverns_level4.json (needs full level-four scenery)',
+                      run_game.missing_assets(self.project))
+
+    def test_missing_level_four_scenery_requests_import(self):
+        (self.project / 'assets/caverns_level4.json').unlink()
+        self.assertIn('caverns_level4.json', run_game.missing_assets(self.project))
+
+    def test_exports_without_room_link_setup_request_reimport_for_both_levels(self):
+        for name, label in (('caverns_entry.json', 'three'), ('caverns_level4.json', 'four')):
+            path = self.project / 'assets' / name
+            program = json.loads(path.read_text())
+            program['version'] = 14
+            path.write_text(json.dumps(program))
+            self.assertIn(f'{name} (needs full level-{label} scenery)', run_game.missing_assets(self.project))
 
     def test_missing_asset_is_named_in_the_error(self):
         (self.project / "assets" / "Kid.rsrc").unlink()

@@ -25,6 +25,8 @@ jobs:
       - name: Checkpoint saves and integrated save-slot browser
         run: python -m unittest -q tests.test_save_slots
       - run: python -m unittest -q tests.test_audio_release tests.test_story_progress
+      - name: Isolated level-four cavern scenery
+        run: python -m unittest -q tests.test_level4
       - name: Host menu audio and isolated SDL UI channels
         run: python -m unittest -q tests.test_ui_audio
       - name: Tests without original game files

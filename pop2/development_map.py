@@ -85,7 +85,7 @@ def clean_room_frames(renderer, terrain, positions, enemies=None):
         # Show the settled puzzle, rather than omitting its animated pieces.
         for stone in desert.stones:
             stone.phase = 13
-    if renderer.level.number == 3:
+    if renderer.level.kind == 3:
         world = CavernState()
         world.configure_entry(renderer.cavern_program.get('entry_exit'))
         world.configure_lava(renderer.cavern_program.get('lava'))

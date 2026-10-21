@@ -20,6 +20,7 @@ REQUIRED_ASSETS = (
     "Desert.rsrc",
     "Caverns.rsrc",
     "caverns_entry.json",
+    "caverns_level4.json",
     "intro.json",
     "ending.json",
     "attract.json",
@@ -96,18 +97,20 @@ def missing_assets(project=PROJECT):
                         raise ValueError("Scene audio is incomplete")
             except (OSError, ValueError, KeyError, TypeError, AttributeError):
                 missing.append(name + " (needs reimport)")
-    cavern_path = project / 'assets/caverns_entry.json'
-    if cavern_path.is_file():
+    for number, name, label in ((3, 'caverns_entry.json', 'three'), (4, 'caverns_level4.json', 'four')):
+        cavern_path = project / 'assets' / name
+        if not cavern_path.is_file():
+            continue
         try:
             cavern = json.loads(cavern_path.read_text(encoding='ascii'))
-            if (cavern.get('version'), cavern.get('level')) != (14, 3) or set(cavern['rooms']) != {
+            if (cavern.get('version'), cavern.get('level')) != (15, number) or set(cavern['rooms']) != {
                     str(room) for room in range(32)}:
-                raise ValueError('Full level-three scenery needs reimport')
+                raise ValueError('Full cavern scenery needs reimport')
             plates = cavern['pressure_plates']
             if plates.get('schema') != 1 or set(plates['rooms']) != {str(room) for room in range(32)}:
                 raise ValueError('Pressure-plate scenery needs reimport')
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
-            missing.append('caverns_entry.json (needs full level-three scenery)')
+            missing.append(f'{name} (needs full level-{label} scenery)')
     attract_path = project / "assets" / "attract.json"
     if attract_path.is_file():
         from pop2.attract import read_attract

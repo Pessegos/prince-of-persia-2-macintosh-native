@@ -32,10 +32,23 @@ runtime transition, saves, cutscene playback or timer presentation.
 LEVL 2003 identifies level 4 as cavern environment 3, starting in native
 room 1, tile 25, row 2, port X=277, decoded facing 0. The entry dispatch
 `2:5d98-5e36` reaches the ordinary sequence-5 branch for a fresh level-four
-start. Level-three scenery is currently prepared specifically from LEVL
-2002; the level-four scene program must be generated from its own resource.
-The existing runtime rejects unsupported entry/scenery rather than reusing
-the wrong room or resetting the live game.
+start. The importer now prepares independent scenery programs from LEVL
+2002 and 2003, including all 32 rooms, entrance closure, torches, loose-floor
+variants, climbing/floor redraw and pressure-plate bindings. The renderer and
+developer-map drawing select the appropriate program for each level. The
+approved room-specific wall retouches remain exclusive to level 3.
+
+Export version 15 initializes room links through original `3:1ab0` before
+the cell passes. Without this setup, DrawCaveFloorCommon `8:1998` misses an
+upper-room loose floor beneath the first-row decoration in level-four room
+19 (563 pixels). This also corrects room-link-dependent loose-floor variants
+in level 3; existing base scenery and approved retouches are unchanged.
+
+The native whole-room audit passes all 32 level-four rooms and 80 directed
+room cuts after that correction. It compares static transfer commands and
+layer replay, excluding actors, animated torches/lava, flask rectangles and
+HUD. It shares the SHAP decoder and is not an independent Macintosh
+rasterizer or a complete dynamic-gameplay test.
 
 Discovery uses NIS.rsrc's original 29000-range resources. The tree scenes
 also require NISTree.rsrc, which was not needed by the opening/voyage importer.

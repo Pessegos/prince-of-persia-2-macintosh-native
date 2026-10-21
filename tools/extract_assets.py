@@ -58,9 +58,11 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         progress("Recovering the original voyage scenes...")
         extract_ending(image, program, resources["NIS.rsrc"], staging, progress)
         resources["ending.json"] = (staging / "ending.json").read_bytes()
-        progress("Preparing level-three scenery...")
-        extract_caverns(program, resources["Caverns.rsrc"], resources["Prince.rsrc"], staging, progress)
-        resources["caverns_entry.json"] = (staging / "caverns_entry.json").read_bytes()
+        for number, name in ((3, 'caverns_entry.json'), (4, 'caverns_level4.json')):
+            progress(f"Preparing level-{number} scenery...")
+            extract_caverns(program, resources["Caverns.rsrc"], resources["Prince.rsrc"],
+                            staging, progress, level_number=number)
+            resources[name] = (staging / name).read_bytes()
         progress("Recovering the original recorded demo and credits...")
         extract_attract(program, resources, staging, progress)
         extract_credits_music(image, staging)
