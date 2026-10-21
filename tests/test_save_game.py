@@ -70,6 +70,15 @@ class SaveFormatTests(unittest.TestCase):
         self.assertIs(loaded.combat.target_cache, loaded.combat.guards[0])
         self.assertIs(loaded.combat.guard, loaded.combat.guards[0])
 
+    def test_selected_sequence_cleared_by_animchar_minus18_roundtrips(self):
+        # AnimChar -18 (4:2d7e) leaves the selected ID at 0, not a SEQS ID.
+        original = GameSession.load(self.resources, 3)
+        original.place(10, 2, 230, 1)
+        original.combat.guards[0].state.selected_sequence_id = 0
+        write_save(self.path, capture(original))
+        loaded, _saved = read_save(self.path, self.resources)
+        self.assertEqual(loaded.combat.guards[0].state.source_sequence_id, 0)
+
     def test_transient_bone_shake_notifications_are_not_replayed_after_loading(self):
         original = GameSession.load(self.resources, 3)
         original.caverns.loose.shake_events.append((14, 2))

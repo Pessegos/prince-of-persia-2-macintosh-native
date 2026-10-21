@@ -654,6 +654,19 @@ class SkeletonTests(unittest.TestCase):
         self.assertEqual((actor.state.action, actor.state.cursor), (206, 7))
         self.assertEqual(actor.state.sound_events, [])
 
+    def test_second_shake_replays_sequence112_after_its_minus18_link(self):
+        # SEQS:112 ends -18, -1 119, so the selected ID is 0 and 4:15c6
+        # selects 112 again; a stale 112 would leave the bones still.
+        combat, actor = self.stationary_bones(shakes=2)
+        self.tick(combat)
+        self.assertEqual(actor.state.sound_events, [61])
+        actor.state.sound_events.clear()
+        while actor.skeleton.shakes:
+            self.tick(combat)
+            if actor.skeleton.shakes:
+                actor.state.sound_events.clear()
+        self.assertEqual((actor.state.source_sequence_id, actor.state.sound_events), (112, [61]))
+
     def test_finished_shakes_can_rise_before_waiting_sequence119(self):
         combat, actor = self.stationary_bones(sequence=112)
         combat.attack_pause = 9

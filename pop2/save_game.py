@@ -186,7 +186,7 @@ def _fighter_valid(actor, resources):
             or actor.skeleton is not None and not isinstance(actor.skeleton, Skeleton)
             or state.facing not in (0, 1) or state.actor_type not in (0, 2, 4)
             or state.sequence_id not in resources.sequences
-            or state.source_sequence_id not in resources.sequences
+            or state.source_sequence_id not in resources.sequences and state.source_sequence_id != 0
             or not 0 <= state.cursor <= len(resources.sequences[state.sequence_id])
             or not 0 <= state.action <= (len(resources.frames) - 1 if state.actor_type == 0 else
                                          229 if state.actor_type == 4 else 254)
