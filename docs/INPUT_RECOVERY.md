@@ -212,6 +212,12 @@ before/on pose 109 and preservation of other pending commands.
 
 ## Intentional Port Extensions
 
+The voluntary sword turn (Shift + fresh Backward, SwordCtrl 6:22f2-2366)
+turns and retargets like the original, but does not toggle the
+automatic-turn flag a5-0x5010 (6:2344). The automatic sword turn therefore
+always stays enabled. This was chosen deliberately; see
+[voluntary-sword-turn.md](research/voluntary-sword-turn.md).
+
 Alt+R during ordinary gameplay restores currently held gameplay keys after
 restarting, in modifier/vertical/horizontal order. The pre-restart command
 buffer is discarded; the new entry controller decides when the restored
