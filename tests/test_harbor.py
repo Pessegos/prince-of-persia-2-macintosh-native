@@ -1,4 +1,5 @@
 import struct
+import time
 import unittest
 from dataclasses import replace
 from unittest.mock import patch
@@ -575,6 +576,49 @@ class HarborSceneTests(unittest.TestCase):
         self.assertEqual(poses, list(range(135, 150)) + [118, 119])
         self.assertEqual(len(set(relative_x)), 1)
         self.assertTrue(scene.level_complete)
+
+    def test_guards_stay_lowered_from_ship_grip_through_climb_and_exit_music(self):
+        self.prepare('9')
+        scene = self.scene
+        scene.peaceful = False
+        scene.combat.last_guard_at = None
+        scene.horizontal_key(None, -1, True)
+        self.now = time.perf_counter()
+        escaped = False
+        for _ in range(240):
+            if scene.room_id == 18 and scene.player_x < 350 and not scene.up_held:
+                scene.up_key(None)
+                scene.set_key_state('shift', True)
+            self.tick()
+            if scene.combat.rooftop_escape:
+                escaped = True
+                self.assertFalse(scene.combat.opponent_to_fight())
+                self.assertTrue(all(g.alert_mode == 0 for g in scene.combat.active_guards()))
+            else:
+                self.assertFalse(escaped, 'Ship standby latch was lost during the climb')
+            if scene.level_complete or scene.terrain_motion.dead:
+                break
+        self.assertTrue(escaped and scene.level_complete)
+        self.assertTrue(scene.combat.player.alive)
+        guards = [g for g in scene.combat.active_guards()
+                  if g.alive and g.room == 18 and 0 <= g.state.target_x < 510]
+        self.assertTrue(guards, 'The cinematic must be exercised with real dock guards')
+        for guard in guards:
+            self.assertFalse(guard.sword_drawn)
+            self.assertEqual(guard.state.action, 166)
+        self.tick(15)
+        self.assertTrue(all(g.state.action == 166 and not g.sword_drawn for g in guards))
+        scene.game.place(18, 1, 300, 0, reset_guards=False)
+        self.assertFalse(scene.combat.rooftop_escape)
+
+    def test_dock_ledge_without_ship_grip_does_not_trigger_cinematic_standby(self):
+        self.prepare('10')
+        scene = self.scene
+        scene.sequence_state.animation_state = 2
+        scene.sequence_state.action = 80
+        scene.sequence_state.target_x = scene.sequence_state.current_x = 300
+        scene.advance_combat()
+        self.assertFalse(scene.combat.rooftop_escape)
 
     def test_ship_catch_uses_fall_displacement_on_last_eligible_frame(self):
         scene = self.scene

@@ -277,6 +277,7 @@ class CombatEncounter:
         self.advance_pause = 0
         self.attack_pause = 0
         self.last_guard_at = None
+        self.rooftop_escape = False
 
     def _reset_initial_guard(self):
         self.player = Fighter(self.player_runtime, 3, 3,
@@ -511,7 +512,7 @@ class CombatEncounter:
         # OppToFight 6:2392-2492, used by PlayAmbient/TimeForNewAmbient.
         # Alert 1 (separated by a gap) qualifies too; sword reach is irrelevant.
         player = self.player
-        if (not player.alive or player.state.actor_type == 1
+        if (self.rooftop_escape or not player.alive or player.state.actor_type == 1
                 or player.state.special_flag == 13
                 or player.state.animation_state in (3, 4)
                 or player.state.action in (185, 242, 243, 266, 271)):
@@ -746,6 +747,17 @@ class CombatEncounter:
             # stabbed actor is not counted in the previous NPC bank yet.
             guard.death_registered = True
             return
+        if self.rooftop_escape:
+            # Port cinematic improvement: once the Prince catches the ship,
+            # dock guards stand down through the climb and the exit music.
+            guard.alert_mode = 0
+            guard.pursuing = False
+            if guard.sword_drawn and state.action in GUARD_POSES and state.animation_state < 2:
+                guard.sword_drawn = False
+                select_sequence(guard, 77)
+            elif not guard.sword_drawn and state.action in (192, 196, 212) and guard.selected_sequence != 101:
+                self._brake_guard(guard, 0)
+            return
         if self.level is not None and not guard.sword_drawn:
             self._choose_unarmed_guard_action(guard)
             bank = self.room_encounters.get(guard.room, ([], []))[0]
@@ -818,7 +830,7 @@ class CombatEncounter:
         # CODE:2 0x6e7e: nearest living enemy on either side can engage (3).
         # Other enemies wait (2); a wall blocks sight, a gap limits pursuit (1).
         primary = (self._nearest_guard(-1), self._nearest_guard(1))
-        if (not guard.alive or not self.player.alive or guard.room != self.player.room
+        if (self.rooftop_escape or not guard.alive or not self.player.alive or guard.room != self.player.room
                 or guard.row != self.player.row
                 or self.player.state.action == 0 or 217 <= self.player.state.action < 226
                 or self.player.state.actor_type == 1):

@@ -2661,6 +2661,11 @@ class ScenePrototype(WindowControls):
         # CheckStrikes 6:58aa-592c uses row, height and actor/mode exclusions;
         # beginning a grab, climb or fall does not confer invulnerability.
         combat.player.targetable = not self._opening_active()
+        harbor = getattr(self, 'harbor', None)
+        if (harbor is not None and self.room_id == 18
+                and (harbor.hanging_from_ship(self.room_id, self.sequence_state)
+                     or self.sequence_state.sequence_id == SHIP_CLIMB_SEQUENCE)):
+            combat.rooftop_escape = True
         if getattr(self, "peaceful", False):
             combat.world_frame += 1
             combat.last_guard_at = time.perf_counter()

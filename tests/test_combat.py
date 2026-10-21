@@ -52,6 +52,32 @@ class GuardCombatTests(unittest.TestCase):
     def test_guard_generator_decodes_actual_first_room(self):
         self.assertEqual(self.spawn, GuardSpawn(3, 1, 149, 1, 0, 77, 1, alternate_row=0))
 
+    def test_rooftop_escape_lowers_swords_without_rearming_or_combat_music(self):
+        combat = self.encounter()
+        combat.rooftop_escape = True
+        for _ in range(35):
+            combat.update_guard_alerts()
+            combat.advance_guard()
+            self.assertEqual(combat.guard.alert_mode, 0)
+            self.assertFalse(combat.guard.sword_drawn)
+            self.assertFalse(combat.opponent_to_fight())
+        self.assertEqual(combat.guard.state.action, 166)
+        combat.reset()
+        self.assertFalse(combat.rooftop_escape)
+
+    def test_rooftop_escape_finishes_an_attack_before_lowering_at_a_ready_pose(self):
+        combat = self.encounter()
+        select_sequence(combat.guard, 66)
+        combat.guard.runtime.next_frame()
+        combat.rooftop_escape = True
+        action = combat.guard.state.action
+        combat.choose_guard_action()
+        self.assertEqual(combat.guard.state.action, action)
+        for _ in range(40):
+            combat.advance_guard()
+        self.assertFalse(combat.guard.sword_drawn)
+        self.assertEqual(combat.guard.state.action, 166)
+
     def test_native_jump_bump_distance_boundaries_both_directions(self):
         for facing in (0, 1):
             for sequence, distance, expected in ((3, 24, True), (3, 25, False),

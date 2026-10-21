@@ -157,6 +157,7 @@ class GameSession:
             self.combat.reset()
             self.combat.player.max_life = max_life
         self.combat.player.terrain_motion = self.motion
+        self.combat.rooftop_escape = False
         self.combat.enter_room(room, row)
         if self.harbor is not None:
             self.harbor.enter_room(room, 15)
