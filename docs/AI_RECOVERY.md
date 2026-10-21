@@ -181,6 +181,30 @@ zero. The preceding InitOpps audits intentionally used the shared SEQS
 interpreter; they were not independent proof of this instruction. Local
 probe: `rendered/sequence_hold_native_probe_v1.py`.
 
+## Silent Animation Movement Signals
+
+AnimCharTap(0), `4:30e0-30f6/314e-315a`, sets the Prince's global movement
+signal just like the end of the footstep callback, but without advancing
+the footstep counter or playing sound. Other actor types leave that signal
+unchanged. The previous interpreter ignored callback zero entirely. Original
+SEQS 11 and 227 use this silent callback; standing guard control already
+consumes the signal, so suppressing its producer could miss a native turn.
+
+The silent callback now sets the Prince's flag independently of environment.
+It preserves pending sound/sequence events and does not re-fire during a
+terminal held pose. Ordinary footstep callback one retains its separate
+counter, sound and actor behavior. Seven asset-free regressions and a
+resource-optional guard integration cover production, peek isolation and
+last-unarmed-record consumption without inventing an audible effect.
+
+Independent original comparisons cover 72 direct AnimCharTap calls and 288
+actual AnimChar executions at the callback in original SEQS 11/227, varying
+actor type 0/2/4, environment, facing, counter and initial signal. The old
+interpreter mismatches 60 of these 360 cases; the correction matches all.
+Resource lookup and Toolbox handle locking are supplied endpoints; this
+does not independently prove every noise producer or the whole AI scheduler.
+Local probe: `rendered/silent_callback_native_probe_v1.py`.
+
 ## Close Spacing After Retreats And Turns
 
 EnGarde `4:0a82-0c08` distinguishes the selected sequence at A5 `-0x502e`

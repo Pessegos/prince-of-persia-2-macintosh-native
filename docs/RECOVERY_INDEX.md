@@ -41,6 +41,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Five unarmed / six armed Macintosh ticks | 2:68c8 | T: timer branch | scene_prototype / test_animation_data |
 | Original pose chains, offsets and attachments | FRAM/AFRM/SEQS/SHAP; 4:2c0c | T: used interpreter operations; others fail explicitly | sequence_runtime / test_animation_data |
 | Terminal -23 rewinds from entry cursor and rereads the resource pose after reload | 4:2f00-2f14 | T: 867 independent original AnimChar checks; other opcode/callback paths retain their own scope | sequence_runtime / test_sequence_holds |
+| Silent animation callback zero sets only the Prince's movement signal | 4:30e0-30f6/314e-315a; SEQS:11/227 | T: 72 original callback calls + 288 independent AnimChar resource cases; complete noise/scheduler lifecycle P | sequence_runtime / test_sequence_noise |
 | Selected SEQS survives -1 links; -8 assigns velocity with 10000 sentinel | 6:0006; 4:2ec2, 2ff4-3018 | T: hurt/turn allowance and repeat sword-retreat catch; -9 is a separate additive opcode | sequence_runtime/terrain / test_animation_data, test_terrain |
 | Supporting-foot tile, signed column/row | 4:3a72, 3ad6, 3afa | T: ordinary actors | terrain / test_terrain |
 | Floor checks require FRAM 0x40 | 4:35ba | T: ordinary rooftop subset | terrain / test_terrain |

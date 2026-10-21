@@ -149,6 +149,10 @@ class SequenceRuntime:
             elif opcode == -15:
                 callback_id = self._next_operand(opcode, opcode_cursor)
                 if callback_id == 0:
+                    # AnimCharTap 4:30f2 -> 314e signals only the Prince,
+                    # without incrementing the step counter or playing sound.
+                    if self.state.actor_type == 0:
+                        self.state.callback_flag = 1
                     continue
                 if 2 <= callback_id <= 301:
                     # AnimCharTap 4:315c-317e forwards ordinary sound IDs.

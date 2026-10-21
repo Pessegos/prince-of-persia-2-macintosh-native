@@ -272,3 +272,52 @@ where a clear flag should become one. Original SEQS 11 and 227 contain
 (-15, 0). Probe/report: `rendered/silent_callback_native_probe_v1.py/.json`.
 Implement separately with asset-free tests and an AI consumption regression;
 do not accidentally make an NPC set the global player flag.
+
+## Silent Callback: Implementation In Verification
+
+The previous turn made authoritative progress: terminal pose restoration,
+save-preview test isolation and zero-HP control registration were committed.
+The latter is `f1a5382`; GitHub Tests run 39556011884 passed. The worktree
+was clean when this continuation began.
+
+Silent callback zero now raises the Prince's movement signal without sound
+or footstep counter changes. Seven asset-free tests and one optional guard
+consumer integration pass; they produced ten assertion failures under the
+old interpreter. A genuinely isolated temporary project also passes the
+combined 16 hold/noise tests, skipping only their two original-resource
+integrations. The new noise module is included in the asset-free CI step.
+
+Extended native evidence includes 288 independent original AnimChar steps
+using original SEQS 11/227, not the portable decoder. Together with 72 direct
+AnimCharTap calls, all 360 outputs match. The prior implementation mismatches
+60 times. Local reports: `rendered/silent_callback_native_probe_v1.json` and
+`rendered/silent-callback-native-baseline-v1.json`. This does not close all
+noise producers or the full target/alert/control scheduler.
+
+Focused animation/combat/pursuit/death/skeleton/alert/hold/noise validation
+passed 358 tests. Full discovery passed 1,916 tests in 364 seconds (one
+optional skip, four expected failures, no unexpected failures). Ruff,
+catalog and diff checks pass. Check GitHub CI after committing.
+Ordinary guard room-bank conversion remains the next larger task; recover
+source flags, jump-height metadata and cold initialization before restricting
+active actors, rather than merely freezing the current neighboring set.
+
+## Ordinary Guard Height Metadata: Native Audit
+
+`rendered/guard_height_native_probe_v1.py` executes original InitOpps with
+independent AnimChar for 510 supplied row/height/current-resource/cursor
+reloads. Type 2 loads saved absolute Y from generator word +1c only when
+the saved current resource is 100; otherwise it starts at the decoded
+row's floor before the first animation step. This also applies to a zero
+cursor whose sequence is then reinitialized to 77. Do not preserve every
+airborne actor's old Y as an invented improvement. The fixture's row*10
+negative cell encoding still incurs InitOpps' exact-tens row decrement.
+
+Another 384 original SetSpecialOppInfo calls confirm that saving word +1c
+depends on the selected/source sequence being 100 or 186, not the current
+resource; other ordinary-environment cases leave its previous value intact.
+Actor types 0/2/4, current/selected resource differences and several prior
+heights are included. Report: `rendered/guard_height_native_probe_v1.json`.
+Graphics, resource handles and record lookup remain supplied endpoints.
+This is evidence for the upcoming guard-bank implementation, not a claim
+that ordinary reload/persistence has already been implemented.
