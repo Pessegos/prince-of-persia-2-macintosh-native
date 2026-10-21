@@ -197,6 +197,15 @@ FirstFrame clears it at each level start. The host draws it in the HUD line
 with the existing interface font. The native DrawMessage `3:4252` shadow
 colours are not reproduced.
 
+**Leaving level four.** GetEndSong selects cue 32 for environment 3, as
+when leaving level three. After the song, CheckPlayNIS(4, 5) runs, so a
+player who never restarted level four sees the first tree scene now. The
+completed level then stays on screen, because level five is not available.
+
+Level five (LEVL 2004) also enters with sequence 5 (`2:5e34`), but its
+scenery uses bridges. The cavern export harness stops in OffsetBrgFloorY
+`8:07de-07fe` at an unsupported OffsetRect trap, and the port has no bridge
+mechanics. Enabling level five is a separate feature.
+
 **Not yet implemented:**
-- the 4->5 tree selection, since the campaign still ends at level four;
 - the death message's 600-frame game-over timeout (`2:67fa-6806`).

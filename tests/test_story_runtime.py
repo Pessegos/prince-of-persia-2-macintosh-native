@@ -126,6 +126,32 @@ class StoryHostTests(unittest.TestCase):
         self.assertEqual(scene.game.level.number, 1)
         self.assertEqual(scene.game.story, StoryProgress())
 
+    def complete_level(self):
+        scene = self.scene
+        scene.game.runtime.state.sequence_events.append((-16, ()))
+        for _ in range(400):
+            self.tick()
+            if scene.game.exit is None:
+                break
+        self.assertIsNone(scene.game.exit)
+
+    def test_surviving_level_four_shows_tree_one_on_the_way_to_level_five(self):
+        # CheckPlayNIS(4, 5): the first tree is deferred to this transition.
+        scene = self.scene
+        self.complete_level()
+        self.assertEqual((scene.attract_stage, scene.tree_variant), ('tree', 1))
+        self.assertEqual(scene.game.story.tree_stage, 0)
+        self.finish_tree()
+        self.assertTrue(scene.level_complete)
+        self.assertEqual(scene.game.level.number, 4)
+
+    def test_level_four_exit_after_the_first_tree_needs_no_scene(self):
+        scene = self.scene
+        scene.game.story = StoryProgress(minutes=70, tree_stage=0)
+        self.complete_level()
+        self.assertIsNone(scene.intro)
+        self.assertTrue(scene.level_complete)
+
     def test_level_changes_keep_the_story_and_new_game_resets_it(self):
         scene = self.scene
         scene.game.story = StoryProgress(minutes=40, tree_stage=4)

@@ -1822,6 +1822,8 @@ class ScenePrototype(WindowControls):
                 if self.game.exit.advance(self.current_animation_interval_ms() / 1000, self.audio):
                     if self.game.level.number == 3:
                         self.start_discovery()
+                    elif self.game.level.number == 4:
+                        self.finish_level_four()
                     else:
                         self.start_ending()
                 self.render()
@@ -2624,7 +2626,7 @@ class ScenePrototype(WindowControls):
                 self.clear_keys(None)
                 self.start_sequence(IDLE_SEQUENCE)
         if self.game.consume_completion():
-            if self.game.level.number in (1, 3):
+            if self.game.level.number in (1, 3, 4):
                 import json
                 from pop2.level_transition import LevelExit
                 from pop2.paths import ASSET_DIR
@@ -3121,8 +3123,22 @@ class ScenePrototype(WindowControls):
         self.last_intro_at = time.perf_counter()
         self.status.set('Tree')
 
+    def finish_level_four(self):
+        # CheckPlayNIS(4, 5) (2:0180) shows the first tree scene here when no
+        # level-four restart has. Level five is not implemented yet, so the
+        # completed level stays on screen afterwards.
+        self.game.exit = None
+        scene = self.game.story.select_scene(4, 5)
+        if scene is not None and 20 <= scene <= 27:
+            self.game.complete = False
+            self.campaign_paused_after = 4
+            self.start_tree(scene - 19)
+
     def finish_tree(self):
         held = set(self.window_keys_down)
+        if getattr(self, 'campaign_paused_after', None) == self.game.level.number:
+            self.game.complete = True
+        self.campaign_paused_after = None
         self.intro = self.attract_stage = None
         if self.audio is not None:
             self.audio.reset()
