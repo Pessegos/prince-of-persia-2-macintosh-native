@@ -16,6 +16,7 @@ class PressurePlates:
     timers: dict = field(default_factory=dict)
     triggered: list = field(default_factory=list)
     slams: list = field(default_factory=list)
+    slam_sounds: list = field(default_factory=list)
     songs: list = field(default_factory=list)
     stopped_sounds: list = field(default_factory=list)
     darts: Darts = field(default_factory=Darts)
@@ -185,6 +186,7 @@ class PressurePlates:
     def advance(self, terrain, state=None, motion=None, record=None):
         self.triggered.clear()
         self.slams.clear()
+        self.slam_sounds.clear()
         cues = []
         for key, phase in tuple(self.active.items()):
             room, cell = key
@@ -249,6 +251,7 @@ class PressurePlates:
                         # ATMGate 5:42c6-42ce asks 5:4766 whether this slam
                         # shut opponents out (the level-four "phew").
                         self.slams.append(key)
+                    self.slam_sounds.append(key)
                     cues.append(20)
             elif position == 255:
                 phase = -1
@@ -277,6 +280,11 @@ class PressurePlates:
                             elif state.action == 266:
                                 phase = -1
                                 self.stopped_sounds.append(17)
+                    elif (struct.unpack_from('>H', terrain.level, 0x218a)[0] == 5
+                          and room == 6):
+                        # ATMGate 5:4396-43bc: level five's room-7 gate undoes
+                        # its waiting step, so once open it stays open.
+                        position -= (-1, -4)[phase]
                 elif position < 184:
                     cues.append(17)
                 elif phase == 2:

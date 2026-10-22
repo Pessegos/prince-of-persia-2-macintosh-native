@@ -153,3 +153,27 @@ class CarpetRoomPaletteTests(unittest.TestCase):
         commands = cavern_assets(5)[0]['rooms']['2']
         self.assertFalse([command for command in commands
                           if command[1] in (3513, 3527, 3532) and command[8:10] == [0, 1]])
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class RoomSevenGateSongTests(unittest.TestCase):
+    """AddGateSound 5:3828-388e: BrgDoor (120) when room 7's gate slams."""
+
+    def setUp(self):
+        CeilingBarsSceneTests.setUp(self)
+
+    def tick(self, count=1):
+        CeilingBarsSceneTests.tick(self, count)
+
+    def slam(self, room, x):
+        scene = self.scene
+        scene.jump_to_room(room, 1, x, 0)
+        caverns = scene.game.caverns
+        caverns.plates.songs.clear()
+        caverns.plates.slam_sounds.append((6, 13))
+        scene.advance_relief(caverns)
+        return list(caverns.plates.songs)
+
+    def test_slam_plays_brgdoor_unless_the_prince_is_at_room_sevens_left_edge(self):
+        self.assertEqual(self.slam(9, 255), [120])
+        self.assertEqual(self.slam(6, 40), [])

@@ -2494,6 +2494,17 @@ class ScenePrototype(WindowControls):
         return result
 
     def advance_relief(self, caverns):
+        motion = self.terrain_motion
+        for room, cell in caverns.plates.slam_sounds:
+            # AddGateSound 5:3828-388e: a slam (sound 20) of level five's room-7
+            # gate adds BrgDoor (120), unless it plays or the Prince stands in
+            # room 7 left of column 3.
+            audio = getattr(self, "audio", None)
+            if (self.game.level.number == 5 and room == 6
+                    and not (audio is not None and audio.song_playing(120))
+                    and not (motion is not None and motion.room == 6
+                             and self.combat._supporting_column(self.combat.player) < 3)):
+                caverns.plates.songs.append(120)
         for room, cell in caverns.plates.slams:
             if self.shut_out_opponents(room, cell):
                 caverns.phew_countdown = 4

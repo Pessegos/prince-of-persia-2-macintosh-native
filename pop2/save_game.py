@@ -49,7 +49,7 @@ CLASSES = {cls.__name__: cls for cls in (
     Skeleton, SkeletonRoomRecord, GuardRoomRecord, TerrainMotion, WallSpikes,
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
-        LooseFloors: {'shake_events'}, PressurePlates: {'slams'}}
+        LooseFloors: {'shake_events'}, PressurePlates: {'slams', 'slam_sounds'}}
 GAME_FIELDS = ('room_id', 'checkpoint', 'death', 'complete', 'harbor', 'desert', 'caverns')
 CONTROL_FIELDS = (
     'run_active', 'run_stop_requested', 'run_direction', 'run_start_x',

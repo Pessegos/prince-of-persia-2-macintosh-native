@@ -310,6 +310,30 @@ class CaveBarsTests(unittest.TestCase):
         self.assertEqual(self.plates.active, {})
 
 
+class LevelFiveRoomSevenGateTests(unittest.TestCase):
+    """ATMGate 5:4396-43bc: level five's room-7 gate never starts closing."""
+
+    def gate(self, level_number, room):
+        PressurePlateTests.setUp(self)
+        struct.pack_into('>H', self.level, 0x218a, level_number)
+        PressurePlateTests.set_tile(self, room, 15, 4, 0x300 | 237)
+        self.plates.active[room, 15] = 0
+        for _ in range(60):
+            self.plates.advance(self.terrain)
+        return self.terrain.tile(room, 5, 1).foreground & 255
+
+    def set_tile(self, room, cell, kind, foreground):
+        PressurePlateTests.set_tile(self, room, cell, kind, foreground)
+
+    def set_link(self, *arguments):
+        PressurePlateTests.set_link(self, *arguments)
+
+    def test_room_seven_gate_holds_open_only_in_level_five(self):
+        self.assertEqual(self.gate(5, 6), 237)
+        self.assertLess(self.gate(4, 6), 184)
+        self.assertLess(self.gate(5, 5), 184)
+
+
 class PressureDrawingTests(unittest.TestCase):
     def test_cave_bars_draw_the_custom_record_of_their_phase(self):
         command = ['back', 4051, 165, 50, 0, 0, [10, 165, 50, 318], 4, 6, 0]
