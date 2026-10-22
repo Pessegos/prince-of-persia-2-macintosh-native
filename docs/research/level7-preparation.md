@@ -221,3 +221,14 @@ cached state and generator record separate. Record mode transitions and
 services before translating a controller. Investigate SnakeComeOutOfHole
 separately; do not apply the head mode layout to its records by assumption.
 This next block has not been performed in the current preparation milestone.
+
+## Autonomous Continuation
+
+The next initialization and frame-loading blocks are now recorded separately:
+
+- [Head/serpent initialization](level7-head-initialization.md): complete native
+  HeadAddOpponent, including signed ALIVE behavior and kind-zero fallback.
+- [Special-actor frame loading](level7-frame-loading.md): original FRAM/AFRM
+  loading for all tested head/serpent pose combinations, including type-8 remap.
+
+These results do not enable the campaign or claim complete special-actor AI.
