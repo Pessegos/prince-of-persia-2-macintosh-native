@@ -326,3 +326,28 @@ class LevelFourSkeletonChaseTests(unittest.TestCase):
             scene.combat.advance_guard()
         self.assertGreater(probe.callback_counter, 0)
         self.assertEqual(state.target_x - before, expected - before)
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported level-four resources required')
+class LevelExitSceneryTests(unittest.TestCase):
+    def test_torches_keep_flickering_while_the_exit_song_plays(self):
+        # 2:6100-6134: FrameAdv still runs before the exit-music check.
+        from pop2.level_transition import LevelExit
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(4)
+        RooftopSceneTests.tick(self, 16)
+        program = scene.level_renderer.cavern_program
+        room = next(int(room) for room, records in program['torches'].items() if records)
+        scene.jump_to_room(room)
+        scene.game.complete = True
+        scene.game.exit = LevelExit(32, 1000)
+        keys = {(record['room'], record['cell']) for record in program['torches'][str(room)]}
+        seen = set()
+        for _ in range(12):
+            RooftopSceneTests.tick(self)
+            seen.add(tuple(scene.game.caverns.torches[key] for key in sorted(keys)))
+        self.assertIsNotNone(scene.game.exit)
+        self.assertGreater(len(seen), 1)
