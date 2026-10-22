@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 import random
 
 from pop2.bridge import Bridge
+from pop2.carpet import Carpet
 from pop2.loose_floors import LooseFloors
 from pop2.lava import Lava
 from pop2.pressure_plates import PressurePlates
@@ -26,6 +27,7 @@ class CavernState:
     spikes: WallSpikes = field(default_factory=WallSpikes)
     crush: GateCrush = field(default_factory=GateCrush)
     bridge: Bridge = field(default_factory=Bridge)
+    carpet: Carpet = field(default_factory=Carpet)
 
     def configure_lava(self, metadata, enhanced=True):
         self.lava = Lava(metadata, enhanced=enhanced)

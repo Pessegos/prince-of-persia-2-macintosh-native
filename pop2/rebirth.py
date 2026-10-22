@@ -76,8 +76,8 @@ class DeathState:
         # ReadKeyboard 2:47e6 tests the copied death counter >6.
         return self.counter > 6
 
-    def advance(self, action, interval, audio=None):
-        if self.counter < 0 or action not in DEAD_POSES:
+    def advance(self, action, interval, audio=None, dead_pose=False):
+        if self.counter < 0 or action not in DEAD_POSES and not dead_pose:
             return
         if audio is not None and not audio.death_ready():
             return

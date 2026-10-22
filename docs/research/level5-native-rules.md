@@ -72,20 +72,31 @@ cave bars and tile 18 at cell 23 belongs to the flying carpet:
   bars and closes fully open ones on a fresh press; `8:1508-1576` moves one
   phase per update with sound 282 (opening from 0) or 284 (closing from 3).
   IsCaveBarsOpen `8:157a` tests phase >= 3.
-- **Carpet:** SetupCarpet `8:12b6` (from Opponent1 `3:084c`), Sitting
-  `8:13a8` (from GenCtrl `6:072a`), DrawCarpet/SaveUnderCarpet/
-  DrawObjCarpet/GetCarpetShape (`8:0e48-1264`) with palette cycling
-  (ComputeBloodRGB `8:0df6`). Sitting: Prince frame 295 starts the carpet
-  and triggers cell (3, 23); while rising, below Y 100 with the bars still
-  closed the Prince gets DecLifePts(100) and death method 9 (`8:1486-1498`);
-  with them open the carpet stops at Y 39 (mode 10, JumpSeq 129, sound 117).
-  `8:14ae-14ec` selects song 115 or 116 by IsCaveBarsOpen.
-
-GenCtrl `6:099a-09fe`: in level 5 room 3, a Prince whose cell or the
-cell to its left is tile 18, outside selected sequences 17/20, starts the
-carpet (`8:14ae`: JumpSeq 128, X 425, +30 facing right, song 115 if the
-bars are open, else 116). The carpet ride and level exit are the next
-bounded task.
+- **Carpet (implemented, `pop2/carpet.py`):**
+  - GenCtrl at frame 109 (`6:06b4` -> `6:099a`, check `6:09b4-09fe`): in
+    level 5 room 3, a crouching Prince whose stored cell or the cell to its
+    left is tile 18, outside selected sequences 17/20, sits down (`8:14ae`):
+    JumpSeq 128, X 425 (+30 facing right; port 218/248), song 115 with the
+    bars open, else 116.
+  - SEQS 128: frame 296 four times, then frame 295 rising (-6 moves, 361
+    pixels in all), -16 (next level), then SEQS 199 (frame 295 forever).
+  - Sitting `8:13a8` (GenCtrl at frame 295, `6:0722`): the first call
+    starts the carpet counter. Later, below Y 100 with the bars not open it
+    crashes: Y 39, mode 10 (hidden), JumpSeq 129 (-> 199), sound 117. The
+    next frames apply DecLifePts(100) and death method 9; IsDeadPos
+    (`4:4814-4842`) counts a dead mode-10 Prince in room 3 as a dead pose.
+  - Drawing: DrawCarpet `8:0e48` paints the unused carpet (SHAP 25312) at
+    X 149, bottom 363; SetupCarpet `8:12b6` paints the ridden carpet at the
+    Prince's X/Y plus a5-0x3104 offsets (-30 facing right), shape 25303 +
+    a5-0x311a[frame]. Frame `8:11e4`: counter mod 9, then counter mod 6 + 3;
+    after a crash min(counter + 8, 10) (SHAP 25318, the underside).
+    DrawObjCarpet `8:11a4` counts each drawn frame.
+  - **Palette [I]:** CheckCarpetImg `8:0d30` loads CTBL 25303 at entries
+    32-46. The SHAPs also use entries 16-30, whose gameplay source is not
+    recovered; the port uses Prince CTBL 2000 under CTBL 8000. Not
+    reproduced: the red fade of entries 45/46 (`8:10ba-119c`).
+  - After the ride the port plays the cavern end song (32) and leaves the
+    completed level on screen; level six is not available.
 
 ## Other level-five checks still to read [?]
 

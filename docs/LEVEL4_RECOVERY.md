@@ -270,5 +270,12 @@ Not reproduced: the per-plank wobble (`8:06d8`, RedrawBrgFloor) and the
 IsBrgGateOpen's other branches. The other level-five rules are listed in
 `docs/research/level5-native-rules.md`.
 
+**The level-five finale (room 3).** The upper-right plate toggles the
+ceiling bars. Crouching on the carpet sits the Prince on it and the carpet
+rises; with the bars open it carries him out of the level (SEQS 128 ends
+with the next-level opcode), with them closed it crashes into them and he
+dies (death method 9). Details and the provisional carpet palette are in
+`docs/research/level5-native-rules.md`.
+
 **Not yet implemented:**
 - the death message's 600-frame game-over timeout (`2:67fa-6806`).

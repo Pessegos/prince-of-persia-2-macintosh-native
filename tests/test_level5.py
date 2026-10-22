@@ -38,3 +38,83 @@ class CeilingBarsSceneTests(unittest.TestCase):
 
         program = scene.level_renderer.cavern_program
         self.assertEqual(cavern_pressure_signature(program, 2, scene.game.caverns)[0], 3)
+
+
+class CarpetTests(unittest.TestCase):
+    """Sitting 8:13a8, frame selection 8:11e4 and SetupCarpet 8:12b6."""
+
+    def test_first_ride_frame_starts_the_carpet_and_low_closed_bars_crash_it(self):
+        from pop2.carpet import CRASH_SOUND, Carpet
+
+        carpet = Carpet()
+        self.assertEqual(carpet.sit(346, False), (None, False, False))
+        self.assertEqual(carpet.counter, 1)
+        self.assertEqual(carpet.sit(100, False), (None, False, False))
+        self.assertEqual(carpet.sit(99, True), (None, False, False))
+        self.assertEqual(carpet.sit(99, False), (CRASH_SOUND, True, False))
+        self.assertEqual((carpet.counter, carpet.crashed), (1, True))
+        self.assertEqual(carpet.sit(39, False), (None, False, True))
+
+    def test_frames_unfold_then_wave_and_a_crash_shows_the_underside(self):
+        from pop2.carpet import Carpet
+
+        carpet = Carpet()
+        frames = []
+        for counter in range(1, 16):
+            carpet.counter = counter
+            frames.append(carpet.frame())
+        self.assertEqual(frames, [1, 2, 3, 4, 5, 6, 7, 8, 6, 7, 8, 3, 4, 5, 6])
+        carpet.crashed, carpet.counter = True, 1
+        self.assertEqual(carpet.frame(), 9)
+        carpet.counter = 5
+        self.assertEqual(carpet.drawing(218, 39, 0), (25318, 218 - 69, 39 + 8))
+        self.assertEqual(Carpet().sit_x(1), 248)
+
+    def test_counter_only_runs_once_the_carpet_is_used(self):
+        from pop2.carpet import Carpet
+
+        carpet = Carpet()
+        carpet.advance()
+        self.assertEqual(carpet.counter, 0)
+        carpet.counter = 3
+        carpet.advance()
+        self.assertEqual(carpet.counter, 4)
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class CarpetRideSceneTests(unittest.TestCase):
+    def setUp(self):
+        CeilingBarsSceneTests.setUp(self)
+
+    def tick(self, count=1):
+        CeilingBarsSceneTests.tick(self, count)
+
+    def ride(self, bars_open):
+        scene = self.scene
+        if bars_open:
+            scene.game.caverns.plates.foreground[2, 6] = 3
+        scene.jump_to_room(2, 2, 200, 0)
+        self.tick(3)
+        # Crouching (frame 109) on carpet cell 23 sits down (GenCtrl 6:09b4).
+        scene.physics.select(scene.sequence_runtime, 50)
+        for _ in range(60):
+            self.tick()
+            if scene.game.caverns.carpet.crashed or scene.game.complete:
+                break
+        return scene
+
+    def test_open_bars_let_the_carpet_carry_the_prince_out_of_level_five(self):
+        scene = self.ride(True)
+        self.assertTrue(scene.game.complete)
+        self.assertTrue(scene.combat.player.alive)
+        self.assertEqual(scene.sequence_state.target_x, 218)
+
+    def test_closed_bars_crush_the_rising_prince(self):
+        scene = self.ride(False)
+        self.assertTrue(scene.game.caverns.carpet.crashed)
+        self.tick(2)
+        self.assertFalse(scene.combat.player.alive)
+        self.assertEqual(scene.sequence_state.sequence_mode, 10)
+        self.assertEqual(scene.death.method, 9)
+        self.tick(10)
+        self.assertGreater(scene.death.counter, 6)

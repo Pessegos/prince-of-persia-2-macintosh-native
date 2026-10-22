@@ -540,6 +540,46 @@ def draw_bridge_planks(frame, room_id, state, *, level_number=3):
     return frame
 
 
+@lru_cache(maxsize=1)
+def carpet_palette():
+    # CheckCarpetImg 8:0d30 loads CTBL 25303 over the skeleton entries from 32.
+    # The carpet SHAPs also use entries 16-30; their source is not recovered,
+    # so Prince CTBL 2000 under CTBL 8000 (PoPSetPalette 2:4f20) stands in.
+    prince = load_resource_file('Prince.rsrc')
+    palette = decode_ctbl(prince['CTBL'][2000]['data'])
+    palette.update(decode_ctbl(prince['CTBL'][8000]['data']))
+    palette.update(decode_ctbl(load_resource_file('Caverns.rsrc')['CTBL'][25303]['data']))
+    return palette
+
+
+def carpet_sprite(shape, resources, shapes):
+    key = ('carpet', shape)
+    if key not in shapes:
+        shapes[key] = decode_shap(resources['SHAP'][shape]['data'], carpet_palette())
+    return shapes[key]
+
+
+def draw_carpet(frame, room_id, state, prince=None, *, level_number=3):
+    """DrawCarpet 8:0e48 (unused carpet) or SetupCarpet 8:12b6 (ridden).
+
+    `prince` is (x, y, facing, action) for the Prince in this room.
+    """
+    from pop2.carpet import RIDE_FRAME, STATIC_BOTTOM, STATIC_SHAPE, STATIC_X, carpet_room
+
+    if not carpet_room(level_number, room_id):
+        return frame
+    _program, resources, _palette, shapes = cavern_assets(level_number)
+    carpet = state.carpet
+    if not carpet.counter:
+        sprite = carpet_sprite(STATIC_SHAPE, resources, shapes)
+        frame.paste(sprite, (STATIC_X, STATIC_BOTTOM - sprite.height), sprite)
+    elif prince is not None and prince[3] == RIDE_FRAME:
+        shape, x, bottom = carpet.drawing(prince[0], prince[1], prince[2])
+        sprite = carpet_sprite(shape, resources, shapes)
+        frame.paste(sprite, (x, bottom - sprite.height), sprite)
+    return frame
+
+
 def cavern_command_sprite(command, resources, palette, shapes):
     library = command[7] if len(command) >= 8 else 4
     index, flags = command[1], command[4]

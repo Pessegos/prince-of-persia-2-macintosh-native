@@ -54,6 +54,10 @@ from pop2.story_progress import MESSAGE_FRAMES, StoryProgress
 from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
 from pop2.bridge import CREAK_SOUND, bridge_checked, bridge_sag, on_bridge
+from pop2.carpet import (
+    CARPET_ROOM, CARPET_TILE, CLOSED_SONG, CRASH_SEQUENCE, OPEN_SONG, RIDE_FRAME, SIT_SEQUENCE,
+    carpet_room,
+)
 from pop2.caverns import cavern_clip_top, cavern_exit_clip
 from pop2.loose_floors import floor_hits_actor
 from pop2.render_opening import (
@@ -1884,11 +1888,12 @@ class ScenePrototype(WindowControls):
             # PlayerCtrl runs before AnimChar: count the previous dead pose,
             # not the first dead pose that this frame may be about to produce.
             self.death.advance(self.action, self.current_animation_interval_ms() / 1000,
-                               getattr(self, "audio", None))
+                               getattr(self, "audio", None), dead_pose=self.carpet_dead_pose())
         self.sample_keyboard()
         old_x = self.sequence_state.target_x
         motion = getattr(self, "terrain_motion", None)
         old_bounds = self.player_collision_bounds() if motion is not None else None
+        self.update_carpet_controls()
         if self.update_potion_controls():
             frame = self.sequence_runtime.next_frame()
             self.action, self.player_x = frame.action, frame.target_x
@@ -2080,6 +2085,53 @@ class ScenePrototype(WindowControls):
         # The remaining skid can bring the flask into reach. Try once at the
         # first standing-control pose, without retaining Shift as a modifier.
         self.pending_potion_pickup = motion.room, motion.row, state.facing
+
+    def carpet_dead_pose(self):
+        # IsDeadPos 4:4814-4842: level five room 3 counts a dead Prince in
+        # mode 10, the hidden carpet-crash pose.
+        game = getattr(self, "game", None)
+        return (getattr(game, "caverns", None) is not None
+                and carpet_room(game.level.number, self.room_id)
+                and not self.combat.player.alive and self.sequence_state.sequence_mode == 10)
+
+    def update_carpet_controls(self):
+        caverns = self.game.caverns
+        motion, state = self.terrain_motion, self.sequence_state
+        if (caverns is None or motion is None or not carpet_room(self.game.level.number, motion.room)
+                or motion.falling):
+            return False
+        carpet = caverns.carpet
+        if state.action == 109 and state.source_sequence_id not in (17, 20) and self.combat.player.alive:
+            # GenCtrl 6:09b4-09fe: crouching on the carpet tile, or just right
+            # of it, sits down (8:14ae).
+            column = self.combat._supporting_column(self.combat.player)
+            if CARPET_TILE in (self.level_map.tile(motion.room, column, motion.row).kind,
+                               self.level_map.tile(motion.room, column - 1, motion.row).kind):
+                self.clear_keys(None)
+                self.physics.select(self.sequence_runtime, SIT_SEQUENCE)
+                state.target_x = state.current_x = self.player_x = carpet.sit_x(state.facing)
+                caverns.plates.songs.append(OPEN_SONG if self.cave_bars_open() else CLOSED_SONG)
+                return True
+        if state.action == RIDE_FRAME:
+            carpet.advance()  # DrawObjCarpet 8:11a4 counted the last drawing.
+            sound, crash, kill = carpet.sit(floor_y(motion.row) + state.current_y, self.cave_bars_open())
+            if sound is not None:
+                state.sound_events.append(sound)
+            if crash:
+                # 8:1456-1474: Y 39, hidden mode 10, SEQS 129.
+                state.current_y = 39 - floor_y(motion.row)
+                self.physics.select(self.sequence_runtime, CRASH_SEQUENCE)
+                state.sequence_mode = 10
+            if kill and self.combat.player.alive and not getattr(self, 'god_mode', False):
+                # 8:1486-1498: DecLifePts(100) and death method 9.
+                self.combat.player.life = 0
+                self.death.begin(9)
+                self.status.set("Defeated")
+        return False
+
+    def cave_bars_open(self):
+        # IsCaveBarsOpen 8:157a: tile (3, 6, 0) phase >= 3.
+        return self.level_map.tile(CARPET_ROOM, 6, 0).foreground & 7 >= 3
 
     def update_potion_controls(self):
         caverns = self.game.caverns
@@ -2419,7 +2471,7 @@ class ScenePrototype(WindowControls):
         # 8:063e lowers a character standing on a plank by its sag; the port
         # applies it to drawing only.
         game = getattr(self, "game", None)
-        motion = actor.terrain_motion
+        motion = getattr(actor, "terrain_motion", None)
         if (getattr(game, "caverns", None) is None or motion is None or game.level.number != 5
                 or getattr(self, "level_map", None) is None or motion.falling):
             return 0
@@ -2451,7 +2503,7 @@ class ScenePrototype(WindowControls):
         audio = getattr(self, "audio", None)
         playing = audio is not None and audio.sound_playing(CREAK_SOUND)
         state.sound_events.extend(bridge.creak(prince, opponent, playing))
-        sounds, push = bridge.check_break(prince, opponent, state.selected_sequence_id)
+        sounds, push = bridge.check_break(prince, opponent, state.source_sequence_id)
         state.sound_events.extend(sounds)
         motion = self.terrain_motion
         if push and motion is not None and state.facing:
@@ -2687,7 +2739,7 @@ class ScenePrototype(WindowControls):
                 self.clear_keys(None)
                 self.start_sequence(IDLE_SEQUENCE)
         if self.game.consume_completion():
-            if self.game.level.number in (1, 3, 4):
+            if self.game.level.number in (1, 3, 4, 5):
                 import json
                 from pop2.level_transition import LevelExit
                 from pop2.paths import ASSET_DIR
@@ -3711,6 +3763,15 @@ class ScenePrototype(WindowControls):
                 TILE_HEIGHT + SCENERY_Y_OFFSET + dy - curtain.height,
             ), curtain)
         combat = getattr(self, "combat", None)
+        motion = getattr(self, "terrain_motion", None)
+        if getattr(self.game, "caverns", None) is not None and motion is not None:
+            from pop2.caverns import draw_carpet
+
+            state = self.sequence_state
+            frame = draw_carpet(frame, self.room_id, self.game.caverns,
+                                (state.target_x, floor_y(motion.row) + state.current_y,
+                                 state.facing, state.action) if motion.room == self.room_id else None,
+                                level_number=self.game.level.number)
         frame = Image.alpha_composite(frame, self.foreground)
         self.level_renderer.remember_scenery(frame)
         hide_guards = getattr(self, "peaceful", False) and getattr(self, "demo", None) is None

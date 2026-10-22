@@ -18,6 +18,7 @@ from PIL import Image
 
 from pop2.cavern_state import CavernState
 from pop2.bridge import Bridge
+from pop2.carpet import Carpet
 from pop2.darts import Dart, Darts
 from pop2.desert_state import DesertState, Stone
 from pop2.game_session import GameSession
@@ -42,7 +43,7 @@ VERSION = 2
 MAX_BYTES = 2 * 1024 * 1024
 SAVE_DIRECTORY = Path.home() / 'Saved Games' / 'PoP2 Macintosh Native'
 CLASSES = {cls.__name__: cls for cls in (
-    Bridge, CavernState, Dart, Darts, DesertState, Stone, GateCrush, Harbor,
+    Bridge, Carpet, CavernState, Dart, Darts, DesertState, Stone, GateCrush, Harbor,
     WaterEntry, Lava, LavaPool, FallingFloor, LooseFloors, OpponentGenerationPoint,
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
     Skeleton, SkeletonRoomRecord, GuardRoomRecord, TerrainMotion, WallSpikes,
@@ -168,7 +169,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     if cls is Potions:
         optional.update(('fatal', 'float_timer'))
     if cls is CavernState:
-        optional.add('bridge')
+        optional.update(('bridge', 'carpet'))
     if (not isinstance(record, dict) or set(record) - allowed
             or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')
@@ -364,6 +365,10 @@ def read_snapshot(path, resources):
                        or not 0 <= plank[1] <= 13 for plank in bridge.planks)
                 or any(song != 121 for song in bridge.songs)):
             raise SaveGameError('Invalid bridge state')
+        carpet = game.caverns.carpet if game.caverns is not None else None
+        if carpet is not None and (type(carpet.counter) is not int or not 0 <= carpet.counter < 2**31
+                                   or type(carpet.crashed) is not bool):
+            raise SaveGameError('Invalid carpet state')
         if game.opening is not None:
             opening = saved['opening']
             if (not isinstance(opening, dict) or set(opening) != {'active', 'phase', 'tick'}
