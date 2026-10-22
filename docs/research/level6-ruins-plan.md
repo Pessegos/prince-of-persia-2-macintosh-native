@@ -38,9 +38,12 @@ render of port room 16 matches the ruins look.
   (caverns: 3562/3563). `tools/extract_pressure_plates.py` and the runtime's
   shape remapping (`pop2/caverns.py`) assume the cavern shapes and need
   per-environment tables or stored variant commands.
-- Port room 26 (the start room) is a CUST room (4650) with its own palette;
-  rendered with CTBL 3500 alone its colours are wrong. Its enter hook (table
-  a5-0x4c2e by CUST kind) must be read, as was done for level five's room 3.
+- Port room 26 (the start room) is a CUST room (4650, kind 22). Its enter
+  hook `7:37a6` (template table a5-0x4c2e) loads CTBL 3502 at entry 64
+  (`S03_508A`), covering entries 64-218; with that overlay the exported
+  room renders correctly. Its leave hook `7:37b6` restores CTBL 3500 at 64
+  under a condition still to read; `7:37d6` (kinds 20/21/22) plays songs
+  292/185 by camera room and the Prince's column.
 - The sword item SHAP needs the Prince/sword palette, not CTBL 3500.
 - Cavern-only data (torches 3581-3589, lava) are skipped for environment 4.
 
