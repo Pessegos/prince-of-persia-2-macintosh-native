@@ -94,7 +94,8 @@ The inventory retains candidate tile IDs without assuming all behavior:
 The first bounded mechanism block is now recorded in
 [trap-door triggering](temple-trapdoors.md): actual cells, full native
 constructor/append/capacity handling, explicit sound/redraw boundaries.
-Animation, caller scheduling and collision remain open. Then investigate
+The follow-up probes below recover bounded animation/lifecycle effects;
+full caller scheduling and collision remain open. Then investigate
 sliding-rock activation/persistence, temple draw
 dispatch/custom callbacks, Birdhead combat/frame data, altar/flame/story rules.
 Do not treat this list as complete temple rule coverage.
@@ -107,6 +108,9 @@ Do not treat this list as complete temple rule coverage.
 - [Presentation/restoration](temple-trapdoor-presentation.md): native full
   ATM body restores level cell even when invisible, with prepared image-cache
   headers, transient draw coordinates and explicit visibility/drawing services.
+- [Connected lifecycle](temple-trapdoor-lifecycle.md): real constructor and
+  both native bank dispatchers across40 stateful traces/800 supplied cycles;
+  restoration and next-update compaction, without complete FrameAdv simulation.
 
 These supersede the initial animation-state gaps only in their documented
 subsets. Actual pixels, complete scheduling, sound state and collision remain open.

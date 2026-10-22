@@ -67,5 +67,7 @@ instruction behavior, not live reachability.
 
 No rendering, restoration, actual sound state, full-frame scheduling,
 collision/damage, save/restart or campaign equivalence claim.
-Next: full ATMTrapDoor10:225c presentation/restoration, especially whether
-restoration depends on visibility and what the render-only offsets affect.
+The subsequent [presentation probe](temple-trapdoor-presentation.md) and
+[connected lifecycle probe](temple-trapdoor-lifecycle.md) now cover the ATM
+restoration effects and bank handoff, with their explicit supplied services.
+Complete FrameAdv ordering and real audio remain open.

@@ -98,9 +98,9 @@ capacity safeguards or reproduce a lost-animation failure silently.
 - Foreground and actor column controls are supplied independently and are
   not all certified reachable in live play.
 
-No animation update, sprite rectangles/QuickDraw, actual sound playback,
-redraw lifecycle, character collision/crush behavior, full-frame ordering,
-save/restart persistence or campaign integration is certified.
-Next bounded task: follow ATMTrapDoor10:225c from the constructor's two
-initial +0xe values, separating arithmetic/state effects from drawing and
-character-damage callbacks. Sliding-rock mechanics remain a distinct track.
+This initial constructor probe does not certify animation update, actual
+sound/pixels/redraw lifecycle, character collision/crush, full-frame ordering,
+save/restart or campaign integration. Subsequent [advance](temple-trapdoor-advance.md),
+[presentation](temple-trapdoor-presentation.md) and [connected lifecycle](temple-trapdoor-lifecycle.md)
+probes establish their documented subsets without removing the broader gaps.
+Sliding-rock mechanics remain a distinct next track.

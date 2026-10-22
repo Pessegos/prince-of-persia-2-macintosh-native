@@ -97,5 +97,6 @@ or externally supplied phase0 cannot occur elsewhere.
 The fixture supplies a roomy clipping rectangle. No visible-neighbor path,
 sound queue, sprite pixels, collision/damage, complete FrameAdv scheduling,
 save/restart or playable campaign integration is certified.
-Next: connect the native constructor, advance-bank pass and presentation-bank
-pass in explicit sequences, with deletion/compaction observed across calls.
+The subsequent [connected lifecycle probe](temple-trapdoor-lifecycle.md) joins
+constructor, advance-bank and presentation-bank passes in explicit sequences,
+observing deletion/compaction across calls without claiming complete FrameAdv.
