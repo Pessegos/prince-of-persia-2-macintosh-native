@@ -36,7 +36,7 @@ The executable's expanded A5 file tables select:
 | Scenery resource fork | OpenLevelRsrcFile 3:51fa, six-byte entries at A5-0x4724 indexed by environment | `Ruins.rsrc` |
 | Opponent resource fork | LoadOppSet 3:5f58/6014, entries at A5-0x464a indexed by LEVL +0x21a4 | `Head.rsrc`, set 5 |
 | Prince palette | SetKidPalette 3:5f1c, CTBL 25000 + environment | CTBL 25004 |
-| Entry sequence | SetKidDefaults 2:5d98-5e36 | Ordinary standing SEQS 5, static branch reading |
+| Entry sequence | SetKidDefaults 2:5d98-5e36 | Ordinary standing SEQS 5, original selector executed to just before JumpSeq |
 
 Level 6 also uses environment 4 and opponent set 5. A future ruins renderer
 and special-actor support should therefore be shared between levels 6 and 7,
@@ -58,6 +58,11 @@ The original level has 14 initial generator records in ten rooms:
 2, 3, 7, 9, 10, 20, 22, 24, 29 and 31. Six records start with SEQS 170,
 the other eight with SEQS 130. These are raw generator fields, not proof
 of actor controller semantics or complete dynamic spawn counts.
+
+In particular, the set number 5 is not an instruction to make every actor
+type 5: the records' +0x18 words contain six 5s, two 6s and six 8s. This
+mixed metadata needs the native initialization/dispatch path; copying the
+ordinary-guard constructor with a new palette would discard it.
 
 Potential integration targets, retaining native room/cell numbers:
 
@@ -100,3 +105,67 @@ The inventory does not make level 7 playable, decode its art or prove AI,
 movement, timing, full-level solvability or visual equivalence. No source
 resources are bundled. Native probes and later milestones must state their
 supplied endpoints and exclusions separately.
+
+## Native Crevice And Entry Probe
+
+```powershell
+python -m tools.probe_level7_rules --source PATH_TO_RECOVERY --output rendered/level7-native-rules.json
+python -m unittest -q tests.test_inspect_level7 tests.test_probe_level7_rules
+```
+
+The probe executes the original 68000 instructions with Unicorn. It loads
+the real DATA/ZERO, jump-table targets and LEVL 2006; its comparison model
+uses its own narrow decoder, not the port's LevelMap. Every instruction
+must stay in a declared routine range, a relocated jump stub or an explicit
+supplied service. Each call has a 50,000-instruction limit and must reach
+its designated stop. Errors/differences abort the command.
+
+Results on the preserved executable (SHA-256
+`ca2c5886244efa7e19d63fee9317ae5c2341b8a7cc79c7740fdd505575f44bd5`):
+
+- Helper 7:332a: 1,920 cases, all 960 actual cells with reveal=0/1.
+  74 cases change the level bytes; zero native/reference differences.
+- Front trigger 7:3404: 3,840 cases, all cells, both native facings and
+  selected sequence 5/17. 26 cases change the level bytes; zero differences.
+- Another 31 supplied-foreground controls force low bits to 3 at actual
+  crevice cells adjacent to an in-room actor: all reject revelation.
+  These are counterfactual controls, not untouched level fixtures.
+- 7:3328 returns without changing the level or calling a supplied service.
+- The original entry selector returns SEQS 5. Execution stops at 2:5e36,
+  before JumpSeq; this is not a complete SetKidDefaults/entry-animation test.
+- GetEndSong 5:4e0c returns 124, not the cavern cue 32. IsTimeForNIS
+  2:00e8 returns false for the tested fresh and resumed level-seven entries
+  with demo/disable/death fields cleared. This does not bypass or recover
+  the separate CheckPlayNIS tree-scene decision between campaign levels.
+
+### Recovered Mutation Rule
+
+The scan helper does **not** only search two or three cells around the actor.
+It scans columns `min(actor_column - 2, 0)` through
+`max(actor_column + 3, 10) - 1`, finds the first tile-7 group, walks left to
+its start, and then changes the entire contiguous group. Native ReadCell
+follows horizontal links, so a group can cross a room boundary. It stops at
+the next non-7 cell, rather than affecting every separate crevice on the row.
+
+Reveal sets foreground bit 0x80; hide clears it. All other bits are retained.
+The front-trigger wrapper rejects selected sequence 17, a non-7 front tile,
+or a front tile with low bits equal to 3, otherwise invoking that scan with
+reveal=1. Existing bit-0x80 cells are not evidence of a different tile kind.
+
+### Exclusions And Supplied Endpoints
+
+- IsVisibleRoomCell 5:3960 returns false; redraw 5:1936 returns without
+  drawing. No native visibility result, redraw side effect or pixels are
+  certified. Neighbor-redraw call sites still execute around these stubs.
+- ReadCell, CalcBlue, FirstInRow, GetCellsInFront and the original direction
+  tables execute natively. No port collision/geometry decoder is substituted
+  for them. The reference covers in-range rows and horizontal traversal only.
+- Actor positions, facing and selected sequence are supplied independently.
+  The probe does not establish that every supplied state is reachable in
+  ordinary play, or recover controller/frame scheduling.
+- Full-level byte comparisons cover the crevice mutations, not CPU flags,
+  all A5 scratch fields, special enemies, audio playback or timing.
+
+The 16 synthetic unit tests validate inventory/reference edge cases without
+assets; they do not independently rerun the native comparisons. Runtime
+integration, visual variants and the special-actor controllers remain open.
