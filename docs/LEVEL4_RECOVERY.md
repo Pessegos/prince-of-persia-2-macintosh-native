@@ -228,9 +228,42 @@ level four was at first:
 - after the exit song and any first tree scene, the level-four exit loads
   level five, keeping the maximum life.
 
-Missing: bridge gameplay (BridgeCheckBreak, TriggerBrgFloor, ATMBrgFloor and
-MarkBrgFloorsForChars in CODE 8) and the other level-five rules listed in
-`docs/research/level5-native-rules.md`. The rope bridge is static floor.
+**The rope bridge breaks** (`pop2/bridge.py`, CODE 8). The Caverns frame
+hook (A5 table -0x46f8, entry `8:3b92`) calls BridgeCheckBreak after the
+characters move, in level five's rooms 7, 10 and 12:
+- **Counter:** while the Prince and the room's first opponent stand on
+  bridge tiles (44) within three columns, a5-0x3132 rises each frame;
+  apart it falls by one, and with fewer than two on the bridge by two. The
+  Prince standing (frame 15) or in frame 185 does not count (`8:01f6`).
+- **Break:** at 60, with the Prince in columns 4-6, the opponent in 5-6 and
+  the Prince's selected sequence not 85, the state goes 1, 2, 3; then one
+  plank per frame drops, from column 7 down to 3 (sound 123 and song 121 on
+  the first). Each emptied cell becomes tile 0 with foreground 0xc000, so
+  the characters fall. The state ends at -1 (earlier if the Prince's
+  selected sequence is 85); a Prince in column <= 4 facing right then
+  moves 17 pixels (AddCharX).
+- **Planks:** each dropped plank is a mob (`8:0c1a`): Rnd(1) makes it hang
+  (frames 0-7, held at 7) or fall (frames 8-13, then removed). Tables
+  a5-0x3188/-0x316c/-0x3150 give its CUST record (SHAP 4226-4232) and draw
+  offsets; DrawObjBrgFloor draws it at the column and the row-1 floor plus
+  the column's sag (a5-0x319a: 2, 4, 6, 7, 7, 7, 6, 3).
+- **Scenery:** a native redraw of each collapse stage equals the room-10
+  export without the fallen columns' SHAP 4226 commands (also the climb
+  layers), so the port filters them.
+- **Turns:** DoTurn (`6:26c0-26d8`) and the voluntary turn
+  (`6:2314-2330`) are refused in room 10 while the state is positive.
+- **Creak:** sound 122 at Rnd(40) with both characters on the bridge,
+  Rnd(80) with one, unless it is still playing (`8:0534`).
+- **Sag:** on a bridge tile, outside frames 34-44, the native Y follows the
+  plank sag (`8:063e`); the port applies it to drawing only.
+
+Not reproduced: the per-plank wobble (`8:06d8`, RedrawBrgFloor) and the
+±1 Y it adds; the opponent AI bridge predicates (`8:02ae`, `8:04a2`) and
+IsBrgGateOpen (`8:033c`), which removes a falling opponent below row 3
+outside rooms 7, 10 and 12. An opponent that falls while the Prince has
+left room 10 stays where it was, as other off-room opponents do. The
+other level-five rules are listed in
+`docs/research/level5-native-rules.md`.
 
 **Not yet implemented:**
 - the death message's 600-frame game-over timeout (`2:67fa-6806`).

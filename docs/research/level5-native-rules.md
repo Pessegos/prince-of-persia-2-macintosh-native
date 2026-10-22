@@ -23,26 +23,27 @@ Labels: **[D]** direct reading; **[I]** inference; **[?]** not yet read.
 
 ## The bridge (CODE 8 "Caverns")
 
-The state lives in a5-0x3130 (0 intact, 1 triggered, 3 collapsing) and the
-counter a5-0x3132 [D].
+Implemented; see `docs/LEVEL4_RECOVERY.md` ("The rope bridge breaks") for
+BridgeCheckBreak `8:002e-016c`, the plank mobs (`8:0c1a`, TriggerBrgFloorMob
+`8:0ba2`, ATMBrgFloor `8:0976`, DrawObjBrgFloor `8:0b44`) and the native
+check of the redraw at each collapse stage.
 
-**BridgeCheckBreak `8:0004-016c` [D].**
-- It resolves the bridge columns of the Prince and of the opponent
-  (BridgeGetCharCol `8:0188`, `8:01e2`/`0252`).
-- While both stand on it within three columns of each other, the counter
-  rises once per call. At 60, with the Prince in columns 4-6, the opponent in
-  columns 5-6 and the Prince's selected sequence not 85, the state becomes
-  1. The two must therefore fight on the middle of the bridge long enough.
-- Apart, the counter falls by one; with no character on the bridge it falls
-  by two.
-- From state 3, pieces are triggered (`8:0c1a`) from column 7 downwards, with
-  sound 123 and song 121.
-
-**Other bridge routines [?]:** MarkBrgFloorsForChars `8:050e`,
-MarkBridgeForCol `8:05cc`, OffsetBrgFloorY/RestoreBrgFloorY
-`8:0772`/`081e`, RedrawBrgFloor `8:0878`, TriggerBrgFloor `8:091c`,
-ATMBrgFloor `8:0976`, DrawObjBrgFloor `8:0b44`, TriggerBrgFloorMob `8:0ba2`
-and IsBrgGateOpen `8:033c`.
+**Still open [D, read but not implemented]:**
+- `8:06d8`/RedrawBrgFloor `8:0878`: the planks under marked columns
+  (a5-0x3134, MarkBridgeForCol `8:05cc`) wobble between CUST records 3-5
+  (Rnd(3)), adding ±1 to a character's Y (`8:0682-06be`).
+- `8:02ae`: opponent predicate for EnGarde/GenFight/DoKidEngarde; facing
+  right it is true from bridge column 8; facing left below column 2, at the
+  room-7 gate (`8:0424`/`8:0458`, cell 13 state 0 or 2), or when an armed
+  character within 204 pixels to its right stands in column <= 6 while
+  tension a5-0x36a2 is 2 and a5-0x36a0 >= 20.
+- `8:04a2`: InRange/EnGarde predicate on the bridge column (< 3 facing
+  right, > 3 facing left).
+- IsBrgGateOpen `8:033c`: removes a falling (mode 4) opponent below row 3
+  outside rooms 7/10/12, and drives the room-7 gate (`8:2c38`).
+- BridgeCheckBreak's room-7 side effect (`8:020a-0236`): an armed Prince
+  outside the bridge, in room 7 column <= 5 with the cell-13 gate state 0
+  or 2, triggers TriggerGateWithRevPlate(7, 13).
 
 **Rules elsewhere that depend on the bridge state [D]:**
 - Prince turn `6:26d2` and voluntary turn `6:2322-2330`: no turn in level 5,
