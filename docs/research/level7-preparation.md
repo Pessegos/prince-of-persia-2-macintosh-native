@@ -241,5 +241,8 @@ The next initialization and frame-loading blocks are now recorded separately:
 - [Head recovery](level7-head-recovery.md): full peaceful/done-attacking
   leaves and rejected-target wrapper checks, including cached native-ALIVE
   threshold, pointer derivation, working-bank save and Prince restoration.
+- [Head movement admission](level7-head-movement.md): native obstacle/cell
+  predicates, vertical-overshoot rejection, X-middle window and variant gate
+  clearance, with supplied body bounds and no stubbed services.
 
 These results do not enable the campaign or claim complete special-actor AI.
