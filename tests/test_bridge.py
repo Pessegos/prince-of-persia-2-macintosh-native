@@ -289,3 +289,15 @@ class BridgeGuardAiTests(unittest.TestCase):
         self.place(200, 0)
         self.assertFalse(skeleton.skeleton.bridge_guard(self.combat, skeleton))
         self.assertEqual((skeleton.state.facing, skeleton.state.target_x), (1, 210))
+
+
+class BridgeRoomCutTests(unittest.TestCase):
+    def test_bridge_room_opponents_always_follow_the_prince(self):
+        # CutAllOpponents 6:4510-4540 for level five's rooms 7/10/12, row not 0.
+        from types import SimpleNamespace
+        from pop2.combat import opponent_follows_cut
+
+        guard = SimpleNamespace(state=SimpleNamespace(action=171, target_x=300), generation_flags=0,
+                                alive=False, native_alive=False, skeleton=None, sword_drawn=False, row=1)
+        self.assertTrue(opponent_follows_cut(guard, 'left', 1, bridge_room=True))
+        self.assertFalse(opponent_follows_cut(guard, 'left', 1))

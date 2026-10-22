@@ -61,12 +61,13 @@ def _native_alive(guard):
     return guard.alive if guard.native_alive is None else guard.native_alive
 
 
-def opponent_follows_cut(guard, direction, count, *, in_destination=False):
+def opponent_follows_cut(guard, direction, count, *, in_destination=False, bridge_room=False):
     # CutAllOpponents 6:4476-4626, ordinary guards and skeletons only.
     state = guard.state
     running = (186 <= state.action <= 201 and guard.generation_flags != 0
                or 202 <= state.action <= 212 and guard.generation_flags == 1)
-    if running or in_destination:
+    # 6:4510-4540: level five's bridge rooms (row not 0) always carry them.
+    if running or in_destination or bridge_room:
         return True
     native_alive = guard.alive if guard.native_alive is None else guard.native_alive
     if guard.skeleton is not None:
@@ -361,7 +362,8 @@ class CombatEncounter:
                         or len(self.guards) >= 5):
                     continue
                 if opponent_follows_cut(view, direction, len(self.guards),
-                                        in_destination=self._position_room(guard) == room):
+                                        in_destination=self._position_room(guard) == room,
+                                        bridge_room=self._bridge_fight_room(view)):
                     self._carry_opponent(guard, room, previous_room, direction)
         for actor, view in room_records:
             if actor.room != room and removed_on_room_save(actor):
