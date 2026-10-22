@@ -232,5 +232,7 @@ The next initialization and frame-loading blocks are now recorded separately:
   loading for all tested head/serpent pose combinations, including type-8 remap.
 - [Head mode routing](level7-head-mode-routing.md): original wrapper with
   native frame/record loading, supplied visibility and inert AI leaves.
+- [Neck alignment](level7-neck-alignment.md): full original coordinate helper,
+  native drawn-object lookup and actual alignment metadata/sprite dimensions.
 
 These results do not enable the campaign or claim complete special-actor AI.
