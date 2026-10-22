@@ -91,6 +91,9 @@ class LevelDefinitionTests(unittest.TestCase):
         for number in (1, 2, 5):
             for kind, blocked in ((5, {10}), (6, {2, 4}), (1, set())):
                 level_map = LevelMap(level_bytes(number, kind))
+                # CutChar 6:4cd2-4ce4 separately vetoes level five's bridge
+                # chasm (native room 10) by level number, in any environment.
+                blocked = blocked | ({9} if number == 5 else set())
                 for room in range(20):
                     with self.subTest(number=number, kind=kind, room=room):
                         self.assertEqual(level_map.allows_down_cut(room), room not in blocked)
