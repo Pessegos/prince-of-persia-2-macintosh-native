@@ -75,6 +75,9 @@ This does not establish identical ordinary-guard/Birdhead AI or initialization.
 Entry testing stops BEFORE JumpSeq/AnimChar. Native X600 is a canary for
 the non-level10 selectors, not their actual spawn coordinate. Actual entry
 position, SEQS2 execution, level9->10 story playback and restarts remain open.
+The nativeX430 special selection corresponds to portX223 under the usual
+207-pixel conversion, not the header's portX175. Do not simply reuse the
+generic header start when integrating that entry.
 
 ## Mechanism Priorities And Integration Gates
 
@@ -88,8 +91,10 @@ The inventory retains candidate tile IDs without assuming all behavior:
 - Tile43 occurs once, level13 room4/cell11. Altar/shadow/flame logic and
   NISTemple15:5fd4 are separate targets; no behavior inferred from the tile alone.
 
-First bounded mechanism target: trap-door triggering/construction with
-actual cells, full native mob append/capacity handling and explicit sound/
-redraw boundaries. Then sliding-rock activation/persistence, temple draw
+The first bounded mechanism block is now recorded in
+[trap-door triggering](temple-trapdoors.md): actual cells, full native
+constructor/append/capacity handling, explicit sound/redraw boundaries.
+Animation, caller scheduling and collision remain open. Then investigate
+sliding-rock activation/persistence, temple draw
 dispatch/custom callbacks, Birdhead combat/frame data, altar/flame/story rules.
 Do not treat this list as complete temple rule coverage.
