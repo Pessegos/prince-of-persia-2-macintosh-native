@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field, replace
 import struct
 
+from pop2.bridge import bridge_checked
 from pop2.loose_floors import pressure_tile
 from pop2.darts import Darts
 from pop2.terrain import floor_contact_x
@@ -43,8 +44,12 @@ class PressurePlates:
         tile = pressure_tile(terrain, motion, state, record)
         if tile is None or tile.kind not in (5, 6, 34):
             return ()
+        # TriggerGateWithRevPlate 8:2d66-2d96: a skeleton on level five's
+        # bridge rooms (row not 0) cannot open a shut reversible gate.
+        shut_only = (state.actor_type == 4 and motion.row != 0 and bridge_checked(
+            struct.unpack_from('>H', terrain.level, 0x218a)[0], motion.room))
         return self.push(terrain, tile, permanent=not alive and state.actor_type != 4,
-                         action=state.action)
+                         action=state.action, shut_only=shut_only)
 
     def impact(self, terrain, room, cell, kind):
         value = struct.unpack_from('>H', terrain.level, 0x780 + room * 120 + cell * 4)[0]
@@ -52,7 +57,7 @@ class PressurePlates:
         tile = replace(terrain.tile(room, cell % 10, cell // 10), kind=kind, foreground=value)
         return self.push(terrain, tile, permanent=True, impact=True)
 
-    def push(self, terrain, tile, permanent=False, action=15, impact=False):
+    def push(self, terrain, tile, permanent=False, action=15, impact=False, shut_only=False):
         if tile.room is None or tile.kind not in (5, 6, 34):
             return ()
         index = tile.foreground & 255
@@ -67,12 +72,13 @@ class PressurePlates:
                 self.add(key, 1)
                 if action != 185:
                     cues.append(27)
-        cues.extend(self.trigger(terrain, index, tile.kind, bool(tile.foreground & 0x2000), impact))
+        cues.extend(self.trigger(terrain, index, tile.kind, bool(tile.foreground & 0x2000), impact,
+                                 shut_only))
         # PushPlate writes the depression bit after traversing the entire chain.
         self.foreground[key] = tile.foreground | 0x2000
         return tuple(cues)
 
-    def trigger(self, terrain, index, how, depressed=False, impact=False):
+    def trigger(self, terrain, index, how, depressed=False, impact=False, shut_only=False):
         seen = set()
         cues = []
         while index != -3:
@@ -88,7 +94,7 @@ class PressurePlates:
             key = room - 1, cell
             self.triggered.append((tile.kind, *key, how))
             if tile.kind == 4:
-                self.trigger_gate(key, tile.foreground, how, depressed, impact)
+                self.trigger_gate(key, tile.foreground, how, depressed, impact, shut_only)
             elif tile.kind == 33 and not depressed and not tile.foreground & 7:
                 # TriggerObject 5:1f8c and TriggerDart 5:49b6: a fresh plate
                 # and an idle shooter; the first mouth pose loads immediately.
@@ -108,7 +114,7 @@ class PressurePlates:
             index = following
         return tuple(cues)
 
-    def trigger_gate(self, key, foreground, how, depressed=False, impact=False):
+    def trigger_gate(self, key, foreground, how, depressed=False, impact=False, shut_only=False):
         position = foreground & 255
         high = foreground & 0xff00
         phase = self.active.get(key)
@@ -124,6 +130,8 @@ class PressurePlates:
                 self.active[key] = 3
             elif phase is None and position != 255:
                 if position == 0:
+                    if shut_only:
+                        return
                     if impact or not depressed:
                         self.add(key, 3 if impact else 2)
                 elif position != 56:

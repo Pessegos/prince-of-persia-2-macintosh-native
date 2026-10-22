@@ -328,6 +328,22 @@ class LevelFiveRoomSevenGateTests(unittest.TestCase):
     def set_link(self, *arguments):
         PressurePlateTests.set_link(self, *arguments)
 
+    def test_a_bridge_skeleton_cannot_open_a_shut_reversible_gate(self):
+        # TriggerGateWithRevPlate 8:2d66-2d96: skeleton (actor 4) on a row
+        # other than 0 of level five's rooms 7/10/12; the Prince still opens it.
+        from pop2.animation_data import FrameRecord
+        from pop2.sequence_runtime import SequenceState
+        from pop2.terrain import TerrainMotion
+
+        for number, actor_type, opens in ((5, 4, False), (5, 0, True), (4, 4, True)):
+            with self.subTest(number=number, actor_type=actor_type):
+                PressurePlateTests.setUp(self)
+                struct.pack_into('>H', self.level, 0x218a, number)
+                self.set_tile(9, 14, 34, 1)
+                state = SequenceState(2, action=15, target_x=4 * 51 + 30, actor_type=actor_type)
+                self.plates.press(self.terrain, TerrainMotion(9, 1), state, FrameRecord(15, 0, 0, 0, 0, 0x40))
+                self.assertEqual((0, 15) in self.plates.active, opens)
+
     def test_room_seven_gate_holds_open_only_in_level_five(self):
         self.assertEqual(self.gate(5, 6), 237)
         self.assertLess(self.gate(4, 6), 184)
