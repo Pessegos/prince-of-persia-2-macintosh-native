@@ -297,8 +297,6 @@ class ImportedPotionTests(unittest.TestCase):
 
     def test_floating_head_under_a_solid_cell_steps_back_and_refloats(self):
         # CheckBarr 4:50b2-514e: room 6 row 1 column 6 lies below a wall.
-        from pop2.combat import select_sequence
-
         s = self.make_scene()
         s.load_level(4)
         s.jump_to_room(5, row=1, x=6 * 51 + 30, facing=1)
