@@ -17,6 +17,7 @@ from typing import get_args, get_origin, get_type_hints
 from PIL import Image
 
 from pop2.cavern_state import CavernState
+from pop2.bridge import Bridge
 from pop2.darts import Dart, Darts
 from pop2.desert_state import DesertState, Stone
 from pop2.game_session import GameSession
@@ -41,7 +42,7 @@ VERSION = 2
 MAX_BYTES = 2 * 1024 * 1024
 SAVE_DIRECTORY = Path.home() / 'Saved Games' / 'PoP2 Macintosh Native'
 CLASSES = {cls.__name__: cls for cls in (
-    CavernState, Dart, Darts, DesertState, Stone, GateCrush, Harbor,
+    Bridge, CavernState, Dart, Darts, DesertState, Stone, GateCrush, Harbor,
     WaterEntry, Lava, LavaPool, FallingFloor, LooseFloors, OpponentGenerationPoint,
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
     Skeleton, SkeletonRoomRecord, GuardRoomRecord, TerrainMotion, WallSpikes,
@@ -166,6 +167,8 @@ def _unpack(value, resources, lava_tables, depth=0):
         optional.add('cell')
     if cls is Potions:
         optional.update(('fatal', 'float_timer'))
+    if cls is CavernState:
+        optional.add('bridge')
     if (not isinstance(record, dict) or set(record) - allowed
             or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')
@@ -350,6 +353,17 @@ def read_snapshot(path, resources):
             raise SaveGameError('Invalid cavern state')
         if game.level.kind == 3 and game.caverns is None:
             raise SaveGameError('Missing cavern state')
+        bridge = game.caverns.bridge if game.caverns is not None else None
+        if bridge is not None and (
+                type(bridge.state) is not int or not -1 <= bridge.state <= 3
+                or type(bridge.counter) is not int or abs(bridge.counter) > 2**31
+                or any(type(column) is not int or not 3 <= column <= 7 or kind not in (1, 2)
+                       for column, kind in bridge.pieces.items())
+                or any(not isinstance(plank, list) or len(plank) != 2
+                       or plank[0] not in bridge.pieces or type(plank[1]) is not int
+                       or not 0 <= plank[1] <= 13 for plank in bridge.planks)
+                or any(song != 121 for song in bridge.songs)):
+            raise SaveGameError('Invalid bridge state')
         if game.opening is not None:
             opening = saved['opening']
             if (not isinstance(opening, dict) or set(opening) != {'active', 'phase', 'tick'}

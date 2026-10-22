@@ -113,6 +113,7 @@ class LevelMap:
             kind = self.caverns.loose.tiles.get((room, index), (kind, fg))[0]
             kind = self.caverns.potions.tiles.get((room, index), (kind, fg))[0]
             fg = self.caverns.foreground(room, index, fg)
+            kind, fg = self.caverns.bridge.tile(room, index, kind, fg)
         if kind == 4 and self.desert is not None:
             fg = (fg & 0xff00) | (104 if self.desert.exit_open else 0)
         elif kind == 30 and self.desert is not None and room == 0 and row == 1 and 2 <= column <= 7:

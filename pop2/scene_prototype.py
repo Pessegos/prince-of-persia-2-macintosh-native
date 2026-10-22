@@ -53,6 +53,7 @@ from pop2.rebirth import RebirthSnapshot
 from pop2.story_progress import MESSAGE_FRAMES, StoryProgress
 from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
+from pop2.bridge import CREAK_SOUND, bridge_checked, bridge_sag, on_bridge
 from pop2.caverns import cavern_clip_top, cavern_exit_clip
 from pop2.loose_floors import floor_hits_actor
 from pop2.render_opening import (
@@ -2414,6 +2415,52 @@ class ScenePrototype(WindowControls):
                 self.audio.stop_sound(cue)
         caverns.plates.stopped_sounds.clear()
 
+    def bridge_draw_sag(self, actor):
+        # 8:063e lowers a character standing on a plank by its sag; the port
+        # applies it to drawing only.
+        game = getattr(self, "game", None)
+        motion = actor.terrain_motion
+        if (getattr(game, "caverns", None) is None or motion is None or game.level.number != 5
+                or getattr(self, "level_map", None) is None or motion.falling):
+            return 0
+        return bridge_sag(self.level_map, motion.room, self.combat._supporting_column(actor),
+                          motion.row, actor.state.action)
+
+    def bridge_column(self, actor):
+        # The stored cell (+0xc/+0xe) used by 8:04e6, or None off the bridge.
+        motion = actor.terrain_motion
+        if motion is None:
+            return None
+        column = self.combat._supporting_column(actor)
+        return column if on_bridge(self.level_map, motion.room, column, motion.row) else None
+
+    def advance_bridge(self):
+        bridge = self.game.caverns.bridge
+        bridge.advance_planks()
+        if not bridge_checked(self.game.level.number, self.room_id) or self.combat is None:
+            return
+        state = self.sequence_state
+        prince = self.bridge_column(self.combat.player)
+        # 8:01f6-0206: standing (frame 15) or frame 185 does not count.
+        if state.action in (15, 185):
+            prince = None
+        # 8:0252-02a6: LoadShad(0) when the current room holds opponents.
+        opponent = next((guard for guard in self.combat.active_guards()
+                         if guard.bank_slot == 0), None)
+        opponent = self.bridge_column(opponent) if opponent is not None else None
+        audio = getattr(self, "audio", None)
+        playing = audio is not None and audio.sound_playing(CREAK_SOUND)
+        state.sound_events.extend(bridge.creak(prince, opponent, playing))
+        sounds, push = bridge.check_break(prince, opponent, state.selected_sequence_id)
+        state.sound_events.extend(sounds)
+        motion = self.terrain_motion
+        if push and motion is not None and state.facing:
+            # 8:0134-0150: LoadKid; a Prince in column <= 4 facing right moves
+            # AddCharX(17).
+            if self.combat._supporting_column(self.combat.player) <= 4:
+                state.target_x += 17
+                state.current_x = self.player_x = state.target_x
+
     def check_cavern_spikes(self):
         spikes = self.game.caverns.spikes
         for actor in (self.combat.player, *self.combat.active_guards()):
@@ -2594,6 +2641,7 @@ class ScenePrototype(WindowControls):
             loose.shake_events.clear()
             self.check_cavern_darts()
             self.check_cavern_spikes()
+            self.advance_bridge()
             self.game.caverns.crush.advance(self.level_map, motion, state,
                                            self.frames[state.action], self.game.caverns.plates,
                                            now=time.perf_counter())
@@ -2684,6 +2732,13 @@ class ScenePrototype(WindowControls):
                   if getattr(self, "level_map", None) is not None else None)
         if not self.sword_drawn:
             self.voluntary_turn_requested = False
+        game = getattr(self, "game", None)
+        caverns = getattr(game, "caverns", None)
+        if caverns is not None and caverns.bridge.blocks_turn(game.level.number, combat.player.room):
+            # DoTurn 6:26c0-26d8 and SwordCtrl 6:2314-2330 refuse both turns
+            # in room 10 while the bridge is breaking.
+            self.voluntary_turn_requested = False
+            return False
         bounds = self.player_bounds() if record is not None else None
         turned = combat.choose_player_turn(record, bounds)
         if turned:
@@ -2779,11 +2834,13 @@ class ScenePrototype(WindowControls):
             return
         audio = getattr(self, "audio", None)
         if self.game.caverns is not None:
-            for cue in (*self.game.caverns.plates.songs, *self.game.caverns.potions.songs):
+            caverns = self.game.caverns
+            for cue in (*caverns.plates.songs, *caverns.potions.songs, *caverns.bridge.songs):
                 if audio is not None and not audio.song_playing(cue):
                     audio.add_song(cue)
-            self.game.caverns.plates.songs.clear()
-            self.game.caverns.potions.songs.clear()
+            caverns.plates.songs.clear()
+            caverns.potions.songs.clear()
+            caverns.bridge.songs.clear()
         if audio is None:
             return
         if self.sequence_state.action == 167:
@@ -3661,8 +3718,9 @@ class ScenePrototype(WindowControls):
         if combat is not None and not hide_guards:
             for guard in combat.visible_guards():
                 layer = Image.new("RGBA", frame.size)
-                self.guard_art.draw(layer, guard.state, floor_y(guard.row), guard.palette_variant)
-                bounds = self.guard_art.bounds(guard.state, floor_y(guard.row))
+                ground = floor_y(guard.row) + self.bridge_draw_sag(guard)
+                self.guard_art.draw(layer, guard.state, ground, guard.palette_variant)
+                bounds = self.guard_art.bounds(guard.state, ground)
                 record = self.guard_art.frames[guard_frame_index(guard.state.action)]
                 actors.append((guard.state, record, bounds, guard.row, layer))
         player_layer = Image.new("RGBA", frame.size)
@@ -3684,7 +3742,8 @@ class ScenePrototype(WindowControls):
             y = character_sprite_top(
                 self.player_floor_y()
                 + record.offset_y
-                + draw_state.current_y,
+                + draw_state.current_y
+                + (self.bridge_draw_sag(combat.player) if combat is not None else 0),
                 sprite.height,
             )
             player_layer.paste(sprite, (x, y), sprite)
@@ -3722,13 +3781,15 @@ class ScenePrototype(WindowControls):
         if combat is not None:
             for guard in (() if hide_guards else combat.visible_guards()):
                 layer = Image.new("RGBA", frame.size)
-                self.hit_art.draw(layer, guard.state, floor_y(guard.row))
-                bounds = self.guard_art.bounds(guard.state, floor_y(guard.row))
+                ground = floor_y(guard.row) + self.bridge_draw_sag(guard)
+                self.hit_art.draw(layer, guard.state, ground)
+                bounds = self.guard_art.bounds(guard.state, ground)
                 record = self.guard_art.frames[guard_frame_index(guard.state.action)]
                 frame = self.composite_actor(frame, layer, guard.row, bounds[3],
                                              guard.state, bounds, record)
             layer = Image.new("RGBA", frame.size)
-            self.hit_art.draw(layer, combat.player.state, self.player_floor_y())
+            self.hit_art.draw(layer, combat.player.state,
+                              self.player_floor_y() + self.bridge_draw_sag(combat.player))
             frame = self.composite_actor(frame, layer, motion.row if motion is not None else None,
                                          player_bounds[3] if player_bounds is not None else None,
                                          self.sequence_state, player_bounds, self.frames[self.action])

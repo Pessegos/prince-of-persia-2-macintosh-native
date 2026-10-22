@@ -526,6 +526,20 @@ def draw_cavern_darts(frame, room_id, state, *, level_number=3):
     return frame
 
 
+def draw_bridge_planks(frame, room_id, state, *, level_number=3):
+    from pop2.bridge import BRIDGE_LEVEL, BRIDGE_ROOM
+
+    # ATMBrgFloor 8:0a5a-0a6e draws plank mobs only in level five's room 10.
+    if level_number != BRIDGE_LEVEL or room_id != BRIDGE_ROOM:
+        return frame
+    _program, resources, palette, shapes = cavern_assets(level_number)
+    for record, x, bottom in state.bridge.plank_drawings():
+        # Room 10's CUST records 3-9 hold SHAP 4226-4232 (base 4225 + record - 2).
+        sprite = cavern_command_sprite(['back', 4223 + record, x, bottom, 16], resources, palette, shapes)
+        frame.paste(sprite, (x, bottom - sprite.height), sprite)
+    return frame
+
+
 def cavern_command_sprite(command, resources, palette, shapes):
     library = command[7] if len(command) >= 8 else 4
     index, flags = command[1], command[4]
@@ -604,8 +618,16 @@ def pressure_drawing_commands(commands, records, phases, resources):
     return result
 
 
+def without_fallen_planks(commands, fallen):
+    # Native room-10 redraws with the emptied bridge cells (8:0c3e-0c54) only
+    # omit those cells' CUST plank (SHAP 4226), in every collapse stage.
+    return [command for command in commands
+            if not (command[1] == 4226 and len(command) >= 10
+                    and command[9] == 1 and command[8] in fallen)]
+
+
 def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=(), retouched=False,
-                *, level_number=3):
+                *, level_number=3, bridge_fallen=frozenset()):
     program, resources, palette, shapes = cavern_assets(level_number)
 
     def scenery_sprite(command):
@@ -630,6 +652,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room_id), ())
     if pressure_key:
         commands = pressure_drawing_commands(commands, records, pressure_key, resources)
+    if bridge_fallen:
+        commands = without_fallen_planks(commands, bridge_fallen)
     gate_cells = {tuple(key[-2:]) for record in records if record['kind'] == 4
                   for key in record['commands']}
     background = Image.new('RGBA', (510, 365))
@@ -674,6 +698,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     for action, redraw_commands in climb_commands.items():
         if pressure_key:
             redraw_commands = pressure_drawing_commands(redraw_commands, records, pressure_key, resources)
+        if bridge_fallen:
+            redraw_commands = without_fallen_planks(redraw_commands, bridge_fallen)
         for command in redraw_commands:
             if animated and len(command) >= 8 and command[7] == 1:
                 continue
@@ -686,6 +712,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                       program.get('floor_redraw', {}).get(str(room_id), ()))
     if pressure_key:
         floor_commands = pressure_drawing_commands(floor_commands, records, pressure_key, resources)
+    if bridge_fallen:
+        floor_commands = without_fallen_planks(floor_commands, bridge_fallen)
     for command in floor_commands:
         if animated and len(command) >= 8 and command[7] == 1:
             continue

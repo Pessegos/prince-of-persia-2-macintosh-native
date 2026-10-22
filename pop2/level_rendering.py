@@ -43,7 +43,8 @@ class LevelRenderer:
             signature = (cavern_scene_signature(self.cavern_program, room_id, caverns)
                          if caverns is not None else '')
             pressure = cavern_pressure_signature(self.cavern_program, room_id, caverns) if caverns else ()
-            key = room_id, frame if room_id == self.level.start_room else 0, signature, pressure
+            fallen = caverns.bridge.fallen() if caverns is not None else frozenset()
+            key = room_id, frame if room_id == self.level.start_room else 0, signature, pressure, fallen
             if key not in self.cavern_frames:
                 # Retain loose-floor variants, not every historical gate height.
                 for previous in tuple(self.cavern_frames):
@@ -52,7 +53,8 @@ class LevelRenderer:
                 self.cavern_frames[key] = cavern_room(room_id, entry_frame=key[1], animated=True,
                                                     loose_key=signature, pressure_key=pressure,
                                                     retouched=self.retouch_caverns,
-                                                    level_number=self.level.number)
+                                                    level_number=self.level.number,
+                                                    bridge_fallen=fallen)
             self.rooms[room_id] = self.cavern_frames[key]
             return self.rooms[room_id]
         if room_id not in self.rooms:
@@ -101,7 +103,7 @@ class LevelRenderer:
             from pop2.terrain import LevelMap
             from pop2.caverns import (
                 draw_cavern_torches, draw_cavern_falling, draw_cavern_lava, draw_cavern_darts,
-                draw_cavern_flasks, draw_cavern_spikes,
+                draw_cavern_flasks, draw_cavern_spikes, draw_bridge_planks,
             )
 
             if self.cavern_map is None:
@@ -117,6 +119,7 @@ class LevelRenderer:
             frame = draw_cavern_darts(frame, room_id, caverns, level_number=self.level.number)
             frame = draw_cavern_spikes(frame, room_id, caverns, self.cavern_map,
                                         level_number=self.level.number)
+            frame = draw_bridge_planks(frame, room_id, caverns, level_number=self.level.number)
             return draw_cavern_falling(frame, room_id, caverns, self.level.data,
                                        self.room(room_id, caverns), level_number=self.level.number)
         if room_id in self.desert_rooms:
