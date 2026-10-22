@@ -658,9 +658,18 @@ def cavern_pressure_signature(program, room_id, state):
     return tuple(phases)
 
 
+# Row clip of a moving door's SHAP relative to its row's top: the export
+# shows the ruins gate (3542) clipped 19 pixels above it and their exit
+# (3547) 10 above, against the caverns' 31 and 1 below.
+DOOR_CLIP_TOP = {3562: -31, 3563: -31, 3566: 1, 3542: -19, 3547: -10}
+
+
 def pressure_drawing_commands(commands, records, phases, resources):
     overrides = {tuple(key): (record, phase) for record, phase in zip(records, phases)
                  for key in record['commands']}
+    # Ruins plates store the toggled state's commands for each changed slot.
+    toggled = {tuple(key): command for record in records
+               for key, command in zip(record['commands'], record.get('toggled', ()))}
     # DrawHalf reuses the plate's drawing slot in its front-only climb repaint.
     for key, item in tuple(overrides.items()):
         if item[0]['kind'] in (5, 6, 34):
@@ -678,6 +687,12 @@ def pressure_drawing_commands(commands, records, phases, resources):
             continue
         record, phase = item
         command = list(source)
+        if 'toggled' in record:
+            if phase != int(bool(record['foreground'] & 0x2000)):
+                stored = toggled.get(key) or toggled[('back', *key[1:])]
+                command = [source[0], *stored[1:]]
+            result.append(command)
+            continue
         if record['kind'] == 27:
             # DrawCaveBars 8:15c0 draws CUST record (phase + 1); a native redraw
             # of each phase only changes this SHAP.
@@ -698,7 +713,8 @@ def pressure_drawing_commands(commands, records, phases, resources):
             command[3] -= (1 if exit_door else 2) * (phase - initial)
             height = struct.unpack_from('>H', resources['SHAP'][command[1]]['data'], 6)[0]
             clip = list(command[6])
-            clip[0] = max(0, command[5] * 120 + (1 if exit_door else -31), command[3] - height)
+            clip[0] = max(0, command[5] * 120 + DOOR_CLIP_TOP.get(command[1], 1 if exit_door else -31),
+                          command[3] - height)
             clip[2] = min(365, command[3])
             if clip[0] >= clip[2]:
                 continue
@@ -795,7 +811,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         destination = background if layer == 'back' else foreground
         destination.paste(sprite, position, sprite)
         cell = tuple(command[8:10])
-        if layer == 'back' and library == 4 and index == 3563 and cell in gate_cells:
+        if layer == 'back' and library == 4 and index in (3563, 3542) and cell in gate_cells:
             # DrawCaveGate anchors the stone one column right of its tile.
             # The repaint caller may be a different cell, even on another row.
             # CheckGateInFore tests the gate's tile, not that repaint caller.

@@ -938,3 +938,17 @@ class LooseVariantDeltaTests(unittest.TestCase):
         self.assertEqual(delta_commands(base, items), changed)
         self.assertLess(len(items), len(changed))
         self.assertEqual(delta_commands(base, encode_delta(base, base)), base)
+
+
+class RuinsPressureDrawingTests(unittest.TestCase):
+    def test_a_toggled_ruins_plate_uses_its_exported_commands(self):
+        from pop2.caverns import pressure_drawing_commands
+
+        plate = ['back', 3552, 408, 365, 16, 2, [335, 408, 365, 497], 4, 9, 2]
+        pressed = ['back', 3552, 408, 366, 16, 2, [336, 408, 365, 497], 4, 9, 2]
+        record = {'kind': 5, 'room': 0, 'cell': 29, 'foreground': 1,
+                  'commands': [['back', 3552, 4, 9, 2]], 'toggled': [pressed]}
+        self.assertEqual(pressure_drawing_commands([plate], [record], (0,), {}), [plate])
+        self.assertEqual(pressure_drawing_commands([plate], [record], (1,), {}), [pressed])
+        front = ['front', *plate[1:]]
+        self.assertEqual(pressure_drawing_commands([front], [record], (1,), {}), [['front', *pressed[1:]]])
