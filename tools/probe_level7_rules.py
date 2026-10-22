@@ -99,10 +99,14 @@ class NativeRules:
             self.failure = f'Unexpected native instruction at {segment}:{offset:04x}'
             cpu.emu_stop()
 
-    def call(self, segment, offset, args=(), stop=None):
+    def call(self, segment, offset, args=(), stop=None, *, arg_bytes=None):
+        if arg_bytes is not None and args:
+            raise ValueError('Supply either word arguments or explicit stack bytes')
         self.stop_at = self.END if stop is None else self.address(*stop)
+        arguments = (arg_bytes if arg_bytes is not None else
+                     b''.join(struct.pack('>H', value & 65535) for value in args))
         self.cpu.mem_write(self.STACK, struct.pack('>I', self.END)
-                           + b''.join(struct.pack('>H', value & 65535) for value in args))
+                           + arguments)
         self.cpu.reg_write(self.registers['a7'], self.STACK)
         self.cpu.emu_start(self.address(segment, offset), 0, count=50000)
         if self.failure or not self.reached:
