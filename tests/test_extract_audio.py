@@ -11,13 +11,13 @@ import wave
 import mido
 import numpy as np
 
-from tools.extract_audio import audio_tables, extract_audio, render_midi, DESERT_SONGS, LEVEL_ONE_SONGS, CAVERN_SONGS
+from tools.extract_audio import audio_tables, extract_audio, render_midi, DESERT_SONGS, LEVEL_ONE_SONGS, CAVERN_SONGS, LATE_CAVERN_SONGS
 from pop2.audio_formats import Sample
 
 
 class AudioTableTests(unittest.TestCase):
     def test_import_prepares_desert_and_exit_door_songs_from_original_midi(self):
-        songs = LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS
+        songs = LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS
         effects = (7, 8, 9, 10, 11, 12, 13, 14, 30, 31, 34, 35, 36, 294, 295, 296)
         manifest = {'schema': 1, 'cues': {
             str(cue): {'kind': 'midi' if cue in songs else 'pcm'}
@@ -38,7 +38,7 @@ class AudioTableTests(unittest.TestCase):
               patch('tools.extract_audio.digitized_sound', return_value=Sample(b'\x80' * 8, 22050)),
               patch('tools.extract_audio.render_midi', return_value=1.0) as render):
             result = extract_audio(b'image', b'program', b'prince', directory)
-        for cue in DESERT_SONGS + CAVERN_SONGS:
+        for cue in DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS:
             self.assertEqual(result['cues'][str(cue)]['file'], f'cue-{cue}.wav')
             self.assertIn(f'cue-{cue}.mid', [call.args[1] for call in render.call_args_list])
 
