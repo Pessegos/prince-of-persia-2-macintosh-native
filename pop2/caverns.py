@@ -569,7 +569,7 @@ def cavern_pressure_signature(program, room_id, state):
                 value = (value & 0xff00) | presentation
         phases.append(min(value & 255, 184) // 4 if record['kind'] == 4 else
                       min(value & 255, 79) if record['kind'] == 17 else
-                      value & 7 if record['kind'] == 33 else int(bool(value & 0x2000)))
+                      value & 7 if record['kind'] in (27, 33) else int(bool(value & 0x2000)))
     return tuple(phases)
 
 
@@ -585,13 +585,19 @@ def pressure_drawing_commands(commands, records, phases, resources):
         key = (source[0], 3554 if source[1] == 3555 else source[1], *source[7:10])
         if 3591 <= source[1] <= 3593:
             key = (source[0], 3591, *source[7:10])
+        if source[1] in (4052, 4053, 4064):
+            key = (source[0], 4051, *source[7:10])
         item = overrides.get(key)
         if item is None:
             result.append(source)
             continue
         record, phase = item
         command = list(source)
-        if record['kind'] == 33:
+        if record['kind'] == 27:
+            # DrawCaveBars 8:15c0 draws CUST record (phase + 1); a native redraw
+            # of each phase only changes this SHAP.
+            command[1] = (4051, 4052, 4053, 4064)[min(phase, 3)]
+        elif record['kind'] == 33:
             # DrawCaveDart's DATA table at A5-2f3e. All three mouth
             # shapes share the PIEC anchor, but have different dimensions.
             command[1] = (3591, 3593, 3592, 3591, 3591, 3591, 3591)[phase]

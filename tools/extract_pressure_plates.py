@@ -10,6 +10,8 @@ def command_key(command):
     shape = 3554 if command[1] == 3555 else command[1]
     if 3591 <= shape <= 3593:
         shape = 3591
+    if shape in (4052, 4053, 4064):
+        shape = 4051  # Level five's ceiling bars (room 3 CUST records 1-4).
     return command[0], shape, *command[7:10]
 
 
@@ -25,14 +27,14 @@ def pressure_scenery(program, caverns, prince, level, base, progress=lambda _tex
         visible = {(tile.room, tile.row * 10 + tile.column)
                    for row in range(-1, 4) for column in range(-1, 11)
                    if (tile := terrain.tile(room, column, row)).room is not None
-                   and (tile.kind in (4, 5, 6, 33, 34)
+                   and (tile.kind in (4, 5, 6, 27, 33, 34)
                         or tile.kind == 17 and tile.room != terrain.start_room)}
         before = base['rooms'][str(room)]
         records = []
         for source_room, cell in sorted(visible):
             tile = terrain.tile(source_room, cell % 10, cell // 10)
             mutable = bytearray(level)
-            value = ((tile.foreground & 0xfff8) | 1 if tile.kind == 33 else
+            value = ((tile.foreground & 0xfff8) | 1 if tile.kind in (27, 33) else
                      (tile.foreground & 0xff00) | (79 if tile.kind == 17 else 184)
                      if tile.kind in (4, 17) else tile.foreground ^ 0x2000)
             struct.pack_into('>H', mutable, 0x780 + source_room * 120 + cell * 4, value)
@@ -41,7 +43,7 @@ def pressure_scenery(program, caverns, prince, level, base, progress=lambda _tex
             if new.keys() - old.keys():
                 raise ValueError('Unexpected new pressure/gate drawing slot')
             keys = [key for key in old if old[key] != new.get(key)]
-            expected = {4: (3562, 3563), 17: (3566,), 33: (3591,)}.get(tile.kind, (3554,))
+            expected = {4: (3562, 3563), 17: (3566,), 27: (4051,), 33: (3591,)}.get(tile.kind, (3554,))
             if any(key[1] not in expected for key in keys):
                 raise ValueError('Unsupported pressure/gate drawing dependency')
             if keys:

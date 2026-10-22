@@ -337,6 +337,9 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             raise ValueError('Cavern drawing did not complete')
 
     passes = (('back', 0x1ff4, 0), ('back', 0x1ff4, 5), ('front', 0x2598, 1))
+    if custom is not None:
+        # RedrawCell 3:1d24-1d2e adds back pass 11 for a loaded CUST room.
+        passes = passes[:2] + (('back', 0x1ff4, 11),) + passes[2:]
     if climb_action is not None:
         passes = (('front', 0x3480, 2),)
     elif floor_redraw:

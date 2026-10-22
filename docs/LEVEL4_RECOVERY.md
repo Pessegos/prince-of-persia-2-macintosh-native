@@ -215,8 +215,11 @@ Level five (LEVL 2004) also enters with sequence 5 (`2:5e34`).
   DrawCustomRoomImgs `3:2324` natively. It records each DrawCustomRoomImg
   `3:2438` call as an item of the requested pass (back for 0/5/11, front
   otherwise) with the SectRect clip (`3:2482`).
-- **Result:** room 10's rope bridge and room 3's custom chamber render. Pass
-  11 (dynamic custom pieces) is not drawn by the static export.
+- **Result:** room 10's rope bridge and room 3's custom chamber render.
+  Back pass 11 now runs for CUST rooms (`3:1d24-1d2e`); it draws room 3's
+  ceiling bars, whose phases follow the room's plate (see
+  `docs/research/level5-native-rules.md`). Existing installations need a
+  reimport to see them.
 
 The export of levels 3 and 4 is byte-identical to before.
 

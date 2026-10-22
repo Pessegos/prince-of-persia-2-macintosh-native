@@ -94,6 +94,10 @@ class PressurePlates:
                 self.foreground[key] = tile.foreground + 1
                 self.darts.spawn(*key)
                 cues.append(65)
+            elif tile.kind == 27 and not depressed and tile.foreground in (0, 3):
+                # TriggerCaveBars 8:1672-16d0: a fresh plate opens fully closed
+                # bars (trob direction 0) and closes fully open ones (1).
+                self.add(key, int(tile.foreground == 3))
             elif tile.kind == 17 and not tile.foreground & 255:
                 # TriggerObject 5:1f40: only a completely closed exit starts.
                 self.add(key, 1)
@@ -200,6 +204,21 @@ class PressurePlates:
                 self.timers[index] = timer - 1
                 if timer < 2:
                     self.foreground[key] = value & 0xdfff
+                    del self.active[key]
+                continue
+            if tile.kind == 27:
+                # 8:1508-1576: one bar phase per update, sound 282 as they
+                # start opening and 284 as they start closing.
+                bars = value & 7
+                if phase == 0 and bars < 3:
+                    if bars == 0:
+                        cues.append(282)
+                    self.foreground[key] = (value & 0xfff8) | (bars + 1)
+                elif phase == 1 and bars:
+                    if bars == 3:
+                        cues.append(284)
+                    self.foreground[key] = (value & 0xfff8) | (bars - 1)
+                else:
                     del self.active[key]
                 continue
             if tile.kind == 17:

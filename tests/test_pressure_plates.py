@@ -271,7 +271,58 @@ class PressurePlateTests(unittest.TestCase):
         self.assertNotIn((0, 15), self.plates.active)
 
 
+class CaveBarsTests(unittest.TestCase):
+    """TriggerCaveBars 8:1672 and the bars animation 8:1508 (level five, room 3)."""
+
+    def setUp(self):
+        PressurePlateTests.setUp(self)
+        self.set_tile(0, 15, 27, 0)
+
+    def set_tile(self, room, cell, kind, foreground):
+        PressurePlateTests.set_tile(self, room, cell, kind, foreground)
+
+    def set_link(self, *arguments):
+        PressurePlateTests.set_link(self, *arguments)
+
+    def run_bars(self, frames):
+        trace = []
+        for _ in range(frames):
+            cues = self.plates.advance(self.terrain)
+            trace.append((self.terrain.tile(0, 5, 1).foreground & 7, cues))
+        return trace
+
+    def test_a_fresh_press_opens_closed_bars_and_the_next_closes_open_bars(self):
+        PressurePlateTests.push(self)
+        self.assertEqual(self.plates.active[0, 15], 0)
+        self.assertEqual(self.run_bars(4), [(1, (282,)), (2, ()), (3, ()), (3, ())])
+        self.assertNotIn((0, 15), self.plates.active)
+        self.run_bars(5)
+        self.assertFalse(self.terrain.tile(0, 4, 1).foreground & 0x2000)
+        PressurePlateTests.push(self)
+        self.assertEqual(self.plates.active[0, 15], 1)
+        self.assertEqual(self.run_bars(4), [(2, (284,)), (1, ()), (0, ()), (0, ())])
+
+    def test_held_plates_and_moving_bars_are_ignored(self):
+        self.plates.trigger(self.terrain, 1, 34, depressed=True)
+        self.assertEqual(self.plates.active, {})
+        self.plates.foreground[0, 15] = 2
+        self.plates.trigger(self.terrain, 1, 34)
+        self.assertEqual(self.plates.active, {})
+
+
 class PressureDrawingTests(unittest.TestCase):
+    def test_cave_bars_draw_the_custom_record_of_their_phase(self):
+        command = ['back', 4051, 165, 50, 0, 0, [10, 165, 50, 318], 4, 6, 0]
+        record = {'kind': 27, 'foreground': 0, 'room': 2, 'cell': 6,
+                  'commands': [('back', 4051, 4, 6, 0)]}
+        for phase, shape in enumerate((4051, 4052, 4053, 4064)):
+            self.assertEqual(pressure_drawing_commands([command], [record], (phase,), {}),
+                             [['back', shape, *command[2:]]])
+        state = CavernState()
+        state.plates.foreground[2, 6] = 3
+        metadata = {'pressure_plates': {'rooms': {'2': [record]}}}
+        self.assertEqual(cavern_pressure_signature(metadata, 2, state), (3,))
+
     def test_gate_moves_its_original_shapes_and_keeps_the_native_top_clip(self):
         command = ['back', 3563, 408, 357, 16, 2, [211, 408, 357, 449], 4, 7, 2]
         record = {'kind': 4, 'foreground': 0x300,

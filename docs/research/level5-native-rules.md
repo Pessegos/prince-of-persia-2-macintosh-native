@@ -62,12 +62,16 @@ check of the redraw at each collapse stage.
 
 Room 3 is customized (CUST 4050). Its tile 27 at cell 6 is the ceiling's
 cave bars and tile 18 at cell 23 belongs to the flying carpet:
-- **Bars:** DrawCaveBars `8:15c0` draws CUST record (foreground & 7) + 1 in
-  pass 11 (SHAP 4051, 4052, 4053, 4064: closed to open). The static export
-  skips pass 11, hence the black area at the top of room 3. The bars
-  animation `8:1508` steps the phase up to 3 (sound 282 at the start) or
-  down to 0 (sound 284 from 3). IsCaveBarsOpen `8:157a` tests tile (3, 6, 0)
-  phase >= 3. TriggerObject `5:1fb0` calls TriggerCaveBars `8:1672`.
+- **Bars (implemented):** RedrawCell `3:1d24-1d2e` adds back pass 11 for a
+  loaded CUST room; the export now runs it, which only adds room 3's bars
+  (levels 3 and 4 stay byte-identical, room 10 unchanged). DrawCaveBars
+  `8:15c0` draws CUST record (foreground & 7) + 1 (SHAP 4051, 4052, 4053,
+  4064: closed to open); native redraws of phases 1-3 only change that
+  SHAP, so the bars are a pressure-drawing record. Room 3's plate (cell 8,
+  link 17) triggers them: TriggerCaveBars `8:1672-16d0` opens fully closed
+  bars and closes fully open ones on a fresh press; `8:1508-1576` moves one
+  phase per update with sound 282 (opening from 0) or 284 (closing from 3).
+  IsCaveBarsOpen `8:157a` tests phase >= 3.
 - **Carpet:** SetupCarpet `8:12b6` (from Opponent1 `3:084c`), Sitting
   `8:13a8` (from GenCtrl `6:072a`), DrawCarpet/SaveUnderCarpet/
   DrawObjCarpet/GetCarpetShape (`8:0e48-1264`) with palette cycling
@@ -77,8 +81,11 @@ cave bars and tile 18 at cell 23 belongs to the flying carpet:
   with them open the carpet stops at Y 39 (mode 10, JumpSeq 129, sound 117).
   `8:14ae-14ec` selects song 115 or 116 by IsCaveBarsOpen.
 
-This is the next bounded task: export the bar phases as pass-11 variants
-(like pressure-plate variants), then the carpet ride and level exit.
+GenCtrl `6:099a-09fe`: in level 5 room 3, a Prince whose cell or the
+cell to its left is tile 18, outside selected sequences 17/20, starts the
+carpet (`8:14ae`: JumpSeq 128, X 425, +30 facing right, song 115 if the
+bars are open, else 116). The carpet ride and level exit are the next
+bounded task.
 
 ## Other level-five checks still to read [?]
 
