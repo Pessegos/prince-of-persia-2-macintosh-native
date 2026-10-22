@@ -244,5 +244,8 @@ The next initialization and frame-loading blocks are now recorded separately:
 - [Head movement admission](level7-head-movement.md): native obstacle/cell
   predicates, vertical-overshoot rejection, X-middle window and variant gate
   clearance, with supplied body bounds and no stubbed services.
+- [Head idle decisions](level7-head-idle.md): full idle leaf with native
+  movement admission and sequence selection; bounded random outcomes and
+  resource existence supplied, including exact draw order and early returns.
 
 These results do not enable the campaign or claim complete special-actor AI.
