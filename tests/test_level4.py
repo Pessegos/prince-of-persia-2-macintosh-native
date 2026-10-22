@@ -268,3 +268,57 @@ class LevelFourHeapPlacementTests(unittest.TestCase):
         self.assertEqual((heap.state.facing, heap.state.action), (1, 206))
         self.assertGreater(heap.state.target_x, 302 + 20)
         self.assertEqual(heap.skeleton.settle_heap(scene.combat, heap), 0)
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported level-four resources required')
+class LevelFourSkeletonChaseTests(unittest.TestCase):
+    """AutoCtrl 4:0780-0798 and AnimCharTap 4:311e-314a in rooms 22, 24-28."""
+
+    def setUp(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        self.scene.load_level(4)
+        RooftopSceneTests.tick(self, 16)
+
+    def runner(self, room, x, facing):
+        from pop2.combat import select_sequence
+
+        scene = self.scene
+        scene.jump_to_room(room, 2, 60, 0)
+        skeleton = next(guard for guard in scene.combat.active_guards() if guard.room == room)
+        skeleton.skeleton.rise(scene.combat, skeleton)
+        select_sequence(skeleton, 216)
+        skeleton.state.facing = facing
+        skeleton.state.target_x = skeleton.state.current_x = x
+        skeleton.sword_drawn = False
+        return scene, skeleton
+
+    def test_runner_in_reach_lunges_with_sword_in_exit_rooms(self):
+        scene, skeleton = self.runner(25, 200, 0)
+        player = scene.combat.player.state
+        player.target_x = player.current_x = 130
+        player.facing, player.action, player.animation_state = 0, 8, 1
+        skeleton.state.action = 195
+        scene.combat._choose_unarmed_guard_action(skeleton)
+        self.assertEqual(skeleton.state.source_sequence_id, 87)
+        self.assertTrue(skeleton.sword_drawn)
+
+    def test_running_footsteps_add_twice_the_bank_slot_in_exit_rooms(self):
+        scene, skeleton = self.runner(25, 300, 1)
+        skeleton.bank_slot = 2
+        state = skeleton.state
+        sequence = scene.combat.sequences[216]
+        state.cursor = sequence.index(-15)
+        state.action = 193
+        before = state.target_x
+        expected = state.target_x
+        probe = type(state)(**{**state.__dict__, 'sound_events': [], 'sequence_events': []})
+        from pop2.sequence_runtime import SequenceRuntime
+
+        SequenceRuntime(scene.combat.sequences, probe).next_frame()
+        expected = probe.target_x + 4
+        with unittest.mock.patch.object(scene.combat, 'choose_guard_action'):
+            scene.combat.advance_guard()
+        self.assertGreater(probe.callback_counter, 0)
+        self.assertEqual(state.target_x - before, expected - before)

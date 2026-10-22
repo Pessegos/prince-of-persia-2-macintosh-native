@@ -2817,8 +2817,17 @@ class ScenePrototype(WindowControls):
                         if not audio.song_playing(112):
                             audio.add_song(112)
                         skeleton.rise_song_pending = False
-            audio.ambient(self.room_id, motion.row, max(0, min(9, int(contact // 51))),
-                          fighting, self.combat.player.alive)
+            # 5:5494-54c8: no new ambient while the first bank skeleton of an
+            # exit-guarded room is rising (88) or running (102/216).
+            from pop2.skeleton import exit_guarded
+
+            first = next(iter(self.combat.active_guards()), None)
+            chasing = (first is not None and first.skeleton is not None
+                       and exit_guarded(self.combat, first)
+                       and first.state.source_sequence_id in (88, 102, 216))
+            if not chasing:
+                audio.ambient(self.room_id, motion.row, max(0, min(9, int(contact // 51))),
+                              fighting, self.combat.player.alive)
         elif motion is not None and self.game.level.number == 2:
             # DesertFunc 18:01ee checks PrinceSndOn(51) before queuing another wave.
             # Cave cue 50 and puzzle cues 46/49 use AddSong instead.

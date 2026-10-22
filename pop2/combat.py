@@ -10,6 +10,7 @@ from pop2.enemy_profiles import (
 )
 from pop2.enemy_alerts import alert_path_mode
 from pop2.opponent_records import GuardRoomRecord, removed_on_room_save
+from pop2.skeleton import exit_guarded
 from pop2.opponent_selection import nearest_opponent
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.control_mapping import IDLE_SEQUENCE
@@ -1039,6 +1040,11 @@ class CombatEncounter:
             self._brake_guard(guard, 2)
         elif not self.player.alive or other.special_flag == 13:
             self._brake_guard(guard, 0)
+        elif guard.skeleton is not None and exit_guarded(self, guard) and distance <= 127:
+            # AutoCtrl 4:0780-0798: in the exit-guarded rooms a runner within
+            # 127 pixels lunges straight into SEQS:87 with its sword drawn.
+            select_sequence(guard, 87)
+            guard.sword_drawn = True
 
     def _brake_guard(self, guard, alert_mode):
         state = guard.state
@@ -1208,9 +1214,17 @@ class CombatEncounter:
                 self.attack_pause = max(0, self.attack_pause - 1)
                 with self._local_opponents(guard):
                     self.choose_guard_action(guard)
+            steps = guard.state.callback_counter
             guard.runtime.next_frame()
             if guard.skeleton is not None:
                 guard.skeleton.after_frame(guard)
+                if (guard.state.callback_counter != steps
+                        and guard.state.source_sequence_id == 216
+                        and exit_guarded(self, guard)):
+                    # AnimCharTap 4:311e-314a: each running footstep in the
+                    # exit-guarded rooms adds twice the bank slot (AddCharX).
+                    boost = 2 * guard.bank_slot
+                    guard.state.target_x += boost if guard.state.facing else -boost
             self._select_guard_corpse_pose(guard)
             # Allow native offscreen entry; each room has its own floor extent.
             entry = guard.entry_x or 0
