@@ -1851,6 +1851,20 @@ class ScenePrototype(WindowControls):
                         self.start_discovery()
                     elif self.game.level.number == 4:
                         self.finish_level_four()
+                    elif self.game.level.number == 5:
+                        # CheckPlayNIS(5, 6) would show cutscene 1 (not yet
+                        # recovered); RestartGame then loads level six.
+                        from pop2.caverns import scenery_available
+
+                        if scenery_available(6):
+                            self.enter_next_level(6)
+                        else:
+                            self.game.exit = None
+                            self.status.set('Level 6 needs a reimport of the game files')
+                    elif self.game.level.number == 6:
+                        # Level seven is not available yet.
+                        self.game.exit = None
+                        self.status.set('Level 6 complete')
                     else:
                         self.start_ending()
                 self.render()
@@ -2865,18 +2879,20 @@ class ScenePrototype(WindowControls):
                 self.clear_keys(None)
                 self.start_sequence(IDLE_SEQUENCE)
         if self.game.consume_completion():
-            if self.game.level.number in (1, 3, 4, 5):
+            if self.game.level.number in (1, 3, 4, 5, 6):
                 import json
                 from pop2.level_transition import LevelExit
                 from pop2.paths import ASSET_DIR
 
-                # GetEndSong 5:4e0c selects 32 for rooftop and cavern exits.
+                # GetEndSong 5:4e0c selects 32 for rooftop and cavern exits,
+                # 124 for the ruins.
+                song = 124 if self.game.level.kind == 4 else 32
                 cues = (self.audio.cues if self.audio is not None else
                         {int(key): item for key, item in json.loads(
                             (ASSET_DIR / "audio/manifest.json").read_text(encoding="ascii"))["cues"].items()})
-                self.game.exit = LevelExit(32, cues[32]["duration"])
+                self.game.exit = LevelExit(song, cues[song]["duration"])
                 if self.audio is not None:
-                    self.audio.add_song(32)
+                    self.audio.add_song(song)
             self.clear_keys(None)
             self.status.set(f"Level {self.game.level.number} complete")
 
@@ -3566,7 +3582,11 @@ class ScenePrototype(WindowControls):
         from pop2.level_data import LevelDefinition
 
         options = []
-        for number in (1, 2, 3, 4, 5):
+        from pop2.caverns import scenery_available
+
+        for number in (1, 2, 3, 4, 5, 6):
+            if number == 6 and not scenery_available(6):
+                continue
             renderer = (self.level_renderer if self.game.level.number == number else
                         LevelRenderer(LevelDefinition.read(self.resources.prince, number),
                                       preload_room=False))

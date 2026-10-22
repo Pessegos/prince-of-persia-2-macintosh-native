@@ -21,7 +21,7 @@ from pop2.bridge import Bridge
 from pop2.carpet import Carpet
 from pop2.darts import Dart, Darts
 from pop2.desert_state import DesertState, Stone
-from pop2.game_session import GameSession
+from pop2.game_session import GameSession, level_sword_type
 from pop2.gate_crush import GateCrush
 from pop2.harbor import Harbor, WaterEntry
 from pop2.lava import Lava, LavaPool
@@ -248,8 +248,23 @@ def capture_snapshot(game, controls=None, copy_verified=False):
              'npc_ids': {id(actor): (room, index) for room, (actors, _points) in combat.room_encounters.items()
                          for index, actor in enumerate(actors)},
              'controls': controls or {}, 'copy_verified': copy_verified}
-    return {'format': FORMAT, 'version': 1, 'level': game.level.number,
-            'level_sha256': hashlib.sha256(game.level.data).hexdigest(), 'state': _pack(state)}
+    document = {'format': FORMAT, 'version': 1, 'level': game.level.number,
+                'level_sha256': hashlib.sha256(game.level.data).hexdigest(), 'state': _pack(state)}
+    _put_sword(document, game)
+    return document
+
+
+def _put_sword(document, game):
+    # Optional: a sword picked up in a level that started without one.
+    if game.sword_type != level_sword_type(game.level.number):
+        document['sword_type'] = game.sword_type
+
+
+def _take_sword(document, game):
+    if 'sword_type' in document:
+        if type(document['sword_type']) is not int or document['sword_type'] not in (-1, 1, 2, 3):
+            raise SaveGameError('Invalid saved sword')
+        game.sword_type = document['sword_type']
 
 
 def write_save(path, data):
@@ -282,11 +297,12 @@ def read_snapshot(path, resources):
         document = json.loads(raw)
         if (not isinstance(document, dict) or document.get('format') != FORMAT
                 or type(document.get('version')) is not int or document['version'] != 1
-                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5)):
+                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5, 6)):
             raise SaveGameError('Unsupported save format or version')
         game = GameSession.load(resources, document['level'])
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
             raise SaveGameError('Save belongs to different original game files')
+        _take_sword(document, game)
         from pop2.caverns import cavern_assets
         from pop2.enemy_profiles import QuickDrawRandom
 
@@ -448,6 +464,7 @@ def capture(game, controls=None, copy_verified=False):
                 'created_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
                 'resume': {'checkpoint': _pack(checkpoint), 'max_life': max_life},
                 'copy_verified': bool(copy_verified)}
+    _put_sword(document, game)
     story = game.story
     if story.clock_started or story != StoryProgress():
         # Optional: older saves and untouched campaigns omit the story clock.
@@ -475,7 +492,7 @@ def read_document(path):
         document = json.loads(raw)
         if (not isinstance(document, dict) or document.get('format') != FORMAT
                 or type(document.get('version')) is not int or document['version'] not in (1, VERSION)
-                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5)):
+                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5, 6)):
             raise SaveGameError('Unsupported save format or version')
         return document
     except (ValueError, RecursionError) as error:
@@ -505,7 +522,7 @@ def restore_progress(document, resources):
     try:
         if set(document) - {'format', 'version', 'level', 'level_sha256', 'created_at',
                             'resume', 'copy_verified', 'preview', 'name', 'preview_at_resume', 'preview_version',
-                            'story'}:
+                            'story', 'sword_type'}:
             raise SaveGameError('Unknown saved progress fields')
         if 'name' in document:
             save_name(document['name'])
@@ -517,6 +534,7 @@ def restore_progress(document, resources):
         game = GameSession.load(resources, document['level'])
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
             raise SaveGameError('Save belongs to different original game files')
+        _take_sword(document, game)
         resume = document['resume']
         if (not isinstance(resume, dict) or set(resume) != {'checkpoint', 'max_life'}
                 or type(resume['max_life']) is not int or not 1 <= resume['max_life'] <= 12
@@ -546,10 +564,10 @@ def restore_progress(document, resources):
                     raise SaveGameError('Invalid checkpoint generation point')
             game.checkpoint = snapshot
             snapshot.restore_world(game.combat)
-            game.arm_prince()
             point = snapshot.checkpoint
             game.place(point.room, point.row, point.x, snapshot.facing,
                        reset_guards=False, preserve_checkpoint=True)
+        game.arm_prince()
         game.combat.player.life = game.combat.player.max_life = resume['max_life']
         if 'story' in document:
             game.story = _story(document['story'])

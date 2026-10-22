@@ -183,6 +183,12 @@ def scenery_name(level_number):
     return f"{'ruins' if level_number in RUINS_LEVELS else 'caverns'}_level{level_number}.json"
 
 
+def scenery_available(level_number):
+    # Imports before level six's support lack the ruins files.
+    return ((ASSET_DIR / scenery_name(level_number)).is_file()
+            and (ASSET_DIR / scenery_resource(level_number)).is_file())
+
+
 def scenery_resource(level_number):
     return 'Ruins.rsrc' if level_number in RUINS_LEVELS else 'Caverns.rsrc'
 

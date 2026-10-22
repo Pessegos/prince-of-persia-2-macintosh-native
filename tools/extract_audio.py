@@ -23,6 +23,9 @@ CAVERN_SONGS = (24, 62, 63, 71, 279, 285, 297, *range(73, 109))
 # Levels 4-5: Float (111), Chase (112), the flying-carpet room and ride
 # (114-116) and the bridge fight, room-7 door and collapse (119-121).
 LATE_CAVERN_SONGS = (111, 112, 114, 115, 116, 119, 120, 121)
+# Levels 6-7 (environment 4): ambient bank 4 (139-174), the ruins' end song
+# (GetEndSong 5:4e32, 124) and FindSwd (183). Rendered, not yet required.
+RUINS_SONGS = (*range(139, 175), 124, 183)
 SYNTH_DIR = Path(__file__).resolve().parents[1] / "vendor" / "smssynth"
 
 
@@ -167,7 +170,7 @@ def extract_audio(image, program_bytes, prince_bytes, directory, progress=lambda
             entry["duration"] = sequence.length
             entry["name"] = next((message.name for track in sequence.tracks for message in track
                                    if message.type == "track_name"), "")
-            if int(cue) in LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS:
+            if int(cue) in LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS + RUINS_SONGS:
                 progress(f"Preparing music: {entry['name']}")
                 entry["file"] = f"cue-{cue}.wav"
                 entry["playback_duration"] = render_midi(directory, raw_name, entry["file"])

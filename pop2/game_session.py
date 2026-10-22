@@ -44,6 +44,11 @@ class GameResources:
         return LevelDefinition.read(self.prince, number)
 
 
+def level_sword_type(number):
+    # 3:61ec-623a: a fresh level six has no sword, seven and eight type 2.
+    return -1 if number == 6 else 2 if number in (7, 8) else 1
+
+
 @dataclass
 class GameSession:
     level: LevelDefinition | None = None
@@ -63,8 +68,7 @@ class GameSession:
     story: StoryProgress = field(default_factory=StoryProgress)
     desert: DesertState | None = None
     caverns: CavernState | None = None
-    # a5-0x500a: the level's sword type, -1 for none. 3:61ec-623a gives level
-    # six none and levels seven and eight type 2; picking a sword sets it.
+    # a5-0x500a: the level's sword type, -1 for none; picking a sword sets it.
     sword_type: int = 1
 
     @property
@@ -116,7 +120,7 @@ class GameSession:
         if self.desert is not None:
             self.desert.enter_room(self.room_id)
         self.harbor = Harbor() if level.kind == 5 else None
-        self.sword_type = -1 if level.number == 6 else 2 if level.number in (7, 8) else 1
+        self.sword_type = level_sword_type(level.number)
         fresh = SequenceState(IDLE_SEQUENCE, action=15, current_x=level.start_x,
                               target_x=level.start_x, facing=level.facing,
                               actor_type=0, level_kind=level.kind)

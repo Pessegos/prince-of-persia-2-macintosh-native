@@ -76,5 +76,30 @@ class LevelSixSwordTests(unittest.TestCase):
         self.assertEqual(scene.level_map.tile(16, 5, 1).kind, 1)
 
 
+@unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported level-six resources required')
+class LevelSixSaveTests(unittest.TestCase):
+    def test_a_picked_up_sword_survives_both_save_formats(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from pop2.game_session import GameResources, GameSession
+        from pop2.save_game import capture, capture_snapshot, read_save, read_snapshot, write_save
+
+        resources = GameResources.load()
+        game = GameSession.load(resources, 6)
+        self.assertTrue(game.combat.player.sword_lost)
+        game.sword_type = 2
+        game.arm_prince()
+        with TemporaryDirectory() as directory:
+            for name, document, reader in (('progress', capture(game), read_save),
+                                           ('snapshot', capture_snapshot(game), read_snapshot)):
+                path = Path(directory) / f'{name}.json'
+                write_save(path, document)
+                loaded, _saved = reader(path, resources)
+                self.assertEqual(loaded.sword_type, 2, name)
+                self.assertFalse(loaded.combat.player.sword_lost, name)
+                loaded.restart()
+                self.assertTrue(loaded.combat.player.sword_lost, name)
+
+
 if __name__ == '__main__':
     unittest.main()
