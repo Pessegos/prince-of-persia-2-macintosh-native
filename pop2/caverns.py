@@ -507,7 +507,12 @@ def cavern_scene_signature(program, room_id, state):
         choices = metadata['cells'][f'{room}:{cell}']
         kind, foreground = state.loose.tiles.get((room, cell), choices[0])
         if choices[0][0] == 11:
-            index = (int(bool(metadata['shifts'][foreground & 15])) if kind == 11 else
+            shifts = metadata['shifts']
+            if isinstance(shifts[0], list):
+                # Ruins: one shake table per column parity. Both nonzero shake
+                # images share the exported phase-1 variant.
+                shifts = shifts[cell % 10 & 1]
+            index = (int(bool(shifts[foreground & 15])) if kind == 11 else
                      2 if (room, cell) in state.loose.cleared or len(choices) == 3 else 3)
         else:
             index = next(i for i, value in enumerate(choices) if value[0] == kind and

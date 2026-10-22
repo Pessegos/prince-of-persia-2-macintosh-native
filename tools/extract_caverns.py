@@ -611,9 +611,14 @@ def extract_loose_floor_scenery(program, caverns, prince, level, base, progress=
     compact = struct.unpack_from('>H', level, 0x2186)[0] != 3
     choices = loose_floor_cells(terrain)
     data = expand_a5_data(parse_resource_fork(program))
-    offsets = struct.unpack_from('>13h', data, len(data) - 0x2f30)
-    # DrawCaveLoose 8:24dc/257c applies the original two table lookups.
-    shifts = [offsets[index] for index in offsets]
+    if compact:
+        # The ruins' loose drawer 7:2bd6-2c1a picks its shake image from one
+        # of two tables by the column's parity (a5-0x2c66 even, -0x2c7e odd).
+        shifts = [list(struct.unpack_from('>13h', data, len(data) - offset)) for offset in (0x2c66, 0x2c7e)]
+    else:
+        offsets = struct.unpack_from('>13h', data, len(data) - 0x2f30)
+        # DrawCaveLoose 8:24dc/257c applies the original two table lookups.
+        shifts = [offsets[index] for index in offsets]
     clears = {key: below for key in choices if choices[key][0][0] == 11
               and (below := cleared_below_cell(terrain, *key)) is not None}
     result = {'shifts': shifts, 'cells': {f'{room}:{cell}': values

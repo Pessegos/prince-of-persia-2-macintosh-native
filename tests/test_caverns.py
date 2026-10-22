@@ -952,3 +952,18 @@ class RuinsPressureDrawingTests(unittest.TestCase):
         self.assertEqual(pressure_drawing_commands([plate], [record], (1,), {}), [pressed])
         front = ['front', *plate[1:]]
         self.assertEqual(pressure_drawing_commands([front], [record], (1,), {}), [['front', *pressed[1:]]])
+
+    def test_ruins_loose_floors_shake_by_their_column_parity(self):
+        # 7:2bd6-2c1a: odd columns read a5-0x2c7e, even ones a5-0x2c66.
+        from types import SimpleNamespace
+        from pop2.caverns import cavern_scene_signature
+
+        even = [0, 2, 0, 1, 1, 0, 0, 2, 2, 2, 0, 2, 98]
+        odd = [0, 1, 0, 2, 2, 0, 0, 0, 1, 1, 1, 0, 0]
+        program = {'loose_floors': {'shifts': [even, odd],
+                                    'cells': {'0:14': [[11, 0], [11, 1], [0, 0]],
+                                              '0:15': [[11, 0], [11, 1], [0, 0]]},
+                                    'rooms': {'0': {'cells': [[0, 14], [0, 15]], 'variants': {}}}}}
+        state = SimpleNamespace(loose=SimpleNamespace(tiles={(0, 14): (11, 7), (0, 15): (11, 7)},
+                                                      cleared=set()))
+        self.assertEqual(cavern_scene_signature(program, 0, state), '10')
