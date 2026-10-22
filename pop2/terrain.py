@@ -88,7 +88,12 @@ class LevelMap:
             return True
         kind = struct.unpack_from(">H", self.level, 0x2186)[0]
         blocked = {5: (10,), 6: (2, 4)}
-        return room not in blocked.get(kind, ())
+        if room in blocked.get(kind, ()):
+            return False
+        # 6:4cd2-4d0c: level 5 room 10 (the bridge chasm) and level 13 rooms
+        # 4/13 refuse the cut and kill the Prince (DecLifePts(100)).
+        number = struct.unpack_from(">H", self.level, 0x218a)[0]
+        return room not in {5: (9,), 13: (3, 12)}.get(number, ())
 
     def tile(self, room, column, row):
         # Same vertical-before-horizontal link traversal as GetBlock/Cut.

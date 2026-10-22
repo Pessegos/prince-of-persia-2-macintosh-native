@@ -212,3 +212,19 @@ class BridgeSceneTests(unittest.TestCase):
             path.write_text(json.dumps(value))
             loaded, _saved = read_snapshot(path, self.scene.resources)
             self.assertEqual(loaded.caverns.bridge, Bridge())
+
+
+class BridgeChasmTests(unittest.TestCase):
+    def test_only_level_five_room_ten_refuses_the_down_cut(self):
+        # CutChar 6:4cd2-4d0c: the bridge chasm kills instead of cutting.
+        import struct
+        from pop2.terrain import LevelMap
+
+        for number, kind, room, allowed in ((5, 3, 9, False), (5, 3, 10, True), (4, 3, 9, True),
+                                            (13, 3, 3, False), (5, 3, 9, True)):
+            with self.subTest(number=number, room=room):
+                level = bytearray(0x49ca)
+                struct.pack_into('>H', level, 0x2186, kind)
+                struct.pack_into('>H', level, 0x218a, number)
+                actor = 2 if allowed and number == 5 and room == 9 else 0
+                self.assertEqual(LevelMap(level).allows_down_cut(room, actor), allowed)
