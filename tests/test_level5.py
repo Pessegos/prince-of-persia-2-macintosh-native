@@ -177,3 +177,23 @@ class RoomSevenGateSongTests(unittest.TestCase):
     def test_slam_plays_brgdoor_unless_the_prince_is_at_room_sevens_left_edge(self):
         self.assertEqual(self.slam(9, 255), [120])
         self.assertEqual(self.slam(6, 40), [])
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class RoomSevenGateShutTests(unittest.TestCase):
+    """BridgeCheckBreak 8:020a-0236: the Prince off the bridge shuts room 7's gate."""
+
+    def setUp(self):
+        CeilingBarsSceneTests.setUp(self)
+
+    def tick(self, count=1):
+        CeilingBarsSceneTests.tick(self, count)
+
+    def test_open_gate_shuts_when_the_prince_is_on_room_sevens_left_side(self):
+        scene = self.scene
+        plates = scene.game.caverns.plates
+        scene.jump_to_room(6, 1, 60, 0)
+        plates.foreground[6, 13] = 0x300 | 237
+        plates.active[6, 13] = 0
+        self.tick()
+        self.assertEqual(plates.active.get((6, 13)), 4)

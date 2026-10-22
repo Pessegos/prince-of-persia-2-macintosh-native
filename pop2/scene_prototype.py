@@ -53,7 +53,7 @@ from pop2.rebirth import RebirthSnapshot
 from pop2.story_progress import MESSAGE_FRAMES, StoryProgress
 from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
-from pop2.bridge import CREAK_SOUND, bridge_checked, bridge_sag, on_bridge
+from pop2.bridge import CREAK_SOUND, bridge_checked, bridge_gate_open, bridge_sag, on_bridge
 from pop2.carpet import (
     CARPET_ROOM, CARPET_TILE, CLOSED_SONG, CRASH_SEQUENCE, OPEN_SONG, RIDE_FRAME, SIT_SEQUENCE,
     carpet_room,
@@ -2579,6 +2579,14 @@ class ScenePrototype(WindowControls):
             return
         state = self.sequence_state
         prince = self.bridge_column(self.combat.player)
+        motion = self.terrain_motion
+        if (prince is None and motion is not None and motion.room == 6
+                and self.combat._supporting_column(self.combat.player) <= 5
+                and bridge_gate_open(self.level_map)):
+            # 8:020a-0236: off the bridge in room 7, at column <= 5, the
+            # Prince shuts room 7's open gate (TriggerGateWithRevPlate(7, 13)).
+            gate = self.level_map.tile(6, 3, 1)
+            self.game.caverns.plates.trigger_gate((6, 13), gate.foreground, 34)
         # 8:01f6-0206: standing (frame 15) or frame 185 does not count.
         if state.action in (15, 185):
             prince = None

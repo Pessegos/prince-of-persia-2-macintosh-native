@@ -53,9 +53,10 @@ check of the redraw at each collapse stage.
 
 **Still open [D, read but not implemented]:**
 - `8:06d8`/RedrawBrgFloor `8:0878`: plank wobble (±1 Y).
-- BridgeCheckBreak's room-7 side effect (`8:020a-0236`): an armed Prince
-  outside the bridge in room 7, column <= 5, with the gate trob in phase 0
-  or 2, triggers TriggerGateWithRevPlate(7, 13).
+- (Implemented) BridgeCheckBreak's room-7 side effect (`8:020a-0236`): an
+  armed Prince outside the bridge in room 7, column <= 5, with the gate trob
+  in phase 0 or 2, triggers TriggerGateWithRevPlate(7, 13). The port's
+  Prince always carries the sword here, so "armed" (+0x1a != -1) holds.
 - Climbing up from a hang in room 10 with the sword out uses SEQS 236
   (`6:2bfd8` in dmucli's numbering).
 
