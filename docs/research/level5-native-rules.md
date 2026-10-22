@@ -112,6 +112,16 @@ cave bars and tile 18 at cell 23 belongs to the flying carpet:
   - After the ride the port plays the cavern end song (32) and leaves the
     completed level on screen; level six is not available.
 
+## Rules found in unmapped listing regions [D, not implemented]
+
+The `.asm` listings leave some real code unmapped (e.g. CODE 5 `4198-4681`,
+ATMGate). Disassembled with capstone:
+- ATMGate `5:4396-43bc`: in level 5, a gate in room 7 subtracts a second
+  table step (a5-0x45dc) each update, so it moves faster.
+- `6:5752-5772`: in level 5 room 10, SetTensionLevel(2, 5).
+- ATMExit `5:15a4-168d`: as the exit finishes opening (position 79) it calls
+  ResetSoundItem(0) before sound 18, except in level 13 room 4.
+
 ## Other level-five checks still to read [?]
 
 | Site | Function |
