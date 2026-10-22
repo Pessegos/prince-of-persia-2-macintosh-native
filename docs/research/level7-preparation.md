@@ -235,5 +235,8 @@ The next initialization and frame-loading blocks are now recorded separately:
   native frame/record loading, supplied visibility and inert AI leaves.
 - [Neck alignment](level7-neck-alignment.md): full original coordinate helper,
   native drawn-object lookup and actual alignment metadata/sprite dimensions.
+- [Sequence selection](level7-sequence-selection.md): native JumpSeq and
+  head-specific facing/position/supporting-column corrections, with actual
+  resource-existence decisions supplied and no animation advancement.
 
 These results do not enable the campaign or claim complete special-actor AI.
