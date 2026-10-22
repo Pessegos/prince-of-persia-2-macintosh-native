@@ -39,3 +39,11 @@ its writer.
 Most single-instruction "functions" in the list are data or Macsbug name
 strings, not code. No further hidden cavern rule for levels 3 and 4 was found
 besides the relief sigh.
+
+## CODE 15, 16 and 18
+
+The same method finds ten starts in unmapped regions of CODE 15/16 and none
+in CODE 18 (desert). Only `15:7226` is real code: NISTower (symbol marker at
+`15:754e`), a later scene coordinator that loads TowerNIS and fades CTBL
+25373/25302. The CODE 16 entries and `15:3050`/`15:3958` are data or name
+strings. Levels 1-4 have no hidden rules in these segments.
