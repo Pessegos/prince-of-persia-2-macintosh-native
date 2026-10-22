@@ -1,12 +1,28 @@
 """Shared application identity for the game and first-run importer."""
 
+from datetime import datetime
 from pathlib import Path
 import sys
 import tkinter as tk
+import traceback
 
 
 ICON_DIR = Path(__file__).resolve().parent / "icons"
 APP_ID = "Pessegos.PrinceOfPersia2.MacintoshNative"
+ERROR_LOG = Path(__file__).resolve().parent.parent / "rendered" / "error.log"
+
+
+def log_callback_exception(kind, value, trace):
+    """Keep Tk callback failures, which otherwise stop the game silently."""
+    text = "".join(traceback.format_exception(kind, value, trace))
+    sys.stderr.write(text)
+    try:
+        ERROR_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with ERROR_LOG.open("a", encoding="utf-8") as stream:
+            stamp = datetime.now().isoformat(timespec='seconds')
+            stream.write(f"--- {stamp}\n{text}")
+    except OSError:
+        pass
 
 
 def create_root():
@@ -20,6 +36,7 @@ def create_root():
         set_app_id(APP_ID)
 
     root = tk.Tk()
+    root.report_callback_exception = log_callback_exception
     if sys.platform == "win32":
         icon = str(ICON_DIR / "prince.ico")
         root.iconbitmap(default=icon)
