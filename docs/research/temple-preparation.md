@@ -98,3 +98,15 @@ Animation, caller scheduling and collision remain open. Then investigate
 sliding-rock activation/persistence, temple draw
 dispatch/custom callbacks, Birdhead combat/frame data, altar/flame/story rules.
 Do not treat this list as complete temple rule coverage.
+
+## Trap-Door Follow-Up
+
+- [Phase advancement](temple-trapdoor-advance.md): native phase/audio-gate
+  helper and MakeRubble update/save/compaction; initial1/75 reaches low17
+  after16/6 helper calls, not a millisecond delay.
+- [Presentation/restoration](temple-trapdoor-presentation.md): native full
+  ATM body restores level cell even when invisible, with prepared image-cache
+  headers, transient draw coordinates and explicit visibility/drawing services.
+
+These supersede the initial animation-state gaps only in their documented
+subsets. Actual pixels, complete scheduling, sound state and collision remain open.

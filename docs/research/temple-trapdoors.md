@@ -9,7 +9,8 @@ Research only, not a runtime implementation or full falling-platform model.
 | Remove floor and prepare moving object | 10:25e8-26d4 | R: full constructor; sound/redraw requests supplied |
 | Append object up to capacity30 | 5:2914-293a | R: original append code, canary-guarded supplied bank |
 | Advance phase, update/save/compact bank | 10:24fa;5:29e8 | R in the separate [advance probe](temple-trapdoor-advance.md) |
-| Present/restore platform, draw, collide, play sound | 10:225c; other callers/services | P: not executed here |
+| Present/restore platform | 10:225c | R in the separate [presentation probe](temple-trapdoor-presentation.md), explicit services supplied |
+| Actual pixels, collision, sound playback/full scheduling | Other callers/services | P: not certified by these probes |
 
 ## Reproduction And Evidence
 
