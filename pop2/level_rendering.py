@@ -18,17 +18,22 @@ class LevelRenderer:
         self.rooms = {}
         self.desert_rooms = {}
         self.cavern_frames = {}
-        self.cavern_program = None
         self.cavern_display = None
         self.cavern_underlay = None
         self.cavern_scenery = None
         self.cavern_map = None
-        if self.level.kind == 3:
-            from pop2.caverns import cavern_assets
-
-            self.cavern_program = cavern_assets(self.level.number)[0]
         if preload_room:
             self.room(level.start_room)
+
+    @property
+    def cavern_program(self):
+        # Parsed on first use: menus build renderers for every level, and the
+        # level-five export alone is about 25 MB of JSON.
+        if self.level.kind != 3:
+            return None
+        from pop2.caverns import cavern_assets
+
+        return cavern_assets(self.level.number)[0]
 
     def room(self, room_id, caverns=None):
         if not 0 <= room_id < 32:

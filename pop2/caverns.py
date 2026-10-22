@@ -173,7 +173,7 @@ def cavern_assets(level_number=3):
     return _cavern_assets(level_number)
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=3)
 def _cavern_assets(level_number):
     name = 'caverns_entry.json' if level_number == 3 else f'caverns_level{level_number}.json'
     program = json.loads((ASSET_DIR / name).read_text(encoding='ascii'))

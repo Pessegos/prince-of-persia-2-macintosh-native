@@ -133,9 +133,9 @@ def missing_assets(project=PROJECT):
     return missing
 
 
-def installation_errors(project=PROJECT):
+def installation_errors(project=PROJECT, missing=None):
     errors = dependency_errors(project)
-    missing = missing_assets(project)
+    missing = missing_assets(project) if missing is None else missing
     if missing:
         errors.append("Missing files in assets/: " + ", ".join(missing))
         errors.append(
@@ -184,9 +184,13 @@ def main(argv=None):
         print("Dependencies are present." if args.check_dependencies
               else "Dependencies and asset files are present.")
         return
-    if missing_assets() and not setup_game(PROJECT):
-        return
-    errors = installation_errors()
+    # Validating the assets parses every cavern export; do it once when complete.
+    missing = missing_assets()
+    if missing:
+        if not setup_game(PROJECT):
+            return
+        missing = None
+    errors = installation_errors(missing=missing)
     if errors:
         parser.exit(1, "\n".join(errors) + "\n")
     try:

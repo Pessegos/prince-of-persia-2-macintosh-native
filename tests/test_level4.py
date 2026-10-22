@@ -60,9 +60,13 @@ class CavernLevelIsolationTests(unittest.TestCase):
         level = SimpleNamespace(number=4, kind=3, start_room=0, data=b'')
         with patch('pop2.caverns.cavern_assets', return_value=(program, None, None, None)) as assets:
             renderer = LevelRenderer(level, preload_room=False)
+            # Menus build renderers for every level; the export loads on first use.
+            assets.assert_not_called()
+            self.assertIs(renderer.cavern_program, program)
             assets.assert_called_once_with(4)
         room = object()
-        with patch('pop2.caverns.cavern_room', return_value=room) as draw:
+        with (patch('pop2.caverns.cavern_assets', return_value=(program, None, None, None)),
+              patch('pop2.caverns.cavern_room', return_value=room) as draw):
             self.assertIs(renderer.room(0), room)
             self.assertEqual(draw.call_args.kwargs['level_number'], 4)
         renderer.cavern_map = object()
