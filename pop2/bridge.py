@@ -39,6 +39,18 @@ class Bridge:
     pieces: dict = field(default_factory=dict)
     planks: list = field(default_factory=list)
     songs: list = field(default_factory=list)
+    # SetTensionLevel 6:5022 (a5-0x36a2 level, a5-0x36a0 amount).
+    tension_level: int = 0
+    tension: int = 0
+
+    def set_tension(self, level, amount):
+        if self.tension_level != level:
+            if {self.tension_level, level} == {2, 3}:
+                self.tension -= 10
+            else:
+                self.tension = 0
+            self.tension_level = level
+        self.tension = max(0, self.tension + amount)
 
     def blocks_turn(self, level_number, room):
         # Prince turn 6:26c0-26d8 and SwordCtrl's voluntary turn 6:2314-2330.
@@ -126,3 +138,19 @@ def bridge_sag(terrain, room, column, row, action):
         return 0
     tile = terrain.tile(room, column, row)
     return SAG.get(tile.column, 0)
+
+
+def bridge_column(room, column):
+    # BridgeGetCharCol 8:0188: rooms 7 and 12 continue room 10's columns.
+    return column - 10 if room == 6 else column + 10 if room == 11 else column
+
+
+def bridge_gate_open(terrain):
+    # IsBrgGateOpen 8:0458: room 7's gate (cell 13) has a trob in phase 0 or 2.
+    caverns = getattr(terrain, 'caverns', None)
+    return caverns is not None and caverns.plates.active.get((6, 13)) in (0, 2)
+
+
+def bridge_tension(terrain):
+    caverns = getattr(terrain, 'caverns', None)
+    return (caverns.bridge.tension_level, caverns.bridge.tension) if caverns is not None else (0, 0)

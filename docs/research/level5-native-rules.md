@@ -28,30 +28,36 @@ BridgeCheckBreak `8:002e-016c`, the plank mobs (`8:0c1a`, TriggerBrgFloorMob
 `8:0ba2`, ATMBrgFloor `8:0976`, DrawObjBrgFloor `8:0b44`) and the native
 check of the redraw at each collapse stage.
 
+**Bridge skeleton AI (implemented, cross-checked with dmucli/pop2-port):**
+`roof_fight_room` means level 5, rooms 7/10/12, row not 0.
+- `8:02ae` engage: facing right, bridge column >= 8; facing left, column < 2,
+  or the Prince behind room 7's open gate (`8:0424`: gate trob phase 0/2,
+  Prince bridge column < 2), or an armed Prince within 204 pixels to the
+  right in column <= 6 with tension level 2 and amount >= 20. An engaging
+  skeleton advances (EnGarde `4:0a30-0a7e`, GenFight, OpponentClose
+  `4:1128-1154`) and does not back off from a gap (`4:0fb8`).
+- `8:04a2` near its end (column < 3 facing right, > 3 facing left): away
+  from it the skeleton neither retreats nor advances (EnGarde `4:0ae2`,
+  `4:0b0c`, `4:0bfc`; InRange `4:04de`; OpponentClose `4:11d4`) and no
+  run is resumed in pursuit.
+- `8:033c` bridge guard (from the skeleton AutoCtrl `4:1672-169c`, which
+  then skips the death-counter collapse): turns back right (+10) when the
+  Prince hides behind the open gate; a right-facing runner brakes (SEQS 101,
+  armed, alert 2) at column 9 or a shut gate; with the Prince behind the
+  gate it runs (SEQS 102); past column 9 it turns (SEQS 60).
+- Tension (SetTensionLevel `6:5022`): a skeleton's hit on the Prince in
+  room 10 adds 5 at level 2 (CheckStab `6:5752-5772`); entering room 10
+  after the break started clears it (`8:050e`).
+- Note: the symbol file's "IsBrgGateOpen" at `8:033c` is the bridge guard;
+  the actual gate test is `8:0458`.
+
 **Still open [D, read but not implemented]:**
-- SpecialMusic `5:5388` (from PlayAmbient `5:4ff8`): a fight in level 5
-  rooms 7/10/12 plays BrgFight (119) instead of the combat group
-  (implemented); other cases: opponent type 12 -> 245, type 10 -> 246,
-  level 8 room 9 -> 180, level 13 rooms 4/29 -> 253.
-- Room 10's CUST enter hook (kind 33) is MarkBrgFloorsForChars `8:050e`,
-  which clears the break counter on entry (implemented); its leave hook
-  `8:06c8` restores CTBL 3500.
-- `8:06d8`/RedrawBrgFloor `8:0878`: the planks under marked columns
-  (a5-0x3134, MarkBridgeForCol `8:05cc`) wobble between CUST records 3-5
-  (Rnd(3)), adding ±1 to a character's Y (`8:0682-06be`).
-- `8:02ae`: opponent predicate for EnGarde/GenFight/DoKidEngarde; facing
-  right it is true from bridge column 8; facing left below column 2, at the
-  room-7 gate (`8:0424`/`8:0458`, cell 13 state 0 or 2), or when an armed
-  character within 204 pixels to its right stands in column <= 6 while
-  tension a5-0x36a2 is 2 and a5-0x36a0 >= 20.
-- `8:04a2`: InRange/EnGarde predicate on the bridge column (< 3 facing
-  right, > 3 facing left).
-- IsBrgGateOpen `8:033c`: the removal of a falling (mode 4) opponent is
-  implemented for one leaving rooms 7/10/12 downward; the other branches
-  (sequence 102/216 handling, the room-7 gate `8:2c38`, DoStrike) are not.
+- `8:06d8`/RedrawBrgFloor `8:0878`: plank wobble (±1 Y).
 - BridgeCheckBreak's room-7 side effect (`8:020a-0236`): an armed Prince
-  outside the bridge, in room 7 column <= 5 with the cell-13 gate state 0
+  outside the bridge in room 7, column <= 5, with the gate trob in phase 0
   or 2, triggers TriggerGateWithRevPlate(7, 13).
+- Climbing up from a hang in room 10 with the sword out uses SEQS 236
+  (`6:2bfd8` in dmucli's numbering).
 
 **Rules elsewhere that depend on the bridge state [D]:**
 - Prince turn `6:26d2` and voluntary turn `6:2322-2330`: no turn in level 5,

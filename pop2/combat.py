@@ -8,7 +8,7 @@ from pop2.enemy_profiles import (
     ADVANCE_CHANCE, BLOCK_CHANCE, PARRY_BLOCK_CHANCE, COUNTER_CHANCE,
     STRIKE_CHANCE, HIT_PAUSE, QuickDrawRandom,
 )
-from pop2.bridge import bridge_checked
+from pop2.bridge import bridge_checked, bridge_column, bridge_gate_open, bridge_tension
 from pop2.enemy_alerts import alert_path_mode
 from pop2.opponent_records import GuardRoomRecord, removed_on_room_save
 from pop2.skeleton import exit_guarded
@@ -558,6 +558,7 @@ class CombatEncounter:
         local_bank = getattr(self, '_local_opponent_bank', False)
         active = self.active_guards()
         try:
+            self._true_player = player
             self.player = self._project_fighter(player, guard.room) or player
             self.guards = [view for other in active
                            if (view := self._project_fighter(other, guard.room)) is not None]
@@ -591,6 +592,10 @@ class CombatEncounter:
             return GuardIntent()
         if distance >= 39 and 102 <= other.action < 118 and other.animation_state == 5:
             return GuardIntent()
+        bridge = self._bridge_fight_room(guard)
+        if bridge and distance < high + 18 and self._bridge_engage(guard):
+            # EnGarde 4:0a30-0a7e: a bridge skeleton allowed to press advances.
+            return GuardIntent(advance=True)
         if distance < low:
             # EnGarde reads JumpSeq's selected ID (-0x502e), not the current
             # AnimChar resource. Retreat/turn history survives links to 227.
@@ -601,7 +606,9 @@ class CombatEncounter:
                     return self._turned_guard_close_intent(guard, distance, low)
                 if state.source_sequence_id not in (57, 104) and self._guard_floor_clear(guard, 1, 1):
                     return GuardIntent(advance=True)
-                return GuardIntent(retreat=self._guard_floor_clear(guard, -1, 1))
+                # EnGarde 4:0ae2-0b16: away from its bridge end it holds.
+                return GuardIntent(retreat=self._guard_floor_clear(guard, -1, 1)
+                                   and not self._bridge_holds(guard))
             return GuardIntent(retreat=True)
         if distance >= high + 18:
             if self.attack_pause:
@@ -619,8 +626,11 @@ class CombatEncounter:
             # directly, without consulting the normal strike table.
             if self.attack_pause:
                 return GuardIntent()
-            return GuardIntent(strike=distance < high, advance=distance >= high)
-        if distance >= high:
+            # InRange 4:04be-04e8: no advance away from the bridge end.
+            return GuardIntent(strike=distance < high,
+                               advance=distance >= high and not self._bridge_holds(guard))
+        if distance >= high or bridge and self._bridge_engage(guard):
+            # GenFight 4:1036-1056 hands a pressing bridge skeleton to OpponentClose.
             return self._close_intent(guard)
         # Defence and Strike both write inputs. GenCtrl then gives an attack
         # input priority over block, even if that attack pose cannot execute it.
@@ -634,6 +644,39 @@ class CombatEncounter:
             strike = self._chance(table, guard)
         return GuardIntent(block=block, strike=strike)
 
+    def _bridge_fight_room(self, guard):
+        # roof_fight_room: level 5, rooms 7/10/12, row not 0 (4:0a30-0a58).
+        level = getattr(self, 'level', None)
+        return (level is not None and guard.row != 0
+                and bridge_checked(struct.unpack_from('>H', level, 0x218a)[0], guard.room))
+
+    def _bridge_near_end(self, guard):
+        # 8:04a2: bridge column < 3 facing right, > 3 facing left.
+        column = bridge_column(guard.room, self._supporting_column(guard))
+        return column < 3 if guard.state.facing else column > 3
+
+    def _kid_behind_bridge_gate(self):
+        # 8:0424: room 7's gate open and the Prince at bridge column < 2.
+        player = getattr(self, '_true_player', None) or self.player
+        return (bridge_gate_open(getattr(self, 'terrain', None))
+                and bridge_column(player.room, self._supporting_column(player)) < 2)
+
+    def _bridge_engage(self, guard):
+        """8:02ae: may the bridge skeleton press forward?"""
+        column = bridge_column(guard.room, self._supporting_column(guard))
+        if guard.state.facing:
+            return column >= 8
+        if column < 2 or self._kid_behind_bridge_gate():
+            return True
+        player = getattr(self, '_true_player', None) or self.player
+        offset = guard.state.target_x - self.player.state.target_x
+        level, tension = bridge_tension(getattr(self, 'terrain', None))
+        return (player.sword_drawn and -204 < offset < 0
+                and self._supporting_column(player) <= 6 and level == 2 and tension >= 20)
+
+    def _bridge_holds(self, guard):
+        return self._bridge_fight_room(guard) and not self._bridge_near_end(guard)
+
     def _turned_guard_close_intent(self, guard, distance, low):
         # EnGarde 4:0b1e-0c08: prefer space behind after a combat turn,
         # subject to the supporting-foot distance and the second rear cell.
@@ -641,7 +684,8 @@ class CombatEncounter:
                 and (self._guard_front_edge_distance(guard) <= 25
                      or low - distance <= 17 or self._guard_floor_clear(guard, -1, 2))):
             return GuardIntent(retreat=True)
-        return GuardIntent(advance=self._guard_floor_clear(guard, 1, 1))
+        return GuardIntent(advance=self._guard_floor_clear(guard, 1, 1)
+                           and not self._bridge_holds(guard))
 
     def _guard_front_edge_distance(self, guard):
         state = guard.state
@@ -653,8 +697,14 @@ class CombatEncounter:
 
     def _close_intent(self, guard=None):
         guard = guard or self.guard
+        if self._bridge_fight_room(guard) and self._bridge_engage(guard):
+            # OpponentClose 4:1128-1154: a pressing bridge skeleton advances.
+            return GuardIntent(advance=True)
         # OpponentClose 0x11a2: profile zero ignores the 15-frame advance pause.
         if guard.skill and self.advance_pause:
+            return GuardIntent()
+        if self._bridge_holds(guard):
+            # OpponentClose 4:11b8-11da: no advance away from the bridge end.
             return GuardIntent()
         return GuardIntent(advance=self._chance(ADVANCE_CHANCE, guard))
 
@@ -664,13 +714,17 @@ class CombatEncounter:
         if self.level is not None:
             column = character_column(guard.state.target_x)
             direction = 1 if guard.state.facing else -1
+            bridge = self._bridge_fight_room(guard)
             if all(self._guard_tile(guard, column + n * direction).kind
                    in EMPTY_TILES for n in (1, 2)):
+                # 4:0fb8-0fd8: a pressing bridge skeleton does not back off.
+                if bridge and self._bridge_engage(guard):
+                    return GuardIntent()
                 return GuardIntent(retreat=True)
             other = self.player.state
             moving = moving_fight_pose(other.action)
             if (guard.generation_flags and moving and guard.state.facing == other.facing
-                    and other.animation_state != 7):
+                    and other.animation_state != 7 and not bridge):
                 self._resume_guard_run(guard)
                 return GuardIntent()
         return self._close_intent(guard)
@@ -1352,6 +1406,14 @@ class CombatEncounter:
             target.state.callback_flag = 1
         target.contact_consumed = True
         target.recovering = target.alive
+        level = getattr(self, 'level', None)
+        caverns = getattr(getattr(self, 'terrain', None), 'caverns', None)
+        if (name == 'player' and attacker.state.actor_type == 4 and caverns is not None
+                and level is not None and struct.unpack_from('>H', level, 0x218a)[0] == 5
+                and target.room == 9):
+            # CheckStab 6:5752-5772: a skeleton's hit on the Prince in room 10
+            # raises the bridge tension (SetTensionLevel(2, 5)).
+            caverns.bridge.set_tension(2, 5)
         if name == "guard":
             # CODE:6 0x513e-0x5152 uses the struck generator's skill.
             self.attack_pause = HIT_PAUSE[target.skill]

@@ -2569,9 +2569,12 @@ class ScenePrototype(WindowControls):
         entered = self.room_id != getattr(self, 'bridge_last_room', None)
         self.bridge_last_room = self.room_id
         if entered and self.game.level.number == 5 and self.room_id == 9:
-            # Room 10's CUST enter hook MarkBrgFloorsForChars (8:050e-0516,
-            # table a5-0x4c2e kind 33) clears the break counter.
+            # Room 10's CUST enter hook MarkBrgFloorsForChars (8:050e-0532,
+            # table a5-0x4c2e kind 33) clears the break counter and, once the
+            # bridge has started breaking, the tension.
             bridge.counter = 0
+            if bridge.state:
+                bridge.set_tension(bridge.tension_level, -bridge.tension)
         if not bridge_checked(self.game.level.number, self.room_id) or self.combat is None:
             return
         state = self.sequence_state

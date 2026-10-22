@@ -170,6 +170,8 @@ def _unpack(value, resources, lava_tables, depth=0):
         optional.update(('fatal', 'float_timer'))
     if cls is CavernState:
         optional.update(('bridge', 'carpet', 'phew_countdown'))
+    if cls is Bridge:
+        optional.update(('tension_level', 'tension'))
     if (not isinstance(record, dict) or set(record) - allowed
             or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')

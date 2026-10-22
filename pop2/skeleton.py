@@ -190,8 +190,14 @@ class Skeleton:
             if self.timer > 0:
                 self.timer -= 1
             return True
+        bridge_room = getattr(encounter, '_bridge_fight_room', None)
+        if bridge_room is not None and bridge_room(actor):
+            # Skeleton AutoCtrl 4:1672-169c: on level five's bridge rooms the
+            # bridge guard (8:033c) replaces the death-counter collapse.
+            if not self.bridge_guard(encounter, actor):
+                return True
         # Skeleton AutoCtrl 4:169e-16ba applies to rising actors too.
-        if (not encounter.player.alive
+        elif (not encounter.player.alive
                 and getattr(encounter, 'player_death_counter', -1) >= 5):
             self.collapse(actor, encounter=encounter)
             return True
@@ -203,6 +209,48 @@ class Skeleton:
                     actor.state.target_x += 16 if facing else -16
                     actor.state.current_x = actor.state.target_x
             return True
+        return False
+
+    def bridge_guard(self, encounter, actor):
+        """8:033c-041c; True lets the ordinary skeleton AI run."""
+        from pop2.bridge import bridge_column, bridge_gate_open
+        from pop2.combat import select_sequence
+
+        state = actor.state
+        if state.animation_state == 5:
+            return True
+        if state.animation_state == 4:
+            # A falling skeleton leaving the bridge rooms is removed on its
+            # room change (combat); it takes no AI decision while falling.
+            return False
+        column = bridge_column(actor.room, encounter._supporting_column(actor))
+        behind_gate = encounter._kid_behind_bridge_gate()
+        if not state.facing:
+            if not behind_gate:
+                return True
+            # 8:0406-041a: the Prince retreated behind room 7's open gate.
+            state.facing = 1
+            state.target_x += 10
+            state.current_x = state.target_x
+            return False
+        if state.source_sequence_id in (102, 216):
+            if column >= 9 or not bridge_gate_open(getattr(encounter, 'terrain', None)):
+                # 8:03ae-03d0: stop running at the bridge end or a shut gate.
+                actor.alert_mode = 2
+                actor.sword_drawn = True
+                select_sequence(actor, 101)
+            return False
+        if encounter.player.state.target_x >= state.target_x:
+            return True
+        if behind_gate:
+            if actor.alert_mode != 1:
+                select_sequence(actor, 102)
+                actor.sword_drawn = False
+                actor.alert_mode = 0
+            return False
+        if column < 9:
+            return True
+        select_sequence(actor, 60)
         return False
 
     def try_wake(self, encounter, actor):

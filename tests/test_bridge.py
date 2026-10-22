@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from pop2.bridge import (
-    BREAK_SONG, BREAK_SOUND, CREAK_SOUND, PLANK_FRAMES, Bridge, bridge_checked,
+    bridge_column, BREAK_SONG, BREAK_SOUND, CREAK_SOUND, PLANK_FRAMES, Bridge, bridge_checked,
 )
 from pop2.paths import ASSET_DIR
 
@@ -155,7 +155,14 @@ class BridgeSceneTests(unittest.TestCase):
     def test_fighting_on_the_middle_planks_breaks_the_bridge_and_drops_the_prince(self):
         scene = self.scene
         scene.god_mode = True
-        scene.jump_to_room(9, 1, 250, 1)
+        # Mid-bridge duel, Prince in column 4-5 and skeleton in 5-6. The
+        # skeleton's AI is held so that the break rule alone is exercised.
+        scene.jump_to_room(9, 1, 230, 1)
+        skeleton = scene.combat.active_guards()[0]
+        skeleton.state.facing = 0
+        skeleton.state.target_x = skeleton.state.current_x = 290
+        scene.combat.choose_guard_action = lambda guard=None: None
+        scene.start_sword_action("sword_draw")
         bridge = scene.game.caverns.bridge
         blocked = False
         for _ in range(240):
@@ -228,3 +235,57 @@ class BridgeChasmTests(unittest.TestCase):
                 struct.pack_into('>H', level, 0x218a, number)
                 actor = 2 if allowed and number == 5 and room == 9 else 0
                 self.assertEqual(LevelMap(level).allows_down_cut(room, actor), allowed)
+
+
+class BridgeTensionTests(unittest.TestCase):
+    def test_tension_changes_level_and_accumulates_like_set_tension_level(self):
+        # SetTensionLevel 6:5022: 2<->3 keeps tension less 10, other changes reset.
+        bridge = Bridge()
+        for _ in range(4):
+            bridge.set_tension(2, 5)
+        self.assertEqual((bridge.tension_level, bridge.tension), (2, 20))
+        bridge.set_tension(3, 5)
+        self.assertEqual((bridge.tension_level, bridge.tension), (3, 15))
+        bridge.set_tension(1, -1)
+        self.assertEqual((bridge.tension_level, bridge.tension), (1, 0))
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class BridgeGuardAiTests(unittest.TestCase):
+    """8:02ae, 8:033c, 8:0424 and 8:04a2 on level five's bridge."""
+
+    def setUp(self):
+        BridgeSceneTests.setUp(self)
+        self.scene.jump_to_room(9, 1, 30, 1)
+        self.combat = self.scene.combat
+        self.skeleton = self.combat.active_guards()[0]
+
+    def tick(self, count=1):
+        BridgeSceneTests.tick(self, count)
+
+    def place(self, x, facing):
+        self.skeleton.state.target_x = self.skeleton.state.current_x = x
+        self.skeleton.state.facing = facing
+
+    def test_engage_and_hold_follow_the_bridge_columns(self):
+        combat, skeleton = self.combat, self.skeleton
+        self.assertTrue(combat._bridge_fight_room(skeleton))
+        self.place(60, 0)
+        self.assertTrue(combat._bridge_engage(skeleton))
+        for x in range(100, 200, 4):
+            self.place(x, 0)
+            if bridge_column(9, combat._supporting_column(skeleton)) in (2, 3):
+                break
+        self.assertFalse(combat._bridge_engage(skeleton))
+        self.assertTrue(combat._bridge_holds(skeleton))
+        self.place(440, 1)
+        self.assertTrue(combat._bridge_engage(skeleton))
+
+    def test_skeleton_turns_back_when_the_prince_hides_behind_room_sevens_gate(self):
+        scene, skeleton = self.scene, self.skeleton
+        scene.jump_to_room(6, 1, 400, 0)
+        scene.game.caverns.plates.active[6, 13] = 0
+        self.assertTrue(self.combat._kid_behind_bridge_gate())
+        self.place(200, 0)
+        self.assertFalse(skeleton.skeleton.bridge_guard(self.combat, skeleton))
+        self.assertEqual((skeleton.state.facing, skeleton.state.target_x), (1, 210))
