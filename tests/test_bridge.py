@@ -301,3 +301,21 @@ class BridgeRoomCutTests(unittest.TestCase):
                                 alive=False, native_alive=False, skeleton=None, sword_drawn=False, row=1)
         self.assertTrue(opponent_follows_cut(guard, 'left', 1, bridge_room=True))
         self.assertFalse(opponent_follows_cut(guard, 'left', 1))
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class BridgeSkeletonImmunityTests(unittest.TestCase):
+    def test_bridge_skeleton_takes_no_sword_damage(self):
+        # DecLifePts 4:34f2-352e returns before subtracting for a skeleton in
+        # level five's bridge rooms (row not 0).
+        BridgeSceneTests.setUp(self)
+        scene = self.scene
+        scene.jump_to_room(9, 1, 30, 1)
+        skeleton = scene.combat.active_guards()[0]
+        life = skeleton.life
+        scene.combat._hurt('guard', skeleton, scene.combat.player)
+        self.assertEqual(skeleton.life, life)
+        self.assertTrue(skeleton.alive)
+
+    def tick(self, count=1):
+        BridgeSceneTests.tick(self, count)

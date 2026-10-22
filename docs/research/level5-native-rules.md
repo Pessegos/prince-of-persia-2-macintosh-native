@@ -48,6 +48,10 @@ check of the redraw at each collapse stage.
 - Tension (SetTensionLevel `6:5022`): a skeleton's hit on the Prince in
   room 10 adds 5 at level 2 (CheckStab `6:5752-5772`); entering room 10
   after the break started clears it (`8:050e`).
+- DecLifePts `4:34f2-352e`: a skeleton in the bridge rooms (row not 0) takes
+  no damage; only the collapse defeats it (implemented).
+- CutAllOpponents `6:4510-4540`: bridge-room opponents always follow the
+  Prince across a cut (implemented).
 - Note: the symbol file's "IsBrgGateOpen" at `8:033c` is the bridge guard;
   the actual gate test is `8:0458`.
 

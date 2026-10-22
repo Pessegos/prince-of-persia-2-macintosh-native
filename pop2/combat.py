@@ -1399,6 +1399,10 @@ class CombatEncounter:
 
     def _hurt(self, name, target, attacker):
         protected = name == 'player' and getattr(self, 'god_mode', False)
+        if name == 'guard' and target.state.actor_type == 4 and self._bridge_fight_room(target):
+            # DecLifePts 4:34f2-350e: on level five's bridge rooms a skeleton
+            # takes no damage; only the falling bridge defeats it.
+            protected = True
         fatal_sequence = not protected and target.state.sequence_id in FATAL_STAB_SEQUENCES
         if not protected:
             target.life = 0 if fatal_sequence else max(0, target.life - 1)
