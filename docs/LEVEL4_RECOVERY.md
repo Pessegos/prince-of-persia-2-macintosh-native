@@ -202,10 +202,26 @@ when leaving level three. After the song, CheckPlayNIS(4, 5) runs, so a
 player who never restarted level four sees the first tree scene now. The
 completed level then stays on screen, because level five is not available.
 
-Level five (LEVL 2004) also enters with sequence 5 (`2:5e34`), but its
-scenery uses bridges. The cavern export harness stops in OffsetBrgFloorY
-`8:07de-07fe` at an unsupported OffsetRect trap, and the port has no bridge
-mechanics. Enabling level five is a separate feature.
+Level five (LEVL 2004) also enters with sequence 5 (`2:5e34`).
+
+**Level-five scenery (research step).** The export harness now produces
+`caverns_level5.json`:
+- **OffsetRect:** it services every OffsetRect trap in CODE 3/5/8, which
+  covers bridge floors (OffsetBrgFloorY `8:07fe`, RestoreBrgFloorY `8:085a`)
+  and custom pieces (`3:120a`).
+- **Custom rooms:** rooms 3 and 10 are customized (foreground bits 0xc000,
+  IsCustomizedRoom `3:1310`). For those, the harness locks CUST
+  room*25+3975 at a5-0x4c9e (LoadCustomRoomData `3:1378`) and runs
+  DrawCustomRoomImgs `3:2324` natively. It records each DrawCustomRoomImg
+  `3:2438` call as an item of the requested pass (back for 0/5/11, front
+  otherwise) with the SectRect clip (`3:2482`).
+- **Result:** room 10's rope bridge and room 3's custom chamber render. Pass
+  11 (dynamic custom pieces) is not drawn by the static export.
+
+The export of levels 3 and 4 is byte-identical to before. The importer and
+launcher do not require level five yet, and there is no bridge gameplay
+(BridgeCheckBreak, TriggerBrgFloor, ATMBrgFloor, MarkBrgFloorsForChars in
+CODE 8) and no level-five entry.
 
 **Not yet implemented:**
 - the death message's 600-frame game-over timeout (`2:67fa-6806`).

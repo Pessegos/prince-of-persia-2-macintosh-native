@@ -168,7 +168,7 @@ def cavern_clip_top(terrain, room, row, state, bounds):
 
 
 def cavern_assets(level_number=3):
-    if type(level_number) is not int or level_number not in (3, 4):
+    if type(level_number) is not int or level_number not in (3, 4, 5):
         raise ValueError(f'Unsupported cavern scenery level {level_number}')
     return _cavern_assets(level_number)
 

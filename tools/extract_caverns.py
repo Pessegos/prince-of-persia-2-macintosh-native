@@ -18,9 +18,15 @@ from tools.extract_attract import jump_targets
 @lru_cache(maxsize=1)
 def recovery_inputs(program, caverns, prince):
     resources = parse_resource_fork(program)
-    primitives = {(3, offset) for offset in (4, 0x29e2, 0x29b6, 0x2ac4, 0x06c4, 0x2324, 0x26e4)}
+    primitives = {(3, offset) for offset in (4, 0x29e2, 0x29b6, 0x2ac4, 0x06c4, 0x2324, 0x26e4, 0x2482, 0x2438)}
     primitives.update((5, offset) for offset in (0x21c, 0x230, 0x08c4, 0x1990))
     primitives.update((8, offset) for offset in (0x176c, 0x20a6, 0x1ca4, 0x1752, 0x1f86))
+    # Every OffsetRect trap (A8A8): bridge and custom-room pieces use it at
+    # 8:07fe, 8:085a and 3:120a, besides 5:021c.
+    for segment in (3, 5, 8):
+        code = resources['CODE'].get(segment, {}).get('data', b'')
+        primitives.update((segment, offset) for offset in range(0, len(code) - 1, 2)
+                          if code[offset:offset + 2] == b'\xa8\xa8')
     intercepts = {}
     # Native A5 calls use relocated jump-table stubs. Only modeled
     # services need instruction hooks; other traps fail in Unicorn.
@@ -136,6 +142,15 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     put_long(a5 - 0x4f8c, info)
     put_long(a5 - 0x4b9e, pieces)
     put_long(a5 - 0x5014, lev)
+    # LoadCustomRoomData 3:1378-13d6 locks CUST room*25+3975 at a5-0x4c9e for
+    # customized rooms (foreground bits 0xc000, IsCustomizedRoom 3:1310).
+    customized = any(struct.unpack_from('>H', level, 0x780 + room_id * 120 + cell * 4)[0] & 0xc000
+                     for cell in range(30))
+    custom = (artwork['CUST'].get(3975 + (room_id + 1) * 25)
+              if artwork is not None and customized else None)
+    if custom is not None:
+        cpu.mem_write(0x94000, custom['data'])
+        put_long(a5 - 0x4c9e, 0x94000)
     put_long(a5 - 0x4ab2, 0)  # No actor-specific gate peeling in a static scene.
     # DoCleanCut 2:608c-6096 builds scenery with full-room repaint enabled.
     # Per-cell redraws change the overlap order of adjacent exit pieces.
@@ -175,7 +190,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         segment = (address - 0x100000) // 0x10000
         offset = address - bases.get(segment, address)
         result = None
-        if opcode == b'\xa8\xa8' and segment == 5 and offset == 0x21c:
+        if opcode == b'\xa8\xa8':  # OffsetRect(rect, dh, dv)
             dy, dx, rect_pointer = word(sp), word(sp + 2), long(sp + 4)
             top, left, bottom, right = struct.unpack('>4h', cpu.mem_read(rect_pointer, 8))
             cpu.mem_write(rect_pointer, struct.pack('>4h', top + dy, left + dx, bottom + dy, right + dx))
@@ -201,7 +216,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             return
         if (opcode == b'\x4e\x90'
                 and (segment == 8 and offset in (0x1ca4, 0x1752, 0x1f86)
-                     or segment == 5 and offset == 0x230)):
+                     or segment == 5 and offset == 0x230 or segment == 3 and offset == 0x2482)):
             out, first, second = (long(sp + i) for i in (0, 4, 8))
             r1 = struct.unpack('>4h', cpu.mem_read(first, 8))
             r2 = struct.unpack('>4h', cpu.mem_read(second, 8))
@@ -265,7 +280,30 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                 result = 0x93000
                 back_rect = match[3]
                 cpu.mem_write(result + 30, struct.pack('>4h', *match[3]))
-        elif segment == 3 and offset == 0x2324:
+        elif segment == 3 and offset == 0x2438:
+            # DrawCustomRoomImg 3:2438-2580: a CUST record of this pass, clipped
+            # by a5-0x4600, becomes a back (passes 0/5/11) or front item.
+            index, draw_pass = word(sp + 4), word(sp + 6)
+            base = long(a5 - 0x4c9e)
+            record = base + 30 + index * 32
+            shape_index, bottom, x, record_pass, mode, hidden = (
+                word(record + i * 2) for i in range(6))
+            if base and hidden != -1 and record_pass == draw_pass:
+                shape = struct.unpack('>H', cpu.mem_read(base + 2, 2))[0] + shape_index
+                if shape not in artwork['SHAP']:
+                    raise ValueError(f'Missing custom cavern shape {shape}')
+                width, height = struct.unpack_from('>hH', artwork['SHAP'][shape]['data'], 4)
+                clip = list(struct.unpack('>4h', cpu.mem_read(a5 - 0x4600, 8)))
+                rect = [max(bottom - height, clip[0]), max(x, clip[1]),
+                        min(bottom, clip[2]), min(x + width, clip[3])]
+                if rect[0] < rect[2] and rect[1] < rect[3]:
+                    layer = 'back' if draw_pass in (0, 5, 11) else 'front'
+                    commands.append([layer, shape, x, bottom, mode, word(a5 - 0x45f6), rect, 4,
+                                     word(a5 - 0x45f8), word(a5 - 0x45f6)])
+                    command_kinds.append(word(info + 0x12) if long(a5 - 0x4f8c) else 0)
+            result = 0
+        elif segment == 3 and offset == 0x2324 and not long(a5 - 0x4c9e):
+            # DrawCustomRoomImgs runs natively only for a loaded CUST room.
             result = 0
         elif segment == 5 and offset == 0x08c4:
             # PieceRightId 5:0904 advances the requested column before lookup.
@@ -377,7 +415,7 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
     from pop2.level_data import LevelDefinition
 
     definition = LevelDefinition.read(parse_resource_fork(prince), level_number)
-    if definition.kind != 3 or level_number not in (3, 4):
+    if definition.kind != 3 or level_number not in (3, 4, 5):
         raise ValueError(f'Unsupported cavern scenery level {level_number}')
     level = definition.data
     scenes = {}
