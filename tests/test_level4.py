@@ -351,3 +351,30 @@ class LevelExitSceneryTests(unittest.TestCase):
             seen.add(tuple(scene.game.caverns.torches[key] for key in sorted(keys)))
         self.assertIsNotNone(scene.game.exit)
         self.assertGreater(len(seen), 1)
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported level-four resources required')
+class LevelFourRunnerBumpTests(unittest.TestCase):
+    def test_running_skeleton_bumps_a_wall_as_an_armed_opponent(self):
+        # Collide 4:5910/59b6: SEQS:46/47 hold Prince poses 50-52, which the
+        # skeleton FRAM lacks; selecting them froze the game (action -99).
+        from pop2.combat import select_sequence
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(4)
+        RooftopSceneTests.tick(self, 16)
+        scene.god_mode = True
+        scene.jump_to_room(25, 2, 255, 0)
+        skeleton = next(guard for guard in scene.combat.active_guards() if guard.room == 25)
+        skeleton.skeleton.rise(scene.combat, skeleton)
+        select_sequence(skeleton, 216)
+        skeleton.state.facing, skeleton.state.target_x = 0, 450
+        skeleton.state.current_x, skeleton.sword_drawn = 450, False
+        sequences = set()
+        for _ in range(40):
+            RooftopSceneTests.tick(self)
+            sequences.add(skeleton.state.sequence_id)
+        self.assertIn(64, sequences)
+        self.assertFalse(sequences & {46, 47})

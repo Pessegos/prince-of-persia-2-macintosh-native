@@ -976,11 +976,14 @@ class RooftopPhysics:
                 supported = self.map.supports(motion.room, character_column(contact), motion.row)
                 # Collide 4:5826-584c / 589e: a low bump over solid floor
                 # stays on that floor. GroundBump (45) is the empty/high case.
-                if supported and (sword_drawn or state.current_y > -30):
+                # Opponents bump as armed characters: HitFloor arms them on
+                # landing (6:038c) and their FRAM has no Prince bump poses 50-52.
+                armed = sword_drawn or state.actor_type not in (0, None)
+                if supported and (armed or state.current_y > -30):
                     action = state.action
                     state.current_y = state.vertical_velocity = 0
                     direction = 1 if state.facing else -1
-                    sequence = ((64 if delta * direction < 0 else 65) if sword_drawn else
+                    sequence = ((64 if delta * direction < 0 else 65) if armed else
                                 46 if action in (24, 25) or 40 <= action < 43
                                 or 102 <= action <= 106 else 47)
                     self.select(runtime, sequence)
@@ -1101,10 +1104,13 @@ class RooftopPhysics:
                     break
                 # HitFloor 6:0348-0444 makes an ordinary NPC's >=50 fall
                 # fatal; the Prince can survive 50..62 with one life lost.
-                fatal = not alive or not invulnerable and velocity >= (50 if state.actor_type == 2 else 63)
+                # HitFloor 6:0358-0392: every opponent type (skeletons too) lands
+                # armed in SEQS:63 and dies from 50.
+                npc = state.actor_type not in (0, None)
+                fatal = not alive or not invulnerable and velocity >= (50 if npc else 63)
                 sequence = (22 if fatal else 20 if velocity >= 50
                             else 187 if state.actor_type == 2 and state.sequence_id == 186
-                            else 63 if sword_drawn or state.actor_type == 2 else 17)
+                            else 63 if sword_drawn or npc else 17)
                 if frame_record is not None:
                     state.target_x += self.map.landing_offset(
                         motion.room, motion.row, state, frame_record)
@@ -1114,7 +1120,8 @@ class RooftopPhysics:
                 motion.dead = fatal
                 self.select(runtime, sequence)
                 # HitFloor 6:039c/03fe/0436 distinguishes safe, hurt and fatal impacts.
-                state.sound_events.append(7 if fatal else 13 if velocity >= 50 else 296)
+                state.sound_events.append(7 if fatal else 13 if velocity >= 50
+                                          else 61 if state.actor_type == 4 else 296)
                 events.append(TerrainEvent("death" if motion.dead else "land",
                                            int(not invulnerable and not fatal and 50 <= velocity < 63)))
                 break
