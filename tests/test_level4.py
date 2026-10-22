@@ -199,6 +199,7 @@ if __name__ == '__main__':
     unittest.main()
 
 
+@unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported level-four resources required')
 class LevelFourExitGuardedSkeletonTests(unittest.TestCase):
     """4:17aa / SkelDoneShaking 4:1ae0-1b34 for rooms 22 and 24-28."""
 
