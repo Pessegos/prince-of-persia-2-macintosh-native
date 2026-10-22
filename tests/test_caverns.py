@@ -318,6 +318,19 @@ class CavernDrawingTests(unittest.TestCase):
                          [255, 255, 255, 0])
         self.assertEqual(room.actor_mask(3).getpixel((20, 340)), 255)
 
+    def test_export_draws_only_environments_with_a_known_piece_table(self):
+        # a5-0x4aea holds one piece-drawing table per LEVL environment; only
+        # the caverns (3, kinds 0-44) and ruins (4, kinds 0-23) are decoded.
+        from tools.extract_caverns import DRAW_KINDS
+
+        self.assertEqual(DRAW_KINDS, {3: 45, 4: 24})
+        level = bytearray(0x49ca)
+        struct.pack_into('>H', level, 0x2186, 5)
+        with (patch('tools.extract_caverns.recovery_inputs',
+                    return_value=({'CODE': {0: {'data': b''}}}, {}, {}, b'', {})),
+              self.assertRaisesRegex(ValueError, 'environment 5')):
+            recover_room(b'program', b'artwork', bytes(level), _machine=Mock())
+
     def test_export_uses_clean_cut_flag_and_full_clip_for_every_cell(self):
         from unicorn import Uc
 
@@ -336,6 +349,8 @@ class CavernDrawingTests(unittest.TestCase):
         struct.pack_into('>i', data, len(data) - 0x4aea + 12, -0x100)
         level = bytearray(0x49ca)
         struct.pack_into('>H', level, 0x2198, 1)
+        # The drawing table is now chosen by the LEVL environment (caverns).
+        struct.pack_into('>H', level, 0x2186, 3)
         observed = []
         released = []
 

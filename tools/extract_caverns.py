@@ -15,15 +15,27 @@ from tools.extract_lava import lava_tables
 from tools.extract_attract import jump_targets
 
 
+SECT_RECT_7 = (0x1f2e, 0x1f8c, 0x2760, 0x2b1a)
+UNION_RECT_7 = (0x1f48, 0x1fa2)
+# Entries of each environment's piece-drawing table (a5-0x4aea + 4 * env):
+# the caverns' table covers kinds 0-44, the ruins' kinds 0-23.
+DRAW_KINDS = {3: 45, 4: 24}
+# Shape libraries: 0 sword items and 1 flasks (Prince.rsrc), 4 scenery.
+LIBRARY_BASE = {0: 1000, 1: 3000, 4: 3500}
+
+
 @lru_cache(maxsize=1)
 def recovery_inputs(program, caverns, prince):
     resources = parse_resource_fork(program)
     primitives = {(3, offset) for offset in (4, 0x29e2, 0x29b6, 0x2ac4, 0x06c4, 0x2324, 0x26e4, 0x2482, 0x2438)}
     primitives.update((5, offset) for offset in (0x21c, 0x230, 0x08c4, 0x1990))
     primitives.update((8, offset) for offset in (0x176c, 0x20a6, 0x1ca4, 0x1752, 0x1f86))
+    # The ruins drawers (CODE 7) call the same SectRect (a5-0x1f58) and
+    # UnionRect (a5-0x1f5c) glue.
+    primitives.update((7, offset) for offset in SECT_RECT_7 + UNION_RECT_7)
     # Every OffsetRect trap (A8A8): bridge and custom-room pieces use it at
     # 8:07fe, 8:085a and 3:120a, besides 5:021c.
-    for segment in (3, 5, 8):
+    for segment in (3, 5, 7, 8):
         code = resources['CODE'].get(segment, {}).get('data', b'')
         primitives.update((segment, offset) for offset in range(0, len(code) - 1, 2)
                           if code[offset:offset + 2] == b'\xa8\xa8')
@@ -133,9 +145,12 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             raise ValueError('Unsupported cavern jump table')
         return bases[segment] + offset + 4
 
-    table_offset = struct.unpack_from('>i', data, len(data) - 0x4aea + 3 * 4)[0]
+    environment = struct.unpack_from('>H', level, 0x2186)[0]
+    if environment not in DRAW_KINDS:
+        raise ValueError(f'Unsupported scenery environment {environment}')
+    table_offset = struct.unpack_from('>i', data, len(data) - 0x4aea + environment * 4)[0]
     dispatch = 0x92000
-    for kind in range(45):
+    for kind in range(DRAW_KINDS[environment]):
         pointer = struct.unpack_from('>i', data, len(data) + table_offset + kind * 4)[0]
         put_long(dispatch + kind * 4, target(pointer) if pointer else 0)
     put_long(a5 - 0x4aae, dispatch)
@@ -197,7 +212,8 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             cpu.reg_write(UC_M68K_REG_A7, sp + 8)
             cpu.reg_write(UC_M68K_REG_PC, address + 2)
             return
-        if opcode == b'\x4e\x90' and segment == 8 and offset == 0x176c:
+        if opcode == b'\x4e\x90' and (segment == 8 and offset == 0x176c
+                                      or segment == 7 and offset in UNION_RECT_7):
             out, first, second = (long(sp + i) for i in (0, 4, 8))
             r1 = struct.unpack('>4h', cpu.mem_read(first, 8))
             r2 = struct.unpack('>4h', cpu.mem_read(second, 8))
@@ -216,6 +232,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             return
         if (opcode == b'\x4e\x90'
                 and (segment == 8 and offset in (0x1ca4, 0x1752, 0x1f86)
+                     or segment == 7 and offset in SECT_RECT_7
                      or segment == 5 and offset == 0x230 or segment == 3 and offset == 0x2482)):
             out, first, second = (long(sp + i) for i in (0, 4, 8))
             r1 = struct.unpack('>4h', cpu.mem_read(first, 8))
@@ -233,10 +250,10 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             draw_column, draw_row = word(a5 - 0x45f8), word(a5 - 0x45f6)
             layer = 'front' if fields[5] in (1, 2) else 'back'
             library = fields[0]
-            if library not in (1, 4):
+            if library not in LIBRARY_BASE:
                 raise ValueError(f'Unsupported cavern shape library {library}')
-            shape = (3000 if library == 1 else 3500) + fields[12]
-            source = flasks if library == 1 else artwork
+            shape = LIBRARY_BASE[library] + fields[12]
+            source = flasks if library in (0, 1) else artwork
             if source is None or shape not in source['SHAP']:
                 raise ValueError(f'Missing library {library} shape {shape}')
             width, height = struct.unpack_from('>hH', source['SHAP'][shape]['data'], 4)
@@ -250,7 +267,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                 commands.append([layer, shape, x, bottom, fields[3], fields[8], rect, library,
                                  draw_column, draw_row])
                 command_kinds.append(fields[9])
-                if library == 4 and 3581 <= shape <= 3589:
+                if environment == 3 and library == 4 and 3581 <= shape <= 3589:
                     tile = terrain.tile(room_id, fields[7], fields[8])
                     torches.append({'room': tile.room, 'cell': tile.row * 10 + tile.column,
                                     'foreground': tile.foreground, 'command': commands[-1]})
