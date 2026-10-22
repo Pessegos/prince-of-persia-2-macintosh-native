@@ -56,25 +56,46 @@ check of the redraw at each collapse stage.
   the actual gate test is `8:0458`.
 
 **Still open [D, read but not implemented]:**
-- `8:06d8`/RedrawBrgFloor `8:0878`: plank wobble (±1 Y).
-- (Implemented) BridgeCheckBreak's room-7 side effect (`8:020a-0236`): an
-  armed Prince outside the bridge in room 7, column <= 5, with the gate trob
-  in phase 0 or 2, triggers TriggerGateWithRevPlate(7, 13). The port's
-  Prince always carries the sword here, so "armed" (+0x1a != -1) holds.
-- Climbing up from a hang in room 10 with the sword out uses SEQS 236
-  (`6:2bfd8` in dmucli's numbering).
+- `8:06d8`/RedrawBrgFloor `8:0878`: plank wobble. Each bridge cell is a trob
+  (TriggerBrgFloor `8:091c` at room entry). While a character's column ±1
+  is marked (8:0534/MarkBridgeForCol `8:05cc`; both on the bridge mark all),
+  Rnd(3) >= 2 sets the foreground nibble to 1 or 2 for one frame; the cell
+  is redrawn with CUST record 3 + nibble (SHAP 4226-4228, bottom +0/+1/+2)
+  and a character's Y on a floor pose moves -1/+1 (`8:068c-06be`). Not
+  implemented: it needs per-cell redraws of the pre-rendered room.
+- (Implemented) BridgeCheckBreak's room-7 side effect (`8:020a-0236`): a
+  Prince who still has his sword (a5-0x503c != -1) outside the bridge in
+  room 7, column <= 5, with the gate trob in phase 0 or 2, triggers
+  TriggerGateWithRevPlate(7, 13).
+- (Implemented) DoClimbUp `6:19aa-19c4`: the first climb out of a hang in
+  room 10 uses SEQS 236 (poses 319-322 let the sword fall, sound 14) and sets
+  a5-0x503c to -1, so Ctrl draws nothing (GenCtrl `6:0c70`). A sword hit
+  writes 1 again (`6:53f8-5406`) and rebirth restores 0 (`2:5e66`, the level
+  sword type a5-0x500a is still 1). Level 6 starts without a sword
+  (`3:6202-6216`).
+- (Implemented) StartFall `4:4c4a-4ca4`: in room 10 a Prince holding the
+  direction behind him turns back with SEQS 198 (bypassing the pose table).
+- (Implemented) Tension level 3: SetKidDeathMethod(3) `4:31b4-31d6` while
+  room 10 is on screen adds 5; from 20 an armed right-facing fall uses SEQS
+  198, from 40 a left-facing catch reaches 25 pixels further
+  (`4:382c-3880`).
+- (Implemented) CutChar `6:4d5a-4d66` moves the Prince to room 0: no floor
+  of room 11 can stop his fall below the chasm.
+- (Implemented) TriggerGateWithRevPlate `8:2d66-2d96`: a bridge skeleton
+  (row != 0) cannot open a fully shut reversible gate.
 
 **Rules elsewhere that depend on the bridge state [D]:**
 - Prince turn `6:26d2` and voluntary turn `6:2322-2330`: no turn in level 5,
   room 10, while a5-0x3130 > 0.
 - AnimChar `-1` link `4:2e64-2ea0`: in level 5, rooms 10/7/12, a char in row
   != 0 linking to 57 from a selected sequence other than 60, in column 9,
-  links to 86 instead.
+  links to 86 instead. Not implemented: only SEQS 60 links to 57, always
+  selected by JumpSeq, so no reachable case was found.
 - OpponentClose `4:1672-169c`: in level 5, rooms 10/7/12, with the char's row
   word nonzero, wake uses S08_033C (IsBrgGateOpen) instead of the proximity
   test.
-- GenFight `4:102c-1054` and similar EnGarde sites: level 5, rooms 10/7/12,
-  skip the run-after-the-Prince start.
+- (Implemented) GenFight `4:102c-1054` and similar EnGarde sites: level 5,
+  rooms 10/7/12, skip the run-after-the-Prince start.
 
 ## The finale: carpet and ceiling bars (room 3) [D, partly read]
 

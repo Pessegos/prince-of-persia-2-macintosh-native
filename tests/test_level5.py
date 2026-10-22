@@ -197,3 +197,14 @@ class RoomSevenGateShutTests(unittest.TestCase):
         plates.active[6, 13] = 0
         self.tick()
         self.assertEqual(plates.active.get((6, 13)), 4)
+
+    def test_a_prince_without_his_sword_leaves_the_gate_open(self):
+        # 8:0214-021a: a5-0x503c == -1 skips the shut.
+        scene = self.scene
+        plates = scene.game.caverns.plates
+        scene.jump_to_room(6, 1, 60, 0)
+        scene.combat.player.sword_lost = True
+        plates.foreground[6, 13] = 0x300 | 237
+        plates.active[6, 13] = 0
+        self.tick()
+        self.assertNotEqual(plates.active.get((6, 13)), 4)

@@ -2604,10 +2604,12 @@ class ScenePrototype(WindowControls):
         prince = self.bridge_column(self.combat.player)
         motion = self.terrain_motion
         if (prince is None and motion is not None and motion.room == 6
+                and not self.combat.player.sword_lost
                 and self.combat._supporting_column(self.combat.player) <= 5
                 and bridge_gate_open(self.level_map)):
-            # 8:020a-0236: off the bridge in room 7, at column <= 5, the
-            # Prince shuts room 7's open gate (TriggerGateWithRevPlate(7, 13)).
+            # 8:020a-0236: off the bridge in room 7, at column <= 5, a Prince
+            # who still has his sword shuts room 7's open gate
+            # (TriggerGateWithRevPlate(7, 13)).
             gate = self.level_map.tile(6, 3, 1)
             self.game.caverns.plates.trigger_gate((6, 13), gate.foreground, 34)
         # 8:01f6-0206: standing (frame 15) or frame 185 does not count.
