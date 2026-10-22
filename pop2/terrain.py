@@ -90,10 +90,14 @@ class LevelMap:
         blocked = {5: (10,), 6: (2, 4)}
         if room in blocked.get(kind, ()):
             return False
-        # 6:4cd2-4d0c: level 5 room 10 (the bridge chasm) and level 13 rooms
-        # 4/13 refuse the cut and kill the Prince (DecLifePts(100)).
+        return not self.chasm(room)
+
+    def chasm(self, room):
+        # 6:4cd2-4d66: level 5 room 10 (the bridge chasm) and level 13 rooms
+        # 4/13 refuse the cut, kill the Prince (DecLifePts(100)) and move him
+        # to room 0, where no floor below the room can stop his fall.
         number = struct.unpack_from(">H", self.level, 0x218a)[0]
-        return room not in {5: (9,), 13: (3, 12)}.get(number, ())
+        return room in {5: (9,), 13: (3, 12)}.get(number, ())
 
     def tile(self, room, column, row):
         # Same vertical-before-horizontal link traversal as GetBlock/Cut.
@@ -1057,9 +1061,13 @@ class RooftopPhysics:
         if catch_ledge is not None and catch_ledge():
             return tuple(events)
 
+        # Below a chasm the Prince is in room 0 (CutChar 6:4d64): its cells
+        # are not the linked room's, so nothing aligns or lands him.
+        below_chasm = (state.actor_type in (0, None) and motion.row >= 3
+                       and self.map.chasm(motion.room))
         # Falling 6:0156-0174 corrects the foot before comparing its height
         # with the next floor, not only after it has reached that floor.
-        if frame_record is not None and state.sequence_id != 15:
+        if frame_record is not None and state.sequence_id != 15 and not below_chasm:
             self.map.align_wall(motion.room, motion.row, state, frame_record)
 
         absolute_y = floor_y(motion.row) + state.current_y
@@ -1079,7 +1087,7 @@ class RooftopPhysics:
             events.append(TerrainEvent("death"))
             return tuple(events)
 
-        if state.animation_state not in (4, 9):
+        if state.animation_state not in (4, 9) or below_chasm:
             return tuple(events)
         while absolute_y > floor_y(motion.row):
             contact_x = (floor_contact_x(state.target_x, state.facing, frame_record)

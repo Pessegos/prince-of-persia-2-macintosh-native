@@ -176,8 +176,11 @@ class BridgeSceneTests(unittest.TestCase):
         self.assertEqual(set(bridge.pieces), {3, 4, 5, 6, 7})
         self.assertEqual([scene.level_map.tile(9, column, 1).kind for column in range(10)],
                          [1, 44, 44, 0, 0, 0, 0, 0, 44, 34])
+        # The chasm has no floor: the Prince dies below room 10.
+        scene.god_mode = False
         self.tick(30)
-        self.assertNotEqual((scene.combat.player.room, scene.terrain_motion.row), (9, 1))
+        self.assertTrue(scene.terrain_motion.dead)
+        self.assertEqual(scene.terrain_motion.room, 9)
 
     def test_an_opponent_falling_out_of_room_ten_is_removed_not_carried_below(self):
         scene = self.scene
@@ -221,6 +224,15 @@ class BridgeSceneTests(unittest.TestCase):
             self.assertEqual(loaded.caverns.bridge, Bridge())
 
 
+def bridge_level(number=5):
+    import struct
+
+    level = bytearray(0x49ca)
+    struct.pack_into('>H', level, 0x2186, 3)
+    struct.pack_into('>H', level, 0x218a, number)
+    return level
+
+
 class BridgeChasmTests(unittest.TestCase):
     def test_only_level_five_room_ten_refuses_the_down_cut(self):
         # CutChar 6:4cd2-4d0c: the bridge chasm kills instead of cutting.
@@ -235,6 +247,35 @@ class BridgeChasmTests(unittest.TestCase):
                 struct.pack_into('>H', level, 0x218a, number)
                 actor = 2 if allowed and number == 5 and room == 9 else 0
                 self.assertEqual(LevelMap(level).allows_down_cut(room, actor), allowed)
+
+    def test_no_floor_of_the_linked_room_catches_the_prince_below_the_chasm(self):
+        # CutChar 6:4d5a-4d66 leaves him in room 0: he falls to Y 730 and dies
+        # instead of landing, unseen, on the floor of room 11 below.
+        import struct
+        from pop2.cavern_state import CavernState
+        from pop2.sequence_runtime import SequenceRuntime, SequenceState
+        from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion
+
+        sequences = {7: (-7, 4, 102, -1, 7), 17: (-7, 1, 109, -1, 17), 22: (-7, 1, 185, -1, 22)}
+        for number, expected in ((5, 'death'), (4, 'land')):
+            with self.subTest(number=number):
+                level = bridge_level(number)
+                struct.pack_into('>H', level, 0x2080 + 9 * 8 + 6, 11)
+                struct.pack_into('>H', level, 10 * 60 + 4 * 2, 1)
+                level_map = LevelMap(level)
+                level_map.caverns = CavernState()
+                physics, motion = RooftopPhysics(level_map), TerrainMotion(9, 2, falling=True)
+                runtime = SequenceRuntime(sequences, SequenceState(
+                    7, target_x=250, current_x=250, facing=1, actor_type=0, vertical_velocity=20))
+                runtime.next_frame()
+                kinds = []
+                for _ in range(20):
+                    kinds += [event.kind for event in physics.advance(
+                        motion, runtime, runtime.state.target_x, (240, 300, 270, 360))]
+                    if not motion.falling or motion.dead:
+                        break
+                self.assertEqual(kinds[-1], expected)
+                self.assertNotIn('land' if number == 5 else 'death', kinds)
 
 
 class BridgeTensionTests(unittest.TestCase):
