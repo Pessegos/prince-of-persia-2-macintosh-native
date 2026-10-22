@@ -86,6 +86,9 @@ def missing_assets(project=PROJECT):
             if any(not manifest["cues"].get(str(cue), {}).get("file")
                    for cue in (62, 63, 71, 279, 285, *range(73, 109))):
                 missing.append("audio/manifest.json (needs cavern ambience and death music)")
+            if any(not manifest["cues"].get(str(cue), {}).get("file")
+                   for cue in (111, 112, 114, 115, 116, 119, 120, 121)):
+                missing.append("audio/manifest.json (needs level-four and level-five music)")
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append("audio/manifest.json (needs reimport)")
     for name in ("intro.json", "ending.json", "discovery.json",

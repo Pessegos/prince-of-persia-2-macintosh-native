@@ -6,10 +6,10 @@ from unittest.mock import patch
 
 import run_game
 from tests.test_attract import fixture
-from tools.extract_audio import CAVERN_SONGS
+from tools.extract_audio import CAVERN_SONGS, LATE_CAVERN_SONGS
 
 
-PREPARED_CUES = tuple(map(str, (10019, 24, 32, 46, 47, 48, 49, 50, 297, *CAVERN_SONGS)))
+PREPARED_CUES = tuple(map(str, (10019, 24, 32, 46, 47, 48, 49, 50, 297, *CAVERN_SONGS, *LATE_CAVERN_SONGS)))
 
 
 class InstallationTests(unittest.TestCase):
@@ -77,6 +77,15 @@ class InstallationTests(unittest.TestCase):
         self.assertEqual(run_game.missing_assets(self.project), ["audio/cue-40.wav"])
         manifest.write_text("invalid json")
         self.assertIn("needs reimport", " ".join(run_game.missing_assets(self.project)))
+
+    def test_installation_without_late_cavern_music_requests_reimport(self):
+        # Float, Chase, the carpet and bridge songs had no prepared audio.
+        manifest = self.project / "assets" / "audio" / "manifest.json"
+        cues = dict.fromkeys(PREPARED_CUES, self.credit_cue)
+        del cues['111']
+        manifest.write_text(json.dumps({"schema": 1, "cues": cues}))
+        self.assertIn("audio/manifest.json (needs level-four and level-five music)",
+                      run_game.missing_assets(self.project))
 
     def test_old_installation_requests_demo_import(self):
         (self.project / "assets" / "attract.json").unlink()

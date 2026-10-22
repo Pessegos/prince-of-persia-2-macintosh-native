@@ -20,6 +20,9 @@ AUDIO_SCHEMA = 1
 LEVEL_ONE_SONGS = (6, 32, 38, 39, 40, 41, 42, 43, 64)
 DESERT_SONGS = (46, 47, 48, 49, 50)
 CAVERN_SONGS = (24, 62, 63, 71, 279, 285, 297, *range(73, 109))
+# Levels 4-5: Float (111), Chase (112), the flying-carpet room and ride
+# (114-116) and the bridge fight, room-7 door and collapse (119-121).
+LATE_CAVERN_SONGS = (111, 112, 114, 115, 116, 119, 120, 121)
 SYNTH_DIR = Path(__file__).resolve().parents[1] / "vendor" / "smssynth"
 
 
@@ -164,7 +167,7 @@ def extract_audio(image, program_bytes, prince_bytes, directory, progress=lambda
             entry["duration"] = sequence.length
             entry["name"] = next((message.name for track in sequence.tracks for message in track
                                    if message.type == "track_name"), "")
-            if int(cue) in LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS:
+            if int(cue) in LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS:
                 progress(f"Preparing music: {entry['name']}")
                 entry["file"] = f"cue-{cue}.wav"
                 entry["playback_duration"] = render_midi(directory, raw_name, entry["file"])
@@ -173,7 +176,7 @@ def extract_audio(image, program_bytes, prince_bytes, directory, progress=lambda
         "bank": struct.unpack_from(">h", level, 0x2186)[0],
         "groups": list(struct.unpack_from(">960h", level, 0x424a)),
     }
-    required = set(LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS) | {7, 8, 9, 10, 11, 12, 13, 14, 30, 31, 34, 35, 36, 294, 295, 296}
+    required = set(LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS) | {7, 8, 9, 10, 11, 12, 13, 14, 30, 31, 34, 35, 36, 294, 295, 296}
     missing = sorted(cue for cue in required if not manifest["cues"].get(str(cue), {}).get("file"))
     if missing:
         raise ValueError(f"Game audio is incomplete (missing cues: {missing})")
