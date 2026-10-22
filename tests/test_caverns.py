@@ -246,7 +246,8 @@ class CavernDrawingTests(unittest.TestCase):
         with (patch('tools.extract_caverns.parse_resource_fork', side_effect=[resources, {}]),
               patch('tools.extract_caverns.expand_a5_data', return_value=b'')):
             intercepts = recovery_inputs(b'program', b'artwork', None)[4]
-        self.assertEqual(intercepts, {0x130004: b'\x4e\x71'})
+        # OffsetRect traps are serviced wherever they occur (bridge/custom pieces).
+        self.assertEqual(intercepts, {0x130004: b'\x4e\x71', 0x130006: b'\xa8\xa8'})
 
     def test_floor_redraw_is_clipped_to_the_current_actor_rectangle(self):
         size = (510, 365)
