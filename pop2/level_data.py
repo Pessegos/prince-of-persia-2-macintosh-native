@@ -66,7 +66,20 @@ class LevelDefinition:
         return 1 if self.window_escape else self.start_tile // 10
 
     @property
+    def native_scenery(self):
+        # Caverns (3) and ruins (4) draw the original renderer's export.
+        return self.kind in (3, 4)
+
+    @property
+    def cliff_start(self):
+        # SetKidDefaults 2:5dd0-5dec: level six's room 27 stands the Prince at
+        # native X 374 with SEQS 2.
+        return self.number == 6 and self.start_room == 26
+
+    @property
     def start_x(self):
+        if self.cliff_start:
+            return 374 - 207
         return self.start_tile % 10 * TILE_WIDTH + 22
 
     @property
@@ -76,7 +89,9 @@ class LevelDefinition:
             return 4
         if self.kind == 1:
             return 124
-        if self.number in (3, 4, 5) and self.kind == 3:
+        if self.cliff_start:
+            return 2
+        if self.number in (3, 4, 5, 7) and self.kind in (3, 4):
             # SetKidDefaults 2:5e34 uses the ordinary standing entry.
             return 5
         raise ValueError(f"Level {self.number} entry controller is not implemented")

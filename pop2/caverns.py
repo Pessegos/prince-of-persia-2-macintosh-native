@@ -167,8 +167,28 @@ def cavern_clip_top(terrain, room, row, state, bounds):
     return boundary
 
 
+# Levels whose scenery is the original renderer's export, by LEVL environment:
+# caverns (3) and ruins (4, levels six and seven).
+SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7)}
+RUINS_LEVELS = SCENERY_LEVELS[4]
+# CUST room enter hooks loading CTBL over entries 64+ (S03_508A): level five's
+# carpet room (CheckCarpetImg 8:0d30, CTBL 3501) and level six's start room
+# (CUST kind 22, 7:37a6, CTBL 3502).
+ROOM_PALETTES = {(5, 2): 3501, (6, 26): 3502}
+
+
+def scenery_name(level_number):
+    if level_number == 3:
+        return 'caverns_entry.json'
+    return f"{'ruins' if level_number in RUINS_LEVELS else 'caverns'}_level{level_number}.json"
+
+
+def scenery_resource(level_number):
+    return 'Ruins.rsrc' if level_number in RUINS_LEVELS else 'Caverns.rsrc'
+
+
 def cavern_assets(level_number=3):
-    if type(level_number) is not int or level_number not in (3, 4, 5):
+    if type(level_number) is not int or level_number not in (3, 4, 5, *RUINS_LEVELS):
         raise ValueError(f'Unsupported cavern scenery level {level_number}')
     return _cavern_assets(level_number)
 
@@ -180,26 +200,25 @@ def room_assets(level_number, room_id):
     (8:0d30, table a5-0x4c2e) loads CTBL 3501 over entries 64-183.
     """
     program, resources, palette, shapes = cavern_assets(level_number)
-    if (level_number, room_id) != (5, 2):
+    if (level_number, room_id) not in ROOM_PALETTES:
         return program, resources, palette, shapes
-    return program, resources, *_carpet_room_palette(level_number)
+    return program, resources, *_custom_room_palette(level_number, room_id)
 
 
-@lru_cache(maxsize=1)
-def _carpet_room_palette(level_number):
+@lru_cache(maxsize=2)
+def _custom_room_palette(level_number, room_id):
     _program, resources, palette, _shapes = cavern_assets(level_number)
     palette = dict(palette)
-    palette.update(decode_ctbl(resources['CTBL'][3501]['data']))
+    palette.update(decode_ctbl(resources['CTBL'][ROOM_PALETTES[level_number, room_id]]['data']))
     return palette, {}
 
 
 @lru_cache(maxsize=3)
 def _cavern_assets(level_number):
-    name = 'caverns_entry.json' if level_number == 3 else f'caverns_level{level_number}.json'
-    program = json.loads((ASSET_DIR / name).read_text(encoding='ascii'))
+    program = json.loads((ASSET_DIR / scenery_name(level_number)).read_text(encoding='ascii'))
     if program.get('level') != level_number:
         raise ValueError('Cavern scenery belongs to a different level')
-    resources = load_resource_file('Caverns.rsrc')
+    resources = load_resource_file(scenery_resource(level_number))
     return program, resources, decode_ctbl(resources['CTBL'][3500]['data']), {}
 
 
@@ -612,6 +631,13 @@ def cavern_command_sprite(command, resources, palette, shapes):
             if flags == 0:
                 # Native transfer mode 0 copies zero/black too; mode 16 masks it.
                 shapes[key].putalpha(255)
+        elif library == 0:
+            # A sword item (tile 22): the sword set (SHPL 1000), drawn with
+            # the ruins' sword colours (Prince CTBL 1004 at entry 239).
+            source = load_resource_file('Prince.rsrc')
+            colors = {239 + entry: color for entry, color in
+                      decode_ctbl(source['CTBL'][1004]['data']).items()}
+            shapes[key] = decode_shap(source['SHAP'][index]['data'], colors)
         else:
             raise ValueError(f'Unsupported cavern shape library {library}')
     return shapes[key]

@@ -11,7 +11,7 @@ from pop2.render_opening import (
 
 class LevelRenderer:
     def __init__(self, level, preload_room=True, retouch_caverns=True):
-        if level.kind != 5 and level.number not in (2, 3, 4, 5):
+        if level.kind != 5 and level.number not in (2, 3, 4, 5, 6):
             raise ValueError(f"Level {level.number} scenery is not implemented (environment {level.kind})")
         self.level = level
         self.retouch_caverns = retouch_caverns
@@ -29,7 +29,7 @@ class LevelRenderer:
     def cavern_program(self):
         # Parsed on first use: menus build renderers for every level, and the
         # level-five export alone is about 25 MB of JSON.
-        if self.level.kind != 3:
+        if self.level.kind not in (3, 4):
             return None
         from pop2.caverns import cavern_assets
 
@@ -38,7 +38,7 @@ class LevelRenderer:
     def room(self, room_id, caverns=None):
         if not 0 <= room_id < 32:
             raise ValueError("Invalid scenery room")
-        if self.level.kind == 3:
+        if self.level.kind in (3, 4):
             from pop2.caverns import cavern_room, cavern_scene_signature, cavern_pressure_signature
 
             if caverns is not None:
@@ -79,7 +79,7 @@ class LevelRenderer:
 
     def enter_room(self, room_id, caverns=None):
         room = self.room(room_id, caverns)
-        if self.level.kind != 3:
+        if self.level.kind not in (3, 4):
             return room
         display = self.cavern_display
         if display is not None and display[0] == room_id and display[1] is room:
@@ -99,12 +99,12 @@ class LevelRenderer:
         return resolved
 
     def remember_scenery(self, frame):
-        if self.level.kind == 3:
+        if self.level.kind in (3, 4):
             # Snapshot before actors/HUD; later drawing must not modify this image.
             self.cavern_scenery = frame.copy()
 
     def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
-        if self.level.kind == 3 and caverns is not None:
+        if self.level.kind in (3, 4) and caverns is not None:
             from pop2.terrain import LevelMap
             from pop2.caverns import (
                 draw_cavern_torches, draw_cavern_falling, draw_cavern_lava, draw_cavern_darts,
@@ -137,7 +137,7 @@ class LevelRenderer:
     def supported_rooms(self):
         if self.level.kind == 1:
             return [0, 1, 2]
-        if self.level.kind == 3:
+        if self.level.kind in (3, 4):
             from pop2.development_map import room_positions
             from pop2.terrain import LevelMap
 
@@ -160,7 +160,7 @@ class LevelRenderer:
     def screen_entries(self):
         if self.level.kind == 1:
             return {"1": 1, "2 (Stones)": 0, "Right shore": 2}
-        if self.level.kind == 3:
+        if self.level.kind in (3, 4):
             return {f"Room {room + 1}": room for room in self.supported_rooms()}
         terrain, _shapes, _pieces = rooftop_scene_data(self.level.resource_id)
         available = set(self.supported_rooms())

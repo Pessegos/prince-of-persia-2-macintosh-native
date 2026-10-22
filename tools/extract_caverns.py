@@ -7,6 +7,7 @@ from itertools import product
 from functools import lru_cache, partial
 from math import prod
 
+from pop2.caverns import SCENERY_LEVELS, scenery_name
 from pop2.mac_resources import parse_resource_fork
 from pop2.terrain import LevelMap
 from tools.extract_enemy_profiles import expand_a5_data
@@ -432,16 +433,6 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                      key=lambda item: (item[0][0] == 'front', item[1] != 0 if item[0][0] == 'back' else False))
     return {'version': 1, 'level': struct.unpack_from('>H', level, 0x218a)[0], 'room': room_id,
             'commands': [command for command, _kind in ordered], 'torches': torches}
-
-
-# LEVL environments with exported scenery: caverns (3) and ruins (4).
-SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7)}
-
-
-def scenery_name(level_number):
-    if level_number == 3:
-        return 'caverns_entry.json'
-    return f"{'ruins' if level_number in SCENERY_LEVELS[4] else 'caverns'}_level{level_number}.json"
 
 
 def extract_caverns(program, caverns, prince, output, progress=lambda _text: None, *, level_number=3):

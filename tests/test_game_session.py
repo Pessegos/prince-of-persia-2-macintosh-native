@@ -150,6 +150,15 @@ class LevelDefinitionTests(unittest.TestCase):
                          (5, 2, 277, 0))
         self.assertFalse(level.window_escape)
 
+    def test_level_six_stands_on_its_cliff_at_native_x_374(self):
+        # SetKidDefaults 2:5dd0-5dec: room 27 of level six selects SEQS 2.
+        level = LevelDefinition.decode(6, level_bytes(6, 4, 27, 23))
+        self.assertEqual((level.entry_sequence, level.start_x, level.start_row), (2, 167, 2))
+        self.assertTrue(level.native_scenery)
+        other = LevelDefinition.decode(7, level_bytes(7, 4, 32, 24))
+        self.assertEqual((other.entry_sequence, other.start_x), (5, 226))
+
+
 
 class GameSessionTests(unittest.TestCase):
     def test_level_one_and_two_have_independent_worlds_and_shared_sequences(self):
@@ -322,7 +331,7 @@ class OriginalLevelSessionTests(unittest.TestCase):
         from pop2.level_rendering import LevelRenderer
 
         with self.assertRaisesRegex(ValueError, "scenery is not implemented"):
-            LevelRenderer(self.resources.level(6))
+            LevelRenderer(self.resources.level(8))
 
     def test_initial_visited_and_generated_guards_inherit_the_player_environment(self):
         data = bytearray(self.resources.level(1).data)
@@ -360,7 +369,7 @@ class LevelHostTests(unittest.TestCase):
         viewport = scene.native_viewport.tobytes()
         with patch.object(scene, "render") as render, \
                 self.assertRaisesRegex(ValueError, "entry controller is not implemented"):
-            scene.load_level(6)
+            scene.load_level(8)
         render.assert_not_called()
         self.assertIs(scene.game, game)
         self.assertIs(scene.level_renderer, renderer)

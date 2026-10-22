@@ -103,7 +103,7 @@ class GameSession:
         self.complete = False
         self.exit = None
         self.desert = DesertState() if level.kind == 1 else None
-        self.caverns = CavernState() if level.kind == 3 else None
+        self.caverns = CavernState() if level.native_scenery else None
         if self.level_map is not None:
             self.level_map.desert = self.desert
             self.level_map.caverns = self.caverns
