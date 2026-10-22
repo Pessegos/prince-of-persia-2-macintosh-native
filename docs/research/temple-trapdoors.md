@@ -8,7 +8,8 @@ Research only, not a runtime implementation or full falling-platform model.
 | Cached-state trigger admission | 10:25aa-25e6 | R: full native body with actual type26 cells and supplied actor columns |
 | Remove floor and prepare moving object | 10:25e8-26d4 | R: full constructor; sound/redraw requests supplied |
 | Append object up to capacity30 | 5:2914-293a | R: original append code, canary-guarded supplied bank |
-| Animate platform, draw, collide, play sound | 10:225c; other callers/services | P: not executed here |
+| Advance phase, update/save/compact bank | 10:24fa;5:29e8 | R in the separate [advance probe](temple-trapdoor-advance.md) |
+| Present/restore platform, draw, collide, play sound | 10:225c; other callers/services | P: not executed here |
 
 ## Reproduction And Evidence
 
@@ -75,9 +76,10 @@ The 16-byte native moving-object record contains eight signed words:
 | +0xc | row |
 | +0xe | 75 if cached bit0x40 is set; otherwise1 |
 
-The last field is an INITIAL animation-state value, not yet a certified
-delay in milliseconds or game ticks. ATMTrapDoor must establish its producer/
-consumer lifecycle before assigning exact timing semantics.
+The last field is an INITIAL animation-state value, not a delay in
+milliseconds or game ticks. The [advance probe](temple-trapdoor-advance.md)
+now establishes low-five-bit phases1/11, reaching17 after16/6 helper calls.
+Presentation/restoration and full-frame scheduling remain separate.
 
 The original append helper copies the scratch object and increments the
 count only when count<30. Count29 uses the last slot; count30 does not append
