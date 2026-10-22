@@ -8,6 +8,7 @@ from pop2.enemy_profiles import (
     ADVANCE_CHANCE, BLOCK_CHANCE, PARRY_BLOCK_CHANCE, COUNTER_CHANCE,
     STRIKE_CHANCE, HIT_PAUSE, QuickDrawRandom,
 )
+from pop2.bridge import bridge_checked
 from pop2.enemy_alerts import alert_path_mode
 from pop2.opponent_records import GuardRoomRecord, removed_on_room_save
 from pop2.skeleton import exit_guarded
@@ -1271,6 +1272,14 @@ class CombatEncounter:
             elif event.kind == "land":
                 guard.life = max(0, guard.life - event.damage)
                 guard.sword_drawn = True
+        level = getattr(self, "level", None)
+        if (guard.room != old_room and motion.falling and level is not None
+                and bridge_checked(struct.unpack_from('>H', level, 0x218a)[0], old_room)
+                and self.terrain.neighbor(old_room, "down") == guard.room):
+            # IsBrgGateOpen 8:035e-0392: an opponent falling out of the bridge
+            # rooms' bottom is removed (RemoveChar) instead of carried below.
+            self.room_encounters[old_room][0].remove(guard)
+            return
         if guard.room != old_room:
             # TransferOppInfo keeps the actor's life, palette and sequence.
             self._load_room(guard.room)

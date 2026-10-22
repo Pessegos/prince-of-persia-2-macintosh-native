@@ -257,12 +257,14 @@ characters move, in level five's rooms 7, 10 and 12:
 - **Sag:** on a bridge tile, outside frames 34-44, the native Y follows the
   plank sag (`8:063e`); the port applies it to drawing only.
 
+- **Falling opponent:** IsBrgGateOpen (`8:035e-0392`) removes an opponent
+  that falls out of the bottom of rooms 7, 10 or 12 (RemoveChar), so the
+  skeleton is not carried into room 11. Like other off-room opponents, one
+  that is still falling when the Prince leaves room 10 waits there.
+
 Not reproduced: the per-plank wobble (`8:06d8`, RedrawBrgFloor) and the
 ±1 Y it adds; the opponent AI bridge predicates (`8:02ae`, `8:04a2`) and
-IsBrgGateOpen (`8:033c`), which removes a falling opponent below row 3
-outside rooms 7, 10 and 12. An opponent that falls while the Prince has
-left room 10 stays where it was, as other off-room opponents do. The
-other level-five rules are listed in
+IsBrgGateOpen's other branches. The other level-five rules are listed in
 `docs/research/level5-native-rules.md`.
 
 **Not yet implemented:**

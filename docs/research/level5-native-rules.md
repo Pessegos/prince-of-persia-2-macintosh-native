@@ -39,8 +39,9 @@ check of the redraw at each collapse stage.
   tension a5-0x36a2 is 2 and a5-0x36a0 >= 20.
 - `8:04a2`: InRange/EnGarde predicate on the bridge column (< 3 facing
   right, > 3 facing left).
-- IsBrgGateOpen `8:033c`: removes a falling (mode 4) opponent below row 3
-  outside rooms 7/10/12, and drives the room-7 gate (`8:2c38`).
+- IsBrgGateOpen `8:033c`: the removal of a falling (mode 4) opponent is
+  implemented for one leaving rooms 7/10/12 downward; the other branches
+  (sequence 102/216 handling, the room-7 gate `8:2c38`, DoStrike) are not.
 - BridgeCheckBreak's room-7 side effect (`8:020a-0236`): an armed Prince
   outside the bridge, in room 7 column <= 5 with the cell-13 gate state 0
   or 2, triggers TriggerGateWithRevPlate(7, 13).

@@ -172,6 +172,19 @@ class BridgeSceneTests(unittest.TestCase):
         self.tick(30)
         self.assertNotEqual((scene.combat.player.room, scene.terrain_motion.row), (9, 1))
 
+    def test_an_opponent_falling_out_of_room_ten_is_removed_not_carried_below(self):
+        scene = self.scene
+        scene.god_mode = True
+        scene.jump_to_room(9, 1, 20, 0)
+        skeleton = scene.combat.active_guards()[0]
+        skeleton.state.target_x = skeleton.state.current_x = 230
+        scene.game.caverns.bridge.pieces.update({column: 1 for column in range(3, 8)})
+        self.tick(12)
+        self.assertNotIn(skeleton, scene.combat.active_guards())
+        self.assertFalse(any(skeleton in guards for guards, _points
+                             in scene.combat.room_encounters.values()))
+        self.assertEqual(scene.combat.room_encounters.get(10, ([], []))[0], [])
+
     def test_bridge_state_survives_a_snapshot_roundtrip_and_old_snapshots_omit_it(self):
         from pop2.save_game import capture_snapshot, read_snapshot, write_save
 
