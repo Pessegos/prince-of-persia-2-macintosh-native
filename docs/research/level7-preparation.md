@@ -213,14 +213,15 @@ kind conversion, routing and narrow lock predicate, **not** full InitOpps,
 neck attachment, bite/damage, knock-off, flight, snake activation or actor
 record persistence. Invalid negative slots are not certified.
 
-### Next Independent Block
+### Follow-Up From The Initial Milestone
 
 Trace the eight head-family records through HeadAddOpponent 7:0574 and
 the mode dispatch at 7:1324 with real FRAM/SEQS data, keeping the Prince's
 cached state and generator record separate. Record mode transitions and
 services before translating a controller. Investigate SnakeComeOutOfHole
 separately; do not apply the head mode layout to its records by assumption.
-This next block has not been performed in the current preparation milestone.
+The autonomous continuation below covers initialization, frame loading and
+bounded wrapper routing. Full AI leaf effects and animation/cadence remain open.
 
 ## Autonomous Continuation
 
