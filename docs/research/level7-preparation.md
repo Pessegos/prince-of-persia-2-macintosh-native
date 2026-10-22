@@ -230,5 +230,7 @@ The next initialization and frame-loading blocks are now recorded separately:
   HeadAddOpponent, including signed ALIVE behavior and kind-zero fallback.
 - [Special-actor frame loading](level7-frame-loading.md): original FRAM/AFRM
   loading for all tested head/serpent pose combinations, including type-8 remap.
+- [Head mode routing](level7-head-mode-routing.md): original wrapper with
+  native frame/record loading, supplied visibility and inert AI leaves.
 
 These results do not enable the campaign or claim complete special-actor AI.
