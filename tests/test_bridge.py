@@ -176,11 +176,13 @@ class BridgeSceneTests(unittest.TestCase):
         self.assertEqual(set(bridge.pieces), {3, 4, 5, 6, 7})
         self.assertEqual([scene.level_map.tile(9, column, 1).kind for column in range(10)],
                          [1, 44, 44, 0, 0, 0, 0, 0, 44, 34])
-        # The chasm has no floor: the Prince dies below room 10.
+        # The chasm has no floor: the Prince dies below room 10, and that
+        # fatal fall raises tension level 3.
         scene.god_mode = False
         self.tick(30)
         self.assertTrue(scene.terrain_motion.dead)
         self.assertEqual(scene.terrain_motion.room, 9)
+        self.assertEqual((bridge.tension_level, bridge.tension), (3, 5))
 
     def test_an_opponent_falling_out_of_room_ten_is_removed_not_carried_below(self):
         scene = self.scene
@@ -289,6 +291,98 @@ class BridgeTensionTests(unittest.TestCase):
         self.assertEqual((bridge.tension_level, bridge.tension), (3, 15))
         bridge.set_tension(1, -1)
         self.assertEqual((bridge.tension_level, bridge.tension), (1, 0))
+
+
+class BridgeFallTests(unittest.TestCase):
+    """StartFall 4:4c4a-4ca4, SetKidDeathMethod 4:31b4-31d6 and Catch 4:382c-3880."""
+
+    SEQUENCES = {7: (-7, 4, 102, -1, 7), 19: (-7, 4, 102, -1, 19), 22: (-7, 1, 185, -1, 22),
+                 198: (-7, 5, 100, -1, 198), 228: (-7, 4, 102, -1, 228)}
+
+    def setUp(self):
+        from pop2.cavern_state import CavernState
+        from pop2.terrain import LevelMap, RooftopPhysics
+
+        self.map = LevelMap(bridge_level())
+        self.map.caverns = CavernState()
+        self.physics = RooftopPhysics(self.map)
+
+    def fall(self, room=9, facing=1, held=0, sword_drawn=False, action=15, actor_type=0):
+        from pop2.sequence_runtime import SequenceRuntime, SequenceState
+        from pop2.terrain import TerrainMotion
+
+        runtime = SequenceRuntime(self.SEQUENCES, SequenceState(
+            2, action=action, target_x=250, current_x=250, facing=facing, actor_type=actor_type))
+        self.physics.held_direction = held
+        self.physics.start_fall(TerrainMotion(room, 1), runtime, sword_drawn)
+        return runtime.state
+
+    def test_holding_the_direction_behind_the_prince_turns_him_back_in_room_ten(self):
+        self.assertEqual(self.fall(facing=1, held=-1).selected_sequence_id, 198)
+        self.assertEqual(self.fall(facing=0, held=1).selected_sequence_id, 198)
+        for room, facing, held, actor_type in ((9, 1, 1, 0), (9, 0, -1, 0), (9, 1, 0, 0),
+                                               (8, 1, -1, 0), (9, 1, -1, 4)):
+            with self.subTest(room=room, facing=facing, held=held, actor_type=actor_type):
+                self.assertEqual(self.fall(room, facing, held, actor_type=actor_type).selected_sequence_id, 7)
+        self.map.level = bridge_level(4)
+        self.assertEqual(self.fall(facing=1, held=-1).selected_sequence_id, 7)
+
+    def test_the_turn_back_skips_the_hang_release_pose_adjustment(self):
+        # StartFall 4:4cb6 bypasses the pose table, including pose 81's +24.
+        state = self.fall(facing=1, held=-1, action=81)
+        self.assertEqual((state.selected_sequence_id, state.current_y), (198, -120))
+        self.assertEqual(self.fall(facing=1, action=81).current_y, -96)
+
+    def test_tension_three_turns_back_an_armed_prince_facing_right(self):
+        bridge = self.map.caverns.bridge
+        bridge.tension_level, bridge.tension = 3, 20
+        self.assertEqual(self.fall(facing=1, sword_drawn=True).selected_sequence_id, 198)
+        self.assertEqual(self.fall(facing=1).selected_sequence_id, 7)
+        self.assertEqual(self.fall(facing=0, sword_drawn=True).selected_sequence_id, 7)
+        bridge.tension = 15
+        self.assertEqual(self.fall(facing=1, sword_drawn=True).selected_sequence_id, 7)
+        bridge.tension_level, bridge.tension = 2, 40
+        self.assertEqual(self.fall(facing=1, sword_drawn=True).selected_sequence_id, 7)
+
+    def test_a_fatal_fall_into_the_chasm_raises_tension_level_three(self):
+        from pop2.sequence_runtime import SequenceRuntime, SequenceState
+        from pop2.terrain import TerrainMotion, VOID_DEATH_Y, floor_y
+
+        for room, expected in ((9, (3, 5)), (8, (0, 0))):
+            with self.subTest(room=room):
+                self.setUp()
+                motion = TerrainMotion(room, 1, falling=True)
+                runtime = SequenceRuntime(self.SEQUENCES, SequenceState(
+                    7, action=102, target_x=200, current_x=200, facing=1, actor_type=0,
+                    animation_state=4, vertical_velocity=30,
+                    current_y=VOID_DEATH_Y - floor_y(1) + 10))
+                events = self.physics.advance(motion, runtime, 200, (190, 300, 230, 360))
+                self.assertEqual([event.kind for event in events], ['death'])
+                bridge = self.map.caverns.bridge
+                self.assertEqual((bridge.tension_level, bridge.tension), expected)
+
+    def catch(self, x, solid, tension=(3, 40), room=9):
+        from pop2.animation_data import FrameRecord
+        from pop2.sequence_runtime import SequenceState
+        import struct
+
+        for column in solid:
+            struct.pack_into('>H', self.map.level, room * 60 + column * 2, 1)
+        bridge = self.map.caverns.bridge
+        bridge.tension_level, bridge.tension = tension
+        state = SequenceState(7, action=102, target_x=x, current_x=x, facing=0, vertical_velocity=20)
+        caught = self.map.catch_ledge(room, 1, state, FrameRecord(102, 0, 0, 0, 0, 0))
+        return caught, state.target_x
+
+    def test_tension_forty_extends_a_left_facing_catch_forward(self):
+        # From x 285 the ordinary look-behind tests column 5; the reach of
+        # 25 pixels tests column 4, whose left neighbour is solid.
+        self.assertEqual(self.catch(285, (3,), tension=(3, 35)), (False, 285))
+        self.assertEqual(self.catch(285, (3,), tension=(2, 40)), (False, 285))
+        self.assertEqual(self.catch(285, (3,)), (True, 277))
+
+    def test_the_catch_reach_is_not_used_from_the_first_three_columns(self):
+        self.assertEqual(self.catch(132, (0,)), (False, 132))
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')

@@ -2249,6 +2249,8 @@ class ScenePrototype(WindowControls):
         motion = getattr(self, "terrain_motion", None)
         if motion is None or self._opening_active():
             return
+        # StartFall reads the held left/right inputs (a5-0x3488/-0x3486).
+        self.physics.held_direction = getattr(self, "horizontal_input", 0)
         if self.native_ledge:
             # SEQS -3/-4 change the native floor row while -6 changes the
             # absolute Y. Preserve that position in our floor-relative model.
