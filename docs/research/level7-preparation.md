@@ -238,5 +238,8 @@ The next initialization and frame-loading blocks are now recorded separately:
 - [Sequence selection](level7-sequence-selection.md): native JumpSeq and
   head-specific facing/position/supporting-column corrections, with actual
   resource-existence decisions supplied and no animation advancement.
+- [Head recovery](level7-head-recovery.md): full peaceful/done-attacking
+  leaves and rejected-target wrapper checks, including cached native-ALIVE
+  threshold, pointer derivation, working-bank save and Prince restoration.
 
 These results do not enable the campaign or claim complete special-actor AI.
