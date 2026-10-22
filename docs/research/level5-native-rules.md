@@ -58,6 +58,28 @@ check of the redraw at each collapse stage.
 - GenFight `4:102c-1054` and similar EnGarde sites: level 5, rooms 10/7/12,
   skip the run-after-the-Prince start.
 
+## The finale: carpet and ceiling bars (room 3) [D, partly read]
+
+Room 3 is customized (CUST 4050). Its tile 27 at cell 6 is the ceiling's
+cave bars and tile 18 at cell 23 belongs to the flying carpet:
+- **Bars:** DrawCaveBars `8:15c0` draws CUST record (foreground & 7) + 1 in
+  pass 11 (SHAP 4051, 4052, 4053, 4064: closed to open). The static export
+  skips pass 11, hence the black area at the top of room 3. The bars
+  animation `8:1508` steps the phase up to 3 (sound 282 at the start) or
+  down to 0 (sound 284 from 3). IsCaveBarsOpen `8:157a` tests tile (3, 6, 0)
+  phase >= 3. TriggerObject `5:1fb0` calls TriggerCaveBars `8:1672`.
+- **Carpet:** SetupCarpet `8:12b6` (from Opponent1 `3:084c`), Sitting
+  `8:13a8` (from GenCtrl `6:072a`), DrawCarpet/SaveUnderCarpet/
+  DrawObjCarpet/GetCarpetShape (`8:0e48-1264`) with palette cycling
+  (ComputeBloodRGB `8:0df6`). Sitting: Prince frame 295 starts the carpet
+  and triggers cell (3, 23); while rising, below Y 100 with the bars still
+  closed the Prince gets DecLifePts(100) and death method 9 (`8:1486-1498`);
+  with them open the carpet stops at Y 39 (mode 10, JumpSeq 129, sound 117).
+  `8:14ae-14ec` selects song 115 or 116 by IsCaveBarsOpen.
+
+This is the next bounded task: export the bar phases as pass-11 variants
+(like pressure-plate variants), then the carpet ride and level exit.
+
 ## Other level-five checks still to read [?]
 
 | Site | Function |
