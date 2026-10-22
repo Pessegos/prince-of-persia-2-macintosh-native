@@ -2877,8 +2877,11 @@ class ScenePrototype(WindowControls):
             self.start_tree(scene - 19)
 
     def restart_level_now(self):
-        # FirstFrame 2:601e-6024 removes a time message at every level start.
+        # FirstFrame 2:601e-6024 removes a time message at every level start;
+        # the Prince initializer 2:5e9c also clears the float timer.
         self.time_message, self.time_message_frames = None, 0
+        if self.game.caverns is not None:
+            self.game.caverns.potions.float_timer = 0
         self.remember_development_room()
         held = set(self.window_keys_down)
         snapshot = self.checkpoint

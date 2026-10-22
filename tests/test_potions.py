@@ -295,6 +295,14 @@ class ImportedPotionTests(unittest.TestCase):
                 else:
                     self.assertFalse(s.combat.player.alive)
 
+    def test_restart_clears_a_running_float(self):
+        # The Prince initializer 2:5e9c writes zero to a5-0x4fa6.
+        s = self.make_scene()
+        s.load_level(4)
+        s.game.caverns.potions.float_timer = 100
+        s.restart_level()
+        self.assertFalse(s.game.caverns.potions.floating)
+
     def test_running_jumping_and_wrong_row_do_not_pick_up_a_flask(self):
         s = self.make_scene()
         for sequence in (202, 4, 3):
