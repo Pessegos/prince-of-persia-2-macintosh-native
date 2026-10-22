@@ -47,16 +47,30 @@ render of port room 16 matches the ruins look.
 - The sword item SHAP needs the Prince/sword palette, not CTBL 3500.
 - Cavern-only data (torches 3581-3589, lava) are skipped for environment 4.
 
+## Implemented (2026-10-22)
+
+- Import of `Ruins.rsrc`/`Head.rsrc` and `ruins_level6.json` (loose-floor
+  variants delta-encoded: 24 MB instead of 115 MB, identical expansion).
+- Ruins plates use their exported toggled commands; gates (3542) and exits
+  (3547) move like the caverns' with clips 19/10 pixels above the row. All
+  plate/gate/exit records of levels six and seven match native redraws.
+- Loose floors shake with the column-parity tables a5-0x2c66/-0x2c7e
+  (7:2bd6); both nonzero images share the phase-1 variant (approximation).
+- Level six starts on the cliff (SEQS 2, native X 374) without a sword
+  (a5-0x500a = -1, 3:6202); crouching at the sword item (tile 22) takes it
+  (6:14ce-1574, SEQS 91, FindSwd 183). Saves keep a changed sword type.
+- Finishing level five loads level six; the ruins' exit song is 124.
+- Tile predicates (IsSpace/IsWall/IsFloor, CODE 3) are environment
+  independent, so the existing collision rules apply. Every level-six
+  crevice (tile 7) already has bit 0x80 set; revealing them changes nothing.
+
 ## Remaining Steps
 
-1. Import `Ruins.rsrc` and `Head.rsrc`; export `ruins_level6.json` with
-   environment-aware plate/gate/exit tables.
-2. Make the scenery runtime (`pop2/caverns.py`, `level_rendering.py`,
-   `game_session.py`) choose its resource file and JSON by environment, and
-   run the shared mechanism state (plates, gates, loose floors, potions) for
-   environment 4.
-3. CUST room palettes/hooks, the sword item (RuinSetCreviceRevealed and
-   crevices from Codex's notes), Prince palette 25004, level-six music.
-4. Route the level-five exit into level six and allow level 6 in saves and
-   the level menu. Level six starts without a sword (`3:6202-6216`).
-5. Heads and serpents (Codex's level-seven research, actor types 7/8/11).
+1. Heads and serpents: level six has special opponents in rooms 4, 7, 16,
+   20 and 25 (native numbering); `GuardSpawn` rejects them, so the level is
+   currently empty of enemies. Codex's level-seven notes cover their
+   selection, initialization, frames and idle/movement rules.
+2. Cutscene 1 between levels five and six (CheckPlayNIS(5, 6)).
+3. The start room's leave hook `7:37b6` and the retained cliff image when
+   walking left from the start (to compare with the original).
+4. Sword type 2 graphics (S03_5A4E) and the two shake images per parity.
