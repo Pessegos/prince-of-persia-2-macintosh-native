@@ -206,6 +206,26 @@ class CueTests(unittest.TestCase):
         self.audio.add_sound(294, actor_type=2)
         self.assertEqual(self.audio.pending_effect, 294)
 
+    def test_bridge_fight_plays_its_special_song_instead_of_the_combat_group(self):
+        # SpecialMusic 5:5398-53bc: BrgFight (119) in level five's bridge rooms.
+        audio = self.audio
+        audio.manifest['ambient'] = [{'starts': [40, 41, 42], 'counts': [0, 0, 1],
+                                     'combat_group': 2}]
+        level = bytearray(0x49ca)
+        struct.pack_into('>h', level, 0x424a + (3 * 30 + 10 + 8) * 2, 1)
+        audio.configure_level(level)
+        audio.ambient(3, 1, 8)
+        audio.flush()
+        self.busy['music'] = True
+        audio.ambient(3, 1, 8, fighting=True, special=119)
+        self.assertEqual(audio.pending_song, 119)
+        audio.flush()
+        self.assertEqual((audio.current_music, audio.current_music_group), (119, 2))
+        audio.ambient(3, 1, 8, fighting=True, special=119)
+        self.assertIsNone(audio.pending_song)
+        audio.ambient(3, 1, 8, special=119)
+        self.assertEqual(audio.pending_song, 41)
+
     def test_ambient_avoids_repeating_and_waits_for_current_song(self):
         audio = self.audio
         audio.current_music = 40

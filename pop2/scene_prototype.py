@@ -2968,8 +2968,11 @@ class ScenePrototype(WindowControls):
                        and exit_guarded(self.combat, first)
                        and first.state.source_sequence_id in (88, 102, 216))
             if not chasing:
+                # SpecialMusic 5:5398-53bc: BrgFight for fights in level five's
+                # bridge rooms 7, 10 and 12.
+                special = 119 if bridge_checked(self.game.level.number, self.room_id) else None
                 audio.ambient(self.room_id, motion.row, max(0, min(9, int(contact // 51))),
-                              fighting, self.combat.player.alive)
+                              fighting, self.combat.player.alive, special=special)
         elif motion is not None and self.game.level.number == 2:
             # DesertFunc 18:01ee checks PrinceSndOn(51) before queuing another wave.
             # Cave cue 50 and puzzle cues 46/49 use AddSong instead.

@@ -29,6 +29,10 @@ BridgeCheckBreak `8:002e-016c`, the plank mobs (`8:0c1a`, TriggerBrgFloorMob
 check of the redraw at each collapse stage.
 
 **Still open [D, read but not implemented]:**
+- SpecialMusic `5:5388` (from PlayAmbient `5:4ff8`): a fight in level 5
+  rooms 7/10/12 plays BrgFight (119) instead of the combat group
+  (implemented); other cases: opponent type 12 -> 245, type 10 -> 246,
+  level 8 room 9 -> 180, level 13 rooms 4/29 -> 253.
 - Room 10's CUST enter hook (kind 33) is MarkBrgFloorsForChars `8:050e`,
   which clears the break counter on entry (implemented); its leave hook
   `8:06c8` restores CTBL 3500.
