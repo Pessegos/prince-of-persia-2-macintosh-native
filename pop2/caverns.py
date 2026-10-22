@@ -683,6 +683,36 @@ def pressure_drawing_commands(commands, records, phases, resources):
     return result
 
 
+def delta_commands(base, items):
+    """Rebuild a command list stored as base slices ([start, stop]) and commands."""
+    result = []
+    for item in items:
+        if isinstance(item[0], int):
+            result.extend(base[item[0]:item[1]])
+        else:
+            result.append(item)
+    return result
+
+
+def loose_variant(program, room_id, loose_key):
+    """A loose-floor variant, expanding the ruins' delta-encoded form."""
+    room = program.get('loose_floors', {}).get('rooms', {}).get(str(room_id), {})
+    variant = room.get('variants', {}).get(loose_key)
+    if variant is None or not room.get('delta'):
+        return variant
+    entry = program.get('entry_exit')
+    climb = program.get('climb_redraw', {}).get(str(room_id), {})
+    decoded = {'commands': delta_commands(program['rooms'][str(room_id)], variant['commands']),
+               'floor_redraw': delta_commands(program['floor_redraw'][str(room_id)],
+                                              variant['floor_redraw']),
+               'climb_redraw': {action: delta_commands(climb.get(action, []), items)
+                                for action, items in variant['climb_redraw'].items()}}
+    if 'entry_frames' in variant:
+        decoded['entry_frames'] = [delta_commands(frame['commands'], items)
+                                   for frame, items in zip(entry['frames'], variant['entry_frames'])]
+    return decoded
+
+
 def without_fallen_planks(commands, fallen):
     # Native room-10 redraws with the emptied bridge cells (8:0c3e-0c54) only
     # omit those cells' CUST plank (SHAP 4226), in every collapse stage.
@@ -707,8 +737,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     else:
         raise ValueError('Unsupported cavern drawing export')
     entry = program.get('entry_exit')
-    variant = program.get('loose_floors', {}).get('rooms', {}).get(str(room_id), {}).get(
-        'variants', {}).get(loose_key)
+    variant = loose_variant(program, room_id, loose_key)
     if variant is not None:
         commands = variant['commands']
     if entry is not None and room_id == entry['room']:

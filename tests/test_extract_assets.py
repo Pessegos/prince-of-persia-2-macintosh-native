@@ -47,8 +47,7 @@ class AssetImportTests(unittest.TestCase):
         caverns = patch.object(extract_assets, "extract_caverns")
         self.caverns = caverns.start()
         self.caverns.side_effect = lambda _program, _caverns, _prince, directory, _progress, level_number: (
-            directory / ('caverns_entry.json' if level_number == 3 else f'caverns_level{level_number}.json')
-            ).write_bytes(b"prepared cavern entrance")
+            directory / extract_assets.scenery_name(level_number)).write_bytes(b"prepared cavern entrance")
         self.addCleanup(caverns.stop)
         attract = patch.object(extract_assets, "extract_attract")
         self.attract = attract.start()
@@ -76,7 +75,7 @@ class AssetImportTests(unittest.TestCase):
         self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json",
                                      "ending.json", "discovery.json", "attract.json",
                                      "caverns_entry.json", "caverns_level4.json", "caverns_level5.json",
-                                     *(f"tree-{n}.json" for n in extract_assets.TREE_VARIANTS)})
+                                     "ruins_level6.json", *(f"tree-{n}.json" for n in extract_assets.TREE_VARIANTS)})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
         for name in extract_assets.RESOURCE_FILES:
             self.assertEqual((self.output / name).read_bytes(), self.forks[name])
@@ -84,7 +83,10 @@ class AssetImportTests(unittest.TestCase):
                          self.profiles)
         profiles.assert_called_once_with(self.forks["Prince of Persia 2"],
                                          self.forks["Prince.rsrc"])
-        self.assertEqual([call.kwargs['level_number'] for call in self.caverns.call_args_list], [3, 4, 5])
+        self.assertEqual([call.kwargs['level_number'] for call in self.caverns.call_args_list], [3, 4, 5, 6])
+        # Level six's scenery is drawn from Ruins.rsrc, not Caverns.rsrc.
+        self.assertEqual([call.args[1] for call in self.caverns.call_args_list],
+                         [self.forks['Caverns.rsrc']] * 3 + [self.forks['Ruins.rsrc']])
 
     def test_level_four_scenery_failure_preserves_installed_resources(self):
         self.output.mkdir()

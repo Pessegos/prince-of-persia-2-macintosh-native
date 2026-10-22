@@ -925,3 +925,16 @@ class OriginalCavernTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LooseVariantDeltaTests(unittest.TestCase):
+    def test_delta_encoding_round_trips_reordered_and_changed_commands(self):
+        from pop2.caverns import delta_commands
+        from tools.extract_caverns import encode_delta
+
+        base = [['back', shape, 0, 0] for shape in range(10)]
+        changed = base[:3] + [['front', 99, 1, 1]] + base[5:8] + base[9:] + [['back', 7, 0, 0]]
+        items = encode_delta(base, changed)
+        self.assertEqual(delta_commands(base, items), changed)
+        self.assertLess(len(items), len(changed))
+        self.assertEqual(delta_commands(base, encode_delta(base, base)), base)

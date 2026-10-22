@@ -10,12 +10,13 @@ from tools.extract_enemy_profiles import extract_bytes
 from tools.extract_audio import extract_audio
 from tools.extract_intro import TREE_VARIANTS, extract_intro, extract_ending, extract_discovery, extract_trees
 from tools.extract_attract import extract_attract, extract_credits_music
-from tools.extract_caverns import extract_caverns
+from tools.extract_caverns import extract_caverns, scenery_name
 from pop2.mac_resources import get_resource_fork, parse_resource_fork
 from pop2.paths import ASSET_DIR
 
 
-RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Skeleton.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc", "NISTree.rsrc")
+RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Skeleton.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc", "NISTree.rsrc",
+                  "Ruins.rsrc", "Head.rsrc")
 REQUIRED_RESOURCES = {
     "Prince.rsrc": {"LEVL", "SEQS", "SHAP", "SHPL", "CTBL", "NFNT"},
     "Kid.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
@@ -27,6 +28,9 @@ REQUIRED_RESOURCES = {
     "Desert.rsrc": {"CUST", "SHAP", "CTBL"},
     "Caverns.rsrc": {"PIEC", "SHAP", "CTBL"},
     "NISTree.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
+    # Levels six and seven (environment 4) and their head/serpent set 5.
+    "Ruins.rsrc": {"PIEC", "SHAP", "CTBL", "CUST"},
+    "Head.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
 }
 
 
@@ -66,11 +70,11 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         extract_trees(image, program, resources["NIS.rsrc"], resources["NISTree.rsrc"], staging, progress)
         for variant in TREE_VARIANTS:
             resources[f"tree-{variant}.json"] = (staging / f"tree-{variant}.json").read_bytes()
-        for number, name in ((3, 'caverns_entry.json'), (4, 'caverns_level4.json'),
-                             (5, 'caverns_level5.json')):
+        for number in (3, 4, 5, 6):
+            name = scenery_name(number)
             progress(f"Preparing level-{number} scenery...")
-            extract_caverns(program, resources["Caverns.rsrc"], resources["Prince.rsrc"],
-                            staging, progress, level_number=number)
+            extract_caverns(program, resources["Ruins.rsrc" if number == 6 else "Caverns.rsrc"],
+                            resources["Prince.rsrc"], staging, progress, level_number=number)
             resources[name] = (staging / name).read_bytes()
         progress("Recovering the original recorded demo and credits...")
         extract_attract(program, resources, staging, progress)

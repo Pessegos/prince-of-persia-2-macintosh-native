@@ -2,6 +2,7 @@
 
 import json
 import struct
+from difflib import SequenceMatcher
 from itertools import product
 from functools import lru_cache, partial
 from math import prod
@@ -433,6 +434,16 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             'commands': [command for command, _kind in ordered], 'torches': torches}
 
 
+# LEVL environments with exported scenery: caverns (3) and ruins (4).
+SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7)}
+
+
+def scenery_name(level_number):
+    if level_number == 3:
+        return 'caverns_entry.json'
+    return f"{'ruins' if level_number in SCENERY_LEVELS[4] else 'caverns'}_level{level_number}.json"
+
+
 def extract_caverns(program, caverns, prince, output, progress=lambda _text: None, *, level_number=3):
     with CavernRecovery(program, caverns, prince) as machine:
         recover = partial(recover_room, _machine=machine)
@@ -443,7 +454,7 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
     from pop2.level_data import LevelDefinition
 
     definition = LevelDefinition.read(parse_resource_fork(prince), level_number)
-    if definition.kind != 3 or level_number not in (3, 4, 5):
+    if level_number not in SCENERY_LEVELS.get(definition.kind, ()):
         raise ValueError(f'Unsupported cavern scenery level {level_number}')
     level = definition.data
     scenes = {}
@@ -460,8 +471,9 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
         result['floor_redraw'][str(room)] = recover(
             program, caverns, level, room, prince, floor_redraw=True)['commands']
     terrain = LevelMap(level)
-    result['lava'] = lava_tables(program, caverns)
-    result['lava']['rooms'] = lava_room_records(result, terrain)
+    if definition.kind == 3:
+        result['lava'] = lava_tables(program, caverns)
+        result['lava']['rooms'] = lava_room_records(result, terrain)
     # FirstFrame 2:5f62 scans for the first exit-right tile in the start room.
     cell = next((cell for cell in range(30)
                  if terrain.tile(terrain.start_room, cell % 10, cell // 10).kind == 17), None)
@@ -482,7 +494,7 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
     result['pressure_plates'] = pressure_scenery(program, caverns, prince, level, result,
                                                progress, recover=recover)
     progress('Saving prepared cavern scenery...')
-    name = 'caverns_entry.json' if level_number == 3 else f'caverns_level{level_number}.json'
+    name = scenery_name(level_number)
     (output / name).write_text(json.dumps(result) + '\n', encoding='ascii')
 
 
@@ -572,10 +584,40 @@ def loose_floor_cells(terrain):
     return cells
 
 
+def encode_delta(base, commands):
+    """Store a command list as slices of `base` plus the commands it lacks."""
+    keys = [json.dumps(command) for command in base]
+    matcher = SequenceMatcher(None, keys, [json.dumps(command) for command in commands],
+                              autojunk=False)
+    items = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == 'equal':
+            items.append([i1, i2])
+        elif tag in ('replace', 'insert'):
+            items.extend(commands[j1:j2])
+    return items
+
+
+def compact_variant(base, room, variant):
+    # Level six's room 20 alone has 7,775 loose-floor variants; whole command
+    # lists would make a 110 MB export. Variants differ in a few commands.
+    key = str(room)
+    result = {'commands': encode_delta(base['rooms'][key], variant['commands']),
+              'floor_redraw': encode_delta(base['floor_redraw'][key], variant['floor_redraw']),
+              'climb_redraw': {action: encode_delta(base['climb_redraw'][key].get(action, []), items)
+                               for action, items in variant['climb_redraw'].items()}}
+    if 'entry_frames' in variant:
+        result['entry_frames'] = [encode_delta(frame['commands'], items) for frame, items
+                                  in zip(base['entry_exit']['frames'], variant['entry_frames'])]
+    return result
+
+
 def extract_loose_floor_scenery(program, caverns, prince, level, base, progress=lambda _text: None,
                                *, recover=None):
     recover = recover or recover_room
     terrain = LevelMap(level)
+    # The ruins' exports store variants as deltas; the caverns keep full lists.
+    compact = struct.unpack_from('>H', level, 0x2186)[0] != 3
     choices = loose_floor_cells(terrain)
     data = expand_a5_data(parse_resource_fork(program))
     offsets = struct.unpack_from('>13h', data, len(data) - 0x2f30)
@@ -624,8 +666,12 @@ def extract_loose_floor_scenery(program, caverns, prince, level, base, progress=
                     struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
                     variant['entry_frames'].append(recover(program, caverns, bytes(mutable),
                                                                room, prince)['commands'])
+            if compact:
+                variant = compact_variant(base, room, variant)
             variants[''.join(map(str, indices))] = variant
         result['rooms'][str(room)] = {'cells': keys, 'variants': variants}
+        if compact:
+            result['rooms'][str(room)]['delta'] = True
     return result
 
 
