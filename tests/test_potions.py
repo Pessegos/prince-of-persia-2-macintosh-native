@@ -295,6 +295,23 @@ class ImportedPotionTests(unittest.TestCase):
                 else:
                     self.assertFalse(s.combat.player.alive)
 
+    def test_floating_head_under_a_solid_cell_steps_back_and_refloats(self):
+        # CheckBarr 4:50b2-514e: room 6 row 1 column 6 lies below a wall.
+        from pop2.combat import select_sequence
+
+        s = self.make_scene()
+        s.load_level(4)
+        s.jump_to_room(5, row=1, x=6 * 51 + 30, facing=1)
+        s.game.caverns.potions.float_timer = 100
+        state = s.sequence_state
+        s.physics.select(s.sequence_runtime, 12)
+        s.terrain_motion.falling = True
+        state.current_y, state.vertical_velocity, state.horizontal_velocity = -100, 2, 2
+        x = state.target_x
+        self.tick()
+        self.assertEqual(state.source_sequence_id, 229)
+        self.assertLess(state.target_x, x + 2)
+
     def test_restart_clears_a_running_float(self):
         # The Prince initializer 2:5e9c writes zero to a5-0x4fa6.
         s = self.make_scene()

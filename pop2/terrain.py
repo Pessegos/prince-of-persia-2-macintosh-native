@@ -1007,6 +1007,18 @@ class RooftopPhysics:
                             bounds = (bounds[0] + shift, bounds[1],
                                       bounds[2] + shift, bounds[3])
             events.append(TerrainEvent("wall"))
+        elif (state.animation_state == 4 and state.actor_type in (0, None) and alive
+                and self.floating()):
+            # CheckBarr 4:50b2-514e: with no barrier, a floating body whose top
+            # is more than 8 pixels into the row above, under a non-space
+            # cell, steps back 6 pixels, stops drifting and restarts SEQS:229.
+            top = floor_y(motion.row) + state.current_y - (collision_bounds[3] - collision_bounds[1])
+            above = self.map.tile(motion.room, character_column(state.target_x), motion.row - 1)
+            if motion.row * TILE_HEIGHT - 8 > top and above.kind not in EMPTY_TILES:
+                state.target_x -= 6 if state.facing else -6
+                state.current_x = state.target_x
+                state.horizontal_velocity = 0
+                self.select(runtime, 229)
         record = self.frames[state.action] if self.frames is not None else frame_record
         gate = self.check_gate(motion, runtime, collision_bounds, old_bounds, record, alive,
                                sword_drawn, contact_bounds=gate_contact, invulnerable=invulnerable)

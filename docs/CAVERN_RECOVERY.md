@@ -1064,9 +1064,10 @@ the type (foreground bits 5-7), and DoPickupEffect dispatches on it:
     228/229;
   - CheckPress (5:129a) ignores plates under the Prince.
 
-  The CheckBarr branch at 4:50b2-514e (a floating Prince near the upper part
-  of a solid cell is pushed back 6 pixels and restarts SEQS:229) is not
-  modelled yet.
+  - CheckBarr (4:50b2-514e): with no barrier hit, a floating body whose top
+    is more than 8 pixels into the row above, under a non-space cell (anchor
+    column), steps back 6 pixels, stops drifting and restarts SEQS:229. The
+    body height uses the port's collision bounds (native a5-0x3560) [I].
 - types 4 (flip, 2:59f6) and 6 come in later levels. They are not modelled
   yet and stay on the floor rather than being consumed without their effect.
 
