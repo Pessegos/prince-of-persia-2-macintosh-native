@@ -76,7 +76,7 @@ class LevelDefinition:
             return 4
         if self.kind == 1:
             return 124
-        if self.number in (3, 4) and self.kind == 3:
+        if self.number in (3, 4, 5) and self.kind == 3:
             # SetKidDefaults 2:5e34 uses the ordinary standing entry.
             return 5
         raise ValueError(f"Level {self.number} entry controller is not implemented")

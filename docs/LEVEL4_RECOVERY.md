@@ -218,10 +218,19 @@ Level five (LEVL 2004) also enters with sequence 5 (`2:5e34`).
 - **Result:** room 10's rope bridge and room 3's custom chamber render. Pass
   11 (dynamic custom pieces) is not drawn by the static export.
 
-The export of levels 3 and 4 is byte-identical to before. The importer and
-launcher do not require level five yet, and there is no bridge gameplay
-(BridgeCheckBreak, TriggerBrgFloor, ATMBrgFloor, MarkBrgFloorsForChars in
-CODE 8) and no level-five entry.
+The export of levels 3 and 4 is byte-identical to before.
+
+**Level five as a playtest level.** Level five can now be played, much as
+level four was at first:
+- the importer writes `caverns_level5.json` and the launcher requires it, so
+  existing installations need a reimport;
+- F3 lists level five, and saves accept it;
+- after the exit song and any first tree scene, the level-four exit loads
+  level five, keeping the maximum life.
+
+Missing: bridge gameplay (BridgeCheckBreak, TriggerBrgFloor, ATMBrgFloor and
+MarkBrgFloorsForChars in CODE 8) and the other level-five rules listed in
+`docs/research/level5-native-rules.md`. The rope bridge is static floor.
 
 **Not yet implemented:**
 - the death message's 600-frame game-over timeout (`2:67fa-6806`).

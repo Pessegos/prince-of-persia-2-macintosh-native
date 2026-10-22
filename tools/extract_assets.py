@@ -66,7 +66,8 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         extract_trees(image, program, resources["NIS.rsrc"], resources["NISTree.rsrc"], staging, progress)
         for variant in TREE_VARIANTS:
             resources[f"tree-{variant}.json"] = (staging / f"tree-{variant}.json").read_bytes()
-        for number, name in ((3, 'caverns_entry.json'), (4, 'caverns_level4.json')):
+        for number, name in ((3, 'caverns_entry.json'), (4, 'caverns_level4.json'),
+                             (5, 'caverns_level5.json')):
             progress(f"Preparing level-{number} scenery...")
             extract_caverns(program, resources["Caverns.rsrc"], resources["Prince.rsrc"],
                             staging, progress, level_number=number)

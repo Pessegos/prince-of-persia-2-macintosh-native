@@ -75,7 +75,7 @@ class AssetImportTests(unittest.TestCase):
             files = extract_assets.extract_assets(self.image, self.output)
         self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json",
                                      "ending.json", "discovery.json", "attract.json",
-                                     "caverns_entry.json", "caverns_level4.json",
+                                     "caverns_entry.json", "caverns_level4.json", "caverns_level5.json",
                                      *(f"tree-{n}.json" for n in extract_assets.TREE_VARIANTS)})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
         for name in extract_assets.RESOURCE_FILES:
@@ -84,7 +84,7 @@ class AssetImportTests(unittest.TestCase):
                          self.profiles)
         profiles.assert_called_once_with(self.forks["Prince of Persia 2"],
                                          self.forks["Prince.rsrc"])
-        self.assertEqual([call.kwargs['level_number'] for call in self.caverns.call_args_list], [3, 4])
+        self.assertEqual([call.kwargs['level_number'] for call in self.caverns.call_args_list], [3, 4, 5])
 
     def test_level_four_scenery_failure_preserves_installed_resources(self):
         self.output.mkdir()

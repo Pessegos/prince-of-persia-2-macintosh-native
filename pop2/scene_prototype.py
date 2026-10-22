@@ -3155,20 +3155,32 @@ class ScenePrototype(WindowControls):
 
     def finish_level_four(self):
         # CheckPlayNIS(4, 5) (2:0180) shows the first tree scene here when no
-        # level-four restart has. Level five is not implemented yet, so the
-        # completed level stays on screen afterwards.
+        # level-four restart has, then RestartGame loads level five.
         self.game.exit = None
         scene = self.game.story.select_scene(4, 5)
         if scene is not None and 20 <= scene <= 27:
             self.game.complete = False
-            self.campaign_paused_after = 4
+            self.next_level_after_tree = 5
             self.start_tree(scene - 19)
+        else:
+            self.enter_next_level(5)
+
+    def enter_next_level(self, number):
+        max_life = self.combat.player.max_life if self.combat is not None else None
+        self.load_level(number)
+        if max_life is not None:
+            self.combat.player.life = self.combat.player.max_life = max_life
+            self.render()
 
     def finish_tree(self):
         held = set(self.window_keys_down)
-        if getattr(self, 'campaign_paused_after', None) == self.game.level.number:
-            self.game.complete = True
-        self.campaign_paused_after = None
+        following = getattr(self, 'next_level_after_tree', None)
+        self.next_level_after_tree = None
+        if following is not None:
+            self.intro = self.attract_stage = None
+            self.enter_next_level(following)
+            self.pause_resume_keys.update(held)
+            return
         self.intro = self.attract_stage = None
         if self.audio is not None:
             self.audio.reset()
@@ -3315,7 +3327,7 @@ class ScenePrototype(WindowControls):
         from pop2.level_data import LevelDefinition
 
         options = []
-        for number in (1, 2, 3, 4):
+        for number in (1, 2, 3, 4, 5):
             renderer = (self.level_renderer if self.game.level.number == number else
                         LevelRenderer(LevelDefinition.read(self.resources.prince, number),
                                       preload_room=False))

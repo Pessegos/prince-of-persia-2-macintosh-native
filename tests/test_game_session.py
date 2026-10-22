@@ -319,7 +319,7 @@ class OriginalLevelSessionTests(unittest.TestCase):
         from pop2.level_rendering import LevelRenderer
 
         with self.assertRaisesRegex(ValueError, "scenery is not implemented"):
-            LevelRenderer(self.resources.level(5))
+            LevelRenderer(self.resources.level(6))
 
     def test_initial_visited_and_generated_guards_inherit_the_player_environment(self):
         data = bytearray(self.resources.level(1).data)
@@ -357,7 +357,7 @@ class LevelHostTests(unittest.TestCase):
         viewport = scene.native_viewport.tobytes()
         with patch.object(scene, "render") as render, \
                 self.assertRaisesRegex(ValueError, "entry controller is not implemented"):
-            scene.load_level(5)
+            scene.load_level(6)
         render.assert_not_called()
         self.assertIs(scene.game, game)
         self.assertIs(scene.level_renderer, renderer)

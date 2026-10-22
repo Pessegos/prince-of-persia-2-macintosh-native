@@ -135,22 +135,25 @@ class StoryHostTests(unittest.TestCase):
                 break
         self.assertIsNone(scene.game.exit)
 
-    def test_surviving_level_four_shows_tree_one_on_the_way_to_level_five(self):
+    def test_surviving_level_four_shows_tree_one_then_enters_level_five(self):
         # CheckPlayNIS(4, 5): the first tree is deferred to this transition.
         scene = self.scene
         self.complete_level()
         self.assertEqual((scene.attract_stage, scene.tree_variant), ('tree', 1))
         self.assertEqual(scene.game.story.tree_stage, 0)
+        max_life = scene.combat.player.max_life
         self.finish_tree()
-        self.assertTrue(scene.level_complete)
-        self.assertEqual(scene.game.level.number, 4)
+        self.assertEqual(scene.game.level.number, 5)
+        self.assertEqual(scene.combat.player.max_life, max_life)
+        self.assertEqual(scene.game.story.tree_stage, 0)
 
-    def test_level_four_exit_after_the_first_tree_needs_no_scene(self):
+    def test_level_four_exit_after_the_first_tree_goes_straight_to_level_five(self):
         scene = self.scene
         scene.game.story = StoryProgress(minutes=70, tree_stage=0)
         self.complete_level()
         self.assertIsNone(scene.intro)
-        self.assertTrue(scene.level_complete)
+        self.assertEqual(scene.game.level.number, 5)
+        self.assertEqual((scene.game.story.minutes, scene.game.story.tree_stage), (70, 0))
 
     def test_level_changes_keep_the_story_and_new_game_resets_it(self):
         scene = self.scene

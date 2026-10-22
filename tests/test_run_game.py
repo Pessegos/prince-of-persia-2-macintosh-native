@@ -38,9 +38,10 @@ class InstallationTests(unittest.TestCase):
         (assets / 'caverns_entry.json').write_text(json.dumps({
             'version': 15, 'level': 3, 'rooms': {str(room): [] for room in range(32)},
             'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}}}))
-        (assets / 'caverns_level4.json').write_text(json.dumps({
-            'version': 15, 'level': 4, 'rooms': {str(room): [] for room in range(32)},
-            'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}}}))
+        for number in (4, 5):
+            (assets / f'caverns_level{number}.json').write_text(json.dumps({
+                'version': 15, 'level': number, 'rooms': {str(room): [] for room in range(32)},
+                'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}}}))
 
     def test_complete_installation_has_no_errors(self):
         self.assertEqual(run_game.installation_errors(self.project), [])

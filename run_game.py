@@ -21,6 +21,7 @@ REQUIRED_ASSETS = (
     "Caverns.rsrc",
     "caverns_entry.json",
     "caverns_level4.json",
+    "caverns_level5.json",
     "intro.json",
     "ending.json",
     "discovery.json",
@@ -102,7 +103,8 @@ def missing_assets(project=PROJECT):
                         raise ValueError("Scene audio is incomplete")
             except (OSError, ValueError, KeyError, TypeError, AttributeError):
                 missing.append(name + " (needs reimport)")
-    for number, name, label in ((3, 'caverns_entry.json', 'three'), (4, 'caverns_level4.json', 'four')):
+    for number, name, label in ((3, 'caverns_entry.json', 'three'), (4, 'caverns_level4.json', 'four'),
+                                (5, 'caverns_level5.json', 'five')):
         cavern_path = project / 'assets' / name
         if not cavern_path.is_file():
             continue
