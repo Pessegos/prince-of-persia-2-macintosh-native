@@ -38,5 +38,43 @@ class LevelSixSceneryTests(unittest.TestCase):
         self.assertEqual(scene.room_id, 16)
 
 
+@unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported level-six resources required')
+class LevelSixSwordTests(unittest.TestCase):
+    """3:6202-6216 (no sword in level six) and the sword item pickup 6:14ce-1574."""
+
+    def setUp(self):
+        LevelSixSceneryTests.setUp(self)
+
+    def tick(self, count=1):
+        LevelSixSceneryTests.tick(self, count)
+
+    def test_level_six_starts_without_a_sword(self):
+        scene = self.scene
+        self.assertEqual(scene.game.sword_type, -1)
+        self.assertTrue(scene.combat.player.sword_lost)
+        self.assertFalse(scene.queue_sword_action('sword_draw'))
+
+    def test_crouching_at_the_sword_item_takes_it(self):
+        scene = self.scene
+        picked = None
+        for x in range(240, 300, 3):
+            scene.jump_to_room(16, 1, x, 1)
+            scene.combat.player.sword_lost = True
+            scene.shift_held = True
+            scene.down_held = True
+            for _ in range(10):
+                self.tick()
+                if scene.sequence_state.sequence_id in (91, 92):
+                    picked = x
+                    break
+            scene.shift_held = scene.down_held = False
+            if picked is not None:
+                break
+        self.assertIsNotNone(picked)
+        self.assertFalse(scene.combat.player.sword_lost)
+        self.assertEqual(scene.game.sword_type, 2)
+        self.assertEqual(scene.level_map.tile(16, 5, 1).kind, 1)
+
+
 if __name__ == '__main__':
     unittest.main()

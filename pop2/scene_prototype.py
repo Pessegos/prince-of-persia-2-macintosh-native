@@ -2159,7 +2159,7 @@ class ScenePrototype(WindowControls):
         caverns = self.game.caverns
         if caverns is None:
             return False
-        from pop2.potions import pickup_target
+        from pop2.potions import SWORD_TILE, pickup_target
 
         potions, state, motion = caverns.potions, self.sequence_state, self.terrain_motion
         fresh_shift = self.shift_held and not potions.shift_was_held
@@ -2210,7 +2210,14 @@ class ScenePrototype(WindowControls):
         self.player_x = state.target_x + delta
         self.pending_action = None
         self.run_active = self.run_stop_requested = self.run_cycle_boundary_pending = False
-        if crouched:
+        if crouched and tile.kind == SWORD_TILE:
+            self.game.sword_type = potions.take_sword(tile)
+            # 6:1530-1572: the Prince has a sword again (a5-0x500a), with
+            # FindSwd (song 183).
+            self.combat.player.sword_lost = False
+            caverns.plates.songs.append(183)
+            self.start_sequence(91)
+        elif crouched:
             potions.take(tile)
             self.start_sequence(78)
         else:
@@ -3131,6 +3138,7 @@ class ScenePrototype(WindowControls):
                 self.root.after_cancel(self.animation_after_id)
                 self.animation_after_id = None
             snapshot.restore_world(self.combat)
+            self.game.arm_prince()
             point = snapshot.checkpoint
             self.jump_to_room(point.room, point.row, point.x, snapshot.facing,
                               reset_guards=False, preserve_checkpoint=True)

@@ -108,7 +108,7 @@ class LevelRenderer:
             from pop2.terrain import LevelMap
             from pop2.caverns import (
                 draw_cavern_torches, draw_cavern_falling, draw_cavern_lava, draw_cavern_darts,
-                draw_cavern_flasks, draw_cavern_spikes, draw_bridge_planks,
+                draw_cavern_flasks, draw_cavern_spikes, draw_bridge_planks, draw_sword_items,
             )
 
             if self.cavern_map is None:
@@ -117,6 +117,10 @@ class LevelRenderer:
                 # Flask bodies and particles belong in front of actors.
                 frame = draw_cavern_flasks(frame, room_id, caverns, self.cavern_map,
                                            level_number=self.level.number)
+                if self.level.kind == 4:
+                    # The sword item is a front-layer command (6:14ce, tile 22).
+                    frame = draw_sword_items(frame, room_id, caverns, self.cavern_map,
+                                             level_number=self.level.number)
                 return draw_cavern_spikes(frame, room_id, caverns, self.cavern_map, front=True,
                                            level_number=self.level.number)
             frame = draw_cavern_torches(frame, room_id, caverns, level_number=self.level.number)

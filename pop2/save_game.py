@@ -546,6 +546,7 @@ def restore_progress(document, resources):
                     raise SaveGameError('Invalid checkpoint generation point')
             game.checkpoint = snapshot
             snapshot.restore_world(game.combat)
+            game.arm_prince()
             point = snapshot.checkpoint
             game.place(point.room, point.row, point.x, snapshot.facing,
                        reset_guards=False, preserve_checkpoint=True)

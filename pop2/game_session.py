@@ -63,6 +63,9 @@ class GameSession:
     story: StoryProgress = field(default_factory=StoryProgress)
     desert: DesertState | None = None
     caverns: CavernState | None = None
+    # a5-0x500a: the level's sword type, -1 for none. 3:61ec-623a gives level
+    # six none and levels seven and eight type 2; picking a sword sets it.
+    sword_type: int = 1
 
     @property
     def entry_active(self):
@@ -113,12 +116,14 @@ class GameSession:
         if self.desert is not None:
             self.desert.enter_room(self.room_id)
         self.harbor = Harbor() if level.kind == 5 else None
+        self.sword_type = -1 if level.number == 6 else 2 if level.number in (7, 8) else 1
         fresh = SequenceState(IDLE_SEQUENCE, action=15, current_x=level.start_x,
                               target_x=level.start_x, facing=level.facing,
                               actor_type=0, level_kind=level.kind)
         state.__dict__.update(fresh.__dict__)
         if self.combat is not None:
             self.combat.reset()
+            self.arm_prince()
             self.motion = TerrainMotion(self.room_id, level.start_row)
             self.combat.player.terrain_motion = self.motion
             self.combat.player.room, self.combat.player.row = self.room_id, level.start_row
@@ -128,6 +133,10 @@ class GameSession:
             self.opening = None
             state.select(level.entry_sequence)
             self.runtime.next_frame()
+
+    def arm_prince(self):
+        # InitKid 2:5eaa-5eba: a5-0x503c is -1 (no sword) when a5-0x500a is.
+        self.combat.player.sword_lost = self.sword_type == -1
 
     def place(self, room, row, x, facing, reset_guards=True, preserve_checkpoint=False):
         if (self.level_map is None or not 0 <= room < 32 or not 0 <= row < 3
@@ -158,6 +167,7 @@ class GameSession:
         if reset_guards:
             max_life = self.combat.player.max_life
             self.combat.reset()
+            self.arm_prince()
             self.combat.player.max_life = max_life
         self.combat.player.terrain_motion = self.motion
         self.combat.rooftop_escape = False

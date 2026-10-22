@@ -307,6 +307,24 @@ def draw_cavern_flasks(frame, room_id, state, terrain, *, level_number=3):
     return frame
 
 
+def draw_sword_items(frame, room_id, state, terrain, *, level_number=6):
+    # Sword items (tile 22, library 0, a front command) leave the scenery
+    # once picked up.
+    program, resources, palette, shapes = cavern_assets(level_number)
+    terrain.caverns = state
+    for command in program['rooms'][str(room_id)]:
+        if len(command) < 10 or command[7] != 0:
+            continue
+        tile = terrain.tile(room_id, command[8], command[9])
+        if tile.room is None or tile.kind != 22:
+            continue
+        clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
+        if clipped is not None:
+            sprite, position = clipped
+            frame.paste(sprite, position, sprite)
+    return frame
+
+
 def clipped_sprite(sprite, command):
     x, bottom = command[2:4]
     if len(command) >= 7:
@@ -805,7 +823,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     for command in commands:
         layer, index, _, _, _, row = command[:6]
         library = command[7] if len(command) >= 8 else 4
-        if animated and library == 1:
+        if animated and library in (0, 1):
             continue
         if animated and program.get('version') >= 4 and library == 4 and 3581 <= index <= 3589:
             continue

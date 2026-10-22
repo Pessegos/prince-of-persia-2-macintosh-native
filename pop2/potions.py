@@ -15,18 +15,24 @@ def potion_kind(foreground):
     return (foreground >> 5) & 7
 
 
+SWORD_TILE = 22
+ITEM_TILES = (10, SWORD_TILE)
+
+
 def pickup_target(terrain, motion, state, record):
     contact = floor_contact_x(state.target_x, state.facing, record)
     column = character_column(contact)
     current = terrain.tile(motion.room, column, motion.row)
-    target = current if current.kind == 10 else terrain.tile(
+    target = current if current.kind in ITEM_TILES else terrain.tile(
         motion.room, column + (1 if state.facing else -1), motion.row)
     # PickItUp 6:1576-1596 takes every flask; types 4 and 6 (flip and
-    # 4:46b2) are not modelled yet and stay on the floor.
-    if target.room is None or target.kind != 10 or potion_kind(target.foreground) not in DRINKABLE:
+    # 4:46b2) are not modelled yet and stay on the floor. 6:14ce-1574
+    # takes a sword item (tile 22) the same way.
+    if (target.room is None or target.kind not in ITEM_TILES
+            or target.kind == 10 and potion_kind(target.foreground) not in DRINKABLE):
         return None
     distance = floor_edge_distance(contact, state.facing)
-    same = current.kind == 10
+    same = current.kind in ITEM_TILES
     if state.action == 109:
         delta = (distance - 6 if not same and distance < 36 else 0) if state.facing else (
             distance + (0 if same else 51) - 34)
@@ -65,6 +71,13 @@ class Potions:
             if key in self.phases and key not in self.tiles:
                 value = self.phases[key]
                 self.phases[key] = (value & 0xffe0) | ((value & 31) + 1) % 28
+
+    def take_sword(self, tile):
+        # 6:152c-1574: SEQS 91, the cell becomes floor (S04_406C) and the
+        # sword type is the item's foreground & 3.
+        self.tiles[tile.room, tile.row * 10 + tile.column] = 1, tile.foreground & 0x0f00
+        self.picking = None
+        return tile.foreground & 3
 
     def take(self, tile):
         key = tile.room, tile.row * 10 + tile.column
