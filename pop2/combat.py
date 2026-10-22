@@ -323,6 +323,7 @@ class CombatEncounter:
                     from pop2.skeleton import Skeleton
                     fighter.skeleton = Skeleton.from_spawn(spawn)
                     fighter.skeleton.initialize(fighter, slot)
+                    fighter.skeleton.settle_heap(self, fighter)
                 else:
                     words = spawn.guard_words
                     fighter.guard_record = (GuardRoomRecord(

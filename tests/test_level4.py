@@ -250,3 +250,21 @@ class LevelFourExitGuardedSkeletonTests(unittest.TestCase):
                              in combat.room_encounters.items() if guards):
             for guard in guards:
                 self.assertEqual(exit_guarded(combat, guard), room in (21, 23, 24, 25, 26, 27))
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported level-four resources required')
+class LevelFourHeapPlacementTests(unittest.TestCase):
+    def test_room_fourteen_heap_moves_off_the_flask_away_from_the_gap(self):
+        # SkelAddOpponent 4:19f0-1a54: open space on the heap's left moves it
+        # right; the original data put it on the type-5 flask's cell.
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(4)
+        RooftopSceneTests.tick(self, 16)
+        scene.jump_to_room(13, 0, 450, 0)
+        heap = next(guard for guard in scene.combat.active_guards() if guard.room == 13)
+        self.assertEqual((heap.state.facing, heap.state.action), (1, 206))
+        self.assertGreater(heap.state.target_x, 302 + 20)
+        self.assertEqual(heap.skeleton.settle_heap(scene.combat, heap), 0)

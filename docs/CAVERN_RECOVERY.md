@@ -1059,9 +1059,19 @@ the type (foreground bits 5-7), and DoPickupEffect dispatches on it:
   come later. These are not modelled yet and stay on the floor rather than
   being consumed without their effect.
 
-In the original data, room 14 places a dormant skeleton on that room's
-harmful flask, the same cell (15). Level 8 room 25 has the same arrangement;
-the overlap is not a port error.
+**Room 14 heap.** The level data puts room 14's dormant skeleton on the
+cell of its harmful flask (cell 15); level 8 room 25 is similar. On the
+Macintosh the heap is not drawn there.
+
+SkelAddOpponent (4:19f0-1a54) moves a heap with open space on its left
+(behind a right-facing heap, ahead of a left-facing one) to the right, until
+its foot is 54 pixels from that cell's left edge.
+- The port now applies this when it creates a heap. Only room 14 in levels
+  3-4 is affected; the heap moves 27 pixels.
+- The native routine measures with the frame record already loaded (a5
+  globals 0x520e/0x520a), which may belong to another character. An emulator
+  image fitted best at about 13 pixels further right. The port uses the heap's
+  own pose-206 foot, so this remaining difference is not reproduced.
 
 Native execution matched 644 pickup admission/alignment/sequence/removal
 cases, 128 particle-controller states and 150 life/capacity/song effects.

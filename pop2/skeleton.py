@@ -61,6 +61,23 @@ class Skeleton:
         select_sequence(actor, 63 if active else 112 if self.marker == 0 and slot == 0 else 119)
         actor.runtime.next_frame()
 
+    def settle_heap(self, encounter, actor):
+        # SkelAddOpponent 4:19f0-1a54: a heap with open space on its left
+        # (behind a right-facing heap, ahead of a left-facing one) is moved
+        # right until its foot is 54 pixels from that cell's left edge.
+        if self.phase == 'active':
+            return 0
+        column = encounter._supporting_column(actor)
+        if encounter._guard_tile(actor, column - 1).kind not in EMPTY_TILES:
+            return 0
+        front = encounter._guard_front_edge_distance(actor)
+        left = 51 - front if actor.state.facing else front
+        if left > 54:
+            return 0
+        actor.state.target_x += 54 - left
+        actor.state.current_x = actor.state.target_x
+        return 54 - left
+
     def store_room(self, actor, *, restart_living, cell=None):
         # UpdateOppInfo 6:30b0 resets the cursor of an in-bounds living actor.
         # Transfer/out-of-bounds records instead retain the current SEQS cursor.
@@ -136,7 +153,9 @@ class Skeleton:
             return False
         own = encounter._supporting_column(actor)
         other = encounter._supporting_column(player)
-        if abs(own - other) > 4:
+        # OpponentClose 4:1522-1548: eight columns in the exit-guarded rooms,
+        # four on skeleton levels (5 for other opponents).
+        if abs(own - other) > (8 if exit_guarded(encounter, actor) else 4):
             return False
         terrain = getattr(encounter, 'terrain', None)
         if terrain is not None:
