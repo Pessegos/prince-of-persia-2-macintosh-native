@@ -19,9 +19,13 @@ I'm trying to stay as close to the original as possible, while still making some
 Levels 1-3 are playable from start to finish.
 
 Level 3 now leads into the original Discovery cutscene and then level 4.
-Level 4 is available for playtesting, including its F3 map, cavern mechanisms,
-restart and saves. The tree cutscenes, story countdown and progression beyond
-level 4 are still being integrated.
+Levels 4 and 5 are available for playtesting, with F3 maps, restart and saves.
+The nine tree cutscenes, story countdown, time messages and saved clock state
+are implemented. The countdown starts with the first tree scene, not on
+arrival in level 4. Level 5 includes the collapsing rope bridge, ceiling bars
+and flying-carpet escape, though some bridge animation and enemy behavior
+still need work. Campaign progression currently stops after level 5;
+level 6 is not available yet.
 
 A lot of the work so far has gone into building and refining the core gameplay systems rather than just moving through the levels. I'm hoping this groundwork will make the remaining levels quicker to implement.
 
@@ -141,14 +145,23 @@ I also improved the sound played while the gate opens. The original had noticeab
 
 - A dedicated in-game menu replacing the original Macintosh menu bar, with game options and settings accessible directly through F1.
 - Confirmation before starting a new game, to prevent accidental progress loss.
-- Capture clean PNG screenshots with F8, without black bars or menus. Choose the image scale and save folder through the F2 screenshot menu.
+- An integrated Save & Load browser with named saves, resume-point previews, renaming, smooth scrolling and confirmation before overwriting or deleting. The current save is highlighted and focused automatically.
+- Both Alt+O and Alt+L open Load Game; the F1 menu keeps the original Macintosh Alt+O label.
+- Capture clean PNG screenshots with F8, or include visible menus and pause overlays with Shift+F8.
+- An in-game F2 screenshot gallery with paired thumbnails, a larger preview, capture-size settings and a folder picker supporting typed or pasted paths. Open the destination in Windows Explorer, or delete screenshots by tossing them into animated lava.
 - Automatic pause on focus loss; returning to the window, mouse clicks and system or multimedia keys do not resume the game.
 - You can pause cutscenes now without skipping them.
+- Aspect-preserving window resizing and fullscreen scaling, without stretching the game image.
 - A 0.3-second filter for rapid repeated commands in the input queue, while preserving combinations of different commands.
 - Pressing Ctrl while running queues a stop-and-draw action, without requiring a second press.
 - Clouds keep moving during the intro's fades, like the DOS version does.
 - The level 1 screen 7-8 drop preserves the full landing and stand-up animation, matching DOS behavior instead of the abrupt interruption in the Macintosh original.
 - Completely overhauled lava pools with detailed rocky edges, convincing depth like the DOS version, seamless bubbling, and properly layered splashes and particles.
+- Reworked stone-gate closing and crushing animation, with a timed slam and seamless opening audio without the original gaps or end click.
+- Local cavern-art retouches soften harsh shadow seams in level 3 rooms 1 and 28, without changing the same pieces elsewhere.
+- Dock guards stay in standby once the Prince catches the boat, instead of switching back into combat during the escape.
+- Shift+Back with the sword drawn turns the Prince manually. Unlike the original toggle, this leaves automatic turning enabled.
+- While floating, the Prince is pushed back from obstructing scenery instead of scraping along it as in the Macintosh original.
 - Original copy protection is optional.
 
 
@@ -202,13 +215,16 @@ in `assets/`:
 - `Prince.rsrc`
 - `Kid.rsrc`
 - `Guard.rsrc`
+- `Skeleton.rsrc`
 - `Rooftops.rsrc`
 - `Desert.rsrc`
-- `Caverns.rsrc` and `caverns_entry.json` (all 32 level-3 scenery rooms)
-- `NIS.rsrc` and `Title.rsrc`
+- `Caverns.rsrc`, `caverns_entry.json`, `caverns_level4.json` and `caverns_level5.json` (independent scenery for levels 3-5)
+- `NIS.rsrc`, `NISTree.rsrc` and `Title.rsrc`
 - `enemy_profiles.json`
 - `intro.json` (recovered scene instructions and audio markers)
 - `ending.json` (voyage after level 1)
+- `discovery.json` (story sequence after level 3)
+- `tree-1.json` through `tree-9.json` (tree scenes and timeout sequence)
 - `attract.json` (original level-one demo and credits program)
 - `audio/` (original samples, voices, instruments and prepared music)
 
@@ -235,9 +251,10 @@ executable. Demo recovery adds time to the first import, not to later launches.
 | --- | --- |
 | Space during intro | Skip to level 1 |
 | Space during voyage | Skip to the level-2 arrival |
+| Space during Discovery or a tree scene | Finish the scene and continue its transition |
 | Gameplay key during demo or credits | Start a new game |
 | Left / Right | Run, turn, or move in sword mode |
-| Shift + Left / Right | Careful step |
+| Shift + Left / Right | Careful step when unarmed; Shift+Back turns with the sword drawn |
 | Up | Jump, climb, or block in sword mode |
 | Direction + Up | Forward or running jump |
 | Down | Crouch, descend a ledge, or sheath the sword |
@@ -248,24 +265,27 @@ executable. Demo recovery adds time to the first import, not to later launches.
 | F1 | Game menu with command shortcuts |
 | Alt + N | New game, after confirmation |
 | Alt + R | Restart from the latest checkpoint or level start |
+| Alt + S | Open Save Game |
+| Alt + O / Alt + L | Open Load Game |
 | Alt + T | Toggle all sound |
 | Alt + M | Toggle ambient music |
 | Alt + V | About the port |
-| F2 | Screenshot controls: folder, PNG size and capture |
-| F3 | Developer Tools: levels 1-4, intro/demo playback and debug display |
+| F2 | Screenshot gallery, folder picker, PNG size and capture |
+| F3 | Developer Tools: levels 1-5, cutscene/demo playback and debug display |
 | F8 | Save a clean PNG screenshot to the configured folder |
-| Any key after death | Retry from the checkpoint or level start |
+| Shift + F8 | Save a PNG including visible menus and pause overlays |
+| Resume key after the death prompt | Retry from the checkpoint or level start |
 
 The game menu accepts mouse, arrows and Tab/Shift+Tab; Enter/Space activates
 the selected option. New game defaults to Cancel. Escape backs out without
-discarding progress. Save/Open and Hall of Fame
-are shown disabled until those systems are implemented. There are no
+discarding progress. Save and Load are implemented; saving is unavailable during
+cutscenes, death and transitions. Hall of Fame remains disabled. There are no
 Alt+Q or Alt+F commands; fullscreen remains Alt+Enter.
 The original manual-symbol challenge is enabled by default. The F1 option
 `Copy protection` disables only that challenge, not the stone puzzle.
 
 The developer menu accepts mouse, Tab/Shift+Tab and arrow navigation.
-Its level/map tools include levels 1-3 and the level-4 playtest, including
+Its level/map tools include levels 1-3 and the level-4 and level-5 playtests, including
 cavern mechanisms and skeletons. Choose `2 (Stones)` to jump directly to the level-2
 puzzle without replaying the beach arrival. Left/Right moves between `Go to screen`
 and `Resume`; Enter/Space activates
@@ -276,7 +296,7 @@ the attract cycle, only playback and display controls are available. Playback
 selects a sequence first, then a story part, animated title, demo screen or
 credits page. `Next part` follows playback order across sequence boundaries.
 The Windows debug status bar is hidden by default; enable it in `Display`.
-F2 opens standalone screenshot controls for the folder and PNG size. `Save PNG` or
+F2 opens the integrated screenshot gallery. `Capture PNG` (with `With menus` unchecked) or
 F8 captures the game image without window borders, fullscreen letterboxing,
 menus or pause overlays. The original in-game HUD remains part of the image.
 Sizes range from native 510 x 384 to 4x, using nearest-neighbor integer scaling;
@@ -285,7 +305,11 @@ the default is 3x (1530 x 1152). Folder and size are remembered locally in
 captures use Minecraft-style `PoP2_YYYY-MM-DD_HH.mm.ss.png` filenames, with a numeric
 suffix if multiple screenshots are saved in the same second. They are not published
 by Git.
-F2 or Escape closes the screenshot controls and restores the previous pause state.
+The gallery's `With menus` option includes menus in a capture; Shift+F8 always
+includes the visible UI. `Change folder` chooses the destination inside the game,
+while `Open folder` opens it in Windows Explorer for sharing or editing images.
+F2 or Escape closes the gallery and restores the previous pause state; Escape
+first cancels an open folder picker or deletion confirmation.
 `python run_game.py --peaceful` starts with guards disabled and terrain intact.
 
 ## Development
@@ -295,6 +319,8 @@ level data, gameplay state, scenery and the window host.
 [Level transitions](docs/LEVEL_TRANSITION.md) documents the boat-to-beach sequence.
 [Desert recovery](docs/DESERT_RECOVERY.md) covers the stones and manual challenge.
 [Cavern recovery](docs/CAVERN_RECOVERY.md) tracks level-3 scenery and remaining mechanics.
+[Level four and story progression](docs/LEVEL4_RECOVERY.md) covers Discovery,
+the tree scenes, countdown and current later-level limitations.
 
 ```powershell
 python -m pip install -r requirements-dev.txt
