@@ -49,7 +49,7 @@ CLASSES = {cls.__name__: cls for cls in (
     Skeleton, SkeletonRoomRecord, GuardRoomRecord, TerrainMotion, WallSpikes,
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
-        LooseFloors: {'shake_events'}}
+        LooseFloors: {'shake_events'}, PressurePlates: {'slams'}}
 GAME_FIELDS = ('room_id', 'checkpoint', 'death', 'complete', 'harbor', 'desert', 'caverns')
 CONTROL_FIELDS = (
     'run_active', 'run_stop_requested', 'run_direction', 'run_start_x',
@@ -169,7 +169,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     if cls is Potions:
         optional.update(('fatal', 'float_timer'))
     if cls is CavernState:
-        optional.update(('bridge', 'carpet'))
+        optional.update(('bridge', 'carpet', 'phew_countdown'))
     if (not isinstance(record, dict) or set(record) - allowed
             or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')

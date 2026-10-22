@@ -28,6 +28,8 @@ class CavernState:
     crush: GateCrush = field(default_factory=GateCrush)
     bridge: Bridge = field(default_factory=Bridge)
     carpet: Carpet = field(default_factory=Carpet)
+    # a5-0x5008: the level-four relief countdown; -1 idle, -2 already used.
+    phew_countdown: int = -1
 
     def configure_lava(self, metadata, enhanced=True):
         self.lava = Lava(metadata, enhanced=enhanced)

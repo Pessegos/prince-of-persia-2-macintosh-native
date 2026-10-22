@@ -2459,6 +2459,7 @@ class ScenePrototype(WindowControls):
         caverns.loose.advance_tiles(self.level_map)
         self.sequence_state.sound_events.extend(caverns.plates.advance(
             self.level_map, self.sequence_state, self.terrain_motion, self.frames[self.action]))
+        self.advance_relief(caverns)
         stopped = set(caverns.plates.stopped_sounds)
         if stopped:
             self.sequence_state.sound_events[:] = [
@@ -2467,6 +2468,46 @@ class ScenePrototype(WindowControls):
             for cue in caverns.plates.stopped_sounds:
                 self.audio.stop_sound(cue)
         caverns.plates.stopped_sounds.clear()
+
+    def shut_out_opponents(self, room, cell):
+        # 5:4766-489c: in level four, a slammed gate in the Prince's room and
+        # row, under five columns away, with the living opponents of that row
+        # all on its far side.
+        motion = self.terrain_motion
+        if (self.game.level.number != 4 or self.game.caverns.phew_countdown == -2
+                or motion is None or room != motion.room or cell // 10 != motion.row):
+            return False
+        from pop2.combat import _native_alive
+
+        gate, prince = cell % 10, self.combat._supporting_column(self.combat.player)
+        if abs(gate - prince) >= 5:
+            return False
+        result = False
+        for guard in self.combat.active_guards():
+            if guard.row != motion.row or guard.room != room or not _native_alive(guard):
+                continue
+            column = self.combat._supporting_column(guard)
+            if (column <= gate) if gate < prince else (column > gate):
+                result = True
+            else:
+                return False
+        return result
+
+    def advance_relief(self, caverns):
+        for room, cell in caverns.plates.slams:
+            if self.shut_out_opponents(room, cell):
+                caverns.phew_countdown = 4
+        # FrameAdv 2:640c-6446: when the countdown reaches zero, a living
+        # Prince outside modes 3/4 sighs (sound 110) once per level.
+        countdown = caverns.phew_countdown
+        if countdown < 0:
+            return
+        state = self.sequence_state
+        if countdown == 0 and self.combat.player.alive and state.animation_state not in (3, 4):
+            state.sound_events.append(110)
+            caverns.phew_countdown = -2
+        else:
+            caverns.phew_countdown -= 1
 
     def advance_exit_scenery(self):
         # The main loop (2:6100-6134) still runs FrameAdv while the exit song

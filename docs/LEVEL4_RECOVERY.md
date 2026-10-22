@@ -277,5 +277,16 @@ with the next-level opcode), with them closed it crashes into them and he
 dies (death method 9). Details and the provisional carpet palette are in
 `docs/research/level5-native-rules.md`.
 
+**Relief sigh (sound 110).** When a gate slams shut (the fast close of a
+reversible plate, ATMGate `5:4290-42ce`, not squashing anyone), `5:4766`
+checks: level 4, not already used; the gate is in the Prince's room and row,
+fewer than five columns from him; and every living opponent in that row is
+on the gate's far side (at least one). Then a countdown a5-0x5008 = 4 runs in
+FrameAdv (`2:640c-6446`); at zero a living Prince outside modes 3/4 plays
+sound 110 and the countdown becomes -2, so it happens once per level. In
+practice this is room 24's gate shutting out the chasing skeletons. The
+disassembly listing left `5:4198-4681` and `5:4752-48af` unmapped; they were
+read with capstone.
+
 **Not yet implemented:**
 - the death message's 600-frame game-over timeout (`2:67fa-6806`).

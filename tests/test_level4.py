@@ -378,3 +378,54 @@ class LevelFourRunnerBumpTests(unittest.TestCase):
             sequences.add(skeleton.state.sequence_id)
         self.assertIn(64, sequences)
         self.assertFalse(sequences & {46, 47})
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported level-four resources required')
+class LevelFourReliefTests(unittest.TestCase):
+    """ATMGate 5:42c6-42ce, 5:4766-489c and FrameAdv 2:640c-6446 (sound 110)."""
+
+    def setUp(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(4)
+        RooftopSceneTests.tick(self, 16)
+        scene.god_mode = True
+        # Room 24's gate (cell 22) open; its reversible plate is cell 21.
+        scene.game.caverns.plates.foreground[23, 22] = 0x200 | 184
+        scene.jump_to_room(25, 2, 300, 0)
+        self.skeleton = next(guard for guard in scene.combat.active_guards() if guard.room == 25)
+        scene.combat.room_encounters[25][0].remove(self.skeleton)
+
+    def slam(self, x):
+        from tests.test_terrain import RooftopSceneTests
+
+        scene, skeleton = self.scene, self.skeleton
+        scene.jump_to_room(23, 2, 120, 0)
+        skeleton.room, skeleton.row, skeleton.bank_room, skeleton.bank_slot = 23, 2, 23, 0
+        skeleton.state.target_x = skeleton.state.current_x = x
+        if skeleton.terrain_motion is not None:
+            skeleton.terrain_motion.room, skeleton.terrain_motion.row = 23, 2
+        scene.combat.room_encounters[23][0].append(skeleton)
+        skeleton.skeleton.rise(scene.combat, skeleton)
+        sounds = []
+        relief = scene.advance_relief
+
+        def spy(caverns):
+            events = scene.sequence_state.sound_events
+            start = len(events)
+            relief(caverns)
+            sounds.extend(cue for cue in events[start:] if cue == 110)
+        scene.advance_relief = spy
+        for _ in range(12):
+            RooftopSceneTests.tick(self)
+        return sounds
+
+    def test_slamming_the_gate_on_a_skeleton_makes_the_prince_sigh_once(self):
+        self.assertEqual(self.slam(330), [110])
+        self.assertEqual(self.scene.game.caverns.phew_countdown, -2)
+
+    def test_no_sigh_with_the_skeleton_on_the_princes_side(self):
+        self.assertEqual(self.slam(60), [])
+        self.assertEqual(self.scene.game.caverns.phew_countdown, -1)
