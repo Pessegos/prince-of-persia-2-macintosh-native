@@ -118,3 +118,38 @@ class CarpetRideSceneTests(unittest.TestCase):
         self.assertEqual(scene.death.method, 9)
         self.tick(10)
         self.assertGreater(scene.death.counter, 6)
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class CarpetRoomPaletteTests(unittest.TestCase):
+    def test_room_three_uses_ctbl_3501_and_other_rooms_keep_3500(self):
+        # CheckCarpetImg 8:0d30 is room 3's CUST enter hook (kind 0).
+        from pop2.caverns import cavern_assets, room_assets
+        from pop2.render_opening import decode_ctbl
+
+        _program, resources, palette, _shapes = cavern_assets(5)
+        alternate = decode_ctbl(resources['CTBL'][3501]['data'])
+        room_palette = room_assets(5, 2)[2]
+        self.assertTrue(all(room_palette[index] == color for index, color in alternate.items()))
+        self.assertNotEqual(room_palette, palette)
+        self.assertIs(room_assets(5, 9)[2], palette)
+        self.assertIs(room_assets(4, 2)[2], cavern_assets(4)[2])
+
+    def test_carpet_entries_16_to_31_repeat_the_cavern_prince_palette(self):
+        from pop2.caverns import carpet_palette
+        from pop2.render_opening import decode_ctbl, load_resource_file
+
+        kid = decode_ctbl(load_resource_file('Kid.rsrc')['CTBL'][25003]['data'])
+        palette = carpet_palette()
+        self.assertEqual([palette[index + 15] for index in range(1, 17)],
+                         [kid[index] for index in range(1, 17)])
+        # Emulator capture of the unused carpet: index 16 is orange, 30 blue.
+        self.assertEqual((palette[16][:3], palette[30][:3]), ((220, 92, 17), (45, 46, 182)))
+
+    def test_room_three_hides_the_left_rooms_last_column(self):
+        # 5:0bbc-0be2 marks the left neighbour column 0xc000 in a CUST room.
+        from pop2.caverns import cavern_assets
+
+        commands = cavern_assets(5)[0]['rooms']['2']
+        self.assertFalse([command for command in commands
+                          if command[1] in (3513, 3527, 3532) and command[8:10] == [0, 1]])

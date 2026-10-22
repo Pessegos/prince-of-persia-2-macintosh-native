@@ -29,6 +29,9 @@ BridgeCheckBreak `8:002e-016c`, the plank mobs (`8:0c1a`, TriggerBrgFloorMob
 check of the redraw at each collapse stage.
 
 **Still open [D, read but not implemented]:**
+- Room 10's CUST enter hook (kind 33) is MarkBrgFloorsForChars `8:050e`,
+  which clears the break counter on entry (implemented); its leave hook
+  `8:06c8` restores CTBL 3500.
 - `8:06d8`/RedrawBrgFloor `8:0878`: the planks under marked columns
   (a5-0x3134, MarkBridgeForCol `8:05cc`) wobble between CUST records 3-5
   (Rnd(3)), adding ±1 to a character's Y (`8:0682-06be`).
@@ -91,10 +94,17 @@ cave bars and tile 18 at cell 23 belongs to the flying carpet:
     a5-0x311a[frame]. Frame `8:11e4`: counter mod 9, then counter mod 6 + 3;
     after a crash min(counter + 8, 10) (SHAP 25318, the underside).
     DrawObjCarpet `8:11a4` counts each drawn frame.
-  - **Palette [I]:** CheckCarpetImg `8:0d30` loads CTBL 25303 at entries
-    32-46. The SHAPs also use entries 16-30, whose gameplay source is not
-    recovered; the port uses Prince CTBL 2000 under CTBL 8000. Not
-    reproduced: the red fade of entries 45/46 (`8:10ba-119c`).
+  - **Palette:** CheckCarpetImg `8:0d30` is room 3's CUST enter hook (kind
+    0, table a5-0x4c2e; the leave hook `8:0d5c` restores CTBL 3500 and 750).
+    It loads CTBL 25303 at entries 32-46 and CTBL 3501 at 64-183, so the
+    whole room uses 3501. Entries 16-31 hold the cavern Prince palette (Kid
+    CTBL 25003) one bank up. An emulator capture of the room and the unused
+    carpet matches pixel for pixel (mean difference below 1 outside the
+    Prince). Not reproduced: the red fade of entries 45/46 (`8:10ba-119c`).
+  - **Left column:** GetCells' neighbour cache (`5:0bbc-0be2`) marks the left
+    room's last column 0xc000 in a CUST room (except rows 1-2 of CUST kind
+    0x1f), so its pillar pieces are not drawn; the export harness now does
+    the same (this removed the dark patch at the top left of room 3).
   - After the ride the port plays the cavern end song (32) and leaves the
     completed level on screen; level six is not available.
 

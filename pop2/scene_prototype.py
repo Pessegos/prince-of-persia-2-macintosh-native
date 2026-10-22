@@ -1824,6 +1824,7 @@ class ScenePrototype(WindowControls):
             if self.game.exit is not None:
                 if self.harbor is not None:
                     self.harbor.advance()
+                self.advance_exit_scenery()
                 if self.game.exit.advance(self.current_animation_interval_ms() / 1000, self.audio):
                     if self.game.level.number == 3:
                         self.start_discovery()
@@ -2467,6 +2468,30 @@ class ScenePrototype(WindowControls):
                 self.audio.stop_sound(cue)
         caverns.plates.stopped_sounds.clear()
 
+    def advance_exit_scenery(self):
+        # The main loop (2:6100-6134) still runs FrameAdv while the exit song
+        # plays, so flasks, lava, torches and moving gates keep animating.
+        caverns = self.game.caverns
+        if caverns is None or getattr(self, "level_map", None) is None:
+            return
+        from pop2.caverns import cavern_flask_instances
+
+        program = self.level_renderer.cavern_program
+        state = self.sequence_state
+        caverns.potions.advance((tile.room, tile.row * 10 + tile.column)
+            for _command, tile in cavern_flask_instances(program, self.room_id, self.level_map))
+        caverns.lava.enter_room(self.room_id, program.get('lava', {}).get('rooms', {}).get(str(self.room_id), ()))
+        state.sound_events.extend(caverns.lava.advance())
+        state.sound_events.extend(caverns.spikes.advance(self.level_map, self.room_id))
+        state.sound_events.extend(caverns.plates.advance(self.level_map))
+        caverns.advance_torches(program.get('torches', {}).get(str(self.room_id), ()))
+        room = self.level_renderer.enter_room(self.room_id, caverns)
+        self.background, self.foreground = room.background, room.foreground
+        if getattr(self, "audio", None) is not None:
+            self.audio.drain(state)
+        else:
+            state.sound_events.clear()
+
     def bridge_draw_sag(self, actor):
         # 8:063e lowers a character standing on a plank by its sag; the port
         # applies it to drawing only.
@@ -2489,6 +2514,12 @@ class ScenePrototype(WindowControls):
     def advance_bridge(self):
         bridge = self.game.caverns.bridge
         bridge.advance_planks()
+        entered = self.room_id != getattr(self, 'bridge_last_room', None)
+        self.bridge_last_room = self.room_id
+        if entered and self.game.level.number == 5 and self.room_id == 9:
+            # Room 10's CUST enter hook MarkBrgFloorsForChars (8:050e-0516,
+            # table a5-0x4c2e kind 33) clears the break counter.
+            bridge.counter = 0
         if not bridge_checked(self.game.level.number, self.room_id) or self.combat is None:
             return
         state = self.sequence_state

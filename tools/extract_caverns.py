@@ -380,8 +380,16 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                                       terrain.tile(room_id, draw_column - 1, draw_row))
                     put_word(a5 - 0x4814, tile.kind)
                     put_long(a5 - 0x4818, (tile.foreground << 16) | tile.background)
+                    previous_foreground = previous.foreground
+                    if custom is not None and draw_column == 0:
+                        # 5:0bbc-0be2: a CUST room hides the left room's last
+                        # column (0xc000), except rows 1-2 of CUST kind 0x1f.
+                        if int.from_bytes(custom['data'][:2], 'big') == 0x1f and draw_row in (1, 2):
+                            previous_foreground &= 0x3fff
+                        else:
+                            previous_foreground |= 0xc000
                     put_word(a5 - 0x49d6, previous.kind)
-                    put_long(a5 - 0x49d4, (previous.foreground << 16) | previous.background)
+                    put_long(a5 - 0x49d4, (previous_foreground << 16) | previous.background)
                     for col in range(11):
                         below = terrain.tile(room_id, col - 1, draw_row + 1)
                         put_word(a5 - 0x4a84 + col * 6, below.kind)

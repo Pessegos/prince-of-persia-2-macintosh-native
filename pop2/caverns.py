@@ -173,6 +173,26 @@ def cavern_assets(level_number=3):
     return _cavern_assets(level_number)
 
 
+def room_assets(level_number, room_id):
+    """cavern_assets with the palette of the room on screen.
+
+    Room 3 of level five is a CUST kind-0 room; its enter hook CheckCarpetImg
+    (8:0d30, table a5-0x4c2e) loads CTBL 3501 over entries 64-183.
+    """
+    program, resources, palette, shapes = cavern_assets(level_number)
+    if (level_number, room_id) != (5, 2):
+        return program, resources, palette, shapes
+    return program, resources, *_carpet_room_palette(level_number)
+
+
+@lru_cache(maxsize=1)
+def _carpet_room_palette(level_number):
+    _program, resources, palette, _shapes = cavern_assets(level_number)
+    palette = dict(palette)
+    palette.update(decode_ctbl(resources['CTBL'][3501]['data']))
+    return palette, {}
+
+
 @lru_cache(maxsize=3)
 def _cavern_assets(level_number):
     name = 'caverns_entry.json' if level_number == 3 else f'caverns_level{level_number}.json'
@@ -302,7 +322,7 @@ def merge_positioned_mask(existing, source, position):
 
 
 def draw_cavern_torches(frame, room_id, state, *, level_number=3):
-    program, resources, palette, shapes = cavern_assets(level_number)
+    program, resources, palette, shapes = room_assets(level_number, room_id)
     for record in program.get('torches', {}).get(str(room_id), ()):
         tile = state.loose.tiles.get((record['room'], record['cell']))
         if tile is not None and tile[0] != 19:
@@ -400,7 +420,7 @@ def split_lava_bubble(sprite, shape):
 
 
 def draw_cavern_lava(frame, room_id, state, *, level_number=3):
-    program, resources, palette, shapes = cavern_assets(level_number)
+    program, resources, palette, shapes = room_assets(level_number, room_id)
     for record in program.get('lava', {}).get('rooms', {}).get(str(room_id), ()):
         pool = state.lava.pools.get((record['room'], record['cell']))
         if pool is None:
@@ -481,7 +501,7 @@ def cavern_scene_signature(program, room_id, state):
 def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3):
     from pop2.terrain import LevelMap
 
-    _program, resources, palette, shapes = cavern_assets(level_number)
+    _program, resources, palette, shapes = room_assets(level_number, room_id)
     terrain = LevelMap(level)
     redraw = []
     for block in state.loose.falling:
@@ -505,7 +525,7 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3):
 
 
 def draw_cavern_spikes(frame, room_id, state, terrain, front=False, *, level_number=3):
-    _program, resources, palette, shapes = cavern_assets(level_number)
+    _program, resources, palette, shapes = room_assets(level_number, room_id)
     for command in state.spikes.drawing_commands(terrain, room_id, front):
         sprite = cavern_command_sprite(command, resources, palette, shapes)
         frame.paste(sprite, (command[2], command[3] - sprite.height + 1), sprite)
@@ -513,7 +533,7 @@ def draw_cavern_spikes(frame, room_id, state, terrain, front=False, *, level_num
 
 
 def draw_cavern_darts(frame, room_id, state, *, level_number=3):
-    _program, resources, palette, shapes = cavern_assets(level_number)
+    _program, resources, palette, shapes = room_assets(level_number, room_id)
     for dart in state.plates.darts.projectiles:
         # 8:2e1a emits a type-2 object only in the current room and while
         # flying. DrawObj passes one-based shape 94. AddMid stores slot 93,
@@ -542,12 +562,11 @@ def draw_bridge_planks(frame, room_id, state, *, level_number=3):
 
 @lru_cache(maxsize=1)
 def carpet_palette():
-    # CheckCarpetImg 8:0d30 loads CTBL 25303 over the skeleton entries from 32.
-    # The carpet SHAPs also use entries 16-30; their source is not recovered,
-    # so Prince CTBL 2000 under CTBL 8000 (PoPSetPalette 2:4f20) stands in.
-    prince = load_resource_file('Prince.rsrc')
-    palette = decode_ctbl(prince['CTBL'][2000]['data'])
-    palette.update(decode_ctbl(prince['CTBL'][8000]['data']))
+    # CheckCarpetImg 8:0d30 loads CTBL 25303 over entries 32-46. Entries
+    # 16-31 hold the cavern Prince palette (Kid CTBL 25003) one bank up, as
+    # an emulator capture of the unused carpet confirms pixel for pixel.
+    palette = {index + 15: color for index, color in
+               decode_ctbl(load_resource_file('Kid.rsrc')['CTBL'][25003]['data']).items()}
     palette.update(decode_ctbl(load_resource_file('Caverns.rsrc')['CTBL'][25303]['data']))
     return palette
 
@@ -674,7 +693,7 @@ def without_fallen_planks(commands, fallen):
 
 def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=(), retouched=False,
                 *, level_number=3, bridge_fallen=frozenset()):
-    program, resources, palette, shapes = cavern_assets(level_number)
+    program, resources, palette, shapes = room_assets(level_number, room_id)
 
     def scenery_sprite(command):
         sprite = cavern_command_sprite(command, resources, palette, shapes)
