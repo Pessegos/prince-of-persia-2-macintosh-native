@@ -161,7 +161,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     if cls is SequenceState:
         optional.add('floating')
     if cls.__name__ == 'Fighter':
-        optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive'))
+        optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive', 'sword_lost'))
     if cls is Skeleton:
         optional.update(('room_record', 'native_alive', 'rise_song_pending'))
     if cls is SkeletonRoomRecord:

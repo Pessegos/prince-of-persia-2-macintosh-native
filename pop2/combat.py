@@ -159,6 +159,8 @@ class Fighter:
     bank_slot: int = 0
     guard_record: GuardRoomRecord | None = None
     native_alive: bool | None = None
+    # a5-0x503c == -1: the Prince has no sword to draw.
+    sword_lost: bool = False
 
     @property
     def state(self):
@@ -1407,8 +1409,10 @@ class CombatEncounter:
         if not protected:
             target.life = 0 if fatal_sequence else max(0, target.life - 1)
         if target.state.actor_type == 0 and not fatal_sequence:
-            # CODE:6 0x53f8-0x5406 arms the Prince without replaying SEQS:55.
+            # CODE:6 0x53f8-0x5406 arms the Prince without replaying SEQS:55,
+            # writing 1 over a lost sword's -1 as well.
             target.sword_drawn = True
+            target.sword_lost = False
             target.state.callback_flag = 1
         target.contact_consumed = True
         target.recovering = target.alive

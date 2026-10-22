@@ -564,7 +564,8 @@ class ScenePrototype(WindowControls):
             setattr(self, f"{key}_held", pressed)
             if self.ledge_climbing and pressed and not previous:
                 if key == "ctrl":
-                    self.buffer_input(BufferedCommand("sword_draw"))
+                    if not self.sword_lost():
+                        self.buffer_input(BufferedCommand("sword_draw"))
                 elif key == "down" and not self.up_held:
                     self.buffer_input(BufferedCommand("crouch"))
             return "break"
@@ -616,8 +617,16 @@ class ScenePrototype(WindowControls):
             self.ctrl_held = pressed
         return "break"
 
+    def sword_lost(self):
+        combat = getattr(self, "combat", None)
+        return combat is not None and combat.player.sword_lost
+
     def queue_sword_action(self, kind):
         if self.sword_sheathing or self._combat_controls_locked():
+            return False
+        if kind == "sword_draw" and self.sword_lost():
+            # GenCtrl 6:0c70-0c86: without a sword (a5-0x503c == -1) Ctrl
+            # draws nothing.
             return False
         state = self.sequence_state
         # Port QoL: a rapid repeat during the first three attack poses must
@@ -877,7 +886,8 @@ class ScenePrototype(WindowControls):
     def resume_pause_controls(self):
         self.sample_keyboard()
         if (getattr(self, "paused_ctrl_request", False) and self.ctrl_held
-                and not self._combat_controls_locked() and not self.sword_sheathing):
+                and not self._combat_controls_locked() and not self.sword_sheathing
+                and (self.sword_drawn or not self.sword_lost())):
             self.buffer_input(BufferedCommand("sword_attack" if self.sword_drawn else "sword_draw"))
         self.paused_ctrl_request = False
 
@@ -1591,6 +1601,15 @@ class ScenePrototype(WindowControls):
                     and self.harbor.hanging_from_ship(self.room_id, self.sequence_state))
             sequence = (SHIP_CLIMB_SEQUENCE if ship else self.level_map.climb_sequence(
                 self.room_id, self.terrain_motion.row, self.sequence_state, self.frames[self.action]))
+            player = self.combat.player
+            if (not ship and self.game.level.number == 5 and self.room_id == 9
+                    and not player.sword_lost):
+                # DoClimbUp 6:19aa-19c4: climbing out in level five's room 10
+                # drops the sword (SEQS:236, a5-0x503c = -1); a low gate above
+                # still selects the failed climb afterwards.
+                player.sword_lost = True
+                if sequence == 10:
+                    sequence = 236
             self.start_sequence(sequence)
             self.status.set("Boarding the ship" if ship else
                             "Blocked climb: original SEQS:73" if sequence == 73 else
@@ -1762,6 +1781,8 @@ class ScenePrototype(WindowControls):
         if command.kind == "crouch" and was_running:
             return False
         self.pending_action = None
+        if command.kind == "sword_draw" and self.sword_lost():
+            return False
         if command.kind in SWORD_SEQUENCES:
             started = self.start_sword_action(command.kind)
             if not started:

@@ -426,6 +426,75 @@ class BridgeGuardAiTests(unittest.TestCase):
         self.assertEqual((skeleton.state.facing, skeleton.state.target_x), (1, 210))
 
 
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class BridgeSwordLossTests(unittest.TestCase):
+    """DoClimbUp 6:19aa-19c4, GenCtrl 6:0c70 and the hit re-arm 6:53f8-5406."""
+
+    def setUp(self):
+        BridgeSceneTests.setUp(self)
+
+    def tick(self, count=1):
+        BridgeSceneTests.tick(self, count)
+
+    def climb(self, room=9, lost=False):
+        import copy
+
+        scene = self.scene
+        scene.jump_to_room(room, 2, 200, 0)
+        scene.combat.player.sword_lost = lost
+        scene.combat.choose_guard_action = lambda guard=None: None
+        for guard in scene.combat.active_guards():
+            guard.state.target_x = guard.state.current_x = 450
+        if room == 9:
+            scene.game.caverns.bridge.pieces.update({column: 1 for column in range(3, 8)})
+        state = scene.sequence_state
+        state.current_y, state.action, state.facing = -24, 106, 0
+        for x in range(120, 480):
+            trial = copy.deepcopy(state)
+            trial.target_x = trial.current_x = x
+            if scene.level_map.catch_ledge(room, 2, trial, scene.frames[106]):
+                break
+        else:
+            self.skipTest('no ledge to catch in this room')
+        state.target_x = state.current_x = x
+        scene.terrain_motion.row = 2
+        self.assertTrue(scene.level_map.catch_ledge(room, 2, state, scene.frames[106]))
+        scene.player_x = state.target_x
+        scene.in_animation_tick = True
+        scene._begin_native_ledge(15)
+        scene.shift_held = scene.up_held = True
+        sequences = []
+        for _ in range(20):
+            self.tick()
+            sequences.append(state.sequence_id)
+            if 235 in sequences:
+                break
+        scene.shift_held = scene.up_held = False
+        return sequences
+
+    def test_climbing_out_of_the_chasm_drops_the_sword(self):
+        scene = self.scene
+        sequences = self.climb()
+        self.assertIn(236, sequences)
+        self.assertNotIn(10, sequences)
+        self.assertTrue(scene.combat.player.sword_lost)
+        self.tick(12)
+        self.assertFalse(scene.queue_sword_action("sword_draw"))
+        self.tick(4)
+        self.assertFalse(scene.sword_drawn)
+        # Without a sword, a climb in room 10 is the ordinary SEQS:10.
+        self.assertIn(10, self.climb(lost=True))
+
+    def test_a_sword_hit_re_arms_a_prince_who_lost_his_sword(self):
+        self.scene.jump_to_room(9, 1, 30, 1)
+        combat = self.scene.combat
+        combat.player.sword_lost = True
+        guard = combat.active_guards()[0]
+        combat._hurt('player', combat.player, guard)
+        self.assertFalse(combat.player.sword_lost)
+        self.assertTrue(combat.player.sword_drawn)
+
+
 class BridgeRoomCutTests(unittest.TestCase):
     def test_bridge_room_opponents_always_follow_the_prince(self):
         # CutAllOpponents 6:4510-4540 for level five's rooms 7/10/12, row not 0.
