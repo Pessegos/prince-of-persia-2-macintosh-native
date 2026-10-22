@@ -1067,11 +1067,13 @@ SkelAddOpponent (4:19f0-1a54) moves a heap with open space on its left
 (behind a right-facing heap, ahead of a left-facing one) to the right, until
 its foot is 54 pixels from that cell's left edge.
 - The port now applies this when it creates a heap. Only room 14 in levels
-  3-4 is affected; the heap moves 27 pixels.
+  3-4 is affected.
 - The native routine measures with the frame record already loaded (a5
-  globals 0x520e/0x520a), which may belong to another character. An emulator
-  image fitted best at about 13 pixels further right. The port uses the heap's
-  own pose-206 foot, so this remaining difference is not reproduced.
+  globals 0x520e/0x520a). When opponents are created on room entry, that is
+  the Prince's current frame [I], so the port uses it too. With a standing
+  Prince the heap moves 31 pixels and ends partly behind the pillar, as in
+  an emulator image; that image fitted best about 9 pixels further right,
+  which depends on the Prince's pose at entry.
 
 Native execution matched 644 pickup admission/alignment/sequence/removal
 cases, 128 particle-controller states and 150 life/capacity/song effects.

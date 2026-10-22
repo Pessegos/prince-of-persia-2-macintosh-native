@@ -70,7 +70,20 @@ class Skeleton:
         column = encounter._supporting_column(actor)
         if encounter._guard_tile(actor, column - 1).kind not in EMPTY_TILES:
             return 0
-        front = encounter._guard_front_edge_distance(actor)
+        # GetFCharX 4:3a72 reads the frame record already loaded (a5-0x520e/
+        # 0x520a). When opponents are created on room entry that is the
+        # Prince's current frame, not the heap's own pose [I].
+        frames = getattr(encounter, 'player_frames', None)
+        player = getattr(encounter, 'player', None)
+        if frames is not None and player is not None and player.state.action < len(frames):
+            from pop2.terrain import floor_edge_distance
+
+            record = frames[player.state.action]
+            offset = record.offset_x - (record.aux & 0x3f)
+            foot = actor.state.target_x + (offset if actor.state.facing else -offset)
+            front = floor_edge_distance(foot, actor.state.facing)
+        else:
+            front = encounter._guard_front_edge_distance(actor)
         left = 51 - front if actor.state.facing else front
         if left > 54:
             return 0
