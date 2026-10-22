@@ -62,7 +62,8 @@ of actor controller semantics or complete dynamic spawn counts.
 In particular, the set number 5 is not an instruction to make every actor
 type 5: the records' +0x18 words contain six 5s, two 6s and six 8s. This
 mixed metadata needs the native initialization/dispatch path; copying the
-ordinary-guard constructor with a new palette would discard it.
+ordinary-guard constructor with a new palette would discard it. The native
+selector/dispatch probe below now establishes their distinct actor types.
 
 Potential integration targets, retaining native room/cell numbers:
 
@@ -169,3 +170,54 @@ reveal=1. Existing bit-0x80 cells are not evidence of a different tile kind.
 The 16 synthetic unit tests validate inventory/reference edge cases without
 assets; they do not independently rerun the native comparisons. Runtime
 integration, visual variants and the special-actor controllers remain open.
+
+## Native Special-Actor Selection And Lock Predicate
+
+```powershell
+python -m tools.probe_level7_actors --source PATH_TO_RECOVERY --output rendered/level7-native-actors.json
+```
+
+The executable's `InitOpps` preserves each record's +0x18 kind when the
+level's opponent set is 5 or 6 (6:2bd2-2bfe). It then converts that kind
+through the original DATA table at A5-0x5280 (6:2bfe-2c0e). These are three
+different concepts: resource set, record kind, and working actor type.
+
+Executing that original selector for all 14 actual records, followed by
+the original AutoCtrl dispatch at 6:4eb6, establishes:
+
+| Record Kind | Working Actor Type | Count | Controller Entry |
+| --- | --- | --- | --- |
+| 5 | 7 | 6 | 7:1324, head controller |
+| 6 | 8 | 2 | 7:1324, head controller |
+| 8 | 11 | 6 | 7:1824, SnakeComeOutOfHole |
+
+The eight head-family records start at SEQS 130. The six snake-family
+records start at SEQS 170, in rooms 3 (two), 20 (one), 29 (two) and 31
+(one). This is not a reconstruction of their complete spawn behavior.
+The two head actor types share an entry point, but that does not establish
+identical movement, collision or art selection.
+
+`IsHeadLockedOn` 7:16b8 calls the original GetOppInfoIdx 6:3642, returns
+false for a missing record, and otherwise tests whether record word +0x1c
+equals 3. A positive result does not independently test life/ALIVE, range
+or facing. There were zero differences in 144 supplied head-record cases
+(eight actual slots x six mode values x three life values), with no changes
+to the level bytes. Another 33 missing-record controls (one-past-count in
+each room and room 0/slot 0) return false.
+
+No services are stubbed in this actor probe. A3 and working actor type are
+supplied for the two selector/dispatch slices; mode and life fields are
+supplied for the predicate controls. Execution stops before CheckLoadedOppSet
+at 6:2c12 and before entering either AI controller. This establishes the
+kind conversion, routing and narrow lock predicate, **not** full InitOpps,
+neck attachment, bite/damage, knock-off, flight, snake activation or actor
+record persistence. Invalid negative slots are not certified.
+
+### Next Independent Block
+
+Trace the eight head-family records through HeadAddOpponent 7:0574 and
+the mode dispatch at 7:1324 with real FRAM/SEQS data, keeping the Prince's
+cached state and generator record separate. Record mode transitions and
+services before translating a controller. Investigate SnakeComeOutOfHole
+separately; do not apply the head mode layout to its records by assumption.
+This next block has not been performed in the current preparation milestone.
