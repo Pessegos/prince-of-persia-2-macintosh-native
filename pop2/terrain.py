@@ -763,8 +763,16 @@ class RooftopPhysics:
                 state.sound_events.extend(cues)
             self.select(runtime, 27)
             return
+        if (state.actor_type in (0, None) and self.floating()
+                and state.source_sequence_id != 228):
+            # StartFall 4:4db4-4dc8: a floating Prince falls with SEQS:228.
+            sequence = 228
         motion.falling = True
         self.select(runtime, sequence)
+
+    def floating(self):
+        caverns = getattr(self.map, 'caverns', None)
+        return caverns is not None and caverns.potions.floating
 
     def check_floor(self, motion, runtime, frame_flags, frame_record):
         # CheckFloor 4:35ba tests FRAM bit 0x40, including late climb poses.
@@ -914,10 +922,18 @@ class RooftopPhysics:
                     state.sound_events.append(30)
             before_x, before_y = state.target_x, state.current_y
             # Move, CODE:4 0x341a/0x3464: add gravity once per simulation frame.
+            floating = self.floating()
             if state.animation_state in (4, 9):
-                state.vertical_velocity = min(MAX_FALL_SPEED, state.vertical_velocity + GRAVITY)
+                if floating:
+                    # 4:342c-3444: the global float timer slows every faller.
+                    state.vertical_velocity = min(8, state.vertical_velocity + 2)
+                else:
+                    state.vertical_velocity = min(MAX_FALL_SPEED, state.vertical_velocity + GRAVITY)
                 if state.animation_state == 4:
-                    state.target_x += state.horizontal_velocity * (1 if state.facing else -1)
+                    # 4:34b2-34ca halves the floating Prince's horizontal step.
+                    step = (state.horizontal_velocity >> 1 if floating and state.actor_type in (0, None)
+                            else state.horizontal_velocity)
+                    state.target_x += step * (1 if state.facing else -1)
             state.current_y += state.vertical_velocity
             if bounds_for_state is not None:
                 bounds = bounds_for_state()

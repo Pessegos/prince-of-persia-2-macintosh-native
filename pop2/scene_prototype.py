@@ -2513,6 +2513,8 @@ class ScenePrototype(WindowControls):
 
             potions = self.game.caverns.potions
             potions.consume_events(self.sequence_state, self.combat.player)
+            potions.advance_float()
+            self.sequence_state.floating = potions.floating
             if potions.fatal:
                 potions.fatal = False
                 motion = self.terrain_motion

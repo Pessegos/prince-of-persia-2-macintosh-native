@@ -35,6 +35,8 @@ class SequenceState:
     selected_sequence_id: int | None = None
     death_song_method: int | None = None
     hit_flash: bool = False
+    # Host copy of the global float timer (a5-0x4fa6) for AnimChar -10.
+    floating: bool = False
 
     @property
     def source_sequence_id(self):
@@ -133,6 +135,12 @@ class SequenceRuntime:
                     self.state.vertical_velocity = second
             elif opcode == -10:
                 callback_id = self._next_operand(opcode, opcode_cursor)
+                if self.state.floating:
+                    # AnimChar 4:2e42-2e54: while floating, -10 is a -1 link
+                    # (SEQS:7 -> 228 and 45 -> 229).
+                    self.state.sequence_id = callback_id
+                    self.state.cursor = 0
+                    continue
                 self.state.sequence_events.append((opcode, (callback_id,)))
             elif opcode == -11:
                 method = self._next_operand(opcode, opcode_cursor)

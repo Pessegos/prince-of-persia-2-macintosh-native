@@ -40,6 +40,15 @@ class SequenceHoldTests(unittest.TestCase):
         state.select(7)
         self.assertEqual(state.source_sequence_id, 7)
 
+    def test_minus10_links_only_while_the_float_timer_runs(self):
+        # AnimChar 4:2e42-2e54: -10 reads its operand; while a5-0x4fa6 is
+        # nonzero it continues as a -1 link (SEQS:7 -> 228).
+        sequences = {7: (-10, 8, -1, 9), 8: (102, -23), 9: (106, -23)}
+        for floating, action in ((False, 106), (True, 102)):
+            state = SequenceState(7, floating=floating)
+            SequenceRuntime(sequences, state).next_frame()
+            self.assertEqual(state.action, action)
+
     def test_repeated_hold_does_not_replay_earlier_offsets_or_callbacks(self):
         state = SequenceState(1, actor_type=0, facing=1)
         runtime = SequenceRuntime({1: (-5, 10, -15, 30, 171, -23)}, state)

@@ -6,7 +6,9 @@ import random
 from pop2.terrain import character_column, floor_contact_x, floor_edge_distance
 
 
-DRINKABLE = (1, 2, 5)
+DRINKABLE = (1, 2, 3, 5)
+# 2:5a26 starts a 228-update slow fall (a5-0x4fa6, decremented at 2:6c5e).
+FLOAT_UPDATES = 228
 
 
 def potion_kind(foreground):
@@ -19,8 +21,8 @@ def pickup_target(terrain, motion, state, record):
     current = terrain.tile(motion.room, column, motion.row)
     target = current if current.kind == 10 else terrain.tile(
         motion.room, column + (1 if state.facing else -1), motion.row)
-    # PickItUp 6:1576-1596 takes every flask; types 3, 4 and 6 (float, flip,
-    # 4:466c-4672/46b2) are not modelled yet and stay on the floor.
+    # PickItUp 6:1576-1596 takes every flask; types 4 and 6 (flip and
+    # 4:46b2) are not modelled yet and stay on the floor.
     if target.room is None or target.kind != 10 or potion_kind(target.foreground) not in DRINKABLE:
         return None
     distance = floor_edge_distance(contact, state.facing)
@@ -46,6 +48,7 @@ class Potions:
     shift_was_held: bool = False
     songs: list = field(default_factory=list)
     fatal: bool = False
+    float_timer: int = 0
 
     def configure(self, terrain, rng=None):
         rng = rng or random
@@ -87,6 +90,11 @@ class Potions:
                 actor.life = actor.max_life
             elif self.held_kind == 1:
                 actor.life = min(actor.max_life, actor.life + 1)
+            elif self.held_kind == 3:
+                # 4:466c -> 2:5a26: slow fall for 228 updates and song 111.
+                self.float_timer = FLOAT_UPDATES
+                self.songs.append(111)
+                continue
             elif self.held_kind == 5:
                 # 4:4678-46b0: DecLifePts(1) and sound 12; a fatal sip selects
                 # SEQS:71 with death method 3, which the host applies.
@@ -97,3 +105,13 @@ class Potions:
             else:
                 continue
             self.songs.append(24)
+
+
+    @property
+    def floating(self):
+        return self.float_timer > 0
+
+    def advance_float(self):
+        # 2:6c58-6c5e: one count per frame until zero.
+        if self.float_timer:
+            self.float_timer -= 1

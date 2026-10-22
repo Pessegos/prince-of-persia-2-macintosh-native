@@ -156,6 +156,8 @@ def _unpack(value, resources, lava_tables, depth=0):
     allowed = {field.name for field in fields(cls)} - OMIT.get(cls, set())
     # Earlier snapshots predate turning-contact history and explicit NPC banks.
     optional = {'gate_contact_bounds'} if cls is TerrainMotion else set()
+    if cls is SequenceState:
+        optional.add('floating')
     if cls.__name__ == 'Fighter':
         optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive'))
     if cls is Skeleton:
@@ -163,7 +165,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     if cls is SkeletonRoomRecord:
         optional.add('cell')
     if cls is Potions:
-        optional.add('fatal')
+        optional.update(('fatal', 'float_timer'))
     if (not isinstance(record, dict) or set(record) - allowed
             or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')

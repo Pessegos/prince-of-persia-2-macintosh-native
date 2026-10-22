@@ -130,11 +130,24 @@ class PotionTests(unittest.TestCase):
         motion = SimpleNamespace(room=0, row=1)
         record = FrameRecord(15, 14, 0, 4, 0, 70)
         state = SequenceState(2, action=15, facing=1, target_x=188)
-        for kind, drinkable in ((1, True), (2, True), (3, False), (4, False), (5, True), (6, False)):
+        for kind, drinkable in ((1, True), (2, True), (3, True), (4, False), (5, True), (6, False)):
             with self.subTest(kind=kind):
                 self.place(0, 13, kind << 5)
                 terrain = LevelMap(bytes(self.data))
                 self.assertEqual(pickup_target(terrain, motion, state, record) is not None, drinkable)
+
+    def test_float_flask_starts_the_global_slow_fall_timer_and_song(self):
+        # 4:466c -> 2:5a26: 228 updates and AddSong(111); 2:6c5e counts down.
+        p = Potions(held_kind=3, effect_pending=True)
+        actor = SimpleNamespace(life=2, max_life=3, alive=True)
+        p.consume_events(SequenceState(78, sequence_events=[(-14, (1,))]), actor)
+        self.assertEqual((p.float_timer, p.songs, actor.life), (228, [111], 2))
+        for _ in range(228):
+            self.assertTrue(p.floating)
+            p.advance_float()
+        self.assertFalse(p.floating)
+        p.advance_float()
+        self.assertEqual(p.float_timer, 0)
 
     def test_sequence_pickup_operations_are_emitted_at_their_original_boundaries(self):
         state = SequenceState(78)
@@ -250,6 +263,37 @@ class ImportedPotionTests(unittest.TestCase):
                 if life == 1:
                     self.assertTrue(s.terrain_motion.dead)
                     self.assertEqual(s.death.method, 3)
+
+    def test_level_four_float_flask_survives_the_room_six_shaft(self):
+        # Without the float the shaft below room 6 is a fatal fall.
+        s = self.make_scene()
+        for drink in (True, False):
+            with self.subTest(drink=drink):
+                s.load_level(4)
+                s.jump_to_room(5, row=0, x=2 * 51 + 35, facing=1)
+                if drink:
+                    s.shift_held = True
+                    for _ in range(28):
+                        self.tick()
+                    s.shift_held = False
+                    self.assertTrue(s.game.caverns.potions.floating)
+                s.horizontal_key(None, 1, True)
+                fall_sequences, speeds = set(), []
+                for step in range(260):
+                    self.tick()
+                    if step == 6:
+                        s.horizontal_key(None, 1, False)
+                    if s.terrain_motion.falling:
+                        fall_sequences.add(s.sequence_state.source_sequence_id)
+                        speeds.append(s.sequence_state.vertical_velocity)
+                    if not s.combat.player.alive or s.terrain_motion.dead:
+                        break
+                if drink:
+                    self.assertIn(228, fall_sequences)
+                    self.assertLessEqual(max(speeds), 8)
+                    self.assertEqual(s.combat.player.life, s.combat.player.max_life)
+                else:
+                    self.assertFalse(s.combat.player.alive)
 
     def test_running_jumping_and_wrong_row_do_not_pick_up_a_flask(self):
         s = self.make_scene()

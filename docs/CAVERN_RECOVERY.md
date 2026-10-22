@@ -1054,10 +1054,21 @@ the type (foreground bits 5-7), and DoPickupEffect dispatches on it:
 - type 5, the harmful flask, calls DecLifePts(1) and plays sound 12
   (4:4678-46b0). A fatal sip selects SEQS:71 with death method 3.
   Level 4 has type-5 flasks in rooms 14 and 29, and the port now drinks them.
-- type 3 (float, 2:5a26: a 228-update slow fall used by StartFall, ConvertX
-  and CheckBarr) is in level-four room 6. Type 4 (flip, 2:59f6) and type 6
-  come later. These are not modelled yet and stay on the floor rather than
-  being consumed without their effect.
+- type 3, the float flask (level-four room 6, above a fatal shaft), sets
+  the global a5-0x4fa6 timer to 228 and plays song 111 (4:466c, 2:5a26). The
+  timer counts down once per frame (2:6c58-6c5e). While it runs:
+  - Move (4:342c-3444) gives every faller +2 gravity with a cap of 8;
+  - 4:34b2-34ca halves the floating Prince's horizontal step;
+  - StartFall (4:4db4) selects SEQS:228;
+  - AnimChar `-10` (4:2e42-2e54) acts as a link, so SEQS:7/45 continue in
+    228/229;
+  - CheckPress (5:129a) ignores plates under the Prince.
+
+  The CheckBarr branch at 4:50b2-514e (a floating Prince near the upper part
+  of a solid cell is pushed back 6 pixels and restarts SEQS:229) is not
+  modelled yet.
+- types 4 (flip, 2:59f6) and 6 come in later levels. They are not modelled
+  yet and stay on the floor rather than being consumed without their effect.
 
 **Room 14 heap.** The level data puts room 14's dormant skeleton on the
 cell of its harmful flask (cell 15); level 8 room 25 is similar. On the
