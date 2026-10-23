@@ -351,7 +351,7 @@ class ScenePrototype(WindowControls):
                                  self.frames, guard_art.frames)
             game.combat.guard_art = guard_art
         if game.caverns is not None and initialize_world:
-            game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'))
+            game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'), game.level.start_room)
             game.caverns.configure_torches(renderer.cavern_program.get('torches', {}))
             game.caverns.configure_lava(renderer.cavern_program.get('lava'))
         room = renderer.enter_room(game.room_id, game.caverns)
@@ -471,7 +471,7 @@ class ScenePrototype(WindowControls):
         try:
             renderer = LevelRenderer(game.level, preload_room=False)
             if game.caverns is not None:
-                game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'))
+                game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'), game.level.start_room)
                 game.caverns.configure_torches(renderer.cavern_program.get('torches', {}))
                 game.caverns.configure_lava(renderer.cavern_program.get('lava'))
             room = renderer.enter_room(game.room_id, game.caverns)
@@ -3500,7 +3500,8 @@ class ScenePrototype(WindowControls):
         self.clear_keys(None)
         self.game.restart()
         if self.game.caverns is not None:
-            self.game.caverns.configure_entry(self.level_renderer.cavern_program.get('entry_exit'))
+            self.game.caverns.configure_entry(
+                self.level_renderer.cavern_program.get('entry_exit'), self.game.level.start_room)
             self.game.caverns.configure_torches(self.level_renderer.cavern_program.get('torches', {}))
             self.game.caverns.configure_lava(self.level_renderer.cavern_program.get('lava'))
         self.reset_level_controls()

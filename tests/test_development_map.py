@@ -1,6 +1,7 @@
 import random
 from dataclasses import replace
 from pathlib import Path
+import struct
 from tempfile import TemporaryDirectory
 import unittest
 from types import SimpleNamespace
@@ -34,7 +35,13 @@ class DevelopmentMapModelTests(unittest.TestCase):
         exits = {(0, 14), (12, 16), (29, 25)}
         terrain = SimpleNamespace(tile=lambda room, column, row:
                                   SimpleNamespace(kind=17 if (room, row * 10 + column) in exits else 1))
-        level = SimpleNamespace(number=3, start_room=0)
+        data = bytearray(0x49ca)
+        # Exits open only through plate links (LEVL +0x1680); room 32's exit
+        # has none, like level six's decorative room-1 door.
+        exits.add((31, 5))
+        for index, (room, cell) in enumerate(((12, 16), (29, 25))):
+            struct.pack_into('>5h', data, 0x1680 + index * 10, room + 1, cell, 0, -3, -3)
+        level = SimpleNamespace(number=3, start_room=0, data=bytes(data))
         self.assertEqual(level_landmarks(level, terrain, labels),
                          ('Room 1', frozenset({'Room 13', 'Room 30'})))
 

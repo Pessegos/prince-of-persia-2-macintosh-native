@@ -16,16 +16,34 @@ MAP_SIZE = (464, 194)
 DIRECTIONS = {'left': (-1, 0), 'right': (1, 0), 'up': (0, -1), 'down': (0, 1)}
 
 
+# Level six: native rooms 28 and 14 are never visited (the cliff's left cut
+# lands in room 3, S07_373E); the cliff is drawn beside room 1 instead.
+HIDDEN_ROOMS = {6: (27, 13)}
+DETACHED_STARTS = {6: (0, (1, 0))}
+
+
 def room_positions(terrain):
-    positions = {terrain.start_room: (0, 0)}
-    occupied = {(0, 0): terrain.start_room}
+    level = getattr(terrain, 'level', None)
+    number = struct.unpack_from('>H', level, 0x218a)[0] if level is not None else None
+    if number in DETACHED_STARTS:
+        anchor, (dx, dy) = DETACHED_STARTS[number]
+        positions = _linked_positions(terrain, anchor, HIDDEN_ROOMS.get(number, ()) + (terrain.start_room,))
+        x, y = positions[anchor]
+        positions[terrain.start_room] = x + dx, y + dy
+        return positions
+    return _linked_positions(terrain, terrain.start_room)
+
+
+def _linked_positions(terrain, origin, hidden=()):
+    positions = {origin: (0, 0)}
+    occupied = {(0, 0): origin}
     pending = deque(positions)
     while pending:
         room = pending.popleft()
         x, y = positions[room]
         for direction, (dx, dy) in DIRECTIONS.items():
             neighbor = terrain.neighbor(room, direction)
-            if neighbor is None:
+            if neighbor is None or neighbor in hidden:
                 continue
             target = x + dx, y + dy
             if neighbor in positions:
@@ -92,7 +110,7 @@ def clean_room_frames(renderer, terrain, positions, enemies=None):
             stone.phase = 13
     if renderer.level.kind == 3:
         world = CavernState()
-        world.configure_entry(renderer.cavern_program.get('entry_exit'))
+        world.configure_entry(renderer.cavern_program.get('entry_exit'), renderer.level.start_room)
         world.configure_lava(renderer.cavern_program.get('lava'))
         # These two controllers use the legacy global RNG during setup.
         seed = random.getstate()
@@ -188,8 +206,15 @@ class DevelopmentMap:
 
 def level_landmarks(level, terrain, labels):
     """Native entry, all usable exit doors, and the two custom level endings."""
+    # An exit opens only through a plate link (LEVL +0x1680). Level six's
+    # room-1 door has none and its room-3 door is the cliff's entrance.
+    data = getattr(level, 'data', None)
+    linked = ({(struct.unpack_from('>h', data, 0x1680 + index * 10)[0] - 1,
+                struct.unpack_from('>h', data, 0x1682 + index * 10)[0]) for index in range(256)}
+              if data is not None else set())
     exits = {room for room in labels if room != level.start_room
-             and any(terrain.tile(room, cell % 10, cell // 10).kind == 17 for cell in range(30))}
+             and any(terrain.tile(room, cell % 10, cell // 10).kind == 17 and (room, cell) in linked
+                     for cell in range(30))}
     if level.number == 1:
         from pop2.harbor import SHIP_ROOM
 

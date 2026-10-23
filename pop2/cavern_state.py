@@ -53,12 +53,15 @@ class CavernState:
                 phase = (phase + 1) % 9
             self.torches[key] = (value & 0xfff0) | phase
 
-    def configure_entry(self, metadata):
+    def configure_entry(self, metadata, start_room=None):
         if metadata is None:
             return
         self.entry_room, self.entry_cell = metadata['room'], metadata['cell']
         self.entry_frames = tuple((frame['phase'], tuple(frame['sounds'])) for frame in metadata['frames'])
-        self.entry_frame = 0
+        # FirstFrame only animates a door in the room the level starts in;
+        # level six's room-3 door waits, shut, for the cliff exit.
+        self.entry_frame = (0 if start_room is None or start_room == self.entry_room
+                            else len(self.entry_frames) - 1)
 
     def foreground(self, room, cell, value):
         if (room, cell) in self.potions.tiles:

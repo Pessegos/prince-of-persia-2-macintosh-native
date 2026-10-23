@@ -69,6 +69,12 @@ class LevelSixSceneryTests(unittest.TestCase):
         self.assertTrue(fell)
         self.assertEqual(loose.tiles.get((0, 24)), (0, 3))
 
+    def test_room_threes_door_stays_shut_and_silent_until_the_cliff_exit(self):
+        caverns = self.scene.game.caverns
+        self.assertEqual(caverns.entry_room, 2)
+        self.assertEqual(caverns.entry_frame, len(caverns.entry_frames) - 1)
+        self.assertEqual(caverns.advance(), ())
+
     def test_the_sword_item_room_draws_from_the_sword_library(self):
         scene = self.scene
         scene.jump_to_room(16, 1, 100, 1)
@@ -153,6 +159,13 @@ class LevelSixMapTests(unittest.TestCase):
         level_map = build_development_map(GameResources.load().level(6))
         self.assertEqual(level_map.start, 'Room 27')
         self.assertIn('Room 17', level_map.positions)
+        # Rooms 28 and 14 are never shown; the cliff sits beside room 1.
+        self.assertNotIn('Room 28', level_map.positions)
+        self.assertNotIn('Room 14', level_map.positions)
+        x, y = level_map.positions['Room 1']
+        self.assertEqual(level_map.positions['Room 27'], (x + 1, y))
+        # Only plate-linked exits end the level: not the room-1 or room-3 doors.
+        self.assertEqual(level_map.exits, frozenset({'Room 16'}))
 
 
 if __name__ == '__main__':
