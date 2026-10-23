@@ -1,7 +1,8 @@
 # Level Six: Ruins Scenery And Integration Plan
 
-Research note, 2026-10-22, `claude/ai-research`. Level six is not playable
-yet. Codex's level-seven notes (branch `codex/level7-preparation`) cover the
+Research note, 2026-10-22, updated 2026-10-23, `claude/ai-research`. Level
+six is playable from the cliff, without its heads and serpents and without
+scythe traps. Codex's level-seven notes (branch `codex/level7-preparation`) cover the
 shared environment-4 dependencies and the head/serpent actors; this note
 covers the campaign track: scenery export and runtime integration.
 
@@ -61,11 +62,29 @@ render of port room 16 matches the ruins look.
   (6:14ce-1574, SEQS 91, FindSwd 183). Saves keep a changed sword type.
 - Finishing level five loads level six; the ruins' exit song is 124.
 - Tile predicates (IsSpace/IsWall/IsFloor, CODE 3) are environment
-  independent, so the existing collision rules apply. Every level-six
-  crevice (tile 7) already has bit 0x80 set; revealing them changes nothing.
+  independent, so the existing collision rules apply.
+- Crevices (tile 7) start covered (InitState 3:5dce clears bit 0x80) and a
+  crouching or crawling Prince uncovers the first run of the row
+  (RuinSetCreviceRevealed 7:3404, scan 7:332a).
+- Crawling (2026-10-23): crouched with Down held, forward into a crevice
+  whose foreground low bits are not 3, or a scythe (12/13), lies down
+  (GenCtrl 6:0a4e-0b28, SEQS 125, X aligned to at most 10 pixels into that
+  column facing right, 34 past its right edge facing left). Prone (poses
+  246-261, 6:07ee-0994): forward crawls (122), back (123); he stands (124)
+  when neither his own, the front nor the rear cell is 7/12/13, or with Up
+  once clear of a crevice behind him (6:08a4-0942). A body at most 34 pixels
+  high passes an open crevice (CheckCollide 4:5ade-5b0a, heads excepted),
+  and the wall alignment skips a prone body in a crevice (4:35e6, 4:5830).
+  These rules are environment independent, so level two's two crevices
+  (port rooms 9 and 11) can now be crawled too. The scythe check under an
+  extended blade (S05_5F1A) reads the static foreground: scythes do not
+  move yet.
 
 ## Remaining Steps
 
+0. Scythes (tiles 12/13, port rooms 18 and 20): TriggerScythe 5:5fde,
+   CheckScytheHit, ComputeBladeHitRect, DrawScythe2, GetScytheHitType and
+   the unmapped animation at 5:4584 (sounds 276/277).
 1. Heads and serpents: level six has special opponents in rooms 4, 7, 16,
    20 and 25 (native numbering); `GuardSpawn` rejects them, so the level is
    currently empty of enemies. Codex's level-seven notes cover their
