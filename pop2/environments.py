@@ -12,7 +12,7 @@ from pop2.carpet import (
     CARPET_ROOM, CARPET_TILE, CLOSED_SONG, CRASH_SEQUENCE, OPEN_SONG, RIDE_FRAME, SIT_SEQUENCE,
     carpet_room,
 )
-from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, on_bridge
+from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, bridge_sag, on_bridge
 from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.crevices import CREVICE_TILE
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
@@ -63,6 +63,28 @@ class Environment:
     def finish_exit(self):
         """After the exit song: level one's voyage scene."""
         self.scene.start_ending()
+
+    # Drawing, in ScenePrototype.render order.
+
+    def scenery_layer(self, frame, motion):
+        """Scenery objects drawn before the room's foreground."""
+        return frame
+
+    def draw_sag(self, actor):
+        """Pixels an actor is drawn lower than its floor."""
+        return 0
+
+    def drawn_player(self, state):
+        """(state, height) the Prince is drawn with; height None is his sprite's."""
+        return state, None
+
+    def after_actors(self, frame, player_bounds):
+        """Drawn over the actors, before the front scenery."""
+        return frame
+
+    def display_life(self, life):
+        """The life the meter shows."""
+        return life
 
 
 class Rooftops(Environment):
@@ -125,6 +147,14 @@ class Rooftops(Environment):
 
 class Desert(Environment):
     """Level two (environment kind 1)."""
+
+    def after_actors(self, frame, player_bounds):
+        scene = self.scene
+        if (scene.sequence_state.level_kind == 1 and scene.sequence_state.source_sequence_id == 27
+                and player_bounds[1] < 227):
+            art = scene.level_renderer.desert_rooms[scene.room_id]
+            frame = art.draw_sand(frame, scene.combat.world_frame, player_bounds)
+        return frame
 
     def level_events(self):
         scene = self.scene
@@ -693,6 +723,37 @@ class Caverns(Environment):
             else:
                 return False
         return result
+
+    def scenery_layer(self, frame, motion):
+        from pop2.caverns import draw_carpet
+
+        scene = self.scene
+        state = scene.sequence_state
+        return draw_carpet(frame, scene.room_id, scene.game.caverns,
+                           (state.target_x, floor_y(motion.row) + state.current_y,
+                            state.facing, state.action) if motion.room == scene.room_id else None,
+                           level_number=scene.game.level.number)
+
+    def draw_sag(self, actor):
+        scene = self.scene
+        # 8:063e lowers a character standing on a plank by its sag; the port
+        # applies it to drawing only.
+        game = getattr(scene, "game", None)
+        motion = getattr(actor, "terrain_motion", None)
+        if (getattr(game, "caverns", None) is None or motion is None or game.level.number != 5
+                or getattr(scene, "level_map", None) is None or motion.falling):
+            return 0
+        record = (scene.frames[actor.state.action] if actor is scene.combat.player else
+                  scene.guard_art.frames[guard_frame_index(actor.state.action)])
+        return bridge_sag(scene.level_map, motion.room, scene.combat._supporting_column(actor),
+                          motion.row, actor.state.action, record)
+
+    def drawn_player(self, state):
+        return self.scene.game.caverns.crush.actor(state)
+
+    def display_life(self, life):
+        scene = self.scene
+        return scene.game.caverns.crush.display_life(scene.sequence_state, life)
 
 
 class Ruins(Caverns):

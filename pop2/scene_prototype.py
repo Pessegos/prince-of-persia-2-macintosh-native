@@ -53,7 +53,7 @@ from pop2.rebirth import RebirthSnapshot
 from pop2.story_progress import MESSAGE_FRAMES, StoryProgress
 from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
-from pop2.bridge import bridge_checked, bridge_sag
+from pop2.bridge import bridge_checked
 from pop2.environments import DESERT_FAR_SHORE_SOUND_X, environment_for
 from pop2.carpet import carpet_room
 from pop2.caverns import cavern_clip_top, cavern_exit_clip
@@ -2432,19 +2432,6 @@ class ScenePrototype(WindowControls):
         self.player_x = self.sequence_state.target_x
         self.sequence_state.current_x = self.player_x
 
-    def bridge_draw_sag(self, actor):
-        # 8:063e lowers a character standing on a plank by its sag; the port
-        # applies it to drawing only.
-        game = getattr(self, "game", None)
-        motion = getattr(actor, "terrain_motion", None)
-        if (getattr(game, "caverns", None) is None or motion is None or game.level.number != 5
-                or getattr(self, "level_map", None) is None or motion.falling):
-            return 0
-        record = (self.frames[actor.state.action] if actor is self.combat.player else
-                  self.guard_art.frames[guard_frame_index(actor.state.action)])
-        return bridge_sag(self.level_map, motion.room, self.combat._supporting_column(actor),
-                          motion.row, actor.state.action, record)
-
     def advance_environment(self):
         environment_for(self).frame_hook()
 
@@ -3528,6 +3515,7 @@ class ScenePrototype(WindowControls):
             self.native_viewport = viewport
             self.present_viewport()
             return
+        environment = environment_for(self)
         frame = self.background.copy()
         frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor,
                     frame_number=self.combat.world_frame if self.combat is not None else 0,
@@ -3545,14 +3533,8 @@ class ScenePrototype(WindowControls):
             ), curtain)
         combat = getattr(self, "combat", None)
         motion = getattr(self, "terrain_motion", None)
-        if getattr(self.game, "caverns", None) is not None and motion is not None:
-            from pop2.caverns import draw_carpet
-
-            state = self.sequence_state
-            frame = draw_carpet(frame, self.room_id, self.game.caverns,
-                                (state.target_x, floor_y(motion.row) + state.current_y,
-                                 state.facing, state.action) if motion.room == self.room_id else None,
-                                level_number=self.game.level.number)
+        if motion is not None:
+            frame = environment.scenery_layer(frame, motion)
         frame = Image.alpha_composite(frame, self.foreground)
         self.level_renderer.remember_scenery(frame)
         hide_guards = getattr(self, "peaceful", False) and getattr(self, "demo", None) is None
@@ -3560,15 +3542,13 @@ class ScenePrototype(WindowControls):
         if combat is not None and not hide_guards:
             for guard in combat.visible_guards():
                 layer = Image.new("RGBA", frame.size)
-                ground = floor_y(guard.row) + self.bridge_draw_sag(guard)
+                ground = floor_y(guard.row) + environment.draw_sag(guard)
                 self.guard_art.draw(layer, guard.state, ground, guard.palette_variant)
                 bounds = self.guard_art.bounds(guard.state, ground)
                 record = self.guard_art.frames[guard_frame_index(guard.state.action)]
                 actors.append((guard.state, record, bounds, guard.row, layer))
         player_layer = Image.new("RGBA", frame.size)
-        draw_state, draw_height = self.sequence_state, None
-        if self.game.caverns is not None:
-            draw_state, draw_height = self.game.caverns.crush.actor(draw_state)
+        draw_state, draw_height = environment.drawn_player(self.sequence_state)
         draw_action = self.action if draw_height is None else draw_state.action
         sprite = self.player_sprite(draw_action)
         drawn_bounds = None
@@ -3585,7 +3565,7 @@ class ScenePrototype(WindowControls):
                 self.player_floor_y()
                 + record.offset_y
                 + draw_state.current_y
-                + (self.bridge_draw_sag(combat.player) if combat is not None else 0),
+                + (environment.draw_sag(combat.player) if combat is not None else 0),
                 sprite.height,
             )
             player_layer.paste(sprite, (x, y), sprite)
@@ -3613,17 +3593,13 @@ class ScenePrototype(WindowControls):
             for state, record, bounds, row, layer in actors:
                 frame = self.composite_actor(frame, layer, row, bounds[3], state, bounds, record)
             frame = self.composite_actor(frame, player_layer)
-        if (motion is not None and self.sequence_state.level_kind == 1
-                and self.sequence_state.source_sequence_id == 27
-                and player_bounds[1] < 227):
-            art = self.level_renderer.desert_rooms[self.room_id]
-            frame_number = self.combat.world_frame
-            frame = art.draw_sand(frame, frame_number, player_bounds)
+        if motion is not None:
+            frame = environment.after_actors(frame, player_bounds)
 
         if combat is not None:
             for guard in (() if hide_guards else combat.visible_guards()):
                 layer = Image.new("RGBA", frame.size)
-                ground = floor_y(guard.row) + self.bridge_draw_sag(guard)
+                ground = floor_y(guard.row) + environment.draw_sag(guard)
                 self.hit_art.draw(layer, guard.state, ground)
                 bounds = self.guard_art.bounds(guard.state, ground)
                 record = self.guard_art.frames[guard_frame_index(guard.state.action)]
@@ -3631,7 +3607,7 @@ class ScenePrototype(WindowControls):
                                              guard.state, bounds, record)
             layer = Image.new("RGBA", frame.size)
             self.hit_art.draw(layer, combat.player.state,
-                              self.player_floor_y() + self.bridge_draw_sag(combat.player))
+                              self.player_floor_y() + environment.draw_sag(combat.player))
             frame = self.composite_actor(frame, layer, motion.row if motion is not None else None,
                                          player_bounds[3] if player_bounds is not None else None,
                                          self.sequence_state, player_bounds, self.frames[self.action])
@@ -3650,9 +3626,7 @@ class ScenePrototype(WindowControls):
         viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
         viewport.paste(frame, (ROOM_ORIGIN_X, 0))
         if combat is not None and not self.death.prompt_visible:
-            player_life = combat.player.life
-            if self.game.caverns is not None:
-                player_life = self.game.caverns.crush.display_life(self.sequence_state, player_life)
+            player_life = environment.display_life(combat.player.life)
             self.health_art.draw(viewport, combat, show_opponent=not hide_guards,
                                  player_life=player_life)
         self.screenshot_viewport = viewport.copy()
