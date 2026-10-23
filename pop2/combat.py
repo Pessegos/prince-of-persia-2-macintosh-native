@@ -541,7 +541,11 @@ class CombatEncounter:
             if offset in (-510, 0, 510):
                 candidates.append((guard, self._project_fighter(guard, self.player.room)))
         selected = nearest_opponent(self.player, [view for _guard, view in candidates])
-        return next((guard for guard, view in candidates if view is selected), None)
+        guard = next((guard for guard, view in candidates if view is selected), None)
+        # 3:4b7a-4ba8: no meter for a skeleton fighting on level five's bridge.
+        if guard is not None and guard.state.actor_type == 4 and self._bridge_fight_room(guard):
+            return None
+        return guard
 
     def opponent_to_fight(self):
         # OppToFight 6:2392-2492, used by PlayAmbient/TimeForNewAmbient.

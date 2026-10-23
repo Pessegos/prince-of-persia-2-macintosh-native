@@ -521,5 +521,16 @@ class BridgeSkeletonImmunityTests(unittest.TestCase):
         self.assertEqual(skeleton.life, life)
         self.assertTrue(skeleton.alive)
 
+    def test_bridge_skeleton_has_no_opponent_meter(self):
+        # DrawOppMeter 3:4b7a-4ba8 erases the meter for a skeleton in level
+        # five's bridge rooms (row not 0) instead of drawing its life.
+        BridgeSceneTests.setUp(self)
+        scene = self.scene
+        scene.jump_to_room(9, 1, 30, 1)
+        skeleton = scene.combat.active_guards()[0]
+        self.assertIsNone(scene.combat.health_opponent())
+        skeleton.row = 0
+        self.assertIs(scene.combat.health_opponent(), skeleton)
+
     def tick(self, count=1):
         BridgeSceneTests.tick(self, count)
