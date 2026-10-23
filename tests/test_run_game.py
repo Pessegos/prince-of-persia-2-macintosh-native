@@ -33,6 +33,7 @@ class InstallationTests(unittest.TestCase):
         (assets / "attract.json").write_text(json.dumps(fixture()))
         (assets / "ending.json").write_bytes((assets / "intro.json").read_bytes())
         (assets / 'discovery.json').write_bytes((assets / 'intro.json').read_bytes())
+        (assets / 'carpet.json').write_bytes((assets / 'intro.json').read_bytes())
         for variant in range(1, 10):
             (assets / f'tree-{variant}.json').write_bytes((assets / 'intro.json').read_bytes())
         (assets / 'caverns_entry.json').write_text(json.dumps({
@@ -42,6 +43,12 @@ class InstallationTests(unittest.TestCase):
             (assets / f'caverns_level{number}.json').write_text(json.dumps({
                 'version': 15, 'level': number, 'rooms': {str(room): [] for room in range(32)},
                 'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}}}))
+        for number in (6, 7):
+            (assets / f'ruins_level{number}.json').write_text(json.dumps({
+                'version': 15, 'level': number, 'rooms': {str(room): [] for room in range(32)},
+                'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}},
+                'scythes': {'schema': 1, 'scythes': [], 'rooms': {}},
+                'alternate_entry': {'room': 3, 'cell': 25, 'frames': [{'commands': []}]}}))
 
     def test_complete_installation_has_no_errors(self):
         self.assertEqual(run_game.installation_errors(self.project), [])
@@ -55,6 +62,43 @@ class InstallationTests(unittest.TestCase):
     def test_missing_level_four_scenery_requests_import(self):
         (self.project / 'assets/caverns_level4.json').unlink()
         self.assertIn('caverns_level4.json', run_game.missing_assets(self.project))
+
+    def test_missing_new_campaign_resources_request_import(self):
+        for name in ('Ruins.rsrc', 'Head.rsrc', 'TNIS1.rsrc', 'TNIS2.rsrc', 'TNIS3.rsrc',
+                     'ruins_level6.json', 'ruins_level7.json', 'carpet.json'):
+            with self.subTest(name=name):
+                path = self.project / 'assets' / name
+                original = path.read_bytes()
+                path.unlink()
+                self.assertIn(name, run_game.missing_assets(self.project))
+                path.write_bytes(original)
+
+    def test_old_ruins_exports_without_scythes_request_reimport(self):
+        for number, label in ((6, 'six'), (7, 'seven')):
+            path = self.project / 'assets' / f'ruins_level{number}.json'
+            program = json.loads(path.read_text())
+            del program['scythes']
+            path.write_text(json.dumps(program))
+            self.assertIn(f'ruins_level{number}.json (needs full level-{label} scenery)',
+                          run_game.missing_assets(self.project))
+
+    def test_level_seven_without_upper_entrance_requests_reimport(self):
+        path = self.project / 'assets/ruins_level7.json'
+        original = json.loads(path.read_text())
+        for alternate in (None, {'room': 3, 'cell': 25, 'frames': []},
+                          {'room': 31, 'cell': 24, 'frames': [{}]}):
+            program = dict(original)
+            if alternate is None:
+                del program['alternate_entry']
+            else:
+                program['alternate_entry'] = alternate
+            path.write_text(json.dumps(program))
+            self.assertIn('ruins_level7.json (needs full level-seven scenery)',
+                          run_game.missing_assets(self.project))
+
+    def test_corrupt_carpet_scene_requests_reimport(self):
+        (self.project / 'assets/carpet.json').write_text('{}')
+        self.assertIn('carpet.json (needs reimport)', run_game.missing_assets(self.project))
 
     def test_exports_without_room_link_setup_request_reimport_for_both_levels(self):
         for name, label in (('caverns_entry.json', 'three'), ('caverns_level4.json', 'four')):

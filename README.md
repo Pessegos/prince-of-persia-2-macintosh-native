@@ -219,11 +219,14 @@ in `assets/`:
 - `Rooftops.rsrc`
 - `Desert.rsrc`
 - `Caverns.rsrc`, `caverns_entry.json`, `caverns_level4.json` and `caverns_level5.json` (independent scenery for levels 3-5)
+- `Ruins.rsrc`, `Head.rsrc`, `ruins_level6.json` and `ruins_level7.json` (ruins scenery; special enemies are not generated yet)
+- `TNIS1.rsrc`, `TNIS2.rsrc` and `TNIS3.rsrc` (carpet scene resources)
 - `NIS.rsrc`, `NISTree.rsrc` and `Title.rsrc`
 - `enemy_profiles.json`
 - `intro.json` (recovered scene instructions and audio markers)
 - `ending.json` (voyage after level 1)
 - `discovery.json` (story sequence after level 3)
+- `carpet.json` (flight between levels 5 and 6)
 - `tree-1.json` through `tree-9.json` (tree scenes and timeout sequence)
 - `attract.json` (original level-one demo and credits program)
 - `audio/` (original samples, voices, instruments and prepared music)
@@ -233,6 +236,10 @@ The same import can be performed without a file picker:
 ```powershell
 .\.venv\Scripts\python.exe -m tools.extract_assets "C:\path\to\pop2.hfs"
 ```
+
+To reimport after an update, close the game and rerun the same command from the
+project folder. It refreshes generated files in `assets/`, not your saves or
+screenshots. Each separate worktree has its own imported assets.
 
 The importer leaves the disk image unchanged and does not retain the game
 executable or any ROM or system files. Generated game files are ignored by Git.

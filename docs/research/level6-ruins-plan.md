@@ -125,7 +125,10 @@ the exported drawing.
    20 and 25 (native numbering); `GuardSpawn` rejects them, so the level is
    currently empty of enemies. Codex's level-seven notes cover their
    selection, initialization, frames and idle/movement rules.
-2. Cutscene 1 between levels five and six (CheckPlayNIS(5, 6)).
-3. The start room's leave hook `7:37b6` and the retained cliff image when
+2. The start room's leave hook `7:37b6` and the retained cliff image when
    walking left from the start (to compare with the original).
-4. Sword type 2 graphics (S03_5A4E) and the two shake images per parity.
+3. Sword type 2 graphics (S03_5A4E) and the two shake images per parity.
+
+Cutscene 1 between levels five and six is now implemented; see
+`level5-native-rules.md`, "Cutscene 1: NISCarpet", including the unresolved
+music-cue continuity. Updated installations need the new scene resources.
