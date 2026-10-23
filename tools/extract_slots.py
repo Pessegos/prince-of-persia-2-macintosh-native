@@ -125,10 +125,17 @@ def mutate_level(level, choices, keys, members, states, clears):
 
 def loose_floor_slot_scenery(program, caverns, prince, level, base, progress=lambda _text: None,
                              *, recover=None):
-    """The loose-floor/crevice/entrance drawing of every room, by slots."""
+    """The loose-floor/crevice/scythe/entrance drawing of every room, by slots.
+
+    A room's units are its loose cells (crevice runs together), then its
+    scythes (`tools.extract_scythes.scythe_pairs`, 60 states each), then the
+    entrance door's closing frames in the entry room.
+    """
+    from pop2.scythes import SCYTHE_STATES
     from tools.extract_caverns import (
         climbing_bounds, cleared_below_cell, crevice_groups, loose_floor_cells, loose_shift_tables,
         recover_room)
+    from tools.extract_scythes import scythe_pairs
 
     recover = recover or recover_room
     terrain = LevelMap(level)
@@ -141,29 +148,37 @@ def loose_floor_slot_scenery(program, caverns, prince, level, base, progress=lam
     result = {'schema': SCHEMA, 'shifts': loose_shift_tables(program, level),
               'cells': {f'{room}:{cell}': values for (room, cell), values in choices.items()},
               'climb': {'source': source, 'rects': {str(action): list(rect) for action, rect in rects.items()}},
-              'rooms': {}}
+              'scythe_units': True, 'rooms': {}}
     groups_all = crevice_groups(terrain)
+    pairs = scythe_pairs(terrain) if struct.unpack_from('>H', level, 0x2186)[0] == 4 else []
     for room in range(32):
         visible = {(tile.room, tile.row * 10 + tile.column)
                    for row in range(-1, 4) for column in range(-1, 11)
                    if (tile := terrain.tile(room, column, row)).room is not None}
         keys = sorted(visible & choices.keys())
         keys = sorted(set(keys) | {key for key, below in clears.items() if below in visible})
-        if not keys:
+        scythes = [index for index, (key, partner) in enumerate(pairs) if {key, partner} & visible]
+        if not keys and not scythes:
             continue
         groups = [tuple(keys.index(key) for key in group if key in keys)
                   for group in groups_all if set(group) & set(keys)]
         counts, members = loose_units(choices, keys, groups)
+        counts.extend(len(SCYTHE_STATES) for _index in scythes)
         door = entry is not None and room == entry['room']
         if door:
             counts.append(len(entry['frames']))
         cache = {}
 
-        def render(states, room=room, keys=keys, members=members, door=door, counts=counts):
+        def render(states, room=room, keys=keys, members=members, door=door, scythes=scythes):
             if states not in cache:
                 progress(f'Cavern floor slots: room {room + 1}/32, renders {len(cache) + 1}')
                 loose = states[:len(members)]
                 mutable = mutate_level(level, choices, keys, members, loose, clears)
+                for index, state in zip(scythes, states[len(members):]):
+                    for source_room, cell in pairs[index]:
+                        offset = 0x780 + source_room * 120 + cell * 4
+                        foreground = struct.unpack_from('>H', mutable, offset)[0] & 0xff00
+                        struct.pack_into('>H', mutable, offset, foreground | SCYTHE_STATES[state])
 
                 def draw(*args, **options):
                     reads = {}
@@ -190,9 +205,11 @@ def loose_floor_slot_scenery(program, caverns, prince, level, base, progress=lam
         unit_cells = [{keys[index] for index in group} | {clears[keys[index]] for index in group
                                                           if keys[index] in clears}
                       for group in members]
+        unit_cells.extend(set(pairs[index]) for index in scythes)
         if door:
             unit_cells.append({(room, entry['cell'])})
         result['rooms'][str(room)] = {'cells': [list(key) for key in keys], 'units': members,
+                                      'scythes': [list(pairs[index][0]) for index in scythes],
                                       'counts': counts, 'door': door,
                                       'lists': room_slot_lists(render, counts, unit_cells)}
     return result

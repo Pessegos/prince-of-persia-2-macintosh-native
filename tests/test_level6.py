@@ -242,13 +242,16 @@ class LevelSixScytheTests(unittest.TestCase):
         scythes.active.clear()
         self.assertFalse(scythes.trigger(scene.level_map, motion, state))
 
-    def test_each_scythe_state_draws_its_exported_patch(self):
-        from pop2.caverns import cavern_room
+    def test_each_scythe_state_draws_its_exported_drawing(self):
+        # Slot units (loose-floor schema 2) or, in older imports, patches.
+        from types import SimpleNamespace
+        from pop2.caverns import cavern_room, cavern_scythe_signature
 
         program = self.scene.level_renderer.cavern_program
-        entry, = program['scythes']['rooms']['18']
+        state = SimpleNamespace(scythes=SimpleNamespace(foreground={(18, 26): 8, (18, 25): 8}))
+        signature = cavern_scythe_signature(program, 18, state)
         rest = cavern_room(18, animated=True, level_number=6)
-        extended = cavern_room(18, animated=True, level_number=6, scythe_patch=(entry['states']['8'],))
+        extended = cavern_room(18, animated=True, level_number=6, scythe_patch=signature)
         self.assertNotEqual(rest.background.tobytes(), extended.background.tobytes())
 
 

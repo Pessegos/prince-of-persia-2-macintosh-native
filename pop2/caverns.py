@@ -803,11 +803,11 @@ def delta_commands(base, items):
     return result
 
 
-def loose_variant(program, room_id, loose_key):
+def loose_variant(program, room_id, loose_key, scythe_states=()):
     """A loose-floor variant, expanding the ruins' delta-encoded form."""
     metadata = program.get('loose_floors', {})
     if metadata.get('schema') == 2:
-        return slot_variant(metadata, metadata.get('rooms', {}).get(str(room_id)), loose_key)
+        return slot_variant(metadata, metadata.get('rooms', {}).get(str(room_id)), loose_key, scythe_states)
     room = program.get('loose_floors', {}).get('rooms', {}).get(str(room_id), {})
     variant = room.get('variants', {}).get(loose_key)
     if variant is None or not room.get('delta'):
@@ -826,7 +826,20 @@ def loose_variant(program, room_id, loose_key):
 
 
 def cavern_scythe_signature(program, room_id, state):
-    """For each scythe drawn in the room, the exported patch of its state."""
+    """For each scythe drawn in the room, the exported patch of its state.
+
+    With per-slot drawing (loose-floor schema 2) the scythes are slot units:
+    ('slots', state indices) instead of patch indices.
+    """
+    slots = program.get('loose_floors', {})
+    room = slots.get('rooms', {}).get(str(room_id)) if slots.get('schema') == 2 else None
+    if room is not None and 'scythes' in room:
+        from pop2.scythes import SCYTHE_STATES
+
+        return ('slots', tuple(SCYTHE_STATES.index(state.scythes.foreground.get(tuple(key), 0))
+                               for key in room['scythes']))
+    if slots.get('scythe_units'):
+        return ()  # No scythe is drawn in this room.
     metadata = program.get('scythes', {})
     signature = []
     for entry in metadata.get('rooms', {}).get(str(room_id), ()):
@@ -891,16 +904,21 @@ def loose_keys(program, room_id):
     return tuple(key for key in keys if set(key) != {'0'})
 
 
-def slot_variant(metadata, room, loose_key):
-    """A room's lists for loose-cell states, composed from drawer slots.
+def slot_variant(metadata, room, loose_key, scythe_states=()):
+    """A room's lists for loose-cell and scythe states, composed from slots.
 
+    `scythe_states` are indices into SCYTHE_STATES, one per room['scythes'].
     Returns None at rest, like the whole-room variants it replaces.
     """
     from pop2.slot_drawing import clip_climbing, compose_list
 
-    if room is None or not loose_key or set(loose_key) == {'0'}:
+    if room is None:
         return None
-    loose = [int(loose_key[group[0]]) for group in room['units']]
+    loose = [int(loose_key[group[0]]) for group in room['units']] if loose_key else [0] * len(room['units'])
+    scythes = list(scythe_states) or [0] * len(room.get('scythes', ()))
+    if not any(loose) and not any(scythes):
+        return None
+    loose = loose + scythes
     lists = room['lists']
 
     def climbing(states):
@@ -946,7 +964,10 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     else:
         raise ValueError('Unsupported cavern drawing export')
     entry = program.get('entry_exit')
-    variant = loose_variant(program, room_id, loose_key)
+    scythe_states = scythe_patch[1] if scythe_patch[:1] == ('slots',) else ()
+    if scythe_states:
+        scythe_patch = ()
+    variant = loose_variant(program, room_id, loose_key, scythe_states)
     if variant is not None:
         commands = variant['commands']
     alternate = program.get('alternate_entry') if alternate_entry else None
