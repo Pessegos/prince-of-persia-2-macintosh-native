@@ -805,6 +805,9 @@ def delta_commands(base, items):
 
 def loose_variant(program, room_id, loose_key):
     """A loose-floor variant, expanding the ruins' delta-encoded form."""
+    metadata = program.get('loose_floors', {})
+    if metadata.get('schema') == 2:
+        return slot_variant(metadata, metadata.get('rooms', {}).get(str(room_id)), loose_key)
     room = program.get('loose_floors', {}).get('rooms', {}).get(str(room_id), {})
     variant = room.get('variants', {}).get(loose_key)
     if variant is None or not room.get('delta'):
@@ -868,6 +871,56 @@ def with_plank_wobble(commands, wobble, resources):
     return result
 
 
+def loose_keys(program, room_id):
+    """Every loose-floor signature a room can take (crevice runs move together)."""
+    from itertools import product
+
+    metadata = program.get('loose_floors', {})
+    room = metadata.get('rooms', {}).get(str(room_id))
+    if room is None:
+        return ()
+    if metadata.get('schema') != 2:
+        return tuple(room.get('variants', {}))
+    keys = []
+    for states in product(*(range(count) for count in room['counts'][:len(room['units'])])):
+        digits = ['0'] * len(room['cells'])
+        for group, state in zip(room['units'], states):
+            for index in group:
+                digits[index] = str(state)
+        keys.append(''.join(digits))
+    return tuple(key for key in keys if set(key) != {'0'})
+
+
+def slot_variant(metadata, room, loose_key):
+    """A room's lists for loose-cell states, composed from drawer slots.
+
+    Returns None at rest, like the whole-room variants it replaces.
+    """
+    from pop2.slot_drawing import clip_climbing, compose_list
+
+    if room is None or not loose_key or set(loose_key) == {'0'}:
+        return None
+    loose = [int(loose_key[group[0]]) for group in room['units']]
+    lists = room['lists']
+
+    def climbing(states):
+        climb = metadata['climb']
+        if climb['source'] is None:
+            return {action: compose_list(lists[f'climb:{action}'], states) for action in climb['rects']}
+        source = compose_list(lists['climb_source'], states)
+        return {action: (compose_list(lists['climb_141'], states) if action == '141'
+                         else clip_climbing(source, rect)) for action, rect in climb['rects'].items()}
+
+    states = loose + [0] if room['door'] else loose
+    variant = {'commands': compose_list(lists['commands'], states),
+               'floor_redraw': compose_list(lists['floor_redraw'], states),
+               'climb_redraw': climbing(states)}
+    if room['door']:
+        variant['entry_frames'] = [compose_list(lists['commands'], loose + [frame])
+                                   for frame in range(room['counts'][-1])]
+    return variant
+
+
 def without_fallen_planks(commands, fallen):
     # Native room-10 redraws with the emptied bridge cells (8:0c3e-0c54) only
     # omit those cells' CUST plank (SHAP 4226), in every collapse stage.
@@ -885,7 +938,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         sprite = cavern_command_sprite(command, resources, palette, shapes)
         return retouched_sprite(room_id, command, sprite) if retouched and level_number == 3 else sprite
 
-    if (program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+    if (program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
             and program.get('level') == level_number):
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, level_number, room_id):

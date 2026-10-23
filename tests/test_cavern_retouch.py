@@ -100,9 +100,10 @@ class CavernRetouchTests(unittest.TestCase):
                 self.assert_masks_equal(native, edited)
 
     def test_entry_and_loose_floor_variants_preserve_all_masks(self):
+        from pop2.caverns import loose_keys
+
         program = cavern_assets()[0]
-        variants = program['loose_floors']['rooms']['0']['variants']
-        for key in ('', *variants):
+        for key in ('', *loose_keys(program, 0)):
             for phase in range(len(program['entry_exit']['frames'])):
                 with self.subTest(variant=key, phase=phase):
                     native = cavern_room(0, entry_frame=phase, loose_key=key)
