@@ -47,14 +47,19 @@ class WorldPhaseTraceTests(unittest.TestCase):
     def test_the_bridge_check_runs_after_the_opponents(self):
         # FrameAdv 2:6224: the opponents (2:626c) and strikes (2:627c-6280)
         # precede the environment hook 2:628c (2:7124) -> 8:3b92 (BridgeCheckBreak).
+        from unittest.mock import patch
+        from pop2.environments import Caverns
+
         scene = self.scene
         self.tick(20)
         calls = []
-        combat, bridge = scene.advance_combat, scene.advance_bridge
+        combat = scene.advance_combat
         scene.advance_combat = lambda *args: (calls.append('combat'), combat(*args))[1]
-        scene.advance_bridge = lambda: (calls.append('bridge'), bridge())[1]
-        scene.jump_to_room(9, 1, 200, 1)
-        self.tick()
+        bridge = Caverns.advance_bridge
+        with patch.object(Caverns, 'advance_bridge',
+                          lambda environment: (calls.append('bridge'), bridge(environment))[1]):
+            scene.jump_to_room(9, 1, 200, 1)
+            self.tick()
         self.assertEqual(calls, ['combat', 'bridge'])
 
     def test_a_falling_prince_runs_the_falling_phases(self):
