@@ -335,10 +335,12 @@ class SceneAudioTests(unittest.TestCase):
                 plates.foreground[22, 1] = 0x200 | position
                 plates.active[22, 1] = phase
                 self.tick()
-                self.assertEqual(self.effects(), [29])
+                # Independent mechanism audio retains the stop/slam beside ouch.
+                expected = [29, 18 if phase == 1 else 20]
+                self.assertEqual(self.effects(), expected)
                 self.assertEqual(plates.foreground[22, 1], 0x200)
                 self.tick(12)
-                self.assertEqual(self.effects(), [29])
+                self.assertEqual(self.effects(), expected)
                 self.assertEqual(scene.combat.player.life, life)
                 self.assertTrue(scene.ledge_hanging)
 

@@ -184,6 +184,7 @@ class AudioEngine:
         self.mix_mechanisms = mix_mechanisms
         self.mix_effects = mix_mechanisms if mix_effects is None else mix_effects
         self.pending_effects = {}
+        self.stopped_effects = set()
         self.effect_buses = ("effect", "mechanism") if mix_mechanisms else ("effect",)
         self.playback = playback or MixerPlayback(
             directory, {**self.cues, **self.scene_cues}, mix_mechanisms=mix_mechanisms)
@@ -265,7 +266,8 @@ class AudioEngine:
 
     def drain(self, state, audible=True):
         for cue in state.sound_events:
-            if audible:
+            # A landing can stop the scream before its queued frame is drained.
+            if audible and cue not in self.stopped_effects:
                 self.add_sound(cue, state.actor_type)
         state.sound_events.clear()
 
@@ -304,6 +306,7 @@ class AudioEngine:
         self.add_song(self.manifest["death_cues"][method])
 
     def stop_sound(self, cue):
+        self.stopped_effects.add(cue)
         self.pending_effects.pop(cue, None)
         if self.mix_effects:
             self.playback.stop_effect(cue)
@@ -321,8 +324,10 @@ class AudioEngine:
             # An empty swing and its contact are one event, not two layers.
             if any(cue in self.pending_effects for cue in (10, 12, 31)):
                 self.pending_effects.pop(11, None)
+            playing = set(self.playback.playing_effects())
             for cue in self.pending_effects:
-                self.playback.play_effect(cue)
+                if cue not in playing:
+                    self.playback.play_effect(cue)
             self.pending_effects.clear()
         for bus in self.effect_buses:
             cue = getattr(self, f"pending_{bus}")
@@ -349,6 +354,7 @@ class AudioEngine:
             self.pending_song = None
             self.pending_song_ambient = False
             self.playback.play("music", self.current_music)
+        self.stopped_effects.clear()
 
     def ambient(self, room, row, column, fighting=False, alive=True, special=None):
         if not self.music_enabled or not alive:
@@ -423,6 +429,7 @@ class AudioEngine:
         self.pending_effect = self.pending_song = None
         self.current_mechanism = self.pending_mechanism = None
         self.pending_effects.clear()
+        self.stopped_effects.clear()
         self.current_music_ambient = self.pending_song_ambient = False
         self.current_music_group = self.pending_music_group = None
 
