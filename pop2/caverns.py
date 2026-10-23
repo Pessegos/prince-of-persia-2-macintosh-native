@@ -783,6 +783,16 @@ def pressure_drawing_commands(commands, records, phases, resources):
             clip[0] = max(0, command[5] * 120 + DOOR_CLIP_TOP.get(command[1], 1 if exit_door else -31),
                           command[3] - height)
             clip[2] = min(365, command[3])
+            if command[1] == 3562 and phase != initial:
+                # GetCells/ComputeClipRect repaints this cell from row*120+5.
+                # Keep its clean-cut cap fixed instead of lifting the stone
+                # over the upper floor/pillar foot when rebuilding the room.
+                boundary = source[9] * 120 + 5
+                cap = list(source)
+                cap[6] = [*source[6][:2], min(source[6][2], boundary), source[6][3]]
+                if cap[6][0] < cap[6][2]:
+                    result.append(cap)
+                clip[0] = max(clip[0], boundary)
             if clip[0] >= clip[2]:
                 continue
             command[6] = clip

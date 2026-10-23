@@ -388,9 +388,82 @@ class PressureDrawingTests(unittest.TestCase):
             state.plates.foreground[0, 15] = position
             self.assertEqual(cavern_pressure_signature(metadata, 0, state), (46, 0))
 
+    def test_front_gate_keeps_its_cap_above_the_dirty_cell_clip_fixed(self):
+        command = ['front', 3562, 283, 358, 16, 2, [238, 283, 358, 306], 4, 5, 2]
+        record = {'kind': 4, 'foreground': 0x300,
+                  'commands': [('front', 3562, 4, 5, 2)]}
+        resources = {'SHAP': {3562: {'data': struct.pack('>4H', 0, 0, 23, 120)}}}
+        self.assertEqual(pressure_drawing_commands([command], [record], (0,), resources), [command])
+        cap = ['front', 3562, 283, 358, 16, 2, [238, 283, 245, 306], 4, 5, 2]
+        for phase in range(1, 47):
+            with self.subTest(phase=phase):
+                actual = pressure_drawing_commands([command], [record], (phase,), resources)
+                self.assertEqual(actual[0], cap)
+                self.assertEqual(actual[1][3], 358 - phase * 2)
+                self.assertEqual(actual[1][6], [245, 283, 358 - phase * 2, 306])
+        self.assertEqual(command[6], [238, 283, 358, 306])
+
+    def test_gate_fragment_uses_the_repaint_row_not_the_source_row(self):
+        # A gate below the viewed room is still repainted by visible row 2.
+        command = ['front', 3562, 283, 478, 16, 3, [358, 283, 365, 306], 4, 5, 2]
+        record = {'kind': 4, 'foreground': 0,
+                  'commands': [('front', 3562, 4, 5, 2)]}
+        resources = {'SHAP': {3562: {'data': struct.pack('>4H', 0, 0, 23, 120)}}}
+        actual = pressure_drawing_commands([command], [record], (46,), resources)
+        self.assertEqual(len(actual), 1)
+        self.assertEqual(actual[0][6], [329, 283, 365, 306])
+
+    def test_initially_open_front_gate_keeps_its_cap_when_closing_or_opening(self):
+        resources = {'SHAP': {3562: {'data': struct.pack('>4H', 0, 0, 23, 120)}}}
+        for row in range(3):
+            for initial in (1, 16, 46):
+                bottom = row * 120 + 118 - initial * 2
+                clip = [max(0, row * 120 - 31, bottom - 120), 283, bottom, 306]
+                command = ['front', 3562, 283, bottom, 16, row, clip, 4, 5, row]
+                record = {'kind': 4, 'foreground': 0x300 | initial * 4,
+                          'commands': [('front', 3562, 4, 5, row)]}
+                for phase in (0, 4, 27, 46):
+                    with self.subTest(row=row, initial=initial, phase=phase):
+                        actual = pressure_drawing_commands([command], [record], (phase,), resources)
+                        if phase == initial:
+                            self.assertEqual(actual, [command])
+                            continue
+                        self.assertEqual(actual[0][3], bottom)
+                        self.assertEqual(actual[0][6], [clip[0], 283, row * 120 + 5, 306])
+                        self.assertEqual(actual[1][3], row * 120 + 118 - phase * 2)
+                        self.assertEqual(actual[1][6][0], row * 120 + 5)
+
+    def test_front_gate_floor_repaint_does_not_add_a_cap_outside_its_clip(self):
+        command = ['front', 3562, 283, 358, 16, 2, [245, 283, 358, 306], 4, 5, 2]
+        record = {'kind': 4, 'foreground': 0,
+                  'commands': [('front', 3562, 4, 5, 2)]}
+        resources = {'SHAP': {3562: {'data': struct.pack('>4H', 0, 0, 23, 120)}}}
+        actual = pressure_drawing_commands([command], [record], (46,), resources)
+        self.assertEqual(len(actual), 1)
+        self.assertEqual(actual[0][6], [245, 283, 266, 306])
+
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class ImportedPressurePlateTests(unittest.TestCase):
+    @unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(),
+                         'Imported level-four resources required')
+    def test_level_four_room_eleven_preserves_the_upper_pillar_during_gate_motion(self):
+        from PIL import Image, ImageChops
+        from pop2.caverns import cavern_room
+
+        closed = cavern_room(10, pressure_key=(0, 0, 0, 0), animated=True, level_number=4)
+        expected = Image.alpha_composite(closed.background, closed.foreground)
+        footprint = (283, 215, 306, 245)
+        for phase in (1, 4, 16, 27, 46):
+            with self.subTest(phase=phase):
+                room = cavern_room(10, pressure_key=(0, 0, 0, phase), animated=True, level_number=4)
+                actual = Image.alpha_composite(room.background, room.foreground)
+                self.assertIsNone(ImageChops.difference(
+                    expected.crop(footprint).convert('RGB'),
+                    actual.crop(footprint).convert('RGB')).getbbox())
+                self.assertIsNotNone(ImageChops.difference(
+                    expected.convert('RGB'), actual.convert('RGB')).getbbox())
+
     def test_all_real_buttons_resolve_to_the_native_object_types(self):
         from pop2.render_opening import load_resource_file
 

@@ -672,6 +672,32 @@ not the entire native scheduler, crushing or the complete route. Integrated
 tests cover actual held-run pressure, blocked/open passage, bounded scenery
 caching, pause and restart. Resource-free controller tests also run on CI.
 
+### Gate Repaint Clip Versus Full-Room Clip
+
+The full-room comparisons above describe clean-cut drawing, not ordinary
+dirty-cell animation. Level 4 Room 11's right gate exposed the difference:
+moving the entire front SHAP 3562 within its clean-cut clip painted over the
+upper pillar foot. The supplied Macintosh recording keeps that foot intact.
+GetCells (5:0a4c, call at 5:0aaa-0aba when A5-4832 is zero) obtains the ordinary
+cell rectangle from ComputeClipRect (5:0162-01cc), whose top is row*120+5.
+The runtime now retains the initial front-gate cap above that boundary and
+moves only the portion below it. It uses the drawing row, not the source
+gate row, so fragments projected from the room below still move. Back-gate
+pieces, exits, ruins drawing and gate controllers are unchanged; no asset
+schema change or reimport is needed.
+
+`tools/probe_gate_repaint_clip.py` executes the original ComputeClipRect with
+its original DATA tables: rows 0-2, columns 0-9 and three viewports, 90
+comparisons without mismatches. It supplies SectRect and its Pascal stack
+cleanup, the viewport, ordinary-cell inputs and A5-4fb0=0. Output SHA-256:
+`69829c16005900b3e2a6979e75dfb0f29cce9155722ff8e0471903ffab2f6968`.
+This does not execute native dirty-cell admission, rasterization, the special
+row-zero flag or the complete frame scheduler. Regressions cover all 47 gate
+heights, opening/closing initially open gates on all three rows, projected
+fragments, floor repaints and Room 11's pillar pixels at five moving phases.
+The pixel regression rejects the previous production implementation at all
+five phases; it also verifies that the gate itself actually changes.
+
 The common pressure/link base, exit opening and projectile traps below are
 integrated. Native shared capacity/order
 between all animated objects and special actor interactions remain incomplete.

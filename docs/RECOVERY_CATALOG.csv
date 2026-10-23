@@ -263,7 +263,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 5,Modular Set 2,CalcBlue,0x0004,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,20,0
 5,Modular Set 2,CellToCol,0x0074,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 5,Modular Set 2,CellToRow,0x00f8,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
-5,Modular Set 2,ComputeClipRect,0x0162,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,0
+5,Modular Set 2,ComputeClipRect,0x0162,decoded,partial,tools/probe_gate_repaint_clip.py;pop2/caverns.py;docs/CAVERN_RECOVERY.md,"90 native row/column/viewport checks using original DATA; ordinary flag-zero cell bounds only; supplied SectRect, not native dirty admission/rasterization or special row-zero flag",3,0
 5,Modular Set 2,ComputeOffsetCellRect,0x01e2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,9,0
 5,Modular Set 2,GetAboveAry,0x026a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,6
 5,Modular Set 2,GetBelowAry,0x03bc,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,5
@@ -479,7 +479,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,DrawCaveDart,0x1aba,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,native mouth shapes and dimension-dependent clips; 315 whole room/floor/climb drawing-list comparisons for all nine shooters,0,3
 8,Caverns,DrawCaveExitMovable,0x1ba4,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,"level-three exit body, pixel-phase displacement and native clips; 226 room/floor/climb command-list comparisons; special actor draw pipeline incomplete",0,12
 8,Caverns,DrawCaveFloor,0x1da8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,12,4
-8,Caverns,DrawCaveGateMovable,0x1f40,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,"native two-layer shapes, quarter-phase displacement and clips; 636 individual and 504 combined room/floor/climb command-list comparisons including plates",2,8
+8,Caverns,DrawCaveGateMovable,0x1f40,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py;docs/CAVERN_RECOVERY.md,native two-layer shapes and quarter-phase displacement; historical 636 individual and 504 combined clean/floor/climb comparisons; front cap now preserved above ordinary dirty-cell clip during motion,2,8
 8,Caverns,DrawCaveLavaBubbles,0x219e,jump_table,partial,pop2/lava.py;pop2/caverns.py;tools/extract_lava.py,native reference cover/order/death triples compared; enhanced presentation uses continuous original surface,0,17
 8,Caverns,DrawCaveLoose,0x24d4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,5
 8,Caverns,DrawCavePillarTop,0x2702,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,5
