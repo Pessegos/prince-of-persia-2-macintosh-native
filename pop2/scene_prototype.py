@@ -53,8 +53,7 @@ from pop2.rebirth import RebirthSnapshot
 from pop2.story_progress import MESSAGE_FRAMES, StoryProgress
 from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
-from pop2.bridge import bridge_checked
-from pop2.environments import DESERT_FAR_SHORE_SOUND_X, environment_for
+from pop2.environments import environment_for
 from pop2.carpet import carpet_room
 from pop2.caverns import cavern_clip_top, cavern_exit_clip
 from pop2.render_opening import (
@@ -2599,14 +2598,8 @@ class ScenePrototype(WindowControls):
         if getattr(self, "intro", None) is not None:
             return
         audio = getattr(self, "audio", None)
-        if self.game.caverns is not None:
-            caverns = self.game.caverns
-            for cue in (*caverns.plates.songs, *caverns.potions.songs, *caverns.bridge.songs):
-                if audio is not None and not audio.song_playing(cue):
-                    audio.add_song(cue)
-            caverns.plates.songs.clear()
-            caverns.potions.songs.clear()
-            caverns.bridge.songs.clear()
+        environment = environment_for(self)
+        environment.queue_songs(audio)
         if audio is None:
             return
         if self.sequence_state.action == 167:
@@ -2625,63 +2618,8 @@ class ScenePrototype(WindowControls):
                         guard.state.sound_events.append(11)
                     audio.drain(guard.state, not self.peaceful and guard.room == self.room_id)
         motion = getattr(self, "terrain_motion", None)
-        if motion is not None and not self.level_complete and self.game.level.kind in (3, 5):
-            fighting = not self.peaceful and self.combat.opponent_to_fight()
-            contact = floor_contact_x(self.sequence_state.target_x,
-                                     self.sequence_state.facing, self.frames[self.action])
-            if self.game.level.kind == 3:
-                for guard in self.combat.guards:
-                    skeleton = guard.skeleton
-                    if (skeleton is not None and skeleton.victory_pending and not fighting
-                            and self.combat.player.alive and 0 < skeleton.timer < 116
-                            and not any(audio.sound_playing(cue) for cue in (61, 68, 69))):
-                        audio.add_song(63)
-                        skeleton.victory_pending = False
-                    if skeleton is not None and skeleton.rise_song_pending:
-                        # SkelDoneShaking 4:1b1c-1b30: AddSong(112) unless playing.
-                        if not audio.song_playing(112):
-                            audio.add_song(112)
-                        skeleton.rise_song_pending = False
-            # 5:5494-54c8: no new ambient while the first bank skeleton of an
-            # exit-guarded room is rising (88) or running (102/216).
-            from pop2.skeleton import exit_guarded
-
-            first = next(iter(self.combat.active_guards()), None)
-            chasing = (first is not None and first.skeleton is not None
-                       and exit_guarded(self.combat, first)
-                       and first.state.source_sequence_id in (88, 102, 216))
-            if not chasing:
-                # SpecialMusic 5:5398-53bc: BrgFight for fights in level five's
-                # bridge rooms 7, 10 and 12.
-                special = 119 if bridge_checked(self.game.level.number, self.room_id) else None
-                audio.ambient(self.room_id, motion.row, max(0, min(9, int(contact // 51))),
-                              fighting, self.combat.player.alive, special=special)
-        elif motion is not None and self.game.level.number == 2:
-            # DesertFunc 18:01ee checks PrinceSndOn(51) before queuing another wave.
-            # Cave cue 50 and puzzle cues 46/49 use AddSong instead.
-            if self.room_id == 0:
-                # 18:0212-0238 retains waves until desert song 50 starts.
-                if audio.song_playing(50):
-                    audio.stop_sound(51)
-                allow_song = not audio.song_playing(50)
-            else:
-                allow_song = self.game.desert.music_started
-                if not audio.sound_playing(51):
-                    audio.add_sound(51)
-                # DesertFunc 18:0334-0392 checks native room 3, X >= 0x30B,
-                # then gates cue 56 with Rnd(20) while it is not playing.
-                if (self.room_id == 2 and self.player_x >= DESERT_FAR_SHORE_SOUND_X
-                        and not audio.sound_playing(56)):
-                    if audio.rng.randrange(21) == 0:
-                        audio.add_sound(56)
-            # DesertFunc 18:023c-0278 retries only with no active stone,
-            # no playing song, a live actor outside mode 7 and inclusive Rnd(30)==0.
-            if (allow_song and audio.music_enabled and self.combat.player.alive
-                    and self.sequence_state.animation_state != 7 and not audio.music_busy
-                    and audio.rng.randrange(31) == 0
-                    and not any(stone.direction for stone in self.game.desert.stones)):
-                self.game.desert.music_started = True
-                audio.add_song(50, ambient=True)
+        if motion is not None:
+            environment.ambient_audio(audio, motion)
         audio.flush()
 
     def restart_after_death(self, *, preserve_controls=False):

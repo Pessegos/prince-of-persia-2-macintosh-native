@@ -64,6 +64,30 @@ class Environment:
         """After the exit song: level one's voyage scene."""
         self.scene.start_ending()
 
+    def queue_songs(self, audio):
+        """Songs the level mechanisms requested this frame."""
+
+    def ambient_audio(self, audio, motion):
+        """Ambient music and environment sounds, after the actors' sounds."""
+
+    def room_ambient(self, audio, motion, fighting, contact):
+        """The rooftops' and caverns' room ambient (5:5398 SpecialMusic, 5:5494)."""
+        scene = self.scene
+        # 5:5494-54c8: no new ambient while the first bank skeleton of an
+        # exit-guarded room is rising (88) or running (102/216).
+        from pop2.skeleton import exit_guarded
+
+        first = next(iter(scene.combat.active_guards()), None)
+        chasing = (first is not None and first.skeleton is not None
+                   and exit_guarded(scene.combat, first)
+                   and first.state.source_sequence_id in (88, 102, 216))
+        if not chasing:
+            # SpecialMusic 5:5398-53bc: BrgFight for fights in level five's
+            # bridge rooms 7, 10 and 12.
+            special = 119 if bridge_checked(scene.game.level.number, scene.room_id) else None
+            audio.ambient(scene.room_id, motion.row, max(0, min(9, int(contact // 51))),
+                          fighting, scene.combat.player.alive, special=special)
+
     # Drawing, in ScenePrototype.render order.
 
     def scenery_layer(self, frame, motion):
@@ -92,6 +116,15 @@ class Rooftops(Environment):
 
     def exit_scenery(self):
         self.scene.harbor.advance()
+
+    def ambient_audio(self, audio, motion):
+        scene = self.scene
+        if scene.level_complete:
+            return
+        fighting = not scene.peaceful and scene.combat.opponent_to_fight()
+        contact = floor_contact_x(scene.sequence_state.target_x,
+                                 scene.sequence_state.facing, scene.frames[scene.action])
+        self.room_ambient(audio, motion, fighting, contact)
 
     def harbor_phase(self):
         scene = self.scene
@@ -147,6 +180,34 @@ class Rooftops(Environment):
 
 class Desert(Environment):
     """Level two (environment kind 1)."""
+
+    def ambient_audio(self, audio, motion):
+        scene = self.scene
+        # DesertFunc 18:01ee checks PrinceSndOn(51) before queuing another wave.
+        # Cave cue 50 and puzzle cues 46/49 use AddSong instead.
+        if scene.room_id == 0:
+            # 18:0212-0238 retains waves until desert song 50 starts.
+            if audio.song_playing(50):
+                audio.stop_sound(51)
+            allow_song = not audio.song_playing(50)
+        else:
+            allow_song = scene.game.desert.music_started
+            if not audio.sound_playing(51):
+                audio.add_sound(51)
+            # DesertFunc 18:0334-0392 checks native room 3, X >= 0x30B,
+            # then gates cue 56 with Rnd(20) while it is not playing.
+            if (scene.room_id == 2 and scene.player_x >= DESERT_FAR_SHORE_SOUND_X
+                    and not audio.sound_playing(56)):
+                if audio.rng.randrange(21) == 0:
+                    audio.add_sound(56)
+        # DesertFunc 18:023c-0278 retries only with no active stone,
+        # no playing song, a live actor outside mode 7 and inclusive Rnd(30)==0.
+        if (allow_song and audio.music_enabled and scene.combat.player.alive
+                and scene.sequence_state.animation_state != 7 and not audio.music_busy
+                and audio.rng.randrange(31) == 0
+                and not any(stone.direction for stone in scene.game.desert.stones)):
+            scene.game.desert.music_started = True
+            audio.add_song(50, ambient=True)
 
     def after_actors(self, frame, player_bounds):
         scene = self.scene
@@ -755,11 +816,44 @@ class Caverns(Environment):
         scene = self.scene
         return scene.game.caverns.crush.display_life(scene.sequence_state, life)
 
+    def queue_songs(self, audio):
+        caverns = self.scene.game.caverns
+        for cue in (*caverns.plates.songs, *caverns.potions.songs, *caverns.bridge.songs):
+            if audio is not None and not audio.song_playing(cue):
+                audio.add_song(cue)
+        caverns.plates.songs.clear()
+        caverns.potions.songs.clear()
+        caverns.bridge.songs.clear()
+
+    def ambient_audio(self, audio, motion):
+        scene = self.scene
+        if scene.level_complete:
+            return
+        fighting = not scene.peaceful and scene.combat.opponent_to_fight()
+        contact = floor_contact_x(scene.sequence_state.target_x,
+                                 scene.sequence_state.facing, scene.frames[scene.action])
+        for guard in scene.combat.guards:
+            skeleton = guard.skeleton
+            if (skeleton is not None and skeleton.victory_pending and not fighting
+                    and scene.combat.player.alive and 0 < skeleton.timer < 116
+                    and not any(audio.sound_playing(cue) for cue in (61, 68, 69))):
+                audio.add_song(63)
+                skeleton.victory_pending = False
+            if skeleton is not None and skeleton.rise_song_pending:
+                # SkelDoneShaking 4:1b1c-1b30: AddSong(112) unless playing.
+                if not audio.song_playing(112):
+                    audio.add_song(112)
+                skeleton.rise_song_pending = False
+        self.room_ambient(audio, motion, fighting, contact)
+
 
 class Ruins(Caverns):
     """Levels six and seven (kind 4)."""
 
     end_song = 124
+
+    def ambient_audio(self, audio, motion):
+        """The ruins have no room ambient yet."""
 
     def finish_exit(self):
         scene = self.scene
