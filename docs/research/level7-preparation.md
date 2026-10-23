@@ -1,9 +1,14 @@
 # Level Seven Preparation
 
-This is an independent research track, not an enabled campaign level. The
-baseline is `5dfc13a`; levels 1-6 and shared runtime integration belong to the
-parallel campaign track. No gameplay, importer, save or README changes are
-part of this preparation.
+This is an independent research track, not a runtime implementation. The
+baseline is `5dfc13a`; campaign and shared runtime integration belonged to the
+parallel track. No gameplay, importer, save or README changes are part of
+this preparation.
+
+Integration note (2026-10-23): the campaign track now opens levels 6-7 with
+partial ruins mechanics, still without heads or serpents. See
+[campaign integration](level6-ruins-plan.md). Merging these research probes
+does not implement the recovered actor rules in the runtime.
 
 ## Reproducible Resource Inventory
 
