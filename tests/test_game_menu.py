@@ -14,6 +14,8 @@ from pop2.game_menu import GameMenu
 from pop2.game_ui import PLAYFIELD_VIEWPORT, fit_viewport, viewport_point
 from pop2.screenshots import ScreenshotSettings
 
+from tests.desktop import exclusive_desktop
+
 
 class GameMenuModelTests(unittest.TestCase):
     def test_shortcuts_exclude_quit_and_alt_f_but_keep_alt_enter(self):
@@ -941,6 +943,7 @@ class GameMenuSceneTests(unittest.TestCase):
         self.assertIn((153, 153, 153, 255),
                       {color for _count, color in footer.getcolors(footer.width * footer.height)})
 
+    @exclusive_desktop('a mapped, focused menu receiving key events')
     def test_real_tk_bindings_route_alt_n_escape_f1_and_alt_enter(self):
         result = subprocess.run([sys.executable, "-c", textwrap.dedent("""
             from unittest.mock import patch
