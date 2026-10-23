@@ -425,6 +425,24 @@ class BridgeGuardAiTests(unittest.TestCase):
         self.assertFalse(skeleton.skeleton.bridge_guard(self.combat, skeleton))
         self.assertEqual((skeleton.state.facing, skeleton.state.target_x), (1, 210))
 
+    def test_a_pressing_skeleton_does_not_turn_to_a_prince_behind_it(self):
+        # SwordCtrl 6:22b4-22e4: in the bridge rooms (row not 0) an engaging
+        # skeleton (8:02ae) keeps its inputs; otherwise DoTurn selects SEQS 60.
+        combat, skeleton = self.combat, self.skeleton
+        player = combat.player
+        player.state.target_x = player.state.current_x = 60
+        skeleton.sword_drawn, skeleton.alert_mode = True, 3
+        selected = []
+        for x, facing in ((470, 1), (200, 1)):
+            self.place(x, facing)
+            skeleton.state.action, skeleton.state.animation_state = 158, 0
+            skeleton.selected_sequence = None
+            self.assertEqual(combat._bridge_engage(skeleton), x == 470)
+            combat.choose_guard_action(skeleton)
+            selected.append(skeleton.selected_sequence)
+        self.assertNotEqual(selected[0], 60)
+        self.assertEqual(selected[1], 60)
+
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
 class BridgeSwordLossTests(unittest.TestCase):

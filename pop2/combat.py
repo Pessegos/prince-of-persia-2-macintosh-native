@@ -913,7 +913,10 @@ class CombatEncounter:
             return
         if guard.alert_mode != 3:
             return
-        if opponent_distance(guard, player) < -15:
+        # SwordCtrl 6:22b4-22e4: a pressing bridge skeleton keeps its EnGarde
+        # inputs instead of turning to a Prince behind it.
+        if (opponent_distance(guard, player) < -15
+                and not (self._bridge_fight_room(guard) and self._bridge_engage(guard))):
             # SwordCtrl 6:2206/22e6/26a8 permits ordinary-NPC turns in
             # modes 0/1, not just pose 171. SEQS:60 performs the facing flip.
             if state.animation_state < 2:
