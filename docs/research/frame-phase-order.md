@@ -158,3 +158,45 @@ read DrawCaveLoose `8:24dc`/the ruins' loose drawer `7:2bd6` and the floor
 drawers' neighbour reads to fix that dependency set from the code, then
 validate a composed model against every existing variant before replacing
 the export.
+
+## Stage 3 Result: Per-Slot Dynamic Scenery (2026-10-23)
+
+The export harness (`recover_room`) already called the original piece
+drawers once per (row, column, pass) and then applied DumpTable's stable
+layer order. Each command now carries its slot, and a memory-read hook
+(`CavernRecovery(track_reads=True)`) records which level cells (LEVL kinds
+and foregrounds, and the a5 current/previous/below-row caches) each slot's
+drawers read. A dynamic unit (a loose floor, a crevice run, a scythe, a
+bridge plank, the entrance door) can only change the slots that read it, so
+`tools/extract_slots.py` renders the product of states only over the units
+one slot reads and stores, per slot, its fragment for each such
+combination. `pop2/slot_drawing.py` composes any combination at run time
+(about 0.2 ms) and the rest of `cavern_room` is unchanged. Loose-floor data
+is schema 2 in export version 16; version-15 imports keep working.
+
+Oracle check (`python -m tools.check_slot_scenery --source ...`): every
+whole-room variant of the previous export, with its floor and climbing
+redraws and entrance frames, renders identically from the slots:
+
+| Level | Variants | Checks | Slot export | Whole-room export | Slot data | Whole-room data |
+| --- | --- | --- | --- | --- | --- | --- |
+| 3 | 354 | 1,097 | 8.2 s | 12.0 s | 0.37 MB | 5.3 MB |
+| 4 | 43 | 129 | 1.2 s | 1.2 s | 0.10 MB | 0.5 MB |
+| 5 | 1,656 | 4,968 | 6.6 s | 55.8 s | 0.23 MB | 24.8 MB |
+| 6 | 9,753 | 29,259 | 69.6 s | 287.8 s | 0.45 MB | 24.3 MB |
+| 7 | 597 | 1,791 | 11.9 s | 18.1 s | 0.26 MB | 0.8 MB |
+
+Single-change detection alone missed slots that change only when two cells
+change together (20 floor-redraw cases in level 3, 96 in level 7); the read
+sets fix that. Scythes (60 states) and bridge planks (rest, wobble up and
+down, fallen) are now slot units too: 120 random scythe states, half of
+them combined with loose floors in the same room, and 60 random plank
+combinations match native renders, as the previous scythe patches and plank
+rules did for single cases. Whole cavern exports: level 3 10.8 s/0.84 MB,
+4 3.1 s/0.49 MB, 5 11.8 s/0.58 MB, 6 83.6 s/0.89 MB, 7 25.3 s/0.97 MB
+(previously 5.8, 0.9, 25.1, 24.6 and 1.3 MB). The previous scythe patches
+are still exported (the import check expects them) but no longer drawn when
+the slots cover the room. Room renders stay cached per state as before.
+
+Not yet slot units: pressure plates, gates, exits, the room-3 bars, darts and
+torches (still `pressure_drawing_commands` and the torch/lava layers).
