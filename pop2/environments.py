@@ -9,7 +9,6 @@ frame phases (pop2.frame_phases); the classes hold no state of their own.
 import time
 
 from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, on_bridge
-from pop2.combat import guard_frame_index
 from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.crevices import CREVICE_TILE
 from pop2.loose_floors import floor_hits_actor
@@ -18,6 +17,14 @@ from pop2.render_opening import TILE_HEIGHT
 from pop2.terrain import floor_contact_x, floor_y
 
 DESERT_FAR_SHORE_SOUND_X = 0x30B
+
+
+def guard_frame_index(action):
+    # pop2.combat reads the imported enemy profiles; import it when used so
+    # that this module stays importable without the game files.
+    from pop2.combat import guard_frame_index as index
+
+    return index(action)
 
 
 class Environment:
