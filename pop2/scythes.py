@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from pop2.coordinates import column_left
 from pop2.opponent_generation import character_column
 from pop2.terrain import floor_y
 
@@ -47,8 +48,8 @@ class Scythes:
             return False
         column = character_column(state.target_x)
         tile = terrain.tile(motion.room, column, motion.row)
-        # Native X (port X + 207) beyond the column's left edge (207 + 51 * column) + 28.
-        if tile.room is None or tile.kind not in SCYTHE_TILES or state.target_x <= column * 51 + 28:
+        # Native X beyond the column table's left edge (a5-0x4b88) + 28.
+        if tile.room is None or tile.kind not in SCYTHE_TILES or state.target_x <= column_left(column) + 28:
             return False
         key, _partner = self.halves(terrain, tile)
         if terrain.tile(key[0], key[1] % 10, key[1] // 10).foreground & 0x1f:

@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 import struct
 
+from pop2.coordinates import port_room
 from pop2.opponent_generation import character_column
 
 
@@ -35,7 +36,7 @@ class Checkpoint:
 
 def level_checkpoints(level):
     records = struct.unpack_from(">4h", level, 0x39a6)
-    return tuple(Checkpoint(slot + 1, room - 1, tile)
+    return tuple(Checkpoint(slot + 1, port_room(room), tile)
                  for slot, (room, tile) in enumerate(zip(records[::2], records[1::2]))
                  if 1 <= room <= 32 and 0 <= tile < 30)
 

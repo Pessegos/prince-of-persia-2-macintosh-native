@@ -78,6 +78,7 @@ from pop2.render_opening import (
     load_resource_file,
 )
 from pop2.opponent_generation import character_column
+from pop2.coordinates import column_left
 from pop2.terrain import PRONE_FRAMES, TerrainMotion, floor_y, floor_contact_x
 from pop2.crevices import (
     CRAWL_BACK_SEQUENCE,
@@ -1509,10 +1510,10 @@ class ScenePrototype(WindowControls):
         if not (tile.kind in (12, 13) or tile.kind == CREVICE_TILE and tile.foreground & 3 != 3):
             return False
         state = self.sequence_state
-        # 6:0a92-0b24: native X (port X + 207) against the column table
-        # a5-0x4b88 (207 + 51 * column): at most 10 into that column facing
-        # right, at least 34 past its right edge facing left.
-        offset = state.target_x - TILE_WIDTH * (column + (0 if state.facing else 1))
+        # 6:0a92-0b24: actor X against the column table a5-0x4b88: at most
+        # 10 into that column facing right, at least 34 past its right edge
+        # facing left.
+        offset = state.target_x - column_left(column + (0 if state.facing else 1))
         if state.facing and offset > 10:
             state.target_x += 10 - offset
         elif not state.facing and offset < 34:
@@ -1546,8 +1547,8 @@ class ScenePrototype(WindowControls):
             # 6:08a4-0942: Up stands only clear of a crevice behind him.
             column = character_column(state.target_x)
             if behind.kind == CREVICE_TILE:
-                clearance = (state.target_x - TILE_WIDTH * column - 58 if state.facing else
-                             -14 - (state.target_x - TILE_WIDTH * (column + 1)))
+                clearance = (state.target_x - column_left(column) - 58 if state.facing else
+                             -14 - (state.target_x - column_left(column + 1)))
             elif behind.kind in (12, 13):
                 # S05_5F1A: under an extended scythe (blade phase 3-15).
                 clearance = -51 if 3 <= behind.foreground & 0x1f <= 15 else 51

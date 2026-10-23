@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 import struct
 
+from pop2.coordinates import port_room, scene_x
 from pop2.rebirth import level_checkpoints
 from pop2.terrain import LevelMap, TILE_WIDTH
 
@@ -48,7 +49,7 @@ class LevelDefinition:
         if any(link > 32 for link in struct.unpack_from(">128H", data, 0x2080)):
             raise ValueError("Invalid LEVL room link")
         # SetKidDefaults 2:5d46 complements LEVL's facing word before storing it.
-        return cls(number, bytes(data), kind, room - 1, tile, int(facing != 0),
+        return cls(number, bytes(data), kind, port_room(room), tile, int(facing != 0),
                    opponent_type, level_checkpoints(data))
 
     @property
@@ -79,7 +80,7 @@ class LevelDefinition:
     @property
     def start_x(self):
         if self.cliff_start:
-            return 374 - 207
+            return scene_x(374)
         return self.start_tile % 10 * TILE_WIDTH + 22
 
     @property

@@ -8,6 +8,7 @@ from pop2.enemy_profiles import (
     ADVANCE_CHANCE, BLOCK_CHANCE, PARRY_BLOCK_CHANCE, COUNTER_CHANCE,
     STRIKE_CHANCE, HIT_PAUSE, QuickDrawRandom,
 )
+from pop2.coordinates import native_room, scene_x
 from pop2.bridge import bridge_checked, bridge_column, bridge_gate_open, bridge_tension
 from pop2.enemy_alerts import alert_path_mode
 from pop2.opponent_records import GuardRoomRecord, removed_on_room_save
@@ -110,7 +111,7 @@ class GuardSpawn:
         opponent_type = struct.unpack_from(">h", level, 0x21A4)[0]
         if opponent_type == -1:
             return []
-        offset = 0x20E6 + (room + 1) * 0xC0
+        offset = 0x20E6 + native_room(room) * 0xC0
         count = struct.unpack_from(">H", level, offset)[0]
         if opponent_type not in (0, 2):
             if count == 0:
@@ -124,7 +125,7 @@ class GuardSpawn:
             skill = fields[3]
             if not 0 <= skill < len(ADVANCE_CHANCE):
                 raise ValueError(f"Unsupported guard skill {skill}")
-            spawns.append(cls(room, fields[0] // 10, fields[1] - 207,
+            spawns.append(cls(room, fields[0] // 10, scene_x(fields[1]),
                               int(fields[2] == 0), skill, fields[4], fields[13] or 3,
                               fields[6] or 1, fields[10], fields[16],
                               4 if opponent_type == 2 else 2,

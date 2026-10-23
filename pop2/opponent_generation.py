@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 import struct
 
+from pop2.coordinates import native_room, scene_x
+
 # CODE:3 IsWall / IsObstacle / IsEmpty; ordinary rooftop actors only.
 WALL_TILES = frozenset((20, 2, 7, 25, 43))
 OBSTACLE_TILES = frozenset((11, 15, 26, 12, 13, 24))
@@ -111,7 +113,7 @@ class OpponentGenerationPoint:
 
     @classmethod
     def from_level(cls, level, room):
-        start = 0x3986 + (room + 1) * 0x44
+        start = 0x3986 + native_room(room) * 0x44
         count, skill = struct.unpack_from(">2h", level, start)
         if not 0 <= count <= 3 or not 0 <= skill < 12:
             raise ValueError("Invalid ordinary-opponent generation header")
@@ -129,7 +131,7 @@ class OpponentGenerationPoint:
     def x(self):
         from pop2.enemy_profiles import ENEMY_DATA
 
-        return ENEMY_DATA["generation_native_x"][self.column] - 207
+        return scene_x(ENEMY_DATA["generation_native_x"][self.column])
 
     @property
     def facing(self):
