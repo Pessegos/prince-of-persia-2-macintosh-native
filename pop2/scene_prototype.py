@@ -2507,6 +2507,8 @@ class ScenePrototype(WindowControls):
                 if event.kind != "wall":
                     self.jump_started_for_press = False
             if event.kind == "death":
+                if self.game.caverns is not None and self.sequence_state.source_sequence_id == 118:
+                    self.game.caverns.crush.begin(self.combat.player.life)
                 self.combat.player.life = 0
                 self.death.begin(event.death_method if event.death_method is not None
                                  else 3 if not motion.falling else 0)
@@ -4253,7 +4255,11 @@ class ScenePrototype(WindowControls):
         viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
         viewport.paste(frame, (ROOM_ORIGIN_X, 0))
         if combat is not None and not self.death.prompt_visible:
-            self.health_art.draw(viewport, combat, show_opponent=not hide_guards)
+            player_life = combat.player.life
+            if self.game.caverns is not None:
+                player_life = self.game.caverns.crush.display_life(self.sequence_state, player_life)
+            self.health_art.draw(viewport, combat, show_opponent=not hide_guards,
+                                 player_life=player_life)
         self.screenshot_viewport = viewport.copy()
         if self.death.prompt_visible:
             text = self.restart_text

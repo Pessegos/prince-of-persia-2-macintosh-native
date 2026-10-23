@@ -448,8 +448,8 @@ translation of the DOS actor or controller. No original artwork, sequence
 resources or collision records are changed.
 
 The native controller still finishes at phase 48 (56 for fast closures),
-with unchanged damage, audio arbitration and retry rules. Only the scenery
-signature and displayed corpse use the presentation state. The overlapping
+with unchanged damage, audio arbitration and retry rules. The scenery
+signature, displayed corpse and health meter use the presentation state. The overlapping
 gate stays in front of the full-size body in both facings even when its foot
 anchor has moved beyond the ordinary column admission. Repainting cannot
 advance the animation. Dedicated presentation callbacks schedule the visual
@@ -458,6 +458,17 @@ normal gameplay updates continue animating the torch. Pause freezes the
 presentation clock, F3/restart clears it, and reopening the gate releases
 only its drawing override, retaining the original-size death pose. The time
 available to escape is still decided by the native controller.
+
+The health meter now follows that same impact milestone. Fatal gate contact
+captures the Prince's previous life for presentation; the bottles keep that
+value until the640ms slam and become empty on the same presentation update as
+gate phase12/pose265. Native life still reaches zero at the original fatal
+contact, so input, enemies and death/retry rules keep their existing behavior.
+The first-kneel delay plus the640ms presentation interval accounts for the
+roughly43 frames at60fps measured from fatal contact; no separate43-frame
+timer is added. Rendering is read-only, pause freezes the shared clock, and
+F3/restart clears the captured value. Older snapshots omit this optional field
+and retain their original health display. Audio timing and sample data are unchanged.
 
 Tests cover elapsed-time boundaries, the first-kneel start, full sprite
 heights, pixel overlap/foreground in both facings, the stable resting pose,

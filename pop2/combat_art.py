@@ -132,11 +132,12 @@ class HealthArtwork:
             for index in range(297, 301)
         }
 
-    def draw(self, viewport, encounter, show_opponent=True):
+    def draw(self, viewport, encounter, show_opponent=True, *, player_life=None):
+        life = encounter.player.life if player_life is None else player_life
         for index in range(encounter.player.max_life):
-            full = index < encounter.player.life
+            full = index < life
             # CODE:2 5442-546c redraws only the final life, on the world clock.
-            if index == 0 and encounter.player.life == 1:
+            if index == 0 and life == 1:
                 full = bool(encounter.world_frame & 1)
             icon = self.icons[300 if full else 299]
             # DrawKidMeter coordinates belong to the visible 510-pixel game,

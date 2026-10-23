@@ -5,9 +5,10 @@ from dataclasses import dataclass, replace
 
 # Milliseconds from the first native kneeling pose. These are drawing times;
 # the original controller still decides when escape ends and death occurs.
-GATE_TRACK = ((0, 88), (300, 84), (460, 80), (640, 12), (720, 32), (800, 28))
+SLAM_AT_MS = 640
+GATE_TRACK = ((0, 88), (300, 84), (460, 80), (SLAM_AT_MS, 12), (720, 32), (800, 28))
 # Time, pose, original height, forward displacement and floor offset.
-CRUSH_POSES = ((0, 264, 35, 0, 0), (640, 265, 22, 4, -2), (840, 266, 17, 6, -1))
+CRUSH_POSES = ((0, 264, 35, 0, 0), (SLAM_AT_MS, 265, 22, 4, -2), (840, 266, 17, 6, -1))
 VISUAL_TIMES = tuple(sorted({time for time, _phase in GATE_TRACK}
                             | {pose[0] for pose in CRUSH_POSES}))
 
@@ -21,12 +22,24 @@ class GateCrush:
     x: int = 0
     y: int = 0
     gate_released: bool = False
+    life_before_crush: int | None = None
 
     def reset(self):
         self.key = None
         self.elapsed_ms = 0
         self.last_updated_at = None
         self.gate_released = False
+        self.life_before_crush = None
+
+    def begin(self, life):
+        self.reset()
+        self.life_before_crush = life if life > 0 else None
+
+    def display_life(self, state, life):
+        if (life == 0 and state.source_sequence_id == 118
+                and self.life_before_crush is not None and self.elapsed_ms < SLAM_AT_MS):
+            return self.life_before_crush
+        return life
 
     def advance(self, terrain, motion, state, record, plates, now=None):
         if motion is None or state.source_sequence_id != 118:

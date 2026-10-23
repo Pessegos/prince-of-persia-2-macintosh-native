@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from pop2.cavern_state import CavernState
 from pop2.caverns import cavern_pressure_signature
+from pop2.gate_crush import SLAM_AT_MS
 from pop2.sequence_runtime import SequenceState
 from pop2.terrain import LevelMap, TerrainMotion
 
@@ -132,6 +133,98 @@ class GateCrushTests(unittest.TestCase):
         self.advance()
         self.assertIsNone(self.crush.key)
         self.assertEqual(self.crush.actor(self.state)[1], None)
+
+    def test_health_stays_visible_from_fatal_contact_until_exact_visual_slam(self):
+        for life in (1, 3, 6):
+            with self.subTest(life=life):
+                self.now = 10
+                self.state.action = 109
+                self.crush.begin(life)
+                self.advance()
+                self.assertIsNone(self.crush.key)
+                self.assertEqual(self.crush.display_life(self.state, 0), life)
+                self.state.action = 264
+                self.advance()
+                self.sample(SLAM_AT_MS - .001)
+                before = vars(self.crush).copy()
+                self.assertEqual(self.crush.display_life(self.state, 0), life)
+                self.assertEqual(vars(self.crush), before)
+                self.assertEqual(self.crush.gate_phase((0, 15)), 80)
+                self.sample(SLAM_AT_MS)
+                self.assertEqual(self.crush.display_life(self.state, 0), 0)
+                self.assertEqual(self.crush.gate_phase((0, 15)), 12)
+                self.assertEqual(self.crush.actor(self.state)[0].action, 265)
+
+    def test_saved_health_never_overrides_living_actors_or_other_deaths(self):
+        self.crush.begin(6)
+        self.assertEqual(self.crush.display_life(self.state, 2), 2)
+        self.state.select(22)
+        self.assertEqual(self.crush.display_life(self.state, 0), 0)
+        self.advance()
+        self.assertIsNone(self.crush.life_before_crush)
+        self.state.select(118)
+        self.assertEqual(self.crush.display_life(self.state, 0), 0)
+
+    def test_new_capture_reset_and_dead_actor_do_not_reuse_previous_health(self):
+        self.crush.begin(6)
+        self.crush.begin(2)
+        self.assertEqual(self.crush.display_life(self.state, 0), 2)
+        self.crush.reset()
+        self.assertEqual(self.crush.display_life(self.state, 0), 0)
+        self.crush.begin(0)
+        self.assertIsNone(self.crush.life_before_crush)
+
+    def test_saved_presentation_health_roundtrips_and_older_saves_use_no_override(self):
+        from pop2.save_game import _pack, _unpack
+
+        self.crush.begin(3)
+        self.advance()
+        self.sample(500)
+        packed = _pack(self.crush)
+        restored = _unpack(packed, None, None)
+        self.assertEqual(restored.display_life(self.state, 0), 3)
+        self.assertEqual(restored.elapsed_ms, 500)
+        self.assertIsNone(restored.last_updated_at)
+        packed['fields'].pop('life_before_crush')
+        legacy = _unpack(packed, None, None)
+        self.assertIsNone(legacy.life_before_crush)
+        self.assertEqual(legacy.display_life(self.state, 0), 0)
+
+
+class CrushHealthArtworkTests(unittest.TestCase):
+    def test_display_override_draws_bottles_without_modifying_player_health(self):
+        from PIL import Image
+        from pop2.combat_art import HealthArtwork
+
+        art = HealthArtwork.__new__(HealthArtwork)
+        art.icons = {300: Image.new('RGBA', (3, 3), 'red'),
+                     299: Image.new('RGBA', (3, 3), 'gray')}
+        player = SimpleNamespace(life=0, max_life=3)
+        combat = SimpleNamespace(player=player, world_frame=1)
+        viewport = Image.new('RGBA', (512, 384), 'black')
+        art.draw(viewport, combat, show_opponent=False, player_life=3)
+        self.assertEqual(viewport.getpixel((4, 368)), (255, 0, 0, 255))
+        self.assertEqual(viewport.getpixel((28, 368)), (255, 0, 0, 255))
+        self.assertEqual(player.life, 0)
+        art.draw(viewport, combat, show_opponent=False, player_life=0)
+        self.assertEqual(viewport.getpixel((4, 368)), (128, 128, 128, 255))
+
+    def test_last_displayed_life_keeps_the_existing_world_clock_blink(self):
+        from PIL import Image
+        from pop2.combat_art import HealthArtwork
+
+        art = HealthArtwork.__new__(HealthArtwork)
+        art.icons = {300: Image.new('RGBA', (3, 3), 'red'),
+                     299: Image.new('RGBA', (3, 3), 'gray')}
+        combat = SimpleNamespace(player=SimpleNamespace(life=0, max_life=3), world_frame=0)
+        viewport = Image.new('RGBA', (512, 384), 'black')
+        art.draw(viewport, combat, show_opponent=False, player_life=1)
+        self.assertEqual(viewport.getpixel((4, 368)), (128, 128, 128, 255))
+        combat.world_frame = 1
+        art.draw(viewport, combat, show_opponent=False, player_life=1)
+        self.assertEqual(viewport.getpixel((4, 368)), (255, 0, 0, 255))
+        art.draw(viewport, combat, show_opponent=False)
+        self.assertEqual(viewport.getpixel((4, 368)), (128, 128, 128, 255))
 
 
 if __name__ == '__main__':
