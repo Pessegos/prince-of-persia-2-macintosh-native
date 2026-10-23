@@ -78,7 +78,15 @@ from pop2.render_opening import (
     load_resource_file,
 )
 from pop2.opponent_generation import character_column
-from pop2.terrain import TerrainMotion, floor_y, floor_contact_x
+from pop2.terrain import PRONE_FRAMES, TerrainMotion, floor_y, floor_contact_x
+from pop2.crevices import (
+    CRAWL_BACK_SEQUENCE,
+    CRAWL_FORWARD_SEQUENCE,
+    CREVICE_TILE,
+    LIE_DOWN_SEQUENCE,
+    PRONE_IDLE_FRAME,
+    STAND_FROM_PRONE_SEQUENCE,
+)
 from pop2.game_ui import MacintoshFont
 from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS
 
@@ -1474,7 +1482,85 @@ class ScenePrototype(WindowControls):
             self.advance_animation_now()
         self.start_queue_grace(BufferedCommand("crouch"))
 
+    def crawl_cell(self, offset):
+        """GetCellsInFront 4:39fc (offset > 0) or the cell behind (4:3a48).
+
+        Returns the room-relative column and its tile, from the character
+        column of X (a5-0x504a), not the supporting foot.
+        """
+        state, motion = self.sequence_state, self.terrain_motion
+        column = character_column(state.target_x) + offset * (1 if state.facing else -1)
+        return column, self.level_map.tile(motion.room, column, motion.row)
+
+    def start_crawl(self):
+        # GenCtrl 6:0a4e-0b28: with Down still held, forward into a crevice
+        # (tile 7 whose low bits are not 3) or a scythe (12/13) lies down.
+        if not self.down_held or getattr(self, 'terrain_motion', None) is None:
+            return False
+        column, tile = self.crawl_cell(1)
+        if not (tile.kind in (12, 13) or tile.kind == CREVICE_TILE and tile.foreground & 3 != 3):
+            return False
+        state = self.sequence_state
+        # 6:0a92-0b24: native X (port X + 207) against the column table
+        # a5-0x4b88 (207 + 51 * column): at most 10 into that column facing
+        # right, at least 34 past its right edge facing left.
+        offset = state.target_x - TILE_WIDTH * (column + (0 if state.facing else 1))
+        if state.facing and offset > 10:
+            state.target_x += 10 - offset
+        elif not state.facing and offset < 34:
+            state.target_x += 34 - offset
+        state.current_x = self.player_x = state.target_x
+        self.start_sequence(LIE_DOWN_SEQUENCE)
+        self.status.set("Lying down to crawl: original SEQS:125")
+        if not self.in_animation_tick:
+            self.advance_animation_now()
+        return True
+
+    def update_crawl(self):
+        """GenCtrl 6:07ee-0994 while prone (poses 246-261)."""
+        state, motion = self.sequence_state, self.terrain_motion
+        if (motion is None or motion.falling or motion.dead
+                or not PRONE_FRAMES[0] <= state.action <= PRONE_FRAMES[1]):
+            return False
+        self.pending_action = None
+        _column, own = self.crawl_cell(0)
+        _column, behind = self.crawl_cell(-1)
+        low = (CREVICE_TILE, 12, 13)
+        if not (own.kind in low or self.crawl_cell(1)[1].kind in low or behind.kind in low):
+            # 6:0884-0896: out of the low passage he stands up (SEQS 124).
+            if state.selected_sequence_id != STAND_FROM_PRONE_SEQUENCE:
+                self.start_sequence(STAND_FROM_PRONE_SEQUENCE)
+            return True
+        if state.action != PRONE_IDLE_FRAME:
+            return True
+        direction = 1 if state.facing else -1
+        if self.up_held and own.kind != CREVICE_TILE:
+            # 6:08a4-0942: Up stands only clear of a crevice behind him.
+            column = character_column(state.target_x)
+            if behind.kind == CREVICE_TILE:
+                clearance = (state.target_x - TILE_WIDTH * column - 58 if state.facing else
+                             -14 - (state.target_x - TILE_WIDTH * (column + 1)))
+            elif behind.kind in (12, 13):
+                # S05_5F1A: under an extended scythe (blade phase 3-15).
+                clearance = -51 if 3 <= behind.foreground & 0x1f <= 15 else 51
+            else:
+                clearance = 51
+            if clearance >= 0:
+                self.start_sequence(STAND_FROM_PRONE_SEQUENCE)
+                if clearance < 9:
+                    state.target_x += (9 - clearance) * direction
+                    state.current_x = self.player_x = state.target_x
+                return True
+        held = self.horizontal_input
+        if held and facing_for_direction(held) == state.facing:
+            self.start_sequence(CRAWL_FORWARD_SEQUENCE)  # 6:094e-0962
+        elif held:
+            self.start_sequence(CRAWL_BACK_SEQUENCE)  # 6:0966-097a
+        return True
+
     def start_crouch_step(self, direction):
+        if self.start_crawl():
+            return
         self.start_sequence(CROUCH_STEP_SEQUENCE)
         self.status.set("Crouch step: original SEQS:79")
         if not self.in_animation_tick:
@@ -1932,6 +2018,7 @@ class ScenePrototype(WindowControls):
         old_bounds = self.player_collision_bounds() if motion is not None else None
         self.update_carpet_controls()
         self.update_crevices()
+        self.update_crawl()
         if self.update_potion_controls():
             frame = self.sequence_runtime.next_frame()
             self.action, self.player_x = frame.action, frame.target_x
@@ -2140,7 +2227,7 @@ class ScenePrototype(WindowControls):
                 or not (state.action == 109 or 246 <= state.action <= 261)
                 or not self.combat.player.alive):
             return
-        from pop2.crevices import CREVICE_TILE, front_crevice_group
+        from pop2.crevices import front_crevice_group
 
         column = character_column(floor_contact_x(state.target_x, state.facing, self.frames[state.action]))
         for room, cell in front_crevice_group(self.level_map, motion.room, column, motion.row,

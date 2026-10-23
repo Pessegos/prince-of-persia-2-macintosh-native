@@ -3,6 +3,12 @@
 import struct
 
 CREVICE_TILE = 7
+# Crawling (GenCtrl 6:07ee-0994, 6:0a4e-0b28): lie down, prone idle pose,
+# crawl forward/back and stand up.
+LIE_DOWN_SEQUENCE = 125
+PRONE_IDLE_FRAME = 251
+CRAWL_FORWARD_SEQUENCE, CRAWL_BACK_SEQUENCE = 122, 123
+STAND_FROM_PRONE_SEQUENCE = 124
 
 
 def hide_crevices(level):

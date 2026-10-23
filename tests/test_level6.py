@@ -90,6 +90,44 @@ class LevelSixSceneryTests(unittest.TestCase):
                           if kind == 7 and value & 0x80}, {(16, 18), (16, 19), (17, 10)})
         self.assertEqual(cavern_scene_signature(program, 16, caverns), '111')
 
+    def test_down_and_forward_at_a_crevice_lies_down_and_crawls_through_it(self):
+        # GenCtrl 6:0a4e-0b28 lies down (SEQS 125); prone, CheckCollide
+        # 4:5ade lets the body (at most 34 pixels high) through open crevices
+        # and 6:07ee-0994 crawls (122) and stands (124) once clear of them.
+        from types import SimpleNamespace
+
+        scene = self.scene
+        state = scene.sequence_state
+        scene.jump_to_room(16, 1, 399, 1)
+        scene.set_key_state('down', True)
+        self.tick(10)
+        event = SimpleNamespace(keysym='Right', state=0)
+        scene.horizontal_key(event, 1, True)
+        seen = []
+        for _ in range(70):
+            self.tick()
+            seen.append((scene.room_id, state.selected_sequence_id))
+            if state.selected_sequence_id == 124:
+                break
+        scene.horizontal_key(event, 1, False)
+        scene.set_key_state('down', False)
+        self.assertEqual(seen[0], (16, 125))
+        self.assertIn((16, 122), seen)
+        self.assertIn((17, 122), seen)
+        self.assertEqual(seen[-1], (17, 124))
+        self.assertEqual(scene.terrain_motion.row, 1)
+        self.assertFalse(scene.terrain_motion.falling)
+
+    def test_a_standing_prince_is_still_stopped_by_a_crevice(self):
+        level_map = self.scene.level_map
+        tile = level_map.tile(16, 8, 1)
+        self.assertEqual((tile.kind, tile.foreground & 3 != 3), (7, True))
+        x = 8 * 51 + 22 + 3 - 20
+        standing = level_map.wall_correction(16, x - 10, x, (x - 20, 150, x + 20, 230), physical_row=1)
+        self.assertLess(standing, x)
+        prone = level_map.wall_correction(16, x - 10, x, (x - 20, 200, x + 20, 230), physical_row=1)
+        self.assertEqual(prone, x)
+
     def test_entering_rooms_beside_heads_does_not_raise(self):
         # Room 6 neighbours rooms whose opponent set 5 is not generated yet;
         # choosing the visible opponent bank raised and froze the game.

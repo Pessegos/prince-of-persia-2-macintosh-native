@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import struct
 
 from pop2.bridge import BRIDGE_LEVEL, BRIDGE_ROOM, bridge_tension
+from pop2.crevices import CREVICE_TILE
 from pop2.opponent_generation import character_column, EMPTY_TILES, WALL_TILES
 from pop2.mac_input import StepBoundary
 from pop2.harbor import SHIP_CLIMB_SEQUENCE, SHIP_ROOM, WATER_ROOMS
@@ -17,6 +18,8 @@ FLOOR_OFFSET = 106
 GRAVITY = 6
 MAX_FALL_SPEED = 63
 VOID_DEATH_Y = 730
+# Prone poses: lying down (SEQS 125), idle (251) and crawling (SEQS 122/123).
+PRONE_FRAMES = (246, 261)
 DOWN_CUT_Y = 440
 
 
@@ -573,7 +576,9 @@ class LevelMap:
         column = character_column(contact)
         tile = self.tile(room, column, row)
         if (tile.room is None or tile.kind not in WALL_TILES
-                or state.sequence_mode == 4 or state.actor_type == 11):
+                or state.sequence_mode == 4 or state.actor_type == 11
+                or tile.kind == CREVICE_TILE and PRONE_FRAMES[0] <= state.action <= PRONE_FRAMES[1]):
+            # 4:35e6-35fa and 4:5830-5842: a prone body may lie in a crevice.
             return tile
         direction = 1 if state.facing else -1
         distance = floor_edge_distance(contact, state.facing)
@@ -606,6 +611,11 @@ class LevelMap:
                               and (state is None or state.actor_type != 11)
                               and stone_gate_blocks(tile.foreground, bounds, state))
                 if tile.kind not in WALL_TILES and not desert_exit and not stone_gate:
+                    continue
+                if (tile.kind == CREVICE_TILE and bottom - top + 1 <= 34 and tile.foreground & 3 != 3
+                        and (state is None or state.actor_type not in (7, 8))):
+                    # CheckCollide 4:5ade-5b0a: a body at most 34 pixels high
+                    # passes an open crevice; only the heads still collide.
                     continue
                 # GetLeftBarr/GetRightBarr, code 4, DATA c9e0/c9f2[barrier].
                 barrier = (5 if stone_gate else 1 if desert_exit else
