@@ -125,12 +125,18 @@ class CavernRecovery:
 
 
 def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=None,
-                 floor_redraw=False, *, _machine=None, _native_scene=False, reads=None):
-    """`reads`, when given, collects {slot: {(room, cell)}} the drawers read."""
+                 floor_redraw=False, *, _machine=None, _native_scene=False, reads=None, only=None):
+    """`reads`, when given, collects {slot: {(room, cell)}} the drawers read.
+
+    `only`, a set of (row, column, pass) slots, runs just those slots' drawers
+    (the other slots' commands are absent). Every slot's drawers start from
+    the same per-cell inputs, so a slot's own commands do not change.
+    """
     if _machine is None:
         with CavernRecovery(program, caverns, prince, track_reads=reads is not None) as machine:
             return recover_room(program, caverns, level, room_id, prince, climb_action,
-                                floor_redraw, _machine=machine, _native_scene=_native_scene, reads=reads)
+                                floor_redraw, _machine=machine, _native_scene=_native_scene, reads=reads,
+                                only=only)
 
     from unicorn.m68k_const import (
         UC_M68K_REG_A5, UC_M68K_REG_A7,
@@ -466,6 +472,8 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                         put_word(a5 - 0x4a84 + col * 6, below.kind)
                         put_long(a5 - 0x4a82 + col * 6, (below.foreground << 16) | below.background)
                 for layer, entry, draw_pass in passes:
+                    if only is not None and (draw_row, draw_column, draw_pass) not in only:
+                        continue
                     # GetCells 5:0abe-0ac8 copies fullclip during DoCleanCut;
                     # ComputeClipRect is only used for subsequent dirty cells.
                     # RedrawCellFast 3:1c64-1d38 visits bottom-up, then the border.
@@ -488,13 +496,60 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             'slots': [[slot, kind] for _command, kind, slot in ordered]}
 
 
-def extract_caverns(program, caverns, prince, output, progress=lambda _text: None, *, level_number=3):
-    with CavernRecovery(program, caverns, prince, track_reads=True) as machine:
+def extract_caverns(program, caverns, prince, output, progress=lambda _text: None, *, level_number=3,
+                    workers=1):
+    """Export one level's scenery; `workers` processes draw the floor slots."""
+    extract_cavern_levels(program, {level_number: caverns}, prince, output, progress, workers=workers)
+
+
+def extract_cavern_levels(program, sceneries, prince, output, progress=lambda _text: None, *, workers=1):
+    """Export each {level number: scenery resource}.
+
+    With `workers` > 1 the levels are recovered side by side and the floor
+    slots of every level are drawn together by that many processes; the
+    files are identical to a serial export.
+    """
+    from tools.extract_slots import parallel_slot_rooms, slot_context
+
+    slots = {}
+    if workers > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        from tools.workers import watch_parent
+
+        with ProcessPoolExecutor(min(workers, len(sceneries)), initializer=watch_parent) as pool:
+            futures = {number: pool.submit(_level_scenery, program, caverns, prince, number)
+                       for number, caverns in sceneries.items()}
+            levels = {}
+            for number, future in futures.items():
+                levels[number] = future.result()
+                progress(f'Cavern scenery: level {number}')
+        contexts = {number: slot_context(program, sceneries[number], prince, level, result)
+                    for number, (result, level, _kind, _plates) in levels.items()}
+        slots = parallel_slot_rooms(contexts, workers, progress)
+    else:
+        levels = {number: _level_scenery(program, caverns, prince, number, progress)
+                  for number, caverns in sceneries.items()}
+    for number, (result, level, kind, plates) in levels.items():
+        with CavernRecovery(program, sceneries[number], prince, track_reads=True) as machine:
+            _finish_caverns(program, sceneries[number], prince, output, progress,
+                            partial(recover_room, _machine=machine), result, level, kind, plates,
+                            slots.get(number))
+
+
+def _level_scenery(program, caverns, prince, number, progress=lambda _text: None):
+    """(export without its slot/plate/scythe sections, drawn level data, level kind, plates)."""
+    from tools.extract_pressure_plates import pressure_scenery
+
+    progress(f'Preparing level-{number} scenery...')
+    with CavernRecovery(program, caverns, prince) as machine:
         recover = partial(recover_room, _machine=machine)
-        _extract_caverns(program, caverns, prince, output, progress, recover, level_number=level_number)
+        result, level, kind = _prepare_caverns(program, caverns, prince, progress, recover, level_number=number)
+        plates = pressure_scenery(program, caverns, prince, level, result, progress, recover=recover)
+    return result, level, kind, plates
 
 
-def _extract_caverns(program, caverns, prince, output, progress, recover, *, level_number=3):
+def _prepare_caverns(program, caverns, prince, progress, recover, *, level_number=3):
+    """(export without its slot/plate/scythe sections, drawn level data, level kind)."""
     from pop2.level_data import LevelDefinition
 
     definition = LevelDefinition.read(parse_resource_fork(prince), level_number)
@@ -548,23 +603,28 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
             struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
             frame['commands'] = recover(program, caverns, bytes(mutable), upper.start_room, prince)['commands']
         result['alternate_entry'] = {'room': upper.start_room, 'cell': upper.start_tile, 'frames': frames}
+    return result, level, definition.kind
+
+
+def _finish_caverns(program, caverns, prince, output, progress, recover, result, level, kind, plates,
+                    slot_rooms=None):
     from tools.extract_slots import loose_floor_slot_scenery
 
     # Per-slot drawing (schema 2); extract_loose_floor_scenery's whole-room
     # variants remain the oracle of tools/check_slot_scenery.py.
     result['loose_floors'] = loose_floor_slot_scenery(program, caverns, prince, level, result,
-                                                      progress, recover=recover)
-    from tools.extract_pressure_plates import pressure_scenery
+                                                      progress, recover=recover, rooms=slot_rooms)
+    result['pressure_plates'] = plates
+    if kind == 4:
+        from tools.extract_scythes import scythe_pairs
 
-    result['pressure_plates'] = pressure_scenery(program, caverns, prince, level, result,
-                                               progress, recover=recover)
-    if definition.kind == 4:
-        from tools.extract_scythes import scythe_scenery
-
-        result['scythes'] = scythe_scenery(program, caverns, prince, level, result,
-                                           progress, recover=recover)
+        # The scythes are slot units of result['loose_floors'] ('scythe_units');
+        # tools.extract_scythes.scythe_scenery's whole-room patches serve
+        # version-15 exports only.
+        result['scythes'] = {'schema': 1, 'rooms': {},
+                             'scythes': [[*key, *partner] for key, partner in scythe_pairs(LevelMap(level))]}
     progress('Saving prepared cavern scenery...')
-    name = scenery_name(level_number)
+    name = scenery_name(result['level'])
     (output / name).write_text(json.dumps(result) + '\n', encoding='ascii')
 
 

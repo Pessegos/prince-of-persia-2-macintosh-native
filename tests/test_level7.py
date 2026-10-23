@@ -63,7 +63,8 @@ class LevelSevenTests(unittest.TestCase):
     def test_level_seven_draws_its_scythes(self):
         program = self.scene.level_renderer.cavern_program
         self.assertEqual(program['level'], 7)
-        self.assertTrue(program['scythes']['rooms'])
+        self.assertTrue(program['scythes']['scythes'])
+        self.assertTrue(any(room.get('scythes') for room in program['loose_floors']['rooms'].values()))
 
     def test_the_level_map_opens(self):
         from pop2.development_map import build_development_map

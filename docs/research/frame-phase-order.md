@@ -204,9 +204,35 @@ them combined with loose floors in the same room, and 60 random plank
 combinations match native renders, as the previous scythe patches and plank
 rules did for single cases. Whole cavern exports: level 3 10.8 s/0.84 MB,
 4 3.1 s/0.49 MB, 5 11.8 s/0.58 MB, 6 83.6 s/0.89 MB, 7 25.3 s/0.97 MB
-(previously 5.8, 0.9, 25.1, 24.6 and 1.3 MB). The previous scythe patches
-are still exported (the import check expects them) but no longer drawn when
-the slots cover the room. Room renders stay cached per state as before.
+(previously 5.8, 0.9, 25.1, 24.6 and 1.3 MB). Version-16 exports keep the
+`scythes` section (schema 1, the scythe pairs) but no whole-room patches:
+the slots cover every scythe room. Room renders stay cached per state as
+before.
+
+### Import Time (2026-10-23)
+
+The first import took 165 s on the development machine (8 cores, 16
+threads), 121 s of it in the floor-slot export. It now takes about 20 s,
+with byte-identical scenery files:
+
+- the five cavern/ruins levels are recovered in parallel processes, and the
+  slot export of all of them shares one pool: first every room's single-unit
+  renders (dependencies), then the combinations of each dependency set, both
+  in small jobs, so level six's room 19 (8,675 list renders) no longer runs
+  alone;
+- a combination render runs only the drawers of the slots it is for
+  (`recover_room(only=...)`); each slot's drawers start from the same
+  per-cell inputs, and the exports confirm that its fragment is unchanged;
+- the redundant scythe patches are no longer rendered (8.8 s);
+- music renderers run side by side (one `smssynth` process per song), and
+  the recorded-demo simulation and the scenery export run beside the music
+  and scene recovery.
+
+The game reads the same files, so play is unaffected. Cancelling ends the
+recovery's whole process tree (`pop2/process_job.py`), and pool workers
+leave when their parent disappears (`tools/workers.py`). The MIDI renderer
+already differed by one sample step in a few samples between two serial
+imports; the parallel import does the same.
 
 Not slot units, by decision: pressure plates, gates, exits, the room-3 bars
 and darts keep `pressure_drawing_commands`, which never generated

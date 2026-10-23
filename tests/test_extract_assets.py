@@ -49,10 +49,14 @@ class AssetImportTests(unittest.TestCase):
         self.carpet.side_effect = lambda _image, _program, _nis, _files, directory, _progress: (
             directory / 'carpet.json').write_bytes(b'prepared carpet')
         self.addCleanup(carpet.stop)
-        caverns = patch.object(extract_assets, "extract_caverns")
+        caverns = patch.object(extract_assets, "extract_cavern_levels")
         self.caverns = caverns.start()
-        self.caverns.side_effect = lambda _program, _caverns, _prince, directory, _progress, level_number: (
-            directory / extract_assets.scenery_name(level_number)).write_bytes(b"prepared cavern entrance")
+
+        def write_caverns(_program, sceneries, _prince, directory, _progress, workers):
+            self.assertGreaterEqual(workers, 1)
+            for number in sceneries:
+                (directory / extract_assets.scenery_name(number)).write_bytes(b"prepared cavern entrance")
+        self.caverns.side_effect = write_caverns
         self.addCleanup(caverns.stop)
         attract = patch.object(extract_assets, "extract_attract")
         self.attract = attract.start()
@@ -88,24 +92,18 @@ class AssetImportTests(unittest.TestCase):
                          self.profiles)
         profiles.assert_called_once_with(self.forks["Prince of Persia 2"],
                                          self.forks["Prince.rsrc"])
-        self.assertEqual([call.kwargs['level_number'] for call in self.caverns.call_args_list],
-                         [3, 4, 5, 6, 7])
         # Levels six and seven are drawn from Ruins.rsrc, not Caverns.rsrc.
-        self.assertEqual([call.args[1] for call in self.caverns.call_args_list],
-                         [self.forks['Caverns.rsrc']] * 3 + [self.forks['Ruins.rsrc']] * 2)
+        self.caverns.assert_called_once()
+        self.assertEqual(self.caverns.call_args.args[1],
+                         {3: self.forks['Caverns.rsrc'], 4: self.forks['Caverns.rsrc'],
+                          5: self.forks['Caverns.rsrc'], 6: self.forks['Ruins.rsrc'],
+                          7: self.forks['Ruins.rsrc']})
 
     def test_level_four_scenery_failure_preserves_installed_resources(self):
         self.output.mkdir()
         original = self.output / 'Prince.rsrc'
         original.write_bytes(b'existing game')
-        prepare = self.caverns.side_effect
-
-        def caverns(*args, level_number):
-            if level_number == 4:
-                raise ValueError('Unsupported level-four scenery')
-            return prepare(*args, level_number=level_number)
-
-        self.caverns.side_effect = caverns
+        self.caverns.side_effect = ValueError('Unsupported level-four scenery')
         with (patch.object(extract_assets, 'get_resource_fork', side_effect=self.fork),
               patch.object(extract_assets, 'parse_resource_fork', side_effect=self.resource_types),
               patch.object(extract_assets, 'extract_bytes', return_value=self.profiles),

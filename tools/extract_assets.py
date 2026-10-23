@@ -1,7 +1,9 @@
 """Extract the resource files required by the rooftop prototype."""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import json
+import os
 from pathlib import Path
 import struct
 import tempfile
@@ -12,7 +14,7 @@ from tools.extract_intro import (
     TREE_VARIANTS, extract_carpet, extract_intro, extract_ending, extract_discovery, extract_trees,
 )
 from tools.extract_attract import extract_attract, extract_credits_music
-from tools.extract_caverns import extract_caverns, scenery_name
+from tools.extract_caverns import extract_cavern_levels, scenery_name
 from pop2.caverns import scenery_resource
 from pop2.mac_resources import get_resource_fork, parse_resource_fork
 from pop2.paths import ASSET_DIR
@@ -59,10 +61,19 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         raise ValueError(f"This is not a supported Macintosh PoP2 disk image: {error}") from error
     output_dir = Path(output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".import-", dir=output_dir) as directory:
+    with (tempfile.TemporaryDirectory(prefix=".import-", dir=output_dir) as directory,
+          ThreadPoolExecutor(2) as background):
         staging = Path(directory)
         for name, resource in resources.items():
             (staging / name).write_bytes(resource)
+        # The recorded demo and the level scenery need only the program and
+        # resource forks: they run beside the music and scenes. The scenery
+        # is drawn by worker processes, the demo by a single simulation.
+        demo = background.submit(extract_attract, program, dict(resources), staging, lambda _text: None)
+        numbers = (3, 4, 5, 6, 7)
+        caverns = background.submit(
+            extract_cavern_levels, program, {number: resources[scenery_resource(number)] for number in numbers},
+            resources["Prince.rsrc"], staging, progress, workers=os.cpu_count() or 1)
         extract_audio(image, program, resources["Prince.rsrc"], staging / "audio", progress)
         progress("Recovering the original opening scenes...")
         extract_intro(image, program, resources["NIS.rsrc"], staging, progress)
@@ -80,14 +91,11 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         resources["carpet.json"] = (staging / "carpet.json").read_bytes()
         for variant in TREE_VARIANTS:
             resources[f"tree-{variant}.json"] = (staging / f"tree-{variant}.json").read_bytes()
-        for number in (3, 4, 5, 6, 7):
-            name = scenery_name(number)
-            progress(f"Preparing level-{number} scenery...")
-            extract_caverns(program, resources[scenery_resource(number)],
-                            resources["Prince.rsrc"], staging, progress, level_number=number)
-            resources[name] = (staging / name).read_bytes()
+        caverns.result()
+        for number in numbers:
+            resources[scenery_name(number)] = (staging / scenery_name(number)).read_bytes()
         progress("Recovering the original recorded demo and credits...")
-        extract_attract(program, resources, staging, progress)
+        demo.result()
         extract_credits_music(image, staging)
         resources["attract.json"] = (staging / "attract.json").read_bytes()
         # Audio is fully prepared before any installed resources are replaced.
