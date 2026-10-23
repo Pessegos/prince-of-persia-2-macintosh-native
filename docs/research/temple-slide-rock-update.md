@@ -3,7 +3,9 @@
 Status: bounded native/reference evidence. This connects real geometry and
 motion to **crush admission**, bank writeback/compaction and repeated activation.
 Admission is NOT damage: actor reaction bodies, animation, presentation and
-file-save/restart behavior are still excluded. No production port code changed.
+file-save/restart behavior are excluded from THIS probe. The subsequent
+[contact-consequence probe](temple-slide-rock-contact.md) now executes10:1b04
+and its actual first animation call separately. No production port code changed.
 
 ## Executed Native Path
 
@@ -149,8 +151,9 @@ were rerun after this guard change; their output hashes are unchanged.
 
 ## Remaining Work
 
-- Recover the native reaction10:1b04 and distinguish pushes, death and other
-  sequence selection; current markers do not model any of those consequences.
+- Current markers do not model reaction consequences. The subsequent contact
+  probe recovers10:1b04, pushes/disarm, native pending-health/dead-pose writes
+  and first-frame animation, but not later animation/death progression.
 - Include ATMSlideRock presentation, retaining/restoring temporary record fields.
 - Recover surrounding trigger admission and actual update/presentation cadence.
 - Inspect native reset/checkpoint/file-save behavior separately from bank state.

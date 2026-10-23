@@ -143,11 +143,19 @@ real geometry/cache plus motion10:1d5c, contact gate10:16f6 and native type6/ban
 dispatch. 13,708 comparisons include24 activation/update traces over all12
 markers,3840 updates and supplied view-selector changes. Live bank state persists
 or compacts as expected; this is NOT file-save/checkpoint/restart persistence.
-Crush reaction10:1b04 and the movement actor reactions remain supplied endpoints,
-not damage/death/animation proof. The contact gate's mode4 bypass is word+52,
+That update probe supplies reaction10:1b04 and the movement actor reactions,
+so it alone is not damage/death/animation proof. The contact gate's mode4 bypass is word+52,
 not actor-kind4, and still requires matching Prince room/row.
 
-Next work follows actual actor consequences, presentation, caller admission,
-scheduling and reset/save behavior separately.
+[Native contact consequences](temple-slide-rock-contact.md) now replace10:1b04
+with its full body, health/death-method primitives, JumpSeq and the actual first
+AnimChar call for clips47/48/71/93. 8,322 comparisons include all12 original
+anchors and eight connected six-update contact traces. Terminal solid contact
+can set alive0/pose185/pending damage; action5 and tile2 have explicit bypasses.
+Resource/handle management and audio remain supplied; later animation/death
+progression, other actor reaction bodies and full FrameAdv remain excluded.
+
+Next work follows presentation, caller admission, scheduling and reset/save
+behavior separately.
 The constructor's X>510 branch, TriggerObject caller admission and connected
 movement lifecycle remain open.

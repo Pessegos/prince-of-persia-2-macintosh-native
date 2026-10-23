@@ -139,7 +139,9 @@ left-link controls modify in-memory copies only. Unit tests use synthetic data.
   crush admission/bank updates by the [connected probe](temple-slide-rock-update.md).
 - ReadCell responses here do not update the original cell cache. Consequently
   this block does not certify the cache-dependent effects of5:3cee.
-- Full actor reactions, crush10:16f6, collision/damage and animation remain open.
+- Actor reactions and crush do not execute in THIS probe. Follow-ups cover
+  [admission](temple-slide-rock-update.md) and [native contact consequences](temple-slide-rock-contact.md),
+  including first-frame animation, but not complete actor/death progression.
 - The connected probe covers bounded live-bank lifecycle/persistence, not
   presentation, actual actor consequences, file-save or restart persistence.
 - ATMSlideRock rendering, controller admission, FrameAdv ordering/cadence,
