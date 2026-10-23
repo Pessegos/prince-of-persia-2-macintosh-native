@@ -96,6 +96,21 @@ class LevelDefinition:
             return 5
         raise ValueError(f"Level {self.number} entry controller is not implemented")
 
+    def with_ruins_entry(self, entry):
+        """SetKidDefaults 2:5d02-5d0c -> 2:5eda for level seven.
+
+        Leaving level six at character column >= 6 (opcode -16, 4:2f3e-2f56,
+        a5-0x500c = 2) starts in native room 4, cell 25, with room 32's
+        door shut; otherwise room 32, cell 24, with room 4's door shut.
+        """
+        if self.number != 7:
+            return self
+        data = bytearray(self.data)
+        room, tile, shut = (4, 25, 0x1668) if entry == 2 else (32, 24, 0x94c)
+        struct.pack_into('>2H', data, 0x2198, room, tile)
+        struct.pack_into('>H', data, shut, struct.unpack_from('>H', data, shut)[0] & 0xff00)
+        return LevelDefinition.decode(self.number, bytes(data))
+
     def right_platform_edge(self):
         terrain = LevelMap(self.data)
         supported = []

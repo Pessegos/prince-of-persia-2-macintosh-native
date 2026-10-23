@@ -853,7 +853,8 @@ def without_fallen_planks(commands, fallen):
 
 
 def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=(), retouched=False,
-                *, level_number=3, bridge_fallen=frozenset(), scythe_patch=(), bridge_wobble=frozenset()):
+                *, level_number=3, bridge_fallen=frozenset(), scythe_patch=(), bridge_wobble=frozenset(),
+                alternate_entry=False):
     program, resources, palette, shapes = room_assets(level_number, room_id)
 
     def scenery_sprite(command):
@@ -871,9 +872,16 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     variant = loose_variant(program, room_id, loose_key)
     if variant is not None:
         commands = variant['commands']
-    if entry is not None and room_id == entry['room']:
-        commands = (variant['entry_frames'][entry_frame] if variant is not None else
-                    entry['frames'][entry_frame]['commands'])
+    alternate = program.get('alternate_entry') if alternate_entry else None
+    if alternate is not None and room_id == alternate['room']:
+        # Level seven's upper entrance: its own closing door (no loose-floor
+        # variants of these frames are exported).
+        commands = alternate['frames'][entry_frame]['commands']
+    elif entry is not None and room_id == entry['room']:
+        # With the other entrance in use, this door stays shut (2:5eda).
+        frame = len(entry['frames']) - 1 if alternate is not None else entry_frame
+        commands = (variant['entry_frames'][frame] if variant is not None else
+                    entry['frames'][frame]['commands'])
     records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room_id), ())
     if pressure_key:
         commands = pressure_drawing_commands(commands, records, pressure_key, resources)

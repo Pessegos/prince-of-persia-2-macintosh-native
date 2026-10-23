@@ -28,6 +28,31 @@ class LevelSevenTests(unittest.TestCase):
         self.tick(20)
         self.assertEqual((scene.room_id, scene.terrain_motion.row), (31, 2))
 
+    def test_leaving_level_six_at_column_six_or_more_opens_the_upper_entrance(self):
+        # Opcode -16 (4:2f3e-2f56) and SetKidDefaults 2:5eda: native room 4,
+        # cell 25, whose door closes behind him, with room 32's door shut.
+        scene = self.scene
+        scene.load_level(6)
+        scene.game.ruins_entry = 2
+        scene.load_level(7)
+        caverns = scene.game.caverns
+        self.assertEqual((scene.room_id, caverns.entry_room, caverns.entry_cell), (3, 3, 25))
+        self.assertTrue(caverns.alternate_entry)
+        self.assertEqual(scene.level_map.tile(31, 4, 2).foreground & 255, 0)
+        self.assertEqual(caverns.entry_frame, 0)
+        self.tick(20)
+        self.assertEqual((scene.room_id, scene.terrain_motion.row), (3, 2))
+        scene.game.restart()
+        self.assertEqual(scene.game.room_id, 3)
+
+    def test_the_level_six_exit_column_chooses_the_entrance(self):
+        # The exit sequences end at X 168 (left door, column 2) and 372
+        # (right door, column 6) of level six's native room 16.
+        scene = self.scene
+        for x, entry in ((168, 1), (372, 2)):
+            scene.sequence_state.target_x = x
+            self.assertEqual(scene.level_six_exit_entry(), entry)
+
     def test_entering_every_room_does_not_raise(self):
         # Opponent set 5 (heads and serpents) is not generated yet.
         for room in range(32):
@@ -90,6 +115,23 @@ class LevelSevenSaveTests(unittest.TestCase):
             write_save(path, capture_snapshot(game))
             loaded, _saved = read_snapshot(path, resources)
         self.assertEqual((loaded.level.number, loaded.sword_type), (7, 2))
+
+    def test_the_upper_entrance_survives_both_save_formats(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from pop2.game_session import GameResources, GameSession
+        from pop2.save_game import capture, capture_snapshot, read_save, read_snapshot, write_save
+
+        resources = GameResources.load()
+        game = GameSession.load(resources, 7, ruins_entry=2)
+        self.assertEqual(game.level.start_room, 3)
+        with TemporaryDirectory() as directory:
+            for name, document, reader in (('progress', capture(game), read_save),
+                                           ('snapshot', capture_snapshot(game), read_snapshot)):
+                path = Path(directory) / f'{name}.json'
+                write_save(path, document)
+                loaded, _saved = reader(path, resources)
+                self.assertEqual((loaded.ruins_entry, loaded.level.start_room), (2, 3), name)
 
 
 if __name__ == '__main__':

@@ -58,7 +58,9 @@ class LevelRenderer:
             scythe = (cavern_scythe_signature(self.cavern_program, room_id, caverns)
                       if caverns is not None else ())
             entry = caverns.entry_room if caverns is not None else self.level.start_room
-            key = room_id, frame if room_id == entry else 0, signature, pressure, fallen, scythe, wobble
+            alternate = caverns is not None and caverns.alternate_entry
+            key = (room_id, frame if room_id == entry else 0, signature, pressure, fallen, scythe, wobble,
+                   alternate)
             if key not in self.cavern_frames:
                 # Retain loose-floor variants, not every historical gate
                 # height or plank wobble.
@@ -70,7 +72,7 @@ class LevelRenderer:
                                                     retouched=self.retouch_caverns,
                                                     level_number=self.level.number,
                                                     bridge_fallen=fallen, scythe_patch=scythe,
-                                                    bridge_wobble=wobble)
+                                                    bridge_wobble=wobble, alternate_entry=alternate)
             self.rooms[room_id] = self.cavern_frames[key]
             return self.rooms[room_id]
         if room_id not in self.rooms:

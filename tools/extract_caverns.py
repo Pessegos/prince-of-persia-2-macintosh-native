@@ -482,6 +482,20 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
             struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
             frame['commands'] = recover(program, caverns, bytes(mutable), entry, prince)['commands']
         result['entry_exit'] = {'room': entry, 'cell': cell, 'frames': frames}
+    if level_number == 7:
+        # SetKidDefaults 2:5eda: leaving level six at column >= 6 starts in
+        # native room 4 (cell 25) with room 32's door shut.
+        upper = definition.with_ruins_entry(2)
+        level_upper = hide_crevices(upper.data)
+        frames = exit_closing_frames(parse_resource_fork(program))
+        mutable = bytearray(level_upper)
+        offset = 0x780 + upper.start_room * 120 + upper.start_tile * 4
+        foreground = struct.unpack_from('>H', level_upper, offset)[0] & 0xff00
+        for frame in frames:
+            progress('Ruins upper entrance animation...')
+            struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
+            frame['commands'] = recover(program, caverns, bytes(mutable), upper.start_room, prince)['commands']
+        result['alternate_entry'] = {'room': upper.start_room, 'cell': upper.start_tile, 'frames': frames}
     result['loose_floors'] = extract_loose_floor_scenery(program, caverns, prince, level, result,
                                                        progress, recover=recover)
     from tools.extract_pressure_plates import pressure_scenery

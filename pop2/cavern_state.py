@@ -30,6 +30,8 @@ class CavernState:
     bridge: Bridge = field(default_factory=Bridge)
     carpet: Carpet = field(default_factory=Carpet)
     scythes: Scythes = field(default_factory=Scythes)
+    # Level seven entered by its upper door (alternate entry export).
+    alternate_entry: bool = False
     # a5-0x5008: the level-four relief countdown; -1 idle, -2 already used.
     phew_countdown: int = -1
 
@@ -54,6 +56,12 @@ class CavernState:
             if phase == previous:
                 phase = (phase + 1) % 9
             self.torches[key] = (value & 0xfff0) | phase
+
+    def configure_level_entry(self, program, game):
+        # Level seven's upper door when level six was left at column >= 6.
+        alternate = program.get('alternate_entry') if game.ruins_entry == 2 else None
+        self.alternate_entry = alternate is not None
+        self.configure_entry(alternate or program.get('entry_exit'), game.level.start_room)
 
     def configure_entry(self, metadata, start_room=None):
         if metadata is None:

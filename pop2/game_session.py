@@ -70,6 +70,9 @@ class GameSession:
     caverns: CavernState | None = None
     # a5-0x500a: the level's sword type, -1 for none; picking a sword sets it.
     sword_type: int = 1
+    # a5-0x500c: where level six was left (2: column >= 6), choosing level
+    # seven's entrance.
+    ruins_entry: int = 1
 
     @property
     def entry_active(self):
@@ -77,8 +80,8 @@ class GameSession:
                 and self.runtime.state.sequence_id == self.level.entry_sequence)
 
     @classmethod
-    def load(cls, resources, number=1, terrain_enabled=True, encounter_factory=None):
-        level = resources.level(number)
+    def load(cls, resources, number=1, terrain_enabled=True, encounter_factory=None, ruins_entry=1):
+        level = resources.level(number).with_ruins_entry(ruins_entry)
         # Validate entry support before constructing any mutable world state.
         level.entry_sequence
         state = SequenceState(IDLE_SEQUENCE, action=15, current_x=level.start_x,
@@ -96,7 +99,7 @@ class GameSession:
                                        level.right_platform_edge(), level=level.data)
         session = cls(level, runtime, terrain,
                       RooftopPhysics(terrain, resources.frames) if terrain is not None else None,
-                      combat=combat)
+                      combat=combat, ruins_entry=ruins_entry)
         if combat is not None:
             combat.terrain = terrain
             combat.player_frames = resources.frames

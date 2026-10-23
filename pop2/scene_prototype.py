@@ -360,7 +360,7 @@ class ScenePrototype(WindowControls):
                                  self.frames, guard_art.frames)
             game.combat.guard_art = guard_art
         if game.caverns is not None and initialize_world:
-            game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'), game.level.start_room)
+            game.caverns.configure_level_entry(renderer.cavern_program, game)
             game.caverns.configure_torches(renderer.cavern_program.get('torches', {}))
             game.caverns.configure_lava(renderer.cavern_program.get('lava'))
         room = renderer.enter_room(game.room_id, game.caverns)
@@ -480,7 +480,7 @@ class ScenePrototype(WindowControls):
         try:
             renderer = LevelRenderer(game.level, preload_room=False)
             if game.caverns is not None:
-                game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'), game.level.start_room)
+                game.caverns.configure_level_entry(renderer.cavern_program, game)
                 game.caverns.configure_torches(renderer.cavern_program.get('torches', {}))
                 game.caverns.configure_lava(renderer.cavern_program.get('lava'))
             room = renderer.enter_room(game.room_id, game.caverns)
@@ -520,8 +520,11 @@ class ScenePrototype(WindowControls):
 
     def load_level(self, number):
         # Prepare the complete destination before replacing a running session.
-        game = GameSession.load(self.resources, number, self.terrain_enabled)
         previous = getattr(self, 'game', None)
+        # Only the level-six exit chooses level seven's entrance.
+        entry = (previous.ruins_entry if previous is not None and previous.level.number == 6
+                 and number == 7 else 1)
+        game = GameSession.load(self.resources, number, self.terrain_enabled, ruins_entry=entry)
         if previous is not None:
             # The campaign clock and tree stage survive level changes (2:5af2).
             game.story = previous.story
@@ -3044,7 +3047,9 @@ class ScenePrototype(WindowControls):
                 self.clear_keys(None)
                 self.start_sequence(IDLE_SEQUENCE)
         if self.game.consume_completion():
-            if self.game.level.number in (1, 3, 4, 5, 6):
+            if self.game.level.number == 6:
+                self.game.ruins_entry = self.level_six_exit_entry()
+            if self.game.level.number in (1, 3, 4, 5, 6, 7):
                 import json
                 from pop2.level_transition import LevelExit
                 from pop2.paths import ASSET_DIR
@@ -3573,6 +3578,11 @@ class ScenePrototype(WindowControls):
         self.last_intro_at = time.perf_counter()
         self.status.set('Tree')
 
+    def level_six_exit_entry(self):
+        # Opcode -16 (4:2f3e-2f56): leaving at character column >= 6 opens
+        # level seven at its upper entrance (a5-0x500c = 2).
+        return 2 if character_column(self.sequence_state.target_x) >= 6 else 1
+
     def finish_level_four(self):
         # CheckPlayNIS(4, 5) (2:0180) shows the first tree scene here when no
         # level-four restart has, then RestartGame loads level five.
@@ -3666,8 +3676,7 @@ class ScenePrototype(WindowControls):
         self.clear_keys(None)
         self.game.restart()
         if self.game.caverns is not None:
-            self.game.caverns.configure_entry(
-                self.level_renderer.cavern_program.get('entry_exit'), self.game.level.start_room)
+            self.game.caverns.configure_level_entry(self.level_renderer.cavern_program, self.game)
             self.game.caverns.configure_torches(self.level_renderer.cavern_program.get('torches', {}))
             self.game.caverns.configure_lava(self.level_renderer.cavern_program.get('lava'))
         self.reset_level_controls()

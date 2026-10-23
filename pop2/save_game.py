@@ -170,7 +170,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     if cls is Potions:
         optional.update(('fatal', 'float_timer'))
     if cls is CavernState:
-        optional.update(('bridge', 'carpet', 'phew_countdown', 'scythes'))
+        optional.update(('bridge', 'carpet', 'phew_countdown', 'scythes', 'alternate_entry'))
     if cls is Bridge:
         optional.update(('tension_level', 'tension', 'marks', 'wobble'))
     if (not isinstance(record, dict) or set(record) - allowed
@@ -259,6 +259,15 @@ def _put_sword(document, game):
     # Optional: a sword picked up in a level that started without one.
     if game.sword_type != level_sword_type(game.level.number):
         document['sword_type'] = game.sword_type
+    if game.ruins_entry != 1:
+        document['ruins_entry'] = game.ruins_entry
+
+
+def _ruins_entry(document):
+    entry = document.get('ruins_entry', 1)
+    if type(entry) is not int or entry not in (1, 2):
+        raise SaveGameError('Invalid saved level entrance')
+    return entry
 
 
 def _take_sword(document, game):
@@ -300,7 +309,7 @@ def read_snapshot(path, resources):
                 or type(document.get('version')) is not int or document['version'] != 1
                 or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5, 6, 7)):
             raise SaveGameError('Unsupported save format or version')
-        game = GameSession.load(resources, document['level'])
+        game = GameSession.load(resources, document['level'], ruins_entry=_ruins_entry(document))
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
             raise SaveGameError('Save belongs to different original game files')
         _take_sword(document, game)
@@ -533,7 +542,7 @@ def restore_progress(document, resources):
     try:
         if set(document) - {'format', 'version', 'level', 'level_sha256', 'created_at',
                             'resume', 'copy_verified', 'preview', 'name', 'preview_at_resume', 'preview_version',
-                            'story', 'sword_type'}:
+                            'story', 'sword_type', 'ruins_entry'}:
             raise SaveGameError('Unknown saved progress fields')
         if 'name' in document:
             save_name(document['name'])
@@ -542,7 +551,7 @@ def restore_progress(document, resources):
         if 'preview_version' in document and (type(document['preview_version']) is not int
                                               or not 1 <= document['preview_version'] <= 1000):
             raise SaveGameError('Invalid save preview version')
-        game = GameSession.load(resources, document['level'])
+        game = GameSession.load(resources, document['level'], ruins_entry=_ruins_entry(document))
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
             raise SaveGameError('Save belongs to different original game files')
         _take_sword(document, game)
