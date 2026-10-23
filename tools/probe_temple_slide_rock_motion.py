@@ -19,12 +19,14 @@ def trunc_div(value, divisor=51):
 
 def motion_reference(mob, left_room, *, filled=(False, False), tiles=(1, 1),
                      cue193_on=False, pending=-1, prince=(0, 0, 0)):
-    """Model 10:1d5c only; supplied predicates are NOT a world simulation."""
+    """Model 10:1d5c; endpoint tuples or independent geometry callbacks."""
     if (len(mob) != 8 or any(not -32768 <= word <= 32767 for word in mob)
             or mob[5] != 6 or not 1 <= mob[2] <= 32 or not 0 <= mob[6] <= 2
             or not 0 <= mob[0] <= 561 or not 0 <= left_room <= 32
-            or len(filled) != 2 or len(tiles) != 2 or len(prince) != 3
-            or any(not -32768 <= word <= 32767 for word in (*tiles, *prince, pending))):
+            or (not callable(filled) and len(filled) != 2)
+            or (not callable(tiles) and len(tiles) != 2) or len(prince) != 3
+            or any(not -32768 <= word <= 32767 for word in
+                   (*(() if callable(tiles) else tiles), *prince, pending))):
         raise ValueError('Outside the bounded type-6 motion fixture domain')
     result = list(mob)
     events = []
@@ -36,14 +38,16 @@ def motion_reference(mob, left_room, *, filled=(False, False), tiles=(1, 1),
         candidate -= 2
     else:
         events.append(('filled', x))
-        if filled[0] and result[4] >= 8:
+        first_filled = filled(x) if callable(filled) else filled[0]
+        if first_filled and result[4] >= 8:
             result[4] = 0
             events.append(('stop', 192))
             if pending == 192:
                 pending = -1
         else:
             events.append(('filled', signed_word(x - 16)))
-            if filled[1]:
+            second_filled = filled(signed_word(x - 16)) if callable(filled) else filled[1]
+            if second_filled:
                 events.append(('sound', 191))
             candidate -= 2
             if result[4] <= 8:
@@ -60,23 +64,25 @@ def motion_reference(mob, left_room, *, filled=(False, False), tiles=(1, 1),
     front = signed_word(candidate - 31)
     column = trunc_div(front) - int(front <= 0)
     events.append(('cell', result[2], column, result[6]))
+    front_tile = tiles(result[2], column, result[6]) if callable(tiles) else tiles[0]
     if result[3] == 1:
         result[3] = 0
         result[4] = 100
         result[1] = signed_word(result[1] + 1)
         result[0] = signed_word(candidate + 3)
-        if tiles[0] == 2:
+        if front_tile == 2:
             events.append(('actor', '5:3cee'))
     else:
         old_column = trunc_div(x - 6)
         new_column = trunc_div(candidate - 6)
         if new_column != old_column or column != old_column:
             events.append(('cell', result[2], new_column, result[6]))
-            if (tiles[1] in (20, 2, 7, 25, 43, 4) or tiles[0] == 2) and result[3] == 0:
+            edge_tile = tiles(result[2], new_column, result[6]) if callable(tiles) else tiles[1]
+            if (edge_tile in (20, 2, 7, 25, 43, 4) or front_tile == 2) and result[3] == 0:
                 result[3] = 1
                 result[1] = signed_word(result[1] - 1)
                 events.append(('query', 193))
-                if not cue193_on and tiles[0] != 2:
+                if not cue193_on and front_tile != 2:
                     events.append(('sound', 18))
         frame, prince_column, prince_row = prince
         if (87 <= frame <= 99 and result[6] + 1 == prince_row
@@ -104,6 +110,7 @@ class NativeSlideRockMotion(NativeRules):
         (5, 0x5252): 'stop', (5, 0x4d84): 'sound', (5, 0x52c8): 'query',
         (5, 0x3cee): '5:3cee', (6, 0x1a84): '6:1a84',
     }
+    ACTOR_TAGS = {'5:3cee': 30001, '6:1a84': 30003}
     BRANCHES = {
         0x1d80: 'minus_two', 0x1d94: 'filled_stop', 0x1db4: 'second_filled_test',
         0x1dae: 'clear_matching_pending_cue', 0x1de6: 'left_room_crossing',
@@ -155,7 +162,7 @@ class NativeSlideRockMotion(NativeRules):
         else:
             self.events.append(('actor', endpoint))
             self.actor_inputs.append(bytes(cpu.mem_read(self.A5 - 0x5056, 62)))
-            tag = 30001 if endpoint == '5:3cee' else 30003
+            tag = self.ACTOR_TAGS[endpoint]
             self.put_word(-0x5056, tag)
             self.put_word(-0x5056 + 60, tag + 1)
         cpu.reg_write(self.registers['d0'], value & 65535)

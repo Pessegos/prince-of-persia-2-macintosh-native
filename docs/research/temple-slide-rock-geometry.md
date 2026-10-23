@@ -116,9 +116,11 @@ The ignored report records all four original level hashes and outcome counts.
 
 ## Remaining Work
 
-This proves the predicate bodies and bounded raw cell traversal, not complete
-motion/world composition. Connect them to10:1d5c with preserved cache effects,
-then include the following crush10:16f6 call, real bank updates/compaction and
-activation/lifecycle traces. The actor reactions5:3cee/6:1a84, rendering,
+This probe proves the predicate bodies and bounded raw cell traversal, not
+complete motion/world composition. The subsequent
+[connected-update probe](temple-slide-rock-update.md) now combines them with
+motion10:1d5c, the following crush-admission10:16f6 call, real bank updates/
+compaction and activation traces, preserving real cache effects. The actual
+actor reactions10:1b04/5:3cee/6:1a84, rendering,
 TriggerObject admission, FrameAdv scheduling, collision consequences and save/
 restart persistence remain separate work. No complete temple/campaign claim.

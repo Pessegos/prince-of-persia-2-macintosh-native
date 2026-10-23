@@ -102,6 +102,8 @@ class NativeRules:
     def call(self, segment, offset, args=(), stop=None, *, arg_bytes=None):
         if arg_bytes is not None and args:
             raise ValueError('Supply either word arguments or explicit stack bytes')
+        self.reached = False
+        self.failure = None
         self.stop_at = self.END if stop is None else self.address(*stop)
         arguments = (arg_bytes if arg_bytes is not None else
                      b''.join(struct.pack('>H', value & 65535) for value in args))

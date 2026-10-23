@@ -135,12 +135,13 @@ left-link controls modify in-memory copies only. Unit tests use synthetic data.
 ## Boundaries And Next Work
 
 - The supplied geometry in THIS probe is now independently validated by the
-  [geometry probe](temple-slide-rock-geometry.md); connecting it to motion remains open.
+  [geometry probe](temple-slide-rock-geometry.md) and composed with native motion/
+  crush admission/bank updates by the [connected probe](temple-slide-rock-update.md).
 - ReadCell responses here do not update the original cell cache. Consequently
   this block does not certify the cache-dependent effects of5:3cee.
 - Full actor reactions, crush10:16f6, collision/damage and animation remain open.
-- Connect actual geometry, then MakeRubble dispatch/compaction, activation and
-  repeated updates before making lifecycle/persistence claims.
+- The connected probe covers bounded live-bank lifecycle/persistence, not
+  presentation, actual actor consequences, file-save or restart persistence.
 - ATMSlideRock rendering, controller admission, FrameAdv ordering/cadence,
   save/restart persistence and complete temple progression remain open.
 

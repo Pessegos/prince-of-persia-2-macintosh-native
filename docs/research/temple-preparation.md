@@ -138,7 +138,16 @@ Important correction: true means neither IsSpace nor marker25 in both scanned
 bands (including vacuous empty intervals), NOT empty/clear space. The supplied
 motion probe now calls this response `filled`; its transitions are unchanged.
 
-Next work connects this geometry to motion and the native type-6 MakeRubble
-update dispatch, presentation, collision and persistence separately.
+[Connected updates and crush admission](temple-slide-rock-update.md) now execute
+real geometry/cache plus motion10:1d5c, contact gate10:16f6 and native type6/bank
+dispatch. 13,708 comparisons include24 activation/update traces over all12
+markers,3840 updates and supplied view-selector changes. Live bank state persists
+or compacts as expected; this is NOT file-save/checkpoint/restart persistence.
+Crush reaction10:1b04 and the movement actor reactions remain supplied endpoints,
+not damage/death/animation proof. The contact gate's mode4 bypass is word+52,
+not actor-kind4, and still requires matching Prince room/row.
+
+Next work follows actual actor consequences, presentation, caller admission,
+scheduling and reset/save behavior separately.
 The constructor's X>510 branch, TriggerObject caller admission and connected
 movement lifecycle remain open.
