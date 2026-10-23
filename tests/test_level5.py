@@ -193,7 +193,9 @@ class RoomSevenGateSongTests(unittest.TestCase):
         caverns = scene.game.caverns
         caverns.plates.songs.clear()
         caverns.plates.slam_sounds.append((6, 13))
-        scene.advance_relief(caverns)
+        from pop2.environments import environment_for
+
+        environment_for(scene).advance_relief(caverns)
         return list(caverns.plates.songs)
 
     def test_slam_plays_brgdoor_unless_the_prince_is_at_room_sevens_left_edge(self):

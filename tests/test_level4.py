@@ -410,17 +410,20 @@ class LevelFourReliefTests(unittest.TestCase):
             skeleton.terrain_motion.room, skeleton.terrain_motion.row = 23, 2
         scene.combat.room_encounters[23][0].append(skeleton)
         skeleton.skeleton.rise(scene.combat, skeleton)
-        sounds = []
-        relief = scene.advance_relief
+        from unittest.mock import patch
+        from pop2.environments import Caverns
 
-        def spy(caverns):
+        sounds = []
+        relief = Caverns.advance_relief
+
+        def spy(environment, caverns):
             events = scene.sequence_state.sound_events
             start = len(events)
-            relief(caverns)
+            relief(environment, caverns)
             sounds.extend(cue for cue in events[start:] if cue == 110)
-        scene.advance_relief = spy
-        for _ in range(12):
-            RooftopSceneTests.tick(self)
+        with patch.object(Caverns, 'advance_relief', spy):
+            for _ in range(12):
+                RooftopSceneTests.tick(self)
         return sounds
 
     def test_slamming_the_gate_on_a_skeleton_makes_the_prince_sigh_once(self):

@@ -8,6 +8,10 @@ frame phases (pop2.frame_phases); the classes hold no state of their own.
 
 import time
 
+from pop2.carpet import (
+    CARPET_ROOM, CARPET_TILE, CLOSED_SONG, CRASH_SEQUENCE, OPEN_SONG, RIDE_FRAME, SIT_SEQUENCE,
+    carpet_room,
+)
 from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, on_bridge
 from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.crevices import CREVICE_TILE
@@ -399,7 +403,7 @@ class Caverns(Environment):
         scene.sequence_state.sound_events.extend(caverns.scythes.advance(scene.level_map))
         scene.sequence_state.sound_events.extend(caverns.plates.advance(
             scene.level_map, scene.sequence_state, scene.terrain_motion, scene.frames[scene.action]))
-        scene.advance_relief(caverns)
+        self.advance_relief(caverns)
         stopped = set(caverns.plates.stopped_sounds)
         if stopped:
             scene.sequence_state.sound_events[:] = [
@@ -593,6 +597,103 @@ class Caverns(Environment):
             scene.game.exit = None
             scene.status.set(f'Level {following} needs a reimport of the game files')
 
+    def controls(self):
+        self.carpet_controls()
+
+    def carpet_controls(self):
+        scene = self.scene
+        caverns = scene.game.caverns
+        motion, state = scene.terrain_motion, scene.sequence_state
+        if (caverns is None or motion is None or not carpet_room(scene.game.level.number, motion.room)
+                or motion.falling):
+            return False
+        carpet = caverns.carpet
+        if state.action == 109 and state.source_sequence_id not in (17, 20) and scene.combat.player.alive:
+            # GenCtrl 6:09b4-09fe: crouching on the carpet tile, or just right
+            # of it, sits down (8:14ae).
+            column = scene.combat._supporting_column(scene.combat.player)
+            if CARPET_TILE in (scene.level_map.tile(motion.room, column, motion.row).kind,
+                               scene.level_map.tile(motion.room, column - 1, motion.row).kind):
+                scene.clear_keys(None)
+                scene.physics.select(scene.sequence_runtime, SIT_SEQUENCE)
+                state.target_x = state.current_x = scene.player_x = carpet.sit_x(state.facing)
+                caverns.plates.songs.append(OPEN_SONG if self.cave_bars_open() else CLOSED_SONG)
+                return True
+        if state.action == RIDE_FRAME:
+            carpet.advance()  # DrawObjCarpet 8:11a4 counted the last drawing.
+            sound, crash, kill = carpet.sit(floor_y(motion.row) + state.current_y, self.cave_bars_open())
+            if sound is not None:
+                state.sound_events.append(sound)
+            if crash:
+                # 8:1456-1474: Y 39, hidden mode 10, SEQS 129.
+                state.current_y = 39 - floor_y(motion.row)
+                scene.physics.select(scene.sequence_runtime, CRASH_SEQUENCE)
+                state.sequence_mode = 10
+            if kill and scene.combat.player.alive and not getattr(scene, 'god_mode', False):
+                # 8:1486-1498: DecLifePts(100) and death method 9.
+                scene.combat.player.life = 0
+                scene.death.begin(9)
+                scene.status.set("Defeated")
+        return False
+
+    def cave_bars_open(self):
+        scene = self.scene
+        # IsCaveBarsOpen 8:157a: tile (3, 6, 0) phase >= 3.
+        return scene.level_map.tile(CARPET_ROOM, 6, 0).foreground & 7 >= 3
+
+    def advance_relief(self, caverns):
+        scene = self.scene
+        motion = scene.terrain_motion
+        for room, cell in caverns.plates.slam_sounds:
+            # AddGateSound 5:3828-388e: a slam (sound 20) of level five's room-7
+            # gate adds BrgDoor (120), unless it plays or the Prince stands in
+            # room 7 left of column 3.
+            audio = getattr(scene, "audio", None)
+            if (scene.game.level.number == 5 and room == 6
+                    and not (audio is not None and audio.song_playing(120))
+                    and not (motion is not None and motion.room == 6
+                             and scene.combat._supporting_column(scene.combat.player) < 3)):
+                caverns.plates.songs.append(120)
+        for room, cell in caverns.plates.slams:
+            if self.shut_out_opponents(room, cell):
+                caverns.phew_countdown = 4
+        # FrameAdv 2:640c-6446: when the countdown reaches zero, a living
+        # Prince outside modes 3/4 sighs (sound 110) once per level.
+        countdown = caverns.phew_countdown
+        if countdown < 0:
+            return
+        state = scene.sequence_state
+        if countdown == 0 and scene.combat.player.alive and state.animation_state not in (3, 4):
+            state.sound_events.append(110)
+            caverns.phew_countdown = -2
+        else:
+            caverns.phew_countdown -= 1
+
+    def shut_out_opponents(self, room, cell):
+        scene = self.scene
+        # 5:4766-489c: in level four, a slammed gate in the Prince's room and
+        # row, under five columns away, with the living opponents of that row
+        # all on its far side.
+        motion = scene.terrain_motion
+        if (scene.game.level.number != 4 or scene.game.caverns.phew_countdown == -2
+                or motion is None or room != motion.room or cell // 10 != motion.row):
+            return False
+        from pop2.combat import _native_alive
+
+        gate, prince = cell % 10, scene.combat._supporting_column(scene.combat.player)
+        if abs(gate - prince) >= 5:
+            return False
+        result = False
+        for guard in scene.combat.active_guards():
+            if guard.row != motion.row or guard.room != room or not _native_alive(guard):
+                continue
+            column = scene.combat._supporting_column(guard)
+            if (column <= gate) if gate < prince else (column > gate):
+                result = True
+            else:
+                return False
+        return result
+
 
 class Ruins(Caverns):
     """Levels six and seven (kind 4)."""
@@ -611,6 +712,7 @@ class Ruins(Caverns):
             scene.start_ending()
 
     def controls(self):
+        super().controls()
         scene = self.scene
         # GenCtrl 6:06b4-06e0: crouched (109) or crawling (246-261) in the
         # ruins, RuinSetCreviceRevealed 7:3404 uncovers the crevice ahead.
@@ -626,6 +728,12 @@ class Ruins(Caverns):
                                               state.facing, state.selected_sequence_id):
             foreground = scene.level_map.tile(room, cell % 10, cell // 10).foreground
             caverns.loose.tiles[room, cell] = CREVICE_TILE, foreground | 0x80
+
+    def exit_entry(self):
+        scene = self.scene
+        # Opcode -16 (4:2f3e-2f56): leaving at character column >= 6 opens
+        # level seven at its upper entrance (a5-0x500c = 2).
+        return 2 if character_column(scene.sequence_state.target_x) >= 6 else 1
 
 
 def environment_for(scene):

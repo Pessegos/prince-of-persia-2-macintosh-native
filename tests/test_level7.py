@@ -48,10 +48,12 @@ class LevelSevenTests(unittest.TestCase):
     def test_the_level_six_exit_column_chooses_the_entrance(self):
         # The exit sequences end at X 168 (left door, column 2) and 372
         # (right door, column 6) of level six's native room 16.
+        from pop2.environments import environment_for
+
         scene = self.scene
         for x, entry in ((168, 1), (372, 2)):
             scene.sequence_state.target_x = x
-            self.assertEqual(scene.level_six_exit_entry(), entry)
+            self.assertEqual(environment_for(scene).exit_entry(), entry)
 
     def test_entering_every_room_does_not_raise(self):
         # Opponent set 5 (heads and serpents) is not generated yet.
