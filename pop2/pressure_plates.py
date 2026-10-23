@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field, replace
 import struct
 
+from pop2.coordinates import port_room
 from pop2.bridge import bridge_checked
 from pop2.loose_floors import pressure_tile
 from pop2.darts import Darts
@@ -90,8 +91,8 @@ class PressurePlates:
                 break
             if not 1 <= room <= 32 or not 0 <= cell < 30:
                 raise ValueError('Invalid pressure-plate destination')
-            tile = terrain.tile(room - 1, cell % 10, cell // 10)
-            key = room - 1, cell
+            tile = terrain.tile(port_room(room), cell % 10, cell // 10)
+            key = port_room(room), cell
             self.triggered.append((tile.kind, *key, how))
             if tile.kind == 4:
                 self.trigger_gate(key, tile.foreground, how, depressed, impact, shut_only)

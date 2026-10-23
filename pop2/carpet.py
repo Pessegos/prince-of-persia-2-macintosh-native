@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from pop2.coordinates import scene_x
+
 
 CARPET_LEVEL = 5
 CARPET_ROOM = 2
@@ -40,8 +42,8 @@ class Carpet:
         return min(self.counter - 4, 7) if self.crashed and self.counter > 4 else 0
 
     def sit_x(self, facing):
-        # 8:14be-14ce: native X 425 (+30 facing right), less the 207 origin.
-        return 218 + (30 if facing else 0)
+        # 8:14be-14ce: native X 425 (+30 facing right).
+        return scene_x(425) + (30 if facing else 0)
 
     def drawing(self, x, y, facing):
         """SetupCarpet 8:12d6-1334: shape and top-left beneath a riding Prince."""
