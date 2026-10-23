@@ -70,6 +70,28 @@ class CarpetTests(unittest.TestCase):
         self.assertEqual(carpet.drawing(218, 39, 0), (25318, 218 - 69, 39 + 8))
         self.assertEqual(Carpet().sit_x(1), 248)
 
+    def test_a_crashed_carpet_turns_red_over_seven_drawings(self):
+        # DrawObjCarpet 8:10ba-11a2 and ComputeBloodRGB 8:0df6.
+        from pop2.carpet import Carpet
+        from pop2.caverns import blood_component, carpet_palette
+
+        carpet = Carpet(counter=4, crashed=True)
+        steps = []
+        for _ in range(10):
+            steps.append(carpet.blood_step())
+            carpet.counter += 1
+        self.assertEqual(steps, [0, 1, 2, 3, 4, 5, 6, 7, 7, 7])
+        self.assertEqual(Carpet(counter=9).blood_step(), 0)
+        self.assertEqual(blood_component(0xffff, 0x7272, 8), 0xffff - (0xffff - 0x7272) // 8 * 8)
+        self.assertEqual(blood_component(0x4040, 0, 3), 0x4040 - 0x808 * 3)
+        base, red = carpet_palette(), carpet_palette(7)
+        for index, target in ((46, 0x72), (45, 0x4b)):
+            self.assertNotEqual(red[index], base[index])
+            self.assertLessEqual(abs(red[index][0] - target), abs(base[index][0] - target))
+            self.assertLessEqual(red[index][1], base[index][1])
+        self.assertEqual({i: c for i, c in red.items() if i not in (45, 46)},
+                         {i: c for i, c in base.items() if i not in (45, 46)})
+
     def test_counter_only_runs_once_the_carpet_is_used(self):
         from pop2.carpet import Carpet
 

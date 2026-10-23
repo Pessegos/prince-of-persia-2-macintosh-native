@@ -623,7 +623,8 @@ def draw_bridge_planks(frame, room_id, state, *, level_number=3):
 
 
 @lru_cache(maxsize=1)
-def carpet_palette():
+@lru_cache(maxsize=1)
+def carpet_base_palette():
     # CheckCarpetImg 8:0d30 loads CTBL 25303 over entries 32-46. Entries
     # 16-31 hold the cavern Prince palette (Kid CTBL 25003) one bank up, as
     # an emulator capture of the unused carpet confirms pixel for pixel.
@@ -633,10 +634,33 @@ def carpet_palette():
     return palette
 
 
-def carpet_sprite(shape, resources, shapes):
-    key = ('carpet', shape)
+def blood_component(start, target, step):
+    # ComputeBloodRGB 8:0df6: start + (target - start) / 8 * step, with the
+    # signed division truncating towards zero, on 16-bit colour words.
+    difference = target - start
+    eighth = abs(difference) // 8 * (1 if difference >= 0 else -1)
+    return start + eighth * step
+
+
+def carpet_palette(blood=0):
+    palette = carpet_base_palette()
+    if blood:
+        # DrawObjCarpet 8:10ba-11a2: from the fifth drawing after a crash,
+        # entries 46 and 45 fade towards dark red (0x7272 / 0x4bc2, no green
+        # or blue) for seven frames, from their colours at the first step.
+        palette = dict(palette)
+        for index, red in ((46, 0x7272), (45, 0x4bc2)):
+            r, g, b, a = palette[index]
+            palette[index] = (blood_component(r * 257, red, blood) >> 8,
+                              blood_component(g * 257, 0, blood) >> 8,
+                              blood_component(b * 257, 0, blood) >> 8, a)
+    return palette
+
+
+def carpet_sprite(shape, resources, shapes, blood=0):
+    key = ('carpet', shape, blood)
     if key not in shapes:
-        shapes[key] = decode_shap(resources['SHAP'][shape]['data'], carpet_palette())
+        shapes[key] = decode_shap(resources['SHAP'][shape]['data'], carpet_palette(blood))
     return shapes[key]
 
 
@@ -656,7 +680,7 @@ def draw_carpet(frame, room_id, state, prince=None, *, level_number=3):
         frame.paste(sprite, (STATIC_X, STATIC_BOTTOM - sprite.height), sprite)
     elif prince is not None and prince[3] == RIDE_FRAME:
         shape, x, bottom = carpet.drawing(prince[0], prince[1], prince[2])
-        sprite = carpet_sprite(shape, resources, shapes)
+        sprite = carpet_sprite(shape, resources, shapes, carpet.blood_step())
         frame.paste(sprite, (x, bottom - sprite.height), sprite)
     return frame
 
