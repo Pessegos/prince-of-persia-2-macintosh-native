@@ -218,3 +218,17 @@ entrance rooms were checked separately through the door frames). But gates
 them: level four's export went from 3 s to 43 s, level five's from 12 s to
 70 s. The rules stay; the trial's checks are their new evidence. Torches and
 lava keep their own layers.
+
+## Stage 4: Coordinate Conversions (2026-10-23)
+
+`pop2/coordinates.py` names the conversions: `native_x`/`scene_x` (the
+207-pixel actor origin), `column_left` (the column table a5-0x4b88 in scene
+X), `native_room`/`port_room` (one-based rooms, 0 meaning none). Migrated
+callers: the attract recording's actor X, ordinary-guard and generation
+records (room offsets and X), the cliff start X, LEVL start room and
+checkpoints, pressure-plate link rooms, the foreground column of a mode-1
+actor, the crawl alignment and the scythe trigger. Actor-X columns
+(`character_column`) and supporting-foot columns (`floor_contact_x` first)
+stay separate calls. `tests/test_coordinates.py` pins the round trips,
+negative X/columns, room 0 and the signed column division at its edges.
+Stored state and saves are unchanged.
