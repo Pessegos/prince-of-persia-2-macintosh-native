@@ -155,7 +155,15 @@ can set alive0/pose185/pending damage; action5 and tile2 have explicit bypasses.
 Resource/handle management and audio remain supplied; later animation/death
 progression, other actor reaction bodies and full FrameAdv remain excluded.
 
-Next work follows presentation, caller admission, scheduling and reset/save
-behavior separately.
+[Native presentation](temple-slide-rock-presentation.md) now covers full
+ATMSlideRock, decoration strips, rectangle computation and native object-queue
+appends through both direct and ATMLoose/type6 entry. 1,416 comparisons include
+all12 actual anchors and3,292 object appends. The16-byte rock/bank is restored;
+two dimension-table heights are canonicalized to the saved height7. Visibility,
+rectangle system services and the redraw-list sink remain supplied. This is
+queue-write evidence, not raster output, real room cuts or FrameAdv coverage.
+
+Next work connects presentation with updates, then follows caller admission,
+scheduling and reset/save behavior separately.
 The constructor's X>510 branch, TriggerObject caller admission and connected
 movement lifecycle remain open.

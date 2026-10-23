@@ -153,6 +153,8 @@ Outputs SHA256:
 `8d69ed5a1def3f43e078fb4bfd5130dda481f89816fa62fad66e1fbf7a4bc245`.
 The ignored report records Prince.rsrc, level and individual sequence hashes.
 
-Next work: ATMSlideRock presentation/restoration, native persistence/reset/save
+[Presentation/restoration](temple-slide-rock-presentation.md) is now recovered
+in a separate native queue-building probe, not interleaved into these contact
+traces. Next work connects the stages, then follows native persistence/reset/save
 paths and the remaining trap-door caller/admission/scheduling/collision audit.
 Production code, imports/assets, campaign and README remain untouched.
