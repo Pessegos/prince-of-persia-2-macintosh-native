@@ -5,9 +5,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 import wave
 
 import numpy as np
@@ -23,6 +24,45 @@ import tests.test_terrain as terrain_tests
 @unittest.skipUnless((ASSET_DIR / "audio" / "manifest.json").is_file(),
                      "Original audio has not been imported")
 class ImportedAudioTests(unittest.TestCase):
+    def test_level_four_exit_and_original_bone_sequence_share_no_effect_channel(self):
+        from pop2.game_session import GameResources, GameSession
+        from pop2.sequence_runtime import SequenceRuntime, SequenceState
+
+        resources = GameResources.load()
+        game = GameSession.load(resources, 4)
+        door = game.level_map.tile(21, 4, 2)
+        self.assertEqual((door.kind, door.foreground & 255), (17, 0))
+        plates = game.caverns.plates
+        plates.add((21, 24), 1)
+        bones = SequenceRuntime(resources.sequences, SequenceState(
+            112, actor_type=4, level_kind=3))
+        bone_cues = []
+        with patch.dict(os.environ, {'SDL_AUDIODRIVER': 'dummy'}):
+            audio = AudioEngine()
+            try:
+                time.sleep(.02)
+                with patch.object(audio.playback, 'play', wraps=audio.playback.play) as played, \
+                        patch.object(audio.playback, 'play_effect',
+                                     wraps=audio.playback.play_effect) as effects:
+                    for step in range(79):
+                        for cue in plates.advance(game.level_map):
+                            audio.add_sound(cue)
+                        bones.next_frame()
+                        bone_cues.extend(bones.state.sound_events)
+                        audio.drain(bones.state)
+                        audio.flush()
+                        if step < 78:
+                            self.assertIs(audio.playback.channels['mechanism'].get_sound(),
+                                          audio.playback.sounds[17])
+                            self.assertTrue(audio.playback.busy('mechanism'))
+                    self.assertEqual(played.call_args_list.count(call('mechanism', 17)), 1)
+                    self.assertEqual(played.call_args_list.count(call('mechanism', 18)), 1)
+                    self.assertTrue(any(item.args[0] in (60, 61) for item in effects.call_args_list))
+                self.assertTrue({60, 61}.intersection(bone_cues))
+                self.assertEqual(game.level_map.tile(21, 4, 2).foreground & 255, 79)
+            finally:
+                audio.close()
+
     def test_level_three_environment_combat_and_death_cues_are_prepared(self):
         audio = AudioEngine(playback=object())
         self.assertEqual(audio.manifest['ambient'][3],
@@ -204,8 +244,10 @@ class SceneAudioTests(unittest.TestCase):
                 self.scene.advance_animation()
 
     def effects(self):
-        return [call.args[1] for call in self.scene.audio.playback.play.call_args_list
-                if call.args[0] == "effect"]
+        return [item.args[0] if item[0] == 'play_effect' else item.args[1]
+                for item in self.scene.audio.playback.mock_calls
+                if item[0] == 'play_effect' or
+                item[0] == 'play' and item.args[0] in ('effect', 'mechanism')]
 
     def test_skeleton_meter_stays_above_while_music_returns_across_the_gap(self):
         from pop2.combat import select_sequence
@@ -293,10 +335,12 @@ class SceneAudioTests(unittest.TestCase):
                 plates.foreground[22, 1] = 0x200 | position
                 plates.active[22, 1] = phase
                 self.tick()
-                self.assertEqual(self.effects(), [29])
+                # Independent mechanism audio retains the stop/slam beside ouch.
+                expected = [29, 18 if phase == 1 else 20]
+                self.assertEqual(self.effects(), expected)
                 self.assertEqual(plates.foreground[22, 1], 0x200)
                 self.tick(12)
-                self.assertEqual(self.effects(), [29])
+                self.assertEqual(self.effects(), expected)
                 self.assertEqual(scene.combat.player.life, life)
                 self.assertTrue(scene.ledge_hanging)
 
@@ -327,8 +371,9 @@ class SceneAudioTests(unittest.TestCase):
         self.assertIn(36, self.effects())
         self.tick(25)
         self.scene.audio.add_sound.assert_any_call(296, 0)
-        # The longer, higher-priority glass sample must not be cut by footsteps.
-        self.assertEqual(self.effects(), [36])
+        # Footsteps can coexist with glass, but must not restart or replace it.
+        self.assertEqual(self.effects().count(36), 1)
+        self.assertIn(296, self.effects())
         self.assertFalse(self.scene.sequence_state.sound_events)
 
     def test_running_uses_sequence_footsteps_and_pause_freezes_both_buses(self):

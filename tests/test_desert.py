@@ -602,12 +602,12 @@ class OriginalDesertTests(unittest.TestCase):
         scene.audio.add_sound(51)
         scene.audio.flush()
         RooftopSceneTests.tick(self)
-        self.assertEqual(audio.current_effect, 51)
+        self.assertTrue(audio.sound_playing(51))
         self.assertIsNone(audio.current_music)
         RooftopSceneTests.tick(self, 50)
         self.assertEqual(audio.current_music, 50)
         self.assertTrue(audio.song_playing(50))
-        self.assertNotEqual(audio.current_effect, 51)
+        self.assertFalse(audio.sound_playing(51))
         desert = scene.game.desert
         desert.last_column = desert.marked_stone + 2
         desert.failed = True
