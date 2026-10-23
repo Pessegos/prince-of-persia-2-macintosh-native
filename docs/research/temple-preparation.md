@@ -181,7 +181,16 @@ tile25 branch, six raw rock-only link chains and repeated held/permanent
 PushPlate calls on five header-admitted sources:8,609 comparisons pass without
 supplied native services. Caller mode5 selects rock how2; other tested words
 select how1. Return-1 skips TROB creation while link traversal continues.
-Two mixed gate/rock chains and the fresh timer<2 plate branch remain open.
+The fresh timer<2 plate branch remains open; the two mixed chains are covered
+by the subsequent bounded experiment below.
+
+[Mixed gate/rock links](temple-mixed-plate-links.md) executes both original
+level11 room3 chains, native gate admission and TROB lookup/append/update:
+9,206 comparisons pass without supplied services. The two banks have independent
+capacity limits; rejected creation in one does not abort the other mechanism.
+First coordinate match updates only the TROB phase, even at capacity. Repeated
+held/permanent plate calls preserve source write/cache ordering. This does not
+establish fresh plate setup, actual actor admission or combined animation.
 
 Next work follows fresh-pressure and mixed-mechanism callers, actual scheduling
 and reset/save behavior separately. The constructor's X>510 branch, actor
