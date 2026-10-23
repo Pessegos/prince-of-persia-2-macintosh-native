@@ -62,3 +62,41 @@ class CavernRetryPresentationTests(unittest.TestCase):
         self.assertTrue(stages)
         self.assertEqual(set(stages), {None})
         self.assertIsNone(self.scene.intro)
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported cavern resources required')
+class CavernGateClearanceTests(unittest.TestCase):
+    def test_short_left_tap_finishes_normally_when_the_gate_only_clips_the_rear_edge(self):
+        from pop2.pressure_plates import PressurePlates
+        from tests.test_terrain import RooftopSceneTests
+
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        directory = stack.enter_context(TemporaryDirectory())
+        stack.enter_context(patch('pop2.window_controls.ScreenshotSettings.load',
+                                  return_value=ScreenshotSettings(Path(directory))))
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(4)
+        scene.peaceful = True
+        scene.in_animation_tick = True
+        with patch.object(scene, 'render'):
+            for start in (130, 132):
+                with self.subTest(start=start):
+                    scene.jump_to_room(10, 2, start, 0)
+                    plates = scene.game.caverns.plates = PressurePlates()
+                    plates.foreground[10, 22] = 0x200 | 237
+                    plates.active[10, 22] = 4
+                    scene.game.caverns.entry_frame = len(scene.game.caverns.entry_frames) - 1
+                    scene.horizontal_key(None, -1, True)
+                    scene.horizontal_key(None, -1, False)
+                    phases = []
+                    for _ in range(24):
+                        RooftopSceneTests.tick(self)
+                        phases.append(plates.foreground[10, 22] & 255)
+                        self.assertNotIn(scene.sequence_state.source_sequence_id, (50, 118))
+                        self.assertFalse(scene.terrain_motion.dead or scene.terrain_motion.falling)
+                    self.assertEqual((scene.action, scene.combat.player.life), (15, 3))
+                    self.assertLess(scene.player_x, start)
+                    # It still slams; the next reversible plate may reopen it.
+                    self.assertIn(0, phases)

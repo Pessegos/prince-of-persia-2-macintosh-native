@@ -887,6 +887,14 @@ class RooftopPhysics:
                     for body in contact_bounds)
                 or not stone_gate_blocks(tile.foreground, bounds, state)):
             return None
+        # Port improvement: a nearly cleared running pose may finish instead
+        # of ducking/ejecting because its trailing edge clips the gate mask.
+        # Keep front contact, airborne poses and deeper body overlap native.
+        rear_overlap = right - bounds[0] if state.facing else bounds[2] + 1 - left
+        if (not sword_drawn and not motion.falling and state.current_y == 0
+                and state.source_sequence_id in (1, 13, 200, 201, 202)
+                and 0 < rear_overlap <= 4):
+            return None
         if state.action != 109 and tile.foreground and not sword_drawn:
             if state.source_sequence_id == 50:
                 return None
