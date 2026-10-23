@@ -175,8 +175,9 @@ global Python installation.
 
 Original game files are not bundled. At the first launch, select your Macintosh
 Prince of Persia 2 disk image. The importer extracts the resources, enemy data
-and audio, then starts the game. Preparing all scenery and music can take several
-minutes on the first import. The window shows the current recovery step and elapsed
+and audio, then starts the game. The first import prepares all scenery and music
+using every processor core: it takes about 20 seconds on an 8-core PC and somewhat
+longer on machines with fewer cores. The window shows the current recovery step and elapsed
 time; Cancel or closing the window stops the import and removes its temporary files.
 Import diagnostics are saved in `rendered/setup.log`.
 Subsequent launches use those local files without
