@@ -115,9 +115,42 @@ class BridgeBreakTests(unittest.TestCase):
         self.assertEqual(bridge.creak(None, None, False, rng), ())
         self.assertEqual(len(rng.calls), 3)
 
+    def test_characters_mark_their_plank_and_its_neighbours(self):
+        # 8:0534-057c and MarkBridgeForCol 8:05cc.
+        bridge = Bridge()
+        for prince, opponent, marks in ((4, 5, 0xff), (4, None, 0x1c), (None, 1, 0x03),
+                                        (8, None, 0xc0), (None, None, 0)):
+            bridge.creak(prince, opponent, True)
+            self.assertEqual(bridge.marks, marks)
+
+    def test_marked_planks_wobble_for_one_frame_on_a_high_roll(self):
+        # ATMBrgFloor 8:06d8-0764: Rnd(3) >= 2 lifts (1) or drops (2) a
+        # resting marked plank; a wobbling plank rests on the next frame.
+        bridge = Bridge(marks=0x1c, pieces={5: 2})
+        bridge.advance_wobble(FixedRandom(2, 3))
+        self.assertEqual(bridge.wobble, {3: 1, 4: 2})
+        bridge.advance_wobble(FixedRandom(3, 3))
+        self.assertEqual(bridge.wobble, {})
+        rng = FixedRandom(1, 0)
+        bridge.advance_wobble(rng)
+        self.assertEqual((bridge.wobble, rng.calls), ({}, [(0, 3), (0, 3)]))
+
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
 class BridgeSceneryTests(unittest.TestCase):
+    def test_wobbling_planks_match_the_native_redraw(self):
+        # A native room-10 redraw with plank 3's nibble at 1 or 2.
+        from pop2.caverns import cavern_assets, with_plank_wobble
+
+        program, resources, _palette, _shapes = cavern_assets(5)
+        plank = next(command for command in program['rooms']['9']
+                     if command[1] == 4226 and command[8] == 3)
+        self.assertEqual(with_plank_wobble([plank], {(3, 1)}, resources),
+                         [['back', 4227, 153, 247, 16, 1, [215, 153, 247, 242], 4, 3, 1]])
+        self.assertEqual(with_plank_wobble([plank], {(3, 2)}, resources),
+                         [['back', 4228, 153, 248, 16, 1, [215, 153, 248, 243], 4, 3, 1]])
+        self.assertEqual(with_plank_wobble([plank], {(4, 2)}, resources), [plank])
+
     def test_room_ten_redraw_omits_only_the_fallen_planks(self):
         # A native redraw of the emptied cells (all five collapse stages)
         # equals the export without the fallen columns' SHAP 4226 commands.

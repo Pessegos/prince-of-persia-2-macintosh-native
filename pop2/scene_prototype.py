@@ -53,7 +53,7 @@ from pop2.rebirth import RebirthSnapshot
 from pop2.story_progress import MESSAGE_FRAMES, StoryProgress
 from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
-from pop2.bridge import CREAK_SOUND, bridge_checked, bridge_gate_open, bridge_sag, on_bridge
+from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, bridge_sag, on_bridge
 from pop2.carpet import (
     CARPET_ROOM, CARPET_TILE, CLOSED_SONG, CRASH_SEQUENCE, OPEN_SONG, RIDE_FRAME, SIT_SEQUENCE,
     carpet_room,
@@ -2707,8 +2707,10 @@ class ScenePrototype(WindowControls):
         if (getattr(game, "caverns", None) is None or motion is None or game.level.number != 5
                 or getattr(self, "level_map", None) is None or motion.falling):
             return 0
+        record = (self.frames[actor.state.action] if actor is self.combat.player else
+                  self.guard_art.frames[guard_frame_index(actor.state.action)])
         return bridge_sag(self.level_map, motion.room, self.combat._supporting_column(actor),
-                          motion.row, actor.state.action)
+                          motion.row, actor.state.action, record)
 
     def bridge_column(self, actor):
         # The stored cell (+0xc/+0xe) used by 8:04e6, or None off the bridge.
@@ -2754,6 +2756,10 @@ class ScenePrototype(WindowControls):
         audio = getattr(self, "audio", None)
         playing = audio is not None and audio.sound_playing(CREAK_SOUND)
         state.sound_events.extend(bridge.creak(prince, opponent, playing))
+        if self.room_id == BRIDGE_ROOM:
+            bridge.advance_wobble()
+        else:
+            bridge.wobble.clear()
         sounds, push = bridge.check_break(prince, opponent, state.source_sequence_id)
         state.sound_events.extend(sounds)
         motion = self.terrain_motion

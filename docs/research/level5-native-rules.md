@@ -41,7 +41,7 @@ unmapped-region sites below). Each is accounted for:
 | `6:451a` | CutAllOpponents | implemented |
 | `6:4cd6`, `6:4d32` | CutChar | implemented (no cut below room 10; chasm to room 0) |
 | `8:0190`, `8:01ae` | BridgeGetCharCol | implemented (rooms 7/12 continue room 10's columns) |
-| `8:06e0` | plank wobble | read, **not implemented** (see below) |
+| `8:06e0` | plank wobble | **implemented 2026-10-23** (see below) |
 | `8:0a5e`, `8:0baa` | ATMBrgFloor / TriggerBrgFloorMob | implemented |
 | `8:2d78` | TriggerGateWithRevPlate | implemented |
 | `8:3b9a` | Caverns frame hook | implemented (BridgeCheckBreak in rooms 10/7/12) |
@@ -60,8 +60,6 @@ The heads of levels six/seven also use it (`7:04ea`, `7:092a`), so it will
 need to move out of the bridge state for those levels.
 
 **Approximations and gaps that remain:**
-- Plank wobble (8:06d8, below) is not drawn and does not move characters by
-  one pixel.
 - The carpet's red fade of palette entries 45/46 (`8:10ba-119c`).
 - Cutscene 1 (NISCarpet) between levels five and six is not shown; the
   port goes straight to level six.
@@ -122,14 +120,17 @@ check of the redraw at each collapse stage.
 - Note: the symbol file's "IsBrgGateOpen" at `8:033c` is the bridge guard;
   the actual gate test is `8:0458`.
 
-**Still open [D, read but not implemented]:**
-- `8:06d8`/RedrawBrgFloor `8:0878`: plank wobble. Each bridge cell is a trob
+**Plank wobble (implemented 2026-10-23):**
+- `8:06d8`/RedrawBrgFloor `8:0878`: each bridge cell is a trob
   (TriggerBrgFloor `8:091c` at room entry). While a character's column ±1
   is marked (8:0534/MarkBridgeForCol `8:05cc`; both on the bridge mark all),
-  Rnd(3) >= 2 sets the foreground nibble to 1 or 2 for one frame; the cell
-  is redrawn with CUST record 3 + nibble (SHAP 4226-4228, bottom +0/+1/+2)
-  and a character's Y on a floor pose moves -1/+1 (`8:068c-06be`). Not
-  implemented: it needs per-cell redraws of the pre-rendered room.
+  a resting marked plank takes nibble Rnd(3) - 1 when Rnd(3) >= 2, and a
+  wobbling plank rests on the next frame. The cell is drawn with CUST record
+  3 + nibble (SHAP 4227/4228, bottom one/two pixels lower, checked against
+  native redraws) and a character's Y on a floor pose (frame flag 0x40)
+  moves -1/+1 (`8:068c-06be`). The port re-renders room 10 for each wobble
+  (about 5 ms) and keeps no wobble variants cached. While room 10 is not
+  shown the trobs stop; the port then clears the nibbles.
 - (Implemented) BridgeCheckBreak's room-7 side effect (`8:020a-0236`): a
   Prince who still has his sword (a5-0x503c != -1) outside the bridge in
   room 7, column <= 5, with the gate trob in phase 0 or 2, triggers

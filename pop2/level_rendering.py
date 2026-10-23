@@ -54,20 +54,23 @@ class LevelRenderer:
                          if caverns is not None else '')
             pressure = cavern_pressure_signature(self.cavern_program, room_id, caverns) if caverns else ()
             fallen = caverns.bridge.fallen() if caverns is not None else frozenset()
+            wobble = frozenset(caverns.bridge.wobble.items()) if caverns is not None else frozenset()
             scythe = (cavern_scythe_signature(self.cavern_program, room_id, caverns)
                       if caverns is not None else None)
             entry = caverns.entry_room if caverns is not None else self.level.start_room
-            key = room_id, frame if room_id == entry else 0, signature, pressure, fallen, scythe
+            key = room_id, frame if room_id == entry else 0, signature, pressure, fallen, scythe, wobble
             if key not in self.cavern_frames:
-                # Retain loose-floor variants, not every historical gate height.
+                # Retain loose-floor variants, not every historical gate
+                # height or plank wobble.
                 for previous in tuple(self.cavern_frames):
-                    if previous[0] == room_id and previous[3] != pressure:
+                    if previous[0] == room_id and (previous[3] != pressure or previous[6] or wobble):
                         del self.cavern_frames[previous]
                 self.cavern_frames[key] = cavern_room(room_id, entry_frame=key[1], animated=True,
                                                     loose_key=signature, pressure_key=pressure,
                                                     retouched=self.retouch_caverns,
                                                     level_number=self.level.number,
-                                                    bridge_fallen=fallen, scythe_patch=scythe)
+                                                    bridge_fallen=fallen, scythe_patch=scythe,
+                                                    bridge_wobble=wobble)
             self.rooms[room_id] = self.cavern_frames[key]
             return self.rooms[room_id]
         if room_id not in self.rooms:

@@ -825,6 +825,24 @@ def with_scythe(commands, patch):
     return result
 
 
+def with_plank_wobble(commands, wobble, resources):
+    # OffsetBrgFloorY 8:0772-07b6 draws a wobbling plank with CUST record
+    # 3 + nibble: SHAP 4227/4228, its bottom one/two pixels lower.
+    wobble = dict(wobble)
+    result = []
+    for command in commands:
+        nibble = (wobble.get(command[8]) if command[1] == 4226 and len(command) >= 10
+                  and command[9] == 1 else None)
+        if nibble:
+            command = list(command)
+            command[1] += nibble
+            command[3] += nibble
+            width, height = struct.unpack_from('>hH', resources['SHAP'][command[1]]['data'], 4)
+            command[6] = [command[3] - height, command[2], command[3], command[2] + width]
+        result.append(command)
+    return result
+
+
 def without_fallen_planks(commands, fallen):
     # Native room-10 redraws with the emptied bridge cells (8:0c3e-0c54) only
     # omit those cells' CUST plank (SHAP 4226), in every collapse stage.
@@ -834,7 +852,7 @@ def without_fallen_planks(commands, fallen):
 
 
 def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=(), retouched=False,
-                *, level_number=3, bridge_fallen=frozenset(), scythe_patch=None):
+                *, level_number=3, bridge_fallen=frozenset(), scythe_patch=None, bridge_wobble=frozenset()):
     program, resources, palette, shapes = room_assets(level_number, room_id)
 
     def scenery_sprite(command):
@@ -860,6 +878,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         commands = pressure_drawing_commands(commands, records, pressure_key, resources)
     if bridge_fallen:
         commands = without_fallen_planks(commands, bridge_fallen)
+    if bridge_wobble:
+        commands = with_plank_wobble(commands, bridge_wobble, resources)
     patch = (program['scythes']['rooms'][str(room_id)]['patches'][scythe_patch]
              if scythe_patch is not None else None)
     if patch is not None:
@@ -910,6 +930,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             redraw_commands = pressure_drawing_commands(redraw_commands, records, pressure_key, resources)
         if bridge_fallen:
             redraw_commands = without_fallen_planks(redraw_commands, bridge_fallen)
+        if bridge_wobble:
+            redraw_commands = with_plank_wobble(redraw_commands, bridge_wobble, resources)
         for command in redraw_commands:
             if animated and len(command) >= 8 and command[7] == 1:
                 continue
@@ -924,6 +946,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         floor_commands = pressure_drawing_commands(floor_commands, records, pressure_key, resources)
     if bridge_fallen:
         floor_commands = without_fallen_planks(floor_commands, bridge_fallen)
+    if bridge_wobble:
+        floor_commands = with_plank_wobble(floor_commands, bridge_wobble, resources)
     if patch is not None:
         floor_commands = with_scythe(floor_commands, patch['floor_redraw'])
     for command in floor_commands:

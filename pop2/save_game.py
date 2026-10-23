@@ -172,7 +172,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     if cls is CavernState:
         optional.update(('bridge', 'carpet', 'phew_countdown', 'scythes'))
     if cls is Bridge:
-        optional.update(('tension_level', 'tension'))
+        optional.update(('tension_level', 'tension', 'marks', 'wobble'))
     if (not isinstance(record, dict) or set(record) - allowed
             or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')
@@ -382,7 +382,10 @@ def read_snapshot(path, resources):
                 or any(not isinstance(plank, list) or len(plank) != 2
                        or plank[0] not in bridge.pieces or type(plank[1]) is not int
                        or not 0 <= plank[1] <= 13 for plank in bridge.planks)
-                or any(song != 121 for song in bridge.songs)):
+                or any(song != 121 for song in bridge.songs)
+                or type(bridge.marks) is not int or not 0 <= bridge.marks <= 0xff
+                or any(column not in range(1, 9) or nibble not in (1, 2)
+                       for column, nibble in bridge.wobble.items())):
             raise SaveGameError('Invalid bridge state')
         carpet = game.caverns.carpet if game.caverns is not None else None
         if carpet is not None and (type(carpet.counter) is not int or not 0 <= carpet.counter < 2**31
