@@ -114,3 +114,16 @@ Do not treat this list as complete temple rule coverage.
 
 These supersede the initial animation-state gaps only in their documented
 subsets. Actual pixels, complete scheduling, sound state and collision remain open.
+
+## Sliding-Rock Follow-Up
+
+[Activation and row lookup](temple-slide-rock-trigger.md) now covers the
+complete native trigger, record selection and normal-cell initialization:
+4,620 comparisons over all 12 actual marker cells, with supplied control
+inputs/banks and no supplied native services. It establishes one selected
+live type-6 record per matching room/row lookup, control-word changes and
+capacity behavior, not movement or a complete actor controller.
+
+Next work follows the native type-6 MakeRubble update dispatch, presentation,
+collision and persistence separately. The constructor's X>510 branch,
+TriggerObject caller admission and connected movement lifecycle remain open.
