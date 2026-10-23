@@ -64,6 +64,11 @@ its rock crosses an absent left link. Terminal/stopped records can still produce
 presentation objects; zero motion alone does not suppress drawing. These
 outcomes agree with the earlier update-only traces.
 
+The subsequent [caller-admission probe](temple-slide-rock-admission.md)
+clarifies that the original resource markers include level12 room29, beyond
+that level's26 declared rooms. Its direct constructed trace is a raw-resource
+control; it does not establish an accessible gameplay trigger there.
+
 ## Verification
 
 ```powershell

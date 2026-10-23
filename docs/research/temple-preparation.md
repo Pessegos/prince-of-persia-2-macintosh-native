@@ -100,6 +100,11 @@ sliding-rock activation/persistence, temple draw
 dispatch/custom callbacks, Birdhead combat/frame data, altar/flame/story rules.
 Do not treat this list as complete temple rule coverage.
 
+These are raw resource counts. Level12 room29 contains one of the six tile25
+markers and a linked plate, but lies beyond the header's26 declared rooms;
+native ReadCell returns wall20 for that source. The caller-admission probe
+below distinguishes direct raw-link controls from admitted gameplay sources.
+
 ## Trap-Door Follow-Up
 
 - [Phase advancement](temple-trapdoor-advance.md): native phase/audio-gate
@@ -171,6 +176,13 @@ absent, visible, invisible, alternating or repeated drawing. Scheduling,
 visibility and queue reset boundaries are supplied; no actor reaction endpoint
 is reached. This does not extend damage/death, actual pixels or FrameAdv proof.
 
-Next work follows caller admission, scheduling and reset/save behavior separately.
-The constructor's X>510 branch, TriggerObject caller admission and connected
-movement lifecycle remain open.
+[Caller admission](temple-slide-rock-admission.md) now executes TriggerObject's
+tile25 branch, six raw rock-only link chains and repeated held/permanent
+PushPlate calls on five header-admitted sources:8,609 comparisons pass without
+supplied native services. Caller mode5 selects rock how2; other tested words
+select how1. Return-1 skips TROB creation while link traversal continues.
+Two mixed gate/rock chains and the fresh timer<2 plate branch remain open.
+
+Next work follows fresh-pressure and mixed-mechanism callers, actual scheduling
+and reset/save behavior separately. The constructor's X>510 branch, actor
+pressure admission and full movement/contact/presentation lifecycle remain open.
