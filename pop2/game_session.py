@@ -110,7 +110,14 @@ class GameSession:
         self.complete = False
         self.exit = None
         self.desert = DesertState() if level.kind == 1 else None
+        previous = getattr(self, 'caverns', None)
         self.caverns = CavernState() if level.native_scenery else None
+        if previous is not None and self.caverns is not None:
+            # SetTensionLevel's a5-0x36a2/-0x36a0 survive RestartGame (2:5b66
+            # reloads the level and clears only the bridge, 2:6e38); the
+            # next-level opcode -16 (4:2f5a) resets them with a new session.
+            self.caverns.bridge.tension_level = previous.bridge.tension_level
+            self.caverns.bridge.tension = previous.bridge.tension
         if self.level_map is not None:
             self.level_map.desert = self.desert
             self.level_map.caverns = self.caverns

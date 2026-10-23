@@ -386,6 +386,25 @@ class BridgeFallTests(unittest.TestCase):
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class BridgeTensionPersistenceTests(unittest.TestCase):
+    def test_tension_survives_a_restart_but_not_a_new_level(self):
+        # RestartGame 2:5b66 reloads the level and clears the bridge (2:6e38)
+        # but never SetTensionLevel's globals; the next-level opcode -16
+        # (4:2f5a) resets them.
+        from pop2.game_session import GameResources, GameSession
+
+        resources = GameResources.load()
+        game = GameSession.load(resources, 5)
+        game.caverns.bridge.set_tension(3, 15)
+        game.caverns.bridge.state = 2
+        game.restart()
+        bridge = game.caverns.bridge
+        self.assertEqual((bridge.state, bridge.tension_level, bridge.tension), (0, 3, 15))
+        fresh = GameSession.load(resources, 5).caverns.bridge
+        self.assertEqual((fresh.tension_level, fresh.tension), (0, 0))
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
 class BridgeGuardAiTests(unittest.TestCase):
     """8:02ae, 8:033c, 8:0424 and 8:04a2 on level five's bridge."""
 

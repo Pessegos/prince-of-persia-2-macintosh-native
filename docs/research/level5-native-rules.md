@@ -50,6 +50,15 @@ Other level-dependent tables reviewed for level five: IsTimeForNIS
 (`2:00e8`) has no level-five case; CheckPlayNIS selects scene 1 (NISCarpet,
 `15:1630` through the NIS 1-6 dispatcher `15:07c8`) when leaving level five.
 
+**Tension persistence (fixed 2026-10-23):** SetTensionLevel's globals
+(a5-0x36a2/-0x36a0) are written only by `6:5022` and a debug dialog
+(`2:4a5a`). RestartGame (`2:5b66`) reloads the level (LoadLevelMinimum
+`3:585a`) and clears only the bridge (`2:6e38`), so tension built up by
+fatal falls survives a restart; the next-level opcode -16 (`4:2f5a`) resets
+it, except when leaving level six. The port now carries it across restarts.
+The heads of levels six/seven also use it (`7:04ea`, `7:092a`), so it will
+need to move out of the bridge state for those levels.
+
 **Approximations and gaps that remain:**
 - Plank wobble (8:06d8, below) is not drawn and does not move characters by
   one pixel.
