@@ -2193,7 +2193,7 @@ class ScenePrototype(WindowControls):
             elif phase == 'environment':
                 self.advance_environment()
             elif phase == 'harbor':
-                self.advance_harbor()
+                environment_for(self).harbor_phase()
             elif phase == 'level_events':
                 self.advance_level_events()
             elif phase == 'rebirth':
@@ -2502,56 +2502,6 @@ class ScenePrototype(WindowControls):
         self.action = self.sequence_state.action
         self.player_x = self.sequence_state.target_x
         self.sequence_state.current_x = self.player_x
-
-    def advance_harbor(self):
-        motion = getattr(self, "terrain_motion", None)
-        if motion is None or self.harbor is None:
-            return
-        state = self.sequence_state
-        if (state.sequence_id == SHIP_CLIMB_SEQUENCE
-                or self.harbor.hanging_from_ship(motion.room, state)):
-            state.target_x -= 2
-            state.current_x = state.target_x
-        self.harbor.advance()
-        if (not motion.dead and not getattr(self, 'god_mode', False)
-                and self.harbor.right_exit_is_fatal(motion.room, state)):
-            self.clear_keys(None)
-            motion.dead, motion.falling = True, False
-            self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
-            state.horizontal_velocity = state.vertical_velocity = 0
-            state.sound_events.append(34)
-            self.physics.select(self.sequence_runtime, 71)
-            self.combat.player.life = 0
-            self.death.begin(14)
-            self.status.set("Defeated")
-        bounds = self.player_bounds()
-        if not motion.dead and not getattr(self, 'god_mode', False) and self.harbor.watch_water(
-                0, motion.room, motion.row, state, bounds[2] - bounds[0] + 1):
-            self.clear_keys(None)
-            self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
-            motion.dead = True
-            motion.falling = False
-            state.horizontal_velocity = state.vertical_velocity = 0
-            state.animation_state, state.action = 1, 185
-            state.selected_sequence_id = 22
-            state.sequence_id, state.cursor = 22, len(self.sequences[22]) - 1
-            self.combat.player.life = 0
-            self.death.begin(15)
-            self.status.set("Defeated")
-        if not self.peaceful:
-            for guard in self.combat.active_guards():
-                if guard.terrain_motion is not None and not guard.terrain_motion.dead:
-                    bounds = self.guard_art.bounds(guard.state, floor_y(guard.row))
-                    if self.harbor.watch_water(id(guard), guard.room, guard.row, guard.state,
-                                               bounds[2] - bounds[0] + 1):
-                        guard.life = 0
-                        guard.targetable = False
-                        guard.terrain_motion.dead = True
-                        guard.state.horizontal_velocity = guard.state.vertical_velocity = 0
-                        guard.state.action, guard.state.animation_state = 185, 1
-                        guard.state.selected_sequence_id = 22
-                        guard.state.sequence_id, guard.state.cursor = 22, len(self.sequences[22]) - 1
-        self.player_x, self.action = state.target_x, state.action
 
     def shut_out_opponents(self, room, cell):
         # 5:4766-489c: in level four, a slammed gate in the Prince's room and

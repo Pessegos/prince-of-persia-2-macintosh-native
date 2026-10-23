@@ -11,6 +11,7 @@ import time
 from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, on_bridge
 from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.crevices import CREVICE_TILE
+from pop2.harbor import SHIP_CLIMB_SEQUENCE
 from pop2.loose_floors import floor_hits_actor
 from pop2.opponent_generation import character_column
 from pop2.render_opening import TILE_HEIGHT
@@ -28,7 +29,7 @@ def guard_frame_index(action):
 
 
 class Environment:
-    """No environment-specific work (the rooftops)."""
+    """No environment-specific work."""
 
     def __init__(self, scene):
         self.scene = scene
@@ -42,9 +43,67 @@ class Environment:
     def frame_hook(self):
         """The 'environment' frame phase."""
 
+    def harbor_phase(self):
+        """The 'harbor' frame phase: level one's ship and water."""
+
     def level_events(self):
         """Level mechanisms after the environment hook; True when the level changed."""
         return False
+
+
+class Rooftops(Environment):
+    """Level one (environment kind 5): the rooftops and the harbor."""
+
+    def harbor_phase(self):
+        scene = self.scene
+        motion = getattr(scene, "terrain_motion", None)
+        if motion is None or scene.harbor is None:
+            return
+        state = scene.sequence_state
+        if (state.sequence_id == SHIP_CLIMB_SEQUENCE
+                or scene.harbor.hanging_from_ship(motion.room, state)):
+            state.target_x -= 2
+            state.current_x = state.target_x
+        scene.harbor.advance()
+        if (not motion.dead and not getattr(scene, 'god_mode', False)
+                and scene.harbor.right_exit_is_fatal(motion.room, state)):
+            scene.clear_keys(None)
+            motion.dead, motion.falling = True, False
+            scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
+            state.horizontal_velocity = state.vertical_velocity = 0
+            state.sound_events.append(34)
+            scene.physics.select(scene.sequence_runtime, 71)
+            scene.combat.player.life = 0
+            scene.death.begin(14)
+            scene.status.set("Defeated")
+        bounds = scene.player_bounds()
+        if not motion.dead and not getattr(scene, 'god_mode', False) and scene.harbor.watch_water(
+                0, motion.room, motion.row, state, bounds[2] - bounds[0] + 1):
+            scene.clear_keys(None)
+            scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
+            motion.dead = True
+            motion.falling = False
+            state.horizontal_velocity = state.vertical_velocity = 0
+            state.animation_state, state.action = 1, 185
+            state.selected_sequence_id = 22
+            state.sequence_id, state.cursor = 22, len(scene.sequences[22]) - 1
+            scene.combat.player.life = 0
+            scene.death.begin(15)
+            scene.status.set("Defeated")
+        if not scene.peaceful:
+            for guard in scene.combat.active_guards():
+                if guard.terrain_motion is not None and not guard.terrain_motion.dead:
+                    bounds = scene.guard_art.bounds(guard.state, floor_y(guard.row))
+                    if scene.harbor.watch_water(id(guard), guard.room, guard.row, guard.state,
+                                               bounds[2] - bounds[0] + 1):
+                        guard.life = 0
+                        guard.targetable = False
+                        guard.terrain_motion.dead = True
+                        guard.state.horizontal_velocity = guard.state.vertical_velocity = 0
+                        guard.state.action, guard.state.animation_state = 185, 1
+                        guard.state.selected_sequence_id = 22
+                        guard.state.sequence_id, guard.state.cursor = 22, len(scene.sequences[22]) - 1
+        scene.player_x, scene.action = state.target_x, state.action
 
 
 class Desert(Environment):
@@ -498,11 +557,13 @@ def environment_for(scene):
     """The environment of the scene's current level.
 
     Chosen by the level's environment state, which the game creates for
-    kinds 3 and 4 (caverns) and level two (desert).
+    kinds 3 and 4 (caverns), level two (desert) and kind 5 (the harbor).
     """
     game = scene.game
     if getattr(game, 'caverns', None) is not None:
         return (Ruins if game.level.kind == 4 else Caverns)(scene)
     if getattr(game, 'desert', None) is not None:
         return Desert(scene)
+    if getattr(game, 'harbor', None) is not None:
+        return Rooftops(scene)
     return Environment(scene)
