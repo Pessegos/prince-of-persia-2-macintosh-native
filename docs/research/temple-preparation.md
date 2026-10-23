@@ -124,6 +124,14 @@ inputs/banks and no supplied native services. It establishes one selected
 live type-6 record per matching room/row lookup, control-word changes and
 capacity behavior, not movement or a complete actor controller.
 
-Next work follows the native type-6 MakeRubble update dispatch, presentation,
-collision and persistence separately. The constructor's X>510 branch,
-TriggerObject caller admission and connected movement lifecycle remain open.
+[Motion control](temple-slide-rock-motion.md) now covers the complete native
+10:1d5c body with supplied geometry/audio/actor endpoints:3,190 comparisons,
+including real left links, native division/IsWall and62-byte actor copies.
+Control is not speed: ordinary movement proposes X-2 per helper call; space
+can stop it from control8, and mark1 finalizes to control100. These results
+do not yet validate actual geometry or the subsequent crush body.
+
+Next work validates space scanning/ReadCell, then connects the native type-6
+MakeRubble update dispatch, presentation, collision and persistence separately.
+The constructor's X>510 branch, TriggerObject caller admission and connected
+movement lifecycle remain open.
