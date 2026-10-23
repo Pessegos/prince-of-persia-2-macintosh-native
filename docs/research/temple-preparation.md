@@ -206,7 +206,14 @@ bank topologies. Timers decrement per record; timer1 lifts the plate, whereas
 timer>=31 removes the record while retaining its depressed bit. No Trigger or
 sound call occurs in this helper. Redraw remains a supplied request sink.
 
-Next work connects press/hold/release and re-press to persistent target banks;
-actual actor pressure admission, frame scheduling and reset/save behavior remain
-separate. The constructor's X>510 branch, target TROB animation and full
-movement/contact/presentation lifecycle remain open.
+[Connected plate lifetime](temple-plate-lifetime.md) now carries native press,
+held refresh, release/compaction and re-press across600 persistent traces on
+five admitted original rock-only sources:14,400 operation comparisons pass.
+Ordinary re-press re-registers the source and reuses the rock; plate release
+leaves rock control unchanged. Supplied full-bank controls expose a timer5
+source with no animation record after rejected registration. Pressure-first
+and animation-first schedules are compared explicitly, not asserted as FrameAdv.
+
+Next work follows actual actor pressure admission and target TROB animation;
+frame scheduling and reset/save behavior remain separate. The constructor's
+X>510 branch and full movement/contact/presentation lifecycle remain open.
