@@ -101,5 +101,19 @@ class LevelSixSaveTests(unittest.TestCase):
                 self.assertTrue(loaded.combat.player.sword_lost, name)
 
 
+
+@unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported level-six resources required')
+class LevelSixMapTests(unittest.TestCase):
+    def test_the_level_map_opens_without_generating_heads_or_serpents(self):
+        # Opponent set 5 is not generated yet; the map previously raised on
+        # every repaint of the level menu.
+        from pop2.development_map import build_development_map
+        from pop2.game_session import GameResources
+
+        level_map = build_development_map(GameResources.load().level(6))
+        self.assertEqual(level_map.start, 'Room 27')
+        self.assertIn('Room 17', level_map.positions)
+
+
 if __name__ == '__main__':
     unittest.main()
