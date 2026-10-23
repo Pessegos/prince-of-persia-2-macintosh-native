@@ -263,6 +263,13 @@ def _put_sword(document, game):
         document['ruins_entry'] = game.ruins_entry
 
 
+def _load_session(resources, document):
+    entry = _ruins_entry(document)
+    if entry == 1:
+        return GameSession.load(resources, document['level'])
+    return GameSession.load(resources, document['level'], ruins_entry=entry)
+
+
 def _ruins_entry(document):
     entry = document.get('ruins_entry', 1)
     if type(entry) is not int or entry not in (1, 2):
@@ -309,7 +316,7 @@ def read_snapshot(path, resources):
                 or type(document.get('version')) is not int or document['version'] != 1
                 or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5, 6, 7)):
             raise SaveGameError('Unsupported save format or version')
-        game = GameSession.load(resources, document['level'], ruins_entry=_ruins_entry(document))
+        game = _load_session(resources, document)
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
             raise SaveGameError('Save belongs to different original game files')
         _take_sword(document, game)
@@ -551,7 +558,7 @@ def restore_progress(document, resources):
         if 'preview_version' in document and (type(document['preview_version']) is not int
                                               or not 1 <= document['preview_version'] <= 1000):
             raise SaveGameError('Invalid save preview version')
-        game = GameSession.load(resources, document['level'], ruins_entry=_ruins_entry(document))
+        game = _load_session(resources, document)
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
             raise SaveGameError('Save belongs to different original game files')
         _take_sword(document, game)
