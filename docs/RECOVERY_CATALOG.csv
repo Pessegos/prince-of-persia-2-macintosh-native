@@ -151,7 +151,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 3,Modular Set 1,DrawHorse,0x4608,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 3,Modular Set 1,GetFlaskBubbleColor,0x46fc,jump_table,partial,pop2/caverns.py,level-three normal/mega body and two mirrored monochrome particle layers; all 196 native phase/room layers pixel matched; other environments incomplete,0,7
 3,Modular Set 1,DrawKidMeter,0x4902,jump_table,partial,pop2/combat_art.py,ordinary health icons; upgrade effects missing,7,5
-3,Modular Set 1,DrawOppMeter,0x4a8e,jump_table,partial,pop2/combat_art.py,ordinary guard health icons,9,8
+3,Modular Set 1,DrawOppMeter,0x4a8e,jump_table,partial,pop2/combat_art.py;pop2/combat.py,ordinary guard health icons; no meter for a level-5 bridge skeleton (3:4b7a-4ba8),9,8
 3,Modular Set 1,DrawSword,0x4cd2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,2
 3,Modular Set 1,IsFloor,0x4da6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,19,2
 3,Modular Set 1,IsImpassable,0x4de2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,8,0
@@ -195,7 +195,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,GetTotalDeadOpps,0x02e0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,14
 4,Characters 2,InRange,0x0466,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,5
 4,Characters 2,DoOppRunJump,0x07fe,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,16
-4,Characters 2,EnGarde,0x098c,jump_table,partial,pop2/combat.py,"ordinary range/pose decisions, selected retreat/turn history, far-run anticipation limits and pursuit; level-5 bridge/special actors missing",1,29
+4,Characters 2,EnGarde,0x098c,jump_table,partial,pop2/combat.py,"ordinary range/pose decisions, selected retreat/turn history, far-run anticipation limits and pursuit; level-5 bridge engage/hold sites 4:0a3a/0aec/0bdc read and ported; special actors missing",1,29
 4,Characters 2,WaitingEngarde,0x0c7e,decoded,partial,pop2/combat.py,ordinary multi-guard spacing and same-facing pursuit; self-nearest obstacle branch missing,1,22
 4,Characters 2,GenFight,0x0f28,decoded,partial,pop2/combat.py,"102-pixel spacing plus 36 per later nearby NPC, including corpses; full native bank lifecycle missing",1,13
 4,Characters 2,OpponentClose,0x111a,decoded,partial,pop2/combat.py,ordinary close-range decisions,2,19
@@ -451,9 +451,9 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 7,Ruins,DrawRuinRubble,0x312a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,9
 7,Ruins,RuinChangeCrevices,0x3328,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,5
 7,Ruins,RuinSetCreviceRevealed,0x3404,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,7
-8,Caverns,BridgeCheckBreak,0x0004,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,9
-8,Caverns,BridgeGetCharCol,0x0188,decoded,indexed-only,,No semantic review recorded in this prototype catalog,4,0
-8,Caverns,IsBrgGateOpen,0x033c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,12
+8,Caverns,BridgeCheckBreak,0x0004,decoded,partial,pop2/bridge.py;pop2/scene_prototype.py,"break counter, column 3-7 collapse, Prince SEQS 85 stop, room-7 gate side effect (8:020a-0236); plank wobble 8:06d8 not drawn",1,9
+8,Caverns,BridgeGetCharCol,0x0188,decoded,partial,pop2/bridge.py,rooms 7/12 continue room 10's columns,4,0
+8,Caverns,IsBrgGateOpen,0x033c,jump_table,partial,pop2/skeleton.py;pop2/combat.py,"body at 8:033c is the bridge guard (turn back, brake, run, SEQS 60); gate test 8:0458",1,12
 8,Caverns,MarkBrgFloorsForChars,0x050e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,6
 8,Caverns,MarkBridgeForCol,0x05cc,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 8,Caverns,OffsetBrgFloorY,0x0772,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,3
@@ -461,20 +461,20 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,RedrawBrgFloor,0x0878,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,4
 8,Caverns,TriggerBrgFloor,0x091c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
 8,Caverns,ATMBrgFloor,0x0976,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,7
-8,Caverns,DrawObjBrgFloor,0x0b44,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,1
-8,Caverns,TriggerBrgFloorMob,0x0ba2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,3
+8,Caverns,DrawObjBrgFloor,0x0b44,jump_table,partial,pop2/bridge.py;pop2/caverns.py,CUST plank shape at column X with sag and frame offsets,1,1
+8,Caverns,TriggerBrgFloorMob,0x0ba2,jump_table,partial,pop2/bridge.py;pop2/caverns.py,hanging/falling plank choice and emptied custom cells; native redraws at each collapse stage compared,0,3
 8,Caverns,CheckCarpetImg,0x0d5c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,4
 8,Caverns,ComputeBloodRGB,0x0df6,decoded,indexed-only,,No semantic review recorded in this prototype catalog,6,2
-8,Caverns,DrawCarpet,0x0e48,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,2
+8,Caverns,DrawCarpet,0x0e48,jump_table,partial,pop2/caverns.py;pop2/carpet.py,"unused carpet SHAP 25312 at X 149, bottom 363; emulator capture matched",0,2
 8,Caverns,SaveUnderCarpet,0x0f0e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
 8,Caverns,DrawObjCarpet,0x0f8c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,13
 8,Caverns,GetCarpetShape,0x1240,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,7,1
-8,Caverns,SetupCarpet,0x12b6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,7
-8,Caverns,Sitting,0x13a8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,9
+8,Caverns,SetupCarpet,0x12b6,jump_table,partial,pop2/carpet.py;pop2/caverns.py,ridden carpet shape/offsets by frame; red fade of entries 45/46 (8:10ba-119c) omitted,1,7
+8,Caverns,Sitting,0x13a8,jump_table,partial,pop2/carpet.py;pop2/scene_prototype.py,"counter start, crash below Y 100 with bars shut, SEQS 129, sound 117, death method 9; MakeSpace of cell 23 not modelled (level ends or Prince dies)",1,9
 8,Caverns,IsCaveBarsOpen,0x1508,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,5
-8,Caverns,DrawCaveBars,0x15c0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
+8,Caverns,DrawCaveBars,0x15c0,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,CUST record phase + 1 (SHAP 4051-4053/4064) as a pressure-drawing record,0,1
 8,Caverns,RedrawCaveBars,0x1632,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,2
-8,Caverns,TriggerCaveBars,0x1672,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,0
+8,Caverns,TriggerCaveBars,0x1672,jump_table,partial,pop2/pressure_plates.py,fresh-press open/close and one phase per update with sounds 282/284,1,0
 8,Caverns,DrawCaveBackWall,0x16ee,decoded,indexed-only,,No semantic review recorded in this prototype catalog,10,3
 8,Caverns,DrawCaveDart,0x1aba,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,native mouth shapes and dimension-dependent clips; 315 whole room/floor/climb drawing-list comparisons for all nine shooters,0,3
 8,Caverns,DrawCaveExitMovable,0x1ba4,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,"level-three exit body, pixel-phase displacement and native clips; 226 room/floor/climb command-list comparisons; special actor draw pipeline incomplete",0,12

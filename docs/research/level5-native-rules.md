@@ -1,19 +1,77 @@
 # Level Five: Native Rule Index
 
-Research note, 2026-10-22, `claude/ai-research`. This is a plan for enabling
-level five (LEVL 2004, cavern environment 3, skeleton opponents), not an
-implementation. Addresses are original CODE `segment:offset`; one-based room
-numbers are native.
+Research note, 2026-10-22, audited 2026-10-23, `claude/ai-research`.
+Level five (LEVL 2004, cavern environment 3, skeleton opponents) is playable
+from the level-four exit to the carpet ride into level six. Addresses are
+original CODE `segment:offset`; one-based room numbers are native. This is a
+rule index, not a claim of full native equivalence.
 
 Labels: **[D]** direct reading; **[I]** inference; **[?]** not yet read.
 
-## What already works
+## Audit checklist (2026-10-23)
+
+Every site in the original CODE that compares the level number (LEVL
+`+0x218a`) with 5 was listed by scanning the listings (39 sites, plus the
+unmapped-region sites below). Each is accounted for:
+
+| Site | Function | Status |
+| --- | --- | --- |
+| `2:6e38` | level start (S02_697E) | clears bridge state (S08_3BCE: a5-0x3130, 16 bytes at -0x312e); the port creates a fresh bridge per level load |
+| `3:0262`, `3:30b0` | AddMid / DrawMidItem | room 10 layer-4 items take CUST shapes (falling planks); covered by the plank drawing, checked against native redraws |
+| `3:0832` | Opponent1 | Prince frame 295 in room 3 draws the ridden carpet (SetupCarpet); implemented |
+| `3:4b8a` | DrawOppMeter | **fixed 2026-10-23**: no meter for a skeleton in the bridge rooms (row != 0) |
+| `4:04be` | InRange | implemented (no advance away from the bridge end) |
+| `4:0a3a`, `4:0aec`, `4:0bdc` | EnGarde | implemented (engage/hold) |
+| `4:1036`, `4:106c`, `4:10cc` | GenFight | implemented |
+| `4:1128`, `4:11b8` | OpponentClose | implemented |
+| `4:1676` | skeleton AutoCtrl | implemented (bridge guard 8:033c) |
+| `4:2e68` | AnimChar -1 link | read; no reachable case (only SEQS 60 links to 57) |
+| `4:31be` | SetKidDeathMethod | implemented (tension level 3) |
+| `4:350e` | DecLifePts | implemented (bridge skeleton immune) |
+| `4:3830` | Catch | implemented (+25 reach at tension >= 40) |
+| `4:4814` | IsDeadPos | implemented (mode-10 carpet crash counts as dead) |
+| `4:4c54` | StartFall | implemented (SEQS 198) |
+| `5:2688` | MakeSpace | read: in room 3 an emptied cell gets foreground 0xc000. Only Sitting (8:13e8) uses it there, emptying the carpet's cell 23; not modelled because the ride ends the level or kills the Prince |
+| `5:3846` | AddGateSound | implemented (BrgDoor 120) |
+| `5:539c` | SpecialMusic | implemented (BrgFight 119 in rooms 7/10/12) |
+| `6:09b4` | GenCtrl | implemented (carpet sit) |
+| `6:19a0` | DoClimbUp | implemented (SEQS 236, sword lost) |
+| `6:22be` | SwordCtrl turn | **fixed 2026-10-23**: an engaging bridge skeleton (8:02ae) does not turn to a Prince more than 15 pixels behind it; otherwise SEQS 60 |
+| `6:2318`, `6:26c0` | SwordCtrl / DoTurn | implemented (no Prince turn in room 10 while breaking). DoTurn's room check (6:26b8) is only reached for char types 0/1, so opponents still turn |
+| `6:451a` | CutAllOpponents | implemented |
+| `6:4cd6`, `6:4d32` | CutChar | implemented (no cut below room 10; chasm to room 0) |
+| `8:0190`, `8:01ae` | BridgeGetCharCol | implemented (rooms 7/12 continue room 10's columns) |
+| `8:06e0` | plank wobble | read, **not implemented** (see below) |
+| `8:0a5e`, `8:0baa` | ATMBrgFloor / TriggerBrgFloorMob | implemented |
+| `8:2d78` | TriggerGateWithRevPlate | implemented |
+| `8:3b9a` | Caverns frame hook | implemented (BridgeCheckBreak in rooms 10/7/12) |
+
+Other level-dependent tables reviewed for level five: IsTimeForNIS
+(`2:00e8`) has no level-five case; CheckPlayNIS selects scene 1 (NISCarpet,
+`15:1630` through the NIS 1-6 dispatcher `15:07c8`) when leaving level five.
+
+**Approximations and gaps that remain:**
+- Plank wobble (8:06d8, below) is not drawn and does not move characters by
+  one pixel.
+- The carpet's red fade of palette entries 45/46 (`8:10ba-119c`).
+- Cutscene 1 (NISCarpet) between levels five and six is not shown; the
+  port goes straight to level six.
+- Unmeasured: the bridge-fight tempo against the original over a whole
+  fight (only the individual rules were checked).
+
+No blocking progression defect is known: the route from the level-four exit
+through the bridge, room 7's gate and the carpet into level six works, and
+the failure paths (chasm fall, carpet crash, saves with bridge state) are
+covered by tests in `tests/test_bridge.py` and `tests/test_level5.py`.
+Death and restart use the shared rebirth path; no level-five-specific
+restart test exists.
+
+## Entry and scenery
 
 - **Entry:** SetKidDefaults `2:5e34` selects ordinary sequence 5 [D].
 - **Scenery:** `tools/extract_caverns.py` exports `caverns_level5.json`,
   including room 10's rope bridge and room 3's custom chamber (CUST
-  4050/4225). Pass-11 custom pieces are not drawn
-  (`docs/LEVEL4_RECOVERY.md`).
+  4050/4225), with room 3's bars (pass 11).
 
 ## Level-specific tiles
 
@@ -141,8 +199,8 @@ cave bars and tile 18 at cell 23 belongs to the flying carpet:
     room's last column 0xc000 in a CUST room (except rows 1-2 of CUST kind
     0x1f), so its pillar pieces are not drawn; the export harness now does
     the same (this removed the dark patch at the top left of room 3).
-  - After the ride the port plays the cavern end song (32) and leaves the
-    completed level on screen; level six is not available.
+  - After the ride the port plays the cavern end song (32) and loads level
+    six (cutscene 1 is not shown).
 
 ## Rules found in unmapped listing regions [D, not implemented]
 
@@ -159,41 +217,3 @@ ATMGate). Disassembled with capstone:
 - `6:5752-5772`: in level 5 room 10, SetTensionLevel(2, 5).
 - ATMExit `5:15a4-168d`: as the exit finishes opening (position 79) it calls
   ResetSoundItem(0) before sound 18, except in level 13 room 4.
-
-## Other level-five checks still to read [?]
-
-| Site | Function |
-| --- | --- |
-| `2:6e38` | CheckAlert |
-| `3:0262` | AddMid |
-| `3:0832` | Opponent1 |
-| `3:30b0` | DrawMidItem |
-| `3:4b8a` | DrawOppMeter |
-| `4:04be` | InRange (opponent run controller) |
-| `4:0a3a`, `4:0aec`, `4:0bdc` | EnGarde |
-| `4:1036`, `4:106c`, `4:10cc` | GenFight |
-| `4:1128`, `4:11b8` | OpponentClose |
-| `4:31be` | SetKidDeathMethod |
-| `4:350e`, `4:3830` | DecLifePts |
-| `4:4814` | IsDeadPos |
-| `4:4c54` | LoadShad |
-| `5:2688` | MakeSpace |
-| `5:3846` | AddGateSound |
-| `5:539c` | SpecialMusic |
-| `6:09b4` | GenCtrl |
-| `6:19a0` | DoJumpHigh |
-| `6:22be`, `6:2318` | DoKidEngarde |
-| `6:26c0` | DoStrike |
-| `6:451a` | CutAllOpponents |
-| `6:4cd6`, `6:4d32` | CutChar |
-| `8:2d78` | TriggerGateWithRevPlate |
-| `8:3b9a` | CaveGetTorchFrame |
-
-## Suggested order
-
-1. Make level five loadable (F3, entry, importer and launcher behind a
-   reimport, saves `1..5`) and route the level-four exit into it.
-2. The bridge: the static floor exists; then break state, piece fall
-   animation and the characters falling through it.
-3. Work through the remaining rows of the table, each with a native probe or
-   direct reading and a regression.
