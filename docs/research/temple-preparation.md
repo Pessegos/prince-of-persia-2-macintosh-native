@@ -199,7 +199,14 @@ The source TROB request precedes target activation and takes the last available
 slot ahead of a missing gate TROB. Audio and redraw bodies are request sinks,
 not native playback/pixel proof; other gameplay writes execute natively.
 
-Next work follows actual actor pressure admission, release/timer decay and
-TROB animation, actual scheduling and reset/save behavior separately. The
-constructor's X>510 branch and full movement/contact/presentation lifecycle
-remain open.
+[Plate release and TROB lifetime](temple-plate-release.md) recovers the previously
+unlisted5:2554 helper, stored-kind dispatch and stable bank compaction.10,640
+comparisons pass over68 header-admitted original plate markers and supplied
+bank topologies. Timers decrement per record; timer1 lifts the plate, whereas
+timer>=31 removes the record while retaining its depressed bit. No Trigger or
+sound call occurs in this helper. Redraw remains a supplied request sink.
+
+Next work connects press/hold/release and re-press to persistent target banks;
+actual actor pressure admission, frame scheduling and reset/save behavior remain
+separate. The constructor's X>510 branch, target TROB animation and full
+movement/contact/presentation lifecycle remain open.
