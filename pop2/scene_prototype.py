@@ -3322,11 +3322,14 @@ class ScenePrototype(WindowControls):
         # RestartGame 2:5b66 asks CheckPlayNIS (2:0180) before every restart;
         # from level four it may select a tree scene (20..27 -> variants 1..8).
         scene = self.game.story.select_scene(level, level) if level >= 4 else None
-        self.restart_level_now()
-        if scene is not None and 20 <= scene <= 28:
+        tree_due = scene is not None and 20 <= scene <= 28
+        # Reset the world without flashing its entry frame before the NIS.
+        self.restart_level_now(redraw=not tree_due)
+        if tree_due:
             self.start_tree(scene - 19)
+            self.render()
 
-    def restart_level_now(self):
+    def restart_level_now(self, *, redraw=True):
         # FirstFrame 2:601e-6024 removes a time message at every level start;
         # the Prince initializer 2:5e9c also clears the float timer.
         self.time_message, self.time_message_frames = None, 0
@@ -3341,10 +3344,11 @@ class ScenePrototype(WindowControls):
                 initial = self.game.caverns.potions.starting_max_life
                 if initial is not None:
                     max_life = initial
-            self.restart_opening()
+            self.restart_opening(redraw=redraw)
             if max_life is not None:
                 self.combat.player.life = self.combat.player.max_life = max_life
-                self.render()
+                if redraw:
+                    self.render()
         else:
             if self.animation_after_id is not None:
                 self.root.after_cancel(self.animation_after_id)
@@ -3353,7 +3357,7 @@ class ScenePrototype(WindowControls):
             self.game.arm_prince()
             point = snapshot.checkpoint
             self.jump_to_room(point.room, point.row, point.x, snapshot.facing,
-                              reset_guards=False, preserve_checkpoint=True)
+                              reset_guards=False, preserve_checkpoint=True, redraw=redraw)
             self.next_animation_at = time.perf_counter()
             if not self.in_animation_tick:
                 self.schedule_next_animation()
@@ -3709,7 +3713,7 @@ class ScenePrototype(WindowControls):
             self.combat.player.life = self.combat.player.max_life = max_life
             self.render()
 
-    def restart_opening(self, _event=None, play_sound=True):
+    def restart_opening(self, _event=None, play_sound=True, *, redraw=True):
         self.copy_challenge = None
         self.end_demo()
         self.attract_stage = None
@@ -3738,7 +3742,8 @@ class ScenePrototype(WindowControls):
         self.status.set("Window escape" if self._opening_active() else f"Level {self.game.level.number}")
         if play_sound:
             self.advance_audio()
-        self.render()
+        if redraw:
+            self.render()
         self.next_animation_at = time.perf_counter()
         if not self.in_animation_tick:
             self.schedule_next_animation()
@@ -3784,7 +3789,7 @@ class ScenePrototype(WindowControls):
         self.render()
 
     def jump_to_room(self, room_id, row=1, x=None, facing=None, reset_guards=True,
-                     preserve_checkpoint=False):
+                     preserve_checkpoint=False, *, redraw=True):
         if self.level_map is None or not 0 <= room_id < 32 or not 0 <= row < 3:
             raise ValueError("Invalid level, room or floor")
         self.level_renderer.room(room_id, self.game.caverns)
@@ -3811,7 +3816,8 @@ class ScenePrototype(WindowControls):
             self.audio.reset()
             self.advance_audio()
         self.status.set(f"Level {self.game.level.number} / Screen {self.screen_label(room_id)}")
-        self.render()
+        if redraw:
+            self.render()
 
     def dev_screens(self):
         return self.level_renderer.screen_entries() if self.level_map is not None else {}
