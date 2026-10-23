@@ -183,6 +183,16 @@ def scenery_name(level_number):
     return f"{'ruins' if level_number in RUINS_LEVELS else 'caverns'}_level{level_number}.json"
 
 
+# The room whose exit closes behind the Prince as he enters. Level six's
+# cliff exit (S07_373E, called from CutChar 6:4d7c-4d92) brings him out of
+# native room 3's door instead of its start room.
+ENTRY_ROOMS = {6: 2}
+
+
+def entry_room(level_number, start_room):
+    return ENTRY_ROOMS.get(level_number, start_room)
+
+
 def scenery_available(level_number):
     # Imports before level six's support lack the ruins files.
     return ((ASSET_DIR / scenery_name(level_number)).is_file()

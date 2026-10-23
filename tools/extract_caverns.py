@@ -7,7 +7,7 @@ from itertools import product
 from functools import lru_cache, partial
 from math import prod
 
-from pop2.caverns import SCENERY_LEVELS, scenery_name
+from pop2.caverns import SCENERY_LEVELS, entry_room, scenery_name
 from pop2.mac_resources import parse_resource_fork
 from pop2.terrain import LevelMap
 from tools.extract_enemy_profiles import expand_a5_data
@@ -466,18 +466,19 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
         result['lava'] = lava_tables(program, caverns)
         result['lava']['rooms'] = lava_room_records(result, terrain)
     # FirstFrame 2:5f62 scans for the first exit-right tile in the start room.
+    entry = entry_room(level_number, terrain.start_room)
     cell = next((cell for cell in range(30)
-                 if terrain.tile(terrain.start_room, cell % 10, cell // 10).kind == 17), None)
+                 if terrain.tile(entry, cell % 10, cell // 10).kind == 17), None)
     if cell is not None:
         frames = exit_closing_frames(parse_resource_fork(program))
         mutable = bytearray(level)
-        offset = 0x780 + terrain.start_room * 120 + cell * 4
+        offset = 0x780 + entry * 120 + cell * 4
         foreground = struct.unpack_from('>H', level, offset)[0] & 0xff00
         for frame in frames:
             progress('Cavern entrance animation...')
             struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
-            frame['commands'] = recover(program, caverns, bytes(mutable), terrain.start_room, prince)['commands']
-        result['entry_exit'] = {'room': terrain.start_room, 'cell': cell, 'frames': frames}
+            frame['commands'] = recover(program, caverns, bytes(mutable), entry, prince)['commands']
+        result['entry_exit'] = {'room': entry, 'cell': cell, 'frames': frames}
     result['loose_floors'] = extract_loose_floor_scenery(program, caverns, prince, level, result,
                                                        progress, recover=recover)
     from tools.extract_pressure_plates import pressure_scenery

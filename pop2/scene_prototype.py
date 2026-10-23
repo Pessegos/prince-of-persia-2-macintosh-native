@@ -2321,6 +2321,10 @@ class ScenePrototype(WindowControls):
             self.jump_to_screen(destination)
             self.combat.player.life, self.combat.player.max_life = life, capacity
             return
+        if (self.game.level.number == 6 and old_room == 26 and motion.room == 27
+                and self.game.caverns is not None):
+            self.leave_ruins_cliff()
+            return
         if motion.room != old_room:
             dx = self.sequence_state.target_x - before_x
             if motion.room not in self.room_cache:
@@ -3541,6 +3545,18 @@ class ScenePrototype(WindowControls):
         if self.level_map is None:
             return []
         return self.level_renderer.supported_rooms()
+
+    def leave_ruins_cliff(self):
+        # CutChar 6:4d7c-4d92 -> S07_373E: leaving level six's cliff (native
+        # room 27) to the left, the Prince steps out of native room 3's door
+        # at column 4, row 2, facing right with SEQS 5 (FirstFrame 2:5f36).
+        self.jump_to_room(2, 2, 4 * TILE_WIDTH + 22, 1, reset_guards=False,
+                          preserve_checkpoint=True)
+        self.game.caverns.entry_frame = 0
+        self.start_sequence(5)
+        self.sequence_runtime.next_frame()
+        self.action = self.sequence_state.action
+        self.render()
 
     def jump_to_room(self, room_id, row=1, x=None, facing=None, reset_guards=True,
                      preserve_checkpoint=False):

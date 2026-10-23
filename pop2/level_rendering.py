@@ -49,7 +49,8 @@ class LevelRenderer:
                          if caverns is not None else '')
             pressure = cavern_pressure_signature(self.cavern_program, room_id, caverns) if caverns else ()
             fallen = caverns.bridge.fallen() if caverns is not None else frozenset()
-            key = room_id, frame if room_id == self.level.start_room else 0, signature, pressure, fallen
+            entry = caverns.entry_room if caverns is not None else self.level.start_room
+            key = room_id, frame if room_id == entry else 0, signature, pressure, fallen
             if key not in self.cavern_frames:
                 # Retain loose-floor variants, not every historical gate height.
                 for previous in tuple(self.cavern_frames):

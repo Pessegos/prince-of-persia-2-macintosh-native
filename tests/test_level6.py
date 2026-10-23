@@ -29,6 +29,26 @@ class LevelSixSceneryTests(unittest.TestCase):
         self.assertNotEqual(palette[64], room_assets(6, 0)[2][64])
         self.assertEqual(scene.level_renderer.cavern_program['level'], 6)
 
+    def test_walking_left_off_the_cliff_comes_out_of_room_threes_door(self):
+        # CutChar 6:4d7c-4d92 -> S07_373E: native room 3, column 4, row 2,
+        # facing right, SEQS 5; its exit closes behind the Prince.
+        from types import SimpleNamespace
+
+        scene = self.scene
+        self.tick(4)
+        event = SimpleNamespace(keysym='Left', state=0)
+        scene.horizontal_key(event, -1, True)
+        for _ in range(25):
+            self.tick()
+            if scene.room_id != 26:
+                break
+        scene.horizontal_key(event, -1, False)
+        self.assertEqual((scene.room_id, scene.terrain_motion.row), (2, 2))
+        self.assertEqual(scene.game.caverns.entry_room, 2)
+        self.assertIn(scene.sequence_state.selected_sequence_id, (5, 2))
+        program = scene.level_renderer.cavern_program
+        self.assertEqual((program['entry_exit']['room'], program['entry_exit']['cell']), (2, 24))
+
     def test_the_sword_item_room_draws_from_the_sword_library(self):
         scene = self.scene
         scene.jump_to_room(16, 1, 100, 1)
