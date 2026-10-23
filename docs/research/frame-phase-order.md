@@ -25,13 +25,13 @@ The world update `2:6224`:
 | --- | --- | --- |
 | 1 | `2:622c` | MakeRubble `5:29e8`: falling debris moves [D] |
 | 2 | `2:6230` | AnimTrobs `5:0c38`: every object animation (gates, plates, exits, loose floors, spikes, scythes, bridge planks, carpet...) [D] |
-| 3 | `2:623a-6252` | opponent set 2 or a5-0x5200 = 10: `4:14c6` [?]; CheckOppGenPts `6:3a0c` for the current room [D] |
-| 4 | `2:6258` | environment hook `2:6e7e` [?] |
+| 3 | `2:623a-6252` | opponent set 2 or a5-0x5200 = 10: `4:14c6` (a per-frame opponent check while the Prince lives, outside modes 3-5) [D]; CheckOppGenPts `6:3a0c` for the current room [D] |
+| 4 | `2:6258` | `2:6e7e`: the room's nearest opponents on each side (GetOppIdxClosestToKid 0/-1) for the alerts [D] |
 | 5 | `2:625c` | the Prince: `2:62e6` (below) [D] |
 | 6 | `2:626c` | the opponents: `2:648c`, the same steps per opponent (PlayerCtrl `2:6468`, AnimChar `2:6538`, collision/press/hazards `2:65f6-6654`, room changes `2:6680-6700`) [D] |
 | 7 | `2:627c-6280` | unless invulnerable (a5-0x4f90) and in room 0: TestStrike `6:57b2`, CheckStab `6:5092` [D] |
-| 8 | `2:6284-6290` | AddSFX `5:4cde`, CheckAlert `2:6b46`, `2:7124` [?], ChangeMeters `2:54d6` [D] |
-| 9 | `2:6294-62b6` | CutAllOpponents `6:4382`, PrepCut `2:532c`; on a cut CutOpponent `6:424c`, `2:51f4` [?], `2:7194` [?] [D] |
+| 8 | `2:6284-6290` | AddSFX `5:4cde`, CheckAlert `2:6b46`, the environment hook `2:7124` (a5-0x46f8[environment]: desert `18:01e0`, temple `10:27ba`, caverns `8:3b92` = level five's BridgeCheckBreak, rooftops `23:0874`, environment 6 `9:0654`; none for the ruins), ChangeMeters `2:54d6` [D] |
+| 9 | `2:6294-62b6` | CutAllOpponents `6:4382`, PrepCut `2:532c`; without a level change CutOpponent `6:424c`, KeepTime `2:51f4` (the minute clock) and, when time runs out, `2:7194` [D] |
 
 A cut returned by step 5 (d3 != 0) skips steps 7-9 except the opponents,
 `2:7124`, ChangeMeters and PrepCut (`2:62c4-62da`).
@@ -40,16 +40,16 @@ The Prince's update `2:62e6`:
 
 | Step | Site | Work |
 | --- | --- | --- |
-| a | `2:62ea-62f4` | LoadKid `4:4b02`; `4:3788` [?] nonzero (not live) -> only PlayerCtrl and `4:3688` (`2:6468-646e`) |
+| a | `2:62ea-62f4` | LoadKid `4:4b02`; `4:3788` nonzero (room 0, or below row 10 of native room 3/5 in environment 6) -> only PlayerCtrl and `4:3688` (gravity and fall outside the rooms) (`2:6468-646e`) [D] |
 | b | `2:62f8-6342` | choose the opponent for the Prince (GetOppIdxClosestToKid `6:36f2`) and LoadShadAsOpp `4:3312` [D] |
 | c | `2:6348-6350` | LoadFrame `4:2a72`, SetupSword `3:0ac8`, GetCharEdges `4:5cbc` (edges before moving) [D] |
 | d | `2:6354` | PlayerCtrl `4:3b88`: keys to controls, GenCtrl (crouch, crawl, carpet, pick-up...) [D] |
 | e | `2:6372` | AnimChar `4:2c0c`: one SEQS step (unless a5-0x4fac) [D] |
-| f | `2:637e-6382` | `4:341a`, `4:3464` [?] (motion after the step) |
+| f | `2:637e-6382` | `4:341a` gravity for modes 4/9 (+6 up to 63, or +2 up to 8 while floating, a5-0x4fa6), `4:3464` applies the vertical speed to Y [D] |
 | g | `2:6386-638e` | LoadFrame, SetupSword, GetCharEdges (edges after moving) [D] |
-| h | `2:6392` | `2:6c64` [?] |
+| h | `2:6392` | `2:6c64`: a sword-fight check on the opponent's distance/facing [?, partly read] |
 | i | `2:6396-639e` | CheckBarr `4:4e34`, CheckCollide1 `4:54da`, CheckGateForKid `4:60e4` [D] |
-| j | `2:63a2-63a6` | `5:1202` [?], CheckPress `5:127e` (plates, loose floors) [D] |
+| j | `2:63a2-63a6` | `5:1202` the floor check by mode (2-6 dispatch, otherwise `4:35ba`; heads and mode 9 with speed `6:00a6`), CheckPress `5:127e` (plates, loose floors) [D] |
 | k | `2:63aa-63fe` | environment hazards: caverns (3) spikes `5:3c42`, darts `8:2e82`, `5:3af8`, lava `8:33fc`; temple (2) spikes, `10:2540`, `5:3af8`, then the scythes; ruins (4) scythe start `5:57bc` and CheckScytheHit `5:588a`. Damage checks are skipped while invulnerable [D] |
 | l | `2:6402` | `2:6c1c` (the queued row shake, CheckAlert's request) [D] |
 | m | `2:640c-6446` | level four's relief countdown (sound 110) [D] |
@@ -85,6 +85,14 @@ and opening branches omit `advance_harbor`; the opening branch also omits
 terrain, level events and rebirth).
 
 ## Known Differences To Investigate
+
+- **Corrected (2026-10-23):** level five's BridgeCheckBreak ran inside the
+  port's terrain phase, before the opponents moved; natively it is the
+  environment hook after the opponents and strikes (step 8). It now runs in
+  the new `environment` world phase after `combat`.
+- The desert's hook (`18:01e0`, the stones) still runs in the port's
+  terrain phase; it should move to `environment` after checking which
+  actor state it reads.
 
 - The darts' flight and the spikes' animation run with the objects (step
   2) in the port; natively darts are MOBs (`5:3c42`, `8:2e82`) and need

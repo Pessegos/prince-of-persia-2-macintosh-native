@@ -8,12 +8,15 @@ changing an entry changes gameplay timing and needs original evidence.
 # Each mode is one early-return branch of ScenePrototype.advance_animation.
 WORLD_PHASES = {
     # A potion pick-up step (DoPickupEffect follows the SEQS step).
-    'potion': ('terrain', 'combat', 'level_events', 'rebirth', 'audio', 'render'),
+    'potion': ('terrain', 'combat', 'environment', 'level_events', 'rebirth', 'audio', 'render'),
     # Falling, sinking or dead: no controls, the SEQS keeps running.
-    'falling': ('terrain', 'combat', 'harbor', 'level_events', 'rebirth', 'audio', 'render'),
+    'falling': ('terrain', 'combat', 'environment', 'harbor', 'level_events', 'rebirth', 'audio',
+                'render'),
     # Hurt/blocked sword poses that refuse new controls.
-    'locked': ('terrain', 'combat', 'harbor', 'level_events', 'rebirth', 'audio', 'render'),
+    'locked': ('terrain', 'combat', 'environment', 'harbor', 'level_events', 'rebirth', 'audio',
+               'render'),
     # Level one's window escape drives the Prince itself.
     'opening': ('combat', 'audio', 'render'),
-    'ordinary': ('terrain', 'combat', 'harbor', 'level_events', 'rebirth', 'audio', 'render'),
+    'ordinary': ('terrain', 'combat', 'environment', 'harbor', 'level_events', 'rebirth', 'audio',
+                 'render'),
 }

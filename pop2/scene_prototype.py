@@ -2190,6 +2190,8 @@ class ScenePrototype(WindowControls):
                 # A room cut rebases X; it must not be swept as a cross-room jump.
                 swept = sweep_combat and (motion is None or motion.room == old_room)
                 self.advance_combat(old_x if swept else None)
+            elif phase == 'environment':
+                self.advance_environment()
             elif phase == 'harbor':
                 self.advance_harbor()
             elif phase == 'level_events':
@@ -2728,6 +2730,17 @@ class ScenePrototype(WindowControls):
         column = self.combat._supporting_column(actor)
         return column if on_bridge(self.level_map, motion.room, column, motion.row) else None
 
+    def advance_environment(self):
+        # The environment frame hook (2:7124 -> a5-0x46f8[environment]) runs
+        # after the opponents and the strike checks; the caverns' hook 8:3b92
+        # is level five's BridgeCheckBreak.
+        if self.game.caverns is None or getattr(self, 'level_map', None) is None:
+            return
+        self.advance_bridge()
+        if bridge_checked(self.game.level.number, self.room_id):
+            room = self.level_renderer.enter_room(self.room_id, self.game.caverns)
+            self.background, self.foreground = room.background, room.foreground
+
     def advance_bridge(self):
         bridge = self.game.caverns.bridge
         bridge.advance_planks()
@@ -3012,7 +3025,6 @@ class ScenePrototype(WindowControls):
             self.check_cavern_darts()
             self.check_cavern_spikes()
             self.check_cavern_scythes()
-            self.advance_bridge()
             self.game.caverns.crush.advance(self.level_map, motion, state,
                                            self.frames[state.action], self.game.caverns.plates,
                                            now=time.perf_counter())

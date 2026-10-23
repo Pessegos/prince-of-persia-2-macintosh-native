@@ -9,9 +9,10 @@ class WorldPhaseTableTests(unittest.TestCase):
         # the orchestrator; changes need original evidence.
         from pop2.frame_phases import WORLD_PHASES
 
-        full = ('terrain', 'combat', 'harbor', 'level_events', 'rebirth', 'audio', 'render')
+        # 'environment' (2:7124, after the opponents) holds the bridge check.
+        full = ('terrain', 'combat', 'environment', 'harbor', 'level_events', 'rebirth', 'audio', 'render')
         self.assertEqual(WORLD_PHASES, {
-            'potion': ('terrain', 'combat', 'level_events', 'rebirth', 'audio', 'render'),
+            'potion': ('terrain', 'combat', 'environment', 'level_events', 'rebirth', 'audio', 'render'),
             'falling': full, 'locked': full, 'opening': ('combat', 'audio', 'render'),
             'ordinary': full})
 
@@ -39,8 +40,22 @@ class WorldPhaseTraceTests(unittest.TestCase):
         scene.frame_trace = []
         self.tick(3)
         self.assertEqual(self.modes(), ['ordinary'] * 3)
-        self.assertEqual([phase for _mode, phase in scene.frame_trace[:7]],
-                         ['terrain', 'combat', 'harbor', 'level_events', 'rebirth', 'audio', 'render'])
+        self.assertEqual([phase for _mode, phase in scene.frame_trace[:8]],
+                         ['terrain', 'combat', 'environment', 'harbor', 'level_events', 'rebirth', 'audio',
+                          'render'])
+
+    def test_the_bridge_check_runs_after_the_opponents(self):
+        # FrameAdv 2:6224: the opponents (2:626c) and strikes (2:627c-6280)
+        # precede the environment hook 2:628c (2:7124) -> 8:3b92 (BridgeCheckBreak).
+        scene = self.scene
+        self.tick(20)
+        calls = []
+        combat, bridge = scene.advance_combat, scene.advance_bridge
+        scene.advance_combat = lambda *args: (calls.append('combat'), combat(*args))[1]
+        scene.advance_bridge = lambda: (calls.append('bridge'), bridge())[1]
+        scene.jump_to_room(9, 1, 200, 1)
+        self.tick()
+        self.assertEqual(calls, ['combat', 'bridge'])
 
     def test_a_falling_prince_runs_the_falling_phases(self):
         scene = self.scene
