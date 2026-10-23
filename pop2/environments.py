@@ -18,7 +18,7 @@ from pop2.crevices import CREVICE_TILE
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
 from pop2.loose_floors import floor_hits_actor
 from pop2.opponent_generation import character_column
-from pop2.render_opening import TILE_HEIGHT
+from pop2.render_opening import TILE_HEIGHT, TILE_WIDTH
 from pop2.terrain import floor_contact_x, floor_y
 
 DESERT_FAR_SHORE_SOUND_X = 0x30B
@@ -46,6 +46,16 @@ class Environment:
 
     def controls(self):
         """With the Prince's controls (GenCtrl)."""
+
+    def room_crossed(self, old_room, room):
+        """The Prince crossed into another room; True when he was moved instead."""
+        return False
+
+    def entered_room(self):
+        """After the scene entered the Prince's new room."""
+
+    def player_died(self):
+        """The terrain killed the Prince, before his life is cleared."""
 
     def frame_hook(self):
         """The 'environment' frame phase."""
@@ -116,6 +126,10 @@ class Rooftops(Environment):
 
     def exit_scenery(self):
         self.scene.harbor.advance()
+
+    def entered_room(self):
+        scene = self.scene
+        scene.harbor.enter_room(scene.room_id, scene.action)
 
     def ambient_audio(self, audio, motion):
         scene = self.scene
@@ -846,6 +860,11 @@ class Caverns(Environment):
                 skeleton.rise_song_pending = False
         self.room_ambient(audio, motion, fighting, contact)
 
+    def player_died(self):
+        scene = self.scene
+        if scene.sequence_state.source_sequence_id == 118:
+            scene.game.caverns.crush.begin(scene.combat.player.life)
+
 
 class Ruins(Caverns):
     """Levels six and seven (kind 4)."""
@@ -854,6 +873,25 @@ class Ruins(Caverns):
 
     def ambient_audio(self, audio, motion):
         """The ruins have no room ambient yet."""
+
+    def room_crossed(self, old_room, room):
+        if self.scene.game.level.number == 6 and old_room == 26 and room == 27:
+            self.leave_cliff()
+            return True
+        return False
+
+    def leave_cliff(self):
+        scene = self.scene
+        # CutChar 6:4d7c-4d92 -> S07_373E: leaving level six's cliff (native
+        # room 27) to the left, the Prince steps out of native room 3's door
+        # at column 4, row 2, facing right with SEQS 5 (FirstFrame 2:5f36).
+        scene.jump_to_room(2, 2, 4 * TILE_WIDTH + 22, 1, reset_guards=False,
+                          preserve_checkpoint=True)
+        scene.game.caverns.entry_frame = 0
+        scene.start_sequence(5)
+        scene.sequence_runtime.next_frame()
+        scene.action = scene.sequence_state.action
+        scene.render()
 
     def finish_exit(self):
         scene = self.scene
