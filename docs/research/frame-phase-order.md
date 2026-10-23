@@ -90,9 +90,11 @@ terrain, level events and rebirth).
   port's terrain phase, before the opponents moved; natively it is the
   environment hook after the opponents and strikes (step 8). It now runs in
   the new `environment` world phase after `combat`.
-- The desert's hook (`18:01e0`, the stones) still runs in the port's
-  terrain phase; it should move to `environment` after checking which
-  actor state it reads.
+- The desert's hook (`18:01e0`, the stones and their sounds) still runs in
+  the port's terrain phase, after the Prince's step as natively; the desert
+  has no opponents, so its place relative to them does not matter.
+- The rooftops' hook (`23:0874`: `23:0a46`, `23:0ab2`, the harbour water)
+  is the port's `harbor` phase, already right after `combat`/`environment`.
 
 - The darts' flight and the spikes' animation run with the objects (step
   2) in the port; natively darts are MOBs (`5:3c42`, `8:2e82`) and need
