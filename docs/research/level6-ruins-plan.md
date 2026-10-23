@@ -95,6 +95,30 @@ render of port room 16 matches the ruins look.
   a blade and the scythe test S05_5F1A for tile 13 (it reads only the
   static blade state).
 
+- Flip flask (2026-10-23, kind 4, level six's only one): DoPickupEffect
+  4:4672 calls 2:59f6, which turns the world for 1080 updates (a5-0x4fa8,
+  song 176) or rights it (song 177). FrameAdv 2:67ba-67d6 counts down while
+  the Prince lives and rights it at 1. Poison drunk upside down only rights
+  it (4:4678-4682). GenCtrl swaps Up and Down (4:3da6-3dcc, 4:3e1c) and the
+  game area is drawn upside down (2:5952-59de). The state survives restarts
+  and the change to level seven. Not reproduced: a level-seven checkpoint
+  stores it as 0 (2:1744-1766) and checkpoint rebirth restores it (2:19b4).
+
+## Level Seven (2026-10-23)
+
+Level seven (LEVL 2006) now opens after level six, with the same ruins
+export (`ruins_level7.json`, 1.3 MB) and still without heads or serpents.
+CheckPlayNIS(6, 7) may show a tree scene first. Its entrance depends on how
+level six was left: the next-level opcode -16 (4:2f3e-2f56) stores 2 in
+a5-0x500c when the Prince's column is >= 6 (level six's right door in native
+room 16 ends at column 6, the left one at 2). SetKidDefaults 2:5eda then
+starts in native room 4, cell 25, and shuts room 32's door; otherwise room
+32, cell 24, with room 4's door shut. The export draws the upper door's
+closing frames (`alternate_entry`); its loose-floor variants are not
+combined with them. Saves keep the entrance. Levels seven and eight start
+with sword type 2 (3:61ec). Level seven's own site 5:09a0/0a74/0b68 is in
+the exported drawing.
+
 ## Remaining Steps
 
 1. Heads and serpents: level six has special opponents in rooms 4, 7, 16,
