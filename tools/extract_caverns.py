@@ -8,6 +8,7 @@ from functools import lru_cache, partial
 from math import prod
 
 from pop2.caverns import SCENERY_LEVELS, entry_room, scenery_name
+from pop2.slot_drawing import clip_climbing, draw_order_key
 from pop2.crevices import CREVICE_TILE, hide_crevices
 from pop2.mac_resources import parse_resource_fork
 from pop2.terrain import LevelMap
@@ -57,7 +58,7 @@ def recovery_inputs(program, caverns, prince):
 class CavernRecovery:
     """Reuse compiled code, restoring working RAM and CPU state per draw."""
 
-    def __init__(self, program, caverns, prince):
+    def __init__(self, program, caverns, prince, track_reads=False):
         from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE
         from unicorn.m68k_const import UC_CPU_M68K_M68000
 
@@ -75,12 +76,25 @@ class CavernRecovery:
         self.initial_ram = bytes(self.cpu.mem_read(0, 0x100000))
         self.initial_cpu = self.cpu.context_save()
         self.callback = None
+        self.read_callback = None
+        self.track_reads = track_reads
         self.closed = False
         self.handles = [self.cpu.hook_add(UC_HOOK_CODE, self.dispatch, begin=address, end=address)
                         for address in intercepts]
+        if track_reads:
+            # Level data and the a5 cell caches, for drawer dependency tracking.
+            from unicorn import UC_HOOK_MEM_READ
+
+            for begin, end in ((0xa0000, 0xa4000), (0x80000 - 0x4a84, 0x80000 - 0x4812)):
+                self.handles.append(self.cpu.hook_add(UC_HOOK_MEM_READ, self.dispatch_read,
+                                                      begin=begin, end=end))
 
     def dispatch(self, cpu, address, size, user):
         self.callback(cpu, address, size, user)
+
+    def dispatch_read(self, cpu, access, address, size, value, user):
+        if self.read_callback is not None:
+            self.read_callback(address)
 
     def reset(self):
         if self.closed:
@@ -111,11 +125,12 @@ class CavernRecovery:
 
 
 def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=None,
-                 floor_redraw=False, *, _machine=None, _native_scene=False):
+                 floor_redraw=False, *, _machine=None, _native_scene=False, reads=None):
+    """`reads`, when given, collects {slot: {(room, cell)}} the drawers read."""
     if _machine is None:
-        with CavernRecovery(program, caverns, prince) as machine:
+        with CavernRecovery(program, caverns, prince, track_reads=reads is not None) as machine:
             return recover_room(program, caverns, level, room_id, prince, climb_action,
-                                floor_redraw, _machine=machine, _native_scene=_native_scene)
+                                floor_redraw, _machine=machine, _native_scene=_native_scene, reads=reads)
 
     from unicorn.m68k_const import (
         UC_M68K_REG_A5, UC_M68K_REG_A7,
@@ -183,6 +198,9 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     terrain = LevelMap(level)
     commands = []
     command_kinds = []
+    # The (row, column, pass) drawer call that admitted each command.
+    command_slots = []
+    current_slot = [None]
     torches = []
     history = []
     previous_items = {}
@@ -270,6 +288,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                 commands.append([layer, shape, x, bottom, fields[3], fields[8], rect, library,
                                  draw_column, draw_row])
                 command_kinds.append(fields[9])
+                command_slots.append(current_slot[0])
                 if environment == 3 and library == 4 and 3581 <= shape <= 3589:
                     tile = terrain.tile(room_id, fields[7], fields[8])
                     torches.append({'room': tile.room, 'cell': tile.row * 10 + tile.column,
@@ -321,6 +340,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                     commands.append([layer, shape, x, bottom, mode, word(a5 - 0x45f6), rect, 4,
                                      word(a5 - 0x45f8), word(a5 - 0x45f6)])
                     command_kinds.append(word(info + 0x12) if long(a5 - 0x4f8c) else 0)
+                    command_slots.append(current_slot[0])
             result = 0
         elif segment == 3 and offset == 0x2324 and not long(a5 - 0x4c9e):
             # DrawCustomRoomImgs runs natively only for a loaded CUST room.
@@ -340,6 +360,37 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             raise ValueError(f'Unexpected Macintosh trap in cavern renderer {segment}:{offset:x}')
 
     _machine.callback = hook
+
+    def read(address):
+        slot = current_slot[0]
+        if slot is None:
+            return
+        row, column = slot[0], slot[1]
+        if lev <= address < lev + 0x780:
+            key = divmod(address - lev, 60)
+            key = key[0], key[1] // 2
+        elif lev + 0x780 <= address < lev + 0x780 + 32 * 120:
+            room, offset = divmod(address - lev - 0x780, 120)
+            key = room, offset // 4
+        else:
+            offset = address - a5
+            if -0x4818 <= offset < -0x4812:
+                tile = terrain.tile(room_id, column, row)
+            elif -0x49d6 <= offset < -0x49d0:
+                tile = terrain.tile(room_id, column - 1, row)
+            elif -0x4a84 <= offset < -0x4a84 + 66:
+                tile = terrain.tile(room_id, (offset + 0x4a84) // 6 - 1, row + 1)
+            else:
+                return
+            if tile.room is None:
+                return
+            key = tile.room, tile.row * 10 + tile.column
+        reads.setdefault(slot, set()).add(key)
+
+    if reads is not None:
+        if not _machine.track_reads:
+            raise ValueError('Read tracking needs CavernRecovery(track_reads=True)')
+        _machine.read_callback = read
 
     def execute(segment, entry, argument=None):
         cpu.reg_write(UC_M68K_REG_A5, a5)
@@ -425,19 +476,20 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                         cpu.mem_write(a5 - 0x4600, struct.pack('>4h',
                                       max(0, draw_row * 120 + 5), draw_column * 51,
                                       (draw_row + 1) * 120 + 5, (draw_column + 1) * 51))
+                    current_slot[0] = (draw_row, draw_column, draw_pass)
                     execute(3, entry, draw_pass)
     finally:
         _machine.callback = None
-    # DumpTable 3:2c1e-2c68 paints back-wall records (kind 0) before
-    # floor/pillar bodies, regardless of their admission order.
-    ordered = sorted(zip(commands, command_kinds),
-                     key=lambda item: (item[0][0] == 'front', item[1] != 0 if item[0][0] == 'back' else False))
+        _machine.read_callback = None
+    ordered = sorted(zip(commands, command_kinds, command_slots),
+                     key=lambda item: draw_order_key(item[0][0], item[1]))
     return {'version': 1, 'level': struct.unpack_from('>H', level, 0x218a)[0], 'room': room_id,
-            'commands': [command for command, _kind in ordered], 'torches': torches}
+            'commands': [command for command, _kind, _slot in ordered], 'torches': torches,
+            'slots': [[slot, kind] for _command, kind, slot in ordered]}
 
 
 def extract_caverns(program, caverns, prince, output, progress=lambda _text: None, *, level_number=3):
-    with CavernRecovery(program, caverns, prince) as machine:
+    with CavernRecovery(program, caverns, prince, track_reads=True) as machine:
         recover = partial(recover_room, _machine=machine)
         _extract_caverns(program, caverns, prince, output, progress, recover, level_number=level_number)
 
@@ -455,7 +507,7 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
     for room in range(32):
         progress(f'Cavern scenery: room {room + 1}/32')
         scenes[str(room)] = recover(program, caverns, level, room, prince)
-    result = {'version': 15, 'level': level_number,
+    result = {'version': 16, 'level': level_number,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     result['climb_redraw'], result['floor_redraw'] = {}, {}
@@ -496,8 +548,12 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
             struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
             frame['commands'] = recover(program, caverns, bytes(mutable), upper.start_room, prince)['commands']
         result['alternate_entry'] = {'room': upper.start_room, 'cell': upper.start_tile, 'frames': frames}
-    result['loose_floors'] = extract_loose_floor_scenery(program, caverns, prince, level, result,
-                                                       progress, recover=recover)
+    from tools.extract_slots import loose_floor_slot_scenery
+
+    # Per-slot drawing (schema 2); extract_loose_floor_scenery's whole-room
+    # variants remain the oracle of tools/check_slot_scenery.py.
+    result['loose_floors'] = loose_floor_slot_scenery(program, caverns, prince, level, result,
+                                                      progress, recover=recover)
     from tools.extract_pressure_plates import pressure_scenery
 
     result['pressure_plates'] = pressure_scenery(program, caverns, prince, level, result,
@@ -512,21 +568,8 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
     (output / name).write_text(json.dumps(result) + '\n', encoding='ascii')
 
 
-def clip_climbing(commands, rect):
-    result = []
-    for command in commands:
-        column, row = command[8:10]
-        clip = list(command[6])
-        clip[0] = max(clip[0], row * 120 + rect[0])
-        clip[3] = min(clip[3], column * 51 + rect[3])
-        if clip[0] < clip[2] and clip[1] < clip[3]:
-            copied = list(command)
-            copied[6] = clip
-            result.append(copied)
-    return result
-
-
-def recover_climbing(program, caverns, prince, level, room, recover):
+def climbing_bounds(program, caverns, prince):
+    """(source pose or None, {pose: rect}) for the climbing repaints 135-144."""
     resources, _art, _flasks, data, _intercepts = recovery_inputs(program, caverns, prince)
     bounds = {action: struct.unpack_from('>4h', data, len(data) - 0x4b46 + (action - 135) * 8)
               for action in range(135, 145)}
@@ -539,6 +582,13 @@ def recover_climbing(program, caverns, prince, level, room, recover):
     # DrawCaveLoose 8:25fa has a separate pose-141 branch: execute it natively.
     if (source is None or any(rect[1:3] != outer[1:3] for rect in bounds.values())
             or code[0x25fa:0x2600] != b'\x0c\x6d\x00\x8d\xaf\x38'):
+        source = None
+    return source, bounds
+
+
+def recover_climbing(program, caverns, prince, level, room, recover):
+    source, bounds = climbing_bounds(program, caverns, prince)
+    if source is None:
         return {str(action): recover(program, caverns, level, room, prince, action)['commands']
                 for action in bounds}
     commands = recover(program, caverns, level, room, prince, source)['commands']
@@ -656,6 +706,17 @@ def compact_variant(base, room, variant):
     return result
 
 
+def loose_shift_tables(program, level):
+    data = expand_a5_data(parse_resource_fork(program))
+    if struct.unpack_from('>H', level, 0x2186)[0] != 3:
+        # The ruins' loose drawer 7:2bd6-2c1a picks its shake image from one
+        # of two tables by the column's parity (a5-0x2c66 even, -0x2c7e odd).
+        return [list(struct.unpack_from('>13h', data, len(data) - offset)) for offset in (0x2c66, 0x2c7e)]
+    offsets = struct.unpack_from('>13h', data, len(data) - 0x2f30)
+    # DrawCaveLoose 8:24dc/257c applies the original two table lookups.
+    return [offsets[index] for index in offsets]
+
+
 def extract_loose_floor_scenery(program, caverns, prince, level, base, progress=lambda _text: None,
                                *, recover=None):
     recover = recover or recover_room
@@ -663,15 +724,7 @@ def extract_loose_floor_scenery(program, caverns, prince, level, base, progress=
     # The ruins' exports store variants as deltas; the caverns keep full lists.
     compact = struct.unpack_from('>H', level, 0x2186)[0] != 3
     choices = loose_floor_cells(terrain)
-    data = expand_a5_data(parse_resource_fork(program))
-    if compact:
-        # The ruins' loose drawer 7:2bd6-2c1a picks its shake image from one
-        # of two tables by the column's parity (a5-0x2c66 even, -0x2c7e odd).
-        shifts = [list(struct.unpack_from('>13h', data, len(data) - offset)) for offset in (0x2c66, 0x2c7e)]
-    else:
-        offsets = struct.unpack_from('>13h', data, len(data) - 0x2f30)
-        # DrawCaveLoose 8:24dc/257c applies the original two table lookups.
-        shifts = [offsets[index] for index in offsets]
+    shifts = loose_shift_tables(program, level)
     clears = {key: below for key in choices if choices[key][0][0] == 11
               and (below := cleared_below_cell(terrain, *key)) is not None}
     result = {'shifts': shifts, 'cells': {f'{room}:{cell}': values

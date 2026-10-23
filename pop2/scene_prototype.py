@@ -2039,40 +2039,17 @@ class ScenePrototype(WindowControls):
             frame = self.sequence_runtime.next_frame()
             self.action, self.player_x = frame.action, frame.target_x
             self.sequence_state.current_x = self.player_x
-            self.advance_terrain(old_x, old_bounds)
-            self.advance_combat()
-            self.advance_level_events()
-            self.advance_rebirth()
-            self.advance_audio()
-            self.render()
-            self.in_animation_tick = False
-            self.schedule_next_animation()
+            self.run_world_phases('potion', old_x, old_bounds)
             return
         if motion is not None and (motion.falling or motion.sinking or motion.dead):
             self.sequence_runtime.next_frame()
-            self.advance_terrain(old_x, old_bounds)
-            self.advance_combat()
-            self.advance_harbor()
-            self.advance_level_events()
-            self.advance_rebirth()
-            self.advance_audio()
-            self.render()
-            self.in_animation_tick = False
-            self.schedule_next_animation()
+            self.run_world_phases('falling', old_x, old_bounds)
             return
         if self._combat_controls_locked():
             # SwordCtrl may turn at a ready pose before the hurt sequence ends.
             self.resume_combat_turn()
             self.combat.advance_player_recovery()
-            self.advance_terrain(old_x, old_bounds)
-            self.advance_combat()
-            self.advance_harbor()
-            self.advance_level_events()
-            self.advance_rebirth()
-            self.advance_audio()
-            self.render()
-            self.in_animation_tick = False
-            self.schedule_next_animation()
+            self.run_world_phases('locked', old_x, old_bounds)
             return
         if self._opening_active():
             phase = self.opening.phase
@@ -2081,11 +2058,7 @@ class ScenePrototype(WindowControls):
                 self.sequence_state.sound_events.append(296)
             self.action = self.sequence_state.action
             self.player_x = self.sequence_state.target_x
-            self.advance_combat()
-            self.advance_audio()
-            self.render()
-            self.in_animation_tick = False
-            self.schedule_next_animation()
+            self.run_world_phases('opening', old_x, old_bounds)
             return
         self.update_fall_recovery_controls()
         self.update_running_jump_controls()
@@ -2199,15 +2172,36 @@ class ScenePrototype(WindowControls):
             motion.row += 1
             self.sequence_state.current_y -= TILE_HEIGHT
             self.physics.select(self.sequence_runtime, 23)
+        self.run_world_phases('ordinary', old_x, old_bounds, sweep_combat=True)
+
+    def run_world_phases(self, mode, old_x, old_bounds, sweep_combat=False):
+        """Run one tick's world phases (pop2.frame_phases) and end the tick."""
+        from pop2.frame_phases import WORLD_PHASES
+
+        motion = getattr(self, "terrain_motion", None)
         old_room = motion.room if motion is not None else None
-        self.advance_terrain(old_x, old_bounds)
-        # A room cut rebases X; it must not be swept as a cross-room jump.
-        self.advance_combat(old_x if motion is None or motion.room == old_room else None)
-        self.advance_harbor()
-        self.advance_level_events()
-        self.advance_rebirth()
-        self.advance_audio()
-        self.render()
+        trace = getattr(self, "frame_trace", None)
+        for phase in WORLD_PHASES[mode]:
+            if trace is not None:
+                trace.append((mode, phase))
+            if phase == 'terrain':
+                self.advance_terrain(old_x, old_bounds)
+            elif phase == 'combat':
+                # A room cut rebases X; it must not be swept as a cross-room jump.
+                swept = sweep_combat and (motion is None or motion.room == old_room)
+                self.advance_combat(old_x if swept else None)
+            elif phase == 'environment':
+                self.advance_environment()
+            elif phase == 'harbor':
+                self.advance_harbor()
+            elif phase == 'level_events':
+                self.advance_level_events()
+            elif phase == 'rebirth':
+                self.advance_rebirth()
+            elif phase == 'audio':
+                self.advance_audio()
+            elif phase == 'render':
+                self.render()
         self.in_animation_tick = False
         self.schedule_next_animation()
 
@@ -2738,6 +2732,17 @@ class ScenePrototype(WindowControls):
         column = self.combat._supporting_column(actor)
         return column if on_bridge(self.level_map, motion.room, column, motion.row) else None
 
+    def advance_environment(self):
+        # The environment frame hook (2:7124 -> a5-0x46f8[environment]) runs
+        # after the opponents and the strike checks; the caverns' hook 8:3b92
+        # is level five's BridgeCheckBreak.
+        if self.game.caverns is None or getattr(self, 'level_map', None) is None:
+            return
+        self.advance_bridge()
+        if bridge_checked(self.game.level.number, self.room_id):
+            room = self.level_renderer.enter_room(self.room_id, self.game.caverns)
+            self.background, self.foreground = room.background, room.foreground
+
     def advance_bridge(self):
         bridge = self.game.caverns.bridge
         bridge.advance_planks()
@@ -3022,7 +3027,6 @@ class ScenePrototype(WindowControls):
             self.check_cavern_darts()
             self.check_cavern_spikes()
             self.check_cavern_scythes()
-            self.advance_bridge()
             self.game.caverns.crush.advance(self.level_map, motion, state,
                                            self.frames[state.action], self.game.caverns.plates,
                                            now=time.perf_counter())
