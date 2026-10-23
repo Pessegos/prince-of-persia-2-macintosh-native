@@ -169,6 +169,10 @@ def launch_game(peaceful):
     from pop2.audio import AudioEngine
     from pop2.scene_prototype import ScenePrototype
 
+    from pop2.development_map import start_map_warmup
+
+    # The F3 maps are cached on disk; refresh stale ones beside the game.
+    start_map_warmup()
     audio = AudioEngine()
     try:
         ScenePrototype(peaceful=peaceful, audio=audio, with_intro=True).run()

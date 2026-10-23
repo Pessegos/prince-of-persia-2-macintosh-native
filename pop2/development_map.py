@@ -292,3 +292,49 @@ def cached_development_map(level, fingerprint, directory=None):
                        start=result.start, exits=sorted(result.exits)),
                   dict(overview=result.image, **result.source_frames))
     return result
+
+
+def warm_development_maps(levels=(1, 2, 3, 4, 5, 6, 7), directory=None):
+    """Prepare the cached F3 map of every available level.
+
+    A code or asset update invalidates the cache; rebuilding a cavern map
+    takes about half a second, so the game does it in a background process
+    at startup instead of when the map is first opened.
+    """
+    from pop2.caverns import scenery_available
+    from pop2.game_session import GameResources
+    from pop2.preview_cache import preview_fingerprint
+
+    resources, fingerprint = GameResources.load(), preview_fingerprint()
+    for number in levels:
+        if number >= 6 and not scenery_available(number):
+            continue
+        try:
+            cached_development_map(resources.level(number), fingerprint, directory)
+        except ValueError:
+            continue  # No supported map rooms.
+
+
+def start_map_warmup():
+    """Run `warm_development_maps` in a low-priority process; returns it."""
+    import subprocess
+    import sys
+
+    from pop2.paths import PROJECT_DIR
+
+    options = {}
+    if sys.platform == 'win32':
+        options['creationflags'] = subprocess.CREATE_NO_WINDOW | subprocess.BELOW_NORMAL_PRIORITY_CLASS
+    try:
+        return subprocess.Popen([sys.executable, '-m', 'pop2.development_map', '--warm'], cwd=PROJECT_DIR,
+                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, **options)
+    except OSError:
+        return None  # The map is then prepared when it is opened.
+
+
+if __name__ == '__main__':
+    import sys
+
+    if sys.argv[1:] == ['--warm']:
+        warm_development_maps()
