@@ -21,13 +21,13 @@ class RunningGateClearanceTests(unittest.TestCase):
         self.record = SimpleNamespace(offset_x=0, aux=0)
 
     def contact(self, facing, overlap, *, sequence=13, phase=104, falling=False,
-                y=0, sword=False, front=False):
+                y=0, sword=False, front=False, action=49):
         left, right = 295, 327
         on_right = bool(facing) != front
         edge = right - overlap if on_right else left + overlap
         body = ((edge, 155, edge + 24, 226) if on_right else
                 (edge - 25, 155, edge - 1, 226))
-        state = SequenceState(sequence, action=53, target_x=340 if on_right else 280,
+        state = SequenceState(sequence, action=action, target_x=340 if on_right else 280,
                               facing=facing, level_kind=3, actor_type=0, current_y=y)
         motion = TerrainMotion(0, 1, falling=falling)
         struct.pack_into('>H', self.level, 0x780 + 15 * 4, 0x300 | phase)
@@ -35,7 +35,7 @@ class RunningGateClearanceTests(unittest.TestCase):
                                         self.record, True, sword)
         return event, state
 
-    def test_only_four_pixels_at_the_back_of_a_grounded_run_are_tolerated(self):
+    def test_ordinary_running_and_settling_poses_keep_the_four_pixel_margin(self):
         for facing in (0, 1):
             for sequence in (1, 13, 200, 201, 202):
                 for phase in (0, 64, 104):
@@ -46,6 +46,25 @@ class RunningGateClearanceTests(unittest.TestCase):
                             self.assertIsNone(event)
                             self.assertEqual(state.source_sequence_id, sequence)
                             self.assertEqual(state.target_x, 340 if facing else 280)
+
+    def test_run_stop_rear_arm_margin_ends_before_the_head_and_torso(self):
+        for facing in (0, 1):
+            for action, inset in ((53, 15), (54, 7), (55, 18), (56, 15)):
+                for phase in (0, 64, 104):
+                    with self.subTest(facing=facing, action=action, phase=phase):
+                        for overlap in (5, inset):
+                            event, state = self.contact(facing, overlap, action=action, phase=phase)
+                            self.assertIsNone(event)
+                            self.assertEqual(state.source_sequence_id, 13)
+                        event, state = self.contact(facing, inset + 1, action=action, phase=phase)
+                        self.assertIsNotNone(event)
+                        self.assertEqual(state.source_sequence_id, 50)
+
+    def test_stop_pose_numbers_do_not_extend_the_margin_for_other_sequences(self):
+        for facing in (0, 1):
+            for sequence in (1, 200, 201, 202, 5):
+                event, _state = self.contact(facing, 9, sequence=sequence, action=56)
+                self.assertIsNotNone(event)
 
     def test_deeper_rear_contact_and_front_contact_still_interrupt_the_run(self):
         for facing in (0, 1):
