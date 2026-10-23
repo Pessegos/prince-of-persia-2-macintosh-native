@@ -8,7 +8,9 @@ import tempfile
 
 from tools.extract_enemy_profiles import extract_bytes
 from tools.extract_audio import extract_audio
-from tools.extract_intro import TREE_VARIANTS, extract_intro, extract_ending, extract_discovery, extract_trees
+from tools.extract_intro import (
+    TREE_VARIANTS, extract_carpet, extract_intro, extract_ending, extract_discovery, extract_trees,
+)
 from tools.extract_attract import extract_attract, extract_credits_music
 from tools.extract_caverns import extract_caverns, scenery_name
 from pop2.caverns import scenery_resource
@@ -17,7 +19,7 @@ from pop2.paths import ASSET_DIR
 
 
 RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Skeleton.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc", "NISTree.rsrc",
-                  "Ruins.rsrc", "Head.rsrc")
+                  "Ruins.rsrc", "Head.rsrc", "TNIS1.rsrc", "TNIS2.rsrc", "TNIS3.rsrc")
 REQUIRED_RESOURCES = {
     "Prince.rsrc": {"LEVL", "SEQS", "SHAP", "SHPL", "CTBL", "NFNT"},
     "Kid.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
@@ -32,6 +34,10 @@ REQUIRED_RESOURCES = {
     # Levels six and seven (environment 4) and their head/serpent set 5.
     "Ruins.rsrc": {"PIEC", "SHAP", "CTBL", "CUST"},
     "Head.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
+    # The carpet scene between levels five and six (NIS 1).
+    "TNIS1.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
+    "TNIS2.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
+    "TNIS3.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
 }
 
 
@@ -69,6 +75,9 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         resources["discovery.json"] = (staging / "discovery.json").read_bytes()
         progress("Recovering the original tree scenes...")
         extract_trees(image, program, resources["NIS.rsrc"], resources["NISTree.rsrc"], staging, progress)
+        progress("Recovering the original carpet scene...")
+        extract_carpet(image, program, resources["NIS.rsrc"], resources, staging, progress)
+        resources["carpet.json"] = (staging / "carpet.json").read_bytes()
         for variant in TREE_VARIANTS:
             resources[f"tree-{variant}.json"] = (staging / f"tree-{variant}.json").read_bytes()
         for number in (3, 4, 5, 6, 7):

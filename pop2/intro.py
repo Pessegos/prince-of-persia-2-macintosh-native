@@ -24,7 +24,7 @@ OPERATIONS = {
     "text": 5, "sound": 2, "wait_sound": 2, "wait_current": 1,
     "timer": 2, "wait_timer": 1, "wait": 1, "cue": 1, "palette": 3,
     "brightness": 2, "fade": 3, "fade_both": 1, "flash": 5, "stop": 1,
-    "title": 0, "fade_in_both": 1,
+    "title": 0, "fade_in_both": 1, "palette_at": 2, "save_background": 0, "restore": 1,
 }
 
 
@@ -133,6 +133,14 @@ class IntroAssets:
             # Tree scenes overlay their SHAP/CTBL on NIS; TEXT 26000 stays there.
             for kind, items in parse_resource_fork(tree.read_bytes()).items():
                 resources.setdefault(kind, {}).update(items)
+        # Scenes that open other resource files (the carpet scene) refer to
+        # their SHAP/CTBL as id + offset.
+        for name, offset in self.program.get("resource_files", {}).items():
+            for kind, items in parse_resource_fork((directory / name).read_bytes()).items():
+                if kind in ("SHAP", "CTBL"):
+                    resources.setdefault(kind, {}).update({offset + key: value for key, value in items.items()})
+        kid = parse_resource_fork((directory / "Kid.rsrc").read_bytes())
+        self.kid_palettes = {key: palette_colors(value["data"]) for key, value in kid["CTBL"].items()}
         self.shapes = {key: indexed_shape(value["data"]) for key, value in resources["SHAP"].items()}
         self.palettes = {key: palette_colors(value["data"]) for key, value in resources["CTBL"].items()}
         self.strings = {key: text_strings(value["data"]) for key, value in resources["TEXT"].items()}
@@ -208,6 +216,7 @@ class IntroPlayer:
         self.assets, self.audio = assets, audio
         self.operations = assets.program["operations"]
         self.sounds = assets.program["audio"]
+        self.program_kind = "carpet" if "resource_files" in assets.program else None
         self.position = 0
         self.time = 0.0
         self.done = False
@@ -418,12 +427,26 @@ class IntroPlayer:
             self.wait_until = self.time + args[0] / MAC_TICKS_PER_SECOND
         elif op == "cue":
             playing = self.playing.get(0)
+            if playing is None and self.program_kind == "carpet":
+                return  # 16:26d0 returns at once when no music plays.
             if playing is None:
                 raise ValueError("Intro cue without music")
             marker = self.sound_metadata(playing[0], 0)["markers"].get(chr(args[0]))
             if marker is None:
                 raise ValueError(f"Missing cue {args[0]} in intro music {playing[0]}")
             self.wait_until = max(self.time, playing[1] + marker)
+        elif op == "save_background":
+            self.background = self.target.copy()
+        elif op == "restore":
+            box = self.box(args[0])
+            self.target.paste(self.background.crop(box), box[:2])
+        elif op == "palette_at":
+            # SetKidPalette 3:5f1c: S03_508A loads Kid CTBL at entry 16.
+            resource_id, first = args
+            for index, color in self.assets.kid_palettes[resource_id].items():
+                if 0 <= index + first < 256:
+                    self.palette[index + first] = color
+            self.changed()
         elif op == "palette":
             resource_id, flags, fade_flags = args
             colors = self.assets.palettes[resource_id]

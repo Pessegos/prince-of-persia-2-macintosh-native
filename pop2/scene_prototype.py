@@ -1947,12 +1947,12 @@ class ScenePrototype(WindowControls):
                     elif self.game.level.number == 4:
                         self.finish_level_four()
                     elif self.game.level.number == 5:
-                        # CheckPlayNIS(5, 6) would show cutscene 1 (not yet
-                        # recovered); RestartGame then loads level six.
+                        # CheckPlayNIS(5, 6) shows the carpet scene (NIS 1),
+                        # then RestartGame loads level six.
                         from pop2.caverns import scenery_available
 
                         if scenery_available(6):
-                            self.enter_next_level(6)
+                            self.finish_level_via_story(5, 6)
                         else:
                             self.game.exit = None
                             self.status.set('Level 6 needs a reimport of the game files')
@@ -3597,6 +3597,23 @@ class ScenePrototype(WindowControls):
         self.last_intro_at = time.perf_counter()
         self.status.set('Tree')
 
+    def start_carpet(self):
+        # NISCarpet (15:1630): the flight from level five's caverns to the
+        # ruins' cliff. It ends like a tree scene, loading the next level.
+        from pop2.intro import IntroAssets, IntroPlayer
+
+        if getattr(self, 'carpet_assets', None) is None:
+            self.carpet_assets = IntroAssets(program_name='carpet.json')
+        self.end_demo()
+        self.clear_keys(None)
+        self.attract_stage = 'tree'
+        self.tree_variant = None
+        if self.audio is not None:
+            self.audio.reset()
+        self.intro = IntroPlayer(self.carpet_assets, self.audio)
+        self.last_intro_at = time.perf_counter()
+        self.status.set('Carpet')
+
     def level_six_exit_entry(self):
         # Opcode -16 (4:2f3e-2f56): leaving at character column >= 6 opens
         # level seven at its upper entrance (a5-0x500c = 2).
@@ -3610,12 +3627,18 @@ class ScenePrototype(WindowControls):
     def finish_level_via_story(self, previous, following):
         # CheckPlayNIS (2:0180) may select a tree scene (20..27) before
         # RestartGame loads the next level.
+        from pop2.paths import ASSET_DIR
+
         self.game.exit = None
         scene = self.game.story.select_scene(previous, following)
         if scene is not None and 20 <= scene <= 27:
             self.game.complete = False
             self.next_level_after_tree = following
             self.start_tree(scene - 19)
+        elif scene == 1 and (ASSET_DIR / 'carpet.json').is_file():
+            self.game.complete = False
+            self.next_level_after_tree = following
+            self.start_carpet()
         else:
             self.enter_next_level(following)
 
