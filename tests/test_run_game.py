@@ -96,6 +96,18 @@ class InstallationTests(unittest.TestCase):
             self.assertIn('ruins_level7.json (needs full level-seven scenery)',
                           run_game.missing_assets(self.project))
 
+    def test_per_slot_exports_are_accepted_and_unknown_versions_are_not(self):
+        # Version 16: loose floors, scythes and bridge planks as drawer slots.
+        for version, accepted in ((16, True), (17, False)):
+            for name, label in (('caverns_level5.json', 'five'), ('ruins_level6.json', 'six')):
+                path = self.project / 'assets' / name
+                program = json.loads(path.read_text())
+                program['version'] = version
+                path.write_text(json.dumps(program))
+                problem = f'{name} (needs full level-{label} scenery)'
+                self.assertEqual(problem not in run_game.missing_assets(self.project), accepted,
+                                 (version, name))
+
     def test_corrupt_carpet_scene_requests_reimport(self):
         (self.project / 'assets/carpet.json').write_text('{}')
         self.assertIn('carpet.json (needs reimport)', run_game.missing_assets(self.project))
