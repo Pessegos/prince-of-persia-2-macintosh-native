@@ -571,8 +571,12 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3):
             y = block.y + 364
         else:
             continue
-        # DrawObjCaveLoose 8:2bb4-2bf4 adds the upper lip and stone body.
-        for index, bottom in ((3557, y - 18), (3604, y)):
+        # DrawObjLoose 3:412c-41aa: the caverns' DrawObjCaveLoose (8:2bb4)
+        # draws the upper lip and stone body; the ruins draw pieces 14 and 18
+        # at the slab's own bottom.
+        pieces = (((3514, y), (3518, y)) if level_number in RUINS_LEVELS
+                  else ((3557, y - 18), (3604, y)))
+        for index, bottom in pieces:
             sprite = cavern_command_sprite(['back', index, block.x, bottom, 16],
                                             resources, palette, shapes)
             frame.paste(sprite, (block.x, bottom - sprite.height), sprite)

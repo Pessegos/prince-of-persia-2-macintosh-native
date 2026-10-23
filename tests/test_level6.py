@@ -49,6 +49,26 @@ class LevelSixSceneryTests(unittest.TestCase):
         program = scene.level_renderer.cavern_program
         self.assertEqual((program['entry_exit']['room'], program['entry_exit']['cell']), (2, 24))
 
+    def test_running_over_room_ones_loose_floors_drops_ruins_slabs(self):
+        # DrawObjLoose 3:412c-41aa draws a falling ruins slab with pieces 14
+        # and 18; the caverns' SHAP 3604 is absent from Ruins.rsrc and froze
+        # the game.
+        from types import SimpleNamespace
+
+        scene = self.scene
+        scene.jump_to_room(0, 2, 160, 1)
+        event = SimpleNamespace(keysym='Right', state=0)
+        scene.horizontal_key(event, 1, True)
+        loose = scene.game.caverns.loose
+        fell = False
+        for _ in range(60):
+            self.tick()
+            scene.render()
+            fell = fell or bool(loose.falling)
+        scene.horizontal_key(event, 1, False)
+        self.assertTrue(fell)
+        self.assertEqual(loose.tiles.get((0, 24)), (0, 3))
+
     def test_the_sword_item_room_draws_from_the_sword_library(self):
         scene = self.scene
         scene.jump_to_room(16, 1, 100, 1)
