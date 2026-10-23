@@ -9,6 +9,7 @@ from pop2.paths import ASSET_DIR
 from pop2.pressure_plates import PressurePlates
 from pop2.sequence_runtime import SequenceState
 from pop2.terrain import LevelMap, TerrainMotion
+from pop2.environments import environment_for
 
 
 class PressurePlateTests(unittest.TestCase):
@@ -518,14 +519,14 @@ class ImportedPressurePlateTests(unittest.TestCase):
         self.assertEqual((plates.foreground, plates.active, plates.timers), before)
         scene.set_paused(False)
         for _ in range(46):
-            scene.advance_cavern_floors()
+            environment_for(scene).frame_start()
         gate = scene.level_map.tile(16, 7, 2)
         self.assertFalse(stone_gate_blocks(gate.foreground, (400, 275, 420, 346)))
         scene.restart_level()
         self.assertEqual(scene.game.caverns.plates.active, {})
         # Debris activates plates before this update's gate animation pass.
         scene.game.caverns.loose.plate_events.append((16, 12, 34))
-        scene.advance_cavern_floors()
+        environment_for(scene).frame_start()
         self.assertEqual(scene.level_map.tile(16, 7, 2).foreground & 255, 4)
         self.assertEqual(scene.game.caverns.plates.active[(16, 27)], 3)
         self.assertEqual(scene.game.caverns.loose.plate_events, [])

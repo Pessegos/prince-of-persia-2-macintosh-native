@@ -12,6 +12,7 @@ from pop2.darts import Dart, dart_death
 from pop2.paths import ASSET_DIR
 from pop2.sequence_runtime import SequenceState
 from pop2.terrain import LevelMap, TerrainMotion
+from pop2.environments import environment_for
 
 
 class DartTests(unittest.TestCase):
@@ -260,7 +261,7 @@ class ImportedDartTests(unittest.TestCase):
         scene.start_sequence(1)
         before = scene.sequence_state.sequence_id, scene.sequence_state.cursor, scene.player_x
         plates.darts.projectiles = [Dart(15, 175, 195, 1) for _ in range(3)]
-        scene.check_cavern_darts()
+        environment_for(scene).check_darts()
         self.assertEqual(scene.combat.player.life, 2)
         self.assertEqual(before, (scene.sequence_state.sequence_id,
                                  scene.sequence_state.cursor, scene.player_x))
@@ -271,7 +272,7 @@ class ImportedDartTests(unittest.TestCase):
         RooftopSceneTests.tick(self, 4)
         self.assertEqual(plates.darts.projectiles[-1], Dart(15, 142, 215, 1))
         scene.set_paused(False)
-        scene.advance_cavern_floors()
+        environment_for(scene).frame_start()
         self.assertFalse(scene.sequence_state.hit_flash)
         scene.restart_level()
         self.assertEqual(scene.game.caverns.plates.darts.projectiles, [])
@@ -286,7 +287,7 @@ class ImportedDartTests(unittest.TestCase):
         scene.jump_to_room(15, row=1, x=250, facing=1)
         scene.combat.player.life = 1
         scene.game.caverns.plates.darts.projectiles = [Dart(15, 235, 195, 1)]
-        scene.check_cavern_darts()
+        environment_for(scene).check_darts()
         self.assertEqual(scene.combat.player.life, 0)
         self.assertEqual(scene.sequence_state.source_sequence_id, 85)
         self.assertEqual(scene.death.method, 0)
@@ -311,7 +312,7 @@ class ImportedDartTests(unittest.TestCase):
             self.fail('No native ledge-fall position found')
         scene.combat.player.life = 1
         scene.game.caverns.plates.darts.projectiles = [Dart(15, x - 15, 195, 1)]
-        scene.check_cavern_darts()
+        environment_for(scene).check_darts()
         self.assertEqual(scene.sequence_state.source_sequence_id, 18)
         self.assertTrue(scene.terrain_motion.falling)
         self.assertFalse(scene.terrain_motion.dead)

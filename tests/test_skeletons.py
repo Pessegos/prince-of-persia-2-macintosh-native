@@ -12,6 +12,7 @@ from pop2.render_opening import decode_ctbl, load_resource_file
 from pop2.scene_prototype import sword_palette_for_level
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.terrain import Tile
+from pop2.environments import environment_for
 
 
 @unittest.skipUnless((ASSET_DIR / 'Skeleton.rsrc').is_file(), 'Imported skeleton artwork required')
@@ -1086,7 +1087,7 @@ class SkeletonTests(unittest.TestCase):
         actor.runtime.next_frame()
         column = next(col for col in range(10) if scene.level_map.tile(14, col, 2).kind == 1)
         scene.game.caverns.loose.falling = [FallingFloor(14, column, 2, 359)]
-        scene.advance_cavern_floors()
+        environment_for(scene).frame_start()
         self.assertEqual((actor.selected_sequence, actor.skeleton.timer), (112, 120))
         self.assertEqual(scene.game.caverns.loose.shake_events, [])
 

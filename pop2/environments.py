@@ -11,6 +11,11 @@ import time
 from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, on_bridge
 from pop2.combat import guard_frame_index
 from pop2.control_mapping import IDLE_SEQUENCE
+from pop2.crevices import CREVICE_TILE
+from pop2.loose_floors import floor_hits_actor
+from pop2.opponent_generation import character_column
+from pop2.render_opening import TILE_HEIGHT
+from pop2.terrain import floor_contact_x, floor_y
 
 DESERT_FAR_SHORE_SOUND_X = 0x30B
 
@@ -20,6 +25,12 @@ class Environment:
 
     def __init__(self, scene):
         self.scene = scene
+
+    def frame_start(self):
+        """Before the Prince's controls: traps and floors that animate on their own."""
+
+    def controls(self):
+        """With the Prince's controls (GenCtrl)."""
 
     def frame_hook(self):
         """The 'environment' frame phase."""
@@ -239,9 +250,9 @@ class Caverns(Environment):
         for room, row in loose.shake_events:
             scene.combat.shake_bones(room, row)
         loose.shake_events.clear()
-        scene.check_cavern_darts()
-        scene.check_cavern_spikes()
-        scene.check_cavern_scythes()
+        self.check_darts()
+        self.check_spikes()
+        self.check_scythes()
         scene.game.caverns.crush.advance(scene.level_map, motion, state,
                                        scene.frames[state.action], scene.game.caverns.plates,
                                        now=time.perf_counter())
@@ -252,9 +263,228 @@ class Caverns(Environment):
         scene.background, scene.foreground = room.background, room.foreground
         return False
 
+    def frame_start(self):
+        scene = self.scene
+        caverns = scene.game.caverns
+        if caverns is None:
+            return
+        for actor in (scene.combat.player, *scene.combat.active_guards()):
+            actor.state.hit_flash = False
+        scene.sequence_state.sound_events.extend(caverns.spikes.advance(scene.level_map, scene.room_id))
+        scene.sequence_state.sound_events.extend(caverns.plates.darts.advance(
+            scene.level_map, scene.room_id, scene.player_collision_bounds(), scene.sequence_state))
+        # FrameAdv 2:622c-6230 moves existing debris before AnimTrobs.
+        cues, blocks = caverns.loose.advance_falling(scene.level_map, scene.sequence_state,
+                                                    scene.terrain_motion, scene.frames[scene.action])
+        scene.sequence_state.sound_events.extend(cues)
+        for room, row in caverns.loose.shake_events:
+            scene.combat.shake_bones(room, row)
+        caverns.loose.shake_events.clear()
+        actors = (scene.combat.player, *scene.combat.active_guards())
+        for block in blocks:
+            for actor in actors:
+                state, motion = actor.state, actor.terrain_motion
+                record = (scene.frames[state.action] if actor is scene.combat.player else
+                          scene.guard_art.frames[guard_frame_index(state.action)])
+                if (motion is None or not floor_hits_actor(block, motion, state, record, actor.alive)
+                        or actor is scene.combat.player and getattr(scene, 'god_mode', False)
+                        or 5 <= state.action < 15 or state.action == 109
+                        or state.animation_state >= 2 and state.animation_state != 7
+                        or state.actor_type == 1):
+                    continue
+                # Crushed 6:28f0: one life for the Prince, fatal for an
+                # ordinary guard; survivors use SEQS:52, not sword recoil.
+                actor.life = max(0, actor.life - (1 if state.actor_type == 0 else 100))
+                state.current_y = 0
+                motion.falling = False
+                actor.recovering = actor.alive
+                if actor.skeleton is not None:
+                    actor.skeleton.collapse(actor, encounter=scene.combat)
+                    actor.runtime.next_frame()
+                    continue
+                scene.physics.select(actor.runtime, 52 if actor.alive else 22)
+                if actor.alive:
+                    state.sound_events.append(300)
+                else:
+                    motion.dead = True
+                    if actor is scene.combat.player:
+                        scene.death.begin(3)
+                if actor is scene.combat.player:
+                    scene.run_active = scene.run_stop_requested = scene.run_cycle_boundary_pending = False
+                    scene.pending_action = None
+                    scene.action, scene.player_x = state.action, state.target_x
+        for room, cell, kind in caverns.loose.plate_events:
+            scene.sequence_state.sound_events.extend(caverns.plates.impact(scene.level_map, room, cell, kind))
+        caverns.loose.plate_events.clear()
+        caverns.loose.advance_tiles(scene.level_map)
+        scene.sequence_state.sound_events.extend(caverns.scythes.advance(scene.level_map))
+        scene.sequence_state.sound_events.extend(caverns.plates.advance(
+            scene.level_map, scene.sequence_state, scene.terrain_motion, scene.frames[scene.action]))
+        scene.advance_relief(caverns)
+        stopped = set(caverns.plates.stopped_sounds)
+        if stopped:
+            scene.sequence_state.sound_events[:] = [
+                cue for cue in scene.sequence_state.sound_events if cue not in stopped]
+        if getattr(scene, "audio", None) is not None:
+            for cue in caverns.plates.stopped_sounds:
+                scene.audio.stop_sound(cue)
+        caverns.plates.stopped_sounds.clear()
+
+    def check_spikes(self):
+        scene = self.scene
+        spikes = scene.game.caverns.spikes
+        for actor in (scene.combat.player, *scene.combat.active_guards()):
+            state, motion = actor.state, actor.terrain_motion
+            if motion is None:
+                continue
+            player = actor is scene.combat.player
+            record = (scene.frames[state.action] if player else
+                      scene.guard_art.frames[guard_frame_index(state.action)])
+            bounds = scene.player_bounds() if player else scene.guard_art.bounds(state, floor_y(motion.row))
+            spikes.approach(scene.level_map, motion, state, record, bounds, actor.sword_drawn)
+            if player and getattr(scene, 'god_mode', False):
+                continue
+            collision = (scene.player_collision_bounds() if player else
+                         scene.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
+            hit = spikes.contact(scene.level_map, motion, state, record, collision,
+                                 actor.alive, actor.sword_drawn)
+            if hit is None:
+                continue
+            sequence, state.target_x = hit
+            state.current_x = state.target_x
+            state.current_y = state.horizontal_velocity = state.vertical_velocity = 0
+            state.facing = 0
+            actor.life, actor.recovering = 0, False
+            motion.dead, motion.falling = True, False
+            if not player:
+                sequence = 189 if sequence == 54 else 188
+                actor.targetable = False
+            scene.physics.select(actor.runtime, sequence)
+            state.sound_events.append(281)
+            if player:
+                scene.clear_keys(None)
+                scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
+                scene.death.begin(4)
+                scene.death.music_method = 4
+                scene.action, scene.player_x = state.action, state.target_x
+                scene.status.set('Defeated')
+
+    def check_scythes(self):
+        scene = self.scene
+        # FrameAdv 2:63f4-63fe and 2:664a-664e (ruins): 5:57bc may start a
+        # scythe, then CheckScytheHit 5:588a, which the Prince skips while
+        # invulnerable (a5-0x4f90).
+        if scene.game.level.kind != 4 or 'scythes' not in scene.level_renderer.cavern_program:
+            return  # An import before the scythes' drawing: leave them still.
+        from pop2.scythes import CUT_SEQUENCE, CUT_SOUND
+
+        scythes = scene.game.caverns.scythes
+        for actor in (scene.combat.player, *scene.combat.active_guards()):
+            state, motion = actor.state, actor.terrain_motion
+            if motion is None or not actor.alive:
+                continue
+            player = actor is scene.combat.player
+            scythes.trigger(scene.level_map, motion, state)
+            if player and getattr(scene, 'god_mode', False):
+                continue
+            bounds = (scene.player_collision_bounds() if player else
+                      scene.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
+            if not scythes.cut(scene.level_map, motion, state, bounds):
+                continue
+            # 5:5942-597e: SEQS 113 and death method 5 for the Prince, SEQS
+            # 190 for a guard; DecLifePts(100) and sound 278.
+            actor.life = 0
+            motion.dead = True
+            actor.recovering = False
+            state.sound_events.append(CUT_SOUND)
+            scene.physics.select(actor.runtime, CUT_SEQUENCE if player else 190)
+            if player:
+                scene.clear_keys(None)
+                scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
+                scene.run_active = scene.run_stop_requested = scene.run_cycle_boundary_pending = False
+                scene.pending_action = None
+                scene.death.begin(5)
+                scene.action, scene.player_x = state.action, state.target_x
+                scene.status.set('Defeated')
+            else:
+                actor.targetable = False
+
+    def check_darts(self):
+        scene = self.scene
+        from pop2.darts import dart_death
+
+        darts = scene.game.caverns.plates.darts
+        for actor in (scene.combat.player, *scene.combat.active_guards()):
+            state, motion = actor.state, actor.terrain_motion
+            if motion is None:
+                continue
+            player = actor is scene.combat.player
+            bounds = (scene.player_collision_bounds() if player else
+                      scene.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
+            if not darts.contacts(motion.room, state, bounds) or not actor.alive:
+                continue
+            if player and getattr(scene, 'god_mode', False):
+                continue
+            # DoCharHurt stores the maximum pending wound, not one life per
+            # projectile when multiple darts contact the actor in one update.
+            actor.life -= 1
+            state.hit_flash = True
+            if actor.alive:
+                # A nonfatal dart does not select a hurt pose or stop a run.
+                state.sound_events.extend((29 if player else 59, 66))
+                continue
+            if actor.skeleton is not None:
+                actor.skeleton.collapse(actor, encounter=scene.combat)
+                actor.runtime.next_frame()
+                state.sound_events.append(66)
+                continue
+            record = (scene.frames[state.action] if player else
+                      scene.guard_art.frames[guard_frame_index(state.action)])
+            sequence, offset = dart_death(scene.level_map, motion, state, record)
+            state.target_x += offset
+            state.current_x = state.target_x
+            state.current_y = state.vertical_velocity = 0
+            if sequence == 18:
+                motion.row += 1
+                state.current_y -= TILE_HEIGHT
+            motion.dead, motion.falling = sequence != 18, sequence == 18
+            motion.hit_fall = sequence == 18
+            actor.recovering = False
+            scene.physics.select(actor.runtime, sequence)
+            if sequence == 98:
+                state.sound_events.append(12)
+            state.sound_events.append(66)
+            if player:
+                scene.clear_keys(None)
+                scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
+                scene.death.begin(0)
+                scene.death.music_method = 0
+                scene.action, scene.player_x = state.action, state.target_x
+                scene.status.set('Defeated')
+            else:
+                actor.row = motion.row
+                actor.targetable = False
+
 
 class Ruins(Caverns):
     """Levels six and seven (kind 4)."""
+
+    def controls(self):
+        scene = self.scene
+        # GenCtrl 6:06b4-06e0: crouched (109) or crawling (246-261) in the
+        # ruins, RuinSetCreviceRevealed 7:3404 uncovers the crevice ahead.
+        caverns, motion, state = scene.game.caverns, scene.terrain_motion, scene.sequence_state
+        if (caverns is None or motion is None or scene.game.level.kind != 4
+                or not (state.action == 109 or 246 <= state.action <= 261)
+                or not scene.combat.player.alive):
+            return
+        from pop2.crevices import front_crevice_group
+
+        column = character_column(floor_contact_x(state.target_x, state.facing, scene.frames[state.action]))
+        for room, cell in front_crevice_group(scene.level_map, motion.room, column, motion.row,
+                                              state.facing, state.selected_sequence_id):
+            foreground = scene.level_map.tile(room, cell % 10, cell // 10).foreground
+            caverns.loose.tiles[room, cell] = CREVICE_TILE, foreground | 0x80
 
 
 def environment_for(scene):
