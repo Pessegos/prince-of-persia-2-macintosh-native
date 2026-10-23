@@ -80,20 +80,13 @@ class CavernGateClearanceTests(unittest.TestCase):
         scene.peaceful = True
         scene.in_animation_tick = True
 
-    def test_stop_insets_leave_one_pixel_past_the_native_head_pixels(self):
-        from pop2.terrain import RUN_STOP_GATE_REAR_INSETS
+    def test_stop_clearance_covers_the_idle_sprite_and_last_backward_pixel(self):
+        from pop2.terrain import RUN_STOP_GATE_REAR_REACH
 
-        for action, inset in RUN_STOP_GATE_REAR_INSETS.items():
-            with self.subTest(action=action):
-                sprite = self.scene.player_sprite(action)
-                head = []
-                for y in range(sprite.height):
-                    for x in range(sprite.width):
-                        red, _green, blue, alpha = sprite.getpixel((x, y))
-                        if alpha and blue > 150 and red < 100:
-                            head.append(x)
-                self.assertTrue(head)
-                self.assertEqual(sprite.width - inset, max(head) + 2)
+        sprite = self.scene.player_sprite(15)
+        record = self.scene.frames[15]
+        self.assertEqual(RUN_STOP_GATE_REAR_REACH, sprite.width - record.offset_x + 1)
+        self.assertEqual(self.scene.sequences[13][-7:], (-5, -1, 50, 51, 52, -1, 2))
 
     def test_short_left_tap_finishes_normally_when_the_gate_only_clips_the_rear_edge(self):
         from pop2.pressure_plates import PressurePlates
@@ -121,18 +114,18 @@ class CavernGateClearanceTests(unittest.TestCase):
                     # It still slams; the next reversible plate may reopen it.
                     self.assertIn(0, phases)
 
-    def test_gate_catching_the_extended_stop_arm_does_not_force_crouch(self):
+    def test_braking_can_settle_at_a_cleared_plate_edge_without_crouching(self):
         from pop2.pressure_plates import PressurePlates
         from tests.test_terrain import RooftopSceneTests
 
         scene = self.scene
         with patch.object(scene, 'render'):
-            for facing in (0, 1):
-                with self.subTest(facing=facing):
+            for facing, start in ((f, s) for f in (0, 1) for s in (142, 153, 161)):
+                with self.subTest(facing=facing, start=start):
                     def x(left_x):
                         return 316 - left_x if facing else left_x
 
-                    scene.jump_to_room(10, 2, x(142), facing)
+                    scene.jump_to_room(10, 2, x(start), facing)
                     plates = scene.game.caverns.plates = PressurePlates()
                     plates.foreground[10, 22] = 0x200 | 237
                     scene.start_sequence(13)
@@ -140,14 +133,35 @@ class CavernGateClearanceTests(unittest.TestCase):
                     scene.action = scene.sequence_state.action
                     scene.player_x = scene.sequence_state.target_x
                     RooftopSceneTests.tick(self)
-                    self.assertEqual((scene.action, scene.player_x), (54, x(141)))
+                    self.assertEqual((scene.action, scene.player_x), (54, x(start - 1)))
                     plates.trigger_gate((10, 22), plates.foreground[10, 22], 34)
                     RooftopSceneTests.tick(self)
-                    self.assertEqual((scene.action, scene.player_x), (55, x(114)))
+                    self.assertEqual((scene.action, scene.player_x), (55, x(start - 28)))
                     RooftopSceneTests.tick(self)
-                    self.assertEqual((scene.action, scene.player_x), (56, x(108)))
+                    self.assertEqual((scene.action, scene.player_x), (56, x(start - 34)))
                     self.assertEqual(scene.sequence_state.source_sequence_id, 13)
                     for _ in range(14):
                         RooftopSceneTests.tick(self)
                         self.assertNotIn(scene.sequence_state.source_sequence_id, (50, 118))
-                    self.assertEqual((scene.action, scene.combat.player.life), (15, 3))
+                    self.assertEqual((scene.action, scene.combat.player.life, scene.player_x),
+                                     (15, 3, x(start - 33)))
+
+    def test_run_stop_still_crouches_when_the_settled_body_would_overlap_one_pixel(self):
+        from pop2.pressure_plates import PressurePlates
+        from tests.test_terrain import RooftopSceneTests
+
+        scene = self.scene
+        with patch.object(scene, 'render'):
+            for facing in (0, 1):
+                with self.subTest(facing=facing):
+                    scene.jump_to_room(10, 2, 154 if facing else 162, facing)
+                    plates = scene.game.caverns.plates = PressurePlates()
+                    plates.foreground[10, 22] = 0x200 | 237
+                    scene.start_sequence(13)
+                    scene.sequence_runtime.next_frame()
+                    scene.action = scene.sequence_state.action
+                    scene.player_x = scene.sequence_state.target_x
+                    RooftopSceneTests.tick(self)
+                    plates.trigger_gate((10, 22), plates.foreground[10, 22], 34)
+                    RooftopSceneTests.tick(self, 2)
+                    self.assertEqual(scene.sequence_state.source_sequence_id, 50)

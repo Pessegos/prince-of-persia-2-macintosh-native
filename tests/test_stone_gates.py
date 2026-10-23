@@ -381,7 +381,7 @@ class ImportedStoneGateTests(unittest.TestCase):
 
     def test_releasing_run_through_room_10_gate_does_not_pull_prince_back_from_room_14(self):
         scene = self.scene_at_gate()
-        for x in (477, 480, 489, 495):
+        for x, needs_crouch in ((477, True), (480, True), (489, False), (495, False)):
             with self.subTest(x=x):
                 plates = scene.game.caverns.plates
                 plates.foreground.clear()
@@ -409,7 +409,13 @@ class ImportedStoneGateTests(unittest.TestCase):
                     self.assertFalse(scene.terrain_motion.dead or scene.terrain_motion.falling)
                     self.assertNotEqual(scene.sequence_state.source_sequence_id, 47)
                 self.assertTrue(entered)
-                self.assertIn(109, poses)
+                # At 477/480 the settled body still overlaps the gate by
+                # 9/6 pixels. At 489/495 it clears by 3/9, so the port's
+                # completed-stop improvement applies across the room seam too.
+                if needs_crouch:
+                    self.assertIn(109, poses)
+                else:
+                    self.assertNotIn(109, poses)
                 self.assertEqual((scene.action, scene.sequence_state.facing), (15, 1))
                 self.assertEqual(plates.foreground[9, 19] & 255, 0)
 

@@ -27,8 +27,25 @@ class RunningGateClearanceTests(unittest.TestCase):
         edge = right - overlap if on_right else left + overlap
         body = ((edge, 155, edge + 24, 226) if on_right else
                 (edge - 25, 155, edge - 1, 226))
-        state = SequenceState(sequence, action=action, target_x=340 if on_right else 280,
+        # Keep the settled footprint under the gate in this edge-only fixture.
+        x = right - overlap + 15 if on_right else left + overlap - 15
+        state = SequenceState(sequence, action=action, target_x=x,
                               facing=facing, level_kind=3, actor_type=0, current_y=y)
+        motion = TerrainMotion(0, 1, falling=falling)
+        struct.pack_into('>H', self.level, 0x780 + 15 * 4, 0x300 | phase)
+        event = self.physics.check_gate(motion, SequenceRuntime({}, state), body, body,
+                                        self.record, True, sword)
+        return event, state
+
+    def stop_contact(self, facing, clearance, *, action=56, sequence=13,
+                     phase=104, falling=False, y=0, sword=False):
+        left, right = 295, 327
+        width, offset = {53: (50, 6), 54: (34, 5), 55: (61, 8), 56: (49, 6)}[action]
+        x = right + 15 + clearance if facing else left - 15 - clearance
+        start = x - (width - offset if facing else offset)
+        body = (start, 155, start + width - 1, 226)
+        state = SequenceState(sequence, action=action, target_x=x, facing=facing,
+                              level_kind=3, actor_type=0, current_y=y)
         motion = TerrainMotion(0, 1, falling=falling)
         struct.pack_into('>H', self.level, 0x780 + 15 * 4, 0x300 | phase)
         event = self.physics.check_gate(motion, SequenceRuntime({}, state), body, body,
@@ -45,26 +62,34 @@ class RunningGateClearanceTests(unittest.TestCase):
                             event, state = self.contact(facing, overlap, sequence=sequence, phase=phase)
                             self.assertIsNone(event)
                             self.assertEqual(state.source_sequence_id, sequence)
-                            self.assertEqual(state.target_x, 340 if facing else 280)
+                            self.assertEqual(state.target_x,
+                                             327 - overlap + 15 if facing else 295 + overlap - 15)
 
-    def test_run_stop_rear_arm_margin_ends_before_the_head_and_torso(self):
+    def test_run_stop_can_finish_only_if_the_settled_footprint_fits(self):
         for facing in (0, 1):
-            for action, inset in ((53, 15), (54, 7), (55, 18), (56, 15)):
+            for action in (53, 54, 55, 56):
                 for phase in (0, 64, 104):
                     with self.subTest(facing=facing, action=action, phase=phase):
-                        for overlap in (5, inset):
-                            event, state = self.contact(facing, overlap, action=action, phase=phase)
+                        for clearance in (0, 8):
+                            event, state = self.stop_contact(facing, clearance, action=action, phase=phase)
                             self.assertIsNone(event)
                             self.assertEqual(state.source_sequence_id, 13)
-                        event, state = self.contact(facing, inset + 1, action=action, phase=phase)
+                        event, state = self.stop_contact(facing, -1, action=action, phase=phase)
                         self.assertIsNotNone(event)
                         self.assertEqual(state.source_sequence_id, 50)
 
     def test_stop_pose_numbers_do_not_extend_the_margin_for_other_sequences(self):
         for facing in (0, 1):
             for sequence in (1, 200, 201, 202, 5):
-                event, _state = self.contact(facing, 9, sequence=sequence, action=56)
+                event, _state = self.stop_contact(facing, 8, sequence=sequence)
                 self.assertIsNotNone(event)
+
+    def test_settled_clearance_does_not_exempt_sword_or_airborne_stop_poses(self):
+        for facing in (0, 1):
+            for options in ({'sword': True}, {'falling': True}, {'y': -1}):
+                with self.subTest(facing=facing, options=options):
+                    event, _state = self.stop_contact(facing, 8, **options)
+                    self.assertIsNotNone(event)
 
     def test_deeper_rear_contact_and_front_contact_still_interrupt_the_run(self):
         for facing in (0, 1):

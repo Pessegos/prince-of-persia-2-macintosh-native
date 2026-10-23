@@ -21,9 +21,8 @@ VOID_DEATH_Y = 730
 # Prone poses: lying down (SEQS 125), idle (251) and crawling (SEQS 122/123).
 PRONE_FRAMES = (246, 261)
 DOWN_CUT_Y = 440
-# SEQS:13's extended limbs trail behind the head/torso in poses 53-56.
-# Insets retain the native turban pixels plus one outline pixel.
-RUN_STOP_GATE_REAR_INSETS = {53: 15, 54: 7, 55: 18, 56: 15}
+# Idle width18 - anchor4, plus SEQS:13's final one-pixel backward step.
+RUN_STOP_GATE_REAR_REACH = 15
 
 
 def floor_y(row):
@@ -890,15 +889,16 @@ class RooftopPhysics:
                     for body in contact_bounds)
                 or not stone_gate_blocks(tile.foreground, bounds, state)):
             return None
-        # Port improvement: ignore a nearly cleared run's trailing contact.
-        # Stop poses extend an arm/leg much further back than the ordinary
-        # four-pixel allowance; keep their head/torso inside the tested body.
+        # Port improvement: let a stop finish if the settled body is already
+        # clear behind the gate. Leaning poses must not reintroduce contact;
+        # reserve the last backward pixel, without moving the actor or gate.
         rear_overlap = right - bounds[0] if state.facing else bounds[2] + 1 - left
-        rear_margin = (RUN_STOP_GATE_REAR_INSETS.get(state.action, 4)
-                       if state.source_sequence_id == 13 else 4)
+        stop_clear = (state.source_sequence_id == 13 and (
+            state.target_x - RUN_STOP_GATE_REAR_REACH >= right if state.facing else
+            state.target_x + RUN_STOP_GATE_REAR_REACH <= left))
         if (not sword_drawn and not motion.falling and state.current_y == 0
                 and state.source_sequence_id in (1, 13, 200, 201, 202)
-                and 0 < rear_overlap <= rear_margin):
+                and (0 < rear_overlap <= 4 or stop_clear)):
             return None
         if state.action != 109 and tile.foreground and not sword_drawn:
             if state.source_sequence_id == 50:
