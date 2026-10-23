@@ -17,6 +17,7 @@ from typing import get_args, get_origin, get_type_hints
 from PIL import Image
 
 from pop2.cavern_state import CavernState
+from pop2.paths import USER_DATA_DIR
 from pop2.bridge import Bridge
 from pop2.carpet import Carpet
 from pop2.darts import Dart, Darts
@@ -42,7 +43,8 @@ from pop2.wall_spikes import WallSpikes
 FORMAT = 'pop2-macintosh-native-save'
 VERSION = 2
 MAX_BYTES = 2 * 1024 * 1024
-SAVE_DIRECTORY = Path.home() / 'Saved Games' / 'PoP2 Macintosh Native'
+SAVE_DIRECTORY = (USER_DATA_DIR / 'saves' if USER_DATA_DIR is not None
+                  else Path.home() / 'Saved Games' / 'PoP2 Macintosh Native')
 CLASSES = {cls.__name__: cls for cls in (
     Bridge, Carpet, CavernState, Dart, Darts, DesertState, Stone, GateCrush, Harbor,
     WaterEntry, Lava, LavaPool, FallingFloor, LooseFloors, OpponentGenerationPoint,

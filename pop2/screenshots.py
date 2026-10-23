@@ -8,15 +8,16 @@ from pathlib import Path
 from PIL import Image
 
 from pop2.game_ui import VISIBLE_SIZE, VISIBLE_VIEWPORT
-from pop2.paths import OUTPUT_DIR
+from pop2.paths import OUTPUT_DIR, USER_DATA_DIR
 
 
-SETTINGS_PATH = OUTPUT_DIR / "screenshot-settings.json"
+USER_OUTPUT_DIR = USER_DATA_DIR if USER_DATA_DIR is not None else OUTPUT_DIR
+SETTINGS_PATH = USER_OUTPUT_DIR / "screenshot-settings.json"
 
 
 @dataclass
 class ScreenshotSettings:
-    folder: Path = OUTPUT_DIR / "screenshots"
+    folder: Path = USER_OUTPUT_DIR / "screenshots"
     scale: int = 3
 
     @classmethod

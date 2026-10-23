@@ -13,6 +13,8 @@ from pop2.game_ui import VISIBLE_VIEWPORT
 from pop2.intro import MAC_TICKS_PER_SECOND
 from pop2.paths import ASSET_DIR
 
+from tests.desktop import exclusive_desktop
+
 
 @unittest.skipUnless((ASSET_DIR / "intro.json").is_file(), "Imported intro resources required")
 class IntroSchedulingTests(unittest.TestCase):
@@ -223,6 +225,7 @@ class IntroSceneTests(unittest.TestCase):
         self.assertEqual(after.call_args.args[0], 1)
         scene.animation_after_id = None
 
+    @exclusive_desktop('a focused fullscreen intro receiving Alt+F4')
     def test_alt_f4_reaches_close_callback_from_fullscreen_intro(self):
         for paused in (False, True):
             with self.subTest(paused=paused):
