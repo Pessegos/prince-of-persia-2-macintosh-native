@@ -29,6 +29,21 @@ def slot_fragments(scene):
     return fragments
 
 
+class LazyScenes(dict):
+    """{list name: recover_room result}, each drawn on first use."""
+
+    def __init__(self, makers):
+        super().__init__()
+        self.makers = makers
+
+    def __missing__(self, name):
+        self[name] = self.makers[name]()
+        return self[name]
+
+    def items(self):
+        return [(name, self[name]) for name in self.makers]
+
+
 def room_slot_lists(render, counts, unit_cells=None):
     """Exported lists as a function of unit states.
 
@@ -198,25 +213,26 @@ def loose_floor_slot_scenery(program, caverns, prince, level, base, progress=lam
                     else:
                         struct.pack_into('>H', mutable, offset, (foreground & 0xfff0) | state)
 
-                def draw(*args, **options):
+                def draw(*args, mutable=bytes(mutable), **options):
                     reads = {}
-                    scene = recover(program, caverns, bytes(mutable), room, prince, *args,
+                    scene = recover(program, caverns, mutable, room, prince, *args,
                                     reads=reads, **options)
                     scene['reads'] = reads
                     return scene
 
-                scenes = {'floor_redraw': draw(floor_redraw=True)}
+                lists = {'floor_redraw': lambda: draw(floor_redraw=True)}
                 if source is not None:
-                    scenes['climb_source'] = draw(source)
-                    scenes['climb_141'] = draw(141)
+                    lists['climb_source'] = lambda: draw(source)
+                    lists['climb_141'] = lambda: draw(141)
                 else:
                     for action in actions:
-                        scenes[f'climb:{action}'] = draw(action)
+                        lists[f'climb:{action}'] = lambda action=action: draw(action)
                 if door:
                     offset = 0x780 + room * 120 + entry['cell'] * 4
                     foreground = struct.unpack_from('>H', level, offset)[0] & 0xff00
                     struct.pack_into('>H', mutable, offset, foreground | entry['frames'][states[-1]]['phase'])
-                scenes['commands'] = draw()
+                lists['commands'] = lambda mutable=bytes(mutable): draw(mutable=mutable)
+                scenes = LazyScenes(lists)
                 cache[states] = scenes
             return cache[states]
 

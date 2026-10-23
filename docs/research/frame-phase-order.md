@@ -208,5 +208,13 @@ rules did for single cases. Whole cavern exports: level 3 10.8 s/0.84 MB,
 are still exported (the import check expects them) but no longer drawn when
 the slots cover the room. Room renders stay cached per state as before.
 
-Not yet slot units: pressure plates, gates, exits, the room-3 bars, darts and
-torches (still `pressure_drawing_commands` and the torch/lava layers).
+Not slot units, by decision: pressure plates, gates, exits, the room-3 bars
+and darts keep `pressure_drawing_commands`, which never generated
+combinations. A trial that made them slot units (2026-10-23) matched native
+renders in all 384 random phase combinations of levels four, five and six,
+and so did the existing rules in every combination they apply to (372; the
+entrance rooms were checked separately through the door frames). But gates
+(47 phases) and exits (80) multiply the renders of every slot that reads
+them: level four's export went from 3 s to 43 s, level five's from 12 s to
+70 s. The rules stay; the trial's checks are their new evidence. Torches and
+lava keep their own layers.
