@@ -111,3 +111,50 @@ terrain, level events and rebirth).
    cache growth measured on the same cases.
 4. Explicit coordinate conversions (native/port X, rooms, actor-X versus
    supporting-foot columns) where touched, with boundary regressions.
+
+## Stage 1 Result (2026-10-23)
+
+`pop2/frame_phases.py` lists each tick mode's world phases;
+`ScenePrototype.run_world_phases` runs them in that order and can record a
+trace (`frame_trace`). The five early-return tails of `advance_animation`
+now use it, with the same order and arguments as before (the combat sweep
+argument only in the ordinary mode). `tests/test_frame_phases.py` pins the
+table and checks the ordinary and falling modes on a live tick. Focused
+suites (terrain, levels five/six, bridge, combat, potions, opening,
+rebirth, harbor, pursuit, skeletons: 491 tests) pass; the full suite waits
+for a slot that does not overlap the user's playtesting.
+
+## Stage 3 Baseline: Loose-Floor Variants (2026-10-23)
+
+Measured on this machine with `extract_loose_floor_scenery` and the current
+exports (same inputs for later comparison):
+
+| Level | Export time | Loose-floor data | Variants | Largest room |
+| --- | --- | --- | --- | --- |
+| 3 | 10.7 s | 5.3 MB | 354 | port 6: 53 |
+| 4 | 1.1 s | 0.5 MB | 43 | port 19: 17 |
+| 5 | 45.9 s | 24.8 MB (full lists) | 1,656 | port 19: 1,295 |
+| 6 | 269.8 s | 24.3 MB (delta) | 9,753 | port 19: 7,775 |
+| 7 | 16.6 s | 0.8 MB (delta) | 597 | port 4: 215 |
+
+Using the existing variants as the native oracle:
+
+- Composing a multi-cell variant from its single-cell patches (removal and
+  anchored insertion) reproduces the native list exactly in most cases:
+  level 4 21 of 22, level 3 236 of 273 (another 18 have the same commands
+  in another order), level 7 209 of 299 checkable. The other 19 level-3
+  cases and one in level 4 differ in content: a loose cell and the cell
+  directly above it in another room change the same front lip (e.g. level
+  4, port room 18 cell 6 with room 28 cell 26, SHAP 3604). Level 7's other
+  229 cases are crevice runs, which only change as a whole.
+- Grouping commands by their drawing cell (command fields 8-9) and layer
+  does not keep a fixed sequence of groups: falling or shaking cells add or
+  remove whole groups.
+
+So independent per-cell patches are not enough; a runtime model needs each
+cell's drawing as a function of its own state and its neighbours' (at
+least the cell above), or the native piece drawers themselves. Next step:
+read DrawCaveLoose `8:24dc`/the ruins' loose drawer `7:2bd6` and the floor
+drawers' neighbour reads to fix that dependency set from the code, then
+validate a composed model against every existing variant before replacing
+the export.
