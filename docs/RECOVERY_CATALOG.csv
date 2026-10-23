@@ -355,13 +355,13 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 5,Modular Set 2,TimeForNewAmbient,0x5478,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,8
 5,Modular Set 2,UpdateAmbient,0x571c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 5,Modular Set 2,UnloadSounds,0x574e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,2
-5,Modular Set 2,CheckScytheHit,0x588a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,11
-5,Modular Set 2,ComputeBladeHitRect,0x5a1c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
+5,Modular Set 2,CheckScytheHit,0x588a,jump_table,partial,pop2/scythes.py;pop2/scene_prototype.py,"first scythe cell of columns -1..+1, hit phases and blade rectangles, SEQS 113/190, death method 5, sound 278 and blood; drawing from exported native patches",2,11
+5,Modular Set 2,ComputeBladeHitRect,0x5a1c,decoded,partial,pop2/scythes.py,"a5-0x372a/-0x3722 rectangles and their union, offset by the cell",1,0
 5,Modular Set 2,DrawScythe2,0x5c60,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,6
-5,Modular Set 2,GetScytheHitType,0x5e6c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
+5,Modular Set 2,GetScytheHitType,0x5e6c,decoded,partial,pop2/scythes.py,"phases 2, 16 and 17",1,0
 5,Modular Set 2,RedrawScythe,0x5eae,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,3
 5,Modular Set 2,ScytheBladeExtended,0x5fa0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,0
-5,Modular Set 2,TriggerScythe,0x5fde,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,2
+5,Modular Set 2,TriggerScythe,0x5fde,decoded,partial,pop2/scythes.py;pop2/scene_prototype.py,"5:57bc admission (living, near floor, 28 pixels into the column) and resting-state start; AnimScythe 5:4584 phases 1-19, sounds and blood",1,2
 5,Modular Set 2,ConvertDirToRecDir,0x6194,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 5,Modular Set 2,ConvertRecDirToDir,0x6232,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 5,Modular Set 2,IncRecordedGameToNextFrame,0x62a0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,1

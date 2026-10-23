@@ -144,6 +144,85 @@ class LevelSixSceneryTests(unittest.TestCase):
 
 
 @unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported level-six resources required')
+class LevelSixScytheTests(unittest.TestCase):
+    """5:57bc, TriggerScythe 5:5fde, AnimScythe 5:4584 and CheckScytheHit 5:588a."""
+
+    def setUp(self):
+        LevelSixSceneryTests.setUp(self)
+        if 'scythes' not in self.scene.level_renderer.cavern_program:
+            self.skipTest('Level-six import predates the scythes')
+
+    def tick(self, count=1):
+        LevelSixSceneryTests.tick(self, count)
+
+    def test_running_into_a_scythe_starts_it_and_its_blade_cuts_the_prince(self):
+        from types import SimpleNamespace
+
+        scene = self.scene
+        state, scythes = scene.sequence_state, scene.game.caverns.scythes
+        scene.jump_to_room(18, 2, 200, 1)
+        event = SimpleNamespace(keysym='Right', state=0)
+        scene.horizontal_key(event, 1, True)
+        sounds = []
+        for _ in range(30):
+            self.tick()
+            sounds.extend(state.sound_events)
+            if not scene.combat.player.alive:
+                break
+        scene.horizontal_key(event, 1, False)
+        self.assertGreater(state.target_x, 5 * 51 + 28)
+        self.assertEqual(state.selected_sequence_id, 113)
+        self.assertEqual(scene.death.method, 5)
+        self.assertIn(277, sounds)
+        self.assertIn(278, sounds)
+        self.assertEqual(scythes.foreground[18, 26] & 0x5f, 0x42)
+        self.assertEqual(scythes.foreground[18, 25], scythes.foreground[18, 26])
+
+    def test_a_started_scythe_runs_twenty_phases_and_keeps_its_blood(self):
+        from pop2.scythes import Scythes
+
+        terrain = self.scene.level_map
+        scythes = self.scene.game.caverns.scythes = Scythes()
+        terrain.caverns = self.scene.game.caverns
+        scythes.active.add((18, 26))
+        scythes.foreground = {(18, 26): 0x40, (18, 25): 0x40}
+        sounds, values = [], []
+        for _ in range(20):
+            sounds.extend(scythes.advance(terrain))
+            values.append(scythes.foreground[18, 26])
+        self.assertEqual(values[0], 0x41)
+        self.assertEqual(values[15], 0x50)
+        self.assertEqual(values[16], 0xd1)  # 0x80 once the retracting blade is bloody
+        self.assertEqual(values[18], 0xd3)
+        self.assertEqual(values[19], 0xc0)
+        self.assertEqual(sounds, [277, 276])
+        self.assertEqual(scythes.active, set())
+
+    def test_standing_short_of_the_scythe_column_edge_does_not_start_it(self):
+        from types import SimpleNamespace
+
+        scene = self.scene
+        scythes = scene.game.caverns.scythes
+        motion = SimpleNamespace(room=18, row=2)
+        state = SimpleNamespace(actor_type=0, current_y=0, target_x=5 * 51 + 28)
+        self.assertFalse(scythes.trigger(scene.level_map, motion, state))
+        state.target_x += 1
+        self.assertTrue(scythes.trigger(scene.level_map, motion, state))
+        state.current_y = -31
+        scythes.active.clear()
+        self.assertFalse(scythes.trigger(scene.level_map, motion, state))
+
+    def test_each_scythe_state_draws_its_exported_patch(self):
+        from pop2.caverns import cavern_room
+
+        program = self.scene.level_renderer.cavern_program
+        room = program['scythes']['rooms']['18']
+        rest = cavern_room(18, animated=True, level_number=6)
+        extended = cavern_room(18, animated=True, level_number=6, scythe_patch=room['states']['8'])
+        self.assertNotEqual(rest.background.tobytes(), extended.background.tobytes())
+
+
+@unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported level-six resources required')
 class LevelSixSwordTests(unittest.TestCase):
     """3:6202-6216 (no sword in level six) and the sword item pickup 6:14ce-1574."""
 
@@ -204,6 +283,24 @@ class LevelSixSaveTests(unittest.TestCase):
                 self.assertFalse(loaded.combat.player.sword_lost, name)
                 loaded.restart()
                 self.assertTrue(loaded.combat.player.sword_lost, name)
+
+    def test_a_moving_bloody_scythe_survives_a_snapshot(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from pop2.game_session import GameResources, GameSession
+        from pop2.save_game import capture_snapshot, read_snapshot, write_save
+
+        resources = GameResources.load()
+        game = GameSession.load(resources, 6)
+        game.caverns.scythes.foreground = {(18, 26): 0x45, (18, 25): 0x45}
+        game.caverns.scythes.active = {(18, 26)}
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'snapshot.json'
+            write_save(path, capture_snapshot(game))
+            loaded, _saved = read_snapshot(path, resources)
+        self.assertEqual(loaded.caverns.scythes.foreground, {(18, 26): 0x45, (18, 25): 0x45})
+        self.assertEqual(loaded.caverns.scythes.active, {(18, 26)})
+        self.assertEqual(loaded.level_map.tile(18, 6, 2).foreground & 255, 0x45)
 
 
 

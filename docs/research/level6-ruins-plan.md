@@ -1,8 +1,7 @@
 # Level Six: Ruins Scenery And Integration Plan
 
 Research note, 2026-10-22, updated 2026-10-23, `claude/ai-research`. Level
-six is playable from the cliff, without its heads and serpents and without
-scythe traps. Codex's level-seven notes (branch `codex/level7-preparation`) cover the
+six is playable from the cliff, without its heads and serpents. Codex's level-seven notes (branch `codex/level7-preparation`) cover the
 shared environment-4 dependencies and the head/serpent actors; this note
 covers the campaign track: scenery export and runtime integration.
 
@@ -76,15 +75,28 @@ render of port room 16 matches the ruins look.
   high passes an open crevice (CheckCollide 4:5ade-5b0a, heads excepted),
   and the wall alignment skips a prone body in a crevice (4:35e6, 4:5830).
   These rules are environment independent, so level two's two crevices
-  (port rooms 9 and 11) can now be crawled too. The scythe check under an
-  extended blade (S05_5F1A) reads the static foreground: scythes do not
-  move yet.
+  (port rooms 9 and 11) can now be crawled too.
+- Scythes (2026-10-23, port rooms 18 and 20): tile 13 holds the state and
+  AnimScythe (5:4584, in an unmapped listing region) copies its low byte to
+  the tile 12 on its left. A living Prince or guard on a scythe cell, at
+  most 30 pixels above the floor and more than 28 pixels into the column
+  (5:57bc), starts a resting scythe (TriggerScythe 5:5fde). Each update
+  advances phases 1-19 (sound 277 leaving 0, 276 leaving 15; from 16 a
+  bloody blade also bloodies the handle, 0x80), then returns to 0 keeping
+  the blood. CheckScytheHit (5:588a) tests only the first scythe cell among
+  the character's columns -1..+1: phases 2, 16 and 17 (GetScytheHitType)
+  cut with the rectangles a5-0x372a/-0x3722 offset by the cell (tile 13 one
+  column right; guards 10 pixels shorter), except poses 267-271 and SEQS
+  44: SEQS 113 and death method 5 for the Prince (SEQS 190 for a guard),
+  sound 278 and blood (0x40) on both halves. The drawing of each of the 60
+  states is exported as a patch of the native room drawing
+  (`tools/extract_scythes.py`); it needs a reimport, and older imports
+  leave the scythes still. Not reproduced: the climbing redraw layers for
+  a blade and the scythe test S05_5F1A for tile 13 (it reads only the
+  static blade state).
 
 ## Remaining Steps
 
-0. Scythes (tiles 12/13, port rooms 18 and 20): TriggerScythe 5:5fde,
-   CheckScytheHit, ComputeBladeHitRect, DrawScythe2, GetScytheHitType and
-   the unmapped animation at 5:4584 (sounds 276/277).
 1. Heads and serpents: level six has special opponents in rooms 4, 7, 16,
    20 and 25 (native numbering); `GuardSpawn` rejects them, so the level is
    currently empty of enemies. Codex's level-seven notes cover their

@@ -39,7 +39,12 @@ class LevelRenderer:
         if not 0 <= room_id < 32:
             raise ValueError("Invalid scenery room")
         if self.level.kind in (3, 4):
-            from pop2.caverns import cavern_room, cavern_scene_signature, cavern_pressure_signature
+            from pop2.caverns import (
+                cavern_pressure_signature,
+                cavern_room,
+                cavern_scene_signature,
+                cavern_scythe_signature,
+            )
 
             if caverns is not None:
                 caverns.lava.enter_room(room_id,
@@ -49,8 +54,10 @@ class LevelRenderer:
                          if caverns is not None else '')
             pressure = cavern_pressure_signature(self.cavern_program, room_id, caverns) if caverns else ()
             fallen = caverns.bridge.fallen() if caverns is not None else frozenset()
+            scythe = (cavern_scythe_signature(self.cavern_program, room_id, caverns)
+                      if caverns is not None else None)
             entry = caverns.entry_room if caverns is not None else self.level.start_room
-            key = room_id, frame if room_id == entry else 0, signature, pressure, fallen
+            key = room_id, frame if room_id == entry else 0, signature, pressure, fallen, scythe
             if key not in self.cavern_frames:
                 # Retain loose-floor variants, not every historical gate height.
                 for previous in tuple(self.cavern_frames):
@@ -60,7 +67,7 @@ class LevelRenderer:
                                                     loose_key=signature, pressure_key=pressure,
                                                     retouched=self.retouch_caverns,
                                                     level_number=self.level.number,
-                                                    bridge_fallen=fallen)
+                                                    bridge_fallen=fallen, scythe_patch=scythe)
             self.rooms[room_id] = self.cavern_frames[key]
             return self.rooms[room_id]
         if room_id not in self.rooms:

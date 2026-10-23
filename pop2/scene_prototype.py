@@ -2610,6 +2610,7 @@ class ScenePrototype(WindowControls):
             self.sequence_state.sound_events.extend(caverns.plates.impact(self.level_map, room, cell, kind))
         caverns.loose.plate_events.clear()
         caverns.loose.advance_tiles(self.level_map)
+        self.sequence_state.sound_events.extend(caverns.scythes.advance(self.level_map))
         self.sequence_state.sound_events.extend(caverns.plates.advance(
             self.level_map, self.sequence_state, self.terrain_motion, self.frames[self.action]))
         self.advance_relief(caverns)
@@ -2689,6 +2690,7 @@ class ScenePrototype(WindowControls):
         state.sound_events.extend(caverns.lava.advance())
         state.sound_events.extend(caverns.spikes.advance(self.level_map, self.room_id))
         state.sound_events.extend(caverns.plates.advance(self.level_map))
+        state.sound_events.extend(caverns.scythes.advance(self.level_map))
         caverns.advance_torches(program.get('torches', {}).get(str(self.room_id), ()))
         room = self.level_renderer.enter_room(self.room_id, caverns)
         self.background, self.foreground = room.background, room.foreground
@@ -2799,6 +2801,45 @@ class ScenePrototype(WindowControls):
                 self.death.music_method = 4
                 self.action, self.player_x = state.action, state.target_x
                 self.status.set('Defeated')
+
+    def check_cavern_scythes(self):
+        # FrameAdv 2:63f4-63fe and 2:664a-664e (ruins): 5:57bc may start a
+        # scythe, then CheckScytheHit 5:588a, which the Prince skips while
+        # invulnerable (a5-0x4f90).
+        if self.game.level.kind != 4 or 'scythes' not in self.level_renderer.cavern_program:
+            return  # An import before the scythes' drawing: leave them still.
+        from pop2.scythes import CUT_SEQUENCE, CUT_SOUND
+
+        scythes = self.game.caverns.scythes
+        for actor in (self.combat.player, *self.combat.active_guards()):
+            state, motion = actor.state, actor.terrain_motion
+            if motion is None or not actor.alive:
+                continue
+            player = actor is self.combat.player
+            scythes.trigger(self.level_map, motion, state)
+            if player and getattr(self, 'god_mode', False):
+                continue
+            bounds = (self.player_collision_bounds() if player else
+                      self.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
+            if not scythes.cut(self.level_map, motion, state, bounds):
+                continue
+            # 5:5942-597e: SEQS 113 and death method 5 for the Prince, SEQS
+            # 190 for a guard; DecLifePts(100) and sound 278.
+            actor.life = 0
+            motion.dead = True
+            actor.recovering = False
+            state.sound_events.append(CUT_SOUND)
+            self.physics.select(actor.runtime, CUT_SEQUENCE if player else 190)
+            if player:
+                self.clear_keys(None)
+                self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
+                self.run_active = self.run_stop_requested = self.run_cycle_boundary_pending = False
+                self.pending_action = None
+                self.death.begin(5)
+                self.action, self.player_x = state.action, state.target_x
+                self.status.set('Defeated')
+            else:
+                actor.targetable = False
 
     def check_cavern_darts(self):
         from pop2.darts import dart_death
@@ -2942,6 +2983,7 @@ class ScenePrototype(WindowControls):
             loose.shake_events.clear()
             self.check_cavern_darts()
             self.check_cavern_spikes()
+            self.check_cavern_scythes()
             self.advance_bridge()
             self.game.caverns.crush.advance(self.level_map, motion, state,
                                            self.frames[state.action], self.game.caverns.plates,

@@ -488,6 +488,11 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
 
     result['pressure_plates'] = pressure_scenery(program, caverns, prince, level, result,
                                                progress, recover=recover)
+    if definition.kind == 4:
+        from tools.extract_scythes import scythe_scenery
+
+        result['scythes'] = scythe_scenery(program, caverns, prince, level, result,
+                                           progress, recover=recover)
     progress('Saving prepared cavern scenery...')
     name = scenery_name(level_number)
     (output / name).write_text(json.dumps(result) + '\n', encoding='ascii')

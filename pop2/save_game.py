@@ -35,6 +35,7 @@ from pop2.story_progress import FRAMES_PER_MINUTE, StoryProgress
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.skeleton import Skeleton, SkeletonRoomRecord
 from pop2.terrain import TerrainMotion
+from pop2.scythes import SCYTHE_STATES, Scythes
 from pop2.wall_spikes import WallSpikes
 
 
@@ -46,7 +47,7 @@ CLASSES = {cls.__name__: cls for cls in (
     Bridge, Carpet, CavernState, Dart, Darts, DesertState, Stone, GateCrush, Harbor,
     WaterEntry, Lava, LavaPool, FallingFloor, LooseFloors, OpponentGenerationPoint,
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
-    Skeleton, SkeletonRoomRecord, GuardRoomRecord, TerrainMotion, WallSpikes,
+    Skeleton, SkeletonRoomRecord, GuardRoomRecord, TerrainMotion, WallSpikes, Scythes,
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
         LooseFloors: {'shake_events'}, PressurePlates: {'slams', 'slam_sounds'}}
@@ -169,7 +170,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     if cls is Potions:
         optional.update(('fatal', 'float_timer'))
     if cls is CavernState:
-        optional.update(('bridge', 'carpet', 'phew_countdown'))
+        optional.update(('bridge', 'carpet', 'phew_countdown', 'scythes'))
     if cls is Bridge:
         optional.update(('tension_level', 'tension'))
     if (not isinstance(record, dict) or set(record) - allowed
@@ -387,6 +388,13 @@ def read_snapshot(path, resources):
         if carpet is not None and (type(carpet.counter) is not int or not 0 <= carpet.counter < 2**31
                                    or type(carpet.crashed) is not bool):
             raise SaveGameError('Invalid carpet state')
+        scythes = game.caverns.scythes if game.caverns is not None else None
+        if scythes is not None and (
+                any(not (isinstance(key, tuple) and len(key) == 2 and 0 <= key[0] < 32 and 0 <= key[1] < 30
+                         and type(value) is int and value in SCYTHE_STATES)
+                    for key, value in scythes.foreground.items())
+                or any(key not in scythes.foreground for key in scythes.active)):
+            raise SaveGameError('Invalid scythe state')
         if game.opening is not None:
             opening = saved['opening']
             if (not isinstance(opening, dict) or set(opening) != {'active', 'phase', 'tick'}

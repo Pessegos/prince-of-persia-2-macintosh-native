@@ -11,6 +11,7 @@ from pop2.pressure_plates import PressurePlates
 from pop2.potions import Potions
 from pop2.wall_spikes import WallSpikes
 from pop2.gate_crush import GateCrush
+from pop2.scythes import Scythes
 
 
 @dataclass
@@ -28,6 +29,7 @@ class CavernState:
     crush: GateCrush = field(default_factory=GateCrush)
     bridge: Bridge = field(default_factory=Bridge)
     carpet: Carpet = field(default_factory=Carpet)
+    scythes: Scythes = field(default_factory=Scythes)
     # a5-0x5008: the level-four relief countdown; -1 idle, -2 already used.
     phew_countdown: int = -1
 
@@ -69,6 +71,8 @@ class CavernState:
         value = self.potions.phases.get((room, cell), value)
         value = self.plates.foreground.get((room, cell), value)
         value = self.spikes.foreground.get((room, cell), value)
+        if (room, cell) in self.scythes.foreground:
+            value = (value & 0xff00) | self.scythes.foreground[room, cell]
         if (room, cell) in self.loose.tiles:
             kind, foreground = self.loose.tiles[room, cell]
             if kind == 19 and (room, cell) in self.torches:

@@ -798,6 +798,33 @@ def loose_variant(program, room_id, loose_key):
     return decoded
 
 
+def cavern_scythe_signature(program, room_id, state):
+    """The exported drawing patch for the state of the room's scythe, or None."""
+    metadata = program.get('scythes', {})
+    room = metadata.get('rooms', {}).get(str(room_id))
+    if room is None:
+        return None
+    key = tuple(metadata['scythes'][room['scythe']][:2])
+    return room['states'].get(str(state.scythes.foreground.get(key, 0)))
+
+
+def with_scythe(commands, patch):
+    """Apply an exported scythe patch: drop its commands, insert after anchors."""
+    result = list(commands)
+    for command in patch['remove']:
+        if command in result:
+            result.remove(command)
+    for anchor, inserted in patch['insert']:
+        if anchor is None:
+            index = 0
+        elif anchor in result:
+            index = result.index(anchor) + 1
+        else:
+            index = len(result)
+        result[index:index] = inserted
+    return result
+
+
 def without_fallen_planks(commands, fallen):
     # Native room-10 redraws with the emptied bridge cells (8:0c3e-0c54) only
     # omit those cells' CUST plank (SHAP 4226), in every collapse stage.
@@ -807,7 +834,7 @@ def without_fallen_planks(commands, fallen):
 
 
 def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=(), retouched=False,
-                *, level_number=3, bridge_fallen=frozenset()):
+                *, level_number=3, bridge_fallen=frozenset(), scythe_patch=None):
     program, resources, palette, shapes = room_assets(level_number, room_id)
 
     def scenery_sprite(command):
@@ -833,6 +860,10 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         commands = pressure_drawing_commands(commands, records, pressure_key, resources)
     if bridge_fallen:
         commands = without_fallen_planks(commands, bridge_fallen)
+    patch = (program['scythes']['rooms'][str(room_id)]['patches'][scythe_patch]
+             if scythe_patch is not None else None)
+    if patch is not None:
+        commands = with_scythe(commands, patch['commands'])
     gate_cells = {tuple(key[-2:]) for record in records if record['kind'] == 4
                   for key in record['commands']}
     background = Image.new('RGBA', (510, 365))
@@ -893,6 +924,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         floor_commands = pressure_drawing_commands(floor_commands, records, pressure_key, resources)
     if bridge_fallen:
         floor_commands = without_fallen_planks(floor_commands, bridge_fallen)
+    if patch is not None:
+        floor_commands = with_scythe(floor_commands, patch['floor_redraw'])
     for command in floor_commands:
         if animated and len(command) >= 8 and command[7] == 1:
             continue
