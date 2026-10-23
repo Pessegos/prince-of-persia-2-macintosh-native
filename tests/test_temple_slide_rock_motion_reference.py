@@ -25,10 +25,10 @@ class TempleSlideRockMotionTests(unittest.TestCase):
                 self.assertEqual(self.step(mob, pending=192),
                                  dict(mob=mob, events=[], pending=192))
 
-    def test_minus_two_skips_space_queries_and_keeps_control(self):
-        result = self.step(clear=(True, True))
+    def test_minus_two_skips_band_queries_and_keeps_control(self):
+        result = self.step(filled=(True, True))
         self.assertEqual(result['mob'], rock(x=202))
-        self.assertFalse(any(event[0] == 'clear' for event in result['events']))
+        self.assertFalse(any(event[0] == 'filled' for event in result['events']))
         self.assertEqual(result['events'][-1], ('sound', 192))
 
     def test_control_increments_until_nine_but_does_not_set_speed(self):
@@ -39,22 +39,22 @@ class TempleSlideRockMotionTests(unittest.TestCase):
             # Reaching state zero exits before committing the candidate X.
             self.assertEqual(result['mob'][0], 204 if expected == 0 else 202)
 
-    def test_space_check_uses_original_x_and_then_x_minus_sixteen(self):
-        result = self.step(rock(state=7), clear=(True, True))
+    def test_band_check_uses_original_x_and_then_x_minus_sixteen(self):
+        result = self.step(rock(state=7), filled=(True, True))
         self.assertEqual(result['events'][:3],
-                         [('clear', 204), ('clear', 188), ('sound', 191)])
+                         [('filled', 204), ('filled', 188), ('sound', 191)])
         self.assertEqual(result['mob'], rock(x=202, state=8))
 
-    def test_clear_space_stops_only_from_control_eight_upwards(self):
+    def test_filled_bands_stop_only_from_control_eight_upwards(self):
         for state in (8, 9, 99, 101, 32767):
-            result = self.step(rock(state=state), clear=(True, True), pending=192)
+            result = self.step(rock(state=state), filled=(True, True), pending=192)
             self.assertEqual(result['mob'], rock(state=0))
-            self.assertEqual(result['events'], [('clear', 204), ('stop', 192)])
+            self.assertEqual(result['events'], [('filled', 204), ('stop', 192)])
             self.assertEqual(result['pending'], -1)
 
-    def test_only_matching_pending_cue_is_explicitly_cleared_on_space_stop(self):
+    def test_only_matching_pending_cue_is_explicitly_cleared_on_filled_stop(self):
         for pending in (-1, 191, 192, 193):
-            result = self.step(rock(state=8), clear=(True, False), pending=pending)
+            result = self.step(rock(state=8), filled=(True, False), pending=pending)
             self.assertEqual(result['pending'], -1 if pending == 192 else pending)
 
     def test_negative_candidate_wraps_to_left_room_without_reanchoring(self):

@@ -17,13 +17,13 @@ def trunc_div(value, divisor=51):
     return (abs(value) // divisor) * (-1 if value < 0 else 1)
 
 
-def motion_reference(mob, left_room, *, clear=(False, False), tiles=(1, 1),
+def motion_reference(mob, left_room, *, filled=(False, False), tiles=(1, 1),
                      cue193_on=False, pending=-1, prince=(0, 0, 0)):
     """Model 10:1d5c only; supplied predicates are NOT a world simulation."""
     if (len(mob) != 8 or any(not -32768 <= word <= 32767 for word in mob)
             or mob[5] != 6 or not 1 <= mob[2] <= 32 or not 0 <= mob[6] <= 2
             or not 0 <= mob[0] <= 561 or not 0 <= left_room <= 32
-            or len(clear) != 2 or len(tiles) != 2 or len(prince) != 3
+            or len(filled) != 2 or len(tiles) != 2 or len(prince) != 3
             or any(not -32768 <= word <= 32767 for word in (*tiles, *prince, pending))):
         raise ValueError('Outside the bounded type-6 motion fixture domain')
     result = list(mob)
@@ -35,15 +35,15 @@ def motion_reference(mob, left_room, *, clear=(False, False), tiles=(1, 1),
     if result[4] == -2:
         candidate -= 2
     else:
-        events.append(('clear', x))
-        if clear[0] and result[4] >= 8:
+        events.append(('filled', x))
+        if filled[0] and result[4] >= 8:
             result[4] = 0
             events.append(('stop', 192))
             if pending == 192:
                 pending = -1
         else:
-            events.append(('clear', signed_word(x - 16)))
-            if clear[1]:
+            events.append(('filled', signed_word(x - 16)))
+            if filled[1]:
                 events.append(('sound', 191))
             candidate -= 2
             if result[4] <= 8:
@@ -100,12 +100,12 @@ class NativeSlideRockMotion(NativeRules):
     }
     SUPPLIED = {}
     ENDPOINTS = {
-        (10, 0x1656): 'clear', (4, 0x27ee): 'cell',
+        (10, 0x1656): 'filled', (4, 0x27ee): 'cell',
         (5, 0x5252): 'stop', (5, 0x4d84): 'sound', (5, 0x52c8): 'query',
         (5, 0x3cee): '5:3cee', (6, 0x1a84): '6:1a84',
     }
     BRANCHES = {
-        0x1d80: 'minus_two', 0x1d94: 'space_stop', 0x1db4: 'second_space_test',
+        0x1d80: 'minus_two', 0x1d94: 'filled_stop', 0x1db4: 'second_filled_test',
         0x1dae: 'clear_matching_pending_cue', 0x1de6: 'left_room_crossing',
         0x1e0e: 'missing_left_removal', 0x1e6a: 'finalize_marker',
         0x1e8e: 'actor_5_3cee', 0x1efe: 'begin_marker',
@@ -119,10 +119,10 @@ class NativeSlideRockMotion(NativeRules):
     def reset(self, level):
         super().reset(level)
         self.events, self.actor_inputs = [], []
-        self.clear = (False, False)
+        self.filled = (False, False)
         self.tiles = (1, 1)
         self.cue193_on = False
-        self.clear_index = self.cell_index = 0
+        self.predicate_index = self.cell_index = 0
 
     def dispatch(self, cpu, address, size, user):
         segment, offset = divmod(address - self.CODE_BASE, 0x10000)
@@ -133,12 +133,12 @@ class NativeSlideRockMotion(NativeRules):
             return super().dispatch(cpu, address, size, user)
         stack = cpu.reg_read(self.registers['a7'])
         value = 0
-        if endpoint == 'clear':
-            if self.clear_index >= 2:
-                raise AssertionError('Unexpected extra space predicate')
-            self.events.append(('clear', self.word(-0x44a6)))
-            value = int(self.clear[self.clear_index])
-            self.clear_index += 1
+        if endpoint == 'filled':
+            if self.predicate_index >= 2:
+                raise AssertionError('Unexpected extra filled-band predicate')
+            self.events.append(('filled', self.word(-0x44a6)))
+            value = int(self.filled[self.predicate_index])
+            self.predicate_index += 1
         elif endpoint == 'cell':
             if self.cell_index >= 2:
                 raise AssertionError('Unexpected extra tile read')
@@ -186,7 +186,7 @@ def run_probe(recovery):
         for index, value in zip((10, 12, 14), options.get('prince', (0, 0, 0))):
             struct.pack_into('>h', actor, index, value)
         machine.reset(level)
-        machine.clear = options.get('clear', (False, False))
+        machine.filled = options.get('filled', (False, False))
         machine.tiles = options.get('tiles', (1, 1))
         machine.cue193_on = options.get('cue193_on', False)
         machine.put_word(-0x439e, options.get('pending', -1))
@@ -224,19 +224,19 @@ def run_probe(recovery):
 
     level = prince_fork['LEVL'][2009]['data']
     states = (-32768, -3, -2, -1, 0, 1, 2, 7, 8, 9, 99, 100, 101, 32767)
-    for state, x, mark, clear in product(
+    for state, x, mark, filled in product(
             states, (0, 1, 2, 6, 7, 30, 31, 32, 51, 57, 58, 561),
             (-1, 0, 1), ((False, False), (False, True), (True, False), (True, True))):
-        check(level, (x, 236, 28, mark, state, 6, 1, 459), 'control_thresholds', clear=clear)
+        check(level, (x, 236, 28, mark, state, 6, 1, 459), 'control_thresholds', filled=filled)
     for front, edge, mark, on193, x in product(
             (0, 1, 2, 25), (0, 1, 2, 4, 7, 20, 25, 43, 49),
             (-1, 0, 1, 2), (False, True), (31, 57, 58)):
         check(level, (x, 236, 28, mark, -2, 6, 1, 459), 'tile_controls',
               tiles=(front, edge), cue193_on=on193)
-    for pending, state, clear in product((-1, 191, 192, 193), (7, 8, 9, 100),
+    for pending, state, filled in product((-1, 191, 192, 193), (7, 8, 9, 100),
                                           ((False, False), (True, False))):
         check(level, (204, 236, 28, 0, state, 6, 1, 459), 'pending_sound',
-              clear=clear, pending=pending)
+              filled=filled, pending=pending)
     for frame, column, row in product((-1, 0, 86, 87, 88, 98, 99, 100, 32767),
                                        (0, 1, 2), (0, 1, 2, 3)):
         check(level, (65, 236, 28, 0, -2, 6, 1, 459), 'actor_admission',
@@ -272,7 +272,7 @@ def run_probe(recovery):
         outputs_sha256=digest.hexdigest(), level_hashes=level_hashes,
         executable_sha256=hashlib.sha256(executable).hexdigest(),
         supplied=[
-            '10:1656 space predicate: up to two supplied independent booleans; X logged',
+            '10:1656 filled-band predicate: up to two supplied independent booleans; X logged',
             '4:27ee ReadCell: supplied front/edge tile words; room/column/row logged; no cache writes',
             '5:5252 StopSound and 5:4d84 AddSound: record requests, no audio side effects',
             '5:52c8 PrinceSndOn: supplied cue193 boolean',

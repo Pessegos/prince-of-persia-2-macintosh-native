@@ -127,11 +127,18 @@ capacity behavior, not movement or a complete actor controller.
 [Motion control](temple-slide-rock-motion.md) now covers the complete native
 10:1d5c body with supplied geometry/audio/actor endpoints:3,190 comparisons,
 including real left links, native division/IsWall and62-byte actor copies.
-Control is not speed: ordinary movement proposes X-2 per helper call; space
-can stop it from control8, and mark1 finalizes to control100. These results
+Control is not speed: ordinary movement proposes X-2 per helper call; the band
+predicate can stop it from control8, and mark1 finalizes to control100. These results
 do not yet validate actual geometry or the subsequent crush body.
 
-Next work validates space scanning/ReadCell, then connects the native type-6
-MakeRubble update dispatch, presentation, collision and persistence separately.
+[Real geometry](temple-slide-rock-geometry.md) now independently validates the
+native band scans and ReadCell/normalization/cache without supplied endpoints:
+32,082 comparisons over all four maps and bounded arithmetic/topology controls.
+Important correction: true means neither IsSpace nor marker25 in both scanned
+bands (including vacuous empty intervals), NOT empty/clear space. The supplied
+motion probe now calls this response `filled`; its transitions are unchanged.
+
+Next work connects this geometry to motion and the native type-6 MakeRubble
+update dispatch, presentation, collision and persistence separately.
 The constructor's X>510 branch, TriggerObject caller admission and connected
 movement lifecycle remain open.

@@ -15,7 +15,7 @@ header, not the `segment_offset` column of the recovery jump-table CSV.
 | MakeRubble mob iterator | 5:29e8 | Static dispatch tracing only in this block |
 | Type dispatcher | 5:2a94, type6 case5:2afa | Calls motion then crush, in that order |
 | Motion | 10:1d5c-1fa6 | Full body executes |
-| Space predicate | 10:1656 | Supplied independent booleans; X logged |
+| Filled-band predicate | 10:1656 | Supplied independent booleans; X logged |
 | ReadCell | 4:27ee | Supplied tile responses; requested room/column/row logged |
 | IsWall | 3:4ef2-4f24 | Native, including original wall-kind constants |
 | Signed division | 19:4bb0/4bd0/4bfe | Native; truncates toward zero |
@@ -36,11 +36,11 @@ These names describe observed storage, not a final runtime API. In particular,
 compaction, while value1 is also a temporary movement phase.
 
 - Control0 and100 return immediately with no services or record changes.
-- Control-2 skips the space predicate and proposes `X-2` without changing control.
-- Every other nonzero/non100 control tests space at the original X. If clear and
+- Control-2 skips the band predicate and proposes `X-2` without changing control.
+- Every other nonzero/non100 control tests the bands at the original X. If true and
   control>=8, set control0, request StopSound192, and clear pending cue A5-439e
   only if it equals192. No second test, tile read or candidate-X write follows.
-- Otherwise test space again at a temporary `X-16`, request cue191 if clear,
+- Otherwise test the bands again at a temporary `X-16`, request cue191 if true,
   restore the original scratch X, and propose `X-2`. Increment control by one
   when its old signed value<=8; values above8 remain unchanged. The control is
   not the X displacement. Reaching zero from-1 exits before committing X.
@@ -54,6 +54,13 @@ compaction, while value1 is also a temporary movement phase.
 
 All displacement units above are native coordinates **per helper call**, not
 port pixels, elapsed milliseconds or certified game-frame cadence.
+
+Terminology correction after [native geometry validation](temple-slide-rock-geometry.md):
+the predicate does NOT mean empty/clear space. It returns true when both scanned
+bands contain neither IsSpace kinds nor marker25, including vacuous empty
+intervals. The initial provisional `clear` response/event name in this probe has
+been renamed `filled` to avoid implying the opposite result. Motion transitions
+are unchanged; the output digest below reflects the renamed endpoint events.
 
 ## Obstacle Phase
 
@@ -101,7 +108,7 @@ Original executable SHA256:
 
 | Supplied Controls | Cases |
 | --- | --- |
-|14 control values,12 X boundaries,3 mark values,4 space-response pairs|2016|
+|14 control values,12 X boundaries,3 mark values,4 band-response pairs|2016|
 |Front/edge tile responses,4 mark values,audio query outcomes,X thresholds|864|
 |Pending-cue clearing and stop thresholds|32|
 |Actor frame/row/column admission boundaries|108|
@@ -110,12 +117,12 @@ Original executable SHA256:
 |Explicit absent/present left-link controls|18|
 
 All11 declared native branch checkpoints were reached: unconditional-2,
-space-stop, second-space-test, matching-pending-cue clear, room crossing,
+filled-band stop, second-band test, matching-pending-cue clear, room crossing,
 missing-room removal, begin/finalize marker, both actor endpoints, terminal
 sound stop. This is targeted branch evidence, not exhaustive path coverage.
 The report records endpoint totals and four original level hashes.
 Outputs SHA256:
-`740ea7c49cccf47a469894ebaed4c1cd11ae1c323be52b30687a1edc8d283d65`.
+`5827bb09d0607168328592b8310e7791a2e8e6d6520872c6e7b1eaa4115985e5`.
 
 Each case compares the record, ordered endpoint requests/arguments, pending
 cue, entire level, unrelated512-byte bank guards, and both62-byte actors.
@@ -127,7 +134,8 @@ left-link controls modify in-memory copies only. Unit tests use synthetic data.
 
 ## Boundaries And Next Work
 
-- Space10:1656 and its scan10:1ca4 still need independent native validation.
+- The supplied geometry in THIS probe is now independently validated by the
+  [geometry probe](temple-slide-rock-geometry.md); connecting it to motion remains open.
 - ReadCell responses here do not update the original cell cache. Consequently
   this block does not certify the cache-dependent effects of5:3cee.
 - Full actor reactions, crush10:16f6, collision/damage and animation remain open.
