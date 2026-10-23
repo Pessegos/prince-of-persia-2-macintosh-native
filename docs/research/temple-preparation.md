@@ -214,6 +214,15 @@ leaves rock control unchanged. Supplied full-bank controls expose a timer5
 source with no animation record after rejected registration. Pressure-first
 and animation-first schedules are compared explicitly, not asserted as FrameAdv.
 
-Next work follows actual actor pressure admission and target TROB animation;
-frame scheduling and reset/save behavior remain separate. The constructor's
-X>510 branch and full movement/contact/presentation lifecycle remain open.
+[Actor pressure admission](temple-pressure-admission.md) now executes original
+CheckPress, real above/current ReadCell helpers and temple cell traversal:
+16,461 comparisons pass. It covers actor/float/selected-sequence exclusions,
+pose/mode/FRAM/Y boundaries, ALIVE versus type4 permanent-pressure selection,
+and the pose79 early loose-floor/trapdoor dispatch. The supporting cell and
+actor/FRAM state are supplied; four outgoing mechanism bodies are request sinks.
+This does not yet connect actor admission to the earlier lifetime traces.
+
+Next work connects that admission to the pressure lifecycle and follows target
+TROB animation; supporting-foot calculation, frame scheduling and reset/save
+behavior remain separate. The constructor's X>510 branch and full
+movement/contact/presentation lifecycle remain open.

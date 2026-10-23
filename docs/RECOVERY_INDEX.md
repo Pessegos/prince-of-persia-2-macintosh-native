@@ -142,6 +142,12 @@ death sequences, coordinates and stored NPC records remain intact.
 
 ## Next Recovery Pass
 
+Temple research: [actor pressure admission](research/temple-pressure-admission.md)
+records R (not runtime-integrated) CheckPress5:127e-13dc and real ReadCell
+helpers, with16,461 native/reference comparisons and8 asset-free regressions.
+Supporting-cell/actor/FRAM inputs and outgoing mechanism request sinks are
+supplied; connected mechanism effects and actual FrameAdv scheduling remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
