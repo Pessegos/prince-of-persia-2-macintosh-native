@@ -181,8 +181,8 @@ tile25 branch, six raw rock-only link chains and repeated held/permanent
 PushPlate calls on five header-admitted sources:8,609 comparisons pass without
 supplied native services. Caller mode5 selects rock how2; other tested words
 select how1. Return-1 skips TROB creation while link traversal continues.
-The fresh timer<2 plate branch remains open; the two mixed chains are covered
-by the subsequent bounded experiment below.
+The fresh timer<2 branch and two mixed chains are covered by the subsequent
+bounded experiments below, with their own stated service boundaries.
 
 [Mixed gate/rock links](temple-mixed-plate-links.md) executes both original
 level11 room3 chains, native gate admission and TROB lookup/append/update:
@@ -192,6 +192,14 @@ First coordinate match updates only the TROB phase, even at capacity. Repeated
 held/permanent plate calls preserve source write/cache ordering. This does not
 establish fresh plate setup, actual actor admission or combined animation.
 
-Next work follows fresh-pressure and mixed-mechanism callers, actual scheduling
-and reset/save behavior separately. The constructor's X>510 branch, actor
-pressure admission and full movement/contact/presentation lifecycle remain open.
+[First-press setup](temple-fresh-plate-setup.md) now covers PushPlate's fresh
+branch and its immediate held repeat on all seven admitted rock-linked sources,
+plus three explicitly supplied sound-exception controls:4,800 comparisons pass.
+The source TROB request precedes target activation and takes the last available
+slot ahead of a missing gate TROB. Audio and redraw bodies are request sinks,
+not native playback/pixel proof; other gameplay writes execute natively.
+
+Next work follows actual actor pressure admission, release/timer decay and
+TROB animation, actual scheduling and reset/save behavior separately. The
+constructor's X>510 branch and full movement/contact/presentation lifecycle
+remain open.
