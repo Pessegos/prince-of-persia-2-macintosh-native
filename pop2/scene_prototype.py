@@ -3669,7 +3669,7 @@ class ScenePrototype(WindowControls):
         demo_paused = self.paused and getattr(self, "demo", None) is not None
         if (hud_text is not None and not demo_paused
                 and self.dev_menu is None and self.game_menu is None):
-            ink = hud_text.getbbox()
+            ink = (self.pause_text if self.audio_notice_text is not None else hud_text).getbbox()
             pause_y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
             viewport.paste(hud_text, ((VIEWPORT_WIDTH - hud_text.width) // 2,
                                       pause_y), hud_text)

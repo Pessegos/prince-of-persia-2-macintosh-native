@@ -588,7 +588,10 @@ class WindowControls:
     def show_audio_notice(self, action, enabled):
         label = "Sounds" if action == "sound" else "Ambient Music"
         message = f"{label} {'On' if enabled else 'Off'}"
-        self.audio_notice_text = self.ui_font.text(message, self.hud_text_color)
+        text = self.ui_font.text(message, self.hud_text_color)
+        alternate = self.ui_font.text(f"{label} {'Off' if enabled else 'On'}", self.hud_text_color)
+        self.audio_notice_text = Image.new("RGBA", (max(text.width, alternate.width), text.height))
+        self.audio_notice_text.paste(text, (0, 0))
         after_id = self.audio_notice_after_id
         if after_id is not None:
             self.root.after_cancel(after_id)

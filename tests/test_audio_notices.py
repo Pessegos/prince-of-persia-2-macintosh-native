@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-from PIL import ImageChops
+from PIL import Image, ImageChops
 
 from pop2.render_opening import ROOM_HEIGHT, VIEWPORT_HEIGHT, VIEWPORT_WIDTH
 from pop2.window_controls import WindowControls
@@ -15,6 +15,7 @@ class AudioNoticeTimerTests(unittest.TestCase):
         host = WindowControls()
         host.root = Mock()
         host.ui_font = Mock()
+        host.ui_font.text.return_value = Image.new('RGBA', (96, 16), (253, 255, 168, 255))
         host.hud_text_color = (253, 255, 168, 255)
         host.audio_notice_after_id = None
         host.render = Mock()
@@ -27,8 +28,8 @@ class AudioNoticeTimerTests(unittest.TestCase):
             with self.subTest(message=message):
                 host = self.host()
                 host.show_audio_notice(action, enabled)
-                host.ui_font.text.assert_called_once_with(message, host.hud_text_color)
-                self.assertIs(host.audio_notice_text, host.ui_font.text.return_value)
+                host.ui_font.text.assert_any_call(message, host.hud_text_color)
+                self.assertEqual(host.audio_notice_text.tobytes(), host.ui_font.text.return_value.tobytes())
                 host.root.after.assert_called_once_with(2000, host.clear_audio_notice)
                 host.render.assert_called_once_with()
 
@@ -85,11 +86,15 @@ class AudioNoticeSceneTests(unittest.TestCase):
                     with self.subTest(paused=paused, action=action, enabled=enabled):
                         self.assertEqual(self.press(key), 'break')
                         text = scene.ui_font.text(f"{label} {'On' if enabled else 'Off'}", scene.hud_text_color)
-                        self.assertEqual(scene.audio_notice_text.tobytes(), text.tobytes())
-                        ink = text.getbbox()
+                        width = max(scene.ui_font.text(f'{label} On').width,
+                                    scene.ui_font.text(f'{label} Off').width)
+                        aligned = Image.new('RGBA', (width, text.height))
+                        aligned.paste(text, (0, 0))
+                        self.assertEqual(scene.audio_notice_text.tobytes(), aligned.tobytes())
+                        ink = scene.pause_text.getbbox()
                         y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
                         expected = scene.screenshot_viewport.copy()
-                        expected.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, y), text)
+                        expected.paste(aligned, ((VIEWPORT_WIDTH - aligned.width) // 2, y), aligned)
                         self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
                         self.assertEqual(scene.paused, paused)
                         self.assertEqual(position, (scene.player_x, scene.action, scene.combat.world_frame))
@@ -136,7 +141,7 @@ class AudioNoticeSceneTests(unittest.TestCase):
         before = scene.native_viewport.copy()
         self.press('m')
         text = scene.audio_notice_text
-        ink = text.getbbox()
+        ink = scene.pause_text.getbbox()
         y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
         expected = scene.screenshot_viewport.copy()
         expected.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, y), text)
@@ -144,6 +149,28 @@ class AudioNoticeSceneTests(unittest.TestCase):
         scene.root.after_cancel(scene.audio_notice_after_id)
         scene.clear_audio_notice()
         self.assertEqual(scene.native_viewport.tobytes(), before.tobytes())
+
+    def test_on_off_keep_label_and_state_origins_fixed_on_pause_baseline(self):
+        scene = self.scene
+        ink = scene.pause_text.getbbox()
+        pause_y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
+        for action, label in (('sound', 'Sounds'), ('music', 'Ambient Music')):
+            frames, sizes = [], []
+            prefix = scene.ui_font.text(label + ' ', scene.hud_text_color)
+            state_width = max(scene.ui_font.text('On').width, scene.ui_font.text('Off').width)
+            width = prefix.width + state_width
+            x = (VIEWPORT_WIDTH - width) // 2
+            for enabled in (False, True):
+                scene.show_audio_notice(action, enabled)
+                sizes.append(scene.audio_notice_text.size)
+                state = scene.ui_font.text('On' if enabled else 'Off', scene.hud_text_color)
+                expected = scene.screenshot_viewport.copy()
+                expected.paste(prefix, (x, pause_y), prefix)
+                expected.paste(state, (x + prefix.width, pause_y), state)
+                self.assertEqual(scene.native_viewport.tobytes(), expected.tobytes())
+                frames.append(scene.native_viewport.crop((x, pause_y, x + prefix.width, pause_y + prefix.height)))
+            self.assertEqual(sizes[0], sizes[1])
+            self.assertEqual(frames[0].tobytes(), frames[1].tobytes())
 
 
 if __name__ == '__main__':
