@@ -60,9 +60,11 @@ The heads of levels six/seven also use it (`7:04ea`, `7:092a`), so it will
 need to move out of the bridge state for those levels.
 
 **Approximations and gaps that remain:**
-- The carpet's red fade of palette entries 45/46 (`8:10ba-119c`).
-- Cutscene 1 (NISCarpet) between levels five and six is not shown; the
-  port goes straight to level six.
+- The carpet's red fade recolours only the carpet's own sprites, not
+  other pixels of entries 45/46.
+- NISCarpet's music cues: the scene starts without music, so the cue waits
+  of its callbacks (97, 99) return at once, as 16:26d0 does without music.
+  Whether the ride's FlyinRug song still plays natively is unmeasured.
 - Unmeasured: the bridge-fight tempo against the original over a whole
   fight (only the individual rules were checked).
 
@@ -204,13 +206,34 @@ cave bars and tile 18 at cell 23 belongs to the flying carpet:
     whole room uses 3501. Entries 16-31 hold the cavern Prince palette (Kid
     CTBL 25003) one bank up. An emulator capture of the room and the unused
     carpet matches pixel for pixel (mean difference below 1 outside the
-    Prince). Not reproduced: the red fade of entries 45/46 (`8:10ba-119c`).
+    Prince). After a crash, DrawObjCarpet `8:10ba-11a2` fades entries 46 and
+    45 towards dark red (0x7272, 0x4bc2; green and blue to 0) in seven steps
+    (counter 5-11) with ComputeBloodRGB `8:0df6` (implemented 2026-10-23).
   - **Left column:** GetCells' neighbour cache (`5:0bbc-0be2`) marks the left
     room's last column 0xc000 in a CUST room (except rows 1-2 of CUST kind
     0x1f), so its pillar pieces are not drawn; the export harness now does
     the same (this removed the dark patch at the top left of room 3).
-  - After the ride the port plays the cavern end song (32) and loads level
-    six (cutscene 1 is not shown).
+  - After the ride the port plays the cavern end song (32), shows the
+    carpet scene (below) and loads level six.
+
+## Cutscene 1: NISCarpet (implemented 2026-10-23)
+
+CheckPlayNIS(5, 6) selects scene 1; the NIS dispatcher `15:07c8` runs
+NISCarpet `15:1630`. It opens Caverns.rsrc, Ruins.rsrc and TNIS1-3.rsrc
+(A5 file records -0x4712, -0x470c, -0x26ce, -0x26c8, -0x26c2), which take
+precedence over NIS.rsrc while open. `tools/extract_intro.py` runs it under
+Unicorn like the other scenes, tracking those opens and closes (17:3260,
+17:322e) and emitting their SHAP/CTBL/ANI/SCRP as id + 100000 * n. New
+helpers: 17:6dd6 (PaintRect in a palette index), 17:4fe4 (CopyBits),
+15:0c98 (a SHAP of an open file), SetKidPalette 3:5f1c (Kid CTBL 25004 at
+entry 16), and PlayTheAnimation flags 0x0c/0x1c: flag 16 places the
+animation at its ANI bounds, `$1a` fills them first, and flag 8 saves the
+background and restores it under the previous frame's layers (16:121c,
+16:1378-13bc). Callbacks TransFunc1 `15:19c2` (show the screen, wait for
+cue 97, fade in) and TransFunc3 `15:1a44` (cue 99) are recovered per frame.
+The scene: the carpet over the sea, through the clouds and down to the
+ruins' cliff, where level six starts. It needs a reimport (`carpet.json`,
+TNIS1-3.rsrc).
 
 ## Rules found in unmapped listing regions [D, not implemented]
 
