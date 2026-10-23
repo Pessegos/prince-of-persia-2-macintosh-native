@@ -803,11 +803,12 @@ def delta_commands(base, items):
     return result
 
 
-def loose_variant(program, room_id, loose_key, scythe_states=()):
+def loose_variant(program, room_id, loose_key, scythe_states=(), plank_states=()):
     """A loose-floor variant, expanding the ruins' delta-encoded form."""
     metadata = program.get('loose_floors', {})
     if metadata.get('schema') == 2:
-        return slot_variant(metadata, metadata.get('rooms', {}).get(str(room_id)), loose_key, scythe_states)
+        return slot_variant(metadata, metadata.get('rooms', {}).get(str(room_id)), loose_key,
+                            scythe_states, plank_states)
     room = program.get('loose_floors', {}).get('rooms', {}).get(str(room_id), {})
     variant = room.get('variants', {}).get(loose_key)
     if variant is None or not room.get('delta'):
@@ -904,7 +905,7 @@ def loose_keys(program, room_id):
     return tuple(key for key in keys if set(key) != {'0'})
 
 
-def slot_variant(metadata, room, loose_key, scythe_states=()):
+def slot_variant(metadata, room, loose_key, scythe_states=(), plank_states=()):
     """A room's lists for loose-cell and scythe states, composed from slots.
 
     `scythe_states` are indices into SCYTHE_STATES, one per room['scythes'].
@@ -916,9 +917,10 @@ def slot_variant(metadata, room, loose_key, scythe_states=()):
         return None
     loose = [int(loose_key[group[0]]) for group in room['units']] if loose_key else [0] * len(room['units'])
     scythes = list(scythe_states) or [0] * len(room.get('scythes', ()))
-    if not any(loose) and not any(scythes):
+    planks = list(plank_states) or [0] * len(room.get('planks', ()))
+    if not any(loose) and not any(scythes) and not any(planks):
         return None
-    loose = loose + scythes
+    loose = loose + scythes + planks
     lists = room['lists']
 
     def climbing(states):
@@ -967,7 +969,16 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     scythe_states = scythe_patch[1] if scythe_patch[:1] == ('slots',) else ()
     if scythe_states:
         scythe_patch = ()
-    variant = loose_variant(program, room_id, loose_key, scythe_states)
+    slot_room = (program.get('loose_floors', {}).get('rooms', {}).get(str(room_id), {})
+                 if program.get('loose_floors', {}).get('plank_units') else {})
+    plank_states = ()
+    if slot_room.get('planks'):
+        # Bridge planks are slot units: fallen (3) or wobbling (1/2).
+        wobble = dict(bridge_wobble)
+        plank_states = tuple(3 if cell % 10 in bridge_fallen else wobble.get(cell % 10, 0)
+                             for _room, cell in slot_room['planks'])
+        bridge_fallen, bridge_wobble = frozenset(), frozenset()
+    variant = loose_variant(program, room_id, loose_key, scythe_states, plank_states)
     if variant is not None:
         commands = variant['commands']
     alternate = program.get('alternate_entry') if alternate_entry else None

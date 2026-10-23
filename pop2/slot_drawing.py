@@ -13,6 +13,9 @@ DumpTable's stable layer order (3:2c1e-2c68).
 SLOT_ORDER = tuple((row, column, draw_pass) for row in (2, 1, 0, -1) for column in range(10)
                    for draw_pass in (0, 5, 11, 1, 2))
 
+# A bridge plank unit: rest, wobbling up (nibble 1), down (2), fallen (3).
+PLANK_STATES = 4
+
 
 def draw_order_key(layer, kind):
     # DumpTable 3:2c1e-2c68 paints back-wall records (kind 0) before

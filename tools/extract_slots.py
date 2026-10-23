@@ -14,7 +14,8 @@ original renderer remain the oracle (`check_room_slots`).
 from itertools import product
 import struct
 
-from pop2.slot_drawing import compose_list
+from pop2.bridge import BRIDGE_LEVEL, BRIDGE_ROOM, BRIDGE_ROW, BRIDGE_TILE
+from pop2.slot_drawing import PLANK_STATES, compose_list
 from pop2.terrain import LevelMap
 
 SCHEMA = 2
@@ -148,9 +149,15 @@ def loose_floor_slot_scenery(program, caverns, prince, level, base, progress=lam
     result = {'schema': SCHEMA, 'shifts': loose_shift_tables(program, level),
               'cells': {f'{room}:{cell}': values for (room, cell), values in choices.items()},
               'climb': {'source': source, 'rects': {str(action): list(rect) for action, rect in rects.items()}},
-              'scythe_units': True, 'rooms': {}}
+              'scythe_units': True, 'plank_units': True, 'rooms': {}}
     groups_all = crevice_groups(terrain)
     pairs = scythe_pairs(terrain) if struct.unpack_from('>H', level, 0x2186)[0] == 4 else []
+    # Level five's bridge planks (tile 44, native room 10): rest, wobbling
+    # up/down (foreground nibble 1/2, OffsetBrgFloorY 8:0772) and fallen
+    # (TriggerBrgFloorMob 8:0c3e-0c54: empty, foreground 0xc000).
+    planks = [(tile.room, tile.row * 10 + tile.column) for column in range(10)
+              if (tile := terrain.tile(BRIDGE_ROOM, column, BRIDGE_ROW)).kind == BRIDGE_TILE
+              and struct.unpack_from('>H', level, 0x218a)[0] == BRIDGE_LEVEL]
     for room in range(32):
         visible = {(tile.room, tile.row * 10 + tile.column)
                    for row in range(-1, 4) for column in range(-1, 11)
@@ -158,18 +165,21 @@ def loose_floor_slot_scenery(program, caverns, prince, level, base, progress=lam
         keys = sorted(visible & choices.keys())
         keys = sorted(set(keys) | {key for key, below in clears.items() if below in visible})
         scythes = [index for index, (key, partner) in enumerate(pairs) if {key, partner} & visible]
-        if not keys and not scythes:
+        bridge = [key for key in planks if key in visible]
+        if not keys and not scythes and not bridge:
             continue
         groups = [tuple(keys.index(key) for key in group if key in keys)
                   for group in groups_all if set(group) & set(keys)]
         counts, members = loose_units(choices, keys, groups)
         counts.extend(len(SCYTHE_STATES) for _index in scythes)
+        counts.extend(PLANK_STATES for _key in bridge)
         door = entry is not None and room == entry['room']
         if door:
             counts.append(len(entry['frames']))
         cache = {}
 
-        def render(states, room=room, keys=keys, members=members, door=door, scythes=scythes):
+        def render(states, room=room, keys=keys, members=members, door=door, scythes=scythes,
+                   bridge=bridge):
             if states not in cache:
                 progress(f'Cavern floor slots: room {room + 1}/32, renders {len(cache) + 1}')
                 loose = states[:len(members)]
@@ -179,6 +189,14 @@ def loose_floor_slot_scenery(program, caverns, prince, level, base, progress=lam
                         offset = 0x780 + source_room * 120 + cell * 4
                         foreground = struct.unpack_from('>H', mutable, offset)[0] & 0xff00
                         struct.pack_into('>H', mutable, offset, foreground | SCYTHE_STATES[state])
+                for (source_room, cell), state in zip(bridge, states[len(members) + len(scythes):]):
+                    offset = 0x780 + source_room * 120 + cell * 4
+                    foreground = struct.unpack_from('>H', mutable, offset)[0]
+                    if state == 3:
+                        struct.pack_into('>H', mutable, source_room * 60 + cell * 2, 0)
+                        struct.pack_into('>H', mutable, offset, 0xc000)
+                    else:
+                        struct.pack_into('>H', mutable, offset, (foreground & 0xfff0) | state)
 
                 def draw(*args, **options):
                     reads = {}
@@ -206,10 +224,12 @@ def loose_floor_slot_scenery(program, caverns, prince, level, base, progress=lam
                                                           if keys[index] in clears}
                       for group in members]
         unit_cells.extend(set(pairs[index]) for index in scythes)
+        unit_cells.extend({key} for key in bridge)
         if door:
             unit_cells.append({(room, entry['cell'])})
         result['rooms'][str(room)] = {'cells': [list(key) for key in keys], 'units': members,
                                       'scythes': [list(pairs[index][0]) for index in scythes],
+                                      'planks': [list(key) for key in bridge],
                                       'counts': counts, 'door': door,
                                       'lists': room_slot_lists(render, counts, unit_cells)}
     return result
