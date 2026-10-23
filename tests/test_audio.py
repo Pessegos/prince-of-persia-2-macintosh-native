@@ -643,6 +643,27 @@ class PolyphonicCueTests(unittest.TestCase):
         self.assertTrue(self.audio.sound_playing(7))
         self.assertFalse(self.audio.sound_playing(294))
 
+    def test_stop_discards_stale_frame_events_without_blocking_later_frames(self):
+        self.audio.add_sound(8)
+        self.audio.flush()
+        self.audio.stop_sound(8)
+        state = SimpleNamespace(sound_events=[8, 7], actor_type=0)
+        self.audio.drain(state)
+        self.audio.flush()
+        self.assertEqual(set(self.playback.playing_effects()), {7})
+        self.assertFalse(state.sound_events)
+        state.sound_events = [8]
+        self.audio.drain(state)
+        self.audio.flush()
+        self.assertTrue(self.audio.sound_playing(8))
+
+    def test_active_effect_is_not_resubmitted_to_playback(self):
+        with patch.object(self.playback, 'play_effect', wraps=self.playback.play_effect) as play:
+            for _ in range(5):
+                self.audio.add_sound(61)
+                self.audio.flush()
+            play.assert_called_once_with(61)
+
 
 class FormatTests(unittest.TestCase):
     def test_pcm_wav_preserves_samples_rate_and_channel_count(self):
