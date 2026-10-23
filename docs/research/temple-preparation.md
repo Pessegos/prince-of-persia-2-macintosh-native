@@ -163,7 +163,14 @@ two dimension-table heights are canonicalized to the saved height7. Visibility,
 rectangle system services and the redraw-list sink remain supplied. This is
 queue-write evidence, not raster output, real room cuts or FrameAdv coverage.
 
-Next work connects presentation with updates, then follows caller admission,
-scheduling and reset/save behavior separately.
+[Connected lifecycle](temple-slide-rock-lifecycle.md) now carries the real bank,
+dimensions, cell cache and object queue through trigger/update/presentation.
+19,504 native/reference operations pass in60 actual-anchor and4 multi-record
+traces. Another7,680 comparisons confirm identical persistent physics with
+absent, visible, invisible, alternating or repeated drawing. Scheduling,
+visibility and queue reset boundaries are supplied; no actor reaction endpoint
+is reached. This does not extend damage/death, actual pixels or FrameAdv proof.
+
+Next work follows caller admission, scheduling and reset/save behavior separately.
 The constructor's X>510 branch, TriggerObject caller admission and connected
 movement lifecycle remain open.
