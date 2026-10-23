@@ -31,6 +31,9 @@ def guard_frame_index(action):
 class Environment:
     """No environment-specific work."""
 
+    # GetEndSong 5:4e0c: 32 for rooftop and cavern exits, 124 for the ruins.
+    end_song = 32
+
     def __init__(self, scene):
         self.scene = scene
 
@@ -50,9 +53,19 @@ class Environment:
         """Level mechanisms after the environment hook; True when the level changed."""
         return False
 
+    def exit_scenery(self):
+        """While the exit song plays: the main loop still runs FrameAdv."""
+
+    def finish_exit(self):
+        """After the exit song: level one's voyage scene."""
+        self.scene.start_ending()
+
 
 class Rooftops(Environment):
     """Level one (environment kind 5): the rooftops and the harbor."""
+
+    def exit_scenery(self):
+        self.scene.harbor.advance()
 
     def harbor_phase(self):
         scene = self.scene
@@ -531,9 +544,71 @@ class Caverns(Environment):
                 actor.row = motion.row
                 actor.targetable = False
 
+    def exit_scenery(self):
+        scene = self.scene
+        # The main loop (2:6100-6134) still runs FrameAdv while the exit song
+        # plays, so flasks, lava, torches and moving gates keep animating.
+        caverns = scene.game.caverns
+        if caverns is None or getattr(scene, "level_map", None) is None:
+            return
+        from pop2.caverns import cavern_flask_instances
+
+        program = scene.level_renderer.cavern_program
+        state = scene.sequence_state
+        caverns.potions.advance((tile.room, tile.row * 10 + tile.column)
+            for _command, tile in cavern_flask_instances(program, scene.room_id, scene.level_map))
+        caverns.lava.enter_room(scene.room_id, program.get('lava', {}).get('rooms', {}).get(str(scene.room_id), ()))
+        state.sound_events.extend(caverns.lava.advance())
+        state.sound_events.extend(caverns.spikes.advance(scene.level_map, scene.room_id))
+        state.sound_events.extend(caverns.plates.advance(scene.level_map))
+        state.sound_events.extend(caverns.scythes.advance(scene.level_map))
+        caverns.advance_torches(program.get('torches', {}).get(str(scene.room_id), ()))
+        room = scene.level_renderer.enter_room(scene.room_id, caverns)
+        scene.background, scene.foreground = room.background, room.foreground
+        if getattr(scene, "audio", None) is not None:
+            scene.audio.drain(state)
+        else:
+            state.sound_events.clear()
+
+    def finish_exit(self):
+        scene = self.scene
+        if scene.game.level.number == 3:
+            scene.start_discovery()
+        elif scene.game.level.number == 4:
+            scene.finish_level_four()
+        elif scene.game.level.number == 5:
+            # CheckPlayNIS(5, 6) shows the carpet scene (NIS 1), then
+            # RestartGame loads level six.
+            self.finish_via_story(6)
+        else:
+            scene.start_ending()
+
+    def finish_via_story(self, following):
+        from pop2.caverns import scenery_available
+
+        scene = self.scene
+        if scenery_available(following):
+            scene.finish_level_via_story(scene.game.level.number, following)
+        else:
+            scene.game.exit = None
+            scene.status.set(f'Level {following} needs a reimport of the game files')
+
 
 class Ruins(Caverns):
     """Levels six and seven (kind 4)."""
+
+    end_song = 124
+
+    def finish_exit(self):
+        scene = self.scene
+        if scene.game.level.number == 6:
+            self.finish_via_story(7)
+        elif scene.game.level.number == 7:
+            # Level eight is not available yet.
+            scene.game.exit = None
+            scene.status.set('Level 7 complete')
+        else:
+            scene.start_ending()
 
     def controls(self):
         scene = self.scene

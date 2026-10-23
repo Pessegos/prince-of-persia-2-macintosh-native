@@ -1938,38 +1938,10 @@ class ScenePrototype(WindowControls):
             return
         if getattr(self, "level_complete", False):
             if self.game.exit is not None:
-                if self.harbor is not None:
-                    self.harbor.advance()
-                self.advance_exit_scenery()
+                environment = environment_for(self)
+                environment.exit_scenery()
                 if self.game.exit.advance(self.current_animation_interval_ms() / 1000, self.audio):
-                    if self.game.level.number == 3:
-                        self.start_discovery()
-                    elif self.game.level.number == 4:
-                        self.finish_level_four()
-                    elif self.game.level.number == 5:
-                        # CheckPlayNIS(5, 6) shows the carpet scene (NIS 1),
-                        # then RestartGame loads level six.
-                        from pop2.caverns import scenery_available
-
-                        if scenery_available(6):
-                            self.finish_level_via_story(5, 6)
-                        else:
-                            self.game.exit = None
-                            self.status.set('Level 6 needs a reimport of the game files')
-                    elif self.game.level.number == 6:
-                        from pop2.caverns import scenery_available
-
-                        if scenery_available(7):
-                            self.finish_level_via_story(6, 7)
-                        else:
-                            self.game.exit = None
-                            self.status.set('Level 7 needs a reimport of the game files')
-                    elif self.game.level.number == 7:
-                        # Level eight is not available yet.
-                        self.game.exit = None
-                        self.status.set('Level 7 complete')
-                    else:
-                        self.start_ending()
+                    environment.finish_exit()
                 self.render()
             self.in_animation_tick = False
             self.schedule_next_animation()
@@ -2554,31 +2526,6 @@ class ScenePrototype(WindowControls):
         else:
             caverns.phew_countdown -= 1
 
-    def advance_exit_scenery(self):
-        # The main loop (2:6100-6134) still runs FrameAdv while the exit song
-        # plays, so flasks, lava, torches and moving gates keep animating.
-        caverns = self.game.caverns
-        if caverns is None or getattr(self, "level_map", None) is None:
-            return
-        from pop2.caverns import cavern_flask_instances
-
-        program = self.level_renderer.cavern_program
-        state = self.sequence_state
-        caverns.potions.advance((tile.room, tile.row * 10 + tile.column)
-            for _command, tile in cavern_flask_instances(program, self.room_id, self.level_map))
-        caverns.lava.enter_room(self.room_id, program.get('lava', {}).get('rooms', {}).get(str(self.room_id), ()))
-        state.sound_events.extend(caverns.lava.advance())
-        state.sound_events.extend(caverns.spikes.advance(self.level_map, self.room_id))
-        state.sound_events.extend(caverns.plates.advance(self.level_map))
-        state.sound_events.extend(caverns.scythes.advance(self.level_map))
-        caverns.advance_torches(program.get('torches', {}).get(str(self.room_id), ()))
-        room = self.level_renderer.enter_room(self.room_id, caverns)
-        self.background, self.foreground = room.background, room.foreground
-        if getattr(self, "audio", None) is not None:
-            self.audio.drain(state)
-        else:
-            state.sound_events.clear()
-
     def bridge_draw_sag(self, actor):
         # 8:063e lowers a character standing on a plank by its sag; the port
         # applies it to drawing only.
@@ -2618,9 +2565,7 @@ class ScenePrototype(WindowControls):
                 from pop2.level_transition import LevelExit
                 from pop2.paths import ASSET_DIR
 
-                # GetEndSong 5:4e0c selects 32 for rooftop and cavern exits,
-                # 124 for the ruins.
-                song = 124 if self.game.level.kind == 4 else 32
+                song = environment_for(self).end_song
                 cues = (self.audio.cues if self.audio is not None else
                         {int(key): item for key, item in json.loads(
                             (ASSET_DIR / "audio/manifest.json").read_text(encoding="ascii"))["cues"].items()})
