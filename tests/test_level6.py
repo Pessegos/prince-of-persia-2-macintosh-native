@@ -90,6 +90,12 @@ class LevelSixSceneryTests(unittest.TestCase):
                           if kind == 7 and value & 0x80}, {(16, 18), (16, 19), (17, 10)})
         self.assertEqual(cavern_scene_signature(program, 16, caverns), '111')
 
+    def test_entering_rooms_beside_heads_does_not_raise(self):
+        # Room 6 neighbours rooms whose opponent set 5 is not generated yet;
+        # choosing the visible opponent bank raised and froze the game.
+        for room in range(32):
+            self.scene.game.combat.enter_room(room, 1)
+
     def test_the_sword_item_room_draws_from_the_sword_library(self):
         scene = self.scene
         scene.jump_to_room(16, 1, 100, 1)
@@ -177,6 +183,7 @@ class LevelSixMapTests(unittest.TestCase):
         # Rooms 28 and 14 are never shown; the cliff sits beside room 1.
         self.assertNotIn('Room 28', level_map.positions)
         self.assertNotIn('Room 14', level_map.positions)
+        self.assertNotIn('Room 10', level_map.positions)
         x, y = level_map.positions['Room 1']
         self.assertEqual(level_map.positions['Room 27'], (x + 1, y))
         # Only plate-linked exits end the level: not the room-1 or room-3 doors.

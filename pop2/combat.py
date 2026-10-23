@@ -468,6 +468,7 @@ class CombatEncounter:
         for side in ('left', 'right'):
             neighbor = terrain.neighbor(room, side) if terrain is not None else None
             if (neighbor is not None and neighbor not in self.room_encounters
+                    and struct.unpack_from(">h", self.level, 0x21A4)[0] in (0, 2)
                     and any(visible_side_opponent(spawn.x, side)
                             for spawn in GuardSpawn.all_from_level(self.level, neighbor))):
                 self._load_room(neighbor)
