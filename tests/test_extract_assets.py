@@ -75,7 +75,7 @@ class AssetImportTests(unittest.TestCase):
         self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json",
                                      "ending.json", "discovery.json", "attract.json",
                                      "caverns_entry.json", "caverns_level4.json", "caverns_level5.json",
-                                     "ruins_level6.json", *(f"tree-{n}.json" for n in extract_assets.TREE_VARIANTS)})
+                                     "ruins_level6.json", "ruins_level7.json", *(f"tree-{n}.json" for n in extract_assets.TREE_VARIANTS)})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
         for name in extract_assets.RESOURCE_FILES:
             self.assertEqual((self.output / name).read_bytes(), self.forks[name])
@@ -83,10 +83,11 @@ class AssetImportTests(unittest.TestCase):
                          self.profiles)
         profiles.assert_called_once_with(self.forks["Prince of Persia 2"],
                                          self.forks["Prince.rsrc"])
-        self.assertEqual([call.kwargs['level_number'] for call in self.caverns.call_args_list], [3, 4, 5, 6])
-        # Level six's scenery is drawn from Ruins.rsrc, not Caverns.rsrc.
+        self.assertEqual([call.kwargs['level_number'] for call in self.caverns.call_args_list],
+                         [3, 4, 5, 6, 7])
+        # Levels six and seven are drawn from Ruins.rsrc, not Caverns.rsrc.
         self.assertEqual([call.args[1] for call in self.caverns.call_args_list],
-                         [self.forks['Caverns.rsrc']] * 3 + [self.forks['Ruins.rsrc']])
+                         [self.forks['Caverns.rsrc']] * 3 + [self.forks['Ruins.rsrc']] * 2)
 
     def test_level_four_scenery_failure_preserves_installed_resources(self):
         self.output.mkdir()

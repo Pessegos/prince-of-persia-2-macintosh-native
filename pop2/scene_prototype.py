@@ -1949,9 +1949,17 @@ class ScenePrototype(WindowControls):
                             self.game.exit = None
                             self.status.set('Level 6 needs a reimport of the game files')
                     elif self.game.level.number == 6:
-                        # Level seven is not available yet.
+                        from pop2.caverns import scenery_available
+
+                        if scenery_available(7):
+                            self.finish_level_via_story(6, 7)
+                        else:
+                            self.game.exit = None
+                            self.status.set('Level 7 needs a reimport of the game files')
+                    elif self.game.level.number == 7:
+                        # Level eight is not available yet.
                         self.game.exit = None
-                        self.status.set('Level 6 complete')
+                        self.status.set('Level 7 complete')
                     else:
                         self.start_ending()
                 self.render()
@@ -3568,14 +3576,19 @@ class ScenePrototype(WindowControls):
     def finish_level_four(self):
         # CheckPlayNIS(4, 5) (2:0180) shows the first tree scene here when no
         # level-four restart has, then RestartGame loads level five.
+        self.finish_level_via_story(4, 5)
+
+    def finish_level_via_story(self, previous, following):
+        # CheckPlayNIS (2:0180) may select a tree scene (20..27) before
+        # RestartGame loads the next level.
         self.game.exit = None
-        scene = self.game.story.select_scene(4, 5)
+        scene = self.game.story.select_scene(previous, following)
         if scene is not None and 20 <= scene <= 27:
             self.game.complete = False
-            self.next_level_after_tree = 5
+            self.next_level_after_tree = following
             self.start_tree(scene - 19)
         else:
-            self.enter_next_level(5)
+            self.enter_next_level(following)
 
     def enter_next_level(self, number):
         max_life = self.combat.player.max_life if self.combat is not None else None
@@ -3754,8 +3767,8 @@ class ScenePrototype(WindowControls):
         options = []
         from pop2.caverns import scenery_available
 
-        for number in (1, 2, 3, 4, 5, 6):
-            if number == 6 and not scenery_available(6):
+        for number in (1, 2, 3, 4, 5, 6, 7):
+            if number >= 6 and not scenery_available(number):
                 continue
             renderer = (self.level_renderer if self.game.level.number == number else
                         LevelRenderer(LevelDefinition.read(self.resources.prince, number),

@@ -799,13 +799,14 @@ def loose_variant(program, room_id, loose_key):
 
 
 def cavern_scythe_signature(program, room_id, state):
-    """The exported drawing patch for the state of the room's scythe, or None."""
+    """For each scythe drawn in the room, the exported patch of its state."""
     metadata = program.get('scythes', {})
-    room = metadata.get('rooms', {}).get(str(room_id))
-    if room is None:
-        return None
-    key = tuple(metadata['scythes'][room['scythe']][:2])
-    return room['states'].get(str(state.scythes.foreground.get(key, 0)))
+    signature = []
+    for entry in metadata.get('rooms', {}).get(str(room_id), ()):
+        key = tuple(metadata['scythes'][entry['scythe']][:2])
+        patch = entry['states'].get(str(state.scythes.foreground.get(key, 0)))
+        signature.append(-1 if patch is None else patch)
+    return tuple(signature)
 
 
 def with_scythe(commands, patch):
@@ -852,7 +853,7 @@ def without_fallen_planks(commands, fallen):
 
 
 def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=(), retouched=False,
-                *, level_number=3, bridge_fallen=frozenset(), scythe_patch=None, bridge_wobble=frozenset()):
+                *, level_number=3, bridge_fallen=frozenset(), scythe_patch=(), bridge_wobble=frozenset()):
     program, resources, palette, shapes = room_assets(level_number, room_id)
 
     def scenery_sprite(command):
@@ -880,9 +881,11 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         commands = without_fallen_planks(commands, bridge_fallen)
     if bridge_wobble:
         commands = with_plank_wobble(commands, bridge_wobble, resources)
-    patch = (program['scythes']['rooms'][str(room_id)]['patches'][scythe_patch]
-             if scythe_patch is not None else None)
-    if patch is not None:
+    # One exported patch per scythe drawn in the room (-1 at rest).
+    patches = [entry['patches'][index] for entry, index
+               in zip(program.get('scythes', {}).get('rooms', {}).get(str(room_id), ()), scythe_patch)
+               if index >= 0]
+    for patch in patches:
         commands = with_scythe(commands, patch['commands'])
     gate_cells = {tuple(key[-2:]) for record in records if record['kind'] == 4
                   for key in record['commands']}
@@ -948,7 +951,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         floor_commands = without_fallen_planks(floor_commands, bridge_fallen)
     if bridge_wobble:
         floor_commands = with_plank_wobble(floor_commands, bridge_wobble, resources)
-    if patch is not None:
+    for patch in patches:
         floor_commands = with_scythe(floor_commands, patch['floor_redraw'])
     for command in floor_commands:
         if animated and len(command) >= 8 and command[7] == 1:

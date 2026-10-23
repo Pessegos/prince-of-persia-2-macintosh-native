@@ -216,9 +216,9 @@ class LevelSixScytheTests(unittest.TestCase):
         from pop2.caverns import cavern_room
 
         program = self.scene.level_renderer.cavern_program
-        room = program['scythes']['rooms']['18']
+        entry, = program['scythes']['rooms']['18']
         rest = cavern_room(18, animated=True, level_number=6)
-        extended = cavern_room(18, animated=True, level_number=6, scythe_patch=room['states']['8'])
+        extended = cavern_room(18, animated=True, level_number=6, scythe_patch=(entry['states']['8'],))
         self.assertNotEqual(rest.background.tobytes(), extended.background.tobytes())
 
 

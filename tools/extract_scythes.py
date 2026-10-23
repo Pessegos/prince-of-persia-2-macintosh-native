@@ -53,29 +53,29 @@ def scythe_scenery(program, caverns, prince, level, base, progress=lambda _text:
                    for row in range(-1, 4) for column in range(-1, 11)
                    if (tile := terrain.tile(room, column, row)).room is not None}
         shown = [index for index, (key, partner) in enumerate(pairs) if {key, partner} & visible]
-        if not shown:
-            continue
-        if len(shown) > 1:
-            raise ValueError('Unsupported room with several scythes')
-        key, partner = pairs[shown[0]]
-        patches, states = [], {}
-        for value in SCYTHE_STATES[1:]:
-            progress(f'Ruins scythes: room {room + 1}/32, state {value:#x}')
-            mutable = bytearray(level)
-            for source_room, cell in (key, partner):
-                offset = 0x780 + source_room * 120 + cell * 4
-                foreground = struct.unpack_from('>H', mutable, offset)[0]
-                struct.pack_into('>H', mutable, offset, (foreground & 0xff00) | value)
-            patch = {
-                'commands': command_patch(base['rooms'][str(room)],
-                                          recover(program, caverns, bytes(mutable), room, prince)['commands']),
-                'floor_redraw': command_patch(base['floor_redraw'][str(room)],
-                                              recover(program, caverns, bytes(mutable), room, prince,
-                                                      floor_redraw=True)['commands'])}
-            if patch not in patches:
-                patches.append(patch)
-            states[str(value)] = patches.index(patch)
-        if any(any(part.values()) for patch in patches for part in patch.values()):
-            # A neighbour's scythe only counts when its drawing reaches this room.
-            result['rooms'][str(room)] = {'scythe': shown[0], 'states': states, 'patches': patches}
+        entries = []
+        for index in shown:
+            key, partner = pairs[index]
+            patches, states = [], {}
+            for value in SCYTHE_STATES[1:]:
+                progress(f'Ruins scythes: room {room + 1}/32, state {value:#x}')
+                mutable = bytearray(level)
+                for source_room, cell in (key, partner):
+                    offset = 0x780 + source_room * 120 + cell * 4
+                    foreground = struct.unpack_from('>H', mutable, offset)[0]
+                    struct.pack_into('>H', mutable, offset, (foreground & 0xff00) | value)
+                patch = {
+                    'commands': command_patch(base['rooms'][str(room)],
+                                              recover(program, caverns, bytes(mutable), room, prince)['commands']),
+                    'floor_redraw': command_patch(base['floor_redraw'][str(room)],
+                                                  recover(program, caverns, bytes(mutable), room, prince,
+                                                          floor_redraw=True)['commands'])}
+                if patch not in patches:
+                    patches.append(patch)
+                states[str(value)] = patches.index(patch)
+            if any(any(part.values()) for patch in patches for part in patch.values()):
+                # A neighbour's scythe only counts when its drawing reaches this room.
+                entries.append({'scythe': index, 'states': states, 'patches': patches})
+        if entries:
+            result['rooms'][str(room)] = entries
     return result

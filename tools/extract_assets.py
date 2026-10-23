@@ -11,6 +11,7 @@ from tools.extract_audio import extract_audio
 from tools.extract_intro import TREE_VARIANTS, extract_intro, extract_ending, extract_discovery, extract_trees
 from tools.extract_attract import extract_attract, extract_credits_music
 from tools.extract_caverns import extract_caverns, scenery_name
+from pop2.caverns import scenery_resource
 from pop2.mac_resources import get_resource_fork, parse_resource_fork
 from pop2.paths import ASSET_DIR
 
@@ -70,10 +71,10 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         extract_trees(image, program, resources["NIS.rsrc"], resources["NISTree.rsrc"], staging, progress)
         for variant in TREE_VARIANTS:
             resources[f"tree-{variant}.json"] = (staging / f"tree-{variant}.json").read_bytes()
-        for number in (3, 4, 5, 6):
+        for number in (3, 4, 5, 6, 7):
             name = scenery_name(number)
             progress(f"Preparing level-{number} scenery...")
-            extract_caverns(program, resources["Ruins.rsrc" if number == 6 else "Caverns.rsrc"],
+            extract_caverns(program, resources[scenery_resource(number)],
                             resources["Prince.rsrc"], staging, progress, level_number=number)
             resources[name] = (staging / name).read_bytes()
         progress("Recovering the original recorded demo and credits...")

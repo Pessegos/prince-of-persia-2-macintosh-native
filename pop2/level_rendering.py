@@ -11,7 +11,7 @@ from pop2.render_opening import (
 
 class LevelRenderer:
     def __init__(self, level, preload_room=True, retouch_caverns=True):
-        if level.kind != 5 and level.number not in (2, 3, 4, 5, 6):
+        if level.kind != 5 and level.number not in (2, 3, 4, 5, 6, 7):
             raise ValueError(f"Level {level.number} scenery is not implemented (environment {level.kind})")
         self.level = level
         self.retouch_caverns = retouch_caverns
@@ -56,7 +56,7 @@ class LevelRenderer:
             fallen = caverns.bridge.fallen() if caverns is not None else frozenset()
             wobble = frozenset(caverns.bridge.wobble.items()) if caverns is not None else frozenset()
             scythe = (cavern_scythe_signature(self.cavern_program, room_id, caverns)
-                      if caverns is not None else None)
+                      if caverns is not None else ())
             entry = caverns.entry_room if caverns is not None else self.level.start_room
             key = room_id, frame if room_id == entry else 0, signature, pressure, fallen, scythe, wobble
             if key not in self.cavern_frames:
