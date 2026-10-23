@@ -3662,7 +3662,8 @@ class ScenePrototype(WindowControls):
             y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
             self.screenshot_viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, y), text)
         message = getattr(self, 'time_message', None)
-        hud_text = (self.pause_text if self.paused else
+        hud_text = (self.audio_notice_text if self.audio_notice_text is not None else
+                    self.pause_text if self.paused else
                     self.restart_text if self.death.prompt_visible else
                     self.ui_font.text(message, self.hud_text_color) if message else None)
         demo_paused = self.paused and getattr(self, "demo", None) is not None
@@ -3673,6 +3674,7 @@ class ScenePrototype(WindowControls):
             viewport.paste(hud_text, ((VIEWPORT_WIDTH - hud_text.width) // 2,
                                       pause_y), hud_text)
         if (self.level_complete and self.game.exit is None
+                and self.audio_notice_text is None
                 and self.dev_menu is None and self.game_menu is None):
             text = self.ui_font.text(f"Level {self.game.level.number} Complete")
             viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, ROOM_HEIGHT), text)

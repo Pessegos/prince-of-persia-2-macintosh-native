@@ -66,6 +66,8 @@ class WindowControls:
         self.screenshot_viewport = None
         self.screenshot_toast = None
         self.screenshot_toast_after_id = None
+        self.audio_notice_text = None
+        self.audio_notice_after_id = None
         self.screenshot_dialog_active = False
         audio = getattr(self, "audio", None)
         self.sound_enabled = audio.sound_enabled if audio is not None else True
@@ -157,6 +159,7 @@ class WindowControls:
         self.focus_pause_after_id = None
         self.root.bind("<FocusOut>", self.focus_out)
         self.root.bind("<Destroy>", self.cancel_focus_pause)
+        self.root.bind("<Destroy>", self.cancel_audio_notice, add="+")
         self.root.bind("<Destroy>", self.destroy_screenshot_gallery, add="+")
         self.root.bind("<Destroy>", self.close_bitmap_presenter, add="+")
         self.root.bind("<KeyPress-Escape>", self.escape_key)
@@ -582,6 +585,26 @@ class WindowControls:
         self.screenshot_toast_after_id = None
         self.render()
 
+    def show_audio_notice(self, action, enabled):
+        label = "Sounds" if action == "sound" else "Ambient Music"
+        message = f"{label} {'On' if enabled else 'Off'}"
+        self.audio_notice_text = self.ui_font.text(message, self.hud_text_color)
+        after_id = self.audio_notice_after_id
+        if after_id is not None:
+            self.root.after_cancel(after_id)
+        self.audio_notice_after_id = self.root.after(2000, self.clear_audio_notice)
+        self.render()
+
+    def clear_audio_notice(self):
+        self.audio_notice_text = None
+        self.audio_notice_after_id = None
+        self.render()
+
+    def cancel_audio_notice(self, event):
+        if event.widget is self.root and self.audio_notice_after_id is not None:
+            self.root.after_cancel(self.audio_notice_after_id)
+            self.audio_notice_after_id = None
+
     def modal_open(self):
         return (self.dev_menu is not None or self.game_menu is not None
                 or getattr(self, "copy_challenge", None) is not None)
@@ -711,7 +734,7 @@ class WindowControls:
             setattr(self, name, enabled)
             if self.audio is not None:
                 getattr(self.audio, "set_" + name)(enabled)
-            self.render()
+            self.show_audio_notice(action, enabled)
         elif action == "fullscreen":
             self.toggle_fullscreen()
             self.render()
