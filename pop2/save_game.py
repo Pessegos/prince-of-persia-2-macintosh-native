@@ -168,7 +168,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     if cls is SkeletonRoomRecord:
         optional.add('cell')
     if cls is Potions:
-        optional.update(('fatal', 'float_timer'))
+        optional.update(('fatal', 'float_timer', 'flip_timer'))
     if cls is CavernState:
         optional.update(('bridge', 'carpet', 'phew_countdown', 'scythes', 'alternate_entry'))
     if cls is Bridge:

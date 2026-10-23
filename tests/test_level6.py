@@ -128,6 +128,36 @@ class LevelSixSceneryTests(unittest.TestCase):
         prone = level_map.wall_correction(16, x - 10, x, (x - 20, 200, x + 20, 230), physical_row=1)
         self.assertEqual(prone, x)
 
+    def test_an_upside_down_world_swaps_up_and_down_and_flips_the_view(self):
+        # GenCtrl 4:3da6-3dcc (4:3e1c) and the drawing 2:5952-59de.
+        from PIL import ImageOps
+
+        scene = self.scene
+        self.tick()
+        scene.render()
+        upright = scene.screenshot_viewport.crop((1, 0, 511, 365))
+        potions = scene.game.caverns.potions
+        potions.toggle_flip()
+        scene.sync_flipped_controls()
+        scene.set_key_state('up', True)
+        self.assertTrue(scene.down_held)
+        self.assertFalse(scene.up_held)
+        scene.set_key_state('up', False)
+        scene.render()
+        flipped = scene.screenshot_viewport.crop((1, 0, 511, 365))
+        from PIL import ImageChops
+
+        # The cliff's animated sky may move between the two paints.
+        difference = ImageChops.difference(ImageOps.flip(flipped).convert('RGB'), upright.convert('RGB'))
+        changed = 510 * 365 - difference.convert('L').histogram()[0]
+        self.assertLess(changed, 510 * 365 // 50)
+        self.assertNotEqual(flipped.tobytes(), upright.tobytes())
+        potions.toggle_flip()
+        scene.sync_flipped_controls()
+        scene.set_key_state('up', True)
+        self.assertTrue(scene.up_held)
+        scene.set_key_state('up', False)
+
     def test_entering_rooms_beside_heads_does_not_raise(self):
         # Room 6 neighbours rooms whose opponent set 5 is not generated yet;
         # choosing the visible opponent bank raised and froze the game.

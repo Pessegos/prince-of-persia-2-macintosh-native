@@ -121,6 +121,9 @@ class GameSession:
             # next-level opcode -16 (4:2f5a) resets them with a new session.
             self.caverns.bridge.tension_level = previous.bridge.tension_level
             self.caverns.bridge.tension = previous.bridge.tension
+            # Nor the upside-down world (a5-0x4fa8, written only by 2:59f6,
+            # saves and checkpoint rebirth 2:19b4).
+            self.caverns.potions.flip_timer = previous.potions.flip_timer
         if self.level_map is not None:
             self.level_map.desert = self.desert
             self.level_map.caverns = self.caverns

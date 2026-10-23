@@ -130,11 +130,34 @@ class PotionTests(unittest.TestCase):
         motion = SimpleNamespace(room=0, row=1)
         record = FrameRecord(15, 14, 0, 4, 0, 70)
         state = SequenceState(2, action=15, facing=1, target_x=188)
-        for kind, drinkable in ((1, True), (2, True), (3, True), (4, False), (5, True), (6, False)):
+        for kind, drinkable in ((1, True), (2, True), (3, True), (4, True), (5, True), (6, False)):
             with self.subTest(kind=kind):
                 self.place(0, 13, kind << 5)
                 terrain = LevelMap(bytes(self.data))
                 self.assertEqual(pickup_target(terrain, motion, state, record) is not None, drinkable)
+
+    def test_the_flip_flask_turns_the_world_for_1080_updates(self):
+        # 4:4672 -> 2:59f6-5a24 (song 176, then 177), FrameAdv 2:67ba-67d6.
+        p = Potions(held_kind=4, effect_pending=True)
+        actor = SimpleNamespace(life=2, max_life=3, alive=True)
+        p.consume_events(SequenceState(78, sequence_events=[(-14, (1,))]), actor)
+        self.assertEqual((p.flip_timer, p.songs, actor.life), (1080, [176], 2))
+        p.advance_flip(alive=False)
+        self.assertEqual(p.flip_timer, 1080)
+        for _ in range(1079):
+            p.advance_flip()
+        self.assertTrue(p.flipped)
+        p.advance_flip()
+        self.assertEqual((p.flipped, p.songs), (False, [176, 177]))
+
+    def test_poison_drunk_upside_down_only_rights_the_world(self):
+        # 4:4678-4682.
+        p = Potions(held_kind=5, effect_pending=True, flip_timer=40)
+        actor = SimpleNamespace(life=1, max_life=3, alive=True)
+        state = SequenceState(78, sequence_events=[(-14, (1,))])
+        p.consume_events(state, actor)
+        self.assertEqual((p.flipped, p.songs, actor.life, p.fatal, state.sound_events),
+                         (False, [177], 1, False, []))
 
     def test_float_flask_starts_the_global_slow_fall_timer_and_song(self):
         # 4:466c -> 2:5a26: 228 updates and AddSong(111); 2:6c5e counts down.

@@ -528,6 +528,9 @@ class ScenePrototype(WindowControls):
         if previous is not None:
             # The campaign clock and tree stage survive level changes (2:5af2).
             game.story = previous.story
+            if previous.caverns is not None and game.caverns is not None:
+                # So does an upside-down world (a5-0x4fa8).
+                game.caverns.potions.flip_timer = previous.caverns.potions.flip_timer
         renderer = LevelRenderer(game.level)
         self.time_message, self.time_message_frames = None, 0
         self.bind_level(game, renderer)
@@ -548,6 +551,8 @@ class ScenePrototype(WindowControls):
             self.schedule_next_animation()
 
     def set_key_state(self, key, pressed):
+        if key in ('up', 'down') and getattr(self, 'controls_flipped', False):
+            key = 'down' if key == 'up' else 'up'  # GenCtrl 4:3e1c, upside down.
         if self.paused:
             if self.gameplay_controls_available():
                 previous = getattr(self, f"{key}_held")
@@ -2913,6 +2918,18 @@ class ScenePrototype(WindowControls):
                 actor.row = motion.row
                 actor.targetable = False
 
+    def world_flipped(self):
+        caverns = getattr(getattr(self, 'game', None), 'caverns', None)
+        return caverns is not None and caverns.potions.flipped
+
+    def sync_flipped_controls(self):
+        # GenCtrl 4:3da6-3dcc (4:3e1c) swaps Up and Down while the world is
+        # upside down; swap the held keys when it turns or rights itself.
+        flipped = self.world_flipped()
+        if flipped != getattr(self, 'controls_flipped', False):
+            self.controls_flipped = flipped
+            self.up_held, self.down_held = self.down_held, self.up_held
+
     def advance_level_events(self):
         if self.game.caverns is not None:
             from pop2.caverns import cavern_flask_instances
@@ -2920,6 +2937,8 @@ class ScenePrototype(WindowControls):
             potions = self.game.caverns.potions
             potions.consume_events(self.sequence_state, self.combat.player)
             potions.advance_float()
+            potions.advance_flip(self.combat.player.alive)
+            self.sync_flipped_controls()
             self.sequence_state.floating = potions.floating
             if potions.fatal:
                 potions.fatal = False
@@ -4205,6 +4224,9 @@ class ScenePrototype(WindowControls):
         frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor, front=True,
                                                   desert=getattr(self.game, "desert", None),
                                                   caverns=self.game.caverns)
+        if self.world_flipped():
+            # 2:5952-59de draws the game area (365 rows) upside down.
+            frame = ImageOps.flip(frame)
         viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
         viewport.paste(frame, (ROOM_ORIGIN_X, 0))
         if combat is not None and not self.death.prompt_visible:
