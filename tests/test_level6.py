@@ -75,6 +75,21 @@ class LevelSixSceneryTests(unittest.TestCase):
         self.assertEqual(caverns.entry_frame, len(caverns.entry_frames) - 1)
         self.assertEqual(caverns.advance(), ())
 
+    def test_crouching_at_a_crevice_uncovers_its_whole_run(self):
+        from pop2.caverns import cavern_scene_signature
+
+        scene = self.scene
+        caverns = scene.game.caverns
+        scene.jump_to_room(16, 1, 399, 1)
+        program = scene.level_renderer.cavern_program
+        self.assertEqual(cavern_scene_signature(program, 16, caverns), '000')
+        scene.set_key_state('down', True)
+        self.tick(12)
+        scene.set_key_state('down', False)
+        self.assertEqual({key for key, (kind, value) in caverns.loose.tiles.items()
+                          if kind == 7 and value & 0x80}, {(16, 18), (16, 19), (17, 10)})
+        self.assertEqual(cavern_scene_signature(program, 16, caverns), '111')
+
     def test_the_sword_item_room_draws_from_the_sword_library(self):
         scene = self.scene
         scene.jump_to_room(16, 1, 100, 1)

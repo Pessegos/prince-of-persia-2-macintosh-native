@@ -77,6 +77,7 @@ from pop2.render_opening import (
     kid_palette_for_level,
     load_resource_file,
 )
+from pop2.opponent_generation import character_column
 from pop2.terrain import TerrainMotion, floor_y, floor_contact_x
 from pop2.game_ui import MacintoshFont
 from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS
@@ -1930,6 +1931,7 @@ class ScenePrototype(WindowControls):
         motion = getattr(self, "terrain_motion", None)
         old_bounds = self.player_collision_bounds() if motion is not None else None
         self.update_carpet_controls()
+        self.update_crevices()
         if self.update_potion_controls():
             frame = self.sequence_runtime.next_frame()
             self.action, self.player_x = frame.action, frame.target_x
@@ -2129,6 +2131,22 @@ class ScenePrototype(WindowControls):
         return (getattr(game, "caverns", None) is not None
                 and carpet_room(game.level.number, self.room_id)
                 and not self.combat.player.alive and self.sequence_state.sequence_mode == 10)
+
+    def update_crevices(self):
+        # GenCtrl 6:06b4-06e0: crouched (109) or crawling (246-261) in the
+        # ruins, RuinSetCreviceRevealed 7:3404 uncovers the crevice ahead.
+        caverns, motion, state = self.game.caverns, self.terrain_motion, self.sequence_state
+        if (caverns is None or motion is None or self.game.level.kind != 4
+                or not (state.action == 109 or 246 <= state.action <= 261)
+                or not self.combat.player.alive):
+            return
+        from pop2.crevices import CREVICE_TILE, front_crevice_group
+
+        column = character_column(floor_contact_x(state.target_x, state.facing, self.frames[state.action]))
+        for room, cell in front_crevice_group(self.level_map, motion.room, column, motion.row,
+                                              state.facing, state.selected_sequence_id):
+            foreground = self.level_map.tile(room, cell % 10, cell // 10).foreground
+            caverns.loose.tiles[room, cell] = CREVICE_TILE, foreground | 0x80
 
     def update_carpet_controls(self):
         caverns = self.game.caverns

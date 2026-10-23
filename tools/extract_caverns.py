@@ -8,6 +8,7 @@ from functools import lru_cache, partial
 from math import prod
 
 from pop2.caverns import SCENERY_LEVELS, entry_room, scenery_name
+from pop2.crevices import CREVICE_TILE, hide_crevices
 from pop2.mac_resources import parse_resource_fork
 from pop2.terrain import LevelMap
 from tools.extract_enemy_profiles import expand_a5_data
@@ -448,6 +449,8 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
     if level_number not in SCENERY_LEVELS.get(definition.kind, ()):
         raise ValueError(f'Unsupported cavern scenery level {level_number}')
     level = definition.data
+    if definition.kind == 4:
+        level = hide_crevices(level)
     scenes = {}
     for room in range(32):
         progress(f'Cavern scenery: room {room + 1}/32')
@@ -573,7 +576,37 @@ def loose_floor_cells(terrain):
                 break
     for key in struck:
         cells[key] += (cells[key][2],)  # Collision removal does not clear below.
+    for room in range(32):
+        for cell in range(30):
+            tile = terrain.tile(room, cell % 10, cell // 10)
+            if tile.kind == CREVICE_TILE and struct.unpack_from('>H', terrain.level, 0x2186)[0] == 4:
+                # A ruins crevice: covered, or revealed by 7:332a (bit 0x80).
+                cells[room, cell] = ((CREVICE_TILE, tile.foreground & 0xff7f),
+                                     (CREVICE_TILE, tile.foreground | 0x80))
     return cells
+
+
+def crevice_groups(terrain):
+    # Every contiguous tile-7 run (through horizontal links): 7:332a always
+    # changes a whole run.
+    groups = set()
+    for room in range(32):
+        for cell in range(30):
+            column, row = cell % 10, cell // 10
+            if terrain.tile(room, column, row).kind != CREVICE_TILE:
+                continue
+            start = column
+            while start > column - 640 and terrain.tile(room, start - 1, row).kind == CREVICE_TILE:
+                start -= 1
+            run = []
+            while len(run) < 640 and (tile := terrain.tile(room, start, row)).kind == CREVICE_TILE:
+                key = tile.room, tile.row * 10 + tile.column
+                if key in run:
+                    break
+                run.append(key)
+                start += 1
+            groups.add(tuple(sorted(run)))
+    return sorted(groups)
 
 
 def encode_delta(base, commands):
@@ -634,9 +667,13 @@ def extract_loose_floor_scenery(program, caverns, prince, level, base, progress=
             continue
         variants = {}
         total = prod(len(choices[key]) for key in keys) - 1
+        groups = [tuple(keys.index(key) for key in group if key in keys)
+                  for group in crevice_groups(terrain) if set(group) & set(keys)]
         for number, indices in enumerate(product(*(range(len(choices[key])) for key in keys))):
             if not any(indices):
                 continue
+            if any(len({indices[index] for index in group}) > 1 for group in groups):
+                continue  # 7:332a reveals a whole run at once.
             progress(f'Cavern floor variants: room {room + 1}/32, variant {number}/{total}')
             mutable = bytearray(level)
             for key, index in zip(keys, indices):
