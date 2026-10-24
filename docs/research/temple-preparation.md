@@ -100,6 +100,11 @@ sliding-rock activation/persistence, temple draw
 dispatch/custom callbacks, Birdhead combat/frame data, altar/flame/story rules.
 Do not treat this list as complete temple rule coverage.
 
+These are raw resource counts. Level12 room29 contains one of the six tile25
+markers and a linked plate, but lies beyond the header's26 declared rooms;
+native ReadCell returns wall20 for that source. The caller-admission probe
+below distinguishes direct raw-link controls from admitted gameplay sources.
+
 ## Trap-Door Follow-Up
 
 - [Phase advancement](temple-trapdoor-advance.md): native phase/audio-gate
@@ -163,7 +168,98 @@ two dimension-table heights are canonicalized to the saved height7. Visibility,
 rectangle system services and the redraw-list sink remain supplied. This is
 queue-write evidence, not raster output, real room cuts or FrameAdv coverage.
 
-Next work connects presentation with updates, then follows caller admission,
-scheduling and reset/save behavior separately.
-The constructor's X>510 branch, TriggerObject caller admission and connected
-movement lifecycle remain open.
+[Connected lifecycle](temple-slide-rock-lifecycle.md) now carries the real bank,
+dimensions, cell cache and object queue through trigger/update/presentation.
+19,504 native/reference operations pass in60 actual-anchor and4 multi-record
+traces. Another7,680 comparisons confirm identical persistent physics with
+absent, visible, invisible, alternating or repeated drawing. Scheduling,
+visibility and queue reset boundaries are supplied; no actor reaction endpoint
+is reached. This does not extend damage/death, actual pixels or FrameAdv proof.
+
+[Caller admission](temple-slide-rock-admission.md) now executes TriggerObject's
+tile25 branch, six raw rock-only link chains and repeated held/permanent
+PushPlate calls on five header-admitted sources:8,609 comparisons pass without
+supplied native services. Caller mode5 selects rock how2; other tested words
+select how1. Return-1 skips TROB creation while link traversal continues.
+The fresh timer<2 branch and two mixed chains are covered by the subsequent
+bounded experiments below, with their own stated service boundaries.
+
+[Mixed gate/rock links](temple-mixed-plate-links.md) executes both original
+level11 room3 chains, native gate admission and TROB lookup/append/update:
+9,206 comparisons pass without supplied services. The two banks have independent
+capacity limits; rejected creation in one does not abort the other mechanism.
+First coordinate match updates only the TROB phase, even at capacity. Repeated
+held/permanent plate calls preserve source write/cache ordering. This does not
+establish fresh plate setup, actual actor admission or combined animation.
+
+[First-press setup](temple-fresh-plate-setup.md) now covers PushPlate's fresh
+branch and its immediate held repeat on all seven admitted rock-linked sources,
+plus three explicitly supplied sound-exception controls:4,800 comparisons pass.
+The source TROB request precedes target activation and takes the last available
+slot ahead of a missing gate TROB. Audio and redraw bodies are request sinks,
+not native playback/pixel proof; other gameplay writes execute natively.
+
+[Plate release and TROB lifetime](temple-plate-release.md) recovers the previously
+unlisted5:2554 helper, stored-kind dispatch and stable bank compaction.10,640
+comparisons pass over68 header-admitted original plate markers and supplied
+bank topologies. Timers decrement per record; timer1 lifts the plate, whereas
+timer>=31 removes the record while retaining its depressed bit. No Trigger or
+sound call occurs in this helper. Redraw remains a supplied request sink.
+
+[Connected plate lifetime](temple-plate-lifetime.md) now carries native press,
+held refresh, release/compaction and re-press across600 persistent traces on
+five admitted original rock-only sources:14,400 operation comparisons pass.
+Ordinary re-press re-registers the source and reuses the rock; plate release
+leaves rock control unchanged. Supplied full-bank controls expose a timer5
+source with no animation record after rejected registration. Pressure-first
+and animation-first schedules are compared explicitly, not asserted as FrameAdv.
+
+[Actor pressure admission](temple-pressure-admission.md) now executes original
+CheckPress, real above/current ReadCell helpers and temple cell traversal:
+16,461 comparisons pass. It covers actor/float/selected-sequence exclusions,
+pose/mode/FRAM/Y boundaries, ALIVE versus type4 permanent-pressure selection,
+and the pose79 early loose-floor/trapdoor dispatch. The supporting cell and
+actor/FRAM state are supplied; four outgoing mechanism bodies are request sinks.
+This does not yet connect actor admission to the earlier lifetime traces.
+
+[Actor-to-plate lifetime](temple-actor-plate-lifetime.md) now connects native
+CheckPress to ordinary/permanent pressure and release on the five admitted
+rock-only sources:540 persistent traces/7,110 comparisons pass. It also
+executes5:252e's timer31-before-PushPlate ordering. Supporting-foot calculation,
+frame scheduling, target gate animation and reset/save remain separate.
+The constructor's X>510 branch and full movement/contact/presentation
+lifecycle remain open.
+
+[Permanent-pressure setup](temple-permanent-pressure.md) independently bounds
+the complete5:252e wrapper and timer setter over all68 admitted original
+plates plus explicit cache controls:1,304 comparisons pass. Timer31 precedes
+the explicit PushPlate(kind,index) call; the wrapper alone does not change
+the source depressed bit or banks. PushPlate is a request sink in this
+independent wrapper probe, not in the five-source connected lifecycle above.
+
+[Gate TROB animation](temple-gate-animation.md) now executes the temple's
+stored-kind4 dispatch, native DATA motion tables and bounded StopGate body:
+6,300 comparisons pass over all41 original anchors plus supplied position/
+phase/forced relief controls. LoadKid, level4 relief return, cue playback
+and redraw remain supplied; actors are explicitly non-hanging. The relief
+countdown is not a damage word. Real crush consequences remain separate.
+
+[Mixed lifetimes](temple-mixed-lifetime.md) now connect real actor admission,
+both original level11 room3 link orders, source/target TROBs, gate motion and
+stable compaction across120 traces/14,784 comparisons. The pressure cache,
+unused bank storage and actor canaries are preserved/checked at every step.
+Rock motion and actual support/contact geometry remain excluded, not inferred
+from passing the connected activation/animation trace.
+
+[Gate services](temple-gate-services.md) corrects the initial support/contact
+labels and executes the real LoadKid4:4b02 and level4 relief5:4766 bodies.
+11,361 comparisons pass, including3,075 connected original temple gate steps.
+LoadKid copies all62 saved actor bytes; relief rejects temple levels before
+looking at any opponent. Positive level4 controls use supplied actors/counts,
+not original level4 gameplay. Hanging reactions and full FrameAdv remain P.
+
+The same real callees now run inside the120 persistent mixed traces via
+`--native-gate-services`:14,784 comparisons pass, including64 full LoadKid
+copies and30 native relief rejections. Current actor/FRAM inputs are supplied
+afresh before each operation, not evolved through a native Prince controller.
+Mixed rock movement is the next separate boundary.

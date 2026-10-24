@@ -143,6 +143,32 @@ death sequences, coordinates and stored NPC records remain intact.
 
 ## Next Recovery Pass
 
+Temple research: [actor-to-plate lifetime](research/temple-actor-plate-lifetime.md)
+records R (not runtime-integrated) CheckPress through ordinary/permanent
+pressure, rock-only activation and plate release:540 persistent traces and
+7,110 native/reference comparisons,10 asset-free regressions. This extends
+the separate16,461-case [admission probe](research/temple-pressure-admission.md)
+within its stated scope. Supporting-cell/actor/FRAM inputs, call schedule,
+audio/redraw remain supplied; full FrameAdv and actual support/contact remain P.
+
+The subsequent [mixed-lifetime trace](research/temple-mixed-lifetime.md)
+extends R to both original level11 gate/rock chains and source/target TROB
+iteration/compaction:120 persistent traces/14,784 native comparisons. Separate
+[gate steps](research/temple-gate-animation.md) cover41 original anchors/6,300
+cases, and [permanent setup](research/temple-permanent-pressure.md) covers68
+plate markers/1,304 cases. These remain research, not runtime integration;
+rock movement, real contact/support, full FrameAdv and saves/reset remain P.
+
+[Real gate services](research/temple-gate-services.md) corrects the initial
+LoadKid/relief labels and adds11,361 native comparisons.4:4b02 copies the
+saved Prince, not support caches;5:4766 is level4 relief, not crushing;
+a5-0x5008 is its sigh countdown, not damage.3,075 connected temple gate steps
+execute both real bodies, with only sound/redraw supplied. Earlier gate/mixed
+v2 reports preserve their transition counts and correct those semantic names.
+The real callees also pass inside the120 persistent mixed traces/14,784
+comparisons; working-actor copies are checked while actor/FRAM inputs remain
+explicitly resupplied per operation. Mixed rock movement is still P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
