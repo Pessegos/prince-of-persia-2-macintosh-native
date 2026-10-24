@@ -167,7 +167,10 @@ execute both real bodies, with only sound/redraw supplied. Earlier gate/mixed
 v2 reports preserve their transition counts and correct those semantic names.
 The real callees also pass inside the120 persistent mixed traces/14,784
 comparisons; working-actor copies are checked while actor/FRAM inputs remain
-explicitly resupplied per operation. Mixed rock movement is still P.
+explicitly resupplied per operation. [Mixed rock motion](research/temple-mixed-rock-motion.md)
+now extends R to real geometry/motion/crush admission and both bank lifetimes:
+192 traces/83,040 comparisons, explicitly no actor contact. Actor consequences,
+presentation and full FrameAdv in that composition remain P.
 
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.

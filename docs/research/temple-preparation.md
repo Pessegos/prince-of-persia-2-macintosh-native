@@ -262,4 +262,8 @@ The same real callees now run inside the120 persistent mixed traces via
 `--native-gate-services`:14,784 comparisons pass, including64 full LoadKid
 copies and30 native relief rejections. Current actor/FRAM inputs are supplied
 afresh before each operation, not evolved through a native Prince controller.
-Mixed rock movement is the next separate boundary.
+[Mixed rock motion](temple-mixed-rock-motion.md) now joins real geometry/
+motion/crush admission and both bank compactions to the plate/gate chain:
+192 traces/83,040 comparisons pass, with saved Prince room0/frame0 deliberately
+excluding actor reactions. Working actors and both call orders remain supplied;
+this is not full FrameAdv, reachable gameplay or a damage timeline.
