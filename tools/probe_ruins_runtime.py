@@ -403,14 +403,186 @@ def run_serpent_probe(recovery, cases=20000, seed=2027):
     )
 
 
+class NativeRuinsStab(NativeRuinsHead):
+    RANGES = {
+        **NativeRuinsHead.RANGES,
+        4: NativeRuinsHead.RANGES[4] + ((0x34f2, 0x35a4), (0x3a48, 0x3a70)),
+        6: NativeRuinsHead.RANGES[6] + ((0x51f2, 0x5560), (0x5562, 0x57b0), (0x5022, 0x5090)),
+    }
+
+    def reset(self, level):
+        super().reset(level)
+        self.animations = self.selections = 0
+
+    def dispatch(self, cpu, address, size, user):
+        if address == self.address(4, 0x2c0c):
+            self.animations += 1  # AnimChar: the port's next_frame, compared separately.
+            self.skip(cpu)
+            return
+        if address == self.address(6, 0x36f2):
+            self.selections += 1  # GetOppIdxClosestToKid: the Prince's new target.
+            self.skip(cpu, 0xffff)
+            return
+        if address == self.address(6, 0x04aa):
+            self.skip(cpu)
+            return
+        super().dispatch(cpu, address, size, user)
+
+
+def run_stab_probe(recovery, cases=20000, seed=2028):
+    """CheckStab 6:51f2 on a struck head or serpent against RuinsCreatures.stab."""
+    from pop2.combat import Fighter
+    from pop2.ruins_ai import PrinceView, RuinsCreatures, RuinsMind
+    from pop2.sequence_runtime import SequenceRuntime, SequenceState
+    from pop2.terrain import LevelMap, floor_y
+
+    directory = Path(recovery) / 'resource_forks'
+    program_bytes = (directory / 'Prince of Persia 2.bin').read_bytes()
+    program, prince_rsrc, head = (parse_resource_fork((directory / name).read_bytes()) for name in
+                                  ('Prince of Persia 2.bin', 'Prince.rsrc.bin', 'Head.rsrc.bin'))
+    level = prince_rsrc['LEVL'][2006]['data']
+    machine = NativeRuinsStab(program, head, prince_rsrc['SEQS'])
+    fram = head['FRAM'][750]['data']
+    slots = [(room, slot, offset, actor) for room, slot, offset, actor in head_slots(level)]
+    slots += [(room, slot, offset, 11) for room, slot, offset in serpent_slots(level)]
+    rng = random.Random(seed)
+    counts, sequences, sounds, mismatches = Counter(), Counter(), Counter(), []
+    for case in range(cases):
+        room, slot, offset, actor_type = rng.choice(slots)
+        is_head = actor_type != 11
+        pose = rng.choice((150, 159, 166, 173) if is_head else (230, 274, 278, 280))
+        facing, row, column = rng.choice((-1, 0)), rng.randrange(3), rng.randrange(1, 9)
+        x = 207 + column * 51 + 47
+        frame_index = pose - 149 + (43 if actor_type == 8 and pose <= 181 else 0)
+        frame = fram[frame_index * 10:frame_index * 10 + 10]
+        column, _remainder = supporting_column(x, facing, frame)
+        selected = rng.choice((140, 147, 150, 166, 142) if is_head else (170, 173, 175, 176))
+        life = rng.choice((1, 2, 3))
+        initial = dict(slot=slot, facing=facing, x=x, y=row * 120 + (73 if is_head else 106),
+                       actor=actor_type, pose=pose, column=column, row=row,
+                       horizontal_velocity=0, vertical_velocity=rng.choice((0, -6)), room=room,
+                       armed=1, alive=-1, life=life, sequence=selected, cursor=1,
+                       selected=selected, body_top=18, body_bottom=48, special=0,
+                       alert=rng.choice((0, 3)))
+        prince = dict(facing=rng.choice((-1, 0)), x=x + rng.choice((-60, 60)), y=row * 120 + 106,
+                      actor=0, pose=154, column=column, row=row, room=room, armed=1, alive=-1,
+                      life=3, selected=75, target=-1)
+        sword_type = rng.choice((1, 2))
+        record = dict(kind=8 if not is_head else 5 if actor_type == 7 else 6,
+                      skill=struct.unpack_from('>h', level, offset + 6)[0], mode=rng.choice((0, 1, 3)))
+        tension = rng.choice((0, 10, 30))
+        draw_seed = rng.randrange(1 << 30)
+
+        supplied = bytearray(level)
+        struct.pack_into('>h', supplied, offset + 0x1c, record['mode'])
+        machine.reset(supplied)
+        machine.cpu.mem_write(machine.A5 - 0x5056, bytes(62))
+        for name, value in initial.items():
+            machine.put_word(WORKING[name], value)
+        prince_bytes_native = bytearray(62)
+        for name, value in prince.items():
+            struct.pack_into('>h', prince_bytes_native, PRINCE[name], value)
+        machine.cpu.mem_write(machine.A5 - 0x50d2, bytes(prince_bytes_native))
+        machine.cpu.mem_write(machine.A5 - 0x5094, bytes(prince_bytes_native))
+        machine.put_word(-0x500a, sword_type)
+        machine.put_word(-0x36a2, 1)
+        machine.put_word(-0x36a0, tension)
+        machine.random = Draws(draw_seed)
+        machine.call(4, 0x2a8e)
+        machine.call(6, 0x51f2)
+        native = {name: machine.word(WORKING[name]) for name in COMPARED}
+        # DecLifePts 4:34f2 queues the damage in a5-0x5034 (applied by ChangeMeters).
+        native['life'] = max(0, native['life'] + min(0, machine.word(-0x5034)))
+        native_mode = struct.unpack_from('>h', machine.level_bytes(len(level)), offset + 0x1c)[0]
+        native_tension = machine.word(-0x36a0)
+
+        state = SequenceState(selected, cursor=1, action=pose, current_x=x - 207, target_x=x - 207,
+                              current_y=initial['y'] - floor_y(row),
+                              facing=1 if facing == 0 else 0, actor_type=actor_type,
+                              vertical_velocity=initial['vertical_velocity'],
+                              selected_sequence_id=selected)
+        actor = Fighter(SequenceRuntime({}, state), life, life, room - 1, row, sword_drawn=True)
+        actor.ruins = RuinsMind(actor_type, record['kind'], record['skill'], slot,
+                                mode=record['mode'], alert=initial['alert'])
+        actor.runtime.next_frame = lambda: None
+        player_state = SequenceState(75, action=154, target_x=prince['x'] - 207,
+                                     facing=1 if prince['facing'] == 0 else 0, actor_type=0)
+        player = Fighter(SequenceRuntime({}, player_state), 3, 3, room - 1, row, sword_drawn=True)
+        draws = Draws(draw_seed)
+        encounter = SimpleNamespace(rng=TapeRandom(draws), terrain=LevelMap(level), player=player,
+                                    parry_timer=0, guard_art=None)
+        creatures = RuinsCreatures(tension_level=1, tension=tension)
+        # IsAbleToFleeInRoom 7:161c reads every record of the room.
+        others = []
+        base = 0x20e6 + room * 0xc0
+        for index in range(struct.unpack_from('>H', level, base)[0]):
+            if index == slot:
+                others.append(actor)
+                continue
+            words = struct.unpack_from('>19h', level, base + 2 + index * 38)
+            others.append(SimpleNamespace(ruins=RuinsMind(0, words[12], words[3], index,
+                                                          mode=words[14])))
+        creatures.rooms[actor.room] = others
+        view = PrinceView(column, row, prince['x'], prince['y'], prince['facing'], 154, room - 1,
+                          -1, 3, True, 75)
+        creatures.prince = lambda _encounter: view
+        event = creatures.stab(actor, encounter, sword_type)
+        port = dict(facing=0 if state.facing else -1, x=state.target_x + 207,
+                    y=floor_y(actor.row) + state.current_y, row=actor.row,
+                    horizontal_velocity=state.horizontal_velocity,
+                    vertical_velocity=state.vertical_velocity, armed=int(actor.sword_drawn),
+                    life=actor.life, sequence=state.sequence_id, cursor=state.cursor,
+                    selected=state.selected_sequence_id, special=state.sequence_mode,
+                    alert=actor.ruins.alert)
+        differences = {name: (native[name], port[name]) for name in COMPARED
+                       if native[name] != port[name]}
+        if native_mode != actor.ruins.mode:
+            differences['record.mode'] = (native_mode, actor.ruins.mode)
+        if native_tension != creatures.tension:
+            differences['tension'] = (native_tension, creatures.tension)
+        # Kill songs (137) come later natively (5:4bb8, at ALIVE 6).
+        port_sounds = [sound for sound in state.sound_events if sound != 137]
+        if event.sound:
+            port_sounds.append(event.sound)
+        if sorted(machine.sounds) != sorted(port_sounds):
+            differences['sounds'] = (machine.sounds, port_sounds)
+        if machine.random.log != draws.log:
+            differences['random'] = (machine.random.log, draws.log)
+        sequences[native['selected']] += 1
+        sounds.update(machine.sounds)
+        if differences:
+            counts['mismatch'] += 1
+            if len(mismatches) < 40:
+                mismatches.append(dict(case=case, initial=initial, prince=prince, record=record,
+                                       sword_type=sword_type, tension=tension,
+                                       differences=differences))
+        else:
+            counts['match'] += 1
+    return dict(
+        cases=dict(counts), mismatches=counts['mismatch'],
+        requested_sequences=dict(sorted(sequences.items())), sounds=dict(sorted(sounds.items())),
+        examples=mismatches, executable_sha256=hashlib.sha256(program_bytes).hexdigest(),
+        supplied=['4:2c0c AnimChar: skipped on both sides (port next_frame not run)',
+                  '6:36f2 nearest opponent: -1', '6:04aa corpse alignment: skipped',
+                  '17:6e06 Rnd: the same seeded outcomes', '5:4d84 AddSound: recorded',
+                  '3:4a8e DrawOppMeter: skipped'],
+        scope=('CheckStab 6:51f2 (with DecLifePts, IsAbleToFleeInRoom, the death branch '
+               '6:5562 and SetTensionLevel 6:5022) on a struck head or serpent of the actual '
+               'level-seven slots, against pop2.ruins_ai.RuinsCreatures.stab. The kill song '
+               '137 is excluded: the port plays it at once, the original at ALIVE 6.'),
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--cases', type=int, default=20000)
     parser.add_argument('--serpents', action='store_true')
+    parser.add_argument('--stab', action='store_true')
     args = parser.parse_args()
-    report = (run_serpent_probe if args.serpents else run_probe)(args.source, args.cases)
+    report = (run_stab_probe if args.stab else run_serpent_probe if args.serpents else run_probe)(
+        args.source, args.cases)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({key: report[key] for key in ('cases', 'requested_sequences', 'sounds')}, indent=2))
