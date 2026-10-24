@@ -228,6 +228,20 @@ clipping raises with `max`. Initial actor anchors/widths/static banks and
 input samples are supplied. Real frame/foot geometry, other physical contact,
 persistent gameplay and playable temple remain P.
 
+[Prince frame support](research/temple-kid-frames.md) extends R through type0
+LoadFrame4:2a72/2a8e, original Kid FRAM/AFRM and signed supporting-column
+calculation:22,528 comparisons,8 asset-free regressions. Prepared bindings,
+poses and X inputs supplied. Sprite bounds/width, foot Y/row, real controller
+composition and reachable physical frame progression remain P in this block.
+
+[Frames in world control](research/temple-frame-progression.md) extends R to
+real Kid LoadFrame inside actual world/PlayerCtrl/cell queries, then bounded
+AnimChar/LoadFrame continuation:23,964 comparisons,9 asset-free regressions.
+Script X/Y/row and supporting columns are recovered in this domain, not
+physical support/climb reachability. Continuation order, initial anchors,
+frame width, sampled inputs and other contact/services remain supplied;
+outer FrameAdv and playable temple remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
