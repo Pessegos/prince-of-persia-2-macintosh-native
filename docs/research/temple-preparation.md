@@ -340,3 +340,18 @@ connect that real loader before/after animation inside the actual caller:
 Scripted X/Y/row changes and refreshed supporting columns are compared;
 manual helper continuation is not another complete world/physics update.
 GetCharEdges/width, support/contact and outer FrameAdv remain separate gaps.
+
+[Prince sprite bounds](temple-sprite-bounds.md) independently executes real
+LoadFrame/SetupSword/GetCharEdges with original Kid dimensions supplied from
+SHAP headers:33,792 comparisons pass. Collision width includes one extra
+pixel and an optional sword extension; the clipped visible rectangle is
+separate and lives in the actor record. World composition, support/contact
+physics and full FrameAdv are not implied by this isolated bounds proof.
+
+[Sprite bounds in the world caller](temple-world-bounds.md) closes that
+composition gap:8,856 native world updates match with real Kid drawing/edges,
+two hanging poses and empty/occupied static rock banks. Final actor rectangles
+and edge saves are compared; keeping width fixed18 would change18 selected
+animations in this corpus. Physical contact/floor/hazards, initial placement,
+sampled input and shape/graphics services remain supplied. This is not a
+complete physical climb/fall or repeated FrameAdv/playable-temple proof.

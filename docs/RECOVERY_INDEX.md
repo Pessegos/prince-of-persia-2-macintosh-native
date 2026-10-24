@@ -242,6 +242,21 @@ physical support/climb reachability. Continuation order, initial anchors,
 frame width, sampled inputs and other contact/services remain supplied;
 outer FrameAdv and playable temple remain P.
 
+[Prince sprite bounds](research/temple-sprite-bounds.md) extends R through
+type0 LoadFrame/SetupSword/GetCharEdges, sword extent and edge rows/columns:
+33,792 comparisons,10 asset-free regressions. Dimensions from original Kid
+SHAP headers and rectangle intersection/library bindings remain supplied;
+resource loading/rasterization, connected world contact and physical
+reachability/full FrameAdv remain P.
+
+[Sprite bounds in world control](research/temple-world-bounds.md) extends R
+through real LoadFrame/SetupSword/GetCharEdges inside world/PlayerCtrl and
+static rock queries:8,856 comparisons,6 asset-free regressions. Final saved
+actor rectangles/edges are derived; supplied fixed18 width would change18
+selected animations. SHAP-size/graphics services, input/placement/static
+banks and remaining physical contact/floor/hazards stay supplied; repeated
+physical frames, outer FrameAdv and playable temple remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
