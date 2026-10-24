@@ -115,6 +115,8 @@ class RuinsCreatures:
     tension_level: int = 0
     tension: int = 0
     banked: object | None = None
+    # a5-0x481c: the remainder of the last GetCharCol (5:48b0) call.
+    remainder: int = 0
 
     # ---- rooms -------------------------------------------------------
 
@@ -221,6 +223,7 @@ class RuinsCreatures:
             state.facing = 0
             if state.action in (150, 159):
                 self.set_native_x(actor, self.add_char_x(actor, 12))
+            self.column(actor, None, native=True)  # The frame reload 4:2a72.
         actor.selected_sequence = sequence
         state.select(sequence)
 
@@ -231,11 +234,15 @@ class RuinsCreatures:
             return None
         return frames[frame_index(actor.ruins.actor_type, actor.state.action)]
 
-    def column(self, actor, encounter):
-        # The stored supporting column (GetCharCol of GetFCharX).
+    def column(self, actor, encounter, *, native=False):
+        # The stored supporting column (GetCharCol of GetFCharX). With
+        # `native` the original computes it here, setting a5-0x481c.
         record = self.record(actor, encounter)
         x = actor.state.target_x
-        return character_column(floor_contact_x(x, actor.state.facing, record) if record else x)
+        contact = floor_contact_x(x, actor.state.facing, record) if record else x
+        if native:
+            self.remainder = column_remainder(contact)
+        return character_column(contact)
 
     def edge_distance(self, actor, encounter):
         # GetDist1 4:3a92 of the supporting foot.
@@ -345,13 +352,16 @@ class RuinsCreatures:
                     break
         if not clear:
             return -1
-        # 6:3946: only the opponent nearest the Prince on its side moves.
-        side = -1 if prince.native_x >= self.native_x(actor) else 0
-        if nearest_opponent(encounter.player, self.living(actor.room), side) is not actor:
+        if not self.nearest_on_side(actor, encounter, prince):
             return 4
         if actor.row != prince.row:
             return 2 if sy > 0 else 3
         return 1 if sx > 0 else 0
+
+    def nearest_on_side(self, actor, encounter, prince):
+        # 6:3946: only the opponent nearest the Prince on its side moves.
+        side = -1 if prince.native_x >= self.native_x(actor) else 0
+        return nearest_opponent(encounter.player, self.living(actor.room), side) is actor
 
     def overshoot(self, actor):
         # 7:170a: a vertical move past the row's floor height.
@@ -367,7 +377,8 @@ class RuinsCreatures:
                 return False
             if self.overshoot(actor):
                 return False
-            probe = character_column(scene_x(self.add_char_x(actor, 26)))
+            probe_x = scene_x(self.add_char_x(actor, 26))
+            probe, self.remainder = character_column(probe_x), column_remainder(probe_x)
             if probe != column:
                 tile = self.tile(encounter, room, column + (1 if direction else -1), row)
                 if is_wall(tile.kind) or tile.kind == 4 and self.gate_blocks(actor, encounter, tile):
@@ -420,7 +431,7 @@ class RuinsCreatures:
         actor.sword_drawn = False
         self.stop(actor)
         self.jump(actor, 139)
-        column = self.column(actor, encounter)
+        column = self.column(actor, encounter, native=True)
         self.set_native_x(actor, NATIVE_X_ORIGIN + column * 51 + 47)
         self.set_floor(actor)
         mind.alert = 0
@@ -575,7 +586,7 @@ class RuinsCreatures:
             direction = 1 if mind.dest_column > column else 0
             moved = self.can_move(actor, encounter, direction)
             if not moved:
-                remainder = column_remainder(scene_x(self.add_char_x(actor, 26)))
+                remainder = self.remainder
                 moved = direction == 1 and remainder < 25 or direction == 0 and remainder > 25
             if moved and actor.state.source_sequence_id != 142:
                 self.jump(actor, 142)
@@ -715,7 +726,6 @@ class RuinsCreatures:
         # SnakeComeOutOfHole 7:1824.
         prince = self.prince(encounter)
         mind = actor.ruins
-        mind.alert = self.serpent_alert(actor, encounter, prince)
         if mind.mode < 0:
             if self.faces_prince(actor, encounter, prince):
                 self.strike(actor, encounter, prince)
@@ -1053,6 +1063,8 @@ class RuinsCreatures:
                 if actor.ruins.actor_type in HEAD_TYPES:
                     self.control_head(actor, encounter)
                 else:
+                    # The alert routine 2:6ee4 runs before AutoCtrl.
+                    actor.ruins.alert = self.serpent_alert(actor, encounter, self.prince(encounter))
                     self.control_serpent(actor, encounter)
             actor.runtime.next_frame()
             self._after_frame(actor, encounter)
