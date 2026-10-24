@@ -1,7 +1,7 @@
 """Ruins special opponents (opponent set 5): heads and serpents.
 
-Data and initialization only; the controllers are not wired into the game
-yet (docs/research/ruins-head-leaves.md and level7-head-*.md).
+Data and initialization; pop2/ruins_ai.py runs the controllers
+(docs/research/ruins-head-leaves.md and level7-head-*.md).
 """
 
 from dataclasses import dataclass

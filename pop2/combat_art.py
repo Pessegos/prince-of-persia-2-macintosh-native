@@ -50,9 +50,9 @@ class GuardArtwork:
         self.sword_cache = {}
 
     def body(self, state, palette_variant=1):
-        from pop2.combat import guard_frame_index
+        from pop2.combat import actor_frame_index
 
-        index = guard_frame_index(state.action)
+        index = actor_frame_index(state)
         shape_id = shape_id_for_action(self.frames, self.base, index)
         if shape_id is None:
             return None
@@ -71,11 +71,11 @@ class GuardArtwork:
         return self.cache[key]
 
     def draw(self, image, state, floor_y, palette_variant=1):
-        from pop2.combat import guard_frame_index
+        from pop2.combat import actor_frame_index
 
         if state.actor_type == 4 and state.source_sequence_id == 115:
             return  # The lava pool draws the sinking skeleton, CODE:8 34a6.
-        index = guard_frame_index(state.action)
+        index = actor_frame_index(state)
         body = self.body(state, palette_variant)
         if body is None:
             return
@@ -103,9 +103,9 @@ class GuardArtwork:
         image.paste(sword, (sword_x, y + body.height + dy - sword.height), sword)
 
     def bounds(self, state, floor_y):
-        from pop2.combat import guard_frame_index
+        from pop2.combat import actor_frame_index
 
-        index = guard_frame_index(state.action)
+        index = actor_frame_index(state)
         body = self.body(state)
         if body is None:
             return (state.target_x, floor_y, state.target_x, floor_y)
@@ -117,9 +117,9 @@ class GuardArtwork:
                 left + body.width - 1, bottom)
 
     def collision_bounds(self, state, floor_y, sword_drawn):
-        from pop2.combat import guard_frame_index
+        from pop2.combat import actor_frame_index
 
-        record = self.frames[guard_frame_index(state.action)]
+        record = self.frames[actor_frame_index(state)]
         return character_collision_bounds(state, self.bounds(state, floor_y),
                                           self.attachments[record.afrm_index], sword_drawn)
 
@@ -160,7 +160,7 @@ class HitArtwork:
         self.guard_frames = guard_frames
 
     def draw(self, image, state, floor_y):
-        from pop2.combat import guard_frame_index
+        from pop2.combat import actor_frame_index
 
         # SetupChar 0x07dc consumes state 10 on the first hurt/death pose.
         # Keep rendering that pose until its next animation tick, not per paint.
@@ -170,7 +170,7 @@ class HitArtwork:
             return
         is_player = state.actor_type == 0
         record = (self.player_frames[state.action] if is_player
-                  else self.guard_frames[guard_frame_index(state.action)])
+                  else self.guard_frames[actor_frame_index(state)])
         # 0x0ca4/0x0cb6 offset from the body's facing-relative draw anchor.
         dx, dy = (14, -30) if is_player else (11, -21)
         sprite = self.mirrored if state.facing else self.sprite

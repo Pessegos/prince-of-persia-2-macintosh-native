@@ -312,26 +312,35 @@ serpent 11), HeadAddOpponent's starting state, the Head FRAM index (type 8
 (4 heads, 2 serpents), seven 14 (8 heads, 6 serpents), eight 24 (19 heads,
 5 serpents), nine 12 (6 heads, 6 serpents).
 
-## Controllers (dormant)
+## Controllers In Play
 
 `pop2/ruins_ai.py` translates the head wrapper and leaves (sight, movement
 admission, idle, angry, peaceful, attack, focus, locked, done, go-to,
-flee, flee check) and the serpent routines above, plus MoveChar's flight
-for heads (Y += vy with GetRow, X += AddCharX(vx)). SequenceRuntime gained
-opcodes -9 (additive velocity), -17 (removal, as an event) and -22
-(random JumpSeq), and -19 sets a head's -33 floor height. A headless test
-runs every level-six room for 300 frames: heads get angry, swoop, bite and
-are shaken off; serpents slither and rest. Nothing calls it from the game
-yet. Port approximations: the wall contact (an armed head inside a wall
-or closed gate cell is pushed back 22 pixels instead of the full
-CheckBarrier 4:62b0 distances) and the column read live from the pose
-instead of the value cached at LoadFrame.
+flee, flee check), the serpent routines above, MoveChar's flight for heads
+(Y += vy with GetRow, X += AddCharX(vx)) and the combat rules above.
+SequenceRuntime gained opcodes -9 (additive velocity), -17 (removal, as an
+event) and -22 (random JumpSeq); -19 sets a head's -33 floor height.
+
+CombatEncounter owns a `RuinsCreatures` for opponent sets 5/6, separate
+from the ordinary guard bank: it loads a room's records on entry (heads
+restart at rest, as HeadAddOpponent does), runs control, AnimChar and
+flight each world frame (decrementing the shared AutoCtrl timers per
+actor), then TestStrike/CheckStab against the Prince. The scene draws them
+with Head.rsrc (type 8's +43 frame offset via `actor_frame_index`), drains
+their sounds and passes the sword type. Events carry their own sound (0 for
+the silent bite and parry).
+
+Port approximations: the wall contact (an armed head inside a wall or
+closed gate cell is pushed back 22 pixels instead of the full CheckBarrier
+4:62b0 distances); the column read live from the pose instead of the value
+cached at LoadFrame; ruins actors are not saved (a restored save or a
+rebirth respawns them from their records); the Prince's native ALIVE is
+taken from the host's death counter; IsSoundPlaying is not consulted.
 
 ## Still Open
 
-Wiring into CombatEncounter (a separate actor list, drawing with Head.rsrc
-art and the type-8 frame offset, audio drain, room entry), the
-TestStrike/CheckStab rules above for ruins actors, neck alignment while
-biting, the Prince's crouch strike (SEQS 96, needed to hit serpents),
-saves/rebirth of ruins actors, and the scheduling of the head pipeline.
+Neck alignment while biting (AlignHeadOnKidNeck, Codex's probe), the
+Prince's crouch strike (SEQS 96, the only way to hit a serpent), the
+opponent health meter for heads, heads crossing into a neighbouring room,
+the development map, saving ruins actors, and the kill songs' timing.
 Every value above needs a native probe before it is relied on.

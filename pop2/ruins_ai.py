@@ -1,5 +1,6 @@
 """Ruins heads and serpents at runtime: the CODE 7 controllers and their
 TestStrike/CheckStab rules (docs/research/ruins-head-leaves.md).
+CombatEncounter owns one RuinsCreatures for opponent sets 5/6.
 
 Names follow the original working actor. `native_x` includes the 207-pixel
 origin, native facing is 0 (right) or -1 (left) where the port stores 1/0,
@@ -14,7 +15,7 @@ from pop2.coordinates import NATIVE_X_ORIGIN, scene_x
 from pop2.opponent_generation import EMPTY_TILES, WALL_TILES, character_column
 from pop2.opponent_selection import nearest_opponent
 from pop2.ruins_actors import (
-    FLEE_REST, HEAD_TYPES, chomp_again, frame_index, initial_state, ruins_spawns,
+    FLEE_REST, HEAD_TYPES, SERPENT_TYPE, chomp_again, frame_index, initial_state, ruins_spawns,
 )
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.terrain import floor_contact_x, floor_edge_distance, floor_y
@@ -836,12 +837,218 @@ class RuinsCreatures:
             self.jump(actor, 172)
         state.sequence_mode = 0
 
+    # ---- combat (TestStrike 6:57b2, CheckStab 6:5092) --------------------
+
+    @staticmethod
+    def striking_pose(fighter):
+        # IsStrikingPos 6:5d60.
+        kind, pose = fighter.state.actor_type, fighter.state.action
+        if kind in HEAD_TYPES:
+            return 165 <= pose <= 167 or pose == 181
+        if kind == SERPENT_TYPE:
+            return fighter.state.source_sequence_id == 173 and pose in (274, 280)
+        return pose in (153, 154) or kind == 0 and pose in (244, 245)
+
+    @staticmethod
+    def strike_pose(fighter):
+        # IsTheStrikePos 6:5e42.
+        kind, pose = fighter.state.actor_type, fighter.state.action
+        if kind == SERPENT_TYPE:
+            return pose == 280
+        return pose == 154 or kind == 0 and pose == 245
+
+    def strike_range(self, striker, defender, sword_type):
+        # GetCharStrikeRanges 6:5b38 for the ruins pairs.
+        same = striker.state.facing == defender.state.facing
+        if striker.state.actor_type == 0:
+            if defender.state.actor_type == SERPENT_TYPE:
+                if (defender.state.sequence_mode == 6 or defender.state.source_sequence_id == 171
+                        or striker.state.source_sequence_id != 96):
+                    return None
+                low, high = (62, 126) if same else (-11, 79)
+            else:
+                low, high = 32, 92
+            return low, high - (10 if sword_type == 2 else 0)
+        if striker.state.actor_type == SERPENT_TYPE:
+            if self.native_y(defender) < defender.row * 120 + 96:
+                return None
+            return (8, 52) if same else (-32, 6)
+        return None
+
+    def contact(self, striker, defender):
+        # CheckStrikes 6:5896's gates.
+        heads = HEAD_TYPES
+        if (not striker.sword_drawn or striker.room != defender.room or striker.row != defender.row
+                or not striker.targetable or not defender.targetable):
+            return False
+        if (striker.state.actor_type not in heads and defender.state.actor_type not in heads
+                and abs(self.native_y(striker) - self.native_y(defender)) >= 15):
+            return False
+        return (self.striking_pose(striker) and defender.alive
+                and defender.state.animation_state != 8
+                and defender.state.source_sequence_id != 110)
+
+    def head_hit(self, actor, encounter):
+        """HeadHit 7:08fa: a blocked head loses a life point."""
+        actor.life = max(0, actor.life - 1)
+        if actor.alive:
+            actor.state.sound_events.append(131)
+            self.able_to_flee(actor, encounter, self.prince(encounter))
+            sequence = 153
+        else:
+            sequence = 154
+            if self.banked is actor:
+                self.banked = None
+        self.set_tension(1, -1)
+        return sequence
+
+    def kill(self, actor, encounter):
+        # 6:5562 for heads and serpents.
+        actor.ruins.alert = 0
+        if actor.ruins.actor_type in HEAD_TYPES:
+            self.set_facing(actor, 0 if self.facing(encounter.player) == -1 else -1)
+            self.set_tension(1, -1)
+            self.jump(actor, 154)
+            actor.state.sound_events.append(137)
+        else:
+            self.jump(actor, 174)
+        if self.banked is actor:
+            self.banked = None
+
+    def test_strike(self, striker, defender, encounter, sword_type):
+        from pop2.combat import opponent_distance
+
+        distance = opponent_distance(striker, defender)
+        kind = striker.state.actor_type
+        low, high = (0, 55) if kind in HEAD_TYPES else (61, 99)
+        if (striker.state.facing != defender.state.facing and low <= distance <= high
+                and defender.state.actor_type not in (*HEAD_TYPES, SERPENT_TYPE)
+                and kind != SERPENT_TYPE and defender.sword_drawn
+                and defender.state.action in (161, 150)):
+            # 6:5a3c: the parry; a blocked head is hurt by HeadHit.
+            defender.state.action = 161
+            encounter.parry_timer = 4
+            if kind in HEAD_TYPES:
+                self.jump(striker, self.head_hit(striker, encounter))
+                striker.runtime.next_frame()
+            return 'parry'
+        if self.strike_pose(striker):
+            limits = self.strike_range(striker, defender, sword_type)
+            if limits is not None and limits[0] <= distance <= limits[1]:
+                return 'hit'
+        elif kind in HEAD_TYPES and striker.state.sequence_mode == 1 and not encounter.parry_timer:
+            return 'hit'
+        return None
+
+    def resolve(self, encounter):
+        """TestStrike/CheckStab for the ruins actors in the Prince's room."""
+        from pop2.combat import CombatEvent
+
+        player = encounter.player
+        actors = [actor for actor in self.living(player.room) if actor.alive]
+        if not actors or player.state.action == 0 or 219 <= player.state.action < 229:
+            return []
+        sword_type = getattr(encounter, 'sword_type', 1)
+        events, stabbed, prince_hit = [], [], False
+        for actor in actors:
+            if self.contact(actor, player):
+                result = self.test_strike(actor, player, encounter, sword_type)
+                if result == 'parry':
+                    events.append(CombatEvent('parry', 'player', sound=0))
+                prince_hit |= result == 'hit'
+        for actor in actors:
+            if self.contact(player, actor) and self.test_strike(player, actor, encounter, sword_type) == 'hit':
+                stabbed.append(actor)
+        for actor in stabbed:
+            events.append(self.stab(actor, encounter, sword_type))
+        if prince_hit and not stabbed:
+            # 6:51ae: the striker is found again by its pose.
+            striker = next((actor for actor in actors
+                            if (actor.state.action in (167, 181) if actor.state.actor_type in HEAD_TYPES
+                                else self.strike_pose(actor))), None)
+            if striker is not None:
+                events.append(self.stab_prince(striker, encounter))
+        return [event for event in events if event is not None]
+
+    def stab(self, actor, encounter, sword_type):
+        # CheckStab 6:51f2 for a struck head or serpent.
+        from pop2.combat import CombatEvent
+
+        if actor.ruins.actor_type in HEAD_TYPES:
+            damage = 1 if sword_type == 2 else 2
+            if actor.life > damage:
+                self.able_to_flee(actor, encounter, self.prince(encounter))
+            sound = 130
+        else:
+            damage, sound = 100, 127
+        actor.life = max(0, actor.life - damage)
+        if actor.alive:
+            self.jump(actor, 153)
+        else:
+            self.kill(actor, encounter)
+        self.set_floor(actor)
+        actor.state.vertical_velocity = 0
+        actor.runtime.next_frame()
+        return CombatEvent('hit' if actor.alive else 'death', 'guard', sound=sound)
+
+    def stab_prince(self, striker, encounter):
+        # CheckStab 6:51f2-5560 and 6:5562 for the Prince.
+        from pop2.combat import CombatEvent, select_sequence
+
+        player = encounter.player
+        state = player.state
+        serpent = striker.state.actor_type == SERPENT_TYPE
+        damage = 100 if serpent else 1
+        sequence = 94 if state.facing == striker.state.facing else 74
+        if not serpent:
+            pose = state.action
+            frames = getattr(encounter, 'player_frames', None)
+            flagged = bool(frames is not None and frames[pose].aux & 0x40) or 191 <= pose <= 205
+            if not player.sword_drawn and not flagged or 102 <= pose <= 106:
+                sequence = 45
+        if state.source_sequence_id in (10, 16, 28, 14) or player.sword_lost:
+            damage = 100
+        if not getattr(encounter, 'god_mode', False):
+            player.life = max(0, player.life - damage)
+        player.contact_consumed = True
+        crouched = 246 <= state.action <= 261
+        if player.alive:
+            if sequence != 45:
+                player.sword_drawn, player.sword_lost = True, False
+                state.callback_flag = 1
+            player.recovering = sequence != 45
+            select_sequence(player, sequence)
+            player.runtime.next_frame()
+            return CombatEvent('hit', 'player', sound=0)
+        if serpent:
+            sequence, method = (98 if crouched else 97), 17
+            state.sound_events.append(126)
+        else:
+            sequence, method = (98 if crouched else 85), 6
+            if crouched:
+                state.sound_events.append(133)
+            self.set_tension(1, 5)
+        player.recovering = False
+        select_sequence(player, sequence)
+        player.runtime.next_frame()
+        if sequence == 85 and getattr(encounter, 'terrain', None) is not None:
+            frames = getattr(encounter, 'player_frames', None)
+            if frames is not None:
+                encounter.terrain.align_flat_death(player.room, player.row, state, frames[state.action])
+        return CombatEvent('death', 'player', method, sound=0)
+
     # ---- per frame ------------------------------------------------------
 
     def advance(self, encounter):
         """Control, animate and move the ruins actors in the Prince's room."""
+        if encounter.player.room not in self.rooms:
+            self.load_room(encounter, encounter.player.room)
         for actor in list(self.living(encounter.player.room)):
             actor.runtime.rng = encounter.rng
+            # AutoCtrl 6:4e90 decrements the shared timers on every call.
+            encounter.parry_timer = max(0, encounter.parry_timer - 1)
+            encounter.advance_pause = max(0, encounter.advance_pause - 1)
+            encounter.attack_pause = max(0, encounter.attack_pause - 1)
             if actor.alive:
                 if actor.ruins.actor_type in HEAD_TYPES:
                     self.control_head(actor, encounter)

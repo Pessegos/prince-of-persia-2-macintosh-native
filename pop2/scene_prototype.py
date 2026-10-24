@@ -11,7 +11,7 @@ from pop2.animation_data import (
     shape_id_for_action,
 )
 from pop2.combat import (
-    PLAYER_COMBAT_TURN_SEQUENCE, contact_allowed, guard_frame_index,
+    PLAYER_COMBAT_TURN_SEQUENCE, actor_frame_index, contact_allowed,
 )
 from pop2.combat_art import (
     GuardArtwork, HealthArtwork, HitArtwork, actor_draw_order, sword_palette_for_level,
@@ -348,8 +348,9 @@ class ScenePrototype(WindowControls):
         sword_palette = sword_palette_for_level(self.resources.prince, game.level.kind)
         guard_art = health_art = hit_art = None
         if game.combat is not None:
-            guard_art = GuardArtwork(load_resource_file(
-                "Skeleton.rsrc" if game.level.kind == 3 else "Guard.rsrc"), self.sword_shapes,
+            artwork = ("Head.rsrc" if getattr(game.combat, 'ruins', None) is not None
+                       else "Skeleton.rsrc" if game.level.kind == 3 else "Guard.rsrc")
+            guard_art = GuardArtwork(load_resource_file(artwork), self.sword_shapes,
                                      self.first_sword_shape_id, sword_palette)
             health_art = HealthArtwork(self.kid, palette, self.first_shape_id)
             hit_art = HitArtwork(self.kid, palette, self.first_shape_id,
@@ -2521,6 +2522,7 @@ class ScenePrototype(WindowControls):
             return
         combat.player_death_counter = self.death.counter
         combat.god_mode = getattr(self, 'god_mode', False)
+        combat.sword_type = getattr(self.game, 'sword_type', 1)
         combat.player.sword_drawn = self.sword_drawn
         # CheckStrikes 6:58aa-592c uses row, height and actor/mode exclusions;
         # beginning a grab, climb or fall does not confer invulnerability.
@@ -2546,9 +2548,11 @@ class ScenePrototype(WindowControls):
             time.perf_counter(), self.current_animation_interval_ms() / 1000,
         )
         for event in events:
-            self.sequence_state.sound_events.append(
-                11 if event.kind == "parry" else 12 if event.actor == "player" else
-                59 if self.game.level.kind == 3 else 31)
+            sound = (event.sound if event.sound is not None else
+                     11 if event.kind == "parry" else 12 if event.actor == "player" else
+                     59 if self.game.level.kind == 3 else 31)
+            if sound:
+                self.sequence_state.sound_events.append(sound)
             if event.actor == "player" and event.kind in ("hit", "death"):
                 self.sword_drawn = combat.player.sword_drawn
                 self.pending_action = None
@@ -2616,6 +2620,8 @@ class ScenePrototype(WindowControls):
                         # NPCs use 6:5ab4-5af8, after the valid-target gate.
                         guard.state.sound_events.append(11)
                     audio.drain(guard.state, not self.peaceful and guard.room == self.room_id)
+            for actor in self.combat.visible_ruins():
+                audio.drain(actor.state, not self.peaceful)
         motion = getattr(self, "terrain_motion", None)
         if motion is not None:
             environment.ambient_audio(audio, motion)
@@ -3481,12 +3487,12 @@ class ScenePrototype(WindowControls):
         hide_guards = getattr(self, "peaceful", False) and getattr(self, "demo", None) is None
         actors = []
         if combat is not None and not hide_guards:
-            for guard in combat.visible_guards():
+            for guard in (*combat.visible_guards(), *combat.visible_ruins()):
                 layer = Image.new("RGBA", frame.size)
                 ground = floor_y(guard.row) + environment.draw_sag(guard)
                 self.guard_art.draw(layer, guard.state, ground, guard.palette_variant)
                 bounds = self.guard_art.bounds(guard.state, ground)
-                record = self.guard_art.frames[guard_frame_index(guard.state.action)]
+                record = self.guard_art.frames[actor_frame_index(guard.state)]
                 actors.append((guard.state, record, bounds, guard.row, layer))
         player_layer = Image.new("RGBA", frame.size)
         draw_state, draw_height = environment.drawn_player(self.sequence_state)
@@ -3538,12 +3544,12 @@ class ScenePrototype(WindowControls):
             frame = environment.after_actors(frame, player_bounds)
 
         if combat is not None:
-            for guard in (() if hide_guards else combat.visible_guards()):
+            for guard in (() if hide_guards else (*combat.visible_guards(), *combat.visible_ruins())):
                 layer = Image.new("RGBA", frame.size)
                 ground = floor_y(guard.row) + environment.draw_sag(guard)
                 self.hit_art.draw(layer, guard.state, ground)
                 bounds = self.guard_art.bounds(guard.state, ground)
-                record = self.guard_art.frames[guard_frame_index(guard.state.action)]
+                record = self.guard_art.frames[actor_frame_index(guard.state)]
                 frame = self.composite_actor(frame, layer, guard.row, bounds[3],
                                              guard.state, bounds, record)
             layer = Image.new("RGBA", frame.size)

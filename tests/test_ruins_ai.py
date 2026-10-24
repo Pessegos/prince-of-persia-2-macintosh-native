@@ -75,6 +75,30 @@ class RuinsControllerTests(unittest.TestCase):
         self.assertTrue({(7, 150), (7, 151)} & seen)
         self.assertIn((11, 170), seen)
 
+    def test_heads_bite_in_play_and_a_sword_hit_sends_them_back(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(6)
+        combat = scene.game.combat
+        combat.enter_room(6, 0)
+        scene.jump_to_room(6, 0, 150, 1)
+        self.assertEqual(len(combat.visible_ruins()), 2)
+        RooftopSceneTests.tick(self, 60)
+        # A head reaches the unarmed Prince and bites (CheckStab, damage 1).
+        self.assertLess(combat.player.life, 3)
+        head = combat.ruins.actors(6)[0]
+        head.life = 3
+        combat.ruins.stab(head, combat, 1)
+        # Sword type 1 does 2 damage; a survivor is knocked back (SEQS 153).
+        self.assertEqual((head.life, head.state.source_sequence_id), (1, 153))
+        combat.ruins.stab(head, combat, 1)
+        self.assertEqual((head.alive, head.state.source_sequence_id), (False, 154))
+        RooftopSceneTests.tick(self, 40)
+        self.assertTrue(head.ruins.removed)
+        self.assertNotIn(head, combat.visible_ruins())
+
 
 if __name__ == '__main__':
     unittest.main()

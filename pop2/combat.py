@@ -181,6 +181,8 @@ class CombatEvent:
     kind: str
     actor: str
     death_method: int | None = None
+    # None keeps the host's ordinary hit/parry sound; 0 is silent.
+    sound: int | None = None
 
 
 @dataclass(frozen=True)
@@ -233,6 +235,14 @@ def contact_allowed(attacker, defender):
     )
 
 
+def actor_frame_index(state):
+    # LoadFrame 4:2a8e: the ruins family has its own remap.
+    if state.actor_type in (7, 8, 11):
+        from pop2.ruins_actors import frame_index
+        return frame_index(state.actor_type, state.action)
+    return guard_frame_index(state.action)
+
+
 def guard_frame_index(action):
     # CODE:4 0x2b0e, LoadFrame for actor type 2.
     if 102 <= action <= 106:
@@ -257,6 +267,12 @@ class CombatEncounter:
         self.rng = rng if rng is not None else QuickDrawRandom()
         self.level = level
         self.level_kind = player_runtime.state.level_kind
+        # Opponent sets 5/6 (ruins heads and serpents) live outside the
+        # ordinary guard bank; the tension they read survives restarts.
+        self.ruins = None
+        if level is not None and struct.unpack_from(">h", level, 0x21a4)[0] in (5, 6):
+            from pop2.ruins_ai import RuinsCreatures
+            self.ruins = RuinsCreatures()
         self.reset()
 
     def reset(self):
@@ -281,6 +297,9 @@ class CombatEncounter:
         if self.spawn is None:
             self._select_opponent_bank(self.player.room)
             self._restore_opponent_records()
+        if getattr(self, 'ruins', None) is not None:
+            self.ruins.rooms, self.ruins.banked = {}, None
+            self.ruins.load_room(self, self.player.room)
 
     def _reset_initial_guard(self):
         self.player = Fighter(self.player_runtime, 3, 3,
@@ -352,6 +371,8 @@ class CombatEncounter:
                     if view is not None:
                         room_records.append((actor, view))
         self._load_room(room)
+        if getattr(self, 'ruins', None) is not None and previous_room != room:
+            self.ruins.load_room(self, room)
         self.player.room, self.player.row = room, row
         self.guards, self.generation_points = self.room_encounters[room]
         terrain = getattr(self, "terrain", None)
@@ -526,6 +547,15 @@ class CombatEncounter:
         state = replace(fighter.state, current_x=fighter.state.current_x + offset,
                         target_x=fighter.state.target_x + offset)
         return replace(fighter, room=room, runtime=SequenceRuntime(self.sequences, state))
+
+    def visible_ruins(self):
+        ruins = getattr(self, 'ruins', None)
+        if ruins is None:
+            return []
+        if self.player.room not in ruins.rooms:
+            # A restored save starts in a room the ruins host has not loaded.
+            ruins.load_room(self, self.player.room)
+        return ruins.living(self.player.room)
 
     def visible_guards(self):
         return [view for guard in self.active_guards()
@@ -1573,6 +1603,8 @@ class CombatEncounter:
         if any(key != "player" for key in hits):
             hits.pop("player", None)
         events.extend(self._hurt(*hit) for hit in hits.values())
+        if getattr(self, 'ruins', None) is not None:
+            events.extend(self.ruins.resolve(self))
         self.refresh_target()
         return events
 
@@ -1585,6 +1617,8 @@ class CombatEncounter:
             if self.level is not None:
                 self.update_guard_alerts()
             self.advance_guard()
+            if getattr(self, 'ruins', None) is not None:
+                self.ruins.advance(self)
             self.world_frame += 1
             if self.last_guard_at is None or now - self.last_guard_at >= interval_seconds * 2:
                 self.last_guard_at = now
