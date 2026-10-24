@@ -241,5 +241,12 @@ independent wrapper probe, not in the five-source connected lifecycle above.
 stored-kind4 dispatch, native DATA motion tables and bounded StopGate body:
 6,300 comparisons pass over all41 original anchors plus supplied position/
 phase/contact controls. Support calculation/contact geometry, cue playback
-and redraw remain supplied; actors are explicitly non-hanging. Mixed-chain
-lifetimes and real crush consequences remain separate integration gates.
+and redraw remain supplied; actors are explicitly non-hanging. Real crush
+consequences remain a separate integration gate.
+
+[Mixed lifetimes](temple-mixed-lifetime.md) now connect real actor admission,
+both original level11 room3 link orders, source/target TROBs, gate motion and
+stable compaction across120 traces/14,784 comparisons. The pressure cache,
+unused bank storage and actor canaries are preserved/checked at every step.
+Rock motion and actual support/contact geometry remain excluded, not inferred
+from passing the connected activation/animation trace.

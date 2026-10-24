@@ -78,5 +78,7 @@ compared-output digest is
 All four LEVL hashes remain in the ignored report.
 
 The [independent permanent wrapper probe](temple-permanent-pressure.md) now
-checks its ordering/passthrough over all68 admitted source markers. Next:
-recover target gate animation and connect mixed chains.
+checks its ordering/passthrough over all68 admitted source markers.
+[Gate animation](temple-gate-animation.md) and
+[mixed lifetimes](temple-mixed-lifetime.md) subsequently connect the two
+original gate/rock chains; real supporting-foot/contact calculations remain open.

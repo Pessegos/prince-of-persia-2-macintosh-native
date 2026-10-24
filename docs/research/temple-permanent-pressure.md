@@ -51,4 +51,6 @@ compared-output digest is
 `5311754d2d1d6b78ad70d5ba95feb0a654b143482bd8fe0501bd3efd0af2f63e`.
 The ignored report records all four LEVL hashes.
 
-Next: target gate TROB animation, then connected mixed gate/rock lifetimes.
+Follow-up evidence: [gate TROB animation](temple-gate-animation.md) and
+[connected mixed gate/rock lifetimes](temple-mixed-lifetime.md). Actual
+support/contact and rock motion in the mixed chain remain separate work.

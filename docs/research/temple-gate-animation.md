@@ -59,5 +59,6 @@ Executable SHA256 is
 `ca2c5886244efa7e19d63fee9317ae5c2341b8a7cc79c7740fdd505575f44bd5`;
 compared-output digest is
 `b95334a41f76d28ceaef23af97c74f091bb91a44feb4c8358ec7dd21db543d2f`.
-Original level hashes remain in the ignored report. Next: connect these gate
-steps to the two original mixed plate/rock link chains and stable TROB removal.
+Original level hashes remain in the ignored report. The subsequent
+[mixed-lifetime probe](temple-mixed-lifetime.md) now connects these steps to
+the two original mixed chains and stable TROB removal within its stated scope.
