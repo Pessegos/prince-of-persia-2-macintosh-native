@@ -706,6 +706,13 @@ def loose_floor_cells(terrain):
                 break
     for key in struck:
         cells[key] += (cells[key][2],)  # Collision removal does not clear below.
+    if struct.unpack_from('>H', terrain.level, 0x2186)[0] == 4:
+        # The ruins' drawer 7:2bd6 has two shake images per column parity
+        # (a5-0x2c66/-0x2c7e): phase 1 shows one, phase 3 the other, in
+        # both tables. The second image is the last choice.
+        for key, values in list(cells.items()):
+            if values[0][0] == 11:
+                cells[key] = values + ((11, (values[0][1] & 0xfff0) | 3),)
     for room in range(32):
         for cell in range(30):
             tile = terrain.tile(room, cell % 10, cell // 10)

@@ -34,11 +34,26 @@ def check_level(program, resources, prince, number, base, progress=lambda _text:
         started = time.perf_counter()
         slots = loose_floor_slot_scenery(program, resources, prince, level, base, progress, recover=recover)
         slot_seconds = time.perf_counter() - started
-    with CavernRecovery(program, resources, prince) as machine:
-        recover = partial(recover_room, _machine=machine)
-        started = time.perf_counter()
+    # The whole-room oracle renders every combination; one harness machine
+    # fails after several thousand rooms, so it is renewed periodically.
+    machines = {'count': 0, 'machine': None}
+
+    def recover(*args, **options):
+        if machines['machine'] is None or machines['count'] >= 400:
+            if machines['machine'] is not None:
+                machines['machine'].__exit__(None, None, None)
+            machines['machine'] = CavernRecovery(program, resources, prince).__enter__()
+            machines['count'] = 0
+        machines['count'] += 1
+        return recover_room(*args, _machine=machines['machine'], **options)
+
+    started = time.perf_counter()
+    try:
         whole = extract_loose_floor_scenery(program, resources, prince, level, base, progress, recover=recover)
-        whole_seconds = time.perf_counter() - started
+    finally:
+        if machines['machine'] is not None:
+            machines['machine'].__exit__(None, None, None)
+    whole_seconds = time.perf_counter() - started
     results = Counter()
     for room, info in whole['rooms'].items():
         climb = base.get('climb_redraw', {}).get(room, {})

@@ -118,6 +118,31 @@ class LevelSixSceneryTests(unittest.TestCase):
         self.assertEqual(scene.terrain_motion.row, 1)
         self.assertFalse(scene.terrain_motion.falling)
 
+    def test_a_shaking_loose_floor_shows_both_ruins_shake_images(self):
+        # 7:2bd6: per column parity two shake images; for this odd column
+        # phases 1 and 8-10 show the first, phases 3-4 the second (exported
+        # as the cell's last choice; the port used to show the first for all).
+        from pop2.caverns import cavern_room, cavern_scene_signature, room_assets
+        from pop2.cavern_state import CavernState
+
+        program, *_ = room_assets(6, 5)
+        choices = program['loose_floors']['cells']['5:25']
+        if len(choices) < 4:
+            self.skipTest('Ruins export from before the second shake image: reimport the game')
+
+        def drawn(phase):
+            state = CavernState()
+            state.loose.tiles[(5, 25)] = (11, (choices[0][1] & 0xfff0) | phase)
+            key = cavern_scene_signature(program, 5, state)
+            art = cavern_room(5, level_number=6, loose_key=key)
+            return key, art.background.tobytes() + art.foreground.tobytes()
+
+        keys = {phase: drawn(phase) for phase in (0, 1, 3, 8)}
+        self.assertEqual([keys[phase][0] for phase in (0, 1, 3, 8)], ['0', '1', '3', '1'])
+        self.assertNotEqual(keys[1][1], keys[3][1])
+        self.assertNotEqual(keys[0][1], keys[3][1])
+        self.assertEqual(keys[1][1], keys[8][1])
+
     def test_lying_down_facing_left_against_a_crevice_stays_down_and_crawls(self):
         # tools/probe_crawl_lie_down.py: the original lies down 34 past the
         # crevice (X 85), collides at frame 259 (35 pixels high) and Collide
