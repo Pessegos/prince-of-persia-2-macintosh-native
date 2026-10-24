@@ -182,6 +182,20 @@ adds26,568 comparisons through the real type4 body for six supplied states;
 ordinary/fast/permanent actor effects and cue/redraw order are distinguished.
 Actor animation and full bank/frame scheduling remain P.
 
+[Actor clip progression](research/temple-gate-actor-clip.md) extends R through
+native AnimChar and original SEQS47/2/9/210 bytes:2,952 persistent traces,
+73,800 comparisons and9 asset-free regressions. Selection precedes the
+mode5/X+16/three-pose transition and active2/mode0 link; selected source47
+persists. Actor-update/copyback scheduling and handles are supplied; no
+physical fall/contact/death or full FrameAdv/bank iteration claim.
+
+[Actor/gate bank progression](research/temple-gate-actor-bank.md) extends R
+through full native AnimTrobs iteration/compaction interleaved with actor
+clips:2,460 persistent traces/78,720 comparisons,8 asset-free tests. Complete
+bank bytes/order and actor effects pass in both supplied schedules, with
+different first-cycle results. Original FrameAdv order, reachable supplied
+banks/placements and physical fall/contact/death remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
