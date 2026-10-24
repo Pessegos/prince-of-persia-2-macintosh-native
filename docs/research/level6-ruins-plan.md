@@ -154,15 +154,30 @@ flush against the crack (a repeated bump, SEQS 47); from one step back
 (standing left edge >= 104 in native room 18) he lies down and crawls
 through. Whether the original also bumps from flush is unverified in play.
 
+## Done Since (2026-10-24)
+
+- Heads and serpents run in play: `docs/research/ruins-head-leaves.md`
+  (controllers, combat, neck alignment, wall contact, saves, native probes).
+- Room ambient: PlayAmbient 5:4fd0 with the ruins' bank (LEVL 0x2186 = 4:
+  groups 139-154 and 155-170, combat 171-174) and the room table at 0x424a;
+  OppToFight 6:2392 counts an angry or fleeing head (-0x5024 > 0), never a
+  serpent.
+- Sword type 2 (levels seven and eight, and the sword found in level six's
+  sword type): LoadSwordSet 3:5a4e draws SHPL 1200 with Kid AFRM 25201
+  (3:5aae-5ab6, 5b2a-5b3e); other types keep SHPL 1000 and AFRM 25001.
+- The start room's leave hook 7:37b6 restores CTBL 3500 at 64 only while the
+  Prince is alive (-0x50b6 < 0) and a5-0x4fce is set; the port picks the
+  palette per drawn room (`ROOM_PALETTES`), which gives the same result on
+  leaving.
+
 ## Remaining Steps
 
-1. Heads and serpents: level six has special opponents in rooms 4, 7, 16,
-   20 and 25 (native numbering); `GuardSpawn` rejects them, so the level is
-   currently empty of enemies. Codex's level-seven notes cover their
-   selection, initialization, frames and idle/movement rules.
-2. The start room's leave hook `7:37b6` and the retained cliff image when
-   walking left from the start (to compare with the original).
-3. Sword type 2 graphics (S03_5A4E) and the two shake images per parity.
+1. The shared CUST hook 7:37d6 (kinds 20-22), level nine only: in room 16
+   with the Prince's column >= 9 it adds song 292; in room 2 with his column
+   < 5 it adds song 185 once (a5-0x4ff8). Which template slot calls it (enter,
+   leave or every frame) is still to read (3:13ec/1922, table a5-0x4c2e).
+2. The retained cliff image when walking left from the start (to compare
+   with the original), and the two shake images per parity of loose floors.
 
 Cutscene 1 between levels five and six is now implemented; see
 `level5-native-rules.md`, "Cutscene 1: NISCarpet", including the unresolved
