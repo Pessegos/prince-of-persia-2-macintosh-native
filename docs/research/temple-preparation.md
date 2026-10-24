@@ -340,3 +340,10 @@ connect that real loader before/after animation inside the actual caller:
 Scripted X/Y/row changes and refreshed supporting columns are compared;
 manual helper continuation is not another complete world/physics update.
 GetCharEdges/width, support/contact and outer FrameAdv remain separate gaps.
+
+[Prince sprite bounds](temple-sprite-bounds.md) independently executes real
+LoadFrame/SetupSword/GetCharEdges with original Kid dimensions supplied from
+SHAP headers:33,792 comparisons pass. Collision width includes one extra
+pixel and an optional sword extension; the clipped visible rectangle is
+separate and lives in the actor record. World composition, support/contact
+physics and full FrameAdv are not implied by this isolated bounds proof.
