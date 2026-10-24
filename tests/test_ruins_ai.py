@@ -219,6 +219,25 @@ class RuinsControllerTests(unittest.TestCase):
         self.assertEqual(len(art.frames), 141)
         self.assertEqual({actor.state.actor_type for room in actors.values() for actor in room}, {7, 11})
 
+    def test_the_head_kill_song_waits_for_the_death_count(self):
+        from pop2.game_session import GameResources, GameSession
+
+        combat = GameSession.load(GameResources.load(), 6).combat
+        combat.enter_room(3, 0)
+        combat.player.room = 3
+        head = combat.ruins.actors(3)[0]
+        head.life = 1
+        combat.ruins.stab(head, combat, 1)
+        self.assertNotIn(137, head.state.sound_events)
+        frames = []
+        for frame in range(10):
+            head.state.sound_events.clear()
+            combat.ruins.advance(combat)
+            if 137 in head.state.sound_events:
+                frames.append(frame)
+        # 4:3d24: registration, six counted frames, then 5:4bb8 once.
+        self.assertEqual(frames, [7])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -455,7 +455,33 @@ version moved such heads into the neighbouring room; that was not original
 behavior and is removed. The development map draws heads and serpents at
 their records' starting state.
 
+## Frame Order
+
+Native (frame-phase-order.md): step 4 runs the alerts (2:6e7e/6ee4) before
+the Prince moves; step 6 runs each opponent: LoadFrame, ShapeBounds, the
+drawing setup 3:0ac8 (neck alignment), the control prefix 4:3d24 (death
+registration and count, kill song 5:4bb8 at ALIVE 6) with AutoCtrl (shared
+timers, then 7:1324 or 7:1824), AnimChar, gravity 4:341a, MoveChar 4:3464,
+LoadFrame, 3:0ac8 again, ShapeBounds and CheckBarrier 4:62b0; step 7 runs
+TestStrike/CheckStab for everyone.
+
+The port's `RuinsCreatures.advance`, after the guards in
+`CombatEncounter.step`, keeps that per-actor order: timers, death count,
+the serpent alert, the controller, `next_frame` (AnimChar), then
+`_after_frame` (neck alignment, row opcodes, flight, CheckBarrier); its
+`resolve` runs after every actor, as step 7. Known differences, matching
+the guards' existing convention: the alerts and the neck alignment read the
+Prince after his move of the same frame rather than before (native step 4,
+and the drawn object of the previous frame), and the first 3:0ac8/LoadFrame
+before control is not repeated (the snapped X persists from the previous
+frame, so the controller sees the same X). The kill song now waits for the
+death count (registration, six counted frames) and the OppToFight gate; a
+head killed through a parry (HeadHit 7:08fa) never sets the flag, as in the
+original.
+
 ## Still Open
 
-A native comparison of the per-frame scheduling (the order of control,
-animation, flight, collision and strikes across all actors of a frame).
+The scheduling differences above (alerts and neck point read after the
+Prince's move) and the serpent kill song (5:4c44's skeleton path) are not
+compared natively. A full FrameAdv comparison would need the whole frame
+harness, not just the ruins routines.

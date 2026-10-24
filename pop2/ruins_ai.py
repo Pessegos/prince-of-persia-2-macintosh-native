@@ -93,6 +93,10 @@ class RuinsMind:
     removed: bool = False
     # AlignHeadOnKidNeck 7:0006: this frame's drawing point (scene X, Y).
     neck: tuple | None = None
+    # Native ALIVE after death (-1 while alive) and the kill-song flag
+    # (+0x18, set by the death branch 6:5562).
+    dead_frames: int = -1
+    song_pending: bool = False
 
 
 @dataclass
@@ -930,9 +934,9 @@ class RuinsCreatures:
             self.set_facing(actor, 0 if self.facing(encounter.player) == -1 else -1)
             self.set_tension(1, -1)
             self.jump(actor, 154)
-            actor.state.sound_events.append(137)
         else:
             self.jump(actor, 174)
+        actor.ruins.song_pending = True
         if self.banked is actor:
             self.banked = None
 
@@ -1127,6 +1131,8 @@ class RuinsCreatures:
             encounter.parry_timer = max(0, encounter.parry_timer - 1)
             encounter.advance_pause = max(0, encounter.advance_pause - 1)
             encounter.attack_pause = max(0, encounter.attack_pause - 1)
+            if not actor.alive:
+                self.count_death(actor, encounter)
             if actor.alive:
                 if actor.ruins.actor_type in HEAD_TYPES:
                     self.control_head(actor, encounter)
@@ -1136,6 +1142,30 @@ class RuinsCreatures:
                     self.control_serpent(actor, encounter)
             actor.runtime.next_frame()
             self._after_frame(actor, encounter)
+
+    def count_death(self, actor, encounter):
+        """The NPC control prefix 4:3d24-3d70: register the death (ALIVE 0),
+        count while the kill-song flag is set, and at 6 call 5:4bb8."""
+        mind = actor.ruins
+        if mind.dead_frames < 0:
+            mind.dead_frames = 0
+            return
+        if mind.dead_frames < 6:
+            if mind.song_pending:
+                mind.dead_frames += 1
+            return
+        if not mind.song_pending:
+            return
+        mind.song_pending = False
+        # 5:4c10 (heads: song 137 unless sound 132 is playing) or 5:4c44
+        # (serpents: the skeleton path, here never met); the tail 5:4c9e
+        # needs no opponent still fighting (OppToFight 6:2392).
+        if mind.actor_type not in HEAD_TYPES or encounter_sound_playing(encounter, 132):
+            return
+        fighting = any(other is not actor and other.alive and other.ruins.alert > 0
+                       for other in self.living(actor.room))
+        if not fighting:
+            actor.state.sound_events.append(137)
 
     def _after_frame(self, actor, encounter):
         state = actor.state
