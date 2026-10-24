@@ -1,6 +1,7 @@
 import argparse
 import math
 import time
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -364,6 +365,10 @@ class ScenePrototype(WindowControls):
             game.caverns.configure_torches(renderer.cavern_program.get('torches', {}))
             game.caverns.configure_lava(renderer.cavern_program.get('lava'))
         room = renderer.enter_room(game.room_id, game.caverns)
+        if game.checkpoint is not None and game.caverns is not None and game.checkpoint.caverns is None:
+            # Older progress saves loaded fresh mechanisms but never stored
+            # them in the checkpoint. Keep that initialized baseline for retries.
+            game.checkpoint.caverns = deepcopy(game.caverns)
         self.game, self.level_renderer = game, renderer
         self.palette, self.sword_palette = palette, sword_palette
         self.guard_art, self.health_art, self.hit_art = guard_art, health_art, hit_art

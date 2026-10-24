@@ -113,6 +113,26 @@ class LevelFiveRetrySceneTests(unittest.TestCase):
         self.assertEqual(scene.game.caverns.bridge.pieces, {})
         self.assertEqual(scene.level_map.tile(6, 3, 1).foreground & 255, 0)
 
+    def test_old_progress_save_gets_a_retry_baseline_after_world_initialization(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from pop2.save_game import write_save
+
+        scene = self.scene
+        document = capture(scene.game)
+        del document['resume']['checkpoint']['fields']['caverns']
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'old.pop2save'
+            write_save(path, document)
+            scene.load_game_from(path)
+        self.assertIsNotNone(scene.checkpoint.caverns)
+        self.assertTrue(scene.checkpoint.caverns.torches)
+        scene.game.caverns.plates.foreground[6, 13] = 0x300 | 255
+        scene.game.caverns.bridge.state = 3
+        scene.restart_level_now(redraw=False)
+        self.assertEqual(scene.game.caverns.bridge.state, 0)
+        self.assertEqual(scene.level_map.tile(6, 3, 1).foreground & 255, 0)
+
 
 if __name__ == '__main__':
     unittest.main()

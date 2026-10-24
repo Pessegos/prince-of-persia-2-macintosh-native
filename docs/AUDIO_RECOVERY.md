@@ -57,6 +57,22 @@ Keyboard selection, activation, page controls and wheel navigation also give
 feedback. `tests/test_ui_audio.py` checks PCM, hit targets, muting, rate limits
 and real SDL isolation while gameplay audio is paused.
 
+## Mixed Gameplay Effects
+
+The port's mixed-effects policy allows distinct effects to overlap, with a
+separate gate-movement voice. This is an intentional exception to the native
+single-effect arbitration below, not a recovered Sound Manager rule.
+
+When debris impact 26 and shooter launch 65 arrive in the same simulation
+update, mixed mode keeps the impact and drops that launch transient. Level
+five, room 9's falling floor can activate a shooter-linked button on impact;
+layering both transients made that contact unnecessarily harsh. The trap
+still fires, other effects (including the gate) remain eligible, and an
+already playing launch is not stopped. Standalone launches and original
+single-channel comparison mode are unchanged. Tests cover arbitration in
+`tests/test_debris_audio.py` and the actual contact in
+`tests/test_level5_traps.py`; subjective loudness still needs listening.
+
 ## Recovered Rules
 
 Addresses are CODE segment:offset. `tools/extract_audio.py` expands DATA/ZERO
