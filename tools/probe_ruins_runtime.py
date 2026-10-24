@@ -890,6 +890,154 @@ def run_strike_probe(recovery, cases=20000, seed=2030):
     )
 
 
+class NativeRuinsAnimation(NativeRuinsStab):
+    RANGES = {
+        **NativeRuinsStab.RANGES,
+        4: NativeRuinsStab.RANGES[4] + ((0x2c0c, 0x3050), (0x305e, 0x308a), (0x30e0, 0x3194),
+                                        (0x341a, 0x3462), (0x3464, 0x34e0), (0x48f8, 0x4970),
+                                        (0x3afa, 0x3b24)),
+    }
+    TRAPS = {0xa029, 0xa02a, 0xa049, 0xa04a, 0xa069, 0xa06a}
+    SEQUENCES = 0xc0000
+
+    def __init__(self, program, head, sequences):
+        super().__init__(program, head, sequences)
+        self.sequence_handles = {}
+        cursor = self.SEQUENCES + 0x1000
+        for index, (key, item) in enumerate(sorted(sequences.items())):
+            handle = self.SEQUENCES + index * 4
+            self.cpu.mem_write(handle, struct.pack('>I', cursor))
+            self.cpu.mem_write(cursor, item['data'])
+            self.sequence_handles[key] = handle
+            cursor += (len(item['data']) + 15) & ~15
+
+    def dispatch(self, cpu, address, size, user):
+        if address == self.address(4, 0x2c0c):
+            self.animations += 1
+            NativeRuinsHead.dispatch(self, cpu, address, size, user)
+            return
+        if address == self.address(4, 0x3098):
+            self.skip(cpu, self.sequence_handles.get(self.argument(cpu), 0))
+            return
+        relative = address - self.CODE_BASE
+        if 0 <= relative < 0x200000:
+            opcode = struct.unpack('>H', cpu.mem_read(address, 2))[0]
+            if opcode in self.TRAPS:
+                # Memory-manager traps on the sequence handle are inert here.
+                cpu.reg_write(self.registers['d0'], 0)
+                cpu.reg_write(self.registers['pc'], address + 2)
+                return
+        super().dispatch(cpu, address, size, user)
+
+
+ANIMATED = ('facing', 'x', 'y', 'row', 'pose', 'horizontal_velocity', 'vertical_velocity',
+            'sequence', 'cursor', 'selected', 'special')
+
+
+def run_animation_probe(recovery, cases=2000, seed=2031, frames=30):
+    """AnimChar 4:2c0c, the gravity step 4:341a and MoveChar 4:3464 over whole
+    head and serpent sequences against SequenceRuntime and RuinsCreatures' flight."""
+    from pop2.animation_data import sequence_words
+    from pop2.combat import Fighter
+    from pop2.ruins_ai import RuinsCreatures, RuinsMind
+    from pop2.sequence_runtime import SequenceRuntime, SequenceState
+    from pop2.terrain import floor_y
+
+    directory = Path(recovery) / 'resource_forks'
+    program_bytes = (directory / 'Prince of Persia 2.bin').read_bytes()
+    program, prince_rsrc, head = (parse_resource_fork((directory / name).read_bytes()) for name in
+                                  ('Prince of Persia 2.bin', 'Prince.rsrc.bin', 'Head.rsrc.bin'))
+    level = prince_rsrc['LEVL'][2006]['data']
+    machine = NativeRuinsAnimation(program, head, prince_rsrc['SEQS'])
+    sequences = {key: sequence_words(item['data']) for key, item in prince_rsrc['SEQS'].items()}
+    head_ids = [key for key in range(130, 167) if key in sequences]
+    serpent_ids = [key for key in range(168, 178) if key in sequences]
+    rng = random.Random(seed)
+    counts, started, removed, mismatches = Counter(), Counter(), 0, []
+    for case in range(cases):
+        actor_type = rng.choice((7, 8, 11))
+        sequence = rng.choice(head_ids if actor_type != 11 else serpent_ids)
+        row = rng.randrange(3)
+        facing = rng.choice((-1, 0))
+        x = 207 + rng.randrange(2, 8) * 51 + rng.randrange(51)
+        pose = 150 if actor_type != 11 else 230
+        y = row * 120 + (73 if actor_type != 11 else 106)
+        initial = dict(slot=0, facing=facing, x=x, y=y, actor=actor_type, pose=pose, column=0,
+                       row=row, horizontal_velocity=0, vertical_velocity=0, room=7, armed=1,
+                       alive=-1, life=3, sequence=sequence, cursor=0, selected=sequence,
+                       body_top=18, body_bottom=48, special=0, alert=0)
+        draw_seed = rng.randrange(1 << 30)
+        machine.reset(level)
+        machine.cpu.mem_write(machine.A5 - 0x5056, bytes(62))
+        for name, value in initial.items():
+            machine.put_word(WORKING[name], value)
+        machine.put_word(-0x5098, -1)
+        machine.random = Draws(draw_seed)
+        state = SequenceState(sequence, action=pose, current_x=x - 207, target_x=x - 207,
+                              current_y=y - floor_y(row), facing=1 if facing == 0 else 0,
+                              actor_type=actor_type, selected_sequence_id=sequence)
+        runtime = SequenceRuntime(sequences, state)
+        draws = Draws(draw_seed)
+        runtime.rng = TapeRandom(draws)
+        actor = Fighter(runtime, 3, 3, 6, row, sword_drawn=True)
+        actor.ruins = RuinsMind(actor_type, 8 if actor_type == 11 else 5, 1, 0)
+        creatures = RuinsCreatures()
+        creatures.rooms[6] = [actor]
+        creatures._wall_contact = lambda *_args: None
+        creatures._cross_room = lambda *_args: None
+        encounter = SimpleNamespace(rng=TapeRandom(draws))
+        started[sequence] += 1
+        difference = None
+        for frame in range(frames):
+            machine.call(4, 0x2c0c)
+            native_removed = machine.word(-0x5054) == 0x56
+            if not native_removed:
+                machine.call(4, 0x341a)
+                machine.call(4, 0x3464)
+            native = {name: machine.word(WORKING[name]) for name in ANIMATED}
+            native['pose'] = machine.word(-0x504c)
+            runtime.next_frame()
+            creatures._after_frame(actor, encounter)
+            port = dict(facing=0 if state.facing else -1, x=state.target_x + 207,
+                        y=floor_y(actor.row) + state.current_y, row=actor.row, pose=state.action,
+                        horizontal_velocity=state.horizontal_velocity,
+                        vertical_velocity=state.vertical_velocity, sequence=state.sequence_id,
+                        cursor=state.cursor, selected=state.selected_sequence_id,
+                        special=state.sequence_mode)
+            if native_removed or actor.ruins.removed:
+                if native_removed != actor.ruins.removed:
+                    difference = dict(frame=frame, removed=(native_removed, actor.ruins.removed))
+                else:
+                    removed += 1
+                break
+            keys = [name for name in ANIMATED if native[name] != port[name]]
+            if keys:
+                difference = dict(frame=frame, **{name: (native[name], port[name]) for name in keys})
+                break
+        if machine.sounds != [] and sorted(machine.sounds) != sorted(state.sound_events) and difference is None:
+            difference = dict(sounds=(machine.sounds, state.sound_events))
+        if machine.random.log != draws.log and difference is None:
+            difference = dict(random=(machine.random.log, draws.log))
+        if difference:
+            counts['mismatch'] += 1
+            if len(mismatches) < 40:
+                mismatches.append(dict(case=case, initial=initial, differences=difference))
+        else:
+            counts['match'] += 1
+    return dict(
+        cases=dict(counts), mismatches=counts['mismatch'], removals=removed,
+        requested_sequences=dict(sorted(started.items())), examples=mismatches,
+        executable_sha256=hashlib.sha256(program_bytes).hexdigest(),
+        supplied=['4:3098 hGetSequence: handles to the actual Prince SEQS bytes',
+                  'HLock/HUnlock/HGetState/HSetState: inert', '17:6e06 Rnd: the same seeded outcomes',
+                  '5:4d84 AddSound: recorded', '3:4a8e DrawOppMeter, 6:36f2: supplied'],
+        scope=(f'Up to {frames} frames of AnimChar 4:2c0c, 4:341a and MoveChar 4:3464 from the '
+               'start of every head (130-166) and serpent (168-177) sequence, against '
+               'SequenceRuntime.next_frame and RuinsCreatures._after_frame (wall contact and '
+               'room change disabled). No controller runs between frames.'),
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
@@ -899,8 +1047,9 @@ def main():
     parser.add_argument('--stab', action='store_true')
     parser.add_argument('--prince', action='store_true')
     parser.add_argument('--strike', action='store_true')
+    parser.add_argument('--animation', action='store_true')
     args = parser.parse_args()
-    report = (run_strike_probe if args.strike else run_prince_probe if args.prince else run_stab_probe if args.stab else run_serpent_probe if args.serpents else run_probe)(
+    report = (run_animation_probe if args.animation else run_strike_probe if args.strike else run_prince_probe if args.prince else run_stab_probe if args.stab else run_serpent_probe if args.serpents else run_probe)(
         args.source, args.cases)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')

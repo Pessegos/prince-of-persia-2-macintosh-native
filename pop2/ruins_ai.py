@@ -1142,6 +1142,11 @@ class RuinsCreatures:
             if self.banked is actor:
                 self.banked = None
             return
+        if state.engine_counter:
+            # AnimChar -4/-3 (4:2d88/3030) change the row, not the height.
+            actor.row += state.engine_counter
+            state.current_y -= 120 * state.engine_counter
+            state.engine_counter = 0
         if actor.ruins.actor_type in HEAD_TYPES:
             # MoveChar 4:3464: heads fly with their velocity.
             if state.vertical_velocity:

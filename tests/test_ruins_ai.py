@@ -37,14 +37,19 @@ class RuinsHelperTests(unittest.TestCase):
             def randrange(self, stop):
                 return self.value % stop
 
-        sequences = {1: (-9, 5, -6, -9, 30, 0, 160, -22, 5, 2, 3, 161), 2: (162, -1, 2), 3: (163, -1, 3)}
-        for value, pose in ((1, 162), (0, 163)):
+        state = SequenceState(1, actor_type=7)
+        SequenceRuntime({1: (-9, 5, -6, -9, 30, 0, 160, -1, 1)}, state).next_frame()
+        # AnimChar 4:2cd6: additive, horizontal capped at 24.
+        self.assertEqual((state.horizontal_velocity, state.vertical_velocity), (24, -6))
+        sequences = {1: (160, -22, 5, 2, 3, 161), 2: (170, 171, 172, -1, 2), 3: (180, 181, 182, -1, 3)}
+        for value, pose in ((1, 171), (0, 181)):
             state = SequenceState(1, actor_type=7)
             runtime = SequenceRuntime(sequences, state)
             runtime.rng = Fixed(value)
-            runtime.next_frame()
-            # AnimChar 4:2cd6: additive, horizontal capped at 24.
-            self.assertEqual((state.horizontal_velocity, state.vertical_velocity), (24, -6))
+            self.assertEqual(runtime.next_frame().action, 160)
+            # 4:2df8 selects the new sequence but this frame still reads the
+            # old handle from cursor 0 (the probe found this quirk).
+            self.assertEqual((runtime.next_frame().action, state.sequence_id), (160, 3 - value))
             self.assertEqual(runtime.next_frame().action, pose)
 
 

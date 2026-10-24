@@ -67,7 +67,10 @@ class SequenceRuntime:
         self.max_operations_per_frame = max_operations_per_frame
 
     def _next_word(self):
-        sequence = self.sequences.get(self.state.sequence_id)
+        # After opcode -22 AnimChar keeps reading the old handle (a3) until
+        # the frame ends or a -1 link reloads it (4:2ed4).
+        reading = getattr(self, 'reading', None)
+        sequence = self.sequences.get(self.state.sequence_id if reading is None else reading)
         if sequence is None:
             raise KeyError(f"Missing SEQS resource {self.state.sequence_id}")
         if self.state.cursor >= len(sequence):
@@ -92,6 +95,7 @@ class SequenceRuntime:
             ) from error
 
     def next_frame(self):
+        self.reading = None
         entry_cursor = self.state.cursor
         if self.state.selected_sequence_id is None:
             self.state.selected_sequence_id = self.state.sequence_id
@@ -112,6 +116,7 @@ class SequenceRuntime:
 
             if opcode == -1:
                 target_sequence = self._next_operand(opcode, opcode_cursor)
+                self.reading = None
                 self.state.sequence_id = target_sequence
                 self.state.cursor = 0
             elif opcode == -2:
@@ -217,6 +222,7 @@ class SequenceRuntime:
                 limit = self._next_operand(opcode, opcode_cursor)
                 first = self._next_operand(opcode, opcode_cursor)
                 second = self._next_operand(opcode, opcode_cursor)
+                self.reading = self.state.sequence_id
                 self.state.select(first if self.rng.randrange(limit + 1) else second)
             elif opcode == -21:
                 self.state.sequence_mode = self._next_operand(opcode, opcode_cursor)
