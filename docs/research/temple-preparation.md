@@ -279,3 +279,11 @@ helpers through the real type4 TROB body:26,568 comparisons at all41 anchors
 pass for six explicit phase/position controls. Ordinary/fast/permanent gate
 paths have different actor-copy/sequence/cue ordering. No AnimChar or full
 bank/frame scheduling is inferred from native JumpSeq selection alone.
+
+[Actor clip progression](temple-gate-actor-clip.md) now follows that gate
+selection through native AnimChar and the original SEQS47-to2 link:
+2,952 traces/73,800 operation comparisons pass. The first actor update
+changes mode2 to5 and X+16 before poses50/51/52; the fourth enters idle
+mode0 while retaining selected source47. This is not physical fall proof:
+Y/health remain unchanged without GenCtrl/physics. Resource/handle services
+and the actor-update/copyback schedule remain explicitly supplied.
