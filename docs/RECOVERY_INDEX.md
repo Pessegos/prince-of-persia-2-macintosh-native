@@ -176,6 +176,10 @@ presentation and full FrameAdv in that composition remain P.
 for native StopGate, JumpSeq47 selection/copyback and separate sound29
 admission at all41 original anchors. Supplied type0 actors/resource existence;
 no clip execution, full caller schedule or mixed hanging/contact integration.
+[Connected hanging animation](research/temple-gate-hanging-animation.md)
+adds26,568 comparisons through the real type4 body for six supplied states;
+ordinary/fast/permanent actor effects and cue/redraw order are distinguished.
+Actor animation and full bank/frame scheduling remain P.
 
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.

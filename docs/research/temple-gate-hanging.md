@@ -77,5 +77,7 @@ Only supplied type0 actors and bounded FirstInRow indexes-1..3 are covered.
 Actor1 conversion and special enemy sequence branches are not executed.
 There is no AnimChar/SEQS47 clip execution, fall progression, actual geometry/
 collision/death, complete caller/FrameAdv schedule, sound playback/pixels,
-saves/reset or runtime integration. Next: compose the actor byte effects
-with full gate animation or persistent mixed traces, preserving those bounds.
+saves/reset or runtime integration. The subsequent
+[gate animation composition](temple-gate-hanging-animation.md) now executes
+these effects through the real type4 body in26,568 comparisons. Persistent
+mixed traces and actual actor animation still require separate proof.

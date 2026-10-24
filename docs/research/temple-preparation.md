@@ -273,3 +273,9 @@ JumpSeq47/copyback and the separate sound29 predicate at all41 original
 gate anchors:14,268 comparisons pass. Actor fields and SEQS existence are
 supplied; the clip itself and full caller schedule are not executed. These
 helper proofs do not extend the non-contact mixed-motion trace's scope.
+
+[Hanging gate animation](temple-gate-hanging-animation.md) connects those
+helpers through the real type4 TROB body:26,568 comparisons at all41 anchors
+pass for six explicit phase/position controls. Ordinary/fast/permanent gate
+paths have different actor-copy/sequence/cue ordering. No AnimChar or full
+bank/frame scheduling is inferred from native JumpSeq selection alone.
