@@ -600,8 +600,13 @@ class CombatEncounter:
                 or player.state.animation_state in (3, 4)
                 or player.state.action in (185, 242, 243, 266, 271)):
             return False
-        return any(guard.alive and guard.alert_mode > 0
-                   and guard.state.actor_type != 11 for guard in self.active_guards())
+        if any(guard.alive and guard.alert_mode > 0
+               and guard.state.actor_type != 11 for guard in self.active_guards()):
+            return True
+        # Ruins heads count by their -0x5024 state (3 angry, 1 fleeing);
+        # serpents (type 11) never do.
+        return any(actor.alive and actor.ruins.alert > 0 and actor.state.actor_type != 11
+                   for actor in self.visible_ruins())
 
     @contextmanager
     def _local_opponents(self, guard):

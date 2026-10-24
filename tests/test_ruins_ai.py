@@ -257,6 +257,50 @@ class RuinsControllerTests(unittest.TestCase):
         self.assertEqual(combat.ruins.prince_drawn[0], 19)
         self.assertFalse(combat.ruins.alerts_ready)
 
+    def test_the_ruins_play_their_room_ambient_and_count_angry_heads_as_a_fight(self):
+        from tests.test_terrain import RooftopSceneTests
+        from pop2.environments import environment_for
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(6)
+        combat = scene.game.combat
+        combat.enter_room(6, 0)
+        scene.jump_to_room(6, 0, 330, 1)
+        calls = []
+
+        class Audio:
+            def ambient(self, room, row, column, fighting=False, alive=True, special=None):
+                calls.append((room, row, fighting))
+
+        environment_for(scene).ambient_audio(Audio(), scene.terrain_motion)
+        # PlayAmbient 5:4fd0 with bank 4 (LEVL 0x2186) and the room table.
+        self.assertEqual(calls, [(6, 0, False)])
+        combat.ruins.actors(6)[0].ruins.alert = 3
+        environment_for(scene).ambient_audio(Audio(), scene.terrain_motion)
+        # OppToFight 6:2392: an angry head (-0x5024 = 3) is a fight.
+        self.assertEqual(calls[-1], (6, 0, True))
+
+    def test_the_second_sword_draws_its_own_set(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(7)
+        self.assertEqual(scene.game.sword_type, 2)
+        # LoadSwordSet 3:5a4e: AFRM 25201 (3:5b3e) and SHPL 1200 (3:5ab6).
+        self.assertEqual(scene.sword_set(), 2)
+        self.assertIsNot(scene.attachment_frames, scene.ordinary_attachment_frames)
+        scene.sequence_state.action = 158  # En garde, sword in hand.
+        scene.action = 158
+        sprite = scene.sword_sprite()
+        self.assertIsNotNone(sprite)
+        _kind, index, _dx, _dy = scene.attachment_frames[scene.frames[158].afrm_index]
+        self.assertIn(int.from_bytes(scene.resources.prince['SHPL'][1200]['data'][:2], 'big') + index,
+                      scene.sword_sprite_cache)
+        scene.load_level(6)
+        self.assertIs(scene.attachment_frames, scene.ordinary_attachment_frames)
+
 
 if __name__ == '__main__':
     unittest.main()
