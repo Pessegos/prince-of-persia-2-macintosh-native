@@ -738,6 +738,158 @@ def run_prince_probe(recovery, cases=20000, seed=2029):
     )
 
 
+class NativeRuinsStrike(NativeRuinsStab):
+    RANGES = {
+        **NativeRuinsStab.RANGES,
+        6: NativeRuinsStab.RANGES[6] + ((0x5896, 0x5b28), (0x5b38, 0x5d46), (0x5d60, 0x5e2e),
+                                        (0x5e42, 0x5eb6)),
+        7: NativeRuinsStab.RANGES[7] + ((0x08fa, 0x0934),),
+    }
+
+
+def run_strike_probe(recovery, cases=20000, seed=2030):
+    """CheckStrikes 6:5896 for ruins pairs against RuinsCreatures.contact/test_strike."""
+    from pop2.combat import Fighter
+    from pop2.ruins_ai import PrinceView, RuinsCreatures, RuinsMind
+    from pop2.sequence_runtime import SequenceRuntime, SequenceState
+    from pop2.terrain import LevelMap, floor_y
+
+    directory = Path(recovery) / 'resource_forks'
+    program_bytes = (directory / 'Prince of Persia 2.bin').read_bytes()
+    program, prince_rsrc, head = (parse_resource_fork((directory / name).read_bytes()) for name in
+                                  ('Prince of Persia 2.bin', 'Prince.rsrc.bin', 'Head.rsrc.bin'))
+    level = prince_rsrc['LEVL'][2006]['data']
+    machine = NativeRuinsStrike(program, head, prince_rsrc['SEQS'])
+    slots = [(room, slot, offset, actor) for room, slot, offset, actor in head_slots(level)]
+    slots += [(room, slot, offset, 11) for room, slot, offset in serpent_slots(level)]
+    rng = random.Random(seed)
+    counts, outcomes, mismatches = Counter(), Counter(), []
+    for case in range(cases):
+        room, slot, offset, ruins_type = rng.choice(slots)
+        prince_strikes = rng.random() < 0.5
+        row = rng.randrange(3)
+        x = 207 + rng.randrange(1, 9) * 51 + rng.randrange(51)
+        distance = rng.choice((-40, -20, -5, 0, 5, 20, 31, 32, 40, 55, 56, 62, 70, 79, 80,
+                               92, 93, 99, 110, 126))
+        if ruins_type == 11:
+            ruins_pose = rng.choice((274, 280, 278, 230))
+            ruins_selected = rng.choice((173, 171, 175, 170))
+        else:
+            ruins_pose = rng.choice((165, 166, 167, 181, 150, 154, 159))
+            ruins_selected = rng.choice((147, 150, 151, 166, 140))
+        prince_pose = rng.choice((153, 154, 244, 245, 161, 150, 157, 15) + (161, 150) * 3)
+        prince_selected = rng.choice((75, 96, 2, 110))
+        ruins = dict(facing=rng.choice((-1, 0)), x=x, row=row, actor=ruins_type, pose=ruins_pose,
+                     selected=ruins_selected, armed=rng.choice((1, 1, 0)), alive=-1,
+                     life=rng.choice((1, 3)), special=rng.choice((0, 1, 1, 6)),
+                     y=row * 120 + (73 if ruins_type != 11 else 106) + rng.choice((0, 0, 20)),
+                     room=room, slot=slot)
+        prince = dict(facing=rng.choice((-1, 0)), row=row if rng.random() < 0.9 else (row + 1) % 3,
+                      actor=0, pose=prince_pose, selected=prince_selected,
+                      armed=rng.choice((1, 1, 0)), alive=rng.choice((-1, -1, -1, 0)),
+                      life=rng.choice((3, 3, 0)), special=0, room=room, slot=0,
+                      y=row * 120 + 106 + rng.choice((0, 0, -12, -20)), anim=rng.choice((0, 0, 8)))
+        if prince['life'] == 0:
+            # A Prince with no life whose death is not yet registered (ALIVE
+            # still -1) lasts until his next control prefix 4:3d24; the port
+            # has no such window, so it is not supplied.
+            prince['alive'] = 0
+        striker, defender = (prince, ruins) if prince_strikes else (ruins, prince)
+        sign = 1 if striker['facing'] == 0 else -1
+        striker['x'], defender['x'] = x, x + sign * distance
+        sword_type = rng.choice((1, 2))
+        parry_timer = rng.choice((0, 0, 3))
+
+        machine.reset(level)
+        machine.cpu.mem_write(machine.A5 - 0x5056, bytes(62))
+        cached = bytearray(62)
+        for name in ('facing', 'x', 'y', 'actor', 'pose', 'row', 'armed', 'alive', 'life',
+                     'selected', 'special', 'room', 'slot'):
+            machine.put_word(WORKING[name], striker[name])
+        layout = dict(slot=0, facing=2, x=4, y=6, actor=8, pose=0xa, row=0xe, anim=0x10,
+                      room=0x16, armed=0x1a, alive=0x1c, life=0x1e, selected=0x28, special=0x34)
+        for name, field_offset in layout.items():
+            if name in defender:
+                struct.pack_into('>h', cached, field_offset, defender[name])
+        machine.cpu.mem_write(machine.A5 - 0x5094, bytes(cached))
+        machine.cpu.mem_write(machine.A5 - 0x50d2, bytes(cached))
+        machine.put_word(-0x500a, sword_type)
+        machine.put_word(-0x369e, parry_timer)
+        machine.random = Draws(case)
+        machine.call(4, 0x2a8e) if striker['actor'] != 0 else None
+        machine.call(6, 0x5896)
+        native_hit = machine.word(-0x5084) == 10
+        # 6:5a3c-5a58: a parry stores pose 161 and sets the parry timer to 4.
+        native_parry = machine.word(-0x369e) == 4
+        native_striker = dict(selected=machine.word(-0x502e), life=max(0, machine.word(-0x5038)
+                                                                       + min(0, machine.word(-0x5034))))
+
+        def fighter(values):
+            state = SequenceState(values['selected'], action=values['pose'],
+                                  target_x=values['x'] - 207, current_x=values['x'] - 207,
+                                  current_y=values['y'] - floor_y(values['row']),
+                                  facing=1 if values['facing'] == 0 else 0, actor_type=values['actor'],
+                                  sequence_mode=values['special'], animation_state=values.get('anim', 0),
+                                  selected_sequence_id=values['selected'])
+            actor = Fighter(SequenceRuntime({}, state), values['life'], 3, room - 1, values['row'],
+                            sword_drawn=values['armed'] == 1)
+            actor.runtime.next_frame = lambda: None
+            if values['actor'] != 0:
+                actor.ruins = RuinsMind(values['actor'], 8 if values['actor'] == 11 else 5, 1, slot)
+            if values['actor'] == 0 and values['alive'] >= 0:
+                actor.life = 0  # Native ALIVE >= 0: the port's dead Prince.
+            return actor
+
+        port_striker, port_defender = fighter(striker), fighter(defender)
+        player = port_striker if prince_strikes else port_defender
+        encounter = SimpleNamespace(rng=TapeRandom(Draws(case)), terrain=LevelMap(level),
+                                    player=player, parry_timer=parry_timer, guard_art=None)
+        creatures = RuinsCreatures()
+        ruins_actor = port_defender if prince_strikes else port_striker
+        others = []
+        base = 0x20e6 + room * 0xc0
+        for index in range(struct.unpack_from('>H', level, base)[0]):
+            words = struct.unpack_from('>19h', level, base + 2 + index * 38)
+            others.append(ruins_actor if index == slot else SimpleNamespace(
+                ruins=RuinsMind(0, words[12], words[3], index, mode=words[14])))
+        ruins_actor.ruins.skill = struct.unpack_from('>h', level, offset + 6)[0]
+        creatures.rooms[room - 1] = others
+        view = PrinceView(0, prince['row'], prince['x'], prince['y'], prince['facing'],
+                          prince['pose'], room - 1, prince['alive'], prince['life'],
+                          prince['armed'] == 1, prince['selected'])
+        creatures.prince = lambda _encounter: view
+        result = (creatures.test_strike(port_striker, port_defender, encounter, sword_type)
+                  if creatures.contact(port_striker, port_defender) else None)
+        port_striker_after = dict(selected=port_striker.state.selected_sequence_id,
+                                  life=port_striker.life)
+        differences = {}
+        if native_hit != (result == 'hit'):
+            differences['hit'] = (native_hit, result)
+        if native_parry != (result == 'parry'):
+            differences['parry'] = (native_parry, result)
+        if not prince_strikes and native_striker != port_striker_after:
+            differences['striker'] = (native_striker, port_striker_after)
+        outcomes['hit' if native_hit else 'parry' if native_parry else 'none'] += 1
+        if differences:
+            counts['mismatch'] += 1
+            if len(mismatches) < 40:
+                mismatches.append(dict(case=case, striker=striker, defender=defender,
+                                       sword_type=sword_type, parry_timer=parry_timer,
+                                       differences=differences))
+        else:
+            counts['match'] += 1
+    return dict(
+        cases=dict(counts), mismatches=counts['mismatch'], outcomes=dict(outcomes),
+        examples=mismatches, executable_sha256=hashlib.sha256(program_bytes).hexdigest(),
+        supplied=['4:2c0c AnimChar: skipped on both sides', '5:4d84 AddSound: recorded',
+                  '17:6e06 Rnd: the same seeded outcomes'],
+        scope=('CheckStrikes 6:5896 (IsStrikingPos, IsTheStrikePos, GetCharStrikeRanges, '
+               'the parry and HeadHit 7:08fa) for a head or serpent against the Prince and the '
+               'Prince against a head or serpent, against pop2.ruins_ai contact/test_strike. '
+               'The miss sounds 11/239 are not compared.'),
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
@@ -746,12 +898,14 @@ def main():
     parser.add_argument('--serpents', action='store_true')
     parser.add_argument('--stab', action='store_true')
     parser.add_argument('--prince', action='store_true')
+    parser.add_argument('--strike', action='store_true')
     args = parser.parse_args()
-    report = (run_prince_probe if args.prince else run_stab_probe if args.stab else run_serpent_probe if args.serpents else run_probe)(
+    report = (run_strike_probe if args.strike else run_prince_probe if args.prince else run_stab_probe if args.stab else run_serpent_probe if args.serpents else run_probe)(
         args.source, args.cases)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-    print(json.dumps({key: report[key] for key in ('cases', 'requested_sequences', 'sounds')}, indent=2))
+    print(json.dumps({key: report[key] for key in ('cases', 'requested_sequences', 'sounds', 'outcomes')
+                      if key in report}, indent=2))
 
 
 if __name__ == '__main__':

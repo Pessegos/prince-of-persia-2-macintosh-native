@@ -940,8 +940,7 @@ class RuinsCreatures:
         low, high = (0, 55) if kind in HEAD_TYPES else (61, 99)
         if (striker.state.facing != defender.state.facing and low <= distance <= high
                 and defender.state.actor_type not in (*HEAD_TYPES, SERPENT_TYPE)
-                and kind != SERPENT_TYPE and defender.sword_drawn
-                and defender.state.action in (161, 150)):
+                and kind != SERPENT_TYPE and defender.state.action in (161, 150)):
             # 6:5a3c: the parry; a blocked head is hurt by HeadHit.
             defender.state.action = 161
             encounter.parry_timer = 4

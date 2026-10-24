@@ -367,6 +367,7 @@ python -m tools.probe_ruins_runtime --source PATH_TO_RECOVERY --output rendered/
 | Serpents | 7:1824 with 1dc6/187e/19fe/1b52 | 20,000 | 0 |
 | Struck head/serpent | CheckStab 6:51f2, DecLifePts, flee check, death 6:5562, SetTensionLevel | 20,000 | 0 |
 | Prince bitten/struck | CheckStab 6:51f2 for type 0: wall pushes, unarmed/crouched reactions, fatal sequences, lost sword, ledge fall, death 6:5562, corpse alignment 6:5524/04aa, SetKidDeathMethod | 20,000 | 0 |
+| Strikes | CheckStrikes 6:5896: contact gates, IsStrikingPos, IsTheStrikePos, GetCharStrikeRanges, the parry with HeadHit 7:08fa, the bite flag, both directions | 20,000 | 0 |
 
 States are randomized (seeded) over the actual level-seven head and serpent
 slots, every record mode, the relevant poses and selected sequences, Prince
@@ -399,12 +400,18 @@ the stored column, which those pushes do not recalculate. It also showed
 that corpse alignment 6:04aa shifts toward IsMobFloor cells (11/15/26) as
 well as empty ones; `LevelMap.align_flat_death` now does, for guards too.
 
-Not compared yet: TestStrike's ranges, AnimChar of the head sequences,
+The strike run (`--strike`) found one more: the parry does not require the
+defending Prince to be armed. It excludes a Prince with no life whose death
+is not yet registered (native ALIVE still -1 until his next control prefix
+4:3d24), a window the port does not have; the miss sounds 11/239 are not
+compared.
+
+Not compared yet: AnimChar of the head sequences,
 flight, the wall contact and the per-frame scheduling.
 
 ## Still Open
 
 Neck alignment while biting (AlignHeadOnKidNeck needs the drawn Prince
 object index), the development map, the original cut between rooms, and
-native comparisons of the Prince's side of CheckStab, TestStrike's ranges,
-AnimChar of the head sequences, flight and per-frame scheduling.
+native comparisons of AnimChar on the head sequences, flight, the wall
+contact and per-frame scheduling.
