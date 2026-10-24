@@ -84,7 +84,8 @@ class AssetImportTests(unittest.TestCase):
         self.assertEqual(set(files), {*extract_assets.RESOURCE_FILES, "enemy_profiles.json", "intro.json",
                                      "ending.json", "discovery.json", "attract.json",
                                      "caverns_entry.json", "caverns_level4.json", "caverns_level5.json",
-                                     "ruins_level6.json", "ruins_level7.json", "carpet.json", *(f"tree-{n}.json" for n in extract_assets.TREE_VARIANTS)})
+                                     "ruins_level6.json", "ruins_level7.json", "ruins_level8.json", "ruins_level9.json",
+                                     "carpet.json", *(f"tree-{n}.json" for n in extract_assets.TREE_VARIANTS)})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
         for name in extract_assets.RESOURCE_FILES:
             self.assertEqual((self.output / name).read_bytes(), self.forks[name])
@@ -97,7 +98,8 @@ class AssetImportTests(unittest.TestCase):
         self.assertEqual(self.caverns.call_args.args[1],
                          {3: self.forks['Caverns.rsrc'], 4: self.forks['Caverns.rsrc'],
                           5: self.forks['Caverns.rsrc'], 6: self.forks['Ruins.rsrc'],
-                          7: self.forks['Ruins.rsrc']})
+                          7: self.forks['Ruins.rsrc'], 8: self.forks['Ruins.rsrc'],
+                          9: self.forks['Ruins.rsrc']})
 
     def test_level_four_scenery_failure_preserves_installed_resources(self):
         self.output.mkdir()

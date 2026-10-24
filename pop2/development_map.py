@@ -294,7 +294,7 @@ def cached_development_map(level, fingerprint, directory=None):
     return result
 
 
-def warm_development_maps(levels=(1, 2, 3, 4, 5, 6, 7), directory=None):
+def warm_development_maps(levels=(1, 2, 3, 4, 5, 6, 7, 8, 9), directory=None):
     """Prepare the cached F3 map of every available level.
 
     A code or asset update invalidates the cache; rebuilding a cavern map

@@ -70,7 +70,7 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         # resource forks: they run beside the music and scenes. The scenery
         # is drawn by worker processes, the demo by a single simulation.
         demo = background.submit(extract_attract, program, dict(resources), staging, lambda _text: None)
-        numbers = (3, 4, 5, 6, 7)
+        numbers = (3, 4, 5, 6, 7, 8, 9)
         caverns = background.submit(
             extract_cavern_levels, program, {number: resources[scenery_resource(number)] for number in numbers},
             resources["Prince.rsrc"], staging, progress, workers=os.cpu_count() or 1)

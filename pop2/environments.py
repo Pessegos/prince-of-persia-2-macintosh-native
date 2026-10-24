@@ -916,12 +916,13 @@ class Ruins(Caverns):
 
     def finish_exit(self):
         scene = self.scene
-        if scene.game.level.number == 6:
-            self.finish_via_story(7)
-        elif scene.game.level.number == 7:
-            # Level eight is not available yet.
+        if scene.game.level.number in (6, 7, 8):
+            self.finish_via_story(scene.game.level.number + 1)
+        elif scene.game.level.number == 9:
+            # CheckPlayNIS(9, 10) shows NIS 2 before the temple, neither of
+            # which is available yet.
             scene.game.exit = None
-            scene.status.set('Level 7 complete')
+            scene.status.set('Level 9 complete')
         else:
             scene.start_ending()
 

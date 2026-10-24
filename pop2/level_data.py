@@ -92,7 +92,7 @@ class LevelDefinition:
             return 124
         if self.cliff_start:
             return 2
-        if self.number in (3, 4, 5, 7) and self.kind in (3, 4):
+        if self.number in (3, 4, 5, 7, 8, 9) and self.kind in (3, 4):
             # SetKidDefaults 2:5e34 uses the ordinary standing entry.
             return 5
         raise ValueError(f"Level {self.number} entry controller is not implemented")

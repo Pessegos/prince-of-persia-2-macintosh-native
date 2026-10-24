@@ -11,7 +11,7 @@ from pop2.render_opening import (
 
 class LevelRenderer:
     def __init__(self, level, preload_room=True, retouch_caverns=True):
-        if level.kind != 5 and level.number not in (2, 3, 4, 5, 6, 7):
+        if level.kind != 5 and level.number not in (2, 3, 4, 5, 6, 7, 8, 9):
             raise ValueError(f"Level {level.number} scenery is not implemented (environment {level.kind})")
         self.level = level
         self.retouch_caverns = retouch_caverns

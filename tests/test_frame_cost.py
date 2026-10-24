@@ -23,7 +23,7 @@ from pop2.scene_prototype import ANIMATION_INTERVAL_MS
 # within three quarters of one, so that a room change does not drop a frame.
 STEADY_BUDGET_MS = ANIMATION_INTERVAL_MS / 2
 ENTRY_BUDGET_MS = ANIMATION_INTERVAL_MS * 3 / 4
-LEVELS = (1, 2, 3, 4, 5, 6, 7)
+LEVELS = (1, 2, 3, 4, 5, 6, 7, 8, 9)
 
 
 def level_available(level):

@@ -169,7 +169,7 @@ def cavern_clip_top(terrain, room, row, state, bounds):
 
 # Levels whose scenery is the original renderer's export, by LEVL environment:
 # caverns (3) and ruins (4, levels six and seven).
-SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7)}
+SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7, 8, 9)}
 RUINS_LEVELS = SCENERY_LEVELS[4]
 # CUST room enter hooks loading CTBL over entries 64+ (S03_508A): level five's
 # carpet room (CheckCarpetImg 8:0d30, CTBL 3501) and level six's start room

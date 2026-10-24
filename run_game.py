@@ -116,7 +116,8 @@ def missing_assets(project=PROJECT):
                 missing.append(name + " (needs reimport)")
     for number, name, label in ((3, 'caverns_entry.json', 'three'), (4, 'caverns_level4.json', 'four'),
                                 (5, 'caverns_level5.json', 'five'), (6, 'ruins_level6.json', 'six'),
-                                (7, 'ruins_level7.json', 'seven')):
+                                (7, 'ruins_level7.json', 'seven'), (8, 'ruins_level8.json', 'eight'),
+                                (9, 'ruins_level9.json', 'nine')):
         cavern_path = project / 'assets' / name
         if not cavern_path.is_file():
             continue

@@ -318,7 +318,7 @@ def read_snapshot(path, resources):
         document = json.loads(raw)
         if (not isinstance(document, dict) or document.get('format') != FORMAT
                 or type(document.get('version')) is not int or document['version'] != 1
-                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5, 6, 7)):
+                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5, 6, 7, 8, 9)):
             raise SaveGameError('Unsupported save format or version')
         game = _load_session(resources, document)
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
@@ -523,7 +523,7 @@ def read_document(path):
         document = json.loads(raw)
         if (not isinstance(document, dict) or document.get('format') != FORMAT
                 or type(document.get('version')) is not int or document['version'] not in (1, VERSION)
-                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5, 6, 7)):
+                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5, 6, 7, 8, 9)):
             raise SaveGameError('Unsupported save format or version')
         return document
     except (ValueError, RecursionError) as error:
