@@ -238,6 +238,25 @@ class RuinsControllerTests(unittest.TestCase):
         # 4:3d24: registration, six counted frames, then 5:4bb8 once.
         self.assertEqual(frames, [7])
 
+    def test_alerts_and_the_drawn_prince_are_taken_before_he_moves(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(6)
+        combat = scene.game.combat
+        combat.enter_room(19, 2)
+        scene.jump_to_room(19, 2, 270, 0)
+        calls = []
+        original = combat.ruins.before_prince
+        combat.ruins.before_prince = lambda encounter: (calls.append(encounter.player.state.target_x),
+                                                         original(encounter))
+        RooftopSceneTests.tick(self, 1)
+        # Ruins.frame_start (FrameAdv step 4) ran before the controls.
+        self.assertEqual(calls, [270])
+        self.assertEqual(combat.ruins.prince_drawn[0], 19)
+        self.assertFalse(combat.ruins.alerts_ready)
+
 
 if __name__ == '__main__':
     unittest.main()
