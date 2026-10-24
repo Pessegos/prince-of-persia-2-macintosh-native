@@ -57,9 +57,14 @@ class CavernRoom(OpeningRoom):
     floor_redraw: dict | None = None
     retained_mask: Image.Image | None = None
     gate_occlusion: dict | None = None
+    custom_occlusion: Image.Image | None = None
 
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
         mask = super().actor_mask(row, bottom, state, bounds, record)
+        if self.custom_occlusion is not None:
+            # DrawCustomRoomImgs 3:239e-23b2 repeats the CUST foreground for
+            # every dirty cell, not just its clean-cut admission cell (9, 0).
+            mask = ImageChops.lighter(mask, self.custom_occlusion)
         # CheckGateInFore 3:2722-2762/2860 peels the movable gate over
         # actors in its own/preceding column, except hanging modes 2/6.
         if (not self.gate_occlusion or state is None or record is None
@@ -202,6 +207,25 @@ def scenery_available(level_number):
 
 def scenery_resource(level_number):
     return 'Ruins.rsrc' if level_number in RUINS_LEVELS else 'Caverns.rsrc'
+
+
+def custom_foreground_records(resources, room_id):
+    custom = resources.get('CUST', {}).get(4000 + room_id * 25)
+    if custom is None:
+        return frozenset()
+    data = custom['data']
+    if len(data) < 30:
+        raise ValueError('Truncated custom scenery header')
+    first = struct.unpack_from('>H', data, 2)[0]
+    count = struct.unpack_from('>H', data, 28)[0]
+    if len(data) < 30 + count * 32:
+        raise ValueError('Truncated custom scenery records')
+    records = set()
+    for offset in range(30, 30 + count * 32, 32):
+        index, bottom, x, draw_pass, mode, hidden = struct.unpack_from('>6h', data, offset)
+        if draw_pass == 1 and hidden != -1:
+            records.add((first + index, x, bottom, mode))
+    return frozenset(records)
 
 
 def cavern_assets(level_number=3):
@@ -1047,6 +1071,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     masks = {row: Image.new('L', background.size) for row in range(-1, 5)}
     cell_masks = {} if program.get('version') >= 6 else None
     gate_masks = {}
+    custom_records = custom_foreground_records(resources, room_id)
+    custom_mask = Image.new('L', background.size) if custom_records else None
     # A crevice reveal's redraw paints over the displayed screen: its back
     # pieces also cover the earlier front pieces (slot_variant `redrawn`).
     redraw_start = variant.get('redraw_start', len(commands)) if variant is not None else len(commands)
@@ -1069,6 +1095,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             uncovered = ImageChops.invert(covered)
             foreground.putalpha(ImageChops.multiply(foreground.getchannel('A'), uncovered))
             masks = {mask_row: ImageChops.multiply(mask, uncovered) for mask_row, mask in masks.items()}
+            if custom_mask is not None:
+                custom_mask = ImageChops.multiply(custom_mask, uncovered)
         cell = tuple(command[8:10])
         if layer == 'back' and library == 4 and index in (3563, 3542) and cell in gate_cells:
             # DrawCaveGate anchors the stone one column right of its tile.
@@ -1080,6 +1108,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         if layer == 'front':
             mask = Image.new('L', background.size)
             mask.paste(sprite.getchannel('A'), position)
+            if library == 4 and (index, command[2], command[3], command[4]) in custom_records:
+                custom_mask = ImageChops.lighter(custom_mask, mask)
             if row in masks:
                 masks[row] = ImageChops.lighter(masks[row], mask)
             if cell_masks is not None and len(command) >= 10:
@@ -1125,4 +1155,4 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         background.getchannel('A'), foreground.getchannel('A')))
     background = Image.alpha_composite(Image.new('RGBA', background.size, 'black'), background)
     return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
-                      redraw, floors, retained, gate_masks)
+                      redraw, floors, retained, gate_masks, custom_mask)

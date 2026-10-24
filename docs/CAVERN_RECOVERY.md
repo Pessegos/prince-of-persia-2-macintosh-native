@@ -1229,3 +1229,37 @@ running and cautious approaches at all three traps, both Prince death
 sequences, pause and restart. Pure tests run on CI without game resources.
 Temple-specific behavior, skeleton interactions and a unified shared MOB
 bank are not claimed by this cavern implementation.
+
+## Custom Foreground Beyond Its Admission Cell
+
+The level-five room-three videos exposed two actor leaks: the right-hand
+pillar and the adjacent ascent. Their CUST foreground records (SHAP4057
+and4060/4061) were present, but their clean-cut admission cell was (9,0).
+The actor mask selected only cells touched by the sprite, so a lower actor
+could paint over these images despite being inside their physical bounds.
+
+DrawCustomRoomImgs3:239e-23b2 admits the foreground at (9,0) during a clean
+cut, but at **every dirty cell** when A5-4832 is zero. It is not ordinary
+tile foreground tied to its clean-cut caller. CavernRoom now retains a
+separate full CUST foreground mask, matched against the original room's
+visible pass1 records by shape/position/mode. Ordinary tile masks keep
+their existing cell selection, and later incremental back repaints clear
+the custom mask in the covered region. No collision or sprite changes,
+new replacement artwork, room-specific shape IDs or reimport are needed.
+
+`tools/probe_carpet_room_repaint_music.py` runs the original foreground
+drawer with all30 dirty-cell clips in this room. Recorded CUST shape/clip
+commands produce exactly the retained custom-mask coverage in each cell;
+zero differences. The native scheduler runs, while shape/drawing services,
+dirty rectangles and SHAP raster decoding remain supplied/shared with the
+existing exporter. This is not native QuickDraw pixel equivalence or a
+complete FrameAdv trace. Tests also reject the previous pillar/ascent
+leaks, preserve ordinary cell masking, cover legacy exports and back
+repaints, and check actual actor ink against the covered pixels.
+
+The same probe verifies96 supplied-state ambient admissions and the room
+entry request; see AUDIO_RECOVERY.md. Original executable SHA256:
+`ca2c5886244efa7e19d63fee9317ae5c2341b8a7cc79c7740fdd505575f44bd5`.
+Combined output SHA256:
+`bc43f365a25d5ec151b74bb774f8c62a2f7c99af4aef068e5c6657d63a8c2209`.
+Reports and original resources remain ignored locally.
