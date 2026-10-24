@@ -15,6 +15,7 @@ from itertools import product
 import struct
 
 from pop2.bridge import BRIDGE_LEVEL, BRIDGE_ROOM, BRIDGE_ROW, BRIDGE_TILE
+from pop2.crevices import CREVICE_TILE
 from pop2.slot_drawing import PLANK_STATES, compose_list
 from pop2.terrain import LevelMap
 
@@ -301,7 +302,51 @@ def room_renderer(context, room, recover, progress=lambda _text: None):
               'scythes': [list(pairs[index][0]) for index in scythes],
               'planks': [list(key) for key in bridge],
               'counts': counts, 'door': door}
+    crevices = [unit for unit, group in enumerate(members) if choices[keys[group[0]]][0][0] == CREVICE_TILE]
+    if crevices:
+        record['crevices'] = crevices
     return record, render, counts, unit_cells
+
+
+def crevice_dirty_cells(terrain, room, cells):
+    """Cells of `room` whose redraw a crevice reveal marks (RuinSetCreviceRevealed).
+
+    7:344a marks each revealed cell visible in the room (IsVisibleRoomCell
+    5:3960: the room itself, the left room's last column) and the right
+    neighbour of a run's end (low bits 0, not column 9) through 5:1936,
+    which maps the left/right rooms by -9/+9 and the rooms above/below by
+    -20/+20 (MarkRedraw 5:18f0 keeps indices 0-29).
+    """
+    offsets = {room: 0, terrain.neighbor(room, 'left'): -9, terrain.neighbor(room, 'right'): 9,
+               terrain.neighbor(room, 'up'): -20, terrain.neighbor(room, 'down'): 20}
+
+    def mark(source, cell):
+        return cell + offsets[source] if source in offsets else cell
+
+    dirty = set()
+    for source, cell in cells:
+        if source == room or source == terrain.neighbor(room, 'left') and cell % 10 == 9:
+            dirty.add(mark(source, cell))
+        if terrain.tile(source, cell % 10, cell // 10).foreground & 3 == 0 and cell % 10 != 9:
+            dirty.add(mark(source, cell + 1))
+    return sorted(cell for cell in dirty if 0 <= cell < 30)
+
+
+def crevice_redraw(context, room, record, unit, recover):
+    """The drawing a reveal adds over the displayed room: the dirty cells'
+    drawers in per-cell redraw mode (RedrawCell 3:1d3a, a5-0x4832 = 0), all
+    other units at rest."""
+    keys = [tuple(key) for key in record['cells']]
+    members = record['units']
+    states = [0] * len(members)
+    states[unit] = 1
+    level = bytes(mutate_level(context['level'], context['choices'], keys, members, states, context['clears']))
+    dirty = crevice_dirty_cells(LevelMap(level), room, [keys[index] for index in members[unit]])
+    if not dirty:
+        return []
+    only = frozenset((cell // 10, cell % 10, draw_pass) for cell in dirty for draw_pass in (0, 5, 11, 1))
+    return recover(context['program'], context['caverns'], level, room, context['prince'],
+                   only=only, cell_redraw=True)['commands']
 
 
 def room_slot_scenery(context, room, recover, progress=lambda _text: None):
@@ -310,7 +355,11 @@ def room_slot_scenery(context, room, recover, progress=lambda _text: None):
     if prepared is None:
         return None
     record, render, counts, unit_cells = prepared
-    return {**record, 'lists': room_slot_lists(render, counts, unit_cells)}
+    record = {**record, 'lists': room_slot_lists(render, counts, unit_cells)}
+    if record.get('crevices'):
+        record['redraws'] = {str(unit): crevice_redraw(context, room, record, unit, recover)
+                             for unit in record['crevices']}
+    return record
 
 
 _worker = {}
@@ -353,6 +402,16 @@ def _worker_combinations(task):
     return task[:4], render_combinations(render, counts, name, depends, members, combinations)
 
 
+def _worker_redraw(task):
+    from functools import partial
+    from tools.extract_caverns import recover_room
+
+    level, room, record, unit = task
+    _worker_renderer(level, room)  # The level's recovery machine.
+    recover = partial(recover_room, _machine=_worker['machines'][level])
+    return task[:2], unit, crevice_redraw(_worker['contexts'][level], room, record, unit, recover)
+
+
 def parallel_slot_rooms(contexts, workers, progress=lambda _text: None):
     """{level: {room: record}} for several levels' contexts, by `workers` processes.
 
@@ -388,10 +447,17 @@ def parallel_slot_rooms(contexts, workers, progress=lambda _text: None):
         for done, (key, result) in enumerate(pool.map(_worker_combinations, jobs), 1):
             progress(f'Cavern floor slots: combinations {done}/{len(jobs)}')
             rendered.setdefault(key[:2], {}).setdefault(key[2:], {}).update(result)
+        redraws = {}
+        for key, unit, commands in pool.map(_worker_redraw, [
+                (level, room, record, unit) for (level, room), record in records.items()
+                for unit in record.get('crevices', ())]):
+            redraws.setdefault(key, {})[str(unit)] = commands
     rooms = {level: {} for level in contexts}
     for (level, room), record in records.items():
         rooms[level][room] = {**record, 'lists': assemble_lists(bases[level, room], dependencies[level, room],
                                                                  rendered.get((level, room), {}))}
+        if record.get('crevices'):
+            rooms[level][room]['redraws'] = redraws[level, room]
     return rooms
 
 

@@ -125,7 +125,8 @@ class CavernRecovery:
 
 
 def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=None,
-                 floor_redraw=False, *, _machine=None, _native_scene=False, reads=None, only=None):
+                 floor_redraw=False, *, _machine=None, _native_scene=False, reads=None, only=None,
+                 cell_redraw=False):
     """`reads`, when given, collects {slot: {(room, cell)}} the drawers read.
 
     `only`, a set of (row, column, pass) slots, runs just those slots' drawers
@@ -136,7 +137,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         with CavernRecovery(program, caverns, prince, track_reads=reads is not None) as machine:
             return recover_room(program, caverns, level, room_id, prince, climb_action,
                                 floor_redraw, _machine=machine, _native_scene=_native_scene, reads=reads,
-                                only=only)
+                                only=only, cell_redraw=cell_redraw)
 
     from unicorn.m68k_const import (
         UC_M68K_REG_A5, UC_M68K_REG_A7,
@@ -193,7 +194,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     put_long(a5 - 0x4ab2, 0)  # No actor-specific gate peeling in a static scene.
     # DoCleanCut 2:608c-6096 builds scenery with full-room repaint enabled.
     # Per-cell redraws change the overlap order of adjacent exit pieces.
-    put_word(a5 - 0x4832, int(climb_action is None and not floor_redraw))
+    put_word(a5 - 0x4832, int(climb_action is None and not floor_redraw and not cell_redraw))
     put_word(a5 - 0x4fc2, room_id + 1)
     if climb_action is not None:
         if not 135 <= climb_action <= 144:
@@ -356,7 +357,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             result = terrain.tile(room_id, word(sp + 4) + 1, word(sp + 6)).kind
         elif segment == 3 and offset == 0x26e4:
             result = 0
-        elif segment == 5 and offset == 0x1990 and (climb_action is not None or floor_redraw):
+        elif segment == 5 and offset == 0x1990 and (climb_action is not None or floor_redraw or cell_redraw):
             result = 0  # Dirty-buffer bookkeeping does not emit shape commands.
         if result is not None:
             cpu.reg_write(UC_M68K_REG_D0, result)
@@ -478,7 +479,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                     # ComputeClipRect is only used for subsequent dirty cells.
                     # RedrawCellFast 3:1c64-1d38 visits bottom-up, then the border.
                     cpu.mem_write(a5 - 0x4600, bytes(cpu.mem_read(a5 - 0x4fec, 8)))
-                    if floor_redraw:
+                    if floor_redraw or cell_redraw:
                         # GetCells/ComputeClipRect supplies the dirty cell clip;
                         # RedrawCell intersects it with QuickFloor's actor rect.
                         cpu.mem_write(a5 - 0x4600, struct.pack('>4h',
