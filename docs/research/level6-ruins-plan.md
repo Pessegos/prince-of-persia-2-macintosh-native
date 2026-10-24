@@ -119,6 +119,30 @@ combined with them. Saves keep the entrance. Levels seven and eight start
 with sword type 2 (3:61ec). Level seven's own site 5:09a0/0a74/0b68 is in
 the exported drawing.
 
+## Crevice Reveal Drawing And Crawling (2026-10-24)
+
+User report: an uncovered crevice showed the wrong wall art. RuinSetCrevice
+Revealed (7:3404 -> 7:332a -> 7:344a) sets bit 0x80 on the run and, for each
+cell it uncovers, MarkRedraw (5:18f0 via 5:1936) if IsVisibleRoomCell
+(5:3960: the room itself, or column 9 of the left room, mapped -9), plus
+the cell right of a run end (low bits 0, column < 9). RedrawCell (3:1d3a)
+then repaints only those cells, with the full-room flag a5-0x4832 clear,
+over the displayed screen: the wall above the tunnel stays. The harness has
+this per-cell mode (`cell_redraw`); the slot export stores each crevice
+run's redraw (`redraws`), drawn over the covered run until the room is
+entered again, when the whole room is redrawn natively (with the revealed
+backdrop). Older exports keep the whole-room drawing; reimport needed.
+
+Crawling: the port's rules match the original's code. A prone body passes
+any crevice whose low bits are not 3, covered or not (CheckCollide 4:5ade:
+shape height a5-0x3560 <= 34); lying down (GenCtrl 6:0a4e-0b28) first moves
+a left-facing Prince to at least 34 pixels right of the crevice's column.
+From there SEQS 125's frame 259 (35 pixels high, so still a wall) reaches
+the barrier GetRightBarr = column x + 22 + 50 when the Prince had walked
+flush against the crack (a repeated bump, SEQS 47); from one step back
+(standing left edge >= 104 in native room 18) he lies down and crawls
+through. Whether the original also bumps from flush is unverified in play.
+
 ## Remaining Steps
 
 1. Heads and serpents: level six has special opponents in rooms 4, 7, 16,
