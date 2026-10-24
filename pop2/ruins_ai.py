@@ -10,6 +10,7 @@ so none of the guard AI paths sees them.
 """
 
 from dataclasses import dataclass, field
+import struct
 
 from pop2.coordinates import NATIVE_X_ORIGIN, scene_x
 from pop2.opponent_generation import EMPTY_TILES, WALL_TILES, character_column
@@ -90,6 +91,8 @@ class RuinsMind:
     song: int = 0
     alert: int = 0
     removed: bool = False
+    # AlignHeadOnKidNeck 7:0006: this frame's drawing point (scene X, Y).
+    neck: tuple | None = None
 
 
 @dataclass
@@ -1142,6 +1145,7 @@ class RuinsCreatures:
             if self.banked is actor:
                 self.banked = None
             return
+        self.align_on_neck(actor, encounter)
         if state.engine_counter:
             # AnimChar -4/-3 (4:2d88/3030) change the row, not the height.
             actor.row += state.engine_counter
@@ -1184,6 +1188,38 @@ class RuinsCreatures:
         if self.banked is actor:
             self.banked = None
 
+    def align_on_neck(self, actor, encounter):
+        """AlignHeadOnKidNeck 7:0006, run by the head's drawing setup
+        (3:0b32-0b9c) while its special flag is 1 (the bite frames)."""
+        mind, state = actor.ruins, actor.state
+        mind.neck = None
+        if mind.actor_type not in HEAD_TYPES or state.sequence_mode != 1:
+            return
+        table, frames = neck_table(), getattr(encounter, 'player_frames', None)
+        art = getattr(encounter, 'guard_art', None)
+        player = getattr(encounter, 'player', None)
+        if table is None or frames is None or art is None or player is None or player.room != actor.room:
+            return
+        record = frames[player.state.action]
+        if record.shape_index < 0:
+            return
+        # The Prince's drawn object (GetObj 3:3e7c kind 2): his drawing point.
+        offset = record.offset_x if player.state.facing else -record.offset_x
+        point_x = player.state.target_x + offset
+        point_y = floor_y(player.row) + player.state.current_y + record.offset_y
+        dy, dx = table[record.shape_index]
+        body = art.body(state)
+        width = body.width if body is not None else 0
+        if self.facing(actor) == self.facing(player):
+            dx = -dx - width - (17 if mind.actor_type == 7 else 25)
+        if mind.actor_type == 8:
+            dx += 10
+        if self.facing(actor) == 0:
+            dx = -dx
+        mind.neck = (point_x + dx, point_y + dy)
+        # The working X becomes the drawing X + 207; Y is left alone.
+        state.target_x = state.current_x = point_x + dx
+
     def _wall_contact(self, actor, encounter):
         # Port approximation of CheckBarrier 4:62b0 -> HeadEnemyCollide
         # 7:0b6e: an armed head inside a wall or closed gate is pushed out.
@@ -1213,6 +1249,21 @@ class RuinsCreatures:
 
 
 _HEAD_FRAMES = []
+_NECK_TABLE = []
+
+
+def neck_table():
+    """Head.rsrc's type-zero 755: (dy, dx) per Kid shape index."""
+    if not _NECK_TABLE:
+        try:
+            from pop2.render_opening import load_resource_file
+
+            data = load_resource_file('Head.rsrc')['\0\0\0\0'][755]['data']
+            _NECK_TABLE.append([struct.unpack_from('>2h', data, offset)
+                                for offset in range(0, len(data), 4)])
+        except (OSError, KeyError):
+            _NECK_TABLE.append(None)
+    return _NECK_TABLE[0]
 
 
 def head_frames():

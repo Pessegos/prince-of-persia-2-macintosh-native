@@ -2,7 +2,7 @@ import argparse
 import math
 import time
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageOps
@@ -3504,10 +3504,17 @@ class ScenePrototype(WindowControls):
             for guard in (*combat.visible_guards(), *combat.visible_ruins()):
                 layer = Image.new("RGBA", frame.size)
                 ground = floor_y(guard.row) + environment.draw_sag(guard)
-                self.guard_art.draw(layer, guard.state, ground, guard.palette_variant)
-                bounds = self.guard_art.bounds(guard.state, ground)
                 record = self.guard_art.frames[actor_frame_index(guard.state)]
-                actors.append((guard.state, record, bounds, guard.row, layer))
+                state = guard.state
+                neck = getattr(guard.ruins, 'neck', None) if guard.ruins is not None else None
+                if neck is not None:
+                    # AlignHeadOnKidNeck 7:0006 gives the drawing point itself.
+                    shift = record.offset_x if state.facing else -record.offset_x
+                    state = replace(state, target_x=neck[0] - shift,
+                                    current_y=neck[1] - ground - record.offset_y)
+                self.guard_art.draw(layer, state, ground, guard.palette_variant)
+                bounds = self.guard_art.bounds(state, ground)
+                actors.append((state, record, bounds, guard.row, layer))
         player_layer = Image.new("RGBA", frame.size)
         draw_state, draw_height = environment.drawn_player(self.sequence_state)
         draw_action = self.action if draw_height is None else draw_state.action

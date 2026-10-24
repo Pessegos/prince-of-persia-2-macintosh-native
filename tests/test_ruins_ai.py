@@ -191,6 +191,38 @@ class RuinsControllerTests(unittest.TestCase):
         self.assertNotIn(head, combat.ruins.actors(6))
         self.assertEqual(head.state.target_x, 470)
 
+    def test_a_biting_head_is_drawn_on_the_princes_neck(self):
+        from dataclasses import replace
+        from tests.test_terrain import RooftopSceneTests
+        from pop2.combat import actor_frame_index
+        from pop2.terrain import floor_y
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(7)
+        combat = scene.game.combat
+        combat.enter_room(21, 0)
+        scene.jump_to_room(21, 0, 250, 1)
+        for _ in range(300):
+            RooftopSceneTests.tick(self, 1)
+            heads = [head for head in combat.ruins.actors(21) if head.ruins.neck]
+            if heads:
+                break
+        self.assertTrue(heads)
+        head = heads[0]
+        # AlignHeadOnKidNeck 7:0006: the working X is the drawing X.
+        self.assertEqual(head.state.target_x, head.ruins.neck[0])
+        record = scene.guard_art.frames[actor_frame_index(head.state)]
+        shift = record.offset_x if head.state.facing else -record.offset_x
+        ground = floor_y(head.row)
+        drawn = replace(head.state, target_x=head.ruins.neck[0] - shift,
+                        current_y=head.ruins.neck[1] - ground - record.offset_y)
+        left, top, right, bottom = scene.guard_art.bounds(drawn, ground)
+        prince = scene.player_bounds()
+        self.assertTrue(left <= prince[2] and prince[0] <= right)
+        self.assertTrue(prince[1] - 40 <= bottom <= prince[1] + 40)
+        scene.render()
+
 
 if __name__ == '__main__':
     unittest.main()
