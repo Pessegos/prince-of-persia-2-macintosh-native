@@ -1162,6 +1162,8 @@ class RuinsCreatures:
         # Port approximation of the cut 2:6680-6700: an actor whose
         # supporting column leaves 0..9 (or whose row leaves 0..2) moves to
         # that neighbour's records, where entering restarts it at rest.
+        if not actor.alive:
+            return  # A dying actor finishes its fall where it is (SEQS -17).
         column = self.column(actor, encounter)
         if 0 <= column <= 9 and 0 <= actor.row <= 2:
             return

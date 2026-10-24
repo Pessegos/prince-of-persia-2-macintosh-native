@@ -100,7 +100,12 @@ class RuinsControllerTests(unittest.TestCase):
         self.assertEqual((head.life, head.state.source_sequence_id), (1, 153))
         combat.ruins.stab(head, combat, 1)
         self.assertEqual((head.alive, head.state.source_sequence_id), (False, 154))
-        RooftopSceneTests.tick(self, 40)
+        # SEQS 154 ends with -17 (removal); a wall on the way back sends a
+        # dead head through 164/145 first (HeadEnemyCollide), which is longer.
+        for _ in range(120):
+            RooftopSceneTests.tick(self, 1)
+            if head.ruins.removed:
+                break
         self.assertTrue(head.ruins.removed)
         self.assertNotIn(head, combat.visible_ruins())
 
