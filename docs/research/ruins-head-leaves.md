@@ -338,9 +338,7 @@ riposte with 66). The port selects 96 when the nearest living ruins actor
 (6:36f2) is a serpent. The opponent meter shows the banked head
 (HeadGetAngry 7:0fc6-0fea, a5-0x505a) while it lives in the Prince's room.
 
-Port approximations: the wall contact (an armed head inside a wall or
-closed gate cell is pushed back 22 pixels instead of the full CheckBarrier
-4:62b0 distances); the column read live from the pose instead of the value
+Port approximations: the column read live from the pose instead of the value
 cached at LoadFrame; IsSoundPlaying is not consulted; the kill song 137 plays at
 death rather than when native ALIVE reaches 6. Rebirth checkpoints (and so
 saves, which keep the checkpoint) carry the ruins actors: killed heads and
@@ -367,6 +365,7 @@ python -m tools.probe_ruins_runtime --source PATH_TO_RECOVERY --output rendered/
 | Prince bitten/struck | CheckStab 6:51f2 for type 0: wall pushes, unarmed/crouched reactions, fatal sequences, lost sword, ledge fall, death 6:5562, corpse alignment 6:5524/04aa, SetKidDeathMethod | 20,000 | 0 |
 | Strikes | CheckStrikes 6:5896: contact gates, IsStrikingPos, IsTheStrikePos, GetCharStrikeRanges, the parry with HeadHit 7:08fa, the bite flag, both directions | 20,000 | 0 |
 | Animation and flight | AnimChar 4:2c0c, 4:341a and MoveChar 4:3464 for 30 frames from the start of every head and serpent sequence | 20,000 | 0 |
+| Wall contact | CheckBarrier 4:62b0 with the drawing setup 3:0ac8, ShapeBounds 4:5cbc, GetBarrDistFromFace/Back and HeadEnemyCollide 7:0b6e | 20,000 | 2 (see below) |
 
 States are randomized (seeded) over the actual level-seven head and serpent
 slots, every record mode, the relevant poses and selected sequences, Prince
@@ -413,8 +412,21 @@ after -22 picks a sequence, the rest of that frame still reads the OLD
 sequence's words from cursor 0 (AnimChar keeps its handle until a -1 link
 reloads it), so SEQS 165 -> 226 first shows 165's pose 173.
 
-Not compared yet: the wall contact, the room change and the per-frame
-scheduling.
+The wall-contact run (`--barrier`) replaces the earlier approximation with
+the translated CheckBarrier: barrier cells (here, else ahead), barrier types
+4:52bc and the edge tables, the face/back distances from the body edges of
+ShapeBounds (drawing point, image width + 1), the 5-pixel clamp, then
+HeadEnemyCollide (pushed out by -22 - face; 157 alive, else 164 with the
+column snap or 145, and DecLifePts(100)) or the general push with 158. Image
+sizes come from the Head SHAP headers; SectRect is supplied (the body stays
+on screen). It found that 4:64fc reads the selected sequence again after
+HeadEnemyCollide may have jumped to 145. The two remaining cases are a head
+at column 0 inside a wall whose left neighbour is missing: the original reads
+that cell as room 0, which 4:3b30 then matches against a zero link and snaps
+the head 510 pixels to the right; the port keeps it in place. Special flag 1
+(neck drawing) and the imageless pose 289 are not supplied.
+
+Not compared yet: the per-frame scheduling.
 
 ## Neck Alignment In Play
 

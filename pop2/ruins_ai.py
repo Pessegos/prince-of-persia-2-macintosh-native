@@ -272,8 +272,9 @@ class RuinsCreatures:
         art = getattr(encounter, 'guard_art', None)
         height = 30
         if art is not None:
+            # ShapeBounds 4:5cbc: the viewport-clipped body rectangle.
             left, top, right, bottom = art.bounds(actor.state, floor_y(actor.row))
-            height = bottom - top
+            height = max(0, min(365, bottom + 1) - max(0, top))
         height += 46 if actor.ruins.actor_type == 7 else 33
         return 2 * ((tile.foreground & 255) >> 2) + 11 < height + 13
 
@@ -1193,33 +1194,115 @@ class RuinsCreatures:
         # The working X becomes the drawing X + 207; Y is left alone.
         state.target_x = state.current_x = point_x + dx
 
-    def _wall_contact(self, actor, encounter):
-        # Port approximation of CheckBarrier 4:62b0 -> HeadEnemyCollide
-        # 7:0b6e: an armed head inside a wall or closed gate is pushed out.
-        if not actor.sword_drawn and actor.state.source_sequence_id != 164:
-            return
-        tile = self.here(actor, encounter)
-        if not (is_wall(tile.kind) or tile.kind == 4 and self.gate_blocks(actor, encounter, tile)):
-            return
-        if actor.state.sequence_mode == 1:
-            return
-        self.set_native_x(actor, self.add_char_x(actor, -22))
-        selected = actor.state.source_sequence_id
-        if actor.alive and selected != 153:
-            self.jump(actor, 157)
-        elif selected != 164:
-            if actor.state.action <= 191:
-                self.jump(actor, 164)
-                column = self.column(actor, encounter)
-                anchor = NATIVE_X_ORIGIN + column * 51 + (51 if self.facing(actor) == -1 else 0)
-                self.set_native_x(actor, anchor + 22)
-            else:
-                self.jump(actor, 145)
-            actor.life = 0
+    def body_edges(self, actor, encounter):
+        """ShapeBounds 4:5cbc for a head: native left/right edges and the
+        width (image width + 1), from its drawing point."""
+        art = getattr(encounter, 'guard_art', None)
+        body = art.body(actor.state) if art is not None else None
+        if body is None:
+            return None
+        record = art.frames[frame_index(actor.ruins.actor_type, actor.state.action)]
+        if actor.ruins.neck is not None:
+            point = actor.ruins.neck[0] + NATIVE_X_ORIGIN
         else:
-            return
-        actor.runtime.next_frame()
+            point = self.add_char_x(actor, record.offset_x)
+        width = body.width + 1
+        if self.facing(actor) == 0:
+            return point - width, point, width, body.height
+        return point, point + width, width, body.height
 
+    def _wall_contact(self, actor, encounter):
+        """CheckBarrier 4:62b0 for a head, with HeadEnemyCollide 7:0b6e."""
+        state, mind = actor.state, actor.ruins
+        if mind.actor_type not in HEAD_TYPES:
+            return  # 4:5654: serpents never meet a barrier.
+        selected = state.source_sequence_id
+        if (state.animation_state != 0 and selected == 164 or not actor.sword_drawn
+                or selected == 58):
+            return
+        column = self.column(actor, encounter)
+        direction = 1 if state.facing else -1
+
+        def blocking(tile):
+            return is_wall(tile.kind) or tile.kind == 4 and self.gate_blocks(actor, encounter, tile)
+
+        cell = None
+        for offset in (0, direction):
+            tile = self.tile(encounter, actor.room, column + offset, actor.row)
+            if blocking(tile):
+                cell, cell_column = tile, column + offset
+                break
+        if cell is None:
+            return
+        edges = self.body_edges(actor, encounter)
+        # 4:5654: kinds 10 and 12 are no barrier for heads; a gate only blocks.
+        if edges is None or cell.kind in (10, 12) or cell.kind == 4 and not self.gate_blocks(
+                actor, encounter, cell):
+            return
+        left, right, width, height = edges
+        cell_x = NATIVE_X_ORIGIN + cell_column * 51 + 22
+        # GetBarrierType 4:52bc and the edge tables a5-0x3620/-0x360e.
+        barrier = {2: 4, 25: 4, 20: 4, 4: 1, 12: 6}.get(cell.kind, 0)
+        if cell.kind == 7:
+            barrier = 4 if height > 34 else 2
+        level = getattr(encounter, 'level', None)
+        if (cell.kind == 4 and level is not None and actor.room == 8
+                and struct.unpack_from('>H', level, 0x218a)[0] == 8):
+            barrier = 8  # 4:532e-5344: level eight's room 9 gates.
+        face_offset = (0, 40, 0, -22, 3, 18, 8, 0, 16, 0)[barrier]
+        back_offset = (0, 0, 50, -22, 0, 0, 16, 0, 24, 0)[barrier]
+
+        def face():
+            # GetBarrDistFromFace 4:6562.
+            if barrier == 0:
+                return -1
+            if self.facing(actor) == 0:
+                return cell_x + face_offset - right
+            return left - (cell_x + 50 - back_offset)
+
+        def back():
+            # GetBarrDistFromBack 4:6610.
+            if barrier == 0:
+                return 200
+            if self.facing(actor) == 0:
+                return left - (cell_x + 50 - back_offset)
+            return cell_x + face_offset - right
+
+        to_face, to_back = face(), back()
+        nearest = to_face if abs(to_face) < abs(to_back) else to_back
+        if abs(nearest) < 5:
+            if nearest:
+                nearest = -5 if nearest < 0 else 5
+            else:
+                nearest = 5 if (to_face or to_back) >= 0 else -5
+            if is_wall(cell.kind) and nearest < 0 and abs(to_face) < 5:
+                nearest = -nearest
+        result = -1
+        if (state.sequence_mode != 1 and to_face < 5 and to_face >= -width):
+            # HeadEnemyCollide 7:0b6e: pushed out of the wall.
+            self.set_native_x(actor, self.add_char_x(actor, -22 - to_face))
+            if actor.alive and selected != 153:
+                result = 157
+            elif selected != 164:
+                if state.action <= 191:
+                    result = 164
+                    anchor = NATIVE_X_ORIGIN + cell_column * 51 + 22
+                    self.set_native_x(actor, anchor + (51 if self.facing(actor) == -1 else 0))
+                else:
+                    self.jump(actor, 145)
+                actor.life = 0
+        if result == -1 and nearest < 5 and nearest >= -width:
+            if (cell.kind == 4 and nearest > 0
+                    or is_wall(cell.kind) and nearest < 0 and nearest == to_face):
+                nearest = -nearest
+            self.set_native_x(actor, self.add_char_x(actor, -nearest))
+            # 4:64fc reads the selected sequence again: HeadEnemyCollide may
+            # have just jumped to 145.
+            if state.source_sequence_id not in (145, 164) and state.sequence_mode != 1:
+                result = 158
+        if result != -1:
+            self.jump(actor, result)
+            actor.runtime.next_frame()
 
 _HEAD_FRAMES = []
 _NECK_TABLE = []
