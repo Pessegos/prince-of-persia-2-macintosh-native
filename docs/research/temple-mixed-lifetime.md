@@ -106,6 +106,8 @@ guarded and are not reached. Compared-output digest is
 `578e76562e31998f27fb0eafbed8633fa8ca13f1d1d3822b9320e796ce5cbc03`.
 
 Four asset-free actor-copy tests plus a service-boundary regression cover
-the new variant. Next bounded work: connect rock movement. Hanging
-reactions, geometry and whole-game timing require their own evidence;
-relief alone is not collision or damage evidence.
+the new variant. The [mixed rock-motion probe](temple-mixed-rock-motion.md)
+now connects real geometry/motion and both bank lifetimes in192 traces/
+83,040 comparisons, explicitly excluding actor contact. Hanging reactions,
+actor geometry and whole-game timing require their own evidence; relief
+alone is not collision or damage evidence.

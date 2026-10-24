@@ -262,4 +262,20 @@ The same real callees now run inside the120 persistent mixed traces via
 `--native-gate-services`:14,784 comparisons pass, including64 full LoadKid
 copies and30 native relief rejections. Current actor/FRAM inputs are supplied
 afresh before each operation, not evolved through a native Prince controller.
-Mixed rock movement is the next separate boundary.
+[Mixed rock motion](temple-mixed-rock-motion.md) now joins real geometry/
+motion/crush admission and both bank compactions to the plate/gate chain:
+192 traces/83,040 comparisons pass, with saved Prince room0/frame0 deliberately
+excluding actor reactions. Working actors and both call orders remain supplied;
+this is not full FrameAdv, reachable gameplay or a damage timeline.
+
+[Gate hanging helpers](temple-gate-hanging.md) now cover native StopGate /
+JumpSeq47/copyback and the separate sound29 predicate at all41 original
+gate anchors:14,268 comparisons pass. Actor fields and SEQS existence are
+supplied; the clip itself and full caller schedule are not executed. These
+helper proofs do not extend the non-contact mixed-motion trace's scope.
+
+[Hanging gate animation](temple-gate-hanging-animation.md) connects those
+helpers through the real type4 TROB body:26,568 comparisons at all41 anchors
+pass for six explicit phase/position controls. Ordinary/fast/permanent gate
+paths have different actor-copy/sequence/cue ordering. No AnimChar or full
+bank/frame scheduling is inferred from native JumpSeq selection alone.

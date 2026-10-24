@@ -167,7 +167,19 @@ execute both real bodies, with only sound/redraw supplied. Earlier gate/mixed
 v2 reports preserve their transition counts and correct those semantic names.
 The real callees also pass inside the120 persistent mixed traces/14,784
 comparisons; working-actor copies are checked while actor/FRAM inputs remain
-explicitly resupplied per operation. Mixed rock movement is still P.
+explicitly resupplied per operation. [Mixed rock motion](research/temple-mixed-rock-motion.md)
+now extends R to real geometry/motion/crush admission and both bank lifetimes:
+192 traces/83,040 comparisons, explicitly no actor contact. Actor consequences,
+presentation and full FrameAdv in that composition remain P.
+
+[Hanging gate helpers](research/temple-gate-hanging.md) add14,268 comparisons
+for native StopGate, JumpSeq47 selection/copyback and separate sound29
+admission at all41 original anchors. Supplied type0 actors/resource existence;
+no clip execution, full caller schedule or mixed hanging/contact integration.
+[Connected hanging animation](research/temple-gate-hanging-animation.md)
+adds26,568 comparisons through the real type4 body for six supplied states;
+ordinary/fast/permanent actor effects and cue/redraw order are distinguished.
+Actor animation and full bank/frame scheduling remain P.
 
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
