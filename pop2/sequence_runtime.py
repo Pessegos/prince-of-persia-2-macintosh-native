@@ -193,6 +193,31 @@ class SequenceRuntime:
                 # 4:2f72 calls SetCharFloor, not ShakeEm. Terrain owns
                 # physical row/height; retain the alignment notification.
                 self.state.sequence_events.append((opcode, ()))
+                if self.state.actor_type in (7, 8):
+                    # Floating heads have no terrain owner: 4:321c's -33.
+                    self.state.current_y = -33
+            elif opcode == -9:
+                # AnimChar 4:2cd6-2d52: additive velocity, capped at 24/63.
+                dx = self._next_operand(opcode, opcode_cursor)
+                dy = self._next_operand(opcode, opcode_cursor)
+                state = self.state
+                if dx and state.horizontal_velocity < 24 and (
+                        not state.vertical_velocity or state.vertical_velocity < 63):
+                    state.horizontal_velocity = min(state.horizontal_velocity + dx, 24)
+                if dy and state.vertical_velocity < 63:
+                    state.vertical_velocity = min(state.vertical_velocity + dy, 63)
+            elif opcode == -17 and getattr(self, 'rng', None) is not None:
+                # 4:48f8 removes the actor; the ruins host acts on the event.
+                self.state.sequence_events.append((opcode, ()))
+                return SequenceFrame(self.state.sequence_id, self.state.action,
+                                     self.state.current_x, self.state.target_x,
+                                     self.state.current_y, self.state.animation_state)
+            elif opcode == -22 and getattr(self, 'rng', None) is not None:
+                # 4:2df8: JumpSeq a when Rnd(n) != 0, else b (17:6e06 inclusive).
+                limit = self._next_operand(opcode, opcode_cursor)
+                first = self._next_operand(opcode, opcode_cursor)
+                second = self._next_operand(opcode, opcode_cursor)
+                self.state.select(first if self.rng.randrange(limit + 1) else second)
             elif opcode == -21:
                 self.state.sequence_mode = self._next_operand(opcode, opcode_cursor)
             elif opcode == -23:

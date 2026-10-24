@@ -16,8 +16,9 @@ armed -0x503c, special flag -0x5022, head state -0x5024 (3 angry, 1 flee,
 0 peaceful), slot -0x5056.
 
 Cached opponent (the Prince, copied by 4:3272): column -0x5088, row
--0x5086, X -0x5090, pose -0x508a, room -0x507e, life -0x5078, life gate
--0x5076, selected SEQS -0x506c, -0x507a (tested == 1 below).
+-0x5086, X -0x5090, pose -0x508a, room -0x507e, native ALIVE -0x5078 (negative
+while alive, then a death counter; Codex: recovery notes), life points
+-0x5076, selected SEQS -0x506c, armed -0x507a (+0x1a; tested == 1 below).
 
 Record pointer `info` = generator record + 0x1c: `info[0]` mode (0 idle,
 1 attack, 2 flee, 3 locked), `info[2]` destination column (locked: bite
@@ -71,12 +72,12 @@ poses 150, 165, 166, 159 or 173:
 3. Same row and dc < 2: direction toward the Prince (1 if X < Prince X,
    else 0). If dc == 0 or movement in that direction is admitted
    (7:0936): JumpSeq 147 (swoop) unless already. Otherwise, unless
-   already 166, if ChompAgain-style random test 7:17c8(Y, 30) passes,
+   already 166, if Y is within 30 of its cell's vertical middle (7:17c8),
    JumpSeq 166 (hover).
 4. dc == 0 and dr == 1, and moving `seen` is admitted: JumpSeq 143 if the
    head is below the Prince's row (row > Prince row) else 144.
-5. `seen == 4` (same cell): unless dc|dr == 0 or already 166, random
-   7:17c8(Y, 30) -> JumpSeq 166.
+5. `seen == 4` (same cell): unless dc|dr == 0 or already 166, Y
+   within 30 of the cell's middle (7:17c8) -> JumpSeq 166.
 6. Otherwise destination = Prince cell. For `seen` 2 or 3 (vertical)
    that is not admitted, use the horizontal direction toward the Prince
    instead. If that direction is admitted: 3 -> 143, 2 -> 144, horizontal
@@ -109,8 +110,8 @@ window end` in the Prince's row and not SEQS 144: AddSound 134.
 ## HeadLockedProg 7:1164 (bite)
 
 At SEQS 150 on pose 167 (or with special flag 1), or at SEQS 151 on pose
-166: if ChompAgain (7:0494) says to bite again: when the Prince's life
-`-0x5078 < 0` (no life left) increment `info[2]` and JumpSeq 150 (from
+166: if ChompAgain (7:0494) says to bite again: while the Prince is alive
+(native ALIVE `-0x5078 < 0`) increment `info[2]` and JumpSeq 150 (from
 151) or 151 (from 150); else, when the opponent record's +6 is >= 11,
 JumpSeq 165 (let go). If ChompAgain says stop: JumpSeq 152 (shaken off),
 X = AddCharX(-12) and `released`. After a release, or in SEQS 158/157/155:
@@ -125,7 +126,8 @@ upper = a5-0x2cba[s] - level. Bite count `info[2]` < lower: bite again;
 
 ## HeadDoneAttackingKid 7:0b16
 
-If the Prince's life `-0x5078 >= 6`: HeadGetPeaceful. Otherwise, unless
+If the Prince's native ALIVE `-0x5078 >= 6` (dead for a
+while): HeadGetPeaceful. Otherwise, unless
 already 166: SetCharFloor and JumpSeq 166. Special flag 0.
 
 ## HeadGoToDest 7:107a
@@ -169,26 +171,137 @@ unless sound 131 is playing (`info[8]`).
 
 ## IsAbleToFleeInRoom 7:1454
 
-Needs another head in the room that is not fleeing (7:161c: more than one
-record and not every other one in mode 2 or kind 8) and Rnd(room count /
-3) == 0. Facing right needs column >= 3; facing left needs column + 3 <=
-10. It scans away from the Prince over barriers (4:52bc, gates by
-4:5b0e); with a clear path to the room edge, or a stop at least 3 columns
-away, it sets armed 0, state 1, record mode 2, destination (that column,
-row), +0x22 = -1, +0x24 = 0 and unbanks the head.
+7:161c needs more than one record in the room and every record (this
+one included) neither fleeing (mode 2) nor a serpent (kind 8). Then
+Rnd(skill / 3 + 1) must be 0 (skill = record +6). Facing right needs
+column >= 3; facing left needs column + 3 <= 10. It scans behind the head
+(toward column -1 facing right, 10 facing left) for barriers (4:52bc;
+kinds 2/7/12/20/25, a gate only while 4:5b0e says it blocks). A clear
+path stops one column short of the edge; a barrier stops two columns
+before it and must still be at least 3 columns away. Success sets armed
+0, state 1, record mode 2, destination (that column, row), +0x22 = -1,
++0x24 = 0, and unbanks the head.
 
-## Serpents (7:1824, partly read)
+## Serpents 7:1824
 
-SnakeComeOutOfHole runs for negative ALIVE. Record mode < 0: if 7:1dc6
-holds, 7:187e (strike when the Prince is 31..71 pixels away, or during
-his poses 1-14/49-56/135-149, JumpSeq 173 with X adjusted by `d - 58`;
-otherwise SEQS 176 with sound 128 at 20..60 pixels; poses 278/279 retract
-with SEQS 177 when the cell in front is a wall or an uncovered crevice).
-Else SnakeGoIntoHole 7:1b52. Record mode > 0: 7:19fe counts it down and
-then turns the serpent toward the Prince when he is in its row between
-the floor edges 5:2198 (directions -1/1), choosing SEQS 170 (out, X +61)
-or 172 (in). Not translated further yet: 7:1b52 onward, 7:1dc6,
-SnakeUpdateOppInfo 7:1ed6.
+Sequences: 170 slither (loop), 171 into the hole (holds pose 264), 172 out
+of a floor hole (then 170), 173 strike, 174 death, 175 coiled (poses
+278/279), 176 rear up into the coil, 177 uncoil (then 170), 168 rest
+(pose 230).
+
+Cell predicates (3:4da6-4f30): IsWall = 2/7/20/25/43, IsSpace =
+0/9/27/47/49, IsFloor = neither. Below, `passable(c)` means IsFloor with
+an open gate (a gate needs foreground bit 0x80; `fg & 0xb8 > 0x38` is that
+bit) or a type-7 cell with bit 0x80 (an uncovered crevice). "Ahead" is
+4:39fc(1), the cell in front; "here" is 4:35a6.
+
+The wrapper 7:1824 runs for negative ALIVE with a record. Record word
++0x1c < 0 (active): when 7:1dc6 holds, strike (7:187e), otherwise
+7:1b52. Otherwise 7:19fe (waiting). 7:1dc6: not SEQS 171, alert state
+(-0x5024, from the ordinary alert routine 2:6ee4) >= 2, and facing the
+Prince (facing right with column <= his, or left with column >= his).
+
+Strike 7:187e, with `d` = 4:49ee:
+
+- 31 <= d <= 71: strike on poses 278/279, or during SEQS 176 while the
+  Prince's pose is 1-14 or 49-56. Otherwise, outside SEQS 176/173 and
+  with 20 <= d <= 60: JumpSeq 176 and sound 128.
+- Else, during SEQS 176: strike when the Prince's pose is 1-14 or 49-56
+  and 31 < d < 79, or 135-149 and 31 < d < 71. On poses 278/279 with d <
+  31 or d > 77 and `passable(ahead)`: JumpSeq 177.
+- Strike (unless already SEQS 173): X = AddCharX(d - 58), JumpSeq 173.
+
+Inactive 7:1b52:
+
+- The Prince not alive: JumpSeq 176 unless already there or coiled.
+- SEQS 171/172 or special flag 9: see the hole step below.
+- `here`'s foreground high nibble (& 0xf00) is 15 (a hole) and the signed
+  remainder of (X - 229) / 51 is 16..28: X = AddCharX(22 - r), negated
+  facing left and less 2 facing right; JumpSeq 171.
+- SEQS 176/168 or coiled: JumpSeq 177 when `passable(ahead)`.
+- Otherwise, with ahead not passable: an IsWall ahead of type 7 -> 168; a
+  wall facing right -> special flag 9; a wall facing left on pose 254 or
+  238 -> 168. Not a wall (space or a closed gate) and 4:3a92 < 25 -> 168.
+- Hole step: with special flag 9, IsWall here and 4:3a92 < 12, pose
+  264 and JumpSeq 168. On pose 264: special flag 6 and the record timer
+  +0x1c = 6 if the alert state is 2, else Rnd(60) + 36.
+
+Waiting 7:19fe: count +0x1c down; at zero set it to -1 and choose a
+facing. The Prince in the same room and row strictly between the floor
+edges 5:2198 (directions -1 and 1): face left if he is at a lower column;
+otherwise face right unless `here` is a wall other than an uncovered
+crevice (then left). The Prince elsewhere: reverse the facing. Then a
+non-wall or uncovered `here` -> JumpSeq 172; a wall -> JumpSeq 170 with
+X = AddCharX(61). Special flag 0.
+
+SnakeUpdateOppInfo 7:1e04 (from the record save 6:342a): in SEQS 171 or
+with special flag 9, special flag 6 and the timer Rnd(60) + 36. Otherwise
+with `passable(ahead)` and SEQS 176/168/170, the stored facing becomes
+NOT facing and the stored X AddCharX(-51).
+
+## Combat: TestStrike, CheckStab And Death
+
+Heads and serpents use the ordinary combat pipeline. TestStrike's
+per-striker check (6:5896) and CheckStab (6:5092/51f2) carry the special
+cases below; "striker" is the working actor, "defender" the cached one.
+
+Contact (6:5896). The striker must be armed (+1) and in the defender's
+row. The vertical limit (|Y difference| < 15) is waived when either side
+is a head. IsStrikingPos 6:5d60: heads on poses 165-167 or 181; a serpent
+only in SEQS 173 on pose 274 or 280. The defender must be alive, not type
+1 or 10, not already marked 8 and not in SEQS 110. `d` = 4:49ee (facing
+distance). Block window: heads 0..55, type 10 24..70, others 61..99.
+
+- Parry: facing differs, `d` in the window, the defender is not a head or
+  serpent, the striker is not a serpent, and the defender's pose is 161 or
+  150. The defender's pose becomes 161. A head striker is banked and the
+  parry timer a5-0x369e = 4; then HeadHit 7:08fa (below) picks its
+  sequence. So blocking a head hurts the head.
+- Otherwise the strike lands (defender mark 10) when IsTheStrikePos 6:5e42
+  holds and `d` is inside GetCharStrikeRanges 6:5b38. Heads never satisfy
+  IsTheStrikePos (pose 154 is outside their striking poses): a head bites
+  instead whenever its special flag is 1 (SEQS opcode -21 1 on poses 167
+  and 181) while the parry timer is 0.
+- Strike ranges for the Prince: against a head 32..92; against a serpent
+  only from SEQS 96 when the serpent's special flag is not 6 and its SEQS
+  is not 171: 62..126 facing the same way, -11..79 otherwise. Sword type
+  2 (a5-0x500a) lowers the upper limit by 10. A serpent striking the
+  Prince needs his Y >= row * 120 + 96 and uses 8..52 (same facing) or
+  -32..6. Serpent IsTheStrikePos is pose 280.
+
+CheckStab finds the Prince's striker by pose: a head counts only on pose
+167 or 181 (6:51ae-51b6), others through IsTheStrikePos. Then (6:51f2):
+
+- Struck head: damage 1 with sword type 2, otherwise 2; SEQS 153 if it
+  survives. Before the damage, if its life exceeds the damage,
+  IsAbleToFleeInRoom runs. Hit sound 130.
+- Struck serpent, or the Prince struck by a serpent: damage 100. A
+  surviving serpent keeps its sequence. Serpent hit sound 127.
+- The Prince struck by a head: damage 1, no hit sound. The base reaction
+  is 74 (facing differs) or 94 (same facing). Unarmed, unless his frame
+  has flag 0x40 or his pose is 191-205, the reaction becomes 45; poses
+  102-106 also give 45. On poses 246-261 he is pushed 25 pixels toward
+  open floor. Any reaction other than 45 arms him.
+
+Death 6:5562. A head turns to face away from the Prince (facing = NOT the
+Prince's), life 0, JumpSeq 154 (falls and ends with -17, removal) and
+SetTensionLevel(1, -1). A serpent JumpSeq 174. The Prince killed by a
+serpent: SEQS 97 (98 on poses 246-261), sound 126, death method 17. Killed
+by a head: SEQS 85 (98 with sound 133 on poses 246-261), death method 6
+and SetTensionLevel(1, 5). The tension amount a5-0x36a0 is ChompAgain's
+`wounds`: each death to a head makes the heads let go sooner.
+
+HeadHit 7:08fa (the symbol table calls it HeadClearInDir): DecLifePts(1);
+dead -> 154; else sound 131, IsAbleToFleeInRoom and 153. Both paths call
+SetTensionLevel(1, -1).
+
+SEQS opcode -17 (4:48f8) removes the actor: unbank it, facing 86 (the
+removed marker), clear -0x5046, ALIVE and life, reselect the Prince's
+opponent if it was this slot, room 0. Opcode -22 `n a b` jumps to `a`
+when Rnd(n) != 0, else to `b` (17:6e06 is the inclusive Rnd).
+
+Drawing (3:0b32-0b9c): with special flag 1 a head is drawn by
+AlignHeadOnKidNeck 7:0006, which also sets its working X.
 
 ## Runtime Groundwork
 
@@ -199,10 +312,26 @@ serpent 11), HeadAddOpponent's starting state, the Head FRAM index (type 8
 (4 heads, 2 serpents), seven 14 (8 heads, 6 serpents), eight 24 (19 heads,
 5 serpents), nine 12 (6 heads, 6 serpents).
 
+## Controllers (dormant)
+
+`pop2/ruins_ai.py` translates the head wrapper and leaves (sight, movement
+admission, idle, angry, peaceful, attack, focus, locked, done, go-to,
+flee, flee check) and the serpent routines above, plus MoveChar's flight
+for heads (Y += vy with GetRow, X += AddCharX(vx)). SequenceRuntime gained
+opcodes -9 (additive velocity), -17 (removal, as an event) and -22
+(random JumpSeq), and -19 sets a head's -33 floor height. A headless test
+runs every level-six room for 300 frames: heads get angry, swoop, bite and
+are shaken off; serpents slither and rest. Nothing calls it from the game
+yet. Port approximations: the wall contact (an armed head inside a wall
+or closed gate cell is pushed back 22 pixels instead of the full
+CheckBarrier 4:62b0 distances) and the column read live from the pose
+instead of the value cached at LoadFrame.
+
 ## Still Open
 
-The Prince's side (bite damage per chomp, the bitten sequences 150-155 of
-the Kid, shaking a head off), what calls HeadEnemyCollide (sword
-contact), head death and removal, the remaining serpent routines and
-drawing (Codex: neck alignment). Every value above needs a native probe
-before runtime use.
+Wiring into CombatEncounter (a separate actor list, drawing with Head.rsrc
+art and the type-8 frame offset, audio drain, room entry), the
+TestStrike/CheckStab rules above for ruins actors, neck alignment while
+biting, the Prince's crouch strike (SEQS 96, needed to hit serpents),
+saves/rebirth of ruins actors, and the scheduling of the head pipeline.
+Every value above needs a native probe before it is relied on.
