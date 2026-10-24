@@ -984,7 +984,6 @@ def run_animation_probe(recovery, cases=2000, seed=2031, frames=30):
         creatures = RuinsCreatures()
         creatures.rooms[6] = [actor]
         creatures._wall_contact = lambda *_args: None
-        creatures._cross_room = lambda *_args: None
         encounter = SimpleNamespace(rng=TapeRandom(draws))
         started[sequence] += 1
         difference = None
@@ -1033,8 +1032,8 @@ def run_animation_probe(recovery, cases=2000, seed=2031, frames=30):
                   '5:4d84 AddSound: recorded', '3:4a8e DrawOppMeter, 6:36f2: supplied'],
         scope=(f'Up to {frames} frames of AnimChar 4:2c0c, 4:341a and MoveChar 4:3464 from the '
                'start of every head (130-166) and serpent (168-177) sequence, against '
-               'SequenceRuntime.next_frame and RuinsCreatures._after_frame (wall contact and '
-               'room change disabled). No controller runs between frames.'),
+               'SequenceRuntime.next_frame and RuinsCreatures._after_frame (wall contact '
+               'disabled). No controller runs between frames.'),
     )
 
 

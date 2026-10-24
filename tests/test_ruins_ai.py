@@ -176,21 +176,6 @@ class RuinsControllerTests(unittest.TestCase):
         self.assertEqual([actor.ruins.removed for actor in loaded.combat.ruins.actors(21)],
                          [True, False])
 
-    def test_a_wandering_head_moves_into_the_neighbouring_room(self):
-        from pop2.game_session import GameResources, GameSession
-
-        game = GameSession.load(GameResources.load(), 6)
-        combat = game.combat
-        combat.enter_room(6, 0)
-        head = combat.ruins.actors(6)[1]
-        left = combat.terrain.neighbor(6, 'left')
-        head.state.target_x = head.state.current_x = -40
-        combat.ruins._cross_room(head, combat)
-        self.assertEqual(head.room, left)
-        self.assertIn(head, combat.ruins.actors(left))
-        self.assertNotIn(head, combat.ruins.actors(6))
-        self.assertEqual(head.state.target_x, 470)
-
     def test_a_biting_head_is_drawn_on_the_princes_neck(self):
         from dataclasses import replace
         from tests.test_terrain import RooftopSceneTests

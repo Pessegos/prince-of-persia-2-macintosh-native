@@ -341,9 +341,7 @@ riposte with 66). The port selects 96 when the nearest living ruins actor
 Port approximations: the wall contact (an armed head inside a wall or
 closed gate cell is pushed back 22 pixels instead of the full CheckBarrier
 4:62b0 distances); the column read live from the pose instead of the value
-cached at LoadFrame; an actor whose supporting column leaves 0..9 moves to
-the neighbouring room's list (the original cut 2:6680-6700 is not
-translated); IsSoundPlaying is not consulted; the kill song 137 plays at
+cached at LoadFrame; IsSoundPlaying is not consulted; the kill song 137 plays at
 death rather than when native ALIVE reaches 6. Rebirth checkpoints (and so
 saves, which keep the checkpoint) carry the ruins actors: killed heads and
 serpents stay dead, the living restart at rest on entry.
@@ -433,7 +431,18 @@ point and the scene draws the head at that point for the frame. In play the
 aligned head sits over the top of the bitten Prince. The object-list order
 (whether the Prince's object of the same frame exists) is not verified.
 
+## Leaving The Room
+
+Heads stay in their room's records, as in the original: movement admission
+7:0936 lets a head reach columns -1 and 10 (one step past the edge, X beyond
+the visible room), but no ruins routine moves it into a neighbour. The
+original's opponent cuts handle actors that fall below the room (CutOpponent
+6:424c, Y >= 730) and guards that follow the Prince (CutAllOpponents
+6:4476-4626); neither applies to a flying head at the side. An earlier port
+version moved such heads into the neighbouring room; that was not original
+behavior and is removed. The development map draws heads and serpents at
+their records' starting state.
+
 ## Still Open
 
-The development map, the original cut between rooms, and
-native comparisons of the wall contact and per-frame scheduling.
+Native comparisons of the wall contact and per-frame scheduling.

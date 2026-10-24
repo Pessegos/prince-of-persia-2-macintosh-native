@@ -1160,33 +1160,6 @@ class RuinsCreatures:
             if state.horizontal_velocity:
                 self.set_native_x(actor, self.add_char_x(actor, state.horizontal_velocity))
             self._wall_contact(actor, encounter)
-        self._cross_room(actor, encounter)
-
-    def _cross_room(self, actor, encounter):
-        # Port approximation of the cut 2:6680-6700: an actor whose
-        # supporting column leaves 0..9 (or whose row leaves 0..2) moves to
-        # that neighbour's records, where entering restarts it at rest.
-        if not actor.alive:
-            return  # A dying actor finishes its fall where it is (SEQS -17).
-        column = self.column(actor, encounter)
-        if 0 <= column <= 9 and 0 <= actor.row <= 2:
-            return
-        if not 0 <= actor.row <= 2:
-            direction, dx, drow = ('up', 0, 3) if actor.row < 0 else ('down', 0, -3)
-        else:
-            direction, dx, drow = ('left', 510, 0) if column < 0 else ('right', -510, 0)
-        neighbour = encounter.terrain.neighbor(actor.room, direction)
-        if neighbour is None:
-            return
-        self.rooms.get(actor.room, []).remove(actor)
-        if neighbour not in self.rooms:
-            self.load_room(encounter, neighbour)
-        actor.room, actor.row = neighbour, actor.row + drow
-        actor.state.target_x += dx
-        actor.state.current_x = actor.state.target_x
-        self.rooms[neighbour].append(actor)
-        if self.banked is actor:
-            self.banked = None
 
     def align_on_neck(self, actor, encounter):
         """AlignHeadOnKidNeck 7:0006, run by the head's drawing setup
