@@ -55,7 +55,20 @@ render of port room 16 matches the ruins look.
   (3547) move like the caverns' with clips 19/10 pixels above the row. All
   plate/gate/exit records of levels six and seven match native redraws.
 - Loose floors shake with the column-parity tables a5-0x2c66/-0x2c7e
-  (7:2bd6); both nonzero images share the phase-1 variant (approximation).
+  (7:2bd6). Each table names two shake images (values 1 and 2); phase 1
+  shows one and phase 3 the other in both tables. Since 2026-10-24 the
+  export keeps both: a ruins loose cell's choices are rest, phase 1, space
+  (and the struck copy) plus phase 3 last, and `cavern_scene_signature`
+  picks the second image whenever the phase's value differs from phase 1's.
+  All twelve phases of an odd- and an even-column cell compose exactly as
+  the original renders them (phase 12's value 98 is never drawn: the
+  original's renderer has no shape for it). The ruins exports grew by 0-14%
+  (level six 440 -> 501 KB). The caverns' table (8:24dc/257c, two lookups)
+  only yields 0/1, a single shake image, so their variant was already
+  faithful.
+  `tools/check_slot_scenery.py --level 6` (its oracle now renews the
+  harness every 400 rooms) compared 41,006 room variants: 123,018 lists,
+  all equal to the original renders.
 - Level six starts on the cliff (SEQS 2, native X 374) without a sword
   (a5-0x500a = -1, 3:6202); crouching at the sword item (tile 22) takes it
   (6:14ce-1574, SEQS 91, FindSwd 183). Saves keep a changed sword type.
@@ -195,14 +208,9 @@ found no remaining loop except a run closed by a crevice whose low bits are
 
 ## Remaining Steps
 
-1. The two shake images per column parity of loose floors: the export keeps
-   one shaking variant (phase 1) for both nonzero shifts. A second image
-   needs another state per loose unit (its choices are rest, phase 1, space
-   and, for struck cells, a fourth), touching the shared cavern/ruins slot
-   export, the signatures and a reimport; it shows for single frames only.
-2. The retained cliff image when walking left from the start needs a visual
+1. The retained cliff image when walking left from the start needs a visual
    comparison with the original game (playtesting).
-3. Level nine's exit leads to the temple (NIS 2 and level ten), which the
+2. Level nine's exit leads to the temple (NIS 2 and level ten), which the
    port does not support yet.
 
 The scythes' climbing redraw layers, listed here earlier, are covered by
