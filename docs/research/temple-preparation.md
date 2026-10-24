@@ -222,7 +222,10 @@ and the pose79 early loose-floor/trapdoor dispatch. The supporting cell and
 actor/FRAM state are supplied; four outgoing mechanism bodies are request sinks.
 This does not yet connect actor admission to the earlier lifetime traces.
 
-Next work connects that admission to the pressure lifecycle and follows target
-TROB animation; supporting-foot calculation, frame scheduling and reset/save
-behavior remain separate. The constructor's X>510 branch and full
-movement/contact/presentation lifecycle remain open.
+[Actor-to-plate lifetime](temple-actor-plate-lifetime.md) now connects native
+CheckPress to ordinary/permanent pressure and release on the five admitted
+rock-only sources:540 persistent traces/7,110 comparisons pass. It also
+executes5:252e's timer31-before-PushPlate ordering. Supporting-foot calculation,
+frame scheduling, target gate animation and reset/save remain separate.
+The constructor's X>510 branch and full movement/contact/presentation
+lifecycle remain open.

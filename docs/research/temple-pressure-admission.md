@@ -94,7 +94,8 @@ SHA256:
 
 ## Next Block
 
-Connect this admission to the already recovered pressure/lifetime chain, or
-recover target gate TROB animation. Supporting-foot cache calculation and
-actual FrameAdv cadence remain distinct requirements. Do not wire the temple
-into ScenePrototype/environments during the parallel environment refactor.
+The [connected actor-to-plate probe](temple-actor-plate-lifetime.md) now covers
+ordinary/permanent pressure and release on five admitted rock-only sources.
+Mixed gate animation, supporting-foot cache calculation and actual FrameAdv
+cadence remain distinct requirements. Runtime temple integration is still
+separate from this research track and the parallel ruins-actor work.

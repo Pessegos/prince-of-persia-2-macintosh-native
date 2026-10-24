@@ -142,11 +142,13 @@ death sequences, coordinates and stored NPC records remain intact.
 
 ## Next Recovery Pass
 
-Temple research: [actor pressure admission](research/temple-pressure-admission.md)
-records R (not runtime-integrated) CheckPress5:127e-13dc and real ReadCell
-helpers, with16,461 native/reference comparisons and8 asset-free regressions.
-Supporting-cell/actor/FRAM inputs and outgoing mechanism request sinks are
-supplied; connected mechanism effects and actual FrameAdv scheduling remain P.
+Temple research: [actor-to-plate lifetime](research/temple-actor-plate-lifetime.md)
+records R (not runtime-integrated) CheckPress through ordinary/permanent
+pressure, rock-only activation and plate release:540 persistent traces and
+7,110 native/reference comparisons,10 asset-free regressions. This extends
+the separate16,461-case [admission probe](research/temple-pressure-admission.md)
+within its stated scope. Supporting-cell/actor/FRAM inputs, call schedule,
+audio/redraw remain supplied; full FrameAdv and target gate animation remain P.
 
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
