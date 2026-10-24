@@ -17,7 +17,7 @@ SHAPE_BASE = 25303
 SHAPES = (0, 0, 1, 2, 3, 4, 5, 6, 7, 15, 15)
 OFFSETS = ((0, 0), (11, -68), (13, -67), (15, -60), (15, -63), (13, -59), (11, -62),
            (13, -59), (17, -59), (9, -69), (8, -69))
-OPEN_SONG, CLOSED_SONG, CRASH_SOUND = 115, 116, 117
+ROOM_SONG, OPEN_SONG, CLOSED_SONG, CRASH_SOUND = 114, 115, 116, 117
 CRASH_Y = 100
 
 

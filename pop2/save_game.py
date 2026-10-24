@@ -165,6 +165,8 @@ def _unpack(value, resources, lava_tables, depth=0):
     optional = {'gate_contact_bounds'} if cls is TerrainMotion else set()
     if cls is GateCrush:
         optional.add('life_before_crush')
+    if cls is RebirthSnapshot:
+        optional.add('caverns')
     if cls is SequenceState:
         optional.add('floating')
     if cls.__name__ == 'Fighter':

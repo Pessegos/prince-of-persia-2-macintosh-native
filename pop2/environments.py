@@ -18,7 +18,7 @@ import time
 
 from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, bridge_sag, on_bridge
 from pop2.carpet import (
-    CARPET_ROOM, CARPET_TILE, CLOSED_SONG, CRASH_SEQUENCE, OPEN_SONG, RIDE_FRAME, SIT_SEQUENCE,
+    CARPET_ROOM, CARPET_TILE, CLOSED_SONG, CRASH_SEQUENCE, OPEN_SONG, RIDE_FRAME, ROOM_SONG, SIT_SEQUENCE,
     carpet_room,
 )
 from pop2.control_mapping import IDLE_SEQUENCE
@@ -879,6 +879,15 @@ class Caverns(Environment):
                 if not audio.song_playing(112):
                     audio.add_song(112)
                 skeleton.rise_song_pending = False
+        if carpet_room(scene.game.level.number, scene.room_id):
+            # CUST entry 8:0d50-0d58 requests RugRoom, not a random cavern cue.
+            # Keep the room theme available after it ends or ambient is re-enabled,
+            # without replacing carpet/event songs or restarting it every tick.
+            if (scene.game.caverns.carpet.counter == 0 and audio.music_enabled
+                    and scene.combat.player.alive and not audio.song_playing(ROOM_SONG)
+                    and (not audio.music_busy or audio.current_music_ambient)):
+                audio.add_song(ROOM_SONG, ambient=True)
+            return
         self.room_ambient(audio, motion, fighting, contact)
 
     def player_died(self):

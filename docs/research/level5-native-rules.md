@@ -72,8 +72,31 @@ No blocking progression defect is known: the route from the level-four exit
 through the bridge, room 7's gate and the carpet into level six works, and
 the failure paths (chasm fall, carpet crash, saves with bridge state) are
 covered by tests in `tests/test_bridge.py` and `tests/test_level5.py`.
-Death and restart use the shared rebirth path; no level-five-specific
-restart test exists.
+Death and restart use the shared rebirth path. The 2026-10-24 retry regression
+in `tests/test_level5_retry.py` covers the actual Alt+R checkpoint path,
+including gate/button state and bridge damage. Checkpoint snapshots now
+include cavern mechanisms; subsequent retries restore that baseline, not
+the post-checkpoint changes. Bridge tension and the flip timer remain
+persistent, while float time and queued impact/music events reset. New
+progress saves retain the baseline; old saves still load and acquire one
+after their fresh world has been initialized.
+
+## Carpet Chamber Audio (2026-10-24)
+
+CUST room entry `8:0d50-0d58` requests `AddSong(0x72)`, RugRoom cue 114 [D].
+The port now selects it in level five, native room 3, before the carpet ride.
+Keeping it as ambient music, repeating after completion and resuming after
+the ambient toggle are host playback policies, not measured native loop
+timing. Foreground carpet/event songs take precedence. Covered by
+`tests/test_carpet_room_music.py`.
+
+`tests/test_level5_traps.py` also checks both room-4 launchers and room 9's
+right loose floor (cell 16) striking button 26. The latter emits debris
+impact 26 and shooter launch 65 in the same update. The mixed-effects host
+policy coalesces that pair to impact 26 without disabling the projectile or
+the concurrent gate sound; it does not change the original single-channel
+comparison mode. The reported room-4 right-launcher failure was not
+reproduced by these tests.
 
 ## Entry and scenery
 
