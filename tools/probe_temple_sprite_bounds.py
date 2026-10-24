@@ -104,6 +104,8 @@ def bind_bounds(machine):
 
 
 def bounds_service(machine, cpu, address):
+    if address not in (SECT_RECT, machine.address(17, 0x673a), machine.address(3, 0x533a)):
+        return False
     stack = cpu.reg_read(machine.registers['a7'])
     if address == SECT_RECT:
         destination, source, clip = struct.unpack('>3I', cpu.mem_read(stack + 4, 12))

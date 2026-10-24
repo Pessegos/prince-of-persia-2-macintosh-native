@@ -74,7 +74,7 @@ def gravity_reference(actor, floating):
     return bytes(result), events
 
 
-def prince_reference(state, sequences, inputs, controller=None, frame_loader=None):
+def prince_reference(state, sequences, inputs, controller=None, frame_loader=None, sprite_loader=None):
     result = dict(state)
     events = list(state['events']) + [('prince',), ('load_kid',), ('outside_check',)]
     saved = state['prince']
@@ -84,6 +84,13 @@ def prince_reference(state, sequences, inputs, controller=None, frame_loader=Non
         events.append(('frame',))
         if frame_loader is not None:
             loaded = frame_loader(bytes(actor), result)
+            actor[:] = loaded['actor']
+            result.update(loaded['updates'])
+
+    def setup_sprite():
+        events.extend((('sword',), ('edges',)))
+        if sprite_loader is not None:
+            loaded = sprite_loader(bytes(actor), result)
             actor[:] = loaded['actor']
             result.update(loaded['updates'])
 
@@ -109,7 +116,7 @@ def prince_reference(state, sequences, inputs, controller=None, frame_loader=Non
         raise ValueError('This caller reference supplies opponent index-1 only')
     events.extend((('nearest', 1), ('load_opponent', 0)))
     load_frame()
-    events.extend((('sword',), ('edges',)))
+    setup_sprite()
     control = controls()
     if control != -1 and inputs.live:
         if inputs.suppress_animation:
@@ -127,7 +134,8 @@ def prince_reference(state, sequences, inputs, controller=None, frame_loader=Non
                     else:
                         events.append(event)
                 load_frame()
-                events.extend((('sword',), ('edges',), ('fight_distance',),
+                setup_sprite()
+                events.extend((('fight_distance',),
                                ('barrier',), ('collide',), ('gate_contact',), ('floor',), ('pressure',),
                                ('spikes',), ('temple_hazard',)))
                 if not inputs.invulnerable:
@@ -146,13 +154,13 @@ def prince_reference(state, sequences, inputs, controller=None, frame_loader=Non
         else:
             countdown = signed_word(countdown - 1)
     if inputs.live:
-        result['saved_edges'] = EDGE_SOURCES
+        result['saved_edges'] = result['current_edges'] if sprite_loader is not None else EDGE_SOURCES
     events.append(('prince_copy',))
     return dict(result, prince=bytes(actor), working=bytes(actor), events=events,
                 countdown=countdown, result=control)
 
 
-def world_reference(state, sequences, inputs, controller=None, frame_loader=None):
+def world_reference(state, sequences, inputs, controller=None, frame_loader=None, sprite_loader=None):
     result = dict(state, events=[('world',)])
     if inputs.live:
         prefix = result['events'] + [('rubble',), ('bank',)]
@@ -161,7 +169,7 @@ def world_reference(state, sequences, inputs, controller=None, frame_loader=None
         if inputs.special_actor == 10:
             result['events'].append(('opponent_check',))
         result['events'].extend((('generators', state['view']), ('nearest_sides',)))
-    result = prince_reference(result, sequences, inputs, controller, frame_loader)
+    result = prince_reference(result, sequences, inputs, controller, frame_loader, sprite_loader)
     if not inputs.live or result['result'] == -1:
         return result
     if result['result'] != 0:
