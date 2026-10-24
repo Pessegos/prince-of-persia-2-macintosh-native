@@ -287,3 +287,10 @@ changes mode2 to5 and X+16 before poses50/51/52; the fourth enters idle
 mode0 while retaining selected source47. This is not physical fall proof:
 Y/health remain unchanged without GenCtrl/physics. Resource/handle services
 and the actor-update/copyback schedule remain explicitly supplied.
+
+[Actor and gate-bank progression](temple-gate-actor-bank.md) now executes
+full native AnimTrobs iteration/compaction between actor clip updates:
+2,460 traces/78,720 operation comparisons pass. Both supplied update orders,
+full20 banks, stable compaction and duplicate-record controls are checked.
+First-cycle actor effects differ with the order, so this still does not
+choose an original FrameAdv cadence or establish physical falling/contact.
