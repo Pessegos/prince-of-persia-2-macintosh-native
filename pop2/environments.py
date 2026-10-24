@@ -899,7 +899,15 @@ class Ruins(Caverns):
     end_song = 124
 
     def ambient_audio(self, audio, motion):
-        """The ruins have no room ambient yet."""
+        # PlayAmbient 5:4fd0 with the ruins' bank (LEVL 0x2186 = 4: groups
+        # 139-154, 155-170, combat 171-174) and the room table at 0x424a.
+        scene = self.scene
+        if scene.level_complete:
+            return
+        fighting = not scene.peaceful and scene.combat.opponent_to_fight()
+        contact = floor_contact_x(scene.sequence_state.target_x,
+                                 scene.sequence_state.facing, scene.frames[scene.action])
+        self.room_ambient(audio, motion, fighting, contact)
 
     def frame_start(self):
         super().frame_start()
