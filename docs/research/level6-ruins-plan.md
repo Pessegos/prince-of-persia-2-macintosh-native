@@ -170,14 +170,24 @@ through. Whether the original also bumps from flush is unverified in play.
   palette per drawn room (`ROOM_PALETTES`), which gives the same result on
   leaving.
 
+- Level nine's CUST kinds 20 (native room 2) and 21 (room 16) share the
+  enter hook 7:37d6 (template table a5-0x4c2e: kinds 20/21 -> 7:37d6, kind 22
+  -> 7:37a6/37b6). Entering room 16 with the Prince's column >= 9 adds song
+  292 (Chasm); entering room 2 with his column < 5 adds song 185 (Horse) once
+  (a5-0x4ff8). The heads' InjrHead 136 and KillHead 137 are songs (AddSong),
+  not sounds. These songs and the flip flask's 176/177 are now rendered by
+  the audio import (`RUINS_SONGS`); an older import has no files for them
+  and stays silent until the game is imported again.
+
 ## Remaining Steps
 
-1. The shared CUST hook 7:37d6 (kinds 20-22), level nine only: in room 16
-   with the Prince's column >= 9 it adds song 292; in room 2 with his column
-   < 5 it adds song 185 once (a5-0x4ff8). Which template slot calls it (enter,
-   leave or every frame) is still to read (3:13ec/1922, table a5-0x4c2e).
-2. The retained cliff image when walking left from the start (to compare
-   with the original), and the two shake images per parity of loose floors.
+1. The two shake images per column parity of loose floors (the export keeps
+   one variant for both; a second needs another variant per cell, which
+   multiplies the room exports) and the scythes' climbing redraw layers.
+2. The retained cliff image when walking left from the start (a visual
+   comparison with the original).
+3. Level nine's exit leads to the temple (NIS 2 and level ten), which the
+   port does not support yet.
 
 Cutscene 1 between levels five and six is now implemented; see
 `level5-native-rules.md`, "Cutscene 1: NISCarpet", including the unresolved
