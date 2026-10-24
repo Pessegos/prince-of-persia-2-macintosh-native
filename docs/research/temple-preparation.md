@@ -355,3 +355,22 @@ and edge saves are compared; keeping width fixed18 would change18 selected
 animations in this corpus. Physical contact/floor/hazards, initial placement,
 sampled input and shape/graphics services remain supplied. This is not a
 complete physical climb/fall or repeated FrameAdv/playable-temple proof.
+
+[Gate admission](temple-gate-admission.md) now recovers native4:5b0e and its
+visible-height threshold:102,400 controlled direct comparisons and14,080
+predicate comparisons after2,816 real Kid frame/bound chains match. Equality
+permits passage; clipping and signed-word height matter. This does not yet
+execute the contact/barrier caller or imply physically reachable passage.
+
+[Standing clearance](temple-gate-standing.md) executes GateBarrToStandUp and
+real cell traversal with no service replacements:39,318 comparisons match.
+The first gate wins; only low-byte positions1..183 and an inclusive native-X
+band block this helper. Cache and room-base-pointer writes are compared.
+Caller/standing animation and full physical contact remain outside this proof.
+
+[Contact routing](temple-gate-contact.md) extends the chain through actual
+CheckGateForKid/ReadCell/admission/JumpSeq50:61,382 comparisons match. The
+contact caller checks neighbors in a different order from standing; exact
+overlap, resource failure and ALIVE/HP separation matter. Distance, overlap
+construction, ejection/cave terminal responses and repeated physical world
+updates remain supplied or excluded; this is not crush/death parity.

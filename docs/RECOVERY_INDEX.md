@@ -257,6 +257,26 @@ selected animations. SHAP-size/graphics services, input/placement/static
 banks and remaining physical contact/floor/hazards stay supplied; repeated
 physical frames, outer FrameAdv and playable temple remain P.
 
+[Gate admission](research/temple-gate-admission.md) extends R through4:5b0e:
+102,400 controlled direct comparisons and14,080 predicate comparisons after
+2,816 real Kid bound chains,8 asset-free regressions. Visible height, exact
+thresholds, exemptions and signed wrapping are checked; graphics services
+stay supplied. Real contact/barrier callers and physical reachability remain P.
+
+[Standing clearance](research/temple-gate-standing.md) extends R through
+GateBarrToStandUp4:5baa and actual cell/neighbor traversal:39,318 comparisons,
+11 asset-free regressions, no supplied services. First-gate priority,
+inclusive native-X band, cached normalized column and room-base-pointer
+side effects are checked. Standing callers/animation, full contact and
+multi-frame physical reachability remain P.
+
+[Gate contact routing](research/temple-gate-contact.md) extends R through
+CheckGateForKid4:60e4, real cells/admission, JumpSeq50 and contact marking:
+61,382 comparisons,14 asset-free regressions. ALIVE/HP, lookup priority,
+exact overlap and failed resource behavior are distinguished. Distance,
+overlap construction and terminal ejection/cave responses remain supplied;
+subsequent damage/death, full collision/world physics and playable temple P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
