@@ -124,6 +124,10 @@ class RuinsCreatures:
     banked: object | None = None
     # a5-0x481c: the remainder of the last GetCharCol (5:48b0) call.
     remainder: int = 0
+    # The Prince as drawn last (his object for AlignHeadOnKidNeck), and
+    # whether this frame's alerts already ran before he moved.
+    prince_drawn: tuple | None = None
+    alerts_ready: bool = False
 
     # ---- rooms -------------------------------------------------------
 
@@ -1137,11 +1141,31 @@ class RuinsCreatures:
                 if actor.ruins.actor_type in HEAD_TYPES:
                     self.control_head(actor, encounter)
                 else:
-                    # The alert routine 2:6ee4 runs before AutoCtrl.
-                    actor.ruins.alert = self.serpent_alert(actor, encounter, self.prince(encounter))
+                    if not self.alerts_ready:
+                        # Without a frame start (tests): the alert now.
+                        actor.ruins.alert = self.serpent_alert(actor, encounter, self.prince(encounter))
                     self.control_serpent(actor, encounter)
             actor.runtime.next_frame()
             self._after_frame(actor, encounter)
+        self.alerts_ready = False
+
+    def before_prince(self, encounter):
+        """Before the Prince moves: the alert routine 2:6e7e/6ee4 (FrameAdv
+        step 4) and his object as last drawn, which 3:3e7c finds."""
+        player = encounter.player
+        frames = getattr(encounter, 'player_frames', None)
+        self.prince_drawn = None
+        if frames is not None:
+            record = frames[player.state.action]
+            offset = record.offset_x if player.state.facing else -record.offset_x
+            self.prince_drawn = (player.room, record.shape_index, player.state.target_x + offset,
+                                 floor_y(player.row) + player.state.current_y + record.offset_y,
+                                 self.facing(player))
+        prince = self.prince(encounter)
+        for actor in self.living(player.room):
+            if actor.ruins.actor_type == SERPENT_TYPE:
+                actor.ruins.alert = self.serpent_alert(actor, encounter, prince)
+        self.alerts_ready = True
 
     def count_death(self, actor, encounter):
         """The NPC control prefix 4:3d24-3d70: register the death (ALIVE 0),
@@ -1204,17 +1228,25 @@ class RuinsCreatures:
         player = getattr(encounter, 'player', None)
         if table is None or frames is None or art is None or player is None or player.room != actor.room:
             return
-        record = frames[player.state.action]
-        if record.shape_index < 0:
+        # The Prince's drawn object (GetObj 3:3e7c kind 2): his drawing point
+        # as last drawn, i.e. before this frame's move when the scene ran
+        # `before_prince`.
+        if self.prince_drawn is not None:
+            room, shape, point_x, point_y, prince_facing = self.prince_drawn
+            if room != actor.room:
+                return
+        else:
+            record = frames[player.state.action]
+            offset = record.offset_x if player.state.facing else -record.offset_x
+            shape, prince_facing = record.shape_index, self.facing(player)
+            point_x = player.state.target_x + offset
+            point_y = floor_y(player.row) + player.state.current_y + record.offset_y
+        if shape < 0:
             return
-        # The Prince's drawn object (GetObj 3:3e7c kind 2): his drawing point.
-        offset = record.offset_x if player.state.facing else -record.offset_x
-        point_x = player.state.target_x + offset
-        point_y = floor_y(player.row) + player.state.current_y + record.offset_y
-        dy, dx = table[record.shape_index]
+        dy, dx = table[shape]
         body = art.body(state)
         width = body.width if body is not None else 0
-        if self.facing(actor) == self.facing(player):
+        if self.facing(actor) == prince_facing:
             dx = -dx - width - (17 if mind.actor_type == 7 else 25)
         if mind.actor_type == 8:
             dx += 10

@@ -901,6 +901,13 @@ class Ruins(Caverns):
     def ambient_audio(self, audio, motion):
         """The ruins have no room ambient yet."""
 
+    def frame_start(self):
+        super().frame_start()
+        combat = getattr(self.scene, 'combat', None)
+        if combat is not None and getattr(combat, 'ruins', None) is not None:
+            # FrameAdv step 4 and the drawn objects come before the Prince.
+            combat.ruins.before_prince(combat)
+
     def room_crossed(self, old_room, room):
         if self.scene.game.level.number == 6 and old_room == 26 and room == 27:
             self.leave_cliff()

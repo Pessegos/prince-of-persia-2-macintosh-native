@@ -469,19 +469,22 @@ The port's `RuinsCreatures.advance`, after the guards in
 `CombatEncounter.step`, keeps that per-actor order: timers, death count,
 the serpent alert, the controller, `next_frame` (AnimChar), then
 `_after_frame` (neck alignment, row opcodes, flight, CheckBarrier); its
-`resolve` runs after every actor, as step 7. Known differences, matching
-the guards' existing convention: the alerts and the neck alignment read the
-Prince after his move of the same frame rather than before (native step 4,
-and the drawn object of the previous frame), and the first 3:0ac8/LoadFrame
-before control is not repeated (the snapped X persists from the previous
-frame, so the controller sees the same X). The kill song now waits for the
+`resolve` runs after every actor, as step 7. `Ruins.frame_start` calls
+`RuinsCreatures.before_prince` before the Prince's controls, as FrameAdv's
+step 4 comes before step 5: the serpents' alerts are taken there, and the
+Prince's drawing point and shape as last drawn are kept for
+AlignHeadOnKidNeck (GetObj finds the object list of the previous drawing).
+The first 3:0ac8/LoadFrame before control is not repeated: the snapped X
+persists from the previous frame, so the controller sees the same X. The kill song now waits for the
 death count (registration, six counted frames) and the OppToFight gate; a
 head killed through a parry (HeadHit 7:08fa) never sets the flag, as in the
 original.
 
 ## Still Open
 
-The scheduling differences above (alerts and neck point read after the
-Prince's move) and the serpent kill song (5:4c44's skeleton path) are not
-compared natively. A full FrameAdv comparison would need the whole frame
-harness, not just the ruins routines.
+The serpent's kill song needs no port work: 5:4c44 clears the flag and
+takes the skeleton path 5:4c4a, which plays song 63 only while the dying
+actor's selected sequence is 120 or 115 (the skeletons' collapse), never
+for SEQS 174. A full FrameAdv comparison (every actor of a frame, guards
+and drawing included) would need the whole frame harness; the ruins
+routines and their order are compared or checked above.
