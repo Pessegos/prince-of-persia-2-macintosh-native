@@ -228,6 +228,12 @@ clipping raises with `max`. Initial actor anchors/widths/static banks and
 input samples are supplied. Real frame/foot geometry, other physical contact,
 persistent gameplay and playable temple remain P.
 
+[Prince frame support](research/temple-kid-frames.md) extends R through type0
+LoadFrame4:2a72/2a8e, original Kid FRAM/AFRM and signed supporting-column
+calculation:22,528 comparisons,8 asset-free regressions. Prepared bindings,
+poses and X inputs supplied. Sprite bounds/width, foot Y/row, real controller
+composition and reachable physical frame progression remain P in this block.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and

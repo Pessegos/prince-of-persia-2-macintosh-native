@@ -327,3 +327,9 @@ admission and final actor state are compared. Left-edge clipping uses `max`,
 not `min`, and depends on supplied frame width/facing. Actor anchors, widths,
 static banks and sampled axes remain fixtures; other physical contact and
 multi-frame gameplay are not yet proved by this composition.
+
+[Prince frame metadata](temple-kid-frames.md) now independently executes real
+type0 LoadFrame and supporting-column calculation with all352 original Kid
+frames:22,528 comparisons pass across two facings,16 X values and two
+separately supplied attachment bindings. This recovers the column input,
+not foot Y/row, sprite bounds/frame width or reachable frame progression.
