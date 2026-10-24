@@ -2986,6 +2986,39 @@ class ScenePrototype(WindowControls):
         self.last_intro_at = time.perf_counter()
         self.status.set('Carpet')
 
+    def start_vision(self, wake):
+        """PlayNIS(6) from 7:38ca: the vision at the throne in level eight.
+        Returns False when the scene is not imported; `wake` runs after it."""
+        from pop2.intro import IntroAssets, IntroPlayer, game_song
+        from pop2.paths import ASSET_DIR
+        from pop2.terrain import floor_y
+
+        if not (ASSET_DIR / 'throne.json').is_file():
+            return False
+        if getattr(self, 'throne_assets', None) is None:
+            self.throne_assets = IntroAssets(program_name='throne.json')
+        state = self.sequence_state
+        music = None
+        if self.audio is not None and self.audio.current_music == 181:
+            played = self.audio.music_elapsed()
+            if played is not None:
+                # Throne2, added at the collapse, plays on: the scene waits
+                # for its end (15:67f2) before the vision's own music.
+                music = 181, played, game_song(181)
+        self.clear_keys(None)
+        self.attract_stage = 'tree'
+        self.tree_variant = None
+        self.after_vision = wake
+        if self.audio is not None and music is None:
+            self.audio.reset()
+        # The Prince's native X (207 origin), facing (0 right, -1 left) and Y.
+        self.intro = IntroPlayer(self.throne_assets, self.audio, music,
+                                 variant=0 if state.facing else -1,
+                                 prince=(state.target_x + 207, floor_y(self.terrain_motion.row) + state.current_y))
+        self.last_intro_at = time.perf_counter()
+        self.status.set('Vision')
+        return True
+
     def finish_level_four(self):
         # CheckPlayNIS(4, 5) (2:0180) shows the first tree scene here when no
         # level-four restart has, then RestartGame loads level five.
@@ -3018,6 +3051,16 @@ class ScenePrototype(WindowControls):
 
     def finish_tree(self):
         held = set(self.window_keys_down)
+        wake = getattr(self, 'after_vision', None)
+        if wake is not None:
+            # NIS 6 returns to the throne room; its last song plays on.
+            self.after_vision = None
+            self.intro = self.attract_stage = None
+            wake()
+            self.pause_resume_keys.update(held)
+            self.next_animation_at = time.perf_counter()
+            self.render()
+            return
         following = getattr(self, 'next_level_after_tree', None)
         self.next_level_after_tree = None
         if following is not None:

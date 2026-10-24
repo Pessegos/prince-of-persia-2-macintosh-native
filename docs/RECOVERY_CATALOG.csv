@@ -634,9 +634,9 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 15,NISs,TransFunc7,0x65ac,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
 15,NISs,TransFunc8,0x65d4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,9
 15,NISs,FlipKid,0x66bc,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,1
-15,NISs,NISThroneRoom,0x66f4,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,85
-15,NISs,DrawDeadKid,0x6c66,prologue,indexed-only,,No semantic review recorded in this prototype catalog,2,6
-15,NISs,QueenAddNIS,0x6d46,prologue,indexed-only,,No semantic review recorded in this prototype catalog,1,21
+15,NISs,NISThroneRoom,0x66f4,prologue,partial,tools/extract_intro.py;pop2/intro.py;pop2/scene_prototype.py,"NIS 6 exported per facing with ThroneNIS/Kid/Prince/Ruins shapes, text panel and Prince-relative drawing; screen before it approximated by 15:6d46; area dissolve order not native",0,85
+15,NISs,DrawDeadKid,0x6c66,prologue,partial,tools/extract_intro.py;pop2/intro.py,"Kid SHAP 25081 at the Prince's X/Y (mirrored facing right), sword SHAP 1011, CTBL 1004 at 240",2,6
+15,NISs,QueenAddNIS,0x6d46,prologue,partial,tools/extract_intro.py,environment 4 only: Ruins SHAP 4200-4207 throne room redraw and DrawDeadKid(1),1,21
 15,NISs,NISTitle,0x6f1a,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,11
 15,NISs,TitleFunc,0x6fec,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,5
 15,NISs,NISTower,,unknown,indexed-only,,No semantic review recorded in this prototype catalog,0,0

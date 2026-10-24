@@ -7,7 +7,7 @@ import random
 import struct
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 from pop2.audio import scene_sound_key
 from pop2.game_ui import MacintoshFont
@@ -25,6 +25,9 @@ OPERATIONS = {
     "timer": 2, "wait_timer": 1, "wait": 1, "cue": 1, "palette": 3,
     "brightness": 2, "fade": 3, "fade_both": 1, "flash": 5, "stop": 1,
     "title": 0, "fade_in_both": 1, "palette_at": 2, "save_background": 0, "restore": 1,
+    # The vision at the throne (NIS 6).
+    "rgb": 4, "set_palette": 2, "remap": 2, "combine": 0, "fade_out_all": 1,
+    "save_rect": 2, "restore_rect": 1, "ensure_sound": 2, "dissolve_area": 1, "text_panel": 1,
 }
 
 
@@ -32,14 +35,15 @@ def read_program(path):
     data = json.loads(Path(path).read_text(encoding="ascii"))
     if data.get("schema") != 1 or not isinstance(data.get("audio"), dict):
         raise ValueError("Intro data needs to be imported again")
-    operations = data.get("operations")
-    if not isinstance(operations, list) or not operations:
-        raise ValueError("Intro scene program is empty")
-    for item in operations:
-        if (not isinstance(item, dict) or item.get("op") not in OPERATIONS
-                or not isinstance(item.get("args"), list)
-                or len(item["args"]) != OPERATIONS[item["op"]]):
-            raise ValueError("Invalid intro scene instruction")
+    programs = [data.get("operations"), *(data.get("variants") or {}).values()]
+    for operations in programs:
+        if not isinstance(operations, list) or not operations:
+            raise ValueError("Intro scene program is empty")
+        for item in operations:
+            if (not isinstance(item, dict) or item.get("op") not in OPERATIONS
+                    or not isinstance(item.get("args"), list)
+                    or len(item["args"]) != OPERATIONS[item["op"]]):
+                raise ValueError("Invalid intro scene instruction")
     return data
 
 
@@ -135,10 +139,18 @@ class IntroAssets:
                 resources.setdefault(kind, {}).update(items)
         # Scenes that open other resource files (the carpet scene) refer to
         # their SHAP/CTBL as id + offset.
+        # The throne scene also draws a few of the game's own shapes: only the
+        # drawn ones are decoded.
+        drawn = None
+        if self.program.get("kind") == "throne":
+            drawn = {item["args"][0] for operations in self.program["variants"].values()
+                     for item in operations if item["op"] == "shape"}
         for name, offset in self.program.get("resource_files", {}).items():
             for kind, items in parse_resource_fork((directory / name).read_bytes()).items():
                 if kind in ("SHAP", "CTBL"):
-                    resources.setdefault(kind, {}).update({offset + key: value for key, value in items.items()})
+                    resources.setdefault(kind, {}).update({
+                        offset + key: value for key, value in items.items()
+                        if kind == "CTBL" or drawn is None or offset + key in drawn})
         kid = parse_resource_fork((directory / "Kid.rsrc").read_bytes())
         self.kid_palettes = {key: palette_colors(value["data"]) for key, value in kid["CTBL"].items()}
         self.shapes = {key: indexed_shape(value["data"]) for key, value in resources["SHAP"].items()}
@@ -252,14 +264,38 @@ def animated_fade_outs(operations):
     return starts
 
 
+def area_words(rect):
+    """Pixel pairs of a dissolve rectangle in a fixed shuffled order. The
+    Macintosh builds its own order for the area (15:3878); that exact
+    pattern is not reproduced."""
+    top, left, bottom, right = (max(0, rect[0]), max(0, rect[1]),
+                                min(SIZE[1], rect[2]), min(SIZE[0], rect[3]))
+    if top >= bottom or left >= right:
+        return np.zeros((0, 2), dtype=np.intp)
+    starts = np.array([y * SIZE[0] + x for y in range(top, bottom) for x in range(left, right, 2)],
+                      dtype=np.intp)
+    order = list(range(len(starts)))
+    random.Random(0).shuffle(order)
+    starts = starts[order]
+    return np.column_stack((starts, np.minimum(starts + 1, starts // SIZE[0] * SIZE[0] + right - 1)))
+
+
 class IntroPlayer:
-    def __init__(self, assets, audio=None, music=None):
+    def __init__(self, assets, audio=None, music=None, variant=None, prince=None):
         """`music`: (cue, seconds played, game_song metadata) of a game song
-        still playing when the scene starts; its cue markers pace the scene."""
+        still playing when the scene starts; its cue markers pace the scene.
+        `variant` picks one of the program's variants (the throne scene: the
+        Prince's native facing) and `prince` his native X and Y, by which
+        the operations tagged `follow` move."""
         self.assets, self.audio = assets, audio
-        self.operations = assets.program["operations"]
-        self.sounds = assets.program["audio"]
-        self.program_kind = "carpet" if "resource_files" in assets.program else None
+        self.variant, self.prince = variant, prince
+        program = assets.program
+        self.operations = program["variants"][str(variant)] if variant is not None else program["operations"]
+        self.follow = (0, 0)
+        if prince is not None and "prince" in program:
+            self.follow = (prince[0] - program["prince"][0], prince[1] - program["prince"][1])
+        self.sounds = program["audio"]
+        self.program_kind = program.get("kind") or ("carpet" if "resource_files" in program else None)
         self.position = 0
         self.time = 0.0
         self.done = False
@@ -282,6 +318,8 @@ class IntroPlayer:
         self.revision = 0
         self.frame_cache = None
         self.dissolve_words = dissolve_words(assets.program.get("dissolve"))
+        self.saved_rects = {}
+        self.text_panel = None
         # QoL (the carpet scene): the Mac fades block, freezing the clouds; here
         # fade-ins and fade-outs overlap the drawing steps, as in the DOS port.
         self.animated_fades = self.program_kind == "carpet"
@@ -316,6 +354,9 @@ class IntroPlayer:
 
     def draw_shape(self, resource_id, x, y, flags):
         shape = self.assets.shapes[resource_id]
+        if flags & 256:
+            # FreeShpInfo 17:5fd0: the shape mirrored left to right.
+            shape = ImageOps.mirror(shape)
         region = (max(x, self.clip[0]), max(y, self.clip[1]),
                   min(x + shape.width, self.clip[2]), min(y + shape.height, self.clip[3]))
         if region[0] >= region[2] or region[1] >= region[3]:
@@ -325,7 +366,13 @@ class IntroPlayer:
         self.target.paste(crop, region[:2], mask)
 
     def text(self, resource_id, index, initial, dx, dy):
-        if 25002 in self.assets.shapes:
+        colors = ((8, 255), (6, 3), (5, 14))
+        if self.text_panel is not None:
+            # 15:026e-028c (NIS 6): the saved rectangle is the panel and the
+            # text uses entries 1 and 2.
+            self.target.paste(self.saved_rects[self.text_panel][1], (0, 297))
+            colors = ((8, 255), (6, 1), (5, 2))
+        elif 25002 in self.assets.shapes:
             self.target.paste(self.assets.shapes[25002], (0, 297))
         if index:
             # TextInRect (17:294e-29ba) skips leading spaces on each line.
@@ -337,7 +384,7 @@ class IntroPlayer:
             for n, line in enumerate(lines):
                 mask = font.text(line).getchannel("A")
                 left = 1 + max(0, (508 - mask.width) // 2)
-                for offset, color in ((8, 255), (6, 3), (5, 14)):
+                for offset, color in colors:
                     self.target.paste(color, (left + offset, top + n * font.height), mask)
             if initial:
                 clip, self.clip = self.clip, (0, 0, *SIZE)
@@ -446,8 +493,65 @@ class IntroPlayer:
         self.transition = ("title", self.time, duration, None, None)
         self.wait_until = self.time + duration
 
+    def followed(self, item):
+        """Arguments of an operation drawn at the Prince's position."""
+        args, tag = item["args"], item.get("follow")
+        if not tag or self.follow == (0, 0):
+            return args
+        dx, dy = self.follow[0], self.follow[1] if tag == "xy" else 0
+        if item["op"] == "shape":
+            return [args[0], args[1] + dx, args[2] + dy, args[3]]
+        if item["op"] == "save_rect":
+            top, left, bottom, right = args[1]
+            return [args[0], [top + dy, left + dx, bottom + dy, right + dx]]
+        if item["op"] == "dissolve_area":
+            top, left, bottom, right = args[0]
+            return [[top + dy, left + dx, bottom + dy, right + dx]]
+        return args
+
+    @staticmethod
+    def renumbered(colors, first):
+        # RemapCTBL 17:6a78 renumbers the entries first, first + 1, ...
+        # unless the first one already has index `first`.
+        if next(iter(colors), first) != first:
+            colors = {first + offset: color for offset, color in enumerate(colors.values())}
+        return colors
+
     def execute(self, op, args):
-        if op == "shape":
+        if op == "rgb":
+            # ShowNthvRGB 17:130e shows one entry at once.
+            self.palette[args[0]] = tuple(args[1:])
+            self.changed()
+        elif op == "set_palette":
+            for index, color in self.renumbered(self.assets.palettes[args[0]], args[1]).items():
+                if 0 <= index < 256:
+                    self.palette[index] = color
+            self.changed()
+        elif op == "remap":
+            self.loaded[args[0]] = self.renumbered(self.loaded.get(args[0], {}), args[1])
+        elif op == "combine":
+            # CombineCtabs 17:1520 becomes the current table (a5-0x2454).
+            self.loaded = {1: {**self.loaded.get(1, {}), **self.loaded.get(2, {})}}
+        elif op == "fade_out_all":
+            self.fade({index: (0, 0, 0) for index in range(256)}, False, args[0])
+        elif op == "save_rect":
+            box = self.box(args[1])
+            self.saved_rects[args[0]] = box, self.target.crop(box)
+        elif op == "restore_rect":
+            box, image = self.saved_rects[args[0]]
+            self.target.paste(image, box[:2])
+        elif op == "ensure_sound":
+            if self.sound_end(args[1], args[0]) <= self.time + 1e-9:
+                self.sound(*args)
+        elif op == "text_panel":
+            self.text_panel = args[0]
+        elif op == "dissolve_area":
+            self.dissolve_words = None if args[0] is None else area_words(args[0])
+        elif op == "dissolve" and self.dissolve_words is None:
+            # 15:2c06: without dissolve data the whole screen is copied.
+            self.display = self.target.copy()
+            self.changed()
+        elif op == "shape":
             self.draw_shape(*args)
         elif op == "fill":
             self.target.paste(args[0], self.box(args[1]))
@@ -602,7 +706,7 @@ class IntroPlayer:
                 self.wait_until = self.transition[1] + self.transition[2]
                 continue
             self.position += 1
-            self.execute(item["op"], item["args"])
+            self.execute(item["op"], self.followed(item))
 
     def next_update_delay(self):
         if self.transition is not None and self.transition[0] == "title":

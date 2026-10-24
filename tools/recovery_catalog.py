@@ -13,6 +13,9 @@ CATALOG = PROJECT_DIR / "docs" / "RECOVERY_CATALOG.csv"
 
 # These reviews cover specific ordinary branches, never an entire routine.
 REVIEWS = {
+    (15, "NISThroneRoom"): ("partial", "tools/extract_intro.py;pop2/intro.py;pop2/scene_prototype.py", "NIS 6 exported per facing with ThroneNIS/Kid/Prince/Ruins shapes, text panel and Prince-relative drawing; screen before it approximated by 15:6d46; area dissolve order not native"),
+    (15, "DrawDeadKid"): ("partial", "tools/extract_intro.py;pop2/intro.py", "Kid SHAP 25081 at the Prince's X/Y (mirrored facing right), sword SHAP 1011, CTBL 1004 at 240"),
+    (15, "QueenAddNIS"): ("partial", "tools/extract_intro.py", "environment 4 only: Ruins SHAP 4200-4207 throne room redraw and DrawDeadKid(1)"),
     (15, "Discovery"): ("partial", "tools/extract_intro.py;pop2/intro.py;docs/LEVEL4_RECOVERY.md", "original coordinator exported to portable operations and level 3-to-4 host wiring; three callback-free flags-6 animations; native host stall parity omitted"),
     (16, "runScript__10tAnimationFiUs"): ("partial", "pop2/intro.py;tools/extract_intro.py", "12 Discovery/tree scripts and 481 native incremental steps; carried layers/events/interval/end checked; tree callbacks and maintain cadence not executed"),
     (16, "draw__10tAnimationFv"): ("partial", "tools/extract_intro.py", "69 Discovery frames and 144 native drawing calls agree in order/coordinates/flags; shape dimensions supplied, not independent pixel rasterization"),
