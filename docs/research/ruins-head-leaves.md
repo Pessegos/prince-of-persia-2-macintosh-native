@@ -190,6 +190,15 @@ the floor edges 5:2198 (directions -1/1), choosing SEQS 170 (out, X +61)
 or 172 (in). Not translated further yet: 7:1b52 onward, 7:1dc6,
 SnakeUpdateOppInfo 7:1ed6.
 
+## Runtime Groundwork
+
+`pop2/ruins_actors.py` (not wired into the game yet) parses the set-5
+records (kind +0x18 through a5-0x5280: 5 -> head 7, 6 -> head 8, 8 ->
+serpent 11), HeadAddOpponent's starting state, the Head FRAM index (type 8
++43 below pose 182) and ChompAgain's bounds. Per level: six 6
+(4 heads, 2 serpents), seven 14 (8 heads, 6 serpents), eight 24 (19 heads,
+5 serpents), nine 12 (6 heads, 6 serpents).
+
 ## Still Open
 
 The Prince's side (bite damage per chomp, the bitten sequences 150-155 of
