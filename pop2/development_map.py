@@ -67,9 +67,9 @@ def map_enemies(level, positions):
     from pop2.sequence_runtime import SequenceRuntime, SequenceState
     from pop2.skeleton import Skeleton
 
+    if struct.unpack_from('>h', level.data, 0x21a4)[0] in (5, 6):
+        return _map_ruins_actors(level, positions)
     if struct.unpack_from('>h', level.data, 0x21a4)[0] not in (-1, 0, 2):
-        # Heads and serpents (opponent sets 5/6) are not drawn on the
-        # development map yet; show their rooms without them.
         return None, {}
     spawns = {room: GuardSpawn.all_from_level(level.data, room) for room in positions}
     if not any(spawns.values()):
@@ -92,6 +92,32 @@ def map_enemies(level, positions):
             if spawn.skeleton_words:
                 Skeleton.from_spawn(spawn).initialize(actor)
             actors[room].append(actor)
+    return art, actors
+
+
+def _map_ruins_actors(level, positions):
+    # Heads and serpents at their records' starting state (HeadAddOpponent).
+    from types import SimpleNamespace
+
+    from pop2.animation_data import sequence_words
+    from pop2.combat_art import GuardArtwork, sword_palette_for_level
+    from pop2.render_opening import load_resource_file
+    from pop2.ruins_ai import RuinsCreatures
+
+    prince = load_resource_file('Prince.rsrc')
+    sequences = {i: sequence_words(item['data']) for i, item in prince['SEQS'].items()}
+    host = SimpleNamespace(level=level.data, level_kind=level.kind, sequences=sequences)
+    creatures = RuinsCreatures()
+    actors = {}
+    for room in positions:
+        creatures.load_room(host, room)
+        if creatures.actors(room):
+            actors[room] = list(creatures.actors(room))
+    if not actors:
+        return None, {}
+    art = GuardArtwork(load_resource_file('Head.rsrc'), prince['SHAP'],
+                       int.from_bytes(prince['SHPL'][1000]['data'][:2], 'big'),
+                       sword_palette_for_level(prince, level.kind))
     return art, actors
 
 
@@ -134,7 +160,7 @@ def clean_room_frames(renderer, terrain, positions, enemies=None):
         frame = Image.alpha_composite(frame, art.foreground)
         scenery[room] = frame.copy()
         if enemies is not None:
-            from pop2.combat import guard_frame_index
+            from pop2.combat import actor_frame_index
             from pop2.terrain import floor_y
 
             artwork, actors = enemies
@@ -142,7 +168,7 @@ def clean_room_frames(renderer, terrain, positions, enemies=None):
                 layer = Image.new('RGBA', frame.size)
                 artwork.draw(layer, actor.state, floor_y(actor.row), actor.palette_variant)
                 bounds = artwork.bounds(actor.state, floor_y(actor.row))
-                record = artwork.frames[guard_frame_index(actor.state.action)]
+                record = artwork.frames[actor_frame_index(actor.state)]
                 # Use the current room's actor-aware masks, including the
                 # corrected cavern redraw ordering, not a flattened PNG mask.
                 mask = art.actor_mask(actor.row, bounds[3], actor.state, bounds, record)

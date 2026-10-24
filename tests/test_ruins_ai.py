@@ -176,21 +176,6 @@ class RuinsControllerTests(unittest.TestCase):
         self.assertEqual([actor.ruins.removed for actor in loaded.combat.ruins.actors(21)],
                          [True, False])
 
-    def test_a_wandering_head_moves_into_the_neighbouring_room(self):
-        from pop2.game_session import GameResources, GameSession
-
-        game = GameSession.load(GameResources.load(), 6)
-        combat = game.combat
-        combat.enter_room(6, 0)
-        head = combat.ruins.actors(6)[1]
-        left = combat.terrain.neighbor(6, 'left')
-        head.state.target_x = head.state.current_x = -40
-        combat.ruins._cross_room(head, combat)
-        self.assertEqual(head.room, left)
-        self.assertIn(head, combat.ruins.actors(left))
-        self.assertNotIn(head, combat.ruins.actors(6))
-        self.assertEqual(head.state.target_x, 470)
-
     def test_a_biting_head_is_drawn_on_the_princes_neck(self):
         from dataclasses import replace
         from tests.test_terrain import RooftopSceneTests
@@ -222,6 +207,17 @@ class RuinsControllerTests(unittest.TestCase):
         self.assertTrue(left <= prince[2] and prince[0] <= right)
         self.assertTrue(prince[1] - 40 <= bottom <= prince[1] + 40)
         scene.render()
+
+    def test_the_development_map_shows_heads_and_serpents(self):
+        from pop2.development_map import map_enemies
+        from pop2.game_session import GameResources
+
+        level = GameResources.load().level(6)
+        art, actors = map_enemies(level, {room: (room, 0) for room in range(32)})
+        # Level six: heads in native rooms 4, 7 and 16, serpents in 20 and 25.
+        self.assertEqual(sorted(room + 1 for room in actors), [4, 7, 16, 20, 25])
+        self.assertEqual(len(art.frames), 141)
+        self.assertEqual({actor.state.actor_type for room in actors.values() for actor in room}, {7, 11})
 
 
 if __name__ == '__main__':

@@ -984,7 +984,6 @@ def run_animation_probe(recovery, cases=2000, seed=2031, frames=30):
         creatures = RuinsCreatures()
         creatures.rooms[6] = [actor]
         creatures._wall_contact = lambda *_args: None
-        creatures._cross_room = lambda *_args: None
         encounter = SimpleNamespace(rng=TapeRandom(draws))
         started[sequence] += 1
         difference = None
@@ -1033,8 +1032,177 @@ def run_animation_probe(recovery, cases=2000, seed=2031, frames=30):
                   '5:4d84 AddSound: recorded', '3:4a8e DrawOppMeter, 6:36f2: supplied'],
         scope=(f'Up to {frames} frames of AnimChar 4:2c0c, 4:341a and MoveChar 4:3464 from the '
                'start of every head (130-166) and serpent (168-177) sequence, against '
-               'SequenceRuntime.next_frame and RuinsCreatures._after_frame (wall contact and '
-               'room change disabled). No controller runs between frames.'),
+               'SequenceRuntime.next_frame and RuinsCreatures._after_frame (wall contact '
+               'disabled). No controller runs between frames.'),
+    )
+
+
+class NativeRuinsBarrier(NativeRuinsStab):
+    RANGES = {
+        **NativeRuinsStab.RANGES,
+        3: NativeRuinsStab.RANGES[3] + ((0x0ac8, 0x0ba2), (0x3e7c, 0x3ec4)),
+        4: NativeRuinsStab.RANGES[4] + ((0x62b0, 0x6550), (0x6562, 0x65f6), (0x6610, 0x6694),
+                                        (0x5654, 0x56d4), (0x56e6, 0x5728), (0x5ade, 0x5b0c),
+                                        (0x5c76, 0x5cba), (0x5cbc, 0x5e60), (0x5e6e, 0x5eac),
+                                        (0x3b30, 0x3b9c), (0x3afa, 0x3b24)),
+        7: NativeRuinsStab.RANGES[7] + ((0x0006, 0x00e0), (0x0b6e, 0x0c48)),
+    }
+    SECT_RECT = 0xd0000
+
+    def __init__(self, program, head, sequences):
+        super().__init__(program, head, sequences)
+        base = struct.unpack_from('>H', head['SHPL'][750]['data'])[0]
+        # SHAP header: width, height (Codex's neck probe reads them alike).
+        self.sizes = {rid - base + 1: struct.unpack_from('>hH', item['data'], 4)
+                      for rid, item in head['SHAP'].items()}
+
+    def reset(self, level):
+        super().reset(level)
+        self.cpu.mem_write(self.A5 - 0x1f58, struct.pack('>I', self.SECT_RECT))
+
+    def dispatch(self, cpu, address, size, user):
+        stack = cpu.reg_read(self.registers['a7'])
+        if address == self.SECT_RECT:
+            # SectRect: the head stays on screen; the rectangle is kept.
+            cpu.mem_write(stack + 16, b'\x01')
+            cpu.reg_write(self.registers['a7'], stack + 16)
+            cpu.reg_write(self.registers['pc'], struct.unpack('>I', cpu.mem_read(stack, 4))[0])
+            return
+        if address in (self.address(17, 0x673a), self.address(3, 0x533a)):
+            if address == self.address(17, 0x673a):
+                index = struct.unpack('>h', cpu.mem_read(stack + 8, 2))[0]
+                point = struct.unpack('>I', cpu.mem_read(stack + 10, 4))[0]
+            else:
+                index = struct.unpack('>h', cpu.mem_read(stack + 4, 2))[0] + 1
+                point = struct.unpack('>I', cpu.mem_read(stack + 6, 4))[0]
+            width, height = self.sizes[index]
+            cpu.mem_write(point, struct.pack('>2h', height, width))
+            self.skip(cpu, 1)
+            return
+        if address in (self.address(7, 0x0028), self.address(7, 0x00cc)):
+            cpu.reg_write(self.registers['pc'], address + 2)
+            return
+        if address == self.address(4, 0x5cbc):
+            # ShapeBounds runs natively here (the other runs keep it inert).
+            NativeHeadIdle.dispatch(self, cpu, address, size, user)
+            return
+        super().dispatch(cpu, address, size, user)
+
+
+def run_barrier_probe(recovery, cases=20000, seed=2032):
+    """CheckBarrier 4:62b0 for heads (HeadEnemyCollide 7:0b6e, ShapeBounds,
+    GetBarrDistFromFace/Back) against RuinsCreatures._wall_contact."""
+    from pop2.combat import Fighter
+    from pop2.combat_art import GuardArtwork, sword_palette_for_level
+    from pop2.render_opening import load_resource_file
+    from pop2.ruins_ai import RuinsCreatures, RuinsMind
+    from pop2.sequence_runtime import SequenceRuntime, SequenceState
+    from pop2.terrain import LevelMap, floor_y
+
+    directory = Path(recovery) / 'resource_forks'
+    program_bytes = (directory / 'Prince of Persia 2.bin').read_bytes()
+    program, prince_rsrc, head = (parse_resource_fork((directory / name).read_bytes()) for name in
+                                  ('Prince of Persia 2.bin', 'Prince.rsrc.bin', 'Head.rsrc.bin'))
+    level = bytearray(prince_rsrc['LEVL'][2006]['data'])
+    machine = NativeRuinsBarrier(program, head, prince_rsrc['SEQS'])
+    prince_assets = load_resource_file('Prince.rsrc')
+    art = GuardArtwork(load_resource_file('Head.rsrc'), prince_assets['SHAP'],
+                       int.from_bytes(prince_assets['SHPL'][1000]['data'][:2], 'big'),
+                       sword_palette_for_level(prince_assets, 6))
+    fram = head['FRAM'][750]['data']
+    terrain = LevelMap(bytes(level))
+    spots = []
+    for room in range(1, 33):
+        for row in range(3):
+            for column in range(1, 9):
+                kinds = [terrain.tile(room - 1, column + offset, row).kind for offset in (-1, 0, 1)]
+                if any(kind in (2, 7, 20, 25, 43, 4, 12, 10) for kind in kinds):
+                    spots.append((room, row, column))
+    rng = random.Random(seed)
+    counts, results, mismatches = Counter(), Counter(), []
+    for case in range(cases):
+        room, row, column = rng.choice(spots)
+        actor_type = rng.choice((7, 8))
+        facing = rng.choice((-1, 0))
+        # Pose 289 has no image (shape -1): ShapeBounds keeps stale edges.
+        pose = rng.choice((150, 159, 165, 166, 173, 181, 190, 192, 225))
+        x = 207 + column * 51 + rng.randrange(-30, 80)
+        frame_index = pose - 149 + (43 if actor_type == 8 and pose <= 181 else 0)
+        column_, remainder = supporting_column(x, facing, fram[frame_index * 10:frame_index * 10 + 10])
+        selected = rng.choice((140, 142, 147, 153, 157, 164, 166, 150, 154, 58))
+        alive = rng.random() < 0.75
+        initial = dict(slot=0, facing=facing, x=x, y=row * 120 + 73 + rng.choice((0, 0, -15)),
+                       actor=actor_type, pose=pose, column=column_, row=row,
+                       horizontal_velocity=0, vertical_velocity=0, room=room,
+                       armed=rng.choice((1, 1, 1, 0)), alive=-1 if alive else 0,
+                       life=rng.choice((1, 2, 3)) if alive else 0, sequence=selected, cursor=1,
+                       selected=selected, body_top=0, body_bottom=0,
+                       special=0, alert=0)
+        # Special flag 1 draws at the Prince's neck, which needs his drawn
+        # object (none here); HeadEnemyCollide skips that flag anyway.
+        anim = rng.choice((0, 0, 5))
+        supplied = bytearray(level)
+        for cell in range(30):
+            if struct.unpack_from('>H', supplied, (room - 1) * 60 + cell * 2)[0] == 4:
+                struct.pack_into('>H', supplied, 0x780 + (room - 1) * 120 + cell * 4,
+                                 rng.choice((0, 40, 120, 188, 255)))
+        machine.reset(supplied)
+        machine.cpu.mem_write(machine.A5 - 0x5056, bytes(62))
+        for name, value in initial.items():
+            machine.put_word(WORKING[name], value)
+        machine.put_word(-0x5046, anim)
+        machine.put_word(-0x4fc2, room)
+        # The current room's neighbours (left, right, up, down), as the
+        # original keeps them for 4:56e6 and 4:3b30.
+        links = struct.unpack_from('>4H', supplied, 0x2080 + (room - 1) * 8)
+        for offset, linked in zip((-0x4fc0, -0x4fbe, -0x4fba, -0x4fbc), links):
+            machine.put_word(offset, linked)
+        machine.put_word(-0x481c, remainder)
+        # 2:65e2-65ea: LoadFrame, the drawing setup and ShapeBounds run just
+        # before the collision checks in the opponent pipeline.
+        machine.call(4, 0x2a8e)
+        machine.call(3, 0x0ac8)
+        machine.call(4, 0x5cbc)
+        machine.call(4, 0x62b0)
+        native = {name: machine.word(WORKING[name]) for name in ('x', 'selected', 'sequence', 'cursor')}
+        native['life'] = max(0, machine.word(WORKING['life']) + min(0, machine.word(-0x5034)))
+
+        state = SequenceState(selected, cursor=1, action=pose, current_x=x - 207, target_x=x - 207,
+                              current_y=initial['y'] - floor_y(row), facing=1 if facing == 0 else 0,
+                              actor_type=actor_type, sequence_mode=initial['special'],
+                              animation_state=anim, selected_sequence_id=selected)
+        actor = Fighter(SequenceRuntime({}, state), initial['life'], 3, room - 1, row,
+                        sword_drawn=initial['armed'] == 1)
+        actor.runtime.next_frame = lambda: None
+        actor.ruins = RuinsMind(actor_type, 5, 1, 0)
+        encounter = SimpleNamespace(terrain=LevelMap(bytes(supplied)), guard_art=art,
+                                    level=bytes(supplied))
+        creatures = RuinsCreatures()
+        creatures._wall_contact(actor, encounter)
+        port = dict(x=state.target_x + 207, selected=state.selected_sequence_id,
+                    sequence=state.sequence_id, cursor=state.cursor, life=actor.life)
+        differences = {name: (native[name], port[name]) for name in native if native[name] != port[name]}
+        results[native['selected']] += 1
+        if differences:
+            counts['mismatch'] += 1
+            if len(mismatches) < 40:
+                cells = [(tile.kind, tile.foreground) for tile in (
+                    encounter.terrain.tile(room - 1, column_ + offset, row) for offset in (-1, 0, 1))]
+                mismatches.append(dict(case=case, initial=initial, anim=anim, cells=cells,
+                                       native_height=machine.word(-0x5028) - machine.word(-0x502c),
+                                       differences=differences))
+        else:
+            counts['match'] += 1
+    return dict(
+        cases=dict(counts), mismatches=counts['mismatch'], outcomes=dict(sorted(results.items())),
+        examples=mismatches, executable_sha256=hashlib.sha256(program_bytes).hexdigest(),
+        supplied=['17:673a/3:533a image sizes: actual Head SHAP headers (ShapeBounds native)',
+                  'SectRect: the body rectangle stays on screen',
+                  'AnimChar: skipped on both sides', 'no Prince drawn object (no neck point)'],
+        scope=('CheckBarrier 4:62b0 for heads next to walls, gates (random foregrounds), '
+               'crevices and other cells of level seven, with the original drawing setup '
+               '3:0ac8 and ShapeBounds 4:5cbc, against RuinsCreatures._wall_contact using '
+               'the port Head artwork.'),
     )
 
 
@@ -1048,8 +1216,9 @@ def main():
     parser.add_argument('--prince', action='store_true')
     parser.add_argument('--strike', action='store_true')
     parser.add_argument('--animation', action='store_true')
+    parser.add_argument('--barrier', action='store_true')
     args = parser.parse_args()
-    report = (run_animation_probe if args.animation else run_strike_probe if args.strike else run_prince_probe if args.prince else run_stab_probe if args.stab else run_serpent_probe if args.serpents else run_probe)(
+    report = (run_barrier_probe if args.barrier else run_animation_probe if args.animation else run_strike_probe if args.strike else run_prince_probe if args.prince else run_stab_probe if args.stab else run_serpent_probe if args.serpents else run_probe)(
         args.source, args.cases)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
