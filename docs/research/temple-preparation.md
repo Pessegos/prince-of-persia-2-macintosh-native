@@ -318,3 +318,12 @@ the same update; consumed Up1 also satisfies the hanging branch's nonzero
 test. Sixteen real preview calls retain their actor effects through save.
 Input polling and cell/bars/physical-contact services remain supplied;
 these are single-update fixtures, not complete gameplay/input parity.
+
+[Real controller geometry](temple-controller-geometry.md) replaces the three
+cell-query sinks and executes SlideRockInCell, correcting the old `bars`
+name:9,534 world comparisons plus8,064 direct query/edge comparisons pass.
+All cache words, cross-room reads, static MOB-bank selection, gate/rock climb
+admission and final actor state are compared. Left-edge clipping uses `max`,
+not `min`, and depends on supplied frame width/facing. Actor anchors, widths,
+static banks and sampled axes remain fixtures; other physical contact and
+multi-frame gameplay are not yet proved by this composition.
