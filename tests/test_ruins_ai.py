@@ -138,6 +138,49 @@ class RuinsControllerTests(unittest.TestCase):
         self.assertIs(opponent, combat.ruins.banked)
         self.assertEqual(opponent.ruins.mode in (1, 3), True)
 
+    def test_killed_heads_stay_dead_through_rebirth_and_saves(self):
+        import tempfile
+        from pathlib import Path
+        from pop2.game_session import GameResources, GameSession
+        from pop2.rebirth import RebirthSnapshot
+        from pop2.save_game import capture, read_save, write_save
+
+        resources = GameResources.load()
+        # Level seven's native room 22 has two heads; the level has a checkpoint.
+        game = GameSession.load(resources, 7)
+        combat = game.combat
+        combat.enter_room(21, 0)
+        first, second = combat.ruins.actors(21)
+        first.life, first.ruins.removed = 0, True
+        game.checkpoint = RebirthSnapshot.capture(game.level.checkpoints[0], combat)
+        game.checkpoint.restore_world(combat)
+        combat.enter_room(21, 0)
+        restored = combat.ruins.actors(21)
+        self.assertEqual([actor.ruins.removed for actor in restored], [True, False])
+        self.assertEqual(restored[1].state.source_sequence_id, 130)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'ruins.pop2save'
+            write_save(path, capture(game))
+            loaded, _saved = read_save(path, resources)
+        loaded.combat.enter_room(21, 0)
+        self.assertEqual([actor.ruins.removed for actor in loaded.combat.ruins.actors(21)],
+                         [True, False])
+
+    def test_a_wandering_head_moves_into_the_neighbouring_room(self):
+        from pop2.game_session import GameResources, GameSession
+
+        game = GameSession.load(GameResources.load(), 6)
+        combat = game.combat
+        combat.enter_room(6, 0)
+        head = combat.ruins.actors(6)[1]
+        left = combat.terrain.neighbor(6, 'left')
+        head.state.target_x = head.state.current_x = -40
+        combat.ruins._cross_room(head, combat)
+        self.assertEqual(head.room, left)
+        self.assertIn(head, combat.ruins.actors(left))
+        self.assertNotIn(head, combat.ruins.actors(6))
+        self.assertEqual(head.state.target_x, 470)
+
 
 if __name__ == '__main__':
     unittest.main()

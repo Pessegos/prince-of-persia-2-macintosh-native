@@ -340,9 +340,12 @@ riposte with 66). The port selects 96 when the nearest living ruins actor
 Port approximations: the wall contact (an armed head inside a wall or
 closed gate cell is pushed back 22 pixels instead of the full CheckBarrier
 4:62b0 distances); the column read live from the pose instead of the value
-cached at LoadFrame; ruins actors are not saved (a restored save or a
-rebirth respawns them from their records); the Prince's native ALIVE is
-taken from the host's death counter; IsSoundPlaying is not consulted.
+cached at LoadFrame; an actor whose supporting column leaves 0..9 moves to
+the neighbouring room's list (the original cut 2:6680-6700 is not
+translated); IsSoundPlaying is not consulted; the kill song 137 plays at
+death rather than when native ALIVE reaches 6. Rebirth checkpoints (and so
+saves, which keep the checkpoint) carry the ruins actors: killed heads and
+serpents stay dead, the living restart at rest on entry.
 
 ## Native Comparison Of The Runtime
 
@@ -388,6 +391,7 @@ flight, the wall contact and the per-frame scheduling.
 
 ## Still Open
 
-Neck alignment while biting (AlignHeadOnKidNeck, Codex's probe), heads crossing into a neighbouring room,
-the development map, saving ruins actors, and the kill songs' timing.
-Every value above needs a native probe before it is relied on.
+Neck alignment while biting (AlignHeadOnKidNeck needs the drawn Prince
+object index), the development map, the original cut between rooms, and
+native comparisons of the Prince's side of CheckStab, TestStrike's ranges,
+AnimChar of the head sequences, flight and per-frame scheduling.

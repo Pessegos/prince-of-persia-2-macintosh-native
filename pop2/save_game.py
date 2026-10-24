@@ -32,6 +32,7 @@ from pop2.opponent_records import GuardRoomRecord
 from pop2.potions import Potions
 from pop2.pressure_plates import PressurePlates
 from pop2.rebirth import Checkpoint, DeathState, RebirthSnapshot
+from pop2.ruins_ai import RuinsMind
 from pop2.story_progress import FRAMES_PER_MINUTE, StoryProgress
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.skeleton import Skeleton, SkeletonRoomRecord
@@ -50,6 +51,7 @@ CLASSES = {cls.__name__: cls for cls in (
     WaterEntry, Lava, LavaPool, FallingFloor, LooseFloors, OpponentGenerationPoint,
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
     Skeleton, SkeletonRoomRecord, GuardRoomRecord, TerrainMotion, WallSpikes, Scythes,
+    RuinsMind,
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
         LooseFloors: {'shake_events'}, PressurePlates: {'slams', 'slam_sounds'}}
@@ -166,7 +168,10 @@ def _unpack(value, resources, lava_tables, depth=0):
     if cls is SequenceState:
         optional.add('floating')
     if cls.__name__ == 'Fighter':
-        optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive', 'sword_lost'))
+        optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive', 'sword_lost',
+                         'ruins'))
+    if cls is RebirthSnapshot:
+        optional.add('ruins_rooms')
     if cls is Skeleton:
         optional.update(('room_record', 'native_alive', 'rise_song_pending'))
     if cls is SkeletonRoomRecord:
@@ -224,6 +229,28 @@ def _fighter_valid(actor, resources):
             or record.cell is not None and not -19 <= record.cell < 90
             or abs(record.height) > 10000):
         raise SaveGameError('Saved guard room record is out of range')
+
+
+def _ruins_rooms_valid(rooms, resources):
+    from pop2.combat import Fighter
+
+    if not isinstance(rooms, dict) or len(rooms) > 32:
+        raise SaveGameError('Invalid saved ruins rooms')
+    for room, actors in rooms.items():
+        if type(room) is not int or not 0 <= room < 32 or not isinstance(actors, list) or len(actors) > 10:
+            raise SaveGameError('Invalid saved ruins room')
+        for actor in actors:
+            if not isinstance(actor, Fighter) or not isinstance(actor.ruins, RuinsMind):
+                raise SaveGameError('Invalid saved ruins actor')
+            state, mind = actor.state, actor.ruins
+            if (actor.room != room or not -2 <= actor.row <= 8
+                    or state.actor_type not in (7, 8, 11) or mind.actor_type != state.actor_type
+                    or not 0 <= actor.life <= actor.max_life <= 120 or not 0 <= mind.skill < 12
+                    or state.facing not in (0, 1) or state.sequence_id not in resources.sequences
+                    or not 0 <= state.cursor <= len(resources.sequences[state.sequence_id])
+                    or not 149 <= state.action <= 289
+                    or abs(state.target_x) > 10000 or abs(state.current_y) > 10000):
+                raise SaveGameError('Saved ruins actor is out of range')
 
 
 def capture_snapshot(game, controls=None, copy_verified=False):
@@ -593,6 +620,8 @@ def restore_progress(document, resources):
                         raise SaveGameError('Invalid checkpoint opponent')
                 if any(not isinstance(point, OpponentGenerationPoint) for point in entry[1]):
                     raise SaveGameError('Invalid checkpoint generation point')
+            if snapshot.ruins_rooms is not None:
+                _ruins_rooms_valid(snapshot.ruins_rooms, resources)
             game.checkpoint = snapshot
             snapshot.restore_world(game.combat)
             point = snapshot.checkpoint

@@ -162,6 +162,8 @@ class Fighter:
     native_alive: bool | None = None
     # a5-0x503c == -1: the Prince has no sword to draw.
     sword_lost: bool = False
+    # Ruins heads and serpents: their generator-record state (RuinsMind).
+    ruins: object | None = None
 
     @property
     def state(self):
