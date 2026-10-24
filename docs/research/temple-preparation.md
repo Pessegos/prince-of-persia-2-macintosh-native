@@ -361,3 +361,9 @@ visible-height threshold:102,400 controlled direct comparisons and14,080
 predicate comparisons after2,816 real Kid frame/bound chains match. Equality
 permits passage; clipping and signed-word height matter. This does not yet
 execute the contact/barrier caller or imply physically reachable passage.
+
+[Standing clearance](temple-gate-standing.md) executes GateBarrToStandUp and
+real cell traversal with no service replacements:39,318 comparisons match.
+The first gate wins; only low-byte positions1..183 and an inclusive native-X
+band block this helper. Cache and room-base-pointer writes are compared.
+Caller/standing animation and full physical contact remain outside this proof.

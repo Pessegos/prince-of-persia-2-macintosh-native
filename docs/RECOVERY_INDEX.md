@@ -263,6 +263,13 @@ physical frames, outer FrameAdv and playable temple remain P.
 thresholds, exemptions and signed wrapping are checked; graphics services
 stay supplied. Real contact/barrier callers and physical reachability remain P.
 
+[Standing clearance](research/temple-gate-standing.md) extends R through
+GateBarrToStandUp4:5baa and actual cell/neighbor traversal:39,318 comparisons,
+11 asset-free regressions, no supplied services. First-gate priority,
+inclusive native-X band, cached normalized column and room-base-pointer
+side effects are checked. Standing callers/animation, full contact and
+multi-frame physical reachability remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
