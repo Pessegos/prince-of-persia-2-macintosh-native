@@ -257,6 +257,12 @@ selected animations. SHAP-size/graphics services, input/placement/static
 banks and remaining physical contact/floor/hazards stay supplied; repeated
 physical frames, outer FrameAdv and playable temple remain P.
 
+[Gate admission](research/temple-gate-admission.md) extends R through4:5b0e:
+102,400 controlled direct comparisons and14,080 predicate comparisons after
+2,816 real Kid bound chains,8 asset-free regressions. Visible height, exact
+thresholds, exemptions and signed wrapping are checked; graphics services
+stay supplied. Real contact/barrier callers and physical reachability remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and

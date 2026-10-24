@@ -355,3 +355,9 @@ and edge saves are compared; keeping width fixed18 would change18 selected
 animations in this corpus. Physical contact/floor/hazards, initial placement,
 sampled input and shape/graphics services remain supplied. This is not a
 complete physical climb/fall or repeated FrameAdv/playable-temple proof.
+
+[Gate admission](temple-gate-admission.md) now recovers native4:5b0e and its
+visible-height threshold:102,400 controlled direct comparisons and14,080
+predicate comparisons after2,816 real Kid frame/bound chains match. Equality
+permits passage; clipping and signed-word height matter. This does not yet
+execute the contact/barrier caller or imply physically reachable passage.
