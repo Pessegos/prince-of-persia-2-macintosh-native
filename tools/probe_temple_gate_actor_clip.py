@@ -19,8 +19,8 @@ def put_actor(actor, offset, value):
     struct.pack_into('>h', actor, offset, signed_word(value))
 
 
-def clip_reference(actor, sequences):
-    """Bounded independent AnimChar interpreter: mode, relative X, links and poses."""
+def clip_reference(actor, sequences, *, vertical=False):
+    """Bounded AnimChar model; vertical opts into relative Y and operand-free row decrement."""
     if len(actor) != 62 or actor_word(actor, 8) != 0:
         raise ValueError('Expected a complete type0 actor')
     result = bytearray(actor)
@@ -40,7 +40,10 @@ def clip_reference(actor, sequences):
             put_actor(result, 10, op)
             events.append(('handle', 'HSetState'))
             return dict(actor=bytes(result), events=events)
-        if op not in (-7, -5, -1):
+        if op == -3 and vertical:
+            put_actor(result, 14, actor_word(result, 14) - 1)
+            continue
+        if op not in ((-7, -6, -5, -1) if vertical else (-7, -5, -1)):
             raise ValueError(f'Opcode outside the bounded clip domain: {op}')
         if cursor >= len(words):
             raise ValueError('Truncated clip operand')
@@ -52,6 +55,8 @@ def clip_reference(actor, sequences):
         elif op == -5:
             delta = operand if actor_word(result, 2) == 0 else -operand
             put_actor(result, 4, actor_word(result, 4) + delta)
+        elif op == -6:
+            put_actor(result, 6, actor_word(result, 6) + operand)
         else:
             # AnimChar's link updates the active sequence, not JumpSeq's source.
             if operand not in sequences or operand == 11:

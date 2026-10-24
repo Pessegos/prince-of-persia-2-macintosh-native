@@ -333,3 +333,10 @@ type0 LoadFrame and supporting-column calculation with all352 original Kid
 frames:22,528 comparisons pass across two facings,16 X values and two
 separately supplied attachment bindings. This recovers the column input,
 not foot Y/row, sprite bounds/frame width or reachable frame progression.
+
+[Frames in world control and bounded progression](temple-frame-progression.md)
+connect that real loader before/after animation inside the actual caller:
+2,214 world calls plus21,750 persistent AnimChar/LoadFrame operations match.
+Scripted X/Y/row changes and refreshed supporting columns are compared;
+manual helper continuation is not another complete world/physics update.
+GetCharEdges/width, support/contact and outer FrameAdv remain separate gaps.

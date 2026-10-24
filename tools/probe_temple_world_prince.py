@@ -74,11 +74,18 @@ def gravity_reference(actor, floating):
     return bytes(result), events
 
 
-def prince_reference(state, sequences, inputs, controller=None):
+def prince_reference(state, sequences, inputs, controller=None, frame_loader=None):
     result = dict(state)
     events = list(state['events']) + [('prince',), ('load_kid',), ('outside_check',)]
     saved = state['prince']
     actor = bytearray(saved)
+
+    def load_frame():
+        events.append(('frame',))
+        if frame_loader is not None:
+            loaded = frame_loader(bytes(actor), result)
+            actor[:] = loaded['actor']
+            result.update(loaded['updates'])
 
     def controls():
         if controller is not None:
@@ -100,7 +107,9 @@ def prince_reference(state, sequences, inputs, controller=None):
     # The fixture's opponent index is -1; nearest returns supplied -1 -> slot0.
     if actor_word(actor, 58) != -1:
         raise ValueError('This caller reference supplies opponent index-1 only')
-    events.extend((('nearest', 1), ('load_opponent', 0), ('frame',), ('sword',), ('edges',)))
+    events.extend((('nearest', 1), ('load_opponent', 0)))
+    load_frame()
+    events.extend((('sword',), ('edges',)))
     control = controls()
     if control != -1 and inputs.live:
         if inputs.suppress_animation:
@@ -112,8 +121,13 @@ def prince_reference(state, sequences, inputs, controller=None):
             if actor_word(actor, 10) != 0:
                 moved, motion_events = gravity_reference(actor, inputs.floating)
                 actor = bytearray(moved)
-                events.extend(motion_events)
-                events.extend((('frame',), ('sword',), ('edges',), ('fight_distance',),
+                for event in motion_events:
+                    if event == ('frame',):
+                        load_frame()
+                    else:
+                        events.append(event)
+                load_frame()
+                events.extend((('sword',), ('edges',), ('fight_distance',),
                                ('barrier',), ('collide',), ('gate_contact',), ('floor',), ('pressure',),
                                ('spikes',), ('temple_hazard',)))
                 if not inputs.invulnerable:
@@ -138,7 +152,7 @@ def prince_reference(state, sequences, inputs, controller=None):
                 countdown=countdown, result=control)
 
 
-def world_reference(state, sequences, inputs, controller=None):
+def world_reference(state, sequences, inputs, controller=None, frame_loader=None):
     result = dict(state, events=[('world',)])
     if inputs.live:
         prefix = result['events'] + [('rubble',), ('bank',)]
@@ -147,7 +161,7 @@ def world_reference(state, sequences, inputs, controller=None):
         if inputs.special_actor == 10:
             result['events'].append(('opponent_check',))
         result['events'].extend((('generators', state['view']), ('nearest_sides',)))
-    result = prince_reference(result, sequences, inputs, controller)
+    result = prince_reference(result, sequences, inputs, controller, frame_loader)
     if not inputs.live or result['result'] == -1:
         return result
     if result['result'] != 0:
