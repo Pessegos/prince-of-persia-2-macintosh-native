@@ -862,6 +862,10 @@ class Caverns(Environment):
 
     def ambient_audio(self, audio, motion):
         scene = self.scene
+        in_carpet_room = carpet_room(scene.game.level.number, scene.room_id)
+        # CUST entry 8:0d50 requests 114 once; leave 8:0d5c -> 14f0 stops it.
+        audio.room_song((scene.game.level.number, scene.room_id),
+                        ROOM_SONG if in_carpet_room and scene.game.caverns.carpet.counter == 0 else None)
         if scene.level_complete:
             return
         fighting = not scene.peaceful and scene.combat.opponent_to_fight()
@@ -879,14 +883,7 @@ class Caverns(Environment):
                 if not audio.song_playing(112):
                     audio.add_song(112)
                 skeleton.rise_song_pending = False
-        if carpet_room(scene.game.level.number, scene.room_id):
-            # CUST entry 8:0d50-0d58 requests RugRoom, not a random cavern cue.
-            # Keep the room theme available after it ends or ambient is re-enabled,
-            # without replacing carpet/event songs or restarting it every tick.
-            if (scene.game.caverns.carpet.counter == 0 and audio.music_enabled
-                    and scene.combat.player.alive and not audio.song_playing(ROOM_SONG)
-                    and (not audio.music_busy or audio.current_music_ambient)):
-                audio.add_song(ROOM_SONG, ambient=True)
+        if in_carpet_room:
             return
         self.room_ambient(audio, motion, fighting, contact)
 
