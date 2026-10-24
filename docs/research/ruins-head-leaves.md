@@ -418,8 +418,22 @@ reloads it), so SEQS 165 -> 226 first shows 165's pose 173.
 Not compared yet: the wall contact, the room change and the per-frame
 scheduling.
 
+## Neck Alignment In Play
+
+While a head's special flag is 1 (the bite poses 167/181), its drawing
+setup (3:0b32-0b9c) calls AlignHeadOnKidNeck 7:0006, whose arithmetic
+Codex verified natively. The port feeds it the Prince's drawn object as the
+drawing code builds it: AddObj stores the drawing point -0x34c4/-0x34c2 at
++0/+2 (3:0174-017e, X through 4:33e6) and the sprite -0x34c0 at +6
+(3:018a); for the Prince that point is AddCharX(frame dx) - 207 and Y +
+frame dy (3:0b4a-0b64), and the sprite is the Kid frame's shape index
+(-0x5212), which indexes the 352-entry table (Kid FRAM also has 352
+records). `RuinsCreatures.align_on_neck` sets the head's X to the drawing
+point and the scene draws the head at that point for the frame. In play the
+aligned head sits over the top of the bitten Prince. The object-list order
+(whether the Prince's object of the same frame exists) is not verified.
+
 ## Still Open
 
-Neck alignment while biting (AlignHeadOnKidNeck needs the drawn Prince
-object index), the development map, the original cut between rooms, and
+The development map, the original cut between rooms, and
 native comparisons of the wall contact and per-frame scheduling.
