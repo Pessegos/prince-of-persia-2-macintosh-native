@@ -17,8 +17,8 @@ armed -0x503c, special flag -0x5022, head state -0x5024 (3 angry, 1 flee,
 
 Cached opponent (the Prince, copied by 4:3272): column -0x5088, row
 -0x5086, X -0x5090, pose -0x508a, room -0x507e, native ALIVE -0x5078 (negative
-while alive, then a death counter; Codex: recovery notes), target word
--0x5076, selected SEQS -0x506c, -0x507a (tested == 1 below).
+while alive, then a death counter; Codex: recovery notes), life points
+-0x5076, selected SEQS -0x506c, armed -0x507a (+0x1a; tested == 1 below).
 
 Record pointer `info` = generator record + 0x1c: `info[0]` mode (0 idle,
 1 attack, 2 flee, 3 locked), `info[2]` destination column (locked: bite
@@ -72,12 +72,12 @@ poses 150, 165, 166, 159 or 173:
 3. Same row and dc < 2: direction toward the Prince (1 if X < Prince X,
    else 0). If dc == 0 or movement in that direction is admitted
    (7:0936): JumpSeq 147 (swoop) unless already. Otherwise, unless
-   already 166, if ChompAgain-style random test 7:17c8(Y, 30) passes,
+   already 166, if Y is within 30 of its cell's vertical middle (7:17c8),
    JumpSeq 166 (hover).
 4. dc == 0 and dr == 1, and moving `seen` is admitted: JumpSeq 143 if the
    head is below the Prince's row (row > Prince row) else 144.
-5. `seen == 4` (same cell): unless dc|dr == 0 or already 166, random
-   7:17c8(Y, 30) -> JumpSeq 166.
+5. `seen == 4` (same cell): unless dc|dr == 0 or already 166, Y
+   within 30 of the cell's middle (7:17c8) -> JumpSeq 166.
 6. Otherwise destination = Prince cell. For `seen` 2 or 3 (vertical)
    that is not admitted, use the horizontal direction toward the Prince
    instead. If that direction is admitted: 3 -> 143, 2 -> 144, horizontal
@@ -171,13 +171,16 @@ unless sound 131 is playing (`info[8]`).
 
 ## IsAbleToFleeInRoom 7:1454
 
-Needs another head in the room that is not fleeing (7:161c: more than one
-record and not every other one in mode 2 or kind 8) and Rnd(room count /
-3) == 0. Facing right needs column >= 3; facing left needs column + 3 <=
-10. It scans away from the Prince over barriers (4:52bc, gates by
-4:5b0e); with a clear path to the room edge, or a stop at least 3 columns
-away, it sets armed 0, state 1, record mode 2, destination (that column,
-row), +0x22 = -1, +0x24 = 0 and unbanks the head.
+7:161c needs more than one record in the room and every record (this
+one included) neither fleeing (mode 2) nor a serpent (kind 8). Then
+Rnd(skill / 3 + 1) must be 0 (skill = record +6). Facing right needs
+column >= 3; facing left needs column + 3 <= 10. It scans behind the head
+(toward column -1 facing right, 10 facing left) for barriers (4:52bc;
+kinds 2/7/12/20/25, a gate only while 4:5b0e says it blocks). A clear
+path stops one column short of the edge; a barrier stops two columns
+before it and must still be at least 3 columns away. Success sets armed
+0, state 1, record mode 2, destination (that column, row), +0x22 = -1,
++0x24 = 0, and unbanks the head.
 
 ## Serpents 7:1824
 
@@ -309,9 +312,26 @@ serpent 11), HeadAddOpponent's starting state, the Head FRAM index (type 8
 (4 heads, 2 serpents), seven 14 (8 heads, 6 serpents), eight 24 (19 heads,
 5 serpents), nine 12 (6 heads, 6 serpents).
 
+## Controllers (dormant)
+
+`pop2/ruins_ai.py` translates the head wrapper and leaves (sight, movement
+admission, idle, angry, peaceful, attack, focus, locked, done, go-to,
+flee, flee check) and the serpent routines above, plus MoveChar's flight
+for heads (Y += vy with GetRow, X += AddCharX(vx)). SequenceRuntime gained
+opcodes -9 (additive velocity), -17 (removal, as an event) and -22
+(random JumpSeq), and -19 sets a head's -33 floor height. A headless test
+runs every level-six room for 300 frames: heads get angry, swoop, bite and
+are shaken off; serpents slither and rest. Nothing calls it from the game
+yet. Port approximations: the wall contact (an armed head inside a wall
+or closed gate cell is pushed back 22 pixels instead of the full
+CheckBarrier 4:62b0 distances) and the column read live from the pose
+instead of the value cached at LoadFrame.
+
 ## Still Open
 
-The Prince's reaction sequences (45, 74,
-94) against a head in play, and the scheduling of the head pipeline
-(AutoCtrl, AnimChar, wall collision 4:647c, TestStrike, CheckStab).
+Wiring into CombatEncounter (a separate actor list, drawing with Head.rsrc
+art and the type-8 frame offset, audio drain, room entry), the
+TestStrike/CheckStab rules above for ruins actors, neck alignment while
+biting, the Prince's crouch strike (SEQS 96, needed to hit serpents),
+saves/rebirth of ruins actors, and the scheduling of the head pipeline.
 Every value above needs a native probe before it is relied on.
