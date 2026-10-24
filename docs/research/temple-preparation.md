@@ -309,3 +309,12 @@ can retain47 or replace it with25/10/73/11/23/99 before ordinary animation.
 DoJumpHang's preview restores sequence fields but retains pose/mode/X effects.
 Cell/bars responses and sampled latches are supplied; this composition does
 not yet run PlayerCtrl or the world coordinator around the real controller.
+
+[PlayerCtrl in the world caller](temple-player-control.md) now closes that
+specific composition gap:7,090 native/reference world updates pass with real
+PlayerCtrl preparation, restore/normalization/orientation/cooldown, hanging
+GenCtrl, latch save and actual Prince save. Cooldown1 can admit climbing in
+the same update; consumed Up1 also satisfies the hanging branch's nonzero
+test. Sixteen real preview calls retain their actor effects through save.
+Input polling and cell/bars/physical-contact services remain supplied;
+these are single-update fixtures, not complete gameplay/input parity.
