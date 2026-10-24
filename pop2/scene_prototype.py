@@ -3207,8 +3207,9 @@ class ScenePrototype(WindowControls):
         elif self.game.level.kind == 3:
             from pop2.development_entry import cavern_entry
 
-            # Retain Room 21's useful lower-floor test entry.
-            preferred = 2 if self.game.level.number == 3 and room == 20 else None
+            # Retain Room 21's useful lower-floor test entry; level five's
+            # Room 3 starts on the upper platform beside the bars' plate.
+            preferred = {(3, 20): 2, (5, 2): 0}.get((self.game.level.number, room))
             row, column = cavern_entry(self.level_map, room, preferred_row=preferred)
             return self.jump_to_room(room, row=row, x=column * TILE_WIDTH + 30, facing=0)
         else:

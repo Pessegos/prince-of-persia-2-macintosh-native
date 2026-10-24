@@ -28,6 +28,14 @@ class CeilingBarsSceneTests(unittest.TestCase):
         records = program['pressure_plates']['rooms']['2']
         self.assertEqual([(record['cell'], record['kind']) for record in records], [(6, 27), (8, 34)])
 
+    def test_the_map_warp_to_room_three_lands_on_the_upper_platform(self):
+        scene = self.scene
+        scene.jump_to_screen('Room 3')
+        self.assertEqual((scene.room_id, scene.terrain_motion.row), (2, 0))
+        self.tick(6)
+        self.assertEqual(scene.terrain_motion.row, 0)
+        self.assertFalse(scene.terrain_motion.falling)
+
     def test_stepping_on_the_upper_right_plate_opens_the_bars(self):
         scene = self.scene
         self.assertEqual(scene.level_map.tile(2, 6, 0).kind, 27)
