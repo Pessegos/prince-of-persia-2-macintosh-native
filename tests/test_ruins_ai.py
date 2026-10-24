@@ -281,6 +281,26 @@ class RuinsControllerTests(unittest.TestCase):
         # OppToFight 6:2392: an angry head (-0x5024 = 3) is a fight.
         self.assertEqual(calls[-1], (6, 0, True))
 
+    def test_the_second_sword_draws_its_own_set(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(7)
+        self.assertEqual(scene.game.sword_type, 2)
+        # LoadSwordSet 3:5a4e: AFRM 25201 (3:5b3e) and SHPL 1200 (3:5ab6).
+        self.assertEqual(scene.sword_set(), 2)
+        self.assertIsNot(scene.attachment_frames, scene.ordinary_attachment_frames)
+        scene.sequence_state.action = 158  # En garde, sword in hand.
+        scene.action = 158
+        sprite = scene.sword_sprite()
+        self.assertIsNotNone(sprite)
+        _kind, index, _dx, _dy = scene.attachment_frames[scene.frames[158].afrm_index]
+        self.assertIn(int.from_bytes(scene.resources.prince['SHPL'][1200]['data'][:2], 'big') + index,
+                      scene.sword_sprite_cache)
+        scene.load_level(6)
+        self.assertIs(scene.attachment_frames, scene.ordinary_attachment_frames)
+
 
 if __name__ == '__main__':
     unittest.main()

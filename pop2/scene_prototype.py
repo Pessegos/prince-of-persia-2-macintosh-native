@@ -256,7 +256,7 @@ class ScenePrototype(WindowControls):
         self.kid = self.resources.kid
         self.first_shape_id = self.resources.first_shape_id
         self.frames = self.resources.frames
-        self.attachment_frames = self.resources.attachment_frames
+        self.ordinary_attachment_frames = self.resources.attachment_frames
         prince = self.resources.prince
         self.ui_font = MacintoshFont(prince["NFNT"][23331]["data"])
         # DrawRestartMessage uses palette index 6; match its displayed RGB.
@@ -3352,6 +3352,24 @@ class ScenePrototype(WindowControls):
             self.sprite_cache[shape_id] = decode_shap(data["data"], self.palette)
         return self.sprite_cache[shape_id]
 
+    def sword_set(self):
+        """LoadSwordSet 3:5a4e: sword type 2 draws SHPL 1200 with AFRM 25201
+        (3:5aae-5ab6, 5b2a-5b3e); every other type SHPL 1000 with AFRM 25001."""
+        game = getattr(self, 'game', None)
+        return 2 if getattr(game, 'sword_type', 1) == 2 else 1
+
+    @property
+    def attachment_frames(self):
+        if self.sword_set() != 2:
+            return self.ordinary_attachment_frames
+        cached = getattr(self, '_second_sword_attachments', None)
+        if cached is None:
+            from pop2.animation_data import parse_aframe_records
+
+            cached = self._second_sword_attachments = parse_aframe_records(
+                self.resources.kid['AFRM'][25201]['data'])
+        return cached
+
     def sword_sprite(self):
         attachment_type, shape_index, dx, dy = self.attachment_frames[
             self.frames[self.action].afrm_index
@@ -3367,7 +3385,10 @@ class ScenePrototype(WindowControls):
             return self.sword_sprite_cache[key], dx, dy
         if attachment_type != 1 or shape_index < 0:
             return None
-        shape_id = self.first_sword_shape_id + shape_index
+        base = self.first_sword_shape_id
+        if self.sword_set() == 2:
+            base = int.from_bytes(self.resources.prince['SHPL'][1200]['data'][:2], 'big')
+        shape_id = base + shape_index
         if shape_id not in self.sword_sprite_cache:
             self.sword_sprite_cache[shape_id] = decode_shap(
                 self.sword_shapes[shape_id]["data"], self.sword_palette
