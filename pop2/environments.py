@@ -941,6 +941,10 @@ class Ruins(Caverns):
         for room, cell in front_crevice_group(scene.level_map, motion.room, column, motion.row,
                                               state.facing, state.selected_sequence_id):
             foreground = scene.level_map.tile(room, cell % 10, cell // 10).foreground
+            if not caverns.loose.tiles.get((room, cell), (0, 0))[1] & 0x80:
+                # 7:344a only redraws a cell it uncovers now (every crevice
+                # starts covered, InitState 3:5dce).
+                caverns.loose.redrawn.add((room, cell))
             caverns.loose.tiles[room, cell] = CREVICE_TILE, foreground | 0x80
 
     def exit_entry(self):

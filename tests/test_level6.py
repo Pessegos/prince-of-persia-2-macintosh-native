@@ -118,6 +118,39 @@ class LevelSixSceneryTests(unittest.TestCase):
         self.assertEqual(scene.terrain_motion.row, 1)
         self.assertFalse(scene.terrain_motion.falling)
 
+    def test_a_crevice_uncovered_on_screen_is_redrawn_over_the_displayed_wall(self):
+        # 7:344a marks the uncovered cells; RedrawCell (3:1d3a) repaints them
+        # in per-cell mode over the screen, so the wall above the tunnel stays
+        # until the room is entered again (then the whole room is redrawn).
+        from PIL import Image
+
+        scene = self.scene
+        program = scene.level_renderer.cavern_program
+        if 'redraws' not in program['loose_floors']['rooms']['17']:
+            self.skipTest('Ruins export from before crevice redraws: reimport the game')
+
+        def scenery(box):
+            return Image.alpha_composite(scene.background, scene.foreground).crop(box).tobytes()
+
+        above, inside = (0, 130, 40, 170), (0, 190, 40, 225)
+        scene.jump_to_room(17, 1, 120, 0)
+        self.tick(3)
+        wall, covered = scenery(above), scenery(inside)
+        scene.set_key_state('down', True)
+        self.tick(10)
+        scene.set_key_state('down', False)
+        caverns = scene.game.caverns
+        self.assertEqual(caverns.loose.redrawn, {(16, 18), (16, 19), (17, 10)})
+        self.assertTrue(scenery(above) == wall)
+        self.assertFalse(scenery(inside) == covered)  # The tunnel is drawn.
+        scene.jump_to_room(16, 1, 300, 0)
+        self.tick()
+        self.assertEqual(caverns.loose.redrawn, set())
+        scene.jump_to_room(17, 1, 120, 0)
+        self.tick()
+        # Entering the room draws it whole, with the uncovered run's backdrop.
+        self.assertFalse(scenery(above) == wall)
+
     def test_a_standing_prince_is_still_stopped_by_a_crevice(self):
         level_map = self.scene.level_map
         tile = level_map.tile(16, 8, 1)

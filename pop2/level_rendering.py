@@ -59,8 +59,9 @@ class LevelRenderer:
                       if caverns is not None else ())
             entry = caverns.entry_room if caverns is not None else self.level.start_room
             alternate = caverns is not None and caverns.alternate_entry
+            redrawn = frozenset(caverns.loose.redrawn) if caverns is not None else frozenset()
             key = (room_id, frame if room_id == entry else 0, signature, pressure, fallen, scythe, wobble,
-                   alternate)
+                   alternate, redrawn)
             if key not in self.cavern_frames:
                 # Retain loose-floor variants, not every historical gate
                 # height or plank wobble.
@@ -72,7 +73,8 @@ class LevelRenderer:
                                                     retouched=self.retouch_caverns,
                                                     level_number=self.level.number,
                                                     bridge_fallen=fallen, scythe_patch=scythe,
-                                                    bridge_wobble=wobble, alternate_entry=alternate)
+                                                    bridge_wobble=wobble, alternate_entry=alternate,
+                                                    redrawn=redrawn)
             self.rooms[room_id] = self.cavern_frames[key]
             return self.rooms[room_id]
         if room_id not in self.rooms:
@@ -91,6 +93,9 @@ class LevelRenderer:
         return self.rooms[room_id]
 
     def enter_room(self, room_id, caverns=None):
+        if caverns is not None and self.cavern_display is not None and self.cavern_display[0] != room_id:
+            # Entering a room repaints it whole: no crevice keeps a redraw.
+            caverns.loose.redrawn.clear()
         room = self.room(room_id, caverns)
         if self.level.kind not in (3, 4):
             return room

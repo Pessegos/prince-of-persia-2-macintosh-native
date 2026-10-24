@@ -76,6 +76,9 @@ class LooseFloors:
     cleared: set = field(default_factory=set)
     plate_events: list = field(default_factory=list)
     shake_events: list = field(default_factory=list)
+    # Crevice cells revealed while their room was displayed: drawn as the
+    # original's per-cell redraw until the room is entered again.
+    redrawn: set = field(default_factory=set)
 
     def trigger(self, tile, force=False):
         if tile.room is None or tile.kind != 11:

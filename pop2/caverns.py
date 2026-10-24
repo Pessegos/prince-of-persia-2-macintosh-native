@@ -813,12 +813,12 @@ def delta_commands(base, items):
     return result
 
 
-def loose_variant(program, room_id, loose_key, scythe_states=(), plank_states=()):
+def loose_variant(program, room_id, loose_key, scythe_states=(), plank_states=(), redrawn=frozenset()):
     """A loose-floor variant, expanding the ruins' delta-encoded form."""
     metadata = program.get('loose_floors', {})
     if metadata.get('schema') == 2:
         return slot_variant(metadata, metadata.get('rooms', {}).get(str(room_id)), loose_key,
-                            scythe_states, plank_states)
+                            scythe_states, plank_states, redrawn)
     room = program.get('loose_floors', {}).get('rooms', {}).get(str(room_id), {})
     variant = room.get('variants', {}).get(loose_key)
     if variant is None or not room.get('delta'):
@@ -915,11 +915,15 @@ def loose_keys(program, room_id):
     return tuple(key for key in keys if set(key) != {'0'})
 
 
-def slot_variant(metadata, room, loose_key, scythe_states=(), plank_states=()):
+def slot_variant(metadata, room, loose_key, scythe_states=(), plank_states=(), redrawn=frozenset()):
     """A room's lists for loose-cell and scythe states, composed from slots.
 
     `scythe_states` are indices into SCYTHE_STATES, one per room['scythes'].
-    Returns None at rest, like the whole-room variants it replaces.
+    `redrawn` holds crevice cells revealed while the room was displayed: the
+    original repaints only their cells over the screen (RedrawCell 3:1d3a in
+    per-cell mode), so those runs keep the covered drawing plus that redraw
+    until the room is entered again. Returns None at rest, like the
+    whole-room variants it replaces.
     """
     from pop2.slot_drawing import clip_climbing, compose_list
 
@@ -928,6 +932,9 @@ def slot_variant(metadata, room, loose_key, scythe_states=(), plank_states=()):
     loose = [int(loose_key[group[0]]) for group in room['units']] if loose_key else [0] * len(room['units'])
     scythes = list(scythe_states) or [0] * len(room.get('scythes', ()))
     planks = list(plank_states) or [0] * len(room.get('planks', ()))
+    incremental = [unit for unit in room.get('crevices', ())
+                   if str(unit) in room.get('redraws', {}) and loose[unit]
+                   and any(tuple(room['cells'][index]) in redrawn for index in room['units'][unit])]
     if not any(loose) and not any(scythes) and not any(planks):
         return None
     loose = loose + scythes + planks
@@ -942,7 +949,12 @@ def slot_variant(metadata, room, loose_key, scythe_states=(), plank_states=()):
                          else clip_climbing(source, rect)) for action, rect in climb['rects'].items()}
 
     states = loose + [0] if room['door'] else loose
-    variant = {'commands': compose_list(lists['commands'], states),
+    covered = [0 if unit in incremental else state for unit, state in enumerate(states)]
+    commands = compose_list(lists['commands'], covered)
+    redraw_start = len(commands)
+    for unit in incremental:
+        commands = commands + room['redraws'][str(unit)]
+    variant = {'commands': commands, 'redraw_start': redraw_start,
                'floor_redraw': compose_list(lists['floor_redraw'], states),
                'climb_redraw': climbing(states)}
     if room['door']:
@@ -961,7 +973,7 @@ def without_fallen_planks(commands, fallen):
 
 def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=(), retouched=False,
                 *, level_number=3, bridge_fallen=frozenset(), scythe_patch=(), bridge_wobble=frozenset(),
-                alternate_entry=False):
+                alternate_entry=False, redrawn=frozenset()):
     program, resources, palette, shapes = room_assets(level_number, room_id)
 
     def scenery_sprite(command):
@@ -990,7 +1002,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         plank_states = tuple(3 if cell % 10 in bridge_fallen else wobble.get(cell % 10, 0)
                              for _room, cell in slot_room['planks'])
         bridge_fallen, bridge_wobble = frozenset(), frozenset()
-    variant = loose_variant(program, room_id, loose_key, scythe_states, plank_states)
+    variant = loose_variant(program, room_id, loose_key, scythe_states, plank_states, redrawn)
     if variant is not None:
         commands = variant['commands']
     alternate = program.get('alternate_entry') if alternate_entry else None
@@ -1023,7 +1035,10 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     masks = {row: Image.new('L', background.size) for row in range(-1, 5)}
     cell_masks = {} if program.get('version') >= 6 else None
     gate_masks = {}
-    for command in commands:
+    # A crevice reveal's redraw paints over the displayed screen: its back
+    # pieces also cover the earlier front pieces (slot_variant `redrawn`).
+    redraw_start = variant.get('redraw_start', len(commands)) if variant is not None else len(commands)
+    for position_index, command in enumerate(commands):
         layer, index, _, _, _, row = command[:6]
         library = command[7] if len(command) >= 8 else 4
         if animated and library in (0, 1):
@@ -1036,6 +1051,12 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         sprite, position = clipped
         destination = background if layer == 'back' else foreground
         destination.paste(sprite, position, sprite)
+        if layer == 'back' and position_index >= redraw_start:
+            covered = Image.new('L', background.size)
+            covered.paste(sprite.getchannel('A'), position)
+            uncovered = ImageChops.invert(covered)
+            foreground.putalpha(ImageChops.multiply(foreground.getchannel('A'), uncovered))
+            masks = {mask_row: ImageChops.multiply(mask, uncovered) for mask_row, mask in masks.items()}
         cell = tuple(command[8:10])
         if layer == 'back' and library == 4 and index in (3563, 3542) and cell in gate_cells:
             # DrawCaveGate anchors the stone one column right of its tile.

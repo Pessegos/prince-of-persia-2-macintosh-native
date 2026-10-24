@@ -60,6 +60,38 @@ class SlotDrawingTests(unittest.TestCase):
         self.assertEqual(whole['commands'], {(1, 3, 0): (0,), (0, 5, 1): (1,), (0, 4, 0): (2,),
                                              (2, 0, 0): (2,)})
 
+    def test_a_crevice_revealed_on_screen_keeps_the_covered_drawing_plus_its_redraw(self):
+        from pop2.caverns import slot_variant
+
+        def table(slot, covered, revealed):
+            return [list(slot), [0], {'0': covered, '1': revealed}]
+
+        empty = {'base': [], 'tables': []}
+        room = {'units': [[0]], 'counts': [2], 'door': False, 'cells': [[3, 14]], 'crevices': [0],
+                'redraws': {'0': [['back', 9, 0, 0]]},
+                'lists': {'commands': {'base': [], 'tables': [table((1, 4, 0), [[['back', 1, 0, 0], 0]],
+                                                                   [[['back', 2, 0, 0], 0]])]},
+                          'floor_redraw': empty, 'climb_source': empty, 'climb_141': empty}}
+        metadata = {'climb': {'source': 135, 'rects': {}}}
+        whole = slot_variant(metadata, room, '1')
+        self.assertEqual(whole['commands'], [['back', 2, 0, 0]])
+        redrawn = slot_variant(metadata, room, '1', redrawn={(3, 14)})
+        self.assertEqual(redrawn['commands'], [['back', 1, 0, 0], ['back', 9, 0, 0]])
+        self.assertEqual(redrawn['redraw_start'], 1)
+
+    def test_a_reveal_marks_visible_run_cells_and_the_cell_right_of_its_end(self):
+        # 7:344a -> IsVisibleRoomCell 5:3960 and 5:1936 (left room: -9).
+        from types import SimpleNamespace
+        from tools.extract_slots import crevice_dirty_cells
+
+        foreground = {(16, 18): 0x82, (16, 19): 0x81, (17, 10): 0x80}
+        terrain = SimpleNamespace(
+            neighbor=lambda room, side: {(17, 'left'): 16, (16, 'right'): 17}.get((room, side)),
+            tile=lambda room, column, row: SimpleNamespace(foreground=foreground.get((room, row * 10 + column), 0)))
+        self.assertEqual(crevice_dirty_cells(terrain, 17, [(16, 18), (16, 19), (17, 10)]), [10, 11])
+        # Room 17's end is not visible from 16; its right neighbour maps by +9.
+        self.assertEqual(crevice_dirty_cells(terrain, 16, [(16, 18), (16, 19), (17, 10)]), [18, 19, 20])
+
     def test_rest_and_unknown_rooms_use_the_base_drawing(self):
         from pop2.caverns import slot_variant
 
