@@ -51,13 +51,15 @@ class NativeRuinsHead(NativeHeadIdle):
         4: NativeHeadIdle.RANGES[4] + (
             (0x3272, 0x3284), (0x31fa, 0x3228), (0x338e, 0x33b4), (0x34e2, 0x34f0),
             (0x39fc, 0x3a70), (0x3a92, 0x3a9e), (0x3aa0, 0x3ad4), (0x49ee, 0x4a44),
-            (0x4a46, 0x4b00), (0x52bc, 0x5360)),
+            (0x4a46, 0x4b00), (0x52bc, 0x5360), (0x35a6, 0x35b8), (0x3a72, 0x3a90)),
         6: NativeHeadIdle.RANGES[6] + ((0x3642, 0x36de),),
         7: NativeHeadIdle.RANGES[7] + (
             (0x00f8, 0x0480), (0x0494, 0x0572), (0x064c, 0x08e6), (0x0b16, 0x0b54),
             (0x0c5e, 0x0e7a), (0x0e8c, 0x0f72), (0x0f88, 0x1000), (0x1012, 0x1064),
             (0x107a, 0x1152), (0x1164, 0x1252), (0x1324, 0x1452), (0x1454, 0x16a0),
-            (0x16b8, 0x16f6), (0x17c8, 0x180a)),
+            (0x16b8, 0x16f6), (0x17c8, 0x180a), (0x1824, 0x1b3a), (0x1b52, 0x1db0),
+            (0x1dc6, 0x1e02)),
+        5: NativeHeadIdle.RANGES[5] + ((0x2198, 0x21de),),
     }
 
     def reset(self, level):
@@ -115,7 +117,7 @@ class TapeRandom:
 
 
 def port_run(level, sequences, frames, initial, record, prince, nearest, seed, tension, banked,
-             remainder):
+             remainder, controller='control_head'):
     """Run pop2.ruins_ai's control_head on the same supplied state."""
     from pop2.combat import Fighter
     from pop2.ruins_ai import PrinceView, RuinsCreatures, RuinsMind
@@ -154,7 +156,7 @@ def port_run(level, sequences, frames, initial, record, prince, nearest, seed, t
                       prince['armed'] == 1, prince['selected'])
     creatures.prince = lambda _encounter: view
     creatures.nearest_on_side = lambda *_args: nearest
-    creatures.control_head(actor, encounter)
+    getattr(creatures, controller)(actor, encounter)
     mind = actor.ruins
     result = dict(facing=0 if state.facing else -1, x=state.target_x + 207,
                   y=floor_y(actor.row) + state.current_y, row=actor.row,
@@ -300,16 +302,118 @@ def run_probe(recovery, cases=20000, seed=2026):
     )
 
 
+def serpent_slots(level):
+    for room in range(1, 33):
+        base = 0x20e6 + room * 0xc0
+        for slot in range(struct.unpack_from('>H', level, base)[0]):
+            offset = base + 2 + slot * 38
+            if struct.unpack_from('>h', level, offset + 0x18)[0] == 8:
+                yield room, slot, offset
+
+
+def run_serpent_probe(recovery, cases=20000, seed=2027):
+    """SnakeComeOutOfHole 7:1824 against RuinsCreatures.control_serpent."""
+    directory = Path(recovery) / 'resource_forks'
+    program_bytes = (directory / 'Prince of Persia 2.bin').read_bytes()
+    program, prince_rsrc, head = (parse_resource_fork((directory / name).read_bytes()) for name in
+                                  ('Prince of Persia 2.bin', 'Prince.rsrc.bin', 'Head.rsrc.bin'))
+    from pop2.animation_data import sequence_words, parse_frame_records
+
+    sequences = {key: sequence_words(item['data']) for key, item in prince_rsrc['SEQS'].items()}
+    frames = parse_frame_records(head['FRAM'][750]['data'])
+    level = prince_rsrc['LEVL'][2006]['data']
+    machine = NativeRuinsHead(program, head, prince_rsrc['SEQS'])
+    slots = list(serpent_slots(level))
+    rng = random.Random(seed)
+    counts, requested, sounds, mismatches = Counter(), Counter(), Counter(), []
+    digest = hashlib.sha256()
+    for case in range(cases):
+        room, slot, offset = rng.choice(slots)
+        facing, pose = rng.choice((-1, 0)), rng.choice((230, 238, 254, 264, 274, 278, 279, 280, 250))
+        row, column = rng.randrange(3), rng.randrange(1, 9)
+        x = 207 + column * 51 + rng.randrange(0, 51)
+        frame_index = pose - 149
+        frame = head['FRAM'][750]['data'][frame_index * 10:frame_index * 10 + 10]
+        column, remainder = supporting_column(x, facing, frame)
+        selected = rng.choice((168, 170, 171, 172, 173, 175, 176, 177))
+        initial = dict(slot=slot, facing=facing, x=x, y=row * 120 + 106, actor=11, pose=pose,
+                       column=column, row=row, horizontal_velocity=0, vertical_velocity=0,
+                       room=room, armed=1, alive=-1, life=3, sequence=selected,
+                       cursor=rng.randrange(4), selected=selected, body_top=18, body_bottom=48,
+                       special=rng.choice((0, 0, 6, 9)), alert=rng.choice((0, 1, 2, 3)))
+        prince_column = max(0, min(9, column + rng.choice((-2, -1, 0, 1, 2))))
+        prince = dict(facing=rng.choice((-1, 0)), x=207 + prince_column * 51 + rng.choice((5, 25, 45)),
+                      y=row * 120 + 106, actor=0,
+                      pose=rng.choice((1, 7, 14, 30, 52, 140, 157, 15)), column=prince_column,
+                      row=row if rng.random() < 0.8 else (row + 1) % 3, room=room,
+                      armed=rng.choice((0, 1)), alive=rng.choice((-1, -1, -1, 0, 6)),
+                      life=rng.choice((0, 3)), selected=rng.choice((2, 227, 96)), target=-1)
+        record = dict(kind=8, skill=struct.unpack_from('>h', level, offset + 6)[0],
+                      mode=rng.choice((-1, -1, 0, 1, 5)), dest_column=0, dest_row=0, timer=0, song=0)
+        draw_seed = rng.randrange(1 << 30)
+        supplied = bytearray(level)
+        struct.pack_into('>h', supplied, offset + 0x1c, record['mode'])
+        machine.reset(supplied)
+        machine.cpu.mem_write(machine.A5 - 0x5056, bytes(62))
+        for name, value in initial.items():
+            machine.put_word(WORKING[name], value)
+        machine.put_word(-0x481c, remainder)
+        prince_bytes_native = bytearray(62)
+        for name, value in prince.items():
+            struct.pack_into('>h', prince_bytes_native, PRINCE[name], value)
+        machine.cpu.mem_write(machine.A5 - 0x50d2, bytes(prince_bytes_native))
+        machine.random = Draws(draw_seed)
+        # 2:6512: the opponent pipeline loads the frame before AutoCtrl; the
+        # serpent wrapper itself (unlike 7:1324) does not.
+        machine.call(4, 0x2a8e)
+        machine.call(7, 0x1824)
+        native = {name: machine.word(WORKING[name]) for name in COMPARED}
+        native_mode = struct.unpack_from('>h', machine.level_bytes(len(level)), offset + 0x1c)[0]
+        port, port_record, port_sounds, port_draws, _banked, _remainder = port_run(
+            level, sequences, frames, initial, record, prince, True, draw_seed, 0, False,
+            remainder, 'control_serpent')
+        differences = {name: (native[name], port[name]) for name in COMPARED
+                       if native[name] != port[name]}
+        if native_mode != port_record['mode']:
+            differences['record.mode'] = (native_mode, port_record['mode'])
+        if sorted(machine.sounds) != sorted(port_sounds):
+            differences['sounds'] = (machine.sounds, port_sounds)
+        if machine.random.log != port_draws:
+            differences['random'] = (machine.random.log, port_draws)
+        requested.update(machine.requests)
+        sounds.update(machine.sounds)
+        if differences:
+            counts['mismatch'] += 1
+            if len(mismatches) < 40:
+                mismatches.append(dict(case=case, initial=initial, prince=prince, record=record,
+                                       differences=differences))
+        else:
+            counts['match'] += 1
+        digest.update(json.dumps([native, native_mode]).encode())
+    return dict(
+        cases=dict(counts), mismatches=counts['mismatch'],
+        requested_sequences=dict(sorted(requested.items())), sounds=dict(sorted(sounds.items())),
+        examples=mismatches, outputs_sha256=digest.hexdigest(),
+        executable_sha256=hashlib.sha256(program_bytes).hexdigest(),
+        supplied=['17:6e06 Rnd: the same seeded bounded outcomes on both sides',
+                  '5:4d84 AddSound: recorded', '17:330e GetResource: actual SEQS existence'],
+        scope=('SnakeComeOutOfHole 7:1824 with 7:1dc6/187e/19fe/1b52 against '
+               'pop2.ruins_ai.RuinsCreatures.control_serpent on randomized supplied states '
+               'in actual level-seven serpent slots; the alert state is supplied.'),
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--cases', type=int, default=20000)
+    parser.add_argument('--serpents', action='store_true')
     args = parser.parse_args()
-    report = run_probe(args.source, args.cases)
+    report = (run_serpent_probe if args.serpents else run_probe)(args.source, args.cases)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-    print(json.dumps({key: report[key] for key in ('cases', 'modes', 'requested_sequences', 'sounds')}, indent=2))
+    print(json.dumps({key: report[key] for key in ('cases', 'requested_sequences', 'sounds')}, indent=2))
 
 
 if __name__ == '__main__':

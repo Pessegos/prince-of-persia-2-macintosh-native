@@ -363,6 +363,17 @@ class RuinsCreatures:
         side = -1 if prince.native_x >= self.native_x(actor) else 0
         return nearest_opponent(encounter.player, self.living(actor.room), side) is actor
 
+    def distance(self, actor, prince):
+        # 4:49ee: 999 unless the Prince has life and shares room and row.
+        if (prince.life == 0 or prince.room != actor.room or prince.row != actor.row):
+            return 999
+        distance = prince.native_x - self.native_x(actor)
+        if self.facing(actor):
+            distance = -distance
+        if distance >= 0 and self.facing(actor) != prince.facing:
+            distance += 21
+        return distance
+
     def overshoot(self, actor):
         # 7:170a: a vertical move past the row's floor height.
         selected = actor.state.source_sequence_id
@@ -518,13 +529,11 @@ class RuinsCreatures:
 
     def focus(self, actor, encounter, prince):
         # HeadFocusOnNeck 7:0e8c.
-        from pop2.combat import opponent_distance
-
         selected = actor.state.source_sequence_id
         if selected not in (147, 144, 143):
             return
         low, high = (0, 60) if prince.armed else (5, 68)
-        distance = opponent_distance(actor, encounter.player)
+        distance = self.distance(actor, prince)
         same_row = actor.row == prince.row
         if same_row and low <= distance <= high:
             self.stop(actor)
@@ -744,10 +753,8 @@ class RuinsCreatures:
 
     def strike(self, actor, encounter, prince):
         # 7:187e.
-        from pop2.combat import opponent_distance
-
         state, selected = actor.state, actor.state.source_sequence_id
-        distance = opponent_distance(actor, encounter.player)
+        distance = self.distance(actor, prince)
         lunging = 1 <= prince.pose <= 14 or 49 <= prince.pose <= 56
         strike = False
         if 31 <= distance <= 71:
