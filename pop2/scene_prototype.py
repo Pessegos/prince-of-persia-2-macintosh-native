@@ -115,7 +115,10 @@ SWORD_SEQUENCES = {
 }
 SWORD_STEP_KINDS = {"sword_advance", "sword_retreat"}
 SWORD_STEP_SEQUENCES = {SWORD_ADVANCE_SEQUENCE, SWORD_RETREAT_SEQUENCE}
-SWORD_ATTACK_START_SEQUENCES = {SWORD_ATTACK_SEQUENCE, SWORD_BLOCK_ATTACK_SEQUENCE, 203}
+# DoStrike 6:27d8 selects SEQS 96 when the Prince's opponent is a serpent.
+SERPENT_ATTACK_SEQUENCE = 96
+SWORD_ATTACK_START_SEQUENCES = {SWORD_ATTACK_SEQUENCE, SWORD_BLOCK_ATTACK_SEQUENCE, 203,
+                                SERPENT_ATTACK_SEQUENCE}
 SWORD_ATTACK_START_POSES = {151, 152, 153, 162}
 SWORD_COMBAT_SEQUENCES = set(SWORD_SEQUENCES.values()) | {
     SWORD_GUARD_SEQUENCE, SWORD_BLOCK_ATTACK_SEQUENCE, 69, 203, 204, 205, 206,
@@ -715,6 +718,12 @@ class ScenePrototype(WindowControls):
                 if any(guard.alive and guard.room in nearby_rooms
                        for guard in self.combat.active_guards()):
                     sequence_id = 93
+        if kind == "sword_attack" and sequence_id is None and self.combat is not None:
+            # 6:27d0-27da: against a serpent the Prince's strike is the low
+            # strike SEQS 96, the only one its strike ranges accept.
+            opponent = getattr(self.combat, "ruins_opponent", lambda: None)()
+            if opponent is not None and opponent.state.actor_type == 11:
+                sequence_id = SERPENT_ATTACK_SEQUENCE
         self.run_active = False
         self.run_stop_requested = False
         self.run_direction = 0

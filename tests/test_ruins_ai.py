@@ -99,6 +99,45 @@ class RuinsControllerTests(unittest.TestCase):
         self.assertTrue(head.ruins.removed)
         self.assertNotIn(head, combat.visible_ruins())
 
+    def test_the_low_strike_kills_a_facing_serpent(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(6)
+        combat = scene.game.combat
+        combat.enter_room(19, 2)
+        scene.jump_to_room(19, 2, 270, 0)
+        serpent = combat.visible_ruins()[0]
+        scene.sword_drawn = combat.player.sword_drawn = True
+        scene.start_sword_action('sword_attack')
+        # DoStrike 6:27d8: against a serpent the strike is SEQS 96.
+        self.assertEqual(scene.sequence_state.source_sequence_id, 96)
+        RooftopSceneTests.tick(self, 6)
+        # 100 damage (CheckStab 6:52a0) and the serpent's death, SEQS 174.
+        self.assertEqual((serpent.alive, serpent.state.source_sequence_id), (False, 174))
+        scene.start_sword_action('sword_attack')
+        self.assertEqual(scene.sequence_state.source_sequence_id, 75)
+
+    def test_an_angry_head_shows_its_life_meter(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(6)
+        combat = scene.game.combat
+        combat.enter_room(6, 0)
+        scene.jump_to_room(6, 0, 150, 1)
+        self.assertIsNone(combat.health_opponent())
+        for _ in range(100):
+            RooftopSceneTests.tick(self, 1)
+            if combat.ruins.banked is not None:
+                break
+        opponent = combat.health_opponent()
+        self.assertIsNotNone(opponent)
+        self.assertIs(opponent, combat.ruins.banked)
+        self.assertEqual(opponent.ruins.mode in (1, 3), True)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -576,7 +576,18 @@ class CombatEncounter:
         # 3:4b7a-4ba8: no meter for a skeleton fighting on level five's bridge.
         if guard is not None and guard.state.actor_type == 4 and self._bridge_fight_room(guard):
             return None
+        ruins = getattr(self, 'ruins', None)
+        if guard is None and ruins is not None:
+            # HeadGetAngry 7:0fc6-0fea banks the angry head (a5-0x505a).
+            banked = ruins.banked
+            if banked is not None and banked.alive and banked.room == self.player.room:
+                return banked
         return guard
+
+    def ruins_opponent(self):
+        """The Prince's nearest living head or serpent (6:36f2), or None."""
+        actors = [actor for actor in self.visible_ruins() if actor.alive]
+        return nearest_opponent(self.player, actors) if actors else None
 
     def opponent_to_fight(self):
         # OppToFight 6:2392-2492, used by PlayAmbient/TimeForNewAmbient.

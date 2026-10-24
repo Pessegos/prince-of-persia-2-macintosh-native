@@ -330,6 +330,13 @@ with Head.rsrc (type 8's +43 frame offset via `actor_frame_index`), drains
 their sounds and passes the sword type. Events carry their own sound (0 for
 the silent bite and parry).
 
+DoStrike 6:2780-2816: from the en-garde poses 157/158/170/171/165 the
+Prince's strike is SEQS 96 when his opponent is a serpent (6:27d0-27da),
+otherwise 75 (an armed NPC of type 10 uses 109, others 58; poses 150/161
+riposte with 66). The port selects 96 when the nearest living ruins actor
+(6:36f2) is a serpent. The opponent meter shows the banked head
+(HeadGetAngry 7:0fc6-0fea, a5-0x505a) while it lives in the Prince's room.
+
 Port approximations: the wall contact (an armed head inside a wall or
 closed gate cell is pushed back 22 pixels instead of the full CheckBarrier
 4:62b0 distances); the column read live from the pose instead of the value
@@ -339,8 +346,6 @@ taken from the host's death counter; IsSoundPlaying is not consulted.
 
 ## Still Open
 
-Neck alignment while biting (AlignHeadOnKidNeck, Codex's probe), the
-Prince's crouch strike (SEQS 96, the only way to hit a serpent), the
-opponent health meter for heads, heads crossing into a neighbouring room,
+Neck alignment while biting (AlignHeadOnKidNeck, Codex's probe), heads crossing into a neighbouring room,
 the development map, saving ruins actors, and the kill songs' timing.
 Every value above needs a native probe before it is relied on.
