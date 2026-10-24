@@ -258,3 +258,32 @@ actor, the crawl alignment and the scythe trigger. Actor-X columns
 stay separate calls. `tests/test_coordinates.py` pins the round trips,
 negative X/columns, room 0 and the signed column division at its edges.
 Stored state and saves are unchanged.
+
+## Stage 5: Environment Split (2026-10-24)
+
+Environment-specific gameplay moved out of `ScenePrototype` into
+`pop2/environments.py`, one class per native environment kind, like the
+original's environment hook table (FrameAdv 2:7124 -> a5-0x46f8):
+`Rooftops` (kind 5, level one's harbor), `Desert` (kind 1), `Caverns`
+(kind 3) and `Ruins` (kind 4, a `Caverns` subclass). `environment_for`
+selects one from the level's state objects (harbor, desert, caverns).
+`ScenePrototype` keeps the frame phases, controls, combat, loading and
+saves, and calls the environment's hooks where the code used to be:
+
+| Hook | Former code |
+| --- | --- |
+| `frame_start` | `advance_cavern_floors` |
+| `controls` | carpet controls, ruins crevices |
+| `room_crossed`, `entered_room`, `player_died` | level six's cliff exit, harbor room entry, crush start |
+| `frame_hook` | the bridge check (`advance_environment`) |
+| `harbor_phase` | `advance_harbor` |
+| `level_events` | the cavern/ruins and desert blocks of `advance_level_events`, traps, phew countdown |
+| `queue_songs`, `ambient_audio` | `advance_audio`'s cavern songs, room and desert ambient |
+| drawing hooks | carpet, bridge sag, crush, desert sand, life meter in `render` |
+| `exit_scenery`, `finish_exit`, `end_song` | the exit-song frames and per-level transitions |
+
+Every move was behaviour-identical and passed full discovery
+(2,437-2,447 tests). Left in the scene on purpose: potion pick-up and
+flip controls (part of the key handling), the cavern gate presentation
+timer (Tk scheduling) and per-level loading/saves. `scene_prototype.py`
+went from 4,323 to 3,606 lines; `environments.py` has about 950.

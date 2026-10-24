@@ -4,15 +4,23 @@ The original selects these through its environment hook table (FrameAdv
 2:7124 -> a5-0x46f8[environment]): desert 18:01e0, caverns 8:3b92 (level
 five's BridgeCheckBreak), rooftops 23:0874. ScenePrototype runs them in its
 frame phases (pop2.frame_phases); the classes hold no state of their own.
+
+Hooks, in the order ScenePrototype calls them during a frame: frame_start,
+controls, room_crossed/entered_room/player_died (terrain), frame_hook
+(environment phase), harbor_phase, level_events, queue_songs/ambient_audio,
+then the drawing hooks in render order (scenery_layer, draw_sag,
+drawn_player, after_actors, display_life). While the exit song plays:
+exit_scenery, then finish_exit. A new environment (the temple, 10:27ba)
+subclasses Environment and is selected in environment_for.
 """
 
 import time
 
+from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, bridge_sag, on_bridge
 from pop2.carpet import (
     CARPET_ROOM, CARPET_TILE, CLOSED_SONG, CRASH_SEQUENCE, OPEN_SONG, RIDE_FRAME, SIT_SEQUENCE,
     carpet_room,
 )
-from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, bridge_sag, on_bridge
 from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.crevices import CREVICE_TILE
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
