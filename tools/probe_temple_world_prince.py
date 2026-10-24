@@ -74,13 +74,19 @@ def gravity_reference(actor, floating):
     return bytes(result), events
 
 
-def prince_reference(state, sequences, inputs):
+def prince_reference(state, sequences, inputs, controller=None):
     result = dict(state)
     events = list(state['events']) + [('prince',), ('load_kid',), ('outside_check',)]
     saved = state['prince']
     actor = bytearray(saved)
 
     def controls():
+        if controller is not None:
+            controlled = controller(bytes(actor), sequences, inputs, result)
+            actor[:] = controlled['actor']
+            result.update(controlled['updates'])
+            events.extend(controlled['events'])
+            return controlled['result']
         events.append(('controls', inputs.control_result, inputs.force_mode))
         if inputs.force_mode is not None:
             put_actor(actor, 16, inputs.force_mode)
@@ -132,7 +138,7 @@ def prince_reference(state, sequences, inputs):
                 countdown=countdown, result=control)
 
 
-def world_reference(state, sequences, inputs):
+def world_reference(state, sequences, inputs, controller=None):
     result = dict(state, events=[('world',)])
     if inputs.live:
         prefix = result['events'] + [('rubble',), ('bank',)]
@@ -141,7 +147,7 @@ def world_reference(state, sequences, inputs):
         if inputs.special_actor == 10:
             result['events'].append(('opponent_check',))
         result['events'].extend((('generators', state['view']), ('nearest_sides',)))
-    result = prince_reference(result, sequences, inputs)
+    result = prince_reference(result, sequences, inputs, controller)
     if not inputs.live or result['result'] == -1:
         return result
     if result['result'] != 0:

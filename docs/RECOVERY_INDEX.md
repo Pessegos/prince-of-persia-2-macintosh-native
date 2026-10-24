@@ -211,6 +211,14 @@ Preview effects survive partial sequence-state restoration. Cell/bars values,
 latches and the four-call schedule are supplied; actual PlayerCtrl and
 physical support/contact/fall in the real coordinator remain P.
 
+[PlayerCtrl in the world caller](research/temple-player-control.md) extends R
+through actual4:3b88/3cae preparation, latch restore/normalization/orientation/
+cooldown/save and hanging GenCtrl inside2:6224/62e6:7,090 single-world-update
+comparisons,16 asset-free regressions. Sixteen previews retain actor effects
+through actual2:6472. Sampled axes, cell/bars responses and other geometry/
+contact services are supplied; physical input, outer FrameAdv, death branches,
+reachable multi-frame gameplay and playable temple remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
