@@ -82,6 +82,30 @@ original level11 SHA256 is
 compared-output digest is
 `6901932fd123ca5cb477169f9748a7dd10bad1c4a02c7d163e828356b04bf274`.
 
-Next bounded work: connect real LoadKid to these persistent traces, followed
-by rock motion. Hanging reactions, geometry and whole-game timing require
-their own evidence; relief alone is not collision or damage evidence.
+## Persistent Trace With Real Gate Callees
+
+The subsequent variant based on `758d4ce` removes the supplied LoadKid and
+relief endpoints from the same120 persistent traces:
+
+```powershell
+.venv\Scripts\python.exe -m tools.probe_temple_mixed_lifetime --source ..\PoP2-Mac-Code-Recovery --native-gate-services --output rendered\temple_mixed_real_gate_services_v1.json
+```
+
+All14,784 comparisons pass again, now with64 native LoadKid copies and30
+native relief checks. The copied working actor is checked byte-for-byte
+against all62 saved bytes; steps without LoadKid must retain the supplied
+working actor. The current actor/FRAM inputs are explicitly resupplied
+before **each** operation, as in the original schedule: this is not an
+independently evolving Prince controller or a complete FrameAdv trace.
+
+Source/target order, gate/plate motion, capacity outcomes, stable compaction
+and unused bank/cache bytes remain identical. Real relief rejects level11;
+its countdown never becomes damage or changes on a fast close. Only four
+audio/redraw endpoints are reached as services; loose/trapdoor sinks remain
+guarded and are not reached. Compared-output digest is
+`578e76562e31998f27fb0eafbed8633fa8ca13f1d1d3822b9320e796ce5cbc03`.
+
+Four asset-free actor-copy tests plus a service-boundary regression cover
+the new variant. Next bounded work: connect rock movement. Hanging
+reactions, geometry and whole-game timing require their own evidence;
+relief alone is not collision or damage evidence.

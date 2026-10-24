@@ -47,6 +47,12 @@ def relief_actor_bytes(actor, seed):
     return bytes(data)
 
 
+def gate_actor_reference(current, saved, events):
+    if len(current) != 62 or len(saved) != 62:
+        raise ValueError('Expected complete62-byte current and saved actors')
+    return bytes(saved if ('load_kid',) in events else current)
+
+
 class NativeGateServices(NativeGateAnimation):
     RANGES = NativeGateAnimation.RANGES | {
         4: NativeGateAnimation.RANGES[4] + ((0x4b02, 0x4b14),),
@@ -163,7 +169,7 @@ def run_probe(recovery):
             machine.call(5, 0x0cd6, (0,))
             actual = dict(foreground=machine.word(-0x4818) & 65535, phase=machine.word(-0x43ea),
                           relief_countdown=machine.word(-0x5008), events=machine.events)
-            expected_current = saved if ('load_kid',) in expected['events'] else current
+            expected_current = gate_actor_reference(current, saved, expected['events'])
             expected_services = Counter({'sound': 'gate_sound', 'redraw': 'gate_redraw'}[event[0]]
                                         for event in expected['events'] if event[0] in ('sound', 'redraw'))
             if (actual != expected or machine.services != expected_services

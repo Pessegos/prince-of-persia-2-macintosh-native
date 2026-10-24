@@ -165,6 +165,9 @@ saved Prince, not support caches;5:4766 is level4 relief, not crushing;
 a5-0x5008 is its sigh countdown, not damage.3,075 connected temple gate steps
 execute both real bodies, with only sound/redraw supplied. Earlier gate/mixed
 v2 reports preserve their transition counts and correct those semantic names.
+The real callees also pass inside the120 persistent mixed traces/14,784
+comparisons; working-actor copies are checked while actor/FRAM inputs remain
+explicitly resupplied per operation. Mixed rock movement is still P.
 
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.

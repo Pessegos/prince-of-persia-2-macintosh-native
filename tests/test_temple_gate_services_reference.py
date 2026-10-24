@@ -1,6 +1,6 @@
 import unittest
 
-from tools.probe_temple_gate_services import ReliefActor, relief_reference
+from tools.probe_temple_gate_services import ReliefActor, gate_actor_reference, relief_reference
 
 
 class TempleGateServicesTests(unittest.TestCase):
@@ -48,6 +48,28 @@ class TempleGateServicesTests(unittest.TestCase):
         for room, cell, bank in ((33, 12, ()), (1, 30, ()), (1, 12, (ReliefActor(1, 0, 1),) * 4)):
             with self.assertRaises(ValueError):
                 self.check(bank, room=room, cell=cell)
+
+
+class TempleGateActorCopyTests(unittest.TestCase):
+    def test_load_kid_replaces_all62_bytes_not_only_selected_fields(self):
+        current, saved = bytes(range(62)), bytes(range(62, 124))
+        self.assertEqual(gate_actor_reference(current, saved, [('sound', 0x112), ('load_kid',)]), saved)
+
+    def test_other_events_preserve_current_actor(self):
+        current, saved = bytes(range(62)), bytes(range(62, 124))
+        self.assertEqual(gate_actor_reference(current, saved, [('relief_check',), ('redraw', 0, -1)]), current)
+
+    def test_copy_does_not_mutate_supplied_actor_buffers(self):
+        current, saved = bytearray(range(62)), bytearray(range(62, 124))
+        result = gate_actor_reference(current, saved, [('load_kid',)])
+        saved[0] = 0
+        self.assertEqual(result, bytes(range(62, 124)))
+        self.assertEqual(current, bytearray(range(62)))
+
+    def test_truncated_actor_buffers_are_rejected(self):
+        for current, saved in ((bytes(61), bytes(62)), (bytes(62), bytes(63))):
+            with self.assertRaises(ValueError):
+                gate_actor_reference(current, saved, [])
 
 
 if __name__ == '__main__':

@@ -95,7 +95,7 @@ class NativeGateAnimation(NativeRules):
         elif address == self.address(5, 0x4766):
             self.events.append(('relief_check',))
         super().dispatch(cpu, address, size, user)
-        if address == self.address(5, 0x4766):
+        if address == self.address(5, 0x4766) and (5, 0x4766) in self.SUPPLIED:
             cpu.reg_write(self.registers['d0'], int(self.relief))
 
 

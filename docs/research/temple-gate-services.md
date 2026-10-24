@@ -83,5 +83,8 @@ not derived from FRAM geometry. Bank iteration/compaction, mixed rock motion,
 actual collision/crushing, sound playback/pixels, complete FrameAdv order,
 saves/reset and temple runtime integration are outside this experiment.
 
-Next: replace the supplied actor-copy endpoint in persistent mixed traces,
-then connect rock movement, preserving the explicit scheduling boundary.
+The [persistent mixed variant](temple-mixed-lifetime.md#persistent-trace-with-real-gate-callees)
+now also executes both real callees in120 traces/14,784 comparisons, with
+all62 copied working-actor bytes checked. Four additional asset-free tests
+pin the actor-copy model. Next: connect rock movement, preserving the
+explicit scheduling boundary.

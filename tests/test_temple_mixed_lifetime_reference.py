@@ -5,7 +5,7 @@ import unittest
 from tests.test_temple_mixed_plate_links_reference import fixture as mixed_fixture, state as mechanism_state
 from tests.test_temple_slide_rock_admission_reference import link
 from tests.test_temple_slide_rock_geometry_reference import tile
-from tools.probe_temple_mixed_lifetime import mixed_lifetime_step
+from tools.probe_temple_mixed_lifetime import NativeMixedGateServices, NativeMixedLifetime, mixed_lifetime_step
 from tools.probe_temple_pressure_admission import PressureActor
 
 
@@ -123,6 +123,16 @@ class TempleMixedLifetimeTests(unittest.TestCase):
             state, reader = fixture()
             with self.assertRaises(ValueError):
                 step(state, reader, actor=actor)
+
+    def test_real_service_variant_executes_load_kid_and_relief_but_keeps_render_audio_sinks(self):
+        for target in ((4, 0x4b02), (5, 0x4766)):
+            self.assertIn(target, NativeMixedLifetime.SUPPLIED)
+            self.assertNotIn(target, NativeMixedGateServices.SUPPLIED)
+            self.assertTrue(any(low <= target[1] <= high
+                                for low, high in NativeMixedGateServices.RANGES[target[0]]))
+        self.assertEqual(NativeMixedGateServices.SUPPLIED,
+                         {key: value for key, value in NativeMixedLifetime.SUPPLIED.items()
+                          if key not in ((4, 0x4b02), (5, 0x4766))})
 
 
 if __name__ == '__main__':

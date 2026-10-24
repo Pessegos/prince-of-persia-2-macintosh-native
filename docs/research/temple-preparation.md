@@ -257,3 +257,9 @@ labels and executes the real LoadKid4:4b02 and level4 relief5:4766 bodies.
 LoadKid copies all62 saved actor bytes; relief rejects temple levels before
 looking at any opponent. Positive level4 controls use supplied actors/counts,
 not original level4 gameplay. Hanging reactions and full FrameAdv remain P.
+
+The same real callees now run inside the120 persistent mixed traces via
+`--native-gate-services`:14,784 comparisons pass, including64 full LoadKid
+copies and30 native relief rejections. Current actor/FRAM inputs are supplied
+afresh before each operation, not evolved through a native Prince controller.
+Mixed rock movement is the next separate boundary.

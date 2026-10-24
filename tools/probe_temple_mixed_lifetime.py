@@ -11,6 +11,7 @@ import struct
 from pop2.mac_resources import parse_resource_fork
 from tools.probe_temple_actor_plate_lifetime import NativeActorPlateLifetime, actor_plate_step, snapshot
 from tools.probe_temple_gate_animation import NativeGateAnimation, gate_animation_reference
+from tools.probe_temple_gate_services import NativeGateServices, gate_actor_reference
 from tools.probe_temple_plate_release import animate_record
 from tools.probe_temple_pressure_admission import PressureActor, actor_bytes
 from tools.probe_temple_slide_rock_geometry import TempleCellReader
@@ -86,12 +87,20 @@ class NativeMixedLifetime(NativeActorPlateLifetime):
         # collision/death predicate or evidence of crushing consequences.
 
 
-def run_probe(recovery):
+class NativeMixedGateServices(NativeMixedLifetime):
+    RANGES = {segment: NativeMixedLifetime.RANGES.get(segment, ()) + NativeGateServices.RANGES.get(segment, ())
+              for segment in NativeMixedLifetime.RANGES.keys() | NativeGateServices.RANGES.keys()}
+    SUPPLIED = {key: value for key, value in NativeMixedLifetime.SUPPLIED.items()
+                if key not in ((4, 0x4b02), (5, 0x4766))}
+
+
+def run_probe(recovery, *, native_gate_services=False):
     directory = Path(recovery) / 'resource_forks'
     executable = (directory / 'Prince of Persia 2.bin').read_bytes()
     resources = parse_resource_fork((directory / 'Prince.rsrc.bin').read_bytes())
     original = resources['LEVL'][2010]['data']
-    machine = NativeMixedLifetime(parse_resource_fork(executable))
+    machine_class = NativeMixedGateServices if native_gate_services else NativeMixedLifetime
+    machine = machine_class(parse_resource_fork(executable))
     if struct.unpack_from('>3h', original, 0x2186)[::2] != (2, 11):
         raise ValueError('Expected original temple level11')
     if tuple(struct.unpack_from('>h', original, 2 * 60 + cell * 2)[0] for cell in (2, 15, 16, 18)) != (4, 6, 5, 25):
@@ -101,7 +110,7 @@ def run_probe(recovery):
     trobs = ((), ((2, 3, 2, 4),), (filler,) * 19, (filler,) * 20)
     saved = bytearray((i * 7 + 17) % 256 for i in range(62))
     struct.pack_into('>h', saved, 22, 0)
-    counts, outcomes, services, digest = Counter(), Counter(), Counter(), hashlib.sha256()
+    counts, outcomes, services, native_calls, digest = Counter(), Counter(), Counter(), Counter(), hashlib.sha256()
     for (plan_name, plan), position, bank, initial_trobs in product(PLANS.items(), (0, 80, 255), banks, trobs):
         level = bytearray(original)
         struct.pack_into('>H', level, 0x780 + 2 * 120 + 2 * 4, position)
@@ -156,11 +165,14 @@ def run_probe(recovery):
             service_names = {'sound': 'audio_request', 'redraw': 'plate_redraw', 'release_redraw': 'plate_redraw',
                              'gate_sound': 'gate_sound', 'gate_redraw': 'gate_redraw',
                              'load_kid': 'load_kid', 'relief_check': 'relief_check'}
+            if native_gate_services:
+                del service_names['load_kid'], service_names['relief_check']
             expected_services = Counter(service_names[event[0]] for event in state['events'] if event[0] in service_names)
+            expected_current = gate_actor_reference(current, saved, state['events']) if native_gate_services else current
             if (actual != state or machine.services != expected_services
                     or machine.level_bytes(len(reader.level)) != reader.level
                     or machine.reads != reader.requests or machine.cache() != reader.cache
-                    or bytes(machine.cpu.mem_read(machine.A5 - 0x5056, 62)) != current
+                    or bytes(machine.cpu.mem_read(machine.A5 - 0x5056, 62)) != expected_current
                     or bytes(machine.cpu.mem_read(machine.A5 - 0x50d2, 62)) != saved
                     or machine.word(-0x439e) != 1234):
                 raise AssertionError(dict(plan=plan_name, initial=(position, len(bank), len(initial_trobs)),
@@ -169,22 +181,33 @@ def run_probe(recovery):
                                           cache=(machine.cache(), reader.cache), services=(machine.services, expected_services)))
             counts[operation] += 1
             services.update(machine.services)
+            if native_gate_services:
+                native_calls.update(event[0] for event in state['events'] if event[0] in ('load_kid', 'relief_check'))
             digest.update(bytes(reader.level) + state['bank_storage'] + state['trob_storage'] + state['os'])
             digest.update(json.dumps([state['events'], state['pressure_requests'], state['press_flag'], state['mob'],
                                      state['trob_scratch'], machine.cache(), machine.reads]).encode('ascii'))
+            if native_gate_services:
+                digest.update(expected_current)
         counts['traces'] += 1
         gate_position = struct.unpack_from('>H', reader.level, 0x780 + 2 * 120 + 2 * 4)[0] & 255
         outcomes[f'gate_position_{gate_position}'] += 1
         outcomes[f'trobs_{len(state["trobs"])}'] += 1
+    supplied_services = ['5:4d84 audio request', '5:0f38 plate redraw request', '5:3828 gate sound request',
+                         '5:0fe6 gate redraw request', '5:2710 loose-floor sink (not expected)',
+                         '7:36a0 trapdoor sink (not expected)']
+    if not native_gate_services:
+        supplied_services.extend(('4:4b02 LoadKid no-op', '5:4766 level4 relief returns0'))
     return dict(cases=dict(counts), outcomes=dict(outcomes), services=dict(services), mismatches=0,
                 outputs_sha256=digest.hexdigest(), executable_sha256=hashlib.sha256(executable).hexdigest(),
                 level_sha256=hashlib.sha256(original).hexdigest(), plans={k: list(v) for k, v in PLANS.items()},
-                supplied_services=['5:4d84 audio request', '5:0f38 plate redraw request', '5:3828 gate sound request',
-                                   '5:0fe6 gate redraw request', '4:4b02 LoadKid no-op', '5:4766 level4 relief returns0',
-                                   '5:2710 loose-floor sink (not expected)', '7:36a0 trapdoor sink (not expected)'],
+                native_gate_services=native_gate_services, native_gate_calls=dict(native_calls),
+                supplied_services=supplied_services,
                 scope='Connected original level11 room3 open/close mixed plate links, actor admission, source/target '
                       'TROBs, gate motion and stable compaction with persistent level/MOB/TROB/cache state. '
-                      'Non-hanging actor/FRAM/support inputs and check/animation schedule supplied. No rock motion, '
+                      + ('Real LoadKid/relief bodies, including saved-to-working copy of all62 actor bytes. '
+                         if native_gate_services else 'LoadKid/relief endpoints supplied. ')
+                      + 'Working actor/FRAM/support inputs are explicitly resupplied before each operation; '
+                      'non-hanging saved actor and check/animation schedule supplied. No rock motion, '
                       'real contact/crush, sound/pixels, full FrameAdv, saves or temple gameplay integration.')
 
 
@@ -192,11 +215,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--native-gate-services', action='store_true',
+                        help='Execute real LoadKid and relief callees instead of supplied endpoints')
     args = parser.parse_args()
-    report = run_probe(args.source)
+    report = run_probe(args.source, native_gate_services=args.native_gate_services)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n', encoding='ascii')
-    print(json.dumps(report, indent=2))
+    print(json.dumps({key: value for key, value in report.items() if key != 'plans'}, indent=2))
 
 
 if __name__ == '__main__':
