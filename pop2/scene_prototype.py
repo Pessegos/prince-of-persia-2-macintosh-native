@@ -3506,7 +3506,7 @@ class ScenePrototype(WindowControls):
                 ground = floor_y(guard.row) + environment.draw_sag(guard)
                 record = self.guard_art.frames[actor_frame_index(guard.state)]
                 state = guard.state
-                neck = getattr(guard.ruins, 'neck', None) if guard.ruins is not None else None
+                neck = getattr(getattr(guard, 'ruins', None), 'neck', None)
                 if neck is not None:
                     # AlignHeadOnKidNeck 7:0006 gives the drawing point itself.
                     shift = record.offset_x if state.facing else -record.offset_x
