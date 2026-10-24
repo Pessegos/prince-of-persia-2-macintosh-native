@@ -286,7 +286,8 @@ CheckStab finds the Prince's striker by pose: a head counts only on pose
 Death 6:5562. A head turns to face away from the Prince (facing = NOT the
 Prince's), life 0, JumpSeq 154 (falls and ends with -17, removal) and
 SetTensionLevel(1, -1). A serpent JumpSeq 174. The Prince killed by a
-serpent: SEQS 97 (98 on poses 246-261), sound 126, death method 17. Killed
+serpent: SEQS 97 (98 on poses 246-261), sound 126, death method 7 (the table
+6:570e sends type 11 to 6:574a; 17 belongs to type 6). Killed
 by a head: SEQS 85 (98 with sound 133 on poses 246-261), death method 6
 and SetTensionLevel(1, 5). The tension amount a5-0x36a0 is ChompAgain's
 `wounds`: each death to a head makes the heads let go sooner.
@@ -365,6 +366,7 @@ python -m tools.probe_ruins_runtime --source PATH_TO_RECOVERY --output rendered/
 | Heads | wrapper 7:1324 and every leaf it reaches | 20,000 | 0 |
 | Serpents | 7:1824 with 1dc6/187e/19fe/1b52 | 20,000 | 0 |
 | Struck head/serpent | CheckStab 6:51f2, DecLifePts, flee check, death 6:5562, SetTensionLevel | 20,000 | 0 |
+| Prince bitten/struck | CheckStab 6:51f2 for type 0: wall pushes, unarmed/crouched reactions, fatal sequences, lost sword, ledge fall, death 6:5562, corpse alignment 6:5524/04aa, SetKidDeathMethod | 20,000 | 0 |
 
 States are randomized (seeded) over the actual level-seven head and serpent
 slots, every record mode, the relevant poses and selected sequences, Prince
@@ -385,8 +387,19 @@ the guards' version); and the Prince's target, not a ruins-only bank, is
 what HeadGetAngry fills (a5-0x505a is the cached Prince's +0x3a).
 DecLifePts queues damage in a5-0x5034; the port applies it at once.
 
-Not compared yet: the Prince struck by a head or serpent (CheckStab with the
-Prince's frame flags), TestStrike's ranges, AnimChar of the head sequences,
+The Prince run (`--prince`) installs Kid FRAM/AFRM 25001 as the type-0
+frame handles and stands in for AnimChar only to load SEQS 85's first pose
+(179), on both sides. It reaches SEQS 45, 74, 81, 85, 94, 97 and 98, sounds
+126/133 and death methods 0 (ledge fall), 6 (head) and 7 (serpent). It found
+four more port errors, now fixed: a serpent's bite skips every reaction and
+does not arm the Prince (6:52a0 jumps to DecLifePts); the serpent's death
+method is 7, not 17 (6:570e/574a); the unarmed reaction 45 needs the Prince
+unarmed even on poses 102-106; and the cell tests after the wall pushes use
+the stored column, which those pushes do not recalculate. It also showed
+that corpse alignment 6:04aa shifts toward IsMobFloor cells (11/15/26) as
+well as empty ones; `LevelMap.align_flat_death` now does, for guards too.
+
+Not compared yet: TestStrike's ranges, AnimChar of the head sequences,
 flight, the wall contact and the per-frame scheduling.
 
 ## Still Open

@@ -490,7 +490,8 @@ class LevelMap:
             column = character_column(contact)
         distance = floor_edge_distance(contact, state.facing)
         neighbor = column + (direction if distance < 32 else -direction)
-        if distance != 32 and self.tile(room, neighbor, row).kind in EMPTY_TILES:
+        # 6:04d8-050c: IsSpace or IsMobFloor (loose floors 11/15/26).
+        if distance != 32 and self.tile(room, neighbor, row).kind in EMPTY_TILES | {11, 15, 26}:
             state.target_x += (distance - 32) * direction
         state.current_x = state.target_x
 

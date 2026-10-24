@@ -1014,44 +1014,102 @@ class RuinsCreatures:
 
         player = encounter.player
         state = player.state
+        frames = getattr(encounter, 'player_frames', None)
+        terrain = getattr(encounter, 'terrain', None)
         serpent = striker.state.actor_type == SERPENT_TYPE
-        damage = 100 if serpent else 1
-        sequence = 94 if state.facing == striker.state.facing else 74
-        if not serpent:
+        direction = 1 if state.facing else -1
+
+        def foot():
+            record = frames[state.action] if frames is not None else None
+            contact = floor_contact_x(state.target_x, state.facing, record) if record else state.target_x
+            return character_column(contact), floor_edge_distance(contact, state.facing)
+
+        # The stored column (a5-0x504a) is not recalculated after the pushes
+        # below; every cell test of this routine reads around it.
+        column = foot()[0] if terrain is not None else 0
+
+        def cell(offset):
+            return terrain.tile(player.room, column + offset, player.row).kind
+
+        def shift(delta):
+            state.target_x += delta if state.facing else -delta
+            state.current_x = state.target_x
+
+        fatal = state.source_sequence_id in (10, 16, 28, 14) or player.sword_lost
+        damage = 100 if fatal or serpent else 1
+        sequence = 74
+        # 6:52a0-52b4: a serpent's bite goes straight to DecLifePts(100).
+        if not fatal and not serpent and state.facing == striker.state.facing:
+            sequence = 94
+            # 6:5306-5340: an unarmed Prince backed against a wall.
+            if not player.sword_drawn and terrain is not None and is_wall(cell(direction)):
+                distance = foot()[1]
+                if distance < 36:
+                    shift(distance - 36)
+        if not fatal and not serpent:
             pose = state.action
-            frames = getattr(encounter, 'player_frames', None)
             flagged = bool(frames is not None and frames[pose].aux & 0x40) or 191 <= pose <= 205
-            if not player.sword_drawn and not flagged or 102 <= pose <= 106:
+            if not player.sword_drawn and (not flagged or 102 <= pose <= 106):
                 sequence = 45
-        if state.source_sequence_id in (10, 16, 28, 14) or player.sword_lost:
-            damage = 100
+            elif 246 <= pose <= 261 and terrain is not None:
+                # 6:53a4-53f4: knocked off a wall behind or ahead.
+                if is_wall(cell(-direction)):
+                    shift(25)
+                elif is_wall(cell(direction)):
+                    shift(-25)
+        crouched = 246 <= state.action <= 261
         if not getattr(encounter, 'god_mode', False):
             player.life = max(0, player.life - damage)
         player.contact_consumed = True
-        crouched = 246 <= state.action <= 261
+        if sequence != 45 and not fatal and not serpent:
+            # 6:53f8-5406 arms the Prince.
+            player.sword_drawn, player.sword_lost = True, False
+            state.callback_flag = 1
         if player.alive:
-            if sequence != 45:
-                player.sword_drawn, player.sword_lost = True, False
-                state.callback_flag = 1
             player.recovering = sequence != 45
             select_sequence(player, sequence)
+            # SetCharFloor 6:5478-547e.
+            state.current_y = state.vertical_velocity = 0
             player.runtime.next_frame()
             return CombatEvent('hit', 'player', sound=0)
+        player.recovering = False
+        if not fatal and terrain is not None and frames is not None:
+            # 6:5428-54b2: a fatal bite at a ledge tips the Prince over it.
+            distance = foot()[1]
+            offset = None
+            if is_space(cell(0)):
+                offset = distance - 12
+            elif is_space(cell(-direction)) and distance >= 6:
+                offset = distance - 12 - 51
+            if offset is not None:
+                shift(offset)
+                # As the guards' fatal fall in CombatEncounter._hurt.
+                from pop2.terrain import TerrainMotion
+
+                player.row += 1
+                state.current_y -= 120
+                if player.terrain_motion is None:
+                    player.terrain_motion = TerrainMotion(player.room, player.row)
+                player.terrain_motion.row = player.row
+                player.terrain_motion.falling = player.terrain_motion.hit_fall = True
+                player.targetable = False
+                select_sequence(player, 81)
+                player.runtime.next_frame()
+                return CombatEvent('death', 'player', 0, sound=0)
         if serpent:
-            sequence, method = (98 if crouched else 97), 17
+            # The death-method table 6:570e sends type 11 to 6:574a (7).
+            sequence, method = (98 if crouched else 97), 7
             state.sound_events.append(126)
         else:
             sequence, method = (98 if crouched else 85), 6
             if crouched:
                 state.sound_events.append(133)
             self.set_tension(1, 5)
-        player.recovering = False
         select_sequence(player, sequence)
+        state.current_y = state.vertical_velocity = 0
         player.runtime.next_frame()
-        if sequence == 85 and getattr(encounter, 'terrain', None) is not None:
-            frames = getattr(encounter, 'player_frames', None)
-            if frames is not None:
-                encounter.terrain.align_flat_death(player.room, player.row, state, frames[state.action])
+        if sequence == 85 and terrain is not None and frames is not None:
+            terrain.align_flat_death(player.room, player.row, state, frames[state.action])
         return CombatEvent('death', 'player', method, sound=0)
 
     # ---- per frame ------------------------------------------------------
