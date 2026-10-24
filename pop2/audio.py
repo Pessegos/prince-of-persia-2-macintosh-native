@@ -324,6 +324,10 @@ class AudioEngine:
             # An empty swing and its contact are one event, not two layers.
             if any(cue in self.pending_effects for cue in (10, 12, 31)):
                 self.pending_effects.pop(11, None)
+            # Debris landing on a shooter plate is one impact. Keep its break
+            # sound instead of stacking the trap's launch transient over it.
+            if 26 in self.pending_effects:
+                self.pending_effects.pop(65, None)
             playing = set(self.playback.playing_effects())
             for cue in self.pending_effects:
                 if cue not in playing:
