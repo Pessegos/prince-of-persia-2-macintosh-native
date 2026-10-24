@@ -196,6 +196,21 @@ bank bytes/order and actor effects pass in both supplied schedules, with
 different first-cycle results. Original FrameAdv order, reachable supplied
 banks/placements and physical fall/contact/death remain P.
 
+[World/Prince callers](research/temple-world-prince.md) extend R through
+actual2:6224/62e6, native gate-bank/clip/gravity and actor save2:6472:
+8,528 traces/34,112 world comparisons plus2,400 direct gravity controls,
+12 asset-free regressions. PlayerCtrl, geometry/contact/hazards, opponent
+and presentation/clock services are supplied. Outer FrameAdv, real controls,
+reachable placements, physical consequences and playable temple remain P.
+
+[Hanging controls](research/temple-hanging-control.md) extend R through native
+GenCtrl6:0560's bounded unarmed/living type0 route and6:18e0/1998/1a84/1b7e,
+native predicates/ClearControls/JumpSeq and first clip after gate selection:
+28,220 traces/112,880 operation comparisons,14 asset-free regressions.
+Preview effects survive partial sequence-state restoration. Cell/bars values,
+latches and the four-call schedule are supplied; actual PlayerCtrl and
+physical support/contact/fall in the real coordinator remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
