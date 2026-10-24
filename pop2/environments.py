@@ -893,6 +893,13 @@ class Caverns(Environment):
             scene.game.caverns.crush.begin(scene.combat.player.life)
 
 
+# Level eight's throne room (native room 9) and its vision (6:14ec-152a,
+# 4:3dd0-3df6, 7:38ca).
+THRONE_ROOM = 8
+THRONE_COLLAPSE_SEQUENCE = 237
+THRONE_WAKE_SEQUENCE = 231
+
+
 class Ruins(Caverns):
     """Levels six and seven (kind 4)."""
 
@@ -913,7 +920,17 @@ class Ruins(Caverns):
         super().entered_room()
         scene = self.scene
         ruins = getattr(scene.combat, 'ruins', None) if scene.combat is not None else None
-        if ruins is None or scene.game.level.number != 9:
+        if ruins is None:
+            return
+        caverns = scene.game.caverns
+        if scene.game.level.number == 8 and scene.room_id == THRONE_ROOM and not caverns.throne_done:
+            # The throne room's enter hook 7:3864-38a2 (CUST kind 34).
+            if scene.combat._supporting_column(scene.combat.player) < 9:
+                ruins.songs.append(180)  # Throne1
+            elif not caverns.throne_seen:
+                ruins.songs.append(179)  # SeeThron, once (a5-0x4ff6)
+                caverns.throne_seen = True
+        if scene.game.level.number != 9:
             return
         # The enter hook 7:37d6 of CUST kinds 20/21 (level nine's native
         # rooms 2 and 16), with the Prince's column.
@@ -974,6 +991,7 @@ class Ruins(Caverns):
     def controls(self):
         super().controls()
         scene = self.scene
+        self.throne_vision()
         # GenCtrl 6:06b4-06e0: crouched (109) or crawling (246-261) in the
         # ruins, RuinSetCreviceRevealed 7:3404 uncovers the crevice ahead.
         caverns, motion, state = scene.game.caverns, scene.terrain_motion, scene.sequence_state
@@ -992,6 +1010,27 @@ class Ruins(Caverns):
                 # starts covered, InitState 3:5dce).
                 caverns.loose.redrawn.add((room, cell))
             caverns.loose.tiles[room, cell] = CREVICE_TILE, foreground | 0x80
+
+    def throne_vision(self):
+        """4:3dd0-3df6: collapsed at the throne (SEQS 237, pose 185) in
+        level eight's room 9, 7:38ca shows NIS 6 and wakes the Prince."""
+        scene = self.scene
+        state, caverns = scene.sequence_state, scene.game.caverns
+        if (scene.game.level.number != 8 or scene.room_id != THRONE_ROOM
+                or state.selected_sequence_id != THRONE_COLLAPSE_SEQUENCE or state.action != 185):
+            return
+        # 7:391c-395e after PlayNIS(6): facing right, SEQS 231 on the floor,
+        # full life, the father's sword (a5-0x500a = 1); song 182 (39d4).
+        state.facing = 1
+        scene.start_sequence(THRONE_WAKE_SEQUENCE)
+        state.current_y = state.vertical_velocity = 0
+        player = scene.combat.player
+        player.life = player.max_life
+        scene.game.sword_type = 1
+        player.sword_lost = False
+        caverns.throne_done = True
+        scene.combat.ruins.songs.append(182)
+        scene.status.set("The father's sword")
 
     def exit_entry(self):
         scene = self.scene

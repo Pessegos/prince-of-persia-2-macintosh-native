@@ -206,12 +206,37 @@ found no remaining loop except a run closed by a crevice whose low bits are
   the audio import (`RUINS_SONGS`); an older import has no files for them
   and stays silent until the game is imported again.
 
+- Level eight's throne room (native room 9, CUST kind 34). The enter hook
+  7:3864 loads Ruins CTBL 3501 at 48 (`ROOM_PALETTES`) and, until the vision
+  is over (a5-0x4ff4), adds Throne1 (180) with the Prince's column < 9, or
+  SeeThron (179) once (a5-0x4ff6). The first crouch at the sword item there
+  (6:14d6-152a: room 9 of level eight, item kind 22) moves him AddCharX(-23)
+  and, facing left, AddCharX(4), starts SEQS 237 and adds Throne2 (181); the
+  item stays. At SEQS 237 pose 185 in that room, 4:3dd0 calls 7:38ca:
+  PlayNIS(6), then facing right, SEQS 231 on the floor, life restored
+  (pending = maximum), the father's sword (a5-0x500a = 1), a5-0x4ff4 = 1,
+  the level redrawn from a saved copy, and Throne4 (182, queued when a song
+  plays). Afterwards the sword is an ordinary item without FindSwd (183,
+  skipped in that room by 6:1554-1568). The port does all of this except
+  the vision itself; the flags are optional save fields. Throne songs are
+  rendered by the audio import (`RUINS_SONGS`) after a reimport.
+
 ## Remaining Steps
 
 1. The retained cliff image when walking left from the start needs a visual
    comparison with the original game (playtesting).
 2. Level nine's exit leads to the temple (NIS 2 and level ten), which the
    port does not support yet.
+3. Cutscene 6 (the vision at the throne, 15:66f4, dispatcher 15:07c8 case
+   6). It opens ThroneNIS.rsrc (file record a5-0x26aa: SHAP 32001-32005,
+   CTBL 32001) over the live game screen: 15:6c66 redraws the Prince from
+   his position (SHAP 25081/1011), 15:6e24 loads the environment's CTBL
+   25000+env at 1 and 1000+env at 2, palette entries 1 and 2 become
+   (ff,5a,00) and (ff,b5,00) (17:130e), and the apparition fades in from
+   SHAP 32001-32005 with timers, cues 97/98 and sound 31020. The scene
+   harness lacks about ten of its APIs (17:130e, 17:1b4e, 17:520a/544a/549e,
+   17:6a78, 17:1520, 15:2c40/2d60, 15:6e9e). The leave hook 7:38a4 restores
+   CTBL 3500 at 64 and 3000 at 224 after it (a5-0x5000 = -1).
 
 The scythes' climbing redraw layers, listed here earlier, are covered by
 the slot export (schema 2): every room's `climb_source`/`climb_141` lists

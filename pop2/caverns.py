@@ -171,10 +171,11 @@ def cavern_clip_top(terrain, room, row, state, bounds):
 # caverns (3) and ruins (4, levels six and seven).
 SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7, 8, 9)}
 RUINS_LEVELS = SCENERY_LEVELS[4]
-# CUST room enter hooks loading CTBL over entries 64+ (S03_508A): level five's
-# carpet room (CheckCarpetImg 8:0d30, CTBL 3501) and level six's start room
-# (CUST kind 22, 7:37a6, CTBL 3502).
-ROOM_PALETTES = {(5, 2): 3501, (6, 26): 3502}
+# CUST room enter hooks loading a CTBL over the room palette (S03_508A):
+# level five's carpet room (CheckCarpetImg 8:0d30, CTBL 3501 at 64), level
+# six's start room (CUST kind 22, 7:37a6, CTBL 3502 at 64) and level eight's
+# throne room (kind 34, 7:3864, Ruins CTBL 3501 at 48).
+ROOM_PALETTES = {(5, 2): 3501, (6, 26): 3502, (8, 8): 3501}
 
 
 def scenery_name(level_number):

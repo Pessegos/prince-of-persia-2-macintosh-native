@@ -2268,12 +2268,26 @@ class ScenePrototype(WindowControls):
         self.player_x = state.target_x + delta
         self.pending_action = None
         self.run_active = self.run_stop_requested = self.run_cycle_boundary_pending = False
-        if crouched and tile.kind == SWORD_TILE:
+        # 6:14d6-14ea: the Prince in level eight's room 9 (the throne).
+        throne = self.game.level.number == 8 and motion.room == 8
+        if crouched and tile.kind == SWORD_TILE and throne and not caverns.throne_done:
+            # 6:14ec-152a: the first touch of the father's sword in level
+            # eight's throne room: shifted 23 back (4 forward facing left),
+            # the Prince collapses (SEQS 237) to song 181; the item stays.
+            direction = 1 if state.facing else -1
+            self.player_x = state.target_x = state.target_x - 23 * direction
+            if not state.facing:
+                self.player_x = state.target_x = state.target_x + 4 * direction
+            state.current_x = state.target_x
+            caverns.plates.songs.append(181)
+            self.start_sequence(237)
+        elif crouched and tile.kind == SWORD_TILE:
             self.game.sword_type = potions.take_sword(tile)
             # 6:1530-1572: the Prince has a sword again (a5-0x500a), with
-            # FindSwd (song 183).
+            # FindSwd (song 183), except in level eight's throne room.
             self.combat.player.sword_lost = False
-            caverns.plates.songs.append(183)
+            if not throne:
+                caverns.plates.songs.append(183)
             self.start_sequence(91)
         elif crouched:
             potions.take(tile)

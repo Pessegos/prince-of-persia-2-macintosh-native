@@ -34,6 +34,10 @@ class CavernState:
     alternate_entry: bool = False
     # a5-0x5008: the level-four relief countdown; -1 idle, -2 already used.
     phew_countdown: int = -1
+    # Level eight's throne room (native room 9): a5-0x4ff4, the vision is
+    # over (the father's sword); a5-0x4ff6, SeeThron (179) already played.
+    throne_done: bool = False
+    throne_seen: bool = False
 
     def configure_lava(self, metadata, enhanced=True):
         self.lava = Lava(metadata, enhanced=enhanced)

@@ -324,6 +324,68 @@ class RuinsControllerTests(unittest.TestCase):
         environment.entered_room()
         self.assertEqual(ruins.songs, [])
 
+    def test_level_eight_throne_vision_gives_the_fathers_sword(self):
+        from tests.test_terrain import RooftopSceneTests
+        from pop2.environments import environment_for
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(8)
+        caverns, ruins = scene.game.caverns, scene.game.combat.ruins
+        environment = environment_for(scene)
+        # 7:3864-38a2: Throne1 (180) left of column 9, else SeeThron (179) once.
+        scene.jump_to_room(8, 1, 60, 1)
+        environment.entered_room()
+        self.assertEqual(ruins.songs, [180])
+        ruins.songs.clear()
+        scene.jump_to_room(8, 1, 505, 1)
+        environment.entered_room()
+        environment.entered_room()
+        self.assertEqual(ruins.songs, [179])
+        self.assertTrue(caverns.throne_seen)
+        ruins.songs.clear()
+        # 6:14ec-152a: crouching at the sword collapses the Prince (237)
+        # without taking the item; pose 185 wakes him (7:38ca).
+        self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 22)
+        scene.game.sword_type = 2
+        heard = []
+        songs = caverns.plates.songs
+
+        class Heard(list):
+            def append(self, song):
+                heard.append(song)
+                super().append(song)
+
+        caverns.plates.songs = Heard(songs)
+        ruins.songs = Heard(ruins.songs)
+        for x in range(240, 320, 3):
+            scene.jump_to_room(8, 2, x, 1)
+            scene.shift_held = scene.down_held = True
+            for _ in range(10):
+                RooftopSceneTests.tick(self)
+                if scene.sequence_state.selected_sequence_id == 237:
+                    break
+            scene.shift_held = scene.down_held = False
+            if scene.sequence_state.selected_sequence_id == 237:
+                break
+        self.assertEqual(scene.sequence_state.selected_sequence_id, 237)
+        self.assertEqual(heard, [181])
+        self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 22)
+        scene.combat.player.life = 1
+        for _ in range(200):
+            RooftopSceneTests.tick(self)
+            if caverns.throne_done:
+                break
+        self.assertTrue(caverns.throne_done)
+        self.assertEqual(scene.sequence_state.selected_sequence_id, 231)
+        self.assertEqual(scene.sequence_state.facing, 1)
+        self.assertEqual(scene.game.sword_type, 1)
+        self.assertEqual(scene.combat.player.life, scene.combat.player.max_life)
+        self.assertEqual(heard, [181, 182])
+        # Once over, the throne hook is silent and the sword is an item.
+        environment.entered_room()
+        self.assertEqual(heard, [181, 182])
+
 
 if __name__ == '__main__':
     unittest.main()
