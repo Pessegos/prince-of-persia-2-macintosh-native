@@ -126,20 +126,27 @@ def assemble_lists(base, dependencies, rendered):
     """The exported lists from rest fragments and rendered combinations.
 
     `rendered` maps (list name, units) to {combination key: {slot: fragment}}.
+    A slot whose drawers read a unit's cells but draw the same fragment in
+    every combination is stored once, like an independent slot.
     """
     lists = {}
     for name, slots in dependencies.items():
-        tables = []
+        tables, constant = [], {}
         by_set = {}
         for slot, depends in slots.items():
             by_set.setdefault(depends, []).append(slot)
         for depends, members in sorted(by_set.items()):
             combinations = rendered[name, depends]
-            tables.extend([list(slot), list(depends), {key: fragments[slot] for key, fragments
-                                                       in combinations.items()}]
-                          for slot in sorted(members))
-        lists[name] = {'base': [[list(slot), fragment] for slot, fragment in sorted(base[name].items())
-                                if slot not in slots],
+            for slot in sorted(members):
+                table = {key: fragments[slot] for key, fragments in combinations.items()}
+                values = list(table.values())
+                if all(value == values[0] for value in values):
+                    constant[slot] = values[0]
+                else:
+                    tables.append([list(slot), list(depends), table])
+        fixed = {slot: fragment for slot, fragment in base[name].items() if slot not in slots}
+        fixed.update((slot, fragment) for slot, fragment in constant.items() if fragment)
+        lists[name] = {'base': [[list(slot), fragment] for slot, fragment in sorted(fixed.items())],
                        'tables': tables}
     return lists
 
