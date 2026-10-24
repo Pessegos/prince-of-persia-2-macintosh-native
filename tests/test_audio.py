@@ -473,6 +473,25 @@ class CueTests(unittest.TestCase):
         self.assertTrue(death.prompt_visible)
 
 
+    def test_music_elapsed_counts_playing_time_without_pauses(self):
+        clock = [100.0]
+        with patch('pop2.audio.time.monotonic', side_effect=lambda: clock[0]):
+            self.assertIsNone(self.audio.music_elapsed())
+            self.audio.add_song(119)
+            self.audio.flush()
+            self.busy['music'] = True
+            clock[0] = 103.0
+            self.assertAlmostEqual(self.audio.music_elapsed(), 3.0)
+            self.audio.pause(True)
+            clock[0] = 110.0
+            self.assertAlmostEqual(self.audio.music_elapsed(), 3.0)
+            self.audio.pause(False)
+            clock[0] = 111.5
+            self.assertAlmostEqual(self.audio.music_elapsed(), 4.5)
+            self.busy['music'] = False
+            self.assertIsNone(self.audio.music_elapsed())
+
+
 class PolyphonicCueTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()

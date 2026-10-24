@@ -354,6 +354,7 @@ class AudioEngine:
             self.pending_song = None
             self.pending_song_ambient = False
             self.playback.play("music", self.current_music)
+            self.music_clock = [time.monotonic(), 0.0]
         self.stopped_effects.clear()
 
     def ambient(self, room, row, column, fighting=False, alive=True, special=None):
@@ -418,8 +419,23 @@ class AudioEngine:
                 self.current_music_ambient = False
 
     def pause(self, paused):
+        clock = getattr(self, 'music_clock', None)
+        if clock is not None and paused != self.paused:
+            # [start of the running span, seconds played before it]
+            if paused:
+                clock[1] += time.monotonic() - clock[0]
+                clock[0] = None
+            else:
+                clock[0] = time.monotonic()
         self.paused = paused
         self.playback.pause(paused)
+
+    def music_elapsed(self):
+        """Seconds the current game song has played, or None."""
+        clock = getattr(self, 'music_clock', None)
+        if clock is None or not self.playback.busy("music"):
+            return None
+        return clock[1] + (time.monotonic() - clock[0] if clock[0] is not None else 0)
 
     def reset(self):
         for bus in self.effect_buses:

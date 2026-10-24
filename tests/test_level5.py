@@ -131,6 +131,16 @@ class CarpetRideSceneTests(unittest.TestCase):
         self.assertTrue(scene.combat.player.alive)
         self.assertEqual(scene.sequence_state.target_x, 218)
 
+    def test_the_carpet_leaves_without_an_end_song_and_the_scene_follows(self):
+        # 6:0fea-0ff2 adds the end song only at the stairs' frame 224; the
+        # level ends as soon as the Prince's sound has finished (2:6146).
+        scene = self.ride(True)
+        self.assertIsNotNone(scene.game.exit)
+        self.assertIsNone(scene.game.exit.song)
+        self.tick(2)
+        self.assertEqual(scene.attract_stage, 'tree')
+        self.assertIs(scene.intro.assets, scene.carpet_assets)
+
     def test_closed_bars_crush_the_rising_prince(self):
         scene = self.ride(False)
         self.assertTrue(scene.game.caverns.carpet.crashed)

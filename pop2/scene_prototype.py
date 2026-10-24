@@ -2453,13 +2453,16 @@ class ScenePrototype(WindowControls):
                 from pop2.level_transition import LevelExit
                 from pop2.paths import ASSET_DIR
 
-                song = environment_for(self).end_song
-                cues = (self.audio.cues if self.audio is not None else
-                        {int(key): item for key, item in json.loads(
-                            (ASSET_DIR / "audio/manifest.json").read_text(encoding="ascii"))["cues"].items()})
-                self.game.exit = LevelExit(song, cues[song]["duration"])
-                if self.audio is not None:
-                    self.audio.add_song(song)
+                song = environment_for(self).exit_song()
+                if song is None:
+                    self.game.exit = LevelExit(None, 0)
+                else:
+                    cues = (self.audio.cues if self.audio is not None else
+                            {int(key): item for key, item in json.loads(
+                                (ASSET_DIR / "audio/manifest.json").read_text(encoding="ascii"))["cues"].items()})
+                    self.game.exit = LevelExit(song, cues[song]["duration"])
+                    if self.audio is not None:
+                        self.audio.add_song(song)
             self.clear_keys(None)
             self.status.set(f"Level {self.game.level.number} complete")
 
@@ -2923,15 +2926,27 @@ class ScenePrototype(WindowControls):
         # ruins' cliff. It ends like a tree scene, loading the next level.
         from pop2.intro import IntroAssets, IntroPlayer
 
+        from pop2.carpet import OPEN_SONG
+        from pop2.intro import game_song
+
         if getattr(self, 'carpet_assets', None) is None:
             self.carpet_assets = IntroAssets(program_name='carpet.json')
+        music = None
+        if self.audio is not None:
+            played = self.audio.music_elapsed()
+            if (self.game.level.number == 5 and self.audio.current_music == OPEN_SONG
+                    and played is not None):
+                # 2:61ce-61ea skips ResetSoundItem after levels five and nine:
+                # FlyinRug, started when the Prince sat down, plays on and
+                # the scene's cue operations wait for its markers a and c.
+                music = OPEN_SONG, played, game_song(OPEN_SONG)
         self.end_demo()
         self.clear_keys(None)
         self.attract_stage = 'tree'
         self.tree_variant = None
-        if self.audio is not None:
+        if self.audio is not None and music is None:
             self.audio.reset()
-        self.intro = IntroPlayer(self.carpet_assets, self.audio)
+        self.intro = IntroPlayer(self.carpet_assets, self.audio, music)
         self.last_intro_at = time.perf_counter()
         self.status.set('Carpet')
 

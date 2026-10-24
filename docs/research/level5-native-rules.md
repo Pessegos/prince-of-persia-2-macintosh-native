@@ -189,6 +189,19 @@ cave bars and tile 18 at cell 23 belongs to the flying carpet:
     bars open, else 116.
   - SEQS 128: frame 296 four times, then frame 295 rising (-6 moves, 361
     pixels in all), -16 (next level), then SEQS 199 (frame 295 forever).
+  - Leaving (implemented 2026-10-24): the end song is added only at the
+    stairs' frame 224 (6:0fea-0ff2, AddSong(GetEndSong) 5:4b40), so the
+    carpet's -16 adds none; FrameAdv (2:6134-6168) then ends the level as
+    soon as the Prince's sound (a5-0x439a, except 272/17/192) has finished.
+    For levels five and nine 2:61ce-61ea skips ResetSoundItem (16:2200):
+    FlyinRug (115, started when he sat down) plays on into the carpet scene
+    (NIS 1), whose cue operations (16:26d0) wait for its markers a (6.86 s)
+    and c (36.57 s). The port starts the scene with the song's elapsed time.
+    Before, the port added end song 32 and waited about 7 s on the empty
+    room, then reset the music.
+  - The scene's Prince colours: SetKidPalette 3:5f1c -> PoPSetPalette
+    3:508a(25000 + kind, 16) -> RemapCTBL 17:6a78 renumbers Kid CTBL entries
+    (stored 1-16) to 16-31; the port had placed them at 17-32.
   - Sitting `8:13a8` (GenCtrl at frame 295, `6:0722`): the first call
     starts the carpet counter. Later, below Y 100 with the bars not open it
     crashes: Y 39, mode 10 (hidden), JumpSeq 129 (-> 199), sound 117. The

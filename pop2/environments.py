@@ -78,6 +78,10 @@ class Environment:
     def exit_scenery(self):
         """While the exit song plays: the main loop still runs FrameAdv."""
 
+    def exit_song(self):
+        """The song a completed level waits for, or None."""
+        return self.end_song
+
     def finish_exit(self):
         """After the exit song: level one's voyage scene."""
         self.scene.start_ending()
@@ -699,6 +703,15 @@ class Caverns(Environment):
             self.finish_via_story(6)
         else:
             scene.start_ending()
+
+    def exit_song(self):
+        # 6:0fea-0ff2 adds the end song only at the stairs' frame 224; the
+        # carpet (SEQS 128's -16 at frame 295) leaves with FlyinRug playing.
+        scene = self.scene
+        if (carpet_room(scene.game.level.number, scene.room_id)
+                and scene.sequence_state.action == RIDE_FRAME):
+            return None
+        return self.end_song
 
     def finish_via_story(self, following):
         from pop2.caverns import scenery_available

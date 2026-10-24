@@ -42,6 +42,25 @@ class KidPaletteTests(unittest.TestCase):
         self.assertEqual(player.palette[16:18], [(5, 5, 5), (6, 6, 6)])
 
 
+class CarriedMusicTests(unittest.TestCase):
+    def test_a_carried_song_paces_the_scene_cues_and_otherwise_they_pass(self):
+        # 16:26d0 waits for the marker of the music still playing (FlyinRug
+        # after level five) and returns at once without music.
+        from types import SimpleNamespace
+        from pop2.intro import IntroPlayer
+
+        program = {'operations': [{'op': 'cue', 'args': [97]}, {'op': 'wait', 'args': [60]}],
+                   'audio': {}, 'resource_files': {}}
+        assets = SimpleNamespace(program=program)
+        song = {'duration': 52.6, 'markers': {'a': 6.86}, 'kind': 0}
+        player = IntroPlayer(assets, music=(115, 2.0, song))
+        self.assertEqual(player.position, 1)
+        self.assertAlmostEqual(player.wait_until, 4.86)
+        silent = IntroPlayer(assets)
+        self.assertEqual(silent.position, 2)
+        self.assertLess(silent.wait_until, 1.01)
+
+
 @unittest.skipUnless((ASSET_DIR / 'carpet.json').is_file(), 'Imported carpet scene required')
 class CarpetSceneTests(unittest.TestCase):
     def test_the_scene_flies_over_the_sea_and_lands_on_the_cliff(self):
@@ -60,6 +79,34 @@ class CarpetSceneTests(unittest.TestCase):
         kid = list(assets.kid_palettes[25004].values())
         self.assertEqual(player.palette[16:16 + len(kid)], kid)
         self.assertEqual(ops.count('save_background'), 3)
+
+    def test_flyinrug_plays_on_into_the_scene_and_paces_its_cues(self):
+        # 2:61ce-61ea: no ResetSoundItem after level five.
+        from unittest.mock import Mock
+        from pop2.intro import game_song
+        from tests.test_terrain import RooftopSceneTests
+
+        song = game_song(115)
+        self.assertEqual(sorted(song['markers']), ['a', 'b', 'c'])
+        self.assertAlmostEqual(song['markers']['a'], 6.857, places=2)
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(5)
+        scene.audio = Mock(current_music=115)
+        scene.audio.music_elapsed.return_value = 3.0
+        scene.start_carpet()
+        scene.audio.reset.assert_not_called()
+        self.assertEqual(scene.intro.playing[0][:2], (115, -3.0))
+        # The first screen's cue (operation 59) waits for marker a.
+        scene.intro.advance(3.8)
+        self.assertEqual(scene.intro.position, 60)
+        self.assertAlmostEqual(scene.intro.wait_until, song['markers']['a'] - 3.0)
+        scene.audio = Mock(current_music=114)
+        scene.audio.music_elapsed.return_value = 3.0
+        scene.start_carpet()
+        scene.audio.reset.assert_called_once_with()
+        self.assertNotIn(0, scene.intro.playing)
+        scene.audio = None
 
     def test_finishing_level_five_plays_the_carpet_scene_then_loads_level_six(self):
         from tests.test_terrain import RooftopSceneTests

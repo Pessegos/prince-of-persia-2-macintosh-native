@@ -211,8 +211,24 @@ class ScriptAnimation:
                 self.next_tick += self.interval
 
 
+def game_song(cue, directory=ASSET_DIR):
+    """Duration and cue markers of a prepared game song (its MIDI file)."""
+    import mido
+
+    directory = Path(directory) / "audio"
+    manifest = json.loads((directory / "manifest.json").read_text(encoding="ascii"))["cues"]
+    elapsed, markers = 0.0, {}
+    for event in mido.MidiFile(directory / f"cue-{cue}.mid"):
+        elapsed += event.time
+        if event.type == "cue_marker":
+            markers[event.text.strip()] = elapsed
+    return {"duration": manifest[str(cue)]["duration"], "markers": markers, "kind": 0}
+
+
 class IntroPlayer:
-    def __init__(self, assets, audio=None):
+    def __init__(self, assets, audio=None, music=None):
+        """`music`: (cue, seconds played, game_song metadata) of a game song
+        still playing when the scene starts; its cue markers pace the scene."""
         self.assets, self.audio = assets, audio
         self.operations = assets.program["operations"]
         self.sounds = assets.program["audio"]
@@ -222,6 +238,10 @@ class IntroPlayer:
         self.done = False
         self.wait_until = 0.0
         self.timers, self.playing = {}, {}
+        if music is not None:
+            cue, played, metadata = music
+            self.sounds = {**self.sounds, str(cue): metadata}
+            self.playing[0] = (cue, -played, metadata["duration"])
         self.palette = [(0, 0, 0)] * 256
         self.loaded = {}
         self.target = Image.new("L", SIZE, 1)
