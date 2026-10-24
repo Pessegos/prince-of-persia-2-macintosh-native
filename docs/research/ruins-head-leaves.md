@@ -340,12 +340,58 @@ riposte with 66). The port selects 96 when the nearest living ruins actor
 Port approximations: the wall contact (an armed head inside a wall or
 closed gate cell is pushed back 22 pixels instead of the full CheckBarrier
 4:62b0 distances); the column read live from the pose instead of the value
-cached at LoadFrame; ruins actors are not saved (a restored save or a
-rebirth respawns them from their records); the Prince's native ALIVE is
-taken from the host's death counter; IsSoundPlaying is not consulted.
+cached at LoadFrame; an actor whose supporting column leaves 0..9 moves to
+the neighbouring room's list (the original cut 2:6680-6700 is not
+translated); IsSoundPlaying is not consulted; the kill song 137 plays at
+death rather than when native ALIVE reaches 6. Rebirth checkpoints (and so
+saves, which keep the checkpoint) carry the ruins actors: killed heads and
+serpents stay dead, the living restart at rest on entry.
+
+## Native Comparison Of The Runtime
+
+`tools/probe_ruins_runtime.py` runs the original code in the Unicorn
+harness (Codex's level7 machines) and the game's own `pop2/ruins_ai.py`
+on the same supplied states, then compares every working field, the
+record words, sounds, random draws and the Prince's target:
+
+```powershell
+python -m tools.probe_ruins_runtime --source PATH_TO_RECOVERY --output rendered/ruins-runtime-probe.json
+python -m tools.probe_ruins_runtime --source PATH_TO_RECOVERY --output rendered/ruins-serpent-probe.json --serpents
+python -m tools.probe_ruins_runtime --source PATH_TO_RECOVERY --output rendered/ruins-stab-probe.json --stab
+```
+
+| Run | Original | Cases | Mismatches |
+| --- | --- | --- | --- |
+| Heads | wrapper 7:1324 and every leaf it reaches | 20,000 | 0 |
+| Serpents | 7:1824 with 1dc6/187e/19fe/1b52 | 20,000 | 0 |
+| Struck head/serpent | CheckStab 6:51f2, DecLifePts, flee check, death 6:5562, SetTensionLevel | 20,000 | 0 |
+
+States are randomized (seeded) over the actual level-seven head and serpent
+slots, every record mode, the relevant poses and selected sequences, Prince
+positions, life and native ALIVE. The heads run reaches SEQS 131-144, 147,
+150-152, 156, 159, 160, 162, 163 and 166 and sounds 131/134/136; serpents
+reach 168, 170, 172, 173, 176 and 177 (not 171: no hole cell was drawn).
+Supplied endpoints: Rnd (the same seeded draws on both sides), AddSound and
+AddSong (recorded), IsSoundPlaying (0), 6:3946 (a supplied flag), shape
+bounds (body height 30), DrawOppMeter, AnimChar and the nearest-opponent
+choice in the death branch. The serpent wrapper is called after LoadFrame,
+as the opponent pipeline does (2:6512); the original serpent leaves read
+the loaded frame.
+
+The probes found and fixed three port errors: GoToDest reads the column
+remainder left by the last GetCharCol (a5-0x481c), not a fresh one; the
+opponent distance 4:49ee is 999 when the Prince has no life (the port used
+the guards' version); and the Prince's target, not a ruins-only bank, is
+what HeadGetAngry fills (a5-0x505a is the cached Prince's +0x3a).
+DecLifePts queues damage in a5-0x5034; the port applies it at once.
+
+Not compared yet: the Prince struck by a head or serpent (CheckStab with the
+Prince's frame flags), TestStrike's ranges, AnimChar of the head sequences,
+flight, the wall contact and the per-frame scheduling.
 
 ## Still Open
 
-Neck alignment while biting (AlignHeadOnKidNeck, Codex's probe), heads crossing into a neighbouring room,
-the development map, saving ruins actors, and the kill songs' timing.
-Every value above needs a native probe before it is relied on.
+Neck alignment while biting (AlignHeadOnKidNeck needs the drawn Prince
+object index), the development map, the original cut between rooms, and
+native comparisons of the Prince's side of CheckStab, TestStrike's ranges,
+AnimChar of the head sequences, flight and per-frame scheduling.

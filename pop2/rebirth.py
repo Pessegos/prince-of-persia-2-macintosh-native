@@ -48,19 +48,29 @@ class RebirthSnapshot:
     facing: int
     max_life: int
     room_encounters: dict
+    # Ruins heads and serpents per room (opponent sets 5/6); None elsewhere.
+    ruins_rooms: dict | None = None
     caverns: CavernState | None = None
 
     @classmethod
     def capture(cls, checkpoint, combat):
-        world = deepcopy(combat.room_encounters, {id(combat.sequences): combat.sequences})
+        memo = {id(combat.sequences): combat.sequences}
+        world = deepcopy(combat.room_encounters, memo)
+        ruins = getattr(combat, 'ruins', None)
+        rooms = deepcopy(ruins.rooms, memo) if ruins is not None else None
         caverns = getattr(getattr(combat, 'terrain', None), 'caverns', None)
         return cls(checkpoint, combat.player.state.facing, combat.player.max_life, world,
-                   deepcopy(caverns))
+                   ruins_rooms=rooms, caverns=deepcopy(caverns))
 
     def restore_world(self, combat):
         combat.reset()
-        combat.room_encounters = deepcopy(
-            self.room_encounters, {id(combat.sequences): combat.sequences})
+        memo = {id(combat.sequences): combat.sequences}
+        combat.room_encounters = deepcopy(self.room_encounters, memo)
+        ruins = getattr(combat, 'ruins', None)
+        if ruins is not None and self.ruins_rooms is not None:
+            # Killed heads stay dead; the living restart at rest on entry.
+            ruins.rooms = deepcopy(self.ruins_rooms, memo)
+            ruins.load_room(combat, combat.player.room)
         combat.player.max_life = combat.player.life = self.max_life
         current = getattr(getattr(combat, 'terrain', None), 'caverns', None)
         if current is not None and self.caverns is not None:
