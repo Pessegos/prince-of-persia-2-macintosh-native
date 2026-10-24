@@ -91,9 +91,8 @@ render of port room 16 matches the ruins look.
   sound 278 and blood (0x40) on both halves. The drawing of each of the 60
   states is exported as a patch of the native room drawing
   (`tools/extract_scythes.py`); it needs a reimport, and older imports
-  leave the scythes still. Not reproduced: the climbing redraw layers for
-  a blade and the scythe test S05_5F1A for tile 13 (it reads only the
-  static blade state).
+  leave the scythes still. (The climbing redraw layers came later with the
+  slot export; the crawl under a blade uses S05_5F1A's blade state.)
 
 - Flip flask (2026-10-23, kind 4, level six's only one): DoPickupEffect
   4:4672 calls 2:59f6, which turns the world for 1080 updates (a5-0x4fa8,
@@ -196,13 +195,20 @@ found no remaining loop except a run closed by a crevice whose low bits are
 
 ## Remaining Steps
 
-1. The two shake images per column parity of loose floors (the export keeps
-   one variant for both; a second needs another variant per cell, which
-   multiplies the room exports) and the scythes' climbing redraw layers.
-2. The retained cliff image when walking left from the start (a visual
-   comparison with the original).
+1. The two shake images per column parity of loose floors: the export keeps
+   one shaking variant (phase 1) for both nonzero shifts. A second image
+   needs another state per loose unit (its choices are rest, phase 1, space
+   and, for struck cells, a fourth), touching the shared cavern/ruins slot
+   export, the signatures and a reimport; it shows for single frames only.
+2. The retained cliff image when walking left from the start needs a visual
+   comparison with the original game (playtesting).
 3. Level nine's exit leads to the temple (NIS 2 and level ten), which the
    port does not support yet.
+
+The scythes' climbing redraw layers, listed here earlier, are covered by
+the slot export (schema 2): every room's `climb_source`/`climb_141` lists
+are composed per slot state, scythe slots included (for example level six
+room 16 and level seven room 3).
 
 Cutscene 1 between levels five and six is now implemented; see
 `level5-native-rules.md`, "Cutscene 1: NISCarpet", including the unresolved
