@@ -116,6 +116,9 @@ class DemoEncounter:
     def visible_guards(self):
         return [view for guard in self.guards if (view := self.project_guard(guard)) is not None]
 
+    def visible_ruins(self):
+        return []  # The rooftop demo has no ruins heads or serpents.
+
     def health_opponent(self):
         if (self.guard is not None and self.guard.alive
                 and self.guard.row == self.player.row):
