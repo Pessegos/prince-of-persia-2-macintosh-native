@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 import struct
 
+from pop2.cavern_state import CavernState
 from pop2.coordinates import port_room
 from pop2.opponent_generation import character_column
 
@@ -47,17 +48,33 @@ class RebirthSnapshot:
     facing: int
     max_life: int
     room_encounters: dict
+    caverns: CavernState | None = None
 
     @classmethod
     def capture(cls, checkpoint, combat):
         world = deepcopy(combat.room_encounters, {id(combat.sequences): combat.sequences})
-        return cls(checkpoint, combat.player.state.facing, combat.player.max_life, world)
+        caverns = getattr(getattr(combat, 'terrain', None), 'caverns', None)
+        return cls(checkpoint, combat.player.state.facing, combat.player.max_life, world,
+                   deepcopy(caverns))
 
     def restore_world(self, combat):
         combat.reset()
         combat.room_encounters = deepcopy(
             self.room_encounters, {id(combat.sequences): combat.sequences})
         combat.player.max_life = combat.player.life = self.max_life
+        current = getattr(getattr(combat, 'terrain', None), 'caverns', None)
+        if current is not None and self.caverns is not None:
+            restored = deepcopy(self.caverns)
+            # These globals deliberately survive native rebirth; mechanisms do not.
+            restored.bridge.tension_level, restored.bridge.tension = current.bridge.tension_level, current.bridge.tension
+            restored.potions.flip_timer = current.potions.flip_timer
+            restored.potions.float_timer = 0
+            for queue in (restored.plates.triggered, restored.plates.slams, restored.plates.slam_sounds,
+                          restored.plates.songs, restored.plates.stopped_sounds, restored.potions.songs,
+                          restored.bridge.songs, restored.loose.plate_events, restored.loose.shake_events):
+                queue.clear()
+            # Preserve the shared identity held by GameSession and LevelMap.
+            current.__dict__.update(restored.__dict__)
 
 
 @dataclass
