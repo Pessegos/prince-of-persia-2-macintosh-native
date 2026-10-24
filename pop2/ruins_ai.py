@@ -128,6 +128,10 @@ class RuinsCreatures:
     # whether this frame's alerts already ran before he moved.
     prince_drawn: tuple | None = None
     alerts_ready: bool = False
+    # Songs the ruins request (AddSong 5:4d58) and a5-0x4ff8, set once level
+    # nine's room 2 has played its song.
+    songs: list = field(default_factory=list)
+    room_two_song: bool = False
 
     # ---- rooms -------------------------------------------------------
 
@@ -647,7 +651,7 @@ class RuinsCreatures:
                     self.jump(actor, 163)
         if not mind.song and not encounter_sound_playing(encounter, 131):
             mind.song = 1
-            actor.state.sound_events.append(136)
+            self.songs.append(136)  # AddSong 5:4d58: InjrHead
 
     def able_to_flee(self, actor, encounter, prince):
         """IsAbleToFleeInRoom 7:1454."""
@@ -1189,7 +1193,7 @@ class RuinsCreatures:
         fighting = any(other is not actor and other.alive and other.ruins.alert > 0
                        for other in self.living(actor.room))
         if not fighting:
-            actor.state.sound_events.append(137)
+            self.songs.append(137)  # KillHead
 
     def _after_frame(self, actor, encounter):
         state = actor.state

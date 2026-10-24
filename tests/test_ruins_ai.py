@@ -228,12 +228,12 @@ class RuinsControllerTests(unittest.TestCase):
         head = combat.ruins.actors(3)[0]
         head.life = 1
         combat.ruins.stab(head, combat, 1)
-        self.assertNotIn(137, head.state.sound_events)
+        self.assertNotIn(137, combat.ruins.songs)
         frames = []
         for frame in range(10):
-            head.state.sound_events.clear()
+            combat.ruins.songs.clear()
             combat.ruins.advance(combat)
-            if 137 in head.state.sound_events:
+            if 137 in combat.ruins.songs:
                 frames.append(frame)
         # 4:3d24: registration, six counted frames, then 5:4bb8 once.
         self.assertEqual(frames, [7])
@@ -300,6 +300,29 @@ class RuinsControllerTests(unittest.TestCase):
                       scene.sword_sprite_cache)
         scene.load_level(6)
         self.assertIs(scene.attachment_frames, scene.ordinary_attachment_frames)
+
+    def test_level_nine_custom_rooms_request_their_songs_on_entry(self):
+        from tests.test_terrain import RooftopSceneTests
+        from pop2.environments import environment_for
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(9)
+        ruins = scene.game.combat.ruins
+        environment = environment_for(scene)
+        # 7:37d6, the enter hook of CUST kinds 20/21 (native rooms 2 and 16).
+        scene.jump_to_room(1, 1, 60, 1)
+        environment.entered_room()
+        environment.entered_room()
+        self.assertEqual(ruins.songs, [185])  # Once (a5-0x4ff8).
+        ruins.songs.clear()
+        scene.jump_to_room(15, 1, 505, 1)
+        environment.entered_room()
+        self.assertEqual(ruins.songs, [292])
+        scene.jump_to_room(15, 1, 100, 1)
+        ruins.songs.clear()
+        environment.entered_room()
+        self.assertEqual(ruins.songs, [])
 
 
 if __name__ == '__main__':

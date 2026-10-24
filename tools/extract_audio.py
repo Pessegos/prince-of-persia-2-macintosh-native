@@ -26,7 +26,9 @@ CAVERN_SONGS = (24, 62, 63, 71, 279, 285, 297, *range(73, 109))
 LATE_CAVERN_SONGS = (111, 112, 114, 115, 116, 119, 120, 121)
 # Levels 6-7 (environment 4): ambient bank 4 (139-174), the ruins' end song
 # (GetEndSong 5:4e32, 124) and FindSwd (183). Rendered, not yet required.
-RUINS_SONGS = (*range(139, 175), 124, 183)
+# The ruins: ambient 139-174, the level end 124, 183; the flip flask 176/177;
+# the heads' InjrHead 136 and KillHead 137; level nine's Horse 185 and Chasm 292.
+RUINS_SONGS = (*range(139, 175), 124, 183, 176, 177, 136, 137, 185, 292)
 SYNTH_DIR = Path(__file__).resolve().parents[1] / "vendor" / "smssynth"
 
 

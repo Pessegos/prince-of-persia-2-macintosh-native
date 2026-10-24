@@ -168,7 +168,8 @@ def port_run(level, sequences, frames, initial, record, prince, nearest, seed, t
     record_after = dict(mode=mind.mode, dest_column=mind.dest_column, dest_row=mind.dest_row,
                         timer=mind.timer, song=mind.song)
     banked_after = creatures.banked is actor
-    return result, record_after, state.sound_events, draws.log, banked_after, creatures.remainder
+    return (result, record_after, state.sound_events + creatures.songs, draws.log, banked_after,
+            creatures.remainder)
 
 
 def run_probe(recovery, cases=20000, seed=2026):

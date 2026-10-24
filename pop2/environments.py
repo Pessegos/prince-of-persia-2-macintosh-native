@@ -909,6 +909,30 @@ class Ruins(Caverns):
                                  scene.sequence_state.facing, scene.frames[scene.action])
         self.room_ambient(audio, motion, fighting, contact)
 
+    def entered_room(self):
+        super().entered_room()
+        scene = self.scene
+        ruins = getattr(scene.combat, 'ruins', None) if scene.combat is not None else None
+        if ruins is None or scene.game.level.number != 9:
+            return
+        # The enter hook 7:37d6 of CUST kinds 20/21 (level nine's native
+        # rooms 2 and 16), with the Prince's column.
+        column = scene.combat._supporting_column(scene.combat.player)
+        if scene.room_id == 15 and column >= 9:
+            ruins.songs.append(292)
+        elif scene.room_id == 1 and column < 5 and not ruins.room_two_song:
+            ruins.songs.append(185)
+            ruins.room_two_song = True
+
+    def queue_songs(self, audio):
+        super().queue_songs(audio)
+        ruins = getattr(self.scene.combat, 'ruins', None) if self.scene.combat is not None else None
+        if ruins is not None:
+            for cue in ruins.songs:
+                if audio is not None and not audio.song_playing(cue):
+                    audio.add_song(cue)
+            ruins.songs.clear()
+
     def frame_start(self):
         super().frame_start()
         combat = getattr(self.scene, 'combat', None)
