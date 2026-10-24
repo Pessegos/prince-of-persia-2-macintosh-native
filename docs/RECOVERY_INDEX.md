@@ -203,6 +203,14 @@ actual2:6224/62e6, native gate-bank/clip/gravity and actor save2:6472:
 and presentation/clock services are supplied. Outer FrameAdv, real controls,
 reachable placements, physical consequences and playable temple remain P.
 
+[Hanging controls](research/temple-hanging-control.md) extend R through native
+GenCtrl6:0560's bounded unarmed/living type0 route and6:18e0/1998/1a84/1b7e,
+native predicates/ClearControls/JumpSeq and first clip after gate selection:
+28,220 traces/112,880 operation comparisons,14 asset-free regressions.
+Preview effects survive partial sequence-state restoration. Cell/bars values,
+latches and the four-call schedule are supplied; actual PlayerCtrl and
+physical support/contact/fall in the real coordinator remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and

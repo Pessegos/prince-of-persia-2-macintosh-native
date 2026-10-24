@@ -301,3 +301,11 @@ traces/34,112 world comparisons plus2,400 gravity controls pass. Animation,
 control-return, room0, invulnerability, countdown and cut/time guards are
 bounded. PlayerCtrl, geometry/contact, opponents and presentation/clock
 services remain supplied; this is not outer FrameAdv or physical gameplay.
+
+[Hanging controls](temple-hanging-control.md) separately replace supplied
+GenCtrl with the real hanging/climb/release/preview decisions after gate
+selection:28,220 traces/112,880 operation comparisons pass. The controller
+can retain47 or replace it with25/10/73/11/23/99 before ordinary animation.
+DoJumpHang's preview restores sequence fields but retains pose/mode/X effects.
+Cell/bars responses and sampled latches are supplied; this composition does
+not yet run PlayerCtrl or the world coordinator around the real controller.

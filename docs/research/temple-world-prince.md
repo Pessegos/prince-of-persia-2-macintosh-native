@@ -36,7 +36,8 @@ precedes the Prince controller and animation in the ordinary world update.
 Gravity controls separately confirm signed velocities, the ordinary63 and
 floating8 caps, arithmetic halving of negative horizontal speed, and the
 Y3650 movement guard. Gravity changes velocity even when that guard prevents
-movement. Modes outside4/9 do not accelerate, but vertical movement can still
+movement. Ordinary speed already above63 is not reduced to the cap.
+Modes outside4/9 do not accelerate, but vertical movement can still
 apply an existing speed.
 
 ## Evidence
