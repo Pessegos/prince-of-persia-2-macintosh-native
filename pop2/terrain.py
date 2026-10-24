@@ -1062,6 +1062,12 @@ class RooftopPhysics:
                     sequence = ((64 if delta * direction < 0 else 65) if armed else
                                 46 if action in (24, 25) or 40 <= action < 43
                                 or 102 <= action <= 106 else 47)
+                    if not armed and PRONE_FRAMES[0] <= action <= PRONE_FRAMES[1]:
+                        # Collide 4:59b6-59dc: a prone body backs off 5 pixels
+                        # and stays down (SEQS 121), not a standing bump.
+                        sequence = 121
+                        state.target_x -= 5 * direction
+                        state.current_x = state.target_x
                     self.select(runtime, sequence)
                     # Collide 4:5a3c-5a54 requests metal contact only for SEQS:64.
                     if sequence == 64:
