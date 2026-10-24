@@ -142,13 +142,18 @@ HeadGetPeaceful. Returns whether it moved.
 
 ## HeadEnemyCollide 7:0b6e
 
-Unless special flag 1: `d = 4:6562(...)` (sword distance in the head's
-row). With `min <= d < 5` (and `d < 8`) and `d >= -width`: X =
-AddCharX(-22 - d). If native ALIVE < 0 and not SEQS 153: return 157
-(hurt). Else, unless SEQS 164: on poses <= 191 return 164 and snap X to
-the column anchor + 22 (+51 facing left); on later poses JumpSeq 145
-(dying). Then DecLifePts(100) for the head (4:34f2). Returns -1 when
-there was no contact.
+Called from the actor collision routine at 4:647c with the distance to a
+barrier (4:6562 measures it in the head's row), not from sword combat.
+Unless special flag 1, with that distance `d` in `min..4` and `d >=
+-width`: X = AddCharX(-22 - d) (pushed out of the wall). If native ALIVE
+< 0 and not SEQS 153: return 157 (bounce). Else, unless SEQS 164: on
+poses <= 191 return 164 and snap X to the column anchor + 22 (+51 facing
+left); on later poses JumpSeq 145 (dying). Then DecLifePts(100) for the
+head (4:34f2): a dead head that hits a wall is finished. Returns -1 when
+there is no contact.
+
+DoStrike (6:2638) gives the head family its own strike: unless already
+SEQS 156 or 166, or locked on (IsHeadLockedOn 7:16b8), JumpSeq 156.
 
 ## Flee 7:0cae / 7:0c5e
 
