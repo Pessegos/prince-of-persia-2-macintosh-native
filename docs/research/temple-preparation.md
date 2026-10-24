@@ -367,3 +367,10 @@ real cell traversal with no service replacements:39,318 comparisons match.
 The first gate wins; only low-byte positions1..183 and an inclusive native-X
 band block this helper. Cache and room-base-pointer writes are compared.
 Caller/standing animation and full physical contact remain outside this proof.
+
+[Contact routing](temple-gate-contact.md) extends the chain through actual
+CheckGateForKid/ReadCell/admission/JumpSeq50:61,382 comparisons match. The
+contact caller checks neighbors in a different order from standing; exact
+overlap, resource failure and ALIVE/HP separation matter. Distance, overlap
+construction, ejection/cave terminal responses and repeated physical world
+updates remain supplied or excluded; this is not crush/death parity.

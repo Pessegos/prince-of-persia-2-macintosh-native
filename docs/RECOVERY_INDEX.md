@@ -270,6 +270,13 @@ inclusive native-X band, cached normalized column and room-base-pointer
 side effects are checked. Standing callers/animation, full contact and
 multi-frame physical reachability remain P.
 
+[Gate contact routing](research/temple-gate-contact.md) extends R through
+CheckGateForKid4:60e4, real cells/admission, JumpSeq50 and contact marking:
+61,382 comparisons,14 asset-free regressions. ALIVE/HP, lookup priority,
+exact overlap and failed resource behavior are distinguished. Distance,
+overlap construction and terminal ejection/cave responses remain supplied;
+subsequent damage/death, full collision/world physics and playable temple P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
