@@ -3370,6 +3370,10 @@ class ScenePrototype(WindowControls):
                 self.resources.kid['AFRM'][25201]['data'])
         return cached
 
+    @attachment_frames.setter
+    def attachment_frames(self, frames):
+        self.ordinary_attachment_frames = frames
+
     def sword_sprite(self):
         attachment_type, shape_index, dx, dy = self.attachment_frames[
             self.frames[self.action].afrm_index
