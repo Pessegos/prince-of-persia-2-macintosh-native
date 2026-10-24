@@ -9,7 +9,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageOps
 
 from pop2.paths import ASSET_DIR
-from pop2.cavern_retouch import retouched_sprite
+from pop2.cavern_retouch import retouched_door_sprite, retouched_sprite
 from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.render_opening import OpeningRoom, decode_ctbl, decode_shap, load_resource_file
 from pop2.terrain import character_row, floor_contact_x
@@ -966,6 +966,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
 
     def scenery_sprite(command):
         sprite = cavern_command_sprite(command, resources, palette, shapes)
+        if retouched:
+            sprite = retouched_door_sprite(level_number, room_id, command, sprite)
         return retouched_sprite(room_id, command, sprite) if retouched and level_number == 3 else sprite
 
     if (program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)

@@ -74,7 +74,10 @@ class CavernRetouchTests(unittest.TestCase):
         for room, expected in hashes.items():
             with self.subTest(room=room):
                 native = cavern_room(room)
-                edited = cavern_room(room, retouched=True)
+                # Keep the earlier wall-art goldens independent of the door
+                # blend, whose approved combined frames have their own tests.
+                with patch('pop2.caverns.retouched_door_sprite', side_effect=lambda level, room, command, source: source):
+                    edited = cavern_room(room, retouched=True)
                 pixels = edited.flattened().convert('RGB').tobytes()
                 self.assertEqual(hashlib.sha256(pixels).hexdigest(), expected)
                 self.assertNotEqual(native.flattened().tobytes(), edited.flattened().tobytes())
@@ -93,8 +96,8 @@ class CavernRetouchTests(unittest.TestCase):
         self.assertEqual(opened.crop((35, 0, 151, 245)).tobytes(), closed.crop((35, 0, 151, 245)).tobytes())
         self.assertEqual(closed.crop((185, 135, 281, 220)).tobytes(), native.crop((185, 135, 281, 220)).tobytes())
 
-    def test_other_twenty_eight_rooms_remain_pixel_identical(self):
-        for room in set(range(32)) - {0, 1, 27, 29}:
+    def test_other_twenty_seven_rooms_remain_pixel_identical(self):
+        for room in set(range(32)) - {0, 1, 12, 27, 29}:
             with self.subTest(room=room):
                 native, edited = cavern_room(room), cavern_room(room, retouched=True)
                 self.assertEqual(native.background.tobytes(), edited.background.tobytes())
@@ -106,7 +109,8 @@ class CavernRetouchTests(unittest.TestCase):
         from pop2.caverns import clipped_sprite
 
         program, resources, palette, shapes = cavern_assets()
-        native, edited = cavern_room(29), cavern_room(29, retouched=True)
+        with patch('pop2.caverns.retouched_door_sprite', side_effect=lambda level, room, command, source: source):
+            native, edited = cavern_room(29), cavern_room(29, retouched=True)
         self.assertEqual(native.foreground.tobytes(), edited.foreground.tobytes())
         before, after = native.flattened().convert('RGB'), edited.flattened().convert('RGB')
         protected = Image.new('L', before.size)
@@ -229,17 +233,17 @@ class CavernRetouchTests(unittest.TestCase):
         game = LevelRenderer(level, preload_room=False)
         reference = LevelRenderer(level, preload_room=False, retouch_caverns=False)
         for room in range(32):
-            expected = cavern_room(room, animated=True, retouched=room in (0, 1, 27, 29))
+            expected = cavern_room(room, animated=True, retouched=room in (0, 1, 12, 27, 29))
             self.assertEqual(game.room(room).flattened().tobytes(), expected.flattened().tobytes())
             self.assertEqual(reference.room(room).flattened().tobytes(), cavern_room(room, animated=True).flattened().tobytes())
 
     def test_retained_pixels_do_not_propagate_retouch_into_adjacent_rooms(self):
         level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 3)
         terrain = LevelMap(level.data)
-        for source in (0, 1, 27, 29):
+        for source in (0, 1, 12, 27, 29):
             for direction in ('left', 'right', 'up', 'down'):
                 destination = terrain.neighbor(source, direction)
-                if destination is None or destination in (0, 1, 27, 29):
+                if destination is None or destination in (0, 1, 12, 27, 29):
                     continue
                 with self.subTest(source=source, destination=destination):
                     game = LevelRenderer(level, preload_room=False)

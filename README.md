@@ -158,7 +158,7 @@ I also improved the sound played while the gate opens. The original had noticeab
 - The level 1 screen 7-8 drop preserves the full landing and stand-up animation, matching DOS behavior instead of the abrupt interruption in the Macintosh original.
 - Completely overhauled lava pools with detailed rocky edges, convincing depth like the DOS version, seamless bubbling, and properly layered splashes and particles.
 - Reworked stone-gate closing and crushing animation, with a timed slam and seamless opening audio without the original gaps or end click.
-- Local cavern-art retouches soften harsh shadow seams in level 3 rooms 1, 2, 28 and 30, without changing the same pieces elsewhere.
+- Local cavern-art retouches soften harsh shadow seams in level 3 rooms 1, 2, 28 and 30, without changing the same pieces elsewhere. Entrance/exit arch edges also blend into the surrounding rock across the cavern levels.
 - Dock guards stay in standby once the Prince catches the boat, instead of switching back into combat during the escape.
 - Shift+Back with the sword drawn turns the Prince manually. Unlike the original toggle, this leaves automatic turning enabled.
 - While floating, the Prince is pushed back from obstructing scenery instead of scraping along it as in the Macintosh original.
