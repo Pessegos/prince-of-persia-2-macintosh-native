@@ -172,6 +172,11 @@ now extends R to real geometry/motion/crush admission and both bank lifetimes:
 192 traces/83,040 comparisons, explicitly no actor contact. Actor consequences,
 presentation and full FrameAdv in that composition remain P.
 
+[Hanging gate helpers](research/temple-gate-hanging.md) add14,268 comparisons
+for native StopGate, JumpSeq47 selection/copyback and separate sound29
+admission at all41 original anchors. Supplied type0 actors/resource existence;
+no clip execution, full caller schedule or mixed hanging/contact integration.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and

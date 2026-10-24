@@ -88,3 +88,8 @@ now also executes both real callees in120 traces/14,784 comparisons, with
 all62 copied working-actor bytes checked. Four additional asset-free tests
 pin the actor-copy model. Next: connect rock movement, preserving the
 explicit scheduling boundary.
+
+[Hanging helper evidence](temple-gate-hanging.md) separately executes
+StopGate's exact sequence47 admission, real JumpSeq/copyback and5:153c's
+distinct sound29 predicate:14,268 comparisons pass. This does not change
+the non-hanging bounds of the earlier connected gate/mixed experiments.

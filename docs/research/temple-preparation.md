@@ -267,3 +267,9 @@ motion/crush admission and both bank compactions to the plate/gate chain:
 192 traces/83,040 comparisons pass, with saved Prince room0/frame0 deliberately
 excluding actor reactions. Working actors and both call orders remain supplied;
 this is not full FrameAdv, reachable gameplay or a damage timeline.
+
+[Gate hanging helpers](temple-gate-hanging.md) now cover native StopGate /
+JumpSeq47/copyback and the separate sound29 predicate at all41 original
+gate anchors:14,268 comparisons pass. Actor fields and SEQS existence are
+supplied; the clip itself and full caller schedule are not executed. These
+helper proofs do not extend the non-contact mixed-motion trace's scope.
