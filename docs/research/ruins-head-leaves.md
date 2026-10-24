@@ -457,4 +457,5 @@ their records' starting state.
 
 ## Still Open
 
-Native comparisons of the wall contact and per-frame scheduling.
+A native comparison of the per-frame scheduling (the order of control,
+animation, flight, collision and strikes across all actors of a frame).
