@@ -883,8 +883,6 @@ class Caverns(Environment):
                 if not audio.song_playing(112):
                     audio.add_song(112)
                 skeleton.rise_song_pending = False
-        if in_carpet_room:
-            return
         self.room_ambient(audio, motion, fighting, contact)
 
     def player_died(self):

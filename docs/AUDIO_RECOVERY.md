@@ -164,6 +164,22 @@ an ambient track plays; foreground songs (potions, exits, victory and
 death) are never interrupted by that transition. Disabling ambient music
 does not suppress these foreground event songs.
 
+Level five's carpet chamber requests RugRoom114 once on entry (8:0d50),
+not continuously. After that track ends, ordinary ambient admission5:550c
+can resume cavern-bank music while the Prince remains in the room; leaving
+and re-entering requests114 again. There is no permanent room-three veto.
+The port's unconditional carpet-room return incorrectly kept the room
+silent after114 ended and is removed. Pending/playing room or foreground
+songs still prevent ambient replacement through the normal audio policy.
+
+`probe_carpet_room_repaint_music` independently executes96 native admission
+fixtures for114/115, rooms1/3/4, enabled/disabled, ALIVE and pending-song
+states, plus the actual8:0d50 entry request. Sound-status/combat/opponent
+queries and AddSong are supplied endpoints; no MIDI driver or full frame
+loop is executed. Scene tests use the actual level-five bank/cell groups,
+verify a cavern-pool cue after completion, and retain once-per-visit,
+departure/re-entry, music-toggle and foreground-song protection checks.
+
 Both routines use OppToFight (6:2392-2492). For the implemented ordinary
 guards and skeletons this means a living, alerted NPC, including alert 1
 when a gap separates it from the Prince; it is not limited to alert >=2 or

@@ -15,6 +15,7 @@ class CarpetRoomMusicTests(unittest.TestCase):
         audio = AudioEngine(playback=object())
         audio.playback = TimedPlayback(audio.cues)
         audio.playback.play = Mock(wraps=audio.playback.play)
+        audio.configure_level(self.scene.level_map.level)
         self.scene.audio = self.audio = audio
         self.scene.jump_to_room(2, 0, 445, 1)
 
@@ -28,13 +29,19 @@ class CarpetRoomMusicTests(unittest.TestCase):
             self.scene.advance_audio()
         self.audio.playback.play.assert_not_called()
 
-    def test_finished_theme_is_not_replayed_while_staying_in_the_room(self):
+    def test_finished_theme_returns_to_cavern_ambient_without_replaying_rugroom(self):
         self.audio.playback.advance(40)
         self.audio.playback.play.reset_mock()
         for _ in range(10):
             self.scene.advance_audio()
-        self.assertFalse(self.audio.music_busy)
-        self.audio.playback.play.assert_not_called()
+        self.assertTrue(self.audio.music_busy)
+        self.audio.playback.play.assert_called_once()
+        cue = self.audio.playback.play.call_args.args[1]
+        self.assertNotEqual(cue, 114)
+        self.assertTrue(self.audio.current_music_ambient)
+        group = self.audio.current_music_group
+        bank = self.audio.manifest['ambient'][self.audio.level_music['bank']]
+        self.assertIn(cue, range(bank['starts'][group], bank['starts'][group] + bank['counts'][group] + 1))
 
     def test_ambient_switch_does_not_rearm_the_used_room_entry_cue(self):
         self.audio.set_music_enabled(False)
@@ -42,7 +49,8 @@ class CarpetRoomMusicTests(unittest.TestCase):
         self.assertFalse(self.audio.music_busy)
         self.audio.set_music_enabled(True)
         self.scene.advance_audio()
-        self.assertFalse(self.audio.music_busy)
+        self.assertTrue(self.audio.music_busy)
+        self.assertNotEqual(self.audio.current_music, 114)
 
     def test_foreground_carpet_song_is_never_replaced_by_the_room_theme(self):
         self.audio.add_song(115)
@@ -94,7 +102,7 @@ class CarpetRoomMusicTests(unittest.TestCase):
         self.scene.game.caverns.carpet.counter = 1
         self.audio.reset()
         self.scene.advance_audio()
-        self.assertFalse(self.audio.music_busy)
+        self.assertFalse(self.audio.song_playing(114))
 
 
 if __name__ == '__main__':
