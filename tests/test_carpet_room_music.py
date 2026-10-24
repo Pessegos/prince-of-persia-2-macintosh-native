@@ -28,19 +28,21 @@ class CarpetRoomMusicTests(unittest.TestCase):
             self.scene.advance_audio()
         self.audio.playback.play.assert_not_called()
 
-    def test_finished_theme_can_repeat_without_picking_an_unrelated_ambient(self):
+    def test_finished_theme_is_not_replayed_while_staying_in_the_room(self):
         self.audio.playback.advance(40)
-        self.scene.advance_audio()
-        self.assertEqual(self.audio.current_music, 114)
-        self.assertTrue(self.audio.song_playing(114))
+        self.audio.playback.play.reset_mock()
+        for _ in range(10):
+            self.scene.advance_audio()
+        self.assertFalse(self.audio.music_busy)
+        self.audio.playback.play.assert_not_called()
 
-    def test_ambient_switch_stops_theme_and_reenabling_it_resumes_room_theme(self):
+    def test_ambient_switch_does_not_rearm_the_used_room_entry_cue(self):
         self.audio.set_music_enabled(False)
         self.scene.advance_audio()
         self.assertFalse(self.audio.music_busy)
         self.audio.set_music_enabled(True)
         self.scene.advance_audio()
-        self.assertTrue(self.audio.song_playing(114))
+        self.assertFalse(self.audio.music_busy)
 
     def test_foreground_carpet_song_is_never_replaced_by_the_room_theme(self):
         self.audio.add_song(115)
@@ -50,10 +52,43 @@ class CarpetRoomMusicTests(unittest.TestCase):
         self.assertFalse(self.audio.current_music_ambient)
 
     def test_entering_from_another_exploration_song_switches_to_rugroom(self):
+        self.leave_room()
         self.audio.add_song(73, ambient=True)
         self.audio.flush()
+        self.scene.game.place(2, 0, 445, 1)
         self.scene.advance_audio()
         self.assertEqual(self.audio.current_music, 114)
+
+    def leave_room(self):
+        # Do not warp/reset audio: exercise a normal room change at its audio phase.
+        self.scene.game.place(3, 0, 445, 1)
+        self.scene.advance_audio()
+
+    def test_leaving_the_room_stops_its_theme_without_an_audio_reset(self):
+        self.audio.playback.stop = Mock(wraps=self.audio.playback.stop)
+        self.leave_room()
+        self.assertFalse(self.audio.song_playing(114))
+        self.audio.playback.stop.assert_called_with('music')
+
+    def test_reentering_the_room_plays_the_theme_once_again(self):
+        self.audio.playback.advance(40)
+        self.leave_room()
+        self.scene.game.place(2, 0, 445, 1)
+        self.scene.advance_audio()
+        self.assertTrue(self.audio.song_playing(114))
+
+    def test_leaving_does_not_stop_the_carpet_travel_song(self):
+        self.audio.add_song(115)
+        self.audio.flush()
+        self.leave_room()
+        self.assertTrue(self.audio.song_playing(115))
+
+    def test_foreground_event_completion_does_not_replay_the_room_theme(self):
+        self.audio.add_song(24)
+        self.audio.flush()
+        self.audio.playback.advance(40)
+        self.scene.advance_audio()
+        self.assertFalse(self.audio.song_playing(114))
 
     def test_unused_theme_does_not_restart_after_the_carpet_is_underway(self):
         self.scene.game.caverns.carpet.counter = 1

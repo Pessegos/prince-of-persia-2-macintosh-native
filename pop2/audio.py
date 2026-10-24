@@ -197,6 +197,8 @@ class AudioEngine:
         self.current_music_ambient = self.pending_song_ambient = False
         self.current_music_group = self.pending_music_group = None
         self.level_music = None
+        self.room_song_scope = None
+        self.room_song_requested = False
         self.last_ui_hover_at = float('-inf')
 
     def play_ui(self, kind):
@@ -263,6 +265,27 @@ class AudioEngine:
             self.pending_song = cue
             self.pending_song_ambient = ambient
             self.pending_music_group = None
+
+    def room_song(self, location, cue=None):
+        """Request a theme once per room visit and stop it on departure."""
+        scope = (location, cue)
+        if self.room_song_scope != scope:
+            previous = self.room_song_scope[1] if self.room_song_scope is not None else None
+            if previous is not None:
+                if self.pending_song == previous:
+                    self.pending_song = None
+                    self.pending_song_ambient = False
+                    self.pending_music_group = None
+                if self.current_music == previous:
+                    self.playback.stop('music')
+                    self.current_music = None
+                    self.current_music_ambient = False
+                    self.current_music_group = None
+            self.room_song_scope = scope
+            self.room_song_requested = False
+        if cue is not None and not self.room_song_requested and self.music_enabled:
+            self.room_song_requested = True
+            self.add_song(cue, ambient=True)
 
     def drain(self, state, audible=True):
         for cue in state.sound_events:
@@ -443,6 +466,8 @@ class AudioEngine:
 
     def reset(self, keep_music=False):
         """Stop every sound; with `keep_music`, the playing song continues."""
+        self.room_song_scope = None
+        self.room_song_requested = False
         for bus in self.effect_buses:
             self.playback.stop(bus)
         if not keep_music:

@@ -84,11 +84,16 @@ after their fresh world has been initialized.
 ## Carpet Chamber Audio (2026-10-24)
 
 CUST room entry `8:0d50-0d58` requests `AddSong(0x72)`, RugRoom cue 114 [D].
-The port now selects it in level five, native room 3, before the carpet ride.
-Keeping it as ambient music, repeating after completion and resuming after
-the ambient toggle are host playback policies, not measured native loop
-timing. Foreground carpet/event songs take precedence. Covered by
-`tests/test_carpet_room_music.py`.
+The port selects it once on entering level five, native room 3, before the
+carpet ride. The leave hook `8:0d5c` calls `8:14f0`, which stops specifically
+cue 114 through PrinceResetSnd `5:5252` [D]. The MIDI ends at 29.7 seconds
+and contains no loop controls. There is no per-frame request to repeat it.
+Sitting `8:14ae` replaces it with 115/116; leaving must not stop that new
+song. An earlier port patch wrongly restarted 114 after completion; the
+room-visit latch now prevents this, including after other foreground songs.
+Treating it as ambient for the host toggle remains a port policy: muting it
+does not rearm the used entry request. Re-entry can request it again.
+Covered by `tests/test_carpet_room_music.py`.
 
 `tests/test_level5_traps.py` also checks both room-4 launchers and room 9's
 right loose floor (cell 16) striking button 26. The latter emits debris
