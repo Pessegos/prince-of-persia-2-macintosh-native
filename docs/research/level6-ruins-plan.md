@@ -217,9 +217,62 @@ found no remaining loop except a run closed by a crevice whose low bits are
   (pending = maximum), the father's sword (a5-0x500a = 1), a5-0x4ff4 = 1,
   the level redrawn from a saved copy, and Throne4 (182, queued when a song
   plays). Afterwards the sword is an ordinary item without FindSwd (183,
-  skipped in that room by 6:1554-1568). The port does all of this except
-  the vision itself; the flags are optional save fields. Throne songs are
-  rendered by the audio import (`RUINS_SONGS`) after a reimport.
+  skipped in that room by 6:1554-1568). The flags are optional save
+  fields. Throne songs are rendered by the audio import (`RUINS_SONGS`)
+  after a reimport.
+
+## Cutscene 6: The Vision At The Throne (2026-10-25)
+
+PlayNIS(6) from 7:38ca reaches NISThroneRoom 15:66f4 (dispatcher 15:07c8,
+table entry 6). The import runs it like the other scenes
+(`tools/extract_intro.py`, `recover_throne`, `throne.json`) and the port
+plays it with the scene player before waking the Prince
+(`ScenePrototype.start_vision`, `Ruins.wake_from_vision`).
+
+- Files: ThroneNIS.rsrc (A5 file record -0x26aa; SHAP 32001-32005, CTBL
+  32001) at id offset 600000, and the game's own open files, searched after
+  NIS: Ruins (400000), Kid (700000) and Prince (800000).
+- Order: ShowNthvRGB 17:130e sets entries 1 and 2 to (255, 90, 0) and
+  (255, 181, 0); 15:6e24 loads Kid CTBL 25004 (at 16) and Prince CTBL 1004
+  (at 240) and combines them (RemapCTBL 17:6a78, CombineCtabs 17:1520);
+  CTBL 32001 replaces 48-229; SHAP 32001 (the restored palace, 510 x 365)
+  with DrawDeadKid 15:6c66 on top: Kid SHAP 25081 at the Prince's X - 221
+  (mirrored by FreeShpInfo 17:5fd0 and 21 further left when he faces right)
+  and Y - 19, and the sword (Prince SHAP 1011) at (271, 345). The scene
+  waits for Throne2 (game song 181, MIDISnd 9933) to end, starts its own
+  music (NISMIDI 31020) and shows the picture. The dissolve data was freed
+  by the previous scene (15:0132, 2:2cfe), so this first dissolve copies
+  the screen at once (15:2c06).
+- The apparition: InitDissolve(2) limits later dissolves to the rectangle
+  at a5-0x22fc (77 x 104) moved to (X - 214, or 39 less facing right; 210).
+  SaveRect 17:520a keeps the background there; SHAP 32002-32005 fade in
+  over it (180, then 20 ticks each) after music cue 97.
+- The words: TEXT 32000 lines 1, 2, 3, 4, 6 and 8, each with its voice
+  (NISDIGI 32001-32004, 32006, 32008); lines 5 and 7 are never shown. While
+  the scene runs (a5-0x27dc), NISTextDraw 15:026e-028c uses the strip saved
+  at a5-0x27da (the picture's top 87 lines) as the panel and colours 1 and
+  2 instead of SHAP 25002 and 3/14.
+- The end: after music 31020 the scene starts Throne4 (182, MIDISnd 9934),
+  dissolves the apparition away, redraws the ruined throne room
+  (QueenAddNIS 15:6d46, environment 4: Ruins SHAP 4200-4207 and the
+  Prince), fades out all colours and fades the room palette in (Ruins CTBL
+  3501), restarts Throne4 if it has ended (SoundIdOn 16:25b0) and leaves it
+  playing. 7:39d4 then only queues 182 while it plays; the port's queue
+  skips a playing song.
+- Two variants (native facing 0 and -1) are exported against the reference
+  position (474, 346) (X with the 207 origin; Y row 2's floor). Drawing at
+  DrawDeadKid 6cc4 follows the Prince's X and Y, the apparition's SaveRect,
+  dissolve area and shapes his X (`follow`).
+- Port approximations: the screen before the scene is the game's last
+  frame on the Macintosh; the port draws the scene's own room redraw there
+  (with Ruins CTBL 3500/3501 and the combined Kid/Prince colours) and black
+  below line 365, where the game's status line stays. An area dissolve uses
+  its own shuffled pixel order, not LoadSaveDisRes 15:3878. Skipping the
+  scene wakes the Prince and lets the game start Throne4.
+- Checks: all existing scene programs (intro, voyage, discovery, carpet,
+  nine trees) are unchanged by the harness additions; MoveRect 17:1b4e now
+  moves the rectangle to the point (17:1b12) instead of offsetting it,
+  which those scenes did not distinguish.
 
 ## Remaining Steps
 
@@ -227,16 +280,6 @@ found no remaining loop except a run closed by a crevice whose low bits are
    comparison with the original game (playtesting).
 2. Level nine's exit leads to the temple (NIS 2 and level ten), which the
    port does not support yet.
-3. Cutscene 6 (the vision at the throne, 15:66f4, dispatcher 15:07c8 case
-   6). It opens ThroneNIS.rsrc (file record a5-0x26aa: SHAP 32001-32005,
-   CTBL 32001) over the live game screen: 15:6c66 redraws the Prince from
-   his position (SHAP 25081/1011), 15:6e24 loads the environment's CTBL
-   25000+env at 1 and 1000+env at 2, palette entries 1 and 2 become
-   (ff,5a,00) and (ff,b5,00) (17:130e), and the apparition fades in from
-   SHAP 32001-32005 with timers, cues 97/98 and sound 31020. The scene
-   harness lacks about ten of its APIs (17:130e, 17:1b4e, 17:520a/544a/549e,
-   17:6a78, 17:1520, 15:2c40/2d60, 15:6e9e). The leave hook 7:38a4 restores
-   CTBL 3500 at 64 and 3000 at 224 after it (a5-0x5000 = -1).
 
 The scythes' climbing redraw layers, listed here earlier, are covered by
 the slot export (schema 2): every room's `climb_source`/`climb_141` lists

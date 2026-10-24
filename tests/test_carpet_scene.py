@@ -185,3 +185,78 @@ class CarpetSceneTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ThroneVisionPlayerTests(unittest.TestCase):
+    """The operations of NIS 6 (15:66f4), the vision at the throne."""
+
+    def player(self, operations, **options):
+        from types import SimpleNamespace
+        from PIL import Image
+        from pop2.intro import IntroPlayer
+
+        shape = Image.new('L', (3, 2), 7)
+        shape.putpixel((0, 0), 9)
+        program = {'kind': 'throne', 'prince': [457, 313], 'audio': {},
+                   'variants': {'0': operations, '-1': operations}, 'operations': operations}
+        assets = SimpleNamespace(program=program, shapes={1: shape},
+                                 palettes={5: {1: (10, 10, 10), 2: (20, 20, 20)}, 6: {3: (30, 30, 30)}})
+        return IntroPlayer(assets, variant=0, **options)
+
+    def test_palette_entries_tables_and_combination(self):
+        player = self.player([
+            {'op': 'rgb', 'args': [1, 255, 90, 0]},
+            {'op': 'set_palette', 'args': [5, 240]},
+            {'op': 'palette', 'args': [5, 1, 0]}, {'op': 'palette', 'args': [6, 2, 0]},
+            {'op': 'remap', 'args': [1, 16]}, {'op': 'remap', 'args': [2, 240]},
+            {'op': 'combine', 'args': []}, {'op': 'brightness', 'args': [0x51, 100]}])
+        # ShowNthvRGB 17:130e, PoPSetPalette/RemapCTBL, CombineCtabs 17:1520.
+        self.assertEqual(player.palette[1], (255, 90, 0))
+        # PoPSetPalette put 5 at 240; the combined table then shows 6 there.
+        self.assertEqual(player.palette[240:242], [(30, 30, 30), (20, 20, 20)])
+        self.assertEqual(player.palette[16:18], [(10, 10, 10), (20, 20, 20)])
+        self.assertEqual(player.loaded, {1: {16: (10, 10, 10), 17: (20, 20, 20), 240: (30, 30, 30)}})
+
+    def test_drawing_follows_the_prince_and_mirrors(self):
+        operations = [{'op': 'shape', 'args': [1, 10, 20, 256], 'follow': 'xy'},
+                      {'op': 'save_rect', 'args': [1, [20, 10, 22, 13]], 'follow': 'x'},
+                      {'op': 'shape', 'args': [1, 100, 100, 0]},
+                      {'op': 'restore_rect', 'args': [1]}]
+        player = self.player(operations, prince=(462, 310))
+        # FreeShpInfo 17:5fd0 mirrors the shape; follow moves it by (+5, -3).
+        self.assertEqual(player.target.getpixel((17, 17)), 9)
+        self.assertEqual(player.target.getpixel((15, 17)), 7)
+        self.assertEqual(player.saved_rects[1][0], (15, 20, 18, 22))
+        player = self.player(operations)
+        self.assertEqual(player.target.getpixel((12, 20)), 9)
+
+    def test_without_dissolve_data_a_dissolve_copies_at_once(self):
+        player = self.player([{'op': 'dissolve_area', 'args': [None]},
+                              {'op': 'fill', 'args': [4, [0, 0, 384, 512]]},
+                              {'op': 'dissolve', 'args': [240]}])
+        # 15:2c06: CopyBits of the whole screen, no wait.
+        self.assertTrue(player.done)
+        self.assertEqual(player.display.getpixel((300, 300)), 4)
+        player = self.player([{'op': 'dissolve_area', 'args': [[210, 243, 314, 320]]},
+                              {'op': 'fill', 'args': [4, [0, 0, 384, 512]]},
+                              {'op': 'dissolve', 'args': [60]}])
+        player.advance(2)
+        # InitDissolve 15:2c40 mode 2: only the rectangle changes.
+        self.assertEqual(player.display.getpixel((250, 250)), 4)
+        self.assertEqual(player.display.getpixel((100, 100)), 1)
+
+    def test_text_panel_is_the_saved_strip_in_orange(self):
+        from types import SimpleNamespace
+        from PIL import Image
+
+        player = self.player([{'op': 'fill', 'args': [9, [0, 0, 87, 510]]},
+                              {'op': 'save_rect', 'args': [2, [0, 0, 87, 510]]},
+                              {'op': 'text_panel', 'args': [2]}])
+        player.assets.strings = {32000: ['I died at his side.']}
+        mask = Image.new('RGBA', (20, 10), (0, 0, 0, 255))
+        player.assets.font = SimpleNamespace(height=12, ascent=9, text=lambda _line: mask)
+        player.text(32000, 1, 0, 0, 0)
+        # 15:026e-028c: the strip saved at a5-0x27da, then colours 1 and 2.
+        colors = {player.display.getpixel((x, y)) for x in range(512) for y in range(297, 384)}
+        self.assertTrue({9, 1, 2, 255} <= colors)
+        self.assertNotIn(3, colors)

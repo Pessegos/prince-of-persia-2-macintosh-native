@@ -1013,12 +1013,20 @@ class Ruins(Caverns):
         """4:3dd0-3df6: collapsed at the throne (SEQS 237, pose 185) in
         level eight's room 9, 7:38ca shows NIS 6 and wakes the Prince."""
         scene = self.scene
-        state, caverns = scene.sequence_state, scene.game.caverns
+        state = scene.sequence_state
         if (scene.game.level.number != 8 or scene.room_id != THRONE_ROOM
                 or state.selected_sequence_id != THRONE_COLLAPSE_SEQUENCE or state.action != 185):
             return
+        if not scene.start_vision(self.wake_from_vision):
+            # Without the imported scene the Prince wakes at once.
+            self.wake_from_vision()
+
+    def wake_from_vision(self):
         # 7:391c-395e after PlayNIS(6): facing right, SEQS 231 on the floor,
-        # full life, the father's sword (a5-0x500a = 1); song 182 (39d4).
+        # full life, the father's sword (a5-0x500a = 1); song 182 (39d4),
+        # which the scene usually leaves playing.
+        scene = self.scene
+        state, caverns = scene.sequence_state, scene.game.caverns
         state.facing = 1
         scene.start_sequence(THRONE_WAKE_SEQUENCE)
         state.current_y = state.vertical_velocity = 0

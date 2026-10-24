@@ -372,10 +372,17 @@ class RuinsControllerTests(unittest.TestCase):
         self.assertEqual(heard, [181])
         self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 22)
         scene.combat.player.life = 1
+        # At pose 185 the vision (NIS 6) plays; the Prince wakes after it.
+        visions = []
+        scene.start_vision = lambda wake: visions.append(wake) or True
         for _ in range(200):
             RooftopSceneTests.tick(self)
-            if caverns.throne_done:
+            if visions:
                 break
+        self.assertEqual(len(visions), 1)
+        self.assertEqual(scene.sequence_state.action, 185)
+        self.assertFalse(caverns.throne_done)
+        visions[0]()
         self.assertTrue(caverns.throne_done)
         self.assertEqual(scene.sequence_state.selected_sequence_id, 231)
         self.assertEqual(scene.sequence_state.facing, 1)
