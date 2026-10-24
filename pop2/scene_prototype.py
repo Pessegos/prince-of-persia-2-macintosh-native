@@ -1504,11 +1504,13 @@ class ScenePrototype(WindowControls):
     def crawl_cell(self, offset):
         """GetCellsInFront 4:39fc (offset > 0) or the cell behind (4:3a48).
 
-        Returns the room-relative column and its tile, from the character
-        column of X (a5-0x504a), not the supporting foot.
+        Returns the room-relative column and its tile, from the stored column
+        a5-0x504a: GetCharCol of the supporting foot (GetFCharX 4:3a72), as
+        LoadFrame's reload 4:2a72 computes it.
         """
         state, motion = self.sequence_state, self.terrain_motion
-        column = character_column(state.target_x) + offset * (1 if state.facing else -1)
+        foot = floor_contact_x(state.target_x, state.facing, self.frames[state.action])
+        column = character_column(foot) + offset * (1 if state.facing else -1)
         return column, self.level_map.tile(motion.room, column, motion.row)
 
     def start_crawl(self):

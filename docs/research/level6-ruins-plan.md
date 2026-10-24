@@ -154,6 +154,21 @@ flush against the crack (a repeated bump, SEQS 47); from one step back
 (standing left edge >= 104 in native room 18) he lies down and crawls
 through. Whether the original also bumps from flush is unverified in play.
 
+Resolved (2026-10-24, `tools/probe_crawl_lie_down.py`): the original runs
+CheckBarr 4:4e34, CheckCollide1 4:54da and Collide on those frames. Facing
+left at X 85, frame 259 (35 pixels high) enters the crevice's barrier and
+collides; but Collide's unarmed branch 4:59b6-59dc treats a prone pose
+(246-261) specially: AddCharX(-5) and SEQS 121 (lying still), not the
+standing bump 47. The port chose 47, so the Prince stood up and, with Down
+still held, lay down again in a loop: the tunnel bug. Now the prone bump
+backs off 5 and stays down; the left-facing lie-down reaches X 89 in SEQS
+121 and crawls on, matching the original. The cell tests of the crawl
+(GetCellsInFront 4:39fc, 4:35a6, 4:3a48) now read the stored column
+a5-0x504a, i.e. the supporting foot's column, as the original does. A sweep
+of every open crevice run of levels two and six to nine from both sides
+found no remaining loop except a run closed by a crevice whose low bits are
+3 (impassable by design).
+
 ## Done Since (2026-10-24)
 
 - Heads and serpents run in play: `docs/research/ruins-head-leaves.md`

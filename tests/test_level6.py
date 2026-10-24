@@ -118,6 +118,33 @@ class LevelSixSceneryTests(unittest.TestCase):
         self.assertEqual(scene.terrain_motion.row, 1)
         self.assertFalse(scene.terrain_motion.falling)
 
+    def test_lying_down_facing_left_against_a_crevice_stays_down_and_crawls(self):
+        # tools/probe_crawl_lie_down.py: the original lies down 34 past the
+        # crevice (X 85), collides at frame 259 (35 pixels high) and Collide
+        # 4:59b6-59dc backs the prone Prince off 5 (X 89) into SEQS 121;
+        # the port used to choose the standing bump 47 and loop forever.
+        from types import SimpleNamespace
+
+        scene = self.scene
+        state = scene.sequence_state
+        scene.jump_to_room(17, 1, 81, 0)
+        self.tick(3)
+        scene.set_key_state('down', True)
+        self.tick(10)
+        event = SimpleNamespace(keysym='Left', state=0)
+        scene.horizontal_key(event, -1, True)
+        seen = []
+        for _ in range(60):
+            self.tick()
+            seen.append((state.selected_sequence_id, state.target_x))
+            if scene.room_id != 17 or state.selected_sequence_id == 124:
+                break
+        scene.horizontal_key(event, -1, False)
+        scene.set_key_state('down', False)
+        self.assertIn((121, 89), seen)
+        self.assertNotIn(47, [sequence for sequence, _x in seen])
+        self.assertIn(122, [sequence for sequence, _x in seen])
+
     def test_a_crevice_uncovered_on_screen_is_redrawn_over_the_displayed_wall(self):
         # 7:344a marks the uncovered cells; RedrawCell (3:1d3a) repaints them
         # in per-cell mode over the screen, so the wall above the tunnel stays
