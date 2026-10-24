@@ -119,6 +119,17 @@ combined with them. Saves keep the entrance. Levels seven and eight start
 with sword type 2 (3:61ec). Level seven's own site 5:09a0/0a74/0b68 is in
 the exported drawing.
 
+## Levels Eight And Nine (2026-10-24)
+
+Both use environment 4 with Ruins.rsrc and open after level seven: LEVL
+2007 starts in native room 16 and 2008 in room 10, both with the ordinary
+standing entry (SetKidDefaults 2:5e34, SEQS 5). Levels seven and eight
+continue through CheckPlayNIS (tree scenes); level nine stops before NIS 2
+and the temple. Their exports (`ruins_level8/9.json`) need a reimport.
+Level nine's room 16 has two scythes read by one slot; the slot export now
+stores tables that never change once, which keeps it small. Heads and
+serpents are still not generated (`docs/research/ruins-head-leaves.md`).
+
 ## Crevice Reveal Drawing And Crawling (2026-10-24)
 
 User report: an uncovered crevice showed the wrong wall art. RuinSetCrevice
