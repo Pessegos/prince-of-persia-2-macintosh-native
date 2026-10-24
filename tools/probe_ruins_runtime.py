@@ -18,7 +18,7 @@ from types import SimpleNamespace
 from pop2.mac_resources import parse_resource_fork
 from tools.probe_level7_head_idle import NativeHeadIdle
 from tools.probe_level7_head_recovery import head_slots
-from tools.probe_level7_sequence_selection import signed_word, supporting_column
+from tools.probe_level7_sequence_selection import supporting_column
 
 WORKING = dict(slot=-0x5056, facing=-0x5054, x=-0x5052, y=-0x5050, actor=-0x504e,
                pose=-0x504c, column=-0x504a, row=-0x5048, horizontal_velocity=-0x5044,
