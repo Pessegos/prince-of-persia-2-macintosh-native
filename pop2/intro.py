@@ -225,6 +225,33 @@ def game_song(cue, directory=ASSET_DIR):
     return {"duration": manifest[str(cue)]["duration"], "markers": markers, "kind": 0}
 
 
+# Drawing steps that may run while a carpet-scene fade changes the palette.
+ANIMATION_OPS = frozenset(("shape", "copy", "restore", "wait", "fill", "clip"))
+
+
+def animated_fade_outs(operations):
+    """{wait index: (fade-out index, seconds into that wait)} for the QoL fades.
+
+    A fade-out starts early by its own duration, over the drawing steps and
+    fixed waits before it, so it ends where the Mac fade would begin.
+    """
+    starts = {}
+    for index, item in enumerate(operations):
+        if item["op"] != "fade" or item["args"][1]:
+            continue
+        duration, remaining = fade_ticks(item["args"][2]) / MAC_TICKS_PER_SECOND, 0.0
+        for before in range(index - 1, -1, -1):
+            step = operations[before]
+            if step["op"] not in ANIMATION_OPS:
+                break
+            if step["op"] == "wait":
+                remaining += step["args"][0] / MAC_TICKS_PER_SECOND
+                if remaining >= duration - 1e-9:
+                    starts[before] = index, remaining - duration
+                    break
+    return starts
+
+
 class IntroPlayer:
     def __init__(self, assets, audio=None, music=None):
         """`music`: (cue, seconds played, game_song metadata) of a game song
@@ -238,10 +265,11 @@ class IntroPlayer:
         self.done = False
         self.wait_until = 0.0
         self.timers, self.playing = {}, {}
+        self.carried_music = {}
         if music is not None:
             cue, played, metadata = music
             self.sounds = {**self.sounds, str(cue): metadata}
-            self.playing[0] = (cue, -played, metadata["duration"])
+            self.playing[0] = self.carried_music[0] = (cue, -played, metadata["duration"])
         self.palette = [(0, 0, 0)] * 256
         self.loaded = {}
         self.target = Image.new("L", SIZE, 1)
@@ -254,6 +282,11 @@ class IntroPlayer:
         self.revision = 0
         self.frame_cache = None
         self.dissolve_words = dissolve_words(assets.program.get("dissolve"))
+        # QoL (the carpet scene): the Mac fades block, freezing the clouds; here
+        # fade-ins and fade-outs overlap the drawing steps, as in the DOS port.
+        self.animated_fades = self.program_kind == "carpet"
+        self.early_fades = animated_fade_outs(self.operations) if self.animated_fades else {}
+        self.started_fades = set()
         self.advance(0)
 
     @staticmethod
@@ -314,18 +347,20 @@ class IntroPlayer:
         self.display.paste(self.target.crop(rect), rect)
         self.changed()
 
-    def fade(self, colors, into, flags):
+    def fade(self, colors, into, flags, start=None, blocking=True):
         duration = fade_ticks(flags) / MAC_TICKS_PER_SECOND
         target = dict(colors) if into else {index: (0, 0, 0) for index in colors}
         source = {index: self.palette[index] for index in colors}
-        self.transition = ("fade", self.time, duration, source, target)
-        self.wait_until = self.time + duration
+        start = self.time if start is None else start
+        self.transition = ("fade", start, duration, source, target)
+        if blocking:
+            self.wait_until = start + duration
 
     def update_transition(self):
         if self.transition is None:
             return
         kind, start, duration, source, target = self.transition
-        progress = 1 if self.time + 1e-9 >= start + duration else (self.time - start) / duration
+        progress = 1 if self.time + 1e-9 >= start + duration else max(0, (self.time - start) / duration)
         if kind == "title":
             tick = (self.time - start) * MAC_TICKS_PER_SECOND
             music = self.playing[0]
@@ -445,6 +480,13 @@ class IntroPlayer:
             self.wait_until = max(self.time, self.timers[args[0]])
         elif op == "wait":
             self.wait_until = self.time + args[0] / MAC_TICKS_PER_SECOND
+            early = self.early_fades.get(self.position - 1)
+            if early is not None:
+                fade, offset = early
+                fade_args = self.operations[fade]["args"]
+                self.fade(self.assets.palettes.get(fade_args[0], {}), False, fade_args[2],
+                          start=self.time + offset, blocking=False)
+                self.started_fades.add(fade)
         elif op == "cue":
             playing = self.playing.get(0)
             if playing is None and self.program_kind == "carpet":
@@ -488,7 +530,13 @@ class IntroPlayer:
                     self.palette[index] = (0, 0, 0) if flags & 4 else color
                 self.changed()
         elif op == "fade":
-            self.fade(self.assets.palettes.get(args[0], {}), args[1], args[2])
+            if self.position - 1 in self.started_fades:
+                # Started early (animated_fade_outs); it ends here.
+                self.wait_until = max(self.time, self.transition[1] + self.transition[2]
+                                      if self.transition is not None else self.time)
+            else:
+                self.fade(self.assets.palettes.get(args[0], {}), args[1], args[2],
+                          blocking=not (self.animated_fades and args[1]))
         elif op in ("fade_both", "fade_in_both"):
             colors = {index: color for colors in self.loaded.values() for index, color in colors.items()}
             self.fade(colors, op == "fade_in_both", args[0])
@@ -546,6 +594,13 @@ class IntroPlayer:
             if stop_position is not None and self.position >= stop_position:
                 return
             item = self.operations[self.position]
+            if (self.animated_fades and item["op"] not in ANIMATION_OPS
+                    and self.position not in self.started_fades and self.transition is not None
+                    and self.transition[0] == "fade"
+                    and self.time + 1e-9 < self.transition[1] + self.transition[2]):
+                # Palette, sound and cue steps still follow the whole fade.
+                self.wait_until = self.transition[1] + self.transition[2]
+                continue
             self.position += 1
             self.execute(item["op"], item["args"])
 

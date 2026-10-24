@@ -196,7 +196,16 @@ cave bars and tile 18 at cell 23 belongs to the flying carpet:
     For levels five and nine 2:61ce-61ea skips ResetSoundItem (16:2200):
     FlyinRug (115, started when he sat down) plays on into the carpet scene
     (NIS 1), whose cue operations (16:26d0) wait for its markers a (6.86 s)
-    and c (36.57 s). The port starts the scene with the song's elapsed time.
+    and c (36.57 s). The port starts the scene with the song's elapsed time
+    and keeps the song when level six loads after the scene (the same
+    skipped reset; the music stopped when the Prince's lives appeared).
+  - QoL in the carpet scene (port exception, like the title clouds): the
+    Mac fades block and freeze the animation; here a fade-in no longer
+    blocks the drawing steps after it (palette, sound and cue steps still
+    wait for it) and a fade-out starts its own duration (0.42 s) early over
+    the fixed waits before it, so the clouds keep moving, as in the DOS
+    version. Screens may start up to 0.84 s earlier; the cue markers
+    re-anchor them to the music.
     Before, the port added end song 32 and waited about 7 s on the empty
     room, then reset the music.
   - The scene's Prince colours: SetKidPalette 3:5f1c -> PoPSetPalette

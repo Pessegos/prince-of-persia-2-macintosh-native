@@ -437,11 +437,14 @@ class AudioEngine:
             return None
         return clock[1] + (time.monotonic() - clock[0] if clock[0] is not None else 0)
 
-    def reset(self):
+    def reset(self, keep_music=False):
+        """Stop every sound; with `keep_music`, the playing song continues."""
         for bus in self.effect_buses:
             self.playback.stop(bus)
-        self.playback.stop("music")
-        self.current_effect = self.current_music = None
+        if not keep_music:
+            self.playback.stop("music")
+            self.current_music = None
+        self.current_effect = None
         self.pending_effect = self.pending_song = None
         self.current_mechanism = self.pending_mechanism = None
         self.pending_effects.clear()

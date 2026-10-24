@@ -61,6 +61,58 @@ class CarriedMusicTests(unittest.TestCase):
         self.assertLess(silent.wait_until, 1.01)
 
 
+class AnimatedFadeTests(unittest.TestCase):
+    """QoL: the carpet scene keeps drawing through its fades (the Mac freezes)."""
+
+    def program(self, carpet=True):
+        from types import SimpleNamespace
+
+        operations = [{'op': 'fade', 'args': [1, True, 0x40001]},
+                      {'op': 'copy', 'args': [[0, 0, 10, 10]]}, {'op': 'wait', 'args': [6]},
+                      {'op': 'copy', 'args': [[0, 0, 10, 10]]}, {'op': 'wait', 'args': [30]},
+                      {'op': 'copy', 'args': [[0, 0, 10, 10]]}, {'op': 'wait', 'args': [6]},
+                      {'op': 'fade', 'args': [1, False, 0x40001]}, {'op': 'palette', 'args': [1, 66, 1]}]
+        program = {'operations': operations, 'audio': {}}
+        if carpet:
+            program['resource_files'] = {}
+        return SimpleNamespace(program=program, palettes={1: {64: (200, 100, 50)}})
+
+    def test_fade_outs_start_their_duration_before_the_mac_fade(self):
+        from pop2.intro import MAC_TICKS_PER_SECOND, animated_fade_outs, fade_ticks
+
+        duration = fade_ticks(0x40001) / MAC_TICKS_PER_SECOND
+        plan = animated_fade_outs(self.program().program['operations'])
+        self.assertEqual(list(plan), [4])
+        fade, offset = plan[4]
+        self.assertEqual(fade, 7)
+        self.assertAlmostEqual(offset, 36 / MAC_TICKS_PER_SECOND - duration)
+
+    def test_drawing_continues_through_fade_in_and_fade_out(self):
+        from pop2.intro import IntroPlayer, MAC_TICKS_PER_SECOND
+
+        player = IntroPlayer(self.program())
+        # The fade-in does not block: the first wait already runs.
+        self.assertEqual(player.position, 3)
+        self.assertEqual(player.transition[0], 'fade')
+        player.advance(0.2)
+        self.assertGreater(player.palette[64][0], 0)
+        self.assertLess(player.palette[64][0], 200)
+        # The fade-out starts while the last waits still run and ends at its step.
+        player.advance(36 / MAC_TICKS_PER_SECOND - 0.2 + 0.05)
+        self.assertLess(player.position, 8)
+        self.assertEqual(player.transition[0], 'fade')
+        player.advance(1)
+        self.assertEqual(player.palette[64], (200, 100, 50))  # the palette step after it
+        self.assertTrue(player.done)
+
+    def test_other_scenes_keep_the_blocking_mac_fades(self):
+        from pop2.intro import IntroPlayer
+
+        player = IntroPlayer(self.program(carpet=False))
+        self.assertEqual(player.position, 1)
+        self.assertGreater(player.wait_until, 0.4)
+
+
 @unittest.skipUnless((ASSET_DIR / 'carpet.json').is_file(), 'Imported carpet scene required')
 class CarpetSceneTests(unittest.TestCase):
     def test_the_scene_flies_over_the_sea_and_lands_on_the_cliff(self):
@@ -101,11 +153,20 @@ class CarpetSceneTests(unittest.TestCase):
         scene.intro.advance(3.8)
         self.assertEqual(scene.intro.position, 60)
         self.assertAlmostEqual(scene.intro.wait_until, song['markers']['a'] - 3.0)
+        # ... and on into level six when the scene ends.
+        scene.next_level_after_tree = 6
+        scene.finish_tree()
+        self.assertEqual(scene.game.level.number, 6)
+        scene.audio.reset.assert_called_once_with(keep_music=True)
+        scene.load_level(5)
         scene.audio = Mock(current_music=114)
         scene.audio.music_elapsed.return_value = 3.0
         scene.start_carpet()
         scene.audio.reset.assert_called_once_with()
         self.assertNotIn(0, scene.intro.playing)
+        scene.next_level_after_tree = 6
+        scene.finish_tree()
+        scene.audio.reset.assert_called_with(keep_music=False)
         scene.audio = None
 
     def test_finishing_level_five_plays_the_carpet_scene_then_loads_level_six(self):

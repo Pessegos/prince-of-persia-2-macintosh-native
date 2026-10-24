@@ -36,7 +36,7 @@ jobs:
       - name: Native research inventory and fresh-call guards
         run: python -m unittest -q tests.test_inspect_level7 tests.test_inspect_temple tests.test_probe_level7_rules tests.test_native_rules_call_guard
       - name: Scythe patches and carpet animation export without original game files
-        run: python -m unittest -q tests.test_scythes tests.test_carpet_scene.CarpetExportTests tests.test_carpet_scene.KidPaletteTests tests.test_carpet_scene.CarriedMusicTests
+        run: python -m unittest -q tests.test_scythes tests.test_carpet_scene.CarpetExportTests tests.test_carpet_scene.KidPaletteTests tests.test_carpet_scene.CarriedMusicTests tests.test_carpet_scene.AnimatedFadeTests
       - name: Host menu audio and isolated SDL UI channels
         run: python -m unittest -q tests.test_ui_audio
       - name: Tests without original game files

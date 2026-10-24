@@ -514,7 +514,7 @@ class ScenePrototype(WindowControls):
         if not self.in_animation_tick:
             self.schedule_next_animation()
 
-    def load_level(self, number):
+    def load_level(self, number, keep_music=False):
         # Prepare the complete destination before replacing a running session.
         previous = getattr(self, 'game', None)
         # Only the level-six exit chooses level seven's entrance.
@@ -536,7 +536,7 @@ class ScenePrototype(WindowControls):
         self.clear_keys(None)
         self.reset_level_controls()
         if self.audio is not None:
-            self.audio.reset()
+            self.audio.reset(keep_music=keep_music)
         if self.animation_after_id is not None:
             self.root.after_cancel(self.animation_after_id)
             self.animation_after_id = None
@@ -2973,9 +2973,9 @@ class ScenePrototype(WindowControls):
         else:
             self.enter_next_level(following)
 
-    def enter_next_level(self, number):
+    def enter_next_level(self, number, keep_music=False):
         max_life = self.combat.player.max_life if self.combat is not None else None
-        self.load_level(number)
+        self.load_level(number, keep_music=keep_music)
         if max_life is not None:
             self.combat.player.life = self.combat.player.max_life = max_life
             self.render()
@@ -2985,8 +2985,11 @@ class ScenePrototype(WindowControls):
         following = getattr(self, 'next_level_after_tree', None)
         self.next_level_after_tree = None
         if following is not None:
+            # FlyinRug, carried into the carpet scene, also plays on into
+            # level six (no ResetSoundItem after level five, 2:61ce-61ea).
+            keep_music = self.intro is not None and 0 in getattr(self.intro, 'carried_music', {})
             self.intro = self.attract_stage = None
-            self.enter_next_level(following)
+            self.enter_next_level(following, keep_music=keep_music)
             self.pause_resume_keys.update(held)
             return
         self.intro = self.attract_stage = None
