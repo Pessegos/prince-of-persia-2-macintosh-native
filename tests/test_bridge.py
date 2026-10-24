@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from pop2.bridge import (
-    BREAK_SONG, BREAK_SOUND, CREAK_SOUND, PLANK_FRAMES, Bridge, bridge_checked,
+    bridge_column, BREAK_SONG, BREAK_SOUND, CREAK_SOUND, PLANK_FRAMES, Bridge, bridge_checked,
 )
 from pop2.paths import ASSET_DIR
 
@@ -115,9 +115,42 @@ class BridgeBreakTests(unittest.TestCase):
         self.assertEqual(bridge.creak(None, None, False, rng), ())
         self.assertEqual(len(rng.calls), 3)
 
+    def test_characters_mark_their_plank_and_its_neighbours(self):
+        # 8:0534-057c and MarkBridgeForCol 8:05cc.
+        bridge = Bridge()
+        for prince, opponent, marks in ((4, 5, 0xff), (4, None, 0x1c), (None, 1, 0x03),
+                                        (8, None, 0xc0), (None, None, 0)):
+            bridge.creak(prince, opponent, True)
+            self.assertEqual(bridge.marks, marks)
+
+    def test_marked_planks_wobble_for_one_frame_on_a_high_roll(self):
+        # ATMBrgFloor 8:06d8-0764: Rnd(3) >= 2 lifts (1) or drops (2) a
+        # resting marked plank; a wobbling plank rests on the next frame.
+        bridge = Bridge(marks=0x1c, pieces={5: 2})
+        bridge.advance_wobble(FixedRandom(2, 3))
+        self.assertEqual(bridge.wobble, {3: 1, 4: 2})
+        bridge.advance_wobble(FixedRandom(3, 3))
+        self.assertEqual(bridge.wobble, {})
+        rng = FixedRandom(1, 0)
+        bridge.advance_wobble(rng)
+        self.assertEqual((bridge.wobble, rng.calls), ({}, [(0, 3), (0, 3)]))
+
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
 class BridgeSceneryTests(unittest.TestCase):
+    def test_wobbling_planks_match_the_native_redraw(self):
+        # A native room-10 redraw with plank 3's nibble at 1 or 2.
+        from pop2.caverns import cavern_assets, with_plank_wobble
+
+        program, resources, _palette, _shapes = cavern_assets(5)
+        plank = next(command for command in program['rooms']['9']
+                     if command[1] == 4226 and command[8] == 3)
+        self.assertEqual(with_plank_wobble([plank], {(3, 1)}, resources),
+                         [['back', 4227, 153, 247, 16, 1, [215, 153, 247, 242], 4, 3, 1]])
+        self.assertEqual(with_plank_wobble([plank], {(3, 2)}, resources),
+                         [['back', 4228, 153, 248, 16, 1, [215, 153, 248, 243], 4, 3, 1]])
+        self.assertEqual(with_plank_wobble([plank], {(4, 2)}, resources), [plank])
+
     def test_room_ten_redraw_omits_only_the_fallen_planks(self):
         # A native redraw of the emptied cells (all five collapse stages)
         # equals the export without the fallen columns' SHAP 4226 commands.
@@ -155,7 +188,14 @@ class BridgeSceneTests(unittest.TestCase):
     def test_fighting_on_the_middle_planks_breaks_the_bridge_and_drops_the_prince(self):
         scene = self.scene
         scene.god_mode = True
-        scene.jump_to_room(9, 1, 250, 1)
+        # Mid-bridge duel, Prince in column 4-5 and skeleton in 5-6. The
+        # skeleton's AI is held so that the break rule alone is exercised.
+        scene.jump_to_room(9, 1, 230, 1)
+        skeleton = scene.combat.active_guards()[0]
+        skeleton.state.facing = 0
+        skeleton.state.target_x = skeleton.state.current_x = 290
+        scene.combat.choose_guard_action = lambda guard=None: None
+        scene.start_sword_action("sword_draw")
         bridge = scene.game.caverns.bridge
         blocked = False
         for _ in range(240):
@@ -169,8 +209,13 @@ class BridgeSceneTests(unittest.TestCase):
         self.assertEqual(set(bridge.pieces), {3, 4, 5, 6, 7})
         self.assertEqual([scene.level_map.tile(9, column, 1).kind for column in range(10)],
                          [1, 44, 44, 0, 0, 0, 0, 0, 44, 34])
+        # The chasm has no floor: the Prince dies below room 10, and that
+        # fatal fall raises tension level 3.
+        scene.god_mode = False
         self.tick(30)
-        self.assertNotEqual((scene.combat.player.room, scene.terrain_motion.row), (9, 1))
+        self.assertTrue(scene.terrain_motion.dead)
+        self.assertEqual(scene.terrain_motion.room, 9)
+        self.assertEqual((bridge.tension_level, bridge.tension), (3, 5))
 
     def test_an_opponent_falling_out_of_room_ten_is_removed_not_carried_below(self):
         scene = self.scene
@@ -212,3 +257,350 @@ class BridgeSceneTests(unittest.TestCase):
             path.write_text(json.dumps(value))
             loaded, _saved = read_snapshot(path, self.scene.resources)
             self.assertEqual(loaded.caverns.bridge, Bridge())
+
+
+def bridge_level(number=5):
+    import struct
+
+    level = bytearray(0x49ca)
+    struct.pack_into('>H', level, 0x2186, 3)
+    struct.pack_into('>H', level, 0x218a, number)
+    return level
+
+
+class BridgeChasmTests(unittest.TestCase):
+    def test_only_level_five_room_ten_refuses_the_down_cut(self):
+        # CutChar 6:4cd2-4d0c: the bridge chasm kills instead of cutting.
+        import struct
+        from pop2.terrain import LevelMap
+
+        for number, kind, room, allowed in ((5, 3, 9, False), (5, 3, 10, True), (4, 3, 9, True),
+                                            (13, 3, 3, False), (5, 3, 9, True)):
+            with self.subTest(number=number, room=room):
+                level = bytearray(0x49ca)
+                struct.pack_into('>H', level, 0x2186, kind)
+                struct.pack_into('>H', level, 0x218a, number)
+                actor = 2 if allowed and number == 5 and room == 9 else 0
+                self.assertEqual(LevelMap(level).allows_down_cut(room, actor), allowed)
+
+    def test_no_floor_of_the_linked_room_catches_the_prince_below_the_chasm(self):
+        # CutChar 6:4d5a-4d66 leaves him in room 0: he falls to Y 730 and dies
+        # instead of landing, unseen, on the floor of room 11 below.
+        import struct
+        from pop2.cavern_state import CavernState
+        from pop2.sequence_runtime import SequenceRuntime, SequenceState
+        from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion
+
+        sequences = {7: (-7, 4, 102, -1, 7), 17: (-7, 1, 109, -1, 17), 22: (-7, 1, 185, -1, 22)}
+        for number, expected in ((5, 'death'), (4, 'land')):
+            with self.subTest(number=number):
+                level = bridge_level(number)
+                struct.pack_into('>H', level, 0x2080 + 9 * 8 + 6, 11)
+                struct.pack_into('>H', level, 10 * 60 + 4 * 2, 1)
+                level_map = LevelMap(level)
+                level_map.caverns = CavernState()
+                physics, motion = RooftopPhysics(level_map), TerrainMotion(9, 2, falling=True)
+                runtime = SequenceRuntime(sequences, SequenceState(
+                    7, target_x=250, current_x=250, facing=1, actor_type=0, vertical_velocity=20))
+                runtime.next_frame()
+                kinds = []
+                for _ in range(20):
+                    kinds += [event.kind for event in physics.advance(
+                        motion, runtime, runtime.state.target_x, (240, 300, 270, 360))]
+                    if not motion.falling or motion.dead:
+                        break
+                self.assertEqual(kinds[-1], expected)
+                self.assertNotIn('land' if number == 5 else 'death', kinds)
+
+
+class BridgeTensionTests(unittest.TestCase):
+    def test_tension_changes_level_and_accumulates_like_set_tension_level(self):
+        # SetTensionLevel 6:5022: 2<->3 keeps tension less 10, other changes reset.
+        bridge = Bridge()
+        for _ in range(4):
+            bridge.set_tension(2, 5)
+        self.assertEqual((bridge.tension_level, bridge.tension), (2, 20))
+        bridge.set_tension(3, 5)
+        self.assertEqual((bridge.tension_level, bridge.tension), (3, 15))
+        bridge.set_tension(1, -1)
+        self.assertEqual((bridge.tension_level, bridge.tension), (1, 0))
+
+
+class BridgeFallTests(unittest.TestCase):
+    """StartFall 4:4c4a-4ca4, SetKidDeathMethod 4:31b4-31d6 and Catch 4:382c-3880."""
+
+    SEQUENCES = {7: (-7, 4, 102, -1, 7), 19: (-7, 4, 102, -1, 19), 22: (-7, 1, 185, -1, 22),
+                 198: (-7, 5, 100, -1, 198), 228: (-7, 4, 102, -1, 228)}
+
+    def setUp(self):
+        from pop2.cavern_state import CavernState
+        from pop2.terrain import LevelMap, RooftopPhysics
+
+        self.map = LevelMap(bridge_level())
+        self.map.caverns = CavernState()
+        self.physics = RooftopPhysics(self.map)
+
+    def fall(self, room=9, facing=1, held=0, sword_drawn=False, action=15, actor_type=0):
+        from pop2.sequence_runtime import SequenceRuntime, SequenceState
+        from pop2.terrain import TerrainMotion
+
+        runtime = SequenceRuntime(self.SEQUENCES, SequenceState(
+            2, action=action, target_x=250, current_x=250, facing=facing, actor_type=actor_type))
+        self.physics.held_direction = held
+        self.physics.start_fall(TerrainMotion(room, 1), runtime, sword_drawn)
+        return runtime.state
+
+    def test_holding_the_direction_behind_the_prince_turns_him_back_in_room_ten(self):
+        self.assertEqual(self.fall(facing=1, held=-1).selected_sequence_id, 198)
+        self.assertEqual(self.fall(facing=0, held=1).selected_sequence_id, 198)
+        for room, facing, held, actor_type in ((9, 1, 1, 0), (9, 0, -1, 0), (9, 1, 0, 0),
+                                               (8, 1, -1, 0), (9, 1, -1, 4)):
+            with self.subTest(room=room, facing=facing, held=held, actor_type=actor_type):
+                self.assertEqual(self.fall(room, facing, held, actor_type=actor_type).selected_sequence_id, 7)
+        self.map.level = bridge_level(4)
+        self.assertEqual(self.fall(facing=1, held=-1).selected_sequence_id, 7)
+
+    def test_the_turn_back_skips_the_hang_release_pose_adjustment(self):
+        # StartFall 4:4cb6 bypasses the pose table, including pose 81's +24.
+        state = self.fall(facing=1, held=-1, action=81)
+        self.assertEqual((state.selected_sequence_id, state.current_y), (198, -120))
+        self.assertEqual(self.fall(facing=1, action=81).current_y, -96)
+
+    def test_tension_three_turns_back_an_armed_prince_facing_right(self):
+        bridge = self.map.caverns.bridge
+        bridge.tension_level, bridge.tension = 3, 20
+        self.assertEqual(self.fall(facing=1, sword_drawn=True).selected_sequence_id, 198)
+        self.assertEqual(self.fall(facing=1).selected_sequence_id, 7)
+        self.assertEqual(self.fall(facing=0, sword_drawn=True).selected_sequence_id, 7)
+        bridge.tension = 15
+        self.assertEqual(self.fall(facing=1, sword_drawn=True).selected_sequence_id, 7)
+        bridge.tension_level, bridge.tension = 2, 40
+        self.assertEqual(self.fall(facing=1, sword_drawn=True).selected_sequence_id, 7)
+
+    def test_a_fatal_fall_into_the_chasm_raises_tension_level_three(self):
+        from pop2.sequence_runtime import SequenceRuntime, SequenceState
+        from pop2.terrain import TerrainMotion, VOID_DEATH_Y, floor_y
+
+        for room, expected in ((9, (3, 5)), (8, (0, 0))):
+            with self.subTest(room=room):
+                self.setUp()
+                motion = TerrainMotion(room, 1, falling=True)
+                runtime = SequenceRuntime(self.SEQUENCES, SequenceState(
+                    7, action=102, target_x=200, current_x=200, facing=1, actor_type=0,
+                    animation_state=4, vertical_velocity=30,
+                    current_y=VOID_DEATH_Y - floor_y(1) + 10))
+                events = self.physics.advance(motion, runtime, 200, (190, 300, 230, 360))
+                self.assertEqual([event.kind for event in events], ['death'])
+                bridge = self.map.caverns.bridge
+                self.assertEqual((bridge.tension_level, bridge.tension), expected)
+
+    def catch(self, x, solid, tension=(3, 40), room=9):
+        from pop2.animation_data import FrameRecord
+        from pop2.sequence_runtime import SequenceState
+        import struct
+
+        for column in solid:
+            struct.pack_into('>H', self.map.level, room * 60 + column * 2, 1)
+        bridge = self.map.caverns.bridge
+        bridge.tension_level, bridge.tension = tension
+        state = SequenceState(7, action=102, target_x=x, current_x=x, facing=0, vertical_velocity=20)
+        caught = self.map.catch_ledge(room, 1, state, FrameRecord(102, 0, 0, 0, 0, 0))
+        return caught, state.target_x
+
+    def test_tension_forty_extends_a_left_facing_catch_forward(self):
+        # From x 285 the ordinary look-behind tests column 5; the reach of
+        # 25 pixels tests column 4, whose left neighbour is solid.
+        self.assertEqual(self.catch(285, (3,), tension=(3, 35)), (False, 285))
+        self.assertEqual(self.catch(285, (3,), tension=(2, 40)), (False, 285))
+        self.assertEqual(self.catch(285, (3,)), (True, 277))
+
+    def test_the_catch_reach_is_not_used_from_the_first_three_columns(self):
+        self.assertEqual(self.catch(132, (0,)), (False, 132))
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class BridgeTensionPersistenceTests(unittest.TestCase):
+    def test_tension_survives_a_restart_but_not_a_new_level(self):
+        # RestartGame 2:5b66 reloads the level and clears the bridge (2:6e38)
+        # but never SetTensionLevel's globals; the next-level opcode -16
+        # (4:2f5a) resets them.
+        from pop2.game_session import GameResources, GameSession
+
+        resources = GameResources.load()
+        game = GameSession.load(resources, 5)
+        game.caverns.bridge.set_tension(3, 15)
+        game.caverns.bridge.state = 2
+        game.restart()
+        bridge = game.caverns.bridge
+        self.assertEqual((bridge.state, bridge.tension_level, bridge.tension), (0, 3, 15))
+        fresh = GameSession.load(resources, 5).caverns.bridge
+        self.assertEqual((fresh.tension_level, fresh.tension), (0, 0))
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class BridgeGuardAiTests(unittest.TestCase):
+    """8:02ae, 8:033c, 8:0424 and 8:04a2 on level five's bridge."""
+
+    def setUp(self):
+        BridgeSceneTests.setUp(self)
+        self.scene.jump_to_room(9, 1, 30, 1)
+        self.combat = self.scene.combat
+        self.skeleton = self.combat.active_guards()[0]
+
+    def tick(self, count=1):
+        BridgeSceneTests.tick(self, count)
+
+    def place(self, x, facing):
+        self.skeleton.state.target_x = self.skeleton.state.current_x = x
+        self.skeleton.state.facing = facing
+
+    def test_engage_and_hold_follow_the_bridge_columns(self):
+        combat, skeleton = self.combat, self.skeleton
+        self.assertTrue(combat._bridge_fight_room(skeleton))
+        self.place(60, 0)
+        self.assertTrue(combat._bridge_engage(skeleton))
+        for x in range(100, 200, 4):
+            self.place(x, 0)
+            if bridge_column(9, combat._supporting_column(skeleton)) in (2, 3):
+                break
+        self.assertFalse(combat._bridge_engage(skeleton))
+        self.assertTrue(combat._bridge_holds(skeleton))
+        self.place(440, 1)
+        self.assertTrue(combat._bridge_engage(skeleton))
+
+    def test_skeleton_turns_back_when_the_prince_hides_behind_room_sevens_gate(self):
+        scene, skeleton = self.scene, self.skeleton
+        scene.jump_to_room(6, 1, 400, 0)
+        scene.game.caverns.plates.active[6, 13] = 0
+        self.assertTrue(self.combat._kid_behind_bridge_gate())
+        self.place(200, 0)
+        self.assertFalse(skeleton.skeleton.bridge_guard(self.combat, skeleton))
+        self.assertEqual((skeleton.state.facing, skeleton.state.target_x), (1, 210))
+
+    def test_a_pressing_skeleton_does_not_turn_to_a_prince_behind_it(self):
+        # SwordCtrl 6:22b4-22e4: in the bridge rooms (row not 0) an engaging
+        # skeleton (8:02ae) keeps its inputs; otherwise DoTurn selects SEQS 60.
+        combat, skeleton = self.combat, self.skeleton
+        player = combat.player
+        player.state.target_x = player.state.current_x = 60
+        skeleton.sword_drawn, skeleton.alert_mode = True, 3
+        selected = []
+        for x, facing in ((470, 1), (200, 1)):
+            self.place(x, facing)
+            skeleton.state.action, skeleton.state.animation_state = 158, 0
+            skeleton.selected_sequence = None
+            self.assertEqual(combat._bridge_engage(skeleton), x == 470)
+            combat.choose_guard_action(skeleton)
+            selected.append(skeleton.selected_sequence)
+        self.assertNotEqual(selected[0], 60)
+        self.assertEqual(selected[1], 60)
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class BridgeSwordLossTests(unittest.TestCase):
+    """DoClimbUp 6:19aa-19c4, GenCtrl 6:0c70 and the hit re-arm 6:53f8-5406."""
+
+    def setUp(self):
+        BridgeSceneTests.setUp(self)
+
+    def tick(self, count=1):
+        BridgeSceneTests.tick(self, count)
+
+    def climb(self, room=9, lost=False):
+        import copy
+
+        scene = self.scene
+        scene.jump_to_room(room, 2, 200, 0)
+        scene.combat.player.sword_lost = lost
+        scene.combat.choose_guard_action = lambda guard=None: None
+        for guard in scene.combat.active_guards():
+            guard.state.target_x = guard.state.current_x = 450
+        if room == 9:
+            scene.game.caverns.bridge.pieces.update({column: 1 for column in range(3, 8)})
+        state = scene.sequence_state
+        state.current_y, state.action, state.facing = -24, 106, 0
+        for x in range(120, 480):
+            trial = copy.deepcopy(state)
+            trial.target_x = trial.current_x = x
+            if scene.level_map.catch_ledge(room, 2, trial, scene.frames[106]):
+                break
+        else:
+            self.skipTest('no ledge to catch in this room')
+        state.target_x = state.current_x = x
+        scene.terrain_motion.row = 2
+        self.assertTrue(scene.level_map.catch_ledge(room, 2, state, scene.frames[106]))
+        scene.player_x = state.target_x
+        scene.in_animation_tick = True
+        scene._begin_native_ledge(15)
+        scene.shift_held = scene.up_held = True
+        sequences = []
+        for _ in range(20):
+            self.tick()
+            sequences.append(state.sequence_id)
+            if 235 in sequences:
+                break
+        scene.shift_held = scene.up_held = False
+        return sequences
+
+    def test_climbing_out_of_the_chasm_drops_the_sword(self):
+        scene = self.scene
+        sequences = self.climb()
+        self.assertIn(236, sequences)
+        self.assertNotIn(10, sequences)
+        self.assertTrue(scene.combat.player.sword_lost)
+        self.tick(12)
+        self.assertFalse(scene.queue_sword_action("sword_draw"))
+        self.tick(4)
+        self.assertFalse(scene.sword_drawn)
+        # Without a sword, a climb in room 10 is the ordinary SEQS:10.
+        self.assertIn(10, self.climb(lost=True))
+
+    def test_a_sword_hit_re_arms_a_prince_who_lost_his_sword(self):
+        self.scene.jump_to_room(9, 1, 30, 1)
+        combat = self.scene.combat
+        combat.player.sword_lost = True
+        guard = combat.active_guards()[0]
+        combat._hurt('player', combat.player, guard)
+        self.assertFalse(combat.player.sword_lost)
+        self.assertTrue(combat.player.sword_drawn)
+
+
+class BridgeRoomCutTests(unittest.TestCase):
+    def test_bridge_room_opponents_always_follow_the_prince(self):
+        # CutAllOpponents 6:4510-4540 for level five's rooms 7/10/12, row not 0.
+        from types import SimpleNamespace
+        from pop2.combat import opponent_follows_cut
+
+        guard = SimpleNamespace(state=SimpleNamespace(action=171, target_x=300), generation_flags=0,
+                                alive=False, native_alive=False, skeleton=None, sword_drawn=False, row=1)
+        self.assertTrue(opponent_follows_cut(guard, 'left', 1, bridge_room=True))
+        self.assertFalse(opponent_follows_cut(guard, 'left', 1))
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class BridgeSkeletonImmunityTests(unittest.TestCase):
+    def test_bridge_skeleton_takes_no_sword_damage(self):
+        # DecLifePts 4:34f2-352e returns before subtracting for a skeleton in
+        # level five's bridge rooms (row not 0).
+        BridgeSceneTests.setUp(self)
+        scene = self.scene
+        scene.jump_to_room(9, 1, 30, 1)
+        skeleton = scene.combat.active_guards()[0]
+        life = skeleton.life
+        scene.combat._hurt('guard', skeleton, scene.combat.player)
+        self.assertEqual(skeleton.life, life)
+        self.assertTrue(skeleton.alive)
+
+    def test_bridge_skeleton_has_no_opponent_meter(self):
+        # DrawOppMeter 3:4b7a-4ba8 erases the meter for a skeleton in level
+        # five's bridge rooms (row not 0) instead of drawing its life.
+        BridgeSceneTests.setUp(self)
+        scene = self.scene
+        scene.jump_to_room(9, 1, 30, 1)
+        skeleton = scene.combat.active_guards()[0]
+        self.assertIsNone(scene.combat.health_opponent())
+        skeleton.row = 0
+        self.assertIs(scene.combat.health_opponent(), skeleton)
+
+    def tick(self, count=1):
+        BridgeSceneTests.tick(self, count)

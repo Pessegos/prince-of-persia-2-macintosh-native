@@ -7,6 +7,7 @@ from PIL import Image
 from pop2.development_map import DevelopmentMap, MAP_SIZE
 from pop2.game_ui import DevelopmentMenu
 from pop2.paths import ASSET_DIR
+from pop2.environments import environment_for
 
 
 class CheatMenuTests(unittest.TestCase):
@@ -145,12 +146,12 @@ class ImportedCheatTests(unittest.TestCase):
         s.set_god_mode(True)
         darts = s.game.caverns.plates.darts
         darts.projectiles = [Dart(15, 175, 195, 1)]
-        s.check_cavern_darts()
+        environment_for(s).check_darts()
         self.assertEqual(s.combat.player.life, 1)
         self.assertFalse(s.terrain_motion.dead)
         s.set_god_mode(False)
         darts.projectiles = [Dart(15, 175, 195, 1)]
-        s.check_cavern_darts()
+        environment_for(s).check_darts()
         self.assertEqual(s.combat.player.life, 0)
 
     def test_k_also_kills_ordinary_guards(self):
@@ -172,12 +173,12 @@ class ImportedCheatTests(unittest.TestCase):
         s.combat.player.life = 1
         s.set_god_mode(True)
         hits_player = lambda block, motion, *_: motion is s.terrain_motion
-        with patch('pop2.scene_prototype.floor_hits_actor', side_effect=hits_player), \
+        with patch('pop2.environments.floor_hits_actor', side_effect=hits_player), \
                 patch.object(s.game.caverns.loose, 'advance_falling', return_value=((), (object(),))):
-            s.advance_cavern_floors()
+            environment_for(s).frame_start()
             self.assertEqual(s.combat.player.life, 1)
             s.set_god_mode(False)
-            s.advance_cavern_floors()
+            environment_for(s).frame_start()
             self.assertEqual(s.combat.player.life, 0)
 
     def test_god_mode_protects_lava_and_wall_spikes(self):
@@ -193,7 +194,7 @@ class ImportedCheatTests(unittest.TestCase):
         s.jump_to_room(20, row=2, x=300, facing=1)
         s.physics.select(s.sequence_runtime, 1)
         s.action = s.sequence_state.action
-        s.check_cavern_spikes()
+        environment_for(s).check_spikes()
         self.assertTrue(s.combat.player.alive)
         self.assertFalse(s.terrain_motion.dead)
         self.assertEqual(s.death.counter, -1)

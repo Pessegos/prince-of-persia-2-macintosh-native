@@ -13,6 +13,8 @@ from pop2.game_ui import VISIBLE_VIEWPORT, fit_viewport, viewport_point
 from pop2.game_menu import GameMenu
 from pop2.window_controls import WindowControls, alt_pressed, is_resume_key
 
+from tests.desktop import exclusive_desktop
+
 
 class PresentationTests(unittest.TestCase):
     def test_fullscreen_intro_and_gameplay_reuse_bitmap_then_windowed_restores_tk(self):
@@ -231,6 +233,7 @@ class ModifierKeyTests(unittest.TestCase):
         self.host.apply_game_action.assert_called_with("save")
 
     @unittest.skipUnless(sys.platform == "win32", "Windows Tk modifier states")
+    @exclusive_desktop('focused real Tk key events')
     def test_real_tk_events_distinguish_numlock_from_alt(self):
         result = subprocess.run([sys.executable, "-c", textwrap.dedent("""
             import tkinter as tk
@@ -292,6 +295,7 @@ class ResumeKeyTests(unittest.TestCase):
                     self.assertNotIn(key, host.window_keys_down)
 
     @unittest.skipUnless(sys.platform == "win32", "Windows virtual-key events")
+    @exclusive_desktop('a mapped, focused root receiving key events')
     def test_windows_tk_media_and_navigation_events_cannot_resume(self):
         result = subprocess.run([sys.executable, "-c", textwrap.dedent("""
             import json
@@ -397,6 +401,7 @@ class ExternalCaptureKeyTests(unittest.TestCase):
                                          host.apply_game_action, host.apply_dev_action, host.capture_screenshot):
                             callback.assert_not_called()
 
+    @exclusive_desktop('focused real Tk key events')
     def test_real_tk_capture_keys_do_not_reach_the_default_menu_binding(self):
         result = subprocess.run([sys.executable, '-c', textwrap.dedent('''
             import tkinter as tk

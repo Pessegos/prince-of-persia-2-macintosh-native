@@ -44,6 +44,11 @@ class GameResources:
         return LevelDefinition.read(self.prince, number)
 
 
+def level_sword_type(number):
+    # 3:61ec-623a: a fresh level six has no sword, seven and eight type 2.
+    return -1 if number == 6 else 2 if number in (7, 8) else 1
+
+
 @dataclass
 class GameSession:
     level: LevelDefinition | None = None
@@ -63,6 +68,11 @@ class GameSession:
     story: StoryProgress = field(default_factory=StoryProgress)
     desert: DesertState | None = None
     caverns: CavernState | None = None
+    # a5-0x500a: the level's sword type, -1 for none; picking a sword sets it.
+    sword_type: int = 1
+    # a5-0x500c: where level six was left (2: column >= 6), choosing level
+    # seven's entrance.
+    ruins_entry: int = 1
 
     @property
     def entry_active(self):
@@ -70,8 +80,8 @@ class GameSession:
                 and self.runtime.state.sequence_id == self.level.entry_sequence)
 
     @classmethod
-    def load(cls, resources, number=1, terrain_enabled=True, encounter_factory=None):
-        level = resources.level(number)
+    def load(cls, resources, number=1, terrain_enabled=True, encounter_factory=None, ruins_entry=1):
+        level = resources.level(number).with_ruins_entry(ruins_entry)
         # Validate entry support before constructing any mutable world state.
         level.entry_sequence
         state = SequenceState(IDLE_SEQUENCE, action=15, current_x=level.start_x,
@@ -89,7 +99,7 @@ class GameSession:
                                        level.right_platform_edge(), level=level.data)
         session = cls(level, runtime, terrain,
                       RooftopPhysics(terrain, resources.frames) if terrain is not None else None,
-                      combat=combat)
+                      combat=combat, ruins_entry=ruins_entry)
         if combat is not None:
             combat.terrain = terrain
             combat.player_frames = resources.frames
@@ -103,7 +113,17 @@ class GameSession:
         self.complete = False
         self.exit = None
         self.desert = DesertState() if level.kind == 1 else None
-        self.caverns = CavernState() if level.kind == 3 else None
+        previous = getattr(self, 'caverns', None)
+        self.caverns = CavernState() if level.native_scenery else None
+        if previous is not None and self.caverns is not None:
+            # SetTensionLevel's a5-0x36a2/-0x36a0 survive RestartGame (2:5b66
+            # reloads the level and clears only the bridge, 2:6e38); the
+            # next-level opcode -16 (4:2f5a) resets them with a new session.
+            self.caverns.bridge.tension_level = previous.bridge.tension_level
+            self.caverns.bridge.tension = previous.bridge.tension
+            # Nor the upside-down world (a5-0x4fa8, written only by 2:59f6,
+            # saves and checkpoint rebirth 2:19b4).
+            self.caverns.potions.flip_timer = previous.potions.flip_timer
         if self.level_map is not None:
             self.level_map.desert = self.desert
             self.level_map.caverns = self.caverns
@@ -113,12 +133,14 @@ class GameSession:
         if self.desert is not None:
             self.desert.enter_room(self.room_id)
         self.harbor = Harbor() if level.kind == 5 else None
+        self.sword_type = level_sword_type(level.number)
         fresh = SequenceState(IDLE_SEQUENCE, action=15, current_x=level.start_x,
                               target_x=level.start_x, facing=level.facing,
                               actor_type=0, level_kind=level.kind)
         state.__dict__.update(fresh.__dict__)
         if self.combat is not None:
             self.combat.reset()
+            self.arm_prince()
             self.motion = TerrainMotion(self.room_id, level.start_row)
             self.combat.player.terrain_motion = self.motion
             self.combat.player.room, self.combat.player.row = self.room_id, level.start_row
@@ -128,6 +150,10 @@ class GameSession:
             self.opening = None
             state.select(level.entry_sequence)
             self.runtime.next_frame()
+
+    def arm_prince(self):
+        # InitKid 2:5eaa-5eba: a5-0x503c is -1 (no sword) when a5-0x500a is.
+        self.combat.player.sword_lost = self.sword_type == -1
 
     def place(self, room, row, x, facing, reset_guards=True, preserve_checkpoint=False):
         if (self.level_map is None or not 0 <= room < 32 or not 0 <= row < 3
@@ -158,6 +184,7 @@ class GameSession:
         if reset_guards:
             max_life = self.combat.player.max_life
             self.combat.reset()
+            self.arm_prince()
             self.combat.player.max_life = max_life
         self.combat.player.terrain_motion = self.motion
         self.combat.rooftop_escape = False

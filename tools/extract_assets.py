@@ -1,21 +1,27 @@
 """Extract the resource files required by the rooftop prototype."""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import json
+import os
 from pathlib import Path
 import struct
 import tempfile
 
 from tools.extract_enemy_profiles import extract_bytes
 from tools.extract_audio import extract_audio
-from tools.extract_intro import TREE_VARIANTS, extract_intro, extract_ending, extract_discovery, extract_trees
+from tools.extract_intro import (
+    TREE_VARIANTS, extract_carpet, extract_intro, extract_ending, extract_discovery, extract_trees,
+)
 from tools.extract_attract import extract_attract, extract_credits_music
-from tools.extract_caverns import extract_caverns
+from tools.extract_caverns import extract_cavern_levels, scenery_name
+from pop2.caverns import scenery_resource
 from pop2.mac_resources import get_resource_fork, parse_resource_fork
 from pop2.paths import ASSET_DIR
 
 
-RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Skeleton.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc", "NISTree.rsrc")
+RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Skeleton.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc", "NISTree.rsrc",
+                  "Ruins.rsrc", "Head.rsrc", "TNIS1.rsrc", "TNIS2.rsrc", "TNIS3.rsrc")
 REQUIRED_RESOURCES = {
     "Prince.rsrc": {"LEVL", "SEQS", "SHAP", "SHPL", "CTBL", "NFNT"},
     "Kid.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
@@ -27,6 +33,13 @@ REQUIRED_RESOURCES = {
     "Desert.rsrc": {"CUST", "SHAP", "CTBL"},
     "Caverns.rsrc": {"PIEC", "SHAP", "CTBL"},
     "NISTree.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
+    # Levels six and seven (environment 4) and their head/serpent set 5.
+    "Ruins.rsrc": {"PIEC", "SHAP", "CTBL", "CUST"},
+    "Head.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
+    # The carpet scene between levels five and six (NIS 1).
+    "TNIS1.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
+    "TNIS2.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
+    "TNIS3.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
 }
 
 
@@ -48,10 +61,19 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         raise ValueError(f"This is not a supported Macintosh PoP2 disk image: {error}") from error
     output_dir = Path(output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".import-", dir=output_dir) as directory:
+    with (tempfile.TemporaryDirectory(prefix=".import-", dir=output_dir) as directory,
+          ThreadPoolExecutor(2) as background):
         staging = Path(directory)
         for name, resource in resources.items():
             (staging / name).write_bytes(resource)
+        # The recorded demo and the level scenery need only the program and
+        # resource forks: they run beside the music and scenes. The scenery
+        # is drawn by worker processes, the demo by a single simulation.
+        demo = background.submit(extract_attract, program, dict(resources), staging, lambda _text: None)
+        numbers = (3, 4, 5, 6, 7, 8, 9)
+        caverns = background.submit(
+            extract_cavern_levels, program, {number: resources[scenery_resource(number)] for number in numbers},
+            resources["Prince.rsrc"], staging, progress, workers=os.cpu_count() or 1)
         extract_audio(image, program, resources["Prince.rsrc"], staging / "audio", progress)
         progress("Recovering the original opening scenes...")
         extract_intro(image, program, resources["NIS.rsrc"], staging, progress)
@@ -64,16 +86,16 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         resources["discovery.json"] = (staging / "discovery.json").read_bytes()
         progress("Recovering the original tree scenes...")
         extract_trees(image, program, resources["NIS.rsrc"], resources["NISTree.rsrc"], staging, progress)
+        progress("Recovering the original carpet scene...")
+        extract_carpet(image, program, resources["NIS.rsrc"], resources, staging, progress)
+        resources["carpet.json"] = (staging / "carpet.json").read_bytes()
         for variant in TREE_VARIANTS:
             resources[f"tree-{variant}.json"] = (staging / f"tree-{variant}.json").read_bytes()
-        for number, name in ((3, 'caverns_entry.json'), (4, 'caverns_level4.json'),
-                             (5, 'caverns_level5.json')):
-            progress(f"Preparing level-{number} scenery...")
-            extract_caverns(program, resources["Caverns.rsrc"], resources["Prince.rsrc"],
-                            staging, progress, level_number=number)
-            resources[name] = (staging / name).read_bytes()
+        caverns.result()
+        for number in numbers:
+            resources[scenery_name(number)] = (staging / scenery_name(number)).read_bytes()
         progress("Recovering the original recorded demo and credits...")
-        extract_attract(program, resources, staging, progress)
+        demo.result()
         extract_credits_music(image, staging)
         resources["attract.json"] = (staging / "attract.json").read_bytes()
         # Audio is fully prepared before any installed resources are replaced.

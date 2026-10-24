@@ -381,7 +381,7 @@ class ImportedStoneGateTests(unittest.TestCase):
 
     def test_releasing_run_through_room_10_gate_does_not_pull_prince_back_from_room_14(self):
         scene = self.scene_at_gate()
-        for x in (477, 480, 489, 495):
+        for x, needs_crouch in ((477, True), (480, True), (489, False), (495, False)):
             with self.subTest(x=x):
                 plates = scene.game.caverns.plates
                 plates.foreground.clear()
@@ -409,7 +409,13 @@ class ImportedStoneGateTests(unittest.TestCase):
                     self.assertFalse(scene.terrain_motion.dead or scene.terrain_motion.falling)
                     self.assertNotEqual(scene.sequence_state.source_sequence_id, 47)
                 self.assertTrue(entered)
-                self.assertIn(109, poses)
+                # At 477/480 the settled body still overlaps the gate by
+                # 9/6 pixels. At 489/495 it clears by 3/9, so the port's
+                # completed-stop improvement applies across the room seam too.
+                if needs_crouch:
+                    self.assertIn(109, poses)
+                else:
+                    self.assertNotIn(109, poses)
                 self.assertEqual((scene.action, scene.sequence_state.facing), (15, 1))
                 self.assertEqual(plates.foreground[9, 19] & 255, 0)
 
@@ -651,6 +657,53 @@ class ImportedStoneGateTests(unittest.TestCase):
         self.assertEqual(crush.gate_phase((16, 27)), 12)
         self.assertEqual(crush.actor(scene.sequence_state)[0].action, 265)
         scene.cancel_gate_presentation()
+
+    def test_health_bottles_empty_on_the_presented_slam_in_both_facings(self):
+        from unittest.mock import patch
+        from pop2.gate_crush import SLAM_AT_MS
+        from pop2.scene_prototype import ScenePrototype
+
+        scene = self.scene_at_gate()
+        for facing, x, life in ((0, 121, 3), (1, 106, 6)):
+            with self.subTest(facing=facing, life=life):
+                scene.jump_to_room(22, row=0, x=x, facing=facing)
+                scene.combat.player.life = scene.combat.player.max_life = life
+                plates = scene.game.caverns.plates
+                plates.foreground[22, 1] = 0x200 | 144
+                plates.active[22, 1] = 0
+                for _ in range(40):
+                    self.tick()
+                    if scene.terrain_motion.dead:
+                        break
+                crush = scene.game.caverns.crush
+                self.assertTrue(scene.terrain_motion.dead)
+                self.assertEqual(scene.combat.player.life, 0)
+                self.assertEqual(crush.life_before_crush, life)
+                self.assertEqual(crush.display_life(scene.sequence_state, 0), life)
+                self.assertIsNone(crush.key)
+                self.tick()
+                self.assertEqual(crush.elapsed_ms, 0)
+                started = self.now
+                native_life, world_frame = scene.combat.player.life, scene.combat.world_frame
+                for elapsed, displayed, gate_phase in ((SLAM_AT_MS - .001, life, 80),
+                                                        (SLAM_AT_MS, 0, 12)):
+                    self.now = started + elapsed / 1000
+                    with patch('pop2.scene_prototype.time.perf_counter', return_value=self.now):
+                        scene.advance_gate_presentation()
+                    self.assertEqual(crush.display_life(scene.sequence_state, 0), displayed)
+                    self.assertEqual(crush.gate_phase((22, 1)), gate_phase)
+                    self.assertEqual((scene.combat.player.life, scene.combat.world_frame),
+                                     (native_life, world_frame))
+                    self.assertFalse(scene.death.prompt_visible)
+                    ScenePrototype.render(scene)
+                    expected = Image.new('RGBA', scene.native_viewport.size, (0, 0, 0, 255))
+                    scene.health_art.draw(expected, scene.combat, show_opponent=False, player_life=displayed)
+                    hud = (0, 368, 512, 384)
+                    self.assertIsNone(ImageChops.difference(
+                        scene.native_viewport.crop(hud).convert('RGB'),
+                        expected.crop(hud).convert('RGB')).getbbox())
+                scene.jump_to_room(16, row=2, x=450, facing=1)
+                self.assertIsNone(scene.game.caverns.crush.life_before_crush)
 
     def test_crouched_prince_can_crawl_out_without_holding_down(self):
         scene = self.scene_at_gate()

@@ -9,6 +9,7 @@ from pop2.paths import ASSET_DIR
 from pop2.pressure_plates import PressurePlates
 from pop2.sequence_runtime import SequenceState
 from pop2.terrain import LevelMap, TerrainMotion
+from pop2.environments import environment_for
 
 
 class PressurePlateTests(unittest.TestCase):
@@ -310,6 +311,46 @@ class CaveBarsTests(unittest.TestCase):
         self.assertEqual(self.plates.active, {})
 
 
+class LevelFiveRoomSevenGateTests(unittest.TestCase):
+    """ATMGate 5:4396-43bc: level five's room-7 gate never starts closing."""
+
+    def gate(self, level_number, room):
+        PressurePlateTests.setUp(self)
+        struct.pack_into('>H', self.level, 0x218a, level_number)
+        PressurePlateTests.set_tile(self, room, 15, 4, 0x300 | 237)
+        self.plates.active[room, 15] = 0
+        for _ in range(60):
+            self.plates.advance(self.terrain)
+        return self.terrain.tile(room, 5, 1).foreground & 255
+
+    def set_tile(self, room, cell, kind, foreground):
+        PressurePlateTests.set_tile(self, room, cell, kind, foreground)
+
+    def set_link(self, *arguments):
+        PressurePlateTests.set_link(self, *arguments)
+
+    def test_a_bridge_skeleton_cannot_open_a_shut_reversible_gate(self):
+        # TriggerGateWithRevPlate 8:2d66-2d96: skeleton (actor 4) on a row
+        # other than 0 of level five's rooms 7/10/12; the Prince still opens it.
+        from pop2.animation_data import FrameRecord
+        from pop2.sequence_runtime import SequenceState
+        from pop2.terrain import TerrainMotion
+
+        for number, actor_type, opens in ((5, 4, False), (5, 0, True), (4, 4, True)):
+            with self.subTest(number=number, actor_type=actor_type):
+                PressurePlateTests.setUp(self)
+                struct.pack_into('>H', self.level, 0x218a, number)
+                self.set_tile(9, 14, 34, 1)
+                state = SequenceState(2, action=15, target_x=4 * 51 + 30, actor_type=actor_type)
+                self.plates.press(self.terrain, TerrainMotion(9, 1), state, FrameRecord(15, 0, 0, 0, 0, 0x40))
+                self.assertEqual((0, 15) in self.plates.active, opens)
+
+    def test_room_seven_gate_holds_open_only_in_level_five(self):
+        self.assertEqual(self.gate(5, 6), 237)
+        self.assertLess(self.gate(4, 6), 184)
+        self.assertLess(self.gate(5, 5), 184)
+
+
 class PressureDrawingTests(unittest.TestCase):
     def test_cave_bars_draw_the_custom_record_of_their_phase(self):
         command = ['back', 4051, 165, 50, 0, 0, [10, 165, 50, 318], 4, 6, 0]
@@ -348,9 +389,82 @@ class PressureDrawingTests(unittest.TestCase):
             state.plates.foreground[0, 15] = position
             self.assertEqual(cavern_pressure_signature(metadata, 0, state), (46, 0))
 
+    def test_front_gate_keeps_its_cap_above_the_dirty_cell_clip_fixed(self):
+        command = ['front', 3562, 283, 358, 16, 2, [238, 283, 358, 306], 4, 5, 2]
+        record = {'kind': 4, 'foreground': 0x300,
+                  'commands': [('front', 3562, 4, 5, 2)]}
+        resources = {'SHAP': {3562: {'data': struct.pack('>4H', 0, 0, 23, 120)}}}
+        self.assertEqual(pressure_drawing_commands([command], [record], (0,), resources), [command])
+        cap = ['front', 3562, 283, 358, 16, 2, [238, 283, 245, 306], 4, 5, 2]
+        for phase in range(1, 47):
+            with self.subTest(phase=phase):
+                actual = pressure_drawing_commands([command], [record], (phase,), resources)
+                self.assertEqual(actual[0], cap)
+                self.assertEqual(actual[1][3], 358 - phase * 2)
+                self.assertEqual(actual[1][6], [245, 283, 358 - phase * 2, 306])
+        self.assertEqual(command[6], [238, 283, 358, 306])
+
+    def test_gate_fragment_uses_the_repaint_row_not_the_source_row(self):
+        # A gate below the viewed room is still repainted by visible row 2.
+        command = ['front', 3562, 283, 478, 16, 3, [358, 283, 365, 306], 4, 5, 2]
+        record = {'kind': 4, 'foreground': 0,
+                  'commands': [('front', 3562, 4, 5, 2)]}
+        resources = {'SHAP': {3562: {'data': struct.pack('>4H', 0, 0, 23, 120)}}}
+        actual = pressure_drawing_commands([command], [record], (46,), resources)
+        self.assertEqual(len(actual), 1)
+        self.assertEqual(actual[0][6], [329, 283, 365, 306])
+
+    def test_initially_open_front_gate_keeps_its_cap_when_closing_or_opening(self):
+        resources = {'SHAP': {3562: {'data': struct.pack('>4H', 0, 0, 23, 120)}}}
+        for row in range(3):
+            for initial in (1, 16, 46):
+                bottom = row * 120 + 118 - initial * 2
+                clip = [max(0, row * 120 - 31, bottom - 120), 283, bottom, 306]
+                command = ['front', 3562, 283, bottom, 16, row, clip, 4, 5, row]
+                record = {'kind': 4, 'foreground': 0x300 | initial * 4,
+                          'commands': [('front', 3562, 4, 5, row)]}
+                for phase in (0, 4, 27, 46):
+                    with self.subTest(row=row, initial=initial, phase=phase):
+                        actual = pressure_drawing_commands([command], [record], (phase,), resources)
+                        if phase == initial:
+                            self.assertEqual(actual, [command])
+                            continue
+                        self.assertEqual(actual[0][3], bottom)
+                        self.assertEqual(actual[0][6], [clip[0], 283, row * 120 + 5, 306])
+                        self.assertEqual(actual[1][3], row * 120 + 118 - phase * 2)
+                        self.assertEqual(actual[1][6][0], row * 120 + 5)
+
+    def test_front_gate_floor_repaint_does_not_add_a_cap_outside_its_clip(self):
+        command = ['front', 3562, 283, 358, 16, 2, [245, 283, 358, 306], 4, 5, 2]
+        record = {'kind': 4, 'foreground': 0,
+                  'commands': [('front', 3562, 4, 5, 2)]}
+        resources = {'SHAP': {3562: {'data': struct.pack('>4H', 0, 0, 23, 120)}}}
+        actual = pressure_drawing_commands([command], [record], (46,), resources)
+        self.assertEqual(len(actual), 1)
+        self.assertEqual(actual[0][6], [245, 283, 266, 306])
+
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class ImportedPressurePlateTests(unittest.TestCase):
+    @unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(),
+                         'Imported level-four resources required')
+    def test_level_four_room_eleven_preserves_the_upper_pillar_during_gate_motion(self):
+        from PIL import Image, ImageChops
+        from pop2.caverns import cavern_room
+
+        closed = cavern_room(10, pressure_key=(0, 0, 0, 0), animated=True, level_number=4)
+        expected = Image.alpha_composite(closed.background, closed.foreground)
+        footprint = (283, 215, 306, 245)
+        for phase in (1, 4, 16, 27, 46):
+            with self.subTest(phase=phase):
+                room = cavern_room(10, pressure_key=(0, 0, 0, phase), animated=True, level_number=4)
+                actual = Image.alpha_composite(room.background, room.foreground)
+                self.assertIsNone(ImageChops.difference(
+                    expected.crop(footprint).convert('RGB'),
+                    actual.crop(footprint).convert('RGB')).getbbox())
+                self.assertIsNotNone(ImageChops.difference(
+                    expected.convert('RGB'), actual.convert('RGB')).getbbox())
+
     def test_all_real_buttons_resolve_to_the_native_object_types(self):
         from pop2.render_opening import load_resource_file
 
@@ -405,14 +519,14 @@ class ImportedPressurePlateTests(unittest.TestCase):
         self.assertEqual((plates.foreground, plates.active, plates.timers), before)
         scene.set_paused(False)
         for _ in range(46):
-            scene.advance_cavern_floors()
+            environment_for(scene).frame_start()
         gate = scene.level_map.tile(16, 7, 2)
         self.assertFalse(stone_gate_blocks(gate.foreground, (400, 275, 420, 346)))
         scene.restart_level()
         self.assertEqual(scene.game.caverns.plates.active, {})
         # Debris activates plates before this update's gate animation pass.
         scene.game.caverns.loose.plate_events.append((16, 12, 34))
-        scene.advance_cavern_floors()
+        environment_for(scene).frame_start()
         self.assertEqual(scene.level_map.tile(16, 7, 2).foreground & 255, 4)
         self.assertEqual(scene.game.caverns.plates.active[(16, 27)], 3)
         self.assertEqual(scene.game.caverns.loose.plate_events, [])

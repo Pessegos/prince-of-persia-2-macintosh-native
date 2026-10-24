@@ -17,11 +17,12 @@ from pop2.rebirth import DeathState
 
 
 class TimedPlayback:
-    """Deterministic MIDI event clock; SDL integration tests cover PCM tails."""
+    """Deterministic cue clock; SDL integration tests cover actual PCM mixing."""
 
     def __init__(self, cues):
         self.cues = cues
-        self.remaining = {"effect": 0, "music": 0}
+        self.remaining = {"effect": 0, "mechanism": 0, "music": 0}
+        self.effects = {}
         self.paused = False
 
     def play(self, bus, cue):
@@ -30,13 +31,27 @@ class TimedPlayback:
     def busy(self, bus):
         return self.remaining[bus] > 1e-9
 
+    def play_effect(self, cue):
+        if cue not in self.effects:
+            self.effects[cue] = self.cues[cue]['duration']
+
+    def playing_effects(self):
+        return tuple(self.effects)
+
+    def stop_effect(self, cue):
+        self.effects.pop(cue, None)
+
     def advance(self, interval):
         if not self.paused:
             for bus in self.remaining:
                 self.remaining[bus] = max(0, self.remaining[bus] - interval)
+            self.effects = {cue: duration - interval for cue, duration in self.effects.items()
+                            if duration - interval > 1e-9}
 
     def stop(self, bus):
         self.remaining[bus] = 0
+        if bus == 'effect':
+            self.effects.clear()
 
     def pause(self, paused):
         self.paused = paused
@@ -46,6 +61,7 @@ class TimedPlayback:
 
 
 class CueTests(unittest.TestCase):
+    """Native foreground arbitration remains available as a comparison mode."""
     def test_cavern_banks_switch_for_combat_without_interrupting_foreground_songs(self):
         audio = self.audio
         audio.manifest['ambient'] = [{'starts': [40, 41, 42], 'counts': [0, 0, 1],
@@ -73,15 +89,19 @@ class CueTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.playback = Mock()
-        self.busy = {"effect": False, "music": False}
+        self.busy = {"effect": False, "mechanism": False, "music": False}
         self.playback.busy.side_effect = self.busy.__getitem__
         cues = {str(i): {"mode": 1, "priority": i, "file": f"{i}.wav"}
-                for i in (7, 11, 12, 31, 38, 40, 41, 42, 43, 51, 119, 294, 295, 300)}
+                for i in (7, 11, 12, 17, 18, 20, 31, 38, 40, 41, 42, 43, 51, 60,
+                          61, 119, 294, 295, 300)}
+        for cue, priority in ((17, 110), (18, 110), (20, 80), (60, 125), (61, 90)):
+            cues[str(cue)]['priority'] = priority
         manifest = {"schema": 1, "cues": cues, "death_cues": [38] * 16,
                     "level_one": {"bank": 0, "groups": [0] * 960},
                     "ambient": [{"starts": [40], "counts": [3], "combat_group": -1}]}
         Path(self.directory.name, "manifest.json").write_text(json.dumps(manifest))
-        self.audio = AudioEngine(self.directory.name, self.playback, random.Random(1))
+        self.audio = AudioEngine(self.directory.name, self.playback, random.Random(1),
+                                 mix_effects=False)
 
     def test_intro_audio_bypasses_game_effect_priority_and_preserves_pause(self):
         self.audio.add_sound(7)
@@ -103,18 +123,18 @@ class CueTests(unittest.TestCase):
         self.audio.cues[17] = {"mode": 1, "priority": 110, "file": "17.wav"}
         self.audio.add_sound(17)
         self.audio.flush()
-        self.busy['effect'] = True
+        self.busy['mechanism'] = True
         for _ in range(3):
             self.audio.add_sound(17)
             self.audio.flush()
-        self.playback.play.assert_called_once_with('effect', 17)
+        self.playback.play.assert_called_once_with('mechanism', 17)
         self.assertEqual(self.playback.sustain_gate.call_count, 3)
 
-    def test_gate_repeat_does_not_bypass_pause_or_other_effect_priorities(self):
+    def test_gate_repeat_respects_pause_but_is_independent_of_foreground_effects(self):
         self.audio.cues[17] = {"mode": 1, "priority": 110, "file": "17.wav"}
         self.audio.add_sound(17)
         self.audio.flush()
-        self.busy['effect'] = True
+        self.busy['mechanism'] = True
         self.audio.add_sound(17)
         self.audio.pause(True)
         self.audio.flush()
@@ -122,8 +142,113 @@ class CueTests(unittest.TestCase):
         self.audio.pause(False)
         self.audio.add_sound(7)
         self.audio.flush()
-        self.playback.play.assert_called_with('effect', 7)
-        self.playback.sustain_gate.assert_not_called()
+        self.playback.play.assert_any_call('effect', 7)
+        self.playback.sustain_gate.assert_called_once()
+
+    def test_door_and_bones_requested_in_the_same_tick_both_play(self):
+        for cues in ((17, 61), (61, 17), (17, 60), (60, 17)):
+            with self.subTest(cues=cues):
+                self.audio.reset()
+                self.playback.reset_mock()
+                for cue in cues:
+                    self.audio.add_sound(cue)
+                self.assertTrue(self.audio.sound_playing(17))
+                bones = next(cue for cue in cues if cue != 17)
+                self.assertTrue(self.audio.sound_playing(bones))
+                self.audio.flush()
+                self.assertEqual(self.playback.play.call_args_list,
+                                 [call('effect', bones), call('mechanism', 17)])
+
+    def test_repeated_bones_do_not_cut_or_restart_the_moving_door(self):
+        self.audio.add_sound(17)
+        self.audio.flush()
+        self.busy['mechanism'] = True
+        for _ in range(8):
+            self.audio.add_sound(17)
+            self.audio.add_sound(61)
+            self.audio.flush()
+            self.busy['effect'] = True
+        self.assertEqual(self.playback.play.call_args_list,
+                         [call('mechanism', 17), call('effect', 61)])
+        self.assertEqual(self.playback.sustain_gate.call_count, 8)
+        self.assertTrue(self.audio.sound_playing(17))
+        self.assertTrue(self.audio.sound_playing(61))
+
+    def test_door_stop_replaces_movement_without_cutting_bones(self):
+        self.audio.add_sound(17)
+        self.audio.add_sound(61)
+        self.audio.flush()
+        self.busy.update(effect=True, mechanism=True)
+        self.audio.add_sound(18)
+        self.audio.flush()
+        self.playback.play.assert_called_with('mechanism', 18)
+        self.assertEqual(self.audio.current_effect, 61)
+        self.assertFalse(self.audio.sound_playing(17))
+        self.assertTrue(self.audio.sound_playing(18))
+        self.assertTrue(self.audio.sound_playing(61))
+
+    def test_stopping_bones_does_not_stop_the_door_and_vice_versa(self):
+        self.audio.add_sound(17)
+        self.audio.add_sound(61)
+        self.audio.flush()
+        self.busy.update(effect=True, mechanism=True)
+        self.audio.stop_sound(61)
+        self.playback.stop.assert_called_once_with('effect')
+        self.assertTrue(self.audio.sound_playing(17))
+        self.audio.stop_sound(17)
+        self.assertEqual(self.playback.stop.call_args_list,
+                         [call('effect'), call('mechanism')])
+
+    def test_pending_mechanisms_are_cancelled_by_reset_and_not_flushed_while_paused(self):
+        self.audio.pause(True)
+        self.audio.add_sound(17)
+        self.audio.add_sound(61)
+        self.audio.flush()
+        self.playback.play.assert_not_called()
+        self.assertTrue(self.audio.effect_busy)
+        self.audio.reset()
+        self.audio.pause(False)
+        self.audio.flush()
+        self.playback.play.assert_not_called()
+        self.assertIsNone(self.audio.pending_mechanism)
+        self.assertIsNone(self.audio.current_mechanism)
+        self.playback.stop.assert_any_call('mechanism')
+
+    def test_mechanism_volume_follows_master_mute_without_stopping_its_clock(self):
+        self.audio.add_sound(17)
+        self.audio.flush()
+        self.busy['mechanism'] = True
+        self.audio.set_sound_enabled(False)
+        self.playback.set_volume.assert_any_call('mechanism', 0.0)
+        self.playback.stop.assert_not_called()
+        self.assertTrue(self.audio.effect_busy)
+        self.audio.set_sound_enabled(True)
+        self.playback.set_volume.assert_any_call('mechanism', 1.0)
+
+    def test_death_can_ignore_door_movement_but_not_a_foreground_impact(self):
+        self.audio.add_sound(17)
+        self.audio.flush()
+        self.busy['mechanism'] = True
+        self.assertTrue(self.audio.death_ready())
+        self.audio.add_sound(7)
+        self.assertFalse(self.audio.death_ready())
+        self.audio.flush()
+        self.busy['effect'] = True
+        self.assertFalse(self.audio.death_ready())
+        self.busy['effect'] = False
+        self.assertTrue(self.audio.death_ready())
+
+    def test_native_single_effect_arbitration_remains_available_for_comparison(self):
+        audio = AudioEngine(self.directory.name, self.playback, mix_mechanisms=False)
+        audio.cues[17]['priority'] = 110
+        audio.add_sound(17)
+        audio.flush()
+        self.busy['effect'] = True
+        audio.add_sound(61)
+        audio.flush()
+        self.assertEqual(self.playback.play.call_args_list,
+                         [call('effect', 17), call('effect', 61)])
+        self.assertFalse(audio.sound_playing(17))
 
     def test_song_playing_checks_pending_and_live_music_not_the_effect_channel(self):
         audio = self.audio
@@ -348,6 +473,217 @@ class CueTests(unittest.TestCase):
         self.assertTrue(death.prompt_visible)
 
 
+    def test_music_elapsed_counts_playing_time_without_pauses(self):
+        clock = [100.0]
+        with patch('pop2.audio.time.monotonic', side_effect=lambda: clock[0]):
+            self.assertIsNone(self.audio.music_elapsed())
+            self.audio.add_song(119)
+            self.audio.flush()
+            self.busy['music'] = True
+            clock[0] = 103.0
+            self.assertAlmostEqual(self.audio.music_elapsed(), 3.0)
+            self.audio.pause(True)
+            clock[0] = 110.0
+            self.assertAlmostEqual(self.audio.music_elapsed(), 3.0)
+            self.audio.pause(False)
+            clock[0] = 111.5
+            self.assertAlmostEqual(self.audio.music_elapsed(), 4.5)
+            self.busy['music'] = False
+            self.assertIsNone(self.audio.music_elapsed())
+
+
+class PolyphonicCueTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        Path(self.directory.name, 'sample.wav').write_bytes(
+            Sample(b'\x90\x70' * 4000, 8000).wav())
+        cues = {str(cue): {'mode': 1, 'priority': cue, 'file': 'sample.wav'}
+                for cue in (7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 20, 27, 31,
+                            38, 40, 51, 60, 61, 69, 71, 192, 272, 294, 295, 296, 300)}
+        cues['17']['priority'] = cues['18']['priority'] = 110
+        Path(self.directory.name, 'manifest.json').write_text(json.dumps({
+            'schema': 1, 'cues': cues, 'death_cues': [38] * 16}))
+        env = patch.dict(os.environ, {'SDL_AUDIODRIVER': 'dummy'})
+        env.start()
+        self.addCleanup(env.stop)
+        self.audio = AudioEngine(self.directory.name)
+        self.addCleanup(self.audio.close)
+        self.playback = self.audio.playback
+        time.sleep(.02)
+
+    def test_distinct_effects_mix_regardless_of_priority_or_request_order(self):
+        for cues in ((61, 294, 7), (7, 294, 61)):
+            with self.subTest(cues=cues):
+                self.audio.reset()
+                for cue in cues:
+                    self.audio.add_sound(cue)
+                    self.assertTrue(self.audio.sound_playing(cue))
+                self.audio.flush()
+                self.assertEqual(set(self.playback.playing_effects()), set(cues))
+                self.assertEqual(len({id(channel) for channel in self.playback.effects.values()}), 3)
+                self.assertTrue(all(self.audio.sound_playing(cue) for cue in cues))
+
+    def test_new_effect_does_not_cut_an_already_playing_effect(self):
+        self.audio.add_sound(61)
+        self.audio.flush()
+        bones = self.playback.effects[61]
+        self.audio.add_sound(7)
+        self.audio.flush()
+        self.assertIs(self.playback.effects[61], bones)
+        self.assertTrue(bones.get_busy())
+        self.assertTrue(self.audio.sound_playing(7))
+
+    def test_pool_grows_past_default_sdl_channel_count_without_stealing(self):
+        cues = (7, 8, 9, 13, 14, 15, 27, 31, 51, 60, 61, 69, 71, 294, 295, 296)
+        for cue in cues:
+            self.audio.add_sound(cue)
+        self.audio.flush()
+        self.assertEqual(set(self.playback.playing_effects()), set(cues))
+        self.assertEqual(len(self.playback.effect_channels), len(cues))
+        self.assertTrue(all(channel.get_busy() for channel in self.playback.effects.values()))
+
+    def test_same_cue_is_coalesced_and_never_restarted_even_for_mode_two(self):
+        self.audio.cues[61]['mode'] = 2
+        for _ in range(20):
+            self.audio.add_sound(61)
+        self.audio.flush()
+        self.assertEqual(len(self.playback.effect_channels), 1)
+        time.sleep(.6)
+        for _ in range(20):
+            self.audio.add_sound(61)
+            self.audio.flush()
+        self.assertEqual(len(self.playback.effect_channels), 1)
+        time.sleep(.55)
+        self.assertFalse(self.audio.sound_playing(61))
+        self.audio.add_sound(61)
+        self.audio.flush()
+        self.assertTrue(self.audio.sound_playing(61))
+        self.assertEqual(len(self.playback.effect_channels), 1)
+
+    def test_stop_sound_is_selective_and_idle_channels_are_reused(self):
+        for cue in (61, 294, 17):
+            self.audio.add_sound(cue)
+        self.audio.flush()
+        first = self.playback.effects[61]
+        self.audio.stop_sound(61)
+        self.assertFalse(self.audio.sound_playing(61))
+        self.assertTrue(self.audio.sound_playing(294))
+        self.assertTrue(self.audio.sound_playing(17))
+        self.audio.add_sound(7)
+        self.audio.flush()
+        self.assertIs(self.playback.effects[7], first)
+        self.assertEqual(len(self.playback.effect_channels), 2)
+
+    def test_doors_keep_one_shared_channel_while_distinct_effects_mix(self):
+        for _ in range(10):
+            self.audio.add_sound(17)
+        for cue in (61, 294):
+            self.audio.add_sound(cue)
+        self.audio.flush()
+        self.assertNotIn(17, self.playback.effects)
+        self.assertEqual(set(self.playback.playing_effects()), {61, 294})
+        self.audio.add_sound(18)
+        self.audio.flush()
+        self.assertIs(self.playback.channels['mechanism'].get_sound(), self.playback.sounds[18])
+        self.assertEqual(set(self.playback.playing_effects()), {61, 294})
+
+    def test_pause_mute_and_reset_apply_to_all_active_and_future_effects(self):
+        for cue in (61, 294):
+            self.audio.add_sound(cue)
+        self.audio.flush()
+        self.audio.pause(True)
+        time.sleep(1.05)
+        self.assertEqual(set(self.playback.playing_effects()), {61, 294})
+        self.audio.add_sound(7)
+        self.audio.flush()
+        self.assertNotIn(7, self.playback.playing_effects())
+        self.assertTrue(self.audio.sound_playing(7))
+        self.audio.set_sound_enabled(False)
+        self.assertTrue(all(channel.get_volume() == 0 for channel in self.playback.effect_channels))
+        self.audio.pause(False)
+        self.audio.flush()
+        self.assertTrue(self.audio.sound_playing(7))
+        self.assertEqual(self.playback.effects[7].get_volume(), 0)
+        self.assertTrue(self.audio.effect_busy)
+        self.audio.set_sound_enabled(True)
+        self.assertTrue(all(channel.get_volume() == 1 for channel in self.playback.effect_channels))
+        self.audio.add_sound(8)
+        self.audio.reset()
+        self.audio.flush()
+        self.assertFalse(self.audio.effect_busy)
+        self.assertFalse(self.playback.playing_effects())
+        self.assertFalse(self.audio.pending_effects)
+
+    def test_effect_pool_never_steals_music_menu_or_mechanism_channels(self):
+        self.audio.add_song(40)
+        self.audio.add_sound(17)
+        self.audio.flush()
+        self.playback.play_ui('click')
+        music = self.playback.channels['music'].get_sound()
+        door = self.playback.channels['mechanism'].get_sound()
+        menu = self.playback.ui_channels['click'].get_sound()
+        for cue in (7, 8, 9, 13, 14, 15, 27, 31, 51, 60, 61, 69, 71, 294, 295):
+            self.audio.add_sound(cue)
+        self.audio.flush()
+        self.assertIs(self.playback.channels['music'].get_sound(), music)
+        self.assertIs(self.playback.channels['mechanism'].get_sound(), door)
+        self.assertIs(self.playback.ui_channels['click'].get_sound(), menu)
+        self.assertTrue(self.audio.song_playing(40))
+        self.assertTrue(self.audio.sound_playing(17))
+
+    def test_death_waits_for_all_relevant_effects_not_only_the_latest(self):
+        self.audio.add_sound(7)
+        self.audio.add_sound(272)
+        self.audio.flush()
+        self.assertFalse(self.audio.death_ready())
+        self.audio.stop_sound(7)
+        self.assertTrue(self.audio.death_ready())
+        self.assertTrue(self.audio.effect_busy)
+        self.audio.stop_sound(272)
+        self.assertFalse(self.audio.effect_busy)
+
+    def test_contact_still_suppresses_the_same_ticks_redundant_empty_swing(self):
+        for contact in (10, 12, 31):
+            with self.subTest(contact=contact):
+                self.audio.reset()
+                for cue in (11, 294, contact):
+                    self.audio.add_sound(cue)
+                self.audio.flush()
+                self.assertEqual(set(self.playback.playing_effects()), {294, contact})
+
+    def test_intro_effect_clears_game_effects_and_pending_requests(self):
+        self.audio.add_sound(61)
+        self.audio.flush()
+        self.audio.add_sound(294)
+        self.audio.play_intro(7, 1)
+        self.audio.flush()
+        self.assertFalse(self.playback.playing_effects())
+        self.assertTrue(self.audio.sound_playing(7))
+        self.assertFalse(self.audio.sound_playing(294))
+
+    def test_stop_discards_stale_frame_events_without_blocking_later_frames(self):
+        self.audio.add_sound(8)
+        self.audio.flush()
+        self.audio.stop_sound(8)
+        state = SimpleNamespace(sound_events=[8, 7], actor_type=0)
+        self.audio.drain(state)
+        self.audio.flush()
+        self.assertEqual(set(self.playback.playing_effects()), {7})
+        self.assertFalse(state.sound_events)
+        state.sound_events = [8]
+        self.audio.drain(state)
+        self.audio.flush()
+        self.assertTrue(self.audio.sound_playing(8))
+
+    def test_active_effect_is_not_resubmitted_to_playback(self):
+        with patch.object(self.playback, 'play_effect', wraps=self.playback.play_effect) as play:
+            for _ in range(5):
+                self.audio.add_sound(61)
+                self.audio.flush()
+            play.assert_called_once_with(61)
+
+
 class FormatTests(unittest.TestCase):
     def test_pcm_wav_preserves_samples_rate_and_channel_count(self):
         sample = Sample(bytes((0, 64, 128, 255)), 11127)
@@ -385,6 +721,71 @@ class FormatTests(unittest.TestCase):
 
 
 class SdlPlaybackTests(unittest.TestCase):
+    def test_mechanism_loop_survives_foreground_playback_and_stop(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, 'sample.wav').write_bytes(Sample(b'\x90\x70' * 4000, 8000).wav())
+            cues = {cue: {'file': 'sample.wav'} for cue in (17, 18, 61)}
+            with patch.dict(os.environ, {'SDL_AUDIODRIVER': 'dummy'}):
+                playback = MixerPlayback(directory, cues, mix_mechanisms=True)
+                try:
+                    playback.play('mechanism', 17)
+                    movement = playback.channels['mechanism']
+                    playback.play('effect', 61)
+                    self.assertTrue(movement.get_busy())
+                    self.assertIs(movement.get_sound(), playback.sounds[17])
+                    self.assertTrue(playback.busy('effect'))
+                    self.assertEqual(playback.effect_channel, 5)
+                    playback.stop('effect')
+                    self.assertTrue(movement.get_busy())
+                    self.assertFalse(playback.busy('effect'))
+                    playback.play('effect', 61)
+                    playback.play('mechanism', 18)
+                    self.assertIs(playback.gate_tail, movement)
+                    self.assertIs(playback.channels['mechanism'].get_sound(), playback.sounds[18])
+                    self.assertIs(playback.channels['effect'].get_sound(), playback.sounds[61])
+                    playback.play('effect', 61)
+                    self.assertTrue(playback.gate_tail.get_busy())
+                    self.assertEqual(playback.gate_release.positions[5], 0)
+                    playback.stop('mechanism')
+                    self.assertFalse(playback.gate_tail.get_busy())
+                    self.assertFalse(playback.busy('mechanism'))
+                    self.assertTrue(playback.busy('effect'))
+                finally:
+                    playback.close()
+
+    def test_mixed_mechanism_pause_mute_and_close_include_both_gate_channels(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, 'sample.wav').write_bytes(Sample(b'\x90\x70' * 8000, 8000).wav())
+            cues = {cue: {'file': 'sample.wav'} for cue in (17, 18, 61)}
+            with patch.dict(os.environ, {'SDL_AUDIODRIVER': 'dummy'}):
+                playback = MixerPlayback(directory, cues, mix_mechanisms=True)
+                try:
+                    time.sleep(.02)
+                    playback.play('mechanism', 17)
+                    playback.play('effect', 61)
+                    playback.pause(True)
+                    time.sleep(.04)
+                    for bus in ('effect', 'mechanism'):
+                        self.assertTrue(playback.busy(bus))
+                    playback.pause(False)
+                    playback.play('mechanism', 18)
+                    playback.pause(True)
+                    position = playback.gate_release.positions[5]
+                    time.sleep(.04)
+                    self.assertEqual(playback.gate_release.positions[5], position)
+                    playback.set_volume('effect', .5)
+                    self.assertEqual(playback.channels['effect'].get_volume(), .5)
+                    self.assertEqual(playback.channels['mechanism'].get_volume(), 1)
+                    playback.set_volume('mechanism', 0)
+                    self.assertFalse(playback.gate_tail.get_busy())
+                    self.assertTrue(playback.busy('mechanism'))
+                    self.assertEqual(playback.channels['mechanism'].get_volume(), 0)
+                    playback.pause(False)
+                finally:
+                    playback.close()
+                self.assertFalse(playback.gate_release.positions)
+                self.assertIsNone(playback.mixer.get_init())
+
     def test_gate_slam_has_exact_eleven_frame_lead_in_without_changing_the_sample(self):
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, 'sample.wav').write_bytes(Sample(b'\x90\x70' * 1000, 8000).wav())
@@ -566,6 +967,8 @@ class MixerGateTransitionTests(unittest.TestCase):
         self.effect, self.music, self.tail = Mock(), Mock(), Mock()
         self.playback.channels = {"effect": self.effect, "music": self.music}
         self.playback.gate_tail = self.tail
+        self.playback.effects = {}
+        self.playback.effect_channels = []
         self.playback.effect_channel, self.playback.tail_channel = 0, 2
         self.playback.gate_release = Mock()
         self.playback.gate_lifetime = 1045

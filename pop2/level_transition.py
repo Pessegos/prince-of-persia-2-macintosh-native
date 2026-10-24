@@ -5,12 +5,16 @@ from dataclasses import dataclass
 
 @dataclass
 class LevelExit:
-    song: int
+    # None: no end song (6:0fea-0ff2 adds it only at the stairs' frame 224);
+    # the level then ends when the current sound effect has finished.
+    song: int | None
     duration: float
     elapsed: float = 0
 
     def advance(self, seconds, audio=None):
         self.elapsed += max(0, seconds)
+        if self.song is None:
+            return audio is None or audio.death_ready()
         if audio is not None and audio.available(self.song):
             return (audio.current_music == self.song and not audio.music_busy
                     and audio.death_ready())

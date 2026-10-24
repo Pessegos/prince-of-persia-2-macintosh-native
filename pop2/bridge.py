@@ -39,6 +39,22 @@ class Bridge:
     pieces: dict = field(default_factory=dict)
     planks: list = field(default_factory=list)
     songs: list = field(default_factory=list)
+    # SetTensionLevel 6:5022 (a5-0x36a2 level, a5-0x36a0 amount).
+    tension_level: int = 0
+    tension: int = 0
+    # a5-0x3134: plank columns 1-8 (bits 0-7) near a character on the bridge,
+    # and each wobbling plank's foreground nibble (1 up, 2 down).
+    marks: int = 0
+    wobble: dict = field(default_factory=dict)
+
+    def set_tension(self, level, amount):
+        if self.tension_level != level:
+            if {self.tension_level, level} == {2, 3}:
+                self.tension -= 10
+            else:
+                self.tension = 0
+            self.tension_level = level
+        self.tension = max(0, self.tension + amount)
 
     def blocks_turn(self, level_number, room):
         # Prince turn 6:26c0-26d8 and SwordCtrl's voluntary turn 6:2314-2330.
@@ -53,9 +69,35 @@ class Bridge:
     def fallen(self):
         return frozenset(self.pieces)
 
+    def mark(self, prince, opponent):
+        # 8:0534-057c: both characters on the bridge mark every plank; one
+        # marks its column and both neighbours (MarkBridgeForCol 8:05cc).
+        if prince is not None and opponent is not None:
+            self.marks = 0xff
+            return
+        column = prince if prince is not None else opponent
+        self.marks = 0 if column is None else sum(
+            1 << (current - 1) for current in range(max(column - 1, 1), min(column + 1, 8) + 1))
+
+    def advance_wobble(self, rng=None):
+        """ATMBrgFloor 8:06d8 for each plank trob of room 10 on screen.
+
+        A marked plank at rest wobbles (nibble Rnd(3) - 1) when Rnd(3) >= 2;
+        any wobbling plank returns to rest the next frame.
+        """
+        rng = rng or random
+        for column in range(1, 9):
+            previous = self.wobble.pop(column, 0)
+            if column in self.pieces or not self.marks & (1 << (column - 1)):
+                continue
+            roll = rng.randint(0, 3)
+            if roll > 1 and not previous:
+                self.wobble[column] = roll - 1
+
     def creak(self, prince, opponent, sound_playing, rng=None):
         # 8:0534-05ac: Rnd(40) with both characters on the bridge, Rnd(80)
         # with one, unless sound 122 is still playing.
+        self.mark(prince, opponent)
         if prince is None and opponent is None or sound_playing:
             return ()
         rng = rng or random
@@ -119,10 +161,31 @@ class Bridge:
             yield record, 51 * column + dx, 245 + SAG[column] + dy - 1
 
 
-def bridge_sag(terrain, room, column, row, action):
+def bridge_sag(terrain, room, column, row, action, record=None):
     # 8:063e-067a: on a bridge tile, outside jump frames 34-44, a character's
-    # Y follows the plank's sag.
+    # Y follows the plank's sag; 8:0682-06be: on a floor pose (frame flag
+    # 0x40) a wobbling plank also moves him up (nibble 1) or down (2).
     if not on_bridge(terrain, room, column, row) or 34 <= action <= 44:
         return 0
     tile = terrain.tile(room, column, row)
-    return SAG.get(tile.column, 0)
+    sag = SAG.get(tile.column, 0)
+    caverns = getattr(terrain, 'caverns', None)
+    if record is not None and record.aux & 0x40 and caverns is not None:
+        sag += {1: -1, 2: 1}.get(caverns.bridge.wobble.get(tile.column), 0)
+    return sag
+
+
+def bridge_column(room, column):
+    # BridgeGetCharCol 8:0188: rooms 7 and 12 continue room 10's columns.
+    return column - 10 if room == 6 else column + 10 if room == 11 else column
+
+
+def bridge_gate_open(terrain):
+    # IsBrgGateOpen 8:0458: room 7's gate (cell 13) has a trob in phase 0 or 2.
+    caverns = getattr(terrain, 'caverns', None)
+    return caverns is not None and caverns.plates.active.get((6, 13)) in (0, 2)
+
+
+def bridge_tension(terrain):
+    caverns = getattr(terrain, 'caverns', None)
+    return (caverns.bridge.tension_level, caverns.bridge.tension) if caverns is not None else (0, 0)

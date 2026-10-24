@@ -11,7 +11,7 @@ from pop2.render_opening import (
 
 class LevelRenderer:
     def __init__(self, level, preload_room=True, retouch_caverns=True):
-        if level.kind != 5 and level.number not in (2, 3, 4, 5):
+        if level.kind != 5 and level.number not in (2, 3, 4, 5, 6, 7, 8, 9):
             raise ValueError(f"Level {level.number} scenery is not implemented (environment {level.kind})")
         self.level = level
         self.retouch_caverns = retouch_caverns
@@ -29,7 +29,7 @@ class LevelRenderer:
     def cavern_program(self):
         # Parsed on first use: menus build renderers for every level, and the
         # level-five export alone is about 25 MB of JSON.
-        if self.level.kind != 3:
+        if self.level.kind not in (3, 4):
             return None
         from pop2.caverns import cavern_assets
 
@@ -38,8 +38,13 @@ class LevelRenderer:
     def room(self, room_id, caverns=None):
         if not 0 <= room_id < 32:
             raise ValueError("Invalid scenery room")
-        if self.level.kind == 3:
-            from pop2.caverns import cavern_room, cavern_scene_signature, cavern_pressure_signature
+        if self.level.kind in (3, 4):
+            from pop2.caverns import (
+                cavern_pressure_signature,
+                cavern_room,
+                cavern_scene_signature,
+                cavern_scythe_signature,
+            )
 
             if caverns is not None:
                 caverns.lava.enter_room(room_id,
@@ -49,17 +54,27 @@ class LevelRenderer:
                          if caverns is not None else '')
             pressure = cavern_pressure_signature(self.cavern_program, room_id, caverns) if caverns else ()
             fallen = caverns.bridge.fallen() if caverns is not None else frozenset()
-            key = room_id, frame if room_id == self.level.start_room else 0, signature, pressure, fallen
+            wobble = frozenset(caverns.bridge.wobble.items()) if caverns is not None else frozenset()
+            scythe = (cavern_scythe_signature(self.cavern_program, room_id, caverns)
+                      if caverns is not None else ())
+            entry = caverns.entry_room if caverns is not None else self.level.start_room
+            alternate = caverns is not None and caverns.alternate_entry
+            redrawn = frozenset(caverns.loose.redrawn) if caverns is not None else frozenset()
+            key = (room_id, frame if room_id == entry else 0, signature, pressure, fallen, scythe, wobble,
+                   alternate, redrawn)
             if key not in self.cavern_frames:
-                # Retain loose-floor variants, not every historical gate height.
+                # Retain loose-floor variants, not every historical gate
+                # height or plank wobble.
                 for previous in tuple(self.cavern_frames):
-                    if previous[0] == room_id and previous[3] != pressure:
+                    if previous[0] == room_id and (previous[3] != pressure or previous[6] or wobble):
                         del self.cavern_frames[previous]
                 self.cavern_frames[key] = cavern_room(room_id, entry_frame=key[1], animated=True,
                                                     loose_key=signature, pressure_key=pressure,
                                                     retouched=self.retouch_caverns,
                                                     level_number=self.level.number,
-                                                    bridge_fallen=fallen)
+                                                    bridge_fallen=fallen, scythe_patch=scythe,
+                                                    bridge_wobble=wobble, alternate_entry=alternate,
+                                                    redrawn=redrawn)
             self.rooms[room_id] = self.cavern_frames[key]
             return self.rooms[room_id]
         if room_id not in self.rooms:
@@ -78,8 +93,11 @@ class LevelRenderer:
         return self.rooms[room_id]
 
     def enter_room(self, room_id, caverns=None):
+        if caverns is not None and self.cavern_display is not None and self.cavern_display[0] != room_id:
+            # Entering a room repaints it whole: no crevice keeps a redraw.
+            caverns.loose.redrawn.clear()
         room = self.room(room_id, caverns)
-        if self.level.kind != 3:
+        if self.level.kind not in (3, 4):
             return room
         display = self.cavern_display
         if display is not None and display[0] == room_id and display[1] is room:
@@ -99,16 +117,16 @@ class LevelRenderer:
         return resolved
 
     def remember_scenery(self, frame):
-        if self.level.kind == 3:
+        if self.level.kind in (3, 4):
             # Snapshot before actors/HUD; later drawing must not modify this image.
             self.cavern_scenery = frame.copy()
 
     def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
-        if self.level.kind == 3 and caverns is not None:
+        if self.level.kind in (3, 4) and caverns is not None:
             from pop2.terrain import LevelMap
             from pop2.caverns import (
                 draw_cavern_torches, draw_cavern_falling, draw_cavern_lava, draw_cavern_darts,
-                draw_cavern_flasks, draw_cavern_spikes, draw_bridge_planks,
+                draw_cavern_flasks, draw_cavern_spikes, draw_bridge_planks, draw_sword_items,
             )
 
             if self.cavern_map is None:
@@ -117,6 +135,10 @@ class LevelRenderer:
                 # Flask bodies and particles belong in front of actors.
                 frame = draw_cavern_flasks(frame, room_id, caverns, self.cavern_map,
                                            level_number=self.level.number)
+                if self.level.kind == 4:
+                    # The sword item is a front-layer command (6:14ce, tile 22).
+                    frame = draw_sword_items(frame, room_id, caverns, self.cavern_map,
+                                             level_number=self.level.number)
                 return draw_cavern_spikes(frame, room_id, caverns, self.cavern_map, front=True,
                                            level_number=self.level.number)
             frame = draw_cavern_torches(frame, room_id, caverns, level_number=self.level.number)
@@ -137,7 +159,7 @@ class LevelRenderer:
     def supported_rooms(self):
         if self.level.kind == 1:
             return [0, 1, 2]
-        if self.level.kind == 3:
+        if self.level.kind in (3, 4):
             from pop2.development_map import room_positions
             from pop2.terrain import LevelMap
 
@@ -160,7 +182,7 @@ class LevelRenderer:
     def screen_entries(self):
         if self.level.kind == 1:
             return {"1": 1, "2 (Stones)": 0, "Right shore": 2}
-        if self.level.kind == 3:
+        if self.level.kind in (3, 4):
             return {f"Room {room + 1}": room for room in self.supported_rooms()}
         terrain, _shapes, _pieces = rooftop_scene_data(self.level.resource_id)
         available = set(self.supported_rooms())

@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 import struct
 
+from pop2.bridge import BRIDGE_LEVEL, BRIDGE_ROOM, bridge_tension
+from pop2.crevices import CREVICE_TILE
 from pop2.opponent_generation import character_column, EMPTY_TILES, WALL_TILES
 from pop2.mac_input import StepBoundary
 from pop2.harbor import SHIP_CLIMB_SEQUENCE, SHIP_ROOM, WATER_ROOMS
@@ -16,7 +18,11 @@ FLOOR_OFFSET = 106
 GRAVITY = 6
 MAX_FALL_SPEED = 63
 VOID_DEATH_Y = 730
+# Prone poses: lying down (SEQS 125), idle (251) and crawling (SEQS 122/123).
+PRONE_FRAMES = (246, 261)
 DOWN_CUT_Y = 440
+# Idle width18 - anchor4, plus SEQS:13's final one-pixel backward step.
+RUN_STOP_GATE_REAR_REACH = 15
 
 
 def floor_y(row):
@@ -88,7 +94,21 @@ class LevelMap:
             return True
         kind = struct.unpack_from(">H", self.level, 0x2186)[0]
         blocked = {5: (10,), 6: (2, 4)}
-        return room not in blocked.get(kind, ())
+        if room in blocked.get(kind, ()):
+            return False
+        return not self.chasm(room)
+
+    def chasm(self, room):
+        # 6:4cd2-4d66: level 5 room 10 (the bridge chasm) and level 13 rooms
+        # 4/13 refuse the cut, kill the Prince (DecLifePts(100)) and move him
+        # to room 0, where no floor below the room can stop his fall.
+        number = struct.unpack_from(">H", self.level, 0x218a)[0]
+        return room in {5: (9,), 13: (3, 12)}.get(number, ())
+
+    def bridge_grab_reach(self, room):
+        level, tension = bridge_tension(self)
+        return (room == BRIDGE_ROOM and level == 3 and tension >= 40
+                and struct.unpack_from(">H", self.level, 0x218a)[0] == BRIDGE_LEVEL)
 
     def tile(self, room, column, row):
         # Same vertical-before-horizontal link traversal as GetBlock/Cut.
@@ -513,8 +533,16 @@ class LevelMap:
         if state.vertical_velocity >= 60 or not -48 <= state.current_y <= 3:
             return False
         direction = 1 if state.facing else -1
-        look_behind = 24 if state.source_sequence_id == 99 else 17
-        trial_x = state.target_x - look_behind * direction
+        trial_x = state.target_x - 17 * direction
+        if not state.facing and self.bridge_grab_reach(room):
+            # Catch 4:382c-3880: once fatal falls in level five's room 10
+            # raise tension level 3 to 40, a left-facing catch tests 25
+            # pixels further ahead, except from the room's first three columns.
+            reach = trial_x + 25 * direction
+            if character_column(floor_contact_x(reach, state.facing, record)) > 2:
+                trial_x = reach
+        if state.source_sequence_id == 99:
+            trial_x -= 7 * direction
         column = character_column(floor_contact_x(trial_x, state.facing, record))
         above = self.tile(room, column, row - 1)
         ahead = self.tile(room, column + direction, row - 1)
@@ -550,7 +578,9 @@ class LevelMap:
         column = character_column(contact)
         tile = self.tile(room, column, row)
         if (tile.room is None or tile.kind not in WALL_TILES
-                or state.sequence_mode == 4 or state.actor_type == 11):
+                or state.sequence_mode == 4 or state.actor_type == 11
+                or tile.kind == CREVICE_TILE and PRONE_FRAMES[0] <= state.action <= PRONE_FRAMES[1]):
+            # 4:35e6-35fa and 4:5830-5842: a prone body may lie in a crevice.
             return tile
         direction = 1 if state.facing else -1
         distance = floor_edge_distance(contact, state.facing)
@@ -583,6 +613,11 @@ class LevelMap:
                               and (state is None or state.actor_type != 11)
                               and stone_gate_blocks(tile.foreground, bounds, state))
                 if tile.kind not in WALL_TILES and not desert_exit and not stone_gate:
+                    continue
+                if (tile.kind == CREVICE_TILE and bottom - top + 1 <= 34 and tile.foreground & 3 != 3
+                        and (state is None or state.actor_type not in (7, 8))):
+                    # CheckCollide 4:5ade-5b0a: a body at most 34 pixels high
+                    # passes an open crevice; only the heads still collide.
                     continue
                 # GetLeftBarr/GetRightBarr, code 4, DATA c9e0/c9f2[barrier].
                 barrier = (5 if stone_gate else 1 if desert_exit else
@@ -639,6 +674,8 @@ class RooftopPhysics:
     def __init__(self, level_map, frames=None):
         self.map = level_map
         self.frames = frames
+        # The Prince's held horizontal input (-1 left, 1 right), set by the host.
+        self.held_direction = 0
 
     @staticmethod
     def select(runtime, sequence):
@@ -731,25 +768,29 @@ class RooftopPhysics:
         state.current_y = absolute_y - floor_y(motion.row)
         return True
 
-    def start_fall(self, motion, runtime):
+    def start_fall(self, motion, runtime, sword_drawn=False):
         state = runtime.state
         contact = (floor_contact_x(state.target_x, state.facing, self.frames[state.action])
                    if self.frames is not None else state.target_x)
         # Retain the cause across SEQS links into the shared free-fall loop.
         motion.hit_fall = state.source_sequence_id in (74, 94, 183)
-        # StartFall, CODE:4 0x4cbe-0x4d90, ordinary unarmed rooftop subset.
-        sequence = {9: 7, 13: 19, 26: 18, 44: 21}.get(state.action, 7)
-        if state.action == 81:
-            state.current_y += 24
-        elif 81 < state.action < 86:
-            sequence = 19
-        elif 150 <= state.action < 180:
-            if state.actor_type == 2:
-                sequence = 83 if state.source_sequence_id in (86, 67, 108, 94) else 82
-            else:
-                sequence = 95 if state.action == 153 or state.source_sequence_id in (56, 94) else 81
-        elif state.actor_type == 2 and state.sequence_id == 100:
-            sequence = 186
+        if self.falls_back(motion, state, sword_drawn):
+            # StartFall 4:4cb6 skips the pose table (and its +24) for SEQS:198.
+            sequence = 198
+        else:
+            # StartFall, CODE:4 0x4cbe-0x4d90, ordinary unarmed rooftop subset.
+            sequence = {9: 7, 13: 19, 26: 18, 44: 21}.get(state.action, 7)
+            if state.action == 81:
+                state.current_y += 24
+            elif 81 < state.action < 86:
+                sequence = 19
+            elif 150 <= state.action < 180:
+                if state.actor_type == 2:
+                    sequence = 83 if state.source_sequence_id in (86, 67, 108, 94) else 82
+                else:
+                    sequence = 95 if state.action == 153 or state.source_sequence_id in (56, 94) else 81
+            elif state.actor_type == 2 and state.sequence_id == 100:
+                sequence = 186
         motion.row += 1
         state.current_y -= TILE_HEIGHT
         if self.frames is not None:
@@ -771,11 +812,34 @@ class RooftopPhysics:
         motion.falling = True
         self.select(runtime, sequence)
 
+    def bridge_room(self, motion, state):
+        return (state.actor_type in (0, None) and motion.room == BRIDGE_ROOM
+                and struct.unpack_from('>H', self.map.level, 0x218a)[0] == BRIDGE_LEVEL)
+
+    def falls_back(self, motion, state, sword_drawn):
+        # StartFall 4:4c4a-4ca4, level five's room 10 only: holding the
+        # direction behind the Prince (a5-0x3488, left, when facing right;
+        # -0x3486 when facing left) turns him back with SEQS:198, as does a
+        # drawn sword facing right once fatal falls raise tension 3 to 20.
+        if not self.bridge_room(motion, state):
+            return False
+        if self.held_direction == (-1 if state.facing else 1):
+            return True
+        level, tension = bridge_tension(self.map)
+        return bool(level == 3 and tension >= 20 and sword_drawn and state.facing)
+
+    def fatal_fall(self, motion, state):
+        # SetKidDeathMethod(3) 4:31b4-31d6: a fatal fall while level five's
+        # room 10 is on screen adds 5 to tension level 3.
+        caverns = getattr(self.map, 'caverns', None)
+        if caverns is not None and self.bridge_room(motion, state):
+            caverns.bridge.set_tension(3, 5)
+
     def floating(self):
         caverns = getattr(self.map, 'caverns', None)
         return caverns is not None and caverns.potions.floating
 
-    def check_floor(self, motion, runtime, frame_flags, frame_record):
+    def check_floor(self, motion, runtime, frame_flags, frame_record, sword_drawn=False):
         # CheckFloor 4:35ba tests FRAM bit 0x40, including late climb poses.
         if not frame_flags & 0x40:
             return False
@@ -791,7 +855,7 @@ class RooftopPhysics:
         if frame_record is not None and tile.kind in WALL_TILES:
             tile = self.map.align_wall(motion.room, motion.row, state, frame_record)
         if tile.kind in EMPTY_TILES or (tile.kind == 30 and (tile.foreground & 15) < 2):
-            self.start_fall(motion, runtime)
+            self.start_fall(motion, runtime, sword_drawn)
             return True
         return False
 
@@ -824,6 +888,17 @@ class RooftopPhysics:
         if (not all(body[0] < right and left < body[2] + 1
                     for body in contact_bounds)
                 or not stone_gate_blocks(tile.foreground, bounds, state)):
+            return None
+        # Port improvement: let a stop finish if the settled body is already
+        # clear behind the gate. Leaning poses must not reintroduce contact;
+        # reserve the last backward pixel, without moving the actor or gate.
+        rear_overlap = right - bounds[0] if state.facing else bounds[2] + 1 - left
+        stop_clear = (state.source_sequence_id == 13 and (
+            state.target_x - RUN_STOP_GATE_REAR_REACH >= right if state.facing else
+            state.target_x + RUN_STOP_GATE_REAR_REACH <= left))
+        if (not sword_drawn and not motion.falling and state.current_y == 0
+                and state.source_sequence_id in (1, 13, 200, 201, 202)
+                and (0 < rear_overlap <= 4 or stop_clear)):
             return None
         if state.action != 109 and tile.foreground and not sword_drawn:
             if state.source_sequence_id == 50:
@@ -862,7 +937,7 @@ class RooftopPhysics:
             # disappearing slab must interrupt them before their idle link.
             if frame_record is not None:
                 frame_flags = frame_record.aux
-            if self.check_floor(motion, runtime, frame_flags, frame_record):
+            if self.check_floor(motion, runtime, frame_flags, frame_record, sword_drawn):
                 return (TerrainEvent("fall"),)
             gate = self.check_gate(motion, runtime, bounds, old_bounds, frame_record, alive, sword_drawn,
                                    invulnerable=invulnerable)
@@ -1043,7 +1118,7 @@ class RooftopPhysics:
         if frame_record is not None:
             frame_flags = frame_record.aux
         if not motion.falling:
-            if self.check_floor(motion, runtime, frame_flags, frame_record):
+            if self.check_floor(motion, runtime, frame_flags, frame_record, sword_drawn):
                 events.append(TerrainEvent("fall"))
             return tuple(events)
 
@@ -1052,9 +1127,13 @@ class RooftopPhysics:
         if catch_ledge is not None and catch_ledge():
             return tuple(events)
 
+        # Below a chasm the Prince is in room 0 (CutChar 6:4d64): its cells
+        # are not the linked room's, so nothing aligns or lands him.
+        below_chasm = (state.actor_type in (0, None) and motion.row >= 3
+                       and self.map.chasm(motion.room))
         # Falling 6:0156-0174 corrects the foot before comparing its height
         # with the next floor, not only after it has reached that floor.
-        if frame_record is not None and state.sequence_id != 15:
+        if frame_record is not None and state.sequence_id != 15 and not below_chasm:
             self.map.align_wall(motion.room, motion.row, state, frame_record)
 
         absolute_y = floor_y(motion.row) + state.current_y
@@ -1069,12 +1148,14 @@ class RooftopPhysics:
                 return tuple(events)
             state.vertical_velocity = state.horizontal_velocity = 0
             motion.dead = True
+            if not invulnerable:
+                self.fatal_fall(motion, state)
             self.select(runtime, 22)
             state.sound_events.append(7)
             events.append(TerrainEvent("death"))
             return tuple(events)
 
-        if state.animation_state not in (4, 9):
+        if state.animation_state not in (4, 9) or below_chasm:
             return tuple(events)
         while absolute_y > floor_y(motion.row):
             contact_x = (floor_contact_x(state.target_x, state.facing, frame_record)
@@ -1118,6 +1199,8 @@ class RooftopPhysics:
                 state.horizontal_velocity = state.vertical_velocity = 0
                 motion.falling = False
                 motion.dead = fatal
+                if fatal:
+                    self.fatal_fall(motion, state)
                 self.select(runtime, sequence)
                 # HitFloor 6:039c/03fe/0436 distinguishes safe, hurt and fatal impacts.
                 state.sound_events.append(7 if fatal else 13 if velocity >= 50

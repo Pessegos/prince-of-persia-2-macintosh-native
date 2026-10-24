@@ -1036,7 +1036,8 @@ class GameWindowTests(unittest.TestCase):
             scene.set_peaceful(True)
             guard.assert_not_called()
             self.assertEqual(hit.call_count, 1)
-            health.assert_called_once_with(scene.native_viewport, scene.combat, show_opponent=False)
+            health.assert_called_once_with(scene.native_viewport, scene.combat, show_opponent=False,
+                                           player_life=scene.combat.player.life)
             self.assertIsNotNone(scene.native_viewport.crop((0, 368, 42, 384)).convert("RGB").getbbox())
             self.assertIsNone(scene.native_viewport.crop((455, 368, 512, 384)).convert("RGB").getbbox())
         before = (scene.room_id, scene.player_x, scene.terrain_motion.row)

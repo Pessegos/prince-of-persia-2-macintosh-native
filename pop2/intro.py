@@ -24,7 +24,7 @@ OPERATIONS = {
     "text": 5, "sound": 2, "wait_sound": 2, "wait_current": 1,
     "timer": 2, "wait_timer": 1, "wait": 1, "cue": 1, "palette": 3,
     "brightness": 2, "fade": 3, "fade_both": 1, "flash": 5, "stop": 1,
-    "title": 0, "fade_in_both": 1,
+    "title": 0, "fade_in_both": 1, "palette_at": 2, "save_background": 0, "restore": 1,
 }
 
 
@@ -133,6 +133,14 @@ class IntroAssets:
             # Tree scenes overlay their SHAP/CTBL on NIS; TEXT 26000 stays there.
             for kind, items in parse_resource_fork(tree.read_bytes()).items():
                 resources.setdefault(kind, {}).update(items)
+        # Scenes that open other resource files (the carpet scene) refer to
+        # their SHAP/CTBL as id + offset.
+        for name, offset in self.program.get("resource_files", {}).items():
+            for kind, items in parse_resource_fork((directory / name).read_bytes()).items():
+                if kind in ("SHAP", "CTBL"):
+                    resources.setdefault(kind, {}).update({offset + key: value for key, value in items.items()})
+        kid = parse_resource_fork((directory / "Kid.rsrc").read_bytes())
+        self.kid_palettes = {key: palette_colors(value["data"]) for key, value in kid["CTBL"].items()}
         self.shapes = {key: indexed_shape(value["data"]) for key, value in resources["SHAP"].items()}
         self.palettes = {key: palette_colors(value["data"]) for key, value in resources["CTBL"].items()}
         self.strings = {key: text_strings(value["data"]) for key, value in resources["TEXT"].items()}
@@ -203,16 +211,65 @@ class ScriptAnimation:
                 self.next_tick += self.interval
 
 
+def game_song(cue, directory=ASSET_DIR):
+    """Duration and cue markers of a prepared game song (its MIDI file)."""
+    import mido
+
+    directory = Path(directory) / "audio"
+    manifest = json.loads((directory / "manifest.json").read_text(encoding="ascii"))["cues"]
+    elapsed, markers = 0.0, {}
+    for event in mido.MidiFile(directory / f"cue-{cue}.mid"):
+        elapsed += event.time
+        if event.type == "cue_marker":
+            markers[event.text.strip()] = elapsed
+    return {"duration": manifest[str(cue)]["duration"], "markers": markers, "kind": 0}
+
+
+# Drawing steps that may run while a carpet-scene fade changes the palette.
+ANIMATION_OPS = frozenset(("shape", "copy", "restore", "wait", "fill", "clip"))
+
+
+def animated_fade_outs(operations):
+    """{wait index: (fade-out index, seconds into that wait)} for the QoL fades.
+
+    A fade-out starts early by its own duration, over the drawing steps and
+    fixed waits before it, so it ends where the Mac fade would begin.
+    """
+    starts = {}
+    for index, item in enumerate(operations):
+        if item["op"] != "fade" or item["args"][1]:
+            continue
+        duration, remaining = fade_ticks(item["args"][2]) / MAC_TICKS_PER_SECOND, 0.0
+        for before in range(index - 1, -1, -1):
+            step = operations[before]
+            if step["op"] not in ANIMATION_OPS:
+                break
+            if step["op"] == "wait":
+                remaining += step["args"][0] / MAC_TICKS_PER_SECOND
+                if remaining >= duration - 1e-9:
+                    starts[before] = index, remaining - duration
+                    break
+    return starts
+
+
 class IntroPlayer:
-    def __init__(self, assets, audio=None):
+    def __init__(self, assets, audio=None, music=None):
+        """`music`: (cue, seconds played, game_song metadata) of a game song
+        still playing when the scene starts; its cue markers pace the scene."""
         self.assets, self.audio = assets, audio
         self.operations = assets.program["operations"]
         self.sounds = assets.program["audio"]
+        self.program_kind = "carpet" if "resource_files" in assets.program else None
         self.position = 0
         self.time = 0.0
         self.done = False
         self.wait_until = 0.0
         self.timers, self.playing = {}, {}
+        self.carried_music = {}
+        if music is not None:
+            cue, played, metadata = music
+            self.sounds = {**self.sounds, str(cue): metadata}
+            self.playing[0] = self.carried_music[0] = (cue, -played, metadata["duration"])
         self.palette = [(0, 0, 0)] * 256
         self.loaded = {}
         self.target = Image.new("L", SIZE, 1)
@@ -225,6 +282,11 @@ class IntroPlayer:
         self.revision = 0
         self.frame_cache = None
         self.dissolve_words = dissolve_words(assets.program.get("dissolve"))
+        # QoL (the carpet scene): the Mac fades block, freezing the clouds; here
+        # fade-ins and fade-outs overlap the drawing steps, as in the DOS port.
+        self.animated_fades = self.program_kind == "carpet"
+        self.early_fades = animated_fade_outs(self.operations) if self.animated_fades else {}
+        self.started_fades = set()
         self.advance(0)
 
     @staticmethod
@@ -285,18 +347,20 @@ class IntroPlayer:
         self.display.paste(self.target.crop(rect), rect)
         self.changed()
 
-    def fade(self, colors, into, flags):
+    def fade(self, colors, into, flags, start=None, blocking=True):
         duration = fade_ticks(flags) / MAC_TICKS_PER_SECOND
         target = dict(colors) if into else {index: (0, 0, 0) for index in colors}
         source = {index: self.palette[index] for index in colors}
-        self.transition = ("fade", self.time, duration, source, target)
-        self.wait_until = self.time + duration
+        start = self.time if start is None else start
+        self.transition = ("fade", start, duration, source, target)
+        if blocking:
+            self.wait_until = start + duration
 
     def update_transition(self):
         if self.transition is None:
             return
         kind, start, duration, source, target = self.transition
-        progress = 1 if self.time + 1e-9 >= start + duration else (self.time - start) / duration
+        progress = 1 if self.time + 1e-9 >= start + duration else max(0, (self.time - start) / duration)
         if kind == "title":
             tick = (self.time - start) * MAC_TICKS_PER_SECOND
             music = self.playing[0]
@@ -416,14 +480,40 @@ class IntroPlayer:
             self.wait_until = max(self.time, self.timers[args[0]])
         elif op == "wait":
             self.wait_until = self.time + args[0] / MAC_TICKS_PER_SECOND
+            early = self.early_fades.get(self.position - 1)
+            if early is not None:
+                fade, offset = early
+                fade_args = self.operations[fade]["args"]
+                self.fade(self.assets.palettes.get(fade_args[0], {}), False, fade_args[2],
+                          start=self.time + offset, blocking=False)
+                self.started_fades.add(fade)
         elif op == "cue":
             playing = self.playing.get(0)
+            if playing is None and self.program_kind == "carpet":
+                return  # 16:26d0 returns at once when no music plays.
             if playing is None:
                 raise ValueError("Intro cue without music")
             marker = self.sound_metadata(playing[0], 0)["markers"].get(chr(args[0]))
             if marker is None:
                 raise ValueError(f"Missing cue {args[0]} in intro music {playing[0]}")
             self.wait_until = max(self.time, playing[1] + marker)
+        elif op == "save_background":
+            self.background = self.target.copy()
+        elif op == "restore":
+            box = self.box(args[0])
+            self.target.paste(self.background.crop(box), box[:2])
+        elif op == "palette_at":
+            # SetKidPalette 3:5f1c -> PoPSetPalette 3:508a(id, 16): RemapCTBL
+            # 17:6a78 renumbers the entries first, first + 1, ... unless the
+            # first one already has index `first`. Kid CTBLs store 1-16.
+            resource_id, first = args
+            colors = self.assets.kid_palettes[resource_id]
+            if next(iter(colors), first) != first:
+                colors = {first + offset: color for offset, color in enumerate(colors.values())}
+            for index, color in colors.items():
+                if 0 <= index < 256:
+                    self.palette[index] = color
+            self.changed()
         elif op == "palette":
             resource_id, flags, fade_flags = args
             colors = self.assets.palettes[resource_id]
@@ -440,7 +530,13 @@ class IntroPlayer:
                     self.palette[index] = (0, 0, 0) if flags & 4 else color
                 self.changed()
         elif op == "fade":
-            self.fade(self.assets.palettes.get(args[0], {}), args[1], args[2])
+            if self.position - 1 in self.started_fades:
+                # Started early (animated_fade_outs); it ends here.
+                self.wait_until = max(self.time, self.transition[1] + self.transition[2]
+                                      if self.transition is not None else self.time)
+            else:
+                self.fade(self.assets.palettes.get(args[0], {}), args[1], args[2],
+                          blocking=not (self.animated_fades and args[1]))
         elif op in ("fade_both", "fade_in_both"):
             colors = {index: color for colors in self.loaded.values() for index, color in colors.items()}
             self.fade(colors, op == "fade_in_both", args[0])
@@ -498,6 +594,13 @@ class IntroPlayer:
             if stop_position is not None and self.position >= stop_position:
                 return
             item = self.operations[self.position]
+            if (self.animated_fades and item["op"] not in ANIMATION_OPS
+                    and self.position not in self.started_fades and self.transition is not None
+                    and self.transition[0] == "fade"
+                    and self.time + 1e-9 < self.transition[1] + self.transition[2]):
+                # Palette, sound and cue steps still follow the whole fade.
+                self.wait_until = self.transition[1] + self.transition[2]
+                continue
             self.position += 1
             self.execute(item["op"], item["args"])
 

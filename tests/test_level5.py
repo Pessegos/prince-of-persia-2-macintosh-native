@@ -28,6 +28,14 @@ class CeilingBarsSceneTests(unittest.TestCase):
         records = program['pressure_plates']['rooms']['2']
         self.assertEqual([(record['cell'], record['kind']) for record in records], [(6, 27), (8, 34)])
 
+    def test_the_map_warp_to_room_three_lands_on_the_upper_platform(self):
+        scene = self.scene
+        scene.jump_to_screen('Room 3')
+        self.assertEqual((scene.room_id, scene.terrain_motion.row), (2, 0))
+        self.tick(6)
+        self.assertEqual(scene.terrain_motion.row, 0)
+        self.assertFalse(scene.terrain_motion.falling)
+
     def test_stepping_on_the_upper_right_plate_opens_the_bars(self):
         scene = self.scene
         self.assertEqual(scene.level_map.tile(2, 6, 0).kind, 27)
@@ -70,6 +78,28 @@ class CarpetTests(unittest.TestCase):
         self.assertEqual(carpet.drawing(218, 39, 0), (25318, 218 - 69, 39 + 8))
         self.assertEqual(Carpet().sit_x(1), 248)
 
+    def test_a_crashed_carpet_turns_red_over_seven_drawings(self):
+        # DrawObjCarpet 8:10ba-11a2 and ComputeBloodRGB 8:0df6.
+        from pop2.carpet import Carpet
+        from pop2.caverns import blood_component, carpet_palette
+
+        carpet = Carpet(counter=4, crashed=True)
+        steps = []
+        for _ in range(10):
+            steps.append(carpet.blood_step())
+            carpet.counter += 1
+        self.assertEqual(steps, [0, 1, 2, 3, 4, 5, 6, 7, 7, 7])
+        self.assertEqual(Carpet(counter=9).blood_step(), 0)
+        self.assertEqual(blood_component(0xffff, 0x7272, 8), 0xffff - (0xffff - 0x7272) // 8 * 8)
+        self.assertEqual(blood_component(0x4040, 0, 3), 0x4040 - 0x808 * 3)
+        base, red = carpet_palette(), carpet_palette(7)
+        for index, target in ((46, 0x72), (45, 0x4b)):
+            self.assertNotEqual(red[index], base[index])
+            self.assertLessEqual(abs(red[index][0] - target), abs(base[index][0] - target))
+            self.assertLessEqual(red[index][1], base[index][1])
+        self.assertEqual({i: c for i, c in red.items() if i not in (45, 46)},
+                         {i: c for i, c in base.items() if i not in (45, 46)})
+
     def test_counter_only_runs_once_the_carpet_is_used(self):
         from pop2.carpet import Carpet
 
@@ -108,6 +138,16 @@ class CarpetRideSceneTests(unittest.TestCase):
         self.assertTrue(scene.game.complete)
         self.assertTrue(scene.combat.player.alive)
         self.assertEqual(scene.sequence_state.target_x, 218)
+
+    def test_the_carpet_leaves_without_an_end_song_and_the_scene_follows(self):
+        # 6:0fea-0ff2 adds the end song only at the stairs' frame 224; the
+        # level ends as soon as the Prince's sound has finished (2:6146).
+        scene = self.ride(True)
+        self.assertIsNotNone(scene.game.exit)
+        self.assertIsNone(scene.game.exit.song)
+        self.tick(2)
+        self.assertEqual(scene.attract_stage, 'tree')
+        self.assertIs(scene.intro.assets, scene.carpet_assets)
 
     def test_closed_bars_crush_the_rising_prince(self):
         scene = self.ride(False)
@@ -153,3 +193,60 @@ class CarpetRoomPaletteTests(unittest.TestCase):
         commands = cavern_assets(5)[0]['rooms']['2']
         self.assertFalse([command for command in commands
                           if command[1] in (3513, 3527, 3532) and command[8:10] == [0, 1]])
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class RoomSevenGateSongTests(unittest.TestCase):
+    """AddGateSound 5:3828-388e: BrgDoor (120) when room 7's gate slams."""
+
+    def setUp(self):
+        CeilingBarsSceneTests.setUp(self)
+
+    def tick(self, count=1):
+        CeilingBarsSceneTests.tick(self, count)
+
+    def slam(self, room, x):
+        scene = self.scene
+        scene.jump_to_room(room, 1, x, 0)
+        caverns = scene.game.caverns
+        caverns.plates.songs.clear()
+        caverns.plates.slam_sounds.append((6, 13))
+        from pop2.environments import environment_for
+
+        environment_for(scene).advance_relief(caverns)
+        return list(caverns.plates.songs)
+
+    def test_slam_plays_brgdoor_unless_the_prince_is_at_room_sevens_left_edge(self):
+        self.assertEqual(self.slam(9, 255), [120])
+        self.assertEqual(self.slam(6, 40), [])
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class RoomSevenGateShutTests(unittest.TestCase):
+    """BridgeCheckBreak 8:020a-0236: the Prince off the bridge shuts room 7's gate."""
+
+    def setUp(self):
+        CeilingBarsSceneTests.setUp(self)
+
+    def tick(self, count=1):
+        CeilingBarsSceneTests.tick(self, count)
+
+    def test_open_gate_shuts_when_the_prince_is_on_room_sevens_left_side(self):
+        scene = self.scene
+        plates = scene.game.caverns.plates
+        scene.jump_to_room(6, 1, 60, 0)
+        plates.foreground[6, 13] = 0x300 | 237
+        plates.active[6, 13] = 0
+        self.tick()
+        self.assertEqual(plates.active.get((6, 13)), 4)
+
+    def test_a_prince_without_his_sword_leaves_the_gate_open(self):
+        # 8:0214-021a: a5-0x503c == -1 skips the shut.
+        scene = self.scene
+        plates = scene.game.caverns.plates
+        scene.jump_to_room(6, 1, 60, 0)
+        scene.combat.player.sword_lost = True
+        plates.foreground[6, 13] = 0x300 | 237
+        plates.active[6, 13] = 0
+        self.tick()
+        self.assertNotEqual(plates.active.get((6, 13)), 4)

@@ -318,6 +318,19 @@ class CavernDrawingTests(unittest.TestCase):
                          [255, 255, 255, 0])
         self.assertEqual(room.actor_mask(3).getpixel((20, 340)), 255)
 
+    def test_export_draws_only_environments_with_a_known_piece_table(self):
+        # a5-0x4aea holds one piece-drawing table per LEVL environment; only
+        # the caverns (3, kinds 0-44) and ruins (4, kinds 0-23) are decoded.
+        from tools.extract_caverns import DRAW_KINDS
+
+        self.assertEqual(DRAW_KINDS, {3: 45, 4: 24})
+        level = bytearray(0x49ca)
+        struct.pack_into('>H', level, 0x2186, 5)
+        with (patch('tools.extract_caverns.recovery_inputs',
+                    return_value=({'CODE': {0: {'data': b''}}}, {}, {}, b'', {})),
+              self.assertRaisesRegex(ValueError, 'environment 5')):
+            recover_room(b'program', b'artwork', bytes(level), _machine=Mock())
+
     def test_export_uses_clean_cut_flag_and_full_clip_for_every_cell(self):
         from unicorn import Uc
 
@@ -336,6 +349,8 @@ class CavernDrawingTests(unittest.TestCase):
         struct.pack_into('>i', data, len(data) - 0x4aea + 12, -0x100)
         level = bytearray(0x49ca)
         struct.pack_into('>H', level, 0x2198, 1)
+        # The drawing table is now chosen by the LEVL environment (caverns).
+        struct.pack_into('>H', level, 0x2186, 3)
         observed = []
         released = []
 
@@ -765,7 +780,7 @@ class OriginalCavernTests(unittest.TestCase):
 
     def test_all_native_rooms_render_with_recorded_clip_rectangles(self):
         program = json.loads((ASSET_DIR / 'caverns_entry.json').read_text(encoding='ascii'))
-        self.assertEqual(program['version'], 15)
+        self.assertIn(program['version'], (15, 16))  # 16: per-slot loose floors
         self.assertEqual(set(program['rooms']), {str(room) for room in range(32)})
         for room in range(32):
             with self.subTest(room=room):
@@ -910,3 +925,45 @@ class OriginalCavernTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LooseVariantDeltaTests(unittest.TestCase):
+    def test_delta_encoding_round_trips_reordered_and_changed_commands(self):
+        from pop2.caverns import delta_commands
+        from tools.extract_caverns import encode_delta
+
+        base = [['back', shape, 0, 0] for shape in range(10)]
+        changed = base[:3] + [['front', 99, 1, 1]] + base[5:8] + base[9:] + [['back', 7, 0, 0]]
+        items = encode_delta(base, changed)
+        self.assertEqual(delta_commands(base, items), changed)
+        self.assertLess(len(items), len(changed))
+        self.assertEqual(delta_commands(base, encode_delta(base, base)), base)
+
+
+class RuinsPressureDrawingTests(unittest.TestCase):
+    def test_a_toggled_ruins_plate_uses_its_exported_commands(self):
+        from pop2.caverns import pressure_drawing_commands
+
+        plate = ['back', 3552, 408, 365, 16, 2, [335, 408, 365, 497], 4, 9, 2]
+        pressed = ['back', 3552, 408, 366, 16, 2, [336, 408, 365, 497], 4, 9, 2]
+        record = {'kind': 5, 'room': 0, 'cell': 29, 'foreground': 1,
+                  'commands': [['back', 3552, 4, 9, 2]], 'toggled': [pressed]}
+        self.assertEqual(pressure_drawing_commands([plate], [record], (0,), {}), [plate])
+        self.assertEqual(pressure_drawing_commands([plate], [record], (1,), {}), [pressed])
+        front = ['front', *plate[1:]]
+        self.assertEqual(pressure_drawing_commands([front], [record], (1,), {}), [['front', *pressed[1:]]])
+
+    def test_ruins_loose_floors_shake_by_their_column_parity(self):
+        # 7:2bd6-2c1a: odd columns read a5-0x2c7e, even ones a5-0x2c66.
+        from types import SimpleNamespace
+        from pop2.caverns import cavern_scene_signature
+
+        even = [0, 2, 0, 1, 1, 0, 0, 2, 2, 2, 0, 2, 98]
+        odd = [0, 1, 0, 2, 2, 0, 0, 0, 1, 1, 1, 0, 0]
+        program = {'loose_floors': {'shifts': [even, odd],
+                                    'cells': {'0:14': [[11, 0], [11, 1], [0, 0]],
+                                              '0:15': [[11, 0], [11, 1], [0, 0]]},
+                                    'rooms': {'0': {'cells': [[0, 14], [0, 15]], 'variants': {}}}}}
+        state = SimpleNamespace(loose=SimpleNamespace(tiles={(0, 14): (11, 7), (0, 15): (11, 7)},
+                                                      cleared=set()))
+        self.assertEqual(cavern_scene_signature(program, 0, state), '10')

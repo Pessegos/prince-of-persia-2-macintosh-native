@@ -114,6 +114,7 @@ class SaveFormatTests(unittest.TestCase):
                 if item.get('record') == 'Fighter':
                     item['fields'].pop('guard_record', None)
                     item['fields'].pop('native_alive', None)
+                    item['fields'].pop('sword_lost', None)
                 for child in item.values():
                     remove_fields(child)
             elif isinstance(item, list):
@@ -125,6 +126,14 @@ class SaveFormatTests(unittest.TestCase):
         loaded, _saved = read_save(self.path, self.resources)
         self.assertIsNone(loaded.combat.guards[0].guard_record)
         self.assertIsNone(loaded.combat.guards[0].native_alive)
+        self.assertFalse(loaded.combat.player.sword_lost)
+
+    def test_a_lost_sword_survives_a_save(self):
+        original = GameSession.load(self.resources, 1)
+        original.combat.player.sword_lost = True
+        write_save(self.path, capture(original))
+        loaded, _saved = read_save(self.path, self.resources)
+        self.assertTrue(loaded.combat.player.sword_lost)
 
     def test_corrupt_guard_room_records_are_rejected(self):
         from dataclasses import replace

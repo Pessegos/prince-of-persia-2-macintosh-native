@@ -91,6 +91,9 @@ class LevelDefinitionTests(unittest.TestCase):
         for number in (1, 2, 5):
             for kind, blocked in ((5, {10}), (6, {2, 4}), (1, set())):
                 level_map = LevelMap(level_bytes(number, kind))
+                # CutChar 6:4cd2-4ce4 separately vetoes level five's bridge
+                # chasm (native room 10) by level number, in any environment.
+                blocked = blocked | ({9} if number == 5 else set())
                 for room in range(20):
                     with self.subTest(number=number, kind=kind, room=room):
                         self.assertEqual(level_map.allows_down_cut(room), room not in blocked)
@@ -146,6 +149,15 @@ class LevelDefinitionTests(unittest.TestCase):
         self.assertEqual((level.entry_sequence, level.start_row, level.start_x, level.facing),
                          (5, 2, 277, 0))
         self.assertFalse(level.window_escape)
+
+    def test_level_six_stands_on_its_cliff_at_native_x_374(self):
+        # SetKidDefaults 2:5dd0-5dec: room 27 of level six selects SEQS 2.
+        level = LevelDefinition.decode(6, level_bytes(6, 4, 27, 23))
+        self.assertEqual((level.entry_sequence, level.start_x, level.start_row), (2, 167, 2))
+        self.assertTrue(level.native_scenery)
+        other = LevelDefinition.decode(7, level_bytes(7, 4, 32, 24))
+        self.assertEqual((other.entry_sequence, other.start_x), (5, 226))
+
 
 
 class GameSessionTests(unittest.TestCase):
@@ -319,7 +331,7 @@ class OriginalLevelSessionTests(unittest.TestCase):
         from pop2.level_rendering import LevelRenderer
 
         with self.assertRaisesRegex(ValueError, "scenery is not implemented"):
-            LevelRenderer(self.resources.level(6))
+            LevelRenderer(self.resources.level(10))
 
     def test_initial_visited_and_generated_guards_inherit_the_player_environment(self):
         data = bytearray(self.resources.level(1).data)
@@ -357,7 +369,7 @@ class LevelHostTests(unittest.TestCase):
         viewport = scene.native_viewport.tobytes()
         with patch.object(scene, "render") as render, \
                 self.assertRaisesRegex(ValueError, "entry controller is not implemented"):
-            scene.load_level(6)
+            scene.load_level(10)
         render.assert_not_called()
         self.assertIs(scene.game, game)
         self.assertIs(scene.level_renderer, renderer)

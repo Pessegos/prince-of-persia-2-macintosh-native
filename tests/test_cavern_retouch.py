@@ -14,10 +14,10 @@ from pop2.terrain import LevelMap
 
 
 class BundledCavernRetouchTests(unittest.TestCase):
-    def test_only_two_rooms_have_bundled_variants_with_valid_crop_sizes(self):
+    def test_only_four_rooms_have_bundled_variants_with_valid_crop_sizes(self):
         assets = retouch_assets()
-        self.assertEqual(len(assets), 20)
-        self.assertEqual({key[0] for key in assets}, {0, 27})
+        self.assertEqual(len(assets), 32)
+        self.assertEqual({key[0] for key in assets}, {0, 1, 27, 29})
         for key, (record, image) in assets.items():
             with self.subTest(key=key):
                 x1, y1, x2, y2 = record['source_rect']
@@ -30,7 +30,7 @@ class BundledCavernRetouchTests(unittest.TestCase):
     def test_unaffected_rooms_do_not_even_load_retouch_assets(self):
         source = Image.new('RGBA', (5, 5), 'red')
         with patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Unexpected load')):
-            for room in set(range(32)) - {0, 27}:
+            for room in set(range(32)) - {0, 1, 27, 29}:
                 self.assertIs(retouched_sprite(room, [], source), source)
 
     def test_unmatched_sources_and_other_shape_libraries_are_untouched(self):
@@ -68,11 +68,16 @@ class CavernRetouchTests(unittest.TestCase):
 
     def test_local_variants_reproduce_approved_images_exactly(self):
         hashes = {0: '18f6592d8c185dbb7c224e4550172cdbde0dfaff88c28a8695e30442f5bede7b',
-                  27: 'a0220428dd30bf81285c1f4f7c28ecbe82760a0030b80a646f78e544e24dba35'}
+                  1: 'd3821666a9cd7439da9d4cf9331c6a3a1892d90db22e9b2a69830bffe3e6f2d5',
+                  27: 'a0220428dd30bf81285c1f4f7c28ecbe82760a0030b80a646f78e544e24dba35',
+                  29: '1f7cb6240cff9746a42fe39ca156c911680bddcfc784e48f3fc7d44caca1372e'}
         for room, expected in hashes.items():
             with self.subTest(room=room):
                 native = cavern_room(room)
-                edited = cavern_room(room, retouched=True)
+                # Keep the earlier wall-art goldens independent of the door
+                # blend, whose approved combined frames have their own tests.
+                with patch('pop2.caverns.retouched_door_sprite', side_effect=lambda level, room, command, source: source):
+                    edited = cavern_room(room, retouched=True)
                 pixels = edited.flattened().convert('RGB').tobytes()
                 self.assertEqual(hashlib.sha256(pixels).hexdigest(), expected)
                 self.assertNotEqual(native.flattened().tobytes(), edited.flattened().tobytes())
@@ -91,18 +96,109 @@ class CavernRetouchTests(unittest.TestCase):
         self.assertEqual(opened.crop((35, 0, 151, 245)).tobytes(), closed.crop((35, 0, 151, 245)).tobytes())
         self.assertEqual(closed.crop((185, 135, 281, 220)).tobytes(), native.crop((185, 135, 281, 220)).tobytes())
 
-    def test_other_thirty_rooms_remain_pixel_identical(self):
-        for room in set(range(32)) - {0, 27}:
+    def test_other_twenty_seven_rooms_remain_pixel_identical(self):
+        for room in set(range(32)) - {0, 1, 12, 27, 29}:
             with self.subTest(room=room):
                 native, edited = cavern_room(room), cavern_room(room, retouched=True)
                 self.assertEqual(native.background.tobytes(), edited.background.tobytes())
                 self.assertEqual(native.foreground.tobytes(), edited.foreground.tobytes())
                 self.assert_masks_equal(native, edited)
 
+    def test_room_thirty_only_changes_marked_margins_not_foreground_or_column_outlines(self):
+        from PIL import ImageChops, ImageDraw, ImageFilter
+        from pop2.caverns import clipped_sprite
+
+        program, resources, palette, shapes = cavern_assets()
+        with patch('pop2.caverns.retouched_door_sprite', side_effect=lambda level, room, command, source: source):
+            native, edited = cavern_room(29), cavern_room(29, retouched=True)
+        self.assertEqual(native.foreground.tobytes(), edited.foreground.tobytes())
+        before, after = native.flattened().convert('RGB'), edited.flattened().convert('RGB')
+        protected = Image.new('L', before.size)
+        for command in program['rooms']['29']:
+            if 3531 <= command[1] <= 3538 or command[0] == 'front':
+                clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
+                if clipped is not None:
+                    sprite, position = clipped
+                    part = Image.new('L', before.size)
+                    part.paste(sprite.getchannel('A'), position)
+                    protected = ImageChops.lighter(protected, part)
+        protected = protected.filter(ImageFilter.MaxFilter(3))
+        allowed = Image.new('L', before.size)
+        for trace in (((47, 295), (56, 295)),
+                      ((73, 268), (91, 268), (91, 296), (89, 296)),
+                      ((142, 287), (142, 307)), ((448, 27), (448, 95))):
+            ImageDraw.Draw(allowed).line(trace, fill=255, width=5)
+        changed = [(x, y) for y in range(before.height) for x in range(before.width)
+                   if before.getpixel((x, y)) != after.getpixel((x, y))]
+        colours = {tuple(c[:3]) for c in palette.values()}
+        self.assertEqual(len(changed), 385)
+        self.assertEqual(sum(y < 125 for x, y in changed), 206)
+        for point in changed:
+            self.assertTrue(allowed.getpixel(point), point)
+            self.assertFalse(protected.getpixel(point), point)
+            self.assertIn(after.getpixel(point), colours)
+
+    def test_room_two_preserves_column_texels_and_only_changes_approved_shadow_edges(self):
+        from PIL import ImageChops, ImageDraw, ImageFilter
+        from pop2.caverns import clipped_sprite
+
+        program, resources, palette, shapes = cavern_assets()
+        native = cavern_room(1).flattened().convert('RGB')
+        edited = cavern_room(1, retouched=True).flattened().convert('RGB')
+        columns = Image.new('L', native.size)
+        for command in program['rooms']['1']:
+            if 3532 <= command[1] <= 3538:
+                clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
+                if clipped is not None:
+                    sprite, position = clipped
+                    part = Image.new('L', native.size)
+                    part.paste(sprite.getchannel('A'), position)
+                    columns = ImageChops.lighter(columns, part)
+        guard = columns.filter(ImageFilter.MaxFilter(3))
+        allowed = Image.new('L', native.size)
+        draw = ImageDraw.Draw(allowed)
+        draw.rectangle((139, 211, 153, 319), fill=255)
+        draw.line(((74, 268), (90, 268), (90, 295), (69, 295)), fill=255, width=5)
+        draw.line(((178, 268), (192, 268), (193, 273), (193, 294), (189, 295)), fill=255, width=5)
+        colours = {tuple(c[:3]) for c in palette.values()}
+        changed = []
+        for y in range(native.height):
+            for x in range(native.width):
+                point = x, y
+                if native.getpixel(point) != edited.getpixel(point):
+                    changed.append(point)
+                    self.assertTrue(allowed.getpixel(point), point)
+                    self.assertFalse(guard.getpixel(point), point)
+                    self.assertIn(edited.getpixel(point), colours)
+        self.assertEqual(len(changed), 485)
+        for left, top, right, bottom in ((69, 266, 93, 298), (139, 269, 145, 298), (176, 266, 196, 298)):
+            self.assertTrue(any(left <= x < right and top <= y < bottom for x, y in changed))
+
+    def test_room_two_foreground_redraws_do_not_cover_or_change_shadow_pixels(self):
+        native, edited = cavern_room(1), cavern_room(1, retouched=True)
+        before, after = native.flattened(), edited.flattened()
+        points = [(x, y) for y in range(before.height) for x in range(before.width)
+                  if before.getpixel((x, y)) != after.getpixel((x, y))]
+        checked = 0
+        for name in ('climb_redraw', 'floor_redraw'):
+            old, new = getattr(native, name), getattr(edited, name)
+            for key in old:
+                blank = Image.new('RGBA', before.size)
+                old_frame = native.draw_floor_records(blank.copy(), old[key], None)
+                new_frame = edited.draw_floor_records(blank.copy(), new[key], None)
+                self.assertEqual(old_frame.tobytes(), new_frame.tobytes())
+                # This room's redraw lists paint only foreground columns; none
+                # of the background shadow texels may be restored over them.
+                for point in points:
+                    self.assertEqual(new_frame.getpixel(point)[3], 0, (name, key, point))
+                checked += 1
+        self.assertGreater(checked, 0)
+
     def test_entry_and_loose_floor_variants_preserve_all_masks(self):
+        from pop2.caverns import loose_keys
+
         program = cavern_assets()[0]
-        variants = program['loose_floors']['rooms']['0']['variants']
-        for key in ('', *variants):
+        for key in ('', *loose_keys(program, 0)):
             for phase in range(len(program['entry_exit']['frames'])):
                 with self.subTest(variant=key, phase=phase):
                     native = cavern_room(0, entry_frame=phase, loose_key=key)
@@ -122,7 +218,7 @@ class CavernRetouchTests(unittest.TestCase):
         self.assertNotEqual(result.tobytes(), original)
         self.assertEqual(source.tobytes(), original)
         self.assertEqual(result.getchannel('A').tobytes(), source.getchannel('A').tobytes())
-        self.assertIs(retouched_sprite(1, command, source), source)
+        self.assertIs(retouched_sprite(2, command, source), source)
         shifted = list(command)
         shifted[2] += 1
         self.assertIs(retouched_sprite(room, shifted, source), source)
@@ -137,17 +233,17 @@ class CavernRetouchTests(unittest.TestCase):
         game = LevelRenderer(level, preload_room=False)
         reference = LevelRenderer(level, preload_room=False, retouch_caverns=False)
         for room in range(32):
-            expected = cavern_room(room, animated=True, retouched=room in (0, 27))
+            expected = cavern_room(room, animated=True, retouched=room in (0, 1, 12, 27, 29))
             self.assertEqual(game.room(room).flattened().tobytes(), expected.flattened().tobytes())
             self.assertEqual(reference.room(room).flattened().tobytes(), cavern_room(room, animated=True).flattened().tobytes())
 
     def test_retained_pixels_do_not_propagate_retouch_into_adjacent_rooms(self):
         level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 3)
         terrain = LevelMap(level.data)
-        for source in (0, 27):
+        for source in (0, 1, 12, 27, 29):
             for direction in ('left', 'right', 'up', 'down'):
                 destination = terrain.neighbor(source, direction)
-                if destination is None or destination in (0, 27):
+                if destination is None or destination in (0, 1, 12, 27, 29):
                     continue
                 with self.subTest(source=source, destination=destination):
                     game = LevelRenderer(level, preload_room=False)

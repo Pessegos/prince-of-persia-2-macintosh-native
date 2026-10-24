@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 from pop2.window_aspect import constrain_window, sizing_rect
 
+from tests.desktop import exclusive_desktop
+
 
 class SizingTests(unittest.TestCase):
     def test_each_drag_edge_keeps_the_opposite_edge_and_native_ratio(self):
@@ -27,6 +29,7 @@ class SizingTests(unittest.TestCase):
                          (0, 0, 1275, 960))
 
     @unittest.skipUnless(sys.platform == 'win32', 'Native Windows resize message')
+    @exclusive_desktop('a mapped native window')
     def test_windows_sizing_message_accounts_for_frame_and_debug_status(self):
         import ctypes
         from ctypes import wintypes
@@ -62,6 +65,7 @@ class SizingTests(unittest.TestCase):
             root.destroy()
 
     @unittest.skipUnless(sys.platform == 'win32', 'Native Tk wrapper lifecycle')
+    @exclusive_desktop('a mapped fullscreen native window')
     def test_first_map_and_fullscreen_keep_hook_on_the_current_wrapper(self):
         import ctypes
         from ctypes import wintypes

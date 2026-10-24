@@ -2,10 +2,14 @@
 
 import json
 import struct
+from difflib import SequenceMatcher
 from itertools import product
 from functools import lru_cache, partial
 from math import prod
 
+from pop2.caverns import SCENERY_LEVELS, entry_room, scenery_name
+from pop2.slot_drawing import clip_climbing, draw_order_key
+from pop2.crevices import CREVICE_TILE, hide_crevices
 from pop2.mac_resources import parse_resource_fork
 from pop2.terrain import LevelMap
 from tools.extract_enemy_profiles import expand_a5_data
@@ -15,15 +19,27 @@ from tools.extract_lava import lava_tables
 from tools.extract_attract import jump_targets
 
 
+SECT_RECT_7 = (0x1f2e, 0x1f8c, 0x2760, 0x2b1a)
+UNION_RECT_7 = (0x1f48, 0x1fa2)
+# Entries of each environment's piece-drawing table (a5-0x4aea + 4 * env):
+# the caverns' table covers kinds 0-44, the ruins' kinds 0-23.
+DRAW_KINDS = {3: 45, 4: 24}
+# Shape libraries: 0 sword items and 1 flasks (Prince.rsrc), 4 scenery.
+LIBRARY_BASE = {0: 1000, 1: 3000, 4: 3500}
+
+
 @lru_cache(maxsize=1)
 def recovery_inputs(program, caverns, prince):
     resources = parse_resource_fork(program)
     primitives = {(3, offset) for offset in (4, 0x29e2, 0x29b6, 0x2ac4, 0x06c4, 0x2324, 0x26e4, 0x2482, 0x2438)}
     primitives.update((5, offset) for offset in (0x21c, 0x230, 0x08c4, 0x1990))
     primitives.update((8, offset) for offset in (0x176c, 0x20a6, 0x1ca4, 0x1752, 0x1f86))
+    # The ruins drawers (CODE 7) call the same SectRect (a5-0x1f58) and
+    # UnionRect (a5-0x1f5c) glue.
+    primitives.update((7, offset) for offset in SECT_RECT_7 + UNION_RECT_7)
     # Every OffsetRect trap (A8A8): bridge and custom-room pieces use it at
     # 8:07fe, 8:085a and 3:120a, besides 5:021c.
-    for segment in (3, 5, 8):
+    for segment in (3, 5, 7, 8):
         code = resources['CODE'].get(segment, {}).get('data', b'')
         primitives.update((segment, offset) for offset in range(0, len(code) - 1, 2)
                           if code[offset:offset + 2] == b'\xa8\xa8')
@@ -42,7 +58,7 @@ def recovery_inputs(program, caverns, prince):
 class CavernRecovery:
     """Reuse compiled code, restoring working RAM and CPU state per draw."""
 
-    def __init__(self, program, caverns, prince):
+    def __init__(self, program, caverns, prince, track_reads=False):
         from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE
         from unicorn.m68k_const import UC_CPU_M68K_M68000
 
@@ -60,12 +76,25 @@ class CavernRecovery:
         self.initial_ram = bytes(self.cpu.mem_read(0, 0x100000))
         self.initial_cpu = self.cpu.context_save()
         self.callback = None
+        self.read_callback = None
+        self.track_reads = track_reads
         self.closed = False
         self.handles = [self.cpu.hook_add(UC_HOOK_CODE, self.dispatch, begin=address, end=address)
                         for address in intercepts]
+        if track_reads:
+            # Level data and the a5 cell caches, for drawer dependency tracking.
+            from unicorn import UC_HOOK_MEM_READ
+
+            for begin, end in ((0xa0000, 0xa4000), (0x80000 - 0x4a84, 0x80000 - 0x4812)):
+                self.handles.append(self.cpu.hook_add(UC_HOOK_MEM_READ, self.dispatch_read,
+                                                      begin=begin, end=end))
 
     def dispatch(self, cpu, address, size, user):
         self.callback(cpu, address, size, user)
+
+    def dispatch_read(self, cpu, access, address, size, value, user):
+        if self.read_callback is not None:
+            self.read_callback(address)
 
     def reset(self):
         if self.closed:
@@ -96,11 +125,19 @@ class CavernRecovery:
 
 
 def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=None,
-                 floor_redraw=False, *, _machine=None, _native_scene=False):
+                 floor_redraw=False, *, _machine=None, _native_scene=False, reads=None, only=None,
+                 cell_redraw=False):
+    """`reads`, when given, collects {slot: {(room, cell)}} the drawers read.
+
+    `only`, a set of (row, column, pass) slots, runs just those slots' drawers
+    (the other slots' commands are absent). Every slot's drawers start from
+    the same per-cell inputs, so a slot's own commands do not change.
+    """
     if _machine is None:
-        with CavernRecovery(program, caverns, prince) as machine:
+        with CavernRecovery(program, caverns, prince, track_reads=reads is not None) as machine:
             return recover_room(program, caverns, level, room_id, prince, climb_action,
-                                floor_redraw, _machine=machine, _native_scene=_native_scene)
+                                floor_redraw, _machine=machine, _native_scene=_native_scene, reads=reads,
+                                only=only, cell_redraw=cell_redraw)
 
     from unicorn.m68k_const import (
         UC_M68K_REG_A5, UC_M68K_REG_A7,
@@ -133,9 +170,12 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             raise ValueError('Unsupported cavern jump table')
         return bases[segment] + offset + 4
 
-    table_offset = struct.unpack_from('>i', data, len(data) - 0x4aea + 3 * 4)[0]
+    environment = struct.unpack_from('>H', level, 0x2186)[0]
+    if environment not in DRAW_KINDS:
+        raise ValueError(f'Unsupported scenery environment {environment}')
+    table_offset = struct.unpack_from('>i', data, len(data) - 0x4aea + environment * 4)[0]
     dispatch = 0x92000
-    for kind in range(45):
+    for kind in range(DRAW_KINDS[environment]):
         pointer = struct.unpack_from('>i', data, len(data) + table_offset + kind * 4)[0]
         put_long(dispatch + kind * 4, target(pointer) if pointer else 0)
     put_long(a5 - 0x4aae, dispatch)
@@ -154,7 +194,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     put_long(a5 - 0x4ab2, 0)  # No actor-specific gate peeling in a static scene.
     # DoCleanCut 2:608c-6096 builds scenery with full-room repaint enabled.
     # Per-cell redraws change the overlap order of adjacent exit pieces.
-    put_word(a5 - 0x4832, int(climb_action is None and not floor_redraw))
+    put_word(a5 - 0x4832, int(climb_action is None and not floor_redraw and not cell_redraw))
     put_word(a5 - 0x4fc2, room_id + 1)
     if climb_action is not None:
         if not 135 <= climb_action <= 144:
@@ -165,6 +205,9 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     terrain = LevelMap(level)
     commands = []
     command_kinds = []
+    # The (row, column, pass) drawer call that admitted each command.
+    command_slots = []
+    current_slot = [None]
     torches = []
     history = []
     previous_items = {}
@@ -197,7 +240,8 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             cpu.reg_write(UC_M68K_REG_A7, sp + 8)
             cpu.reg_write(UC_M68K_REG_PC, address + 2)
             return
-        if opcode == b'\x4e\x90' and segment == 8 and offset == 0x176c:
+        if opcode == b'\x4e\x90' and (segment == 8 and offset == 0x176c
+                                      or segment == 7 and offset in UNION_RECT_7):
             out, first, second = (long(sp + i) for i in (0, 4, 8))
             r1 = struct.unpack('>4h', cpu.mem_read(first, 8))
             r2 = struct.unpack('>4h', cpu.mem_read(second, 8))
@@ -216,6 +260,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             return
         if (opcode == b'\x4e\x90'
                 and (segment == 8 and offset in (0x1ca4, 0x1752, 0x1f86)
+                     or segment == 7 and offset in SECT_RECT_7
                      or segment == 5 and offset == 0x230 or segment == 3 and offset == 0x2482)):
             out, first, second = (long(sp + i) for i in (0, 4, 8))
             r1 = struct.unpack('>4h', cpu.mem_read(first, 8))
@@ -233,10 +278,10 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             draw_column, draw_row = word(a5 - 0x45f8), word(a5 - 0x45f6)
             layer = 'front' if fields[5] in (1, 2) else 'back'
             library = fields[0]
-            if library not in (1, 4):
+            if library not in LIBRARY_BASE:
                 raise ValueError(f'Unsupported cavern shape library {library}')
-            shape = (3000 if library == 1 else 3500) + fields[12]
-            source = flasks if library == 1 else artwork
+            shape = LIBRARY_BASE[library] + fields[12]
+            source = flasks if library in (0, 1) else artwork
             if source is None or shape not in source['SHAP']:
                 raise ValueError(f'Missing library {library} shape {shape}')
             width, height = struct.unpack_from('>hH', source['SHAP'][shape]['data'], 4)
@@ -250,7 +295,8 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                 commands.append([layer, shape, x, bottom, fields[3], fields[8], rect, library,
                                  draw_column, draw_row])
                 command_kinds.append(fields[9])
-                if library == 4 and 3581 <= shape <= 3589:
+                command_slots.append(current_slot[0])
+                if environment == 3 and library == 4 and 3581 <= shape <= 3589:
                     tile = terrain.tile(room_id, fields[7], fields[8])
                     torches.append({'room': tile.room, 'cell': tile.row * 10 + tile.column,
                                     'foreground': tile.foreground, 'command': commands[-1]})
@@ -301,6 +347,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                     commands.append([layer, shape, x, bottom, mode, word(a5 - 0x45f6), rect, 4,
                                      word(a5 - 0x45f8), word(a5 - 0x45f6)])
                     command_kinds.append(word(info + 0x12) if long(a5 - 0x4f8c) else 0)
+                    command_slots.append(current_slot[0])
             result = 0
         elif segment == 3 and offset == 0x2324 and not long(a5 - 0x4c9e):
             # DrawCustomRoomImgs runs natively only for a loaded CUST room.
@@ -310,7 +357,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             result = terrain.tile(room_id, word(sp + 4) + 1, word(sp + 6)).kind
         elif segment == 3 and offset == 0x26e4:
             result = 0
-        elif segment == 5 and offset == 0x1990 and (climb_action is not None or floor_redraw):
+        elif segment == 5 and offset == 0x1990 and (climb_action is not None or floor_redraw or cell_redraw):
             result = 0  # Dirty-buffer bookkeeping does not emit shape commands.
         if result is not None:
             cpu.reg_write(UC_M68K_REG_D0, result)
@@ -320,6 +367,37 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             raise ValueError(f'Unexpected Macintosh trap in cavern renderer {segment}:{offset:x}')
 
     _machine.callback = hook
+
+    def read(address):
+        slot = current_slot[0]
+        if slot is None:
+            return
+        row, column = slot[0], slot[1]
+        if lev <= address < lev + 0x780:
+            key = divmod(address - lev, 60)
+            key = key[0], key[1] // 2
+        elif lev + 0x780 <= address < lev + 0x780 + 32 * 120:
+            room, offset = divmod(address - lev - 0x780, 120)
+            key = room, offset // 4
+        else:
+            offset = address - a5
+            if -0x4818 <= offset < -0x4812:
+                tile = terrain.tile(room_id, column, row)
+            elif -0x49d6 <= offset < -0x49d0:
+                tile = terrain.tile(room_id, column - 1, row)
+            elif -0x4a84 <= offset < -0x4a84 + 66:
+                tile = terrain.tile(room_id, (offset + 0x4a84) // 6 - 1, row + 1)
+            else:
+                return
+            if tile.room is None:
+                return
+            key = tile.room, tile.row * 10 + tile.column
+        reads.setdefault(slot, set()).add(key)
+
+    if reads is not None:
+        if not _machine.track_reads:
+            raise ValueError('Read tracking needs CavernRecovery(track_reads=True)')
+        _machine.read_callback = read
 
     def execute(segment, entry, argument=None):
         cpu.reg_write(UC_M68K_REG_A5, a5)
@@ -395,45 +473,97 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                         put_word(a5 - 0x4a84 + col * 6, below.kind)
                         put_long(a5 - 0x4a82 + col * 6, (below.foreground << 16) | below.background)
                 for layer, entry, draw_pass in passes:
+                    if only is not None and (draw_row, draw_column, draw_pass) not in only:
+                        continue
                     # GetCells 5:0abe-0ac8 copies fullclip during DoCleanCut;
                     # ComputeClipRect is only used for subsequent dirty cells.
                     # RedrawCellFast 3:1c64-1d38 visits bottom-up, then the border.
                     cpu.mem_write(a5 - 0x4600, bytes(cpu.mem_read(a5 - 0x4fec, 8)))
-                    if floor_redraw:
+                    if floor_redraw or cell_redraw:
                         # GetCells/ComputeClipRect supplies the dirty cell clip;
                         # RedrawCell intersects it with QuickFloor's actor rect.
                         cpu.mem_write(a5 - 0x4600, struct.pack('>4h',
                                       max(0, draw_row * 120 + 5), draw_column * 51,
                                       (draw_row + 1) * 120 + 5, (draw_column + 1) * 51))
+                    current_slot[0] = (draw_row, draw_column, draw_pass)
                     execute(3, entry, draw_pass)
     finally:
         _machine.callback = None
-    # DumpTable 3:2c1e-2c68 paints back-wall records (kind 0) before
-    # floor/pillar bodies, regardless of their admission order.
-    ordered = sorted(zip(commands, command_kinds),
-                     key=lambda item: (item[0][0] == 'front', item[1] != 0 if item[0][0] == 'back' else False))
+        _machine.read_callback = None
+    ordered = sorted(zip(commands, command_kinds, command_slots),
+                     key=lambda item: draw_order_key(item[0][0], item[1]))
     return {'version': 1, 'level': struct.unpack_from('>H', level, 0x218a)[0], 'room': room_id,
-            'commands': [command for command, _kind in ordered], 'torches': torches}
+            'commands': [command for command, _kind, _slot in ordered], 'torches': torches,
+            'slots': [[slot, kind] for _command, kind, slot in ordered]}
 
 
-def extract_caverns(program, caverns, prince, output, progress=lambda _text: None, *, level_number=3):
+def extract_caverns(program, caverns, prince, output, progress=lambda _text: None, *, level_number=3,
+                    workers=1):
+    """Export one level's scenery; `workers` processes draw the floor slots."""
+    extract_cavern_levels(program, {level_number: caverns}, prince, output, progress, workers=workers)
+
+
+def extract_cavern_levels(program, sceneries, prince, output, progress=lambda _text: None, *, workers=1):
+    """Export each {level number: scenery resource}.
+
+    With `workers` > 1 the levels are recovered side by side and the floor
+    slots of every level are drawn together by that many processes; the
+    files are identical to a serial export.
+    """
+    from tools.extract_slots import parallel_slot_rooms, slot_context
+
+    slots = {}
+    if workers > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        from tools.workers import watch_parent
+
+        with ProcessPoolExecutor(min(workers, len(sceneries)), initializer=watch_parent) as pool:
+            futures = {number: pool.submit(_level_scenery, program, caverns, prince, number)
+                       for number, caverns in sceneries.items()}
+            levels = {}
+            for number, future in futures.items():
+                levels[number] = future.result()
+                progress(f'Cavern scenery: level {number}')
+        contexts = {number: slot_context(program, sceneries[number], prince, level, result)
+                    for number, (result, level, _kind, _plates) in levels.items()}
+        slots = parallel_slot_rooms(contexts, workers, progress)
+    else:
+        levels = {number: _level_scenery(program, caverns, prince, number, progress)
+                  for number, caverns in sceneries.items()}
+    for number, (result, level, kind, plates) in levels.items():
+        with CavernRecovery(program, sceneries[number], prince, track_reads=True) as machine:
+            _finish_caverns(program, sceneries[number], prince, output, progress,
+                            partial(recover_room, _machine=machine), result, level, kind, plates,
+                            slots.get(number))
+
+
+def _level_scenery(program, caverns, prince, number, progress=lambda _text: None):
+    """(export without its slot/plate/scythe sections, drawn level data, level kind, plates)."""
+    from tools.extract_pressure_plates import pressure_scenery
+
+    progress(f'Preparing level-{number} scenery...')
     with CavernRecovery(program, caverns, prince) as machine:
         recover = partial(recover_room, _machine=machine)
-        _extract_caverns(program, caverns, prince, output, progress, recover, level_number=level_number)
+        result, level, kind = _prepare_caverns(program, caverns, prince, progress, recover, level_number=number)
+        plates = pressure_scenery(program, caverns, prince, level, result, progress, recover=recover)
+    return result, level, kind, plates
 
 
-def _extract_caverns(program, caverns, prince, output, progress, recover, *, level_number=3):
+def _prepare_caverns(program, caverns, prince, progress, recover, *, level_number=3):
+    """(export without its slot/plate/scythe sections, drawn level data, level kind)."""
     from pop2.level_data import LevelDefinition
 
     definition = LevelDefinition.read(parse_resource_fork(prince), level_number)
-    if definition.kind != 3 or level_number not in (3, 4, 5):
+    if level_number not in SCENERY_LEVELS.get(definition.kind, ()):
         raise ValueError(f'Unsupported cavern scenery level {level_number}')
     level = definition.data
+    if definition.kind == 4:
+        level = hide_crevices(level)
     scenes = {}
     for room in range(32):
         progress(f'Cavern scenery: room {room + 1}/32')
         scenes[str(room)] = recover(program, caverns, level, room, prince)
-    result = {'version': 15, 'level': level_number,
+    result = {'version': 16, 'level': level_number,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     result['climb_redraw'], result['floor_redraw'] = {}, {}
@@ -443,47 +573,64 @@ def _extract_caverns(program, caverns, prince, output, progress, recover, *, lev
         result['floor_redraw'][str(room)] = recover(
             program, caverns, level, room, prince, floor_redraw=True)['commands']
     terrain = LevelMap(level)
-    result['lava'] = lava_tables(program, caverns)
-    result['lava']['rooms'] = lava_room_records(result, terrain)
+    if definition.kind == 3:
+        result['lava'] = lava_tables(program, caverns)
+        result['lava']['rooms'] = lava_room_records(result, terrain)
     # FirstFrame 2:5f62 scans for the first exit-right tile in the start room.
+    entry = entry_room(level_number, terrain.start_room)
     cell = next((cell for cell in range(30)
-                 if terrain.tile(terrain.start_room, cell % 10, cell // 10).kind == 17), None)
+                 if terrain.tile(entry, cell % 10, cell // 10).kind == 17), None)
     if cell is not None:
         frames = exit_closing_frames(parse_resource_fork(program))
         mutable = bytearray(level)
-        offset = 0x780 + terrain.start_room * 120 + cell * 4
+        offset = 0x780 + entry * 120 + cell * 4
         foreground = struct.unpack_from('>H', level, offset)[0] & 0xff00
         for frame in frames:
             progress('Cavern entrance animation...')
             struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
-            frame['commands'] = recover(program, caverns, bytes(mutable), terrain.start_room, prince)['commands']
-        result['entry_exit'] = {'room': terrain.start_room, 'cell': cell, 'frames': frames}
-    result['loose_floors'] = extract_loose_floor_scenery(program, caverns, prince, level, result,
-                                                       progress, recover=recover)
-    from tools.extract_pressure_plates import pressure_scenery
+            frame['commands'] = recover(program, caverns, bytes(mutable), entry, prince)['commands']
+        result['entry_exit'] = {'room': entry, 'cell': cell, 'frames': frames}
+    if level_number == 7:
+        # SetKidDefaults 2:5eda: leaving level six at column >= 6 starts in
+        # native room 4 (cell 25) with room 32's door shut.
+        upper = definition.with_ruins_entry(2)
+        level_upper = hide_crevices(upper.data)
+        frames = exit_closing_frames(parse_resource_fork(program))
+        mutable = bytearray(level_upper)
+        offset = 0x780 + upper.start_room * 120 + upper.start_tile * 4
+        foreground = struct.unpack_from('>H', level_upper, offset)[0] & 0xff00
+        for frame in frames:
+            progress('Ruins upper entrance animation...')
+            struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
+            frame['commands'] = recover(program, caverns, bytes(mutable), upper.start_room, prince)['commands']
+        result['alternate_entry'] = {'room': upper.start_room, 'cell': upper.start_tile, 'frames': frames}
+    return result, level, definition.kind
 
-    result['pressure_plates'] = pressure_scenery(program, caverns, prince, level, result,
-                                               progress, recover=recover)
+
+def _finish_caverns(program, caverns, prince, output, progress, recover, result, level, kind, plates,
+                    slot_rooms=None):
+    from tools.extract_slots import loose_floor_slot_scenery
+
+    # Per-slot drawing (schema 2); extract_loose_floor_scenery's whole-room
+    # variants remain the oracle of tools/check_slot_scenery.py.
+    result['loose_floors'] = loose_floor_slot_scenery(program, caverns, prince, level, result,
+                                                      progress, recover=recover, rooms=slot_rooms)
+    result['pressure_plates'] = plates
+    if kind == 4:
+        from tools.extract_scythes import scythe_pairs
+
+        # The scythes are slot units of result['loose_floors'] ('scythe_units');
+        # tools.extract_scythes.scythe_scenery's whole-room patches serve
+        # version-15 exports only.
+        result['scythes'] = {'schema': 1, 'rooms': {},
+                             'scythes': [[*key, *partner] for key, partner in scythe_pairs(LevelMap(level))]}
     progress('Saving prepared cavern scenery...')
-    name = 'caverns_entry.json' if level_number == 3 else f'caverns_level{level_number}.json'
+    name = scenery_name(result['level'])
     (output / name).write_text(json.dumps(result) + '\n', encoding='ascii')
 
 
-def clip_climbing(commands, rect):
-    result = []
-    for command in commands:
-        column, row = command[8:10]
-        clip = list(command[6])
-        clip[0] = max(clip[0], row * 120 + rect[0])
-        clip[3] = min(clip[3], column * 51 + rect[3])
-        if clip[0] < clip[2] and clip[1] < clip[3]:
-            copied = list(command)
-            copied[6] = clip
-            result.append(copied)
-    return result
-
-
-def recover_climbing(program, caverns, prince, level, room, recover):
+def climbing_bounds(program, caverns, prince):
+    """(source pose or None, {pose: rect}) for the climbing repaints 135-144."""
     resources, _art, _flasks, data, _intercepts = recovery_inputs(program, caverns, prince)
     bounds = {action: struct.unpack_from('>4h', data, len(data) - 0x4b46 + (action - 135) * 8)
               for action in range(135, 145)}
@@ -496,6 +643,13 @@ def recover_climbing(program, caverns, prince, level, room, recover):
     # DrawCaveLoose 8:25fa has a separate pose-141 branch: execute it natively.
     if (source is None or any(rect[1:3] != outer[1:3] for rect in bounds.values())
             or code[0x25fa:0x2600] != b'\x0c\x6d\x00\x8d\xaf\x38'):
+        source = None
+    return source, bounds
+
+
+def recover_climbing(program, caverns, prince, level, room, recover):
+    source, bounds = climbing_bounds(program, caverns, prince)
+    if source is None:
         return {str(action): recover(program, caverns, level, room, prince, action)['commands']
                 for action in bounds}
     commands = recover(program, caverns, level, room, prince, source)['commands']
@@ -552,18 +706,86 @@ def loose_floor_cells(terrain):
                 break
     for key in struck:
         cells[key] += (cells[key][2],)  # Collision removal does not clear below.
+    for room in range(32):
+        for cell in range(30):
+            tile = terrain.tile(room, cell % 10, cell // 10)
+            if tile.kind == CREVICE_TILE and struct.unpack_from('>H', terrain.level, 0x2186)[0] == 4:
+                # A ruins crevice: covered, or revealed by 7:332a (bit 0x80).
+                cells[room, cell] = ((CREVICE_TILE, tile.foreground & 0xff7f),
+                                     (CREVICE_TILE, tile.foreground | 0x80))
     return cells
+
+
+def crevice_groups(terrain):
+    # Every contiguous tile-7 run (through horizontal links): 7:332a always
+    # changes a whole run.
+    groups = set()
+    for room in range(32):
+        for cell in range(30):
+            column, row = cell % 10, cell // 10
+            if terrain.tile(room, column, row).kind != CREVICE_TILE:
+                continue
+            start = column
+            while start > column - 640 and terrain.tile(room, start - 1, row).kind == CREVICE_TILE:
+                start -= 1
+            run = []
+            while len(run) < 640 and (tile := terrain.tile(room, start, row)).kind == CREVICE_TILE:
+                key = tile.room, tile.row * 10 + tile.column
+                if key in run:
+                    break
+                run.append(key)
+                start += 1
+            groups.add(tuple(sorted(run)))
+    return sorted(groups)
+
+
+def encode_delta(base, commands):
+    """Store a command list as slices of `base` plus the commands it lacks."""
+    keys = [json.dumps(command) for command in base]
+    matcher = SequenceMatcher(None, keys, [json.dumps(command) for command in commands],
+                              autojunk=False)
+    items = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == 'equal':
+            items.append([i1, i2])
+        elif tag in ('replace', 'insert'):
+            items.extend(commands[j1:j2])
+    return items
+
+
+def compact_variant(base, room, variant):
+    # Level six's room 20 alone has 7,775 loose-floor variants; whole command
+    # lists would make a 110 MB export. Variants differ in a few commands.
+    key = str(room)
+    result = {'commands': encode_delta(base['rooms'][key], variant['commands']),
+              'floor_redraw': encode_delta(base['floor_redraw'][key], variant['floor_redraw']),
+              'climb_redraw': {action: encode_delta(base['climb_redraw'][key].get(action, []), items)
+                               for action, items in variant['climb_redraw'].items()}}
+    if 'entry_frames' in variant:
+        result['entry_frames'] = [encode_delta(frame['commands'], items) for frame, items
+                                  in zip(base['entry_exit']['frames'], variant['entry_frames'])]
+    return result
+
+
+def loose_shift_tables(program, level):
+    data = expand_a5_data(parse_resource_fork(program))
+    if struct.unpack_from('>H', level, 0x2186)[0] != 3:
+        # The ruins' loose drawer 7:2bd6-2c1a picks its shake image from one
+        # of two tables by the column's parity (a5-0x2c66 even, -0x2c7e odd).
+        return [list(struct.unpack_from('>13h', data, len(data) - offset)) for offset in (0x2c66, 0x2c7e)]
+    offsets = struct.unpack_from('>13h', data, len(data) - 0x2f30)
+    # DrawCaveLoose 8:24dc/257c applies the original two table lookups.
+    return [offsets[index] for index in offsets]
 
 
 def extract_loose_floor_scenery(program, caverns, prince, level, base, progress=lambda _text: None,
                                *, recover=None):
     recover = recover or recover_room
     terrain = LevelMap(level)
+    # The ruins' exports store variants as deltas; the caverns keep full lists.
+    compact = struct.unpack_from('>H', level, 0x2186)[0] != 3
     choices = loose_floor_cells(terrain)
-    data = expand_a5_data(parse_resource_fork(program))
-    offsets = struct.unpack_from('>13h', data, len(data) - 0x2f30)
-    # DrawCaveLoose 8:24dc/257c applies the original two table lookups.
-    shifts = [offsets[index] for index in offsets]
+    shifts = loose_shift_tables(program, level)
     clears = {key: below for key in choices if choices[key][0][0] == 11
               and (below := cleared_below_cell(terrain, *key)) is not None}
     result = {'shifts': shifts, 'cells': {f'{room}:{cell}': values
@@ -578,9 +800,13 @@ def extract_loose_floor_scenery(program, caverns, prince, level, base, progress=
             continue
         variants = {}
         total = prod(len(choices[key]) for key in keys) - 1
+        groups = [tuple(keys.index(key) for key in group if key in keys)
+                  for group in crevice_groups(terrain) if set(group) & set(keys)]
         for number, indices in enumerate(product(*(range(len(choices[key])) for key in keys))):
             if not any(indices):
                 continue
+            if any(len({indices[index] for index in group}) > 1 for group in groups):
+                continue  # 7:332a reveals a whole run at once.
             progress(f'Cavern floor variants: room {room + 1}/32, variant {number}/{total}')
             mutable = bytearray(level)
             for key, index in zip(keys, indices):
@@ -607,8 +833,12 @@ def extract_loose_floor_scenery(program, caverns, prince, level, base, progress=
                     struct.pack_into('>H', mutable, offset, foreground | frame['phase'])
                     variant['entry_frames'].append(recover(program, caverns, bytes(mutable),
                                                                room, prince)['commands'])
+            if compact:
+                variant = compact_variant(base, room, variant)
             variants[''.join(map(str, indices))] = variant
         result['rooms'][str(room)] = {'cells': keys, 'variants': variants}
+        if compact:
+            result['rooms'][str(room)]['delta'] = True
     return result
 
 

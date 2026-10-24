@@ -1,0 +1,169 @@
+# Level Six: Ruins Scenery And Integration Plan
+
+Research note, 2026-10-22, updated 2026-10-23, `claude/ai-research`. Level
+six is playable from the cliff, without its heads and serpents. Codex's level-seven notes (branch `codex/level7-preparation`) cover the
+shared environment-4 dependencies and the head/serpent actors; this note
+covers the campaign track: scenery export and runtime integration.
+
+## Identity
+
+LEVL 2005 is level six, environment 4 (Ruins), start room 27 (port 26),
+cell 23, opponent set 5 (`Head.rsrc`). Levels six and seven share
+`Ruins.rsrc` (CTBL 3500-3502, PIEC 3500, SHAP 3501+, CUST 4025, 4200, 4250,
+4275, 4300, 4325, 4350, 4375 and 4650) and the Prince palette CTBL 25004.
+
+## Native Scenery Export (done)
+
+`tools/extract_caverns.py` now draws any environment whose piece table is
+decoded (`DRAW_KINDS`):
+
+- The per-environment piece-drawing tables sit at a5-0x4aea + 4 * env. The
+  caverns' table has 45 entries (kinds 0-44); the ruins' has 24 (0-23),
+  followed by unrelated data.
+- The ruins drawers in CODE 7 call SectRect (a5-0x1f58) at `7:1f2e`,
+  `7:1f8c`, `7:2760`, `7:2b1a` and UnionRect (a5-0x1f5c) at `7:1f48`,
+  `7:1fa2`, like CODE 8's cavern drawers.
+- Shape library 0 is the sword item (SHAP 1000 + index, `Prince.rsrc`):
+  level six's room 17 (port 16) has a tile-22 sword at cell 15.
+
+With these, all 32 rooms of level six export with the original renderer
+under Unicorn; levels three to five export byte for byte as before. A test
+render of port room 16 matches the ruins look.
+
+## Known Differences From The Caverns
+
+- Pressure plates and gates use other SHAPs. In levels six and seven a plate
+  (kinds 5/6) changes SHAP 3554 to 3555 and also redraws 3552 (kind 5) or
+  3553 (kind 6); the exit moves 3547 (caverns: 3566); the gate is 3542
+  (caverns: 3562/3563). `tools/extract_pressure_plates.py` and the runtime's
+  shape remapping (`pop2/caverns.py`) assume the cavern shapes and need
+  per-environment tables or stored variant commands.
+- Port room 26 (the start room) is a CUST room (4650, kind 22). Its enter
+  hook `7:37a6` (template table a5-0x4c2e) loads CTBL 3502 at entry 64
+  (`S03_508A`), covering entries 64-218; with that overlay the exported
+  room renders correctly. Its leave hook `7:37b6` restores CTBL 3500 at 64
+  under a condition still to read. The shared hook `7:37d6` (kinds 20-22)
+  only acts in level nine (rooms 16 and 2).
+- The sword item SHAP needs the Prince/sword palette, not CTBL 3500.
+- Cavern-only data (torches 3581-3589, lava) are skipped for environment 4.
+
+## Implemented (2026-10-22)
+
+- Import of `Ruins.rsrc`/`Head.rsrc` and `ruins_level6.json` (loose-floor
+  variants delta-encoded: 24 MB instead of 115 MB, identical expansion).
+- Ruins plates use their exported toggled commands; gates (3542) and exits
+  (3547) move like the caverns' with clips 19/10 pixels above the row. All
+  plate/gate/exit records of levels six and seven match native redraws.
+- Loose floors shake with the column-parity tables a5-0x2c66/-0x2c7e
+  (7:2bd6); both nonzero images share the phase-1 variant (approximation).
+- Level six starts on the cliff (SEQS 2, native X 374) without a sword
+  (a5-0x500a = -1, 3:6202); crouching at the sword item (tile 22) takes it
+  (6:14ce-1574, SEQS 91, FindSwd 183). Saves keep a changed sword type.
+- Finishing level five loads level six; the ruins' exit song is 124.
+- Tile predicates (IsSpace/IsWall/IsFloor, CODE 3) are environment
+  independent, so the existing collision rules apply.
+- Crevices (tile 7) start covered (InitState 3:5dce clears bit 0x80) and a
+  crouching or crawling Prince uncovers the first run of the row
+  (RuinSetCreviceRevealed 7:3404, scan 7:332a).
+- Crawling (2026-10-23): crouched with Down held, forward into a crevice
+  whose foreground low bits are not 3, or a scythe (12/13), lies down
+  (GenCtrl 6:0a4e-0b28, SEQS 125, X aligned to at most 10 pixels into that
+  column facing right, 34 past its right edge facing left). Prone (poses
+  246-261, 6:07ee-0994): forward crawls (122), back (123); he stands (124)
+  when neither his own, the front nor the rear cell is 7/12/13, or with Up
+  once clear of a crevice behind him (6:08a4-0942). A body at most 34 pixels
+  high passes an open crevice (CheckCollide 4:5ade-5b0a, heads excepted),
+  and the wall alignment skips a prone body in a crevice (4:35e6, 4:5830).
+  These rules are environment independent, so level two's two crevices
+  (port rooms 9 and 11) can now be crawled too.
+- Scythes (2026-10-23, port rooms 18 and 20): tile 13 holds the state and
+  AnimScythe (5:4584, in an unmapped listing region) copies its low byte to
+  the tile 12 on its left. A living Prince or guard on a scythe cell, at
+  most 30 pixels above the floor and more than 28 pixels into the column
+  (5:57bc), starts a resting scythe (TriggerScythe 5:5fde). Each update
+  advances phases 1-19 (sound 277 leaving 0, 276 leaving 15; from 16 a
+  bloody blade also bloodies the handle, 0x80), then returns to 0 keeping
+  the blood. CheckScytheHit (5:588a) tests only the first scythe cell among
+  the character's columns -1..+1: phases 2, 16 and 17 (GetScytheHitType)
+  cut with the rectangles a5-0x372a/-0x3722 offset by the cell (tile 13 one
+  column right; guards 10 pixels shorter), except poses 267-271 and SEQS
+  44: SEQS 113 and death method 5 for the Prince (SEQS 190 for a guard),
+  sound 278 and blood (0x40) on both halves. The drawing of each of the 60
+  states is exported as a patch of the native room drawing
+  (`tools/extract_scythes.py`); it needs a reimport, and older imports
+  leave the scythes still. Not reproduced: the climbing redraw layers for
+  a blade and the scythe test S05_5F1A for tile 13 (it reads only the
+  static blade state).
+
+- Flip flask (2026-10-23, kind 4, level six's only one): DoPickupEffect
+  4:4672 calls 2:59f6, which turns the world for 1080 updates (a5-0x4fa8,
+  song 176) or rights it (song 177). FrameAdv 2:67ba-67d6 counts down while
+  the Prince lives and rights it at 1. Poison drunk upside down only rights
+  it (4:4678-4682). GenCtrl swaps Up and Down (4:3da6-3dcc, 4:3e1c) and the
+  game area is drawn upside down (2:5952-59de). The state survives restarts
+  and the change to level seven. Not reproduced: a level-seven checkpoint
+  stores it as 0 (2:1744-1766) and checkpoint rebirth restores it (2:19b4).
+
+## Level Seven (2026-10-23)
+
+Level seven (LEVL 2006) now opens after level six, with the same ruins
+export (`ruins_level7.json`, 1.3 MB) and still without heads or serpents.
+CheckPlayNIS(6, 7) may show a tree scene first. Its entrance depends on how
+level six was left: the next-level opcode -16 (4:2f3e-2f56) stores 2 in
+a5-0x500c when the Prince's column is >= 6 (level six's right door in native
+room 16 ends at column 6, the left one at 2). SetKidDefaults 2:5eda then
+starts in native room 4, cell 25, and shuts room 32's door; otherwise room
+32, cell 24, with room 4's door shut. The export draws the upper door's
+closing frames (`alternate_entry`); its loose-floor variants are not
+combined with them. Saves keep the entrance. Levels seven and eight start
+with sword type 2 (3:61ec). Level seven's own site 5:09a0/0a74/0b68 is in
+the exported drawing.
+
+## Levels Eight And Nine (2026-10-24)
+
+Both use environment 4 with Ruins.rsrc and open after level seven: LEVL
+2007 starts in native room 16 and 2008 in room 10, both with the ordinary
+standing entry (SetKidDefaults 2:5e34, SEQS 5). Levels seven and eight
+continue through CheckPlayNIS (tree scenes); level nine stops before NIS 2
+and the temple. Their exports (`ruins_level8/9.json`) need a reimport.
+Level nine's room 16 has two scythes read by one slot; the slot export now
+stores tables that never change once, which keeps it small. Heads and
+serpents are still not generated (`docs/research/ruins-head-leaves.md`).
+
+## Crevice Reveal Drawing And Crawling (2026-10-24)
+
+User report: an uncovered crevice showed the wrong wall art. RuinSetCrevice
+Revealed (7:3404 -> 7:332a -> 7:344a) sets bit 0x80 on the run and, for each
+cell it uncovers, MarkRedraw (5:18f0 via 5:1936) if IsVisibleRoomCell
+(5:3960: the room itself, or column 9 of the left room, mapped -9), plus
+the cell right of a run end (low bits 0, column < 9). RedrawCell (3:1d3a)
+then repaints only those cells, with the full-room flag a5-0x4832 clear,
+over the displayed screen: the wall above the tunnel stays. The harness has
+this per-cell mode (`cell_redraw`); the slot export stores each crevice
+run's redraw (`redraws`), drawn over the covered run until the room is
+entered again, when the whole room is redrawn natively (with the revealed
+backdrop). Older exports keep the whole-room drawing; reimport needed.
+
+Crawling: the port's rules match the original's code. A prone body passes
+any crevice whose low bits are not 3, covered or not (CheckCollide 4:5ade:
+shape height a5-0x3560 <= 34); lying down (GenCtrl 6:0a4e-0b28) first moves
+a left-facing Prince to at least 34 pixels right of the crevice's column.
+From there SEQS 125's frame 259 (35 pixels high, so still a wall) reaches
+the barrier GetRightBarr = column x + 22 + 50 when the Prince had walked
+flush against the crack (a repeated bump, SEQS 47); from one step back
+(standing left edge >= 104 in native room 18) he lies down and crawls
+through. Whether the original also bumps from flush is unverified in play.
+
+## Remaining Steps
+
+1. Heads and serpents: level six has special opponents in rooms 4, 7, 16,
+   20 and 25 (native numbering); `GuardSpawn` rejects them, so the level is
+   currently empty of enemies. Codex's level-seven notes cover their
+   selection, initialization, frames and idle/movement rules.
+2. The start room's leave hook `7:37b6` and the retained cliff image when
+   walking left from the start (to compare with the original).
+3. Sword type 2 graphics (S03_5A4E) and the two shake images per parity.
+
+Cutscene 1 between levels five and six is now implemented; see
+`level5-native-rules.md`, "Cutscene 1: NISCarpet", including the unresolved
+music-cue continuity. Updated installations need the new scene resources.

@@ -64,6 +64,7 @@ class AttractSceneTests(unittest.TestCase):
 
         playback = Mock()
         playback.busy.return_value = False
+        playback.playing_effects.return_value = ()
         audio = AudioEngine(playback=playback)
         self.scene.audio = audio
         audio.set_music_enabled(False)
@@ -265,6 +266,7 @@ class AttractSceneTests(unittest.TestCase):
         scene = self.scene
         playback = Mock()
         playback.busy.return_value = False
+        playback.playing_effects.return_value = ()
         scene.audio = AudioEngine(playback=playback)
         parts = scene.development_parts()
         for stage in ("intro", "demo", "credits", "ending", "discovery"):

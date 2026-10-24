@@ -10,6 +10,8 @@ from PIL import Image
 
 from pop2.bitmap_presenter import CanvasBitmap
 
+from tests.desktop import exclusive_desktop
+
 
 class CanvasBitmapTests(unittest.TestCase):
     def test_reuses_bitmap_and_coalesces_idle_paints(self):
@@ -46,6 +48,7 @@ class CanvasBitmapTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform == "win32" and not os.environ.get("CI"), "Interactive Windows desktop required")
 class CanvasBitmapIntegrationTests(unittest.TestCase):
+    @exclusive_desktop('a mapped, focused fullscreen window')
     def test_fullscreen_pixels_exposure_and_return_to_tk_presentation(self):
         result = subprocess.run([sys.executable, "-c", textwrap.dedent("""
             import ctypes

@@ -11,6 +11,7 @@ from pop2.pressure_plates import PressurePlates
 from pop2.potions import Potions
 from pop2.wall_spikes import WallSpikes
 from pop2.gate_crush import GateCrush
+from pop2.scythes import Scythes
 
 
 @dataclass
@@ -28,6 +29,9 @@ class CavernState:
     crush: GateCrush = field(default_factory=GateCrush)
     bridge: Bridge = field(default_factory=Bridge)
     carpet: Carpet = field(default_factory=Carpet)
+    scythes: Scythes = field(default_factory=Scythes)
+    # Level seven entered by its upper door (alternate entry export).
+    alternate_entry: bool = False
     # a5-0x5008: the level-four relief countdown; -1 idle, -2 already used.
     phew_countdown: int = -1
 
@@ -53,12 +57,21 @@ class CavernState:
                 phase = (phase + 1) % 9
             self.torches[key] = (value & 0xfff0) | phase
 
-    def configure_entry(self, metadata):
+    def configure_level_entry(self, program, game):
+        # Level seven's upper door when level six was left at column >= 6.
+        alternate = program.get('alternate_entry') if game.ruins_entry == 2 else None
+        self.alternate_entry = alternate is not None
+        self.configure_entry(alternate or program.get('entry_exit'), game.level.start_room)
+
+    def configure_entry(self, metadata, start_room=None):
         if metadata is None:
             return
         self.entry_room, self.entry_cell = metadata['room'], metadata['cell']
         self.entry_frames = tuple((frame['phase'], tuple(frame['sounds'])) for frame in metadata['frames'])
-        self.entry_frame = 0
+        # FirstFrame only animates a door in the room the level starts in;
+        # level six's room-3 door waits, shut, for the cliff exit.
+        self.entry_frame = (0 if start_room is None or start_room == self.entry_room
+                            else len(self.entry_frames) - 1)
 
     def foreground(self, room, cell, value):
         if (room, cell) in self.potions.tiles:
@@ -66,6 +79,8 @@ class CavernState:
         value = self.potions.phases.get((room, cell), value)
         value = self.plates.foreground.get((room, cell), value)
         value = self.spikes.foreground.get((room, cell), value)
+        if (room, cell) in self.scythes.foreground:
+            value = (value & 0xff00) | self.scythes.foreground[room, cell]
         if (room, cell) in self.loose.tiles:
             kind, foreground = self.loose.tiles[room, cell]
             if kind == 19 and (room, cell) in self.torches:

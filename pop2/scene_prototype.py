@@ -53,13 +53,9 @@ from pop2.rebirth import RebirthSnapshot
 from pop2.story_progress import MESSAGE_FRAMES, StoryProgress
 from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
-from pop2.bridge import CREAK_SOUND, bridge_checked, bridge_sag, on_bridge
-from pop2.carpet import (
-    CARPET_ROOM, CARPET_TILE, CLOSED_SONG, CRASH_SEQUENCE, OPEN_SONG, RIDE_FRAME, SIT_SEQUENCE,
-    carpet_room,
-)
+from pop2.environments import environment_for
+from pop2.carpet import carpet_room
 from pop2.caverns import cavern_clip_top, cavern_exit_clip
-from pop2.loose_floors import floor_hits_actor
 from pop2.render_opening import (
     OPENING_FLOOR_Y,
     ROOF_GLASS_OFFSETS,
@@ -77,7 +73,17 @@ from pop2.render_opening import (
     kid_palette_for_level,
     load_resource_file,
 )
-from pop2.terrain import TerrainMotion, floor_y, floor_contact_x
+from pop2.opponent_generation import character_column
+from pop2.coordinates import column_left
+from pop2.terrain import PRONE_FRAMES, TerrainMotion, floor_y, floor_contact_x
+from pop2.crevices import (
+    CRAWL_BACK_SEQUENCE,
+    CRAWL_FORWARD_SEQUENCE,
+    CREVICE_TILE,
+    LIE_DOWN_SEQUENCE,
+    PRONE_IDLE_FRAME,
+    STAND_FROM_PRONE_SEQUENCE,
+)
 from pop2.game_ui import MacintoshFont
 from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS
 
@@ -96,7 +102,6 @@ CROUCH_SEQUENCES = {
     CROUCH_STEP_SEQUENCE, CROUCH_RISE_SEQUENCE,
 }
 JUMP_LANDING_SEQUENCE = 11
-DESERT_FAR_SHORE_SOUND_X = 0x30B
 RUN_SEGMENT_SEQUENCES = RUN_CYCLE_SEQUENCES | {
     RUNNING_DRIFT_SEQUENCE, RUNNING_TURN_SEQUENCE
 }
@@ -351,7 +356,7 @@ class ScenePrototype(WindowControls):
                                  self.frames, guard_art.frames)
             game.combat.guard_art = guard_art
         if game.caverns is not None and initialize_world:
-            game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'))
+            game.caverns.configure_level_entry(renderer.cavern_program, game)
             game.caverns.configure_torches(renderer.cavern_program.get('torches', {}))
             game.caverns.configure_lava(renderer.cavern_program.get('lava'))
         room = renderer.enter_room(game.room_id, game.caverns)
@@ -471,7 +476,7 @@ class ScenePrototype(WindowControls):
         try:
             renderer = LevelRenderer(game.level, preload_room=False)
             if game.caverns is not None:
-                game.caverns.configure_entry(renderer.cavern_program.get('entry_exit'))
+                game.caverns.configure_level_entry(renderer.cavern_program, game)
                 game.caverns.configure_torches(renderer.cavern_program.get('torches', {}))
                 game.caverns.configure_lava(renderer.cavern_program.get('lava'))
             room = renderer.enter_room(game.room_id, game.caverns)
@@ -509,13 +514,19 @@ class ScenePrototype(WindowControls):
         if not self.in_animation_tick:
             self.schedule_next_animation()
 
-    def load_level(self, number):
+    def load_level(self, number, keep_music=False):
         # Prepare the complete destination before replacing a running session.
-        game = GameSession.load(self.resources, number, self.terrain_enabled)
         previous = getattr(self, 'game', None)
+        # Only the level-six exit chooses level seven's entrance.
+        entry = (previous.ruins_entry if previous is not None and previous.level.number == 6
+                 and number == 7 else 1)
+        game = GameSession.load(self.resources, number, self.terrain_enabled, ruins_entry=entry)
         if previous is not None:
             # The campaign clock and tree stage survive level changes (2:5af2).
             game.story = previous.story
+            if previous.caverns is not None and game.caverns is not None:
+                # So does an upside-down world (a5-0x4fa8).
+                game.caverns.potions.flip_timer = previous.caverns.potions.flip_timer
         renderer = LevelRenderer(game.level)
         self.time_message, self.time_message_frames = None, 0
         self.bind_level(game, renderer)
@@ -525,7 +536,7 @@ class ScenePrototype(WindowControls):
         self.clear_keys(None)
         self.reset_level_controls()
         if self.audio is not None:
-            self.audio.reset()
+            self.audio.reset(keep_music=keep_music)
         if self.animation_after_id is not None:
             self.root.after_cancel(self.animation_after_id)
             self.animation_after_id = None
@@ -536,6 +547,8 @@ class ScenePrototype(WindowControls):
             self.schedule_next_animation()
 
     def set_key_state(self, key, pressed):
+        if key in ('up', 'down') and getattr(self, 'controls_flipped', False):
+            key = 'down' if key == 'up' else 'up'  # GenCtrl 4:3e1c, upside down.
         if self.paused:
             if self.gameplay_controls_available():
                 previous = getattr(self, f"{key}_held")
@@ -564,7 +577,8 @@ class ScenePrototype(WindowControls):
             setattr(self, f"{key}_held", pressed)
             if self.ledge_climbing and pressed and not previous:
                 if key == "ctrl":
-                    self.buffer_input(BufferedCommand("sword_draw"))
+                    if not self.sword_lost():
+                        self.buffer_input(BufferedCommand("sword_draw"))
                 elif key == "down" and not self.up_held:
                     self.buffer_input(BufferedCommand("crouch"))
             return "break"
@@ -616,8 +630,16 @@ class ScenePrototype(WindowControls):
             self.ctrl_held = pressed
         return "break"
 
+    def sword_lost(self):
+        combat = getattr(self, "combat", None)
+        return combat is not None and combat.player.sword_lost
+
     def queue_sword_action(self, kind):
         if self.sword_sheathing or self._combat_controls_locked():
+            return False
+        if kind == "sword_draw" and self.sword_lost():
+            # GenCtrl 6:0c70-0c86: without a sword (a5-0x503c == -1) Ctrl
+            # draws nothing.
             return False
         state = self.sequence_state
         # Port QoL: a rapid repeat during the first three attack poses must
@@ -877,7 +899,8 @@ class ScenePrototype(WindowControls):
     def resume_pause_controls(self):
         self.sample_keyboard()
         if (getattr(self, "paused_ctrl_request", False) and self.ctrl_held
-                and not self._combat_controls_locked() and not self.sword_sheathing):
+                and not self._combat_controls_locked() and not self.sword_sheathing
+                and (self.sword_drawn or not self.sword_lost())):
             self.buffer_input(BufferedCommand("sword_attack" if self.sword_drawn else "sword_draw"))
         self.paused_ctrl_request = False
 
@@ -1463,7 +1486,85 @@ class ScenePrototype(WindowControls):
             self.advance_animation_now()
         self.start_queue_grace(BufferedCommand("crouch"))
 
+    def crawl_cell(self, offset):
+        """GetCellsInFront 4:39fc (offset > 0) or the cell behind (4:3a48).
+
+        Returns the room-relative column and its tile, from the character
+        column of X (a5-0x504a), not the supporting foot.
+        """
+        state, motion = self.sequence_state, self.terrain_motion
+        column = character_column(state.target_x) + offset * (1 if state.facing else -1)
+        return column, self.level_map.tile(motion.room, column, motion.row)
+
+    def start_crawl(self):
+        # GenCtrl 6:0a4e-0b28: with Down still held, forward into a crevice
+        # (tile 7 whose low bits are not 3) or a scythe (12/13) lies down.
+        if not self.down_held or getattr(self, 'terrain_motion', None) is None:
+            return False
+        column, tile = self.crawl_cell(1)
+        if not (tile.kind in (12, 13) or tile.kind == CREVICE_TILE and tile.foreground & 3 != 3):
+            return False
+        state = self.sequence_state
+        # 6:0a92-0b24: actor X against the column table a5-0x4b88: at most
+        # 10 into that column facing right, at least 34 past its right edge
+        # facing left.
+        offset = state.target_x - column_left(column + (0 if state.facing else 1))
+        if state.facing and offset > 10:
+            state.target_x += 10 - offset
+        elif not state.facing and offset < 34:
+            state.target_x += 34 - offset
+        state.current_x = self.player_x = state.target_x
+        self.start_sequence(LIE_DOWN_SEQUENCE)
+        self.status.set("Lying down to crawl: original SEQS:125")
+        if not self.in_animation_tick:
+            self.advance_animation_now()
+        return True
+
+    def update_crawl(self):
+        """GenCtrl 6:07ee-0994 while prone (poses 246-261)."""
+        state, motion = self.sequence_state, self.terrain_motion
+        if (motion is None or motion.falling or motion.dead
+                or not PRONE_FRAMES[0] <= state.action <= PRONE_FRAMES[1]):
+            return False
+        self.pending_action = None
+        _column, own = self.crawl_cell(0)
+        _column, behind = self.crawl_cell(-1)
+        low = (CREVICE_TILE, 12, 13)
+        if not (own.kind in low or self.crawl_cell(1)[1].kind in low or behind.kind in low):
+            # 6:0884-0896: out of the low passage he stands up (SEQS 124).
+            if state.selected_sequence_id != STAND_FROM_PRONE_SEQUENCE:
+                self.start_sequence(STAND_FROM_PRONE_SEQUENCE)
+            return True
+        if state.action != PRONE_IDLE_FRAME:
+            return True
+        direction = 1 if state.facing else -1
+        if self.up_held and own.kind != CREVICE_TILE:
+            # 6:08a4-0942: Up stands only clear of a crevice behind him.
+            column = character_column(state.target_x)
+            if behind.kind == CREVICE_TILE:
+                clearance = (state.target_x - column_left(column) - 58 if state.facing else
+                             -14 - (state.target_x - column_left(column + 1)))
+            elif behind.kind in (12, 13):
+                # S05_5F1A: under an extended scythe (blade phase 3-15).
+                clearance = -51 if 3 <= behind.foreground & 0x1f <= 15 else 51
+            else:
+                clearance = 51
+            if clearance >= 0:
+                self.start_sequence(STAND_FROM_PRONE_SEQUENCE)
+                if clearance < 9:
+                    state.target_x += (9 - clearance) * direction
+                    state.current_x = self.player_x = state.target_x
+                return True
+        held = self.horizontal_input
+        if held and facing_for_direction(held) == state.facing:
+            self.start_sequence(CRAWL_FORWARD_SEQUENCE)  # 6:094e-0962
+        elif held:
+            self.start_sequence(CRAWL_BACK_SEQUENCE)  # 6:0966-097a
+        return True
+
     def start_crouch_step(self, direction):
+        if self.start_crawl():
+            return
         self.start_sequence(CROUCH_STEP_SEQUENCE)
         self.status.set("Crouch step: original SEQS:79")
         if not self.in_animation_tick:
@@ -1591,6 +1692,15 @@ class ScenePrototype(WindowControls):
                     and self.harbor.hanging_from_ship(self.room_id, self.sequence_state))
             sequence = (SHIP_CLIMB_SEQUENCE if ship else self.level_map.climb_sequence(
                 self.room_id, self.terrain_motion.row, self.sequence_state, self.frames[self.action]))
+            player = self.combat.player
+            if (not ship and self.game.level.number == 5 and self.room_id == 9
+                    and not player.sword_lost):
+                # DoClimbUp 6:19aa-19c4: climbing out in level five's room 10
+                # drops the sword (SEQS:236, a5-0x503c = -1); a low gate above
+                # still selects the failed climb afterwards.
+                player.sword_lost = True
+                if sequence == 10:
+                    sequence = 236
             self.start_sequence(sequence)
             self.status.set("Boarding the ship" if ship else
                             "Blocked climb: original SEQS:73" if sequence == 73 else
@@ -1762,6 +1872,8 @@ class ScenePrototype(WindowControls):
         if command.kind == "crouch" and was_running:
             return False
         self.pending_action = None
+        if command.kind == "sword_draw" and self.sword_lost():
+            return False
         if command.kind in SWORD_SEQUENCES:
             started = self.start_sword_action(command.kind)
             if not started:
@@ -1822,16 +1934,10 @@ class ScenePrototype(WindowControls):
             return
         if getattr(self, "level_complete", False):
             if self.game.exit is not None:
-                if self.harbor is not None:
-                    self.harbor.advance()
-                self.advance_exit_scenery()
+                environment = environment_for(self)
+                environment.exit_scenery()
                 if self.game.exit.advance(self.current_animation_interval_ms() / 1000, self.audio):
-                    if self.game.level.number == 3:
-                        self.start_discovery()
-                    elif self.game.level.number == 4:
-                        self.finish_level_four()
-                    else:
-                        self.start_ending()
+                    environment.finish_exit()
                 self.render()
             self.in_animation_tick = False
             self.schedule_next_animation()
@@ -1878,7 +1984,7 @@ class ScenePrototype(WindowControls):
             self.in_animation_tick = False
             self.schedule_next_animation()
             return
-        self.advance_cavern_floors()
+        environment_for(self).frame_start()
         if self.advance_story_clock():
             self.render()
             self.in_animation_tick = False
@@ -1894,45 +2000,23 @@ class ScenePrototype(WindowControls):
         old_x = self.sequence_state.target_x
         motion = getattr(self, "terrain_motion", None)
         old_bounds = self.player_collision_bounds() if motion is not None else None
-        self.update_carpet_controls()
+        environment_for(self).controls()
+        self.update_crawl()
         if self.update_potion_controls():
             frame = self.sequence_runtime.next_frame()
             self.action, self.player_x = frame.action, frame.target_x
             self.sequence_state.current_x = self.player_x
-            self.advance_terrain(old_x, old_bounds)
-            self.advance_combat()
-            self.advance_level_events()
-            self.advance_rebirth()
-            self.advance_audio()
-            self.render()
-            self.in_animation_tick = False
-            self.schedule_next_animation()
+            self.run_world_phases('potion', old_x, old_bounds)
             return
         if motion is not None and (motion.falling or motion.sinking or motion.dead):
             self.sequence_runtime.next_frame()
-            self.advance_terrain(old_x, old_bounds)
-            self.advance_combat()
-            self.advance_harbor()
-            self.advance_level_events()
-            self.advance_rebirth()
-            self.advance_audio()
-            self.render()
-            self.in_animation_tick = False
-            self.schedule_next_animation()
+            self.run_world_phases('falling', old_x, old_bounds)
             return
         if self._combat_controls_locked():
             # SwordCtrl may turn at a ready pose before the hurt sequence ends.
             self.resume_combat_turn()
             self.combat.advance_player_recovery()
-            self.advance_terrain(old_x, old_bounds)
-            self.advance_combat()
-            self.advance_harbor()
-            self.advance_level_events()
-            self.advance_rebirth()
-            self.advance_audio()
-            self.render()
-            self.in_animation_tick = False
-            self.schedule_next_animation()
+            self.run_world_phases('locked', old_x, old_bounds)
             return
         if self._opening_active():
             phase = self.opening.phase
@@ -1941,11 +2025,7 @@ class ScenePrototype(WindowControls):
                 self.sequence_state.sound_events.append(296)
             self.action = self.sequence_state.action
             self.player_x = self.sequence_state.target_x
-            self.advance_combat()
-            self.advance_audio()
-            self.render()
-            self.in_animation_tick = False
-            self.schedule_next_animation()
+            self.run_world_phases('opening', old_x, old_bounds)
             return
         self.update_fall_recovery_controls()
         self.update_running_jump_controls()
@@ -2059,15 +2139,36 @@ class ScenePrototype(WindowControls):
             motion.row += 1
             self.sequence_state.current_y -= TILE_HEIGHT
             self.physics.select(self.sequence_runtime, 23)
+        self.run_world_phases('ordinary', old_x, old_bounds, sweep_combat=True)
+
+    def run_world_phases(self, mode, old_x, old_bounds, sweep_combat=False):
+        """Run one tick's world phases (pop2.frame_phases) and end the tick."""
+        from pop2.frame_phases import WORLD_PHASES
+
+        motion = getattr(self, "terrain_motion", None)
         old_room = motion.room if motion is not None else None
-        self.advance_terrain(old_x, old_bounds)
-        # A room cut rebases X; it must not be swept as a cross-room jump.
-        self.advance_combat(old_x if motion is None or motion.room == old_room else None)
-        self.advance_harbor()
-        self.advance_level_events()
-        self.advance_rebirth()
-        self.advance_audio()
-        self.render()
+        trace = getattr(self, "frame_trace", None)
+        for phase in WORLD_PHASES[mode]:
+            if trace is not None:
+                trace.append((mode, phase))
+            if phase == 'terrain':
+                self.advance_terrain(old_x, old_bounds)
+            elif phase == 'combat':
+                # A room cut rebases X; it must not be swept as a cross-room jump.
+                swept = sweep_combat and (motion is None or motion.room == old_room)
+                self.advance_combat(old_x if swept else None)
+            elif phase == 'environment':
+                self.advance_environment()
+            elif phase == 'harbor':
+                environment_for(self).harbor_phase()
+            elif phase == 'level_events':
+                self.advance_level_events()
+            elif phase == 'rebirth':
+                self.advance_rebirth()
+            elif phase == 'audio':
+                self.advance_audio()
+            elif phase == 'render':
+                self.render()
         self.in_animation_tick = False
         self.schedule_next_animation()
 
@@ -2095,50 +2196,11 @@ class ScenePrototype(WindowControls):
                 and carpet_room(game.level.number, self.room_id)
                 and not self.combat.player.alive and self.sequence_state.sequence_mode == 10)
 
-    def update_carpet_controls(self):
-        caverns = self.game.caverns
-        motion, state = self.terrain_motion, self.sequence_state
-        if (caverns is None or motion is None or not carpet_room(self.game.level.number, motion.room)
-                or motion.falling):
-            return False
-        carpet = caverns.carpet
-        if state.action == 109 and state.source_sequence_id not in (17, 20) and self.combat.player.alive:
-            # GenCtrl 6:09b4-09fe: crouching on the carpet tile, or just right
-            # of it, sits down (8:14ae).
-            column = self.combat._supporting_column(self.combat.player)
-            if CARPET_TILE in (self.level_map.tile(motion.room, column, motion.row).kind,
-                               self.level_map.tile(motion.room, column - 1, motion.row).kind):
-                self.clear_keys(None)
-                self.physics.select(self.sequence_runtime, SIT_SEQUENCE)
-                state.target_x = state.current_x = self.player_x = carpet.sit_x(state.facing)
-                caverns.plates.songs.append(OPEN_SONG if self.cave_bars_open() else CLOSED_SONG)
-                return True
-        if state.action == RIDE_FRAME:
-            carpet.advance()  # DrawObjCarpet 8:11a4 counted the last drawing.
-            sound, crash, kill = carpet.sit(floor_y(motion.row) + state.current_y, self.cave_bars_open())
-            if sound is not None:
-                state.sound_events.append(sound)
-            if crash:
-                # 8:1456-1474: Y 39, hidden mode 10, SEQS 129.
-                state.current_y = 39 - floor_y(motion.row)
-                self.physics.select(self.sequence_runtime, CRASH_SEQUENCE)
-                state.sequence_mode = 10
-            if kill and self.combat.player.alive and not getattr(self, 'god_mode', False):
-                # 8:1486-1498: DecLifePts(100) and death method 9.
-                self.combat.player.life = 0
-                self.death.begin(9)
-                self.status.set("Defeated")
-        return False
-
-    def cave_bars_open(self):
-        # IsCaveBarsOpen 8:157a: tile (3, 6, 0) phase >= 3.
-        return self.level_map.tile(CARPET_ROOM, 6, 0).foreground & 7 >= 3
-
     def update_potion_controls(self):
         caverns = self.game.caverns
         if caverns is None:
             return False
-        from pop2.potions import pickup_target
+        from pop2.potions import SWORD_TILE, pickup_target
 
         potions, state, motion = caverns.potions, self.sequence_state, self.terrain_motion
         fresh_shift = self.shift_held and not potions.shift_was_held
@@ -2189,7 +2251,14 @@ class ScenePrototype(WindowControls):
         self.player_x = state.target_x + delta
         self.pending_action = None
         self.run_active = self.run_stop_requested = self.run_cycle_boundary_pending = False
-        if crouched:
+        if crouched and tile.kind == SWORD_TILE:
+            self.game.sword_type = potions.take_sword(tile)
+            # 6:1530-1572: the Prince has a sword again (a5-0x500a), with
+            # FindSwd (song 183).
+            self.combat.player.sword_lost = False
+            caverns.plates.songs.append(183)
+            self.start_sequence(91)
+        elif crouched:
             potions.take(tile)
             self.start_sequence(78)
         else:
@@ -2249,6 +2318,8 @@ class ScenePrototype(WindowControls):
         motion = getattr(self, "terrain_motion", None)
         if motion is None or self._opening_active():
             return
+        # StartFall reads the held left/right inputs (a5-0x3488/-0x3486).
+        self.physics.held_direction = getattr(self, "horizontal_input", 0)
         if self.native_ledge:
             # SEQS -3/-4 change the native floor row while -6 changes the
             # absolute Y. Preserve that position in our floor-relative model.
@@ -2277,6 +2348,8 @@ class ScenePrototype(WindowControls):
             self.jump_to_screen(destination)
             self.combat.player.life, self.combat.player.max_life = life, capacity
             return
+        if environment_for(self).room_crossed(old_room, motion.room):
+            return
         if motion.room != old_room:
             dx = self.sequence_state.target_x - before_x
             if motion.room not in self.room_cache:
@@ -2303,8 +2376,7 @@ class ScenePrototype(WindowControls):
             room = self.level_renderer.enter_room(self.room_id, self.game.caverns)
             self.background, self.foreground = room.background, room.foreground
             self.combat.enter_room(self.room_id, motion.row)
-            if self.harbor is not None:
-                self.harbor.enter_room(self.room_id, self.action)
+            environment_for(self).entered_room()
             self.status.set(f"Screen {self.screen_label(self.room_id)}")
         self.combat.player.row = motion.row
         for event in events:
@@ -2338,6 +2410,7 @@ class ScenePrototype(WindowControls):
                 if event.kind != "wall":
                     self.jump_started_for_press = False
             if event.kind == "death":
+                environment_for(self).player_died()
                 self.combat.player.life = 0
                 self.death.begin(event.death_method if event.death_method is not None
                                  else 3 if not motion.falling else 0)
@@ -2354,475 +2427,42 @@ class ScenePrototype(WindowControls):
         self.player_x = self.sequence_state.target_x
         self.sequence_state.current_x = self.player_x
 
-    def advance_harbor(self):
-        motion = getattr(self, "terrain_motion", None)
-        if motion is None or self.harbor is None:
-            return
-        state = self.sequence_state
-        if (state.sequence_id == SHIP_CLIMB_SEQUENCE
-                or self.harbor.hanging_from_ship(motion.room, state)):
-            state.target_x -= 2
-            state.current_x = state.target_x
-        self.harbor.advance()
-        if (not motion.dead and not getattr(self, 'god_mode', False)
-                and self.harbor.right_exit_is_fatal(motion.room, state)):
-            self.clear_keys(None)
-            motion.dead, motion.falling = True, False
-            self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
-            state.horizontal_velocity = state.vertical_velocity = 0
-            state.sound_events.append(34)
-            self.physics.select(self.sequence_runtime, 71)
-            self.combat.player.life = 0
-            self.death.begin(14)
-            self.status.set("Defeated")
-        bounds = self.player_bounds()
-        if not motion.dead and not getattr(self, 'god_mode', False) and self.harbor.watch_water(
-                0, motion.room, motion.row, state, bounds[2] - bounds[0] + 1):
-            self.clear_keys(None)
-            self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
-            motion.dead = True
-            motion.falling = False
-            state.horizontal_velocity = state.vertical_velocity = 0
-            state.animation_state, state.action = 1, 185
-            state.selected_sequence_id = 22
-            state.sequence_id, state.cursor = 22, len(self.sequences[22]) - 1
-            self.combat.player.life = 0
-            self.death.begin(15)
-            self.status.set("Defeated")
-        if not self.peaceful:
-            for guard in self.combat.active_guards():
-                if guard.terrain_motion is not None and not guard.terrain_motion.dead:
-                    bounds = self.guard_art.bounds(guard.state, floor_y(guard.row))
-                    if self.harbor.watch_water(id(guard), guard.room, guard.row, guard.state,
-                                               bounds[2] - bounds[0] + 1):
-                        guard.life = 0
-                        guard.targetable = False
-                        guard.terrain_motion.dead = True
-                        guard.state.horizontal_velocity = guard.state.vertical_velocity = 0
-                        guard.state.action, guard.state.animation_state = 185, 1
-                        guard.state.selected_sequence_id = 22
-                        guard.state.sequence_id, guard.state.cursor = 22, len(self.sequences[22]) - 1
-        self.player_x, self.action = state.target_x, state.action
+    def advance_environment(self):
+        environment_for(self).frame_hook()
 
-    def advance_cavern_floors(self):
-        caverns = self.game.caverns
-        if caverns is None:
-            return
-        for actor in (self.combat.player, *self.combat.active_guards()):
-            actor.state.hit_flash = False
-        self.sequence_state.sound_events.extend(caverns.spikes.advance(self.level_map, self.room_id))
-        self.sequence_state.sound_events.extend(caverns.plates.darts.advance(
-            self.level_map, self.room_id, self.player_collision_bounds(), self.sequence_state))
-        # FrameAdv 2:622c-6230 moves existing debris before AnimTrobs.
-        cues, blocks = caverns.loose.advance_falling(self.level_map, self.sequence_state,
-                                                    self.terrain_motion, self.frames[self.action])
-        self.sequence_state.sound_events.extend(cues)
-        for room, row in caverns.loose.shake_events:
-            self.combat.shake_bones(room, row)
-        caverns.loose.shake_events.clear()
-        actors = (self.combat.player, *self.combat.active_guards())
-        for block in blocks:
-            for actor in actors:
-                state, motion = actor.state, actor.terrain_motion
-                record = (self.frames[state.action] if actor is self.combat.player else
-                          self.guard_art.frames[guard_frame_index(state.action)])
-                if (motion is None or not floor_hits_actor(block, motion, state, record, actor.alive)
-                        or actor is self.combat.player and getattr(self, 'god_mode', False)
-                        or 5 <= state.action < 15 or state.action == 109
-                        or state.animation_state >= 2 and state.animation_state != 7
-                        or state.actor_type == 1):
-                    continue
-                # Crushed 6:28f0: one life for the Prince, fatal for an
-                # ordinary guard; survivors use SEQS:52, not sword recoil.
-                actor.life = max(0, actor.life - (1 if state.actor_type == 0 else 100))
-                state.current_y = 0
-                motion.falling = False
-                actor.recovering = actor.alive
-                if actor.skeleton is not None:
-                    actor.skeleton.collapse(actor, encounter=self.combat)
-                    actor.runtime.next_frame()
-                    continue
-                self.physics.select(actor.runtime, 52 if actor.alive else 22)
-                if actor.alive:
-                    state.sound_events.append(300)
-                else:
-                    motion.dead = True
-                    if actor is self.combat.player:
-                        self.death.begin(3)
-                if actor is self.combat.player:
-                    self.run_active = self.run_stop_requested = self.run_cycle_boundary_pending = False
-                    self.pending_action = None
-                    self.action, self.player_x = state.action, state.target_x
-        for room, cell, kind in caverns.loose.plate_events:
-            self.sequence_state.sound_events.extend(caverns.plates.impact(self.level_map, room, cell, kind))
-        caverns.loose.plate_events.clear()
-        caverns.loose.advance_tiles(self.level_map)
-        self.sequence_state.sound_events.extend(caverns.plates.advance(
-            self.level_map, self.sequence_state, self.terrain_motion, self.frames[self.action]))
-        self.advance_relief(caverns)
-        stopped = set(caverns.plates.stopped_sounds)
-        if stopped:
-            self.sequence_state.sound_events[:] = [
-                cue for cue in self.sequence_state.sound_events if cue not in stopped]
-        if getattr(self, "audio", None) is not None:
-            for cue in caverns.plates.stopped_sounds:
-                self.audio.stop_sound(cue)
-        caverns.plates.stopped_sounds.clear()
+    def world_flipped(self):
+        caverns = getattr(getattr(self, 'game', None), 'caverns', None)
+        return caverns is not None and caverns.potions.flipped
 
-    def shut_out_opponents(self, room, cell):
-        # 5:4766-489c: in level four, a slammed gate in the Prince's room and
-        # row, under five columns away, with the living opponents of that row
-        # all on its far side.
-        motion = self.terrain_motion
-        if (self.game.level.number != 4 or self.game.caverns.phew_countdown == -2
-                or motion is None or room != motion.room or cell // 10 != motion.row):
-            return False
-        from pop2.combat import _native_alive
-
-        gate, prince = cell % 10, self.combat._supporting_column(self.combat.player)
-        if abs(gate - prince) >= 5:
-            return False
-        result = False
-        for guard in self.combat.active_guards():
-            if guard.row != motion.row or guard.room != room or not _native_alive(guard):
-                continue
-            column = self.combat._supporting_column(guard)
-            if (column <= gate) if gate < prince else (column > gate):
-                result = True
-            else:
-                return False
-        return result
-
-    def advance_relief(self, caverns):
-        for room, cell in caverns.plates.slams:
-            if self.shut_out_opponents(room, cell):
-                caverns.phew_countdown = 4
-        # FrameAdv 2:640c-6446: when the countdown reaches zero, a living
-        # Prince outside modes 3/4 sighs (sound 110) once per level.
-        countdown = caverns.phew_countdown
-        if countdown < 0:
-            return
-        state = self.sequence_state
-        if countdown == 0 and self.combat.player.alive and state.animation_state not in (3, 4):
-            state.sound_events.append(110)
-            caverns.phew_countdown = -2
-        else:
-            caverns.phew_countdown -= 1
-
-    def advance_exit_scenery(self):
-        # The main loop (2:6100-6134) still runs FrameAdv while the exit song
-        # plays, so flasks, lava, torches and moving gates keep animating.
-        caverns = self.game.caverns
-        if caverns is None or getattr(self, "level_map", None) is None:
-            return
-        from pop2.caverns import cavern_flask_instances
-
-        program = self.level_renderer.cavern_program
-        state = self.sequence_state
-        caverns.potions.advance((tile.room, tile.row * 10 + tile.column)
-            for _command, tile in cavern_flask_instances(program, self.room_id, self.level_map))
-        caverns.lava.enter_room(self.room_id, program.get('lava', {}).get('rooms', {}).get(str(self.room_id), ()))
-        state.sound_events.extend(caverns.lava.advance())
-        state.sound_events.extend(caverns.spikes.advance(self.level_map, self.room_id))
-        state.sound_events.extend(caverns.plates.advance(self.level_map))
-        caverns.advance_torches(program.get('torches', {}).get(str(self.room_id), ()))
-        room = self.level_renderer.enter_room(self.room_id, caverns)
-        self.background, self.foreground = room.background, room.foreground
-        if getattr(self, "audio", None) is not None:
-            self.audio.drain(state)
-        else:
-            state.sound_events.clear()
-
-    def bridge_draw_sag(self, actor):
-        # 8:063e lowers a character standing on a plank by its sag; the port
-        # applies it to drawing only.
-        game = getattr(self, "game", None)
-        motion = getattr(actor, "terrain_motion", None)
-        if (getattr(game, "caverns", None) is None or motion is None or game.level.number != 5
-                or getattr(self, "level_map", None) is None or motion.falling):
-            return 0
-        return bridge_sag(self.level_map, motion.room, self.combat._supporting_column(actor),
-                          motion.row, actor.state.action)
-
-    def bridge_column(self, actor):
-        # The stored cell (+0xc/+0xe) used by 8:04e6, or None off the bridge.
-        motion = actor.terrain_motion
-        if motion is None:
-            return None
-        column = self.combat._supporting_column(actor)
-        return column if on_bridge(self.level_map, motion.room, column, motion.row) else None
-
-    def advance_bridge(self):
-        bridge = self.game.caverns.bridge
-        bridge.advance_planks()
-        entered = self.room_id != getattr(self, 'bridge_last_room', None)
-        self.bridge_last_room = self.room_id
-        if entered and self.game.level.number == 5 and self.room_id == 9:
-            # Room 10's CUST enter hook MarkBrgFloorsForChars (8:050e-0516,
-            # table a5-0x4c2e kind 33) clears the break counter.
-            bridge.counter = 0
-        if not bridge_checked(self.game.level.number, self.room_id) or self.combat is None:
-            return
-        state = self.sequence_state
-        prince = self.bridge_column(self.combat.player)
-        # 8:01f6-0206: standing (frame 15) or frame 185 does not count.
-        if state.action in (15, 185):
-            prince = None
-        # 8:0252-02a6: LoadShad(0) when the current room holds opponents.
-        opponent = next((guard for guard in self.combat.active_guards()
-                         if guard.bank_slot == 0), None)
-        opponent = self.bridge_column(opponent) if opponent is not None else None
-        audio = getattr(self, "audio", None)
-        playing = audio is not None and audio.sound_playing(CREAK_SOUND)
-        state.sound_events.extend(bridge.creak(prince, opponent, playing))
-        sounds, push = bridge.check_break(prince, opponent, state.source_sequence_id)
-        state.sound_events.extend(sounds)
-        motion = self.terrain_motion
-        if push and motion is not None and state.facing:
-            # 8:0134-0150: LoadKid; a Prince in column <= 4 facing right moves
-            # AddCharX(17).
-            if self.combat._supporting_column(self.combat.player) <= 4:
-                state.target_x += 17
-                state.current_x = self.player_x = state.target_x
-
-    def check_cavern_spikes(self):
-        spikes = self.game.caverns.spikes
-        for actor in (self.combat.player, *self.combat.active_guards()):
-            state, motion = actor.state, actor.terrain_motion
-            if motion is None:
-                continue
-            player = actor is self.combat.player
-            record = (self.frames[state.action] if player else
-                      self.guard_art.frames[guard_frame_index(state.action)])
-            bounds = self.player_bounds() if player else self.guard_art.bounds(state, floor_y(motion.row))
-            spikes.approach(self.level_map, motion, state, record, bounds, actor.sword_drawn)
-            if player and getattr(self, 'god_mode', False):
-                continue
-            collision = (self.player_collision_bounds() if player else
-                         self.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
-            hit = spikes.contact(self.level_map, motion, state, record, collision,
-                                 actor.alive, actor.sword_drawn)
-            if hit is None:
-                continue
-            sequence, state.target_x = hit
-            state.current_x = state.target_x
-            state.current_y = state.horizontal_velocity = state.vertical_velocity = 0
-            state.facing = 0
-            actor.life, actor.recovering = 0, False
-            motion.dead, motion.falling = True, False
-            if not player:
-                sequence = 189 if sequence == 54 else 188
-                actor.targetable = False
-            self.physics.select(actor.runtime, sequence)
-            state.sound_events.append(281)
-            if player:
-                self.clear_keys(None)
-                self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
-                self.death.begin(4)
-                self.death.music_method = 4
-                self.action, self.player_x = state.action, state.target_x
-                self.status.set('Defeated')
-
-    def check_cavern_darts(self):
-        from pop2.darts import dart_death
-
-        darts = self.game.caverns.plates.darts
-        for actor in (self.combat.player, *self.combat.active_guards()):
-            state, motion = actor.state, actor.terrain_motion
-            if motion is None:
-                continue
-            player = actor is self.combat.player
-            bounds = (self.player_collision_bounds() if player else
-                      self.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
-            if not darts.contacts(motion.room, state, bounds) or not actor.alive:
-                continue
-            if player and getattr(self, 'god_mode', False):
-                continue
-            # DoCharHurt stores the maximum pending wound, not one life per
-            # projectile when multiple darts contact the actor in one update.
-            actor.life -= 1
-            state.hit_flash = True
-            if actor.alive:
-                # A nonfatal dart does not select a hurt pose or stop a run.
-                state.sound_events.extend((29 if player else 59, 66))
-                continue
-            if actor.skeleton is not None:
-                actor.skeleton.collapse(actor, encounter=self.combat)
-                actor.runtime.next_frame()
-                state.sound_events.append(66)
-                continue
-            record = (self.frames[state.action] if player else
-                      self.guard_art.frames[guard_frame_index(state.action)])
-            sequence, offset = dart_death(self.level_map, motion, state, record)
-            state.target_x += offset
-            state.current_x = state.target_x
-            state.current_y = state.vertical_velocity = 0
-            if sequence == 18:
-                motion.row += 1
-                state.current_y -= TILE_HEIGHT
-            motion.dead, motion.falling = sequence != 18, sequence == 18
-            motion.hit_fall = sequence == 18
-            actor.recovering = False
-            self.physics.select(actor.runtime, sequence)
-            if sequence == 98:
-                state.sound_events.append(12)
-            state.sound_events.append(66)
-            if player:
-                self.clear_keys(None)
-                self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
-                self.death.begin(0)
-                self.death.music_method = 0
-                self.action, self.player_x = state.action, state.target_x
-                self.status.set('Defeated')
-            else:
-                actor.row = motion.row
-                actor.targetable = False
+    def sync_flipped_controls(self):
+        # GenCtrl 4:3da6-3dcc (4:3e1c) swaps Up and Down while the world is
+        # upside down; swap the held keys when it turns or rights itself.
+        flipped = self.world_flipped()
+        if flipped != getattr(self, 'controls_flipped', False):
+            self.controls_flipped = flipped
+            self.up_held, self.down_held = self.down_held, self.up_held
 
     def advance_level_events(self):
-        if self.game.caverns is not None:
-            from pop2.caverns import cavern_flask_instances
-
-            potions = self.game.caverns.potions
-            potions.consume_events(self.sequence_state, self.combat.player)
-            potions.advance_float()
-            self.sequence_state.floating = potions.floating
-            if potions.fatal:
-                potions.fatal = False
-                motion = self.terrain_motion
-                self.clear_keys(None)
-                self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
-                if motion is not None:
-                    motion.dead, motion.falling = True, False
-                self.sequence_state.horizontal_velocity = self.sequence_state.vertical_velocity = 0
-                self.physics.select(self.sequence_runtime, 71)
-                self.death.begin(3)
-                self.status.set("Defeated")
-            potions.advance((tile.room, tile.row * 10 + tile.column)
-                for _command, tile in cavern_flask_instances(
-                    self.level_renderer.cavern_program, self.room_id, self.level_map))
-            lava = self.game.caverns.lava
-            lava.enter_room(self.room_id, self.level_renderer.cavern_program.get(
-                'lava', {}).get('rooms', {}).get(str(self.room_id), ()))
-            self.sequence_state.sound_events.extend(lava.advance())
-            pool = (lava.contact(self.level_map, self.terrain_motion, self.sequence_state,
-                                 self.frames[self.action], landed=self.terrain_motion.lava_landing)
-                    if self.terrain_motion is not None else None)
-            if self.terrain_motion is not None:
-                self.terrain_motion.lava_landing = False
-            if pool is not None and not getattr(self, 'god_mode', False):
-                state, motion = self.sequence_state, self.terrain_motion
-                sequence, cue = pool.begin_death(state.animation_state, state.facing)
-                self.clear_keys(None)
-                self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
-                motion.dead, motion.falling = True, False
-                state.horizontal_velocity = state.vertical_velocity = 0
-                self.combat.player.life = 0
-                self.death.begin(5)
-                self.physics.select(self.sequence_runtime, sequence)
-                self.death.music_method = state.death_song_method
-                state.sound_events.append(cue)
-                self.action, self.player_x = state.action, state.target_x
-                self.status.set('Defeated')
-            loose = self.game.caverns.loose
-            for guard in self.combat.active_guards():
-                if guard.skeleton is None or not guard.alive or guard.terrain_motion is None:
-                    continue
-                state, motion = guard.state, guard.terrain_motion
-                pool = lava.contact(self.level_map, motion, state,
-                    self.guard_art.frames[guard_frame_index(state.action)], landed=motion.lava_landing)
-                motion.lava_landing = False
-                if pool is not None:
-                    sequence, cue = pool.begin_death(state.animation_state, state.facing, actor_type=4)
-                    guard.life, guard.targetable = 0, False
-                    guard.skeleton.phase = 'lava'
-                    motion.dead, motion.falling = True, False
-                    state.horizontal_velocity = state.vertical_velocity = 0
-                    self.physics.select(guard.runtime, sequence)
-                    state.sound_events.append(cue)
-            state, motion = self.sequence_state, self.terrain_motion
-            if motion is not None:
-                state.sound_events.extend(loose.press(self.level_map, motion, state, self.frames[state.action]))
-                state.sound_events.extend(self.game.caverns.plates.press(
-                    self.level_map, motion, state, self.frames[state.action], self.combat.player.alive))
-                for guard in self.combat.active_guards():
-                    if guard.terrain_motion is not None:
-                        guard.state.sound_events.extend(loose.press(self.level_map, guard.terrain_motion,
-                            guard.state, self.guard_art.frames[guard_frame_index(guard.state.action)]))
-                        guard.state.sound_events.extend(self.game.caverns.plates.press(
-                            self.level_map, guard.terrain_motion, guard.state,
-                            self.guard_art.frames[guard_frame_index(guard.state.action)], guard.alive))
-                shakes = [event for event in state.sequence_events if event[0] in (-12, -13)]
-                if shakes:
-                    # CheckAlert 2:6c1c consumes one scalar request; a later
-                    # SEQS shake operation replaces an earlier one.
-                    row = motion.row - int(shakes[-1][0] == -12)
-                    state.sound_events.extend(loose.shake_row(self.level_map, motion.room, row,
-                                                             state, motion, self.frames[state.action]))
-                    for event in shakes:
-                        state.sequence_events.remove(event)
-            for room, row in loose.shake_events:
-                self.combat.shake_bones(room, row)
-            loose.shake_events.clear()
-            self.check_cavern_darts()
-            self.check_cavern_spikes()
-            self.advance_bridge()
-            self.game.caverns.crush.advance(self.level_map, motion, state,
-                                           self.frames[state.action], self.game.caverns.plates,
-                                           now=time.perf_counter())
-            self.sequence_state.sound_events.extend(self.game.caverns.advance())
-            self.game.caverns.advance_torches(
-                self.level_renderer.cavern_program.get('torches', {}).get(str(self.room_id), ()))
-            room = self.level_renderer.enter_room(self.room_id, self.game.caverns)
-            self.background, self.foreground = room.background, room.foreground
-        desert = getattr(self.game, "desert", None)
-        if desert is not None and self.terrain_motion is not None:
-            cues = desert.advance(self.room_id, self.sequence_state, self.frames[self.action],
-                                  self.combat is None or self.combat.player.alive,
-                                  audio=self.audio)
-            for cue in cues:
-                if cue in (46, 47, 49, 50) and self.audio is not None:
-                    if cue == 50:
-                        if self.audio.music_enabled:
-                            self.audio.add_song(cue, ambient=True)
-                    else:
-                        self.audio.add_song(cue)
-                else:
-                    self.sequence_state.sound_events.append(cue)
-            entering_cavern = self.room_id == 0 and desert.exit_open and self.player_x < 0
-            if (entering_cavern and getattr(self, "copy_protection_enabled", True)
-                    and not getattr(self, "copy_verified", False)):
-                from pop2.copy_protection import CopyProtection
-
-                self.copy_challenge = CopyProtection(self.resources.prince)
-                self.last_copy_at = None
-                self.update_cursor_visibility()
-                self.clear_keys(None)
-                self.pause_resume_keys.update(self.window_keys_down)
-            if entering_cavern and getattr(self, "copy_challenge", None) is None:
-                max_life = self.combat.player.max_life
-                self.load_level(3)
-                self.combat.player.life = self.combat.player.max_life = max_life
-                return
-            if self.room_id == 2 and self.player_x >= DESERT_FAR_SHORE_SOUND_X:
-                self.sequence_state.current_x = self.sequence_state.target_x = (
-                    DESERT_FAR_SHORE_SOUND_X
-                )
-                self.player_x = DESERT_FAR_SHORE_SOUND_X
-                self.clear_keys(None)
-                self.start_sequence(IDLE_SEQUENCE)
+        if environment_for(self).level_events():
+            return
         if self.game.consume_completion():
-            if self.game.level.number in (1, 3, 4, 5):
+            if self.game.level.number == 6:
+                self.game.ruins_entry = environment_for(self).exit_entry()
+            if self.game.level.number in (1, 3, 4, 5, 6, 7):
                 import json
                 from pop2.level_transition import LevelExit
                 from pop2.paths import ASSET_DIR
 
-                # GetEndSong 5:4e0c selects 32 for rooftop and cavern exits.
-                cues = (self.audio.cues if self.audio is not None else
-                        {int(key): item for key, item in json.loads(
-                            (ASSET_DIR / "audio/manifest.json").read_text(encoding="ascii"))["cues"].items()})
-                self.game.exit = LevelExit(32, cues[32]["duration"])
-                if self.audio is not None:
-                    self.audio.add_song(32)
+                song = environment_for(self).exit_song()
+                if song is None:
+                    self.game.exit = LevelExit(None, 0)
+                else:
+                    cues = (self.audio.cues if self.audio is not None else
+                            {int(key): item for key, item in json.loads(
+                                (ASSET_DIR / "audio/manifest.json").read_text(encoding="ascii"))["cues"].items()})
+                    self.game.exit = LevelExit(song, cues[song]["duration"])
+                    if self.audio is not None:
+                        self.audio.add_song(song)
             self.clear_keys(None)
             self.status.set(f"Level {self.game.level.number} complete")
 
@@ -2957,14 +2597,8 @@ class ScenePrototype(WindowControls):
         if getattr(self, "intro", None) is not None:
             return
         audio = getattr(self, "audio", None)
-        if self.game.caverns is not None:
-            caverns = self.game.caverns
-            for cue in (*caverns.plates.songs, *caverns.potions.songs, *caverns.bridge.songs):
-                if audio is not None and not audio.song_playing(cue):
-                    audio.add_song(cue)
-            caverns.plates.songs.clear()
-            caverns.potions.songs.clear()
-            caverns.bridge.songs.clear()
+        environment = environment_for(self)
+        environment.queue_songs(audio)
         if audio is None:
             return
         if self.sequence_state.action == 167:
@@ -2983,63 +2617,8 @@ class ScenePrototype(WindowControls):
                         guard.state.sound_events.append(11)
                     audio.drain(guard.state, not self.peaceful and guard.room == self.room_id)
         motion = getattr(self, "terrain_motion", None)
-        if motion is not None and not self.level_complete and self.game.level.kind in (3, 5):
-            fighting = not self.peaceful and self.combat.opponent_to_fight()
-            contact = floor_contact_x(self.sequence_state.target_x,
-                                     self.sequence_state.facing, self.frames[self.action])
-            if self.game.level.kind == 3:
-                for guard in self.combat.guards:
-                    skeleton = guard.skeleton
-                    if (skeleton is not None and skeleton.victory_pending and not fighting
-                            and self.combat.player.alive and 0 < skeleton.timer < 116
-                            and not any(audio.sound_playing(cue) for cue in (61, 68, 69))):
-                        audio.add_song(63)
-                        skeleton.victory_pending = False
-                    if skeleton is not None and skeleton.rise_song_pending:
-                        # SkelDoneShaking 4:1b1c-1b30: AddSong(112) unless playing.
-                        if not audio.song_playing(112):
-                            audio.add_song(112)
-                        skeleton.rise_song_pending = False
-            # 5:5494-54c8: no new ambient while the first bank skeleton of an
-            # exit-guarded room is rising (88) or running (102/216).
-            from pop2.skeleton import exit_guarded
-
-            first = next(iter(self.combat.active_guards()), None)
-            chasing = (first is not None and first.skeleton is not None
-                       and exit_guarded(self.combat, first)
-                       and first.state.source_sequence_id in (88, 102, 216))
-            if not chasing:
-                # SpecialMusic 5:5398-53bc: BrgFight for fights in level five's
-                # bridge rooms 7, 10 and 12.
-                special = 119 if bridge_checked(self.game.level.number, self.room_id) else None
-                audio.ambient(self.room_id, motion.row, max(0, min(9, int(contact // 51))),
-                              fighting, self.combat.player.alive, special=special)
-        elif motion is not None and self.game.level.number == 2:
-            # DesertFunc 18:01ee checks PrinceSndOn(51) before queuing another wave.
-            # Cave cue 50 and puzzle cues 46/49 use AddSong instead.
-            if self.room_id == 0:
-                # 18:0212-0238 retains waves until desert song 50 starts.
-                if audio.song_playing(50):
-                    audio.stop_sound(51)
-                allow_song = not audio.song_playing(50)
-            else:
-                allow_song = self.game.desert.music_started
-                if not audio.sound_playing(51):
-                    audio.add_sound(51)
-                # DesertFunc 18:0334-0392 checks native room 3, X >= 0x30B,
-                # then gates cue 56 with Rnd(20) while it is not playing.
-                if (self.room_id == 2 and self.player_x >= DESERT_FAR_SHORE_SOUND_X
-                        and not audio.sound_playing(56)):
-                    if audio.rng.randrange(21) == 0:
-                        audio.add_sound(56)
-            # DesertFunc 18:023c-0278 retries only with no active stone,
-            # no playing song, a live actor outside mode 7 and inclusive Rnd(30)==0.
-            if (allow_song and audio.music_enabled and self.combat.player.alive
-                    and self.sequence_state.animation_state != 7 and not audio.music_busy
-                    and audio.rng.randrange(31) == 0
-                    and not any(stone.direction for stone in self.game.desert.stones)):
-                self.game.desert.music_started = True
-                audio.add_song(50, ambient=True)
+        if motion is not None:
+            environment.ambient_audio(audio, motion)
         audio.flush()
 
     def restart_after_death(self, *, preserve_controls=False):
@@ -3056,11 +2635,14 @@ class ScenePrototype(WindowControls):
         # RestartGame 2:5b66 asks CheckPlayNIS (2:0180) before every restart;
         # from level four it may select a tree scene (20..27 -> variants 1..8).
         scene = self.game.story.select_scene(level, level) if level >= 4 else None
-        self.restart_level_now()
-        if scene is not None and 20 <= scene <= 28:
+        tree_due = scene is not None and 20 <= scene <= 28
+        # Reset the world without flashing its entry frame before the NIS.
+        self.restart_level_now(redraw=not tree_due)
+        if tree_due:
             self.start_tree(scene - 19)
+            self.render()
 
-    def restart_level_now(self):
+    def restart_level_now(self, *, redraw=True):
         # FirstFrame 2:601e-6024 removes a time message at every level start;
         # the Prince initializer 2:5e9c also clears the float timer.
         self.time_message, self.time_message_frames = None, 0
@@ -3075,18 +2657,20 @@ class ScenePrototype(WindowControls):
                 initial = self.game.caverns.potions.starting_max_life
                 if initial is not None:
                     max_life = initial
-            self.restart_opening()
+            self.restart_opening(redraw=redraw)
             if max_life is not None:
                 self.combat.player.life = self.combat.player.max_life = max_life
-                self.render()
+                if redraw:
+                    self.render()
         else:
             if self.animation_after_id is not None:
                 self.root.after_cancel(self.animation_after_id)
                 self.animation_after_id = None
             snapshot.restore_world(self.combat)
+            self.game.arm_prince()
             point = snapshot.checkpoint
             self.jump_to_room(point.room, point.row, point.x, snapshot.facing,
-                              reset_guards=False, preserve_checkpoint=True)
+                              reset_guards=False, preserve_checkpoint=True, redraw=redraw)
             self.next_animation_at = time.perf_counter()
             if not self.in_animation_tick:
                 self.schedule_next_animation()
@@ -3337,21 +2921,61 @@ class ScenePrototype(WindowControls):
         self.last_intro_at = time.perf_counter()
         self.status.set('Tree')
 
+    def start_carpet(self):
+        # NISCarpet (15:1630): the flight from level five's caverns to the
+        # ruins' cliff. It ends like a tree scene, loading the next level.
+        from pop2.intro import IntroAssets, IntroPlayer
+
+        from pop2.carpet import OPEN_SONG
+        from pop2.intro import game_song
+
+        if getattr(self, 'carpet_assets', None) is None:
+            self.carpet_assets = IntroAssets(program_name='carpet.json')
+        music = None
+        if self.audio is not None:
+            played = self.audio.music_elapsed()
+            if (self.game.level.number == 5 and self.audio.current_music == OPEN_SONG
+                    and played is not None):
+                # 2:61ce-61ea skips ResetSoundItem after levels five and nine:
+                # FlyinRug, started when the Prince sat down, plays on and
+                # the scene's cue operations wait for its markers a and c.
+                music = OPEN_SONG, played, game_song(OPEN_SONG)
+        self.end_demo()
+        self.clear_keys(None)
+        self.attract_stage = 'tree'
+        self.tree_variant = None
+        if self.audio is not None and music is None:
+            self.audio.reset()
+        self.intro = IntroPlayer(self.carpet_assets, self.audio, music)
+        self.last_intro_at = time.perf_counter()
+        self.status.set('Carpet')
+
     def finish_level_four(self):
         # CheckPlayNIS(4, 5) (2:0180) shows the first tree scene here when no
         # level-four restart has, then RestartGame loads level five.
+        self.finish_level_via_story(4, 5)
+
+    def finish_level_via_story(self, previous, following):
+        # CheckPlayNIS (2:0180) may select a tree scene (20..27) before
+        # RestartGame loads the next level.
+        from pop2.paths import ASSET_DIR
+
         self.game.exit = None
-        scene = self.game.story.select_scene(4, 5)
+        scene = self.game.story.select_scene(previous, following)
         if scene is not None and 20 <= scene <= 27:
             self.game.complete = False
-            self.next_level_after_tree = 5
+            self.next_level_after_tree = following
             self.start_tree(scene - 19)
+        elif scene == 1 and (ASSET_DIR / 'carpet.json').is_file():
+            self.game.complete = False
+            self.next_level_after_tree = following
+            self.start_carpet()
         else:
-            self.enter_next_level(5)
+            self.enter_next_level(following)
 
-    def enter_next_level(self, number):
+    def enter_next_level(self, number, keep_music=False):
         max_life = self.combat.player.max_life if self.combat is not None else None
-        self.load_level(number)
+        self.load_level(number, keep_music=keep_music)
         if max_life is not None:
             self.combat.player.life = self.combat.player.max_life = max_life
             self.render()
@@ -3361,8 +2985,11 @@ class ScenePrototype(WindowControls):
         following = getattr(self, 'next_level_after_tree', None)
         self.next_level_after_tree = None
         if following is not None:
+            # FlyinRug, carried into the carpet scene, also plays on into
+            # level six (no ResetSoundItem after level five, 2:61ce-61ea).
+            keep_music = self.intro is not None and 0 in getattr(self.intro, 'carried_music', {})
             self.intro = self.attract_stage = None
-            self.enter_next_level(following)
+            self.enter_next_level(following, keep_music=keep_music)
             self.pause_resume_keys.update(held)
             return
         self.intro = self.attract_stage = None
@@ -3409,7 +3036,7 @@ class ScenePrototype(WindowControls):
             self.combat.player.life = self.combat.player.max_life = max_life
             self.render()
 
-    def restart_opening(self, _event=None, play_sound=True):
+    def restart_opening(self, _event=None, play_sound=True, *, redraw=True):
         self.copy_challenge = None
         self.end_demo()
         self.attract_stage = None
@@ -3425,7 +3052,7 @@ class ScenePrototype(WindowControls):
         self.clear_keys(None)
         self.game.restart()
         if self.game.caverns is not None:
-            self.game.caverns.configure_entry(self.level_renderer.cavern_program.get('entry_exit'))
+            self.game.caverns.configure_level_entry(self.level_renderer.cavern_program, self.game)
             self.game.caverns.configure_torches(self.level_renderer.cavern_program.get('torches', {}))
             self.game.caverns.configure_lava(self.level_renderer.cavern_program.get('lava'))
         self.reset_level_controls()
@@ -3438,7 +3065,8 @@ class ScenePrototype(WindowControls):
         self.status.set("Window escape" if self._opening_active() else f"Level {self.game.level.number}")
         if play_sound:
             self.advance_audio()
-        self.render()
+        if redraw:
+            self.render()
         self.next_animation_at = time.perf_counter()
         if not self.in_animation_tick:
             self.schedule_next_animation()
@@ -3472,7 +3100,7 @@ class ScenePrototype(WindowControls):
         return self.level_renderer.supported_rooms()
 
     def jump_to_room(self, room_id, row=1, x=None, facing=None, reset_guards=True,
-                     preserve_checkpoint=False):
+                     preserve_checkpoint=False, *, redraw=True):
         if self.level_map is None or not 0 <= room_id < 32 or not 0 <= row < 3:
             raise ValueError("Invalid level, room or floor")
         self.level_renderer.room(room_id, self.game.caverns)
@@ -3499,7 +3127,8 @@ class ScenePrototype(WindowControls):
             self.audio.reset()
             self.advance_audio()
         self.status.set(f"Level {self.game.level.number} / Screen {self.screen_label(room_id)}")
-        self.render()
+        if redraw:
+            self.render()
 
     def dev_screens(self):
         return self.level_renderer.screen_entries() if self.level_map is not None else {}
@@ -3511,7 +3140,11 @@ class ScenePrototype(WindowControls):
         from pop2.level_data import LevelDefinition
 
         options = []
-        for number in (1, 2, 3, 4, 5):
+        from pop2.caverns import scenery_available
+
+        for number in (1, 2, 3, 4, 5, 6, 7, 8, 9):
+            if number >= 6 and not scenery_available(number):
+                continue
             renderer = (self.level_renderer if self.game.level.number == number else
                         LevelRenderer(LevelDefinition.read(self.resources.prince, number),
                                       preload_room=False))
@@ -3574,8 +3207,9 @@ class ScenePrototype(WindowControls):
         elif self.game.level.kind == 3:
             from pop2.development_entry import cavern_entry
 
-            # Retain Room 21's useful lower-floor test entry.
-            preferred = 2 if self.game.level.number == 3 and room == 20 else None
+            # Retain Room 21's useful lower-floor test entry; level five's
+            # Room 3 starts on the upper platform beside the bars' plate.
+            preferred = {(3, 20): 2, (5, 2): 0}.get((self.game.level.number, room))
             row, column = cavern_entry(self.level_map, room, preferred_row=preferred)
             return self.jump_to_room(room, row=row, x=column * TILE_WIDTH + 30, facing=0)
         else:
@@ -3822,6 +3456,7 @@ class ScenePrototype(WindowControls):
             self.native_viewport = viewport
             self.present_viewport()
             return
+        environment = environment_for(self)
         frame = self.background.copy()
         frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor,
                     frame_number=self.combat.world_frame if self.combat is not None else 0,
@@ -3839,14 +3474,8 @@ class ScenePrototype(WindowControls):
             ), curtain)
         combat = getattr(self, "combat", None)
         motion = getattr(self, "terrain_motion", None)
-        if getattr(self.game, "caverns", None) is not None and motion is not None:
-            from pop2.caverns import draw_carpet
-
-            state = self.sequence_state
-            frame = draw_carpet(frame, self.room_id, self.game.caverns,
-                                (state.target_x, floor_y(motion.row) + state.current_y,
-                                 state.facing, state.action) if motion.room == self.room_id else None,
-                                level_number=self.game.level.number)
+        if motion is not None:
+            frame = environment.scenery_layer(frame, motion)
         frame = Image.alpha_composite(frame, self.foreground)
         self.level_renderer.remember_scenery(frame)
         hide_guards = getattr(self, "peaceful", False) and getattr(self, "demo", None) is None
@@ -3854,15 +3483,13 @@ class ScenePrototype(WindowControls):
         if combat is not None and not hide_guards:
             for guard in combat.visible_guards():
                 layer = Image.new("RGBA", frame.size)
-                ground = floor_y(guard.row) + self.bridge_draw_sag(guard)
+                ground = floor_y(guard.row) + environment.draw_sag(guard)
                 self.guard_art.draw(layer, guard.state, ground, guard.palette_variant)
                 bounds = self.guard_art.bounds(guard.state, ground)
                 record = self.guard_art.frames[guard_frame_index(guard.state.action)]
                 actors.append((guard.state, record, bounds, guard.row, layer))
         player_layer = Image.new("RGBA", frame.size)
-        draw_state, draw_height = self.sequence_state, None
-        if self.game.caverns is not None:
-            draw_state, draw_height = self.game.caverns.crush.actor(draw_state)
+        draw_state, draw_height = environment.drawn_player(self.sequence_state)
         draw_action = self.action if draw_height is None else draw_state.action
         sprite = self.player_sprite(draw_action)
         drawn_bounds = None
@@ -3879,7 +3506,7 @@ class ScenePrototype(WindowControls):
                 self.player_floor_y()
                 + record.offset_y
                 + draw_state.current_y
-                + (self.bridge_draw_sag(combat.player) if combat is not None else 0),
+                + (environment.draw_sag(combat.player) if combat is not None else 0),
                 sprite.height,
             )
             player_layer.paste(sprite, (x, y), sprite)
@@ -3907,17 +3534,13 @@ class ScenePrototype(WindowControls):
             for state, record, bounds, row, layer in actors:
                 frame = self.composite_actor(frame, layer, row, bounds[3], state, bounds, record)
             frame = self.composite_actor(frame, player_layer)
-        if (motion is not None and self.sequence_state.level_kind == 1
-                and self.sequence_state.source_sequence_id == 27
-                and player_bounds[1] < 227):
-            art = self.level_renderer.desert_rooms[self.room_id]
-            frame_number = self.combat.world_frame
-            frame = art.draw_sand(frame, frame_number, player_bounds)
+        if motion is not None:
+            frame = environment.after_actors(frame, player_bounds)
 
         if combat is not None:
             for guard in (() if hide_guards else combat.visible_guards()):
                 layer = Image.new("RGBA", frame.size)
-                ground = floor_y(guard.row) + self.bridge_draw_sag(guard)
+                ground = floor_y(guard.row) + environment.draw_sag(guard)
                 self.hit_art.draw(layer, guard.state, ground)
                 bounds = self.guard_art.bounds(guard.state, ground)
                 record = self.guard_art.frames[guard_frame_index(guard.state.action)]
@@ -3925,7 +3548,7 @@ class ScenePrototype(WindowControls):
                                              guard.state, bounds, record)
             layer = Image.new("RGBA", frame.size)
             self.hit_art.draw(layer, combat.player.state,
-                              self.player_floor_y() + self.bridge_draw_sag(combat.player))
+                              self.player_floor_y() + environment.draw_sag(combat.player))
             frame = self.composite_actor(frame, layer, motion.row if motion is not None else None,
                                          player_bounds[3] if player_bounds is not None else None,
                                          self.sequence_state, player_bounds, self.frames[self.action])
@@ -3938,10 +3561,15 @@ class ScenePrototype(WindowControls):
         frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor, front=True,
                                                   desert=getattr(self.game, "desert", None),
                                                   caverns=self.game.caverns)
+        if self.world_flipped():
+            # 2:5952-59de draws the game area (365 rows) upside down.
+            frame = ImageOps.flip(frame)
         viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
         viewport.paste(frame, (ROOM_ORIGIN_X, 0))
         if combat is not None and not self.death.prompt_visible:
-            self.health_art.draw(viewport, combat, show_opponent=not hide_guards)
+            player_life = environment.display_life(combat.player.life)
+            self.health_art.draw(viewport, combat, show_opponent=not hide_guards,
+                                 player_life=player_life)
         self.screenshot_viewport = viewport.copy()
         if self.death.prompt_visible:
             text = self.restart_text
@@ -3949,17 +3577,20 @@ class ScenePrototype(WindowControls):
             y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
             self.screenshot_viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, y), text)
         message = getattr(self, 'time_message', None)
-        hud_text = (self.pause_text if self.paused else
+        notice = getattr(self, 'audio_notice_text', None)
+        hud_text = (notice if notice is not None else
+                    self.pause_text if self.paused else
                     self.restart_text if self.death.prompt_visible else
                     self.ui_font.text(message, self.hud_text_color) if message else None)
         demo_paused = self.paused and getattr(self, "demo", None) is not None
         if (hud_text is not None and not demo_paused
                 and self.dev_menu is None and self.game_menu is None):
-            ink = hud_text.getbbox()
+            ink = (self.pause_text if notice is not None else hud_text).getbbox()
             pause_y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
             viewport.paste(hud_text, ((VIEWPORT_WIDTH - hud_text.width) // 2,
                                       pause_y), hud_text)
         if (self.level_complete and self.game.exit is None
+                and notice is None
                 and self.dev_menu is None and self.game_menu is None):
             text = self.ui_font.text(f"Level {self.game.level.number} Complete")
             viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, ROOM_HEIGHT), text)
