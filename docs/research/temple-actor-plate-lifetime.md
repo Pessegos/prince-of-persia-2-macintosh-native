@@ -77,5 +77,6 @@ compared-output digest is
 `f6b6ac621e56c12a10ce95071e834be1b593fef7cfce27f989c337f27df6a498`.
 All four LEVL hashes remain in the ignored report.
 
-Next: independently bound the permanent wrapper over all admitted plate
-sources, then recover target gate animation and connect mixed chains.
+The [independent permanent wrapper probe](temple-permanent-pressure.md) now
+checks its ordering/passthrough over all68 admitted source markers. Next:
+recover target gate animation and connect mixed chains.

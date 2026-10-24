@@ -229,3 +229,10 @@ executes5:252e's timer31-before-PushPlate ordering. Supporting-foot calculation,
 frame scheduling, target gate animation and reset/save remain separate.
 The constructor's X>510 branch and full movement/contact/presentation
 lifecycle remain open.
+
+[Permanent-pressure setup](temple-permanent-pressure.md) independently bounds
+the complete5:252e wrapper and timer setter over all68 admitted original
+plates plus explicit cache controls:1,304 comparisons pass. Timer31 precedes
+the explicit PushPlate(kind,index) call; the wrapper alone does not change
+the source depressed bit or banks. PushPlate is a request sink in this
+independent wrapper probe, not in the five-source connected lifecycle above.
