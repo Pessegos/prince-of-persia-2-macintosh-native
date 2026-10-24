@@ -441,11 +441,16 @@ class IntroPlayer:
             box = self.box(args[0])
             self.target.paste(self.background.crop(box), box[:2])
         elif op == "palette_at":
-            # SetKidPalette 3:5f1c: S03_508A loads Kid CTBL at entry 16.
+            # SetKidPalette 3:5f1c -> PoPSetPalette 3:508a(id, 16): RemapCTBL
+            # 17:6a78 renumbers the entries first, first + 1, ... unless the
+            # first one already has index `first`. Kid CTBLs store 1-16.
             resource_id, first = args
-            for index, color in self.assets.kid_palettes[resource_id].items():
-                if 0 <= index + first < 256:
-                    self.palette[index + first] = color
+            colors = self.assets.kid_palettes[resource_id]
+            if next(iter(colors), first) != first:
+                colors = {first + offset: color for offset, color in enumerate(colors.values())}
+            for index, color in colors.items():
+                if 0 <= index < 256:
+                    self.palette[index] = color
             self.changed()
         elif op == "palette":
             resource_id, flags, fade_flags = args

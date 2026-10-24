@@ -24,6 +24,24 @@ class CarpetExportTests(unittest.TestCase):
             ('copy', [[6, 5, 9, 9]]), ('copy', [[6, 8, 9, 12]]), ('wait', [3])])
 
 
+class KidPaletteTests(unittest.TestCase):
+    def test_kid_colours_are_renumbered_from_the_given_entry(self):
+        # PoPSetPalette 3:508a -> RemapCTBL 17:6a78: entries become 16, 17, ...
+        # The Kid CTBLs store indices 1-16, so entry 1 lands at 16, not 17.
+        from types import SimpleNamespace
+        from pop2.intro import IntroPlayer
+
+        player = IntroPlayer.__new__(IntroPlayer)
+        player.assets = SimpleNamespace(kid_palettes={25004: {1: (1, 1, 1), 2: (2, 2, 2), 16: (16, 16, 16)}})
+        player.palette = [(0, 0, 0)] * 256
+        player.changed = lambda: None
+        player.execute('palette_at', [25004, 16])
+        self.assertEqual(player.palette[15:19], [(0, 0, 0), (1, 1, 1), (2, 2, 2), (16, 16, 16)])
+        player.assets.kid_palettes[1] = {16: (5, 5, 5), 17: (6, 6, 6)}
+        player.execute('palette_at', [1, 16])
+        self.assertEqual(player.palette[16:18], [(5, 5, 5), (6, 6, 6)])
+
+
 @unittest.skipUnless((ASSET_DIR / 'carpet.json').is_file(), 'Imported carpet scene required')
 class CarpetSceneTests(unittest.TestCase):
     def test_the_scene_flies_over_the_sea_and_lands_on_the_cliff(self):
@@ -38,6 +56,9 @@ class CarpetSceneTests(unittest.TestCase):
         self.assertGreater(player.time, 20)
         ops = [item['op'] for item in assets.program['operations']]
         self.assertIn('palette_at', ops)
+        # The last screen's sprites use TNIS3's copy of the Kid colours at 16-31.
+        kid = list(assets.kid_palettes[25004].values())
+        self.assertEqual(player.palette[16:16 + len(kid)], kid)
         self.assertEqual(ops.count('save_background'), 3)
 
     def test_finishing_level_five_plays_the_carpet_scene_then_loads_level_six(self):
