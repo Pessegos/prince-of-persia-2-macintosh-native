@@ -294,3 +294,10 @@ full native AnimTrobs iteration/compaction between actor clip updates:
 full20 banks, stable compaction and duplicate-record controls are checked.
 First-cycle actor effects differ with the order, so this still does not
 choose an original FrameAdv cadence or establish physical falling/contact.
+
+[World/Prince callers](temple-world-prince.md) now replace that supplied
+schedule with actual2:6224/62e6 calls and actor save2:6472:8,528 persistent
+traces/34,112 world comparisons plus2,400 gravity controls pass. Animation,
+control-return, room0, invulnerability, countdown and cut/time guards are
+bounded. PlayerCtrl, geometry/contact, opponents and presentation/clock
+services remain supplied; this is not outer FrameAdv or physical gameplay.

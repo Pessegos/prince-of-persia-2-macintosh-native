@@ -196,6 +196,13 @@ bank bytes/order and actor effects pass in both supplied schedules, with
 different first-cycle results. Original FrameAdv order, reachable supplied
 banks/placements and physical fall/contact/death remain P.
 
+[World/Prince callers](research/temple-world-prince.md) extend R through
+actual2:6224/62e6, native gate-bank/clip/gravity and actor save2:6472:
+8,528 traces/34,112 world comparisons plus2,400 direct gravity controls,
+12 asset-free regressions. PlayerCtrl, geometry/contact/hazards, opponent
+and presentation/clock services are supplied. Outer FrameAdv, real controls,
+reachable placements, physical consequences and playable temple remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
