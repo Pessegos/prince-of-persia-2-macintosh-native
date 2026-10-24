@@ -21,7 +21,7 @@ def retouch_assets():
 
 
 def retouched_sprite(room, command, source):
-    if room not in (0, 1, 27) or len(command) < 8 or command[7] != 4:
+    if room not in (0, 1, 27, 29) or len(command) < 8 or command[7] != 4:
         return source
     key = (room, command[1], command[2], command[3], command[4])
     item = retouch_assets().get(key)

@@ -648,6 +648,126 @@
         134,
         217
       ]
+    },
+    {
+      "room": 29,
+      "shape": 3513,
+      "x": 142,
+      "bottom": 340,
+      "mode": 0,
+      "size": [
+        51,
+        120
+      ],
+      "source_rect": [
+        0,
+        67,
+        3,
+        88
+      ],
+      "source_sha256": "b377430e4d628f84af3bf9d54df00ae0864fe3822e0d89dba4ed7468c6450106",
+      "atlas_rect": [
+        0,
+        305,
+        3,
+        326
+      ]
+    },
+    {
+      "room": 29,
+      "shape": 3513,
+      "x": 448,
+      "bottom": 100,
+      "mode": 0,
+      "size": [
+        51,
+        120
+      ],
+      "source_rect": [
+        0,
+        48,
+        3,
+        114
+      ],
+      "source_sha256": "b377430e4d628f84af3bf9d54df00ae0864fe3822e0d89dba4ed7468c6450106",
+      "atlas_rect": [
+        4,
+        305,
+        7,
+        371
+      ]
+    },
+    {
+      "room": 29,
+      "shape": 3515,
+      "x": 91,
+      "bottom": 340,
+      "mode": 0,
+      "size": [
+        51,
+        120
+      ],
+      "source_rect": [
+        0,
+        49,
+        51,
+        87
+      ],
+      "source_sha256": "46bf377cc12d09e2c7472513a5563688d39a45b28a86e002584e00967ed6af9f",
+      "atlas_rect": [
+        8,
+        305,
+        59,
+        343
+      ]
+    },
+    {
+      "room": 29,
+      "shape": 3518,
+      "x": 40,
+      "bottom": 340,
+      "mode": 0,
+      "size": [
+        51,
+        120
+      ],
+      "source_rect": [
+        7,
+        47,
+        51,
+        78
+      ],
+      "source_sha256": "76eee9b8468609a735374fc9cfd993931818c8fc77a53dc993ae7335c931a57c",
+      "atlas_rect": [
+        60,
+        305,
+        104,
+        336
+      ]
+    },
+    {
+      "room": 29,
+      "shape": 3550,
+      "x": 408,
+      "bottom": 125,
+      "mode": 16,
+      "size": [
+        40,
+        146
+      ],
+      "source_rect": [
+        38,
+        49,
+        40,
+        115
+      ],
+      "source_sha256": "350e8a75269701fd5f1e26c11c38cae826136e2bedb1e98b2ddd169db2da4b65",
+      "atlas_rect": [
+        105,
+        305,
+        107,
+        371
+      ]
     }
   ]
 }
