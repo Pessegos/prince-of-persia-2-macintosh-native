@@ -236,3 +236,10 @@ plates plus explicit cache controls:1,304 comparisons pass. Timer31 precedes
 the explicit PushPlate(kind,index) call; the wrapper alone does not change
 the source depressed bit or banks. PushPlate is a request sink in this
 independent wrapper probe, not in the five-source connected lifecycle above.
+
+[Gate TROB animation](temple-gate-animation.md) now executes the temple's
+stored-kind4 dispatch, native DATA motion tables and bounded StopGate body:
+6,300 comparisons pass over all41 original anchors plus supplied position/
+phase/contact controls. Support calculation/contact geometry, cue playback
+and redraw remain supplied; actors are explicitly non-hanging. Mixed-chain
+lifetimes and real crush consequences remain separate integration gates.
