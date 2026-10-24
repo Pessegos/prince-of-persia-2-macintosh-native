@@ -49,7 +49,7 @@ bodies, gate motion and stable bank compaction are native, not request sinks.
 ## Evidence
 
 ```powershell
-.venv\Scripts\python.exe -m tools.probe_temple_mixed_lifetime --source ..\PoP2-Mac-Code-Recovery --output rendered\temple_mixed_lifetime_v1.json
+.venv\Scripts\python.exe -m tools.probe_temple_mixed_lifetime --source ..\PoP2-Mac-Code-Recovery --output rendered\temple_mixed_lifetime_v2.json
 .venv\Scripts\python.exe -m unittest -q tests.test_temple_mixed_lifetime_reference
 ```
 
@@ -57,14 +57,17 @@ bodies, gate motion and stable bank compaction are native, not request sinks.
 576 CheckPress calls and14,208 animation calls in120 traces. Every operation
 compares full level bytes, MOB/TROB banks including unused storage, scratch
 records, object/rock/pressure requests and arguments, OS scratch, press flag,
-pending-damage word, complete ordered reads/cache and current/saved actor
+relief-countdown word, complete ordered reads/cache and current/saved actor
 canaries. Final states include74 gates at0,40 at255 and6 at80; all120 traces
 end without TROBs under their supplied plans. Ten asset-free regressions
 cover the composed behavior and capacity consequences.
 
-Audio/redraw endpoints remain request sinks. Supporting-cache4:4b02 is a
-no-op and contact5:4766 returns supplied0:30 contact requests are observed
-but no real collision or crushing is claimed. Loose-floor/trapdoor sinks
+Audio/redraw endpoints remain request sinks. LoadKid4:4b02 is a no-op and
+the level4 relief predicate5:4766 returns supplied0:30 relief requests are
+observed, not collision checks. The initial v1 support/contact/damage labels
+were incorrect; v2 corrects the names without changing native transitions.
+The [real-service probe](temple-gate-services.md) separately executes both
+callees for bounded gate steps. Loose-floor/trapdoor sinks
 remain guarded and are not reached. The native rock **activation** body is
 executed; its movement/presentation dispatchers are not part of this trace.
 
@@ -77,8 +80,8 @@ Executable SHA256 is
 original level11 SHA256 is
 `3f3559f2d1dd4853098d9a812692a69a64fd86ac1ae677745f8fea6cdb6f1664`;
 compared-output digest is
-`9a9d77805c2d45e4af07aebea32fd4dceb7c62b689d82bb45d14917bf9753a2c`.
+`6901932fd123ca5cb477169f9748a7dd10bad1c4a02c7d163e828356b04bf274`.
 
-Next bounded work: recover gate contact/support calculations or connect
-rock motion to these mixed traces. Do not silently substitute a whole-game
-timing or damage model for the explicitly supplied endpoints.
+Next bounded work: connect real LoadKid to these persistent traces, followed
+by rock motion. Hanging reactions, geometry and whole-game timing require
+their own evidence; relief alone is not collision or damage evidence.

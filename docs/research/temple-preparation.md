@@ -240,9 +240,9 @@ independent wrapper probe, not in the five-source connected lifecycle above.
 [Gate TROB animation](temple-gate-animation.md) now executes the temple's
 stored-kind4 dispatch, native DATA motion tables and bounded StopGate body:
 6,300 comparisons pass over all41 original anchors plus supplied position/
-phase/contact controls. Support calculation/contact geometry, cue playback
-and redraw remain supplied; actors are explicitly non-hanging. Real crush
-consequences remain a separate integration gate.
+phase/forced relief controls. LoadKid, level4 relief return, cue playback
+and redraw remain supplied; actors are explicitly non-hanging. The relief
+countdown is not a damage word. Real crush consequences remain separate.
 
 [Mixed lifetimes](temple-mixed-lifetime.md) now connect real actor admission,
 both original level11 room3 link orders, source/target TROBs, gate motion and
@@ -250,3 +250,10 @@ stable compaction across120 traces/14,784 comparisons. The pressure cache,
 unused bank storage and actor canaries are preserved/checked at every step.
 Rock motion and actual support/contact geometry remain excluded, not inferred
 from passing the connected activation/animation trace.
+
+[Gate services](temple-gate-services.md) corrects the initial support/contact
+labels and executes the real LoadKid4:4b02 and level4 relief5:4766 bodies.
+11,361 comparisons pass, including3,075 connected original temple gate steps.
+LoadKid copies all62 saved actor bytes; relief rejects temple levels before
+looking at any opponent. Positive level4 controls use supplied actors/counts,
+not original level4 gameplay. Hanging reactions and full FrameAdv remain P.

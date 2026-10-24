@@ -35,14 +35,14 @@ def mixed_animation_step(state, reader):
             offset = 0x780 + (room - 1) * 120 + cell * 4
             foreground, tail = struct.unpack_from('>2H', reader.level, offset)
             raw_kind = struct.unpack_from('>H', reader.level, (room - 1) * 60 + cell * 2)[0]
-            gate = gate_animation_reference(foreground, phase, damage=state['damage'])
+            gate = gate_animation_reference(foreground, phase, relief_countdown=state['relief_countdown'])
             level = bytearray(reader.level)
             struct.pack_into('>H', level, offset, gate['foreground'])
             reader.level = bytes(level)
             events = [('visit', index, *record)]
             events.extend(('gate_' + event[0], *event[1:]) if event[0] in ('sound', 'redraw') else event
                           for event in gate['events'])
-            state = dict(state, trob_scratch=(cell, room, gate['phase'], kind), damage=gate['damage'],
+            state = dict(state, trob_scratch=(cell, room, gate['phase'], kind), relief_countdown=gate['relief_countdown'],
                          os=struct.pack('>3H', gate['foreground'], tail, raw_kind), events=state['events'] + events)
         else:
             plate = animate_record(reader.level, record, index)
@@ -78,12 +78,12 @@ class NativeMixedLifetime(NativeActorPlateLifetime):
         elif address == self.address(5, 0x0fe6):
             self.events.append(('gate_redraw', self.word(-0x4818) & 65535, self.word(-0x43ea)))
         elif address == self.address(4, 0x4b02):
-            self.events.append(('support_cache',))
+            self.events.append(('load_kid',))
         elif address == self.address(5, 0x4766):
-            self.events.append(('contact',))
+            self.events.append(('relief_check',))
         super().dispatch(cpu, address, size, user)
-        # NativeRules' supplied contact endpoint returns0: no geometry or crush
-        # is inferred in this connected mechanism scheduling experiment.
+        # The supplied level4 relief predicate returns0; this is not a
+        # collision/death predicate or evidence of crushing consequences.
 
 
 def run_probe(recovery):
@@ -118,7 +118,7 @@ def run_probe(recovery):
                      bank_storage=store_bank(bytes((i * 37 + 11) % 256 for i in range(512)), bank),
                      trobs=initial_trobs, trob_storage=bytes(storage), trob_scratch=(41, 43, 47, 53),
                      os=bytes((11, 13, 17, 19, 23, 29)), object_calls=[], rock_calls=[], events=[],
-                     press_flag=4321, pressure_requests=[], damage=1234)
+                     press_flag=4321, pressure_requests=[], relief_countdown=1234)
         machine.cpu.mem_write(machine.A5 - 0x44a6, struct.pack('>8h', *state['mob']))
         machine.cpu.mem_write(machine.BANK - 16, state['bank_storage'])
         machine.cpu.mem_write(machine.A5 - 0x4496, struct.pack('>I', machine.BANK))
@@ -152,10 +152,10 @@ def run_probe(recovery):
             reader.requests.clear()
             state = mixed_lifetime_step(dict(state, events=[], object_calls=[], rock_calls=[]), reader, operation, actor)
             machine.call(5, 0x0c38 if operation == 'animate' else 0x127e)
-            actual = dict(snapshot(machine), damage=machine.word(-0x5008))
+            actual = dict(snapshot(machine), relief_countdown=machine.word(-0x5008))
             service_names = {'sound': 'audio_request', 'redraw': 'plate_redraw', 'release_redraw': 'plate_redraw',
                              'gate_sound': 'gate_sound', 'gate_redraw': 'gate_redraw',
-                             'support_cache': 'support_cache', 'contact': 'contact'}
+                             'load_kid': 'load_kid', 'relief_check': 'relief_check'}
             expected_services = Counter(service_names[event[0]] for event in state['events'] if event[0] in service_names)
             if (actual != state or machine.services != expected_services
                     or machine.level_bytes(len(reader.level)) != reader.level
@@ -180,7 +180,7 @@ def run_probe(recovery):
                 outputs_sha256=digest.hexdigest(), executable_sha256=hashlib.sha256(executable).hexdigest(),
                 level_sha256=hashlib.sha256(original).hexdigest(), plans={k: list(v) for k, v in PLANS.items()},
                 supplied_services=['5:4d84 audio request', '5:0f38 plate redraw request', '5:3828 gate sound request',
-                                   '5:0fe6 gate redraw request', '4:4b02 support cache no-op', '5:4766 contact returns0',
+                                   '5:0fe6 gate redraw request', '4:4b02 LoadKid no-op', '5:4766 level4 relief returns0',
                                    '5:2710 loose-floor sink (not expected)', '7:36a0 trapdoor sink (not expected)'],
                 scope='Connected original level11 room3 open/close mixed plate links, actor admission, source/target '
                       'TROBs, gate motion and stable compaction with persistent level/MOB/TROB/cache state. '

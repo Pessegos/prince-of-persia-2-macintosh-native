@@ -159,6 +159,13 @@ cases, and [permanent setup](research/temple-permanent-pressure.md) covers68
 plate markers/1,304 cases. These remain research, not runtime integration;
 rock movement, real contact/support, full FrameAdv and saves/reset remain P.
 
+[Real gate services](research/temple-gate-services.md) corrects the initial
+LoadKid/relief labels and adds11,361 native comparisons.4:4b02 copies the
+saved Prince, not support caches;5:4766 is level4 relief, not crushing;
+a5-0x5008 is its sigh countdown, not damage.3,075 connected temple gate steps
+execute both real bodies, with only sound/redraw supplied. Earlier gate/mixed
+v2 reports preserve their transition counts and correct those semantic names.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and

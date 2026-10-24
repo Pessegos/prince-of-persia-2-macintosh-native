@@ -28,7 +28,7 @@ class TempleGateAnimationTests(unittest.TestCase):
     def test_permanent_open_limit_stops_at255_without_final_redraw(self):
         result = gate_animation_reference(180, 3)
         self.assertEqual((result['foreground'], result['phase']), (255, -1))
-        self.assertEqual(result['events'], [('sound', 0x112), ('support_cache',)])
+        self.assertEqual(result['events'], [('sound', 0x112), ('load_kid',)])
 
     def test_already_permanent_position_stops_any_nonnegative_phase_below4(self):
         for phase in range(4):
@@ -41,16 +41,16 @@ class TempleGateAnimationTests(unittest.TestCase):
         result = gate_animation_reference(250, 5)
         self.assertEqual((result['foreground'], result['phase']), (170, 6))
 
-    def test_terminal_fast_close_uses_supplied_contact_result_not_inferred_death(self):
-        for contact, damage in ((False, 1234), (True, 4)):
-            result = gate_animation_reference(120, 8, contact)
-            self.assertEqual((result['foreground'], result['phase'], result['damage']), (0, -1, damage))
-            self.assertEqual(result['events'], [('contact',), ('sound', 0x113), ('redraw', 0, -1)])
+    def test_terminal_fast_close_uses_supplied_relief_result_not_inferred_damage(self):
+        for relief, countdown in ((False, 1234), (True, 4)):
+            result = gate_animation_reference(120, 8, relief)
+            self.assertEqual((result['foreground'], result['phase'], result['relief_countdown']), (0, -1, countdown))
+            self.assertEqual(result['events'], [('relief_check',), ('sound', 0x113), ('redraw', 0, -1)])
 
-    def test_normal_closing_stops_without_calling_fast_close_contact_predicate(self):
+    def test_normal_closing_stops_without_calling_fast_close_relief_predicate(self):
         result = gate_animation_reference(3, 1, True)
-        self.assertEqual((result['foreground'], result['phase'], result['damage']), (0, -1, 1234))
-        self.assertEqual(result['events'], [('sound', 0x112), ('support_cache',), ('redraw', 0, -1)])
+        self.assertEqual((result['foreground'], result['phase'], result['relief_countdown']), (0, -1, 1234))
+        self.assertEqual(result['events'], [('sound', 0x112), ('load_kid',), ('redraw', 0, -1)])
 
     def test_decoration_high_byte_survives_motion_and_terminal_positions(self):
         for high in (0, 0x300, 0xff00):

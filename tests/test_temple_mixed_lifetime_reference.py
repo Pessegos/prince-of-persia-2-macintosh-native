@@ -23,7 +23,7 @@ def fixture(position=0, trobs=(), bank=()):
     link(level, 3, 3, 18)
     reader.level = level
     state = dict(mechanism_state(bank, trobs), os=bytes((11, 13, 17, 19, 23, 29)),
-                 press_flag=4321, pressure_requests=[], damage=1234)
+                 press_flag=4321, pressure_requests=[], relief_countdown=1234)
     return state, reader
 
 
@@ -65,8 +65,8 @@ class TempleMixedLifetimeTests(unittest.TestCase):
         state = step(state, reader, 'animate', CLOSE)
         self.assertEqual((position(reader), state['trobs']), (0, ((15, 3, 1, 6),)))
         self.assertEqual(reader.cache, cache)
-        self.assertIn(('contact',), state['events'])
-        self.assertEqual(state['damage'], 1234)
+        self.assertIn(('relief_check',), state['events'])
+        self.assertEqual(state['relief_countdown'], 1234)
 
     def test_permanent_actor_opens_to255_without_source_trob_or_later_close(self):
         state, reader = fixture()
