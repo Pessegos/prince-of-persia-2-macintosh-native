@@ -5,6 +5,11 @@ Research only, connecting [world/Prince callers](temple-world-prince.md) and
 changes. The earlier [input audit](../INPUT_RECOVERY.md) already records the
 static latch rules; this block executes their bounded native composition.
 
+**Naming correction:** references to the supplied `bars`/`10:2036` query
+mean SlideRockInCell, a sliding-rock occupancy query, not bars. That legacy
+fixture name does not change the old comparison digest. The follow-up
+[geometry proof](temple-controller-geometry.md) executes its actual body.
+
 ## Connected Behavior
 
 Actual world `2:6224` and Prince `2:62e6` now call real PlayerCtrl `4:3b88`,

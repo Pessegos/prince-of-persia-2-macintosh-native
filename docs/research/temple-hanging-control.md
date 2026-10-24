@@ -4,6 +4,12 @@ Research only, following [world/Prince callers](temple-world-prince.md).
 No runtime changes. This separately bounded composition removes the supplied
 GenCtrl decision, not the whole PlayerCtrl or geometry boundary.
 
+**Naming correction:** `10:2036` is SlideRockInCell, not a bars query.
+The historical probe field/event `bars` below is a supplied-bool compatibility
+alias, not evidence of bars. [Real controller geometry](temple-controller-geometry.md)
+executes the actual sliding-rock lookup/occupancy body. The old comparison
+digests and bounded supplied-result behavior are unchanged by this correction.
+
 ## Findings
 
 Native GenCtrl `6:0560` routes the tested unarmed living type0 actors with

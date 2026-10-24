@@ -219,6 +219,15 @@ through actual2:6472. Sampled axes, cell/bars responses and other geometry/
 contact services are supplied; physical input, outer FrameAdv, death branches,
 reachable multi-frame gameplay and playable temple remain P.
 
+[Real controller geometry](research/temple-controller-geometry.md) extends R
+through actual current/front/above ReadCell/cache and SlideRockInCell10:2036
+inside world/Prince/PlayerCtrl:9,534 world comparisons plus8,064 direct
+query/returned-edge comparisons,15 asset-free regressions. Corrects `bars`
+as a legacy supplied alias for sliding-rock occupancy; native left-edge
+clipping raises with `max`. Initial actor anchors/widths/static banks and
+input samples are supplied. Real frame/foot geometry, other physical contact,
+persistent gameplay and playable temple remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and

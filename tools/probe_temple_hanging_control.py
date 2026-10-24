@@ -33,7 +33,7 @@ class HangingInputs:
     front: int = 1
     above: int = 1
     foreground: int = 0
-    bars: int = 0
+    bars: int = 0  # Legacy fixture alias for supplied SlideRockInCell(0).
     release_word: int = 0
 
 
@@ -312,7 +312,7 @@ def run_probe(recovery):
                 sequence_sha256={str(n): hashlib.sha256(data).hexdigest() for n, data in raw.items()},
                 level_sha256={str(n): hashlib.sha256(resources['LEVL'][1999 + n]['data']).hexdigest() for n in range(10, 14)},
                 supplied_services=['4:35a6 current cell kind', '4:3a48 front cell kind',
-                                   '4:3ff8 above kind/foreground', '10:2036 bars query0 bool',
+                                   '4:3ff8 above kind/foreground', '10:2036 SlideRockInCell bool (legacy bars label)',
                                    '5:3828/0fe6/4d84 cue/redraw/audio requests',
                                    '17:330e and4:3098 prepared original sequence handles; state0 handle traps'],
                 scope='Native AnimTrobs -> LoadKid -> GenCtrl unarmed living type0 hanging route '

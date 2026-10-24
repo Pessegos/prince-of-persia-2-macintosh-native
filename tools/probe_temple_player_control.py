@@ -253,7 +253,7 @@ def run_probe(recovery):
                 level_sha256={str(n): hashlib.sha256(resources['LEVL'][1999 + n]['data']).hexdigest() for n in range(10, 14)},
                 supplied_services={f'{s}:{o:04x}': name for (s, o), name in machine.ENDPOINTS.items()},
                 other_supplied=['2:55d2 writes sampled raw axes only', '4:35a6/3a48/3ff8 cell kind/above foreground',
-                                '10:2036 bars bool', '5:3828/0fe6/4d84 cue/redraw/audio',
+                                '10:2036 SlideRockInCell bool (legacy bars label)', '5:3828/0fe6/4d84 cue/redraw/audio',
                                 '17:330e/4:3098 prepared original handles; state0 handle traps'],
                 scope='Actual2:6224 world/2:62e6 Prince/4:3b88 PlayerCtrl, latch restore/sample-normalization/'
                       'orientation/cooldown/save, real GenCtrl hanging/climb/release/preview, gate bank, '
