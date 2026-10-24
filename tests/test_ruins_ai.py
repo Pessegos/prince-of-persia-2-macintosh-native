@@ -223,6 +223,17 @@ class RuinsControllerTests(unittest.TestCase):
         self.assertTrue(prince[1] - 40 <= bottom <= prince[1] + 40)
         scene.render()
 
+    def test_the_development_map_shows_heads_and_serpents(self):
+        from pop2.development_map import map_enemies
+        from pop2.game_session import GameResources
+
+        level = GameResources.load().level(6)
+        art, actors = map_enemies(level, {room: (room, 0) for room in range(32)})
+        # Level six: heads in native rooms 4, 7 and 16, serpents in 20 and 25.
+        self.assertEqual(sorted(room + 1 for room in actors), [4, 7, 16, 20, 25])
+        self.assertEqual(len(art.frames), 141)
+        self.assertEqual({actor.state.actor_type for room in actors.values() for actor in room}, {7, 11})
+
 
 if __name__ == '__main__':
     unittest.main()
