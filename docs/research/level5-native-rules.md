@@ -89,6 +89,10 @@ immediately [D]. UpdateOppInfo `6:30c4-30d4` routes this marker to
 RemoveOppInfo `6:3462`, via `6:32d8-32e0`, instead of preserving a room record.
 The port previously set only zero HP and phase `lava`, so InitOpps could reload
 it as a recoverable heap. NPC lava entry now retains the original marker.
+The NPC hazard pass `2:6638` calls CheckLavaBoil even for a zero-HP heap;
+`8:3480-3488` rejects an already-consumed special5 actor, not zero HP [D].
+The port now uses that marker instead of its old HP guard, so an already
+collapsed skeleton at the lava surface sinks as well.
 Terminal actors are also excluded from room transfer and removed before their
 room records can be reloaded, including a previous side-bank actor already
 physically owned by the destination. Living/collapsed skeleton rules remain.
@@ -99,7 +103,7 @@ UpdateOppInfo branch for 192 controlled skeleton room/facing/level cases
 excludes lava contact/lookup, damage, animation and actual bank removal.
 `tests/test_skeleton_lava.py` exercises the real room-23 pool entry from a
 controlled final recoil position, both facings, immediate/delayed exit,
-three revisits, a mid-lava snapshot and fresh level restart. No save schema
+zero-HP collapse, three revisits, a mid-lava snapshot and fresh level restart. No save schema
 or imported scenery changes are needed.
 
 ## Running Down Must Crouch, Not Descend (2026-10-25)

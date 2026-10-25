@@ -418,7 +418,10 @@ class Caverns(Environment):
             scene.status.set('Defeated')
         loose = scene.game.caverns.loose
         for guard in scene.combat.active_guards():
-            if guard.skeleton is None or not guard.alive or guard.terrain_motion is None:
+            # CheckLavaBoil 8:3480 gates repeated entry on special5, not HP:
+            # a zero-HP skeleton heap can still be consumed by the pool.
+            if (guard.skeleton is None or guard.state.special_flag == 5
+                    or guard.terrain_motion is None):
                 continue
             state, motion = guard.state, guard.terrain_motion
             pool = lava.contact(scene.level_map, motion, state,

@@ -14,7 +14,7 @@ class SkeletonLavaPersistenceTests(unittest.TestCase):
         RooftopSceneTests.setUp(self)
         self.scene.render = Mock()
 
-    def lava_entry(self, facing=1):
+    def lava_entry(self, facing=1, collapsed=False):
         from pop2.combat import guard_frame_index, select_sequence
         from pop2.environments import environment_for
         from pop2.terrain import TerrainMotion, floor_contact_x
@@ -29,6 +29,9 @@ class SkeletonLavaPersistenceTests(unittest.TestCase):
         actor.state.facing = facing
         select_sequence(actor, 227)
         actor.runtime.next_frame()
+        if collapsed:
+            actor.skeleton.collapse(actor, landing=True, encounter=scene.combat)
+            actor.runtime.next_frame()
         frame = scene.guard_art.frames[guard_frame_index(actor.state.action)]
         # The final recoil position inside room23's real pool, without
         # simulating unrelated sword AI/random input leading to that push.
@@ -48,6 +51,15 @@ class SkeletonLavaPersistenceTests(unittest.TestCase):
                 actor = self.lava_entry(facing)
                 self.assertEqual(actor.state.special_flag, 5)
                 self.assertTrue(removed_on_room_save(actor))
+
+    def test_zero_hp_heap_also_sinks_instead_of_becoming_a_revivable_lava_heap(self):
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                actor = self.lava_entry(facing, collapsed=True)
+                self.assertEqual(actor.state.special_flag, 5)
+                self.scene.combat.enter_room(1, 2)
+                self.scene.combat.enter_room(22, 2)
+                self.assertEqual(self.scene.combat.guards, [])
 
     def test_room_exit_removes_the_lava_skeleton_before_any_possible_revival(self):
         from tests.test_terrain import RooftopSceneTests
