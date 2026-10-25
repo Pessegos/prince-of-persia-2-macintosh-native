@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 
-GATE_IMPACT_GAIN = 10 ** (-3 / 20)
+GATE_IMPACT_GAIN = 10 ** (-9 / 20)
 
 
 class DuckEnvelope:

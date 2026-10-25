@@ -30,7 +30,9 @@ class DuckEnvelopeTests(unittest.TestCase):
                     self.assertEqual(output[5999, 0], output[575, 0])
                     self.assertEqual(output[6000, 0], output[5999, 0])
                     self.assertTrue((output[11759:] == 10000).all())
-                    self.assertLess(abs(np.diff(output[:, 0].astype(int))).max(), 10)
+                    max_step = np.ceil(10000 * (1 - GATE_IMPACT_GAIN) * np.pi
+                                       / (2 * (envelope.attack - 1))) + 1
+                    self.assertLess(abs(np.diff(output[:, 0].astype(int))).max(), max_step)
 
     def test_isolated_gate_is_bit_identical_including_full_scale(self):
         source = np.tile(np.array([-32768, 32767], np.int16), (4096, 1))
@@ -166,6 +168,27 @@ class SdlGateDuckTests(unittest.TestCase):
                      and (ASSET_DIR / 'audio' / 'manifest.json').is_file(),
                      'Original level/audio data has not been imported')
 class ImportedGateImpactTests(unittest.TestCase):
+    def test_overlapping_gate_adds_less_than_one_db_to_the_debris_burst(self):
+        with patch.dict(os.environ, {'SDL_AUDIODRIVER': 'dummy'}):
+            audio = AudioEngine()
+            self.addCleanup(audio.close)
+            samples = {}
+            for cue in (17, 26):
+                samples[cue] = np.frombuffer(audio.playback.sounds[cue].get_raw(),
+                                             np.int16).reshape(-1, 2).copy()
+            gate = samples[17]
+            DuckEnvelope(48000).apply(gate, True)
+            for milliseconds in (100, 250, 500, 950):
+                with self.subTest(milliseconds=milliseconds):
+                    count = milliseconds * 48
+                    impact = samples[26][:count].astype(float)
+                    mixed = impact + gate[:count]
+                    excess = 10 * np.log10(np.sum(mixed ** 2) / np.sum(impact ** 2))
+                    # The user's recording retained a 2.5 dB double impact
+                    # with the earlier -3 dB gate duck. Keep this near unity.
+                    self.assertLessEqual(excess, 1.0)
+                    self.assertGreater(excess, 0)
+
     def test_room_nine_only_the_right_impact_has_a_gate_to_duck(self):
         from pop2.game_session import GameResources
         from pop2.pressure_plates import PressurePlates
