@@ -115,9 +115,42 @@ class BridgeBreakTests(unittest.TestCase):
         self.assertEqual(bridge.creak(None, None, False, rng), ())
         self.assertEqual(len(rng.calls), 3)
 
+    def test_characters_mark_their_plank_and_its_neighbours(self):
+        # 8:0534-057c and MarkBridgeForCol 8:05cc.
+        bridge = Bridge()
+        for prince, opponent, marks in ((4, 5, 0xff), (4, None, 0x1c), (None, 1, 0x03),
+                                        (8, None, 0xc0), (None, None, 0)):
+            bridge.creak(prince, opponent, True)
+            self.assertEqual(bridge.marks, marks)
+
+    def test_marked_planks_wobble_for_one_frame_on_a_high_roll(self):
+        # ATMBrgFloor 8:06d8-0764: Rnd(3) >= 2 lifts (1) or drops (2) a
+        # resting marked plank; a wobbling plank rests on the next frame.
+        bridge = Bridge(marks=0x1c, pieces={5: 2})
+        bridge.advance_wobble(FixedRandom(2, 3))
+        self.assertEqual(bridge.wobble, {3: 1, 4: 2})
+        bridge.advance_wobble(FixedRandom(3, 3))
+        self.assertEqual(bridge.wobble, {})
+        rng = FixedRandom(1, 0)
+        bridge.advance_wobble(rng)
+        self.assertEqual((bridge.wobble, rng.calls), ({}, [(0, 3), (0, 3)]))
+
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
 class BridgeSceneryTests(unittest.TestCase):
+    def test_wobbling_planks_match_the_native_redraw(self):
+        # A native room-10 redraw with plank 3's nibble at 1 or 2.
+        from pop2.caverns import cavern_assets, with_plank_wobble
+
+        program, resources, _palette, _shapes = cavern_assets(5)
+        plank = next(command for command in program['rooms']['9']
+                     if command[1] == 4226 and command[8] == 3)
+        self.assertEqual(with_plank_wobble([plank], {(3, 1)}, resources),
+                         [['back', 4227, 153, 247, 16, 1, [215, 153, 247, 242], 4, 3, 1]])
+        self.assertEqual(with_plank_wobble([plank], {(3, 2)}, resources),
+                         [['back', 4228, 153, 248, 16, 1, [215, 153, 248, 243], 4, 3, 1]])
+        self.assertEqual(with_plank_wobble([plank], {(4, 2)}, resources), [plank])
+
     def test_room_ten_redraw_omits_only_the_fallen_planks(self):
         # A native redraw of the emptied cells (all five collapse stages)
         # equals the export without the fallen columns' SHAP 4226 commands.
@@ -386,6 +419,25 @@ class BridgeFallTests(unittest.TestCase):
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
+class BridgeTensionPersistenceTests(unittest.TestCase):
+    def test_tension_survives_a_restart_but_not_a_new_level(self):
+        # RestartGame 2:5b66 reloads the level and clears the bridge (2:6e38)
+        # but never SetTensionLevel's globals; the next-level opcode -16
+        # (4:2f5a) resets them.
+        from pop2.game_session import GameResources, GameSession
+
+        resources = GameResources.load()
+        game = GameSession.load(resources, 5)
+        game.caverns.bridge.set_tension(3, 15)
+        game.caverns.bridge.state = 2
+        game.restart()
+        bridge = game.caverns.bridge
+        self.assertEqual((bridge.state, bridge.tension_level, bridge.tension), (0, 3, 15))
+        fresh = GameSession.load(resources, 5).caverns.bridge
+        self.assertEqual((fresh.tension_level, fresh.tension), (0, 0))
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
 class BridgeGuardAiTests(unittest.TestCase):
     """8:02ae, 8:033c, 8:0424 and 8:04a2 on level five's bridge."""
 
@@ -424,6 +476,24 @@ class BridgeGuardAiTests(unittest.TestCase):
         self.place(200, 0)
         self.assertFalse(skeleton.skeleton.bridge_guard(self.combat, skeleton))
         self.assertEqual((skeleton.state.facing, skeleton.state.target_x), (1, 210))
+
+    def test_a_pressing_skeleton_does_not_turn_to_a_prince_behind_it(self):
+        # SwordCtrl 6:22b4-22e4: in the bridge rooms (row not 0) an engaging
+        # skeleton (8:02ae) keeps its inputs; otherwise DoTurn selects SEQS 60.
+        combat, skeleton = self.combat, self.skeleton
+        player = combat.player
+        player.state.target_x = player.state.current_x = 60
+        skeleton.sword_drawn, skeleton.alert_mode = True, 3
+        selected = []
+        for x, facing in ((470, 1), (200, 1)):
+            self.place(x, facing)
+            skeleton.state.action, skeleton.state.animation_state = 158, 0
+            skeleton.selected_sequence = None
+            self.assertEqual(combat._bridge_engage(skeleton), x == 470)
+            combat.choose_guard_action(skeleton)
+            selected.append(skeleton.selected_sequence)
+        self.assertNotEqual(selected[0], 60)
+        self.assertEqual(selected[1], 60)
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
@@ -520,6 +590,17 @@ class BridgeSkeletonImmunityTests(unittest.TestCase):
         scene.combat._hurt('guard', skeleton, scene.combat.player)
         self.assertEqual(skeleton.life, life)
         self.assertTrue(skeleton.alive)
+
+    def test_bridge_skeleton_has_no_opponent_meter(self):
+        # DrawOppMeter 3:4b7a-4ba8 erases the meter for a skeleton in level
+        # five's bridge rooms (row not 0) instead of drawing its life.
+        BridgeSceneTests.setUp(self)
+        scene = self.scene
+        scene.jump_to_room(9, 1, 30, 1)
+        skeleton = scene.combat.active_guards()[0]
+        self.assertIsNone(scene.combat.health_opponent())
+        skeleton.row = 0
+        self.assertIs(scene.combat.health_opponent(), skeleton)
 
     def tick(self, count=1):
         BridgeSceneTests.tick(self, count)

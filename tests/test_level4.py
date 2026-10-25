@@ -43,7 +43,7 @@ class CavernLevelIsolationTests(unittest.TestCase):
             with (patch('pop2.caverns.ASSET_DIR', directory),
                   self.assertRaisesRegex(ValueError, 'different level')):
                 cavern_assets(4)
-        for number in (True, 2, 8, '4'):
+        for number in (True, 2, 10, '4'):
             with self.subTest(number=number), self.assertRaisesRegex(ValueError, 'Unsupported cavern'):
                 cavern_assets(number)
 
@@ -117,7 +117,8 @@ class LevelFourSceneryTests(unittest.TestCase):
         program = cavern_assets(4)[0]
         self.assertEqual((level.kind, level.start_room, level.start_tile, level.start_x, level.facing),
                          (3, 0, 25, 277, 0))
-        self.assertEqual((program['version'], program['level']), (15, 4))
+        self.assertIn(program['version'], (15, 16))
+        self.assertEqual(program['level'], 4)
         rooms = {str(room) for room in range(32)}
         for key in ('rooms', 'torches', 'climb_redraw', 'floor_redraw'):
             self.assertEqual(set(program[key]), rooms)
@@ -409,17 +410,20 @@ class LevelFourReliefTests(unittest.TestCase):
             skeleton.terrain_motion.room, skeleton.terrain_motion.row = 23, 2
         scene.combat.room_encounters[23][0].append(skeleton)
         skeleton.skeleton.rise(scene.combat, skeleton)
-        sounds = []
-        relief = scene.advance_relief
+        from unittest.mock import patch
+        from pop2.environments import Caverns
 
-        def spy(caverns):
+        sounds = []
+        relief = Caverns.advance_relief
+
+        def spy(environment, caverns):
             events = scene.sequence_state.sound_events
             start = len(events)
-            relief(caverns)
+            relief(environment, caverns)
             sounds.extend(cue for cue in events[start:] if cue == 110)
-        scene.advance_relief = spy
-        for _ in range(12):
-            RooftopSceneTests.tick(self)
+        with patch.object(Caverns, 'advance_relief', spy):
+            for _ in range(12):
+                RooftopSceneTests.tick(self)
         return sounds
 
     def test_slamming_the_gate_on_a_skeleton_makes_the_prince_sigh_once(self):

@@ -51,6 +51,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Shift step reserves four pixels; caution then deliberate step | 4:5eae; 6:1276-1324 | T: floor/gap/ordinary wall; special barrier states P | terrain/mac_input / test_cautious_step, test_terrain |
 | Run release at native stop gates; queued follow-up | 6:11e4; SEQS:13 | T: ordinary run; gates 7/11 only, 33-pixel stop displacement and stop/turn/descent positions audited | scene_prototype / test_animation_data, test_guard_deaths, test_game_ui |
 | Standing crouch 50 versus running crouch 26; input at first low pose 109 | 6:0f4e/1068-108a, 125a, 06b4/099a; SEQS:50/26/117/79/49 | T: ordinary crouch, release/crawl gates and wall response; pickup/special-level branches P | scene_prototype / test_animation_data, test_game_ui |
+| Nearly cleared running pose ignores trailing contact at cavern gates | deliberate port improvement, not a recovered native rule | A/T: four-pixel ordinary margin; stop13 may settle when its idle body plus final backward pixel fully clears the gate; grounded unarmed run/start/stop only, either facing; front/settled-body contact, jumping, crouching and crush/slam timing unchanged | terrain / test_gate_clearance, test_cavern_retry; [scope](CAVERN_GATE_CLEARANCE.md) |
 | Running-jump landing clears pending directional inputs, then resamples held keys | 6:074a-0760, 1216-1248; 4:3e3a/3e84; SEQS:4 to 201 | T: pose-44 reset, released/held Up, opposing chords, backward-before-Up priority; both directions | scene_prototype / test_animation_data, test_game_ui |
 | Other ClearControls sites and full directional/modifier latch lifecycle | 6:059c, 0754 (pose 26); 4:3cae-3f42 | R: ordinary lifecycle and 31 decoded direct clear calls audited; integration missing, special contexts P | INPUT_RECOVERY / test_input_recovery (four expected failures, not parity coverage) |
 | Running jump takeoff checks next two cells | 6:1c14-1d3a | T: ordinary player/NPC subset | terrain / test_terrain, test_rooftop_pursuit |
@@ -117,6 +118,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Visible 510x384 rectangle and host presentation | 17:1ada-1b00; NIS SHAP:25001 | T: native extent, cropped host padding, nearest-neighbor fitting and inverse pointer mapping | game_ui, window_controls / test_game_ui, test_development_menu |
 | Prince environment palette | 3:5f1c-5f44; LEVL:2186; Kid CTBL:25001-25006 | T: palette 25000 + environment kind, independent of SHPL/FRAM bank; rooftop CTBL 25005 | render_opening, scene_prototype / test_palettes, test_game_ui |
 | CUST full-room background and foreground | 3:1378/142a/2324; CUST:4350 | T: fixed level-1 descent-room images and draw passes; animated custom templates P | render_opening / test_harbor |
+| Cavern/ruins CUST foreground across dirty cells | 3:239e-23b2/2438; CUST pass1 | T: custom mask is not restricted to clean-cut caller (9,0); level-five room-three pillar/ascent leaks fixed;30 native dirty-cell command comparisons, shared raster decoder | caverns / test_cavern_custom_foreground; probe_carpet_room_repaint_music |
 | Harbor floor, pillars and waves | 23:0248, 0d1c/0dce; DATA:cc32/cc3a | T: native SHAP/PIEC offsets, phase cycle and wave clip rectangles; native random phase seeding / conditional redraw P | render_opening, harbor / test_harbor |
 | Ship activation, two-pixel drift and departure limit | 2:5374; 23:1066/1120/1256 | T: level-1 counter, entry-pose reset and original SHAP layers; full native obstacle-bank lifecycle P | harbor, render_opening / test_harbor |
 | Ship catch, grip movement and boarding sequence | 23:12ba/12f0/132c; SEQS:59 | T: strict X/row/time bounds, relative movement and complete original pose chain | harbor, terrain, scene_prototype / test_harbor |
@@ -125,7 +127,8 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Dynamic tiles/gates, ceilings, other levels and full level-transition pipeline | remaining level/controller routines | P | not yet ported |
 | Dead-pose counter, any-key retry and centered restart message | 2:47e6/7148; 4:3b88/47a0; 3:433a | T: ordinary dead-pose/key gate and actual current/pending playback completion; frontend timeout P | rebirth, audio, scene_prototype, window_controls / test_rebirth, test_audio |
 | Audio cue arbitration, source samples and rooftop music pool | CODE:5; DATA; INST/snd; MIDISnd/DigiSnd | T/A: ordinary level-1 subset; original instruments with host sampler, not bit-exact Mac MIDI driver | audio, audio_formats, extract_audio / test_audio, test_extract_audio, test_audio_integration |
-| LEVL checkpoint trigger and restored start | LEVL:39a6; 2:6b46/1674/19ba/5d50 | T: level-1 foot/cell trigger, native anchor, facing/full life and opponent/generator snapshot; dynamic normalization/story pipeline P | rebirth, scene_prototype / test_rebirth |
+| Carpet chamber theme lifetime | 8:0d50/0d5c/14f0/14ae; 5:5252/550c; RugRoom MIDI | T: entry requests114 once, completion permits normal cavern ambient, leave stops specifically114, re-entry requests it again, sitting replaces with115/116;96 native admission fixtures; host ambient toggle classification retained | environments, audio / test_carpet_room_music, test_audio; probe_carpet_room_repaint_music |
+| LEVL checkpoint trigger and restored start | LEVL:39a6; 2:6b46/1674/19ba/5d50 | T: level-1 foot/cell trigger, native anchor, facing/full life and opponent/generator snapshot; host cavern-mechanism snapshot tested through level-5 Alt+R and progress saves; full native normalization/story pipeline P | rebirth, scene_prototype / test_rebirth, test_level5_retry |
 | F3 screen jumps seed the latest route checkpoint from LEVL | host feature | T: route order rather than slot order; earlier/secret jumps and New Game clear it; not an original activation rule | scene_prototype / test_rebirth |
 | F3 cavern entries avoid sealed decorative floor pockets | host feature | T: room-link-connected space, stable terrain fallback, live gate state and lower-floor Room 21 preference; placement heuristic only, not gameplay pathfinding | development_entry, scene_prototype / test_development_entry, test_caverns |
 | F3 stitched level map | host feature | T: compact Open map entry, separate unframed workspace, nested Back/Escape and level arrows, real room links, initial enemy bones, safe teleport and return to the room before death/restart, spatial keys, persistent lossless artwork cache, aspect-preserving HD presentation, two-size cache and partial Tk hover uploads without world redraw | development_map, preview_cache, game_ui, window_controls / test_development_map, test_preview_cache, test_development_menu; [details](DEVELOPMENT_MAP.md) |
@@ -141,6 +144,139 @@ IsCharNonViewable rule, including guard pose 228. This changes drawing only:
 death sequences, coordinates and stored NPC records remain intact.
 
 ## Next Recovery Pass
+
+Temple research: [actor-to-plate lifetime](research/temple-actor-plate-lifetime.md)
+records R (not runtime-integrated) CheckPress through ordinary/permanent
+pressure, rock-only activation and plate release:540 persistent traces and
+7,110 native/reference comparisons,10 asset-free regressions. This extends
+the separate16,461-case [admission probe](research/temple-pressure-admission.md)
+within its stated scope. Supporting-cell/actor/FRAM inputs, call schedule,
+audio/redraw remain supplied; full FrameAdv and actual support/contact remain P.
+
+The subsequent [mixed-lifetime trace](research/temple-mixed-lifetime.md)
+extends R to both original level11 gate/rock chains and source/target TROB
+iteration/compaction:120 persistent traces/14,784 native comparisons. Separate
+[gate steps](research/temple-gate-animation.md) cover41 original anchors/6,300
+cases, and [permanent setup](research/temple-permanent-pressure.md) covers68
+plate markers/1,304 cases. These remain research, not runtime integration;
+rock movement, real contact/support, full FrameAdv and saves/reset remain P.
+
+[Real gate services](research/temple-gate-services.md) corrects the initial
+LoadKid/relief labels and adds11,361 native comparisons.4:4b02 copies the
+saved Prince, not support caches;5:4766 is level4 relief, not crushing;
+a5-0x5008 is its sigh countdown, not damage.3,075 connected temple gate steps
+execute both real bodies, with only sound/redraw supplied. Earlier gate/mixed
+v2 reports preserve their transition counts and correct those semantic names.
+The real callees also pass inside the120 persistent mixed traces/14,784
+comparisons; working-actor copies are checked while actor/FRAM inputs remain
+explicitly resupplied per operation. [Mixed rock motion](research/temple-mixed-rock-motion.md)
+now extends R to real geometry/motion/crush admission and both bank lifetimes:
+192 traces/83,040 comparisons, explicitly no actor contact. Actor consequences,
+presentation and full FrameAdv in that composition remain P.
+
+[Hanging gate helpers](research/temple-gate-hanging.md) add14,268 comparisons
+for native StopGate, JumpSeq47 selection/copyback and separate sound29
+admission at all41 original anchors. Supplied type0 actors/resource existence;
+no clip execution, full caller schedule or mixed hanging/contact integration.
+[Connected hanging animation](research/temple-gate-hanging-animation.md)
+adds26,568 comparisons through the real type4 body for six supplied states;
+ordinary/fast/permanent actor effects and cue/redraw order are distinguished.
+Actor animation and full bank/frame scheduling remain P.
+
+[Actor clip progression](research/temple-gate-actor-clip.md) extends R through
+native AnimChar and original SEQS47/2/9/210 bytes:2,952 persistent traces,
+73,800 comparisons and9 asset-free regressions. Selection precedes the
+mode5/X+16/three-pose transition and active2/mode0 link; selected source47
+persists. Actor-update/copyback scheduling and handles are supplied; no
+physical fall/contact/death or full FrameAdv/bank iteration claim.
+
+[Actor/gate bank progression](research/temple-gate-actor-bank.md) extends R
+through full native AnimTrobs iteration/compaction interleaved with actor
+clips:2,460 persistent traces/78,720 comparisons,8 asset-free tests. Complete
+bank bytes/order and actor effects pass in both supplied schedules, with
+different first-cycle results. Original FrameAdv order, reachable supplied
+banks/placements and physical fall/contact/death remain P.
+
+[World/Prince callers](research/temple-world-prince.md) extend R through
+actual2:6224/62e6, native gate-bank/clip/gravity and actor save2:6472:
+8,528 traces/34,112 world comparisons plus2,400 direct gravity controls,
+12 asset-free regressions. PlayerCtrl, geometry/contact/hazards, opponent
+and presentation/clock services are supplied. Outer FrameAdv, real controls,
+reachable placements, physical consequences and playable temple remain P.
+
+[Hanging controls](research/temple-hanging-control.md) extend R through native
+GenCtrl6:0560's bounded unarmed/living type0 route and6:18e0/1998/1a84/1b7e,
+native predicates/ClearControls/JumpSeq and first clip after gate selection:
+28,220 traces/112,880 operation comparisons,14 asset-free regressions.
+Preview effects survive partial sequence-state restoration. Cell/bars values,
+latches and the four-call schedule are supplied; actual PlayerCtrl and
+physical support/contact/fall in the real coordinator remain P.
+
+[PlayerCtrl in the world caller](research/temple-player-control.md) extends R
+through actual4:3b88/3cae preparation, latch restore/normalization/orientation/
+cooldown/save and hanging GenCtrl inside2:6224/62e6:7,090 single-world-update
+comparisons,16 asset-free regressions. Sixteen previews retain actor effects
+through actual2:6472. Sampled axes, cell/bars responses and other geometry/
+contact services are supplied; physical input, outer FrameAdv, death branches,
+reachable multi-frame gameplay and playable temple remain P.
+
+[Real controller geometry](research/temple-controller-geometry.md) extends R
+through actual current/front/above ReadCell/cache and SlideRockInCell10:2036
+inside world/Prince/PlayerCtrl:9,534 world comparisons plus8,064 direct
+query/returned-edge comparisons,15 asset-free regressions. Corrects `bars`
+as a legacy supplied alias for sliding-rock occupancy; native left-edge
+clipping raises with `max`. Initial actor anchors/widths/static banks and
+input samples are supplied. Real frame/foot geometry, other physical contact,
+persistent gameplay and playable temple remain P.
+
+[Prince frame support](research/temple-kid-frames.md) extends R through type0
+LoadFrame4:2a72/2a8e, original Kid FRAM/AFRM and signed supporting-column
+calculation:22,528 comparisons,8 asset-free regressions. Prepared bindings,
+poses and X inputs supplied. Sprite bounds/width, foot Y/row, real controller
+composition and reachable physical frame progression remain P in this block.
+
+[Frames in world control](research/temple-frame-progression.md) extends R to
+real Kid LoadFrame inside actual world/PlayerCtrl/cell queries, then bounded
+AnimChar/LoadFrame continuation:23,964 comparisons,9 asset-free regressions.
+Script X/Y/row and supporting columns are recovered in this domain, not
+physical support/climb reachability. Continuation order, initial anchors,
+frame width, sampled inputs and other contact/services remain supplied;
+outer FrameAdv and playable temple remain P.
+
+[Prince sprite bounds](research/temple-sprite-bounds.md) extends R through
+type0 LoadFrame/SetupSword/GetCharEdges, sword extent and edge rows/columns:
+33,792 comparisons,10 asset-free regressions. Dimensions from original Kid
+SHAP headers and rectangle intersection/library bindings remain supplied;
+resource loading/rasterization, connected world contact and physical
+reachability/full FrameAdv remain P.
+
+[Sprite bounds in world control](research/temple-world-bounds.md) extends R
+through real LoadFrame/SetupSword/GetCharEdges inside world/PlayerCtrl and
+static rock queries:8,856 comparisons,6 asset-free regressions. Final saved
+actor rectangles/edges are derived; supplied fixed18 width would change18
+selected animations. SHAP-size/graphics services, input/placement/static
+banks and remaining physical contact/floor/hazards stay supplied; repeated
+physical frames, outer FrameAdv and playable temple remain P.
+
+[Gate admission](research/temple-gate-admission.md) extends R through4:5b0e:
+102,400 controlled direct comparisons and14,080 predicate comparisons after
+2,816 real Kid bound chains,8 asset-free regressions. Visible height, exact
+thresholds, exemptions and signed wrapping are checked; graphics services
+stay supplied. Real contact/barrier callers and physical reachability remain P.
+
+[Standing clearance](research/temple-gate-standing.md) extends R through
+GateBarrToStandUp4:5baa and actual cell/neighbor traversal:39,318 comparisons,
+11 asset-free regressions, no supplied services. First-gate priority,
+inclusive native-X band, cached normalized column and room-base-pointer
+side effects are checked. Standing callers/animation, full contact and
+multi-frame physical reachability remain P.
+
+[Gate contact routing](research/temple-gate-contact.md) extends R through
+CheckGateForKid4:60e4, real cells/admission, JumpSeq50 and contact marking:
+61,382 comparisons,14 asset-free regressions. ALIVE/HP, lookup priority,
+exact overlap and failed resource behavior are distinguished. Distance,
+overlap construction and terminal ejection/cave responses remain supplied;
+subsequent damage/death, full collision/world physics and playable temple P.
 
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.

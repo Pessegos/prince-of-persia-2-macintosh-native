@@ -12,6 +12,8 @@ from PIL import Image
 from pop2.app_window import ICON_DIR, create_root
 from tools.build_app_icon import build_icon
 
+from tests.desktop import exclusive_desktop
+
 
 def native_icon_image(icon):
     import ctypes as C
@@ -138,6 +140,7 @@ class ApplicationIconTests(unittest.TestCase):
             root.iconbitmap.assert_not_called()
 
     @unittest.skipUnless(sys.platform == "win32", "Windows window and taskbar icons")
+    @exclusive_desktop('mapped native roots and their icons')
     def test_real_windows_roots_are_pixel_exact_and_children_inherit_icon(self):
         result = subprocess.run([sys.executable, "-c", textwrap.dedent("""
             import ctypes

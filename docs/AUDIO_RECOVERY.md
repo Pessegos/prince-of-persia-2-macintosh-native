@@ -57,6 +57,22 @@ Keyboard selection, activation, page controls and wheel navigation also give
 feedback. `tests/test_ui_audio.py` checks PCM, hit targets, muting, rate limits
 and real SDL isolation while gameplay audio is paused.
 
+## Mixed Gameplay Effects
+
+The port's mixed-effects policy allows distinct effects to overlap, with a
+separate gate-movement voice. This is an intentional exception to the native
+single-effect arbitration below, not a recovered Sound Manager rule.
+
+When debris impact 26 and shooter launch 65 arrive in the same simulation
+update, mixed mode keeps the impact and drops that launch transient. Level
+five, room 9's falling floor can activate a shooter-linked button on impact;
+layering both transients made that contact unnecessarily harsh. The trap
+still fires, other effects (including the gate) remain eligible, and an
+already playing launch is not stopped. Standalone launches and original
+single-channel comparison mode are unchanged. Tests cover arbitration in
+`tests/test_debris_audio.py` and the actual contact in
+`tests/test_level5_traps.py`; subjective loudness still needs listening.
+
 ## Recovered Rules
 
 Addresses are CODE segment:offset. `tools/extract_audio.py` expands DATA/ZERO
@@ -147,6 +163,22 @@ TimeForNewAmbient 5:557e-5634 permits exploration/combat transitions while
 an ambient track plays; foreground songs (potions, exits, victory and
 death) are never interrupted by that transition. Disabling ambient music
 does not suppress these foreground event songs.
+
+Level five's carpet chamber requests RugRoom114 once on entry (8:0d50),
+not continuously. After that track ends, ordinary ambient admission5:550c
+can resume cavern-bank music while the Prince remains in the room; leaving
+and re-entering requests114 again. There is no permanent room-three veto.
+The port's unconditional carpet-room return incorrectly kept the room
+silent after114 ended and is removed. Pending/playing room or foreground
+songs still prevent ambient replacement through the normal audio policy.
+
+`probe_carpet_room_repaint_music` independently executes96 native admission
+fixtures for114/115, rooms1/3/4, enabled/disabled, ALIVE and pending-song
+states, plus the actual8:0d50 entry request. Sound-status/combat/opponent
+queries and AddSong are supplied endpoints; no MIDI driver or full frame
+loop is executed. Scene tests use the actual level-five bank/cell groups,
+verify a cavern-pool cue after completion, and retain once-per-visit,
+departure/re-entry, music-toggle and foreground-song protection checks.
 
 Both routines use OppToFight (6:2392-2492). For the implemented ordinary
 guards and skeletons this means a living, alerted NPC, including alert 1

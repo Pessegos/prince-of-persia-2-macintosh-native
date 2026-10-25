@@ -197,6 +197,8 @@ class AudioEngine:
         self.current_music_ambient = self.pending_song_ambient = False
         self.current_music_group = self.pending_music_group = None
         self.level_music = None
+        self.room_song_scope = None
+        self.room_song_requested = False
         self.last_ui_hover_at = float('-inf')
 
     def play_ui(self, kind):
@@ -264,6 +266,27 @@ class AudioEngine:
             self.pending_song_ambient = ambient
             self.pending_music_group = None
 
+    def room_song(self, location, cue=None):
+        """Request a theme once per room visit and stop it on departure."""
+        scope = (location, cue)
+        if self.room_song_scope != scope:
+            previous = self.room_song_scope[1] if self.room_song_scope is not None else None
+            if previous is not None:
+                if self.pending_song == previous:
+                    self.pending_song = None
+                    self.pending_song_ambient = False
+                    self.pending_music_group = None
+                if self.current_music == previous:
+                    self.playback.stop('music')
+                    self.current_music = None
+                    self.current_music_ambient = False
+                    self.current_music_group = None
+            self.room_song_scope = scope
+            self.room_song_requested = False
+        if cue is not None and not self.room_song_requested and self.music_enabled:
+            self.room_song_requested = True
+            self.add_song(cue, ambient=True)
+
     def drain(self, state, audible=True):
         for cue in state.sound_events:
             # A landing can stop the scream before its queued frame is drained.
@@ -324,6 +347,10 @@ class AudioEngine:
             # An empty swing and its contact are one event, not two layers.
             if any(cue in self.pending_effects for cue in (10, 12, 31)):
                 self.pending_effects.pop(11, None)
+            # Debris landing on a shooter plate is one impact. Keep its break
+            # sound instead of stacking the trap's launch transient over it.
+            if 26 in self.pending_effects:
+                self.pending_effects.pop(65, None)
             playing = set(self.playback.playing_effects())
             for cue in self.pending_effects:
                 if cue not in playing:
@@ -354,6 +381,7 @@ class AudioEngine:
             self.pending_song = None
             self.pending_song_ambient = False
             self.playback.play("music", self.current_music)
+            self.music_clock = [time.monotonic(), 0.0]
         self.stopped_effects.clear()
 
     def ambient(self, room, row, column, fighting=False, alive=True, special=None):
@@ -418,14 +446,34 @@ class AudioEngine:
                 self.current_music_ambient = False
 
     def pause(self, paused):
+        clock = getattr(self, 'music_clock', None)
+        if clock is not None and paused != self.paused:
+            # [start of the running span, seconds played before it]
+            if paused:
+                clock[1] += time.monotonic() - clock[0]
+                clock[0] = None
+            else:
+                clock[0] = time.monotonic()
         self.paused = paused
         self.playback.pause(paused)
 
-    def reset(self):
+    def music_elapsed(self):
+        """Seconds the current game song has played, or None."""
+        clock = getattr(self, 'music_clock', None)
+        if clock is None or not self.playback.busy("music"):
+            return None
+        return clock[1] + (time.monotonic() - clock[0] if clock[0] is not None else 0)
+
+    def reset(self, keep_music=False):
+        """Stop every sound; with `keep_music`, the playing song continues."""
+        self.room_song_scope = None
+        self.room_song_requested = False
         for bus in self.effect_buses:
             self.playback.stop(bus)
-        self.playback.stop("music")
-        self.current_effect = self.current_music = None
+        if not keep_music:
+            self.playback.stop("music")
+            self.current_music = None
+        self.current_effect = None
         self.pending_effect = self.pending_song = None
         self.current_mechanism = self.pending_mechanism = None
         self.pending_effects.clear()

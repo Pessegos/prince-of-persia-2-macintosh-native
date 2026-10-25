@@ -1,6 +1,7 @@
 import random
 from dataclasses import replace
 from pathlib import Path
+import struct
 from tempfile import TemporaryDirectory
 import unittest
 from types import SimpleNamespace
@@ -29,12 +30,34 @@ def room_point(menu, label):
 
 
 class DevelopmentMapModelTests(unittest.TestCase):
+    def test_map_warmup_is_a_quiet_low_priority_process(self):
+        import subprocess
+        import sys
+        from pop2.development_map import start_map_warmup
+
+        with patch('subprocess.Popen') as popen:
+            self.assertIs(start_map_warmup(), popen.return_value)
+        args, options = popen.call_args
+        self.assertEqual(args[0][1:], ['-m', 'pop2.development_map', '--warm'])
+        self.assertEqual(options['stdout'], subprocess.DEVNULL)
+        if sys.platform == 'win32':
+            self.assertTrue(options['creationflags'] & subprocess.BELOW_NORMAL_PRIORITY_CLASS)
+            self.assertTrue(options['creationflags'] & subprocess.CREATE_NO_WINDOW)
+        with patch('subprocess.Popen', side_effect=OSError):
+            self.assertIsNone(start_map_warmup())
+
     def test_landmarks_use_native_start_and_all_exit_rooms_but_not_entrance(self):
         labels = {0: 'Room 1', 12: 'Room 13', 29: 'Room 30', 31: 'Room 32'}
         exits = {(0, 14), (12, 16), (29, 25)}
         terrain = SimpleNamespace(tile=lambda room, column, row:
                                   SimpleNamespace(kind=17 if (room, row * 10 + column) in exits else 1))
-        level = SimpleNamespace(number=3, start_room=0)
+        data = bytearray(0x49ca)
+        # Exits open only through plate links (LEVL +0x1680); room 32's exit
+        # has none, like level six's decorative room-1 door.
+        exits.add((31, 5))
+        for index, (room, cell) in enumerate(((12, 16), (29, 25))):
+            struct.pack_into('>5h', data, 0x1680 + index * 10, room + 1, cell, 0, -3, -3)
+        level = SimpleNamespace(number=3, start_room=0, data=bytes(data))
         self.assertEqual(level_landmarks(level, terrain, labels),
                          ('Room 1', frozenset({'Room 13', 'Room 30'})))
 
@@ -230,6 +253,21 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
     def setUpClass(cls):
         from pop2.game_session import GameResources
         cls.resources = GameResources.load()
+
+    def test_warmed_maps_open_from_the_cache_without_rebuilding(self):
+        from pop2.development_map import cached_development_map, warm_development_maps
+        from pop2.preview_cache import preview_fingerprint
+
+        with TemporaryDirectory() as directory:
+            warm_development_maps((3, 5), Path(directory))
+            self.assertEqual({path.name for path in Path(directory).iterdir()},
+                             {'level-3.zip', 'level-5.zip'})
+            with patch('pop2.development_map.build_development_map',
+                       side_effect=AssertionError('rebuilt')):
+                for number in (3, 5):
+                    level_map = cached_development_map(self.resources.level(number), preview_fingerprint(),
+                                                       Path(directory))
+                    self.assertTrue(level_map.rooms)
 
     def test_return_remembers_room_before_restart_and_uses_safe_entry(self):
         from tests.test_terrain import RooftopSceneTests

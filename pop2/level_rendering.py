@@ -11,7 +11,7 @@ from pop2.render_opening import (
 
 class LevelRenderer:
     def __init__(self, level, preload_room=True, retouch_caverns=True):
-        if level.kind != 5 and level.number not in (2, 3, 4, 5, 6):
+        if level.kind != 5 and level.number not in (2, 3, 4, 5, 6, 7, 8, 9):
             raise ValueError(f"Level {level.number} scenery is not implemented (environment {level.kind})")
         self.level = level
         self.retouch_caverns = retouch_caverns
@@ -39,7 +39,12 @@ class LevelRenderer:
         if not 0 <= room_id < 32:
             raise ValueError("Invalid scenery room")
         if self.level.kind in (3, 4):
-            from pop2.caverns import cavern_room, cavern_scene_signature, cavern_pressure_signature
+            from pop2.caverns import (
+                cavern_pressure_signature,
+                cavern_room,
+                cavern_scene_signature,
+                cavern_scythe_signature,
+            )
 
             if caverns is not None:
                 caverns.lava.enter_room(room_id,
@@ -49,17 +54,27 @@ class LevelRenderer:
                          if caverns is not None else '')
             pressure = cavern_pressure_signature(self.cavern_program, room_id, caverns) if caverns else ()
             fallen = caverns.bridge.fallen() if caverns is not None else frozenset()
-            key = room_id, frame if room_id == self.level.start_room else 0, signature, pressure, fallen
+            wobble = frozenset(caverns.bridge.wobble.items()) if caverns is not None else frozenset()
+            scythe = (cavern_scythe_signature(self.cavern_program, room_id, caverns)
+                      if caverns is not None else ())
+            entry = caverns.entry_room if caverns is not None else self.level.start_room
+            alternate = caverns is not None and caverns.alternate_entry
+            redrawn = frozenset(caverns.loose.redrawn) if caverns is not None else frozenset()
+            key = (room_id, frame if room_id == entry else 0, signature, pressure, fallen, scythe, wobble,
+                   alternate, redrawn)
             if key not in self.cavern_frames:
-                # Retain loose-floor variants, not every historical gate height.
+                # Retain loose-floor variants, not every historical gate
+                # height or plank wobble.
                 for previous in tuple(self.cavern_frames):
-                    if previous[0] == room_id and previous[3] != pressure:
+                    if previous[0] == room_id and (previous[3] != pressure or previous[6] or wobble):
                         del self.cavern_frames[previous]
                 self.cavern_frames[key] = cavern_room(room_id, entry_frame=key[1], animated=True,
                                                     loose_key=signature, pressure_key=pressure,
                                                     retouched=self.retouch_caverns,
                                                     level_number=self.level.number,
-                                                    bridge_fallen=fallen)
+                                                    bridge_fallen=fallen, scythe_patch=scythe,
+                                                    bridge_wobble=wobble, alternate_entry=alternate,
+                                                    redrawn=redrawn)
             self.rooms[room_id] = self.cavern_frames[key]
             return self.rooms[room_id]
         if room_id not in self.rooms:
@@ -78,6 +93,9 @@ class LevelRenderer:
         return self.rooms[room_id]
 
     def enter_room(self, room_id, caverns=None):
+        if caverns is not None and self.cavern_display is not None and self.cavern_display[0] != room_id:
+            # Entering a room repaints it whole: no crevice keeps a redraw.
+            caverns.loose.redrawn.clear()
         room = self.room(room_id, caverns)
         if self.level.kind not in (3, 4):
             return room

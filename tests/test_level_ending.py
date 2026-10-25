@@ -239,7 +239,7 @@ class OriginalEndingTests(unittest.TestCase):
         scene.audio.ambient.assert_not_called()
 
     def test_far_right_shore_splash_uses_native_threshold_and_random_gate(self):
-        from pop2.scene_prototype import DESERT_FAR_SHORE_SOUND_X
+        from pop2.environments import DESERT_FAR_SHORE_SOUND_X
 
         scene = self.scene
         scene.load_level(2)
@@ -267,7 +267,7 @@ class OriginalEndingTests(unittest.TestCase):
         scene.audio.rng.randrange.assert_not_called()
 
     def test_far_right_shore_remains_walkable_until_native_splash_threshold(self):
-        from pop2.scene_prototype import DESERT_FAR_SHORE_SOUND_X
+        from pop2.environments import DESERT_FAR_SHORE_SOUND_X
 
         scene = self.scene
         scene.load_level(2)

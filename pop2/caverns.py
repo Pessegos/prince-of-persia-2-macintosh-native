@@ -9,7 +9,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageOps
 
 from pop2.paths import ASSET_DIR
-from pop2.cavern_retouch import retouched_sprite
+from pop2.cavern_retouch import retouched_door_sprite, retouched_sprite
 from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.render_opening import OpeningRoom, decode_ctbl, decode_shap, load_resource_file
 from pop2.terrain import character_row, floor_contact_x
@@ -57,9 +57,14 @@ class CavernRoom(OpeningRoom):
     floor_redraw: dict | None = None
     retained_mask: Image.Image | None = None
     gate_occlusion: dict | None = None
+    custom_occlusion: Image.Image | None = None
 
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
         mask = super().actor_mask(row, bottom, state, bounds, record)
+        if self.custom_occlusion is not None:
+            # DrawCustomRoomImgs 3:239e-23b2 repeats the CUST foreground for
+            # every dirty cell, not just its clean-cut admission cell (9, 0).
+            mask = ImageChops.lighter(mask, self.custom_occlusion)
         # CheckGateInFore 3:2722-2762/2860 peels the movable gate over
         # actors in its own/preceding column, except hanging modes 2/6.
         if (not self.gate_occlusion or state is None or record is None
@@ -169,18 +174,29 @@ def cavern_clip_top(terrain, room, row, state, bounds):
 
 # Levels whose scenery is the original renderer's export, by LEVL environment:
 # caverns (3) and ruins (4, levels six and seven).
-SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7)}
+SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7, 8, 9)}
 RUINS_LEVELS = SCENERY_LEVELS[4]
-# CUST room enter hooks loading CTBL over entries 64+ (S03_508A): level five's
-# carpet room (CheckCarpetImg 8:0d30, CTBL 3501) and level six's start room
-# (CUST kind 22, 7:37a6, CTBL 3502).
-ROOM_PALETTES = {(5, 2): 3501, (6, 26): 3502}
+# CUST room enter hooks loading a CTBL over the room palette (S03_508A):
+# level five's carpet room (CheckCarpetImg 8:0d30, CTBL 3501 at 64), level
+# six's start room (CUST kind 22, 7:37a6, CTBL 3502 at 64) and level eight's
+# throne room (kind 34, 7:3864, Ruins CTBL 3501 at 48).
+ROOM_PALETTES = {(5, 2): 3501, (6, 26): 3502, (8, 8): 3501}
 
 
 def scenery_name(level_number):
     if level_number == 3:
         return 'caverns_entry.json'
     return f"{'ruins' if level_number in RUINS_LEVELS else 'caverns'}_level{level_number}.json"
+
+
+# The room whose exit closes behind the Prince as he enters. Level six's
+# cliff exit (S07_373E, called from CutChar 6:4d7c-4d92) brings him out of
+# native room 3's door instead of its start room.
+ENTRY_ROOMS = {6: 2}
+
+
+def entry_room(level_number, start_room):
+    return ENTRY_ROOMS.get(level_number, start_room)
 
 
 def scenery_available(level_number):
@@ -191,6 +207,25 @@ def scenery_available(level_number):
 
 def scenery_resource(level_number):
     return 'Ruins.rsrc' if level_number in RUINS_LEVELS else 'Caverns.rsrc'
+
+
+def custom_foreground_records(resources, room_id):
+    custom = resources.get('CUST', {}).get(4000 + room_id * 25)
+    if custom is None:
+        return frozenset()
+    data = custom['data']
+    if len(data) < 30:
+        raise ValueError('Truncated custom scenery header')
+    first = struct.unpack_from('>H', data, 2)[0]
+    count = struct.unpack_from('>H', data, 28)[0]
+    if len(data) < 30 + count * 32:
+        raise ValueError('Truncated custom scenery records')
+    records = set()
+    for offset in range(30, 30 + count * 32, 32):
+        index, bottom, x, draw_pass, mode, hidden = struct.unpack_from('>6h', data, offset)
+        if draw_pass == 1 and hidden != -1:
+            records.add((first + index, x, bottom, mode))
+    return frozenset(records)
 
 
 def cavern_assets(level_number=3):
@@ -532,12 +567,23 @@ def cavern_scene_signature(program, room_id, state):
         kind, foreground = state.loose.tiles.get((room, cell), choices[0])
         if choices[0][0] == 11:
             shifts = metadata['shifts']
+            second = None
             if isinstance(shifts[0], list):
-                # Ruins: one shake table per column parity. Both nonzero shake
-                # images share the exported phase-1 variant.
+                # Ruins: one shake table per column parity (7:2bd6), each with
+                # two images: phase 1's, and the other one, exported last
+                # (older exports have only phase 1's).
                 shifts = shifts[cell % 10 & 1]
-            index = (int(bool(shifts[foreground & 15])) if kind == 11 else
-                     2 if (room, cell) in state.loose.cleared or len(choices) == 3 else 3)
+                if choices[-1][0] == 11 and len(choices) > 3:
+                    second = len(choices) - 1
+            shift = shifts[foreground & 15]
+            # A struck cell (one more choice, 3) keeps the floor below it.
+            struck = len(choices) == (5 if second is not None else 4)
+            if kind != 11:
+                index = 3 if struck and (room, cell) not in state.loose.cleared else 2
+            elif second is not None and shift in (1, 2) and shift != shifts[1]:
+                index = second
+            else:
+                index = int(bool(shift))
         else:
             index = next(i for i, value in enumerate(choices) if value[0] == kind and
                          (choices[0][0] != choices[1][0]
@@ -561,8 +607,12 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3):
             y = block.y + 364
         else:
             continue
-        # DrawObjCaveLoose 8:2bb4-2bf4 adds the upper lip and stone body.
-        for index, bottom in ((3557, y - 18), (3604, y)):
+        # DrawObjLoose 3:412c-41aa: the caverns' DrawObjCaveLoose (8:2bb4)
+        # draws the upper lip and stone body; the ruins draw pieces 14 and 18
+        # at the slab's own bottom.
+        pieces = (((3514, y), (3518, y)) if level_number in RUINS_LEVELS
+                  else ((3557, y - 18), (3604, y)))
+        for index, bottom in pieces:
             sprite = cavern_command_sprite(['back', index, block.x, bottom, 16],
                                             resources, palette, shapes)
             frame.paste(sprite, (block.x, bottom - sprite.height), sprite)
@@ -609,7 +659,8 @@ def draw_bridge_planks(frame, room_id, state, *, level_number=3):
 
 
 @lru_cache(maxsize=1)
-def carpet_palette():
+@lru_cache(maxsize=1)
+def carpet_base_palette():
     # CheckCarpetImg 8:0d30 loads CTBL 25303 over entries 32-46. Entries
     # 16-31 hold the cavern Prince palette (Kid CTBL 25003) one bank up, as
     # an emulator capture of the unused carpet confirms pixel for pixel.
@@ -619,10 +670,33 @@ def carpet_palette():
     return palette
 
 
-def carpet_sprite(shape, resources, shapes):
-    key = ('carpet', shape)
+def blood_component(start, target, step):
+    # ComputeBloodRGB 8:0df6: start + (target - start) / 8 * step, with the
+    # signed division truncating towards zero, on 16-bit colour words.
+    difference = target - start
+    eighth = abs(difference) // 8 * (1 if difference >= 0 else -1)
+    return start + eighth * step
+
+
+def carpet_palette(blood=0):
+    palette = carpet_base_palette()
+    if blood:
+        # DrawObjCarpet 8:10ba-11a2: from the fifth drawing after a crash,
+        # entries 46 and 45 fade towards dark red (0x7272 / 0x4bc2, no green
+        # or blue) for seven frames, from their colours at the first step.
+        palette = dict(palette)
+        for index, red in ((46, 0x7272), (45, 0x4bc2)):
+            r, g, b, a = palette[index]
+            palette[index] = (blood_component(r * 257, red, blood) >> 8,
+                              blood_component(g * 257, 0, blood) >> 8,
+                              blood_component(b * 257, 0, blood) >> 8, a)
+    return palette
+
+
+def carpet_sprite(shape, resources, shapes, blood=0):
+    key = ('carpet', shape, blood)
     if key not in shapes:
-        shapes[key] = decode_shap(resources['SHAP'][shape]['data'], carpet_palette())
+        shapes[key] = decode_shap(resources['SHAP'][shape]['data'], carpet_palette(blood))
     return shapes[key]
 
 
@@ -642,7 +716,7 @@ def draw_carpet(frame, room_id, state, prince=None, *, level_number=3):
         frame.paste(sprite, (STATIC_X, STATIC_BOTTOM - sprite.height), sprite)
     elif prince is not None and prince[3] == RIDE_FRAME:
         shape, x, bottom = carpet.drawing(prince[0], prince[1], prince[2])
-        sprite = carpet_sprite(shape, resources, shapes)
+        sprite = carpet_sprite(shape, resources, shapes, carpet.blood_step())
         frame.paste(sprite, (x, bottom - sprite.height), sprite)
     return frame
 
@@ -745,6 +819,16 @@ def pressure_drawing_commands(commands, records, phases, resources):
             clip[0] = max(0, command[5] * 120 + DOOR_CLIP_TOP.get(command[1], 1 if exit_door else -31),
                           command[3] - height)
             clip[2] = min(365, command[3])
+            if command[1] == 3562 and phase != initial:
+                # GetCells/ComputeClipRect repaints this cell from row*120+5.
+                # Keep its clean-cut cap fixed instead of lifting the stone
+                # over the upper floor/pillar foot when rebuilding the room.
+                boundary = source[9] * 120 + 5
+                cap = list(source)
+                cap[6] = [*source[6][:2], min(source[6][2], boundary), source[6][3]]
+                if cap[6][0] < cap[6][2]:
+                    result.append(cap)
+                clip[0] = max(clip[0], boundary)
             if clip[0] >= clip[2]:
                 continue
             command[6] = clip
@@ -765,8 +849,12 @@ def delta_commands(base, items):
     return result
 
 
-def loose_variant(program, room_id, loose_key):
+def loose_variant(program, room_id, loose_key, scythe_states=(), plank_states=(), redrawn=frozenset()):
     """A loose-floor variant, expanding the ruins' delta-encoded form."""
+    metadata = program.get('loose_floors', {})
+    if metadata.get('schema') == 2:
+        return slot_variant(metadata, metadata.get('rooms', {}).get(str(room_id)), loose_key,
+                            scythe_states, plank_states, redrawn)
     room = program.get('loose_floors', {}).get('rooms', {}).get(str(room_id), {})
     variant = room.get('variants', {}).get(loose_key)
     if variant is None or not room.get('delta'):
@@ -784,6 +872,133 @@ def loose_variant(program, room_id, loose_key):
     return decoded
 
 
+def cavern_scythe_signature(program, room_id, state):
+    """For each scythe drawn in the room, the exported patch of its state.
+
+    With per-slot drawing (loose-floor schema 2) the scythes are slot units:
+    ('slots', state indices) instead of patch indices.
+    """
+    slots = program.get('loose_floors', {})
+    room = slots.get('rooms', {}).get(str(room_id)) if slots.get('schema') == 2 else None
+    if room is not None and 'scythes' in room:
+        from pop2.scythes import SCYTHE_STATES
+
+        return ('slots', tuple(SCYTHE_STATES.index(state.scythes.foreground.get(tuple(key), 0))
+                               for key in room['scythes']))
+    if slots.get('scythe_units'):
+        return ()  # No scythe is drawn in this room.
+    metadata = program.get('scythes', {})
+    signature = []
+    for entry in metadata.get('rooms', {}).get(str(room_id), ()):
+        key = tuple(metadata['scythes'][entry['scythe']][:2])
+        patch = entry['states'].get(str(state.scythes.foreground.get(key, 0)))
+        signature.append(-1 if patch is None else patch)
+    return tuple(signature)
+
+
+def with_scythe(commands, patch):
+    """Apply an exported scythe patch: drop its commands, insert after anchors."""
+    result = list(commands)
+    for command in patch['remove']:
+        if command in result:
+            result.remove(command)
+    for anchor, inserted in patch['insert']:
+        if anchor is None:
+            index = 0
+        elif anchor in result:
+            index = result.index(anchor) + 1
+        else:
+            index = len(result)
+        result[index:index] = inserted
+    return result
+
+
+def with_plank_wobble(commands, wobble, resources):
+    # OffsetBrgFloorY 8:0772-07b6 draws a wobbling plank with CUST record
+    # 3 + nibble: SHAP 4227/4228, its bottom one/two pixels lower.
+    wobble = dict(wobble)
+    result = []
+    for command in commands:
+        nibble = (wobble.get(command[8]) if command[1] == 4226 and len(command) >= 10
+                  and command[9] == 1 else None)
+        if nibble:
+            command = list(command)
+            command[1] += nibble
+            command[3] += nibble
+            width, height = struct.unpack_from('>hH', resources['SHAP'][command[1]]['data'], 4)
+            command[6] = [command[3] - height, command[2], command[3], command[2] + width]
+        result.append(command)
+    return result
+
+
+def loose_keys(program, room_id):
+    """Every loose-floor signature a room can take (crevice runs move together)."""
+    from itertools import product
+
+    metadata = program.get('loose_floors', {})
+    room = metadata.get('rooms', {}).get(str(room_id))
+    if room is None:
+        return ()
+    if metadata.get('schema') != 2:
+        return tuple(room.get('variants', {}))
+    keys = []
+    for states in product(*(range(count) for count in room['counts'][:len(room['units'])])):
+        digits = ['0'] * len(room['cells'])
+        for group, state in zip(room['units'], states):
+            for index in group:
+                digits[index] = str(state)
+        keys.append(''.join(digits))
+    return tuple(key for key in keys if set(key) != {'0'})
+
+
+def slot_variant(metadata, room, loose_key, scythe_states=(), plank_states=(), redrawn=frozenset()):
+    """A room's lists for loose-cell and scythe states, composed from slots.
+
+    `scythe_states` are indices into SCYTHE_STATES, one per room['scythes'].
+    `redrawn` holds crevice cells revealed while the room was displayed: the
+    original repaints only their cells over the screen (RedrawCell 3:1d3a in
+    per-cell mode), so those runs keep the covered drawing plus that redraw
+    until the room is entered again. Returns None at rest, like the
+    whole-room variants it replaces.
+    """
+    from pop2.slot_drawing import clip_climbing, compose_list
+
+    if room is None:
+        return None
+    loose = [int(loose_key[group[0]]) for group in room['units']] if loose_key else [0] * len(room['units'])
+    scythes = list(scythe_states) or [0] * len(room.get('scythes', ()))
+    planks = list(plank_states) or [0] * len(room.get('planks', ()))
+    incremental = [unit for unit in room.get('crevices', ())
+                   if str(unit) in room.get('redraws', {}) and loose[unit]
+                   and any(tuple(room['cells'][index]) in redrawn for index in room['units'][unit])]
+    if not any(loose) and not any(scythes) and not any(planks):
+        return None
+    loose = loose + scythes + planks
+    lists = room['lists']
+
+    def climbing(states):
+        climb = metadata['climb']
+        if climb['source'] is None:
+            return {action: compose_list(lists[f'climb:{action}'], states) for action in climb['rects']}
+        source = compose_list(lists['climb_source'], states)
+        return {action: (compose_list(lists['climb_141'], states) if action == '141'
+                         else clip_climbing(source, rect)) for action, rect in climb['rects'].items()}
+
+    states = loose + [0] if room['door'] else loose
+    covered = [0 if unit in incremental else state for unit, state in enumerate(states)]
+    commands = compose_list(lists['commands'], covered)
+    redraw_start = len(commands)
+    for unit in incremental:
+        commands = commands + room['redraws'][str(unit)]
+    variant = {'commands': commands, 'redraw_start': redraw_start,
+               'floor_redraw': compose_list(lists['floor_redraw'], states),
+               'climb_redraw': climbing(states)}
+    if room['door']:
+        variant['entry_frames'] = [compose_list(lists['commands'], loose + [frame])
+                                   for frame in range(room['counts'][-1])]
+    return variant
+
+
 def without_fallen_planks(commands, fallen):
     # Native room-10 redraws with the emptied bridge cells (8:0c3e-0c54) only
     # omit those cells' CUST plank (SHAP 4226), in every collapse stage.
@@ -793,14 +1008,17 @@ def without_fallen_planks(commands, fallen):
 
 
 def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure_key=(), retouched=False,
-                *, level_number=3, bridge_fallen=frozenset()):
+                *, level_number=3, bridge_fallen=frozenset(), scythe_patch=(), bridge_wobble=frozenset(),
+                alternate_entry=False, redrawn=frozenset()):
     program, resources, palette, shapes = room_assets(level_number, room_id)
 
     def scenery_sprite(command):
         sprite = cavern_command_sprite(command, resources, palette, shapes)
+        if retouched:
+            sprite = retouched_door_sprite(level_number, room_id, command, sprite)
         return retouched_sprite(room_id, command, sprite) if retouched and level_number == 3 else sprite
 
-    if (program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+    if (program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
             and program.get('level') == level_number):
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, level_number, room_id):
@@ -808,17 +1026,44 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     else:
         raise ValueError('Unsupported cavern drawing export')
     entry = program.get('entry_exit')
-    variant = loose_variant(program, room_id, loose_key)
+    scythe_states = scythe_patch[1] if scythe_patch[:1] == ('slots',) else ()
+    if scythe_states:
+        scythe_patch = ()
+    slot_room = (program.get('loose_floors', {}).get('rooms', {}).get(str(room_id), {})
+                 if program.get('loose_floors', {}).get('plank_units') else {})
+    plank_states = ()
+    if slot_room.get('planks'):
+        # Bridge planks are slot units: fallen (3) or wobbling (1/2).
+        wobble = dict(bridge_wobble)
+        plank_states = tuple(3 if cell % 10 in bridge_fallen else wobble.get(cell % 10, 0)
+                             for _room, cell in slot_room['planks'])
+        bridge_fallen, bridge_wobble = frozenset(), frozenset()
+    variant = loose_variant(program, room_id, loose_key, scythe_states, plank_states, redrawn)
     if variant is not None:
         commands = variant['commands']
-    if entry is not None and room_id == entry['room']:
-        commands = (variant['entry_frames'][entry_frame] if variant is not None else
-                    entry['frames'][entry_frame]['commands'])
+    alternate = program.get('alternate_entry') if alternate_entry else None
+    if alternate is not None and room_id == alternate['room']:
+        # Level seven's upper entrance: its own closing door (no loose-floor
+        # variants of these frames are exported).
+        commands = alternate['frames'][entry_frame]['commands']
+    elif entry is not None and room_id == entry['room']:
+        # With the other entrance in use, this door stays shut (2:5eda).
+        frame = len(entry['frames']) - 1 if alternate is not None else entry_frame
+        commands = (variant['entry_frames'][frame] if variant is not None else
+                    entry['frames'][frame]['commands'])
     records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room_id), ())
     if pressure_key:
         commands = pressure_drawing_commands(commands, records, pressure_key, resources)
     if bridge_fallen:
         commands = without_fallen_planks(commands, bridge_fallen)
+    if bridge_wobble:
+        commands = with_plank_wobble(commands, bridge_wobble, resources)
+    # One exported patch per scythe drawn in the room (-1 at rest).
+    patches = [entry['patches'][index] for entry, index
+               in zip(program.get('scythes', {}).get('rooms', {}).get(str(room_id), ()), scythe_patch)
+               if index >= 0]
+    for patch in patches:
+        commands = with_scythe(commands, patch['commands'])
     gate_cells = {tuple(key[-2:]) for record in records if record['kind'] == 4
                   for key in record['commands']}
     background = Image.new('RGBA', (510, 365))
@@ -826,7 +1071,12 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     masks = {row: Image.new('L', background.size) for row in range(-1, 5)}
     cell_masks = {} if program.get('version') >= 6 else None
     gate_masks = {}
-    for command in commands:
+    custom_records = custom_foreground_records(resources, room_id)
+    custom_mask = Image.new('L', background.size) if custom_records else None
+    # A crevice reveal's redraw paints over the displayed screen: its back
+    # pieces also cover the earlier front pieces (slot_variant `redrawn`).
+    redraw_start = variant.get('redraw_start', len(commands)) if variant is not None else len(commands)
+    for position_index, command in enumerate(commands):
         layer, index, _, _, _, row = command[:6]
         library = command[7] if len(command) >= 8 else 4
         if animated and library in (0, 1):
@@ -839,6 +1089,14 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         sprite, position = clipped
         destination = background if layer == 'back' else foreground
         destination.paste(sprite, position, sprite)
+        if layer == 'back' and position_index >= redraw_start:
+            covered = Image.new('L', background.size)
+            covered.paste(sprite.getchannel('A'), position)
+            uncovered = ImageChops.invert(covered)
+            foreground.putalpha(ImageChops.multiply(foreground.getchannel('A'), uncovered))
+            masks = {mask_row: ImageChops.multiply(mask, uncovered) for mask_row, mask in masks.items()}
+            if custom_mask is not None:
+                custom_mask = ImageChops.multiply(custom_mask, uncovered)
         cell = tuple(command[8:10])
         if layer == 'back' and library == 4 and index in (3563, 3542) and cell in gate_cells:
             # DrawCaveGate anchors the stone one column right of its tile.
@@ -850,6 +1108,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         if layer == 'front':
             mask = Image.new('L', background.size)
             mask.paste(sprite.getchannel('A'), position)
+            if library == 4 and (index, command[2], command[3], command[4]) in custom_records:
+                custom_mask = ImageChops.lighter(custom_mask, mask)
             if row in masks:
                 masks[row] = ImageChops.lighter(masks[row], mask)
             if cell_masks is not None and len(command) >= 10:
@@ -865,6 +1125,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             redraw_commands = pressure_drawing_commands(redraw_commands, records, pressure_key, resources)
         if bridge_fallen:
             redraw_commands = without_fallen_planks(redraw_commands, bridge_fallen)
+        if bridge_wobble:
+            redraw_commands = with_plank_wobble(redraw_commands, bridge_wobble, resources)
         for command in redraw_commands:
             if animated and len(command) >= 8 and command[7] == 1:
                 continue
@@ -879,6 +1141,10 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         floor_commands = pressure_drawing_commands(floor_commands, records, pressure_key, resources)
     if bridge_fallen:
         floor_commands = without_fallen_planks(floor_commands, bridge_fallen)
+    if bridge_wobble:
+        floor_commands = with_plank_wobble(floor_commands, bridge_wobble, resources)
+    for patch in patches:
+        floor_commands = with_scythe(floor_commands, patch['floor_redraw'])
     for command in floor_commands:
         if animated and len(command) >= 8 and command[7] == 1:
             continue
@@ -889,4 +1155,4 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         background.getchannel('A'), foreground.getchannel('A')))
     background = Image.alpha_composite(Image.new('RGBA', background.size, 'black'), background)
     return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
-                      redraw, floors, retained, gate_masks)
+                      redraw, floors, retained, gate_masks, custom_mask)

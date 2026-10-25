@@ -66,10 +66,21 @@ def extract_dissolve(image):
 
 
 def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_words=None,
-                   callbacks=None):
+                   callbacks=None, files=None, resident=None, memory=None, inline=(), follow=None):
     """Run CODE 15 coordinators. ``arguments`` are the Pascal word arguments
     after the return address, ``a5_words`` preset A5-relative globals and
-    ``callbacks`` maps an A5 jump-table offset to an animation callback name."""
+    ``callbacks`` maps an A5 jump-table offset to an animation callback name.
+
+    ``files`` maps the A5 offset of a resource-file record to (id offset,
+    parsed resources). While the coordinator has such a file open (open
+    17:3260, close 17:322e) its SHAP/CTBL take precedence, like the Resource
+    Manager's search order, and are emitted as id + offset.
+
+    ``resident`` lists (id offset, parsed resources) of the game's own open
+    files (Kid, Prince, the environment), searched after NIS. ``memory``
+    presets absolute addresses, ``inline`` names CODE 15 helpers that run
+    instead of being recognized, and ``follow`` tags the operations of a call
+    at a CODE 15 offset (for drawing that follows the Prince's position)."""
     from unicorn import Uc, UcError, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_CODE
     from unicorn.m68k_const import (
         UC_M68K_REG_A5, UC_M68K_REG_A7, UC_M68K_REG_PC, UC_M68K_REG_D0,
@@ -79,8 +90,26 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
     resources = parse_resource_fork(program)
     code = resources["CODE"][15]["data"]
     data = expand_a5_data(resources)
-    shapes = (nis if isinstance(nis, dict) else parse_resource_fork(nis))["SHAP"]
+    resources_all = nis if isinstance(nis, dict) else parse_resource_fork(nis)
+    files = files or {}
+    shapes = dict(resources_all["SHAP"])
+    resident = resident or ()
+    for offset, extra in (*files.values(), *resident):
+        shapes.update({offset + key: value for key, value in extra.get("SHAP", {}).items()})
     callbacks = callbacks or {}
+    opened = []
+    files_by_offset = {offset: extra for offset, extra in files.values()}
+
+    def resolve(kind, resource_id):
+        for record in reversed(opened):
+            offset, extra = files[record]
+            if resource_id in extra.get(kind, {}):
+                return offset + resource_id
+        if resource_id not in resources_all.get(kind, {}):
+            for offset, extra in resident:
+                if resource_id in extra.get(kind, {}):
+                    return offset + resource_id
+        return resource_id
     scenes = []
     for entry in entries:
         if code[entry:entry + 2] != b"\x4e\x56":
@@ -100,12 +129,16 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
             cpu.mem_write(stack + 4 + index * 2, struct.pack(">h", value))
         for offset, value in (a5_words or {}).items():
             cpu.mem_write(a5 - offset, struct.pack(">h", value))
+        for address, value in (memory or {}).items():
+            cpu.mem_write(address, value)
         cpu.reg_write(UC_M68K_REG_A5, a5)
         cpu.reg_write(UC_M68K_REG_A7, stack)
         pointers, handles, palettes = {}, {}, {0x900000 + 25001 * 8: 25001}
         cpu.mem_write(a5 - 0x2454, struct.pack(">I", 0x900000 + 25001 * 8))
         pool = 0x200000
         operations = []
+        # FreeShpInfo 17:5fd0 orientations, SaveRect 17:520a handles.
+        mirrored, saved, panel = set(), {}, []
 
         def word(address):
             return struct.unpack(">h", cpu.mem_read(address, 2))[0]
@@ -118,6 +151,8 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
 
         def emit(op, *args):
             operations.append({"op": op, "args": list(args), "pc": address_now - base})
+            if (follow or {}).get(address_now - base):
+                operations[-1]["follow"] = follow[address_now - base]
 
         address_now = base
 
@@ -144,8 +179,17 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
             displacement = struct.unpack(">h", instruction[2:4])[0]
             if opcode == b"\x4e\xba":
                 target = address + 2 + displacement - base
-                if target == 0x331e:
-                    emit("shape", w(), w(2), w(4), w(6))
+                if target in inline:
+                    return
+                if target in (0x0170, 0x0bf4) and word(a5 - 0x27dc) and w() and not panel:
+                    # 15:026e-028c: while NIS 6 runs (a5-0x27dc), the text
+                    # panel is the rectangle saved at a5-0x27da, drawn with
+                    # colours 1 and 2 instead of SHAP 25002 and 3/14.
+                    panel.append(saved[long(a5 - 0x27da)])
+                    emit("text_panel", panel[0])
+                if target in (0x331e, 0x0c98):
+                    # 15:0c98 draws a SHAP of an open file, as AddNIS does.
+                    emit("shape", resolve("SHAP", w()), w(2), w(4), w(6))
                 elif target == 0x0b32:
                     emit("fill", w(4) & 255, rectangle(l(6)))
                 elif target == 0x32f4:
@@ -163,11 +207,12 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                     cpu.mem_write(a5 - 0x245e, b"\0\0")
                     emit("wait_sound", w(4), 1)
                 elif target == 0x26fc:
-                    emit("palette", w(), w(2), l(4))
+                    palette_id = resolve("CTBL", w())
+                    emit("palette", palette_id, w(2), l(4))
                     for flag, offset in ((1, 0x2454), (2, 0x2450)):
                         if w(2) & flag:
-                            pointer = 0x900000 + w() * 8
-                            palettes[pointer] = w()
+                            pointer = 0x900000 + palette_id * 8
+                            palettes[pointer] = palette_id
                             cpu.mem_write(a5 - offset, struct.pack(">I", pointer))
                 elif target == 0x24a0:
                     emit("brightness", w(), w(2))
@@ -179,6 +224,15 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                     emit("flash", w(), l(2), l(6), l(10), l(14))
                 elif target == 0x2b70:
                     emit("wait_current", w())
+                elif target == 0x2d60:
+                    # MakeDisolveData 15:2d60 frees the dissolve data: a
+                    # dissolve then copies the whole screen at once (15:2c06).
+                    emit("dissolve_area", None)
+                elif target == 0x2c40:
+                    # InitDissolve 15:2c40: mode 1 the picture (0, 0, 365,
+                    # 512), mode 2 the rectangle at a5-0x22fc, else STORY_RECT.
+                    emit("dissolve_area", [0, 0, 365, 512] if w() == 1 else rectangle(a5 - 0x22fc)
+                         if w() == 2 else list(STORY_RECT))
                 elif target not in (0x0c36, 0x0c82, 0x29a0):
                     raise ValueError(f"Unrecognized opening helper {target:#x}")
             else:
@@ -186,11 +240,12 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                 if target == 0x10f2:
                     cpu.mem_write(l(), struct.pack(">4h", 0, 0, 384, 510))
                 elif target == 0x10fa:
+                    # MoveRect 17:1b4e (17:1b12 first moves it to the origin).
                     top, left, bottom, right = rectangle(l())
                     dx, dy = w(4), w(6)
-                    cpu.mem_write(l(), struct.pack(">4h", top + dy, left + dx, bottom + dy, right + dx))
+                    cpu.mem_write(l(), struct.pack(">4h", dy, dx, bottom - top + dy, right - left + dx))
                 elif target == 0x1262:
-                    resource_id = w()
+                    resource_id = resolve("SHAP", w())
                     if resource_id not in shapes:
                         raise ValueError(f"Opening SHAP {resource_id} is missing")
                     if resource_id not in handles:
@@ -202,8 +257,14 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                         pointers[pointer] = resource_id
                         handles[resource_id] = handle
                     result = handles[resource_id]
+                elif target == 0x126a:
+                    # FreeShpInfo 17:5fd0(shape, 1): mirrored, from the
+                    # stored orientation (header bits $30, here always 0).
+                    if struct.unpack(">H", cpu.mem_read(l(), 2))[0] & 0x30 or w(4) & 3 not in (0, 1):
+                        raise ValueError("Unsupported scene shape orientation")
+                    (mirrored.add if w(4) & 3 else mirrored.discard)(l())
                 elif target == 0x125a:
-                    emit("shape", pointers[l()], w(8), w(10), w(12))
+                    emit("shape", pointers[l()], w(8), w(10), w(12) | (256 if l() in mirrored else 0))
                     if l(16):
                         _, _, width, height = struct.unpack(">HhhH", shapes[pointers[l()]]["data"][:8])
                         cpu.mem_write(l(16), struct.pack(">4h", w(10), w(8), w(10) + height, w(8) + width))
@@ -221,9 +282,34 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                     emit("wait_sound", w(), w(2))
                 elif target == 0xf5a:
                     callback = callbacks.get(l(6) - a5) if l(6) else None
-                    if (l(6) and callback is None) or w(16) != 6 or w(18):
+                    if (l(6) and callback is None) or w(16) not in (6, 0x0c, 0x1c):
                         raise ValueError("Unsupported scene animation callback or flags")
-                    emit("animation", w(), w(2), w(20), w(22), *([callback] if callback else []))
+                    # PlayTheAnimation 16:10ba-10e8: flag 2 places the
+                    # animation at the given point, flag 16 at the ANI
+                    # bounds' top-left, otherwise at the origin.
+                    # An animation of an open scene file keeps its id offset.
+                    animation_id = resolve("ANI ", w() + w(2))
+                    first = animation_id - w(2)
+                    header = (resources_all["ANI "] if animation_id == w() + w(2)
+                              else files_by_offset[animation_id - w() - w(2)]["ANI "])[w() + w(2)]
+                    top, left, bottom, right = struct.unpack_from('>4h', header['data'])
+                    if w(16) & 2:
+                        x, y = w(20), w(22)
+                    elif w(16) & 16:
+                        x, y = left, top
+                    else:
+                        x = y = 0
+                    if w(18):
+                        # 16:11b8-11ce: PaintRect of the animation's bounds
+                        # within the screen in palette index $1a.
+                        emit("fill", w(18) & 255, [max(0, y), max(0, x), min(384, y + bottom - top),
+                                                   min(512, x + right - left)])
+                    emit("animation", first, w(2), x, y, *([callback] if callback else []))
+                    if w(16) & 8:
+                        operations[-1]["flags"] = w(16)
+                    if opened:
+                        # The Resource Manager's search order for its shapes.
+                        operations[-1]["search"] = [files[record][0] for record in reversed(opened)] + [0]
                 elif target in (0x1332, 0x133a):
                     emit("fade", palettes.get(l(), 0), target == 0x1332, l(8))
                 elif target == 0xfc2:
@@ -237,11 +323,59 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                     divisor = signed(cpu.reg_read(UC_M68K_REG_D1))
                     quotient = abs(dividend) // abs(divisor)
                     result = (-quotient if (dividend < 0) != (divisor < 0) else quotient) & 0xffffffff
+                elif target in (0x11a2, 0x119a) and a5 - l() in files:
+                    # Open (17:3260) or close (17:322e) a scene resource file.
+                    record = a5 - l()
+                    if record in opened:
+                        opened.remove(record)
+                    if target == 0x11a2:
+                        opened.append(record)
+                elif target == 0x2e2:
+                    # SetKidPalette 3:5f1c: Kid CTBL 25000 + environment at 16.
+                    emit("palette_at", 25000 + w(), 16)
+                elif target == 0x1222:
+                    # 17:4fe4 CopyBits: show the given rectangle.
+                    emit("copy", rectangle(l(8)))
+                elif target == 0x12da:
+                    # 17:6dd6: PaintRect(rect) in palette index `color`.
+                    emit("fill", w(4) & 255, rectangle(l()))
                 elif target == 0x132a:
                     # SetSHAPColors 17:0a52 prepares the offscreen colour
                     # table; indexed drawing is unaffected by it.
                     pass
-                elif target not in (0xf8a, 0xfea, 0x1012, 0x11fa, 0x1202, 0x11a2, 0x119a):
+                elif target == 0x135a:
+                    # ShowNthvRGB 17:130e: entry (byte at +8) := red, green, blue.
+                    emit("rgb", *bytes(cpu.mem_read(sp + 8, 8))[::2])
+                elif target == 0x25a:
+                    # PoPSetPalette 3:508a(id, first).
+                    emit("set_palette", resolve("CTBL", w()), w(2))
+                elif target == 0x12a2:
+                    # RemapCTBL 17:6a78 of the current (1) or target (2) table.
+                    slot = 1 if l() == long(a5 - 0x2454) else 2 if l() == long(a5 - 0x2450) else 0
+                    if not slot:
+                        raise ValueError("Unsupported scene palette remap")
+                    emit("remap", slot, w(4))
+                elif target == 0x1362:
+                    # CombineCtabs 17:1520(current, target) -> the new current.
+                    emit("combine")
+                    result = 0x9f0000
+                elif target == 0x13a2:
+                    # FadeOutAllColors 17:1a78.
+                    emit("fade_out_all", l(4))
+                elif target == 0x123a:
+                    # SaveRect 17:520a: the offscreen pixels under a rectangle.
+                    result = 0xa00000 + len(saved) * 8
+                    saved[result] = len(saved) + 1
+                    emit("save_rect", saved[result], rectangle(l()))
+                elif target == 0x1242:
+                    # RestoreRectKeep 17:544a.
+                    emit("restore_rect", saved[l()])
+                elif target == 0xff2:
+                    # SoundIdOn 16:25b0: the scene restarts the sound when it
+                    # has ended; it is reported as playing here.
+                    emit("ensure_sound", w(), w(2))
+                    result = 1
+                elif target not in (0xf8a, 0xfea, 0x1012, 0x11fa, 0x1202, 0x11a2, 0x119a, 0x124a):
                     raise ValueError(f"Unrecognized opening API {target:#x}")
             cpu.reg_write(UC_M68K_REG_D0, result)
             cpu.reg_write(UC_M68K_REG_PC, address + 4)
@@ -280,11 +414,20 @@ def expand_animations(operations, nis, callbacks=None):
         _top, _left, _bottom, _right, layers, script_id, *_rest = struct.unpack('>9h', header)
         if not 1 <= layers <= 24:
             raise ValueError('Unsupported scene animation layer count')
-        animation = ScriptAnimation(resources['SCRP'][script_id]['data'], layers)
+        # Resources of an opened scene file carry an id offset of 100000 * n.
+        offset = base - base % 100000
+        animation = ScriptAnimation(resources['SCRP'][script_id + offset]['data'], layers)
 
         def emit(op, *args):
             result.append({'op': op, 'args': list(args), 'pc': item['pc']})
 
+        # Flag 8 (16:121c, 16:1378-13bc): the background is saved before the
+        # first frame, and each frame first restores it under the previous
+        # frame's layers; the copy to the screen then covers both.
+        restore = bool(item.get('flags', 0) & 8)
+        previous = []
+        if restore:
+            emit('save_background')
         while not animation.done:
             animation.step()
             for opcode, argument in animation.events:
@@ -296,18 +439,25 @@ def expand_animations(operations, nis, callbacks=None):
             if animation.done:
                 break
             rectangles = []
+            for rectangle in previous:
+                emit('restore', rectangle)
             for shape, dx, dy, flags in animation.layers:
                 if not shape:
                     continue
-                shape_id = base + shape
+                shape_id = next((offset + base % 100000 + shape
+                                 for offset in item.get('search', (base - base % 100000,))
+                                 if offset + base % 100000 + shape in resources['SHAP']),
+                                base + shape)
                 data = resources['SHAP'][shape_id]['data']
                 _encoding, _stride, width, height = struct.unpack_from('>HhhH', data)
                 emit('shape', shape_id, x + dx, y + dy, flags)
                 rectangles.append([y + dy, x + dx, y + dy + height, x + dx + width])
             frame += 1
             result.extend(frame_operations.get(frame, ()))
-            for rectangle in rectangles:
+            for rectangle in previous + rectangles:
                 emit('copy', rectangle)
+            if restore:
+                previous = rectangles
             emit('wait', animation.interval)
     return result
 
@@ -324,7 +474,8 @@ def extract_scene_audio(image, operations, directory, progress=lambda _text: Non
     manifest_path = directory / "audio/manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="ascii"))
     audio = {}
-    for resource_id, kind in sorted({tuple(item["args"]) for item in operations if item["op"] == "sound"}):
+    for resource_id, kind in sorted({tuple(item["args"]) for item in operations
+                                     if item["op"] == "sound" and not item.get("song")}):
         progress(f"Preparing intro audio {resource_id}...")
         key = scene_sound_key(resource_id, kind) if banked else str(resource_id)
         stem = key if banked else f"intro-{resource_id}"
@@ -355,6 +506,14 @@ def extract_scene_audio(image, operations, directory, progress=lambda _text: Non
                 "NISDIGI.dat" if resource_id in native_voices else "DigiSnd.dat"))
         audio[key] = {"duration": duration, "markers": markers, "kind": kind}
         manifest.setdefault('scene_cues' if banked else 'cues', {})[key] = entry
+    for cue in sorted({item["args"][0] for item in operations if item.get("song")}):
+        # A game song (MIDISnd 9752 + cue), prepared by the audio import.
+        elapsed, markers = 0.0, {}
+        for event in mido.MidiFile(directory / "audio" / f"cue-{cue}.mid"):
+            elapsed += event.time
+            if event.type == "cue_marker":
+                markers[event.text.strip()] = elapsed
+        audio[str(cue)] = {"duration": manifest["cues"][str(cue)]["duration"], "markers": markers, "kind": 0}
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="ascii")
     (directory / "audio/playback.mid").unlink(missing_ok=True)
     return audio
@@ -389,6 +548,143 @@ def extract_discovery(image, program, nis, directory, progress=lambda _text: Non
     audio = extract_scene_audio(image, operations, directory, progress, banked=True)
     result = {'schema': 1, 'operations': operations, 'audio': audio}
     (directory / 'discovery.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')
+
+
+# NISCarpet (NIS 1, CheckPlayNIS(5, 6)) opens these files (A5 file records)
+# over NIS.rsrc; the scene program shows their resources as id + offset.
+CARPET_FILES = {0x26ce: ('TNIS1.rsrc', 100000), 0x26c8: ('TNIS2.rsrc', 200000),
+                0x26c2: ('TNIS3.rsrc', 300000), 0x470c: ('Ruins.rsrc', 400000),
+                0x4712: ('Caverns.rsrc', 500000)}
+CARPET_CALLBACKS = {0xe7a: ('carpet1', 0x19c2), 0xe82: ('carpet2', 0x1a44)}
+
+
+def carpet_resources(nis, files):
+    """NIS.rsrc plus each carpet file's resources at its id offset."""
+    merged = {kind: dict(items) for kind, items in parse_resource_fork(nis).items()}
+    for name, offset in CARPET_FILES.values():
+        for kind, items in parse_resource_fork(files[name]).items():
+            merged.setdefault(kind, {}).update({offset + key: value for key, value in items.items()})
+    return merged
+
+
+def recover_carpet(program, nis, files):
+    """NISCarpet 15:1630 (the 15:07c8 dispatcher's NIS 1) and its callbacks.
+
+    TransFunc1 15:19c2 shows the drawn screen on frame 1, then waits for music
+    cue 97 and fades in the current palette on frame 2; TransFunc3 15:1a44
+    waits for cue 99 on frame 1. Their fade reads the palette the coordinator
+    last loaded (a5-0x2450), so each animation gets its own copy.
+    """
+    parsed = {record: (offset, parse_resource_fork(files[name]))
+              for record, (name, offset) in CARPET_FILES.items()}
+    names = {offset: name for offset, (name, _entry) in CARPET_CALLBACKS.items()}
+    operations = recover_scenes(program, nis, entries=(0x1630,), callbacks=names, files=parsed)
+    callbacks, palette = {}, 0
+    for item in operations:
+        if item['op'] == 'palette' and item['args'][1] & 2:
+            palette = item['args'][0]
+        if item['op'] == 'animation' and len(item['args']) == 5:
+            name = f"{item['args'][4]}:{palette}"
+            entry = next(entry for callback, entry in CARPET_CALLBACKS.values() if callback == item['args'][4])
+            frames = {}
+            for frame in (1, 2):
+                frame_operations = recover_scenes(program, nis, entries=(entry,), arguments=(frame,),
+                                                  files=parsed)
+                for operation in frame_operations:
+                    if operation['op'] == 'fade' and operation['args'][0] == 0:
+                        operation['args'][0] = palette
+                if frame_operations:
+                    frames[frame] = frame_operations
+            callbacks[name] = frames
+            item['args'][4] = name
+    return expand_animations(operations, carpet_resources(nis, files), callbacks)
+
+
+def extract_carpet(image, program, nis, files, directory, progress=lambda _text: None):
+    """Write the carpet scene shown between levels five and six."""
+    directory = Path(directory)
+    operations = recover_carpet(program, nis, files)
+    audio = extract_scene_audio(image, operations, directory, progress, banked=True)
+    result = {'schema': 1, 'resource_files': {name: offset for name, offset in CARPET_FILES.values()},
+              'operations': operations, 'audio': audio}
+    (directory / 'carpet.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')
+
+
+# The vision at the throne (NIS 6, 15:66f4) opens ThroneNIS.rsrc (A5 file
+# record -0x26aa) and draws the game's own Kid, Prince and Ruins shapes.
+THRONE_FILES = {0x26aa: ('ThroneNIS.rsrc', 600000)}
+THRONE_RESIDENT = (('Ruins.rsrc', 400000), ('Kid.rsrc', 700000), ('Prince.rsrc', 800000))
+# The Prince at a reference position: native X (207 origin; the collapse
+# facing right ends there) and Y, row 2's floor (SetCharFloor 4:31fa).
+THRONE_PRINCE = (474, 346)
+# Game songs are MIDISnd 9752 + cue (5:4d58).
+SONG_BASE, SONG_COUNT = 9752, 301
+
+
+def throne_resources(nis, files):
+    """NIS.rsrc plus the throne scene's and the game's files at their offsets."""
+    merged = {kind: dict(items) for kind, items in parse_resource_fork(nis).items()}
+    for name, offset in (*THRONE_FILES.values(), *THRONE_RESIDENT):
+        for kind, items in parse_resource_fork(files[name]).items():
+            merged.setdefault(kind, {}).update({offset + key: value for key, value in items.items()})
+    return merged
+
+
+def recover_throne(program, nis, files, facing):
+    """NIS 6 for a Prince facing right (native facing 0) or left (-1).
+
+    15:6c66 draws the collapsed Prince (Kid SHAP 25081, mirrored by
+    FreeShpInfo when he faces right) at his X/Y and the sword (Prince SHAP
+    1011); 15:6efc places the apparition's rectangle at his X. Those calls
+    are tagged ``follow`` ('xy' or 'x') against THRONE_PRINCE. 15:6d46 (the
+    environment is 4) redraws the throne room from Ruins SHAP 4200-4207.
+    The game's level record is supplied at 0x700000: environment 4 at
+    +0x2186 and level 8 at +0x218a."""
+    x, y = THRONE_PRINCE
+    operations = recover_scenes(
+        program, nis, entries=(0x66f4,),
+        files={record: (offset, parse_resource_fork(files[name]))
+               for record, (name, offset) in THRONE_FILES.items()},
+        resident=tuple((offset, parse_resource_fork(files[name])) for name, offset in THRONE_RESIDENT),
+        a5_words={0x5014: 0x70, 0x5012: 0, 0x50ce: x, 0x50d0: facing, 0x50cc: y},
+        memory={0x702186: struct.pack('>h', 4), 0x70218a: struct.pack('>h', 8)},
+        inline=(0x6c66, 0x6d46, 0x6e24, 0x6e9e, 0x6efc),
+        follow={0x6cc4: 'xy', 0x6ed8: 'x', 0x6862: 'x', 0x684c: 'x'})
+    for item in operations:
+        if (item['op'] in ('sound', 'wait_sound', 'ensure_sound') and item['args'][1] == 0
+                and SONG_BASE <= item['args'][0] < SONG_BASE + SONG_COUNT):
+            item['args'][0] -= SONG_BASE
+            item['song'] = True
+    # The screen before the scene: the game's throne room. The port draws it
+    # with the scene's own room redraw (15:6d46-6d2c) and the room palette
+    # (Ruins CTBL 3500 at 64 and 3501 at 48, Kid 25004 at 16, Prince 1004
+    # at 240); the Macintosh shows the game's last frame.
+    start = next(index for index, item in enumerate(operations) if item['pc'] == 0x6d66)
+    end = next(index for index, item in enumerate(operations) if item['op'] == 'set_palette')
+    # The previous scene freed the dissolve data (15:0132, 2:2cfe): the
+    # first dissolve copies the screen at once.
+    prelude = [{'op': 'dissolve_area', 'args': [None], 'pc': None}]
+    prelude += [{'op': 'set_palette', 'args': [resource, first], 'pc': None}
+               for resource, first in ((403500, 64), (403501, 48), (725004, 16), (801004, 240))]
+    prelude += [dict(item) for item in operations[start:end]]
+    # Below the 365-line picture the game's status line stays; the port
+    # shows it black.
+    prelude.append({'op': 'fill', 'args': [255, [365, 0, 384, 512]], 'pc': None})
+    prelude.append({'op': 'copy', 'args': [[0, 0, 384, 512]], 'pc': None})
+    return prelude + operations
+
+
+def extract_throne(image, program, nis, files, directory, progress=lambda _text: None):
+    """Write the vision at the throne in level eight (both facings)."""
+    directory = Path(directory)
+    variants = {str(facing): recover_throne(program, nis, files, facing) for facing in (0, -1)}
+    audio = extract_scene_audio(image, [item for operations in variants.values() for item in operations],
+                                directory, progress, banked=True)
+    result = {'schema': 1, 'kind': 'throne',
+              'resource_files': {name: offset for name, offset in (*THRONE_FILES.values(), *THRONE_RESIDENT)},
+              'prince': list(THRONE_PRINCE), 'variants': variants, 'operations': variants['-1'],
+              'audio': audio}
+    (directory / 'throne.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')
 
 
 TREE_VARIANTS = range(1, 10)

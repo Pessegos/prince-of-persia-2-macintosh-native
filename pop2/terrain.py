@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import struct
 
 from pop2.bridge import BRIDGE_LEVEL, BRIDGE_ROOM, bridge_tension
+from pop2.crevices import CREVICE_TILE
 from pop2.opponent_generation import character_column, EMPTY_TILES, WALL_TILES
 from pop2.mac_input import StepBoundary
 from pop2.harbor import SHIP_CLIMB_SEQUENCE, SHIP_ROOM, WATER_ROOMS
@@ -17,7 +18,11 @@ FLOOR_OFFSET = 106
 GRAVITY = 6
 MAX_FALL_SPEED = 63
 VOID_DEATH_Y = 730
+# Prone poses: lying down (SEQS 125), idle (251) and crawling (SEQS 122/123).
+PRONE_FRAMES = (246, 261)
 DOWN_CUT_Y = 440
+# Idle width18 - anchor4, plus SEQS:13's final one-pixel backward step.
+RUN_STOP_GATE_REAR_REACH = 15
 
 
 def floor_y(row):
@@ -485,7 +490,8 @@ class LevelMap:
             column = character_column(contact)
         distance = floor_edge_distance(contact, state.facing)
         neighbor = column + (direction if distance < 32 else -direction)
-        if distance != 32 and self.tile(room, neighbor, row).kind in EMPTY_TILES:
+        # 6:04d8-050c: IsSpace or IsMobFloor (loose floors 11/15/26).
+        if distance != 32 and self.tile(room, neighbor, row).kind in EMPTY_TILES | {11, 15, 26}:
             state.target_x += (distance - 32) * direction
         state.current_x = state.target_x
 
@@ -573,7 +579,9 @@ class LevelMap:
         column = character_column(contact)
         tile = self.tile(room, column, row)
         if (tile.room is None or tile.kind not in WALL_TILES
-                or state.sequence_mode == 4 or state.actor_type == 11):
+                or state.sequence_mode == 4 or state.actor_type == 11
+                or tile.kind == CREVICE_TILE and PRONE_FRAMES[0] <= state.action <= PRONE_FRAMES[1]):
+            # 4:35e6-35fa and 4:5830-5842: a prone body may lie in a crevice.
             return tile
         direction = 1 if state.facing else -1
         distance = floor_edge_distance(contact, state.facing)
@@ -606,6 +614,11 @@ class LevelMap:
                               and (state is None or state.actor_type != 11)
                               and stone_gate_blocks(tile.foreground, bounds, state))
                 if tile.kind not in WALL_TILES and not desert_exit and not stone_gate:
+                    continue
+                if (tile.kind == CREVICE_TILE and bottom - top + 1 <= 34 and tile.foreground & 3 != 3
+                        and (state is None or state.actor_type not in (7, 8))):
+                    # CheckCollide 4:5ade-5b0a: a body at most 34 pixels high
+                    # passes an open crevice; only the heads still collide.
                     continue
                 # GetLeftBarr/GetRightBarr, code 4, DATA c9e0/c9f2[barrier].
                 barrier = (5 if stone_gate else 1 if desert_exit else
@@ -877,6 +890,17 @@ class RooftopPhysics:
                     for body in contact_bounds)
                 or not stone_gate_blocks(tile.foreground, bounds, state)):
             return None
+        # Port improvement: let a stop finish if the settled body is already
+        # clear behind the gate. Leaning poses must not reintroduce contact;
+        # reserve the last backward pixel, without moving the actor or gate.
+        rear_overlap = right - bounds[0] if state.facing else bounds[2] + 1 - left
+        stop_clear = (state.source_sequence_id == 13 and (
+            state.target_x - RUN_STOP_GATE_REAR_REACH >= right if state.facing else
+            state.target_x + RUN_STOP_GATE_REAR_REACH <= left))
+        if (not sword_drawn and not motion.falling and state.current_y == 0
+                and state.source_sequence_id in (1, 13, 200, 201, 202)
+                and (0 < rear_overlap <= 4 or stop_clear)):
+            return None
         if state.action != 109 and tile.foreground and not sword_drawn:
             if state.source_sequence_id == 50:
                 return None
@@ -1038,6 +1062,12 @@ class RooftopPhysics:
                     sequence = ((64 if delta * direction < 0 else 65) if armed else
                                 46 if action in (24, 25) or 40 <= action < 43
                                 or 102 <= action <= 106 else 47)
+                    if not armed and PRONE_FRAMES[0] <= action <= PRONE_FRAMES[1]:
+                        # Collide 4:59b6-59dc: a prone body backs off 5 pixels
+                        # and stays down (SEQS 121), not a standing bump.
+                        sequence = 121
+                        state.target_x -= 5 * direction
+                        state.current_x = state.target_x
                     self.select(runtime, sequence)
                     # Collide 4:5a3c-5a54 requests metal contact only for SEQS:64.
                     if sequence == 64:

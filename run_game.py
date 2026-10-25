@@ -19,12 +19,20 @@ REQUIRED_ASSETS = (
     "Title.rsrc",
     "Desert.rsrc",
     "Caverns.rsrc",
+    "Ruins.rsrc",
+    "Head.rsrc",
+    "TNIS1.rsrc",
+    "TNIS2.rsrc",
+    "TNIS3.rsrc",
     "caverns_entry.json",
     "caverns_level4.json",
     "caverns_level5.json",
+    "ruins_level6.json",
+    "ruins_level7.json",
     "intro.json",
     "ending.json",
     "discovery.json",
+    "carpet.json",
     *(f"tree-{variant}.json" for variant in range(1, 10)),
     "NISTree.rsrc",
     "attract.json",
@@ -91,7 +99,7 @@ def missing_assets(project=PROJECT):
                 missing.append("audio/manifest.json (needs level-four and level-five music)")
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append("audio/manifest.json (needs reimport)")
-    for name in ("intro.json", "ending.json", "discovery.json",
+    for name in ("intro.json", "ending.json", "discovery.json", "carpet.json",
                  *(f"tree-{variant}.json" for variant in range(1, 10))):
         scene_path = project / "assets" / name
         if scene_path.is_file():
@@ -107,18 +115,28 @@ def missing_assets(project=PROJECT):
             except (OSError, ValueError, KeyError, TypeError, AttributeError):
                 missing.append(name + " (needs reimport)")
     for number, name, label in ((3, 'caverns_entry.json', 'three'), (4, 'caverns_level4.json', 'four'),
-                                (5, 'caverns_level5.json', 'five')):
+                                (5, 'caverns_level5.json', 'five'), (6, 'ruins_level6.json', 'six'),
+                                (7, 'ruins_level7.json', 'seven'), (8, 'ruins_level8.json', 'eight'),
+                                (9, 'ruins_level9.json', 'nine')):
         cavern_path = project / 'assets' / name
         if not cavern_path.is_file():
             continue
         try:
             cavern = json.loads(cavern_path.read_text(encoding='ascii'))
-            if (cavern.get('version'), cavern.get('level')) != (15, number) or set(cavern['rooms']) != {
-                    str(room) for room in range(32)}:
+            # Version 16 stores loose floors, scythes and bridge planks as
+            # per-slot drawing (loose-floor schema 2); 15 is still valid.
+            if (cavern.get('version') not in (15, 16) or cavern.get('level') != number
+                    or set(cavern['rooms']) != {str(room) for room in range(32)}):
                 raise ValueError('Full cavern scenery needs reimport')
             plates = cavern['pressure_plates']
             if plates.get('schema') != 1 or set(plates['rooms']) != {str(room) for room in range(32)}:
                 raise ValueError('Pressure-plate scenery needs reimport')
+            if number >= 6 and cavern['scythes'].get('schema') != 1:
+                raise ValueError('Scythe scenery needs reimport')
+            if number == 7:
+                alternate = cavern['alternate_entry']
+                if (alternate['room'], alternate['cell']) != (3, 25) or not alternate['frames']:
+                    raise ValueError('Upper entrance scenery needs reimport')
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append(f'{name} (needs full level-{label} scenery)')
     attract_path = project / "assets" / "attract.json"
@@ -152,6 +170,10 @@ def launch_game(peaceful):
     from pop2.audio import AudioEngine
     from pop2.scene_prototype import ScenePrototype
 
+    from pop2.development_map import start_map_warmup
+
+    # The F3 maps are cached on disk; refresh stale ones beside the game.
+    start_map_warmup()
     audio = AudioEngine()
     try:
         ScenePrototype(peaceful=peaceful, audio=audio, with_intro=True).run()

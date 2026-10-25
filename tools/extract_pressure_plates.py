@@ -28,7 +28,10 @@ def pressure_scenery(program, caverns, prince, level, base, progress=lambda _tex
     from tools.extract_caverns import recover_room
     recover = recover or recover_room
 
+    from pop2.caverns import entry_room
+
     terrain = LevelMap(level)
+    entry = entry_room(struct.unpack_from('>H', level, 0x218a)[0], terrain.start_room)
     environment = struct.unpack_from('>H', level, 0x2186)[0]
     result = {'schema': 1, 'rooms': {}}
     for room in range(32):
@@ -38,7 +41,7 @@ def pressure_scenery(program, caverns, prince, level, base, progress=lambda _tex
                    for row in range(-1, 4) for column in range(-1, 11)
                    if (tile := terrain.tile(room, column, row)).room is not None
                    and (tile.kind in (4, 5, 6, 27, 33, 34)
-                        or tile.kind == 17 and tile.room != terrain.start_room)}
+                        or tile.kind == 17 and tile.room != entry)}
         before = base['rooms'][str(room)]
         records = []
         for source_room, cell in sorted(visible):

@@ -158,7 +158,7 @@ I also improved the sound played while the gate opens. The original had noticeab
 - The level 1 screen 7-8 drop preserves the full landing and stand-up animation, matching DOS behavior instead of the abrupt interruption in the Macintosh original.
 - Completely overhauled lava pools with detailed rocky edges, convincing depth like the DOS version, seamless bubbling, and properly layered splashes and particles.
 - Reworked stone-gate closing and crushing animation, with a timed slam and seamless opening audio without the original gaps or end click.
-- Local cavern-art retouches soften harsh shadow seams in level 3 rooms 1 and 28, without changing the same pieces elsewhere.
+- Local cavern-art retouches soften harsh shadow seams in level 3 rooms 1, 2, 28 and 30, without changing the same pieces elsewhere. Entrance/exit arch edges also blend into the surrounding rock across the cavern levels.
 - Dock guards stay in standby once the Prince catches the boat, instead of switching back into combat during the escape.
 - Shift+Back with the sword drawn turns the Prince manually. Unlike the original toggle, this leaves automatic turning enabled.
 - While floating, the Prince is pushed back from obstructing scenery instead of scraping along it as in the Macintosh original.
@@ -175,8 +175,9 @@ global Python installation.
 
 Original game files are not bundled. At the first launch, select your Macintosh
 Prince of Persia 2 disk image. The importer extracts the resources, enemy data
-and audio, then starts the game. Preparing all scenery and music can take several
-minutes on the first import. The window shows the current recovery step and elapsed
+and audio, then starts the game. The first import prepares all scenery and music
+using every processor core: it takes about 20 seconds on an 8-core PC and somewhat
+longer on machines with fewer cores. The window shows the current recovery step and elapsed
 time; Cancel or closing the window stops the import and removes its temporary files.
 Import diagnostics are saved in `rendered/setup.log`.
 Subsequent launches use those local files without
@@ -219,11 +220,14 @@ in `assets/`:
 - `Rooftops.rsrc`
 - `Desert.rsrc`
 - `Caverns.rsrc`, `caverns_entry.json`, `caverns_level4.json` and `caverns_level5.json` (independent scenery for levels 3-5)
+- `Ruins.rsrc`, `Head.rsrc`, `ruins_level6.json` and `ruins_level7.json` (ruins scenery; special enemies are not generated yet)
+- `TNIS1.rsrc`, `TNIS2.rsrc` and `TNIS3.rsrc` (carpet scene resources)
 - `NIS.rsrc`, `NISTree.rsrc` and `Title.rsrc`
 - `enemy_profiles.json`
 - `intro.json` (recovered scene instructions and audio markers)
 - `ending.json` (voyage after level 1)
 - `discovery.json` (story sequence after level 3)
+- `carpet.json` (flight between levels 5 and 6)
 - `tree-1.json` through `tree-9.json` (tree scenes and timeout sequence)
 - `attract.json` (original level-one demo and credits program)
 - `audio/` (original samples, voices, instruments and prepared music)
@@ -233,6 +237,10 @@ The same import can be performed without a file picker:
 ```powershell
 .\.venv\Scripts\python.exe -m tools.extract_assets "C:\path\to\pop2.hfs"
 ```
+
+To reimport after an update, close the game and rerun the same command from the
+project folder. It refreshes generated files in `assets/`, not your saves or
+screenshots. Each separate worktree has its own imported assets.
 
 The importer leaves the disk image unchanged and does not retain the game
 executable or any ROM or system files. Generated game files are ignored by Git.

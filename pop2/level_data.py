@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 import struct
 
+from pop2.coordinates import port_room, scene_x
 from pop2.rebirth import level_checkpoints
 from pop2.terrain import LevelMap, TILE_WIDTH
 
@@ -48,7 +49,7 @@ class LevelDefinition:
         if any(link > 32 for link in struct.unpack_from(">128H", data, 0x2080)):
             raise ValueError("Invalid LEVL room link")
         # SetKidDefaults 2:5d46 complements LEVL's facing word before storing it.
-        return cls(number, bytes(data), kind, room - 1, tile, int(facing != 0),
+        return cls(number, bytes(data), kind, port_room(room), tile, int(facing != 0),
                    opponent_type, level_checkpoints(data))
 
     @property
@@ -79,7 +80,7 @@ class LevelDefinition:
     @property
     def start_x(self):
         if self.cliff_start:
-            return 374 - 207
+            return scene_x(374)
         return self.start_tile % 10 * TILE_WIDTH + 22
 
     @property
@@ -91,10 +92,25 @@ class LevelDefinition:
             return 124
         if self.cliff_start:
             return 2
-        if self.number in (3, 4, 5, 7) and self.kind in (3, 4):
+        if self.number in (3, 4, 5, 7, 8, 9) and self.kind in (3, 4):
             # SetKidDefaults 2:5e34 uses the ordinary standing entry.
             return 5
         raise ValueError(f"Level {self.number} entry controller is not implemented")
+
+    def with_ruins_entry(self, entry):
+        """SetKidDefaults 2:5d02-5d0c -> 2:5eda for level seven.
+
+        Leaving level six at character column >= 6 (opcode -16, 4:2f3e-2f56,
+        a5-0x500c = 2) starts in native room 4, cell 25, with room 32's
+        door shut; otherwise room 32, cell 24, with room 4's door shut.
+        """
+        if self.number != 7:
+            return self
+        data = bytearray(self.data)
+        room, tile, shut = (4, 25, 0x1668) if entry == 2 else (32, 24, 0x94c)
+        struct.pack_into('>2H', data, 0x2198, room, tile)
+        struct.pack_into('>H', data, shut, struct.unpack_from('>H', data, shut)[0] & 0xff00)
+        return LevelDefinition.decode(self.number, bytes(data))
 
     def right_platform_edge(self):
         terrain = LevelMap(self.data)

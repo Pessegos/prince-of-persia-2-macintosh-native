@@ -17,6 +17,7 @@ from typing import get_args, get_origin, get_type_hints
 from PIL import Image
 
 from pop2.cavern_state import CavernState
+from pop2.paths import USER_DATA_DIR
 from pop2.bridge import Bridge
 from pop2.carpet import Carpet
 from pop2.darts import Dart, Darts
@@ -31,22 +32,26 @@ from pop2.opponent_records import GuardRoomRecord
 from pop2.potions import Potions
 from pop2.pressure_plates import PressurePlates
 from pop2.rebirth import Checkpoint, DeathState, RebirthSnapshot
+from pop2.ruins_ai import RuinsMind
 from pop2.story_progress import FRAMES_PER_MINUTE, StoryProgress
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.skeleton import Skeleton, SkeletonRoomRecord
 from pop2.terrain import TerrainMotion
+from pop2.scythes import SCYTHE_STATES, Scythes
 from pop2.wall_spikes import WallSpikes
 
 
 FORMAT = 'pop2-macintosh-native-save'
 VERSION = 2
 MAX_BYTES = 2 * 1024 * 1024
-SAVE_DIRECTORY = Path.home() / 'Saved Games' / 'PoP2 Macintosh Native'
+SAVE_DIRECTORY = (USER_DATA_DIR / 'saves' if USER_DATA_DIR is not None
+                  else Path.home() / 'Saved Games' / 'PoP2 Macintosh Native')
 CLASSES = {cls.__name__: cls for cls in (
     Bridge, Carpet, CavernState, Dart, Darts, DesertState, Stone, GateCrush, Harbor,
     WaterEntry, Lava, LavaPool, FallingFloor, LooseFloors, OpponentGenerationPoint,
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
-    Skeleton, SkeletonRoomRecord, GuardRoomRecord, TerrainMotion, WallSpikes,
+    Skeleton, SkeletonRoomRecord, GuardRoomRecord, TerrainMotion, WallSpikes, Scythes,
+    RuinsMind,
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
         LooseFloors: {'shake_events'}, PressurePlates: {'slams', 'slam_sounds'}}
@@ -158,20 +163,28 @@ def _unpack(value, resources, lava_tables, depth=0):
     allowed = {field.name for field in fields(cls)} - OMIT.get(cls, set())
     # Earlier snapshots predate turning-contact history and explicit NPC banks.
     optional = {'gate_contact_bounds'} if cls is TerrainMotion else set()
+    if cls is GateCrush:
+        optional.add('life_before_crush')
+    if cls is RebirthSnapshot:
+        optional.add('caverns')
     if cls is SequenceState:
         optional.add('floating')
     if cls.__name__ == 'Fighter':
-        optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive', 'sword_lost'))
+        optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive', 'sword_lost',
+                         'ruins'))
+    if cls is RebirthSnapshot:
+        optional.add('ruins_rooms')
     if cls is Skeleton:
         optional.update(('room_record', 'native_alive', 'rise_song_pending'))
     if cls is SkeletonRoomRecord:
         optional.add('cell')
     if cls is Potions:
-        optional.update(('fatal', 'float_timer'))
+        optional.update(('fatal', 'float_timer', 'flip_timer'))
     if cls is CavernState:
-        optional.update(('bridge', 'carpet', 'phew_countdown'))
+        optional.update(('bridge', 'carpet', 'phew_countdown', 'scythes', 'alternate_entry',
+                         'throne_done', 'throne_seen'))
     if cls is Bridge:
-        optional.update(('tension_level', 'tension'))
+        optional.update(('tension_level', 'tension', 'marks', 'wobble'))
     if (not isinstance(record, dict) or set(record) - allowed
             or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')
@@ -221,6 +234,28 @@ def _fighter_valid(actor, resources):
         raise SaveGameError('Saved guard room record is out of range')
 
 
+def _ruins_rooms_valid(rooms, resources):
+    from pop2.combat import Fighter
+
+    if not isinstance(rooms, dict) or len(rooms) > 32:
+        raise SaveGameError('Invalid saved ruins rooms')
+    for room, actors in rooms.items():
+        if type(room) is not int or not 0 <= room < 32 or not isinstance(actors, list) or len(actors) > 10:
+            raise SaveGameError('Invalid saved ruins room')
+        for actor in actors:
+            if not isinstance(actor, Fighter) or not isinstance(actor.ruins, RuinsMind):
+                raise SaveGameError('Invalid saved ruins actor')
+            state, mind = actor.state, actor.ruins
+            if (actor.room != room or not -2 <= actor.row <= 8
+                    or state.actor_type not in (7, 8, 11) or mind.actor_type != state.actor_type
+                    or not 0 <= actor.life <= actor.max_life <= 120 or not 0 <= mind.skill < 12
+                    or state.facing not in (0, 1) or state.sequence_id not in resources.sequences
+                    or not 0 <= state.cursor <= len(resources.sequences[state.sequence_id])
+                    or not 149 <= state.action <= 289
+                    or abs(state.target_x) > 10000 or abs(state.current_y) > 10000):
+                raise SaveGameError('Saved ruins actor is out of range')
+
+
 def capture_snapshot(game, controls=None, copy_verified=False):
     """Version-one fixture/compatibility encoder; new saves use capture()."""
     from pop2.enemy_profiles import QuickDrawRandom
@@ -258,6 +293,22 @@ def _put_sword(document, game):
     # Optional: a sword picked up in a level that started without one.
     if game.sword_type != level_sword_type(game.level.number):
         document['sword_type'] = game.sword_type
+    if game.ruins_entry != 1:
+        document['ruins_entry'] = game.ruins_entry
+
+
+def _load_session(resources, document):
+    entry = _ruins_entry(document)
+    if entry == 1:
+        return GameSession.load(resources, document['level'])
+    return GameSession.load(resources, document['level'], ruins_entry=entry)
+
+
+def _ruins_entry(document):
+    entry = document.get('ruins_entry', 1)
+    if type(entry) is not int or entry not in (1, 2):
+        raise SaveGameError('Invalid saved level entrance')
+    return entry
 
 
 def _take_sword(document, game):
@@ -297,9 +348,9 @@ def read_snapshot(path, resources):
         document = json.loads(raw)
         if (not isinstance(document, dict) or document.get('format') != FORMAT
                 or type(document.get('version')) is not int or document['version'] != 1
-                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5, 6)):
+                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5, 6, 7, 8, 9)):
             raise SaveGameError('Unsupported save format or version')
-        game = GameSession.load(resources, document['level'])
+        game = _load_session(resources, document)
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
             raise SaveGameError('Save belongs to different original game files')
         _take_sword(document, game)
@@ -381,12 +432,22 @@ def read_snapshot(path, resources):
                 or any(not isinstance(plank, list) or len(plank) != 2
                        or plank[0] not in bridge.pieces or type(plank[1]) is not int
                        or not 0 <= plank[1] <= 13 for plank in bridge.planks)
-                or any(song != 121 for song in bridge.songs)):
+                or any(song != 121 for song in bridge.songs)
+                or type(bridge.marks) is not int or not 0 <= bridge.marks <= 0xff
+                or any(column not in range(1, 9) or nibble not in (1, 2)
+                       for column, nibble in bridge.wobble.items())):
             raise SaveGameError('Invalid bridge state')
         carpet = game.caverns.carpet if game.caverns is not None else None
         if carpet is not None and (type(carpet.counter) is not int or not 0 <= carpet.counter < 2**31
                                    or type(carpet.crashed) is not bool):
             raise SaveGameError('Invalid carpet state')
+        scythes = game.caverns.scythes if game.caverns is not None else None
+        if scythes is not None and (
+                any(not (isinstance(key, tuple) and len(key) == 2 and 0 <= key[0] < 32 and 0 <= key[1] < 30
+                         and type(value) is int and value in SCYTHE_STATES)
+                    for key, value in scythes.foreground.items())
+                or any(key not in scythes.foreground for key in scythes.active)):
+            raise SaveGameError('Invalid scythe state')
         if game.opening is not None:
             opening = saved['opening']
             if (not isinstance(opening, dict) or set(opening) != {'active', 'phase', 'tick'}
@@ -492,7 +553,7 @@ def read_document(path):
         document = json.loads(raw)
         if (not isinstance(document, dict) or document.get('format') != FORMAT
                 or type(document.get('version')) is not int or document['version'] not in (1, VERSION)
-                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5, 6)):
+                or type(document.get('level')) is not int or document['level'] not in (1, 2, 3, 4, 5, 6, 7, 8, 9)):
             raise SaveGameError('Unsupported save format or version')
         return document
     except (ValueError, RecursionError) as error:
@@ -522,7 +583,7 @@ def restore_progress(document, resources):
     try:
         if set(document) - {'format', 'version', 'level', 'level_sha256', 'created_at',
                             'resume', 'copy_verified', 'preview', 'name', 'preview_at_resume', 'preview_version',
-                            'story', 'sword_type'}:
+                            'story', 'sword_type', 'ruins_entry'}:
             raise SaveGameError('Unknown saved progress fields')
         if 'name' in document:
             save_name(document['name'])
@@ -531,7 +592,7 @@ def restore_progress(document, resources):
         if 'preview_version' in document and (type(document['preview_version']) is not int
                                               or not 1 <= document['preview_version'] <= 1000):
             raise SaveGameError('Invalid save preview version')
-        game = GameSession.load(resources, document['level'])
+        game = _load_session(resources, document)
         if document.get('level_sha256') != hashlib.sha256(game.level.data).hexdigest():
             raise SaveGameError('Save belongs to different original game files')
         _take_sword(document, game)
@@ -562,6 +623,8 @@ def restore_progress(document, resources):
                         raise SaveGameError('Invalid checkpoint opponent')
                 if any(not isinstance(point, OpponentGenerationPoint) for point in entry[1]):
                     raise SaveGameError('Invalid checkpoint generation point')
+            if snapshot.ruins_rooms is not None:
+                _ruins_rooms_valid(snapshot.ruins_rooms, resources)
             game.checkpoint = snapshot
             snapshot.restore_world(game.combat)
             point = snapshot.checkpoint

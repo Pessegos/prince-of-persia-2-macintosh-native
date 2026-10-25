@@ -8,6 +8,7 @@ from pop2.caverns import cavern_exit_clip, pressure_drawing_commands
 from pop2.paths import ASSET_DIR
 from pop2.sequence_runtime import SequenceState
 from pop2.terrain import LevelMap
+from pop2.environments import environment_for
 
 
 class CavernExitTests(unittest.TestCase):
@@ -125,7 +126,7 @@ class ImportedCavernExitTests(unittest.TestCase):
         self.assertEqual(scene.level_map.tile(29, 5, 2).foreground & 255, 0)
         scene.set_paused(False)
         for _ in range(79):
-            scene.advance_cavern_floors()
+            environment_for(scene).frame_start()
         scene.jump_to_room(28, row=1, x=250, facing=1)
         self.assertEqual(scene.level_map.tile(29, 5, 2).foreground & 255, 79)
         scene.jump_to_room(29, row=2, x=280, facing=1)

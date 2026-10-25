@@ -8,6 +8,7 @@ from pop2.enemy_profiles import (
     ADVANCE_CHANCE, BLOCK_CHANCE, PARRY_BLOCK_CHANCE, COUNTER_CHANCE,
     STRIKE_CHANCE, HIT_PAUSE, QuickDrawRandom,
 )
+from pop2.coordinates import native_room, scene_x
 from pop2.bridge import bridge_checked, bridge_column, bridge_gate_open, bridge_tension
 from pop2.enemy_alerts import alert_path_mode
 from pop2.opponent_records import GuardRoomRecord, removed_on_room_save
@@ -110,7 +111,7 @@ class GuardSpawn:
         opponent_type = struct.unpack_from(">h", level, 0x21A4)[0]
         if opponent_type == -1:
             return []
-        offset = 0x20E6 + (room + 1) * 0xC0
+        offset = 0x20E6 + native_room(room) * 0xC0
         count = struct.unpack_from(">H", level, offset)[0]
         if opponent_type not in (0, 2):
             if count == 0:
@@ -124,7 +125,7 @@ class GuardSpawn:
             skill = fields[3]
             if not 0 <= skill < len(ADVANCE_CHANCE):
                 raise ValueError(f"Unsupported guard skill {skill}")
-            spawns.append(cls(room, fields[0] // 10, fields[1] - 207,
+            spawns.append(cls(room, fields[0] // 10, scene_x(fields[1]),
                               int(fields[2] == 0), skill, fields[4], fields[13] or 3,
                               fields[6] or 1, fields[10], fields[16],
                               4 if opponent_type == 2 else 2,
@@ -161,6 +162,8 @@ class Fighter:
     native_alive: bool | None = None
     # a5-0x503c == -1: the Prince has no sword to draw.
     sword_lost: bool = False
+    # Ruins heads and serpents: their generator-record state (RuinsMind).
+    ruins: object | None = None
 
     @property
     def state(self):
@@ -180,6 +183,8 @@ class CombatEvent:
     kind: str
     actor: str
     death_method: int | None = None
+    # None keeps the host's ordinary hit/parry sound; 0 is silent.
+    sound: int | None = None
 
 
 @dataclass(frozen=True)
@@ -232,6 +237,14 @@ def contact_allowed(attacker, defender):
     )
 
 
+def actor_frame_index(state):
+    # LoadFrame 4:2a8e: the ruins family has its own remap.
+    if state.actor_type in (7, 8, 11):
+        from pop2.ruins_actors import frame_index
+        return frame_index(state.actor_type, state.action)
+    return guard_frame_index(state.action)
+
+
 def guard_frame_index(action):
     # CODE:4 0x2b0e, LoadFrame for actor type 2.
     if 102 <= action <= 106:
@@ -256,6 +269,12 @@ class CombatEncounter:
         self.rng = rng if rng is not None else QuickDrawRandom()
         self.level = level
         self.level_kind = player_runtime.state.level_kind
+        # Opponent sets 5/6 (ruins heads and serpents) live outside the
+        # ordinary guard bank; the tension they read survives restarts.
+        self.ruins = None
+        if level is not None and struct.unpack_from(">h", level, 0x21a4)[0] in (5, 6):
+            from pop2.ruins_ai import RuinsCreatures
+            self.ruins = RuinsCreatures()
         self.reset()
 
     def reset(self):
@@ -280,6 +299,9 @@ class CombatEncounter:
         if self.spawn is None:
             self._select_opponent_bank(self.player.room)
             self._restore_opponent_records()
+        if getattr(self, 'ruins', None) is not None:
+            self.ruins.rooms, self.ruins.banked = {}, None
+            self.ruins.load_room(self, self.player.room)
 
     def _reset_initial_guard(self):
         self.player = Fighter(self.player_runtime, 3, 3,
@@ -351,6 +373,8 @@ class CombatEncounter:
                     if view is not None:
                         room_records.append((actor, view))
         self._load_room(room)
+        if getattr(self, 'ruins', None) is not None and previous_room != room:
+            self.ruins.load_room(self, room)
         self.player.room, self.player.row = room, row
         self.guards, self.generation_points = self.room_encounters[room]
         terrain = getattr(self, "terrain", None)
@@ -468,6 +492,7 @@ class CombatEncounter:
         for side in ('left', 'right'):
             neighbor = terrain.neighbor(room, side) if terrain is not None else None
             if (neighbor is not None and neighbor not in self.room_encounters
+                    and struct.unpack_from(">h", self.level, 0x21A4)[0] in (0, 2)
                     and any(visible_side_opponent(spawn.x, side)
                             for spawn in GuardSpawn.all_from_level(self.level, neighbor))):
                 self._load_room(neighbor)
@@ -525,6 +550,15 @@ class CombatEncounter:
                         target_x=fighter.state.target_x + offset)
         return replace(fighter, room=room, runtime=SequenceRuntime(self.sequences, state))
 
+    def visible_ruins(self):
+        ruins = getattr(self, 'ruins', None)
+        if ruins is None:
+            return []
+        if self.player.room not in ruins.rooms:
+            # A restored save starts in a room the ruins host has not loaded.
+            ruins.load_room(self, self.player.room)
+        return ruins.living(self.player.room)
+
     def visible_guards(self):
         return [view for guard in self.active_guards()
                 if (view := self._project_fighter(guard, self.player.room)) is not None]
@@ -540,7 +574,22 @@ class CombatEncounter:
             if offset in (-510, 0, 510):
                 candidates.append((guard, self._project_fighter(guard, self.player.room)))
         selected = nearest_opponent(self.player, [view for _guard, view in candidates])
-        return next((guard for guard, view in candidates if view is selected), None)
+        guard = next((guard for guard, view in candidates if view is selected), None)
+        # 3:4b7a-4ba8: no meter for a skeleton fighting on level five's bridge.
+        if guard is not None and guard.state.actor_type == 4 and self._bridge_fight_room(guard):
+            return None
+        ruins = getattr(self, 'ruins', None)
+        if guard is None and ruins is not None:
+            # HeadGetAngry 7:0fc6-0fea banks the angry head (a5-0x505a).
+            banked = ruins.banked
+            if banked is not None and banked.alive and banked.room == self.player.room:
+                return banked
+        return guard
+
+    def ruins_opponent(self):
+        """The Prince's nearest living head or serpent (6:36f2), or None."""
+        actors = [actor for actor in self.visible_ruins() if actor.alive]
+        return nearest_opponent(self.player, actors) if actors else None
 
     def opponent_to_fight(self):
         # OppToFight 6:2392-2492, used by PlayAmbient/TimeForNewAmbient.
@@ -551,8 +600,13 @@ class CombatEncounter:
                 or player.state.animation_state in (3, 4)
                 or player.state.action in (185, 242, 243, 266, 271)):
             return False
-        return any(guard.alive and guard.alert_mode > 0
-                   and guard.state.actor_type != 11 for guard in self.active_guards())
+        if any(guard.alive and guard.alert_mode > 0
+               and guard.state.actor_type != 11 for guard in self.active_guards()):
+            return True
+        # Ruins heads count by their -0x5024 state (3 angry, 1 fleeing);
+        # serpents (type 11) never do.
+        return any(actor.alive and actor.ruins.alert > 0 and actor.state.actor_type != 11
+                   for actor in self.visible_ruins())
 
     @contextmanager
     def _local_opponents(self, guard):
@@ -908,7 +962,10 @@ class CombatEncounter:
             return
         if guard.alert_mode != 3:
             return
-        if opponent_distance(guard, player) < -15:
+        # SwordCtrl 6:22b4-22e4: a pressing bridge skeleton keeps its EnGarde
+        # inputs instead of turning to a Prince behind it.
+        if (opponent_distance(guard, player) < -15
+                and not (self._bridge_fight_room(guard) and self._bridge_engage(guard))):
             # SwordCtrl 6:2206/22e6/26a8 permits ordinary-NPC turns in
             # modes 0/1, not just pose 171. SEQS:60 performs the facing flip.
             if state.animation_state < 2:
@@ -1564,6 +1621,8 @@ class CombatEncounter:
         if any(key != "player" for key in hits):
             hits.pop("player", None)
         events.extend(self._hurt(*hit) for hit in hits.values())
+        if getattr(self, 'ruins', None) is not None:
+            events.extend(self.ruins.resolve(self))
         self.refresh_target()
         return events
 
@@ -1576,6 +1635,8 @@ class CombatEncounter:
             if self.level is not None:
                 self.update_guard_alerts()
             self.advance_guard()
+            if getattr(self, 'ruins', None) is not None:
+                self.ruins.advance(self)
             self.world_frame += 1
             if self.last_guard_at is None or now - self.last_guard_at >= interval_seconds * 2:
                 self.last_guard_at = now

@@ -448,8 +448,8 @@ translation of the DOS actor or controller. No original artwork, sequence
 resources or collision records are changed.
 
 The native controller still finishes at phase 48 (56 for fast closures),
-with unchanged damage, audio arbitration and retry rules. Only the scenery
-signature and displayed corpse use the presentation state. The overlapping
+with unchanged damage, audio arbitration and retry rules. The scenery
+signature, displayed corpse and health meter use the presentation state. The overlapping
 gate stays in front of the full-size body in both facings even when its foot
 anchor has moved beyond the ordinary column admission. Repainting cannot
 advance the animation. Dedicated presentation callbacks schedule the visual
@@ -458,6 +458,17 @@ normal gameplay updates continue animating the torch. Pause freezes the
 presentation clock, F3/restart clears it, and reopening the gate releases
 only its drawing override, retaining the original-size death pose. The time
 available to escape is still decided by the native controller.
+
+The health meter now follows that same impact milestone. Fatal gate contact
+captures the Prince's previous life for presentation; the bottles keep that
+value until the640ms slam and become empty on the same presentation update as
+gate phase12/pose265. Native life still reaches zero at the original fatal
+contact, so input, enemies and death/retry rules keep their existing behavior.
+The first-kneel delay plus the640ms presentation interval accounts for the
+roughly43 frames at60fps measured from fatal contact; no separate43-frame
+timer is added. Rendering is read-only, pause freezes the shared clock, and
+F3/restart clears the captured value. Older snapshots omit this optional field
+and retain their original health display. Audio timing and sample data are unchanged.
 
 Tests cover elapsed-time boundaries, the first-kneel start, full sprite
 heights, pixel overlap/foreground in both facings, the stable resting pose,
@@ -671,6 +682,32 @@ redraw bookkeeping and ordinary actor/impact context; it tests these routines,
 not the entire native scheduler, crushing or the complete route. Integrated
 tests cover actual held-run pressure, blocked/open passage, bounded scenery
 caching, pause and restart. Resource-free controller tests also run on CI.
+
+### Gate Repaint Clip Versus Full-Room Clip
+
+The full-room comparisons above describe clean-cut drawing, not ordinary
+dirty-cell animation. Level 4 Room 11's right gate exposed the difference:
+moving the entire front SHAP 3562 within its clean-cut clip painted over the
+upper pillar foot. The supplied Macintosh recording keeps that foot intact.
+GetCells (5:0a4c, call at 5:0aaa-0aba when A5-4832 is zero) obtains the ordinary
+cell rectangle from ComputeClipRect (5:0162-01cc), whose top is row*120+5.
+The runtime now retains the initial front-gate cap above that boundary and
+moves only the portion below it. It uses the drawing row, not the source
+gate row, so fragments projected from the room below still move. Back-gate
+pieces, exits, ruins drawing and gate controllers are unchanged; no asset
+schema change or reimport is needed.
+
+`tools/probe_gate_repaint_clip.py` executes the original ComputeClipRect with
+its original DATA tables: rows 0-2, columns 0-9 and three viewports, 90
+comparisons without mismatches. It supplies SectRect and its Pascal stack
+cleanup, the viewport, ordinary-cell inputs and A5-4fb0=0. Output SHA-256:
+`69829c16005900b3e2a6979e75dfb0f29cce9155722ff8e0471903ffab2f6968`.
+This does not execute native dirty-cell admission, rasterization, the special
+row-zero flag or the complete frame scheduler. Regressions cover all 47 gate
+heights, opening/closing initially open gates on all three rows, projected
+fragments, floor repaints and Room 11's pillar pixels at five moving phases.
+The pixel regression rejects the previous production implementation at all
+five phases; it also verifies that the gate itself actually changes.
 
 The common pressure/link base, exit opening and projectile traps below are
 integrated. Native shared capacity/order
@@ -1192,3 +1229,37 @@ running and cautious approaches at all three traps, both Prince death
 sequences, pause and restart. Pure tests run on CI without game resources.
 Temple-specific behavior, skeleton interactions and a unified shared MOB
 bank are not claimed by this cavern implementation.
+
+## Custom Foreground Beyond Its Admission Cell
+
+The level-five room-three videos exposed two actor leaks: the right-hand
+pillar and the adjacent ascent. Their CUST foreground records (SHAP4057
+and4060/4061) were present, but their clean-cut admission cell was (9,0).
+The actor mask selected only cells touched by the sprite, so a lower actor
+could paint over these images despite being inside their physical bounds.
+
+DrawCustomRoomImgs3:239e-23b2 admits the foreground at (9,0) during a clean
+cut, but at **every dirty cell** when A5-4832 is zero. It is not ordinary
+tile foreground tied to its clean-cut caller. CavernRoom now retains a
+separate full CUST foreground mask, matched against the original room's
+visible pass1 records by shape/position/mode. Ordinary tile masks keep
+their existing cell selection, and later incremental back repaints clear
+the custom mask in the covered region. No collision or sprite changes,
+new replacement artwork, room-specific shape IDs or reimport are needed.
+
+`tools/probe_carpet_room_repaint_music.py` runs the original foreground
+drawer with all30 dirty-cell clips in this room. Recorded CUST shape/clip
+commands produce exactly the retained custom-mask coverage in each cell;
+zero differences. The native scheduler runs, while shape/drawing services,
+dirty rectangles and SHAP raster decoding remain supplied/shared with the
+existing exporter. This is not native QuickDraw pixel equivalence or a
+complete FrameAdv trace. Tests also reject the previous pillar/ascent
+leaks, preserve ordinary cell masking, cover legacy exports and back
+repaints, and check actual actor ink against the covered pixels.
+
+The same probe verifies96 supplied-state ambient admissions and the room
+entry request; see AUDIO_RECOVERY.md. Original executable SHA256:
+`ca2c5886244efa7e19d63fee9317ae5c2341b8a7cc79c7740fdd505575f44bd5`.
+Combined output SHA256:
+`bc43f365a25d5ec151b74bb774f8c62a2f7c99af4aef068e5c6657d63a8c2209`.
+Reports and original resources remain ignored locally.

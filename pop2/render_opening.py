@@ -4,6 +4,7 @@ import struct
 
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 
+from pop2.coordinates import native_x
 from pop2.animation_data import parse_frame_records, shape_id_for_action
 from pop2.mac_resources import parse_resource_fork
 from pop2.paths import ASSET_DIR, OUTPUT_DIR
@@ -76,7 +77,7 @@ def actor_foreground_column(state, record, bounds=None):
     # rectangle; other modes index the supporting foot. 5:48b0 subtracts 4
     # from native X (scene X + 207) before its signed division by 51.
     if state.animation_state == 1 and bounds is not None:
-        native_left = bounds[0] + 207
+        native_left = native_x(bounds[0])
         numerator = native_left - 4
         quotient = abs(numerator) // TILE_WIDTH * (-1 if numerator < 0 else 1)
         column = max(0, quotient - 4 - int(native_left < 0))

@@ -4,6 +4,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 import struct
 
+from pop2.cavern_state import CavernState
+from pop2.coordinates import port_room
 from pop2.opponent_generation import character_column
 
 
@@ -35,7 +37,7 @@ class Checkpoint:
 
 def level_checkpoints(level):
     records = struct.unpack_from(">4h", level, 0x39a6)
-    return tuple(Checkpoint(slot + 1, room - 1, tile)
+    return tuple(Checkpoint(slot + 1, port_room(room), tile)
                  for slot, (room, tile) in enumerate(zip(records[::2], records[1::2]))
                  if 1 <= room <= 32 and 0 <= tile < 30)
 
@@ -46,17 +48,43 @@ class RebirthSnapshot:
     facing: int
     max_life: int
     room_encounters: dict
+    # Ruins heads and serpents per room (opponent sets 5/6); None elsewhere.
+    ruins_rooms: dict | None = None
+    caverns: CavernState | None = None
 
     @classmethod
     def capture(cls, checkpoint, combat):
-        world = deepcopy(combat.room_encounters, {id(combat.sequences): combat.sequences})
-        return cls(checkpoint, combat.player.state.facing, combat.player.max_life, world)
+        memo = {id(combat.sequences): combat.sequences}
+        world = deepcopy(combat.room_encounters, memo)
+        ruins = getattr(combat, 'ruins', None)
+        rooms = deepcopy(ruins.rooms, memo) if ruins is not None else None
+        caverns = getattr(getattr(combat, 'terrain', None), 'caverns', None)
+        return cls(checkpoint, combat.player.state.facing, combat.player.max_life, world,
+                   ruins_rooms=rooms, caverns=deepcopy(caverns))
 
     def restore_world(self, combat):
         combat.reset()
-        combat.room_encounters = deepcopy(
-            self.room_encounters, {id(combat.sequences): combat.sequences})
+        memo = {id(combat.sequences): combat.sequences}
+        combat.room_encounters = deepcopy(self.room_encounters, memo)
+        ruins = getattr(combat, 'ruins', None)
+        if ruins is not None and self.ruins_rooms is not None:
+            # Killed heads stay dead; the living restart at rest on entry.
+            ruins.rooms = deepcopy(self.ruins_rooms, memo)
+            ruins.load_room(combat, combat.player.room)
         combat.player.max_life = combat.player.life = self.max_life
+        current = getattr(getattr(combat, 'terrain', None), 'caverns', None)
+        if current is not None and self.caverns is not None:
+            restored = deepcopy(self.caverns)
+            # These globals deliberately survive native rebirth; mechanisms do not.
+            restored.bridge.tension_level, restored.bridge.tension = current.bridge.tension_level, current.bridge.tension
+            restored.potions.flip_timer = current.potions.flip_timer
+            restored.potions.float_timer = 0
+            for queue in (restored.plates.triggered, restored.plates.slams, restored.plates.slam_sounds,
+                          restored.plates.songs, restored.plates.stopped_sounds, restored.potions.songs,
+                          restored.bridge.songs, restored.loose.plate_events, restored.loose.shake_events):
+                queue.clear()
+            # Preserve the shared identity held by GameSession and LevelMap.
+            current.__dict__.update(restored.__dict__)
 
 
 @dataclass

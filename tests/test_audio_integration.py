@@ -131,9 +131,9 @@ for cancel in (True, False):
         assert cancelling
         assert not list(Path('assets').iterdir())
     else:
-        assert 'Cavern scenery: room 1/32' in messages
-        assert 'Cavern scenery: room 32/32' in messages
-        assert any(text.startswith('Cavern floor variants:') for text in messages)
+        assert 'Cavern scenery: level 3' in messages
+        assert 'Cavern scenery: level 7' in messages
+        assert any(text.startswith('Cavern floor slots:') for text in messages)
     print(f'GUI import: cancel={cancel}, elapsed={monotonic()-started:.1f}s, '
           f'maximum UI heartbeat gap={gap:.3f}s', flush=True)
 """

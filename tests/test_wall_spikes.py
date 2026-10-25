@@ -11,6 +11,7 @@ from pop2.paths import ASSET_DIR
 from pop2.sequence_runtime import SequenceState
 from pop2.terrain import LevelMap, TerrainMotion
 from pop2.wall_spikes import WallSpikes, drawing_phase, lethal
+from pop2.environments import environment_for
 
 
 class WallSpikeTests(unittest.TestCase):
@@ -312,7 +313,7 @@ class ImportedWallSpikeTests(unittest.TestCase):
         scene.jump_to_room(20, row=2, x=300, facing=1)
         scene.physics.select(scene.sequence_runtime, 1)
         scene.action, scene.player_x = scene.sequence_state.action, scene.sequence_state.target_x
-        scene.check_cavern_spikes()
+        environment_for(scene).check_spikes()
         self.assertEqual((scene.action, scene.sequence_state.source_sequence_id,
                           scene.sequence_state.facing, scene.player_x), (188, 54, 0, 286))
         with patch.object(scene, 'render'):

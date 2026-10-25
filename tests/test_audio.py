@@ -103,6 +103,33 @@ class CueTests(unittest.TestCase):
         self.audio = AudioEngine(self.directory.name, self.playback, random.Random(1),
                                  mix_effects=False)
 
+    def test_room_song_departure_cancels_a_still_pending_entry_request(self):
+        self.audio.room_song((5, 2), 40)
+        self.assertEqual(self.audio.pending_song, 40)
+        self.audio.room_song((5, 3))
+        self.audio.flush()
+        self.playback.play.assert_not_called()
+
+    def test_room_song_is_once_per_visit_and_reset_allows_a_new_entry(self):
+        self.audio.room_song((5, 2), 40)
+        self.audio.flush()
+        self.playback.play.reset_mock()
+        self.audio.room_song((5, 2), 40)
+        self.audio.flush()
+        self.playback.play.assert_not_called()
+        self.audio.reset()
+        self.audio.room_song((5, 2), 40)
+        self.audio.flush()
+        self.playback.play.assert_called_once_with('music', 40)
+
+    def test_room_song_can_start_once_when_entered_with_ambient_disabled(self):
+        self.audio.set_music_enabled(False)
+        self.audio.room_song((5, 2), 40)
+        self.assertIsNone(self.audio.pending_song)
+        self.audio.set_music_enabled(True)
+        self.audio.room_song((5, 2), 40)
+        self.assertEqual(self.audio.pending_song, 40)
+
     def test_intro_audio_bypasses_game_effect_priority_and_preserves_pause(self):
         self.audio.add_sound(7)
         self.audio.play_intro(11, 1)
@@ -471,6 +498,25 @@ class CueTests(unittest.TestCase):
         self.busy["music"] = False
         death.advance(185, 0, self.audio)
         self.assertTrue(death.prompt_visible)
+
+
+    def test_music_elapsed_counts_playing_time_without_pauses(self):
+        clock = [100.0]
+        with patch('pop2.audio.time.monotonic', side_effect=lambda: clock[0]):
+            self.assertIsNone(self.audio.music_elapsed())
+            self.audio.add_song(119)
+            self.audio.flush()
+            self.busy['music'] = True
+            clock[0] = 103.0
+            self.assertAlmostEqual(self.audio.music_elapsed(), 3.0)
+            self.audio.pause(True)
+            clock[0] = 110.0
+            self.assertAlmostEqual(self.audio.music_elapsed(), 3.0)
+            self.audio.pause(False)
+            clock[0] = 111.5
+            self.assertAlmostEqual(self.audio.music_elapsed(), 4.5)
+            self.busy['music'] = False
+            self.assertIsNone(self.audio.music_elapsed())
 
 
 class PolyphonicCueTests(unittest.TestCase):

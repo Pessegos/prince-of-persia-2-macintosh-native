@@ -9,6 +9,7 @@ import tempfile
 from threading import Event
 
 from pop2.paths import PROJECT_DIR
+from pop2.process_job import terminate_tree
 
 
 class ImportCancelled(Exception):
@@ -26,7 +27,8 @@ class AssetImport:
         process = self.process
         if process is not None and process.poll() is None:
             try:
-                process.terminate()
+                # Worker pools and MIDI renderers end with the recovery.
+                terminate_tree(process)
             except OSError:
                 if process.poll() is None:
                     raise
@@ -72,7 +74,7 @@ class AssetImport:
                         code = process.wait()
                     finally:
                         if process.poll() is None:
-                            process.terminate()
+                            terminate_tree(process)
                             process.wait()
                         self.process = None
                 self.check_cancelled()

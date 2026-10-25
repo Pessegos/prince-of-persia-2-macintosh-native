@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from pop2.coordinates import scene_x
 from pop2.game_ui import MacintoshFont
 from pop2.intro import MAC_TICKS_PER_SECOND, SIZE, dissolve_words, indexed_shape, palette_colors
 from pop2.mac_resources import parse_resource_fork
@@ -51,7 +52,7 @@ def read_attract(path):
 
 
 def actor_state(words, actor_type):
-    x, row = words[2] - 207, words[7]
+    x, row = scene_x(words[2]), words[7]
     return SequenceState(words[19], cursor=words[18] // 2, action=words[5],
                          current_x=x, target_x=x, current_y=words[3] - floor_y(row),
                          facing=int(words[1] == 0), animation_state=words[8],
@@ -114,6 +115,9 @@ class DemoEncounter:
 
     def visible_guards(self):
         return [view for guard in self.guards if (view := self.project_guard(guard)) is not None]
+
+    def visible_ruins(self):
+        return []  # The rooftop demo has no ruins heads or serpents.
 
     def health_opponent(self):
         if (self.guard is not None and self.guard.alive

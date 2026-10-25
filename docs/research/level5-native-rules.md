@@ -1,19 +1,114 @@
 # Level Five: Native Rule Index
 
-Research note, 2026-10-22, `claude/ai-research`. This is a plan for enabling
-level five (LEVL 2004, cavern environment 3, skeleton opponents), not an
-implementation. Addresses are original CODE `segment:offset`; one-based room
-numbers are native.
+Research note, 2026-10-22, audited 2026-10-23, `claude/ai-research`.
+Level five (LEVL 2004, cavern environment 3, skeleton opponents) is playable
+from the level-four exit to the carpet ride into level six. Addresses are
+original CODE `segment:offset`; one-based room numbers are native. This is a
+rule index, not a claim of full native equivalence.
 
 Labels: **[D]** direct reading; **[I]** inference; **[?]** not yet read.
 
-## What already works
+## Audit checklist (2026-10-23)
+
+Every site in the original CODE that compares the level number (LEVL
+`+0x218a`) with 5 was listed by scanning the listings (39 sites, plus the
+unmapped-region sites below). Each is accounted for:
+
+| Site | Function | Status |
+| --- | --- | --- |
+| `2:6e38` | level start (S02_697E) | clears bridge state (S08_3BCE: a5-0x3130, 16 bytes at -0x312e); the port creates a fresh bridge per level load |
+| `3:0262`, `3:30b0` | AddMid / DrawMidItem | room 10 layer-4 items take CUST shapes (falling planks); covered by the plank drawing, checked against native redraws |
+| `3:0832` | Opponent1 | Prince frame 295 in room 3 draws the ridden carpet (SetupCarpet); implemented |
+| `3:4b8a` | DrawOppMeter | **fixed 2026-10-23**: no meter for a skeleton in the bridge rooms (row != 0) |
+| `4:04be` | InRange | implemented (no advance away from the bridge end) |
+| `4:0a3a`, `4:0aec`, `4:0bdc` | EnGarde | implemented (engage/hold) |
+| `4:1036`, `4:106c`, `4:10cc` | GenFight | implemented |
+| `4:1128`, `4:11b8` | OpponentClose | implemented |
+| `4:1676` | skeleton AutoCtrl | implemented (bridge guard 8:033c) |
+| `4:2e68` | AnimChar -1 link | read; no reachable case (only SEQS 60 links to 57) |
+| `4:31be` | SetKidDeathMethod | implemented (tension level 3) |
+| `4:350e` | DecLifePts | implemented (bridge skeleton immune) |
+| `4:3830` | Catch | implemented (+25 reach at tension >= 40) |
+| `4:4814` | IsDeadPos | implemented (mode-10 carpet crash counts as dead) |
+| `4:4c54` | StartFall | implemented (SEQS 198) |
+| `5:2688` | MakeSpace | read: in room 3 an emptied cell gets foreground 0xc000. Only Sitting (8:13e8) uses it there, emptying the carpet's cell 23; not modelled because the ride ends the level or kills the Prince |
+| `5:3846` | AddGateSound | implemented (BrgDoor 120) |
+| `5:539c` | SpecialMusic | implemented (BrgFight 119 in rooms 7/10/12) |
+| `6:09b4` | GenCtrl | implemented (carpet sit) |
+| `6:19a0` | DoClimbUp | implemented (SEQS 236, sword lost) |
+| `6:22be` | SwordCtrl turn | **fixed 2026-10-23**: an engaging bridge skeleton (8:02ae) does not turn to a Prince more than 15 pixels behind it; otherwise SEQS 60 |
+| `6:2318`, `6:26c0` | SwordCtrl / DoTurn | implemented (no Prince turn in room 10 while breaking). DoTurn's room check (6:26b8) is only reached for char types 0/1, so opponents still turn |
+| `6:451a` | CutAllOpponents | implemented |
+| `6:4cd6`, `6:4d32` | CutChar | implemented (no cut below room 10; chasm to room 0) |
+| `8:0190`, `8:01ae` | BridgeGetCharCol | implemented (rooms 7/12 continue room 10's columns) |
+| `8:06e0` | plank wobble | **implemented 2026-10-23** (see below) |
+| `8:0a5e`, `8:0baa` | ATMBrgFloor / TriggerBrgFloorMob | implemented |
+| `8:2d78` | TriggerGateWithRevPlate | implemented |
+| `8:3b9a` | Caverns frame hook | implemented (BridgeCheckBreak in rooms 10/7/12) |
+
+Other level-dependent tables reviewed for level five: IsTimeForNIS
+(`2:00e8`) has no level-five case; CheckPlayNIS selects scene 1 (NISCarpet,
+`15:1630` through the NIS 1-6 dispatcher `15:07c8`) when leaving level five.
+
+**Tension persistence (fixed 2026-10-23):** SetTensionLevel's globals
+(a5-0x36a2/-0x36a0) are written only by `6:5022` and a debug dialog
+(`2:4a5a`). RestartGame (`2:5b66`) reloads the level (LoadLevelMinimum
+`3:585a`) and clears only the bridge (`2:6e38`), so tension built up by
+fatal falls survives a restart; the next-level opcode -16 (`4:2f5a`) resets
+it, except when leaving level six. The port now carries it across restarts.
+The heads of levels six/seven also use it (`7:04ea`, `7:092a`), so it will
+need to move out of the bridge state for those levels.
+
+**Approximations and gaps that remain:**
+- The carpet's red fade recolours only the carpet's own sprites, not
+  other pixels of entries 45/46.
+- NISCarpet's music cues: the scene starts without music, so the cue waits
+  of its callbacks (97, 99) return at once, as 16:26d0 does without music.
+  Whether the ride's FlyinRug song still plays natively is unmeasured.
+- Unmeasured: the bridge-fight tempo against the original over a whole
+  fight (only the individual rules were checked).
+
+No blocking progression defect is known: the route from the level-four exit
+through the bridge, room 7's gate and the carpet into level six works, and
+the failure paths (chasm fall, carpet crash, saves with bridge state) are
+covered by tests in `tests/test_bridge.py` and `tests/test_level5.py`.
+Death and restart use the shared rebirth path. The 2026-10-24 retry regression
+in `tests/test_level5_retry.py` covers the actual Alt+R checkpoint path,
+including gate/button state and bridge damage. Checkpoint snapshots now
+include cavern mechanisms; subsequent retries restore that baseline, not
+the post-checkpoint changes. Bridge tension and the flip timer remain
+persistent, while float time and queued impact/music events reset. New
+progress saves retain the baseline; old saves still load and acquire one
+after their fresh world has been initialized.
+
+## Carpet Chamber Audio (2026-10-24)
+
+CUST room entry `8:0d50-0d58` requests `AddSong(0x72)`, RugRoom cue 114 [D].
+The port selects it once on entering level five, native room 3, before the
+carpet ride. The leave hook `8:0d5c` calls `8:14f0`, which stops specifically
+cue 114 through PrinceResetSnd `5:5252` [D]. The MIDI ends at 29.7 seconds
+and contains no loop controls. There is no per-frame request to repeat it.
+Sitting `8:14ae` replaces it with 115/116; leaving must not stop that new
+song. An earlier port patch wrongly restarted 114 after completion; the
+room-visit latch now prevents this, including after other foreground songs.
+Treating it as ambient for the host toggle remains a port policy: muting it
+does not rearm the used entry request. Re-entry can request it again.
+Covered by `tests/test_carpet_room_music.py`.
+
+`tests/test_level5_traps.py` also checks both room-4 launchers and room 9's
+right loose floor (cell 16) striking button 26. The latter emits debris
+impact 26 and shooter launch 65 in the same update. The mixed-effects host
+policy coalesces that pair to impact 26 without disabling the projectile or
+the concurrent gate sound; it does not change the original single-channel
+comparison mode. The reported room-4 right-launcher failure was not
+reproduced by these tests.
+
+## Entry and scenery
 
 - **Entry:** SetKidDefaults `2:5e34` selects ordinary sequence 5 [D].
 - **Scenery:** `tools/extract_caverns.py` exports `caverns_level5.json`,
   including room 10's rope bridge and room 3's custom chamber (CUST
-  4050/4225). Pass-11 custom pieces are not drawn
-  (`docs/LEVEL4_RECOVERY.md`).
+  4050/4225), with room 3's bars (pass 11).
 
 ## Level-specific tiles
 
@@ -55,14 +150,17 @@ check of the redraw at each collapse stage.
 - Note: the symbol file's "IsBrgGateOpen" at `8:033c` is the bridge guard;
   the actual gate test is `8:0458`.
 
-**Still open [D, read but not implemented]:**
-- `8:06d8`/RedrawBrgFloor `8:0878`: plank wobble. Each bridge cell is a trob
+**Plank wobble (implemented 2026-10-23):**
+- `8:06d8`/RedrawBrgFloor `8:0878`: each bridge cell is a trob
   (TriggerBrgFloor `8:091c` at room entry). While a character's column ±1
   is marked (8:0534/MarkBridgeForCol `8:05cc`; both on the bridge mark all),
-  Rnd(3) >= 2 sets the foreground nibble to 1 or 2 for one frame; the cell
-  is redrawn with CUST record 3 + nibble (SHAP 4226-4228, bottom +0/+1/+2)
-  and a character's Y on a floor pose moves -1/+1 (`8:068c-06be`). Not
-  implemented: it needs per-cell redraws of the pre-rendered room.
+  a resting marked plank takes nibble Rnd(3) - 1 when Rnd(3) >= 2, and a
+  wobbling plank rests on the next frame. The cell is drawn with CUST record
+  3 + nibble (SHAP 4227/4228, bottom one/two pixels lower, checked against
+  native redraws) and a character's Y on a floor pose (frame flag 0x40)
+  moves -1/+1 (`8:068c-06be`). The port re-renders room 10 for each wobble
+  (about 5 ms) and keeps no wobble variants cached. While room 10 is not
+  shown the trobs stop; the port then clears the nibbles.
 - (Implemented) BridgeCheckBreak's room-7 side effect (`8:020a-0236`): a
   Prince who still has his sword (a5-0x503c != -1) outside the bridge in
   room 7, column <= 5, with the gate trob in phase 0 or 2, triggers
@@ -119,6 +217,28 @@ cave bars and tile 18 at cell 23 belongs to the flying carpet:
     bars open, else 116.
   - SEQS 128: frame 296 four times, then frame 295 rising (-6 moves, 361
     pixels in all), -16 (next level), then SEQS 199 (frame 295 forever).
+  - Leaving (implemented 2026-10-24): the end song is added only at the
+    stairs' frame 224 (6:0fea-0ff2, AddSong(GetEndSong) 5:4b40), so the
+    carpet's -16 adds none; FrameAdv (2:6134-6168) then ends the level as
+    soon as the Prince's sound (a5-0x439a, except 272/17/192) has finished.
+    For levels five and nine 2:61ce-61ea skips ResetSoundItem (16:2200):
+    FlyinRug (115, started when he sat down) plays on into the carpet scene
+    (NIS 1), whose cue operations (16:26d0) wait for its markers a (6.86 s)
+    and c (36.57 s). The port starts the scene with the song's elapsed time
+    and keeps the song when level six loads after the scene (the same
+    skipped reset; the music stopped when the Prince's lives appeared).
+  - QoL in the carpet scene (port exception, like the title clouds): the
+    Mac fades block and freeze the animation; here a fade-in no longer
+    blocks the drawing steps after it (palette, sound and cue steps still
+    wait for it) and a fade-out starts its own duration (0.42 s) early over
+    the fixed waits before it, so the clouds keep moving, as in the DOS
+    version. Screens may start up to 0.84 s earlier; the cue markers
+    re-anchor them to the music.
+    Before, the port added end song 32 and waited about 7 s on the empty
+    room, then reset the music.
+  - The scene's Prince colours: SetKidPalette 3:5f1c -> PoPSetPalette
+    3:508a(25000 + kind, 16) -> RemapCTBL 17:6a78 renumbers Kid CTBL entries
+    (stored 1-16) to 16-31; the port had placed them at 17-32.
   - Sitting `8:13a8` (GenCtrl at frame 295, `6:0722`): the first call
     starts the carpet counter. Later, below Y 100 with the bars not open it
     crashes: Y 39, mode 10 (hidden), JumpSeq 129 (-> 199), sound 117. The
@@ -136,13 +256,34 @@ cave bars and tile 18 at cell 23 belongs to the flying carpet:
     whole room uses 3501. Entries 16-31 hold the cavern Prince palette (Kid
     CTBL 25003) one bank up. An emulator capture of the room and the unused
     carpet matches pixel for pixel (mean difference below 1 outside the
-    Prince). Not reproduced: the red fade of entries 45/46 (`8:10ba-119c`).
+    Prince). After a crash, DrawObjCarpet `8:10ba-11a2` fades entries 46 and
+    45 towards dark red (0x7272, 0x4bc2; green and blue to 0) in seven steps
+    (counter 5-11) with ComputeBloodRGB `8:0df6` (implemented 2026-10-23).
   - **Left column:** GetCells' neighbour cache (`5:0bbc-0be2`) marks the left
     room's last column 0xc000 in a CUST room (except rows 1-2 of CUST kind
     0x1f), so its pillar pieces are not drawn; the export harness now does
     the same (this removed the dark patch at the top left of room 3).
-  - After the ride the port plays the cavern end song (32) and leaves the
-    completed level on screen; level six is not available.
+  - After the ride the port plays the cavern end song (32), shows the
+    carpet scene (below) and loads level six.
+
+## Cutscene 1: NISCarpet (implemented 2026-10-23)
+
+CheckPlayNIS(5, 6) selects scene 1; the NIS dispatcher `15:07c8` runs
+NISCarpet `15:1630`. It opens Caverns.rsrc, Ruins.rsrc and TNIS1-3.rsrc
+(A5 file records -0x4712, -0x470c, -0x26ce, -0x26c8, -0x26c2), which take
+precedence over NIS.rsrc while open. `tools/extract_intro.py` runs it under
+Unicorn like the other scenes, tracking those opens and closes (17:3260,
+17:322e) and emitting their SHAP/CTBL/ANI/SCRP as id + 100000 * n. New
+helpers: 17:6dd6 (PaintRect in a palette index), 17:4fe4 (CopyBits),
+15:0c98 (a SHAP of an open file), SetKidPalette 3:5f1c (Kid CTBL 25004 at
+entry 16), and PlayTheAnimation flags 0x0c/0x1c: flag 16 places the
+animation at its ANI bounds, `$1a` fills them first, and flag 8 saves the
+background and restores it under the previous frame's layers (16:121c,
+16:1378-13bc). Callbacks TransFunc1 `15:19c2` (show the screen, wait for
+cue 97, fade in) and TransFunc3 `15:1a44` (cue 99) are recovered per frame.
+The scene: the carpet over the sea, through the clouds and down to the
+ruins' cliff, where level six starts. It needs a reimport (`carpet.json`,
+TNIS1-3.rsrc).
 
 ## Rules found in unmapped listing regions [D, not implemented]
 
@@ -159,41 +300,3 @@ ATMGate). Disassembled with capstone:
 - `6:5752-5772`: in level 5 room 10, SetTensionLevel(2, 5).
 - ATMExit `5:15a4-168d`: as the exit finishes opening (position 79) it calls
   ResetSoundItem(0) before sound 18, except in level 13 room 4.
-
-## Other level-five checks still to read [?]
-
-| Site | Function |
-| --- | --- |
-| `2:6e38` | CheckAlert |
-| `3:0262` | AddMid |
-| `3:0832` | Opponent1 |
-| `3:30b0` | DrawMidItem |
-| `3:4b8a` | DrawOppMeter |
-| `4:04be` | InRange (opponent run controller) |
-| `4:0a3a`, `4:0aec`, `4:0bdc` | EnGarde |
-| `4:1036`, `4:106c`, `4:10cc` | GenFight |
-| `4:1128`, `4:11b8` | OpponentClose |
-| `4:31be` | SetKidDeathMethod |
-| `4:350e`, `4:3830` | DecLifePts |
-| `4:4814` | IsDeadPos |
-| `4:4c54` | LoadShad |
-| `5:2688` | MakeSpace |
-| `5:3846` | AddGateSound |
-| `5:539c` | SpecialMusic |
-| `6:09b4` | GenCtrl |
-| `6:19a0` | DoJumpHigh |
-| `6:22be`, `6:2318` | DoKidEngarde |
-| `6:26c0` | DoStrike |
-| `6:451a` | CutAllOpponents |
-| `6:4cd6`, `6:4d32` | CutChar |
-| `8:2d78` | TriggerGateWithRevPlate |
-| `8:3b9a` | CaveGetTorchFrame |
-
-## Suggested order
-
-1. Make level five loadable (F3, entry, importer and launcher behind a
-   reimport, saves `1..5`) and route the level-four exit into it.
-2. The bridge: the static floor exists; then break state, piece fall
-   animation and the characters falling through it.
-3. Work through the remaining rows of the table, each with a native probe or
-   direct reading and a regression.
