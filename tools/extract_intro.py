@@ -661,9 +661,9 @@ def recover_throne(program, nis, files, facing):
     # at 240); the Macintosh shows the game's last frame.
     start = next(index for index, item in enumerate(operations) if item['pc'] == 0x6d66)
     end = next(index for index, item in enumerate(operations) if item['op'] == 'set_palette')
-    # The previous scene freed the dissolve data (15:0132, 2:2cfe): the
-    # first dissolve copies the screen at once.
-    prelude = [{'op': 'dissolve_area', 'args': [None], 'pc': None}]
+    # NIS(6)'s common prologue 15:006a-0072 calls InitDissolve(1), before
+    # entering 15:66f4. The coordinator alone does not include this setup.
+    prelude = [{'op': 'dissolve_area', 'args': [[0, 0, 365, 512]], 'pc': 0x006e}]
     prelude += [{'op': 'set_palette', 'args': [resource, first], 'pc': None}
                for resource, first in ((403500, 64), (403501, 48), (725004, 16), (801004, 240))]
     prelude += [dict(item) for item in operations[start:end]]

@@ -3014,7 +3014,8 @@ class ScenePrototype(WindowControls):
         # The Prince's native X (207 origin), facing (0 right, -1 left) and Y.
         self.intro = IntroPlayer(self.throne_assets, self.audio, music,
                                  variant=0 if state.facing else -1,
-                                 prince=(state.target_x + 207, floor_y(self.terrain_motion.row) + state.current_y))
+                                 prince=(state.target_x + 207, floor_y(self.terrain_motion.row) + state.current_y),
+                                 status=self.native_viewport.crop((0, 365, 512, 384)))
         self.last_intro_at = time.perf_counter()
         self.status.set('Vision')
         return True

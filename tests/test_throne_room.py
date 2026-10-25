@@ -1,6 +1,8 @@
 import struct
 import unittest
 
+import numpy as np
+
 from pop2.sequence_runtime import SequenceState
 from pop2.paths import ASSET_DIR
 from pop2.terrain import LevelMap
@@ -99,6 +101,57 @@ class ThroneSceneMusicTests(unittest.TestCase):
         scene.advance_audio()
         self.assertNotEqual(scene.audio.current_music, 180)
         self.assertTrue(139 <= scene.audio.current_music <= 174)
+
+
+@unittest.skipUnless((ASSET_DIR / 'throne.json').is_file(), 'Original throne scene has not been imported')
+class ThroneVisualTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from pop2.intro import IntroAssets
+
+        cls.assets = IntroAssets(program_name='throne.json')
+
+    def test_resident_kid_inks_are_relocated_but_zero_stays_transparent(self):
+        from pop2.intro import indexed_shape
+        from pop2.render_opening import load_resource_file
+
+        original = np.asarray(indexed_shape(load_resource_file('Kid.rsrc')['SHAP'][25081]['data']))
+        actual = np.asarray(self.assets.shapes[725081])
+        expected = np.where(original == 0, 0, original + 15)
+        np.testing.assert_array_equal(actual, expected)
+        self.assertTrue(set(actual.ravel()) <= {0, *range(16, 32)})
+
+    def test_both_facings_get_full_first_dissolve_and_unchanged_mother_durations(self):
+        for variant in self.assets.program['variants'].values():
+            self.assertEqual(variant[0]['args'], [[0, 0, 365, 512]])
+            self.assertEqual([op['args'][0] for op in variant if op['op'] == 'dissolve'],
+                             [240, 180, 20, 20, 20, 180])
+
+    def test_ground_sword_is_intact_without_an_extra_floor_patch(self):
+        from pop2.caverns import cavern_assets
+
+        program, _resources, _palette, _shapes = cavern_assets(8)
+        commands = [command for command in program['rooms']['8'] if command[8:10] == [5, 2]]
+        self.assertTrue(any(command[1] == 1011 and command[7] == 0 for command in commands))
+        self.assertFalse(any(command[1] in (1046, 3518) for command in commands))
+
+    def test_real_scene_retains_its_hud_to_the_last_vision_frame(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(8)
+        scene.peaceful = True
+        scene.jump_to_room(8, 2, 267, 1)
+        scene.combat.player.life = 2
+        scene.render()
+        expected = scene.native_viewport.crop((0, 365, 512, 384)).convert('RGBA')
+        self.assertGreater(np.asarray(expected)[..., :3].max(), 0)
+        self.assertTrue(scene.start_vision(lambda: None))
+        self.assertEqual(scene.intro.status.tobytes(), expected.tobytes())
+        scene.intro.advance(1000)
+        self.assertTrue(scene.intro.done)
+        self.assertEqual(scene.intro.frame().crop((0, 365, 512, 384)).tobytes(), expected.tobytes())
 
 
 if __name__ == '__main__':

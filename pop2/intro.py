@@ -154,6 +154,14 @@ class IntroAssets:
         kid = parse_resource_fork((directory / "Kid.rsrc").read_bytes())
         self.kid_palettes = {key: palette_colors(value["data"]) for key, value in kid["CTBL"].items()}
         self.shapes = {key: indexed_shape(value["data"]) for key, value in resources["SHAP"].items()}
+        kid_offset = self.program.get('resource_files', {}).get('Kid.rsrc')
+        if kid_offset is not None:
+            # Resident Kid shapes use local inks 1..16. SetKidPalette puts
+            # these colours at 16..31 in the shared game/NIS palette.
+            for key in kid['SHAP']:
+                if kid_offset + key in self.shapes:
+                    self.shapes[kid_offset + key] = self.shapes[kid_offset + key].point(
+                        lambda ink: ink + 15 if ink else 0)
         self.palettes = {key: palette_colors(value["data"]) for key, value in resources["CTBL"].items()}
         self.strings = {key: text_strings(value["data"]) for key, value in resources["TEXT"].items()}
         prince = parse_resource_fork((directory / "Prince.rsrc").read_bytes())
@@ -281,7 +289,7 @@ def area_words(rect):
 
 
 class IntroPlayer:
-    def __init__(self, assets, audio=None, music=None, variant=None, prince=None):
+    def __init__(self, assets, audio=None, music=None, variant=None, prince=None, status=None):
         """`music`: (cue, seconds played, game_song metadata) of a game song
         still playing when the scene starts; its cue markers pace the scene.
         `variant` picks one of the program's variants (the throne scene: the
@@ -296,6 +304,9 @@ class IntroPlayer:
             self.follow = (prince[0] - program["prince"][0], prince[1] - program["prince"][1])
         self.sounds = program["audio"]
         self.program_kind = program.get("kind") or ("carpet" if "resource_files" in program else None)
+        self.status = status.copy() if status is not None else None
+        if self.status is None and self.program_kind == 'throne':
+            self.status = Image.new('RGBA', (SIZE[0], SIZE[1] - 365), 'black')
         self.position = 0
         self.time = 0.0
         self.done = False
@@ -367,10 +378,12 @@ class IntroPlayer:
 
     def text(self, resource_id, index, initial, dx, dy):
         colors = ((8, 255), (6, 3), (5, 14))
+        panel = (0, 297, 512, 384)
         if self.text_panel is not None:
             # 15:026e-028c (NIS 6): the saved rectangle is the panel and the
             # text uses entries 1 and 2.
-            self.target.paste(self.saved_rects[self.text_panel][1], (0, 297))
+            panel, image = self.saved_rects[self.text_panel]
+            self.target.paste(image, panel[:2])
             colors = ((8, 255), (6, 1), (5, 2))
         elif 25002 in self.assets.shapes:
             self.target.paste(self.assets.shapes[25002], (0, 297))
@@ -380,17 +393,18 @@ class IntroPlayer:
             font = self.assets.font
             # NISTextDraw 15:0302 and TextInRect 17:28de/2b9a use a
             # baseline, not the top of the NFNT bitmap, to center the lines.
-            top = 297 + 87 // 2 - len(lines) * font.height // 2 + font.height - 4 - font.ascent
+            top = panel[1] + (panel[3] - panel[1]) // 2 - len(lines) * font.height // 2
+            top += font.height - 4 - font.ascent
             for n, line in enumerate(lines):
                 mask = font.text(line).getchannel("A")
-                left = 1 + max(0, (508 - mask.width) // 2)
+                left = panel[0] + 1 + max(0, (panel[2] - panel[0] - 4 - mask.width) // 2)
                 for offset, color in colors:
                     self.target.paste(color, (left + offset, top + n * font.height), mask)
             if initial:
                 clip, self.clip = self.clip, (0, 0, *SIZE)
-                self.draw_shape(initial, 8 + dx, 297 + 30 + dy, 16)
+                self.draw_shape(initial, panel[0] + 8 + dx, panel[1] + 30 + dy, 16)
                 self.clip = clip
-        rect = (0, 297, 512, 384)
+        rect = panel
         self.display.paste(self.target.crop(rect), rect)
         self.changed()
 
@@ -735,4 +749,6 @@ class IntroPlayer:
             # leaves the display's black index 255 unchanged.
             frame.putpalette([value for color in self.palette[:255] for value in color] + [0, 0, 0])
             self.frame_cache = frame.convert("RGBA")
+            if self.status is not None:
+                self.frame_cache.paste(self.status, (0, 365))
         return self.frame_cache.copy()

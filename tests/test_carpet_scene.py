@@ -255,8 +255,33 @@ class ThroneVisionPlayerTests(unittest.TestCase):
         player.assets.strings = {32000: ['I died at his side.']}
         mask = Image.new('RGBA', (20, 10), (0, 0, 0, 255))
         player.assets.font = SimpleNamespace(height=12, ascent=9, text=lambda _line: mask)
+        before = player.display.crop((0, 297, 512, 384)).tobytes()
         player.text(32000, 1, 0, 0, 0)
         # 15:026e-028c: the strip saved at a5-0x27da, then colours 1 and 2.
-        colors = {player.display.getpixel((x, y)) for x in range(512) for y in range(297, 384)}
+        colors = {player.display.getpixel((x, y)) for x in range(510) for y in range(87)}
         self.assertTrue({9, 1, 2, 255} <= colors)
         self.assertNotIn(3, colors)
+        self.assertEqual(player.display.crop((0, 297, 512, 384)).tobytes(), before)
+        player.text(0, 0, 0, 0, 0)
+        self.assertEqual(set(player.display.crop((0, 0, 510, 87)).tobytes()), {9})
+
+    def test_full_picture_dissolve_keeps_the_actual_status_pixels(self):
+        from PIL import Image
+
+        status = Image.new('RGBA', (512, 19), (220, 7, 19, 255))
+        player = self.player([
+            {'op': 'rgb', 'args': [3, 40, 40, 40]},
+            {'op': 'rgb', 'args': [4, 200, 200, 200]},
+            {'op': 'fill', 'args': [3, [0, 0, 384, 512]]},
+            {'op': 'copy', 'args': [[0, 0, 384, 512]]},
+            {'op': 'dissolve_area', 'args': [[0, 0, 365, 512]]},
+            {'op': 'fill', 'args': [4, [0, 0, 384, 512]]},
+            {'op': 'dissolve', 'args': [60]},
+            {'op': 'fade_out_all', 'args': [0x40001]},
+            {'op': 'copy', 'args': [[0, 0, 384, 512]]}], status=status)
+        player.advance(.5)
+        self.assertEqual(set(player.display.crop((0, 0, 512, 365)).tobytes()), {3, 4})
+        self.assertEqual(player.frame().crop((0, 365, 512, 384)).tobytes(), status.tobytes())
+        player.advance(10)
+        self.assertTrue(player.done)
+        self.assertEqual(player.frame().crop((0, 365, 512, 384)).tobytes(), status.tobytes())

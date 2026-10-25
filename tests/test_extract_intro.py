@@ -24,6 +24,21 @@ def coordinator(entry):
 
 
 class IntroExtractionTests(unittest.TestCase):
+    def test_throne_inherits_full_picture_dissolve_from_the_common_nis_prologue(self):
+        operations = [
+            {'op': 'shape', 'args': [404200, 0, 0, 0], 'pc': 0x6d66},
+            {'op': 'set_palette', 'args': [403501, 48], 'pc': 0x6d28},
+            {'op': 'dissolve', 'args': [240], 'pc': 0x6824},
+            {'op': 'dissolve_area', 'args': [[210, 221, 314, 298]], 'pc': 0x684c},
+            {'op': 'dissolve', 'args': [180], 'pc': 0x6ee4}]
+        files = {name: b'' for name, _offset in (*extractor.THRONE_FILES.values(), *extractor.THRONE_RESIDENT)}
+        with patch.object(extractor, 'recover_scenes', return_value=operations), \
+                patch.object(extractor, 'parse_resource_fork', return_value={}):
+            actual = extractor.recover_throne(b'', b'', files, 0)
+        # NIS(6) 15:006a-0072 prepares mode 1 before the scene coordinator.
+        self.assertEqual(actual[0], {'op': 'dissolve_area', 'args': [[0, 0, 365, 512]], 'pc': 0x006e})
+        self.assertEqual([op['args'] for op in actual if op['op'] == 'dissolve'], [[240], [180]])
+
     def test_cached_dissolve_offsets_recover_order_independent_of_framebuffer_stride(self):
         offsets = [(3 * 528 + 8, 0), (2 * 528 + 4, 0),
                    (3 * 528 + 4, 0), (2 * 528 + 8, 0), (2 * 528 + 4, 0)]

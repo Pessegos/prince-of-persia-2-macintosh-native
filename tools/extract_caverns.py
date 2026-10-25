@@ -196,6 +196,11 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     # Per-cell redraws change the overlap order of adjacent exit pieces.
     put_word(a5 - 0x4832, int(climb_action is None and not floor_redraw and not cell_redraw))
     put_word(a5 - 0x4fc2, room_id + 1)
+    # DrawSword 3:4cf2 skips ordinary floor under the throne-room item.
+    # Static exports have no live Prince: use the unowned-item projection
+    # (3:4d56-4d60), which distinguishes the intact and broken sword items.
+    put_word(a5 - 0x50bc, room_id + 1)
+    put_word(a5 - 0x500a, -1)
     if climb_action is not None:
         if not 135 <= climb_action <= 144:
             raise ValueError('DrawHalf requires a native climbing pose')

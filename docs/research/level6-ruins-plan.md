@@ -249,9 +249,11 @@ plays it with the scene player before waking the Prince
   (mirrored by FreeShpInfo 17:5fd0 and 21 further left when he faces right)
   and Y - 19, and the sword (Prince SHAP 1011) at (271, 345). The scene
   waits for Throne2 (game song 181, MIDISnd 9933) to end, starts its own
-  music (NISMIDI 31020) and shows the picture. The dissolve data was freed
-  by the previous scene (15:0132, 2:2cfe), so this first dissolve copies
-  the screen at once (15:2c06).
+  music (NISMIDI 31020) and shows the picture. Correction: although the
+  previous scene frees its dissolve data, NIS(6)'s common prologue
+  15:006a-0072 calls InitDissolve(1), preparing the whole 512 x 365 picture
+  before 15:66f4. The exporter now includes that setup; the first dissolve
+  runs for its original 240 ticks rather than taking the no-data copy path.
 - The apparition: InitDissolve(2) limits later dissolves to the rectangle
   at a5-0x22fc (77 x 104) moved to (X - 214, or 39 less facing right; 210).
   SaveRect 17:520a keeps the background there; SHAP 32002-32005 fade in
@@ -274,14 +276,27 @@ plays it with the scene player before waking the Prince
   dissolve area and shapes his X (`follow`).
 - Port approximations: the screen before the scene is the game's last
   frame on the Macintosh; the port draws the scene's own room redraw there
-  (with Ruins CTBL 3500/3501 and the combined Kid/Prince colours) and black
-  below line 365, where the game's status line stays. An area dissolve uses
+  (with Ruins CTBL 3500/3501 and the combined Kid/Prince colours). The actual
+  game HUD below line 365 is retained as RGB through the scene, so palette
+  changes cannot recolour unrelated palace pixels as status graphics.
+  Standalone previews without a game HUD use black there. An area dissolve uses
   its own shuffled pixel order, not LoadSaveDisRes 15:3878. Skipping the
   scene wakes the Prince and lets the game start Throne4.
 - Checks: all existing scene programs (intro, voyage, discovery, carpet,
   nine trees) are unchanged by the harness additions; MoveRect 17:1b4e now
   moves the rectangle to the point (17:1b12) instead of offsetting it,
   which those scenes did not distinguish.
+
+Follow-up visual fixes (Codex): resident Kid SHAP inks 1-16 are mapped to
+16-31 (zero remains transparent); NIS text uses its saved strip's actual
+rectangle at the top, leaving the picture and HUD below untouched. Mother's
+180/20-tick dissolves, dialogue/music cue timing and total scene duration
+are unchanged in both facings. The static scenery exporter now supplies the
+view room for DrawSword 3:4cf2 and the unowned-item projection (-0x500a=-1)
+for 3:4d56-4d60, not an uninitialized weapon value zero. This draws the intact
+father's sword without an ordinary floor patch over the custom throne floor;
+runtime weapon ownership is unchanged. A local old/new native command audit
+of all 224 base rooms in levels 3-9 changes only level 8 room 9.
 
 ## Remaining Steps
 
