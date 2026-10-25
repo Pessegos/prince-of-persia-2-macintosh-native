@@ -428,6 +428,9 @@ class Caverns(Environment):
                 sequence, cue = pool.begin_death(state.animation_state, state.facing, actor_type=4)
                 guard.life, guard.targetable = 0, False
                 guard.skeleton.phase = 'lava'
+                # GetLavaInfoHnd 8:3546-3548 marks the actor for removal;
+                # UpdateOppInfo 6:30c4-30d4 must not save a revivable heap.
+                state.special_flag = 5
                 motion.dead, motion.falling = True, False
                 state.horizontal_velocity = state.vertical_velocity = 0
                 scene.physics.select(guard.runtime, sequence)

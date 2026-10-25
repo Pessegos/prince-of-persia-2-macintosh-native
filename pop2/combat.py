@@ -385,6 +385,7 @@ class CombatEncounter:
             for guard in previous_active:
                 view = self._project_fighter(guard, previous_room)
                 if (view is None or guard.room == room or guard.state.actor_type not in (2, 4)
+                        or removed_on_room_save(guard)
                         or len(self.guards) >= 5):
                     continue
                 if opponent_follows_cut(view, direction, len(self.guards),
@@ -392,7 +393,7 @@ class CombatEncounter:
                                         bridge_room=self._bridge_fight_room(view)):
                     self._carry_opponent(guard, room, previous_room, direction)
         for actor, view in room_records:
-            if actor.room != room and removed_on_room_save(actor):
+            if removed_on_room_save(actor):
                 self.room_encounters[actor.room][0].remove(actor)
                 continue
             if actor.room != room:

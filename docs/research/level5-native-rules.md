@@ -81,6 +81,27 @@ persistent, while float time and queued impact/music events reset. New
 progress saves retain the baseline; old saves still load and acquire one
 after their fresh world has been initialized.
 
+## Lava Skeletons Stay Removed On Revisit (2026-10-25)
+
+Room 23's skeleton could return after falling into its cell-27/28 lava pool.
+GetLavaInfoHnd `8:3546-3548` sets the actor's special word (`a5-0x5022`) to 5
+immediately [D]. UpdateOppInfo `6:30c4-30d4` routes this marker to
+RemoveOppInfo `6:3462`, via `6:32d8-32e0`, instead of preserving a room record.
+The port previously set only zero HP and phase `lava`, so InitOpps could reload
+it as a recoverable heap. NPC lava entry now retains the original marker.
+Terminal actors are also excluded from room transfer and removed before their
+room records can be reloaded, including a previous side-bank actor already
+physically owned by the destination. Living/collapsed skeleton rules remain.
+
+`tools/probe_lava_removal.py` executes the original common marker writes and
+UpdateOppInfo branch for 192 controlled skeleton room/facing/level cases
+(levels 3-5), stopping on RemoveOppInfo entry; no supplied services. This
+excludes lava contact/lookup, damage, animation and actual bank removal.
+`tests/test_skeleton_lava.py` exercises the real room-23 pool entry from a
+controlled final recoil position, both facings, immediate/delayed exit,
+three revisits, a mid-lava snapshot and fresh level restart. No save schema
+or imported scenery changes are needed.
+
 ## Running Down Must Crouch, Not Descend (2026-10-25)
 
 The room-2 reproduction requires the loose slab at cell 12 to have fallen,
