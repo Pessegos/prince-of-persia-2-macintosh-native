@@ -13,7 +13,7 @@ from pop2.paths import ASSET_DIR
 from pop2.sequence_runtime import SequenceState
 from pop2.terrain import TerrainMotion
 from tests.test_audio import TimedPlayback
-from tests import test_audio_duck, test_pressure_plates, test_terrain
+from tests import test_audio_duck, test_pressure_plates
 
 
 class GateControllerAudioTests(unittest.TestCase):
@@ -228,7 +228,10 @@ class OppositeGateSdlTests(test_audio_duck.SdlGateDuckTests):
                      'Original cavern assets have not been imported')
 class GateSceneAudioTests(unittest.TestCase):
     def setUp(self):
-        test_terrain.RooftopSceneTests.setUp(self)
+        from tests.test_terrain import RooftopSceneTests
+
+        self.fixture_type = RooftopSceneTests
+        self.fixture_type.setUp(self)
         self.scene.load_level(4)
         self.scene.peaceful = self.scene.god_mode = True
         self.scene.audio = AudioEngine(playback=object())
@@ -246,7 +249,7 @@ class GateSceneAudioTests(unittest.TestCase):
         plates = self.scene.game.caverns.plates
         plates.foreground[self.gates[1]] = 100
         plates.active[self.gates[1]] = 1
-        test_terrain.RooftopSceneTests.tick(self)
+        self.fixture_type.tick(self)
         self.assertEqual((self.scene.audio.current_mechanism, self.scene.audio.current_closing), (17, 17))
         self.assertTrue(self.backend.busy('mechanism'))
         self.assertTrue(self.backend.busy('closing'))
@@ -256,7 +259,7 @@ class GateSceneAudioTests(unittest.TestCase):
         plates = self.scene.game.caverns.plates
         plates.foreground[self.gates[1]] = 40
         plates.active[self.gates[1]] = 4
-        test_terrain.RooftopSceneTests.tick(self)
+        self.fixture_type.tick(self)
         self.assertEqual((self.scene.audio.current_mechanism, self.scene.audio.current_closing), (17, 20))
         self.assertEqual(plates.foreground[self.gates[0]], 4)
         self.assertEqual(plates.foreground[self.gates[1]], 0)
