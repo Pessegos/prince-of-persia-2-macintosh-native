@@ -223,6 +223,15 @@ found no remaining loop except a run closed by a crevice whose low bits are
 
 ## Cutscene 6: The Vision At The Throne (2026-10-25)
 
+Follow-up validation (Codex): SpecialMusic 5:5388/5418 selects Throne1 even
+without combat, until sword type 1; ordinary room ambience resumes after the
+vision's foreground music. GetBarrCode 4:52bc/532e selects type 8 for the
+level-eight throne gate, with DATA offsets 16/24, independently of its phase.
+`tools/probe_throne_room_rules.py` executes 128 music and 128 barrier cases
+with controlled LEVL/room/sword/combat fields and no supplied services.
+`tests/test_throne_room.py` covers playback repetition, both collision planes,
+cautious clearance and the real scene's return to ordinary ruins ambience.
+
 PlayNIS(6) from 7:38ca reaches NISThroneRoom 15:66f4 (dispatcher 15:07c8,
 table entry 6). The import runs it like the other scenes
 (`tools/extract_intro.py`, `recover_throne`, `throne.json`) and the port

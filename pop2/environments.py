@@ -96,7 +96,7 @@ class Environment:
     def ambient_audio(self, audio, motion):
         """Ambient music and environment sounds, after the actors' sounds."""
 
-    def room_ambient(self, audio, motion, fighting, contact):
+    def room_ambient(self, audio, motion, fighting, contact, *, special=None, special_when_idle=False):
         """The rooftops' and caverns' room ambient (5:5398 SpecialMusic, 5:5494)."""
         scene = self.scene
         # 5:5494-54c8: no new ambient while the first bank skeleton of an
@@ -110,9 +110,11 @@ class Environment:
         if not chasing:
             # SpecialMusic 5:5398-53bc: BrgFight for fights in level five's
             # bridge rooms 7, 10 and 12.
-            special = 119 if bridge_checked(scene.game.level.number, scene.room_id) else None
+            if special is None:
+                special = 119 if bridge_checked(scene.game.level.number, scene.room_id) else None
+            options = {'special_when_idle': True} if special_when_idle else {}
             audio.ambient(scene.room_id, motion.row, max(0, min(9, int(contact // 51))),
-                          fighting, scene.combat.player.alive, special=special)
+                          fighting, scene.combat.player.alive, special=special, **options)
 
     # Drawing, in ScenePrototype.render order.
 
@@ -922,7 +924,12 @@ class Ruins(Caverns):
         fighting = not scene.peaceful and scene.combat.opponent_to_fight()
         contact = floor_contact_x(scene.sequence_state.target_x,
                                  scene.sequence_state.facing, scene.frames[scene.action])
-        self.room_ambient(audio, motion, fighting, contact)
+        # SpecialMusic 5:5418-5436: Throne1 replaces ordinary ambience even
+        # outside combat, until the Prince has his father's sword.
+        throne = (scene.game.level.number == 8 and scene.room_id == THRONE_ROOM
+                  and scene.game.sword_type != 1)
+        self.room_ambient(audio, motion, fighting, contact,
+                          special=180 if throne else None, special_when_idle=throne)
 
     def entered_room(self):
         super().entered_room()

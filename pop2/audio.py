@@ -467,14 +467,15 @@ class AudioEngine:
                         self.playback.stop(bus)
                 setattr(self, f'current_{bus}', None)
 
-    def ambient(self, room, row, column, fighting=False, alive=True, special=None):
+    def ambient(self, room, row, column, fighting=False, alive=True, special=None,
+                *, special_when_idle=False):
         if not self.music_enabled or not alive:
             return
         level = self.level_music or self.manifest["level_one"]
         bank = self.manifest["ambient"][level["bank"]]
         # PlayAmbient 5:4fd0-4ff4 disables combat selection for bank 5.
         fighting = fighting and bank["combat_group"] != -1
-        if fighting and special is not None:
+        if special is not None and (fighting or special_when_idle):
             # SpecialMusic 5:5388 replaces the combat group with one song,
             # e.g. BrgFight (119) on level five's bridge (5:5398-53bc).
             if self.music_busy and (self.current_music == special or self.pending_song is not None
@@ -482,7 +483,7 @@ class AudioEngine:
                 return
             self.add_song(special, ambient=True)
             if self.pending_song == special:
-                self.pending_music_group = bank["combat_group"]
+                self.pending_music_group = bank["combat_group"] if fighting else None
             return
         group = (bank["combat_group"] if fighting else
                  level["groups"][room * 30 + row * 10 + column]
