@@ -1334,6 +1334,36 @@ class ScenePrototype(WindowControls):
         # An airborne reversal waits for the first run pose after landing.
         return self.dispatch_pending_action(was_running=True)
 
+    def update_native_input_boundaries(self):
+        """Discard stale host requests at verified Macintosh control gates."""
+        command = self.pending_action
+        if command is None:
+            return
+        state = self.sequence_state
+        if (state.sequence_id == JUMP_FORWARD_SEQUENCE and state.action == 26
+                and command.kind in ('horizontal', 'jump', 'crouch', 'crawl')):
+            # GenCtrl 6:074a-0760 clears all four directions at pose26.
+            # A still-held key can be sampled afresh at the next legal gate.
+            # Keep the host's explicit vertical follow-up from releasing the
+            # horizontal half of a held-Up chord. Wall contact must still
+            # receive that held climb request; a released Up is discarded.
+            held_vertical = command.kind == 'jump' and not command.direction and self.up_held
+            self.pending_action = command if held_vertical else None
+            self.jump_started_for_press = self.up_held
+        elif (state.sequence_id == CROUCH_RISE_SEQUENCE and state.animation_state == 5
+              and command.kind in ('horizontal', 'crawl')):
+            # 6:0576-059c also clears released turns during the low rise.
+            # Keep the separately documented vertical wall-bump/climb
+            # tolerance; this is not a global rewrite of the host buffer.
+            self.pending_action = None
+        elif (command.kind == 'sword_attack' and not self.ctrl_held
+              and (state.sequence_id in (61, SWORD_BLOCK_SEQUENCE)
+                   or state.action in (150, 161, 169))):
+            # 4:3f38 cancels a released Ctrl before a legal counter gate.
+            # Already-started attacks and the port's queued-swing extension
+            # during an attack/draw are separate from this block request.
+            self.pending_action = None
+
     def update_fall_recovery_controls(self):
         state = self.sequence_state
         if state.source_sequence_id != 20 or state.animation_state != 5:
@@ -2048,6 +2078,7 @@ class ScenePrototype(WindowControls):
             self.player_x = self.sequence_state.target_x
             self.run_world_phases('opening', old_x, old_bounds)
             return
+        self.update_native_input_boundaries()
         self.update_fall_recovery_controls()
         self.update_running_jump_controls()
         if not self.resume_combat_turn():

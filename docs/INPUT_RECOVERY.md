@@ -107,7 +107,7 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 | Ledge poses 87-99 | Up active, grip delay zero: climb before release check; otherwise zero modifier or sequence-mode 11 releases | 6:18e0-1994 | Up/Shift and expiry tested; modifier/special branches partial |
 | Climb/release | Clear directions; consume Up + modifier on climb, Down on release | 6:1998-19d0, 1a84-1a8c | Terrain transitions tested; full latch reset missing |
 | Sword controls | Fresh Ctrl before fresh Down, Up, Forward, Backward; retreat requires modifier zero | 6:24bc-2584 | Actions tested; Shift+Backward selects the voluntary turn instead of a retreat (auto-turn toggle intentionally omitted); conflict priority missing |
-| Attack | Legal poses 157/158/170/171/165 or block 150/161; consume Ctrl and clear directions | 6:2780-281c | Gates/chains tested; released pending Ctrl differs |
+| Attack | Legal poses 157/158/170/171/165 or block 150/161; consume Ctrl and clear directions | 6:2780-281c | Gates/chains and released-Ctrl block cancellation tested; queued ordinary swing during attack/draw remains a host tolerance |
 | Block | Ordinary legal poses 158/170/171/168/165; special branch at 167; consume Up without clearing other latches | 6:282a-28ee | Ordinary block/attack chain tested; opponent-dependent branches partial |
 | Sword steps/sheath | Steps at 158/170/171 clear/consume Forward or Backward; sheath clears/consumes Down | 6:1d6e-1e68, 2592-25ec | Common flow tested; host buffer is not complete native state |
 
@@ -127,7 +127,7 @@ returned value `1` unless noted.
 | Call site(s) | Context | Immediate post-clear state / scope |
 | --- | --- | --- |
 | 6:059c | Mode 4/5/9 or SEQS 27/110 | No accepted direction; later-level exception pending |
-| 6:075c | Ordinary unarmed pose 26/44 | No accepted direction; pose-44 subset translated |
+| 6:075c | Ordinary unarmed pose 26/44 | No accepted direction; standing-forward-jump pose 26 and running-jump pose 44 translated |
 | 6:092a | Special handler 07ee, selects SEQS 124 | U=1; special terrain context pending |
 | 6:0956, 096e, 0990 | Same handler: forward/backward/cleanup | Selects 122/123 or clears; not ordinary run/crouch |
 | 6:0a58 | Crouch forward | F=1 |
@@ -171,22 +171,72 @@ callbacks before the next simulation tick and classify a request using the
 current movement/modifier. Native decisions use independent latches at the
 legal pose, with explicit resets.
 
-`tests/test_input_recovery.py` records four source-backed discrepancies as
-**expected failures**, alongside a passing late-input boundary test:
+The four discrepancies previously recorded as expected failures are now
+passing regressions. Shift + Backward was already corrected by the voluntary
+sword-turn implementation. The 2026-10-25 boundary correction addresses the
+other three extra-action cases:
 
-1. A released opposite tap early in a standing jump survives pose 26 in the
-   port and produces a turn after landing.
-2. A released direction during mode-5 crouch rise survives in the port.
-3. Ctrl sampled at block pose 169, released before the legal pose-150 pass,
-   still produces a block-attack in the port.
-4. Shift + backward in sword guard starts a retreat, despite native OnAlert
-   requiring a zero modifier for that branch.
+1. A released opposite tap at standing forward-jump poses 16-26 is discarded
+   by the pose-26 reset, rather than producing a turn after landing. A new
+   tap at pose 27 still survives to the landing gate. An explicit vertical
+   follow-up with Up still held remains available for the established
+   wall-climb behavior; releasing Up discards it at the reset.
+2. Horizontal/crawl requests during crouch-rise mode 5 (poses 110-116) are
+   discarded. Physical holds remain available for later sampling. The
+   separately documented vertical wall-bump/climb tolerance remains.
+3. A queued counter request is cancelled when Ctrl is released before the
+   block's legal attack pass. Holding Ctrl still permits the counter. The
+   intentionally queued ordinary swing during attack/draw is retained.
 
-These are missing translations, not intermittent defects. Expected failures
-track mismatches, not successful parity tests. Remove the decorator when
-fixing a case, and update older tests that encode host-buffer behavior.
-Early-jump tap and released-Ctrl block-chain tests must not be treated as
-authoritative original-game requirements.
+All three regressions failed against the previous controller. Tests cover
+both facings; the older animation expectations that retained early jump taps
+and released-Ctrl counters were changed because they encoded host behavior,
+not original-game requirements. The opening-duel integration scripts now
+hold Ctrl through the accepting counter tick, retaining all fight, health
+and room-exit assertions. The real-terrain held-Up wall-climb tests remain
+unchanged. No animation poses, timings or queue timeout
+were changed. This is a bounded correction to the existing host buffer, not
+integration of the complete native bank.
+
+## Executable Input-Bank Recovery (2026-10-25)
+
+`tools/reference_input_bank.py` is an asset-free research model of the five
+latches, with sampling, direction clearing, save/restore representation,
+facing/inversion remapping and explicit consumption. It is deliberately not
+wired into gameplay yet. `tests/test_input_bank.py` checks released taps,
+independent opposite directions, modifier cancellation/consumption, held-key
+rearming after reset and reversible remapping.
+
+`tools/probe_input_bank.py` executes original instructions against that model:
+
+| Actual original path | Cases | Supplied context |
+| --- | ---: | --- |
+| Sample bank, 4:3e84-3f42 | 10,935 | All 405 valid bank states and 27 raw axis/modifier combinations |
+| ClearControls, 4:3e3a | 405 | Every bank state; also checks return value 1 |
+| Save/restore, 4:3e50/3e60 | 405 | Every bank state, clearing the working bank between calls |
+| Horizontal/vertical flips, 4:3dfe/3e1c | 1,620 | Every bank state and all four flip combinations |
+| Live unarmed GenCtrl reset gates, 6:0560-07e0 | 900 | Level 5, six modes, five sequence IDs, poses 26/27/44, both facings and five modifier states; executes IsDeadPos too |
+
+All **14,265 cases match**, with no supplied external services. Raw controls
+are supplied after ReadKeyboard; the probe does not execute OS key-map
+sampling. The reset matrix uses a living unarmed actor and excludes the
+level-12 post-reset exception. It does not certify other GenCtrl action or
+geometry branches, the whole player wrapper, action consumption sites or
+FrameAdv. The flip primitive is verified; restoring with the captured old
+facing when an action changes facing still relies on the wrapper audit.
+
+Reproduce locally with the read-only original recovery resources:
+
+```powershell
+.venv\Scripts\python.exe -m tools.probe_input_bank --source ..\PoP2-Mac-Code-Recovery --output rendered\native-input-bank.json
+```
+
+The remaining architectural gap is explicit: gameplay still uses one
+latest-command slot, so independently pending directions, simultaneous-input
+priorities and all accepted-action consumption/reset sites are not fully
+translated. A complete replacement must map those gates and preserve the
+intentional extensions below. The 300 ms host repeat filter is not a native
+buffer lifetime; shortening it would not recover the original rules.
 
 ## Landing Into Crouch
 

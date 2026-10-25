@@ -1719,7 +1719,7 @@ class AnimationDataTests(unittest.TestCase):
         self.assertEqual(scene.sequence_state.sequence_id, JUMP_FORWARD_SEQUENCE)
         self.assertIsNone(scene.pending_action)
 
-    def test_tapped_turn_during_jump_starts_without_idle_pose(self):
+    def test_early_released_turn_during_jump_is_cleared_at_pose_26(self):
         scene = self.scene(facing=1)
         scene.root = DummyRoot()
         scene.animation_after_id = None
@@ -1740,11 +1740,14 @@ class AnimationDataTests(unittest.TestCase):
             scene.advance_animation()
             actions.append(scene.action)
 
-        self.assertEqual(actions, [*range(16, 34), 45])
-        self.assertEqual(scene.sequence_state.sequence_id, STANDING_TURN_SEQUENCE)
+        # Original GenCtrl6:075c clears the early tap, even though the
+        # former host-only buffer kept it until landing.
+        self.assertEqual(actions, [*range(16, 34), 15])
+        self.assertEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)
+        self.assertEqual(scene.sequence_state.facing, 1)
         self.assertIsNone(scene.pending_action)
 
-    def test_opposite_jump_chord_during_jump_only_turns_after_landing(self):
+    def test_early_released_opposite_jump_chord_is_cleared_before_landing(self):
         for up_first in (False, True):
             with self.subTest(up_first=up_first):
                 scene = self.scene(facing=1)
@@ -1776,13 +1779,13 @@ class AnimationDataTests(unittest.TestCase):
                     scene.advance_animation()
                     actions.append(scene.action)
 
-                self.assertEqual(actions, [*range(21, 34), 45])
-                self.assertEqual(scene.sequence_state.sequence_id, STANDING_TURN_SEQUENCE)
+                self.assertEqual(actions, [*range(21, 34), 15])
+                self.assertEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)
                 self.assertIsNone(scene.pending_action)
                 for _ in range(16):
                     scene.advance_animation()
                 self.assertEqual(scene.action, 15)
-                self.assertEqual(scene.sequence_state.facing, 0)
+                self.assertEqual(scene.sequence_state.facing, 1)
                 self.assertIsNone(scene.pending_action)
 
     def test_held_opposite_jump_chord_does_not_jump_after_turn(self):
@@ -1820,7 +1823,7 @@ class AnimationDataTests(unittest.TestCase):
         self.assertEqual(scene.sequence_state.sequence_id, JUMP_FORWARD_SEQUENCE)
         self.assertEqual(scene.action, 16)
 
-    def test_latest_jump_chord_replaces_opposite_chord_before_landing(self):
+    def test_pose_26_clears_the_latest_early_released_chord_too(self):
         scene = self.scene(facing=1)
         scene.root = DummyRoot()
         scene.animation_after_id = None
@@ -1845,8 +1848,8 @@ class AnimationDataTests(unittest.TestCase):
         self.assertEqual(scene.pending_action, BufferedCommand("jump", 1))
         for _ in range(13):
             scene.advance_animation()
-        self.assertEqual(scene.sequence_state.sequence_id, JUMP_FORWARD_SEQUENCE)
-        self.assertEqual(scene.action, 16)
+        self.assertEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)
+        self.assertEqual(scene.action, 15)
         self.assertEqual(scene.sequence_state.facing, 1)
         self.assertIsNone(scene.pending_action)
 
@@ -2581,6 +2584,17 @@ class AnimationDataTests(unittest.TestCase):
                         while len(frames) < 10:
                             scene.advance_animation()
                             frames.append((scene.action, scene.player_x))
+                        if not held:
+                            # Native modifier sampling4:3f38 cancels Ctrl
+                            # before the counter gate; ordinary block SEQS
+                            # finishes unchanged instead of adding a swing.
+                            self.assertEqual([action for action, _ in frames],
+                                             [169, 150, 158, 170, *([171] * 6)])
+                            self.assertEqual([x for _, x in frames],
+                                             [start_x + sign * dx for dx in (1, 2, *([0] * 8))])
+                            self.assertIsNone(scene.pending_action)
+                            self.assertEqual(scene.sequence_state.sequence_id, SWORD_GUARD_SEQUENCE)
+                            continue
                         self.assertEqual(
                             [action for action, _ in frames],
                             [169, 150, 162, 152, 153, 154, 155, 156, 157, 158],

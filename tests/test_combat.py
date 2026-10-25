@@ -994,8 +994,10 @@ class GuardCombatTests(unittest.TestCase):
                 if scene.action == 161:
                     parried = True
                     scene.set_key_state("ctrl", True)
-                    scene.set_key_state("ctrl", False)
                 tick()
+                # Native modifier sampling cancels Ctrl released before
+                # the counter gate: hold it through the accepting tick.
+                scene.set_key_state("ctrl", False)
                 if not c.guard.alive:
                     break
             self.assertTrue(parried)

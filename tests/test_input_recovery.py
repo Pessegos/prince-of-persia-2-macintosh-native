@@ -1,4 +1,4 @@
-"""Source-backed input gaps; expected failures are not parity coverage."""
+"""Recovered input boundaries and explicitly retained host tolerances."""
 
 import unittest
 
@@ -22,22 +22,23 @@ class InputRecoveryTests(unittest.TestCase):
         animation_tests.AnimationDataTests.setUpClass()
         cls.fixture = animation_tests.AnimationDataTests()
 
-    def forward_jump(self, pose):
+    def forward_jump(self, pose, facing=1):
         scene = self.fixture.sword_scene()
-        scene.sequence_state.facing = 1
+        scene.sequence_state.facing = facing
+        direction = 1 if facing else -1
         scene.up_key(None)
-        scene.horizontal_key(None, 1, True)
+        scene.horizontal_key(None, direction, True)
         scene.set_key_state("up", False)
-        scene.horizontal_key(None, 1, False)
+        scene.horizontal_key(None, direction, False)
         for _ in range(pose - 16):
             scene.advance_animation()
         self.assertEqual((scene.sequence_state.sequence_id, scene.action),
                          (JUMP_FORWARD_SEQUENCE, pose))
         return scene
 
-    def sword_guard(self):
+    def sword_guard(self, facing=1):
         scene = self.fixture.sword_scene()
-        scene.sequence_state.facing = 1
+        scene.sequence_state.facing = facing
         scene.sword_drawn = True
         scene.start_sequence(SWORD_GUARD_SEQUENCE)
         scene.advance_animation()
@@ -376,56 +377,83 @@ class InputRecoveryTests(unittest.TestCase):
                     self.assertFalse(scene.run_active)
                     self.assertIsNone(scene.pending_action)
 
-    @unittest.expectedFailure
     def test_released_turn_before_jump_pose_26_is_discarded(self):
         # GenCtrl 6:074a-0760 clears directional latches at pose 26.
-        scene = self.forward_jump(21)
-        scene.horizontal_key(None, -1, True)
-        scene.horizontal_key(None, -1, False)
-        for _ in range(13):
-            scene.advance_animation()
-        self.assertEqual(scene.action, 15)
-        self.assertEqual(scene.sequence_state.facing, 1)
-        self.assertIsNone(scene.pending_action)
+        for facing in (0, 1):
+            for pose in (16, 21, 26):
+                with self.subTest(facing=facing, pose=pose):
+                    scene = self.forward_jump(pose, facing)
+                    backward = -1 if facing else 1
+                    scene.horizontal_key(None, backward, True)
+                    scene.horizontal_key(None, backward, False)
+                    for _ in range(34 - pose):
+                        scene.advance_animation()
+                    self.assertEqual(scene.action, 15)
+                    self.assertEqual(scene.sequence_state.facing, facing)
+                    self.assertIsNone(scene.pending_action)
 
     def test_released_turn_after_jump_pose_26_survives_until_landing(self):
-        scene = self.forward_jump(27)
-        scene.horizontal_key(None, -1, True)
-        scene.horizontal_key(None, -1, False)
-        for _ in range(7):
-            scene.advance_animation()
-        self.assertEqual((scene.sequence_state.sequence_id, scene.action),
-                         (STANDING_TURN_SEQUENCE, 45))
-        self.assertIsNone(scene.pending_action)
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                scene = self.forward_jump(27, facing)
+                backward = -1 if facing else 1
+                scene.horizontal_key(None, backward, True)
+                scene.horizontal_key(None, backward, False)
+                for _ in range(7):
+                    scene.advance_animation()
+                self.assertEqual((scene.sequence_state.sequence_id, scene.action),
+                                 (STANDING_TURN_SEQUENCE, 45))
+                self.assertIsNone(scene.pending_action)
 
-    @unittest.expectedFailure
+    def test_pose_26_discards_a_vertical_follow_up_when_up_is_released(self):
+        # Held vertical follow-ups keep the wall-climb tolerance, but a
+        # released Up must not become an extra jump after landing.
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                scene = self.forward_jump(21, facing)
+                scene.up_key(None)
+                scene.set_key_state('up', False)
+                self.assertEqual((scene.pending_action.kind, scene.pending_action.direction),
+                                 ('jump', 0))
+                for _ in range(20):
+                    scene.advance_animation()
+                self.assertEqual((scene.sequence_state.sequence_id, scene.action),
+                                 (IDLE_SEQUENCE, 15))
+                self.assertIsNone(scene.pending_action)
+
     def test_released_direction_during_crouch_rise_mode_5_is_discarded(self):
         # GenCtrl 6:0576-059c clears directions before dispatch in mode 5.
-        scene = self.fixture.sword_scene()
-        scene.sequence_state.facing = 1
-        scene.start_sequence(CROUCH_RISE_SEQUENCE)
-        scene.advance_animation()
-        self.assertEqual((scene.action, scene.sequence_state.animation_state),
-                         (110, 5))
-        scene.horizontal_key(None, -1, True)
-        scene.horizontal_key(None, -1, False)
-        scene.advance_animation()
-        self.assertIsNone(scene.pending_action)
+        for facing in (0, 1):
+            for pose in range(110, 117):
+                with self.subTest(facing=facing, pose=pose):
+                    scene = self.fixture.sword_scene()
+                    scene.sequence_state.facing = facing
+                    scene.start_sequence(CROUCH_RISE_SEQUENCE)
+                    for _ in range(pose - 109):
+                        scene.advance_animation()
+                    self.assertEqual((scene.action, scene.sequence_state.animation_state),
+                                     (pose, 5))
+                    backward = -1 if facing else 1
+                    scene.horizontal_key(None, backward, True)
+                    scene.horizontal_key(None, backward, False)
+                    scene.advance_animation()
+                    self.assertIsNone(scene.pending_action)
 
-    @unittest.expectedFailure
     def test_released_ctrl_before_legal_block_attack_gate_cancels_attack(self):
         # 4:3f38 clears released Ctrl; 6:27e8 accepts only 150/161 here.
-        scene = self.sword_guard()
-        scene.up_key(None)
-        scene.set_key_state("up", False)
-        self.assertEqual(scene.action, 169)
-        scene.set_key_state("ctrl", True)
-        scene.advance_animation()
-        self.assertEqual(scene.action, 150)
-        scene.set_key_state("ctrl", False)
-        scene.advance_animation()
-        self.assertEqual((scene.sequence_state.sequence_id, scene.action),
-                         (SWORD_GUARD_SEQUENCE, 158))
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                scene = self.sword_guard(facing)
+                scene.up_key(None)
+                scene.set_key_state("up", False)
+                self.assertEqual(scene.action, 169)
+                scene.set_key_state("ctrl", True)
+                scene.advance_animation()
+                self.assertEqual(scene.action, 150)
+                scene.set_key_state("ctrl", False)
+                scene.advance_animation()
+                self.assertEqual((scene.sequence_state.sequence_id, scene.action),
+                                 (SWORD_GUARD_SEQUENCE, 158))
 
     def test_shift_suppresses_backward_sword_step(self):
         # OnAlert 6:256e-257c requires cb80 == 0 for ordinary retreat; Shift

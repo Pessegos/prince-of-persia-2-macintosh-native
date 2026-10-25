@@ -1823,8 +1823,9 @@ class RooftopSceneTests(unittest.TestCase):
                             scene.set_key_state("up", False)
                 if scene.action == 161:
                     scene.set_key_state("ctrl", True)
-                    scene.set_key_state("ctrl", False)
                 self.tick()
+                # Sample Ctrl at the legal counter pass, then release.
+                scene.set_key_state("ctrl", False)
                 if len(c.guards) == 2 and not any(g.alive for g in c.guards):
                     break
             self.assertEqual(len(c.guards), 2)

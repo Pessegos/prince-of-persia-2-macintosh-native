@@ -53,7 +53,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Standing crouch 50 versus running crouch 26; input at first low pose 109 | 6:0f4e/1068-108a, 125a, 06b4/099a; SEQS:50/26/117/79/49 | T: ordinary crouch, release/crawl gates and wall response; pickup/special-level branches P | scene_prototype / test_animation_data, test_game_ui |
 | Nearly cleared running pose ignores trailing contact at cavern gates | deliberate port improvement, not a recovered native rule | A/T: four-pixel ordinary margin; stop13 may settle when its idle body plus final backward pixel fully clears the gate; grounded unarmed run/start/stop only, either facing; front/settled-body contact, jumping, crouching and crush/slam timing unchanged | terrain / test_gate_clearance, test_cavern_retry; [scope](CAVERN_GATE_CLEARANCE.md) |
 | Running-jump landing clears pending directional inputs, then resamples held keys | 6:074a-0760, 1216-1248; 4:3e3a/3e84; SEQS:4 to 201 | T: pose-44 reset, released/held Up, opposing chords, backward-before-Up priority; both directions | scene_prototype / test_animation_data, test_game_ui |
-| Other ClearControls sites and full directional/modifier latch lifecycle | 6:059c, 0754 (pose 26); 4:3cae-3f42 | R: ordinary lifecycle and 31 decoded direct clear calls audited; integration missing, special contexts P | INPUT_RECOVERY / test_input_recovery (four expected failures, not parity coverage) |
+| Other ClearControls sites and full directional/modifier latch lifecycle | 6:059c, 075c (pose 26); 4:3cae-3f42 | R/T: 14,265 original bank/reset cases; early-jump, horizontal crouch-rise and released-Ctrl counter gaps corrected; full bank integration and special contexts P | INPUT_RECOVERY / probe_input_bank, reference_input_bank / test_input_bank, test_input_recovery |
 | Running jump takeoff checks next two cells | 6:1c14-1d3a | T: ordinary player/NPC subset | terrain / test_terrain, test_rooftop_pursuit |
 | Draw reserves 56 against gap/solid wall; combat turn reserves gap space | 6:2072-2122, 26dc-276c | T: ordinary rooftop floor/gap/wall; full gate/special branches P | terrain / test_terrain, test_game_ui |
 | Prince sword turn reserves space at blocking cavern gates | 6:26b8-2770 | T: closed/open first and second gate cells with current body bounds, forwarded by host; special actor turn branches P | terrain, combat, scene_prototype / test_terrain, test_level4 |
@@ -295,6 +295,11 @@ Neither this ledger nor green tests certify complete original-game parity.
 [INPUT_RECOVERY.md](INPUT_RECOVERY.md) maps the five native input latches,
 sampling order, ordinary controller priorities and all 31 decoded direct
 ClearControls calls. It distinguishes recovered rules from translated behavior.
-`tests/test_input_recovery.py` tracks four demonstrated gaps as expected
-failures; these are not passing parity coverage. The full native latch lifecycle
-still needs integration, without changing the established animation clocks.
+`tools/probe_input_bank.py` compares a separate executable bank model with
+14,265 actual original sample/reset/save/remap cases, without external service
+stubs. Raw axes are supplied after ReadKeyboard; full action dispatch and
+FrameAdv are excluded. The formerly expected-failure regressions now pass:
+early jump taps clear at pose 26, horizontal crouch-rise requests clear in
+mode 5, released Ctrl cancels a pending counter, and Shift + Backward uses
+the voluntary turn. The full native latch lifecycle still needs integration,
+without changing established animation clocks or intentional tolerances.
