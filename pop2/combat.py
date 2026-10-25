@@ -581,10 +581,14 @@ class CombatEncounter:
             return None
         ruins = getattr(self, 'ruins', None)
         if guard is None and ruins is not None:
-            # HeadGetAngry 7:0fc6-0fea banks the angry head (a5-0x505a).
-            banked = ruins.banked
-            if banked is not None and banked.alive and banked.room == self.player.room:
-                return banked
+            # DrawOppMeter(-1) uses GetOppIdxClosestToKid (3:4aa0-4aaa).
+            # HeadGetAngry enables a meter; death/flee clears that head's
+            # meter, but another already-angry head remains eligible. The
+            # Prince's cached target is not a permanent HUD owner.
+            heads = [actor for actor in self.visible_ruins()
+                     if actor.alive and actor.state.actor_type in (7, 8)
+                     and actor.ruins.alert == 3 and actor.ruins.mode != 2]
+            return nearest_opponent(self.player, heads)
         return guard
 
     def ruins_opponent(self):

@@ -139,6 +139,9 @@ class RuinsCreatures:
         return self.rooms.get(room, [])
 
     def load_room(self, encounter, room):
+        # InitOpps rebuilds the room bank; a target from the old room cannot
+        # prevent the new room's HeadGetAngry from banking a head.
+        self.banked = None
         if room in self.rooms:
             for actor in self.rooms[room]:
                 if actor.alive and not actor.ruins.removed:

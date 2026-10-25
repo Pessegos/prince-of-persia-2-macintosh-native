@@ -145,7 +145,13 @@ class RuinsControllerTests(unittest.TestCase):
                 break
         opponent = combat.health_opponent()
         self.assertIsNotNone(opponent)
-        self.assertIs(opponent, combat.ruins.banked)
+        # DrawOppMeter(-1), 3:4aa0-4aaa, selects the nearest eligible
+        # opponent; the first head banked by HeadGetAngry is not its owner.
+        from pop2.opponent_selection import nearest_opponent
+
+        candidates = [actor for actor in combat.visible_ruins()
+                      if actor.alive and actor.ruins.alert == 3 and actor.ruins.mode != 2]
+        self.assertIs(opponent, nearest_opponent(combat.player, candidates))
         self.assertEqual(opponent.ruins.mode in (1, 3), True)
 
     def test_killed_heads_stay_dead_through_rebirth_and_saves(self):

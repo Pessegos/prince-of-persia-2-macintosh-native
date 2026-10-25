@@ -30,6 +30,8 @@ class Checkpoint:
     def matches(self, room, row, contact_x, animation_state, alive,
                 level_number=1, story_flag=0):
         # SaveRebirthPt 2:6b46 rejects ordinary falling and dead actors.
+        # Its level8 room9 gate reads the sword word (2:6bae-6bb4), not
+        # merely a generic story-completed boolean.
         return (alive and animation_state != 4 and self.room == room
                 and self.tile == row * 10 + character_column(contact_x)
                 and not (level_number == 8 and room == 8 and story_flag != 1))

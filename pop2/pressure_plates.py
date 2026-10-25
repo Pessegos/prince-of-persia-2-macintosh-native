@@ -12,6 +12,17 @@ from pop2.opponent_generation import character_column
 from pop2.mechanism_audio import GateSound
 
 
+def can_trigger_exit(level, room, sword_type):
+    """TriggerObject 5:1f18-1f3c: level eight needs the father's sword.
+
+    The entrance-room exit is exempt, including before the throne vision.
+    A missing sword context must not unlock the level-eight final exit.
+    """
+    number = struct.unpack_from('>H', level, 0x218a)[0]
+    entry = port_room(struct.unpack_from('>H', level, 0x2198)[0])
+    return number != 8 or room == entry or sword_type == 1
+
+
 @dataclass
 class PressurePlates:
     foreground: dict = field(default_factory=dict)
@@ -37,7 +48,7 @@ class PressurePlates:
         if key in self.active or len(self.active) < 20:
             self.active[key] = phase
 
-    def press(self, terrain, motion, state, record, alive=True):
+    def press(self, terrain, motion, state, record, alive=True, *, sword_type=None):
         if state.actor_type == 1 and 29 <= state.selected_sequence_id <= 42:
             return ()
         # CheckPress 5:129a-12a2: a floating Prince presses no plate.
@@ -52,15 +63,16 @@ class PressurePlates:
         shut_only = (state.actor_type == 4 and motion.row != 0 and bridge_checked(
             struct.unpack_from('>H', terrain.level, 0x218a)[0], motion.room))
         return self.push(terrain, tile, permanent=not alive and state.actor_type != 4,
-                         action=state.action, shut_only=shut_only)
+                         action=state.action, shut_only=shut_only, sword_type=sword_type)
 
-    def impact(self, terrain, room, cell, kind):
+    def impact(self, terrain, room, cell, kind, *, sword_type=None):
         value = struct.unpack_from('>H', terrain.level, 0x780 + room * 120 + cell * 4)[0]
         value = self.foreground.get((room, cell), value)
         tile = replace(terrain.tile(room, cell % 10, cell // 10), kind=kind, foreground=value)
-        return self.push(terrain, tile, permanent=True, impact=True)
+        return self.push(terrain, tile, permanent=True, impact=True, sword_type=sword_type)
 
-    def push(self, terrain, tile, permanent=False, action=15, impact=False, shut_only=False):
+    def push(self, terrain, tile, permanent=False, action=15, impact=False, shut_only=False,
+             *, sword_type=None):
         if tile.room is None or tile.kind not in (5, 6, 34):
             return ()
         index = tile.foreground & 255
@@ -76,12 +88,13 @@ class PressurePlates:
                 if action != 185:
                     cues.append(27)
         cues.extend(self.trigger(terrain, index, tile.kind, bool(tile.foreground & 0x2000), impact,
-                                 shut_only))
+                                 shut_only, sword_type=sword_type))
         # PushPlate writes the depression bit after traversing the entire chain.
         self.foreground[key] = tile.foreground | 0x2000
         return tuple(cues)
 
-    def trigger(self, terrain, index, how, depressed=False, impact=False, shut_only=False):
+    def trigger(self, terrain, index, how, depressed=False, impact=False, shut_only=False,
+                *, sword_type=None):
         seen = set()
         cues = []
         while index != -3:
@@ -109,7 +122,8 @@ class PressurePlates:
                 # TriggerCaveBars 8:1672-16d0: a fresh plate opens fully closed
                 # bars (trob direction 0) and closes fully open ones (1).
                 self.add(key, int(tile.foreground == 3))
-            elif tile.kind == 17 and not tile.foreground & 255:
+            elif (tile.kind == 17 and not tile.foreground & 255
+                  and can_trigger_exit(terrain.level, tile.room, sword_type)):
                 # TriggerObject 5:1f40: only a completely closed exit starts.
                 self.add(key, 1)
                 if 297 not in self.songs:

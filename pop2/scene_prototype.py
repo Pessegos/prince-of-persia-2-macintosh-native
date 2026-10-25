@@ -2657,7 +2657,8 @@ class ScenePrototype(WindowControls):
         for checkpoint in self.checkpoints:
             if checkpoint.matches(motion.room, motion.row, contact,
                                   state.animation_state, self.combat.player.alive,
-                                  level_number=self.game.level.number):
+                                  level_number=self.game.level.number,
+                                  story_flag=self.game.sword_type):
                 if self.checkpoint is None or self.checkpoint.checkpoint != checkpoint:
                     self.checkpoint = RebirthSnapshot.capture(checkpoint, self.combat)
                 break

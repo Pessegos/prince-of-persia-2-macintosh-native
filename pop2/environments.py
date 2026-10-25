@@ -442,14 +442,16 @@ class Caverns(Environment):
         if motion is not None:
             state.sound_events.extend(loose.press(scene.level_map, motion, state, scene.frames[state.action]))
             state.sound_events.extend(scene.game.caverns.plates.press(
-                scene.level_map, motion, state, scene.frames[state.action], scene.combat.player.alive))
+                scene.level_map, motion, state, scene.frames[state.action], scene.combat.player.alive,
+                sword_type=scene.game.sword_type))
             for guard in scene.combat.active_guards():
                 if guard.terrain_motion is not None:
                     guard.state.sound_events.extend(loose.press(scene.level_map, guard.terrain_motion,
                         guard.state, scene.guard_art.frames[guard_frame_index(guard.state.action)]))
                     guard.state.sound_events.extend(scene.game.caverns.plates.press(
                         scene.level_map, guard.terrain_motion, guard.state,
-                        scene.guard_art.frames[guard_frame_index(guard.state.action)], guard.alive))
+                        scene.guard_art.frames[guard_frame_index(guard.state.action)], guard.alive,
+                        sword_type=scene.game.sword_type))
             shakes = [event for event in state.sequence_events if event[0] in (-12, -13)]
             if shakes:
                 # CheckAlert 2:6c1c consumes one scalar request; a later
@@ -526,7 +528,8 @@ class Caverns(Environment):
                     scene.pending_action = None
                     scene.action, scene.player_x = state.action, state.target_x
         for room, cell, kind in caverns.loose.plate_events:
-            scene.sequence_state.sound_events.extend(caverns.plates.impact(scene.level_map, room, cell, kind))
+            scene.sequence_state.sound_events.extend(caverns.plates.impact(
+                scene.level_map, room, cell, kind, sword_type=scene.game.sword_type))
         caverns.loose.plate_events.clear()
         caverns.loose.advance_tiles(scene.level_map)
         scene.sequence_state.sound_events.extend(caverns.scythes.advance(scene.level_map))

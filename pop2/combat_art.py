@@ -146,8 +146,11 @@ class HealthArtwork:
         opponent = encounter.health_opponent() if show_opponent else None
         if opponent is not None:
             # DrawOppMeter draws current life only, unlike DrawKidMeter.
-            for index in range(opponent.life):
-                icon = self.icons[298]
+            # Heads store half-bottle points (3:4bc8-4bea/4c3a-4c60).
+            heads = opponent.state.actor_type in (7, 8)
+            full, half = divmod(opponent.life, 2) if heads else (opponent.life, 0)
+            for index in range(full + half):
+                icon = self.icons[298 if index < full else 297]
                 viewport.paste(icon, (ROOM_ORIGIN_X + 495 - index * 12, 368), icon)
 
 
