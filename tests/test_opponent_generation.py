@@ -419,8 +419,10 @@ class OpponentGenerationTests(unittest.TestCase):
                 if scene.action == 161:
                     parries += 1
                     scene.set_key_state("ctrl", True)
-                    scene.set_key_state("ctrl", False)
                 tick()
+                # Keep Ctrl through the legal counter pass; releasing it
+                # before sampling now correctly cancels the request.
+                scene.set_key_state("ctrl", False)
                 if len(c.guards) == 2 and not any(g.alive for g in c.guards):
                     break
             self.assertGreaterEqual(parries, 2)
