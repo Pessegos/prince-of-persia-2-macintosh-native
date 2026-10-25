@@ -89,7 +89,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 2,Main,FrameAdv,0x60fc,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,123
 2,Main,ResetFrameVars,0x68c0,decoded,partial,pop2/scene_prototype.py,five/six-tick cadence only,1,2
 2,Main,QuickFloor,0x697e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,8
-2,Main,CheckAlert,0x6b46,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,20
+2,Main,CheckAlert,0x6b46,decoded,partial,pop2/rebirth.py;pop2/scene_prototype.py;tools/probe_ruins_hud_exit.py,"marker at 6b46: checkpoint admission prefix, level8 room9 requires sword type1 (80 native checks); full record save excluded",1,20
 2,Main,CheckCurrentFreeMemory,0x71c4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,1
 3,Modular Set 1,AddNextBFItemToTable,0x0004,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,125,4
 3,Modular Set 1,AddCharObj,0x0130,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,11,1
@@ -151,7 +151,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 3,Modular Set 1,DrawHorse,0x4608,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 3,Modular Set 1,GetFlaskBubbleColor,0x46fc,jump_table,partial,pop2/caverns.py,level-three normal/mega body and two mirrored monochrome particle layers; all 196 native phase/room layers pixel matched; other environments incomplete,0,7
 3,Modular Set 1,DrawKidMeter,0x4902,jump_table,partial,pop2/combat_art.py,ordinary health icons; upgrade effects missing,7,5
-3,Modular Set 1,DrawOppMeter,0x4a8e,jump_table,partial,pop2/combat_art.py;pop2/combat.py,ordinary guard health icons; no meter for a level-5 bridge skeleton (3:4b7a-4ba8),9,8
+3,Modular Set 1,DrawOppMeter,0x4a8e,jump_table,partial,pop2/combat_art.py;pop2/combat.py;tools/probe_ruins_hud_exit.py,ordinary icons and head half-points (60 native positive-HP shape/position loops); nearest active-head HUD handoff; no level5 bridge-skeleton meter; native redraw cache and rasterization excluded,9,8
 3,Modular Set 1,DrawSword,0x4cd2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,2
 3,Modular Set 1,IsFloor,0x4da6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,19,2
 3,Modular Set 1,IsImpassable,0x4de2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,8,0
@@ -301,7 +301,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 5,Modular Set 2,Trigger,0x1c4c,decoded,partial,pop2/pressure_plates.py,"native linked target traversal; level-three stone gates, exits and all nine projectile traps dispatched",3,7
 5,Modular Set 2,TriggerFlask,0x1ce8,jump_table,partial,pop2/potions.py;pop2/game_session.py,"initial phase Rnd(26)+1, original 28-update visible flask cycle; native Trob bank replaced",2,2
 5,Modular Set 2,TriggerGate,0x1d50,decoded,partial,pop2/pressure_plates.py,level-three reverse-plate dispatch; special level/story and closing-on-actor branches missing,1,3
-5,Modular Set 2,TriggerObject,0x1ec8,decoded,partial,pop2/pressure_plates.py;pop2/darts.py;pop2/scene_prototype.py,level-three closed exits and fresh-plate idle-shooter admission; other environment branches missing,1,6
+5,Modular Set 2,TriggerObject,0x1ec8,decoded,partial,pop2/pressure_plates.py;pop2/darts.py;pop2/environments.py,closed exits and fresh-plate idle-shooter admission; level8 non-entrance exits require sword type1 (300 native admission checks); other environment branches partial,1,6
 5,Modular Set 2,TriggerTorch,0x1ffa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,3
 5,Modular Set 2,AddTrob,0x20a0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,19,1
 5,Modular Set 2,Get1stWallColInDir,0x2198,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,2
@@ -397,7 +397,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,RemoveOppFromRoom,0x3462,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,2
 6,Characters 1,AddOppToRoom,0x358e,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
 6,Characters 1,GetOppInfoIdx,0x3642,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,36,0
-6,Characters 1,GetOppIdxClosestToKid,0x36f2,jump_table,partial,pop2/combat.py,ordinary living same-floor nearest actors on each side; full native vertical/type candidate filtering missing,19,1
+6,Characters 1,GetOppIdxClosestToKid,0x36f2,jump_table,partial,pop2/opponent_selection.py;pop2/combat.py;pop2/ruins_ai.py;tools/probe_ruins_hud_exit.py,"native-ALIVE candidates, vertical 80-unit boundary, serpent fallback, fleeing-head exclusion; 15000 native multi-actor selections plus14961 nearest-on-side checks; complete frame/bank lifecycle partial",19,1
 6,Characters 1,SetCharacterBank,0x3946,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,4
 6,Characters 1,CheckOppGenPts,0x3a0c,jump_table,partial,pop2/opponent_generation.py;pop2/combat.py,tested rooftop reinforcement branches,1,3
 6,Characters 1,GenerateOpponent,0x3a84,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,8

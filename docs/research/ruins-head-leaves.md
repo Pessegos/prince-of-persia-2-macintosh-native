@@ -3,9 +3,10 @@
 Read from the original CODE 7 (2026-10-24), continuing Codex's
 [level-seven preparation](level7-preparation.md) notes (initialization,
 frame loading, routing, idle, movement admission, sequence selection,
-recovery, neck alignment). Those notes have native probes; the routines
-below are translated by reading only (no probe yet). Addresses are
-CODE:offset. Nothing here is wired into the runtime.
+recovery, neck alignment). The initial leaf notes below predate runtime
+integration; the later sections record the live controllers and their native
+comparisons. Addresses are CODE:offset. See the playtest corrections below
+for the current meter, selection and level-eight sword gates.
 
 ## Names
 
@@ -480,7 +481,61 @@ death count (registration, six counted frames) and the OppToFight gate; a
 head killed through a parry (HeadHit 7:08fa) never sets the flag, as in the
 original.
 
-## Still Open
+## Ruins Playtest Corrections (2026-10-25)
+
+Heads store two life points per HUD bottle. CheckStab already dealt one point
+with the broken sword (type2) and two with the father's sword (type1); the
+error was drawing every point as a full bottle. DrawOppMeter 3:4bc8-4bea
+halves the full-bottle count for actor types7/8 and keeps the odd bit. Its
+4c3a-4c60 tail draws shape297 for that half bottle after shape298 full bottles,
+with the same 12-pixel right-to-left spacing. Other enemies retain whole units.
+
+The HUD used to remain attached to the first head banked by HeadGetAngry.
+That actor could be on another floor, and clearing it on death or flee made
+the meter disappear even while another head remained angry. The ordinary
+DrawOppMeter(-1) path uses GetOppIdxClosestToKid (3:4aa0-4aaa); the host now
+selects the nearest eligible angry head for its continuously redrawn meter.
+This HUD selection stays separate from the Prince's cached control target.
+Room-bank loading clears a stale target from the previous room. Tests use
+level8's real room1 records, including its three heads on different rows.
+
+GetOppIdxClosestToKid 6:379e-37a6 excludes heads whose generator mode is2
+(flee). The port had left them in nearest-on-side selection, so they could
+keep a farther head waiting. The selector now excludes fleeing/removed heads
+and uses the ruins actor's native death counter rather than conflating zero
+HP with registered death. The room1 controller regression observes hover166
+while the nearer head competes, then approach142 after it flees. This is
+spatial priority, not a chronological FIFO or a new one-attacker-only rule;
+the original close-range attack branches remain unchanged.
+
+TriggerObject 5:1f18-1f3c refuses level8 exits unless sword type is1, except
+for an exit in the entrance room from LEVL:2198. The actual sword value now
+travels through player/NPC presses and falling-floor impacts. A refused exit
+does not suppress other objects on the plate's link chain. The real room23
+button opens only after the throne wake callback grants the sword. The same
+word gates room9's checkpoint (2:6bae-6bb4); the host had omitted it when
+calling Checkpoint.matches, preventing that checkpoint from activating at all.
+The corrected caller and a retry from the post-vision checkpoint are tested.
+
+`tools/probe_ruins_hud_exit.py` executes original instructions for300 exit
+admissions,80 checkpoint admissions,60 positive-HP meter loops,15000
+multi-actor selections and14961 nearest-on-side decisions, all matching.
+Exit/checkpoint probes stop before changing the mechanism/saving the record.
+HUD port/rectangle/EraseRect services are supplied and shape calls recorded;
+pixel rasterization and the final port/copy operations are excluded. Selection
+and nearest-on-side execute fully without external service stubs. Controlled
+banks include both head types, serpents, one to five actors, flee/recovery,
+offscreen X, different heights and HP/native-ALIVE disagreements. These checks
+do not certify the complete FrameAdv or Prince target-cache lifecycle.
+An additional4000 native CheckStab comparisons match the live runtime with
+the existing probe's recorded endpoint exclusions.
+
+```powershell
+python -m tools.probe_ruins_hud_exit --source ..\PoP2-Mac-Code-Recovery --output rendered/ruins-hud-exit-probe.json
+python -m tools.probe_ruins_runtime --source ..\PoP2-Mac-Code-Recovery --output rendered/ruins-stab-fixes-probe.json --cases 4000 --stab
+```
+
+## Remaining Frame Comparison
 
 The serpent's kill song needs no port work: 5:4c44 clears the flag and
 takes the skeleton path 5:4c4a, which plays song 63 only while the dying
