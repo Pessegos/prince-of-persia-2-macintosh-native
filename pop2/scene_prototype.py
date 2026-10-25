@@ -1410,8 +1410,12 @@ class ScenePrototype(WindowControls):
             self.start_sequence(RUN_STOP_SEQUENCE)
             return True
 
-        # GenCtrl's run handler selects SEQS:26 directly for Down.
-        return self.dispatch_pending_action()
+        # GenCtrl 6:124a-1262 selects SEQS:26 directly for Down. The
+        # standing dispatcher tries StairClimbing first, whose alignment
+        # uses a different foot pose and can back a runner into the floor.
+        self.pending_action = None
+        self.start_crouch_lower()
+        return True
 
     def resume_held_running_jump(self):
         state = self.sequence_state

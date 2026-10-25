@@ -81,6 +81,32 @@ persistent, while float time and queued impact/music events reset. New
 progress saves retain the baseline; old saves still load and acquire one
 after their fresh world has been initialized.
 
+## Running Down Must Crouch, Not Descend (2026-10-25)
+
+The room-2 reproduction requires the loose slab at cell 12 to have fallen,
+as after climbing onto that platform. Running right from X180 (port space),
+then pressing Down at run pose 4/X197, previously dispatched SEQS68 and
+entered the lower floor through the platform. The common standing dispatcher
+tested a backward ledge using the running pose's foot and aligned it for a
+different animation. With the slab intact, that accidental descent was rejected,
+which made the bug appear inconsistent.
+
+The original running controller `6:124a-1262` chooses SEQS26 directly [D];
+it never calls StairClimbing `6:0e8e` in this branch. The port now takes that
+direct running route. Standing descent and the original initial brake when
+horizontal input is released at supporting poses 7/11 (`6:11f2-1214`, SEQS13)
+remain separate. This is a shared input correction, not a room exception.
+
+`tools/probe_run_crouch.py` executes the actual running handler and
+ClearControls `4:3e3a-3e4e` up to JumpSeq `6:0006` entry, inspecting its stack
+argument: 4,224 cases across all 32 rooms of levels 3-5, both facings, poses
+4-14 and forward held/released; 3,840 crouches and 384 initial brakes, zero
+mismatches or supplied services. Inputs are already relative (no Backward or
+Up). This excludes JumpSeq execution, standing descent and full FrameAdv.
+Regressions cover every running pose in both directions, the exact room-2
+slab/controller replay, and six other real floor/space joins across levels
+3-5 where the old dispatcher could accept a descent.
+
 ## Initially Open Gate Drawing (2026-10-25)
 
 DrawCaveGateMovable `8:1f92-1fb6` clamps the low foreground byte's
