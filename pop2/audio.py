@@ -8,6 +8,7 @@ import struct
 import time
 
 from pop2.paths import ASSET_DIR
+from pop2.audio_duck import PcmGateDuck
 from pop2.audio_release import PcmRelease, seamless_loop
 from pop2.ui_audio import menu_pcm
 
@@ -33,6 +34,7 @@ class MixerPlayback:
         mixer.set_num_channels(6)
         self.channels = {"effect": mixer.Channel(0), "music": mixer.Channel(1)}
         self.effect_channels = []
+        self.effect_channel_ids = {}
         self.effects = {}
         self.effect_volume = 1.0
         self.gate_bus = "mechanism" if mix_mechanisms else "effect"
@@ -52,6 +54,8 @@ class MixerPlayback:
             silence = bytes(round(rate * GATE_SLAM_DELAY) * (abs(bits) // 8) * channels)
             self.sounds[20] = mixer.Sound(buffer=silence + self.sounds[20].get_raw())
         self.gate_release = PcmRelease(mixer) if 17 in self.sounds and 18 in self.sounds else None
+        self.gate_duck = (PcmGateDuck(mixer) if mix_mechanisms
+                          and 17 in self.sounds and 26 in self.sounds else None)
         if self.gate_release is not None:
             rate, _bits, channels = mixer.get_init()
             original = self.sounds[17]
@@ -96,6 +100,8 @@ class MixerPlayback:
             self.sustain_gate()
         else:
             self.channels[bus].play(sound)
+        if bus == gate_bus and cue == 17 and self.gate_duck is not None:
+            self.gate_duck.watch(self.effect_channel, 'gate')
 
     def busy(self, bus):
         return self.channels[bus].get_busy()
@@ -116,9 +122,12 @@ class MixerPlayback:
             self.mixer.set_num_channels(index + 1)
             channel = self.mixer.Channel(index)
             self.effect_channels.append(channel)
+            self.effect_channel_ids[channel] = index
         channel.set_volume(self.effect_volume)
         channel.play(self.sounds[cue])
         self.effects[cue] = channel
+        if cue == 26 and self.gate_duck is not None:
+            self.gate_duck.watch(self.effect_channel_ids[channel], 'impact')
 
     def stop_effect(self, cue):
         channel = self.effects.pop(cue, None)
@@ -166,6 +175,8 @@ class MixerPlayback:
         for channel in (*self.channels.values(), self.gate_tail, *self.effect_channels):
             channel.stop()
         self.effects.clear()
+        if self.gate_duck is not None:
+            self.gate_duck.close()
         if self.gate_release is not None:
             self.gate_release.cancel(self.effect_channel)
             self.gate_release.cancel(self.tail_channel)

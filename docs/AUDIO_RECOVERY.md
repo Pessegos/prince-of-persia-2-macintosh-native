@@ -73,6 +73,16 @@ single-channel comparison mode are unchanged. Tests cover arbitration in
 `tests/test_debris_audio.py` and the actual contact in
 `tests/test_level5_traps.py`; subjective loudness still needs listening.
 
+In mixed mode, gate movement 17 is gently ducked by 3 dB while debris impact
+26 is actually playing. The gate's PCM gain ramps down over 12 ms and back
+up over 120 ms after the impact ends or is stopped, without restarting the
+gate. SDL's channel callbacks track the overlap in either start order and
+freeze with pause; no frame timer, room number or polyphony limit is used.
+This is a listening trial/intentional mix improvement, not a native rule.
+Isolated gates/impacts, gate stop/slam 18/20, music and unrelated effects
+retain their gains. `tests/test_audio_duck.py` covers the sample envelope,
+captured SDL output and level five room 9's original plate links.
+
 ## Recovered Rules
 
 Addresses are CODE segment:offset. `tools/extract_audio.py` expands DATA/ZERO
