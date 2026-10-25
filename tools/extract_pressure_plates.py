@@ -47,9 +47,17 @@ def pressure_scenery(program, caverns, prince, level, base, progress=lambda _tex
         for source_room, cell in sorted(visible):
             tile = terrain.tile(source_room, cell % 10, cell // 10)
             mutable = bytearray(level)
-            value = ((tile.foreground & 0xfff8) | 1 if tile.kind in (27, 33) else
-                     (tile.foreground & 0xff00) | (79 if tile.kind == 17 else 184)
-                     if tile.kind in (4, 17) else tile.foreground ^ 0x2000)
+            if tile.kind in (4, 17):
+                # DrawCaveGateMovable 8:1f92-1fb6 clamps phases >=184 to
+                # the same height. Comparing an initially open gate with
+                # 184 silently drops its binding. Probe the other endpoint;
+                # an exit's corresponding fully open endpoint is 79.
+                opened = 79 if tile.kind == 17 else 184
+                value = (tile.foreground & 0xff00) | (
+                    0 if (tile.foreground & 255) >= opened else opened)
+            else:
+                value = ((tile.foreground & 0xfff8) | 1 if tile.kind in (27, 33) else
+                         tile.foreground ^ 0x2000)
             struct.pack_into('>H', mutable, 0x780 + source_room * 120 + cell * 4, value)
             after = recover(program, caverns, bytes(mutable), room, prince)['commands']
             old, new = {command_key(c): c for c in before}, {command_key(c): c for c in after}

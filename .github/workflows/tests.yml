@@ -31,6 +31,8 @@ jobs:
         run: python -m unittest -q tests.test_audio_duck tests.test_gate_audio tests.test_debris_audio
       - name: Throne gate and special ambient music
         run: python -m unittest -q tests.test_throne_room
+      - name: Initially open gate drawing bindings
+        run: python -m unittest -q tests.test_gate_scenery
       - name: Discovery animation import and isolated sound banks
         run: python -m unittest -q tests.test_discovery
       - name: Isolated level-four cavern scenery

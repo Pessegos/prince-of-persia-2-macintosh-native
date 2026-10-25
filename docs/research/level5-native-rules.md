@@ -81,6 +81,30 @@ persistent, while float time and queued impact/music events reset. New
 progress saves retain the baseline; old saves still load and acquire one
 after their fresh world has been initialized.
 
+## Initially Open Gate Drawing (2026-10-25)
+
+DrawCaveGateMovable `8:1f92-1fb6` clamps the low foreground byte's
+quarter-phase to 46 [D]. Thus phases 184, 200 and 237 draw at the same height.
+The importer's old comparison with phase 184 missed already-open gates:
+level five room 2 cell 15 and room 20 cell 0 (both start at 200). Their live
+controllers and collisions changed while their drawing remained open.
+Room 11 also displays part of room 20's gate. The importer now compares
+against the closed endpoint for already-open gates, retaining each original
+foreground value. The same distinct-endpoint check covers exits at phase 79.
+
+All 22 cavern gates were audited (level 3: nine, level 4: five, level 5:
+eight). Only those two level-five gates lacked bindings; regenerated metadata
+adds three records in view rooms 2, 11 and 20, removing none. A bounded
+original-drawer audit compared 29 visible gate records at eight phases
+(232 cases), with no mismatches in back-piece commands or, for front-only
+records, movable pixels below the deliberately retained top cap. It uses
+the existing modeled QuickDraw services and shared sprite decoder, not an
+independent verification of that decoder or of the entire frame loop.
+The original resources are unchanged. Existing installations need refreshed
+`caverns_level5.json`; no other scenery or rules change. Regression checks
+cover both real buttons closing/reopening the gates, their drawing and body
+clearance, and the complete 22-gate binding inventory.
+
 ## Carpet Chamber Audio (2026-10-24)
 
 CUST room entry `8:0d50-0d58` requests `AddSong(0x72)`, RugRoom cue 114 [D].
