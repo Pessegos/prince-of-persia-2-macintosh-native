@@ -74,6 +74,13 @@ class Tile:
 
 
 class LevelMap:
+    def throne_gate(self, room, tile):
+        """GetBarrCode 4:532e-5346: a gate in level eight's room 9 (the
+        throne) is barrier type 8, solid whatever its state."""
+        return (tile.kind == 4 and room == 8
+                and struct.unpack_from('>H', self.level, 0x218a)[0] == 8
+                and struct.unpack_from('>H', self.level, 0x2186)[0] == 4)
+
     def __init__(self, level):
         self.level = level
         self.start_room = struct.unpack_from(">H", level, 0x2198)[0] - 1
@@ -194,11 +201,13 @@ class LevelMap:
             # GetBarrierType/DistToBarrier; c944 enables type 3 for tile 2.
             stone_gate = (tile.kind == 4 and struct.unpack_from('>H', self.level, 0x2186)[0] == 3
                           and stone_gate_blocks(tile.foreground, bounds, state))
-            if tile.kind in WALL_TILES | {12} or stone_gate:
-                barrier = (5 if stone_gate else 6 if tile.kind == 12 else
+            throne_gate = self.throne_gate(room, tile)
+            if tile.kind in WALL_TILES | {12} or stone_gate or throne_gate:
+                barrier = (5 if stone_gate else 8 if throne_gate else 6 if tile.kind == 12 else
                            3 if cautious and tile.kind == 2 and (tile.foreground & 255) < 3 else 4)
-                left_offset = {3: -22, 4: 3, 5: 18, 6: 8}[barrier]
-                right_offset = {3: -22, 4: 0, 5: 0, 6: 16}[barrier]
+                # DATA a5-0x3620/-0x360e by barrier type.
+                left_offset = {3: -22, 4: 3, 5: 18, 6: 8, 8: 16}[barrier]
+                right_offset = {3: -22, 4: 0, 5: 0, 6: 16, 8: 24}[barrier]
                 # GetCharEdges / QuickDraw uses an exclusive right edge;
                 # Pillow's last sprite column is inclusive.
                 barrier_distance = (col * TILE_WIDTH + 22 + left_offset - (bounds[2] + 1)
@@ -613,7 +622,8 @@ class LevelMap:
                 stone_gate = (tile.kind == 4 and struct.unpack_from('>H', self.level, 0x2186)[0] == 3
                               and (state is None or state.actor_type != 11)
                               and stone_gate_blocks(tile.foreground, bounds, state))
-                if tile.kind not in WALL_TILES and not desert_exit and not stone_gate:
+                throne_gate = self.throne_gate(room, tile)
+                if tile.kind not in WALL_TILES and not desert_exit and not stone_gate and not throne_gate:
                     continue
                 if (tile.kind == CREVICE_TILE and bottom - top + 1 <= 34 and tile.foreground & 3 != 3
                         and (state is None or state.actor_type not in (7, 8))):
@@ -621,12 +631,12 @@ class LevelMap:
                     # passes an open crevice; only the heads still collide.
                     continue
                 # GetLeftBarr/GetRightBarr, code 4, DATA c9e0/c9f2[barrier].
-                barrier = (5 if stone_gate else 1 if desert_exit else
+                barrier = (5 if stone_gate else 1 if desert_exit else 8 if throne_gate else
                            2 if tile.kind == 7 and bottom - top + 1 <= 34 else 4)
                 # Tile 2's extended barrier (type 3) exists only while
                 # DoStepFwd queries clearance with c944 set, not in Collide.
                 left_offset, right_offset = {1: (40, 0), 2: (0, 50), 3: (-22, -22),
-                                             4: (3, 0), 5: (18, 0)}[barrier]
+                                             4: (3, 0), 5: (18, 0), 8: (16, 24)}[barrier]
                 wall_left = col * TILE_WIDTH + 22 + left_offset
                 wall_right = col * TILE_WIDTH + 72 - right_offset
                 # CheckBarr 4:4f8a-4fb4 only raises a gate side collision
