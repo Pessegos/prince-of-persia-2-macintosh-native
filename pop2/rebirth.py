@@ -80,7 +80,8 @@ class RebirthSnapshot:
             restored.potions.flip_timer = current.potions.flip_timer
             restored.potions.float_timer = 0
             for queue in (restored.plates.triggered, restored.plates.slams, restored.plates.slam_sounds,
-                          restored.plates.songs, restored.plates.stopped_sounds, restored.potions.songs,
+                          restored.plates.songs, restored.plates.stopped_sounds, restored.plates.gate_sounds,
+                          restored.potions.songs,
                           restored.bridge.songs, restored.loose.plate_events, restored.loose.shake_events):
                 queue.clear()
             # Preserve the shared identity held by GameSession and LevelMap.

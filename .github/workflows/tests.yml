@@ -27,6 +27,8 @@ jobs:
       - name: Checkpoint saves and integrated save-slot browser
         run: python -m unittest -q tests.test_save_slots
       - run: python -m unittest -q tests.test_audio_release tests.test_story_progress
+      - name: Opposite gate motions and debris impact mixing
+        run: python -m unittest -q tests.test_audio_duck tests.test_gate_audio tests.test_debris_audio
       - name: Discovery animation import and isolated sound banks
         run: python -m unittest -q tests.test_discovery
       - name: Isolated level-four cavern scenery

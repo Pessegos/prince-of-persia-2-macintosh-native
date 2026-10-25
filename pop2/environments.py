@@ -89,6 +89,10 @@ class Environment:
     def queue_songs(self, audio):
         """Songs the level mechanisms requested this frame."""
 
+    def gate_audio(self):
+        """Attributed gate cues, or None for unmodified native arbitration."""
+        return None
+
     def ambient_audio(self, audio, motion):
         """Ambient music and environment sounds, after the actors' sounds."""
 
@@ -527,7 +531,8 @@ class Caverns(Environment):
                 cue for cue in scene.sequence_state.sound_events if cue not in stopped]
         if getattr(scene, "audio", None) is not None:
             for cue in caverns.plates.stopped_sounds:
-                scene.audio.stop_sound(cue)
+                if cue != 17 or not scene.audio.split_mechanisms:
+                    scene.audio.stop_sound(cue)
         caverns.plates.stopped_sounds.clear()
 
     def check_spikes(self):
@@ -687,7 +692,7 @@ class Caverns(Environment):
         room = scene.level_renderer.enter_room(scene.room_id, caverns)
         scene.background, scene.foreground = room.background, room.foreground
         if getattr(scene, "audio", None) is not None:
-            scene.audio.drain(state)
+            scene.audio.drain(state, gate_events=self.gate_audio())
         else:
             state.sound_events.clear()
 
@@ -850,6 +855,11 @@ class Caverns(Environment):
     def display_life(self, life):
         scene = self.scene
         return scene.game.caverns.crush.display_life(scene.sequence_state, life)
+
+    def gate_audio(self):
+        events = tuple(self.scene.game.caverns.plates.gate_sounds)
+        self.scene.game.caverns.plates.gate_sounds.clear()
+        return events
 
     def queue_songs(self, audio):
         caverns = self.scene.game.caverns

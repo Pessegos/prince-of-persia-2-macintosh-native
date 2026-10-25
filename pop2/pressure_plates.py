@@ -9,6 +9,7 @@ from pop2.loose_floors import pressure_tile
 from pop2.darts import Darts
 from pop2.terrain import floor_contact_x
 from pop2.opponent_generation import character_column
+from pop2.mechanism_audio import GateSound
 
 
 @dataclass
@@ -21,6 +22,7 @@ class PressurePlates:
     slam_sounds: list = field(default_factory=list)
     songs: list = field(default_factory=list)
     stopped_sounds: list = field(default_factory=list)
+    gate_sounds: list = field(default_factory=list)
     darts: Darts = field(default_factory=Darts)
 
     def link(self, terrain, index):
@@ -196,7 +198,14 @@ class PressurePlates:
         self.triggered.clear()
         self.slams.clear()
         self.slam_sounds.clear()
+        self.gate_sounds.clear()
         cues = []
+
+        def gate_sound(cue, opening, source):
+            self.gate_sounds.append(GateSound(cue, opening, source))
+            if cue is not None:
+                cues.append(cue)
+
         for key, phase in tuple(self.active.items()):
             room, cell = key
             tile = terrain.tile(room, cell % 10, cell // 10)
@@ -240,14 +249,15 @@ class PressurePlates:
                 self.foreground[key] = (value & 0xff00) | position
                 if position >= 79:
                     del self.active[key]
-                    cues.append(18)
+                    gate_sound(18, True, key)
                 else:
-                    cues.append(17)
+                    gate_sound(17, True, key)
                 continue
             if tile.kind != 4:
                 del self.active[key]
                 continue
             position = value & 255
+            opening = phase in (2, 3)
             squashing = self.squashing_player(terrain, key, state, motion, record)
             if phase >= 4:
                 phase = min(8, phase + 1)
@@ -261,27 +271,28 @@ class PressurePlates:
                         # shut opponents out (the level-four "phew").
                         self.slams.append(key)
                     self.slam_sounds.append(key)
-                    cues.append(20)
+                    gate_sound(20, False, key)
             elif position == 255:
                 phase = -1
-                cues.append(18)
+                gate_sound(18, opening, key)
             else:
                 position += (-1, -4, 4, 4)[phase]
                 if phase in (0, 1):
                     if position <= 0:
                         position, phase = 56 if squashing else 0, -1
-                        cues.append(18)
+                        gate_sound(18, False, key)
                         if self.fingers_under_gate(key, state, motion, record):
                             cues.append(29)
                     elif position < 184:
                         phase = 1
-                        cues.append(17)
+                        gate_sound(17, False, key)
                         # SEQS:118 signals the final slam with mode 3 on
                         # its last kneeling frame, before the flattened poses.
                         if squashing and self.crushing_body_under_gate(terrain, key, state, motion, record):
                             if state.sequence_mode == 3:
                                 position, phase = 48, -1
-                                cues.extend((20, 18))
+                                gate_sound(20, False, key)
+                                gate_sound(18, False, key)
                             elif state.action == 264:
                                 position += 3
                             elif state.action == 265:
@@ -289,19 +300,20 @@ class PressurePlates:
                             elif state.action == 266:
                                 phase = -1
                                 self.stopped_sounds.append(17)
+                                gate_sound(None, False, key)
                     elif (struct.unpack_from('>H', terrain.level, 0x218a)[0] == 5
                           and room == 6):
                         # ATMGate 5:4396-43bc: level five's room-7 gate undoes
                         # its waiting step, so once open it stays open.
                         position -= (-1, -4)[phase]
                 elif position < 184:
-                    cues.append(17)
+                    gate_sound(17, True, key)
                 elif phase == 2:
                     position, phase = 237, 0
-                    cues.append(18)
+                    gate_sound(18, True, key)
                 else:
                     position, phase = 255, -1
-                    cues.append(18)
+                    gate_sound(18, True, key)
             self.foreground[key] = (value & 0xff00) | position
             if phase < 0:
                 del self.active[key]

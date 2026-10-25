@@ -21,7 +21,7 @@ class TimedPlayback:
 
     def __init__(self, cues):
         self.cues = cues
-        self.remaining = {"effect": 0, "mechanism": 0, "music": 0}
+        self.remaining = {"effect": 0, "mechanism": 0, "closing": 0, "music": 0}
         self.effects = {}
         self.paused = False
 

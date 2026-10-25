@@ -59,9 +59,23 @@ and real SDL isolation while gameplay audio is paused.
 
 ## Mixed Gameplay Effects
 
-The port's mixed-effects policy allows distinct effects to overlap, with a
-separate gate-movement voice. This is an intentional exception to the native
-single-effect arbitration below, not a recovered Sound Manager rule.
+The port's mixed-effects policy allows distinct effects to overlap, with one
+gate voice for opening and one for closing. This is an intentional exception
+to the native single-effect arbitration below, not a recovered Sound Manager rule.
+
+The controller retains its original integer cues/timing and supplies transient
+`GateSound` direction/source records alongside them. Scene audio attributes
+these before coalescing: opposite motions can overlap, but multiple gates
+moving in the same direction still share one voice. An exit uses the opening
+voice. Finishing one gate cannot stop another still moving in that direction;
+reversal or a silent crush stop releases an unused movement voice over 12 ms.
+Stop/slam 18/20 affect only their own direction, retaining the slam's existing
+sample-clock delay. Both voices follow pause/mute/reset and debris ducking;
+notifications are excluded from saves and cleared on checkpoint rebirth.
+Untagged cue callers, `split_mechanisms=False` and native comparison mode keep
+the prior shared-voice arbitration. Tests in `tests/test_gate_audio.py` cover
+controller attribution, scene routing and actual SDL output. This is a user
+listening trial, not a change to gate physics or native-rule equivalence.
 
 When debris impact 26 and shooter launch 65 arrive in the same simulation
 update, mixed mode keeps the impact and drops that launch transient. Level

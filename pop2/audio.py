@@ -1,4 +1,4 @@
-"""SDL effect mixing with a shared stone-mechanism channel."""
+"""SDL effect mixing with coalesced stone-mechanism voices."""
 
 import json
 import os
@@ -11,6 +11,7 @@ from pop2.paths import ASSET_DIR
 from pop2.audio_duck import PcmGateDuck
 from pop2.audio_release import PcmRelease, seamless_loop
 from pop2.ui_audio import menu_pcm
+from pop2.mechanism_audio import GateVoice
 
 
 GATE_SLAM_DELAY = 11 / 60
@@ -22,7 +23,7 @@ def scene_sound_key(resource_id, kind):
 
 
 class MixerPlayback:
-    def __init__(self, directory, cues, mix_mechanisms=False):
+    def __init__(self, directory, cues, mix_mechanisms=False, split_mechanisms=False):
         os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
         from pygame import mixer
 
@@ -31,7 +32,7 @@ class MixerPlayback:
             mixer.init(frequency=48000, size=-16, channels=2, buffer=512)
         except mixer.error as error:
             raise RuntimeError(f"Cannot open the sound device. Check Windows audio settings: {error}") from error
-        mixer.set_num_channels(6)
+        mixer.set_num_channels(8 if split_mechanisms else 6)
         self.channels = {"effect": mixer.Channel(0), "music": mixer.Channel(1)}
         self.effect_channels = []
         self.effect_channel_ids = {}
@@ -42,6 +43,10 @@ class MixerPlayback:
             self.channels["mechanism"] = mixer.Channel(5)
         self.gate_tail = mixer.Channel(2)
         self.effect_channel, self.tail_channel = (5 if mix_mechanisms else 0), 2
+        self.closing_voice = None
+        if split_mechanisms:
+            self.channels['closing'] = mixer.Channel(6)
+            self.closing_voice = GateVoice(mixer.Channel(7), 6, 7)
         rate, _bits, channels = mixer.get_init()
         self.ui_channels = {kind: mixer.Channel(index) for index, kind in enumerate(('hover', 'click'), 3)}
         self.ui_sounds = {kind: mixer.Sound(buffer=menu_pcm(kind, rate, channels)) for kind in self.ui_channels}
@@ -63,17 +68,38 @@ class MixerPlayback:
             self.sounds[17] = mixer.Sound(buffer=seamless_loop(
                 original.get_raw(), channels, rate * 12 // 1000))
 
-    def sustain_gate(self):
-        channel = self.channels[getattr(self, 'gate_bus', 'effect')]
+    def _gate_voice(self, bus):
+        if bus == getattr(self, 'gate_bus', 'effect'):
+            return self
+        if bus == 'closing':
+            return getattr(self, 'closing_voice', None)
+        return None
+
+    def _gate_tails(self):
+        yield self.gate_tail
+        if getattr(self, 'closing_voice', None) is not None:
+            yield self.closing_voice.gate_tail
+
+    def sustain_gate(self, bus=None):
+        bus = bus or getattr(self, 'gate_bus', 'effect')
+        voice = self._gate_voice(bus)
+        channel = self.channels[bus]
         if (self.gate_release is not None and channel.get_busy()
                 and channel.get_sound() is self.sounds[17]):
             # Renew only while the controller still requests movement. A lost
             # stop cue must not leave an infinite stone sound behind.
-            self.gate_release.expire(self.effect_channel, self.gate_lifetime)
+            self.gate_release.expire(voice.effect_channel, self.gate_lifetime)
+
+    def release_gate(self, bus):
+        voice = self._gate_voice(bus)
+        if self.gate_release is not None:
+            self.gate_release.start(voice.effect_channel)
+        else:
+            self.channels[bus].stop()
 
     def play(self, bus, cue, offset=0):
         sound = self.sounds[cue]
-        gate_bus = getattr(self, 'gate_bus', 'effect')
+        voice = self._gate_voice(bus)
         if offset:
             rate, bits, channels = self.mixer.get_init()
             frame_size = abs(bits) // 8 * channels
@@ -83,25 +109,25 @@ class MixerPlayback:
                 self.stop(bus)
                 return
             sound = self.mixer.Sound(buffer=remaining)
-        if (bus == gate_bus and cue in (18, 20) and self.channels[bus].get_busy()
+        if (voice is not None and cue in (18, 20) and self.channels[bus].get_busy()
                 and self.channels[bus].get_sound() is self.sounds.get(17)):
             # Fade PCM samples, not SDL's stepped per-buffer channel volume.
-            self.gate_tail.stop()
-            self.gate_tail.set_volume(self.channels[bus].get_volume())
-            self.gate_release.start(self.effect_channel)
-            self.channels[bus], self.gate_tail = self.gate_tail, self.channels[bus]
-            self.effect_channel, self.tail_channel = self.tail_channel, self.effect_channel
-        elif bus == gate_bus:
-            self.gate_tail.stop()
-        if bus == gate_bus and self.gate_release is not None:
-            self.gate_release.cancel(self.effect_channel)
-        if bus == gate_bus and cue == 17 and not offset and self.gate_release is not None:
+            voice.gate_tail.stop()
+            voice.gate_tail.set_volume(self.channels[bus].get_volume())
+            self.gate_release.start(voice.effect_channel)
+            self.channels[bus], voice.gate_tail = voice.gate_tail, self.channels[bus]
+            voice.effect_channel, voice.tail_channel = voice.tail_channel, voice.effect_channel
+        elif voice is not None:
+            voice.gate_tail.stop()
+        if voice is not None and self.gate_release is not None:
+            self.gate_release.cancel(voice.effect_channel)
+        if voice is not None and cue == 17 and not offset and self.gate_release is not None:
             self.channels[bus].play(sound, loops=-1)
-            self.sustain_gate()
+            self.sustain_gate(bus)
         else:
             self.channels[bus].play(sound)
-        if bus == gate_bus and cue == 17 and self.gate_duck is not None:
-            self.gate_duck.watch(self.effect_channel, 'gate')
+        if voice is not None and cue == 17 and self.gate_duck is not None:
+            self.gate_duck.watch(voice.effect_channel, 'gate')
 
     def busy(self, bus):
         return self.channels[bus].get_busy()
@@ -149,11 +175,12 @@ class MixerPlayback:
         if bus == 'effect':
             for cue in tuple(self.effects):
                 self.stop_effect(cue)
-        if bus == getattr(self, 'gate_bus', 'effect'):
-            self.gate_tail.stop()
+        voice = self._gate_voice(bus)
+        if voice is not None:
+            voice.gate_tail.stop()
             if self.gate_release is not None:
-                self.gate_release.cancel(self.effect_channel)
-                self.gate_release.cancel(self.tail_channel)
+                self.gate_release.cancel(voice.effect_channel)
+                self.gate_release.cancel(voice.tail_channel)
 
     def set_volume(self, bus, volume):
         self.channels[bus].set_volume(volume)
@@ -161,31 +188,35 @@ class MixerPlayback:
             self.effect_volume = volume
             for channel in self.effect_channels:
                 channel.set_volume(volume)
-        if bus == getattr(self, 'gate_bus', 'effect'):
-            self.gate_tail.set_volume(volume)
+        voice = self._gate_voice(bus)
+        if voice is not None:
+            voice.gate_tail.set_volume(volume)
             if not volume:
-                self.gate_tail.stop()
+                voice.gate_tail.stop()
 
     def pause(self, paused):
-        for channel in (*self.channels.values(), self.gate_tail, *self.effect_channels):
+        for channel in (*self.channels.values(), *self._gate_tails(), *self.effect_channels):
             (channel.pause if paused else channel.unpause)()
 
     def close(self):
         self.stop_ui()
-        for channel in (*self.channels.values(), self.gate_tail, *self.effect_channels):
+        for channel in (*self.channels.values(), *self._gate_tails(), *self.effect_channels):
             channel.stop()
         self.effects.clear()
         if self.gate_duck is not None:
             self.gate_duck.close()
         if self.gate_release is not None:
-            self.gate_release.cancel(self.effect_channel)
-            self.gate_release.cancel(self.tail_channel)
+            for bus in self.channels:
+                voice = self._gate_voice(bus)
+                if voice is not None:
+                    self.gate_release.cancel(voice.effect_channel)
+                    self.gate_release.cancel(voice.tail_channel)
         self.mixer.quit()
 
 
 class AudioEngine:
     def __init__(self, directory=ASSET_DIR / "audio", playback=None, rng=None,
-                 *, mix_mechanisms=True, mix_effects=None):
+                 *, mix_mechanisms=True, mix_effects=None, split_mechanisms=None):
         directory = Path(directory)
         self.manifest = json.loads((directory / "manifest.json").read_text(encoding="ascii"))
         if self.manifest.get("schema") != 1:
@@ -194,15 +225,23 @@ class AudioEngine:
         self.scene_cues = self.manifest.get("scene_cues", {})
         self.mix_mechanisms = mix_mechanisms
         self.mix_effects = mix_mechanisms if mix_effects is None else mix_effects
+        self.split_mechanisms = (self.mix_mechanisms and self.mix_effects
+                                 if split_mechanisms is None else
+                                 bool(split_mechanisms and self.mix_mechanisms))
+        self.gate_events = None
         self.pending_effects = {}
         self.stopped_effects = set()
         self.effect_buses = ("effect", "mechanism") if mix_mechanisms else ("effect",)
+        if self.split_mechanisms:
+            self.effect_buses += ('closing',)
         self.playback = playback or MixerPlayback(
-            directory, {**self.cues, **self.scene_cues}, mix_mechanisms=mix_mechanisms)
+            directory, {**self.cues, **self.scene_cues}, mix_mechanisms=mix_mechanisms,
+            split_mechanisms=self.split_mechanisms)
         self.rng = rng or random.Random()
         self.current_effect = self.current_music = None
         self.pending_effect = self.pending_song = None
         self.current_mechanism = self.pending_mechanism = None
+        self.current_closing = self.pending_closing = None
         self.paused = False
         self.sound_enabled = self.music_enabled = True
         self.current_music_ambient = self.pending_song_ambient = False
@@ -298,16 +337,24 @@ class AudioEngine:
             self.room_song_requested = True
             self.add_song(cue, ambient=True)
 
-    def drain(self, state, audible=True):
+    def drain(self, state, audible=True, *, gate_events=None):
+        attributed = self.split_mechanisms and gate_events is not None
+        if attributed:
+            if self.gate_events is None:
+                self.gate_events = []
+            if audible:
+                self.gate_events.extend(event for event in gate_events
+                                        if event.cue not in self.stopped_effects)
         for cue in state.sound_events:
             # A landing can stop the scream before its queued frame is drained.
-            if audible and cue not in self.stopped_effects:
+            if (audible and cue not in self.stopped_effects
+                    and not (attributed and cue in MECHANISM_CUES)):
                 self.add_sound(cue, state.actor_type)
         state.sound_events.clear()
 
     @property
     def effect_busy(self):
-        return (bool(self.pending_effects)
+        return (bool(self.pending_effects) or bool(self.gate_events)
                 or any(self._effect_busy(bus) for bus in self.effect_buses)
                 or self.mix_effects and bool(self.playback.playing_effects()))
 
@@ -316,6 +363,7 @@ class AudioEngine:
 
     def sound_playing(self, cue):
         return (cue in self.pending_effects
+                or any(event.cue == cue for event in self.gate_events or ())
                 or self.mix_effects and cue in self.playback.playing_effects()
                 or any(getattr(self, f"pending_{bus}") == cue or
                        (getattr(self, f"current_{bus}") == cue and self.playback.busy(bus))
@@ -354,6 +402,8 @@ class AudioEngine:
     def flush(self):
         if self.paused:
             return
+        if self.gate_events is not None:
+            self._prepare_gate_events()
         if self.mix_effects:
             # An empty swing and its contact are one event, not two layers.
             if any(cue in self.pending_effects for cue in (10, 12, 31)):
@@ -384,7 +434,7 @@ class AudioEngine:
             elif cue == current == 17:
                 sustain = getattr(self.playback, "sustain_gate", None)
                 if sustain is not None:
-                    sustain()
+                    sustain(bus) if bus == 'closing' else sustain()
         if self.pending_song is not None:
             self.current_music = self.pending_song
             self.current_music_ambient = self.pending_song_ambient
@@ -394,6 +444,28 @@ class AudioEngine:
             self.playback.play("music", self.current_music)
             self.music_clock = [time.monotonic(), 0.0]
         self.stopped_effects.clear()
+
+    def _prepare_gate_events(self):
+        # Keep the native cue list untouched. Attribute before coalescing so
+        # one gate's stop cannot discard another gate's movement in this tick.
+        sources = {}
+        for event in self.gate_events:
+            previous = sources.get(event.source)
+            if previous is None or previous.cue != 20:
+                sources[event.source] = event
+        self.gate_events = None
+        for bus, opening in (('mechanism', True), ('closing', False)):
+            cues = {event.cue for event in sources.values() if event.opening == opening}
+            cue = next((item for item in (20, 17, 18) if item in cues), None)
+            setattr(self, f'pending_{bus}', cue)
+            if cue is None and getattr(self, f'current_{bus}') == 17:
+                if self.playback.busy(bus):
+                    release = getattr(self.playback, 'release_gate', None)
+                    if release is not None:
+                        release(bus)
+                    else:
+                        self.playback.stop(bus)
+                setattr(self, f'current_{bus}', None)
 
     def ambient(self, room, row, column, fighting=False, alive=True, special=None):
         if not self.music_enabled or not alive:
@@ -487,6 +559,8 @@ class AudioEngine:
         self.current_effect = None
         self.pending_effect = self.pending_song = None
         self.current_mechanism = self.pending_mechanism = None
+        self.current_closing = self.pending_closing = None
+        self.gate_events = None
         self.pending_effects.clear()
         self.stopped_effects.clear()
         self.current_music_ambient = self.pending_song_ambient = False

@@ -67,7 +67,8 @@ class SdlGateDuckTests(unittest.TestCase):
         env = patch.dict(os.environ, {'SDL_AUDIODRIVER': 'dummy'})
         env.start()
         self.addCleanup(env.stop)
-        self.playback = MixerPlayback(self.directory.name, cues, mix_mechanisms=True)
+        self.playback = MixerPlayback(self.directory.name, cues, mix_mechanisms=True,
+                                      split_mechanisms=getattr(self, 'split_mechanisms', False))
         self.addCleanup(self.playback.close)
         self.duck = self.playback.gate_duck
         self.blocks = []

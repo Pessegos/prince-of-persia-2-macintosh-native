@@ -86,6 +86,17 @@ class SaveFormatTests(unittest.TestCase):
         restored, _saved = read_save(self.path, self.resources)
         self.assertEqual(restored.caverns.loose.shake_events, [])
 
+    def test_gate_audio_attribution_is_transient_and_does_not_change_save_fields(self):
+        from pop2.mechanism_audio import GateSound
+
+        original = GameSession.load(self.resources, 3)
+        before = capture(original)
+        original.caverns.plates.gate_sounds.append(GateSound(17, True, (0, 15)))
+        self.assertEqual(capture(original), before)
+        write_save(self.path, capture(original))
+        restored, _saved = read_save(self.path, self.resources)
+        self.assertEqual(restored.caverns.plates.gate_sounds, [])
+
     def test_inactive_guard_record_roundtrip_resumes_native_cold_reload(self):
         from pop2.combat import select_sequence
 

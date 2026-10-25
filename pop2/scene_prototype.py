@@ -2640,7 +2640,7 @@ class ScenePrototype(WindowControls):
         elif self.sequence_state.action == 154:
             # TestStrike 6:5876-588a / 5b00-5b1c also sounds an empty swing.
             self.sequence_state.sound_events.append(11)
-        audio.drain(self.sequence_state)
+        audio.drain(self.sequence_state, gate_events=environment.gate_audio())
         if self.combat is not None:
             for guards, _generators in self.combat.room_encounters.values():
                 for guard in guards:

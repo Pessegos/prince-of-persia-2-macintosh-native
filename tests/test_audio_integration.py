@@ -247,7 +247,7 @@ class SceneAudioTests(unittest.TestCase):
         return [item.args[0] if item[0] == 'play_effect' else item.args[1]
                 for item in self.scene.audio.playback.mock_calls
                 if item[0] == 'play_effect' or
-                item[0] == 'play' and item.args[0] in ('effect', 'mechanism')]
+                item[0] == 'play' and item.args[0] in ('effect', 'mechanism', 'closing')]
 
     def test_skeleton_meter_stays_above_while_music_returns_across_the_gap(self):
         from pop2.combat import select_sequence
