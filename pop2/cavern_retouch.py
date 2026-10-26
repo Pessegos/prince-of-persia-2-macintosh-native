@@ -45,11 +45,12 @@ def _retouch_bundle():
     return data, atlas
 
 
-@lru_cache(maxsize=1)
-def retouch_assets():
+@lru_cache(maxsize=3)
+def retouch_assets(level_number=3):
     data, atlas = _retouch_bundle()
     return {(r['room'], r['shape'], r['x'], r['bottom'], r['mode']):
-            (r, atlas.crop(r['atlas_rect'])) for r in data['records']}
+            (r, atlas.crop(r['atlas_rect'])) for r in data['records']
+            if r.get('level', 3) == level_number}
 
 
 @lru_cache(maxsize=1)
@@ -78,11 +79,12 @@ def retouched_door_sprite(level, room, command, source):
     return _apply_retouch(*item, source) if item is not None else source
 
 
-def retouched_sprite(room, command, source):
-    if room not in (0, 1, 27, 29) or len(command) < 8 or command[7] != 4:
+def retouched_sprite(room, command, source, *, level_number=3):
+    approved = room in (0, 1, 27, 29) if level_number == 3 else (level_number, room) == (4, 11)
+    if not approved or len(command) < 8 or command[7] != 4:
         return source
     key = (room, command[1], command[2], command[3], command[4])
-    item = retouch_assets().get(key)
+    item = retouch_assets(level_number).get(key)
     if item is None:
         return source
     return _apply_retouch(*item, source)

@@ -1038,7 +1038,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         sprite = cavern_command_sprite(command, resources, palette, shapes)
         if retouched:
             sprite = retouched_door_sprite(level_number, room_id, command, sprite)
-        return retouched_sprite(room_id, command, sprite) if retouched and level_number == 3 else sprite
+        return retouched_sprite(room_id, command, sprite, level_number=level_number) if retouched else sprite
 
     if (program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17)
             and program.get('level') == level_number):

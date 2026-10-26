@@ -47,13 +47,17 @@ class CavernLevelIsolationTests(unittest.TestCase):
             with self.subTest(number=number), self.assertRaisesRegex(ValueError, 'Unsupported cavern'):
                 cavern_assets(number)
 
-    def test_level_three_artwork_retouch_is_never_applied_to_level_four(self):
+    def test_level_four_artwork_uses_its_own_level_and_skips_unapproved_rooms(self):
+        from pop2.cavern_retouch import retouched_sprite
+
         program = {'version': 14, 'level': 4, 'rooms': {'0': [['back', 3501, 0, 1, 16, 0]]}}
         sprite = Image.new('RGBA', (1, 1), 'red')
         with (patch('pop2.caverns.cavern_assets', return_value=(program, {}, {}, {3501: sprite})),
-              patch('pop2.caverns.retouched_sprite', side_effect=AssertionError('Level-three artwork'))):
+              patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Unapproved room')),
+              patch('pop2.caverns.retouched_sprite', wraps=retouched_sprite) as retouch):
             room = cavern_room(0, retouched=True, level_number=4)
         self.assertEqual(room.background.getpixel((0, 0)), (255, 0, 0, 255))
+        self.assertEqual(retouch.call_args.kwargs, {'level_number': 4})
 
     def test_renderer_routes_static_and_animated_drawing_to_the_selected_level(self):
         program = {'torches': {}}

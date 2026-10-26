@@ -36,7 +36,9 @@ start. The importer now prepares independent scenery programs from LEVL
 2002 and 2003, including all 32 rooms, entrance closure, torches, loose-floor
 variants, climbing/floor redraw and pressure-plate bindings. The renderer and
 developer-map drawing select the appropriate program for each level. The
-approved room-specific wall retouches remain exclusive to level 3.
+approved wall retouches are scoped by level and room. Level-four room12 now
+also has the user-approved local shadow continuation described in
+[`CAVERN_ARTWORK.md`](CAVERN_ARTWORK.md); shared native shapes are unchanged.
 
 Export version 15 initializes room links through original `3:1ab0` before
 the cell passes. Without this setup, DrawCaveFloorCommon `8:1998` misses an

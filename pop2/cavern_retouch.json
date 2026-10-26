@@ -768,6 +768,156 @@
         107,
         371
       ]
+    },
+    {
+      "level": 4,
+      "room": 11,
+      "shape": 3502,
+      "x": 193,
+      "bottom": 220,
+      "mode": 0,
+      "size": [
+        51,
+        120
+      ],
+      "source_rect": [
+        0,
+        44,
+        4,
+        120
+      ],
+      "source_sha256": "1bb7b4e808287609fc641c77bb2337f82e0823f4d5cc70e85fbaddd235ddef27",
+      "atlas_rect": [
+        0,
+        385,
+        4,
+        461
+      ]
+    },
+    {
+      "level": 4,
+      "room": 11,
+      "shape": 3511,
+      "x": 142,
+      "bottom": 340,
+      "mode": 0,
+      "size": [
+        51,
+        120
+      ],
+      "source_rect": [
+        47,
+        0,
+        51,
+        10
+      ],
+      "source_sha256": "5d382f03d9f7be0c7d9684cfb8b89f2d848cff4eb523b8cd01b5e1bb52c084b3",
+      "atlas_rect": [
+        5,
+        385,
+        9,
+        395
+      ]
+    },
+    {
+      "level": 4,
+      "room": 11,
+      "shape": 3513,
+      "x": 193,
+      "bottom": 340,
+      "mode": 0,
+      "size": [
+        51,
+        120
+      ],
+      "source_rect": [
+        0,
+        0,
+        3,
+        13
+      ],
+      "source_sha256": "b377430e4d628f84af3bf9d54df00ae0864fe3822e0d89dba4ed7468c6450106",
+      "atlas_rect": [
+        10,
+        385,
+        13,
+        398
+      ]
+    },
+    {
+      "level": 4,
+      "room": 11,
+      "shape": 3513,
+      "x": 346,
+      "bottom": 340,
+      "mode": 0,
+      "size": [
+        51,
+        120
+      ],
+      "source_rect": [
+        0,
+        24,
+        4,
+        111
+      ],
+      "source_sha256": "b377430e4d628f84af3bf9d54df00ae0864fe3822e0d89dba4ed7468c6450106",
+      "atlas_rect": [
+        14,
+        385,
+        18,
+        472
+      ]
+    },
+    {
+      "level": 4,
+      "room": 11,
+      "shape": 3550,
+      "x": 153,
+      "bottom": 245,
+      "mode": 16,
+      "size": [
+        40,
+        146
+      ],
+      "source_rect": [
+        36,
+        47,
+        40,
+        123
+      ],
+      "source_sha256": "350e8a75269701fd5f1e26c11c38cae826136e2bedb1e98b2ddd169db2da4b65",
+      "atlas_rect": [
+        19,
+        385,
+        23,
+        461
+      ]
+    },
+    {
+      "level": 4,
+      "room": 11,
+      "shape": 3568,
+      "x": 306,
+      "bottom": 365,
+      "mode": 16,
+      "size": [
+        40,
+        146
+      ],
+      "source_rect": [
+        37,
+        25,
+        40,
+        113
+      ],
+      "source_sha256": "f75266d415b83d3335b4d30f2cd98bc39db08d6d83e40776c93e62c91509c07c",
+      "atlas_rect": [
+        24,
+        385,
+        27,
+        473
+      ]
     }
   ],
   "doors": [
