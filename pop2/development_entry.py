@@ -51,3 +51,19 @@ def cavern_entry(terrain, room, preferred_row=None):
         preferred_row is not None and cell[0] != preferred_row,
         terrain.tile(room, cell[1], cell[0]).kind != 1,
         abs(cell[1] - 5), cell[0], cell[1]))
+
+
+def room_entry(terrain, room, preferred_row=None):
+    """Keep route entries when possible; F3 can also inspect isolated rooms/shafts."""
+    try:
+        return cavern_entry(terrain, room, preferred_row)
+    except ValueError:
+        pass
+    for kinds in (STANDING_TILES, EMPTY_TILES):
+        candidates = [(row, column) for row in range(3) for column in range(10)
+                      if terrain.tile(room, column, row).kind in kinds]
+        if candidates:
+            return min(candidates, key=lambda cell: (
+                preferred_row is not None and cell[0] != preferred_row,
+                abs(cell[1] - 5), cell[0], cell[1]))
+    raise ValueError("This screen has no safe entry cell")

@@ -119,6 +119,7 @@ class LevelMap:
 
     def tile(self, room, column, row):
         # Same vertical-before-horizontal link traversal as GetBlock/Cut.
+        origin = room
         while not 0 <= column < 10 or not 0 <= row < 3:
             if row < 0:
                 direction, row = "up", row + 3
@@ -130,9 +131,13 @@ class LevelMap:
                 direction, column = "right", column - 10
             room = self.neighbor(room, direction)
             if room is None:
-                # GetUndefineCellId 4:28e8 returns air for rooftop levels.
+                # GetUndefineCellId 4:28e8/2956-2988: rooftop void and the
+                # level-six cliff / level-nine outside room are air. Ordinary
+                # ruins boundaries stay walls, including their AI clearances.
                 level_kind = struct.unpack_from(">H", self.level, 0x2186)[0]
-                return Tile(0 if level_kind == 5 else 20)
+                number = struct.unpack_from(">H", self.level, 0x218a)[0]
+                air = level_kind == 5 or level_kind == 4 and (number, origin) in ((6, 26), (9, 15))
+                return Tile(0 if air else 20)
         index = row * 10 + column
         kind = struct.unpack_from(">H", self.level, room * 60 + index * 2)[0]
         fg, bg = struct.unpack_from(">2H", self.level, 0x780 + room * 120 + index * 4)
@@ -679,6 +684,7 @@ class TerrainEvent:
     kind: str
     damage: int = 0
     death_method: int | None = None
+    impact: bool = True
 
 
 class RooftopPhysics:
@@ -1168,8 +1174,13 @@ class RooftopPhysics:
             if not invulnerable:
                 self.fatal_fall(motion, state)
             self.select(runtime, 22)
-            state.sound_events.append(7)
-            events.append(TerrainEvent("death"))
+            # Move 4:36a2-3738 supplies the rooftop impact; its non-rooftop
+            # void branch 4:374a-3786 is silent. There is no floor to end a
+            # scream here, even though the actor has reached its death state.
+            impact = state.level_kind == 5
+            if impact:
+                state.sound_events.append(7)
+            events.append(TerrainEvent("death", impact=impact))
             return tuple(events)
 
         if state.animation_state not in (4, 9) or below_chasm:

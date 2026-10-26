@@ -13,6 +13,7 @@ CATALOG = PROJECT_DIR / "docs" / "RECOVERY_CATALOG.csv"
 
 # These reviews cover specific ordinary branches, never an entire routine.
 REVIEWS = {
+    (4, "GetUndefineCellId"): ("partial", "pop2/terrain.py;tools/probe_cliff_void.py", "ordinary undefined cells in levels 3-9: rooftop air, level-six room27 and level-nine room16 exterior air, other cavern/ruins boundaries solid; 8800 native comparisons; special top-row flag and environment2/6 branches not translated here"),
     (15, "NISThroneRoom"): ("partial", "tools/extract_intro.py;pop2/intro.py;pop2/scene_prototype.py", "NIS 6 exported per facing with ThroneNIS/Kid/Prince/Ruins shapes, text panel and Prince-relative drawing; screen before it approximated by 15:6d46; area dissolve order not native"),
     (15, "DrawDeadKid"): ("partial", "tools/extract_intro.py;pop2/intro.py", "Kid SHAP 25081 at the Prince's X/Y (mirrored facing right), sword SHAP 1011, CTBL 1004 at 240"),
     (15, "QueenAddNIS"): ("partial", "tools/extract_intro.py", "environment 4 only: Ruins SHAP 4200-4207 throne room redraw and DrawDeadKid(1)"),

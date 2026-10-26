@@ -11,6 +11,7 @@ from pop2.pressure_plates import PressurePlates
 from pop2.potions import Potions
 from pop2.wall_spikes import WallSpikes
 from pop2.gate_crush import GateCrush
+from pop2.mechanism_audio import GateSound
 from pop2.scythes import Scythes
 
 
@@ -100,4 +101,9 @@ class CavernState:
         if self.entry_frame + 1 >= len(self.entry_frames):
             return ()
         self.entry_frame += 1
-        return self.entry_frames[self.entry_frame][1]
+        sounds = self.entry_frames[self.entry_frame][1]
+        # ATMExit 5:15da emits the entry door's final slam. Like plate-driven
+        # exits, it needs a source/direction for the port's split audio mixer.
+        self.plates.gate_sounds.extend(GateSound(cue, False, (self.entry_room, self.entry_cell))
+                                      for cue in sounds if cue in (17, 18, 20))
+        return sounds

@@ -694,3 +694,27 @@ No room-specific geometry or button activation change is introduced.
 No replacement artwork or generic physics library changes the recovered
 animation sequences. The prototype's 12 fps movement / 10 fps combat cadence
 is unchanged.
+
+### Ruins Cliff Exterior And Terminal Fall
+
+GetUndefineCellId 4:2956-2988 returns air outside native room27 of level6
+and native room16 of level9. Ordinary ruins boundaries still return wall20.
+The port previously used wall20 for both exteriors: the collision sweep pulled
+the running jump backwards after the Prince left the cliff. Restoring those
+air cells preserves the existing native sequences, gravity and velocities.
+
+Move's non-rooftop terminal branch 4:374a-3786 calls DecLifePts(100), assigns
+pose185, SetMode(3), Y730, zero vertical velocity and animation state1, with
+no impact cue. Rooftop impacts retain their separate sound behavior. A silent
+void death now carries an ephemeral no-impact event so the host keeps cue8
+playing through its imported duration; real landings/lava/impacts still stop it.
+No save fields, fall timer or replacement scream are introduced.
+
+`tools.probe_cliff_void` executes the original undefined-cell helper for
+8,800 undefined lookups reached through level3-9 links (ordinary top-row flag),
+matching the port. Another63 Prince terminal-death calls match the native
+assignments and recorded DecLifePts/SetMode arguments. Those two endpoints
+are supplied, not executed; this is not a complete FrameAdv/CutChar or audio
+waveform comparison. Scene regressions cover the actual level6 running jump,
+forward arc, single scream, no floor impact and death audio waiting for the
+full imported scream. Existing ordinary rooftop/landing tests remain required.

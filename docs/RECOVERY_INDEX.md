@@ -36,6 +36,8 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 
 | Rule / condition | Source | Status and scope | Owner / tests |
 | --- | --- | --- | --- |
+| Ruins exterior air; silent non-rooftop void death preserves falling scream | 4:2956-2988, 374a-3786; 5:4b5a | T: level6 room27 / level9 room16 exterior air; 8,800 native undefined-cell comparisons and 63 terminal death calls with DecLifePts/SetMode recorded; full FrameAdv and audio waveform parity P | terrain, scene_prototype / probe_cliff_void, test_cliff_map_fixes |
+| Entrance door final slam reaches the split closing audio lane | 5:15bc-161a, 25aa-25f8 | T/A: existing native exported entry phases/cue20 retained; source/direction attributed for intentional concurrent audio | cavern_state / test_cliff_map_fixes, test_gate_audio |
 | Discovery after level three and fresh level-four arrival | 2:0180-027e; 15:1a76 | T: native coordinator import, three callback-free flags-6 animations, bank-separated audio, pause/skip/F3 and life retention; tree/live clock/onward progression P | extract_intro, intro, scene_prototype / test_discovery |
 | Keyboard sample priority; ordinary Forward + Up selection | 2:55d2; 6:0dbe-0dca | T: directional priority and ordinary chord subset; not a native single-command buffer | mac_input / test_animation_data |
 | Host single-command buffer; legal pose transitions; held repeat | 6:0c32, 1014, 11e4; 4:3e84 | T/A: tested transitions; host buffer is not the complete native per-direction -1/0/1 input state | scene_prototype / test_animation_data |

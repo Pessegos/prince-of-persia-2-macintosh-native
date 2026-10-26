@@ -544,6 +544,12 @@ class WindowControls:
                 scale = self.screenshot_settings.scale
                 source = self.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
                 viewport = self.draw_screenshot_notice(menu.screenshot_gallery.draw(source, self.ui_font))
+            elif include_ui and self.dev_menu is not None and self.dev_menu.preview_enabled:
+                scale = self.screenshot_settings.scale
+                source = viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
+                visible = source.crop((scale, 0, 511 * scale, 384 * scale))
+                source.paste(self.dev_menu.present_map(visible, self.ui_font), (scale, 0))
+                viewport = source
             path = save_screenshot(viewport, self.screenshot_settings)
         except (OSError, ValueError) as exc:
             message = "Could not save PNG. Check the screenshot folder."

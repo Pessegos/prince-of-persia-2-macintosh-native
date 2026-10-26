@@ -214,7 +214,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,SetupShadowFlame,0x2630,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,8
 4,Characters 2,Handler,0x26e0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,4
 4,Characters 2,ReadCell,0x27ee,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,81,4
-4,Characters 2,GetUndefineCellId,0x28b6,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
+4,Characters 2,GetUndefineCellId,0x28b6,decoded,partial,pop2/terrain.py;tools/probe_cliff_void.py,"ordinary undefined cells in levels 3-9: rooftop air, level-six room27 and level-nine room16 exterior air, other cavern/ruins boundaries solid; 8800 native comparisons; special top-row flag and environment2/6 branches not translated here",1,0
 4,Characters 2,IndexCell,0x29d8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,9,1
 4,Characters 2,IndexCell1,0x2a38,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,8,1
 4,Characters 2,AddCharX,0x2bae,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,102,0

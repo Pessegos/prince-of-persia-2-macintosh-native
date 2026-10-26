@@ -2452,7 +2452,7 @@ class ScenePrototype(WindowControls):
                 # StartFall 4:4ca8-4cb2 puts the drawn sword away immediately.
                 self.sword_drawn = self.combat.player.sword_drawn = False
                 self.combat.player.recovering = False
-            if event.kind in ("land", "lava", "death"):
+            if event.kind in ("land", "lava") or event.kind == "death" and event.impact:
                 if getattr(self, "audio", None) is not None:
                     self.audio.stop_sound(8)
             if event.kind in ("fall", "wall", "gate", "death"):
@@ -3321,13 +3321,18 @@ class ScenePrototype(WindowControls):
                 raise ValueError("The stone screen has no supported entry")
             return self.jump_to_room(room, rows[0], 9 * TILE_WIDTH + 30, facing=0)
         elif self.game.level.kind == 3:
-            from pop2.development_entry import cavern_entry
+            from pop2.development_entry import room_entry
 
             # Retain Room 21's useful lower-floor test entry; level five's
             # Room 3 starts on the upper platform beside the bars' plate.
             preferred = {(3, 20): 2, (5, 2): 0}.get((self.game.level.number, room))
-            row, column = cavern_entry(self.level_map, room, preferred_row=preferred)
+            row, column = room_entry(self.level_map, room, preferred_row=preferred)
             return self.jump_to_room(room, row=row, x=column * TILE_WIDTH + 30, facing=0)
+        elif self.game.level.kind == 4:
+            from pop2.development_entry import room_entry
+
+            row, column = room_entry(self.level_map, room)
+            x = column * TILE_WIDTH + 30
         else:
             rows = [row for row in range(3)
                     if self.level_map.tile(room, 9, row).kind == 1]
