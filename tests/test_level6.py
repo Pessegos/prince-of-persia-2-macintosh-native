@@ -82,13 +82,16 @@ class LevelSixSceneryTests(unittest.TestCase):
         caverns = scene.game.caverns
         scene.jump_to_room(16, 1, 399, 1)
         program = scene.level_renderer.cavern_program
-        self.assertEqual(cavern_scene_signature(program, 16, caverns), '000')
+        cells = program['loose_floors']['rooms']['16']['cells']
+        crevices = {(16, 18), (16, 19), (17, 10)}
+        self.assertEqual(cavern_scene_signature(program, 16, caverns), '0' * len(cells))
         scene.set_key_state('down', True)
         self.tick(12)
         scene.set_key_state('down', False)
         self.assertEqual({key for key, (kind, value) in caverns.loose.tiles.items()
                           if kind == 7 and value & 0x80}, {(16, 18), (16, 19), (17, 10)})
-        self.assertEqual(cavern_scene_signature(program, 16, caverns), '111')
+        self.assertEqual(cavern_scene_signature(program, 16, caverns),
+                         ''.join('1' if tuple(key) in crevices else '0' for key in cells))
 
     def test_down_and_forward_at_a_crevice_lies_down_and_crawls_through_it(self):
         # GenCtrl 6:0a4e-0b28 lies down (SEQS 125); prone, CheckCollide

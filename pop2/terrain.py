@@ -1236,12 +1236,17 @@ class RooftopPhysics:
                     motion.lava_landing = True
                     events.append(TerrainEvent('lava'))
                     break
-                if tile.kind == 11 and self.map.caverns is not None and velocity:
+                if tile.kind in (11, 15) and self.map.caverns is not None and velocity:
                     # Falling 6:01ee-0260: strike the slab, halve velocity and
-                    # remain airborne just above the current floor.
-                    state.sound_events.extend(self.map.caverns.loose.trigger(tile, force=velocity))
+                    # remain airborne at the native slab-contact position.
+                    loose = self.map.caverns.loose
+                    state.sound_events.extend(loose.break_shelf(self.map, tile, motion.room)
+                        if tile.kind == 15 else loose.trigger(tile, force=velocity))
                     state.vertical_velocity //= 2
-                    state.current_y = -13
+                    # 6:0248-025c uses DATA row bottom (125+120*row),
+                    # minus13, not SetCharFloor's106+120*row. Thus the
+                    # working actor is six pixels below his standing Y.
+                    state.current_y = 6
                     if not invulnerable and (velocity >= 63 or state.actor_type == 2):
                         events.append(TerrainEvent('damage', 100))
                     break

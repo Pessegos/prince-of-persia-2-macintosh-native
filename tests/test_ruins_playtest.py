@@ -32,6 +32,37 @@ class RuinsPlaytestTests(unittest.TestCase):
         self.tick(15)
         self.assertNotIn(s.sequence_state.source_sequence_id, (14, 28))
 
+    def test_mega_potion_shaft_preserved_slab_cushions_a_cautious_descent(self):
+        from unittest.mock import patch
+
+        s = self.scene
+        # Native rooms5 ->6 (cell25) ->18. Cautious descent from the
+        # mega-potion platform; the unused slab must still be present.
+        s.jump_to_room(4, 2, 340, 1)
+        s.in_animation_tick = True
+        s.set_key_state('down', True)
+        with patch.object(s, 'render'), patch.object(s, 'advance_audio'):
+            for step in range(50):
+                if step == 8:
+                    s.set_key_state('down', False)
+                self.tick()
+                if s.room_id == 17 and not s.terrain_motion.falling or not s.combat.player.alive:
+                    break
+        self.assertIn((5, 25), s.game.caverns.loose.cleared)
+        self.assertEqual((s.room_id, s.terrain_motion.row), (17, 1))
+        self.assertTrue(s.combat.player.alive)
+        self.assertEqual(s.combat.player.life, 2)
+
+    def test_level7_room32_special_floor_falls_on_contact_and_redraws(self):
+        s = self.scene
+        s.load_level(7)
+        s.jump_to_room(31, 2, 128, 1)
+        self.assertEqual(s.level_map.tile(31, 2, 2).kind, 15)
+        self.tick(2)
+        self.assertEqual(s.level_map.tile(31, 2, 2).kind, 0)
+        self.assertTrue(s.game.caverns.loose.falling)
+        s.render()
+
     def test_room25_inverted_potion_then_jump_and_falling_slab_do_not_freeze(self):
         s = self.scene
         s.jump_to_room(24, 1, 137, 1)

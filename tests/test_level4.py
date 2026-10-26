@@ -117,7 +117,7 @@ class LevelFourSceneryTests(unittest.TestCase):
         program = cavern_assets(4)[0]
         self.assertEqual((level.kind, level.start_room, level.start_tile, level.start_x, level.facing),
                          (3, 0, 25, 277, 0))
-        self.assertIn(program['version'], (15, 16))
+        self.assertIn(program['version'], (15, 16, 17))
         self.assertEqual(program['level'], 4)
         rooms = {str(room) for room in range(32)}
         for key in ('rooms', 'torches', 'climb_redraw', 'floor_redraw'):

@@ -42,11 +42,11 @@ def floor_redraw_cells(state, bounds):
                  for column in range(first, last + 1))
 
 
-def falling_floor_redraw_cells(x, y):
+def falling_floor_redraw_cells(x, y, height=43):
     # Cave loose MOB: 5:3128-32e0 marks the next column at the bottom
     # and, if different, at the top of its 43-unit bounding rectangle.
     column = x // 51 + 1
-    bottom, top = character_row(y), character_row(y - 43)
+    bottom, top = character_row(y), character_row(y - height)
     rows = (bottom,) if top == bottom else (bottom, top)
     return tuple((column, row) for row in rows if 0 <= column < 10 and -1 <= row < 3)
 
@@ -102,11 +102,12 @@ class CavernRoom(OpeningRoom):
             return frame
         return self.draw_floor_records(frame, records, clip)
 
-    def draw_falling_foreground(self, frame, x, y):
-        records = [record for cell in falling_floor_redraw_cells(x, y)
+    def draw_falling_foreground(self, frame, x, y, size=(87, 43)):
+        width, height = size
+        records = [record for cell in falling_floor_redraw_cells(x, y, height)
                    for record in (self.floor_redraw or {}).get(cell, ())]
         # ComputeMobRect 5:32f6 uses width 87, bottom Y+1.
-        return self.draw_floor_records(frame, records, (x, y - 43, x + 87, y + 1))
+        return self.draw_floor_records(frame, records, (x, y - height, x + width, y + 1))
 
     def draw_floor_records(self, frame, records, clip):
         for sprite, position in records:
@@ -621,9 +622,9 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3):
             sprite = cavern_command_sprite(['back', index, block.x, bottom, 16],
                                             resources, palette, shapes)
             frame.paste(sprite, (block.x, bottom - sprite.height), sprite)
-        redraw.append((block.x, y))
-    for x, y in redraw:
-        art.draw_falling_foreground(frame, x, y)
+        redraw.append((block.x, y, block.size))
+    for x, y, size in redraw:
+        art.draw_falling_foreground(frame, x, y, size)
     return frame
 
 
@@ -1023,7 +1024,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             sprite = retouched_door_sprite(level_number, room_id, command, sprite)
         return retouched_sprite(room_id, command, sprite) if retouched and level_number == 3 else sprite
 
-    if (program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
+    if (program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17)
             and program.get('level') == level_number):
         commands = program['rooms'][str(room_id)]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, level_number, room_id):

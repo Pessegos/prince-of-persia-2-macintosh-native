@@ -45,7 +45,7 @@ class InstallationTests(unittest.TestCase):
                 'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}}}))
         for number in (6, 7):
             (assets / f'ruins_level{number}.json').write_text(json.dumps({
-                'version': 15, 'level': number, 'rooms': {str(room): [] for room in range(32)},
+                'version': 17, 'level': number, 'rooms': {str(room): [] for room in range(32)},
                 'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}},
                 'scythes': {'schema': 1, 'scythes': [], 'rooms': {}},
                 'alternate_entry': {'room': 3, 'cell': 25, 'frames': [{'commands': []}]}}))
@@ -98,14 +98,15 @@ class InstallationTests(unittest.TestCase):
 
     def test_per_slot_exports_are_accepted_and_unknown_versions_are_not(self):
         # Version 16: loose floors, scythes and bridge planks as drawer slots.
-        for version, accepted in ((16, True), (17, False)):
+        for version, accepted in ((16, True), (17, True), (18, False)):
             for name, label in (('caverns_level5.json', 'five'), ('ruins_level6.json', 'six')):
                 path = self.project / 'assets' / name
                 program = json.loads(path.read_text())
                 program['version'] = version
                 path.write_text(json.dumps(program))
                 problem = f'{name} (needs full level-{label} scenery)'
-                self.assertEqual(problem not in run_game.missing_assets(self.project), accepted,
+                expected = accepted and (version >= 17 or name.startswith('caverns'))
+                self.assertEqual(problem not in run_game.missing_assets(self.project), expected,
                                  (version, name))
 
     def test_corrupt_carpet_scene_requests_reimport(self):

@@ -124,8 +124,10 @@ def missing_assets(project=PROJECT):
         try:
             cavern = json.loads(cavern_path.read_text(encoding='ascii'))
             # Version 16 stores loose floors, scythes and bridge planks as
-            # per-slot drawing (loose-floor schema 2); 15 is still valid.
-            if (cavern.get('version') not in (15, 16) or cavern.get('level') != number
+            # per-slot drawing (schema 2); 17 adds immediate type15 floors.
+            # Caverns accept earlier compatible exports; ruins need type15.
+            if (cavern.get('version') not in ((17,) if number >= 6 else (15, 16, 17))
+                    or cavern.get('level') != number
                     or set(cavern['rooms']) != {str(room) for room in range(32)}):
                 raise ValueError('Full cavern scenery needs reimport')
             plates = cavern['pressure_plates']

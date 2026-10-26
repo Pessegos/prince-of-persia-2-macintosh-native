@@ -109,3 +109,39 @@ Cut probe to actual level5 room9:46 original rebases now pass in both
 caverns and ruins.56 focused ruins/bridge/void tests pass12.883s. The earlier
 2951-test full run had this one fixture failure and10 explicit skips; a new
 full run is required after the remaining shared changes.
+
+## Block 7: ruins collapsing shelves and mega-potion shaft
+
+Native Falling6:0236-0260 halves vertical speed and sets Y from DATA
+row-bottom125+120*row minus13, not SetCharFloor106+120*row minus13.
+The port's position was19px too high, adding a fatal extra falling frame.
+The original arithmetic agrees for189 supplied row/velocity cases. A real
+cautious Down/release from level6 room5 X340 now breaks the preserved room6
+cell25 slab and lands in room18 row1 alive with one HP lost. Running blindly
+into the shaft can still be fatal; damage thresholds were not relaxed.
+
+Room32 level7 cell22 is type15, omitted from the previous type11-only host.
+CheckPress5:1330/13d2, ShakeEm5:28c2, Falling6:0204 and MakeRubble5:2bc4
+invoke7:36a0: immediate MakeSpace plus a type3 MOB, no warning controller or
+cue28. The native room32 shelf call matches cell removal and all eight MOB
+words; only object drawing/redraw services are supplied. Added this family
+to pressure, ceiling pose79, shake, Prince/debris contact and dynamic export.
+Normal type11 ceiling contact already works, including the room25 potion
+regression; special15 was the missing ceiling family found in this audit.
+
+AnimLoose5:446a also distinguishes environment4 MOB3's initial bottom
+125+120*row from the cavern MOB0 bottom143+120*row. ComputeMobRect5:32f6
+uses91x31 versus87x43. Preserve that type through split debris and snapshots;
+older snapshots default to the original MOB0 field. Per-slot scenery export
+version17 includes type15 removal and downstream impact surfaces; ruins
+exports6-9 were regenerated locally. Original resources remain read-only.
+The installation check requests updated ruins exports, while earlier compatible
+cavern exports remain accepted. Native draw/raster parity and full MOB/frame
+scheduling are outside the small native shelf/position probe.
+
+Validation:169 focused loose-floor, actual level6/7 scenes, ceiling, slot,
+shaft and save tests pass28.958s;77 pure installation/floor/helper tests pass.
+The old room17 crevice test now asserts every crevice digit and every other
+unchanged digit rather than assuming the export has only three dynamic cells.
+The serpent controller independently matches20000 cases in addition to the
+5000 alert slice checks. Full shared-desktop discovery follows this block.

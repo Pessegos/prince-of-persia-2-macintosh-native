@@ -55,6 +55,56 @@ class LooseFloorTests(unittest.TestCase):
         self.assertFalse(self.terrain.supports(0, 7, 0))
         self.assertEqual(self.loose.falling, [FallingFloor(0, 7, 0, 143)])
 
+    def test_ruins_detachment_uses_mob_three_without_the_cave_body_offset(self):
+        struct.pack_into('>H', self.terrain.level, 0x2186, 4)
+        self.loose.trigger(self.terrain.tile(0, 7, 0), force=40)
+        self.tick()
+        self.assertEqual(self.loose.falling, [FallingFloor(0, 7, 0, 125, 40, 3)])
+        self.assertEqual(self.loose.falling[0].size, (91, 31))
+
+    def test_special_floor_falls_immediately_without_a_warning_sound(self):
+        self.set_tile(0, 7, 15, 0x1100)
+        self.assertEqual(self.loose.press(self.terrain, self.motion, self.state, self.record), ())
+        self.assertEqual(self.terrain.tile(0, 7, 0).kind, 0)
+        self.assertFalse(self.loose.active)
+        self.assertEqual(self.loose.falling, [FallingFloor(0, 7, 0, 125, 0, 3)])
+
+    def test_ceiling_contact_also_breaks_the_special_floor_above(self):
+        self.set_tile(0, 7, 15)
+        self.motion.row = 1
+        self.state.action = 79
+        self.state.current_y = -80
+        self.assertEqual(self.loose.press(self.terrain, self.motion, self.state, self.record), ())
+        self.assertEqual(self.terrain.tile(0, 7, 0).kind, 0)
+
+    def test_row_shake_breaks_special_floors_without_the_three_warning_shakes(self):
+        self.set_tile(0, 7, 15)
+        self.assertEqual(self.loose.shake_row(self.terrain, 0, 0), ())
+        self.assertEqual(self.terrain.tile(0, 7, 0).kind, 0)
+        self.assertEqual(len(self.loose.falling), 1)
+
+    def test_debris_breaks_special_floor_without_halving_its_own_velocity(self):
+        self.set_tile(0, 7, 15)
+        self.loose.falling = [FallingFloor(0, 7, 0, 119, 16, 3)]
+        self.loose.advance_falling(self.terrain)
+        self.assertEqual(self.terrain.tile(0, 7, 0).kind, 0)
+        self.assertEqual([(b.row, b.y, b.velocity) for b in self.loose.falling],
+                         [(1, 143, 24), (0, 125, 0)])
+
+    def test_special_floor_export_includes_its_removed_state_and_impact_surface(self):
+        self.set_tile(0, 7, 15, 0x1100)
+        cells = loose_floor_cells(self.terrain)
+        self.assertEqual(cells[0, 7], ((15, 0x1100), (0, 0x103)))
+        self.assertIn((3, 7), cells)
+
+    def test_falling_mob_type_roundtrips_and_older_snapshots_default_to_cave(self):
+        from pop2.save_game import _pack, _unpack
+
+        packed = _pack(FallingFloor(0, 7, 0, 125, 40, 3))
+        self.assertEqual(_unpack(packed, None, None).mob_type, 3)
+        del packed['fields']['mob_type']
+        self.assertEqual(_unpack(packed, None, None).mob_type, 0)
+
     def test_row_shake_reports_bone_notification_without_a_loose_tile(self):
         self.assertEqual(self.loose.shake_row(self.terrain, 0, 2), ())
         self.assertEqual(self.loose.shake_events, [(0, 2)])

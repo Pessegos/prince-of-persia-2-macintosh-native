@@ -1,6 +1,7 @@
 """Loose-floor controllers recovered from Macintosh CODE:5."""
 
 from dataclasses import dataclass, field
+import struct
 
 from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.terrain import floor_contact_x, floor_y
@@ -17,7 +18,7 @@ def pressure_tile(terrain, motion, state, record):
         return None
     tile = terrain.tile(motion.room, column, motion.row - 1)
     if not above:
-        if state.action == 79 and tile.kind == 11:
+        if state.action == 79 and tile.kind in (11, 15):
             return tile
         if not record.aux & 0x40:
             return None
@@ -62,10 +63,16 @@ class FallingFloor:
     row: int
     y: int
     velocity: int = 0
+    mob_type: int = 0
 
     @property
     def x(self):
         return self.column * 51
+
+    @property
+    def size(self):
+        # ComputeMobRect 5:32f6, DATA a5-0x4518/-0x44fc.
+        return (91, 31) if self.mob_type == 3 else (87, 43)
 
 
 @dataclass
@@ -95,7 +102,24 @@ class LooseFloors:
 
     def press(self, terrain, motion, state, record):
         tile = pressure_tile(terrain, motion, state, record)
+        if tile is not None and tile.kind == 15:
+            return self.break_shelf(terrain, tile, motion.room)
         return self.trigger(tile) if tile is not None else ()
+
+    def break_shelf(self, terrain, tile, visible_room=None):
+        # 7:36a0: type15 becomes space immediately, spawning a ruins MOB3
+        # without the type11 warning/phase controller or cue28.
+        if tile.room is None or tile.kind != 15:
+            return ()
+        key = tile.room, tile.row * 10 + tile.column
+        self.tiles[key] = 0, space_foreground(tile.foreground)
+        y = (tile.row + 1) * 120 + 5
+        if (visible_room is not None and tile.row == 2
+                and tile.room == terrain.neighbor(visible_room, 'down')):
+            y += 5
+        if len(self.falling) < 30:
+            self.falling.append(FallingFloor(tile.room, tile.column, tile.row, y, mob_type=3))
+        return ()
 
     def shake_row(self, terrain, room, row, state=None, motion=None, record=None):
         # ShakeEm 5:2876 and 27b4: a short warning, or a full collapse on
@@ -106,6 +130,9 @@ class LooseFloors:
                   if state is not None and record is not None else None)
         for col in range(10):
             tile = terrain.tile(room, col, row)
+            if tile.kind == 15:
+                self.break_shelf(terrain, tile, motion.room if motion is not None else None)
+                continue
             if tile.room is None or tile.kind != 11 or tile.foreground & 15:
                 continue
             key = tile.room, tile.row * 10 + tile.column
@@ -144,8 +171,10 @@ class LooseFloors:
                     self.tiles[below] = target.kind, target.foreground & 0xf0ff
                 self.cleared.add(key)
                 if len(self.falling) < 30:
+                    ruins = struct.unpack_from('>H', terrain.level, 0x2186)[0] == 4
                     self.falling.append(FallingFloor(room, cell % 10, cell // 10,
-                                        (cell // 10 + 1) * 120 + 23, velocity))
+                                        (cell // 10 + 1) * 120 + (5 if ruins else 23),
+                                        velocity, 3 if ruins else 0))
                 del self.active[key]
 
     def advance_falling(self, terrain, state=None, motion=None, record=None):
@@ -157,7 +186,7 @@ class LooseFloors:
             block.y += block.velocity
             finished = False
             if block.room is None:
-                finished = block.y >= 365 + 43
+                finished = block.y >= 365 + block.size[1]
             elif block.y >= block.row * 120 + 120:
                 tile = terrain.tile(block.room, block.column, block.row)
                 if tile.kind == 11:
@@ -167,7 +196,13 @@ class LooseFloors:
                         0, space_foreground(tile.foreground))
                     block.velocity //= 2
                     added.append(FallingFloor(tile.room, tile.column, tile.row + 1,
-                                 block.y + 6, block.velocity))
+                                 block.y + 6, block.velocity, block.mob_type))
+                    block.row += 1
+                elif tile.kind == 15:
+                    count = len(self.falling)
+                    self.break_shelf(terrain, tile, motion.room if motion is not None else None)
+                    # The new shelf has not moved in this MakeRubble pass.
+                    added.extend(self.falling[count:])
                     block.row += 1
                 elif tile.kind in EMPTY_TILES:
                     block.row += 1

@@ -568,7 +568,7 @@ def _prepare_caverns(program, caverns, prince, progress, recover, *, level_numbe
     for room in range(32):
         progress(f'Cavern scenery: room {room + 1}/32')
         scenes[str(room)] = recover(program, caverns, level, room, prince)
-    result = {'version': 16, 'level': level_number,
+    result = {'version': 17, 'level': level_number,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     result['climb_redraw'], result['floor_redraw'] = {}, {}
@@ -687,11 +687,14 @@ def loose_floor_cells(terrain):
     for room in range(32):
         for cell in range(30):
             tile = terrain.tile(room, cell % 10, cell // 10)
-            if tile.kind != 11:
+            if tile.kind not in (11, 15):
                 continue
-            cells[room, cell] = ((11, tile.foreground),
-                                 (11, (tile.foreground & 0xfff0) | 1),
-                                 (0, space_foreground(tile.foreground)))
+            removed = 0, space_foreground(tile.foreground)
+            if tile.kind == 15:
+                cells[room, cell] = ((15, tile.foreground), removed)
+            else:
+                cells[room, cell] = ((11, tile.foreground),
+                                     (11, (tile.foreground & 0xfff0) | 1), removed)
             visited = set()
             for below_row in range(tile.row + 1, tile.row + 97):
                 below = terrain.tile(room, tile.column, below_row)
@@ -699,8 +702,9 @@ def loose_floor_cells(terrain):
                 if below.room is None or key in visited:
                     break
                 visited.add(key)
-                if below.kind == 11:
-                    struck.add(key)
+                if below.kind in (11, 15):
+                    if below.kind == 11:
+                        struck.add(key)
                     continue
                 if below.kind in EMPTY_TILES:
                     continue
