@@ -88,3 +88,15 @@ special actor/room exceptions, removing pillars or redrawing replacement art.
 Validation:104 scenery/custom-foreground/level6/slot/gate tests pass15.769s.
 The new regression rejects foreground ghost mask pixels within the revealed
 passage. Entry trace now retains over99% of pose251/X9 instead of39%.
+
+## Block 6: serpent alert boundaries
+
+CODE2:6f76-6f98 adjusts a hanging Prince's supporting column by the native
+facing table (left +1, right -1). CODE2:70c4 stops the LOS scan at its first
+non-clear result; continuing could overwrite a cautious gap alert with a later
+wall. PrinceView now carries the cached animation mode and both rules apply.
+The bounded original alert slice agrees on5000 deterministic cases across
+levels6-9, respecting the original LEVL room-count header. Working actor and
+A6 locals are supplied; no LOS/classification/tile helper is stubbed. Full
+FrameAdv, actor loading and pose admission remain outside this comparison.
+Two regressions cover the gap-before-wall and both hanging facings.

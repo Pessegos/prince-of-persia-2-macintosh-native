@@ -113,6 +113,7 @@ class PrinceView:
     life: int
     armed: bool
     selected: int
+    mode: int = 1
 
 
 @dataclass
@@ -276,7 +277,8 @@ class RuinsCreatures:
         return PrinceView(encounter._supporting_column(player), player.row,
                           self.native_x(player), self.native_y(player), self.facing(player),
                           player.state.action, player.room, alive, player.life,
-                          player.sword_drawn, player.state.source_sequence_id)
+                          player.sword_drawn, player.state.source_sequence_id,
+                          player.state.animation_state)
 
     @staticmethod
     def tile(encounter, room, column, row):
@@ -725,7 +727,12 @@ class RuinsCreatures:
         if (prince.alive >= 0 or prince.pose == 0 or 217 <= prince.pose < 226
                 or actor.row != prince.row or state.sequence_mode == 6):
             return 0
-        low, high = sorted((self.column(actor, encounter), prince.column))
+        # 2:6f76-6f98: hanging uses the cell behind the cached supporting
+        # column (DATA a5-0x4b96: left +1, right -1).
+        column = prince.column
+        if prince.mode == 6:
+            column += -1 if prince.facing == 0 else 1
+        low, high = sorted((self.column(actor, encounter), column))
         if low < high and self.tile(encounter, actor.room, high, actor.row).kind == 4:
             high -= 1
         alert = 3
@@ -739,7 +746,9 @@ class RuinsCreatures:
                 continue
             if (tile.kind in EMPTY_TILES or tile.kind in (11, 15, 26, 24)
                     or tile.kind == 4 and tile.foreground & 255 < 104):
-                alert = 1
+                # 2:70c4 stops on the first non-clear cell. A later wall
+                # must not overwrite this cautious (1) alert with zero.
+                return 1
         return alert
 
     def faces_prince(self, actor, encounter, prince):

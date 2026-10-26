@@ -4,6 +4,30 @@ from pop2.paths import ASSET_DIR
 
 
 class RuinsHelperTests(unittest.TestCase):
+    def serpent_alert(self, tiles, column, mode=1, facing=0):
+        from types import SimpleNamespace
+        from pop2.ruins_ai import PrinceView, RuinsCreatures
+        from pop2.terrain import Tile
+
+        creatures = RuinsCreatures()
+        creatures.column = lambda actor, encounter: 0
+        encounter = SimpleNamespace(terrain=SimpleNamespace(
+            tile=lambda room, col, row: Tile(tiles.get(col, 1))))
+        actor = SimpleNamespace(state=SimpleNamespace(sequence_mode=0), row=1, room=0)
+        prince = PrinceView(column, 1, 400, 226, facing, 15, 0, -1, 3, False, 2, mode)
+        return creatures.serpent_alert(actor, encounter, prince)
+
+    def test_serpent_alert_stops_at_a_gap_before_a_later_wall(self):
+        # 2:70c4 continues only while alert==3, not past a cautious result.
+        self.assertEqual(self.serpent_alert({1: 0, 2: 20}, 3), 1)
+        self.assertEqual(self.serpent_alert({1: 20, 2: 0}, 3), 0)
+
+    def test_serpent_alert_uses_the_cell_behind_a_hanging_prince(self):
+        # 2:6f76-6f98 and DATA a5-0x4b96: left +1 / right -1.
+        self.assertEqual(self.serpent_alert({2: 20}, 2), 0)
+        self.assertEqual(self.serpent_alert({2: 20}, 2, mode=6), 3)
+        self.assertEqual(self.serpent_alert({2: 20}, 1, mode=6, facing=-1), 0)
+
     def test_native_cell_windows_and_rows(self):
         from pop2.ruins_ai import character_row, signed_remainder, x_within_middle, y_within_middle
 
