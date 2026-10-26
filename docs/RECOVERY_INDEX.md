@@ -48,6 +48,8 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Silent animation callback zero sets only the Prince's movement signal | 4:30e0-30f6/314e-315a; SEQS:11/227 | T: 72 original callback calls + 288 independent AnimChar resource cases; complete noise/scheduler lifecycle P | sequence_runtime / test_sequence_noise |
 | Selected SEQS survives -1 links; -8 assigns velocity with 10000 sentinel | 6:0006; 4:2ec2, 2ff4-3018 | T: hurt/turn allowance and repeat sword-retreat catch; -9 is a separate additive opcode | sequence_runtime/terrain / test_animation_data, test_terrain |
 | Supporting-foot tile, signed column/row | 4:3a72, 3ad6, 3afa | T: ordinary actors | terrain / test_terrain |
+| Ruins crevice fronts and floor decorations retain overlapping cavern torch IDs | 7:2344-24ae, 282e-295c | T: environment-scoped live filter; 102 item-free room drawings and revealed tunnel regressions; whole import/renderer P | caverns / test_ruins_scenery_items; research/ruins-scenery-pickup.md |
+| Sword pickup admission and held-Shift resampling | 6:1350-13c0, 0c50-0c66; 4:3a72/3ad6 | T: 2200 native admission comparisons and3520 held/clear gate calls; complete GenCtrl and pickup effects P | potions, scene_prototype / probe_item_pickup, test_level6; research/ruins-scenery-pickup.md |
 | Floor checks require FRAM 0x40 | 4:35ba | T: ordinary rooftop subset | terrain / test_terrain |
 | Fresh forward press, solid barrier type 1, distance <27 | 6:11a0-11d6 | T: short step without Shift; strict threshold | scene_prototype / test_game_ui |
 | Shift step reserves four pixels; caution then deliberate step | 4:5eae; 6:1276-1324 | T: floor/gap/ordinary wall; special barrier states P | terrain/mac_input / test_cautious_step, test_terrain |

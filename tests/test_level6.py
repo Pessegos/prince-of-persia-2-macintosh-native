@@ -172,8 +172,9 @@ class LevelSixSceneryTests(unittest.TestCase):
 
     def test_a_crevice_uncovered_on_screen_is_redrawn_over_the_displayed_wall(self):
         # 7:344a marks the uncovered cells; RedrawCell (3:1d3a) repaints them
-        # in per-cell mode over the screen, so the wall above the tunnel stays
-        # until the room is entered again (then the whole room is redrawn).
+        # in per-cell mode over the screen. Ruins SHAP 3582 is its ceiling,
+        # not a cavern torch frame: 7:2344 draws the newly uncovered front
+        # over the old wall, before a later whole-room redraw.
         from PIL import Image
 
         scene = self.scene
@@ -193,7 +194,7 @@ class LevelSixSceneryTests(unittest.TestCase):
         scene.set_key_state('down', False)
         caverns = scene.game.caverns
         self.assertEqual(caverns.loose.redrawn, {(16, 18), (16, 19), (17, 10)})
-        self.assertTrue(scenery(above) == wall)
+        self.assertFalse(scenery(above) == wall)  # The native tunnel ceiling.
         self.assertFalse(scenery(inside) == covered)  # The tunnel is drawn.
         scene.jump_to_room(16, 1, 300, 0)
         self.tick()
@@ -374,6 +375,22 @@ class LevelSixSwordTests(unittest.TestCase):
                 break
         self.assertIsNotNone(picked)
         self.assertFalse(scene.combat.player.sword_lost)
+        self.assertEqual(scene.game.sword_type, 2)
+        self.assertEqual(scene.level_map.tile(16, 5, 1).kind, 1)
+
+    def test_failed_sword_attempt_does_not_consume_held_shift(self):
+        # TryPickUp 6:1350 checks the foot's cell and the cell ahead.
+        # StandingCtrl 6:0c50 checks held Shift on each eligible pose.
+        scene = self.scene
+        scene.jump_to_room(16, 1, 228, 1)
+        scene.start_sequence(13)
+        scene.sequence_state.action = scene.action = 50
+        scene.set_key_state('shift', True)
+        self.assertFalse(scene.update_potion_controls())  # One pixel outside reach.
+        scene.player_x = scene.sequence_state.target_x = 229
+        self.assertTrue(scene.update_potion_controls())
+        self.assertEqual(scene.sequence_state.sequence_id, 50)
+        self.tick(12)
         self.assertEqual(scene.game.sword_type, 2)
         self.assertEqual(scene.level_map.tile(16, 5, 1).kind, 1)
 

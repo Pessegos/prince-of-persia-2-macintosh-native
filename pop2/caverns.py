@@ -1081,7 +1081,10 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         library = command[7] if len(command) >= 8 else 4
         if animated and library in (0, 1):
             continue
-        if animated and program.get('version') >= 4 and library == 4 and 3581 <= index <= 3589:
+        # These IDs animate torches only in Caverns.rsrc. Ruins.rsrc uses
+        # the same numbers for tunnel fronts and floor decorations/cracks.
+        if (animated and level_number in SCENERY_LEVELS[3] and program.get('version') >= 4
+                and library == 4 and 3581 <= index <= 3589):
             continue
         clipped = clipped_sprite(scenery_sprite(command), command)
         if clipped is None:

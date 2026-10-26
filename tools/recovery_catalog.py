@@ -65,7 +65,7 @@ REVIEWS = {
     (3, "GetFlaskBubbleColor"): ("partial", "pop2/caverns.py", "level-three normal/mega body and two mirrored monochrome particle layers; all 196 native phase/room layers pixel matched; other environments incomplete"),
     (3, "LoadFlaskSet"): ("partial", "pop2/caverns.py", "original Prince SHPL 3000 and CTBL relocation to indices 224-238; verified native RemapCTBL; full handle pipeline omitted"),
     (5, "TriggerFlask"): ("partial", "pop2/potions.py;pop2/game_session.py", "initial phase Rnd(26)+1, original 28-update visible flask cycle; native Trob bank replaced"),
-    (6, "TryPickUp"): ("partial", "pop2/potions.py;pop2/scene_prototype.py", "current/forward normal and mega flask selection; 644 native admission/alignment/sequence/removal cases; sword and special flask branches omitted"),
+    (6, "TryPickUp"): ("partial", "pop2/potions.py;pop2/scene_prototype.py", "current/forward flask and sword admission; 644 flask cases plus2200 sword reach comparisons and3520 held-Shift gate calls; complete GenCtrl and special pickup effects not certified"),
     (6, "PickItUp"): ("partial", "pop2/potions.py;pop2/scene_prototype.py", "ordinary standing/crouched alignment, SEQS 50/78, native late effect event and healing/capacity cap; other object types omitted"),
     (4, "RemoveObj"): ("partial", "pop2/potions.py;pop2/terrain.py", "level-three potion removal to floor 1 retaining foreground 0x0f00 decoration; other environments/story objects omitted"),
     (16, "PlaySound"): ("reference-only", "pop2/audio.py", "native Mac driver playback replaced by SDL; full handle pipeline not translated"),

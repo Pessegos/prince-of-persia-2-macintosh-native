@@ -2255,7 +2255,6 @@ class ScenePrototype(WindowControls):
         from pop2.potions import SWORD_TILE, pickup_target
 
         potions, state, motion = caverns.potions, self.sequence_state, self.terrain_motion
-        fresh_shift = self.shift_held and not potions.shift_was_held
         if not self.shift_held:
             potions.shift_was_held = False
         if (motion is None or motion.falling or motion.dead or self.sword_drawn
@@ -2276,7 +2275,10 @@ class ScenePrototype(WindowControls):
                 or not (self._is_resting() or state.sequence_id in RUN_CYCLE_SEQUENCES
                         or state.sequence_id == RUN_STOP_SEQUENCE)):
             self.pending_potion_pickup = queued = None
-        requested = fresh_shift or queued is not None
+        # StandingCtrl 6:0c50/0c58 tests held Shift every eligible frame.
+        # A failed try must not consume a still-held key: later eligible
+        # poses retry. Released taps retain their single queued attempt.
+        requested = self.shift_held or queued is not None
         # PickItUp 6:1466-1482 permits the ordinary landing crouch, but
         # explicitly excludes SEQS:20's protected hard-fall recovery.
         crouched = (state.action == 109 and state.source_sequence_id != 20

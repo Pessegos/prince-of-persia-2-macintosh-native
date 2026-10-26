@@ -70,6 +70,20 @@ class PotionTests(unittest.TestCase):
             self.assertEqual(self.potions.phases[0, 13], 0xa120 | phase)
             self.assertEqual(self.potions.phases[1, 13], 0x142)
 
+    def test_sword_admission_preserves_native_standing_cell_boundaries(self):
+        # Native TryPickUp 6:1350, GetFCharX 4:3a72, GetCharCol 4:3ad6.
+        # The same cell / one ahead rule applies to swords and flasks.
+        struct.pack_into('>H', self.data, 13 * 2, 22)
+        terrain = LevelMap(bytes(self.data))
+        motion = SimpleNamespace(room=0, row=1)
+        record = FrameRecord(15, 14, 0, 4, 0, 70)
+        for facing, first, last in ((0, 174, 275), (1, 127, 228)):
+            for x, admitted in ((first - 1, False), (first, True), (last, True), (last + 1, False)):
+                with self.subTest(facing=facing, x=x):
+                    state = SequenceState(2, action=15, target_x=x, facing=facing)
+                    self.assertEqual(pickup_target(terrain, motion, state, record) is not None,
+                                     admitted)
+
     def test_removal_leaves_a_floor_and_preserves_only_native_rock_decoration(self):
         tile = self.terrain.tile(0, 3, 1)
         self.potions.take(tile)

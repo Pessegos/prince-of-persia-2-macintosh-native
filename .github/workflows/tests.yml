@@ -23,7 +23,7 @@ jobs:
       - name: Ruins exit admission, head half-life HUD and waiting selection
         run: python -m unittest -q tests.test_ruins_fixes tests.test_opponent_selection
       - name: Coordinate conversions, frame phases and slot drawing
-        run: python -m unittest -q tests.test_coordinates tests.test_frame_phases tests.test_slot_drawing tests.test_jump_descent
+        run: python -m unittest -q tests.test_coordinates tests.test_frame_phases tests.test_slot_drawing tests.test_jump_descent tests.test_ruins_scenery_items.SharedSceneryNumberTests
       - name: Bundled application icon and native window identity
         run: python -m unittest -q tests.test_app_window
       - name: Native terminal animation pose and reload semantics
