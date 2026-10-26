@@ -337,7 +337,12 @@ free-fall motion; a jumping victim no longer leaves a suspended corpse.
 predicates with real ReadCell, hit-type selection, blade-rectangle instructions
 and DATA. Local report: `rendered/ruins-new/native-scythe-contact.json`;
 8,580 contacts,864 trigger admissions and6 independent SetCharFloor calls,
-zero mismatches. It also checks original cut-sequence prefixes. QuickDraw
+zero mismatches. The corrected fixture is LEVL2005 (header level6), with
+room19 cells25/26 explicitly asserted as12/13:3,471 contacts and334 trigger
+admissions are positive. The initial LEVL2006 report accidentally used level7
+walls and exercised no positive contacts; that report is invalid. The probe
+now rejects a wrong level, absent scythe or all-negative/all-positive results.
+It also checks original cut-sequence prefixes. QuickDraw
 UnionRect/SectRect/OffsetRect and their stack cleanup are supplied; actor
 snapshots, inclusive body rectangles and supporting columns are fixtures.
 The type2 fixtures reuse Kid frame offsets to vary the supplied column, not

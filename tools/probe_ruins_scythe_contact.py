@@ -88,13 +88,16 @@ def run_probe(source):
     kid = parse_resource_fork(kid_bytes)
     frames = kid['FRAM'][25001]['data']
     records = parse_frame_records(frames)
-    level = prince['LEVL'][2006]['data']
+    level = prince['LEVL'][2005]['data']
+    if (struct.unpack_from('>H', level, 0x218a)[0] != 6
+            or struct.unpack_from('>2H', level, 18 * 60 + 25 * 2) != (12, 13)):
+        raise ValueError('Expected native level six, room19 scythe cells25/26')
     machine = NativeScythe(parse_resource_fork(executable))
     terrain = LevelMap(level)
     trap = Scythes()
     terrain.caverns = CavernState(scythes=trap)
     motion = SimpleNamespace(room=18, row=2)
-    counts, digest = Counter(), hashlib.sha256()
+    counts, positives, digest = Counter(), Counter(), hashlib.sha256()
     # The independent column reference uses original FRAM bytes; the host
     # implementation uses its parsed record and floor_contact_x helper.
     for pose, facing, x, kind, phase in product(range(34, 45), (0, 1),
@@ -114,6 +117,7 @@ def run_probe(source):
         if actual != expected:
             raise AssertionError(('contact', pose, facing, x, kind, phase, column, actual, expected))
         counts['contacts'] += 1
+        positives['contacts'] += int(actual)
         digest.update(struct.pack('>6h?', pose, facing, x, kind, phase, column, actual))
     # Fresh, resting trap: bound the trigger predicate through its call into
     # TriggerScythe; capacity/admission and phase advancement are excluded.
@@ -130,6 +134,7 @@ def run_probe(source):
         if actual != expected:
             raise AssertionError(('trigger', pose, facing, x, y, column, actual, expected))
         counts['triggers'] += 1
+        positives['triggers'] += int(actual)
     for row, kind in product(range(3), (0, 2)):
         machine.reset(level)
         machine.put_word(-0x5048, row)
@@ -144,13 +149,15 @@ def run_probe(source):
         words = struct.unpack('>4h', prince['SEQS'][sequence]['data'][:8])
         if words != (-7, 5, -19, pose):
             raise AssertionError(('Unexpected cut sequence prefix', sequence, words))
-    return dict(comparisons=dict(counts), mismatches=0,
+    if not all(0 < positives[key] < counts[key] for key in ('contacts', 'triggers')):
+        raise AssertionError('Contact/trigger fixtures must exercise both positive and negative outcomes')
+    return dict(comparisons=dict(counts), positive_results=dict(positives), mismatches=0,
                 executable_sha256=hashlib.sha256(executable).hexdigest(),
                 kid_sha256=hashlib.sha256(kid_bytes).hexdigest(),
                 contact_outputs_sha256=digest.hexdigest(),
                 supplied=['QuickDraw UnionRect, SectRect and OffsetRect with original stack cleanup',
                           'Living actor snapshots, inclusive body rectangles and cached supporting column',
-                          'Original LEVL2006 with both scythe foregrounds varied; Kid FRAM25001'],
+                          'Original LEVL2005 (native level6) with both scythe foregrounds varied; Kid FRAM25001'],
                 scope='CODE5:57bc trigger through5:584e and5:588a contact through5:5942, '
                       'real ReadCell/GetScytheHitType/ComputeBladeHitRect and DATA rectangles. '
                       'No death/audio/blood-write endpoints execute in contact queries. '
