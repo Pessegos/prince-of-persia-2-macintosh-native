@@ -89,8 +89,9 @@ recovered independently and [composed with the real contact caller](temple-full-
 Collision-bank construction and repeated physical support remain separate
 steps; no new temple runtime is enabled by these research modules.
 The first bank boundary is now recovered as
-[collision history selection](temple-collision-history.md); the actual row
-sweep and sliding-rock overlays remain separate steps.
+[collision history selection](temple-collision-history.md), followed by the
+[actual row sweep](temple-collision-sweep.md). Caller-generated intervals,
+three-row composition and sliding-rock overlays remain separate steps.
 
 The inventory retains candidate tile IDs without assuming all behavior:
 
