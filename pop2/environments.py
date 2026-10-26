@@ -861,7 +861,12 @@ class Caverns(Environment):
                           motion.row, actor.state.action, record)
 
     def drawn_player(self, state):
-        return self.scene.game.caverns.crush.actor(state)
+        drawn, height = self.scene.game.caverns.crush.actor(state)
+        terminal = getattr(self.scene, 'jump_descent_frame', None)
+        if (height is None and terminal is not None
+                and state.source_sequence_id == 21 and state.action == 102):
+            return terminal, self.scene.player_sprite(terminal.action).height
+        return drawn, height
 
     def display_life(self, life):
         scene = self.scene

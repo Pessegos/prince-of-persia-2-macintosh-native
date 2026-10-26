@@ -2381,6 +2381,7 @@ class ScenePrototype(WindowControls):
         return True
 
     def advance_terrain(self, old_x, old_bounds=None):
+        self.jump_descent_frame = None
         motion = getattr(self, "terrain_motion", None)
         if motion is None or self._opening_active():
             return
@@ -2398,6 +2399,9 @@ class ScenePrototype(WindowControls):
         old_room = self.room_id
         before_x = self.sequence_state.target_x
         command = self.pending_action
+        from pop2.jump_descent import capture_jump_end, descent_drawing
+
+        jump_end = capture_jump_end(motion, self.sequence_state)
         events = self.physics.advance(
             motion, self.sequence_runtime, old_x, self.player_bounds(),
             sword_drawn=self.sword_drawn, protected=self.ledge_hanging or self.ledge_climbing,
@@ -2492,6 +2496,7 @@ class ScenePrototype(WindowControls):
         self.action = self.sequence_state.action
         self.player_x = self.sequence_state.target_x
         self.sequence_state.current_x = self.player_x
+        self.jump_descent_frame = descent_drawing(jump_end, motion, self.sequence_state)
 
     def advance_environment(self):
         environment_for(self).frame_hook()
@@ -3189,6 +3194,7 @@ class ScenePrototype(WindowControls):
         return "break"
 
     def reset_level_controls(self):
+        self.jump_descent_frame = None
         self.cancel_gate_presentation()
         self.pending_potion_pickup = None
         self.queue_grace_remaining_ms = 0
