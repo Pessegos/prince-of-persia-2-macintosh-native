@@ -14,10 +14,10 @@ from pop2.terrain import LevelMap
 
 
 class BundledCavernRetouchTests(unittest.TestCase):
-    def test_level_four_bundle_is_separate_and_only_targets_room_twelve(self):
+    def test_level_four_bundle_is_separate_and_only_targets_approved_rooms(self):
         assets = retouch_assets(4)
-        self.assertEqual(len(assets), 6)
-        self.assertEqual({key[0] for key in assets}, {11})
+        self.assertEqual(len(assets), 8)
+        self.assertEqual({key[0] for key in assets}, {11, 22})
         key, (record, image) = next(iter(assets.items()))
         self.assertEqual(image.size, (record['source_rect'][2] - record['source_rect'][0],
                                       record['source_rect'][3] - record['source_rect'][1]))
@@ -28,6 +28,21 @@ class BundledCavernRetouchTests(unittest.TestCase):
         with patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Wrong level')):
             for level in (3, 5, 6, 7, 8, 9):
                 self.assertIs(retouched_sprite(room, command, source, level_number=level), source)
+
+    def test_room_twenty_three_patch_rejects_wrong_level_room_or_source(self):
+        for key, (record, image) in retouch_assets(4).items():
+            if key[0] != 22:
+                continue
+            room, shape, x, bottom, mode = key
+            self.assertEqual(image.size, (record['source_rect'][2] - record['source_rect'][0],
+                                          record['source_rect'][3] - record['source_rect'][1]))
+            source = Image.new('RGBA', record['size'], 'magenta')
+            command = ['back', shape, x, bottom, mode, 2, [], 4]
+            self.assertIs(retouched_sprite(room, command, source, level_number=4), source)
+            with patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Wrong scope')):
+                for level in (3, 5, 6, 7, 8, 9):
+                    self.assertIs(retouched_sprite(room, command, source, level_number=level), source)
+                self.assertIs(retouched_sprite(21, command, source, level_number=4), source)
 
     def test_only_four_rooms_have_bundled_variants_with_valid_crop_sizes(self):
         assets = retouch_assets()
@@ -121,11 +136,43 @@ class CavernRetouchTests(unittest.TestCase):
 
     def test_level_four_other_rooms_keep_their_original_wall_art(self):
         with patch('pop2.caverns.retouched_door_sprite', side_effect=lambda level, room, command, source: source):
-            for room in set(range(32)) - {11}:
+            for room in set(range(32)) - {11, 22}:
                 with self.subTest(room=room):
                     original = cavern_room(room, level_number=4)
                     edited = cavern_room(room, level_number=4, retouched=True)
                     self.assertEqual(original.flattened().tobytes(), edited.flattened().tobytes())
+
+    def test_level_four_room_twenty_three_matches_approved_v9_with_original_masks(self):
+        native = cavern_room(22, level_number=4)
+        edited = cavern_room(22, level_number=4, retouched=True)
+        before, after = native.flattened().convert('RGB'), edited.flattened().convert('RGB')
+        self.assertEqual(hashlib.sha256(after.tobytes()).hexdigest(),
+                         'f4a72ba65bba70226a882dcb4cb9394e1e85b8dc688340ccd5aca5a2dfdbe68a')
+        changed = [(x, y) for y in range(365) for x in range(510)
+                   if before.getpixel((x, y)) != after.getpixel((x, y))]
+        self.assertEqual(len(changed), 2035)
+        self.assertTrue(all((102 <= x < 126 and 256 <= y < 362)
+                            or (99 <= x < 105 and 252 <= y < 342) for x, y in changed))
+        self.assert_masks_equal(native, edited)
+        level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 4)
+        game = LevelRenderer(level, preload_room=False)
+        reference = LevelRenderer(level, preload_room=False, retouch_caverns=False)
+        self.assertEqual(game.room(22).flattened().tobytes(),
+                         cavern_room(22, level_number=4, animated=True, retouched=True).flattened().tobytes())
+        self.assertEqual(reference.room(22).flattened().tobytes(),
+                         cavern_room(22, level_number=4, animated=True).flattened().tobytes())
+
+    def test_room_twenty_three_keeps_v1_stalactites_outside_the_marked_join(self):
+        program, resources, palette, shapes = cavern_assets(4)
+        command = next(c for c in program['rooms']['22'] if c[:5] == ['back', 3550, 102, 365, 16])
+        source = cavern_command_sprite(command, resources, palette, shapes)
+        alias = list(command)
+        alias[3] = 125  # V1 reused this exact approved level-three room-one crop.
+        v1 = retouched_sprite(0, alias, source)
+        edited = retouched_sprite(22, command, source, level_number=4)
+        self.assertEqual(edited.crop((4, 0, *source.size)).tobytes(),
+                         v1.crop((4, 0, *source.size)).tobytes())
+        self.assertEqual(edited.getchannel('A').tobytes(), source.getchannel('A').tobytes())
 
     def test_ceiling_stalactite_keeps_its_original_texels(self):
         program, resources, palette, shapes = cavern_assets()
