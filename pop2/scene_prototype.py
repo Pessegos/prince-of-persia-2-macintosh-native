@@ -964,6 +964,10 @@ class ScenePrototype(WindowControls):
             return self.queue_horizontal_action(direction, "run")
 
     def up_key(self, _event):
+        if getattr(self, 'controls_flipped', False):
+            # Physical Up is logical Down under GenCtrl's 4:3e1c swap.
+            # Its dedicated binding must use the same mapping as key release.
+            return self.set_key_state('up', True)
         if self.paused or self.dev_menu is not None:
             return "break"
         if self.up_held:
@@ -3446,9 +3450,11 @@ class ScenePrototype(WindowControls):
             self.schedule_gate_presentation()
 
     def player_sprite(self, action=None):
-        # DrawKid/DrawChar 3:089e/09ea: death method 5 is drawn by lava.
+        # Lava's SEQS 116 is drawn by its pool. Scythes also use death
+        # method 5, but their ordinary Kid frames 267-271 must remain visible.
         death = getattr(self, 'death', None)
-        if death is not None and death.counter >= 0 and death.method == 5:
+        if (death is not None and death.counter >= 0 and death.method == 5
+                and self.sequence_state.source_sequence_id == 116):
             return None
         shape_id = shape_id_for_action(self.frames, self.first_shape_id,
                                       self.action if action is None else action)

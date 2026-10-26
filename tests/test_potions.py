@@ -92,6 +92,18 @@ class PotionTests(unittest.TestCase):
         self.potions.advance([(0, 13)])
         self.assertEqual(self.terrain.tile(0, 3, 1), result)
 
+    def test_rubble_can_replace_the_floor_of_an_already_consumed_item(self):
+        self.potions.take(self.terrain.tile(0, 3, 1))
+        self.caverns.loose.tiles[0, 13] = 14, 0
+        result = self.terrain.tile(0, 3, 1)
+        self.assertEqual((result.kind, result.foreground), (14, 0))
+
+    def test_old_item_decoration_edit_does_not_resurrect_a_collected_flask(self):
+        self.caverns.loose.tiles[0, 13] = 10, 0x32
+        self.potions.take(self.terrain.tile(0, 3, 1))
+        result = self.terrain.tile(0, 3, 1)
+        self.assertEqual((result.kind, result.foreground), (1, 0))
+
     def test_healing_waits_for_the_late_effect_and_is_not_applied_twice(self):
         self.potions.take(self.terrain.tile(0, 3, 1))
         actor = SimpleNamespace(life=1, max_life=3, alive=True)

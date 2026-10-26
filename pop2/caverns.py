@@ -584,6 +584,11 @@ def cavern_scene_signature(program, room_id, state):
                 index = second
             else:
                 index = int(bool(shift))
+        elif choices[0][0] in (10, 22) and kind == 1:
+            # A taken pickup leaves its ordinary floor. A falling slab may
+            # then clear that floor's decoration into loose.tiles. The base
+            # item slot has the same floor drawing; items animate separately.
+            index = 0
         else:
             index = next(i for i, value in enumerate(choices) if value[0] == kind and
                          (choices[0][0] != choices[1][0]

@@ -142,8 +142,13 @@ class LevelMap:
         kind = struct.unpack_from(">H", self.level, room * 60 + index * 2)[0]
         fg, bg = struct.unpack_from(">2H", self.level, 0x780 + room * 120 + index * 4)
         if self.caverns is not None:
-            kind = self.caverns.loose.tiles.get((room, index), (kind, fg))[0]
             kind = self.caverns.potions.tiles.get((room, index), (kind, fg))[0]
+            changed = self.caverns.loose.tiles.get((room, index))
+            # A consumed item can subsequently be struck by a slab. An old
+            # item decoration edit must not resurrect the collected object.
+            if changed is not None and (changed[0] not in (10, 22)
+                                        or (room, index) not in self.caverns.potions.tiles):
+                kind = changed[0]
             fg = self.caverns.foreground(room, index, fg)
             kind, fg = self.caverns.bridge.tile(room, index, kind, fg)
         if kind == 4 and self.desert is not None:

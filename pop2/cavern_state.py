@@ -88,8 +88,12 @@ class CavernState:
 
     def foreground(self, room, cell, value):
         if (room, cell) in self.potions.tiles:
-            return self.potions.tiles[room, cell][1]
-        value = self.potions.phases.get((room, cell), value)
+            value = self.potions.tiles[room, cell][1]
+            changed = self.loose.tiles.get((room, cell))
+            if changed is None or changed[0] in (10, 22):
+                return value
+        else:
+            value = self.potions.phases.get((room, cell), value)
         value = self.plates.foreground.get((room, cell), value)
         value = self.spikes.foreground.get((room, cell), value)
         if (room, cell) in self.scythes.foreground:
