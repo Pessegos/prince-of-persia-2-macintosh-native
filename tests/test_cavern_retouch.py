@@ -16,8 +16,8 @@ from pop2.terrain import LevelMap
 class BundledCavernRetouchTests(unittest.TestCase):
     def test_level_four_bundle_is_separate_and_only_targets_approved_rooms(self):
         assets = retouch_assets(4)
-        self.assertEqual(len(assets), 8)
-        self.assertEqual({key[0] for key in assets}, {11, 22})
+        self.assertEqual(len(assets), 10)
+        self.assertEqual({key[0] for key in assets}, {11, 21, 22})
         key, (record, image) = next(iter(assets.items()))
         self.assertEqual(image.size, (record['source_rect'][2] - record['source_rect'][0],
                                       record['source_rect'][3] - record['source_rect'][1]))
@@ -29,9 +29,9 @@ class BundledCavernRetouchTests(unittest.TestCase):
             for level in (3, 5, 6, 7, 8, 9):
                 self.assertIs(retouched_sprite(room, command, source, level_number=level), source)
 
-    def test_room_twenty_three_patch_rejects_wrong_level_room_or_source(self):
+    def test_new_wall_patches_reject_wrong_level_room_or_source(self):
         for key, (record, image) in retouch_assets(4).items():
-            if key[0] != 22:
+            if key[0] not in (21, 22):
                 continue
             room, shape, x, bottom, mode = key
             self.assertEqual(image.size, (record['source_rect'][2] - record['source_rect'][0],
@@ -42,7 +42,7 @@ class BundledCavernRetouchTests(unittest.TestCase):
             with patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Wrong scope')):
                 for level in (3, 5, 6, 7, 8, 9):
                     self.assertIs(retouched_sprite(room, command, source, level_number=level), source)
-                self.assertIs(retouched_sprite(21, command, source, level_number=4), source)
+                self.assertIs(retouched_sprite(20, command, source, level_number=4), source)
 
     def test_only_four_rooms_have_bundled_variants_with_valid_crop_sizes(self):
         assets = retouch_assets()
@@ -136,11 +136,46 @@ class CavernRetouchTests(unittest.TestCase):
 
     def test_level_four_other_rooms_keep_their_original_wall_art(self):
         with patch('pop2.caverns.retouched_door_sprite', side_effect=lambda level, room, command, source: source):
-            for room in set(range(32)) - {11, 22}:
+            for room in set(range(32)) - {11, 21, 22}:
                 with self.subTest(room=room):
                     original = cavern_room(room, level_number=4)
                     edited = cavern_room(room, level_number=4, retouched=True)
                     self.assertEqual(original.flattened().tobytes(), edited.flattened().tobytes())
+
+    def test_level_four_room_twenty_two_matches_approved_gradient_and_keeps_its_column(self):
+        with patch('pop2.caverns.retouched_sprite', side_effect=lambda room, command, source, **kw: source):
+            before = cavern_room(21, level_number=4, retouched=True)
+        edited = cavern_room(21, level_number=4, retouched=True)
+        a, b = before.flattened().convert('RGB'), edited.flattened().convert('RGB')
+        self.assertEqual(hashlib.sha256(b.tobytes()).hexdigest(),
+                         '74912e7249bf2e288597df09ca426527045adc8cc55a9e75c0883408060cde16')
+        changed = [(x, y) for y in range(365) for x in range(510)
+                   if a.getpixel((x, y)) != b.getpixel((x, y))]
+        self.assertEqual(len(changed), 213)
+        self.assertTrue(all(37 <= x < 43 and 259 <= y < 318 for x, y in changed))
+        self.assertEqual(before.foreground.tobytes(), edited.foreground.tobytes())
+        self.assert_masks_equal(before, edited)
+        level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 4)
+        self.assertEqual(LevelRenderer(level, preload_room=False).room(21).flattened().tobytes(),
+                         cavern_room(21, level_number=4, animated=True, retouched=True).flattened().tobytes())
+
+    def test_room_twenty_two_gradient_survives_exit_animation(self):
+        records = cavern_assets(4)[0]['pressure_plates']['rooms']['21']
+        index = next(i for i, record in enumerate(records) if record['kind'] == 17)
+        for phase in (0, 27, 53, 79):
+            with self.subTest(exit_phase=phase):
+                phases = [0] * len(records)
+                phases[index] = phase
+                kwargs = dict(level_number=4, retouched=True, pressure_key=tuple(phases))
+                with patch('pop2.caverns.retouched_sprite', side_effect=lambda room, command, source, **kw: source):
+                    before = cavern_room(21, **kwargs)
+                after = cavern_room(21, **kwargs)
+                self.assert_masks_equal(before, after)
+                a, b = before.flattened().convert('RGB'), after.flattened().convert('RGB')
+                changed = [(x, y) for y in range(365) for x in range(510)
+                           if a.getpixel((x, y)) != b.getpixel((x, y))]
+                self.assertEqual(len(changed), 213)
+                self.assertTrue(all(37 <= x < 43 and 259 <= y < 318 for x, y in changed))
 
     def test_level_four_room_twenty_three_matches_approved_v9_with_original_masks(self):
         native = cavern_room(22, level_number=4)

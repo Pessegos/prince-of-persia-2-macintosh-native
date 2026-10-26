@@ -53,3 +53,15 @@ a bright rim. Do not classify all grey or dark pixels as dirt to remove.
 V1 and V9 are the relevant reference images; the intermediate cleanup variants
 are not part of the approved result. Local previews remain under the working
 tree's ignored `rendered/level4-room23-shadow-v*/` directories.
+
+## Level4 room22: gradient behind the column
+
+The user approved room22 V1 on 2026-10-26. Two source-checked background crops
+(SHAP3550 and3518) grade the marked colour discontinuity behind the left column.
+The213 changed native pixels are confined to X37..42/Y259..317. The actual
+foreground column, its outline, transparency and actor masks stay intact;
+the existing doorway blend is preserved. This is a baked native-palette pixel
+gradient, not an overlay or an RGB blur. The combined render's RGB SHA256 is
+`74912e7249bf2e288597df09ca426527045adc8cc55a9e75c0883408060cde16`.
+The exit animation retains the same local correction. Local review images
+remain under `rendered/level4-room22-shadow-v1/`.
