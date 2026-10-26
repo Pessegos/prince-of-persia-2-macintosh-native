@@ -84,6 +84,34 @@ class PotionTests(unittest.TestCase):
                     self.assertEqual(pickup_target(terrain, motion, state, record) is not None,
                                      admitted)
 
+    def test_sword_tolerance_extends_each_boundary_by_only_four_pixels_and_aligns(self):
+        struct.pack_into('>H', self.data, 13 * 2, 22)
+        terrain = LevelMap(bytes(self.data))
+        motion = SimpleNamespace(room=0, row=1)
+        record = FrameRecord(15, 14, 0, 4, 0, 70)
+        for facing, first, last in ((0, 174, 275), (1, 127, 228)):
+            for edge, shift in ((first, -4), (last, 4)):
+                with self.subTest(facing=facing, edge=edge):
+                    native = SequenceState(2, action=15, target_x=edge, facing=facing)
+                    tile, delta = pickup_target(terrain, motion, native, record)
+                    state = SequenceState(2, action=15, target_x=edge + shift, facing=facing)
+                    self.assertIsNone(pickup_target(terrain, motion, state, record))
+                    target, adjusted = pickup_target(terrain, motion, state, record, sword_tolerance=4)
+                    self.assertEqual(target, tile)
+                    self.assertEqual(state.target_x + adjusted, native.target_x + delta)
+                    state.target_x += 1 if shift > 0 else -1
+                    self.assertIsNone(pickup_target(terrain, motion, state, record, sword_tolerance=4))
+
+    def test_sword_tolerance_does_not_extend_or_shift_flask_pickup(self):
+        motion = SimpleNamespace(room=0, row=1)
+        record = FrameRecord(15, 14, 0, 4, 0, 70)
+        for facing, first, last in ((0, 174, 275), (1, 127, 228)):
+            for x in (first - 4, first - 1, first, first + 20, last, last + 1, last + 4):
+                with self.subTest(facing=facing, x=x):
+                    state = SequenceState(2, action=15, target_x=x, facing=facing)
+                    self.assertEqual(pickup_target(self.terrain, motion, state, record, sword_tolerance=4),
+                                     pickup_target(self.terrain, motion, state, record))
+
     def test_removal_leaves_a_floor_and_preserves_only_native_rock_decoration(self):
         tile = self.terrain.tile(0, 3, 1)
         self.potions.take(tile)

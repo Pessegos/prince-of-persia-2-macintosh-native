@@ -104,5 +104,31 @@ The sword-position screenshot shows the Prince facing away from the item.
 The bounded original TryPickUp/held-Shift probe was rerun:5,720 checks agree
 with the existing reach rule. It checks the supporting-foot cell and the
 forward cell, not behind. Native standing-left pose15 admits X276..377;
-standing-right admits X229..330 in room17. Turning toward the sword allows
-pickup from the photographed vicinity; no pickup-range extension is applied.
+standing-right admits X229..330 in room17. These checks describe the native
+rule; the subsequent user-approved micro-QoL below deliberately softens it.
+
+## Four-pixel sword tolerance (2026-10-26)
+
+The second back-facing screenshot was reproduced near X272: the original
+TryPickUp rejects it, while X276 succeeds. Both full held-Shift attempts were
+followed in the hidden runtime. The user confirmed that this was a requested
+micro-QoL, not a demand for original equivalence, and approved a small tolerance.
+
+The runtime opts into four pixels of extra sword reach on either boundary,
+in both facings. The pure `pickup_target` defaults to the strict native rule
+so native probes retain that independent comparison. Only when strict
+admission fails does the optional fallback try the two shifted foot positions;
+it accepts only a sword, and includes that shift in the final alignment. The
+lowering animation therefore reaches the usual pickup anchor instead of moving
+the Prince away from the sword. Existing flask admission/alignment and native
+item priority are preserved. Room17 standing-left admits X272..381 with this
+exception; standing-right admits X225..334. This is a port exception, not newly
+recovered Macintosh behavior.
+
+Regressions cover all four boundaries and the next rejected pixel, alignment
+to the same native anchor, unchanged flask reach and alignment, and the actual
+X272 back-facing held-Shift animation through collection. The existing held
+Shift retry scene now starts at X224 and retries at225, reflecting the approved
+four-pixel extension of its old native boundary229. Its key-repeat behavior
+remains under test. The strict native admission/gate probe still agrees in
+all5,720 cases; it intentionally excludes this opt-in runtime exception.

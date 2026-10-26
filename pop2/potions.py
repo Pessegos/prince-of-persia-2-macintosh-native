@@ -20,10 +20,25 @@ def potion_kind(foreground):
 
 SWORD_TILE = 22
 ITEM_TILES = (10, SWORD_TILE)
+# Approved port QoL: soften only sword pickup's cell boundary by four pixels.
+SWORD_PICKUP_TOLERANCE = 4
 
 
-def pickup_target(terrain, motion, state, record):
+def pickup_target(terrain, motion, state, record, *, sword_tolerance=0):
     contact = floor_contact_x(state.target_x, state.facing, record)
+    target = _pickup_at_contact(terrain, motion, state, contact)
+    if target is not None or not sword_tolerance:
+        return target
+    for shift in (-sword_tolerance, sword_tolerance):
+        target = _pickup_at_contact(terrain, motion, state, contact + shift)
+        if target is not None and target[0].kind == SWORD_TILE:
+            # Carry the virtual foot adjustment into the real alignment, so
+            # the lowering animation still reaches the sword's native anchor.
+            return target[0], target[1] + shift
+    return None
+
+
+def _pickup_at_contact(terrain, motion, state, contact):
     column = character_column(contact)
     current = terrain.tile(motion.room, column, motion.row)
     target = current if current.kind in ITEM_TILES else terrain.tile(

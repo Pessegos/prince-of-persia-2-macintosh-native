@@ -2256,7 +2256,7 @@ class ScenePrototype(WindowControls):
         caverns = self.game.caverns
         if caverns is None:
             return False
-        from pop2.potions import SWORD_TILE, pickup_target
+        from pop2.potions import SWORD_PICKUP_TOLERANCE, SWORD_TILE, pickup_target
 
         potions, state, motion = caverns.potions, self.sequence_state, self.terrain_motion
         if not self.shift_held:
@@ -2300,7 +2300,8 @@ class ScenePrototype(WindowControls):
         # GenCtrl 6:0c50/0a0c reaches TryPickUp only at an eligible pose.
         # A held Shift pressed in the air must survive until that handler.
         potions.shift_was_held = self.shift_held
-        target = pickup_target(self.level_map, motion, state, self.frames[state.action])
+        target = pickup_target(self.level_map, motion, state, self.frames[state.action],
+                               sword_tolerance=SWORD_PICKUP_TOLERANCE)
         self.pending_potion_pickup = None
         if target is None:
             potions.picking = None

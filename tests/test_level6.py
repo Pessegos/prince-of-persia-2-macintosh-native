@@ -451,17 +451,30 @@ class LevelSixSwordTests(unittest.TestCase):
         # TryPickUp 6:1350 checks the foot's cell and the cell ahead.
         # StandingCtrl 6:0c50 checks held Shift on each eligible pose.
         scene = self.scene
-        scene.jump_to_room(16, 1, 228, 1)
+        scene.jump_to_room(16, 1, 224, 1)
         scene.start_sequence(13)
         scene.sequence_state.action = scene.action = 50
         scene.set_key_state('shift', True)
         self.assertFalse(scene.update_potion_controls())  # One pixel outside reach.
-        scene.player_x = scene.sequence_state.target_x = 229
+        # The approved four-pixel sword tolerance starts at225, not229.
+        scene.player_x = scene.sequence_state.target_x = 225
         self.assertTrue(scene.update_potion_controls())
         self.assertEqual(scene.sequence_state.sequence_id, 50)
         self.tick(12)
         self.assertEqual(scene.game.sword_type, 2)
         self.assertEqual(scene.level_map.tile(16, 5, 1).kind, 1)
+
+    def test_sword_pickup_from_just_behind_aligns_and_finishes_with_held_shift(self):
+        scene = self.scene
+        # Reported back-facing position: original admission begins at276.
+        scene.jump_to_room(16, 1, 272, 0)
+        scene.set_key_state('shift', True)
+        self.tick(15)
+        scene.set_key_state('shift', False)
+        self.assertEqual(scene.game.sword_type, 2)
+        self.assertFalse(scene.combat.player.sword_lost)
+        self.assertEqual(scene.level_map.tile(16, 5, 1).kind, 1)
+        self.assertEqual(scene.sequence_state.facing, 0)
 
 
 @unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported level-six resources required')
