@@ -251,15 +251,15 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,GetRightBarr,0x547c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
 4,Characters 2,CheckCollide1,0x54da,jump_table,partial,pop2/terrain.py,unarmed grounded front-only versus armed front/rear within port sweep,1,12
 4,Characters 2,CheckCollide,0x5654,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,4
-4,Characters 2,AdjustRoom,0x56e6,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,0
+4,Characters 2,AdjustRoom,0x56e6,decoded,partial,tools/probe_temple_gate_distance.py,"temple gate distance calls: displayed room precedence, supplied left/right slot adjustment and signed wrapping; InitRoom slot construction excluded",3,0
 4,Characters 2,Collide,0x5738,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,10
 4,Characters 2,GroundBump,0x5868,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,20
 4,Characters 2,GateBarrToStandUp,0x5baa,jump_table,partial,pop2/terrain.py;pop2/scene_prototype.py,cavern phase 1-183 directional crouch-rise veto; 4096 native checks; other environments omitted,1,4
 4,Characters 2,GetCharEdges,0x5cbc,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,11,9
 4,Characters 2,CheckGateForKid,0x60e4,jump_table,partial,pop2/terrain.py;pop2/scene_prototype.py,"cavern Prince consecutive overlap, forced crouch, nearest-side ejection and SEQS 118 crushing; 1920 native selection/displacement/damage checks with supplied masks",1,10
 4,Characters 2,EnemyCollide,0x62b0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,18
-4,Characters 2,GetBarrDistFromFace,0x6562,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,7,3
-4,Characters 2,GetBarrDistFromBack,0x6610,decoded,indexed-only,,No semantic review recorded in this prototype catalog,4,2
+4,Characters 2,GetBarrDistFromFace,0x6562,jump_table,partial,tools/probe_temple_gate_distance.py,"environment2 ordinary gate type1 with actual admission/classification/AdjustRoom;79104 face/back calls total, no endpoint stubs; body and room slots supplied; other barriers/general distance selector excluded",7,3
+4,Characters 2,GetBarrDistFromBack,0x6610,decoded,partial,tools/probe_temple_gate_distance.py,environment2 ordinary gate type1; back distance computes even when face admission returns-1; whole A5 side effects checked; sprite bounds/InitRoom/full collision excluded,4,2
 5,Modular Set 2,CalcBlue,0x0004,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,20,0
 5,Modular Set 2,CellToCol,0x0074,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
 5,Modular Set 2,CellToRow,0x00f8,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0

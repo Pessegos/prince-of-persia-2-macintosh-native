@@ -81,6 +81,11 @@ generic header start when integrating that entry.
 
 ## Mechanism Priorities And Integration Gates
 
+The gate-contact follow-up now includes independent
+[face/back distances](temple-gate-distance.md), with real admission and
+room adjustment. General distance selection and ejection remain separate
+steps; no new temple runtime is enabled by these research modules.
+
 The inventory retains candidate tile IDs without assuming all behavior:
 
 - Tile25:2/2/6/2 cells by level10/11/12/13. Sliding-rock machinery is in

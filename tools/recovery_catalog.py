@@ -13,6 +13,9 @@ CATALOG = PROJECT_DIR / "docs" / "RECOVERY_CATALOG.csv"
 
 # These reviews cover specific ordinary branches, never an entire routine.
 REVIEWS = {
+    (4, "AdjustRoom"): ("partial", "tools/probe_temple_gate_distance.py", "temple gate distance calls: displayed room precedence, supplied left/right slot adjustment and signed wrapping; InitRoom slot construction excluded"),
+    (4, "GetBarrDistFromFace"): ("partial", "tools/probe_temple_gate_distance.py", "environment2 ordinary gate type1 with actual admission/classification/AdjustRoom;79104 face/back calls total, no endpoint stubs; body and room slots supplied; other barriers/general distance selector excluded"),
+    (4, "GetBarrDistFromBack"): ("partial", "tools/probe_temple_gate_distance.py", "environment2 ordinary gate type1; back distance computes even when face admission returns-1; whole A5 side effects checked; sprite bounds/InitRoom/full collision excluded"),
     (4, "GetUndefineCellId"): ("partial", "pop2/terrain.py;tools/probe_cliff_void.py", "ordinary undefined cells in levels 3-9: rooftop air, level-six room27 and level-nine room16 exterior air, other cavern/ruins boundaries solid; 8800 native comparisons; special top-row flag and environment2/6 branches not translated here"),
     (15, "NISThroneRoom"): ("partial", "tools/extract_intro.py;pop2/intro.py;pop2/scene_prototype.py", "NIS 6 exported per facing with ThroneNIS/Kid/Prince/Ruins shapes, text panel and Prince-relative drawing; screen before it approximated by 15:6d46; area dissolve order not native"),
     (15, "DrawDeadKid"): ("partial", "tools/extract_intro.py;pop2/intro.py", "Kid SHAP 25081 at the Prince's X/Y (mirrored facing right), sword SHAP 1011, CTBL 1004 at 240"),
