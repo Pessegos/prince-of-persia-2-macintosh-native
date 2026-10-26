@@ -98,6 +98,9 @@ responses remain separate steps.
 The [collision decision](temple-collision-decision.md) now consumes actual
 generated indices and applies original admission/span selection, recording
 Collide's correction arguments at an explicit no-op response boundary.
+The [floating ceiling helper](temple-floating-ceiling.md) also executes
+through its real caller, including side-contact suppression and successful
+or missing sequence lookup. Body bounds remain supplied in these modules.
 
 The inventory retains candidate tile IDs without assuming all behavior:
 
