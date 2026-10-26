@@ -5,11 +5,30 @@
 - Rooms: the original numbers rooms from 1 (0 means none); the port from 0.
 - Columns: `character_column` (CODE:4 3ad6 -> 5:48b0) converts an actor X;
   callers decide whether that X is the actor's own X or its supporting foot
-  (`floor_contact_x`). There is deliberately no single generic column helper.
+  (`floor_contact_x`). The arithmetic helper never chooses the foot/anchor.
 """
 
 NATIVE_X_ORIGIN = 207
 TILE_WIDTH = 51
+
+
+def character_column_parts(scene_x):
+    """GetCharCol4:3ad6 ->5:48b0: column and native DIVS remainder.
+
+    The caller subtracts22 from native X in a word. The callee extends
+    that argument before SUBQ.W4, preserving the upper word. Arguments
+    0..3 therefore produce65532..65535, including offscreen snake turns.
+    """
+    argument = (scene_x + NATIVE_X_ORIGIN - 22) & 0xffff
+    if argument >= 0x8000:
+        argument -= 0x10000
+    dividend = argument - 4
+    if 0 <= argument < 4:
+        dividend += 0x10000
+    quotient = abs(dividend) // TILE_WIDTH
+    if dividend < 0:
+        quotient = -quotient
+    return quotient - 4 - int(argument < 0), dividend - quotient * TILE_WIDTH
 
 
 def native_x(scene_x):

@@ -12,7 +12,7 @@ so none of the guard AI paths sees them.
 from dataclasses import dataclass, field
 import struct
 
-from pop2.coordinates import NATIVE_X_ORIGIN, scene_x
+from pop2.coordinates import NATIVE_X_ORIGIN, character_column_parts, scene_x
 from pop2.opponent_generation import EMPTY_TILES, WALL_TILES, character_column
 from pop2.opponent_selection import nearest_opponent
 from pop2.ruins_actors import (
@@ -66,7 +66,7 @@ def character_row(native_y):
 
 def column_remainder(x):
     # 5:48b0's remainder (a5-0x481c) for a scene X.
-    return signed_remainder(x + 181, 51)
+    return character_column_parts(x)[1]
 
 
 def serpent_passable(tile):

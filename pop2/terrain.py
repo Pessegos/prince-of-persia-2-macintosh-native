@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import struct
 
 from pop2.bridge import BRIDGE_LEVEL, BRIDGE_ROOM, bridge_tension
+from pop2.coordinates import character_column_parts
 from pop2.crevices import CREVICE_TILE
 from pop2.opponent_generation import character_column, EMPTY_TILES, WALL_TILES
 from pop2.mac_input import StepBoundary
@@ -46,9 +47,7 @@ def floor_contact_x(x, facing, record):
 
 def floor_edge_distance(contact_x, facing):
     # GetDist1 (4:3aa0) uses GetCharCol's signed DIVS remainder (5:48b0).
-    numerator = contact_x + 181
-    quotient = abs(numerator) // TILE_WIDTH * (-1 if numerator < 0 else 1)
-    remainder = numerator - quotient * TILE_WIDTH
+    remainder = character_column_parts(contact_x)[1]
     return 50 - remainder if facing else remainder
 
 

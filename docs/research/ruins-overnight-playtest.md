@@ -205,3 +205,11 @@ byte-for-byte. Update the four ignored ruins6-9 scenery exports to17, whose
 base drawings and non-floor sections remain identical. No manual reimport
 will be needed in the primary workspace; restart the game after integration.
 Room2 visual proposal remains local and unapplied pending the user's review.
+
+## Subsequent coordinate audit
+
+The four exploratory serpent divergences above are now resolved by the
+[mixed-width column arithmetic fix](native-column-word-arithmetic.md), found
+while continuing temple modules. Native comparisons agree for all signed X
+coordinates and13,680 repeated serpent steps. This closes those specific
+differences, while full LOS/damage/bank scheduling remains outside that trace.

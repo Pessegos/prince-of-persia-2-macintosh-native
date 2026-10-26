@@ -20,12 +20,30 @@ class CoordinateConversionTests(unittest.TestCase):
         self.assertIsNone(port_room(0))
 
     def test_actor_columns_keep_the_signed_division_at_their_edges(self):
-        # CODE:4 3ad6 -> 5:48b0: (native X - 22 - 4) / 51 towards zero, - 4,
-        # one less for a negative value; pinned at the column edges.
+        # CODE:4 3ad6 -> 5:48b0 extends before the word subtraction.
+        # Scene X-185 is raw argument0: its dividend is65532, not-4.
         from pop2.opponent_generation import character_column
 
         self.assertEqual([character_column(x) for x in (22, 23, 73, 74, 0, -1, -181, -185, -186)],
-                         [-1, 0, 0, 1, -1, -1, -4, -4, -5])
+                         [-1, 0, 0, 1, -1, -1, -4, 1280, -5])
+
+    def test_mixed_word_long_subtraction_keeps_offscreen_column_and_edge_in_sync(self):
+        from pop2.coordinates import character_column_parts
+        from pop2.ruins_ai import column_remainder
+        from pop2.terrain import floor_edge_distance
+
+        for x, column, remainder in ((-185, 1280, 48), (-184, 1280, 49),
+                                     (-183, 1280, 50), (-182, 1281, 0), (-181, -4, 0)):
+            self.assertEqual(character_column_parts(x), (column, remainder))
+            self.assertEqual(column_remainder(x), remainder)
+            self.assertEqual(floor_edge_distance(x, 0), remainder)
+            self.assertEqual(floor_edge_distance(x, 1), 50 - remainder)
+
+    def test_native_x_word_wrap_precedes_the_division(self):
+        from pop2.coordinates import character_column_parts
+
+        self.assertEqual(character_column_parts(-32768 - 207), (638, 0))
+        self.assertEqual(character_column_parts(-32746 - 207), (-647, -30))
 
     def test_level_checkpoints_use_port_rooms(self):
         from pop2.rebirth import level_checkpoints

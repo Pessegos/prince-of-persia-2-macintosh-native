@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 import struct
 
-from pop2.coordinates import native_room, scene_x
+from pop2.coordinates import character_column_parts, native_room, scene_x
 
 # CODE:3 IsWall / IsObstacle / IsEmpty; ordinary rooftop actors only.
 WALL_TILES = frozenset((20, 2, 7, 25, 43))
@@ -12,13 +12,7 @@ EMPTY_TILES = frozenset((0, 9, 27, 47, 49))
 
 
 def character_column(scene_x):
-    # CODE:4 0x3ad6 -> CODE:5 0x48b0, signed division towards zero.
-    value = scene_x + 185
-    numerator = value - 4
-    quotient = abs(numerator) // 51
-    if numerator < 0:
-        quotient = -quotient
-    return quotient - 4 - int(value < 0)
+    return character_column_parts(scene_x)[0]
 
 
 def opponent_record_in_bounds(column, row):
