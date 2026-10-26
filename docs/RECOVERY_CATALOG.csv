@@ -249,7 +249,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,GetColDetData,0x536a,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
 4,Characters 2,GetLeftBarr,0x541a,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
 4,Characters 2,GetRightBarr,0x547c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
-4,Characters 2,CheckCollide1,0x54da,jump_table,partial,pop2/terrain.py,unarmed grounded front-only versus armed front/rear within port sweep,1,12
+4,Characters 2,CheckCollide1,0x54da,jump_table,partial,pop2/terrain.py;tools/probe_temple_collision_decision.py,"temple decision/admission/span arguments verified41264 native calls including8784 real CheckBarr compositions; low-side priority/no retry, signed row folding and serpent exclusion; Collide response recorded no-op, body/history supplied",1,12
 4,Characters 2,CheckCollide,0x5654,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,4
 4,Characters 2,AdjustRoom,0x56e6,decoded,partial,tools/probe_temple_gate_distance.py,"temple gate distance calls: displayed room precedence, supplied left/right slot adjustment and signed wrapping; InitRoom slot construction excluded",3,0
 4,Characters 2,Collide,0x5738,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,10

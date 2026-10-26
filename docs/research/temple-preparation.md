@@ -95,6 +95,9 @@ The first bank boundary is now recovered as
 composes three rows and selects incoming contacts, with actual rock queries
 against an explicitly empty bank. Nonempty rock overlays and physical
 responses remain separate steps.
+The [collision decision](temple-collision-decision.md) now consumes actual
+generated indices and applies original admission/span selection, recording
+Collide's correction arguments at an explicit no-op response boundary.
 
 The inventory retains candidate tile IDs without assuming all behavior:
 
