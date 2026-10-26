@@ -212,12 +212,15 @@ class LevelMap:
             stone_gate = (tile.kind == 4 and struct.unpack_from('>H', self.level, 0x2186)[0] == 3
                           and stone_gate_blocks(tile.foreground, bounds, state))
             throne_gate = self.throne_gate(room, tile)
-            if tile.kind in WALL_TILES | {12} or stone_gate or throne_gate:
-                barrier = (5 if stone_gate else 8 if throne_gate else 6 if tile.kind == 12 else
+            ruins_gate = (tile.kind == 4 and not throne_gate
+                          and struct.unpack_from('>H', self.level, 0x2186)[0] == 4
+                          and stone_gate_blocks(tile.foreground, bounds, state))
+            if tile.kind in WALL_TILES | {12} or stone_gate or ruins_gate or throne_gate:
+                barrier = (5 if stone_gate else 8 if throne_gate else 1 if ruins_gate else 6 if tile.kind == 12 else
                            3 if cautious and tile.kind == 2 and (tile.foreground & 255) < 3 else 4)
                 # DATA a5-0x3620/-0x360e by barrier type.
-                left_offset = {3: -22, 4: 3, 5: 18, 6: 8, 8: 16}[barrier]
-                right_offset = {3: -22, 4: 0, 5: 0, 6: 16, 8: 24}[barrier]
+                left_offset = {1: 40, 3: -22, 4: 3, 5: 18, 6: 8, 8: 16}[barrier]
+                right_offset = {1: 0, 3: -22, 4: 0, 5: 0, 6: 16, 8: 24}[barrier]
                 # GetCharEdges / QuickDraw uses an exclusive right edge;
                 # Pillow's last sprite column is inclusive.
                 barrier_distance = (col * TILE_WIDTH + 22 + left_offset - (bounds[2] + 1)
@@ -266,7 +269,7 @@ class LevelMap:
         for ahead in (1, 2):
             tile = self.tile(room, column + direction * ahead, row)
             kind = tile.kind
-            gate = (kind == 4 and bounds is not None and state.level_kind == 3
+            gate = (kind == 4 and bounds is not None and state.level_kind in (3, 4)
                     and stone_gate_blocks(tile.foreground, bounds, state))
             if kind in EMPTY_TILES | WALL_TILES or gate:
                 allowance = (ahead - 1) * TILE_WIDTH
@@ -431,12 +434,14 @@ class LevelMap:
 
     def gate_blocks_rise(self, room, row, state, record):
         # GateBarrToStandUp 4:5baa-5c56 tests an anchor band, not body height.
-        if state.level_kind != 3:
+        if state.level_kind not in (3, 4):
             return False
         gate = self.nearby_gate(room, row, state, record)
         if gate is None:
             return False
         tile, column = gate
+        if self.throne_gate(room, tile):
+            return False
         anchor = state.target_x - 10 * (1 if state.facing else -1) - 22
         return (0 < tile.foreground & 255 < 184
                 and column * TILE_WIDTH + 19 <= anchor <= column * TILE_WIDTH + 57)
@@ -633,7 +638,12 @@ class LevelMap:
                               and (state is None or state.actor_type != 11)
                               and stone_gate_blocks(tile.foreground, bounds, state))
                 throne_gate = self.throne_gate(room, tile)
-                if tile.kind not in WALL_TILES and not desert_exit and not stone_gate and not throne_gate:
+                ruins_gate = (tile.kind == 4 and not throne_gate
+                              and struct.unpack_from('>H', self.level, 0x2186)[0] == 4
+                              and (state is None or state.actor_type != 11)
+                              and stone_gate_blocks(tile.foreground, bounds, state))
+                if (tile.kind not in WALL_TILES and not desert_exit and not stone_gate
+                        and not ruins_gate and not throne_gate):
                     continue
                 if (tile.kind == CREVICE_TILE and bottom - top + 1 <= 34 and tile.foreground & 3 != 3
                         and (state is None or state.actor_type not in (7, 8))):
@@ -641,7 +651,7 @@ class LevelMap:
                     # passes an open crevice; only the heads still collide.
                     continue
                 # GetLeftBarr/GetRightBarr, code 4, DATA c9e0/c9f2[barrier].
-                barrier = (5 if stone_gate else 1 if desert_exit else 8 if throne_gate else
+                barrier = (5 if stone_gate else 1 if desert_exit or ruins_gate else 8 if throne_gate else
                            2 if tile.kind == 7 and bottom - top + 1 <= 34 else 4)
                 # Tile 2's extended barrier (type 3) exists only while
                 # DoStepFwd queries clearance with c944 set, not in Collide.
@@ -884,7 +894,7 @@ class RooftopPhysics:
     def check_gate(self, motion, runtime, bounds, old_bounds, record, alive, sword_drawn,
                    contact_bounds=None, invulnerable=False):
         state = runtime.state
-        if (not alive or state.actor_type not in (0, None) or state.level_kind != 3
+        if (not alive or state.actor_type not in (0, None) or state.level_kind not in (3, 4)
                 or state.source_sequence_id == 118 or record is None):
             return None
         # CheckBarr 4:4e46/4fce skips the ordinary collision-buffer update
@@ -904,7 +914,10 @@ class RooftopPhysics:
         if gate is None:
             return None
         tile, column = gate
-        left, right = column * TILE_WIDTH + 40, column * TILE_WIDTH + 72
+        if self.map.throne_gate(motion.room, tile):
+            return None  # 4:6124-6138 excludes the throne's special barrier.
+        left = column * TILE_WIDTH + (40 if state.level_kind == 3 else 62)
+        right = column * TILE_WIDTH + 72
         # CheckGateForKid 4:613c-616e requires both CheckBarr masks to be
         # 0xff: overlap on the previous frame as well as this one.
         if (not all(body[0] < right and left < body[2] + 1
@@ -918,7 +931,7 @@ class RooftopPhysics:
         stop_clear = (state.source_sequence_id == 13 and (
             state.target_x - RUN_STOP_GATE_REAR_REACH >= right if state.facing else
             state.target_x + RUN_STOP_GATE_REAR_REACH <= left))
-        if (not sword_drawn and not motion.falling and state.current_y == 0
+        if (state.level_kind == 3 and not sword_drawn and not motion.falling and state.current_y == 0
                 and state.source_sequence_id in (1, 13, 200, 201, 202)
                 and (0 < rear_overlap <= 4 or stop_clear)):
             return None
@@ -933,7 +946,7 @@ class RooftopPhysics:
             state.current_x = state.target_x
             motion.falling = False
             return TerrainEvent("gate")
-        if tile.foreground & 255 and not sword_drawn and not invulnerable:
+        if state.level_kind == 3 and tile.foreground & 255 and not sword_drawn and not invulnerable:
             # CrushedByGate 6:2ac8 chooses SEQS:118 and removes 100 life.
             state.select(118)
             motion.dead, motion.falling = True, False

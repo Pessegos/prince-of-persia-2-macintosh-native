@@ -40,3 +40,18 @@ same API field. User-requested rooms24/26 of level6 are hidden from the map
 only; original level records and gameplay links are preserved.
 
 Validation:61 map/cache/developer-cheat and ruins playtest tests pass17.492s.
+
+## Block 3: ordinary ruins gates
+
+GetBarrCode4:531c-534a classifies cavern gates as5 and ordinary ruin gates
+as1 (throne barrier8 remains special). Both use CheckCollide4:5688 and the
+height predicate4:5b0e, so the host's environment3-only side/step/rise tests
+were incorrect. Restore ruin barrier1's narrower DATA span (column+62..72),
+plus crouch/ejection under a lowering gate. CrushedByGate4:61b8-61de and
+6:2ac8 stays cavern-only. Existing approved cavern run clearance stays scoped.
+
+Validation:184 gate/terrain/throne/crush tests and2 new both-facing narrow
+ruins gate regressions pass. New probe_ruins_gate_void executes4096 original
+gate predicates and2 barrier classifications without predicate stubs. It also
+establishes23 original room-zero down rebases for the next cliff fix; full
+frame/admission/redraw/audio remain excluded from this bounded probe.
