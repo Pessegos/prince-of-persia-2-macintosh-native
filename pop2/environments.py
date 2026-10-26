@@ -480,6 +480,7 @@ class Caverns(Environment):
 
     def frame_start(self):
         scene = self.scene
+        scene.slab_crush_poses = {}
         caverns = scene.game.caverns
         if caverns is None:
             return
@@ -521,6 +522,8 @@ class Caverns(Environment):
                 if special:
                     # Crushed6:2934/2950-2980: SetCharFloor, then146 for
                     # heads or169 for serpents. This is not sword-hit death.
+                    if state.actor_type in (7, 8) and sequence == 146:
+                        scene.slab_crush_poses[id(actor)] = (actor, state.action)
                     ruins.set_floor(actor)
                     ruins.jump(actor, sequence)
                     if ruins.banked is actor:

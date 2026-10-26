@@ -1,5 +1,7 @@
 """Original guard rendering, damage bursts and the game's health-bottle HUD."""
 
+from dataclasses import replace
+
 from PIL import ImageOps
 
 from pop2.animation_data import (
@@ -32,6 +34,22 @@ def actor_draw_order(state, record, bounds, row):
     cell = 1 + (2 - row) * 10 + column if 0 <= row < 3 and 0 <= column < 10 else 0
     anchor = bounds[2] + 1 if state.facing else bounds[0]
     return cell, bounds[3], anchor
+
+
+def slab_crush_draw_state(actor, previous_poses):
+    """Keep the pre-impact expression during the head crush's first frame.
+
+    SEQS146 really starts with resting pose150. Only its displayed pose is
+    replaced; the native sequence cursor, motion and death timing stay intact.
+    The scene discards these presentation snapshots at the next frame start.
+    """
+    state = actor.state
+    previous = previous_poses.get(id(actor))
+    if (previous is not None and previous[0] is actor and state.actor_type in (7, 8)
+            and state.sequence_id == state.source_sequence_id == 146
+            and state.cursor == 1 and state.action == 150):
+        return replace(state, action=previous[1])
+    return state
 
 
 class GuardArtwork:

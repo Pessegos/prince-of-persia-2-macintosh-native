@@ -15,7 +15,8 @@ from pop2.combat import (
     PLAYER_COMBAT_TURN_SEQUENCE, actor_frame_index, contact_allowed,
 )
 from pop2.combat_art import (
-    GuardArtwork, HealthArtwork, HitArtwork, actor_draw_order, sword_palette_for_level,
+    GuardArtwork, HealthArtwork, HitArtwork, actor_draw_order, slab_crush_draw_state,
+    sword_palette_for_level,
 )
 from pop2.control_mapping import (
     IDLE_SEQUENCE,
@@ -3652,12 +3653,13 @@ class ScenePrototype(WindowControls):
         self.level_renderer.remember_scenery(frame)
         hide_guards = getattr(self, "peaceful", False) and getattr(self, "demo", None) is None
         actors = []
+        crush_poses = getattr(self, 'slab_crush_poses', {})
         if combat is not None and not hide_guards:
             for guard in (*combat.visible_guards(), *combat.visible_ruins()):
                 layer = Image.new("RGBA", frame.size)
                 ground = floor_y(guard.row) + environment.draw_sag(guard)
-                record = self.guard_art.frames[actor_frame_index(guard.state)]
-                state = guard.state
+                state = slab_crush_draw_state(guard, crush_poses)
+                record = self.guard_art.frames[actor_frame_index(state)]
                 neck = getattr(getattr(guard, 'ruins', None), 'neck', None)
                 if neck is not None:
                     # AlignHeadOnKidNeck 7:0006 gives the drawing point itself.
@@ -3720,11 +3722,12 @@ class ScenePrototype(WindowControls):
             for guard in (() if hide_guards else (*combat.visible_guards(), *combat.visible_ruins())):
                 layer = Image.new("RGBA", frame.size)
                 ground = floor_y(guard.row) + environment.draw_sag(guard)
-                self.hit_art.draw(layer, guard.state, ground)
-                bounds = self.guard_art.bounds(guard.state, ground)
-                record = self.guard_art.frames[actor_frame_index(guard.state)]
+                state = slab_crush_draw_state(guard, crush_poses)
+                self.hit_art.draw(layer, state, ground)
+                bounds = self.guard_art.bounds(state, ground)
+                record = self.guard_art.frames[actor_frame_index(state)]
                 frame = self.composite_actor(frame, layer, guard.row, bounds[3],
-                                             guard.state, bounds, record)
+                                             state, bounds, record)
             layer = Image.new("RGBA", frame.size)
             self.hit_art.draw(layer, combat.player.state,
                               self.player_floor_y() + environment.draw_sag(combat.player))

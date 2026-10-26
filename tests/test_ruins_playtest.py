@@ -31,7 +31,7 @@ class RuinsPlaytestTests(unittest.TestCase):
         head.state.current_y = -33
         head.state.target_x = head.state.current_x = 200
         head.state.horizontal_velocity = head.state.vertical_velocity = 0
-        brain.jump(head, 131)
+        brain.jump(head, 141)  # Angry hovering pose, distinct from resting150.
         head.runtime.next_frame()
         brain.banked = head
         tile = s.level_map.tile(3, 3, 1)
@@ -41,12 +41,22 @@ class RuinsPlaytestTests(unittest.TestCase):
         # The real shelf, gravity, contact, damage and animation still run.
         with patch.object(brain, 'control_head'):
             for _ in range(8):
+                previous_pose = head.state.action
                 self.tick()
                 if not head.alive:
                     break
         self.assertEqual(head.life, 0)
         self.assertEqual(head.state.source_sequence_id, 146)
         self.assertIsNone(brain.banked)
+        self.assertNotEqual(previous_pose, 150)
+        self.assertEqual((head.state.action, head.state.cursor), (150, 1))
+        with patch.object(s.guard_art, 'draw', wraps=s.guard_art.draw) as draw:
+            s.render()
+        self.assertEqual(draw.call_args_list[0].args[1].action, previous_pose)
+        self.assertEqual((head.state.action, head.state.cursor), (150, 1))
+        self.tick()
+        self.assertEqual(head.state.action, 226)
+        self.assertEqual(s.slab_crush_poses, {})
         self.tick(12)
         s.jump_to_room(2, 2, 100, 1, reset_guards=False)
         s.jump_to_room(3, 2, 120, 1, reset_guards=False)

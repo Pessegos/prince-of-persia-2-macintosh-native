@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from pop2.combat_art import actor_draw_order
+from pop2.combat_art import actor_draw_order, slab_crush_draw_state
 from pop2.sequence_runtime import SequenceState
 
 
@@ -31,6 +31,34 @@ class ActorLayeringTests(unittest.TestCase):
         self.assertEqual(self.key(x=560)[0], 0)
         self.assertEqual(self.key(row=3)[0], 0)
         self.assertLess(self.key(x=0), self.key(x=100))
+
+
+class SlabCrushPresentationTests(unittest.TestCase):
+    def test_first_crush_frame_keeps_expression_without_mutating_simulation(self):
+        for kind in (7, 8):
+            with self.subTest(kind=kind):
+                state = SequenceState(146, cursor=1, action=150, actor_type=kind,
+                                      target_x=200, current_y=-33)
+                actor = SimpleNamespace(state=state)
+                before = vars(state).copy()
+                drawn = slab_crush_draw_state(actor, {id(actor): (actor, 165)})
+                self.assertEqual(drawn.action, 165)
+                self.assertEqual(vars(state), before)
+                self.assertEqual(drawn.target_x, state.target_x)
+                self.assertEqual(drawn.current_y, state.current_y)
+                self.assertEqual(drawn.cursor, 1)
+
+    def test_later_frames_other_deaths_and_stale_snapshots_use_real_pose(self):
+        for sequence, cursor, pose, kind in (
+                (146, 10, 226, 7), (154, 1, 150, 7), (169, 1, 288, 11),
+                (146, 1, 150, 2)):
+            with self.subTest(sequence=sequence, kind=kind):
+                actor = SimpleNamespace(state=SequenceState(
+                    sequence, cursor=cursor, action=pose, actor_type=kind))
+                self.assertIs(slab_crush_draw_state(actor, {id(actor): (actor, 165)}), actor.state)
+        actor = SimpleNamespace(state=SequenceState(146, cursor=1, action=150, actor_type=7))
+        self.assertIs(slab_crush_draw_state(actor, {}), actor.state)
+        self.assertIs(slab_crush_draw_state(actor, {id(actor): (object(), 165)}), actor.state)
 
 
 if __name__ == '__main__':

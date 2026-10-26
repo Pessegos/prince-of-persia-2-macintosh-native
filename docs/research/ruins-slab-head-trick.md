@@ -50,6 +50,20 @@ without the developer teleport's optional enemy reset and verifies that the
 head stays dead. A serpent scene verifies169; pure boundary cases cover both
 facings of its adjacent body cells. These are not input-for-input video replays.
 
+### Crush expression continuity (port presentation improvement)
+
+Original SEQS146 begins with resting pose150 before226/228. After adding the
+native crush path, a moving/angry head visibly flashed to that resting face for
+one frame. The port now draws its pre-impact pose during that first frame only.
+Its real action remains150, cursor1; the next frame proceeds normally to226.
+This preserves animation duration, physics, contact and death timing, rather
+than advancing the sequence twice. Serpents keep their normal169/288 drawing.
+The snapshot is transient scene presentation state, discarded next frame;
+no saves, original resources or imported art change. The shelf regression
+checks an angry head's actual draw call and unchanged runtime cursor, followed
+by the next crush pose. This is deliberate polish, not a claim that the native
+sequence omits150 or that its complete frame scheduler has been reproduced.
+
 ## The remaining mega-fall frame
 
 The prior fixed-floor redraw handles the upper ledge and the cushioning-contact
