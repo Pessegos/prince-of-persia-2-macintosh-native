@@ -605,9 +605,12 @@ def cavern_scene_signature(program, room_id, state):
     return ''.join(indices)
 
 
-def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3):
+def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, actor_bounds=None):
     from pop2.terrain import LevelMap
 
+    original = frame
+    if actor_bounds is not None:
+        frame = frame.copy()
     _program, resources, palette, shapes = room_assets(level_number, room_id)
     terrain = LevelMap(level)
     redraw = []
@@ -632,6 +635,12 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3):
         redraw.append((block.x, y, block.size))
     for x, y, size in redraw:
         art.draw_falling_foreground(frame, x, y, size)
+    if actor_bounds is not None:
+        left, top, right, bottom = actor_bounds
+        clip = (max(0, left), max(0, top), min(frame.width, right + 1), min(frame.height, bottom + 1))
+        if clip[0] < clip[2] and clip[1] < clip[3]:
+            original.paste(frame.crop(clip), clip[:2])
+        return original
     return frame
 
 

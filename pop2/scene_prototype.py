@@ -3550,6 +3550,15 @@ class ScenePrototype(WindowControls):
         frame = Image.alpha_composite(frame, layer)
         if level_kind in (3, 4) and room is not None and state is not None and bounds is not None:
             frame = room.draw_actor_foreground(frame, state, bounds)
+            if (state.actor_type in (0, 2, 4) and record is not None
+                    and actor_draw_order(state, record, bounds, row)[0] == 0):
+                # IndexCell1 maps offscreen actors to bucket30, drawn before
+                # visible debris. Preserve that order where a falling actor
+                # still overlaps the last visible slab at the room boundary.
+                from pop2.caverns import draw_cavern_falling
+
+                frame = draw_cavern_falling(frame, self.room_id, self.game.caverns,
+                    self.game.level.data, room, level_number=self.game.level.number, actor_bounds=bounds)
         return frame
 
     def draw_cutscene_pause(self, viewport):

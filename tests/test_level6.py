@@ -34,11 +34,18 @@ class LevelSixSceneryTests(unittest.TestCase):
                 # The shelf cushions the fall, with its front over the foot.
                 self.assertEqual(scene.native_viewport.getpixel((282, 348)), (157, 114, 98, 255))
                 seen.add('shelf')
+            if (scene.room_id == 5 and state.action == 106
+                    and motion.row == 3 and state.current_y == -79):
+                # Next frame: the floor is now a moving slab, while the
+                # Prince's legs extend beyond the viewport. It still covers
+                # his white trousers instead of being painted behind them.
+                self.assertEqual(scene.native_viewport.getpixel((277, 351)), (157, 114, 98, 255))
+                seen.add('moving_slab')
             if tick == 16:
                 scene.set_key_state('down', False)
             if scene.room_id == 17 and not motion.falling:
                 break
-        self.assertEqual(seen, {'upper', 'shelf'})
+        self.assertEqual(seen, {'upper', 'shelf', 'moving_slab'})
         self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.combat.player.life), (17, 1, 3))
 
     def test_level_six_starts_on_the_cliff_with_its_custom_palette(self):
