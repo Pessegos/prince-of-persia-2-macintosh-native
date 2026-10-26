@@ -109,6 +109,8 @@ class CavernExitTests(unittest.TestCase):
         self.assertIsNone(cavern_exit_clip(self.terrain, 1, 1, state,
                                           SimpleNamespace(offset_x=0, aux=0)))
 
+    @unittest.skipUnless((ASSET_DIR / 'enemy_profiles.json').is_file(),
+                         'Scene compositor import requires imported enemy profiles')
     def test_scene_compositor_applies_the_exit_clip_in_ruins(self):
         from PIL import Image
         from pop2.scene_prototype import ScenePrototype
