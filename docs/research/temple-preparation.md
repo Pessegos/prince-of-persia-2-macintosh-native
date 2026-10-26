@@ -85,7 +85,8 @@ The gate-contact follow-up now includes independent
 [face/back distances](temple-gate-distance.md), with real admission and
 room adjustment, and [hard contact/ejection](temple-gate-ejection.md).
 The [general soft distance selector](temple-gate-soft-distance.md) is also
-recovered independently. Its caller composition and collision-bank construction remain separate
+recovered independently and [composed with the real contact caller](temple-full-contact.md).
+Collision-bank construction and repeated physical support remain separate
 steps; no new temple runtime is enabled by these research modules.
 
 The inventory retains candidate tile IDs without assuming all behavior:

@@ -61,5 +61,6 @@ The174 focused tests pass. The earlier coordinate test that asserted scene
 X-185 maps to-4 was based on the simplified arithmetic; its expectation now
 uses independently executed original output1280. New regressions pin all
 four offscreen boundary values, remainder/edge agreement and signed X wrap.
-Full gameplay discovery follows because this is a shared arithmetic helper.
+Full shared-desktop gameplay discovery passes2994 tests518.608s, with10
+explicit desktop skips, after this shared arithmetic correction.
 Original resources and detailed before/after reports remain local/ignored.
