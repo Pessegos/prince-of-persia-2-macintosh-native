@@ -213,3 +213,13 @@ The four exploratory serpent divergences above are now resolved by the
 while continuing temple modules. Native comparisons agree for all signed X
 coordinates and13,680 repeated serpent steps. This closes those specific
 differences, while full LOS/damage/bank scheduling remains outside that trace.
+
+## Subsequent tunnel coverage audit
+
+The [all-tunnel mask audit](ruins-tunnel-mask-audit.md) checks11 groups/45
+cells across16 actual tunnel rooms in levels6-9, including neighbor drawing
+dependencies and already-revealed re-entry. All31 reveal combinations and
+their62 rendering states are free of stale wall masks. The old omission
+reproduces in every actual tunnel room; the shared room18 correction already
+covers them. This extends the earlier room18-specific regression; it is an
+offscreen rendering audit, not a manual playthrough of every entrance.
