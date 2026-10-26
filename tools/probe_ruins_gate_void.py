@@ -52,16 +52,17 @@ def run_probe(source):
         if actual != (5 if number == 3 else 1):
             raise AssertionError('Environment-specific gate barrier type differs')
         barriers += 1
-    level = levels[2005]['data']
-    for y in range(440, 1101, 30):
-        machine.reset(level)
-        machine.put_word(-0x5040, 27)
-        machine.put_word(-0x5050, y)
-        machine.call(6, 0x4864, (3,), stop=(6, 0x4908))
-        if (machine.word(-0x5040), machine.word(-0x5050), machine.word(-0x5048)) != (
-                0, y - 360, character_row(y - 360)):
-            raise AssertionError('Unlinked Cut did not enter native room zero with Y - 360')
-        cuts += 1
+    for number, room in ((6, 27), (5, 9)):
+        level = levels[1999 + number]['data']
+        for y in range(440, 1101, 30):
+            machine.reset(level)
+            machine.put_word(-0x5040, room)
+            machine.put_word(-0x5050, y)
+            machine.call(6, 0x4864, (3,), stop=(6, 0x4908))
+            if (machine.word(-0x5040), machine.word(-0x5050), machine.word(-0x5048)) != (
+                    0, y - 360, character_row(y - 360)):
+                raise AssertionError('Unlinked Cut did not enter native room zero with Y - 360')
+            cuts += 1
     return dict(gate_predicates=predicates, gate_barriers=barriers, room_zero_cuts=cuts,
                 scope=__doc__)
 

@@ -100,3 +100,12 @@ levels6-9, respecting the original LEVL room-count header. Working actor and
 A6 locals are supplied; no LOS/classification/tile helper is stubbed. Full
 FrameAdv, actor loading and pose admission remain outside this comparison.
 Two regressions cover the gap-before-wall and both hanging facings.
+
+Full-suite follow-up: the existing bridge tension test's ordinary unlinked
+room9 fixture assumed camera Y730 was native void Y730. Updated its initial
+camera Y by360, preserving its death/tension assertions. The bridge chasm
+(vetoed down cut) fixture stays unchanged. Extended the independent native
+Cut probe to actual level5 room9:46 original rebases now pass in both
+caverns and ruins.56 focused ruins/bridge/void tests pass12.883s. The earlier
+2951-test full run had this one fixture failure and10 explicit skips; a new
+full run is required after the remaining shared changes.

@@ -388,7 +388,9 @@ class BridgeFallTests(unittest.TestCase):
                 runtime = SequenceRuntime(self.SEQUENCES, SequenceState(
                     7, action=102, target_x=200, current_x=200, facing=1, actor_type=0,
                     animation_state=4, vertical_velocity=30,
-                    current_y=VOID_DEATH_Y - floor_y(1) + 10))
+                    # Ordinary unlinked room9 continues in native room0
+                    # with Y-360; the bridge's vetoed down cut does not.
+                    current_y=VOID_DEATH_Y + (360 if room == 8 else 0) - floor_y(1) + 10))
                 events = self.physics.advance(motion, runtime, 200, (190, 300, 230, 360))
                 self.assertEqual([event.kind for event in events], ['death'])
                 bridge = self.map.caverns.bridge
