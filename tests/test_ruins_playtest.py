@@ -56,3 +56,47 @@ class RuinsPlaytestTests(unittest.TestCase):
             self.assertEqual(s.sequence_state.action, pose)
             self.assertIsNotNone(s.player_sprite(s.sequence_state.action))
             s.sequence_runtime.next_frame()
+
+    def test_god_k_kills_heads_and_serpents_without_changing_other_rooms(self):
+        from types import SimpleNamespace
+
+        s = self.scene
+        s.set_god_mode(True)
+        for room in (3, 19):
+            s.jump_to_room(room, 2, 100, 1)
+            c = s.combat
+            c.ruins.load_room(c, 6)
+            others = [(actor.life, actor.state.source_sequence_id) for actor in c.ruins.actors(6)]
+            actors = c.ruins.actors(room)
+            self.assertTrue(actors)
+            s.dev_key_press(SimpleNamespace(keysym='k', state=0))
+            s.dev_key_release(SimpleNamespace(keysym='k', state=0))
+            self.assertTrue(all(actor.life == 0 for actor in actors))
+            self.assertTrue(all(actor.state.source_sequence_id in (154, 174) for actor in actors))
+            c.ruins.load_room(c, room)
+            self.assertTrue(all(actor.life == 0 for actor in actors))
+            self.assertEqual(others, [(actor.life, actor.state.source_sequence_id)
+                                     for actor in c.ruins.actors(6)])
+
+    def test_level7_map_keeps_both_entry_doors_and_roundtrips_cached_starts(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from pop2.development_map import cached_development_map
+
+        with TemporaryDirectory() as directory:
+            level = self.scene.resources.level(7)
+            first = cached_development_map(level, 'alternate-start-regression', Path(directory))
+            second = cached_development_map(level, 'alternate-start-regression', Path(directory))
+        self.assertEqual(first.starts, frozenset(('Room 32', 'Room 4')))
+        self.assertEqual(first.starts, second.starts)
+
+    def test_requested_unused_rooms_are_hidden_only_from_the_level6_map(self):
+        from pop2.development_map import room_positions
+
+        terrain = self.scene.level_map
+        before = terrain.level
+        positions = room_positions(terrain)
+        self.assertNotIn(23, positions)
+        self.assertNotIn(25, positions)
+        self.assertIn(24, positions)  # Potion/serpent room stays reachable.
+        self.assertEqual(terrain.level, before)

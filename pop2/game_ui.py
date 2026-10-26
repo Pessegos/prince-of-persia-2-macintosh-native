@@ -804,8 +804,9 @@ class DevelopmentMenu:
             return (round(x1 * sx + ox), round(y1 * sy + oy),
                     round(x2 * sx + ox) - 1, round(y2 * sy + oy) - 1)
 
-        markers = ([(preview.start, 'Start', (127, 223, 170))]
-                   if preview.start in preview.rooms else [])
+        start_labels = preview.starts | {preview.start}
+        markers = [(label, 'Start', (127, 223, 170))
+                   for label in sorted(label for label in start_labels if label in preview.rooms)]
         markers += [(label, 'End', (255, 157, 122))
                     for label in sorted(preview.exits) if label in preview.rooms]
         if self.screen in preview.rooms and self.focus == 4 and self.preview_keyboard_selection:
@@ -821,7 +822,7 @@ class DevelopmentMenu:
             image.paste(ImageEnhance.Brightness(image.crop(rect)).enhance(1.35), (x1, y1))
             draw.rectangle((x1, y1, x2, y2), outline=gold, width=max(1, round(2 * min(sx, sy))))
             caption = label if label.startswith('Room ') else f'Screen {label}'
-            if label == preview.start:
+            if label in start_labels:
                 caption += ' - Start'
             if label in preview.exits:
                 caption += ' - End'

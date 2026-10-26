@@ -19,7 +19,7 @@ DIRECTIONS = {'left': (-1, 0), 'right': (1, 0), 'up': (0, -1), 'down': (0, 1)}
 # Level six: native rooms 28 and 14 are never visited (the cliff's left cut
 # lands in room 3, S07_373E) and room 10 has no tiles at all; the cliff is
 # drawn beside room 1 instead.
-HIDDEN_ROOMS = {6: (27, 13, 9)}
+HIDDEN_ROOMS = {6: (27, 13, 9, 23, 25)}
 DETACHED_STARTS = {6: (0, (1, 0))}
 
 
@@ -190,6 +190,7 @@ class DevelopmentMap:
     scaled_images: dict = field(default_factory=dict, repr=False, compare=False)
     start: str | None = None
     exits: frozenset = frozenset()
+    starts: frozenset = frozenset()
 
     def transform(self, size):
         scale = min(size[0] / self.image.width, size[1] / self.image.height)
@@ -282,9 +283,14 @@ def build_development_map(level, include_enemies=True):
         rooms[labels[room]] = x1, y1, x2, y2
         frames[labels[room]] = frame
     start, exits = level_landmarks(level, terrain, {room: labels[room] for room in positions})
+    starts = {start} if start is not None else set()
+    alternate = (renderer.cavern_program or {}).get('alternate_entry')
+    if alternate is not None and alternate['room'] in positions:
+        starts.add(labels[alternate['room']])
     return DevelopmentMap(image, rooms, {labels[room]: point for room, point in positions.items()},
                           frozenset(labels[room] for room, actors in enemies[1].items() if actors)
-                          if enemies is not None else frozenset(), frames, start=start, exits=exits)
+                          if enemies is not None else frozenset(), frames, start=start, exits=exits,
+                          starts=frozenset(starts))
 
 
 def cached_development_map(level, fingerprint, directory=None):
@@ -300,22 +306,25 @@ def cached_development_map(level, fingerprint, directory=None):
             positions = {label: tuple(point) for label, point in metadata['positions'].items()}
             frames = {label: images[label] for label in rooms}
             start, exits = metadata['start'], frozenset(metadata['exits'])
+            starts = frozenset(metadata.get('starts', ()))
             if (images['overview'].size != MAP_SIZE or not rooms or set(rooms) != set(positions)
                     or any(len(rect) != 4 or not 0 <= rect[0] < rect[2] <= MAP_SIZE[0]
                            or not 0 <= rect[1] < rect[3] <= MAP_SIZE[1] for rect in rooms.values())
                     or any(len(point) != 2 or any(type(v) is not int for v in point)
                            for point in positions.values())
                     or any(frame.size != ROOM_SIZE for frame in frames.values())
-                    or start is not None and start not in rooms or not exits.issubset(rooms)):
+                    or start is not None and start not in rooms or not exits.issubset(rooms)
+                    or not starts.issubset(rooms)):
                 raise ValueError('Invalid cached map geometry')
             return DevelopmentMap(images['overview'], rooms, positions,
-                                  frozenset(metadata['enemies']), frames, start=start, exits=exits)
+                                  frozenset(metadata['enemies']), frames, start=start, exits=exits,
+                                  starts=starts)
         except (ValueError, KeyError, TypeError, IndexError, AttributeError):
             pass
     result = build_development_map(level)
     write_preview(path, fingerprint,
                   dict(rooms=result.rooms, positions=result.positions, enemies=sorted(result.enemy_rooms),
-                       start=result.start, exits=sorted(result.exits)),
+                       start=result.start, exits=sorted(result.exits), starts=sorted(result.starts)),
                   dict(overview=result.image, **result.source_frames))
     return result
 

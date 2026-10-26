@@ -1574,6 +1574,18 @@ class CombatEncounter:
             if actor.skeleton is not None:
                 actor.skeleton.marker = -1
                 actor.skeleton.timer = 0
+        if self.ruins is not None:
+            if room not in self.ruins.rooms:
+                self.ruins.load_room(self, room)
+            for actor in self.ruins.actors(room):
+                if actor.room != room or not actor.alive:
+                    continue
+                actor.life = 0
+                self.ruins.kill(actor, self)
+                self.ruins.set_floor(actor)
+                actor.state.vertical_velocity = 0
+                actor.runtime.next_frame()
+                actor.state.sound_events.append(130 if actor.state.actor_type in (7, 8) else 127)
         self.refresh_target()
 
     def resolve_contacts(self):

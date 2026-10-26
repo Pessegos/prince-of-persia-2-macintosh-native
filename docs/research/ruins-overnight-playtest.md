@@ -28,3 +28,15 @@ No resource reimport or save-schema change. Complete overnight suite pending.
 - Ceiling shake; mega-potion shaft and cushioning slab.
 - Level7 alternate start room4; room32 special collapsing floor.
 - Room2 wall art preview; level6 rooms24/26 map removal (not LEVL deletion).
+
+## Block 2: developer controls and map entries
+
+K now visits the separate ruins actor bank, selecting native head/serpent
+kill sequences154/174 and clearing the banked opponent. It stays in the
+selected room; other-room actors and ordinary skeleton rules are unchanged.
+Level7's map displays both actual entrance doors (native rooms32 and4),
+including cache restoration and Start tooltips. Primary start remains the
+same API field. User-requested rooms24/26 of level6 are hidden from the map
+only; original level records and gameplay links are preserved.
+
+Validation:61 map/cache/developer-cheat and ruins playtest tests pass17.492s.
