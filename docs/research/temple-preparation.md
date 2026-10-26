@@ -83,7 +83,8 @@ generic header start when integrating that entry.
 
 The gate-contact follow-up now includes independent
 [face/back distances](temple-gate-distance.md), with real admission and
-room adjustment. General distance selection and ejection remain separate
+room adjustment, and [hard contact/ejection](temple-gate-ejection.md).
+General soft distance selection and collision-bank construction remain separate
 steps; no new temple runtime is enabled by these research modules.
 
 The inventory retains candidate tile IDs without assuming all behavior:
