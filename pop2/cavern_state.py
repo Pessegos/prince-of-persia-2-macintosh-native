@@ -21,6 +21,9 @@ class CavernState:
     entry_cell: int | None = None
     entry_frames: tuple = ()
     entry_frame: int = 0
+    # A room cut starts the closure after this tick's object animation. This
+    # sub-frame presentation guard is deliberately absent from saves.
+    entry_pending: bool = False
     torches: dict = field(default_factory=dict)
     loose: LooseFloors = field(default_factory=LooseFloors)
     lava: Lava = field(default_factory=Lava)
@@ -69,6 +72,7 @@ class CavernState:
         self.configure_entry(alternate or program.get('entry_exit'), game.level.start_room)
 
     def configure_entry(self, metadata, start_room=None):
+        self.entry_pending = False
         if metadata is None:
             return
         self.entry_room, self.entry_cell = metadata['room'], metadata['cell']
@@ -77,6 +81,10 @@ class CavernState:
         # level six's room-3 door waits, shut, for the cliff exit.
         self.entry_frame = (0 if start_room is None or start_room == self.entry_room
                             else len(self.entry_frames) - 1)
+
+    def start_entry(self):
+        self.entry_frame = 0
+        self.entry_pending = True
 
     def foreground(self, room, cell, value):
         if (room, cell) in self.potions.tiles:
@@ -98,6 +106,9 @@ class CavernState:
         return value
 
     def advance(self):
+        if self.entry_pending:
+            self.entry_pending = False
+            return ()
         if self.entry_frame + 1 >= len(self.entry_frames):
             return ()
         self.entry_frame += 1

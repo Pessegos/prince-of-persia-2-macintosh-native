@@ -992,9 +992,11 @@ class Ruins(Caverns):
         # CutChar 6:4d7c-4d92 -> S07_373E: leaving level six's cliff (native
         # room 27) to the left, the Prince steps out of native room 3's door
         # at column 4, row 2, facing right with SEQS 5 (FirstFrame 2:5f36).
+        # Load the open backdrop before drawing the arrival. The same tick's
+        # later level-events phase must not consume its first visible frame.
+        scene.game.caverns.start_entry()
         scene.jump_to_room(2, 2, 4 * TILE_WIDTH + 22, 1, reset_guards=False,
-                          preserve_checkpoint=True)
-        scene.game.caverns.entry_frame = 0
+                          preserve_checkpoint=True, redraw=False)
         scene.start_sequence(5)
         scene.sequence_runtime.next_frame()
         scene.action = scene.sequence_state.action

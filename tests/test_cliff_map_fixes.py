@@ -12,6 +12,27 @@ from pop2.paths import ASSET_DIR
 from pop2.screenshots import ScreenshotSettings
 
 
+class EntranceFrameTests(unittest.TestCase):
+    def test_arrival_holds_the_open_frame_once_without_changing_save_fields(self):
+        from pop2.cavern_state import CavernState
+        from pop2.save_game import _pack
+
+        door = CavernState()
+        door.configure_entry({'room': 2, 'cell': 24, 'frames': [
+            {'phase': 79, 'sounds': []}, {'phase': 47, 'sounds': []},
+            {'phase': 0, 'sounds': [20]}]}, start_room=26)
+        door.start_entry()
+        pending = _pack(door)
+        self.assertEqual(door.advance(), ())
+        self.assertEqual(door.foreground(2, 24, 0), 79)
+        self.assertEqual(_pack(door), pending)
+        self.assertEqual(door.advance(), ())
+        self.assertEqual(door.foreground(2, 24, 0), 47)
+        self.assertEqual(door.advance(), (20,))
+        self.assertEqual(door.foreground(2, 24, 0), 0)
+        self.assertEqual(door.advance(), ())
+
+
 @unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported ruins required')
 class CliffMapTests(unittest.TestCase):
     def setUp(self):
@@ -103,6 +124,34 @@ class CliffMapTests(unittest.TestCase):
         self.assertEqual(s.room_id, 2)
         self.assertEqual(heard, [GateSound(20, False, (2, 24))])
         self.assertTrue(any(event.cue == 20 and not event.opening for event in audio.gate_events))
+
+    def test_first_visible_ruins_frame_has_the_fully_open_door_and_its_stairs(self):
+        s = self.scene
+        shown = []
+
+        def remember():
+            if s.room_id == 2:
+                shown.append((s.game.caverns.entry_frame, s.background.tobytes()))
+
+        with patch.object(s, 'render', side_effect=remember), patch.object(s, 'advance_audio'):
+            s.load_level(6)
+            self.tick(4)
+            s.horizontal_key(SimpleNamespace(keysym='Left', state=0), -1, True)
+            for _ in range(30):
+                self.tick()
+                if s.room_id == 2:
+                    break
+            self.assertTrue(shown)
+            self.assertTrue(all(frame == 0 for frame, _background in shown))
+            expected = s.level_renderer.enter_room(2, s.game.caverns).background.tobytes()
+            self.assertTrue(all(background == expected for _frame, background in shown))
+            self.assertEqual(s.level_map.tile(2, 4, 2).foreground & 255, 79)
+            self.assertNotIn(20, s.sequence_state.sound_events)
+            self.tick()
+            self.assertEqual(s.level_map.tile(2, 4, 2).foreground & 255, 47)
+            self.tick()
+            self.assertEqual(s.level_map.tile(2, 4, 2).foreground & 255, 0)
+            self.assertEqual(s.sequence_state.sound_events.count(20), 1)
 
     def test_running_jump_off_cliff_keeps_forward_arc_and_scream_without_impact(self):
         from pop2.audio import AudioEngine

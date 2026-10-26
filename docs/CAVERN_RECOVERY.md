@@ -849,6 +849,19 @@ Restart restores the initial phase. The two portal tiles are not pressure plates
 This remains the separate entry-closure controller; button-driven exit opening
 is described above.
 
+Level six's cliff arrival presents phase79 before advancing the closure.
+AnimTrobs (2:6230) precedes the Prince (2:625c); the cliff cut calls
+7:373e -> FirstFrame (2:5f36) later in that update. The port's later
+level-events phase formerly consumed phase79 immediately, while room placement
+had loaded the shut backdrop. Starting the entrance before loading its room and
+holding its first advance for the arrival tick fixes both omissions. The existing
+79/47/0 phases, ordinary entry cadence and final cue20 remain unchanged.
+The `entry_pending` sub-frame guard is omitted from save records and defaults
+to false on restore; no saved fields or version change. The port's visible
+stairs are intentionally retained over the Macintosh black doorway interior,
+as requested. Scene regressions check every render during the actual cliff
+crossing, the loaded open backdrop, both following phases and the single slam.
+
 The rooftop waterline previously clipped actors in cavern Rooms 16 and 19
 because their room IDs matched the docks. Composition now requires environment
 5, as in ClipChar (4:4218-4228). Cavern actors retain their lower pixels.

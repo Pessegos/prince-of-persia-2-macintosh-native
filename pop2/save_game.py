@@ -54,6 +54,7 @@ CLASSES = {cls.__name__: cls for cls in (
     RuinsMind,
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
+        CavernState: {'entry_pending'},
         LooseFloors: {'shake_events'}, PressurePlates: {'slams', 'slam_sounds', 'gate_sounds'}}
 GAME_FIELDS = ('room_id', 'checkpoint', 'death', 'complete', 'harbor', 'desert', 'caverns')
 CONTROL_FIELDS = (
