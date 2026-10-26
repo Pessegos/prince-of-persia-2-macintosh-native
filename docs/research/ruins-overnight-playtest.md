@@ -21,7 +21,7 @@ Validation:140 targeted potion/lava/floor/slot/crevice/ruins tests pass52.783s.
 Regression reproduces actual room25 potion consumption, jump and slab fall.
 No resource reimport or save-schema change. Complete overnight suite pending.
 
-## Remaining requests
+## Initial backlog after block1 (resolved below)
 
 - Tunnel18 X-ray; ordinary ruins gates; cautious cliff scream.
 - God-mode K heads/serpents; serpent runtime/source review.
@@ -145,3 +145,39 @@ The old room17 crevice test now asserts every crevice digit and every other
 unchanged digit rather than assuming the export has only three dynamic cells.
 The serpent controller independently matches20000 cases in addition to the
 5000 alert slice checks. Full shared-desktop discovery follows this block.
+
+## Room2 artwork and final scope
+
+The level6/native room2 screenshot combines the repeated dark ruin sky
+(SHAP3506/3507) with a remaining right-hand strip of the landscape behind
+it. Prepared a local-only comparison extending the same native sky repeat
+under that strip, preserving the original foreground wall, character and HUD.
+This is a subjective proposal, not an integrated artwork change. Evidence:
+`rendered/ruins-night/room2-wall-proposal.png` and `.gif`. Existing approved
+cavern art is unchanged. No original resource is edited or published.
+
+An additional original drawing check covers17 rooms and51 rest/removed
+combinations for type15 floors: stored slot composition matches whole-room
+original command lists, including floor/climb redraws, with zero differences.
+The importer/decoder is shared with the existing native drawing harness;
+this establishes command equality, not independent QuickDraw raster equality.
+Base room commands, entrance/exit frames, pressure plates and other sections
+of all four regenerated exports are identical to the earlier version16 files;
+only version and loose-floor metadata changed.
+
+A hidden scene smoke run exercises the15 serpent-bearing rooms across
+levels6-9 for180 frames each. It exposes no runtime exception, but some
+serpents continue offscreen in these artificial invulnerable/warped fixtures.
+This is not evidence that the complete serpent runtime is correct or that
+an offscreen trajectory itself differs from the original. CheckCollide4:569e
+explicitly exempts serpents from barriers. Keep full serpent scheduling,
+room transitions and retreat behavior as an open parity audit rather than
+adding speculative wall clamps. The two independently demonstrated alert
+errors are corrected; the user's broad serpent concern is not closed in full.
+
+Full discovery2962 tests555.665s reached all gameplay checks without a
+failure; two strict fresh-import comparisons failed solely because unchanged
+cavern exports3/4 had been labelled17. Scope the new export version17 to
+ruins/environment4; cavern exports retain16 and their byte-equivalent data.
+The strict import equality assertions remain intact. A new full run follows
+the one-line importer correction, with10 explicit desktop skips expected.

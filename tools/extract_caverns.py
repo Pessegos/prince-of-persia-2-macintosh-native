@@ -568,7 +568,7 @@ def _prepare_caverns(program, caverns, prince, progress, recover, *, level_numbe
     for room in range(32):
         progress(f'Cavern scenery: room {room + 1}/32')
         scenes[str(room)] = recover(program, caverns, level, room, prince)
-    result = {'version': 17, 'level': level_number,
+    result = {'version': 17 if definition.kind == 4 else 16, 'level': level_number,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     result['climb_redraw'], result['floor_redraw'] = {}, {}
