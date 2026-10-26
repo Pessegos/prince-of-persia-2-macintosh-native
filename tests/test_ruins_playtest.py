@@ -19,6 +19,59 @@ class RuinsPlaytestTests(unittest.TestCase):
 
         RooftopSceneTests.tick(self, count)
 
+    def test_first_head_is_crushed_by_the_falling_shelf_and_stays_dead_on_return(self):
+        from unittest.mock import patch
+
+        s = self.scene
+        s.peaceful = False
+        s.jump_to_room(3, 2, 120, 1)
+        brain = s.combat.ruins
+        head = s.combat.visible_ruins()[0]
+        head.row = 2
+        head.state.current_y = -33
+        head.state.target_x = head.state.current_x = 200
+        head.state.horizontal_velocity = head.state.vertical_velocity = 0
+        brain.jump(head, 131)
+        head.runtime.next_frame()
+        brain.banked = head
+        tile = s.level_map.tile(3, 3, 1)
+        self.assertEqual(tile.kind, 15)
+        s.game.caverns.loose.break_shelf(s.level_map, tile, 3)
+        # Hold its horizontal AI position to isolate the falling-slab trick.
+        # The real shelf, gravity, contact, damage and animation still run.
+        with patch.object(brain, 'control_head'):
+            for _ in range(8):
+                self.tick()
+                if not head.alive:
+                    break
+        self.assertEqual(head.life, 0)
+        self.assertEqual(head.state.source_sequence_id, 146)
+        self.assertIsNone(brain.banked)
+        self.tick(12)
+        s.jump_to_room(2, 2, 100, 1, reset_guards=False)
+        s.jump_to_room(3, 2, 120, 1, reset_guards=False)
+        self.assertIn(head, brain.actors(3))
+        self.assertEqual(head.life, 0)
+        self.assertEqual(head.state.source_sequence_id, 146)
+
+    def test_falling_slab_uses_the_serpents_flattened_death(self):
+        from unittest.mock import patch
+        from pop2.loose_floors import FallingFloor
+
+        s = self.scene
+        s.peaceful = False
+        s.jump_to_room(19, 2, 120, 1)
+        brain = s.combat.ruins
+        serpent = s.combat.visible_ruins()[0]
+        self.assertEqual(serpent.state.actor_type, 11)
+        serpent.state.target_x = serpent.state.current_x = 250
+        column = brain.column(serpent, s.combat)
+        s.game.caverns.loose.falling.append(FallingFloor(19, column, 2, 330, 16, 3))
+        with patch.object(brain, 'control_serpent'):
+            self.tick(2)
+        self.assertEqual(serpent.life, 0)
+        self.assertEqual(serpent.state.source_sequence_id, 169)
+
     def test_physical_up_and_its_release_both_map_to_down_while_inverted(self):
         s = self.scene
         s.jump_to_room(24, 1, 137, 1)

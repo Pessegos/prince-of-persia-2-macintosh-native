@@ -15,6 +15,7 @@ subclasses Environment and is selected in environment_for.
 """
 
 import time
+from types import SimpleNamespace
 
 from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, bridge_sag, on_bridge
 from pop2.carpet import (
@@ -24,7 +25,7 @@ from pop2.carpet import (
 from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.crevices import CREVICE_TILE
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
-from pop2.loose_floors import floor_hits_actor
+from pop2.loose_floors import crush_sequence, floor_hits_actor
 from pop2.opponent_generation import character_column
 from pop2.render_opening import TILE_HEIGHT, TILE_WIDTH
 from pop2.terrain import floor_contact_x, floor_y
@@ -494,21 +495,37 @@ class Caverns(Environment):
         for room, row in caverns.loose.shake_events:
             scene.combat.shake_bones(room, row)
         caverns.loose.shake_events.clear()
-        actors = (scene.combat.player, *scene.combat.active_guards())
+        ruins = getattr(scene.combat, 'ruins', None)
+        actors = (scene.combat.player, *scene.combat.active_guards(),
+                  *(scene.combat.visible_ruins() if ruins is not None else ()))
         for block in blocks:
             for actor in actors:
                 state, motion = actor.state, actor.terrain_motion
+                special = getattr(actor, 'ruins', None) is not None
+                if special:
+                    # Ruins actors keep their physical room/row in Fighter;
+                    # their controller owns motion, not RooftopPhysics.
+                    motion = SimpleNamespace(room=actor.room, row=actor.row)
                 record = (scene.frames[state.action] if actor is scene.combat.player else
+                          ruins.record(actor, scene.combat) if special else
                           scene.guard_art.frames[guard_frame_index(state.action)])
+                damage = 1 if state.actor_type == 0 else 100
+                sequence = crush_sequence(state, actor.life <= damage)
                 if (motion is None or not floor_hits_actor(block, motion, state, record, actor.alive)
                         or actor is scene.combat.player and getattr(scene, 'god_mode', False)
-                        or 5 <= state.action < 15 or state.action == 109
-                        or state.animation_state >= 2 and state.animation_state != 7
-                        or state.actor_type == 1):
+                        or sequence is None):
                     continue
                 # Crushed 6:28f0: one life for the Prince, fatal for an
                 # ordinary guard; survivors use SEQS:52, not sword recoil.
-                actor.life = max(0, actor.life - (1 if state.actor_type == 0 else 100))
+                actor.life = max(0, actor.life - damage)
+                if special:
+                    # Crushed6:2934/2950-2980: SetCharFloor, then146 for
+                    # heads or169 for serpents. This is not sword-hit death.
+                    ruins.set_floor(actor)
+                    ruins.jump(actor, sequence)
+                    if ruins.banked is actor:
+                        ruins.banked = None
+                    continue
                 state.current_y = 0
                 motion.falling = False
                 actor.recovering = actor.alive
@@ -516,7 +533,7 @@ class Caverns(Environment):
                     actor.skeleton.collapse(actor, encounter=scene.combat)
                     actor.runtime.next_frame()
                     continue
-                scene.physics.select(actor.runtime, 52 if actor.alive else 22)
+                scene.physics.select(actor.runtime, sequence)
                 if actor.alive:
                     state.sound_events.append(300)
                 else:

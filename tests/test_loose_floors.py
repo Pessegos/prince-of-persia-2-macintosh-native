@@ -278,6 +278,18 @@ class LooseFloorTests(unittest.TestCase):
         self.state.target_x -= 51
         self.assertFalse(floor_hits_actor(block, self.motion, self.state, self.record, alive=False))
 
+    def test_serpent_body_can_be_hit_in_either_neighbor_cell_at_native_edges(self):
+        self.state.actor_type = 11
+        # Same supporting cell7; rear body needs distance>12, front needs<6.
+        for facing, x, column, hit in ((1, 417, 6, True), (1, 418, 6, False),
+                                       (1, 425, 8, True), (1, 424, 8, False),
+                                       (0, 393, 8, True), (0, 392, 8, False),
+                                       (0, 385, 6, True), (0, 386, 6, False)):
+            with self.subTest(facing=facing, x=x, column=column):
+                self.state.facing, self.state.target_x = facing, x
+                self.assertEqual(floor_hits_actor(FallingFloor(0, column, 0, 107),
+                                                 self.motion, self.state, self.record), hit)
+
     def test_export_identifies_loose_and_impact_cells_from_links(self):
         cells = loose_floor_cells(self.terrain)
         self.assertEqual(set(cells), {(0, 7), (3, 7)})

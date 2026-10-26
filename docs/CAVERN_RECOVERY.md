@@ -1006,7 +1006,8 @@ with a 365-unit physical cut, and uses the original impact classifications and
 sound cues 28/26. A falling actor strikes a loose floor with its own velocity;
 Falling (6:01ee) halves that velocity and retains the airborne state. Crushed
 (6:28f0) supplies the ordinary Prince's one-life damage and SEQS:52 recovery.
-Special actors remain separate recovery work. Pressure-plate impacts now feed
+The ruins special-actor slab path is now handled separately as described in
+`research/ruins-slab-head-trick.md`. Pressure-plate impacts now feed
 the controller described above; this older debris comparison did not test them.
 
 DrawMob (5:3128-32e0) also marks the next column's floor for repaint at the

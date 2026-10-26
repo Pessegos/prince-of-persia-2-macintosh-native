@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import struct
 
 from pop2.opponent_generation import EMPTY_TILES, character_column
-from pop2.terrain import floor_contact_x, floor_y
+from pop2.terrain import floor_contact_x, floor_edge_distance, floor_y
 
 
 def pressure_tile(terrain, motion, state, record):
@@ -238,5 +238,25 @@ def floor_hits_actor(block, motion, state, record, alive=True):
     height = 0 if state.actor_type == 11 else -38 if state.actor_type in (7, 8) else -57
     if block.y <= floor_y(motion.row) + state.current_y + height:
         return False
-    column = character_column(floor_contact_x(state.target_x, state.facing, record))
-    return block.column == column
+    contact = floor_contact_x(state.target_x, state.facing, record)
+    column = character_column(contact)
+    if block.column == column:
+        return True
+    if state.actor_type == 11:
+        # 5:36e0-3762 also tests the serpent's adjacent body cells.
+        distance = floor_edge_distance(contact, state.facing)
+        forward = 1 if state.facing else -1
+        return (block.column == column - forward and distance > 12
+                or block.column == column + forward and distance < 6)
+    return False
+
+
+def crush_sequence(state, fatal):
+    """Crushed6:28f0: excluded poses/modes, then the type-specific reaction."""
+    if (5 <= state.action < 15 or state.action == 109
+            or state.animation_state >= 2 and state.animation_state != 7
+            or state.actor_type == 1):
+        return None
+    if not fatal:
+        return 52
+    return 146 if state.actor_type in (7, 8) else 169 if state.actor_type == 11 else 22
