@@ -9,7 +9,14 @@ from PIL import Image
 
 
 def retouched_room_commands(level, room, commands):
-    """Level6 room2: continue its lower wall upward with the same native piece."""
+    """Room-local continuations made from the existing native drawing pieces."""
+    if (level, room) == (6, 14):
+        if any(command[:6] == ['back', 3506, 40, 340, 0, 2] for command in commands):
+            # Fill the unpainted strip; otherwise DoCleanCut retains the
+            # previous room there. Continue the same102-pixel sky repeat.
+            return commands + [['back', 3506, -62, 340, 0, 2,
+                                [0, 0, 335, 40], 4, 0, 2]]
+        return commands
     if (level, room) != (6, 1):
         return commands
     walls = [command for command in commands if command[:6] in (
