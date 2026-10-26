@@ -9,7 +9,8 @@ from tools.probe_temple_gate_standing import StandingCellReader
 
 class TempleSoftDistanceTests(unittest.TestCase):
     def query(self, *, here=1, ahead=1, foreground=0, facing=-1, x=460,
-              edges=(445, 475), metadata=(0, 0), height=74, bars=0):
+              edges=(445, 475), metadata=(0, 0), height=74, bars=0,
+              view=1, neighbors=(0,) * 6):
         level = bytearray(0x218c)
         for offset, value in ((0x2180, 1), (0x2186, 2), (0x218a, 10)):
             struct.pack_into('>H', level, offset, value)
@@ -20,8 +21,8 @@ class TempleSoftDistanceTests(unittest.TestCase):
         actor = bytearray(actor_fixture(1, 1, 4, facing, 0))
         for offset, value in ((4, x), (40, 9), (42, 20), (46, 94)):
             put_actor(actor, offset, value)
-        reader = StandingCellReader(level, 1)
-        result = soft_distance_reference(bytes(actor), reader, edges, metadata, 1, (0,) * 6,
+        reader = StandingCellReader(level, view)
+        result = soft_distance_reference(bytes(actor), reader, edges, metadata, view, neighbors,
                                          height=height, bars=bars)
         return result, reader
 
@@ -79,3 +80,9 @@ class TempleSoftDistanceTests(unittest.TestCase):
     def test_extending_before_word_subtraction_preserves_the_original_edge_quirk(self):
         for x, remainder in ((22, 48), (23, 49), (24, 50), (25, 0), (-32746, -30)):
             self.assertEqual(self.query(ahead=0, x=x)[0]['remainder'], remainder)
+
+    def test_soft_selector_uses_only_the_four_adjustroom_slots(self):
+        for slot, anchor in enumerate((-77, -77, 433, 943, 943, 433)):
+            neighbors = tuple(1 if i == slot else 0 for i in range(6))
+            result, _ = self.query(here=4, edges=(500, 530), view=2, neighbors=neighbors)
+            self.assertEqual(result['anchor'], anchor)

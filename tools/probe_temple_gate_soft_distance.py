@@ -18,7 +18,9 @@ from pop2.mac_resources import parse_resource_fork
 from tools.probe_level7_sequence_selection import signed_word
 from tools.probe_temple_gate_actor_clip import put_actor
 from tools.probe_temple_gate_admission import admission_reference
-from tools.probe_temple_gate_distance import NEIGHBOR_SLOTS, NativeTempleGateDistance
+from tools.probe_temple_gate_distance import (
+    NEIGHBOR_SLOTS, NativeTempleGateDistance, adjusted_anchor_reference,
+)
 from tools.probe_temple_gate_hanging import actor_fixture
 from tools.probe_temple_gate_standing import COLD_CACHE, StandingCellReader
 from tools.probe_temple_slide_rock_update import actor_word
@@ -53,12 +55,7 @@ def soft_distance_reference(actor, reader, edges, metadata, view, neighbors,
             return -1
         if not -2 <= col <= 11:
             raise ValueError('Native anchor table outside tested -2..11 domain')
-        anchor = signed_word(229 + col * 51)
-        if room != view:
-            if room in neighbors[:3]:
-                anchor = signed_word(anchor - 510)
-            elif room in neighbors[3:]:
-                anchor = signed_word(anchor + 510)
+        anchor = adjusted_anchor_reference(signed_word(229 + col * 51), room, view, neighbors)
         barrier = category(kind)
         if not barrier:
             return -1

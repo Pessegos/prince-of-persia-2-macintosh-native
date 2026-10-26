@@ -18,16 +18,17 @@ distance and writes the anchor. Kind1 and selected source68 are included
 in that asymmetry. Foreground high bits do not substitute for gate position.
 
 AdjustRoom compares the requested room with the displayed room first.
-Three supplied left-neighbor slots shift the anchor by-510; three right
-slots shift it by+510. Left wins if a malformed/control fixture lists the
+Two supplied left-neighbor slots shift the anchor by-510; two right
+slots shift it by+510. A5-4fb8 and A5-4fb6 are not read by this routine.
+Left wins if a malformed/control fixture lists the
 same room on both sides. An unrelated room keeps its unshifted coordinate.
 This probe supplies the room slots and does not certify InitRoom's creation
 of them or independently assert every slot's topological meaning.
 
 ## Evidence
 
-`tools/probe_temple_gate_distance.py` executes79,104 comparisons with zero
-mismatches:78,720 at all41 actual temple gate anchors and384 controls for
+`tools/probe_temple_gate_distance.py` executes79,680 comparisons with zero
+mismatches:78,720 at all41 actual temple gate anchors and960 controls for
 neighbor precedence, signed edges and room adjustment. Both facings, face/
 back, visible heights34/74, kinds0/1/4, sources9/68 and eight foreground
 values are crossed with body positions around the gate. These prepared
@@ -38,18 +39,22 @@ predicted anchor write. Working/saved actor, cache, TROBs, level bytes and
 other fields remain unchanged. No native endpoint is supplied or stubbed;
 the actor, collision edges, room slots and level are input fixtures. The
 independent model does not use the gameplay terrain implementation.
-Ten asset-free tests pin the geometric sides, signed wrapping, admission
-asymmetry, kind/source exceptions and room priorities.
+Eleven asset-free tests pin the geometric sides, signed wrapping, admission
+asymmetry, kind/source exceptions and room priorities. The revised corpus
+places a matching room in each slot alone. The earlier384 controls never
+isolated the two ignored slots, allowing an overbroad reference model to
+pass; that model and the soft selector's shared geometry are now corrected.
+This is a research correction, not a production gameplay change.
 
 ```powershell
-.venv\Scripts\python.exe -m tools.probe_temple_gate_distance --source ..\PoP2-Mac-Code-Recovery --output rendered\temple_gate_distance_v1.json
+.venv\Scripts\python.exe -m tools.probe_temple_gate_distance --source ..\PoP2-Mac-Code-Recovery --output rendered\temple_gate_distance_v2.json
 .venv\Scripts\python.exe -m unittest -q tests.test_temple_gate_distance_reference
 ```
 
 Executable SHA256:
 `ca2c5886244efa7e19d63fee9317ae5c2341b8a7cc79c7740fdd505575f44bd5`.
 Compared-output SHA256:
-`bccefb575e62d378cbb717744c1558eadc60a9646938e44efe57748d037973b6`.
+`66ac00d64996a3ec67433d5be38958ef9b3711d2fff8ea1aaa25807daeb71528`.
 Original bytes and detailed reports remain ignored locally.
 
 Next: use these real distances in4:6202 gate ejection and the hard branch

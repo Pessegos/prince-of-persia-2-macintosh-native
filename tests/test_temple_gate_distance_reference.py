@@ -49,6 +49,11 @@ class TempleGateDistanceTests(unittest.TestCase):
     def test_an_unrelated_room_keeps_the_column_anchor(self):
         self.assertEqual(self.query(room=2), self.query())
 
+    def test_each_neighbor_slot_is_distinguished_in_isolation(self):
+        for slot, expected in enumerate((-77, -77, 433, 943, 943, 433)):
+            neighbors = tuple(2 if i == slot else 0 for i in range(6))
+            self.assertEqual(self.query(room=2, neighbors=neighbors)['anchor'], expected)
+
     def test_subtraction_wraps_as_a_signed_word(self):
         self.assertEqual(self.query(edges=(-32768, 32767)), dict(distance=32285, anchor=433))
         self.assertEqual(self.query(edges=(-32768, 32767), back=True),

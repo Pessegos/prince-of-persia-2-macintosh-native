@@ -26,6 +26,18 @@ from tools.probe_temple_slide_rock_update import actor_word
 NEIGHBOR_SLOTS = (-0x4fc0, -0x4fb4, -0x4fb8, -0x4fbe, -0x4fb2, -0x4fb6)
 
 
+def adjusted_anchor_reference(anchor, room, view, neighbors):
+    """4:56e6 reads two left/two right slots; the third on each side is not read."""
+    if len(neighbors) != 6:
+        raise ValueError('Expected the six supplied room slots')
+    if room != view:
+        if room in neighbors[:2]:
+            anchor = signed_word(anchor - 510)
+        elif room in neighbors[3:5]:
+            anchor = signed_word(anchor + 510)
+    return anchor
+
+
 def distance_reference(actor, foreground, gate_room, gate_column, edges,
                        view_room, neighbors, *, back=False, anchor=73):
     """Gate type1's two geometric distances; all arithmetic stores signed words."""
@@ -35,12 +47,8 @@ def distance_reference(actor, foreground, gate_room, gate_column, edges,
         raise ValueError('Outside the bounded temple gate geometry domain')
     if not back and not admission_reference(actor, foreground, 2):
         return dict(distance=-1, anchor=anchor)
-    anchor = signed_word(229 + gate_column * 51)
-    if gate_room != view_room:
-        if gate_room in neighbors[:3]:
-            anchor = signed_word(anchor - 510)
-        elif gate_room in neighbors[3:]:
-            anchor = signed_word(anchor + 510)
+    anchor = adjusted_anchor_reference(signed_word(229 + gate_column * 51),
+                                       gate_room, view_room, neighbors)
     # DATA type1: face offset40, back offset0, cell span50.
     left, right = edges
     left_distance = signed_word(left - signed_word(anchor + 50))
@@ -118,10 +126,13 @@ def run_probe(source):
     level = levels[2009]['data']
     # Neighbor slot priority, same-room precedence, an unrelated room and
     # signed-word edge/absolute-distance controls. No InitRoom is executed.
+    neighbors_cases = ((2, 3, 4, 5, 6, 7), (5, 6, 7, 2, 3, 4),
+                       (2, 0, 0, 2, 0, 0), (0,) * 6) + tuple(
+                       tuple(2 if i == slot else 0 for i in range(6)) for slot in range(6))
     for facing, kind, edges, view, neighbors, back in product(
             (-1, 0), (0, 1, 4),
             ((-32768, 32767), (32767, -32768), (-1, 0), (400, 430)),
-            (1, 2), ((2, 3, 4, 5, 6, 7), (5, 6, 7, 2, 3, 4), (2, 0, 0, 2, 0, 0), (0,) * 6),
+            (1, 2), neighbors_cases,
             (False, True)):
         actor = bytearray(actor_fixture(1, 1, 4, facing, 0))
         for offset, value in ((8, kind), (42, 20), (46, 94)):
