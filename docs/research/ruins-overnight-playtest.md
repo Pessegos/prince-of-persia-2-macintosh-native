@@ -181,3 +181,27 @@ cavern exports3/4 had been labelled17. Scope the new export version17 to
 ruins/environment4; cavern exports retain16 and their byte-equivalent data.
 The strict import equality assertions remain intact. A new full run follows
 the one-line importer correction, with10 explicit desktop skips expected.
+
+## Final validation
+
+The final shared-desktop full suite passes:2962 tests606.074s,10 explicit
+exclusive-desktop skips, no failures. Full-import equality assertions are
+unchanged. Ruff F/E9, recovery catalog, diff whitespace and dependency checks
+pass. Tests use isolated userdata/hidden synthetic scenes; no live user game,
+emulator or personal saves/settings were operated.
+
+A further local investigation combines native serpent controller, frame
+reload/supporting-column, AnimChar, gravity and MoveChar across actual spawn
+records with a stationary supplied Prince/alert. It agrees for13430 updates
+before four divergences after serpents travel beyond the left edge in two
+level9 rooms. Caller caches, visible-room/bank admission and saving must be
+validated before attributing these traces to a runtime bug. This exploratory
+fixture is not a full FrameAdv oracle and does not justify new wall clamps.
+The tested alert corrections ship; this broader AI question stays open.
+
+Ready to integrate only this task's nine implementation/check commits and
+this validation note onto main2056ed5. Preserve the user's README preview
+byte-for-byte. Update the four ignored ruins6-9 scenery exports to17, whose
+base drawings and non-floor sections remain identical. No manual reimport
+will be needed in the primary workspace; restart the game after integration.
+Room2 visual proposal remains local and unapplied pending the user's review.
