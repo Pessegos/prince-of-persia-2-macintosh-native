@@ -90,8 +90,11 @@ Collision-bank construction and repeated physical support remain separate
 steps; no new temple runtime is enabled by these research modules.
 The first bank boundary is now recovered as
 [collision history selection](temple-collision-history.md), followed by the
-[actual row sweep](temple-collision-sweep.md). Caller-generated intervals,
-three-row composition and sliding-rock overlays remain separate steps.
+[actual row sweep](temple-collision-sweep.md). The
+[complete bank caller](temple-collision-banks.md) now generates intervals,
+composes three rows and selects incoming contacts, with actual rock queries
+against an explicitly empty bank. Nonempty rock overlays and physical
+responses remain separate steps.
 
 The inventory retains candidate tile IDs without assuming all behavior:
 

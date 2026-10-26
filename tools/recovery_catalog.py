@@ -115,7 +115,7 @@ REVIEWS = {
     (8, "TriggerLavaBubble"): ("partial", "pop2/lava.py", "first inactive bubble reuse, event coordinates/sequence/layer and previous-phase activation"),
     (4, "GetCharCol"): ("partial", "pop2/coordinates.py;pop2/opponent_generation.py;tools/probe_character_columns.py", "all65536 signed native X values agree, including26 old mismatches at word wrap/arguments0..3; actor/foot coordinate choice remains with callers"),
     (4, "GetRow"): ("partial", "pop2/terrain.py", "signed row conversion"),
-    (4, "CheckBarr"): ("partial", "pop2/terrain.py;tools/probe_temple_collision_history.py", "standing-turn mode-7 exclusion; called helper4:5152 history/tag selection and native copy/fill verified10200 cases; full sweep/rock overlay/caller not executed"),
+    (4, "CheckBarr"): ("partial", "pop2/terrain.py;tools/probe_temple_collision_banks.py", "temple4:4e34 history/generated interval/three row sweeps/incoming masks verified26370 native calls; real rock queries/overlays against empty MOB bank, supplied body/previous banks; nonempty rocks/floating ceiling/response excluded"),
     (4, "CheckCollide1"): ("partial", "pop2/terrain.py", "unarmed grounded front-only versus armed front/rear within port sweep"),
     (4, "ClipChar"): ("partial", "pop2/caverns.py;pop2/scene_prototype.py", "cavern ordinary top clipping and Prince exit top/right rectangle; full native clipping pipeline not translated"),
     (4, "IsCharNonViewable"): ("partial", "pop2/render_opening.py", "settled Prince/ordinary guard rooftop corpses except native rooms 15/16/19; guard variant 228 included"),
