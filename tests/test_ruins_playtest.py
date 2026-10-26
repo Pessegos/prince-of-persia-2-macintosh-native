@@ -100,3 +100,25 @@ class RuinsPlaytestTests(unittest.TestCase):
         self.assertNotIn(25, positions)
         self.assertIn(24, positions)  # Potion/serpent room stays reachable.
         self.assertEqual(terrain.level, before)
+
+    def test_cautious_cliff_descent_reaches_the_scream_without_a_floor_impact(self):
+        from unittest.mock import patch
+
+        s = self.scene
+        s.jump_to_room(26, 2, 250, 0)
+        s.in_animation_tick = True
+        heard = []
+        s.set_key_state('down', True)
+        with patch.object(s, 'render'), patch.object(s, 'advance_audio'):
+            for step in range(45):
+                if step == 5:
+                    s.set_key_state('down', False)
+                s.sequence_state.sound_events.clear()
+                self.tick()
+                heard.extend(s.sequence_state.sound_events)
+                if s.terrain_motion.dead:
+                    break
+        self.assertTrue(s.terrain_motion.void_fall)
+        self.assertTrue(s.terrain_motion.dead)
+        self.assertEqual(heard.count(8), 1)
+        self.assertNotIn(7, heard)

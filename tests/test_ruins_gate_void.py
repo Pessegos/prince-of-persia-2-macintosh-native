@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import unittest
 
 from pop2.sequence_runtime import SequenceState
-from pop2.terrain import LevelMap
+from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion, floor_y
 
 
 class RuinsGateTests(unittest.TestCase):
@@ -39,3 +39,28 @@ class RuinsGateTests(unittest.TestCase):
             body = x - 4, 160, x + 13, 226
             boundary = self.terrain.step_boundary(0, 1, state, record, body)
             self.assertEqual(boundary.clearance, distance)
+
+
+class UnlinkedDownCutTests(unittest.TestCase):
+    def test_body_leaves_before_room_zero_continuation_and_camera_y_is_retained(self):
+        data = bytearray(0x49ca)
+        struct.pack_into('>H', data, 0x2186, 4)
+        struct.pack_into('>H', data, 0x218a, 6)
+        struct.pack_into('>H', data, 0x2198, 27)
+        physics = RooftopPhysics(LevelMap(data))
+        motion = TerrainMotion(26, 3, falling=True)
+        state = SequenceState(99, actor_type=0, level_kind=4)
+        for y, leaves in ((499, False), (500, True)):
+            state.current_y = y - floor_y(motion.row)
+            self.assertFalse(physics.cut_down(motion, state, (250, y - 59, 270, y)))
+            self.assertEqual(motion.void_fall, leaves)
+            self.assertEqual(floor_y(motion.row) + state.current_y, y)
+            self.assertEqual(motion.room, 26)
+
+    def test_void_continuation_roundtrips_and_older_snapshots_default_to_false(self):
+        from pop2.save_game import _pack, _unpack
+
+        packed = _pack(TerrainMotion(26, 3, falling=True, void_fall=True))
+        self.assertTrue(_unpack(packed, None, None).void_fall)
+        del packed['fields']['void_fall']
+        self.assertFalse(_unpack(packed, None, None).void_fall)

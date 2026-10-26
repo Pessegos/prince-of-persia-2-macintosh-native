@@ -55,3 +55,22 @@ ruins gate regressions pass. New probe_ruins_gate_void executes4096 original
 gate predicates and2 barrier classifications without predicate stubs. It also
 establishes23 original room-zero down rebases for the next cliff fix; full
 frame/admission/redraw/audio remain excluded from this bounded probe.
+
+## Block 4: cautious cliff descent
+
+Actual reproduction: level6/native room27, row2, X250 facing left, Down
+enters SEQS68, then releases to99. Before the fix, the visible-room Y730
+limit killed him at velocity57 before the threshold59 scream.
+
+CutChar6:49ee-4a02 waits until Y>=440+body height for an unlinked down cut.
+Cut6:4890/48f2 still enters native room0 and subtracts360 from actor Y even
+when there is no lower neighbor. The host had omitted this continuation.
+TerrainMotion now tracks it explicitly (void_fall), retaining camera-space Y
+and the visible room. Its native death limit730 is therefore camera-space
+1090. No subsequent walls, catches or room cuts exist in native room0.
+Rooftop/water and vetoed/chasm paths keep their separate existing behavior.
+
+The native Cut probe independently verifies23 original unlinked down rebases;
+no Cut/row helper is stubbed.208 cliff/terrain/ceiling/snapshot/ruins tests
+pass48.501s, including an actual descent/release and one scream/no impact.
+The new snapshot field is optional for older saves and roundtrips explicitly.

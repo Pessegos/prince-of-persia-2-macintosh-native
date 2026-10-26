@@ -692,6 +692,9 @@ class TerrainMotion:
     sinking: bool = False
     lava_landing: bool = False
     gate_contact_bounds: tuple[int, int, tuple[int, int, int, int], tuple[int, int, int, int]] | None = None
+    # The native working actor entered room zero below the visible room.
+    # Keep camera-space Y here; Cut has rebased the native Y by -360.
+    void_fall: bool = False
 
 
 @dataclass(frozen=True)
@@ -715,6 +718,8 @@ class RooftopPhysics:
         runtime.next_frame()
 
     def cut_horizontal(self, motion, state, bounds):
+        if motion.void_fall:
+            return False
         left, _top, right, _bottom = bounds
         if motion.falling:
             # CutChar (6:49ce) handles leaving below the viewport BEFORE X.
@@ -764,6 +769,8 @@ class RooftopPhysics:
         return True
 
     def cut_up(self, motion, state):
+        if motion.void_fall:
+            return False
         # CutChar 6:4994-49ca tests the floor-relative actor Y, not the
         # sprite top. Falling modes 3/4/5 must not select an upper room.
         absolute_y = floor_y(motion.row) + state.current_y
@@ -782,15 +789,22 @@ class RooftopPhysics:
         state.current_y = absolute_y - floor_y(motion.row)
         return True
 
-    def cut_down(self, motion, state):
+    def cut_down(self, motion, state, bounds=None):
         # CutChar 6:49ce-4a22 selects down at Y >= 440; the player
         # rebase at 6:48f2 subtracts 360, unlike the NPC Cut's 365.
         absolute_y = floor_y(motion.row) + state.current_y
-        if (absolute_y < DOWN_CUT_Y or state.source_sequence_id == 70
+        if (motion.void_fall or absolute_y < DOWN_CUT_Y or state.source_sequence_id == 70
                 or not self.map.allows_down_cut(motion.room, state.actor_type)):
             return False
         room = self.map.neighbor(motion.room, "down")
         if room is None:
+            # CutChar6:49ee-4a02 waits for the body to leave, then Cut
+            # 6:4890/48f2 enters native room0 and subtracts360 even without
+            # a lower room. Rooftop/water deaths have their own Move path.
+            height = bounds[3] - bounds[1] + 1 if bounds is not None else 0
+            if (motion.falling and state.level_kind != 5
+                    and absolute_y >= DOWN_CUT_Y + height):
+                motion.void_fall = True
             return False
         motion.smooth_landing = (motion.room == 11 and room == 14
                                  and state.actor_type == 0 and state.level_kind == 5)
@@ -980,7 +994,7 @@ class RooftopPhysics:
                 return (gate,)
             # A held/climbing ledge bypasses free-fall physics, not CutChar.
             if (cut_enabled and state.actor_type in (0, None)
-                    and (self.cut_up(motion, state) or self.cut_down(motion, state))):
+                    and (self.cut_up(motion, state) or self.cut_down(motion, state, bounds))):
                 return (TerrainEvent("room"),)
             return ()
         if motion.sinking:
@@ -1065,7 +1079,7 @@ class RooftopPhysics:
                         else old_bounds or collision_bounds)
         # Collide 4:5740-5746 returns before displacement or bump selection
         # for a dead actor. A death pose must never become a live wall bump.
-        corrected = (state.target_x if not alive or state.animation_state == 7
+        corrected = (state.target_x if motion.void_fall or not alive or state.animation_state == 7
                      or state.source_sequence_id in (70, 78) else
                      self.map.wall_correction(motion.room, old_x, state.target_x,
                                               collision_bounds, old_bounds, collision_facing,
@@ -1140,8 +1154,9 @@ class RooftopPhysics:
                 state.horizontal_velocity = 0
                 self.select(runtime, 229)
         record = self.frames[state.action] if self.frames is not None else frame_record
-        gate = self.check_gate(motion, runtime, collision_bounds, old_bounds, record, alive,
-                               sword_drawn, contact_bounds=gate_contact, invulnerable=invulnerable)
+        gate = (None if motion.void_fall else self.check_gate(
+            motion, runtime, collision_bounds, old_bounds, record, alive,
+            sword_drawn, contact_bounds=gate_contact, invulnerable=invulnerable))
         if gate is not None:
             events.append(gate)
             return tuple(events)
@@ -1151,7 +1166,7 @@ class RooftopPhysics:
         elif cut_enabled and self.cut_horizontal(motion, state, bounds):
             events.append(TerrainEvent("room"))
         if (cut_enabled and state.actor_type in (0, None)
-                and self.cut_down(motion, state)):
+                and self.cut_down(motion, state, bounds)):
             events.append(TerrainEvent("room"))
 
         if self.frames is not None:
@@ -1170,19 +1185,20 @@ class RooftopPhysics:
 
         # Below a chasm the Prince is in room 0 (CutChar 6:4d64): its cells
         # are not the linked room's, so nothing aligns or lands him.
-        below_chasm = (state.actor_type in (0, None) and motion.row >= 3
-                       and self.map.chasm(motion.room))
+        below_chasm = motion.void_fall or (state.actor_type in (0, None) and motion.row >= 3
+                                         and self.map.chasm(motion.room))
         # Falling 6:0156-0174 corrects the foot before comparing its height
         # with the next floor, not only after it has reached that floor.
         if frame_record is not None and state.sequence_id != 15 and not below_chasm:
             self.map.align_wall(motion.room, motion.row, state, frame_record)
 
         absolute_y = floor_y(motion.row) + state.current_y
-        if absolute_y > VOID_DEATH_Y and (
+        void_limit = VOID_DEATH_Y + (3 * TILE_HEIGHT if motion.void_fall else 0)
+        if absolute_y > void_limit and (
             self.map.neighbor(motion.room, "down") is None
             or not self.map.allows_down_cut(motion.room, state.actor_type)
         ):
-            state.current_y = VOID_DEATH_Y - floor_y(motion.row)
+            state.current_y = void_limit - floor_y(motion.row)
             if state.level_kind == 5 and motion.room in WATER_ROOMS and not invulnerable:
                 state.vertical_velocity = 0
                 state.animation_state = 1

@@ -2373,7 +2373,7 @@ class ScenePrototype(WindowControls):
 
     def catch_falling_ledge(self):
         motion, state = self.terrain_motion, self.sequence_state
-        if (motion.dead or motion.hit_fall or not self.combat.player.alive
+        if (motion.dead or motion.hit_fall or motion.void_fall or not self.combat.player.alive
                 or not self.shift_held or self.sword_drawn
                 or not self.level_map.catch_ledge(motion.room, motion.row,
                     state, self.frames[state.action], self.harbor)):
