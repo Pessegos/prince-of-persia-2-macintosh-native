@@ -103,7 +103,9 @@ through its real caller, including side-contact suppression and successful
 or missing sequence lookup. Body bounds remain supplied in these modules.
 The [ground bump](temple-ground-bump.md) now advances the actual original
 clip and reloads Kid metadata/supporting column, including the floating link
-and failed selection path. Full Collide admission/airborne responses remain.
+and failed selection path. Its [bounded Collide caller](temple-ground-collision.md)
+also executes real tile/empty-rock admission and the30-pixel branch through
+that animation/frame reload. Other airborne responses and wall spacing remain.
 
 The inventory retains candidate tile IDs without assuming all behavior:
 
