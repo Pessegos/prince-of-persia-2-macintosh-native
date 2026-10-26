@@ -243,7 +243,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,IsCharNonViewable,0x471e,jump_table,partial,pop2/render_opening.py,settled Prince/ordinary guard rooftop corpses except native rooms 15/16/19; guard variant 228 included,3,1
 4,Characters 2,IsDeadPos,0x47a0,jump_table,partial,pop2/rebirth.py,Prince dead-pose IDs only,10,0
 4,Characters 2,LoadShad,0x4ac0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,31,0
-4,Characters 2,CheckBarr,0x4e34,jump_table,partial,pop2/terrain.py,standing-turn mode-7 exclusion; full barriers not translated,1,20
+4,Characters 2,CheckBarr,0x4e34,jump_table,partial,pop2/terrain.py;tools/probe_temple_collision_history.py,standing-turn mode-7 exclusion; called helper4:5152 history/tag selection and native copy/fill verified10200 cases; full sweep/rock overlay/caller not executed,1,20
 4,Characters 2,InitColDetBufs,0x50da,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,9
 4,Characters 2,GetBarrCode,0x52bc,jump_table,partial,pop2/terrain.py;pop2/scene_prototype.py,wall-spike type 3 reserved for explicit DoStepFwd query; run startup and ordinary collision keep type 4; native close-start clearances 39/17 verified; other barrier special cases partial,10,0
 4,Characters 2,GetColDetData,0x536a,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
