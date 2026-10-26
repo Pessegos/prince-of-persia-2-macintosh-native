@@ -3547,7 +3547,7 @@ class ScenePrototype(WindowControls):
             # SetupSand 18:057a draws the surface at bottom 243.
             layer.paste((0, 0, 0, 0), (0, 243, layer.width, layer.height))
         frame = Image.alpha_composite(frame, layer)
-        if level_kind == 3 and room is not None and state is not None and bounds is not None:
+        if level_kind in (3, 4) and room is not None and state is not None and bounds is not None:
             frame = room.draw_actor_foreground(frame, state, bounds)
         return frame
 

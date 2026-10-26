@@ -16,6 +16,31 @@ class LevelSixSceneryTests(unittest.TestCase):
 
         RooftopSceneTests.tick(self, count)
 
+    def test_mega_potion_descent_hides_the_legs_behind_both_platform_faces(self):
+        scene = self.scene
+        scene.peaceful = True
+        scene.jump_to_room(4, 2, 333, 1)
+        scene.combat.player.life = scene.combat.player.max_life = 4
+        scene.set_key_state('down', True)
+        seen = set()
+        for tick in range(35):
+            self.tick()
+            state, motion = scene.sequence_state, scene.terrain_motion
+            if scene.room_id == 4 and state.action == 141:
+                # The descending white trouser leg belongs behind the ledge.
+                self.assertEqual(scene.native_viewport.getpixel((329, 355)), (100, 87, 122, 255))
+                seen.add('upper')
+            if scene.room_id == 5 and state.action == 106 and state.current_y == 6:
+                # The shelf cushions the fall, with its front over the foot.
+                self.assertEqual(scene.native_viewport.getpixel((282, 348)), (157, 114, 98, 255))
+                seen.add('shelf')
+            if tick == 16:
+                scene.set_key_state('down', False)
+            if scene.room_id == 17 and not motion.falling:
+                break
+        self.assertEqual(seen, {'upper', 'shelf'})
+        self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.combat.player.life), (17, 1, 3))
+
     def test_level_six_starts_on_the_cliff_with_its_custom_palette(self):
         from pop2.caverns import room_assets
 

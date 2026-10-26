@@ -78,3 +78,31 @@ python -m tools.probe_item_pickup --source PATH_TO_RECOVERY
 
 The 5,720 checks cover this bounded admission/gate slice, not the complete
 pickup controller, flask effects or throne vision.
+
+## Mega-potion descent foreground (2026-10-26)
+
+The supplied Macintosh/port fall videos show two drawing errors: the trouser
+leg crosses the upper platform face during downward climbing, and the foot
+crosses the cushioning shelf's face. The actor compositor only called the
+already-exported QuickFloor/MarkHalf redraw for environment3. Ruins (kind4)
+already contain their own native floor_redraw and climb_redraw slot commands,
+but the compositor never replayed them over actors. It now admits kind4 as
+well. QuickFloor2:697e-6ac4 selects the same mode/pose/cell redraws; the
+exporter runs each environment's own piece drawers and clips them to the
+actor rectangle. This change reuses those native commands, not an arbitrary
+sprite crop or a change to fall velocity/cushioning rules.
+
+The hidden level6 room5->6->18 Down-input regression reproduces both cases:
+pose141 below the upper ledge and pose106 at shelf-contact Y+6. It checks
+specific native floor pixels instead of the old visible leg/foot, then follows
+the fall to room18 row1, with one life lost and survival. A local before/after
+trace changes only three sampled frames in that route. Original video inputs
+are not logged, so this does not establish frame-for-frame replay timing.
+Artifacts and trace are ignored under `rendered/ruins-mega/`.
+
+The sword-position screenshot shows the Prince facing away from the item.
+The bounded original TryPickUp/held-Shift probe was rerun:5,720 checks agree
+with the existing reach rule. It checks the supporting-foot cell and the
+forward cell, not behind. Native standing-left pose15 admits X276..377;
+standing-right admits X229..330 in room17. Turning toward the sword allows
+pickup from the photographed vicinity; no pickup-range extension is applied.
