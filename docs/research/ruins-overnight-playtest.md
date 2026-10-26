@@ -74,3 +74,17 @@ The native Cut probe independently verifies23 original unlinked down rebases;
 no Cut/row helper is stubbed.208 cliff/terrain/ceiling/snapshot/ruins tests
 pass48.501s, including an actual descent/release and one scream/no impact.
 The new snapshot field is optional for older saves and roundtrips explicitly.
+
+## Block 5: tunnel reveal leaves a stale wall mask
+
+Reproduction follows the supplied room18 entry: crouch then crawl left.
+At pose251/X9 the old per-cell mask hid about60% of the Kid, although the
+new tunnel backdrop had already erased that wall from the picture.
+CavernRoom's per-cell background redraw cleared foreground alpha, row masks
+and the custom mask, but omitted actor_cell_occlusion. Clear those positioned
+cell masks with the same uncovered pixels. This restores the cutaway without
+special actor/room exceptions, removing pillars or redrawing replacement art.
+
+Validation:104 scenery/custom-foreground/level6/slot/gate tests pass15.769s.
+The new regression rejects foreground ghost mask pixels within the revealed
+passage. Entry trace now retains over99% of pose251/X9 instead of39%.

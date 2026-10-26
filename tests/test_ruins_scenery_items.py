@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import patch
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 from pop2.caverns import cavern_assets, cavern_room, cavern_scene_signature
 from pop2.cavern_state import CavernState
@@ -61,3 +61,21 @@ class RuinsSceneryArtTests(unittest.TestCase):
                 expected = cavern_room(room, **options).flattened().crop(rect)
                 actual = cavern_room(room, animated=True, **options).flattened().crop(rect)
                 self.assertTrue(actual.tobytes() == expected.tobytes())
+
+    def test_reveal_erases_the_old_wall_from_actor_masks_as_well_as_the_picture(self):
+        state = CavernState()
+        program, *_ = cavern_assets(6)
+        for room, cell, foreground in ((16, 18, 130), (16, 19, 129), (17, 10, 128)):
+            state.loose.tiles[room, cell] = 7, foreground
+            state.loose.redrawn.add((room, cell))
+        signature = cavern_scene_signature(program, 17, state)
+        room = cavern_room(17, animated=True, loose_key=signature,
+                           redrawn=frozenset(state.loose.redrawn), level_number=6)
+        merged = Image.new('L', (510, 365))
+        for mask, position in room.actor_cell_occlusion.values():
+            full = Image.new('L', merged.size)
+            full.paste(mask, position)
+            merged = ImageChops.lighter(merged, full)
+        # Mask pixels must not retain erased foreground inside the passage.
+        ghosts = ImageChops.subtract(merged, room.foreground.getchannel('A'))
+        self.assertIsNone(ghosts.crop((0, 190, 85, 226)).getbbox())

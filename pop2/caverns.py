@@ -1103,6 +1103,17 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             uncovered = ImageChops.invert(covered)
             foreground.putalpha(ImageChops.multiply(foreground.getchannel('A'), uncovered))
             masks = {mask_row: ImageChops.multiply(mask, uncovered) for mask_row, mask in masks.items()}
+            if cell_masks is not None:
+                # RedrawCell's new back pixels erase the old foreground in
+                # both the displayed image AND the actor's per-cell masks.
+                # A revealed tunnel must not retain its former solid wall.
+                for key, (cover, (x, y)) in tuple(cell_masks.items()):
+                    cover = ImageChops.multiply(cover, uncovered.crop(
+                        (x, y, x + cover.width, y + cover.height)))
+                    if cover.getbbox() is None:
+                        del cell_masks[key]
+                    else:
+                        cell_masks[key] = cover, (x, y)
             if custom_mask is not None:
                 custom_mask = ImageChops.multiply(custom_mask, uncovered)
         cell = tuple(command[8:10])
