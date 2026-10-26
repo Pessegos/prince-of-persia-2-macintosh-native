@@ -182,6 +182,24 @@ class CarpetSceneTests(unittest.TestCase):
         self.assertEqual(scene.game.level.number, 6)
         self.assertIsNone(scene.intro)
 
+    def test_skipping_the_carpet_scene_stops_its_carried_song_on_the_cliff(self):
+        from unittest.mock import Mock
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(5)
+        scene.audio = Mock(current_music=115)
+        scene.audio.music_elapsed.return_value = 3.0
+        scene.next_level_after_tree = 6
+        scene.start_carpet()
+        self.assertIn(0, scene.intro.carried_music)
+        scene.finish_intro()  # Same manual-skip path as the window key handler.
+        self.assertEqual((scene.game.level.number, scene.room_id), (6, 26))
+        self.assertIsNone(scene.intro)
+        scene.audio.reset.assert_called_once_with(keep_music=False)
+        scene.audio = None
+
 
 if __name__ == '__main__':
     unittest.main()

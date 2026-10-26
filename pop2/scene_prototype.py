@@ -2930,7 +2930,7 @@ class ScenePrototype(WindowControls):
         elif self.attract_stage == "discovery":
             self.finish_discovery()
         elif self.attract_stage == "tree":
-            self.finish_tree()
+            self.finish_tree(skipped=True)
         else:
             if self.game.level.number != 1:
                 self.load_level(1)
@@ -3097,7 +3097,7 @@ class ScenePrototype(WindowControls):
             self.combat.player.life = self.combat.player.max_life = max_life
             self.render()
 
-    def finish_tree(self):
+    def finish_tree(self, *, skipped=False):
         held = set(self.window_keys_down)
         wake = getattr(self, 'after_vision', None)
         if wake is not None:
@@ -3114,7 +3114,8 @@ class ScenePrototype(WindowControls):
         if following is not None:
             # FlyinRug, carried into the carpet scene, also plays on into
             # level six (no ResetSoundItem after level five, 2:61ce-61ea).
-            keep_music = self.intro is not None and 0 in getattr(self.intro, 'carried_music', {})
+            keep_music = (not skipped and self.intro is not None
+                          and 0 in getattr(self.intro, 'carried_music', {}))
             self.intro = self.attract_stage = None
             self.enter_next_level(following, keep_music=keep_music)
             self.pause_resume_keys.update(held)
