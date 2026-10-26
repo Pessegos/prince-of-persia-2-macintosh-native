@@ -9,7 +9,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageOps
 
 from pop2.paths import ASSET_DIR
-from pop2.cavern_retouch import retouched_door_sprite, retouched_sprite
+from pop2.cavern_retouch import retouched_door_sprite, retouched_room_commands, retouched_sprite
 from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.render_opening import OpeningRoom, decode_ctbl, decode_shap, load_resource_file
 from pop2.terrain import character_row, floor_contact_x
@@ -1070,6 +1070,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                if index >= 0]
     for patch in patches:
         commands = with_scythe(commands, patch['commands'])
+    if retouched:
+        commands = retouched_room_commands(level_number, room_id, commands)
     gate_cells = {tuple(key[-2:]) for record in records if record['kind'] == 4
                   for key in record['commands']}
     background = Image.new('RGBA', (510, 365))

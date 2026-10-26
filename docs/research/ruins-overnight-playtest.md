@@ -223,3 +223,18 @@ their62 rendering states are free of stale wall masks. The old omission
 reproduces in every actual tunnel room; the shared room18 correction already
 covers them. This extends the earlier room18-specific regression; it is an
 offscreen rendering audit, not a manual playthrough of every entrance.
+
+## Approved room2 wall continuation
+
+The user subsequently chose a wall continuation instead of the initial sky
+proposal. Level6/native room2 now repeats its existing SHAP3527 upward in
+the same two columns, with the original120-pixel course alignment. This is
+a deliberate local artwork improvement through the established retouch
+path; imported resources and terrain rules are unchanged. No reimport is
+needed. Preview/map caches already fingerprint Python drawing code.
+
+The actual hidden game viewport matches the approved v2 proposal pixel for
+pixel. Only viewport x409..510,y0..244 changes; the lower wall, Prince and
+HUD remain identical.45 existing retouch/scenery/tunnel/level6 checks pass,
+as do Ruff/catalog/whitespace checks. The earlier sky proposal was never
+integrated; its local preview remains historical evidence.

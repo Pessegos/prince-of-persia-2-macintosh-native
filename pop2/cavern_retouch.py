@@ -1,4 +1,4 @@
-"""Baked scenery/door variants; native shapes and transparency stay untouched."""
+"""Approved local scenery variants, leaving imported native resources intact."""
 
 from functools import lru_cache
 import hashlib
@@ -6,6 +6,25 @@ import json
 from pathlib import Path
 
 from PIL import Image
+
+
+def retouched_room_commands(level, room, commands):
+    """Level6 room2: continue its lower wall upward with the same native piece."""
+    if (level, room) != (6, 1):
+        return commands
+    walls = [command for command in commands if command[:6] in (
+        ['front', 3527, 408, 365, 16, 2], ['front', 3527, 459, 365, 16, 2])
+        and len(command) >= 10 and command[7] == 4]
+    if {command[2] for command in walls} != {408, 459}:
+        return commands
+    extension = []
+    for command in walls:
+        for row in (-1, 0, 1):
+            bottom = 125 + row * 120
+            x = command[2]
+            extension.append(['front', 3527, x, bottom, 16, row,
+                              [max(0, bottom - 120), x, bottom, x + 51], 4, x // 51, row])
+    return commands + extension
 
 
 @lru_cache(maxsize=1)
