@@ -101,6 +101,9 @@ Collide's correction arguments at an explicit no-op response boundary.
 The [floating ceiling helper](temple-floating-ceiling.md) also executes
 through its real caller, including side-contact suppression and successful
 or missing sequence lookup. Body bounds remain supplied in these modules.
+The [ground bump](temple-ground-bump.md) now advances the actual original
+clip and reloads Kid metadata/supporting column, including the floating link
+and failed selection path. Full Collide admission/airborne responses remain.
 
 The inventory retains candidate tile IDs without assuming all behavior:
 
