@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from pop2.coordinates import column_left
 from pop2.opponent_generation import character_column
-from pop2.terrain import floor_y
+from pop2.terrain import floor_contact_x, floor_y
 
 
 SCYTHE_TILES = (12, 13)
@@ -39,14 +39,15 @@ class Scythes:
         return ((tile.room, tile.row * 10 + tile.column),
                 (left.room, left.row * 10 + left.column))
 
-    def trigger(self, terrain, motion, state):
+    def trigger(self, terrain, motion, state, record):
         """5:57bc for a living Prince or guard, then TriggerScythe 5:5fde."""
         if state.actor_type in (7, 8, 11):
             return False
         # Not more than 30 pixels above the row's floor (native Y >= row * 120 + 76).
         if floor_y(motion.row) + state.current_y < motion.row * 120 + 76:
             return False
-        column = character_column(state.target_x)
+        # LoadFrame's cached A5-504a is the supporting-foot column.
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
         tile = terrain.tile(motion.room, column, motion.row)
         # Native X beyond the column table's left edge (a5-0x4b88) + 28.
         if tile.room is None or tile.kind not in SCYTHE_TILES or state.target_x <= column_left(column) + 28:
@@ -79,7 +80,7 @@ class Scythes:
                 self.foreground[half] = value
         return tuple(cues)
 
-    def cut(self, terrain, motion, state, bounds):
+    def cut(self, terrain, motion, state, bounds, record):
         """CheckScytheHit 5:588a: the first scythe cell of columns -1..+1.
 
         `bounds` is the inclusive character rectangle. Returns True when the
@@ -87,7 +88,7 @@ class Scythes:
         """
         if state.actor_type not in (0, 2) or state.selected_sequence_id == 44:
             return False
-        column = character_column(state.target_x)
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
         for current in (column - 1, column, column + 1):
             tile = terrain.tile(motion.room, current, motion.row)
             if tile.room is None or tile.kind not in SCYTHE_TILES:
@@ -99,7 +100,8 @@ class Scythes:
             dx = (tile.column + (tile.kind == 13)) * 51
             dy = tile.row * 120
             if state.actor_type:
-                bottom -= 10
+                # 5:5910 subtracts from the rectangle's RIGHT word, not bottom.
+                right -= 10
             if not (left + dx <= bounds[2] and bounds[0] < right + dx
                     and top + dy <= bounds[3] and bounds[1] < bottom + dy):
                 return False

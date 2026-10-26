@@ -1,4 +1,11 @@
 import unittest
+import struct
+from types import SimpleNamespace
+
+from pop2.cavern_state import CavernState
+from pop2.scythes import Scythes
+from pop2.sequence_runtime import SequenceState
+from pop2.terrain import LevelMap
 
 
 class ScytheDrawingPatchTests(unittest.TestCase):
@@ -21,6 +28,22 @@ class ScytheDrawingPatchTests(unittest.TestCase):
         self.assertEqual(blade_rect(2), (53, 37, 67, 142))
         self.assertEqual((blade_rect(16), blade_rect(17)), (UPPER_BLADE, LOWER_BLADE))
         self.assertEqual([phase for phase in range(20) if blade_rect(phase)], [2, 16, 17])
+
+
+class ScytheContactTests(unittest.TestCase):
+    def test_guard_inset_shortens_the_right_edge_not_the_height(self):
+        level = bytearray(0x2200)
+        struct.pack_into('>2H', level, 25 * 2, 12, 13)
+        terrain = LevelMap(level)
+        trap = Scythes(foreground={(0, 25): 2, (0, 26): 2})
+        terrain.caverns = CavernState(scythes=trap)
+        state = SequenceState(2, target_x=300, facing=1, actor_type=2)
+        motion = SimpleNamespace(room=0, row=2)
+        record = SimpleNamespace(offset_x=0, aux=0)
+        # Native phase2 blade: (top293,left292,bottom307,right397).
+        # Guard CheckScytheHit5:5910 moves RIGHT to387; bottom stays307.
+        self.assertFalse(trap.cut(terrain, motion, state, (390, 295, 395, 300), record))
+        self.assertTrue(trap.cut(terrain, motion, state, (300, 300, 310, 305), record))
 
 
 if __name__ == '__main__':

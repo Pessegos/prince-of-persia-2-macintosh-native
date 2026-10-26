@@ -600,12 +600,14 @@ class Caverns(Environment):
             if motion is None or not actor.alive:
                 continue
             player = actor is scene.combat.player
-            scythes.trigger(scene.level_map, motion, state)
+            record = (scene.frames[state.action] if player else
+                      scene.guard_art.frames[guard_frame_index(state.action)])
+            scythes.trigger(scene.level_map, motion, state, record)
             if player and getattr(scene, 'god_mode', False):
                 continue
             bounds = (scene.player_collision_bounds() if player else
                       scene.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
-            if not scythes.cut(scene.level_map, motion, state, bounds):
+            if not scythes.cut(scene.level_map, motion, state, bounds, record):
                 continue
             # 5:5942-597e: SEQS 113 and death method 5 for the Prince, SEQS
             # 190 for a guard; DecLifePts(100) and sound 278.
@@ -614,6 +616,10 @@ class Caverns(Environment):
             actor.recovering = False
             state.sound_events.append(CUT_SOUND)
             scene.physics.select(actor.runtime, CUT_SEQUENCE if player else 190)
+            # Both cut sequences begin with -19 (SetCharFloor 4:31fa),
+            # immediately executed by AnimChar at 5:596e, even during a jump.
+            state.current_y = 0
+            motion.falling = False
             if player:
                 scene.clear_keys(None)
                 scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False

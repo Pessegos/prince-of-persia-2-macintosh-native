@@ -99,7 +99,7 @@ render of port room 16 matches the ruins look.
   the blood. CheckScytheHit (5:588a) tests only the first scythe cell among
   the character's columns -1..+1: phases 2, 16 and 17 (GetScytheHitType)
   cut with the rectangles a5-0x372a/-0x3722 offset by the cell (tile 13 one
-  column right; guards 10 pixels shorter), except poses 267-271 and SEQS
+  column right; guards' right edge inset by 10), except poses 267-271 and SEQS
   44: SEQS 113 and death method 5 for the Prince (SEQS 190 for a guard),
   sound 278 and blood (0x40) on both halves. The drawing of each of the 60
   states is exported as a patch of the native room drawing
@@ -313,3 +313,38 @@ room 16 and level seven room 3).
 Cutscene 1 between levels five and six is now implemented; see
 `level5-native-rules.md`, "Cutscene 1: NISCarpet", including the unresolved
 music-cue continuity. Updated installations need the new scene resources.
+
+## Scythe jumping contact correction (2026-10-26)
+
+The room19 running-jump report exposed two contact errors and a death-pose
+alignment omission. Trigger5:57bc and CheckScytheHit5:588a read the cached
+supporting-foot column A5-504a, refreshed by LoadFrame4:2a72 via
+GetFCharX4:3a72/GetCharCol4:3ad6. They do not recompute the column from the
+sprite anchor. Using the anchor could miss the first half or select the wrong
+half farther along, both allowing contact escapes and cutting beyond the blade.
+Both host queries now receive the actor's current frame record. The first
+scythe cell still owns the decision, including inactive phases; this is not a
+blanket rule that every jump through an extended trap must die.
+
+ComputeBladeHitRect5:5a1c uses the original DATA rectangles. The guard inset
+at5:5910 subtracts10 from RIGHT, not BOTTOM. After a hit,5:596e immediately
+executes AnimChar: original SEQS113/190 both start with -7,5,-19, then their
+first pose267/241. That -19 calls SetCharFloor4:31fa, placing ordinary actors
+at106+120*row. The host cut handler now applies that alignment and stops its
+free-fall motion; a jumping victim no longer leaves a suspended corpse.
+
+`tools/probe_ruins_scythe_contact.py` executes the original trigger/contact
+predicates with real ReadCell, hit-type selection, blade-rectangle instructions
+and DATA. Local report: `rendered/ruins-new/native-scythe-contact.json`;
+8,580 contacts,864 trigger admissions and6 independent SetCharFloor calls,
+zero mismatches. It also checks original cut-sequence prefixes. QuickDraw
+UnionRect/SectRect/OffsetRect and their stack cleanup are supplied; actor
+snapshots, inclusive body rectangles and supporting columns are fixtures.
+The type2 fixtures reuse Kid frame offsets to vary the supplied column, not
+to claim Guard FRAM parity. Actor and level bytes are checked unchanged by
+the predicate queries. Contact stops before death/audio/blood-write endpoints;
+trigger stops before TriggerScythe. This excludes full FrameAdv timing,
+body-edge generation, trap capacity, rasterization, room crossings and
+whole-game equivalence. Imported-scene regressions cover a missed jumping
+contact, a false contact beyond the blade, delayed foot activation and the
+corpse's floor alignment; an asset-free regression covers the guard inset.

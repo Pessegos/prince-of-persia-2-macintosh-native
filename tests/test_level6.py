@@ -323,13 +323,54 @@ class LevelSixScytheTests(unittest.TestCase):
         scene = self.scene
         scythes = scene.game.caverns.scythes
         motion = SimpleNamespace(room=18, row=2)
-        state = SimpleNamespace(actor_type=0, current_y=0, target_x=5 * 51 + 28)
-        self.assertFalse(scythes.trigger(scene.level_map, motion, state))
+        state = SimpleNamespace(actor_type=0, current_y=0, target_x=5 * 51 + 28, facing=1)
+        record = SimpleNamespace(offset_x=0, aux=0)
+        self.assertFalse(scythes.trigger(scene.level_map, motion, state, record))
         state.target_x += 1
-        self.assertTrue(scythes.trigger(scene.level_map, motion, state))
+        self.assertTrue(scythes.trigger(scene.level_map, motion, state, record))
         state.current_y = -31
         scythes.active.clear()
-        self.assertFalse(scythes.trigger(scene.level_map, motion, state))
+        self.assertFalse(scythes.trigger(scene.level_map, motion, state, record))
+
+    def test_scythe_waits_for_the_jumping_supporting_foot_not_the_sprite_anchor(self):
+        scene = self.scene
+        scene.jump_to_room(18, 2, 302, 1)
+        state = scene.sequence_state
+        state.action = 35
+        scythes = scene.game.caverns.scythes
+        self.assertFalse(scythes.trigger(scene.level_map, scene.terrain_motion, state,
+                                        scene.frames[state.action]))
+        self.assertEqual(scythes.active, set())
+
+    def test_a_jumping_body_crossing_the_blade_is_cut_and_aligned_to_the_floor(self):
+        from pop2.environments import environment_for
+
+        scene = self.scene
+        scene.jump_to_room(18, 2, 380, 1)
+        state, motion = scene.sequence_state, scene.terrain_motion
+        state.action = scene.action = 34
+        state.current_y = -20
+        motion.falling = True
+        scythes = scene.game.caverns.scythes
+        scythes.foreground = {(18, 25): 2, (18, 26): 2}
+        environment_for(scene).check_scythes()
+        self.assertEqual((scene.combat.player.life, state.action, state.current_y), (0, 267, 0))
+        self.assertFalse(motion.falling)
+        self.tick(6)
+        self.assertEqual((state.action, state.current_y), (271, 0))
+
+    def test_a_jump_beyond_the_blade_is_not_cut_by_the_wrong_half(self):
+        from pop2.environments import environment_for
+
+        scene = self.scene
+        scene.jump_to_room(18, 2, 425, 0)
+        state = scene.sequence_state
+        state.action = scene.action = 34
+        state.current_y = -20
+        scene.game.caverns.scythes.foreground = {(18, 25): 2, (18, 26): 2}
+        environment_for(scene).check_scythes()
+        self.assertTrue(scene.combat.player.alive)
+        self.assertEqual(state.action, 34)
 
     def test_each_scythe_state_draws_its_exported_drawing(self):
         # Slot units (loose-floor schema 2) or, in older imports, patches.
