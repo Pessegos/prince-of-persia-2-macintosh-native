@@ -237,7 +237,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,PlayerCtrl,0x3b88,jump_table,partial,pop2/rebirth.py;pop2/scene_prototype.py;pop2/audio.py,ordinary dead-pose counter/retry gate with current/pending SDL audio completion,2,20
 4,Characters 2,IsLedge,0x3f44,jump_table,partial,pop2/terrain.py,ordinary empty/floor catch geometry and left-facing phase-zero gate veto (512 native gate checks); DoJumpUp gate override retained; special floor branches partial,4,2
 4,Characters 2,RemoveObj,0x406c,jump_table,partial,pop2/potions.py;pop2/terrain.py,level-three potion removal to floor 1 retaining foreground 0x0f00 decoration; other environments/story objects omitted,2,1
-4,Characters 2,ClipChar,0x4146,jump_table,partial,pop2/caverns.py;pop2/scene_prototype.py,cavern ordinary top clipping and Prince exit top/right rectangle; full native clipping pipeline not translated,2,13
+4,Characters 2,ClipChar,0x4146,jump_table,partial,pop2/caverns.py;pop2/scene_prototype.py;tools/probe_ruins_exit_clip.py,"cavern ordinary top clipping; cavern/ruins exit DATA top/right and strict height verified20160 native slice calls, real ReadCell/GetBlockRect with supplied QuickDraw and initialized frame/pointers; full clipping pipeline excluded",2,13
 4,Characters 2,MakeFCharClipRect,0x4432,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,2
 4,Characters 2,IndexChar,0x4558,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
 4,Characters 2,IsCharNonViewable,0x471e,jump_table,partial,pop2/render_opening.py,settled Prince/ordinary guard rooftop corpses except native rooms 15/16/19; guard variant 228 included,3,1

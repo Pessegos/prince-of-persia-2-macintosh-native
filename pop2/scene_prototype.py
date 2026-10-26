@@ -3531,6 +3531,7 @@ class ScenePrototype(WindowControls):
             clip_top = cavern_clip_top(self.level_map, self.room_id, row, state, bounds)
             if clip_top > 0:
                 layer.paste((0, 0, 0, 0), (0, 0, layer.width, clip_top))
+        if level_kind in (3, 4) and state is not None and bounds is not None and row is not None:
             exit_clip = cavern_exit_clip(self.level_map, self.room_id, row, state, record)
             if exit_clip is not None:
                 top, right = exit_clip

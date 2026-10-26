@@ -95,9 +95,80 @@ class CavernExitTests(unittest.TestCase):
         state.action = 216
         self.assertIsNone(cavern_exit_clip(self.terrain, 1, 1, state, record))
 
+    def test_ruins_exit_uses_its_own_native_top_and_right_edges(self):
+        struct.pack_into('>H', self.level, 0x2186, 4)
+        state = SequenceState(70, action=226, target_x=280, facing=0,
+                              actor_type=0, current_y=-25)
+        record = SimpleNamespace(offset_x=0, aux=0)
+        self.assertEqual(cavern_exit_clip(self.terrain, 1, 1, state, record), (131, 331))
+
+    def test_a_cavern_door_rectangle_wholly_outside_the_screen_does_not_clip(self):
+        self.set_tile(1, 19, 16, 0)
+        state = SequenceState(70, action=226, target_x=484, facing=0,
+                              actor_type=0, current_y=-25)
+        self.assertIsNone(cavern_exit_clip(self.terrain, 1, 1, state,
+                                          SimpleNamespace(offset_x=0, aux=0)))
+
+    def test_scene_compositor_applies_the_exit_clip_in_ruins(self):
+        from PIL import Image
+        from pop2.scene_prototype import ScenePrototype
+
+        struct.pack_into('>H', self.level, 0x2186, 4)
+        state = SequenceState(70, action=226, target_x=280, facing=0,
+                              actor_type=0, level_kind=4, current_y=-25)
+        host = SimpleNamespace(room_cache={}, room_id=1, level_map=self.terrain,
+                               foreground=Image.new('RGBA', (510, 365)))
+        layer = Image.new('RGBA', (510, 365), 'white')
+        frame = ScenePrototype.composite_actor(host, Image.new('RGBA', layer.size), layer,
+            row=1, state=state, bounds=(270, 110, 345, 230),
+            record=SimpleNamespace(offset_x=0, aux=0))
+        self.assertEqual(frame.getchannel('A').getbbox(), (0, 131, 331, 365))
+
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class ImportedCavernExitTests(unittest.TestCase):
+    def test_all_usable_ruins_exit_doors_clip_each_late_stair_frame(self):
+        from unittest.mock import patch
+        from tests.test_terrain import RooftopSceneTests
+
+        if not all((ASSET_DIR / f'ruins_level{n}.json').is_file() for n in (6, 7, 8)):
+            self.skipTest('Imported ruins6-8 required')
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        original = scene.composite_actor
+        observed = set()
+
+        def composite(frame, layer, row=None, bottom=None, state=None, bounds=None, record=None):
+            result = original(frame, layer, row, bottom, state, bounds, record)
+            if (state is not None and bounds is not None and row is not None
+                    and state.actor_type == 0 and state.level_kind == 4
+                    and 217 <= state.action <= 226 and state.current_y < -24):
+                clip = cavern_exit_clip(scene.level_map, scene.room_id, row, state, record)
+                self.assertIsNotNone(clip)
+                ink = layer.getchannel('A').getbbox()
+                if ink is not None:
+                    self.assertGreaterEqual(ink[1], clip[0])
+                    self.assertLessEqual(ink[2], clip[1])
+                    observed.add((scene.game.level.number, scene.room_id, cell))
+            return result
+
+        doors = ((6, 15, 22), (6, 15, 26), (7, 20, 18), (8, 22, 22))
+        with patch.object(scene, 'composite_actor', side_effect=composite):
+            for number, room, cell in doors:
+                with self.subTest(level=number, room=room + 1, cell=cell):
+                    scene.load_level(number)
+                    row, column = divmod(cell, 10)
+                    foreground = scene.level_map.tile(room, column, row).foreground
+                    scene.game.caverns.plates.foreground[room, cell] = (foreground & 0xff00) | 79
+                    scene.jump_to_room(room, row, column * 51 + 24, 1)
+                    self.assertTrue(scene.start_cavern_exit())
+                    for _ in range(24):
+                        scene.render()
+                        if scene.level_complete:
+                            break
+                        RooftopSceneTests.tick(self)
+        self.assertEqual(observed, set(doors))
+
     def test_button_song_pause_room_persistence_and_entry_completion(self):
         from tests.test_terrain import RooftopSceneTests
         from pop2.audio import AudioEngine

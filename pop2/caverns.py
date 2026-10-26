@@ -129,12 +129,19 @@ class CavernRoom(OpeningRoom):
 
 
 def cavern_exit_clip(terrain, room, row, state, record):
-    # ClipChar 4:416a-420c: cavern DATA rectangle (17, 0, 364, 71).
+    # ClipChar4:416a-420c uses a distinct DATA rectangle per environment.
+    # Only its top/right replace the actor clip: caves17/71, ruins11/76.
     if state.actor_type != 0 or not 217 <= state.action <= 226 or state.current_y >= -24:
+        return None
+    environment = struct.unpack_from('>H', terrain.level, 0x2186)[0]
+    rect = {3: (17, 0, 364, 71), 4: (11, -51, 364, 76)}.get(environment)
+    if rect is None:
         return None
     column = character_column(floor_contact_x(state.target_x, state.facing, record))
     column += int(terrain.tile(room, column, row).kind == 16)
-    return max(0, row * 120 + 17), min(510, column * 51 + 71)
+    top, left = max(0, row * 120 + rect[0]), max(0, column * 51 + rect[1])
+    bottom, right = min(365, row * 120 + rect[2]), min(510, column * 51 + rect[3])
+    return (top, right) if top < bottom and left < right else None
 
 
 def cavern_clip_top(terrain, room, row, state, bounds):

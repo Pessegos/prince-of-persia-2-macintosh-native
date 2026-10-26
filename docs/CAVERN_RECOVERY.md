@@ -738,6 +738,29 @@ Controls remain locked while it runs; pause still freezes it. ClipChar's
 rectangle (17, 0, 364, 71), with the right-half column selected from tile 16/17.
 The portable actor layer applies its top/right limits before compositing.
 
+The ruins use the same entry predicate but a different DATA rectangle:
+environment4 is (11,-51,364,76), rather than cavern (17,0,364,71).
+The host compositor had guarded the entire exit branch by environment3,
+so late stair poses escaped the ruins arch. Exit clipping now applies to
+both environments; ordinary cavern top-clipping remains cavern-only.
+An empty viewport intersection retains the old clip, as GetBlockRect does.
+
+`tools/probe_ruins_exit_clip.py` compares20,160 native slice calls across
+level3-9 headers, rows0..2, columns0..9, both tile16/17 halves, pose/height
+boundary controls, actor kinds0/2 and both facings, with zero mismatches.
+Actual4:416a-420c/ReadCell/GetBlockRect and DATA execute; initialized DATA
+pointers, the existing ClipChar A6 frame and QuickDraw OffsetRect/SectRect
+are supplied. It starts after visibility/bounds setup and stops before the
+remaining ClipChar body/epilogue; it is not full drawing or FrameAdv proof.
+Whole A5/level comparison guards unrelated state. Output SHA256:
+`89da8ecb39a898e19ccf04ec1ad28cc63e660bca3b5d1adc1c3d0a709a0ed91c`.
+
+The actual SEQS70 sequence is rendered through all four usable ruins doors:
+level6 room16 cells22/26, level7 room21 cell18 and level8 room23 cell22.
+An integrated regression checks each late actor layer against the clip.
+Level9 has no plate-linked door exit.69 focused scenery/exit/level6/level7/
+tunnel/retouch tests pass; no asset reimport or terrain rule change is needed.
+
 Native comparisons matched 1,080 exit-controller updates across both linked
 buttons (single, held, repeated), including ordered effects, song requests,
 foreground flags and timers. Admission/alignment matched 576 native cases.
