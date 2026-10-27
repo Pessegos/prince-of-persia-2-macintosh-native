@@ -113,7 +113,11 @@ ALIVE versus HP/pending health and missing-resource continuation. Armed
 responses are separately recovered in the [armed response](temple-armed-collision.md):
 12,312 calls verify the real static-rock lookup, strike/gate position60 boundary,
 clips64/65/93, disarming, mark/audio requests and failed-resource continuation.
-Wall spacing and complete caller/physical-frame composition remain separate.
+The [wall-spacing helper](temple-wall-spacing.md) now executes real point/distance,
+forward-cell/wall decisions, relative movement, Kid reload and final current-cell
+refresh:27,364 calls match across all1,345 wall-kind anchors in levels10–13 and
+pose/cache/threshold controls. Supplied metadata and caller admission remain
+explicit; composing the complete Collide response and physical frames is next.
 
 The inventory retains candidate tile IDs without assuming all behavior:
 

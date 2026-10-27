@@ -62,3 +62,8 @@ steps. This research does not enable temple gameplay or change production.
 The subsequent [unarmed airborne leaf](temple-air-collision.md) recovers the
 unarmed remainder of4:589e separately. It does not change this probe's bounded
 caller coverage or remove its armed/post-response-spacing exclusions.
+
+Later [armed reactions](temple-armed-collision.md) and
+[post-response spacing](temple-wall-spacing.md) recover those helpers separately.
+This grounded caller probe retains its exclusions until a composed native
+caller comparison replaces them; leaf results do not enlarge its corpus.

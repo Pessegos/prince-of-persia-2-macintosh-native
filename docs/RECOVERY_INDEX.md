@@ -290,16 +290,27 @@ R through the isolated type0 branch of4:589e, with real alignment, relative
 movement, original46/47/121 animation and Kid frame reload. All9,648 controlled
 native calls match; signed velocity49/50, ALIVE/health separation, pose-specific
 word+24 clear and missing-resource continuation are pinned. Actor/admission
-and resource handles remain supplied. Armed reactions, wall spacing, body/contact
-construction, complete caller composition and playable temple remain P.
+and resource handles remain supplied. Armed reactions and wall spacing are
+separately recovered below; body/contact construction, complete caller
+composition and playable temple remain P.
 
 [Armed airborne response](research/temple-armed-collision.md) extends R through
 the isolated type0 armed branch, including real static-rock lookup/strike
 predicate, relative reaction, original64/65/93 slices and Kid reload:12,312
 native calls match. Gate low-byte60/61, active/source distinction, mark/audio
 requests and disarming are pinned. Contact/cache/MOB bank/frame width and
-resource/audio endpoints remain supplied; wall spacing, body construction,
-moving-rock/full-frame composition and playable temple remain P.
+resource/audio endpoints remain supplied; wall spacing is recovered separately
+below. Body construction, moving-rock/full-frame composition and playable temple
+remain P.
+
+[Post-response wall spacing](research/temple-wall-spacing.md) extends R through
+isolated4:3982: real metadata-derived point/distance, adjacent-cell/wall decision,
+relative movement, Kid reload and current-cell refresh. All27,364 calls match,
+including1,345 wall-kind anchors across levels10–13, original Kid poses, cache
+controls and17/18/19 boundaries. Word+52/type11 and room3/environment6 exceptions
+are distinguished; non-temple undefined-cell behavior is excluded. Metadata and
+admission remain supplied; caller/body/complete physical-frame composition and
+playable temple remain P.
 
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
