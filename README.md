@@ -18,14 +18,22 @@ I'm trying to stay as close to the original as possible, while still making some
 
 Levels 1-3 are playable from start to finish.
 
-Level 3 now leads into the original Discovery cutscene and then level 4.
-Levels 4 and 5 are available for playtesting, with F3 maps, restart and saves.
-The nine tree cutscenes, story countdown, time messages and saved clock state
-are implemented. The countdown starts with the first tree scene, not on
-arrival in level 4. Level 5 includes the collapsing rope bridge, ceiling bars
-and flying-carpet escape, though some bridge animation and enemy behavior
-still need work. Campaign progression currently stops after level 5;
-level 6 is not available yet.
+Levels 4 and 5 are available for playtesting, including the original Discovery
+and tree cutscenes, story countdown, collapsing rope bridge, ceiling bars and
+flying-carpet escape. The countdown starts with the first tree scene, not on
+arrival in level 4. Both levels are still being refined through playtesting.
+
+The ruins in levels 6-9 are also available for playtesting, with campaign
+progression from level 5. Crawling through crevices, scythes, the upside-down
+potion and sword pickups are implemented, along with the flying heads and
+serpents. These levels and their enemies still need more side-by-side testing
+and refinement.
+
+Campaign progression currently stops after level 9. The temple levels (10-13)
+are not playable yet, but research is already underway into their mechanisms,
+enemies and special events. Recovered rules are being checked against the
+original Macintosh executable before being connected to playable levels;
+full collision and frame-by-frame behavior still need work.
 
 A lot of the work so far has gone into building and refining the core gameplay systems rather than just moving through the levels. I'm hoping this groundwork will make the remaining levels quicker to implement.
 
@@ -141,6 +149,25 @@ I also improved the sound played while the gate opens. The original had noticeab
 
 <br/>
 
+## Cavern Artwork
+
+I've retouched 22 rooms across the cavern levels to soften overly harsh shadows and blend abrupt joins between pieces of scenery, while preserving their original texture and detail. Entrance and exit doorway edges also blend more naturally into the surrounding rock.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/github readme/cavern-artwork/level3-room1.gif" alt="Cavern wall shadow retouch, level 3 room 1: Macintosh and Port" width="490"></td>
+    <td width="50%"><img src="docs/github readme/cavern-artwork/level3-room28.gif" alt="Cavern wall shadow retouch, level 3 room 28: Macintosh and Port" width="490"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/github readme/cavern-artwork/door-edge.gif" alt="Entrance and exit doorway edge retouch: Macintosh and Port" width="490"></td>
+    <td width="50%"><img src="docs/github readme/cavern-artwork/level5-room25.gif" alt="Wall and column shadow joins, level 5 room 25: Macintosh and Port" width="490"></td>
+  </tr>
+</table>
+
+[View full-room comparisons](docs/CAVERN_ARTWORK_COMPARISONS.md)
+
+<br/>
+
 ## Quality of Life
 
 - A dedicated in-game menu replacing the original Macintosh menu bar, with game options and settings accessible directly through F1.
@@ -158,7 +185,6 @@ I also improved the sound played while the gate opens. The original had noticeab
 - The level 1 screen 7-8 drop preserves the full landing and stand-up animation, matching DOS behavior instead of the abrupt interruption in the Macintosh original.
 - Completely overhauled lava pools with detailed rocky edges, convincing depth like the DOS version, seamless bubbling, and properly layered splashes and particles.
 - Reworked stone-gate closing and crushing animation, with a timed slam and seamless opening audio without the original gaps or end click.
-- Local cavern-art retouches soften harsh shadow seams in level 3 rooms 1, 2, 28 and 30, without changing the same pieces elsewhere. Entrance/exit arch edges also blend into the surrounding rock across the cavern levels.
 - Dock guards stay in standby once the Prince catches the boat, instead of switching back into combat during the escape.
 - Shift+Back with the sword drawn turns the Prince manually. Unlike the original toggle, this leaves automatic turning enabled.
 - While floating, the Prince is pushed back from obstructing scenery instead of scraping along it as in the Macintosh original.

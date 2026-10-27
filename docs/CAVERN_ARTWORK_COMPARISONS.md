@@ -1,14 +1,17 @@
 # Cavern Artwork Comparisons
 
-Original Macintosh scenery and the approved artwork retouches in the port.
+Original Macintosh scenery and the artwork retouches in the port.
 
-The 22 rooms below include rooms that received only the entrance/exit doorway-edge retouch. Some rooms received both wall and doorway retouches.
+Artwork retouches cover **22 rooms** across the cavern levels. The gallery below shows the **19 rooms** with wall or shadow changes. Doorway-only retouches are represented by the close-up in the README.
 
-| Level | Retouched rooms |
-| --- | ---: |
-| 3 | 5 |
-| 4 | 8 |
-| 5 | 9 |
+| Level | Retouched rooms | Comparisons below |
+| --- | ---: | ---: |
+| 3 | 5 | 4 |
+| 4 | 8 | 7 |
+| 5 | 9 | 8 |
+| **Total** | **22** | **19** |
+
+Each GIF alternates between Macintosh and Port with identical framing. The Port images include the current overhauled lava.
 
 The scenery is shown without characters, with entrance doors closed. In level 5, room 7, the stone gate is open to reveal the wall behind it.
 
@@ -18,224 +21,118 @@ The scenery is shown without characters, with entrance doors closed. In level 5,
 
 ### Room 1
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level3-room1-macintosh.png" alt="Macintosh scenery, level 3, room 1" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level3-room1-port.png" alt="Port scenery, level 3, room 1" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level3-room1.gif" alt="Level 3, room 1: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 2
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level3-room2-macintosh.png" alt="Macintosh scenery, level 3, room 2" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level3-room2-port.png" alt="Port scenery, level 3, room 2" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level3-room2.gif" alt="Level 3, room 2: Macintosh and Port artwork comparison" width="1020">
 
-### Room 13
-
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level3-room13-macintosh.png" alt="Macintosh scenery, level 3, room 13" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level3-room13-port.png" alt="Port scenery, level 3, room 13" width="510"></td>
-  </tr>
-</table>
+<br/><br/>
 
 ### Room 28
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level3-room28-macintosh.png" alt="Macintosh scenery, level 3, room 28" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level3-room28-port.png" alt="Port scenery, level 3, room 28" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level3-room28.gif" alt="Level 3, room 28: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 30
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level3-room30-macintosh.png" alt="Macintosh scenery, level 3, room 30" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level3-room30-port.png" alt="Port scenery, level 3, room 30" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level3-room30.gif" alt="Level 3, room 30: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ## Level 4
 
-### Room 1
-
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level4-room1-macintosh.png" alt="Macintosh scenery, level 4, room 1" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level4-room1-port.png" alt="Port scenery, level 4, room 1" width="510"></td>
-  </tr>
-</table>
-
 ### Room 5
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level4-room5-macintosh.png" alt="Macintosh scenery, level 4, room 5" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level4-room5-port.png" alt="Port scenery, level 4, room 5" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level4-room5.gif" alt="Level 4, room 5: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 12
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level4-room12-macintosh.png" alt="Macintosh scenery, level 4, room 12" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level4-room12-port.png" alt="Port scenery, level 4, room 12" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level4-room12.gif" alt="Level 4, room 12: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 14
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level4-room14-macintosh.png" alt="Macintosh scenery, level 4, room 14" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level4-room14-port.png" alt="Port scenery, level 4, room 14" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level4-room14.gif" alt="Level 4, room 14: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 22
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level4-room22-macintosh.png" alt="Macintosh scenery, level 4, room 22" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level4-room22-port.png" alt="Port scenery, level 4, room 22" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level4-room22.gif" alt="Level 4, room 22: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 23
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level4-room23-macintosh.png" alt="Macintosh scenery, level 4, room 23" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level4-room23-port.png" alt="Port scenery, level 4, room 23" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level4-room23.gif" alt="Level 4, room 23: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 26
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level4-room26-macintosh.png" alt="Macintosh scenery, level 4, room 26" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level4-room26-port.png" alt="Port scenery, level 4, room 26" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level4-room26.gif" alt="Level 4, room 26: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 28
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level4-room28-macintosh.png" alt="Macintosh scenery, level 4, room 28" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level4-room28-port.png" alt="Port scenery, level 4, room 28" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level4-room28.gif" alt="Level 4, room 28: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ## Level 5
 
-### Room 1
-
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level5-room1-macintosh.png" alt="Macintosh scenery, level 5, room 1" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level5-room1-port.png" alt="Port scenery, level 5, room 1" width="510"></td>
-  </tr>
-</table>
-
 ### Room 6
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level5-room6-macintosh.png" alt="Macintosh scenery, level 5, room 6" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level5-room6-port.png" alt="Port scenery, level 5, room 6" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level5-room6.gif" alt="Level 5, room 6: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 7
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level5-room7-macintosh.png" alt="Macintosh scenery, level 5, room 7" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level5-room7-port.png" alt="Port scenery, level 5, room 7" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level5-room7.gif" alt="Level 5, room 7: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 14
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level5-room14-macintosh.png" alt="Macintosh scenery, level 5, room 14" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level5-room14-port.png" alt="Port scenery, level 5, room 14" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level5-room14.gif" alt="Level 5, room 14: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 15
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level5-room15-macintosh.png" alt="Macintosh scenery, level 5, room 15" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level5-room15-port.png" alt="Port scenery, level 5, room 15" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level5-room15.gif" alt="Level 5, room 15: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 16
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level5-room16-macintosh.png" alt="Macintosh scenery, level 5, room 16" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level5-room16-port.png" alt="Port scenery, level 5, room 16" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level5-room16.gif" alt="Level 5, room 16: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 17
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level5-room17-macintosh.png" alt="Macintosh scenery, level 5, room 17" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level5-room17-port.png" alt="Port scenery, level 5, room 17" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level5-room17.gif" alt="Level 5, room 17: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 23
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level5-room23-macintosh.png" alt="Macintosh scenery, level 5, room 23" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level5-room23-port.png" alt="Port scenery, level 5, room 23" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level5-room23.gif" alt="Level 5, room 23: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
 
 ### Room 25
 
-<table>
-  <tr><th width="50%">Macintosh</th><th width="50%">Port</th></tr>
-  <tr>
-    <td><img src="cavern-artwork-comparisons/level5-room25-macintosh.png" alt="Macintosh scenery, level 5, room 25" width="510"></td>
-    <td><img src="cavern-artwork-comparisons/level5-room25-port.png" alt="Port scenery, level 5, room 25" width="510"></td>
-  </tr>
-</table>
+<img src="cavern-artwork-comparisons/level5-room25.gif" alt="Level 5, room 25: Macintosh and Port artwork comparison" width="1020">
+
+<br/><br/>
