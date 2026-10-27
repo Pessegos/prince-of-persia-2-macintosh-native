@@ -77,9 +77,10 @@ also check initial-effect blocking, pending-song blocking, and the
 distinction between lava's physical death cause and its music override.
 Early retry still becomes legal at counter 7, before the prompt.
 
-The 600-update prompt lifetime/blinking and frontend return described
-below remain an explicit host difference; this audit does not silently
-introduce an automatic restart or change the time available to retry.
+The user chose to keep the retry prompt waiting indefinitely. The original
+600-update prompt lifetime/blinking and frontend return described below are
+intentionally not reproduced; they are not unfinished gameplay. Preserve
+this choice when auditing death timing or adding a frontend.
 `DEATH_CUE_SECONDS` has been removed: native counter gates still advance on
 simulation frames, while final completion comes from SDL's playback state,
 including the prepared sampler's release tail. Pause/F3 freezes both. Tests
@@ -110,8 +111,9 @@ that color for the restart prompt without changing the separate pause/menu
 colors. The complete native palette conversion is not implemented here.
 
 The original gives the message a 600-frame lifetime, blinks it near expiry,
-then returns to its frontend (2:674c/67e8-68aa). This port has no frontend yet;
-it keeps waiting for a retry instead of inventing an automatic level restart.
+then returns to its frontend (2:674c/67e8-68aa). By the user's choice, the port
+keeps waiting for a retry indefinitely. This is an intentional port difference,
+independent of frontend availability, not a missing feature to restore later.
 
 ## Death Presentation
 

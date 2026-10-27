@@ -143,7 +143,8 @@ DOS-style uninterrupted landing recovery for the screen 7 -> 8 drop.
 [REBIRTH_RECOVERY.md](REBIRTH_RECOVERY.md) records the dead-pose/key gate,
 death-song-dependent prompt, all LEVL checkpoint records and the level-1
 world snapshot. Current/pending SDL playback now supplies the sound-completion
-gate; the native timeout-to-frontend is not yet implemented. [Audio notes](AUDIO_RECOVERY.md)
+gate. The retry prompt waits indefinitely by the user's choice, rather than
+using the native timeout-to-frontend. [Audio notes](AUDIO_RECOVERY.md)
 distinguish source MIDI timing from the host sampler's output and release tails.
 
 ## Public Repository Boundary

@@ -290,5 +290,6 @@ practice this is room 24's gate shutting out the chasing skeletons. The
 disassembly listing left `5:4198-4681` and `5:4752-48af` unmapped; they were
 read with capstone.
 
-**Not yet implemented:**
-- the death message's 600-frame game-over timeout (`2:67fa-6806`).
+**Intentional port difference:** the user chose an indefinite retry prompt
+instead of the original death message's 600-frame game-over timeout
+(`2:67fa-6806`). This is not an implementation gap.
