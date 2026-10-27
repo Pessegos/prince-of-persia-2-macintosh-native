@@ -36,6 +36,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 
 | Rule / condition | Source | Status and scope | Owner / tests |
 | --- | --- | --- | --- |
+| Cavern movement17 internal sustain loop and cue admission | WAVE9769;20:3b2a,37a8,467c;5:4d84,5122,530a;16:25fe | R: native block5025..11520 repeats indefinitely;516 admission checks. Port still loops whole sample. Recording pauses are not hardware timing parity | probe_stone_gate_audio / research/stone-gate-opening-audio |
 | Ruins exterior air; silent non-rooftop void death preserves falling scream | 4:2956-2988, 374a-3786; 5:4b5a | T: level6 room27 / level9 room16 exterior air; 8,800 native undefined-cell comparisons and 63 terminal death calls with DecLifePts/SetMode recorded; full FrameAdv and audio waveform parity P | terrain, scene_prototype / probe_cliff_void, test_cliff_map_fixes |
 | Entrance door final slam reaches the split closing audio lane | 5:15bc-161a, 25aa-25f8 | T/A: existing native exported entry phases/cue20 retained; source/direction attributed for intentional concurrent audio | cavern_state / test_cliff_map_fixes, test_gate_audio |
 | Discovery after level three and fresh level-four arrival | 2:0180-027e; 15:1a76 | T: native coordinator import, three callback-free flags-6 animations, bank-separated audio, pause/skip/F3 and life retention; tree/live clock/onward progression P | extract_intro, intro, scene_prototype / test_discovery |
