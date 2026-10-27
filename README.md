@@ -128,10 +128,10 @@ The animation also required some careful masking to prevent overlapping, and I f
 
 ## Cavern Artwork
 
-22 cavern rooms have been touched up to soften harsh shadows and smooth abrupt joins between scenery pieces.
-I also blended the weird rectangular edges on every cavern doors into the surrounding rock.
+22 cavern rooms have been touched up to soften harsh shadows and smooth abrupt joins between scenery pieces. I also blended the odd rectangular edges around the cavern doorways into the surrounding rock.
 
-<br/>
+Here are a few examples:
+
 <p align="center">
   <img src="docs/github readme/cavern-artwork/cavern-artwork-preview.gif" alt="Cavern artwork retouches: level 3 rooms 1 and 28, level 5 room 25, and doorway edges; Macintosh and Port" width="1005">
 </p>
