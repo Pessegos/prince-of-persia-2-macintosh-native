@@ -105,7 +105,12 @@ The [ground bump](temple-ground-bump.md) now advances the actual original
 clip and reloads Kid metadata/supporting column, including the floating link
 and failed selection path. Its [bounded Collide caller](temple-ground-collision.md)
 also executes real tile/empty-rock admission and the30-pixel branch through
-that animation/frame reload. Other airborne responses and wall spacing remain.
+that animation/frame reload. The subsequent
+[unarmed airborne response](temple-air-collision.md) executes the isolated
+4:589e leaf through real alignment and original46/47/121 animation/frame
+reload:9,648 comparisons match, including signed velocity49/50, pose edges,
+ALIVE versus HP/pending health and missing-resource continuation. Armed
+responses, wall spacing and complete caller/physical-frame composition remain.
 
 The inventory retains candidate tile IDs without assuming all behavior:
 

@@ -58,3 +58,7 @@ Reports and original resources remain ignored locally. Nonempty rocks,
 undefined-room correction, other airborne responses, post-bump wall spacing,
 ShapeBounds, CheckCollide1/CheckBarr composition and FrameAdv remain separate
 steps. This research does not enable temple gameplay or change production.
+
+The subsequent [unarmed airborne leaf](temple-air-collision.md) recovers the
+unarmed remainder of4:589e separately. It does not change this probe's bounded
+caller coverage or remove its armed/post-response-spacing exclusions.

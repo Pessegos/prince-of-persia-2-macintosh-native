@@ -285,6 +285,14 @@ exact overlap and failed resource behavior are distinguished. Distance,
 overlap construction and terminal ejection/cave responses remain supplied;
 subsequent damage/death, full collision/world physics and playable temple P.
 
+[Unarmed airborne collision response](research/temple-air-collision.md) extends
+R through the isolated type0 branch of4:589e, with real alignment, relative
+movement, original46/47/121 animation and Kid frame reload. All9,648 controlled
+native calls match; signed velocity49/50, ALIVE/health separation, pose-specific
+word+24 clear and missing-resource continuation are pinned. Actor/admission
+and resource handles remain supplied. Armed reactions, wall spacing, body/contact
+construction, complete caller composition and playable temple remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
