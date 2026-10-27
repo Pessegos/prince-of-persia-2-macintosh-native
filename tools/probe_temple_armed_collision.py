@@ -146,9 +146,13 @@ def run_probe(source):
         machine = NativeTempleArmedCollision(program, raw, frames, attachments)
 
         def check(label, *, pose=153, facing=0, side=-1, vy=49, alive=-1, available=True,
-                  hp=3, pending=0, active=2, selected=2, gate=60, tile=4, x=460, bank=(), width=40, env=2):
+                  hp=3, pending=0, active=2, selected=2, gate=60, tile=4, x=460, bank=(), width=40, env=2,
+                  raw_kind=None):
             level = bytearray(prince['LEVL'][2009]['data'])
             struct.pack_into('>h', level, 0x2186, env)
+            if raw_kind is not None:
+                for cell in range(10,20):
+                    struct.pack_into('>h',level,cell*2,raw_kind)
             actor = bytearray(actor_fixture(1, 1, 4, facing, 0))
             for offset, value in ((4, x), (6, 180), (8, 0), (10, pose), (18, 5), (20, vy),
                     (24, 17), (26, 1), (28, alive), (30, hp), (34, pending), (36, 0), (38, active), (40, selected)):
@@ -210,6 +214,9 @@ def run_probe(source):
             check('signed_x',x=x,facing=facing,side=side,vy=vy)
         for x,facing in product((370,371,372),(-1,0)):
             check('rock_equality',x=x,facing=facing,side=~facing,gate=61,
+                  bank=((153,236,1,0,-2,6,1,459),))
+        for raw_kind,width,facing,side,x in product((1,4,20),(0,40),(-1,0),(-1,0),(300,380,460)):
+            check('rock_raw_clipping',raw_kind=raw_kind,width=width,facing=facing,side=side,x=x,
                   bank=((153,236,1,0,-2,6,1,459),))
     return dict(comparisons=dict(counts), mismatches=0, outcomes=dict(outcomes),
                 executable_sha256=hashlib.sha256(executable).hexdigest(), outputs_sha256=digest.hexdigest(),scope=__doc__)

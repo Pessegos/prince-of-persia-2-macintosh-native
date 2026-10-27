@@ -26,11 +26,13 @@ This is a response leaf, not physical contact admission or a playable level.
   relative moves and disarming survive lookup failure. Sound suppression uses
   source after selection, so failed lookup can preserve source56.
 
-The bounded probe compares12,312 native calls with zero mismatches: all352
+The bounded probe compares12,456 native calls with zero mismatches: all352
 incoming Kid poses, both facings/sides, resource availability and velocity49/50;
 strike/gate low-byte boundaries, active/source separation, ALIVE/health controls,
-static rock filtering/first-record selection and environment2/3. Both original
-Kid AFRM25001 and25201 bindings are separate. Eleven asset-free regressions pin
+static rock filtering/first-record selection and environment2/3. Additional
+raw-level tile1/4/20 and width0/40 controls exercise native left-edge clipping,
+including X380 where clipping changes reaction65 into disarming93. Both original
+Kid AFRM25001 and25201 bindings are separate. Twelve asset-free regressions pin
 the rules. Direct pose fixtures do not establish physical reachability.
 
 Whole A5 output, ordered query/animation/audio-request events, original level,
@@ -48,5 +50,5 @@ outer Collide/CheckCollide1 composition and full FrameAdv remain excluded.
 Executable SHA256:
 `ca2c5886244efa7e19d63fee9317ae5c2341b8a7cc79c7740fdd505575f44bd5`.
 Compared-output SHA256:
-`e41ddb0965982f8882ac81c873ea12c54200da4a074fca7ca9caf9e4933d352e`.
+`e8ebb6cd71e447dea64e121af74054ef4d72c7cfc948d2dca1a4cadbe290d413`.
 Reports and original bytes stay ignored locally. No runtime, art or README edits.

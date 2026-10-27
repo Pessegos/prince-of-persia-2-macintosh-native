@@ -111,7 +111,7 @@ that animation/frame reload. The subsequent
 reload:9,648 comparisons match, including signed velocity49/50, pose edges,
 ALIVE versus HP/pending health and missing-resource continuation. Armed
 responses are separately recovered in the [armed response](temple-armed-collision.md):
-12,312 calls verify the real static-rock lookup, strike/gate position60 boundary,
+12,456 calls verify the real static-rock lookup, strike/gate position60 boundary,
 clips64/65/93, disarming, mark/audio requests and failed-resource continuation.
 The [wall-spacing helper](temple-wall-spacing.md) now executes real point/distance,
 forward-cell/wall decisions, relative movement, Kid reload and final current-cell

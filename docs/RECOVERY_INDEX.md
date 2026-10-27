@@ -296,7 +296,7 @@ composition and playable temple remain P.
 
 [Armed airborne response](research/temple-armed-collision.md) extends R through
 the isolated type0 armed branch, including real static-rock lookup/strike
-predicate, relative reaction, original64/65/93 slices and Kid reload:12,312
+predicate, relative reaction, original64/65/93 slices and Kid reload:12,456
 native calls match. Gate low-byte60/61, active/source distinction, mark/audio
 requests and disarming are pinned. Contact/cache/MOB bank/frame width and
 resource/audio endpoints remain supplied; wall spacing is recovered separately

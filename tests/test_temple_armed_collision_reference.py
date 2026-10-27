@@ -9,13 +9,16 @@ from tools.probe_temple_slide_rock_update import actor_word
 
 class TempleArmedCollisionTests(unittest.TestCase):
     def query(self, *, pose=153, facing=0, side=-1, gate=60, tile=4, available=True,
-              vy=49, alive=-1, hp=3, pending=0, active=2, selected=2, x=460, bank=(), env=2):
+              vy=49, alive=-1, hp=3, pending=0, active=2, selected=2, x=460, bank=(), env=2,
+              raw_kind=None):
         actor = bytearray(actor_fixture(1, 1, 4, facing, 0))
         for offset,value in ((4,x),(6,180),(8,0),(10,pose),(18,5),(20,vy),(24,17),(26,1),
                 (28,alive),(30,hp),(34,pending),(36,0),(38,active),(40,selected)):
             put_actor(actor,offset,value)
         level=bytearray(0x2400)
         struct.pack_into('>h',level,0x2186,env)
+        if raw_kind is not None:
+            for cell in range(10,20):struct.pack_into('>h',level,cell*2,raw_kind)
         sequences={2:(-7,0,15),55:(-7,1,-5,-6,207),64:(-7,5,-5,-10,157),
                    65:(-7,5,160),93:(-7,1,-5,-10,234)}
         return armed_collision_reference(bytes(actor),side,level,bank,(tile,gate,14,1,4,1),sequences,
@@ -95,3 +98,12 @@ class TempleArmedCollisionTests(unittest.TestCase):
         result=self.query(bank=(second,),env=3)
         self.assertEqual(actor_word(result['actor'],40),64)
         self.assertFalse(any(e[0]=='rock_edge' for e in result['events']))
+
+    def test_raw_gate_clips_rock_left_edge_before_armed_reaction(self):
+        rock=((153,236,1,0,-2,6,1,459),)
+        # At X380 the unclipped edge371 permits the reaction65 advance, but
+        # the gate-clipped edge388 remains in front and forces disarming93.
+        plain=self.query(bank=rock,x=380,side=0,raw_kind=1)
+        clipped=self.query(bank=rock,x=380,side=0,raw_kind=4)
+        self.assertEqual(actor_word(plain['actor'],40),65)
+        self.assertEqual(actor_word(clipped['actor'],40),93)
