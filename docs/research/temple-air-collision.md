@@ -63,3 +63,7 @@ Original resources and reports remain ignored locally. Armed4:591a-59b4,
 post-response4:3982 spacing, real contact/body construction, nonempty rock
 overlays, caller composition and repeated FrameAdv remain separate steps.
 No production gameplay, artwork or README changed in this module.
+
+The later [armed response](temple-armed-collision.md) separately recovers the
+type0 armed branch with actual static-rock queries, strike predicate and clips.
+It does not expand this unarmed probe's admission or full-frame coverage.

@@ -110,7 +110,10 @@ that animation/frame reload. The subsequent
 4:589e leaf through real alignment and original46/47/121 animation/frame
 reload:9,648 comparisons match, including signed velocity49/50, pose edges,
 ALIVE versus HP/pending health and missing-resource continuation. Armed
-responses, wall spacing and complete caller/physical-frame composition remain.
+responses are separately recovered in the [armed response](temple-armed-collision.md):
+12,312 calls verify the real static-rock lookup, strike/gate position60 boundary,
+clips64/65/93, disarming, mark/audio requests and failed-resource continuation.
+Wall spacing and complete caller/physical-frame composition remain separate.
 
 The inventory retains candidate tile IDs without assuming all behavior:
 

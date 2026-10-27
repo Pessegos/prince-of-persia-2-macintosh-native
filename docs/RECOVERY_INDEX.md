@@ -293,6 +293,14 @@ word+24 clear and missing-resource continuation are pinned. Actor/admission
 and resource handles remain supplied. Armed reactions, wall spacing, body/contact
 construction, complete caller composition and playable temple remain P.
 
+[Armed airborne response](research/temple-armed-collision.md) extends R through
+the isolated type0 armed branch, including real static-rock lookup/strike
+predicate, relative reaction, original64/65/93 slices and Kid reload:12,312
+native calls match. Gate low-byte60/61, active/source distinction, mark/audio
+requests and disarming are pinned. Contact/cache/MOB bank/frame width and
+resource/audio endpoints remain supplied; wall spacing, body construction,
+moving-rock/full-frame composition and playable temple remain P.
+
 1. Complete ordinary GetCharEdges/Collide/ClipChar and rooftop draw-pass
    dependencies and climb stages.
 2. Extend the branch ledger with each predicate, caller, global field and
