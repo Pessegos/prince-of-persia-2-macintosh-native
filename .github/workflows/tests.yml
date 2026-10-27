@@ -41,6 +41,8 @@ jobs:
         run: python -m unittest -q tests.test_discovery
       - name: Isolated level-four cavern scenery
         run: python -m unittest -q tests.test_level4
+      - name: Approved level-five cavern artwork bundle
+        run: python -m unittest -q tests.test_level5_cavern_retouch
       - name: Native head and temple reference rules without original game files
         run: python -m unittest discover -s tests -p "test_*_reference.py" -q
       - name: Native research inventory and fresh-call guards

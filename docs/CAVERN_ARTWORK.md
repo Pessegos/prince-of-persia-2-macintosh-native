@@ -94,3 +94,45 @@ while revising the right. All four use the native palette and pixel grid, with
 local texture retained rather than blurred. Local previews and the approval
 manifest remain under ignored `rendered/level4-art-batch/` and the corresponding
 `rendered/level4-room*-shadow-v*/` folders.
+
+## Level5 final batch: eight approved rooms
+
+The user approved room17 V2 and closed the cavern-artwork review on2026-10-27.
+Forty-one room/placement-specific crops reproduce the eight approved images,
+changing9497 visible native pixels across the review states below. Earlier
+level3/4 crops and doorway blends remain unchanged. Imported resources stay
+untouched, and the runtime's native-artwork opt-out remains available.
+
+| Room | Version | Changed pixels | Render RGB SHA256 |
+| --- | --- | --- | --- |
+| 6 | V2 | 2747 | `2ef93b2f6a12554f9f77acc4b07a523187769454c65eab587417dbebeb805eae` |
+| 7 | V1 | 1196 | `d879511695be25224c60c436910ba09e3b6f44fa602f44dbd165966b3a13ad7f` |
+| 14 | V1 | 764 | `dc3972e7a39d9f9499afc088edcf5b4792346376e500d5a1ff548922e86c96c5` |
+| 15 | V1 | 643 | `2e5bc07ca34916df66c27435e220421e87f77f0e2e4ccdd7859ab7fe42c0e756` |
+| 16 | V1 | 1231 | `5cadd904b80f1fc11fd21a8eb4fd3d44ccee4ff62b8f9ba2f831b9270e3c3413` |
+| 17 | V2 | 1619 | `fbb686730f48d2a6e589fb13b4202a0fdcdeecddc1c3aaa751499c22ff44e471` |
+| 23 | V1 | 226 | `0cb8d78015db256f4843c6cf58a55104476a7ad8507b345d2fc865534467e789` |
+| 25 | V2 | 1071 | `4ba338d53567d00d272402a59fec0fb9664aee9fd3a164cc0ac65341f23d74a6` |
+
+Room7's approval shows the stone gate fully open (`pressure_key=(46,0,0)`). Its
+wide gradient belongs exclusively to the two static wall pieces, not the gate;
+the same local artwork must remain correct throughout the gate's movement.
+Rooms6,15,16 and25 follow the actual widening column contours. Only their outer
+dark shadow fringe may recolour; lit column bodies and silhouettes stay native.
+Room25's right-hand lower wall was explicitly left unchanged.
+
+Rooms6 and17 reuse the approved room1 level3 wall behind their own foreground
+columns. A source-checked crop can still expose a previously hidden edge in a
+different placement: this produced a thin dark stroke at X396 in room6 and
+X192 in room17. Their final approved versions remove those introduced strokes.
+Room17 restores its exposed right margin exactly to native pixels. The last
+three colour columns of the neighboring foreground rock faces may grade
+locally, as approved; physical foreground columns remain exact.
+
+All edits retain the native palette and pixel grid. Transparency, retained
+pixels, actor occlusion, climbing/floor redraw masks and moving-gate masks
+are unchanged. Gradients are baked into the bundled atlas and applied when
+building cached room images, not recomputed pixel by pixel each frame.
+Local approvals and baking reports remain under ignored
+`rendered/level5-art-review/`. README comparison selection is a separate user
+decision; this artwork review does not replace its wording.

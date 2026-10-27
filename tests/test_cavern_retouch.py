@@ -39,8 +39,11 @@ class BundledCavernRetouchTests(unittest.TestCase):
             source = Image.new('RGBA', record['size'], 'magenta')
             command = ['back', shape, x, bottom, mode, 2, [], 4]
             self.assertIs(retouched_sprite(room, command, source, level_number=4), source)
+            # This room number may also have its own level-five artwork;
+            # source and placement guards must still reject the wrong patch.
+            self.assertIs(retouched_sprite(room, command, source, level_number=5), source)
             with patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Wrong scope')):
-                for level in (3, 5, 6, 7, 8, 9):
+                for level in (3, 6, 7, 8, 9):
                     self.assertIs(retouched_sprite(room, command, source, level_number=level), source)
                 self.assertIs(retouched_sprite(20, command, source, level_number=4), source)
 
