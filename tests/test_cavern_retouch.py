@@ -16,8 +16,8 @@ from pop2.terrain import LevelMap
 class BundledCavernRetouchTests(unittest.TestCase):
     def test_level_four_bundle_is_separate_and_only_targets_approved_rooms(self):
         assets = retouch_assets(4)
-        self.assertEqual(len(assets), 10)
-        self.assertEqual({key[0] for key in assets}, {11, 21, 22})
+        self.assertEqual(len(assets), 27)
+        self.assertEqual({key[0] for key in assets}, {4, 11, 13, 21, 22, 25, 27})
         key, (record, image) = next(iter(assets.items()))
         self.assertEqual(image.size, (record['source_rect'][2] - record['source_rect'][0],
                                       record['source_rect'][3] - record['source_rect'][1]))
@@ -136,11 +136,64 @@ class CavernRetouchTests(unittest.TestCase):
 
     def test_level_four_other_rooms_keep_their_original_wall_art(self):
         with patch('pop2.caverns.retouched_door_sprite', side_effect=lambda level, room, command, source: source):
-            for room in set(range(32)) - {11, 21, 22}:
+            for room in set(range(32)) - {4, 11, 13, 21, 22, 25, 27}:
                 with self.subTest(room=room):
                     original = cavern_room(room, level_number=4)
                     edited = cavern_room(room, level_number=4, retouched=True)
                     self.assertEqual(original.flattened().tobytes(), edited.flattened().tobytes())
+
+    def test_level_four_final_batch_matches_approved_pixels_and_preserves_masks(self):
+        approved = {
+            4: (382, '421ee7b40f740af3598ef7d1c3b8acf5ba6a5b4fd4394a2a684ed017f53d5290'),
+            13: (608, '6c545e48efa6fde6a208453d89c3bd5785bdb9fcf1bdee055d086521553c7933'),
+            25: (481, '9ef82c6d26f7540b12e655ed87dcebaf0ab4f3ba810f609ac75d0735ab096197'),
+            27: (336, 'd60832d8900669a315a5868ea9d069755f5b330f4c12b5618e6567578c8e1d63'),
+        }
+        colours = {tuple(c[:3]) for c in cavern_assets(4)[2].values()}
+        level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 4)
+        game = LevelRenderer(level, preload_room=False)
+        for room, (count, expected) in approved.items():
+            with self.subTest(room=room + 1):
+                native = cavern_room(room, level_number=4)
+                edited = cavern_room(room, level_number=4, retouched=True)
+                a, b = native.flattened().convert('RGB'), edited.flattened().convert('RGB')
+                self.assertEqual(hashlib.sha256(b.tobytes()).hexdigest(), expected)
+                changed = [new for old, new in zip(a.getdata(), b.getdata()) if old != new]
+                self.assertEqual(len(changed), count)
+                self.assertTrue(set(changed) <= colours)
+                self.assert_masks_equal(native, edited)
+                if room in (4, 27):
+                    self.assertEqual(native.foreground.tobytes(), edited.foreground.tobytes())
+                self.assertEqual(game.room(room).flattened().tobytes(),
+                                 cavern_room(room, level_number=4, animated=True, retouched=True).flattened().tobytes())
+
+    def test_batch_column_gradients_preserve_lit_bodies_and_reject_changed_sources(self):
+        program, resources, palette, shapes = cavern_assets(4)
+        for key, (record, _) in retouch_assets(4).items():
+            room, shape, x, bottom, mode = key
+            if room not in (4, 13, 25, 27):
+                continue
+            with self.subTest(key=key):
+                command = next(c for c in program['rooms'][str(room)] if tuple(c[1:5]) == key[1:])
+                source = cavern_command_sprite(command, resources, palette, shapes)
+                original = source.tobytes()
+                self.assertEqual(hashlib.sha256(original).hexdigest(), record['source_sha256'])
+                result = retouched_sprite(room, command, source, level_number=4)
+                self.assertNotEqual(result.tobytes(), original)
+                self.assertEqual(source.tobytes(), original)
+                self.assertEqual(result.getchannel('A').tobytes(), source.getchannel('A').tobytes())
+                if (room, shape) in ((13, 3531), (25, 3533)):
+                    for old, new in zip(source.getdata(), result.getdata()):
+                        if old[3] and max(old[:3]) > 24:
+                            self.assertEqual(old, new)
+                changed = source.copy()
+                changed.putpixel((0, 0), (1, 2, 3, 255))
+                self.assertIs(retouched_sprite(room, command, changed, level_number=4), changed)
+                other_library = list(command)
+                other_library[7] = 1
+                self.assertIs(retouched_sprite(room, other_library, source, level_number=4), source)
+                for level_number in (5, 6, 7, 8, 9):
+                    self.assertIs(retouched_sprite(room, command, source, level_number=level_number), source)
 
     def test_level_four_room_twenty_two_matches_approved_gradient_and_keeps_its_column(self):
         with patch('pop2.caverns.retouched_sprite', side_effect=lambda room, command, source, **kw: source):

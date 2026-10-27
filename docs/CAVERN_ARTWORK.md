@@ -65,3 +65,32 @@ gradient, not an overlay or an RGB blur. The combined render's RGB SHA256 is
 `74912e7249bf2e288597df09ca426527045adc8cc55a9e75c0883408060cde16`.
 The exit animation retains the same local correction. Local review images
 remain under `rendered/level4-room22-shadow-v1/`.
+
+## Level4 final batch: rooms5,14,26 and28
+
+The user approved these four rooms individually, then approved integration of
+the complete batch on 2026-10-27. Seventeen additional source-checked crops
+apply only to these level4 placements. Earlier atlas crops remain unchanged.
+
+| Room | Approved version | Changed native pixels | Render RGB SHA256 |
+| --- | --- | --- | --- |
+| 5 | V1 | 382 | `421ee7b40f740af3598ef7d1c3b8acf5ba6a5b4fd4394a2a684ed017f53d5290` |
+| 14 | V1 | 608 | `6c545e48efa6fde6a208453d89c3bd5785bdb9fcf1bdee055d086521553c7933` |
+| 26 | V4 | 481 | `9ef82c6d26f7540b12e655ed87dcebaf0ab4f3ba810f609ac75d0735ab096197` |
+| 28 | V3 | 336 | `d60832d8900669a315a5868ea9d069755f5b330f4c12b5618e6567578c8e1d63` |
+
+Room5 continues the matching approved room12 lighting. Room14 grades a wider
+shadow beside its upper column. In room26, follow the widening column contour
+and continue the accepted upper gradient gradually into the lower rim; resetting
+the shading at a fixed row produced a rejected horizontal cut. The lit column
+bodies retain their original pixels. Only their outer dark shadow fringe may
+change colour; alpha, silhouettes and actor masks stay identical.
+
+Room28 preserves its foreground completely. The right-hand circle in the first
+reference indicated an area, not a contour to trace: the requested gradient is
+across the vertical background join beside the stalactite. V3 also softens the
+small squared shadow shoulder below it. Keep the approved left join unchanged
+while revising the right. All four use the native palette and pixel grid, with
+local texture retained rather than blurred. Local previews and the approval
+manifest remain under ignored `rendered/level4-art-batch/` and the corresponding
+`rendered/level4-room*-shadow-v*/` folders.
