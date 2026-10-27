@@ -126,6 +126,22 @@ The animation also required some careful masking to prevent overlapping, and I f
 
 <br/>
 
+## Cavern Artwork
+
+22 cavern rooms have been touched up to soften harsh shadows and smooth abrupt joins between scenery pieces.
+I also blended the weird rectangular edges on every cavern doors into the surrounding rock.
+
+<br/>
+<p align="center">
+  <img src="docs/github readme/cavern-artwork/cavern-artwork-preview.gif" alt="Cavern artwork retouches: level 3 rooms 1 and 28, level 5 room 25, and doorway edges; Macintosh and Port" width="1005">
+</p>
+
+<h3 align="center">
+  <a href="docs/CAVERN_ARTWORK_COMPARISONS.md">View all 19 full-room comparisons →</a>
+</h3>
+
+<br/>
+
 ## Stone Gates
 
 The stone gate closing animation in the Macintosh version looks pretty rough, especially when crushing the Prince. The DOS version handles this much better, with a nice bouncing effect when the gate slams shut, so I recreated its closing animation frame by frame for the port and adjusted the timing of the original slam sound to match.
@@ -146,25 +162,6 @@ I also improved the sound played while the gate opens. The original had noticeab
     <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/527207f5-1f7b-48de-88c3-cde732a694ec"></video></td>
   </tr>
 </table>
-
-<br/>
-
-## Cavern Artwork
-
-I've retouched 22 rooms across the cavern levels to soften overly harsh shadows and blend abrupt joins between pieces of scenery, while preserving their original texture and detail. Entrance and exit doorway edges also blend more naturally into the surrounding rock.
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/github readme/cavern-artwork/level3-room1.gif" alt="Cavern wall shadow retouch, level 3 room 1: Macintosh and Port" width="490"></td>
-    <td width="50%"><img src="docs/github readme/cavern-artwork/level3-room28.gif" alt="Cavern wall shadow retouch, level 3 room 28: Macintosh and Port" width="490"></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/github readme/cavern-artwork/door-edge.gif" alt="Entrance and exit doorway edge retouch: Macintosh and Port" width="490"></td>
-    <td width="50%"><img src="docs/github readme/cavern-artwork/level5-room25.gif" alt="Wall and column shadow joins, level 5 room 25: Macintosh and Port" width="490"></td>
-  </tr>
-</table>
-
-[View full-room comparisons](docs/CAVERN_ARTWORK_COMPARISONS.md)
 
 <br/>
 
