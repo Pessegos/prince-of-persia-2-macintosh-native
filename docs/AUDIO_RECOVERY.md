@@ -59,12 +59,14 @@ and real SDL isolation while gameplay audio is paused.
 
 ## Mixed Gameplay Effects
 
-The [stone-gate loop audit](research/stone-gate-opening-audio.md) found that
-cue17 has an original internal sustain region omitted by the current importer.
-The present seamless rework loops the entire sample; its historical Before
-demonstrates the old port, not original Macintosh device timing. Two Macintosh
-recordings contain one larger initial pause and much smaller later loop joins.
-The audit records that distinction without changing approved runtime audio.
+The [stone-gate loop audit](research/stone-gate-opening-audio.md) recovered
+cue17's original internal sustain region. Playback now keeps the introduction
+once and repeats only source frames5025..11520, rather than the whole sample.
+Import retains optional loop metadata; an exact PCM hash recognizes existing
+original imports without requiring reimport. The historical Before demonstrates
+the old port, not original Macintosh device timing. Two Macintosh recordings
+contain one larger initial pause and much smaller later loop joins; these
+emulator delays are not inserted into the resource-based playback.
 
 The port's mixed-effects policy allows distinct effects to overlap, with one
 gate voice for opening and one for closing. This is an intentional exception

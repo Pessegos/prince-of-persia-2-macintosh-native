@@ -10,6 +10,7 @@ import time
 from pop2.paths import ASSET_DIR
 from pop2.audio_duck import PcmGateDuck
 from pop2.audio_release import PcmRelease, seamless_loop
+from pop2.audio_loop import PcmSustain, gate_loop_bounds
 from pop2.ui_audio import menu_pcm
 from pop2.mechanism_audio import GateVoice
 
@@ -61,12 +62,18 @@ class MixerPlayback:
         self.gate_release = PcmRelease(mixer) if 17 in self.sounds and 18 in self.sounds else None
         self.gate_duck = (PcmGateDuck(mixer) if mix_mechanisms
                           and 17 in self.sounds and 26 in self.sounds else None)
+        self.gate_sustain = None
         if self.gate_release is not None:
             rate, _bits, channels = mixer.get_init()
             original = self.sounds[17]
             self.gate_lifetime = max(1, round(original.get_length() * 1000))
-            self.sounds[17] = mixer.Sound(buffer=seamless_loop(
-                original.get_raw(), channels, rate * 12 // 1000))
+            bounds = gate_loop_bounds(Path(directory) / cues[17]['file'], cues[17], rate)
+            if bounds is not None:
+                self.gate_sustain = PcmSustain(
+                    self.gate_release.library, original.get_raw(), channels, *bounds)
+            else:
+                self.sounds[17] = mixer.Sound(buffer=seamless_loop(
+                    original.get_raw(), channels, rate * 12 // 1000))
 
     def _gate_voice(self, bus):
         if bus == getattr(self, 'gate_bus', 'effect'):
@@ -122,6 +129,11 @@ class MixerPlayback:
         if voice is not None and self.gate_release is not None:
             self.gate_release.cancel(voice.effect_channel)
         if voice is not None and cue == 17 and not offset and self.gate_release is not None:
+            if getattr(self, 'gate_sustain', None) is not None:
+                # Inactive channels retain registered SDL effects when started.
+                # The sustain callback runs before subsequent duck/release effects.
+                self.channels[bus].stop()
+                self.gate_sustain.start(voice.effect_channel)
             self.channels[bus].play(sound, loops=-1)
             self.sustain_gate(bus)
         else:
@@ -205,6 +217,8 @@ class MixerPlayback:
         self.effects.clear()
         if self.gate_duck is not None:
             self.gate_duck.close()
+        if getattr(self, 'gate_sustain', None) is not None:
+            self.gate_sustain.close()
         if self.gate_release is not None:
             for bus in self.channels:
                 voice = self._gate_voice(bus)

@@ -648,11 +648,12 @@ The callback only processes SDL's temporary channel buffer, never shared sound
 data, and remains owned until playback stops before mixer shutdown.
 See [SDL_mixer channel effects](https://wiki.libsdl.org/SDL2_mixer/Mix_RegisterEffect).
 
-Movement cue 17 now repeats on SDL's audio clock instead of waiting for the
-next game update after each roughly 1.045-second sample. A 12 ms raised-cosine
-overlap joins the end to the beginning in a private, in-memory loop; its start
-is rotated near zero without inserting a fade on every repetition. Imported
-WAVs are not rewritten. Repeated movement requests renew a playback deadline
+Movement cue17 uses the [recovered resource loop](research/stone-gate-opening-audio.md)
+on SDL's audio clock: the introduction plays once, then source frames5025..11520
+repeat (about589 ms). This replaces the previous whole-file12 ms crossfade,
+which repeated the opening attack. New imports carry loop metadata; an exact
+original PCM hash supports existing imports without rewriting WAVs or requiring
+reimport. Repeated movement requests renew a playback deadline
 equal to the original sample duration, so a missing stop request cannot leave
 an infinite sound. Priorities and controller timing are unchanged; cue 18 keeps
 the sample-accurate release above, including across a loop boundary. Pause,

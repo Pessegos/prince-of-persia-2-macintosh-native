@@ -175,6 +175,9 @@ def extract_audio(image, program_bytes, prince_bytes, directory, progress=lambda
                 writer.setparams((sample.channels, 2, sample.rate, 0, "NONE", ""))
                 writer.writeframes(encoded)
             entry["duration"] = len(sample.pcm) / sample.channels / sample.rate
+            if sample.loop_count:
+                entry["loop"] = {"rate": sample.rate, "start": sample.loop_start,
+                                 "end": sample.loop_end, "count": sample.loop_count}
         elif resource_id in midi:
             raw_name = f"cue-{cue}.mid"
             raw = midi[resource_id]

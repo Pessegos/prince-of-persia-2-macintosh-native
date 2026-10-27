@@ -733,6 +733,18 @@ class FormatTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             digitized_sound(chunk[:-1])
 
+    def test_mohawk_retains_loop_region_and_full_32bit_frame_count(self):
+        pcm = b'a' * 70000
+        header = struct.pack('>HIBBHHII', 11025, len(pcm), 8, 1, 0, 65535, 5025, 11520)
+        sample = digitized_sound(b'Data' + struct.pack('>I', len(header) + len(pcm)) + header + pcm)
+        self.assertEqual((sample.rate, len(sample.pcm)), (11025, 70000))
+        self.assertEqual((sample.loop_start, sample.loop_end, sample.loop_count), (5025, 11520, 65535))
+
+    def test_mohawk_out_of_range_loop_words_do_not_loop_an_ordinary_effect(self):
+        header = struct.pack('>HIBBHHII', 11025, 4, 8, 1, 0, 65535, 134732, 25032688)
+        sample = digitized_sound(b'Data' + struct.pack('>I', 24) + header + b'abcd')
+        self.assertEqual((sample.loop_start, sample.loop_end, sample.loop_count), (0, 0, 0))
+
     def test_standard_sound_header_and_truncation(self):
         data = struct.pack(">HHHHHI", 2, 0, 1, 0x8051, 0, 14)
         data += struct.pack(">5IBB", 0, 4, 22050 << 16, 0, 0, 0, 67) + b"abcd"

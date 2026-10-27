@@ -1,9 +1,10 @@
 # Stone-gate opening audio: source loop and recorded pauses
 
-The cavern movement sound has an internal sustain loop. The port currently
-discards that metadata and repeats the whole sample. Its seamless-loop rework
-removes the old port's periodic restart gaps, but uses a different repeating
-section from the Macintosh. This audit changes no runtime sound or asset.
+The cavern movement sound has an internal sustain loop. The initial audit
+found that the port discarded that metadata and repeated the whole sample.
+Its seamless-loop rework removed the old port's periodic restart gaps, but
+repeated a different section from the Macintosh. The follow-up implementation
+below preserves the introduction and repeats the resource's sustain region.
 
 The historical `gate-opening-before.wav` is an SDL capture of the old port,
 created by the local `gate_opening_loop.py` experiment. It is not a Macintosh
@@ -40,8 +41,8 @@ Their stored loop offsets lie beyond their sample lengths, so the raw65535
 word alone must not be treated as a valid infinite loop for every effect.
 
 The port's imported cue17 PCM matches the resource samples exactly after its
-documented fixed gain/conversion. The omission is the loop metadata.
-`MixerPlayback` currently crossfades12 ms at the whole sample's ends and loops
+documented fixed gain/conversion. At audit time the omission was the loop
+metadata: `MixerPlayback` crossfaded12 ms at the whole sample's ends and looped
 that private copy, giving a period near1.033 s. Imported WAVs remain unchanged.
 
 ## Macintosh recordings
@@ -106,13 +107,44 @@ The final probe reports zero mismatches and output fingerprint
 `5653e07dbbdaf2824ac5e0efa72c8d0fe67e5571b379ba78b5067274d5cac242`.
 
 Local listening evidence includes the two unfiltered recording excerpts, an
-explicit reconstruction of the resource loop, the current port's actual
+explicit reconstruction of the resource loop, the pre-fix port's actual
 prepared loop and the historical old-port capture. The reconstruction supplies
 four seconds of movement and no emulator/device delays; it is not labelled as
 an original recording. It uses the same fixed import gain as the port version.
 
-Before another subjective audio change, preserve the introductory section and
-the native sustain region, then compare that version with the present rework.
-Any smoothing at joins or stopping should be described as a port choice.
-The README should describe the resulting continuous playback without claiming
-that its old Before example is evidence of repeated Macintosh gaps.
+## Implemented resource-loop playback
+
+The user approved the metadata-loop reconstruction. `digitized_sound` now
+decodes the Hz word, full32-bit frame count and validated loop fields. Import
+adds optional loop metadata without changing PCM samples, rates or fixed gain.
+All83 `DigiSnd.dat` and74 `NISDIGI.dat` PCM records were checked: their frame
+counts fit16 bits, so the corrected header layout does not change their lengths.
+Out-of-range loop offsets do not turn other effects into infinite sounds.
+
+`pop2/audio_loop.py` plays the introduction once and repeats only5025..11520,
+using the loaded SDL PCM and an independent cursor per gate voice. The callback
+runs before ducking and release, on the audio clock rather than gameplay ticks.
+At48 kHz the boundaries round to21878..50155, within one output sample of the
+source positions. No crossfade or encoded silence is added at sustain joins.
+This follows the resource layout, without reproducing the measured emulator
+delays or claiming bit-exact Macintosh hardware playback.
+
+Existing imports work without reimporting: only the exact original signed16-bit
+cue17 PCM hash, format, frame count and rate enable its known loop when metadata
+is absent. Equal duration alone is insufficient. New imports retain metadata
+directly. Unknown replacement sounds keep the previous whole-file fallback.
+
+The two gate voices, impact ducking,12 ms stop release, pause/mute/reset and
+movement-request deadline remain in place. These are port mixing choices,
+separate from original single-effect priority arbitration.
+
+Tests reject repeated intros, skipped intros, gaps at callback/carrier wraps,
+shared cursors, accidental loops on unrelated effects and modified source PCM.
+An actual SDL postmix capture using an existing original import matched192000
+stereo frames (four seconds) exactly against intro-once/tail-repeat PCM, with
+zero mismatching samples. Stop cleared its cursor. Local capture and validation
+are under ignored `rendered/gate-sustain-runtime/`. The native audit still has
+the same six block graphs,516 admission comparisons and fingerprint above.
+
+The README's historical Before example remains old-port audio, not evidence
+of repeated Macintosh gaps. Its presentation is reserved for user review.

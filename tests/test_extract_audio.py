@@ -18,7 +18,7 @@ from pop2.audio_formats import Sample
 class AudioTableTests(unittest.TestCase):
     def test_import_prepares_desert_and_exit_door_songs_from_original_midi(self):
         songs = LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS
-        effects = (7, 8, 9, 10, 11, 12, 13, 14, 30, 31, 34, 35, 36, 294, 295, 296)
+        effects = (7, 8, 9, 10, 11, 12, 13, 14, 17, 30, 31, 34, 35, 36, 294, 295, 296)
         manifest = {'schema': 1, 'cues': {
             str(cue): {'kind': 'midi' if cue in songs else 'pcm'}
             for cue in songs + effects}}
@@ -35,9 +35,14 @@ class AudioTableTests(unittest.TestCase):
               patch('tools.extract_audio.instrument_bank'),
               patch('tools.extract_audio.get_data_fork', side_effect=lambda _image, name: name),
               patch('tools.extract_audio.mohawk_resources', side_effect=archives.__getitem__),
-              patch('tools.extract_audio.digitized_sound', return_value=Sample(b'\x80' * 8, 22050)),
+              patch('tools.extract_audio.digitized_sound', return_value=Sample(
+                  b'\x80' * 8, 22050, loop_start=2, loop_end=7, loop_count=65535)),
               patch('tools.extract_audio.render_midi', return_value=1.0) as render):
             result = extract_audio(b'image', b'program', b'prince', directory)
+            with wave.open(str(Path(directory, 'cue-17.wav'))) as reader:
+                self.assertEqual(reader.readframes(8), bytes(16))
+            self.assertEqual(result['cues']['17']['loop'],
+                             dict(rate=22050, start=2, end=7, count=65535))
         for cue in DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS:
             self.assertEqual(result['cues'][str(cue)]['file'], f'cue-{cue}.wav')
             self.assertIn(f'cue-{cue}.mid', [call.args[1] for call in render.call_args_list])

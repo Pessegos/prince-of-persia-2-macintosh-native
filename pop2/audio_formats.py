@@ -50,6 +50,7 @@ class Sample:
     base_note: int = 60
     loop_start: int = 0
     loop_end: int = 0
+    loop_count: int = 0
 
     def wav(self, sustain=False):
         output = io.BytesIO()
@@ -97,10 +98,15 @@ def digitized_sound(data):
         cursor += 8 + size
         if tag != b"Data":
             continue
-        rate = round(_u32(body, 0) / 65536)
-        frames = _u16(body, 4)
+        # waveObj20:3b40-3b96: Hz word, frame long, format and loop fields.
+        rate = _u16(body, 0)
+        frames = _u32(body, 2)
         bits, channels = _span(body, 6, 2)
-        if not rate or bits != 8 or channels not in (1, 2):
+        if not rate or bits != 8 or channels not in (1, 2) or _u16(body, 8):
             raise ValueError("Unsupported Mohawk PCM format")
-        return Sample(_span(body, 20, frames * channels), rate, channels)
+        count, start, end = _u16(body, 10), _u32(body, 12), _u32(body, 16)
+        if not count or not 0 <= start < end <= frames:
+            count, start, end = 0, 0, 0
+        return Sample(_span(body, 20, frames * channels), rate, channels,
+                      loop_start=start, loop_end=end, loop_count=count)
     raise ValueError("Mohawk sound has no PCM data")
