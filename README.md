@@ -14,30 +14,35 @@ I'm trying to stay as close to the original as possible, while still making some
 
 <br/>
 
+## Contents
+
+- [Gameplay Status](#gameplay-status)
+- [Features & Improvements](#features--improvements)
+  - [Game Menu (F1)](#game-menu-f1)
+  - [Save & Load](#save--load)
+  - [Screenshot Gallery (F2)](#screenshot-gallery-f2)
+  - [Developer Tools (F3)](#developer-tools-f3)
+  - [Cutscene Pausing](#cutscene-pausing)
+  - [Lava Overhaul](#lava-overhaul)
+  - [Cavern Artwork](#cavern-artwork)
+  - [Stone Gates](#stone-gates)
+- [Quality of Life](#quality-of-life)
+- [Run](#run)
+- [Controls](#controls)
+- [Development](#development)
+- [License](#license)
+
+<br/>
+
 ## Gameplay Status
 
-Levels 1-3 are playable from start to finish.
+Levels 1–9 are playable, with ongoing bug fixes and side-by-side testing
+against the Macintosh version. Most current playtesting is focused on the
+ruins, especially the heads and serpents, whose AI still needs work.
 
-Levels 4 and 5 are available for playtesting, including the original Discovery
-and tree cutscenes, story countdown, collapsing rope bridge, ceiling bars and
-flying-carpet escape. The countdown starts with the first tree scene, not on
-arrival in level 4. Both levels are still being refined through playtesting.
-
-The ruins in levels 6-9 are also available for playtesting, with campaign
-progression from level 5. Crawling through crevices, scythes, the upside-down
-potion and sword pickups are implemented, along with the flying heads and
-serpents. These levels and their enemies still need more side-by-side testing
-and refinement.
-
-Campaign progression currently stops after level 9. The temple levels (10-13)
-are not playable yet, but research is already underway into their mechanisms,
-enemies and special events. Recovered rules are being checked against the
-original Macintosh executable before being connected to playable levels;
-full collision and frame-by-frame behavior still need work.
-
-A lot of the work so far has gone into building and refining the core gameplay systems rather than just moving through the levels. I'm hoping this groundwork will make the remaining levels quicker to implement.
-
-Enemy AI is already working well, but there's still ongoing research into the original Macintosh executable to better understand and reproduce its more subtle behaviors.
+The temple levels (10–13) are not playable yet. Research into their rules is
+well underway, but they still need to be added to the game, along with the
+horse cutscene between levels 9 and 10.
 
 <br/>
 
@@ -181,7 +186,7 @@ I also smoothed out the gate opening sound. It now plays continuously and fades 
 - Clouds keep moving during the intro's fades, like the DOS version does.
 - The level 1 screen 7-8 drop preserves the full landing and stand-up animation, matching DOS behavior instead of the abrupt interruption in the Macintosh original.
 - Completely overhauled lava pools with detailed rocky edges, convincing depth like the DOS version, seamless bubbling, and properly layered splashes and particles.
-- Reworked stone-gate closing and crushing animation, with a timed slam and seamless opening audio without the original gaps or end click.
+- Reworked stone-gate closing and crushing animation, with a timed slam and a short fade when the opening sound stops.
 - Dock guards stay in standby once the Prince catches the boat, instead of switching back into combat during the escape.
 - Shift+Back with the sword drawn turns the Prince manually. Unlike the original toggle, this leaves automatic turning enabled.
 - While floating, the Prince is pushed back from obstructing scenery instead of scraping along it as in the Macintosh original.
@@ -243,7 +248,8 @@ in `assets/`:
 - `Rooftops.rsrc`
 - `Desert.rsrc`
 - `Caverns.rsrc`, `caverns_entry.json`, `caverns_level4.json` and `caverns_level5.json` (independent scenery for levels 3-5)
-- `Ruins.rsrc`, `Head.rsrc`, `ruins_level6.json` and `ruins_level7.json` (ruins scenery; special enemies are not generated yet)
+- `Ruins.rsrc`, `Head.rsrc` and `ruins_level6.json` through `ruins_level9.json` (ruins scenery and enemy resources)
+- `ThroneNIS.rsrc` (throne vision resources)
 - `TNIS1.rsrc`, `TNIS2.rsrc` and `TNIS3.rsrc` (carpet scene resources)
 - `NIS.rsrc`, `NISTree.rsrc` and `Title.rsrc`
 - `enemy_profiles.json`
@@ -251,6 +257,7 @@ in `assets/`:
 - `ending.json` (voyage after level 1)
 - `discovery.json` (story sequence after level 3)
 - `carpet.json` (flight between levels 5 and 6)
+- `throne.json` (vision in level 8)
 - `tree-1.json` through `tree-9.json` (tree scenes and timeout sequence)
 - `attract.json` (original level-one demo and credits program)
 - `audio/` (original samples, voices, instruments and prepared music)
