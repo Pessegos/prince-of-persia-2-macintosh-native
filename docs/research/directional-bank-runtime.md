@@ -39,6 +39,11 @@ to load. JumpSeq resets the cursor while leaving the old displayed action
 in place; consulting that old ready pose again could otherwise replace a
 new step with a run before it had even started. A regression rejects that
 double dispatch, including repeated controller calls at cursor zero.
+The existing initial forward-chord window remains an explicit exception:
+fresh Up can combine with the arrow that just selected an automatic
+near-wall step, before its first pose. It cannot turn a plain Shift release
+into another run. The real-terrain wall-bump regression checks that this
+chord starts once and cannot replay after collision.
 
 This is an explicit family boundary, not proof of native bank continuity
 through the still-unmigrated families. That continuity and their consumption

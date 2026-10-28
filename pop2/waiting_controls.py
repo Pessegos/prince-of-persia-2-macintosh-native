@@ -128,12 +128,18 @@ class WaitingControls:
             self.latch_waiting_command(queued)
             self.pending_action = None
         state = self.sequence_state
+        facing = bool(state.facing)
+        relative = self.directional_input.remap(facing_right=facing)
         if state.cursor == 0 and state.sequence_id != IDLE_SEQUENCE:
             # JumpSeq leaves the previous displayed action in place. Do not
             # run its ready gate again before loading the selected first pose.
-            return False
-        facing = bool(state.facing)
-        relative = self.directional_input.remap(facing_right=facing)
+            # Preserve the host's initial forward chord window when an arrow
+            # selected an automatic near-wall step before Up arrived.
+            early_chord = (getattr(self, 'waiting_step_direction', 0)
+                           and not self.shift_held and relative.up < 0 and relative.left
+                           and (state.action == 15 or 50 <= state.action <= 52))
+            if not early_chord:
+                return False
         relative, request = standing_input_request(
             relative, state.action, mode=state.animation_state,
             sequence=state.sequence_id, sword=not self.sword_lost())
