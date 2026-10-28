@@ -93,13 +93,13 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 | Context | Recovered gate / priority | Source | Port status |
 | --- | --- | --- | --- |
 | Rest/stop poses 15, 50-52 | Standing handler, after mode/sequence reset gate | 6:05fe-0618, 0c32 | Tested subset; mode-5 exception missing |
-| Standing without Shift | Fresh Forward + fresh Up: jump; otherwise fresh Forward, Backward, Up, Down; active Forward is final run fallback | 6:0db0-0e16 | Common chords tested; independent pending inputs missing |
-| Standing with Shift pending/consumed | Fresh Backward, Up, Down before a fresh Forward-only step | 6:0d4c-0db0 | Opposite Shift+direction consumes a turn only; other buffered modifier classification remains partial |
-| Draw from rest | Fresh Ctrl and no directional latches; consume modifier, clear directions, DoEngarde | 6:0c90-0cb6, 1e78 | Draw implemented; simultaneous-input gates partial |
-| Turn poses 45-49 | Pose 48: active Forward, no Up/Down, modifier >= 0 resumes run; otherwise protected | 6:1014-1066 | Held-run transition reinterprets direction after facing flips; host-held state replaces latches |
+| Standing without Shift | Fresh Forward + fresh Up: jump; otherwise fresh Forward, Backward, Up, Down; active Forward is final run fallback | 6:0db0-0e16 | Independent pending directions integrated at migrated ready gates; other family handoffs partial |
+| Standing with Shift pending/consumed | Fresh Backward, Up, Down before a fresh Forward-only step | 6:0d4c-0db0 | Migrated bank reads current modifier and priorities; native selector compared directly |
+| Draw from rest | Fresh Ctrl and no directional latches; consume modifier, clear directions, DoEngarde | 6:0c90-0cb6, 1e78 | Migrated selector and running/braking Ctrl lifecycle tested; armed controller migration remains partial |
+| Turn poses 45-49 | Pose 48: active Forward, no Up/Down, modifier >= 0 resumes run; otherwise protected | 6:1014-1066 | Bank remaps against current facing and admits running turn 43; first-pose guard tested |
 | Run start poses 1-3 | Fresh Up AND fresh Forward: forward jump; clear directions | 6:15b6-15da | Forward + Up chord retained at pose 1; later forward startup buffers a run jump; see Intentional Port Extensions |
 | Vertical preparation 67-69 | Active Forward: standing forward jump | 6:15de-15e8 | Chord tested; 35 ms host chord delay is an approximation |
-| Running 4-14 | Both horizontals zero: brake only at 7/11; otherwise Backward before fresh Up, then fresh Down; finally consume fresh Forward | 6:11e4-1274 | Ordinary flow tested, including release at pose 8 waiting for 11; latest-command slot cannot reproduce every conflict |
+| Running 4-14 | Both horizontals zero: brake only at 7/11; otherwise Backward before fresh Up, then fresh Down; finally consume fresh Forward | 6:11e4-1274 | Grounded run bank integrated; direct production/native routing comparison and scene conflict/geometry regressions; airborne continuity remains partial |
 | Run-jump takeoff | Legal run poses plus two-cell geometry; accepted jump clears directions, consumes Up | 6:1c14-1d5e | Ordinary geometry tested |
 | Other unarmed poses | No general dispatch; pending latches remain unless reset/special branch intervenes | 6:0560-07e0 | Full native lifecycle missing |
 | Crouch pose 109 | Down active: fresh Forward selects low step/lie-down, including with Shift; Down zero: rise unless terrain vetoes | 6:099a-0b58 | Low/prone native consumption and saved-player traces recovered; Shift low-step classification corrected; full runtime bank migration missing |
@@ -166,8 +166,8 @@ Other state writers are separate from that count:
 
 ## Demonstrated Host Differences
 
-`BufferedCommand` is the legacy latest-wins slot. The first runtime migration
-replaces deferred standing-turn/cautious-step input with a directional bank;
+`BufferedCommand` is the legacy latest-wins slot. The runtime migration
+replaces deferred standing-turn/cautious-step and grounded running input with a directional bank;
 see [directional-bank runtime](research/directional-bank-runtime.md) for exact
 ownership, observable changes and remaining families. Elsewhere, handlers can enqueue on host key
 callbacks before the next simulation tick and classify a request using the
@@ -263,8 +263,9 @@ opponent target. Action and geometry endpoints are no-op request sinks;
 resets/consumption inside those actions are excluded. Trace poses and raw
 axes are supplied, not advanced by real animation or OS polling. This proves
 the bounded router and its composition with sampling, not complete input,
-physics or FrameAdv parity. Full directional runtime migration still needs
-action-body consumption and caller scheduling before replacing the host slot.
+physics or FrameAdv parity. The action-body and saved-player studies below
+extend that evidence; runtime migration now uses it in the bounded families
+described above. Other families and complete caller scheduling remain partial.
 
 A separate 7,290-call matrix executes DoStrike 6:2780-281c for Prince type0,
 all 405 banks, nine poses and ordinary/serpent opponent types. It verifies
@@ -658,8 +659,9 @@ bank/controller audit or add an expiry to the current slot.
 
 ## Implementation Order
 
-The first production stage is now integrated for deferred standing-turn and
-cautious-step input: [scope and validation](research/directional-bank-runtime.md).
+The first two production stages are integrated for deferred standing-turn,
+cautious-step and grounded running input:
+[scope and validation](research/directional-bank-runtime.md).
 The independent research models remain separate from runtime. Continue the
 remaining families using the recovered gates, extending native-bank ownership
 and removing each superseded producer/consumer together.
@@ -677,7 +679,7 @@ and removing each superseded producer/consumer together.
 5. Use original recordings or traces for unresolved sampling/update timing
    and special branches instead of assigning unsupported semantics.
 
-The native-latch audit adds documentation and executable mismatch cases only.
-The run-stop correction does not replace the runtime buffer, change animation
-clocks or change the approved running-jump fix. Routine-level progress is in
+The original audit phase added documentation and executable comparisons;
+the later runtime stages above now replace the covered parts of the buffer.
+Animation clocks and the approved running-jump fix are preserved. Routine-level progress is in
 [RECOVERY_INDEX.md](RECOVERY_INDEX.md).

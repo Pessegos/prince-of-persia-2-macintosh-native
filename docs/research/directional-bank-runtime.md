@@ -1,9 +1,10 @@
-# First directional-bank runtime migration
+# Directional-bank runtime migration
 
 The input research is now used by a production `DirectionalInput` bank in
-`pop2/mac_input.py`. This first migration replaces deferred input during
+`pop2/mac_input.py`. The first stage replaces deferred input during
 standing turns and cautious steps, including the ordinary ready gate at their
-end. It does **not** enable a complete replacement across every controller.
+end. The second stage extends ownership through grounded running, described
+below. This does **not** replace input across every controller yet.
 
 ## Ownership
 
@@ -19,7 +20,8 @@ release. No pending-input expiry was added.
 | Context | Current owner |
 | --- | --- |
 | Standing turn entered through the scene, cautious step, their subsequent ordinary ready/idle gate | Production directional bank |
-| Run, airborne, low/prone, ledge and armed controllers | Existing host policies, pending later migrations |
+| Run start 1, cycles 200/201/202, drift 6, running turn 43 and brake 13 | Production directional bank through `RunningControls` |
+| Airborne, low/prone, ledge and armed controllers | Existing host policies, pending later migrations |
 | Host pause/focus/menu/restart boundaries | Existing held-key rules and explicit reset |
 
 While the bank owns input, physical callbacks and internal directional
@@ -134,3 +136,77 @@ without claiming the remaining ledge/vertical-jump admission is recovered.
 
 Output digest: `454233e270a2c64ebb433ca109198547c8d0f7d9b1c826b327f614c0db75d28a`.
 Executable digest: `ca2c5886244efa7e19d63fee9317ae5c2341b8a7cc79c7740fdd505575f44bd5`.
+
+## Second stage: grounded running
+
+`pop2/running_controls.py` extends the same bank through the run family.
+The old grounded reversal, jump, crouch and stop dispatchers are removed
+from the frame path. Two compatibility methods used by scene tests delegate
+to the bank; they contain no independent queue logic. Physical callbacks
+sample directions and the simulation gate chooses the action. Scripted
+legacy requests can be imported once, as in the first stage.
+
+`running_input_request` follows native GenCtrl 6:15b6-15e8 and 11e4-1274:
+
+- Startup poses 1-3 need fresh Forward and fresh Up for the forward jump.
+- Run poses 4-14 choose braking first when both horizontal latches are zero
+  at pose 7/11, then active Backward, then fresh Up, then fresh Down.
+  Active but consumed Up also blocks the Down branch.
+- Common run exit consumes fresh Forward. Braking, reversal and crouching
+  clear directions and mark their respective latch consumed.
+- Drift poses 53-65 retain pending directions until an accepting pose.
+  Remapping uses the current facing, including the drift's direction flip.
+
+DoRunJump (6:1c14) still checks pose 7-14 and the existing geometry admission.
+Rejecting a jump preserves pending Up. An accepted jump retires the grounded
+bank on entry to sequence 4. The running-jump arc itself remains outside this
+stage: its existing pose-44 clear runs, and grounded return seeds the bank
+from the held keys. This is not full native saved-bank continuity through
+airborne controllers.
+
+Existing host tolerances remain explicit and tested:
+
+- The initial pose-1 forward chord window, and the opposite startup chord
+  which turns from the original start position.
+- Releasing the horizontal half of a chord, or requesting Up after release,
+  can brake before the existing vertical wall alignment/climb. This is a
+  bank Up plus a vertical-followup flag, not another executable command slot.
+- A continuously held jump key can repeat after landing; releasing that
+  automatic repeat cancels it. A genuine new Up tap remains pending when
+  geometry rejects takeoff, even after release.
+- Ctrl does not interrupt running or skip braking. Its released request
+  cannot become a later sword draw. A fresh Ctrl also retains the existing
+  cancellation of a pending potion pickup, including while the bank owns
+  a run/brake. No stop-and-draw QoL was restored.
+
+The previous test that braked at a synthetic cycle-end pose 14 now checks
+that it waits until 7/11, matching the recovered native gate. Tests formerly
+inspecting a queued command now inspect the bank for migrated contexts;
+their full movement, facing, wall-climb and animation expectations remain.
+The test exposing the prior startup-frame guard remains in place.
+
+A before/after execution against the checked pre-migration scene also
+confirms a visible priority difference in both facings. During a drift,
+released Up then Down taps used to enter crouch 26/107, while the reverse
+order entered running jump 4/34. Both orders now enter 4/34. Both directions
+remain pending until the accepting gate chooses Up first; Down no longer
+replaces it merely by arriving later. This is an observed scene result,
+not an inference from different queue metadata.
+
+`tests/test_running_controls.py` compares production routing with the
+independent research model and exercises actual scene dispatch/rejection.
+`tools/probe_running_controls.py` additionally executes original GenCtrl
+against the production selector: 10,935 ordinary/startup/drift cases and
+2,025 protected-clear cases, all matching. Action and geometry calls are
+supplied sinks in that routing matrix. Earlier native action/traces probes
+remain the evidence for action-body consumption; this tool does not claim
+animation/physics/FrameAdv parity or native equivalence for host tolerances.
+
+```powershell
+.venv\Scripts\python.exe -m tools.probe_running_controls --source ..\PoP2-Mac-Code-Recovery --output rendered\native-running-controls.json
+```
+
+Output digest: `226500f57e6f0add94a1498100e5e89a9a3acc2e53add05b7e8f605fba4a7470`.
+Original executable digest is unchanged. Airborne/low/prone/ledge/armed
+migration, ordinary vertical/pickup admission and full update ordering remain
+separate work; do not restart the already completed bank/action audits.

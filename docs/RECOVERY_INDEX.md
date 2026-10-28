@@ -390,8 +390,18 @@ ready gates. Direct native comparisons verify production sampling, clearing,
 remapping and bounded standing selection in 42,120 cases. Scene regressions
 cover independent Up/Down, current modifier/facing choice, consumed versus
 fresh horizontal release, host repeat policies and interruption clearing.
-Run/airborne/low/ledge/armed family migration and whole-frame parity remain P;
+Airborne/low/ledge/armed family migration and whole-frame parity remain P;
 the old command slot is bypassed only while the new family owns input.
 Another 810 original Up-choice/DoJumpUp-prefix cases confirm dispatch from
 the current Forward latch and the vertical prefix's direction clearing/Up
 consumption, stopping before terrain lookup. Total 42,930 matching cases.
+
+The second stage extends that owner through grounded run start/cycles,
+drift, running turn and brake. The old grounded dispatchers are bypassed or
+removed together. Another 12,960 direct production/native GenCtrl cases
+match, including startup, run priorities/common consumption, drift and
+protected clears. Real scene tests cover geometry-rejected Up remaining
+pending, conflicting Up/Down, braking before wall alignment and Ctrl draw
+admission. Host initial chord/held-repeat/vertical-climb tolerances stay
+explicit; the sequence-4 airborne reset/return policy remains a boundary,
+not proof of whole saved-bank continuity or FrameAdv parity.
