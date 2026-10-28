@@ -54,11 +54,13 @@ class WaitingControls:
         self.modifier_input = self.directional_input.modifier
 
     def waiting_key(self, key, pressed):
-        if not self.waiting_controls_available():
+        if key not in ('up', 'down', 'shift', 'ctrl') or not self.waiting_controls_available():
             return False
         previous = getattr(self, key + '_held')
         release_suppressed_up = key == 'up' and not pressed and getattr(self, 'waiting_suppressed_up', False)
         setattr(self, key + '_held', pressed)
+        if key == 'ctrl' and pressed and not previous:
+            self.pending_potion_pickup = None
         if key == 'up' and not pressed:
             self.jump_started_for_press = False
         elif (key == 'up' and pressed and not previous

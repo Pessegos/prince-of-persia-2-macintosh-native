@@ -72,9 +72,9 @@ class FrameCostTests(unittest.TestCase):
                 self.frame_ms()
                 # Standing, then running from the start position.
                 steady = [self.frame_ms() for _ in range(20)]
-                scene.set_key_state('right', True)
+                scene.horizontal_key(None, 1, True)
                 steady += [self.frame_ms() for _ in range(20)]
-                scene.set_key_state('right', False)
+                scene.horizontal_key(None, 1, False)
                 # The first two frames in each room draw it from its exports.
                 entries = []
                 for room in range(32):

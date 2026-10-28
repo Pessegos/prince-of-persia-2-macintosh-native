@@ -2137,7 +2137,8 @@ class AnimationDataTests(unittest.TestCase):
         self.assertEqual(scene.sequence_state.sequence_id, RUN_STOP_SEQUENCE)
         self.assertEqual(scene.action, 53)
         self.assertIsNone(scene.pending_action)
-        self.assertEqual(scene.directional_input.down, 0)
+        # Brake clears Down, then sampling the still-held key rearms it.
+        self.assertEqual(scene.directional_input.down, -1)
 
     def test_down_during_run_stop_enters_crouch_before_idle(self):
         scene = self.scene(sequence_id=RUN_STOP_SEQUENCE, facing=0)
