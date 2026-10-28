@@ -21,6 +21,12 @@ class StepBoundary:
     tile_kind: int = 1
 
 
+def sample_modifier(previous, shift, ctrl):
+    """4:3f08-3f42: Shift wins; release cancels; consumed holds stay consumed."""
+    raw = -1 if shift else (-2 if ctrl else 0)
+    return -raw if raw and previous == -raw else raw
+
+
 def plan_cautious_step(boundary, cautious):
     # DoStepFwd (6:12fc-1324): a warning clears afc2; the next attempt
     # deliberately takes SEQS:42. Solid barriers do not get this warning.

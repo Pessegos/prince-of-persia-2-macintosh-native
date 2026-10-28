@@ -338,3 +338,15 @@ early jump taps clear at pose 26, horizontal crouch-rise requests clear in
 mode 5, released Ctrl cancels a pending counter, and Shift + Backward uses
 the voluntary turn. The full native latch lifecycle still needs integration,
 without changing established animation clocks or intentional tolerances.
+
+The [unarmed routing extension](INPUT_RECOVERY.md#executable-unarmed-routing-2026-10-27)
+adds 17,415 original dispatch comparisons and 36 persistent sampled steps, all
+matching an independent reference. Standing/run/start/turn/preparation priorities
+and router-owned resets are recovered; action bodies, OS polling, full animation
+and FrameAdv remain outside that matrix. A separate 7,290-call DoStrike matrix
+verifies actual modifier/direction consumption, supplying JumpSeq without
+executing attack animation or outer armed admission. The production Ctrl modifier is also
+checked against 10,935 native samples. The user revoked the former running
+stop-and-draw QoL: runtime draw now requires fresh/held Ctrl at a standing gate,
+and released taps preserve normal running-jump/braking traces. This bounded
+modifier integration does not replace the host's directional command slot.

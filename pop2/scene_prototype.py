@@ -48,7 +48,7 @@ from pop2.control_mapping import (
     facing_for_direction,
     jump_sequence_for_input,
 )
-from pop2.mac_input import plan_cautious_step, plan_step, read_keyboard
+from pop2.mac_input import plan_cautious_step, plan_step, read_keyboard, sample_modifier
 from pop2.opening_animation import GLASS_POSITIONS
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
 from pop2.rebirth import RebirthSnapshot
@@ -289,6 +289,7 @@ class ScenePrototype(WindowControls):
         self.step_cautious = True
         self.step_warning_direction = 0
         self.ctrl_held = False
+        self.modifier_input = 0
         self.sword_drawn = False
         self.paused_ctrl_request = False
         self.sword_sheathing = False
@@ -586,10 +587,7 @@ class ScenePrototype(WindowControls):
             previous = getattr(self, f"{key}_held")
             setattr(self, f"{key}_held", pressed)
             if self.ledge_climbing and pressed and not previous:
-                if key == "ctrl":
-                    if not self.sword_lost():
-                        self.buffer_input(BufferedCommand("sword_draw"))
-                elif key == "down" and not self.up_held:
+                if key == "down" and not self.up_held:
                     self.buffer_input(BufferedCommand("crouch"))
             return "break"
         if key == "up":
@@ -633,11 +631,13 @@ class ScenePrototype(WindowControls):
             self.shift_held = pressed
             self.update_ledge_test_state()
         elif key == "ctrl":
-            if pressed and not self.ctrl_held:
+            fresh = pressed and not self.ctrl_held
+            self.ctrl_held = pressed
+            self.sample_keyboard()
+            if fresh:
                 self.queue_sword_action(
                     "sword_attack" if self.sword_drawn else "sword_draw"
                 )
-            self.ctrl_held = pressed
         return "break"
 
     def sword_lost(self):
@@ -647,10 +647,13 @@ class ScenePrototype(WindowControls):
     def queue_sword_action(self, kind):
         if self.sword_sheathing or self._combat_controls_locked():
             return False
-        if kind == "sword_draw" and self.sword_lost():
-            # GenCtrl 6:0c70-0c86: without a sword (a5-0x503c == -1) Ctrl
-            # draws nothing.
-            return False
+        if kind == "sword_draw":
+            self.pending_potion_pickup = None
+            return self.try_draw_sword()
+        if kind == "sword_attack":
+            # The existing armed buffer/repeat policy owns this press now;
+            # do not replay it later through the unarmed draw gate.
+            self.modifier_input = 2
         state = self.sequence_state
         # Port QoL: a rapid repeat during the first three attack poses must
         # not schedule another swing. Drawing/blocking still accepts Ctrl.
@@ -658,16 +661,30 @@ class ScenePrototype(WindowControls):
                 and state.sequence_id in SWORD_ATTACK_START_SEQUENCES
                 and state.action in SWORD_ATTACK_START_POSES):
             return False
-        if (kind == "sword_draw" and self._is_resting()) or (
-            kind != "sword_draw"
-            and self.sword_drawn
-            and self.sequence_state.sequence_id == SWORD_GUARD_SEQUENCE
-        ):
+        if self.sword_drawn and self.sequence_state.sequence_id == SWORD_GUARD_SEQUENCE:
             self.pending_action = None
             if self.start_sword_action(kind):
                 return True
         self.buffer_input(BufferedCommand(kind))
         return False
+
+    def try_draw_sword(self):
+        """Standing Ctrl gate; a released tap is never a future draw command."""
+        self.sample_keyboard()
+        state = self.sequence_state
+        motion = getattr(self, 'terrain_motion', None)
+        if (self.modifier_input != -2 or self.sword_drawn or self.sword_sheathing
+                or self.sword_lost() or self._combat_controls_locked()
+                or not (self._is_resting() or state.action in (50, 51, 52))
+                or self.ledge_hanging or self.ledge_climbing
+                or state.animation_state in (4, 5, 9) or state.sequence_id in (27, 110)
+                or self.horizontal_input or self.up_held or self.down_held
+                or self.pending_action is not None
+                or motion is not None and (motion.falling or motion.dead)):
+            return False
+        # GenCtrl6:0c90-0cba accepts only fresh Ctrl with no directions;
+        # running6:11e4 does not consume it or request a sword animation.
+        return self.start_sword_action('sword_draw')
 
     def buffer_input(self, command):
         if (getattr(self, "queue_grace_remaining_ms", 0) > 0
@@ -700,6 +717,10 @@ class ScenePrototype(WindowControls):
                 fast_block = other == 153
             else:
                 return False
+        if kind in ("sword_draw", "sword_attack"):
+            # GenCtrl6:0cb2 / DoStrike6:280c consume accepted Ctrl. A hold
+            # used to attack must not become a fresh draw after sheathing.
+            self.modifier_input = 2
         if kind == "sword_draw":
             motion = getattr(self, "terrain_motion", None)
             if motion is not None:
@@ -910,6 +931,8 @@ class ScenePrototype(WindowControls):
             self.held_directions, self.up_held, self.down_held, self.shift_held
         )
         self.horizontal_input = frame.horizontal
+        self.modifier_input = sample_modifier(
+            getattr(self, 'modifier_input', 0), self.shift_held, self.ctrl_held)
         return frame
 
     def resume_pause_controls(self):
@@ -917,7 +940,11 @@ class ScenePrototype(WindowControls):
         if (getattr(self, "paused_ctrl_request", False) and self.ctrl_held
                 and not self._combat_controls_locked() and not self.sword_sheathing
                 and (self.sword_drawn or not self.sword_lost())):
-            self.buffer_input(BufferedCommand("sword_attack" if self.sword_drawn else "sword_draw"))
+            if self.sword_drawn:
+                self.modifier_input = 2
+                self.buffer_input(BufferedCommand("sword_attack"))
+            else:
+                self.try_draw_sword()
         self.paused_ctrl_request = False
 
     def queue_sampled_horizontal_action(self, direction):
@@ -1872,6 +1899,7 @@ class ScenePrototype(WindowControls):
         self.down_held = False
         self.shift_held = False
         self.ctrl_held = False
+        self.modifier_input = 0
         self.paused_ctrl_request = False
         self.down_sheathe_consumed = False
         self.ledge_test_active = False
@@ -1883,13 +1911,6 @@ class ScenePrototype(WindowControls):
         self.pending_potion_pickup = None
 
     def prepare_next_sequence(self, run_cycle_boundary=False):
-        state = self.sequence_state
-        if (self.pending_action is not None and self.pending_action.kind == "sword_draw"
-                and state.source_sequence_id == RUN_JUMP_SEQUENCE
-                and state.sequence_id in RUN_CYCLE_SEQUENCES):
-            # Port QoL: keep SEQS:4's landing step, but do not wait for the
-            # following run loop before honoring a buffered sword draw.
-            return self.dispatch_pending_action()
         if run_cycle_boundary:
             if self.pending_action is not None and self.dispatch_pending_action(
                 was_running=True
@@ -1903,6 +1924,8 @@ class ScenePrototype(WindowControls):
                 return True
             return False
 
+        if self.try_draw_sword():
+            return True
         if self._is_resting():
             if self.pending_action is not None:
                 return self.dispatch_pending_action()
@@ -1928,8 +1951,8 @@ class ScenePrototype(WindowControls):
         if command.kind == "crouch" and was_running:
             return False
         self.pending_action = None
-        if command.kind == "sword_draw" and self.sword_lost():
-            return False
+        if command.kind == "sword_draw":
+            return self.try_draw_sword()
         if command.kind in SWORD_SEQUENCES:
             started = self.start_sword_action(command.kind)
             if not started:

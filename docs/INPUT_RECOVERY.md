@@ -238,6 +238,50 @@ translated. A complete replacement must map those gates and preserve the
 intentional extensions below. The 300 ms host repeat filter is not a native
 buffer lifetime; shortening it would not recover the original rules.
 
+## Executable Unarmed Routing (2026-10-27)
+
+`tools/reference_input_routes.py` independently models the ordinary unarmed
+GenCtrl router. `tools/probe_input_routes.py` compares it with original
+instructions at 6:0560, standing 6:0c32, turn 6:1014, run 6:11e4 and jump
+preparation 6:15b6. The 17,415 cases cover all 405 latch states across standing,
+run/start, turn, jump preparation and clear poses, protected modes/sequences,
+and standing without a sword. All match. Another 36 persistent sampled steps
+execute sampling, facing remapping and dispatch for released/held Ctrl,
+continued Forward and a second press, in both facings. All match too.
+
+The native run handler ignores Ctrl. Backward has priority over Up, and an
+already-consumed Up can suppress Down; a single latest-command slot cannot
+represent these rules. With neither horizontal latch active, poses 7/11
+request brake sequence 13. Standing draw requires fresh Ctrl and every
+directional latch zero; it consumes Ctrl before calling the draw routine.
+
+These probes supply a living Prince (actor 10/type 0), no alert, no pickup and no
+opponent target. Action and geometry endpoints are no-op request sinks;
+resets/consumption inside those actions are excluded. Trace poses and raw
+axes are supplied, not advanced by real animation or OS polling. This proves
+the bounded router and its composition with sampling, not complete input,
+physics or FrameAdv parity. Full directional runtime migration still needs
+action-body consumption and caller scheduling before replacing the host slot.
+
+A separate 7,290-call matrix executes DoStrike 6:2780-281c for Prince type0,
+all 405 banks, nine poses and ordinary/serpent opponent types. It verifies
+accepted sequence requests 75/96/66, consumption of Ctrl as 2 and clearing
+directions, versus rejected poses that leave the bank intact. JumpSeq is a
+supplied request sink; this does not recover the outer armed admission or
+the attack animation, target geometry and combat update.
+
+The executable resource-fork SHA256 is
+`ca2c5886244efa7e19d63fee9317ae5c2341b8a7cc79c7740fdd505575f44bd5`;
+the route output digest is
+`a66eb501c91c934b3305a599a9c6ddc1f0a4f072e8c506dde73cd0a9e4cf1e7b`.
+`tests/test_input_routes.py` runs without original assets in CI. The existing
+bank probe also checks production `sample_modifier` against all 10,935 native
+sample cases, independently of the research model.
+
+```powershell
+.venv\Scripts\python.exe -m tools.probe_input_routes --source ..\PoP2-Mac-Code-Recovery --output rendered\native-input-routes.json
+```
+
 ## Landing Into Crouch
 
 An ordinary landing uses SEQS:17: poses 107/108 in mode 5, then mode 1
@@ -293,9 +337,10 @@ not only running. Ordinary pause freezes existing holds and repeat/queue state;
 key releases and modifier changes during pause update held state without moving
 the actor. Resuming with Escape therefore preserves a continuously held Shift
 on a ledge, but does not restore a Shift or direction released during pause.
-Ctrl newly held during pause is buffered only on explicit resume; releasing it
-before resume cancels that request. Modifiers and system keys still do not
-resume by themselves. A full gameplay frame interval after resume preserves
+Ctrl newly held during pause is admitted only on explicit resume; releasing it
+before resume cancels that request. Unarmed draw uses the standing gate below,
+while an armed attack retains its existing buffer. Modifiers and system keys
+still do not resume by themselves. A full gameplay frame interval after resume preserves
 the existing Up+direction chord window; ordinary key handlers can still start
 their action immediately.
 
@@ -307,28 +352,33 @@ or restore them. This is host pause integration, not a recovered Macintosh pause
 rule or a claimed port-exclusive improvement; the user's Macintosh setup also
 preserves held inputs on resume.
 
-Ctrl pressed while running preserves a request to stop running and draw the
-sword once the current run segment reaches its transition. A short Ctrl tap
-is sufficient; no second press is required. The user's Macintosh comparison
-instead stopped the Prince without drawing, and the port behavior is retained
-as a preferred QoL difference, not a parity defect.
+The user revoked the former Ctrl stop-and-draw extension on 2026-10-27.
+A short Ctrl tap during movement must no longer survive as a future sword-draw
+command or bypass the ordinary brake after a running jump. Ctrl alone does not
+stop a still-held run. Releasing Forward keeps the normal braking sequence;
+releasing Ctrl cancels draw intent on the next sample.
 
-`test_ctrl_during_run_retains_intentional_stop_and_draw_extension` covers
-running poses 4-14, both facings and tapped/held Ctrl. It checks that the
-current pose is not immediately overwritten and that the original draw poses
-207-210 reach sword guard. Native-latch integration must preserve this explicit
-extension separately from ordinary attack buffering.
+The runtime now uses the native modifier normalization (4:3f08-3f42) for
+unarmed draw: Shift wins, fresh Ctrl is -2, accepted Ctrl becomes 2, and a
+release becomes 0. Accepted attacks also consume Ctrl (6:280c-2812), so an
+attack hold cannot become a new draw after sheathing. Holding Ctrl through
+the brake can draw at standing poses
+50-52, as admitted by GenCtrl 6:0c90-0cba. A consumed hold cannot draw again
+without release. This is not a mandatory second press when Ctrl remains held.
+The whole directional latch bank is still a research model, not the runtime's
+input representation. Existing host rest/pending-action admission remains;
+this bounded modifier migration does not establish full controller parity.
+The retained armed buffer/repeat policy owns an attack press as soon as it is
+submitted (or deliberately discarded by that policy); the unarmed modifier
+is consumed there too. This bridge preserves existing armed buffering rather
+than claiming its consumption timing now follows the full native controller.
 
-The same request during a running jump is consumed at the first grounded
-controller pass after landing, rather than waiting for the following run loop.
-Original SEQS:4 poses 34-44, its final 11-unit landing step, callbacks and link
-to SEQS:201 pose 7 remain intact. `prepare_next_sequence` admits only a queued
-sword draw while the current run sequence still has SEQS:4 as its source;
-ordinary running, other commands and the falling controller retain their rules.
-This is an intentional timing refinement to the port extension, not a recovered
-Macintosh sword-draw rule. Regression tests cover Ctrl at all 11 jump poses,
-both facings, held/released movement and Ctrl, requests just after landing,
-the complete draw poses and a missed-floor jump with actual terrain.
+Regression traces compare Ctrl taps/holds with no-Ctrl movement in both
+facings at every run pose 4-14 and running-jump pose 34-44. A released tap keeps
+the complete brake (53,54,55,56,49,50,51,52,15), including the real-terrain
+jump/landing case. A held Ctrl reaches the native standing brake gate before
+drawing. Hard-fall and climb taps no longer queue a future draw either.
+Other approved input tolerances and ordinary armed attack buffering remain.
 
 Forward + Up remains a standing jump in either key order. When Forward
 arrives first, the initial run pose (1) leaves one full animation interval
@@ -356,7 +406,8 @@ released Up, and fresh or consumed old Up. With Forward still held, a
 released Up resumes running at rest; keeping Up held selects a jump instead.
 
 The host now clears pending horizontal/jump/crouch/crawl commands on each
-protected recovery pass, leaving physical key holds and Ctrl requests alone.
+protected recovery pass, leaving physical key holds alone. Ctrl uses the
+modifier lifecycle above rather than a stored draw request.
 Held Up uses the existing idle-transition repeat admission, marked consumed
 until then so releasing it cannot invoke the short-tap fallback. Released Up
 does not produce a delayed standing forward jump. Requests sampled after the
@@ -364,7 +415,7 @@ mode-5 portion can still queue normally. Animation poses, recovery duration,
 impact damage, ordinary soft landings and wall-impact/climb queues are unchanged.
 
 Controller regressions cover taps and holds at 14 protected recovery updates
-in both facings, a late tap at pose 117 and buffered sword draw. A real-terrain
+in both facings, a late tap at pose 117 and held/released Ctrl. A real-terrain
 fall checks that the complete recovery/run trace matches the no-Up baseline
 in both directions, with exactly one life lost.
 
@@ -386,7 +437,7 @@ real cavern climbs across an upper-room link, without fabricated ledge geometry.
 
 ## Climb And Turn Command Boundaries
 
-Horizontal commands, Ctrl draw and fresh Up/Down during the protected climb
+Horizontal commands and fresh Up/Down during the protected climb
 can now enter the host buffer without interrupting its poses. At the return
 to idle, the old climb's protection and floor-relative offsets are cleared
 before dispatching the queued command. A queued Down can deliberately begin

@@ -182,7 +182,6 @@ I also smoothed out the gate opening sound. It now plays continuously and fades 
 - You can pause cutscenes now without skipping them.
 - Aspect-preserving window resizing and fullscreen scaling, without stretching the game image.
 - A 0.3-second filter for rapid repeated commands in the input queue, while preserving combinations of different commands.
-- Pressing Ctrl while running queues a stop-and-draw action, without requiring a second press.
 - Clouds keep moving during the intro's fades, like the DOS version does.
 - The level 1 screen 7-8 drop preserves the full landing and stand-up animation, matching DOS behavior instead of the abrupt interruption in the Macintosh original.
 - Completely overhauled lava pools with detailed rocky edges, convincing depth like the DOS version, seamless bubbling, and properly layered splashes and particles.

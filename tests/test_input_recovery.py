@@ -116,23 +116,28 @@ class InputRecoveryTests(unittest.TestCase):
                     break
             self.assertEqual(scene.sequence_state.source_sequence_id, JUMP_FORWARD_SEQUENCE)
 
-    def test_hard_fall_recovery_keeps_buffered_sword_draw(self):
-        scene = self.fixture.sword_scene()
-        scene.start_sequence(20)
-        scene.advance_animation()
-        scene.set_key_state('ctrl', True)
-        scene.set_key_state('ctrl', False)
-        for _ in range(40):
-            scene.advance_animation()
-            if scene.sequence_state.source_sequence_id != 20:
-                break
-        self.assertEqual(scene.sequence_state.source_sequence_id, SWORD_DRAW_SEQUENCE)
+    def test_hard_fall_recovery_resamples_ctrl_instead_of_retaining_a_released_tap(self):
+        for held in (False, True):
+            with self.subTest(held=held):
+                scene = self.fixture.sword_scene()
+                scene.start_sequence(20)
+                scene.advance_animation()
+                scene.set_key_state('ctrl', True)
+                if not held:
+                    scene.set_key_state('ctrl', False)
+                for _ in range(40):
+                    scene.advance_animation()
+                    if scene.sequence_state.source_sequence_id != 20:
+                        break
+                self.assertEqual(scene.sequence_state.sequence_id,
+                                 SWORD_DRAW_SEQUENCE if held else IDLE_SEQUENCE)
+                self.assertIsNone(scene.pending_action)
 
     def test_turn_ready_poses_accept_all_ordinary_buffered_commands(self):
         from pop2.scene_prototype import BufferedCommand
 
         for facing in (0, 1):
-            for kind, expected in (('crouch', 50), ('jump', 28), ('sword_draw', 55)):
+            for kind, expected in (('crouch', 50), ('jump', 28)):
                 for pose in (50, 51, 52):
                     with self.subTest(facing=facing, kind=kind, pose=pose):
                         scene = self.fixture.sword_scene()
@@ -263,119 +268,156 @@ class InputRecoveryTests(unittest.TestCase):
                         else:
                             self.assertIsNone(scene.pending_action)
 
-    def test_ctrl_during_run_retains_intentional_stop_and_draw_extension(self):
-        # Port QoL: preserve the draw request, unlike native modifier sampling.
+    def run_scene_at(self, facing, pose):
+        scene = self.fixture.sword_scene()
+        scene.sequence_state.facing = facing
+        direction = 1 if facing else -1
+        scene.horizontal_key(None, direction, True)
+        for _ in range(20):
+            if scene.sequence_state.sequence_id in RUN_CYCLE_SEQUENCES and scene.action == pose:
+                return scene
+            scene.advance_animation()
+        self.fail(f'Run did not reach pose {pose}')
+
+    def test_ctrl_tap_or_hold_does_not_stop_a_held_run(self):
         for facing in (0, 1):
-            for held_ctrl in (False, True):
+            for held in (False, True):
                 for pose in range(4, 15):
-                    with self.subTest(facing=facing, held_ctrl=held_ctrl, pose=pose):
-                        scene = self.fixture.sword_scene()
-                        scene.sequence_state.facing = facing
-                        direction = 1 if facing else -1
-                        scene.horizontal_key(None, direction, True)
-                        for _ in range(20):
-                            if (scene.sequence_state.sequence_id in RUN_CYCLE_SEQUENCES
-                                    and scene.action == pose):
-                                break
-                            scene.advance_animation()
-                        else:
-                            self.fail(f"Run did not reach pose {pose}")
-
-                        before = (scene.sequence_state.sequence_id, scene.action)
-                        scene.set_key_state("ctrl", True)
-                        if not held_ctrl:
-                            scene.set_key_state("ctrl", False)
-                        self.assertEqual((scene.sequence_state.sequence_id, scene.action), before)
-                        self.assertFalse(scene.sword_drawn)
-
-                        draw_poses = []
-                        for _ in range(25):
-                            scene.advance_animation()
-                            if scene.sequence_state.sequence_id == SWORD_DRAW_SEQUENCE:
-                                draw_poses.append(scene.action)
-                                self.assertFalse(scene.run_active)
-                            if scene.sequence_state.sequence_id == SWORD_GUARD_SEQUENCE:
-                                break
-                        else:
-                            self.fail("Ctrl draw request did not reach sword guard")
-                        self.assertEqual(draw_poses, [207, 208, 209, 210])
-                        self.assertEqual(scene.action, 158)
-                        self.assertTrue(scene.sword_drawn)
+                    with self.subTest(facing=facing, held=held, pose=pose):
+                        scene = self.run_scene_at(facing, pose)
+                        baseline = self.run_scene_at(facing, pose)
+                        scene.set_key_state('ctrl', True)
+                        if not held:
+                            scene.set_key_state('ctrl', False)
                         self.assertIsNone(scene.pending_action)
-                        self.assertEqual(scene.sequence_state.facing, facing)
-
-    def test_ctrl_during_running_jump_draws_at_landing_without_an_extra_run_cycle(self):
-        for facing in (0, 1):
-            direction = 1 if facing else -1
-            for held_direction in (False, True):
-                reference = self.fixture.running_jump_scene(facing)
-                reference.set_key_state("up", False)
-                if not held_direction:
-                    reference.horizontal_key(None, direction, False)
-                original_arc = []
-                while reference.sequence_state.sequence_id == RUN_JUMP_SEQUENCE:
-                    original_arc.append((reference.action, reference.player_x,
-                                         reference.sequence_state.current_y))
-                    reference.advance_animation()
-                landing = (reference.action, reference.player_x, reference.sequence_state.current_y)
-                self.assertEqual(landing[0], 7)
-                for held_ctrl in (False, True):
-                    for pose in range(34, 45):
-                        with self.subTest(facing=facing, held_direction=held_direction,
-                                          held_ctrl=held_ctrl, pose=pose):
-                            scene = self.fixture.running_jump_scene(facing)
-                            scene.set_key_state("up", False)
-                            if not held_direction:
-                                scene.horizontal_key(None, direction, False)
-                            for _ in range(pose - 34):
-                                scene.advance_animation()
-                            before = (scene.sequence_state.sequence_id, scene.action, scene.player_x)
-                            scene.set_key_state("ctrl", True)
-                            if not held_ctrl:
-                                scene.set_key_state("ctrl", False)
-                            self.assertEqual((scene.sequence_state.sequence_id, scene.action, scene.player_x), before)
-                            arc = []
-                            while scene.sequence_state.sequence_id == RUN_JUMP_SEQUENCE:
-                                self.assertFalse(scene.sword_drawn)
-                                arc.append((scene.action, scene.player_x, scene.sequence_state.current_y))
-                                scene.advance_animation()
-                            self.assertEqual(arc, original_arc[pose - 34:])
-                            self.assertEqual((scene.action, scene.player_x, scene.sequence_state.current_y), landing)
+                        for _ in range(24):
+                            scene.advance_animation()
+                            baseline.advance_animation()
+                            self.assertEqual((scene.action, scene.player_x, scene.run_active),
+                                             (baseline.action, baseline.player_x, baseline.run_active))
                             self.assertFalse(scene.sword_drawn)
-                            draw_poses = []
-                            for _ in range(5):
-                                scene.advance_animation()
-                                if scene.sequence_state.sequence_id == SWORD_DRAW_SEQUENCE:
-                                    draw_poses.append(scene.action)
-                                    self.assertFalse(scene.run_active)
-                                    self.assertIsNone(scene.pending_action)
-                                else:
-                                    break
-                            self.assertEqual(draw_poses, [207, 208, 209, 210])
-                            self.assertEqual((scene.sequence_state.sequence_id, scene.action),
-                                             (SWORD_GUARD_SEQUENCE, 158))
-                            self.assertEqual(scene.sequence_state.facing, facing)
 
-    def test_ctrl_after_running_jump_does_not_wait_for_the_remaining_run_cycle(self):
+    def test_released_ctrl_during_run_preserves_the_complete_normal_brake(self):
         for facing in (0, 1):
             direction = 1 if facing else -1
-            for pose in range(7, 15):
+            for pose in range(4, 15):
+                with self.subTest(facing=facing, pose=pose):
+                    scene = self.run_scene_at(facing, pose)
+                    baseline = self.run_scene_at(facing, pose)
+                    scene.set_key_state('ctrl', True)
+                    scene.set_key_state('ctrl', False)
+                    for actor in (scene, baseline):
+                        actor.horizontal_key(None, direction, False)
+                    poses = []
+                    for _ in range(24):
+                        scene.advance_animation()
+                        baseline.advance_animation()
+                        poses.append(scene.action)
+                        self.assertEqual((scene.action, scene.player_x, scene.run_active),
+                                         (baseline.action, baseline.player_x, baseline.run_active))
+                        self.assertFalse(scene.sword_drawn)
+                    self.assertIn(53, poses)
+                    self.assertIn(56, poses)
+                    self.assertEqual(scene.action, 15)
+                    self.assertIsNone(scene.pending_action)
+                    scene.set_key_state('ctrl', True)
+                    self.assertEqual(scene.action, 207)
+
+    def test_held_ctrl_can_draw_at_a_native_standing_brake_pose(self):
+        for facing in (0, 1):
+            direction = 1 if facing else -1
+            scene = self.run_scene_at(facing, 8)
+            scene.set_key_state('ctrl', True)
+            scene.horizontal_key(None, direction, False)
+            before = []
+            for _ in range(24):
+                before.append(scene.action)
+                scene.advance_animation()
+                if scene.sword_drawn:
+                    break
+            self.assertEqual(before[-1], 50)
+            self.assertIn(53, before)
+            self.assertIn(56, before)
+            self.assertEqual(scene.action, 207)
+            self.assertEqual(scene.modifier_input, 2)
+            self.assertIsNone(scene.pending_action)
+
+    def test_ctrl_during_running_jump_preserves_arc_and_brakes_without_a_stored_draw(self):
+        for facing in (0, 1):
+            direction = 1 if facing else -1
+            for pose in range(34, 45):
                 with self.subTest(facing=facing, pose=pose):
                     scene = self.fixture.running_jump_scene(facing)
-                    scene.set_key_state("up", False)
-                    for _ in range(25):
-                        if scene.sequence_state.sequence_id in RUN_CYCLE_SEQUENCES and scene.action == pose:
-                            break
+                    baseline = self.fixture.running_jump_scene(facing)
+                    for actor in (scene, baseline):
+                        actor.set_key_state('up', False)
+                        for _ in range(pose - 34):
+                            actor.advance_animation()
+                    scene.set_key_state('ctrl', True)
+                    scene.set_key_state('ctrl', False)
+                    for actor in (scene, baseline):
+                        actor.horizontal_key(None, direction, False)
+                    for _ in range(28):
                         scene.advance_animation()
-                    else:
-                        self.fail(f"Jump did not reach post-landing run pose {pose}")
-                    scene.horizontal_key(None, direction, False)
-                    scene.set_key_state("ctrl", True)
-                    scene.set_key_state("ctrl", False)
-                    scene.advance_animation()
-                    self.assertEqual((scene.sequence_state.sequence_id, scene.action), (SWORD_DRAW_SEQUENCE, 207))
-                    self.assertFalse(scene.run_active)
+                        baseline.advance_animation()
+                        self.assertEqual((scene.action, scene.player_x, scene.sequence_state.current_y),
+                                         (baseline.action, baseline.player_x, baseline.sequence_state.current_y))
+                        self.assertFalse(scene.sword_drawn)
+                    self.assertEqual(scene.action, 15)
                     self.assertIsNone(scene.pending_action)
+
+    def test_standing_draw_requires_fresh_ctrl_and_no_directions_or_shift(self):
+        for other in ('up', 'down', 'shift', 'horizontal'):
+            with self.subTest(other=other):
+                scene = self.fixture.sword_scene()
+                scene.start_sequence(IDLE_SEQUENCE)
+                scene.advance_animation()
+                if other == 'horizontal':
+                    scene.held_directions = [1]
+                else:
+                    setattr(scene, other + '_held', True)
+                scene.set_key_state('ctrl', True)
+                self.assertFalse(scene.sword_drawn)
+                self.assertIsNone(scene.pending_action)
+        scene = self.fixture.sword_scene()
+        scene.modifier_input = 2
+        scene.ctrl_held = True
+        self.assertFalse(scene.try_draw_sword())
+        scene.set_key_state('ctrl', False)
+        scene.set_key_state('ctrl', True)
+        self.assertTrue(scene.sword_drawn)
+
+    def test_ctrl_consumed_by_an_attack_cannot_redraw_after_sheathing(self):
+        for facing in (0, 1):
+            for repeat in (False, True):
+                with self.subTest(facing=facing, repeat=repeat):
+                    self.check_attack_hold_after_sheathing(facing, repeat)
+
+    def check_attack_hold_after_sheathing(self, facing, repeat):
+        scene = self.sword_guard(facing)
+        scene.set_key_state('ctrl', True)
+        if repeat:
+            # This second press is deliberately rejected by the retained
+            # rapid-attack QoL, rather than queued.
+            scene.set_key_state('ctrl', False)
+            scene.set_key_state('ctrl', True)
+            self.assertIsNone(scene.pending_action)
+        for _ in range(20):
+            scene.advance_animation()
+            if scene.sequence_state.sequence_id == SWORD_GUARD_SEQUENCE:
+                break
+        self.assertEqual(scene.sequence_state.sequence_id, SWORD_GUARD_SEQUENCE)
+        scene.set_key_state('down', True)
+        scene.set_key_state('down', False)
+        for _ in range(50):
+            scene.advance_animation()
+        self.assertFalse(scene.sword_sheathing)
+        self.assertFalse(scene.sword_drawn)
+        self.assertEqual(scene.modifier_input, 2)
+        self.assertIsNone(scene.pending_action)
+        scene.set_key_state('ctrl', False)
+        scene.set_key_state('ctrl', True)
+        self.assertTrue(scene.sword_drawn)
 
     def test_released_turn_before_jump_pose_26_is_discarded(self):
         # GenCtrl 6:074a-0760 clears directional latches at pose 26.

@@ -1019,6 +1019,12 @@ class RooftopSceneTests(unittest.TestCase):
                     scene.up_key(None)
                     scene.set_key_state("up", False)
                     jumped = True
+                # Start the normal brake before crossing into sword range.
+                # This replay used to tap Ctrl after the cut and depended on
+                # the removed instant stop-and-draw extension.
+                if jumped and scene.room_id == 0 and scene.player_x < 60 and not scene.ctrl_held:
+                    scene.horizontal_key(None, -1, False)
+                    scene.set_key_state("ctrl", True)
                 if scene.room_id == 9 and first is None:
                     first = scene.combat.guard
                     incoming, = [guard for guard in scene.combat.guards if guard is not first]
@@ -1026,6 +1032,7 @@ class RooftopSceneTests(unittest.TestCase):
                     self.assertNotIn(incoming, scene.combat.room_encounters[0][0])
                     scene.horizontal_key(None, -1, False)
                     scene.set_key_state("ctrl", True)
+                if scene.sword_drawn and scene.ctrl_held:
                     scene.set_key_state("ctrl", False)
                 if first is not None and first.alive and scene.action in (158, 170, 171):
                     if opponent_distance(scene.combat.player, first) >= 100:
@@ -1433,7 +1440,7 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertEqual(scene.combat.player.life, 3)
         self.assertEqual(scene.terrain_motion.row, 1)
 
-    def test_queued_sword_draw_after_running_jump_keeps_native_landing_without_extra_run(self):
+    def test_ctrl_tap_after_running_jump_keeps_landing_and_complete_braking(self):
         scene = self.scene
         scene.peaceful = True
         for facing, start_x in ((0, 450), (1, 60)):
@@ -1458,12 +1465,11 @@ class RooftopSceneTests(unittest.TestCase):
                     self.assertFalse(scene.terrain_motion.falling)
                     self.assertFalse(scene.terrain_motion.dead)
                     self.assertEqual((scene.room_id, scene.terrain_motion.row), (1, 1))
-                    if scene.action == 207:
-                        self.assertEqual(scene.player_x, start_x + (236 - 6) * direction)
-                    if scene.sequence_state.sequence_id == 227:
+                    self.assertFalse(scene.sword_drawn)
+                    if scene.action == 15:
                         break
-                self.assertEqual(poses, [*range(34, 45), 7, 207, 208, 209, 210, 158])
-                self.assertTrue(scene.sword_drawn)
+                self.assertEqual(poses, [*range(34, 45), 7, 53, 54, 55, 56, 49, 50, 51, 52, 15])
+                self.assertFalse(scene.sword_drawn)
                 self.assertFalse(scene.run_active)
                 self.assertIsNone(scene.pending_action)
 

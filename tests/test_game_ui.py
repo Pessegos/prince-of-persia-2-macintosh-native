@@ -5,7 +5,7 @@ from PIL import ImageTk
 
 from pop2.game_ui import fit_viewport
 from pop2.render_opening import ROOM_ORIGIN_X
-from pop2.scene_prototype import animation_interval_for_frame
+from pop2.scene_prototype import IDLE_SEQUENCE, animation_interval_for_frame
 import tests.test_terrain as test_terrain
 
 
@@ -649,7 +649,7 @@ class GameWindowTests(unittest.TestCase):
         scene = self.scene
         with patch.object(scene, 'render'):
             for facing in (0, 1):
-                for kind in ('turn', 'sword', 'crouch', 'jump'):
+                for kind in ('turn', 'sword', 'sword_held', 'crouch', 'jump'):
                     with self.subTest(facing=facing, kind=kind):
                         scene.load_level(3)
                         scene.peaceful = True
@@ -673,10 +673,16 @@ class GameWindowTests(unittest.TestCase):
                             scene.up_key(None)
                             scene.set_key_state('up', False)
                         else:
-                            key = 'ctrl' if kind == 'sword' else 'down'
+                            key = 'ctrl' if kind.startswith('sword') else 'down'
                             scene.set_key_state(key, True)
-                            scene.set_key_state(key, False)
-                        self.assertIsNotNone(scene.pending_action)
+                            if kind != 'sword_held':
+                                scene.set_key_state(key, False)
+                        if kind.startswith('sword'):
+                            # Ctrl is sampled at standing; a released climb tap
+                            # no longer creates a future draw command.
+                            self.assertIsNone(scene.pending_action)
+                        else:
+                            self.assertIsNotNone(scene.pending_action)
                         self.assertEqual(scene.action, action)
                         for _ in range(30):
                             self.tick()
@@ -684,6 +690,13 @@ class GameWindowTests(unittest.TestCase):
                                 break
                         self.assertFalse(scene.ledge_climbing)
                         self.assertIsNone(scene.pending_action)
+                        if kind.startswith('sword'):
+                            # The climb has a standing tail after releasing
+                            # its ledge state. Let that reach the draw gate.
+                            for _ in range(12):
+                                if scene.sword_drawn or (kind == 'sword' and scene.action == 15):
+                                    break
+                                self.tick()
                         if kind == 'jump':
                             self.assertIn(scene.sequence_state.sequence_id, (14, 24, 28))
                             self.assertEqual(scene.native_ledge, scene.sequence_state.sequence_id == 24)
@@ -691,8 +704,14 @@ class GameWindowTests(unittest.TestCase):
                             self.assertEqual(scene.native_ledge, kind == 'crouch')
                             self.assertEqual(scene.ledge_hanging, kind == 'crouch')
                             self.assertEqual(scene.sequence_state.sequence_id,
-                                             {'turn': 5, 'sword': 55, 'crouch': 68}[kind])
+                                             {'turn': 5, 'sword': IDLE_SEQUENCE, 'sword_held': 55,
+                                              'crouch': 68}[kind])
                         self.assertEqual(scene.terrain_motion.row, 1)
+                        if kind == 'sword':
+                            self.tick(10)
+                            self.assertFalse(scene.sword_drawn)
+                            scene.set_key_state('ctrl', True)
+                            self.assertEqual(scene.sequence_state.sequence_id, 55)
 
     def test_cavern_swing_release_lands_on_the_intermediate_platform_in_both_room_routes(self):
         scene = self.scene

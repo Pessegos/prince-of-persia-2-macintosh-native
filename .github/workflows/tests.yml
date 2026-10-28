@@ -18,8 +18,8 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m ruff check --select F,E9 .
       - run: python run_game.py --check-dependencies
-      - name: Native input-bank reference without original game files
-        run: python -m unittest -q tests.test_input_bank
+      - name: Native input bank and unarmed routing without original game files
+        run: python -m unittest -q tests.test_input_bank tests.test_input_routes
       - name: Ruins exit admission, head half-life HUD and waiting selection
         run: python -m unittest -q tests.test_ruins_fixes tests.test_opponent_selection
       - name: Coordinate conversions, frame phases and slot drawing

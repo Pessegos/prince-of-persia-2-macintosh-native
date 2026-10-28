@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from pop2.mac_resources import parse_resource_fork
+from pop2.mac_input import sample_modifier
 from tools.probe_level7_rules import NativeRules
 from tools.reference_input_bank import InputBank
 
@@ -52,6 +53,8 @@ def run_probe(source):
                 machine.put_word(offset, value)
             machine.call(4, 0x3e84)
             check(bank.sample(horizontal, vertical, modifier), ('sample', bank, horizontal, vertical, modifier))
+            if read().modifier != sample_modifier(bank.modifier, modifier == -1, modifier == -2):
+                raise AssertionError(('runtime modifier', bank, modifier, read()))
             samples += 1
         put(bank)
         result = machine.call(4, 0x3e3a)
