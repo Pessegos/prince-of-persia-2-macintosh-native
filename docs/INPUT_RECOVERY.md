@@ -284,6 +284,11 @@ sample cases, independently of the research model.
 
 ## Landing Into Crouch
 
+For the distinct per-action consumption beyond the routing sinks, see
+[Ordinary action input consumption](research/input-action-consumption.md).
+Those additional native calls do not remove this audit's remaining controller
+and frame-order exclusions.
+
 An ordinary landing uses SEQS:17: poses 107/108 in mode 5, then mode 1
 and the low pose 109 in SEQS:117. Native GenCtrl clears directional latches
 in mode 5 (6:0576-059c); its low-pose handler consumes active Down and clears

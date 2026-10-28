@@ -350,3 +350,10 @@ checked against 10,935 native samples. The user revoked the former running
 stop-and-draw QoL: runtime draw now requires fresh/held Ctrl at a standing gate,
 and released taps preserve normal running-jump/braking traces. This bounded
 modifier integration does not replace the host's directional command slot.
+
+[Ordinary action consumption](research/input-action-consumption.md) executes
+the action bodies beyond the router sinks: 11,304 comparisons for run/restart,
+turn, cautious step, standing forward jump and running jump. All match an
+independent reference, including full bank effects, original relative-X word
+arithmetic and warnings. Terrain services and animation requests remain supplied;
+pose advancement, outer scheduling and whole runtime queue migration remain P.
