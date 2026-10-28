@@ -70,8 +70,10 @@ that can both dispatch the same command:
 
 1. Recover the remaining Up/Down, low-pose, ledge, pickup and armed outer
    gates, including failed-action consumption and entry/exit resets. Trace
-   the actual player wrapper's saved bank and active-control gate separately
-   from the automatic opponents' input bank.
+   the remaining player-wrapper contexts separately from the automatic
+   opponents' input bank. The [ordinary saved-bank/gate proof](player-input-wrapper.md)
+   now covers that wrapper's bounded living-player path with supplied
+   keyboard/recording endpoints; replay/death/inversion contexts remain open.
 2. Put the production directional bank in the input layer. Keyboard callbacks
    should update physical holds, with action classification at the simulation
    gate against the current facing and actor state. Keep the independent

@@ -6,6 +6,7 @@ import hashlib
 from itertools import product
 import json
 from pathlib import Path
+import struct
 
 from tools.probe_input_actions import NativeInputActions
 from tools.reference_input_bank import InputBank
@@ -18,6 +19,8 @@ def run_probe(source):
     raw = (directory / 'Prince of Persia 2.bin').read_bytes()
     program = parse_resource_fork(raw)
     level = parse_resource_fork((directory / 'Prince.rsrc.bin').read_bytes())['LEVL'][2004]['data']
+    assert struct.unpack_from('>H', level, 0x2186)[0] == 3
+    assert struct.unpack_from('>H', level, 0x218a)[0] == 5
     machine = NativeInputActions(program)
     counts, digest = {'composed': 0, 'excluded_other_actions': 0, 'trace_steps': 0}, hashlib.sha256()
 

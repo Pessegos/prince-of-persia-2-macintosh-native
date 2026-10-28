@@ -366,3 +366,11 @@ pose/mode/facing contexts remain supplied, JumpSeq is a request sink, and
 animation/physics/full player-wrapper/FrameAdv parity remains P. A local
 host conflict experiment did not demonstrate a visible extra action; the
 architecture mismatch must not be mistaken for a reproduced user bug.
+
+[Saved player-input wrapper](research/player-input-wrapper.md) adds 67,850
+matching cases/steps through actual 4:3cae-3d14 plus the covered sampler/router/
+actions, excluding 740 unsupported-action cases. It checks saved versus working
+bank ownership, raw-direction gate, recording order/result, countdown and
+persistent state despite a different working bank between calls. Keyboard,
+recording and terrain endpoints remain supplied. Death/replay/inversion,
+uncovered action families, animation/physics/FrameAdv and runtime migration P.
