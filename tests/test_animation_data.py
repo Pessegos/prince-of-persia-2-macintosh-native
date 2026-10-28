@@ -451,7 +451,8 @@ class AnimationDataTests(unittest.TestCase):
             scene.advance_animation()
 
         scene.horizontal_key(None, 1, True)
-        self.assertEqual(scene.pending_action, BufferedCommand("horizontal", 1, "step"))
+        self.assertIsNone(scene.pending_action)
+        self.assertEqual(scene.directional_input.right, -1)
 
     def test_different_command_survives_a_rapid_step_repeat(self):
         scene = self.sword_scene()
@@ -461,10 +462,11 @@ class AnimationDataTests(unittest.TestCase):
         scene.horizontal_key(None, 1, False)
 
         scene.up_key(None)
-        self.assertEqual(scene.pending_action, BufferedCommand("jump"))
+        self.assertEqual(scene.directional_input.up, -1)
         scene.set_key_state("up", False)
         scene.horizontal_key(None, 1, True)
-        self.assertEqual(scene.pending_action, BufferedCommand("jump"))
+        self.assertEqual(scene.directional_input.up, -1)
+        self.assertIsNone(scene.pending_action)
 
     def test_arrow_tap_plays_native_start_run_and_stop_phases(self):
         scene = self.scene(facing=1)
@@ -1294,7 +1296,8 @@ class AnimationDataTests(unittest.TestCase):
         self.assertEqual(scene.action, 45)
         scene.horizontal_key(None, 1, False)
         scene.horizontal_key(None, -1, True)
-        self.assertEqual(scene.pending_action, BufferedCommand("horizontal", -1, "turn"))
+        self.assertIsNone(scene.pending_action)
+        self.assertEqual(scene.directional_input.left, -1)
 
         actions = [scene.action]
         for _ in range(6):
@@ -1316,7 +1319,7 @@ class AnimationDataTests(unittest.TestCase):
         self.assertEqual(scene.sequence_state.facing, 1)
         self.assertIsNone(scene.pending_action)
 
-    def test_latest_horizontal_input_replaces_only_the_buffered_command(self):
+    def test_opposite_input_is_latched_without_interrupting_the_step(self):
         scene = self.scene(facing=1)
         scene.shift_held = True
         scene.horizontal_key(None, 1, True)
@@ -1328,7 +1331,8 @@ class AnimationDataTests(unittest.TestCase):
 
         self.assertEqual(scene.sequence_state.sequence_id, SHIFT_STEP_SEQUENCE)
         self.assertEqual(scene.sequence_state.cursor, cursor)
-        self.assertEqual(scene.pending_action, BufferedCommand("horizontal", -1, "step"))
+        self.assertIsNone(scene.pending_action)
+        self.assertEqual(scene.directional_input.left, -1)
 
     def test_jump_waits_for_full_step_and_landing_sequences(self):
         scene = self.scene(facing=1)
@@ -1338,7 +1342,8 @@ class AnimationDataTests(unittest.TestCase):
         scene.start_jump()
 
         self.assertEqual(scene.sequence_state.sequence_id, SHIFT_STEP_SEQUENCE)
-        self.assertEqual(scene.pending_action.kind, "jump")
+        self.assertIsNone(scene.pending_action)
+        self.assertEqual(scene.directional_input.up, -1)
         while scene.sequence_state.sequence_id != 2:
             scene.sequence_runtime.next_frame()
         self.assertTrue(scene.prepare_next_sequence())
@@ -1526,7 +1531,7 @@ class AnimationDataTests(unittest.TestCase):
         scene.set_key_state("up", False)
         self.assertEqual(scene.pending_action, BufferedCommand("jump", 1))
 
-    def test_turn_then_horizontal_jump_tap_is_buffered_as_one_command(self):
+    def test_turn_then_horizontal_jump_tap_keeps_both_directional_latches(self):
         for up_first in (False, True):
             with self.subTest(up_first=up_first):
                 scene = self.scene(facing=1)
@@ -1540,16 +1545,21 @@ class AnimationDataTests(unittest.TestCase):
                 if up_first:
                     scene.horizontal_key(None, -1, False)
                     scene.up_key(None)
-                    self.assertEqual(scene.pending_action, BufferedCommand("jump"))
+                    self.assertEqual(scene.directional_input.up, -1)
                     scene.horizontal_key(None, -1, True)
                 else:
                     scene.advance_animation()
                     scene.up_key(None)
 
-                self.assertEqual(scene.pending_action, BufferedCommand("jump", -1))
+                self.assertIsNone(scene.pending_action)
+                self.assertEqual((scene.directional_input.up, scene.directional_input.left),
+                                 (-1, -1 if up_first else 1))
                 scene.set_key_state("up", False)
                 scene.horizontal_key(None, -1, False)
-                self.assertEqual(scene.pending_action, BufferedCommand("jump", -1))
+                # A repressed Forward is pending; the original turn's consumed
+                # Forward instead becomes zero on release (4:3e84).
+                self.assertEqual((scene.directional_input.up, scene.directional_input.left),
+                                 (-1, -1 if up_first else 0))
 
                 actions = [scene.action]
                 for _ in range(6 if up_first else 5):
@@ -1557,9 +1567,10 @@ class AnimationDataTests(unittest.TestCase):
                     actions.append(scene.action)
 
                 self.assertEqual(
-                    actions, [*range(45 if up_first else 46, 51), 16]
+                    actions, [*range(45 if up_first else 46, 51), 16 if up_first else 67]
                 )
-                self.assertEqual(scene.sequence_state.sequence_id, JUMP_FORWARD_SEQUENCE)
+                self.assertEqual(scene.sequence_state.sequence_id,
+                                 JUMP_FORWARD_SEQUENCE if up_first else JUMP_VERTICAL_SEQUENCE)
                 self.assertIsNone(scene.pending_action)
 
     def test_jump_queued_late_in_turn_skips_final_turn_pose(self):
@@ -1673,7 +1684,8 @@ class AnimationDataTests(unittest.TestCase):
         scene.up_key(None)
         scene.set_key_state("up", False)
 
-        self.assertEqual(scene.pending_action, BufferedCommand("jump"))
+        self.assertIsNone(scene.pending_action)
+        self.assertEqual(scene.directional_input.up, -1)
         for _ in range(6):
             scene.advance_animation()
         self.assertEqual(scene.sequence_state.sequence_id, JUMP_VERTICAL_SEQUENCE)
@@ -1694,7 +1706,7 @@ class AnimationDataTests(unittest.TestCase):
         self.assertFalse(scene.up_held)
         self.assertIsNone(scene.pending_action)
 
-    def test_tapped_chord_during_step_starts_forward_jump_at_step_end(self):
+    def test_up_during_step_is_vertical_if_the_consumed_horizontal_is_released(self):
         scene = self.scene(facing=1)
         scene.root = DummyRoot()
         scene.animation_after_id = None
@@ -1705,7 +1717,7 @@ class AnimationDataTests(unittest.TestCase):
         self.assertEqual(scene.action, 121)
 
         scene.up_key(None)
-        self.assertEqual(scene.pending_action, BufferedCommand("jump", 1))
+        self.assertEqual((scene.directional_input.right, scene.directional_input.up), (1, -1))
         scene.set_key_state("up", False)
         scene.horizontal_key(None, 1, False)
         scene.shift_held = False
@@ -1715,8 +1727,10 @@ class AnimationDataTests(unittest.TestCase):
             scene.advance_animation()
             actions.append(scene.action)
 
-        self.assertEqual(actions, [*range(121, 133), 16])
-        self.assertEqual(scene.sequence_state.sequence_id, JUMP_FORWARD_SEQUENCE)
+        # The step already consumed Forward. Its release clears +1, whereas
+        # pending Up remains -1 (4:3e84); 6:0e7a now selects DoJumpUp.
+        self.assertEqual(actions, [*range(121, 133), 67])
+        self.assertEqual(scene.sequence_state.sequence_id, JUMP_VERTICAL_SEQUENCE)
         self.assertIsNone(scene.pending_action)
 
     def test_early_released_turn_during_jump_is_cleared_at_pose_26(self):
@@ -1871,7 +1885,7 @@ class AnimationDataTests(unittest.TestCase):
         self.assertFalse(scene.jump_repeat_armed)
         self.assertIsNone(scene.pending_action)
 
-    def test_latest_command_replaces_older_chord_in_single_buffer(self):
+    def test_pending_up_survives_later_backward_until_turn_consumes_both(self):
         scene = self.scene(facing=1)
         scene.root = DummyRoot()
         scene.animation_after_id = None
@@ -1882,13 +1896,15 @@ class AnimationDataTests(unittest.TestCase):
         scene.shift_held = False
 
         scene.up_key(None)
-        self.assertEqual(scene.pending_action, BufferedCommand("jump", 1))
+        self.assertIsNone(scene.pending_action)
+        self.assertEqual(scene.directional_input.up, -1)
         scene.set_key_state("up", False)
         scene.horizontal_key(None, 1, False)
         scene.horizontal_key(None, -1, True)
         scene.horizontal_key(None, -1, False)
 
-        self.assertEqual(scene.pending_action, BufferedCommand("horizontal", -1, "turn"))
+        self.assertIsNone(scene.pending_action)
+        self.assertEqual((scene.directional_input.left, scene.directional_input.up), (-1, -1))
         for _ in range(12):
             scene.advance_animation()
         self.assertEqual(scene.sequence_state.sequence_id, STANDING_TURN_SEQUENCE)

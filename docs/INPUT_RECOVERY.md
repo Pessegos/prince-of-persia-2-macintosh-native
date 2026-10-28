@@ -166,7 +166,10 @@ Other state writers are separate from that count:
 
 ## Demonstrated Host Differences
 
-`BufferedCommand` is one latest-wins slot. Handlers can enqueue on host key
+`BufferedCommand` is the legacy latest-wins slot. The first runtime migration
+replaces deferred standing-turn/cautious-step input with a directional bank;
+see [directional-bank runtime](research/directional-bank-runtime.md) for exact
+ownership, observable changes and remaining families. Elsewhere, handlers can enqueue on host key
 callbacks before the next simulation tick and classify a request using the
 current movement/modifier. Native decisions use independent latches at the
 legal pose, with explicit resets.
@@ -231,8 +234,8 @@ Reproduce locally with the read-only original recovery resources:
 .venv\Scripts\python.exe -m tools.probe_input_bank --source ..\PoP2-Mac-Code-Recovery --output rendered\native-input-bank.json
 ```
 
-The remaining architectural gap is explicit: gameplay still uses one
-latest-command slot, so independently pending directions, simultaneous-input
+The remaining architectural gap is explicit: outside the migrated turn/step
+family, gameplay still uses the latest-command slot. Independently pending directions, simultaneous-input
 priorities and all accepted-action consumption/reset sites are not fully
 translated. A complete replacement must map those gates and preserve the
 intentional extensions below. The 300 ms host repeat filter is not a native
@@ -370,9 +373,9 @@ attack hold cannot become a new draw after sheathing. Holding Ctrl through
 the brake can draw at standing poses
 50-52, as admitted by GenCtrl 6:0c90-0cba. A consumed hold cannot draw again
 without release. This is not a mandatory second press when Ctrl remains held.
-The whole directional latch bank is still a research model, not the runtime's
-input representation. Existing host rest/pending-action admission remains;
-this bounded modifier migration does not establish full controller parity.
+The later turn/step migration uses a production directional bank in that
+family; other host rest/pending-action admission remains. Neither migration
+establishes full controller parity.
 The retained armed buffer/repeat policy owns an attack press as soon as it is
 submitted (or deliberately discarded by that policy); the unarmed modifier
 is consumed there too. This bridge preserves existing armed buffering rather
@@ -654,6 +657,12 @@ migration work must reuse these results rather than repeat the same isolated
 bank/controller audit or add an expiry to the current slot.
 
 ## Implementation Order
+
+The first production stage is now integrated for deferred standing-turn and
+cautious-step input: [scope and validation](research/directional-bank-runtime.md).
+The independent research models remain separate from runtime. Continue the
+remaining families using the recovered gates, extending native-bank ownership
+and removing each superseded producer/consumer together.
 
 1. Translate five native latches, sampling, facing remap and consume/reset
    operations in `mac_input`. Test every directional/modifier transition.

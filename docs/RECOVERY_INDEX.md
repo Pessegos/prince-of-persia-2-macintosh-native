@@ -383,3 +383,15 @@ failure and no-gap ordinary Down entry are checked; geometry/pickup/carpet
 decisions and pose/mode progression remain supplied. A concrete Shift+Forward
 crouch classification mismatch is corrected in the scene. Full native-bank
 runtime migration, other controller families and FrameAdv remain P.
+
+[First directional-bank runtime stage](research/directional-bank-runtime.md)
+uses a production bank for deferred standing turns/cautious steps and their
+ready gates. Direct native comparisons verify production sampling, clearing,
+remapping and bounded standing selection in 42,120 cases. Scene regressions
+cover independent Up/Down, current modifier/facing choice, consumed versus
+fresh horizontal release, host repeat policies and interruption clearing.
+Run/airborne/low/ledge/armed family migration and whole-frame parity remain P;
+the old command slot is bypassed only while the new family owns input.
+Another 810 original Up-choice/DoJumpUp-prefix cases confirm dispatch from
+the current Forward latch and the vertical prefix's direction clearing/Up
+consumption, stopping before terrain lookup. Total 42,930 matching cases.

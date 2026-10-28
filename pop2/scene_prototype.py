@@ -88,6 +88,7 @@ from pop2.crevices import (
 )
 from pop2.game_ui import MacintoshFont
 from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS
+from pop2.waiting_controls import WaitingControls
 
 
 SCALE = 2
@@ -158,7 +159,7 @@ def next_animation_deadline(previous_deadline, now, interval_ms=ANIMATION_INTERV
     return deadline, delay_ms
 
 
-class ScenePrototype(WindowControls):
+class ScenePrototype(WindowControls, WaitingControls):
     @property
     def room_id(self):
         return self.game.room_id
@@ -590,6 +591,8 @@ class ScenePrototype(WindowControls):
                 if key == "down" and not self.up_held:
                     self.buffer_input(BufferedCommand("crouch"))
             return "break"
+        if self.waiting_key(key, pressed):
+            return "break"
         if key == "up":
             if (
                 not pressed
@@ -691,6 +694,10 @@ class ScenePrototype(WindowControls):
                 and command == getattr(self, "queue_grace_command", None)):
             return False
         self.pending_potion_pickup = None
+        if (self.waiting_controls_available()
+                and command.kind in ('horizontal', 'jump', 'crouch', 'crawl')):
+            self.latch_waiting_command(command)
+            return True
         self.pending_action = command
         return True
 
@@ -887,14 +894,18 @@ class ScenePrototype(WindowControls):
                 self.step_warning_direction = 0
         self.sample_keyboard()
 
-        self.queue_released_jump_direction(previous_direction)
-
         if self._combat_controls_locked():
             return "break"
         if self._opening_active():
             return "break"
         if self.native_ledge and not self.ledge_climbing:
             return "break"
+
+        if self.waiting_controls_available():
+            self.waiting_horizontal(direction, pressed)
+            return "break"
+
+        self.queue_released_jump_direction(previous_direction)
 
         if self.sword_sheathing:
             if pressed and self.horizontal_input != previous_direction and self.horizontal_input:
@@ -999,6 +1010,8 @@ class ScenePrototype(WindowControls):
             return "break"
         if self.up_held:
             return "break"
+        if self.waiting_key('up', True):
+            return "break"
         self.up_held = True
         if self._combat_controls_locked():
             return "break"
@@ -1036,6 +1049,9 @@ class ScenePrototype(WindowControls):
     def start_jump_if_needed(self):
         if (not self.paused and self.dev_menu is None and not self.ledge_hanging
                 and self.up_held and not self.jump_started_for_press and not self.sword_drawn):
+            if self.waiting_controls_available():
+                self.update_waiting_controls()
+                return
             self.start_jump()
 
     def start_jump(self):
@@ -1230,6 +1246,7 @@ class ScenePrototype(WindowControls):
             self.run_active = False
             self.run_direction = direction
             self.run_stop_requested = False
+            self.begin_waiting_controls(direction)
             if step.sequence_id is None:
                 self.status.set("Short step: original sub-frame offset")
             else:
@@ -1289,6 +1306,7 @@ class ScenePrototype(WindowControls):
         self.advance_animation_now()
 
     def start_standing_turn(self):
+        self.begin_waiting_controls(-1 if self.sequence_state.facing else 1, turning=True)
         self.run_active = False
         self.run_direction = 0
         self.run_stop_requested = False
@@ -1541,6 +1559,8 @@ class ScenePrototype(WindowControls):
         return False
 
     def start_sequence(self, sequence_id):
+        if not self.waiting_sequence(sequence_id):
+            self.clear_waiting_controls()
         self.run_cycle_boundary_pending = False
         if sequence_id != IDLE_SEQUENCE and not 29 <= sequence_id <= 44:
             self.step_cautious = True
@@ -1882,6 +1902,7 @@ class ScenePrototype(WindowControls):
         return False
 
     def clear_keys(self, _event):
+        self.clear_waiting_controls()
         self.pause_resume_keys.clear()
         if _event is not None:
             self.window_keys_down.clear()
@@ -1909,6 +1930,8 @@ class ScenePrototype(WindowControls):
         self.pending_potion_pickup = None
 
     def prepare_next_sequence(self, run_cycle_boundary=False):
+        if self.waiting_controls_available():
+            return self.update_waiting_controls()
         if run_cycle_boundary:
             if self.pending_action is not None and self.dispatch_pending_action(
                 was_running=True
@@ -2112,9 +2135,12 @@ class ScenePrototype(WindowControls):
                 self.resume_sword_parry_recoil()
             self.resume_sword_controls()
         self.resume_crouch()
-        self.resume_queued_action_during_run_stop()
-        self.resume_run_during_standing_turn()
-        self.resume_queued_turn_during_standing_turn()
+        if self.waiting_controls_available():
+            self.update_waiting_controls()
+        else:
+            self.resume_queued_action_during_run_stop()
+            self.resume_run_during_standing_turn()
+            self.resume_queued_turn_during_standing_turn()
         self.resume_drift_during_run()
         self.resume_queued_running_jump_during_run()
         self.resume_queued_crouch_during_run()
@@ -2179,7 +2205,9 @@ class ScenePrototype(WindowControls):
             JUMP_LANDING_SEQUENCE, IDLE_SEQUENCE
         ):
             self.player_x = frame.target_x
-            if self.pending_action is not None and self.dispatch_pending_action():
+            if self.waiting_controls_available() and self.update_waiting_controls(repeat=False):
+                frame = self.sequence_runtime.next_frame()
+            elif self.pending_action is not None and self.dispatch_pending_action():
                 frame = self.sequence_runtime.next_frame()
             elif (
                 self.up_held
@@ -2247,6 +2275,7 @@ class ScenePrototype(WindowControls):
                 self.advance_audio()
             elif phase == 'render':
                 self.render()
+        self.retire_waiting_controls()
         self.in_animation_tick = False
         self.schedule_next_animation()
 
@@ -2428,6 +2457,12 @@ class ScenePrototype(WindowControls):
         old_room = self.room_id
         before_x = self.sequence_state.target_x
         command = self.pending_action
+        if (command is None and self.waiting_controls_available()
+                and self.directional_input.up < 0
+                and not self.directional_input.left and not self.directional_input.right):
+            # Carry the existing grounded wall-bump/climb tolerance across
+            # an interruption into the still-unmigrated airborne controller.
+            command = BufferedCommand('jump')
         from pop2.jump_descent import capture_jump_end, descent_drawing
 
         jump_end = capture_jump_end(motion, self.sequence_state)
@@ -2489,6 +2524,7 @@ class ScenePrototype(WindowControls):
                 if getattr(self, "audio", None) is not None:
                     self.audio.stop_sound(8)
             if event.kind in ("fall", "wall", "gate", "death"):
+                self.clear_waiting_controls()
                 if event.kind in ("gate", "death"):
                     self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
                     self.ledge_climb_requested = False
