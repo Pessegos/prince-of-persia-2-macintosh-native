@@ -357,3 +357,12 @@ turn, cautious step, standing forward jump and running jump. All match an
 independent reference, including full bank effects, original relative-X word
 arithmetic and warnings. Terrain services and animation requests remain supplied;
 pose advancement, outer scheduling and whole runtime queue migration remain P.
+
+[Composed input traces](research/input-controller-traces.md) match 45,044
+native router-plus-action cases and 62 persistent sampled steps in 18 traces;
+1,936 unsupported-action cases are explicitly excluded. Sampling/remapping,
+action consumption and X/warning persistence execute together. Terrain and
+pose/mode/facing contexts remain supplied, JumpSeq is a request sink, and
+animation/physics/full player-wrapper/FrameAdv parity remains P. A local
+host conflict experiment did not demonstrate a visible extra action; the
+architecture mismatch must not be mistaken for a reproduced user bug.

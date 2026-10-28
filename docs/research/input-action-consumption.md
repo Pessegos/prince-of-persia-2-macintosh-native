@@ -54,8 +54,8 @@ Output digest: `bb0a54499d01fad56ed311a140f392d889fabad81ac2f4f67531f8122be7948f
 Executable resource-fork digest remains
 `ca2c5886244efa7e19d63fee9317ae5c2341b8a7cc79c7740fdd505575f44bd5`.
 
-The next step is composing these bodies with sampling and routing over
-persistent input traces, then recovering the remaining Up/Down, low-pose,
+The [composed controller traces](input-controller-traces.md) now combine these
+bodies with sampling and routing. Remaining work includes Up/Down, low-pose,
 ledge, pickup and armed-controller paths. The runtime still has its host
 directional command slot. The Ctrl lifecycle correction is already integrated
 separately; this research does not replace that slot or the approved port
