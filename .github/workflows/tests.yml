@@ -19,7 +19,7 @@ jobs:
       - run: python -m ruff check --select F,E9 .
       - run: python run_game.py --check-dependencies
       - name: Native input sampling, routing and consumption without original game files
-        run: python -m unittest -q tests.test_input_bank tests.test_input_routes tests.test_input_actions tests.test_input_traces tests.test_player_input
+        run: python -m unittest -q tests.test_input_bank tests.test_input_routes tests.test_input_actions tests.test_input_traces tests.test_player_input tests.test_low_input
       - name: Ruins exit admission, head half-life HUD and waiting selection
         run: python -m unittest -q tests.test_ruins_fixes tests.test_opponent_selection
       - name: Coordinate conversions, frame phases and slot drawing

@@ -374,3 +374,12 @@ bank ownership, raw-direction gate, recording order/result, countdown and
 persistent state despite a different working bank between calls. Keyboard,
 recording and terrain endpoints remain supplied. Death/replay/inversion,
 uncovered action families, animation/physics/FrameAdv and runtime migration P.
+
+[Low/prone input consumption](research/low-input-consumption.md) adds 76,357
+matching original calls/steps, including 100 persistent saved-player steps in
+32 traces. Actual JumpSeq selection/cursor writes replace the request sink
+for these paths. Crouch/rise/crawl resets, direction consumption, resource
+failure and no-gap ordinary Down entry are checked; geometry/pickup/carpet
+decisions and pose/mode progression remain supplied. A concrete Shift+Forward
+crouch classification mismatch is corrected in the scene. Full native-bank
+runtime migration, other controller families and FrameAdv remain P.

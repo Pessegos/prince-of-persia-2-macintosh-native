@@ -102,7 +102,7 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 | Running 4-14 | Both horizontals zero: brake only at 7/11; otherwise Backward before fresh Up, then fresh Down; finally consume fresh Forward | 6:11e4-1274 | Ordinary flow tested, including release at pose 8 waiting for 11; latest-command slot cannot reproduce every conflict |
 | Run-jump takeoff | Legal run poses plus two-cell geometry; accepted jump clears directions, consumes Up | 6:1c14-1d5e | Ordinary geometry tested |
 | Other unarmed poses | No general dispatch; pending latches remain unless reset/special branch intervenes | 6:0560-07e0 | Full native lifecycle missing |
-| Crouch pose 109 | Down active: fresh Forward selects crawl, then clear/consume; Down zero: rise unless terrain vetoes | 6:099a-0b58 | Tap/hold/crawl and fulfilled landing-Down consumption tested; full latch/mode-5 resets missing |
+| Crouch pose 109 | Down active: fresh Forward selects low step/lie-down, including with Shift; Down zero: rise unless terrain vetoes | 6:099a-0b58 | Low/prone native consumption and saved-player traces recovered; Shift low-step classification corrected; full runtime bank migration missing |
 | Cautious step | Consume Forward and modifier; no unconditional ClearControls at ordinary step entry | 6:1276-128a | Common repeat/late requests tested |
 | Ledge poses 87-99 | Up active, grip delay zero: climb before release check; otherwise zero modifier or sequence-mode 11 releases | 6:18e0-1994 | Up/Shift and expiry tested; modifier/special branches partial |
 | Climb/release | Clear directions; consume Up + modifier on climb, Down on release | 6:1998-19d0, 1a84-1a8c | Terrain transitions tested; full latch reset missing |
@@ -635,6 +635,23 @@ with `0x80004005`. This establishes that the hotkey reached NVIDIA, not the
 cause of its fullscreen capture failure. No renderer replacement, layered
 window workaround, screenshot-key remapping or NVIDIA setting change is
 claimed as a verified fix.
+
+## Low And Prone Consumption Extension (2026-10-28)
+
+[Low/prone input consumption](research/low-input-consumption.md) reuses earlier
+crawl geometry evidence and extends the input audit with 76,357 matching native
+calls/steps. It executes actual JumpSeq selection/cursor writes, ordinary
+no-gap crouch entry and low/prone controllers. One hundred persistent steps
+check held/released inputs through protected lower/rise and crawl boundaries,
+including saved-bank ownership. Pose/terrain progression and special action
+endpoints remain supplied; this is not whole-frame or complete runtime parity.
+
+The concrete runtime correction allows Shift + Forward to use the existing
+low-step path when crouched, including input during lowering. Previously it
+was stored as a standing cautious step and the Prince remained stationary.
+The directional command slot itself has not yet been replaced. The next
+migration work must reuse these results rather than repeat the same isolated
+bank/controller audit or add an expiry to the current slot.
 
 ## Implementation Order
 
