@@ -86,6 +86,31 @@ def standing_input_request(bank, pose, *, mode=0, sequence=2, sword=True):
     return bank, 'run' if forward else None
 
 
+def running_input_request(bank, pose, *, mode=0, sequence=201):
+    """GenCtrl 6:15b6 and 11e4-1274; facing-relative bank, geometry deferred."""
+    if mode in (4, 5, 9) or sequence in (27, 110):
+        return bank.clear_directions(), None
+    if 1 <= pose <= 3:
+        if bank.left < 0 and bank.up < 0:
+            return bank.consume('left', 'up', clear=True), 'forward_jump'
+        return bank, None
+    if not 4 <= pose <= 14:
+        return bank, None
+    if not bank.left and not bank.right and pose in (7, 11):
+        result, request = bank.consume('left', clear=True), 'brake'
+    elif bank.right:
+        result, request = bank.consume('right', clear=True), 'reverse'
+    elif bank.up:
+        result, request = bank, 'running_jump' if bank.up < 0 else None
+    elif bank.down < 0:
+        result, request = bank.consume('down', clear=True), 'running_crouch'
+    else:
+        result, request = bank, None
+    if result.left < 0:
+        result = result.consume('left')
+    return result, request
+
+
 @dataclass(frozen=True)
 class KeyboardFrame:
     horizontal: int

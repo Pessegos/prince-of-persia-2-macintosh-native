@@ -7,13 +7,20 @@ from pop2.sequence_runtime import SequenceState
 
 @unittest.skipUnless((ASSET_DIR / 'enemy_profiles.json').is_file(), 'Imported controller data required')
 class RunningCrouchControlTests(unittest.TestCase):
-    def scene(self, action, facing, forward=True):
-        from pop2.scene_prototype import BufferedCommand, ScenePrototype
+    @classmethod
+    def setUpClass(cls):
+        from tests.test_animation_data import AnimationDataTests
+        AnimationDataTests.setUpClass()
+        cls.fixture = AnimationDataTests()
 
-        scene = ScenePrototype.__new__(ScenePrototype)
-        scene.sequence_state = SequenceState(200, action=action, facing=facing)
+    def scene(self, action, facing, forward=True):
+        from pop2.scene_prototype import BufferedCommand
+
+        scene = self.fixture.sword_scene()
+        scene.sequence_state = SequenceState(200, action=action, facing=facing, cursor=1)
         scene.pending_action = BufferedCommand('crouch')
         scene.horizontal_input = (1 if facing else -1) if forward else 0
+        scene.held_directions = [scene.horizontal_input] if forward else []
         scene.run_active = True
         scene.run_stop_requested = False
         scene.run_direction = 1 if facing else -1
@@ -35,8 +42,6 @@ class RunningCrouchControlTests(unittest.TestCase):
                     self.assertIsNone(scene.pending_action)
 
     def test_released_direction_still_brakes_first_on_supporting_poses(self):
-        from pop2.scene_prototype import BufferedCommand
-
         for facing in (0, 1):
             for action in (7, 11):
                 with self.subTest(facing=facing, action=action):
@@ -45,7 +50,10 @@ class RunningCrouchControlTests(unittest.TestCase):
                     scene.start_sequence.assert_called_once_with(13)
                     scene.start_crouch_lower.assert_not_called()
                     scene.start_native_descent.assert_not_called()
-                    self.assertEqual(scene.pending_action, BufferedCommand('crouch'))
+                    # Native brake clears pending Down (6:11e4-1206).
+                    # A still-held Down can rearm later; this released tap cannot.
+                    self.assertIsNone(scene.pending_action)
+                    self.assertEqual(scene.directional_input.down, 0)
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported cavern scenery required')
@@ -67,6 +75,7 @@ class RunningCrouchSceneTests(unittest.TestCase):
                 scene.in_animation_tick = True
                 scene.start_sequence(200)
                 scene.sequence_state.action = scene.action = 4
+                scene.sequence_state.cursor = 1
                 scene.run_active = True
                 scene.run_direction = 1 if facing else -1
                 scene.held_directions = [scene.run_direction]

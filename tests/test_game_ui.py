@@ -903,9 +903,14 @@ class GameWindowTests(unittest.TestCase):
                         self.assertEqual(scene.action, queue_pose)
                         scene.up_key(None)
                         scene.horizontal_key(None, direction, False)
-                        self.assertIsNotNone(scene.pending_action)
-                        self.assertEqual((scene.pending_action.kind, scene.pending_action.direction),
-                                         ('jump', 0))
+                        if queue_pose == 6:
+                            self.assertIsNone(scene.pending_action)
+                            self.assertLess(scene.directional_input.up, 0)
+                            self.assertTrue(scene.run_vertical_followup)
+                        else:
+                            self.assertIsNotNone(scene.pending_action)
+                            self.assertEqual((scene.pending_action.kind, scene.pending_action.direction),
+                                             ('jump', 0))
                         poses = []
                         for _ in range(65):
                             self.tick()

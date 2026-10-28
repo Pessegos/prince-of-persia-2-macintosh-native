@@ -74,8 +74,9 @@ class WaitingSceneTests(unittest.TestCase):
     def test_running_turn_sequence_43_is_not_misclassified_as_a_cautious_step(self):
         scene = self.step()
         scene.start_sequence(43)
-        self.assertIsNone(scene.directional_input)
-        self.assertFalse(scene.waiting_controls_available())
+        self.assertIsNotNone(scene.directional_input)
+        self.assertEqual(scene.waiting_step_direction, 0)
+        self.assertTrue(scene.waiting_controls_available())
 
     def test_a_direct_physics_sequence_change_cannot_replay_the_step_bank_after_landing(self):
         scene = self.step()

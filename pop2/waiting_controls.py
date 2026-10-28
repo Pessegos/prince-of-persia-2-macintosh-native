@@ -86,7 +86,8 @@ class WaitingControls:
     def waiting_horizontal(self, direction, pressed):
         self.sample_waiting_controls()
         command = getattr(self, 'queue_grace_command', None)
-        if (pressed and self.shift_held and getattr(self, 'queue_grace_remaining_ms', 0) > 0
+        if (pressed and getattr(self, 'waiting_step_direction', 0) and self.shift_held
+                and getattr(self, 'queue_grace_remaining_ms', 0) > 0
                 and command is not None and command.kind == 'horizontal'
                 and command.mode == 'step' and command.direction == direction):
             # Existing rapid-step repeat policy; other pending directions stay.

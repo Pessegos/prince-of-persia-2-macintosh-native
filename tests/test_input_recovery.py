@@ -262,9 +262,14 @@ class InputRecoveryTests(unittest.TestCase):
                         self.assertEqual((scene.sequence_state.sequence_id, scene.action,
                                           scene.player_x), before)
                         if held_up:
-                            self.assertIsNotNone(scene.pending_action)
-                            self.assertEqual((scene.pending_action.kind, scene.pending_action.direction,
-                                              scene.pending_action.running), ('jump', 0, False))
+                            if sequence in RUN_SEGMENT_SEQUENCES:
+                                self.assertIsNone(scene.pending_action)
+                                self.assertLess(scene.directional_input.up, 0)
+                                self.assertTrue(scene.run_vertical_followup)
+                            else:
+                                self.assertIsNotNone(scene.pending_action)
+                                self.assertEqual((scene.pending_action.kind, scene.pending_action.direction,
+                                                  scene.pending_action.running), ('jump', 0, False))
                         else:
                             self.assertIsNone(scene.pending_action)
 

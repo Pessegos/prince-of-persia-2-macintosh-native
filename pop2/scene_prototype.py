@@ -88,7 +88,7 @@ from pop2.crevices import (
 )
 from pop2.game_ui import MacintoshFont
 from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS
-from pop2.waiting_controls import WaitingControls
+from pop2.running_controls import RunningControls, RUN_INPUT_SEQUENCES
 
 
 SCALE = 2
@@ -159,7 +159,7 @@ def next_animation_deadline(previous_deadline, now, interval_ms=ANIMATION_INTERV
     return deadline, delay_ms
 
 
-class ScenePrototype(WindowControls, WaitingControls):
+class ScenePrototype(WindowControls, RunningControls):
     @property
     def room_id(self):
         return self.game.room_id
@@ -1055,6 +1055,9 @@ class ScenePrototype(WindowControls, WaitingControls):
             self.start_jump()
 
     def start_jump(self):
+        if self.sequence_state.sequence_id in RUN_INPUT_SEQUENCES and self.waiting_controls_available():
+            self.request_running_jump()
+            return
         self.jump_started_for_press = True
         horizontal = self.horizontal_input
         starting_chord = (
@@ -1148,9 +1151,10 @@ class ScenePrototype(WindowControls, WaitingControls):
                 self.room_id, self.terrain_motion.row, self.sequence_state,
                 self.frames[self.sequence_state.action], self.player_collision_bounds())
             self.player_x += offset
-        if sequence_id == RUN_JUMP_SEQUENCE and getattr(self, "level_map", None) is not None:
+        if sequence_id == RUN_JUMP_SEQUENCE:
             if not 7 <= self.sequence_state.action <= 14:
                 return False
+        if sequence_id == RUN_JUMP_SEQUENCE and getattr(self, "level_map", None) is not None:
             offset = self.level_map.run_jump_offset(
                 self.room_id, self.terrain_motion.row, self.sequence_state)
             if offset is None:
@@ -1273,6 +1277,7 @@ class ScenePrototype(WindowControls, WaitingControls):
                     BufferedCommand("horizontal", direction, "step"))
 
         self.run_start_x = self.player_x
+        self.begin_running_controls(direction)
         self.start_sequence(RUN_START_SEQUENCE)
         self.run_active = True
         self.run_direction = direction
@@ -1296,6 +1301,7 @@ class ScenePrototype(WindowControls, WaitingControls):
         self.advance_animation_now()
 
     def start_running_drift(self, direction):
+        self.begin_running_controls(direction)
         self.run_start_x = None
         self.start_sequence(RUNNING_DRIFT_SEQUENCE)
         self.run_active = True
@@ -1364,25 +1370,6 @@ class ScenePrototype(WindowControls, WaitingControls):
         # poses 50-52, including the turn used when entering the caverns.
         return self.dispatch_pending_action()
 
-    def resume_drift_during_run(self):
-        state = self.sequence_state
-        command = self.pending_action
-        if (
-            state.sequence_id not in RUN_CYCLE_SEQUENCES
-            or not 4 <= state.action <= 14
-            or command is None
-            or not (
-                (command.kind == "horizontal" and command.mode == "turn")
-                or (command.kind == "jump" and command.direction)
-            )
-            or facing_for_direction(command.direction) == state.facing
-        ):
-            return False
-
-        # GenCtrl 6:1216 checks backward before Up, including a jump chord.
-        # An airborne reversal waits for the first run pose after landing.
-        return self.dispatch_pending_action(was_running=True)
-
     def update_native_input_boundaries(self):
         """Discard stale host requests at verified Macintosh control gates."""
         command = self.pending_action
@@ -1443,78 +1430,14 @@ class ScenePrototype(WindowControls, WaitingControls):
         self.running_jump_controls_cleared = False
         if state.sequence_id not in RUN_CYCLE_SEQUENCES:
             return
-        # The next ReadKeyboard/GenCtrl pass sees fresh held directions,
-        # not an unconditional command saved before ClearControls.
-        direction = self.horizontal_input
-        self.run_stop_requested = not direction
-        if self.pending_action is not None:
-            return
-        if direction and facing_for_direction(direction) != state.facing:
-            self.pending_action = BufferedCommand("horizontal", direction, "turn")
-        elif direction and self.up_held:
-            self.start_jump()
-        elif self.down_held and not self.up_held:
-            self.pending_action = BufferedCommand("crouch")
-
-    def resume_queued_running_jump_during_run(self):
-        state = self.sequence_state
-        command = self.pending_action
-        if (
-            state.sequence_id not in RUN_CYCLE_SEQUENCES
-            or not 7 <= state.action <= 14
-            or command is None
-            or command.kind != "jump"
-            or not command.direction
-            or facing_for_direction(command.direction) != state.facing
-        ):
-            return False
-
-        # DoRunJump accepts a running jump from run actions 7-14.
-        return self.dispatch_pending_action(was_running=True)
+        # The grounded bank samples held directions after the arc's clear.
+        # No executable command is copied out of the old airborne slot here.
+        self.waiting_controls_available()
+        self.run_repeat_up = self.up_held and self.jump_repeat_armed
 
     def resume_queued_crouch_during_run(self):
-        state = self.sequence_state
-        if (
-            state.sequence_id not in RUN_CYCLE_SEQUENCES
-            or not 4 <= state.action <= 14
-            or self.pending_action is None
-            or self.pending_action.kind != "crouch"
-        ):
-            return False
-
-        if state.action in (7, 11) and not self.horizontal_input:
-            self.run_active = False
-            self.run_stop_requested = False
-            self.run_direction = 0
-            self.start_sequence(RUN_STOP_SEQUENCE)
-            return True
-
-        # GenCtrl 6:124a-1262 selects SEQS:26 directly for Down. The
-        # standing dispatcher tries StairClimbing first, whose alignment
-        # uses a different foot pose and can back a runner into the floor.
-        self.pending_action = None
-        self.start_crouch_lower()
-        return True
-
-    def resume_held_running_jump(self):
-        state = self.sequence_state
-        direction = self.horizontal_input
-        if (
-            state.sequence_id not in RUN_CYCLE_SEQUENCES
-            or not 7 <= state.action <= 14
-            or not self.run_active
-            or not self.jump_repeat_armed
-            or not self.jump_started_for_press
-            or not self.up_held
-            or not direction
-            or direction != self.run_direction
-            or direction not in self.held_directions
-            or self.run_stop_requested
-            or self.pending_action is not None
-        ):
-            return False
-
-        return self.dispatch_jump(BufferedCommand("jump", direction, running=True))
+        # Compatibility entry point; the directional bank is the sole dispatcher.
+        return self.update_waiting_controls()
 
     def resume_queued_action_during_run_stop(self):
         state = self.sequence_state
@@ -1544,21 +1467,12 @@ class ScenePrototype(WindowControls, WaitingControls):
         return self.dispatch_pending_action()
 
     def resume_run_stop(self):
-        state = self.sequence_state
-        command = self.pending_action
-        vertical_jump = command is not None and command.kind == "jump" and not command.direction
-        if (self.run_stop_requested and state.sequence_id in RUN_CYCLE_SEQUENCES
-                and state.action in (7, 11) and (command is None or vertical_jump)):
-            # GenCtrl 6:11e4 brakes on either supporting-foot pose. Waiting
-            # for the loop's last pose adds an unnecessary half stride.
-            self.run_active = False
-            self.run_stop_requested = False
-            self.run_direction = 0
-            self.start_sequence(RUN_STOP_SEQUENCE)
-            return True
-        return False
+        # Compatibility entry point; the directional bank is the sole dispatcher.
+        return self.update_waiting_controls()
 
     def start_sequence(self, sequence_id):
+        if sequence_id in RUN_INPUT_SEQUENCES:
+            self.waiting_step_direction = 0
         if not self.waiting_sequence(sequence_id):
             self.clear_waiting_controls()
         self.run_cycle_boundary_pending = False
@@ -2141,11 +2055,6 @@ class ScenePrototype(WindowControls, WaitingControls):
             self.resume_queued_action_during_run_stop()
             self.resume_run_during_standing_turn()
             self.resume_queued_turn_during_standing_turn()
-        self.resume_drift_during_run()
-        self.resume_queued_running_jump_during_run()
-        self.resume_queued_crouch_during_run()
-        self.resume_held_running_jump()
-        self.resume_run_stop()
         self.update_native_ledge()
         if (
             self.ledge_climb_requested
