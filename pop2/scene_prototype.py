@@ -972,7 +972,6 @@ class ScenePrototype(WindowControls):
                 CROUCH_HOLD_SEQUENCE, CROUCH_STEP_SEQUENCE
             )
             and (self.down_held or self.gate_blocks_crouch_rise())
-            and not self.shift_held
             and facing_for_direction(direction) == self.sequence_state.facing
         ):
             # GenCtrl 6:06b4/099a accepts input on the first displayed low pose.
@@ -1687,7 +1686,6 @@ class ScenePrototype(WindowControls):
         if (
             self.pending_action is None
             and direction
-            and not self.shift_held
             and facing_for_direction(direction) == self.sequence_state.facing
         ):
             self.start_crouch_step(direction)

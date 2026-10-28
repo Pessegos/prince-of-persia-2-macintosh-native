@@ -463,6 +463,44 @@ class InputRecoveryTests(unittest.TestCase):
                                  (IDLE_SEQUENCE, 15))
                 self.assertIsNone(scene.pending_action)
 
+    def test_shift_forward_while_crouched_keeps_the_low_step_instead_of_a_standing_step(self):
+        for facing in (0, 1):
+            for ready in (False, True):
+                with self.subTest(facing=facing, ready=ready):
+                    scene = self.fixture.sword_scene()
+                    scene.sequence_state.facing = facing
+                    scene.in_animation_tick = True
+                    scene.set_key_state('down', True)
+                    if ready:
+                        for _ in range(12):
+                            scene.advance_animation()
+                            if scene.action == 109 and scene.sequence_state.cursor > 0:
+                                break
+                        self.assertEqual(scene.action, 109)
+                    scene.set_key_state('shift', True)
+                    direction = 1 if facing else -1
+                    scene.horizontal_key(None, direction, True)
+                    if ready:
+                        self.assertEqual(scene.sequence_state.sequence_id, 79)
+                        self.assertIsNone(scene.pending_action)
+                    else:
+                        self.assertEqual(scene.pending_action.kind, 'crawl')
+                        for _ in range(12):
+                            scene.advance_animation()
+                            if scene.sequence_state.sequence_id == 79:
+                                break
+                        self.assertEqual(scene.sequence_state.sequence_id, 79)
+                        self.assertIsNone(scene.pending_action)
+                    scene.horizontal_key(None, direction, False)
+                    scene.set_key_state('down', False)
+                    sequences = []
+                    for _ in range(40):
+                        scene.advance_animation()
+                        sequences.append(scene.sequence_state.sequence_id)
+                    self.assertEqual(scene.action, 15)
+                    self.assertIsNone(scene.pending_action)
+                    self.assertFalse(any(29 <= sequence <= 44 for sequence in sequences))
+
     def test_released_direction_during_crouch_rise_mode_5_is_discarded(self):
         # GenCtrl 6:0576-059c clears directions before dispatch in mode 5.
         for facing in (0, 1):
