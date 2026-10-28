@@ -1,4 +1,89 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+
+
+@dataclass(frozen=True)
+class DirectionalInput:
+    """4:3e84: four independent latches in keyboard coordinates, plus modifier."""
+
+    left: int = 0
+    right: int = 0
+    up: int = 0
+    down: int = 0
+    modifier: int = 0
+
+    def sample(self, horizontal=0, vertical=0, modifier=0):
+        if horizontal not in (-1, 0, 1) or vertical not in (-1, 0, 1):
+            raise ValueError('Invalid raw direction')
+        if modifier not in (-2, -1, 0):
+            raise ValueError('Invalid raw modifier')
+
+        def latch(value, active):
+            if value < 0:
+                return value
+            return (-1 if value == 0 else value) if active else 0
+
+        return DirectionalInput(latch(self.left, horizontal == -1),
+                                latch(self.right, horizontal == 1),
+                                latch(self.up, vertical == -1),
+                                latch(self.down, vertical == 1),
+                                -modifier if modifier and self.modifier == -modifier else modifier)
+
+    def clear_directions(self):
+        return DirectionalInput(modifier=self.modifier)
+
+    def remap(self, *, facing_right, inverted=False):
+        return DirectionalInput(self.right if facing_right else self.left,
+                                self.left if facing_right else self.right,
+                                self.down if inverted else self.up,
+                                self.up if inverted else self.down, self.modifier)
+
+    def consume(self, *directions, modifier=None, clear=False):
+        if not set(directions) <= {'left', 'right', 'up', 'down'}:
+            raise ValueError('Invalid direction to consume')
+        if modifier is not None and modifier not in (1, 2):
+            raise ValueError('Invalid consumed modifier')
+        changes = {direction: 1 for direction in directions}
+        if modifier is not None:
+            changes['modifier'] = modifier
+        return replace(self.clear_directions() if clear else self, **changes)
+
+    def words(self):
+        return self.left, self.right, self.up, self.down, self.modifier
+
+
+def standing_input_request(bank, pose, *, mode=0, sequence=2, sword=True):
+    """GenCtrl standing/turn gates; bank.left/right mean Forward/Backward here."""
+    if mode in (4, 5, 9) or sequence in (27, 110):
+        return bank.clear_directions(), None
+    forward, backward, up, down, modifier = bank.words()
+    if 45 <= pose <= 49:
+        if pose == 48 and modifier >= 0 and forward and not up and not down:
+            return bank, 'turn_run'
+        return bank, None
+    if pose != 15 and not 50 <= pose <= 52:
+        return bank, None
+    if sword and modifier == -2 and not any((forward, backward, up, down)):
+        return bank.consume(modifier=2, clear=True), 'draw'
+    if modifier in (-1, 1):
+        if backward < 0:
+            return bank, 'turn'
+        if up < 0:
+            return bank, 'up'
+        if down < 0:
+            return bank, 'down'
+        if forward < 0 and not up and not down:
+            return bank, 'step'
+        if forward:
+            return bank, None
+    if forward < 0:
+        return bank, 'forward_jump' if up < 0 else 'run'
+    if backward < 0:
+        return bank, 'turn'
+    if up < 0:
+        return bank, 'up'
+    if down < 0:
+        return bank, 'down'
+    return bank, 'run' if forward else None
 
 
 @dataclass(frozen=True)
