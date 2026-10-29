@@ -34,7 +34,9 @@ class WaitingSceneTests(unittest.TestCase):
                 for _ in range(12):
                     scene.advance_animation()
                 self.assertEqual((scene.sequence_state.sequence_id, scene.action), (28, 67))
-                self.assertIsNone(scene.directional_input)
+                # Vertical takeoff now keeps ownership, consumes Up and
+                # clears the losing Down without consuming Shift again.
+                self.assertEqual(scene.directional_input.words(), (0, 0, 1, 0, 1))
                 self.assertIsNone(scene.pending_action)
 
     def test_modifier_is_read_at_dispatch_instead_of_baked_into_the_queued_direction(self):

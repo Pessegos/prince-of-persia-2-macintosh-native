@@ -89,7 +89,7 @@ from pop2.crevices import (
 from pop2.game_ui import MacintoshFont
 from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS
 from pop2.running_controls import RUN_INPUT_SEQUENCES
-from pop2.airborne_controls import AirborneControls, AIRBORNE_INPUT_SEQUENCES
+from pop2.airborne_controls import AirborneControls, AIRBORNE_TAKEOFF_SEQUENCES
 
 
 SCALE = 2
@@ -1447,7 +1447,7 @@ class ScenePrototype(WindowControls, AirborneControls):
         return self.update_waiting_controls()
 
     def start_sequence(self, sequence_id):
-        if sequence_id in AIRBORNE_INPUT_SEQUENCES:
+        if sequence_id in AIRBORNE_TAKEOFF_SEQUENCES:
             self.begin_airborne_controls(sequence_id)
         if sequence_id in RUN_INPUT_SEQUENCES:
             self.waiting_step_direction = 0

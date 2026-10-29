@@ -74,7 +74,7 @@ Examples from original SEQS data:
 - Standing forward jump: pose 26 clears. Earlier released requests must
   not survive; a request sampled after that reset can survive.
 - Running jump: pose 44 clears; the next run pass samples held keys afresh.
-  This subset is implemented in `update_running_jump_controls`.
+  This subset is implemented in `AirborneControls.update_airborne_controls`.
 - Hard-fall recovery: SEQS:20 -> 212 -> 49 stays in mode 5 through pose 116.
   `update_fall_recovery_controls` discards directional taps during that part;
   held keys remain available afterward. This does not apply a global mode-5
@@ -98,7 +98,7 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 | Draw from rest | Fresh Ctrl and no directional latches; consume modifier, clear directions, DoEngarde | 6:0c90-0cb6, 1e78 | Migrated selector and running/braking Ctrl lifecycle tested; armed controller migration remains partial |
 | Turn poses 45-49 | Pose 48: active Forward, no Up/Down, modifier >= 0 resumes run; otherwise protected | 6:1014-1066 | Bank remaps against current facing and admits running turn 43; first-pose guard tested |
 | Run start poses 1-3 | Fresh Up AND fresh Forward: forward jump; clear directions | 6:15b6-15da | Forward + Up chord retained at pose 1; later forward startup buffers a run jump; see Intentional Port Extensions |
-| Vertical preparation 67-69 | Active Forward: standing forward jump | 6:15de-15e8 | Chord tested; 35 ms host chord delay is an approximation |
+| Vertical preparation 67-69 | Active Forward: standing forward jump | 6:15de-15e8 | Vertical bank integrated, independent route model and actual takeoff windows tested; 35 ms rest chord delay remains a host approximation |
 | Running 4-14 | Both horizontals zero: brake only at 7/11; otherwise Backward before fresh Up, then fresh Down; finally consume fresh Forward | 6:11e4-1274 | Grounded run bank integrated; direct production/native routing comparison and scene conflict/geometry regressions; airborne continuity remains partial |
 | Run-jump takeoff | Legal run poses plus two-cell geometry; accepted jump clears directions, consumes Up | 6:1c14-1d5e | Ordinary geometry tested |
 | Other unarmed poses | No general dispatch; pending latches remain unless reset/special branch intervenes | 6:0560-07e0 | Full native lifecycle missing |
@@ -659,8 +659,9 @@ bank/controller audit or add an expiry to the current slot.
 
 ## Implementation Order
 
-The first three production stages cover deferred standing-turn,
-cautious-step, grounded running and ordinary/running jump3/4 input:
+The first four production stages cover deferred standing-turn,
+cautious-step, grounded running, ordinary/running jump3/4 and vertical14/28
+through landing11 input:
 [scope and validation](research/directional-bank-runtime.md).
 The independent research models remain separate from runtime. Continue the
 remaining families using the recovered gates, extending native-bank ownership
@@ -671,7 +672,10 @@ the former late-jump boundary: Up/Down taps replaced one another before
 reaching the migrated standing gate. The same eight actual host scenes now
 agree with the84 bounded original/model routing steps. Bank ownership through
 SEQS3/4 and its pose26/44 clears replaces the old arc slot/reset paths;
-other airborne/vertical and ledge families are still separate work.
+The [vertical handoff](research/vertical-input-handoff.md) extends this into
+14/28/11, with early67-69 Forward admission and protected83 clearing. Its
+16 actual host cases now agree with112 bounded original/model steps. Other
+airborne and ledge families are still separate work.
 
 1. Translate five native latches, sampling, facing remap and consume/reset
    operations in `mac_input`. Test every directional/modifier transition.

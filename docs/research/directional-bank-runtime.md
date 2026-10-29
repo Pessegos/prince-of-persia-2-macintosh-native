@@ -5,6 +5,8 @@ The input research is now used by a production `DirectionalInput` bank in
 standing turns and cautious steps, including the ordinary ready gate at their
 end. The second stage extends ownership through grounded running; the third
 carries the same bank through ordinary/running jumps3/4 and grounded return.
+The fourth extends it through vertical14/28 and landing11, described in
+[vertical input handoff](vertical-input-handoff.md).
 This does **not** replace input across every controller yet.
 
 ## Ownership
@@ -23,7 +25,8 @@ release. No pending-input expiry was added.
 | Standing turn entered through the scene, cautious step, their subsequent ordinary ready/idle gate | Production directional bank |
 | Run start 1, cycles 200/201/202, drift 6, running turn 43 and brake 13 | Production directional bank through `RunningControls` |
 | Ordinary forward jump3, running jump4 and their grounded return | Same production bank through `AirborneControls` |
-| Other airborne/vertical, low/prone, ledge and armed controllers | Existing host policies, pending later migrations |
+| Vertical jump14/28, landing11 and the early67-69 Forward gate | Same production bank through `AirborneControls` |
+| Other airborne, low/prone, ledge and armed controllers | Existing host policies, pending later migrations |
 | Host pause/focus/menu/restart boundaries | Existing held-key rules and explicit reset |
 
 While the bank owns input, physical callbacks and internal directional
@@ -260,8 +263,9 @@ real scenery and checks takeoff consumption, modifier-preserving resets,
 inverted late taps, automatic-repeat cancellation and modal reset. Existing
 animation/input/wall-climb tests now inspect bank metadata in migrated arcs;
 their movement/pose/facing and successful-climb expectations remain, except
-for the direct grounded Run described above. Vertical jump28/14, wall recovery,
-low/prone, ledge and armed controllers are still outside this stage.
+for the direct grounded Run described above. Vertical jump28/14 was outside
+this third stage; the fourth stage linked above now migrates it. Wall recovery,
+low/prone, ledge and armed controllers remain separate.
 
 ### Stage validation
 

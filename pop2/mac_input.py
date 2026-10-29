@@ -86,6 +86,15 @@ def standing_input_request(bank, pose, *, mode=0, sequence=2, sword=True):
     return bank, 'run' if forward else None
 
 
+def vertical_input_request(bank, pose, *, mode=1):
+    """GenCtrl6:0576-059c/064c-0660; bank.left is facing-relative Forward."""
+    if mode in (4, 5, 9):
+        return bank.clear_directions(), None
+    # 6:15de accepts active Forward, including a consumed hold. Up need
+    # not be pressed again during the first three vertical preparation poses.
+    return bank, 'forward_jump' if 67 <= pose <= 69 and bank.left else None
+
+
 def running_input_request(bank, pose, *, mode=0, sequence=201):
     """GenCtrl 6:15b6 and 11e4-1274; facing-relative bank, geometry deferred."""
     if mode in (4, 5, 9) or sequence in (27, 110):
