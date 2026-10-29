@@ -494,7 +494,9 @@ class InputRecoveryTests(unittest.TestCase):
                         self.assertEqual(scene.sequence_state.sequence_id, 79)
                         self.assertIsNone(scene.pending_action)
                     else:
-                        self.assertEqual(scene.pending_action.kind, 'crawl')
+                        self.assertIsNone(scene.pending_action)
+                        self.assertLess(getattr(scene.directional_input,
+                                                'right' if direction > 0 else 'left'), 0)
                         for _ in range(12):
                             scene.advance_animation()
                             if scene.sequence_state.sequence_id == 79:

@@ -2066,7 +2066,8 @@ class AnimationDataTests(unittest.TestCase):
         scene.set_key_state("down", True)
         scene.horizontal_key(None, -1, True)
         scene.horizontal_key(None, -1, False)
-        self.assertEqual(scene.pending_action, BufferedCommand("crawl", -1))
+        self.assertIsNone(scene.pending_action)
+        self.assertEqual(scene.directional_input.left, -1)
         for _ in range(3):
             scene.advance_animation()
         self.assertEqual(scene.sequence_state.sequence_id, CROUCH_STEP_SEQUENCE)
@@ -2211,7 +2212,8 @@ class AnimationDataTests(unittest.TestCase):
                         scene.advance_animation()
                     self.assertEqual(scene.action, pose)
                     scene.set_key_state("down", True)
-                    self.assertEqual(scene.pending_action, BufferedCommand("crouch"))
+                    self.assertIsNone(scene.pending_action)
+                    self.assertEqual(scene.directional_input.down, -1)
                     for _ in range(3):
                         scene.advance_animation()
                         if scene.sequence_state.sequence_id == CROUCH_STEP_SEQUENCE:
@@ -2248,7 +2250,7 @@ class AnimationDataTests(unittest.TestCase):
                     self.assertEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)
                     self.assertIsNone(scene.pending_action)
 
-    def test_low_pose_only_consumes_the_already_fulfilled_crouch_request(self):
+    def test_low_pose_imports_directional_requests_into_native_down_consumption(self):
         for command in (BufferedCommand("crawl", -1), BufferedCommand("sword_draw"),
                         BufferedCommand("jump"), BufferedCommand("horizontal", 1, "turn")):
             with self.subTest(command=command):
@@ -2261,8 +2263,13 @@ class AnimationDataTests(unittest.TestCase):
                 if command.kind == "crawl":
                     self.assertEqual(scene.sequence_state.sequence_id, CROUCH_STEP_SEQUENCE)
                     self.assertIsNone(scene.pending_action)
-                else:
+                elif command.kind == 'sword_draw':
                     self.assertEqual(scene.pending_action, command)
+                else:
+                    # With Down active, 6:0b2e clears other directions;
+                    # an old queued jump/turn cannot replay after rising.
+                    self.assertIsNone(scene.pending_action)
+                    self.assertEqual(scene.directional_input.words(), (0, 0, 0, 1, 0))
 
     def test_rooftop_hang_still_works_in_either_shift_down_order(self):
         for down_first in (False, True):

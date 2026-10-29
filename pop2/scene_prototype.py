@@ -77,20 +77,16 @@ from pop2.render_opening import (
 )
 from pop2.opponent_generation import character_column
 from pop2.coordinates import column_left
-from pop2.terrain import PRONE_FRAMES, TerrainMotion, floor_y, floor_contact_x
+from pop2.terrain import TerrainMotion, floor_y, floor_contact_x
 from pop2.crevices import (
-    CRAWL_BACK_SEQUENCE,
-    CRAWL_FORWARD_SEQUENCE,
     CREVICE_TILE,
     LIE_DOWN_SEQUENCE,
-    PRONE_IDLE_FRAME,
-    STAND_FROM_PRONE_SEQUENCE,
 )
 from pop2.game_ui import MacintoshFont
 from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS
 from pop2.running_controls import RUN_INPUT_SEQUENCES
 from pop2.airborne_controls import AIRBORNE_TAKEOFF_SEQUENCES
-from pop2.ledge_controls import LedgeControls
+from pop2.low_controls import LowControls, LOW_INPUT_SEQUENCES
 
 
 SCALE = 2
@@ -161,7 +157,7 @@ def next_animation_deadline(previous_deadline, now, interval_ms=ANIMATION_INTERV
     return deadline, delay_ms
 
 
-class ScenePrototype(WindowControls, LedgeControls):
+class ScenePrototype(WindowControls, LowControls):
     @property
     def room_id(self):
         return self.game.room_id
@@ -978,21 +974,6 @@ class ScenePrototype(WindowControls, LedgeControls):
                     ))
                 return False
             return self.start_jump_if_needed()
-        elif (
-            self.sequence_state.sequence_id in (
-                CROUCH_LOWER_SEQUENCE, CROUCH_STANDING_LOWER_SEQUENCE,
-                CROUCH_HOLD_SEQUENCE, CROUCH_STEP_SEQUENCE
-            )
-            and (self.down_held or self.gate_blocks_crouch_rise())
-            and facing_for_direction(direction) == self.sequence_state.facing
-        ):
-            # GenCtrl 6:06b4/099a accepts input on the first displayed low pose.
-            if self.sequence_state.action == 109 and self.sequence_state.cursor > 0:
-                self.pending_action = None
-                self.start_crouch_step(direction)
-                return True
-            self.buffer_input(BufferedCommand("crawl", direction))
-            return False
         elif self.shift_held:
             if getattr(self, "shift_turn_direction", 0) == direction:
                 return False
@@ -1380,11 +1361,10 @@ class ScenePrototype(WindowControls, LedgeControls):
         if command is None:
             return
         state = self.sequence_state
-        if (state.sequence_id == CROUCH_RISE_SEQUENCE and state.animation_state == 5
-              and command.kind in ('horizontal', 'crawl')):
-            # 6:0576-059c also clears released turns during the low rise.
-            # Keep the separately documented vertical wall-bump/climb
-            # tolerance; this is not a global rewrite of the host buffer.
+        if (state.sequence_id == CROUCH_RISE_SEQUENCE and state.source_sequence_id == LEDGE_CLIMB_SEQUENCE
+              and state.animation_state == 5 and command.kind in ('horizontal', 'crawl')):
+            # The unmigrated SEQS46 wall/climb tail retains its old policy:
+            # discard these directions while preserving its vertical request.
             self.pending_action = None
         elif (command.kind == 'sword_attack' and not self.ctrl_held
               and (state.sequence_id in (61, SWORD_BLOCK_SEQUENCE)
@@ -1444,6 +1424,8 @@ class ScenePrototype(WindowControls, LedgeControls):
         return self.update_waiting_controls()
 
     def start_sequence(self, sequence_id):
+        if sequence_id in LOW_INPUT_SEQUENCES:
+            self.begin_low_controls(sequence_id)
         if sequence_id in AIRBORNE_TAKEOFF_SEQUENCES:
             self.begin_airborne_controls(sequence_id)
         if sequence_id in RUN_INPUT_SEQUENCES:
@@ -1487,10 +1469,10 @@ class ScenePrototype(WindowControls, LedgeControls):
         column = character_column(foot) + offset * (1 if state.facing else -1)
         return column, self.level_map.tile(motion.room, column, motion.row)
 
-    def start_crawl(self):
+    def start_crawl(self, *, down_active=None):
         # GenCtrl 6:0a4e-0b28: with Down still held, forward into a crevice
         # (tile 7 whose low bits are not 3) or a scythe (12/13) lies down.
-        if not self.down_held or getattr(self, 'terrain_motion', None) is None:
+        if not (self.down_held if down_active is None else down_active) or getattr(self, 'terrain_motion', None) is None:
             return False
         column, tile = self.crawl_cell(1)
         if not (tile.kind in (12, 13) or tile.kind == CREVICE_TILE and tile.foreground & 3 != 3):
@@ -1511,50 +1493,8 @@ class ScenePrototype(WindowControls, LedgeControls):
             self.advance_animation_now()
         return True
 
-    def update_crawl(self):
-        """GenCtrl 6:07ee-0994 while prone (poses 246-261)."""
-        state, motion = self.sequence_state, self.terrain_motion
-        if (motion is None or motion.falling or motion.dead
-                or not PRONE_FRAMES[0] <= state.action <= PRONE_FRAMES[1]):
-            return False
-        self.pending_action = None
-        _column, own = self.crawl_cell(0)
-        _column, behind = self.crawl_cell(-1)
-        low = (CREVICE_TILE, 12, 13)
-        if not (own.kind in low or self.crawl_cell(1)[1].kind in low or behind.kind in low):
-            # 6:0884-0896: out of the low passage he stands up (SEQS 124).
-            if state.selected_sequence_id != STAND_FROM_PRONE_SEQUENCE:
-                self.start_sequence(STAND_FROM_PRONE_SEQUENCE)
-            return True
-        if state.action != PRONE_IDLE_FRAME:
-            return True
-        direction = 1 if state.facing else -1
-        if self.up_held and own.kind != CREVICE_TILE:
-            # 6:08a4-0942: Up stands only clear of a crevice behind him.
-            column = character_column(state.target_x)
-            if behind.kind == CREVICE_TILE:
-                clearance = (state.target_x - column_left(column) - 58 if state.facing else
-                             -14 - (state.target_x - column_left(column + 1)))
-            elif behind.kind in (12, 13):
-                # S05_5F1A: under an extended scythe (blade phase 3-15).
-                clearance = -51 if 3 <= behind.foreground & 0x1f <= 15 else 51
-            else:
-                clearance = 51
-            if clearance >= 0:
-                self.start_sequence(STAND_FROM_PRONE_SEQUENCE)
-                if clearance < 9:
-                    state.target_x += (9 - clearance) * direction
-                    state.current_x = self.player_x = state.target_x
-                return True
-        held = self.horizontal_input
-        if held and facing_for_direction(held) == state.facing:
-            self.start_sequence(CRAWL_FORWARD_SEQUENCE)  # 6:094e-0962
-        elif held:
-            self.start_sequence(CRAWL_BACK_SEQUENCE)  # 6:0966-097a
-        return True
-
-    def start_crouch_step(self, direction):
-        if self.start_crawl():
+    def start_crouch_step(self, direction, *, try_crawl=True):
+        if try_crawl and self.start_crawl():
             return
         self.start_sequence(CROUCH_STEP_SEQUENCE)
         self.status.set("Crouch step: original SEQS:79")
@@ -1571,35 +1511,6 @@ class ScenePrototype(WindowControls, LedgeControls):
         return (getattr(self, "level_map", None) is not None
                 and self.level_map.gate_blocks_rise(
                     self.room_id, self.terrain_motion.row, state, self.frames[state.action]))
-
-    def resume_crouch(self):
-        state = self.sequence_state
-        if (state.sequence_id not in (
-                CROUCH_LOWER_SEQUENCE, CROUCH_STANDING_LOWER_SEQUENCE,
-                CROUCH_HOLD_SEQUENCE)
-                or state.action != 109 or state.cursor == 0):
-            return False
-        # GenCtrl 6:099a-0b38 consumes Down at the low pose. A landing
-        # already fulfilled a buffered crouch; don't replay it after rising.
-        if self.pending_action is not None and self.pending_action.kind == "crouch":
-            self.pending_action = None
-        if self.pending_action is not None and self.pending_action.kind == "crawl":
-            direction = self.pending_action.direction
-            self.pending_action = None
-            self.start_crouch_step(direction)
-            return True
-        if not self.down_held and not self.gate_blocks_crouch_rise():
-            self.start_crouch_rise()
-            return True
-        direction = self.horizontal_input
-        if (
-            self.pending_action is None
-            and direction
-            and facing_for_direction(direction) == self.sequence_state.facing
-        ):
-            self.start_crouch_step(direction)
-            return True
-        return False
 
     @staticmethod
     def _right_platform_edge(level, room_id, start_x):
@@ -1994,7 +1905,6 @@ class ScenePrototype(WindowControls, LedgeControls):
         motion = getattr(self, "terrain_motion", None)
         old_bounds = self.player_collision_bounds() if motion is not None else None
         environment_for(self).controls()
-        self.update_crawl()
         if self.update_potion_controls():
             frame = self.sequence_runtime.next_frame()
             self.action, self.player_x = frame.action, frame.target_x
@@ -2027,7 +1937,6 @@ class ScenePrototype(WindowControls, LedgeControls):
             if not self.resume_sword_attack_after_block():
                 self.resume_sword_parry_recoil()
             self.resume_sword_controls()
-        self.resume_crouch()
         if self.waiting_controls_available():
             self.update_waiting_controls()
         else:
@@ -2250,6 +2159,11 @@ class ScenePrototype(WindowControls, LedgeControls):
             return False
         tile, delta = target
         self.player_x = state.target_x + delta
+        if crouched and self.waiting_controls_available():
+            # GenCtrl6:0b4c: successful pickup clears low directions and
+            # consumes the modifier before handing off to the item action.
+            self.directional_input = self.directional_input.consume(clear=True, modifier=1)
+            self.modifier_input = 1
         self.pending_action = None
         self.run_active = self.run_stop_requested = self.run_cycle_boundary_pending = False
         # 6:14d6-14ea: the Prince in level eight's room 9 (the throne).

@@ -86,6 +86,37 @@ def standing_input_request(bank, pose, *, mode=0, sequence=2, sword=True):
     return bank, 'run' if forward else None
 
 
+def low_input_request(bank, pose, *, mode=1, selected=117, can_rise=True,
+                      low_ahead=False, inside_low=True, can_stand_prone=False):
+    """GenCtrl6:0576/099a/07ee at supplied terrain/pickup boundaries.
+
+    Latches are facing-relative. Requests are original sequence IDs; existing
+    terrain/action code performs alignment and checks pickup/carpet first.
+    """
+    if mode in (4, 5, 9) or selected in (27, 110):
+        return bank.clear_directions(), None
+    if pose == 109:
+        if selected == 111:
+            return bank.consume(clear=True, modifier=1), None
+        if not bank.down:
+            return bank, 49 if can_rise else 79 if bank.left < 0 else None
+        if bank.left < 0:
+            return bank.consume('left', clear=True), 125 if low_ahead else 79
+        return bank.consume('down', clear=True), None
+    if 246 <= pose <= 261:
+        if not inside_low and selected != 124:
+            return bank, 124
+        if pose != 251:
+            return bank.clear_directions(), None
+        if bank.up and can_stand_prone:
+            return bank.consume('up', clear=True), 124
+        if selected != 124:
+            sequence = 122 if bank.left < 0 else 123 if bank.right < 0 else None
+            if sequence is not None:
+                return bank.clear_directions(), sequence
+    return bank, None
+
+
 def ledge_input_request(bank, *, grip=0, alive=True, sequence_mode=0):
     """GenCtrl6:18e0-191e, before the separate terrain/support decisions."""
     if not alive:

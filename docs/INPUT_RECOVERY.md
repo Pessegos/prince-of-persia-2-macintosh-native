@@ -659,9 +659,9 @@ bank/controller audit or add an expiry to the current slot.
 
 ## Implementation Order
 
-The first five production stages cover deferred standing-turn,
+The first six production stages cover deferred standing-turn,
 cautious-step, grounded running, ordinary/running jump3/4 and vertical14/28
-through landing11, plus native hanging/release/climb input:
+through landing11, native hanging/release/climb, and ordinary crouch/prone input:
 [scope and validation](research/directional-bank-runtime.md).
 The independent research models remain separate from runtime. Continue the
 remaining families using the recovered gates, extending native-bank ownership
@@ -680,6 +680,12 @@ airborne families are still separate work. The
 native entry, hanging, release and protected climbing. Its1170 bounded original
 gate/prefix cases match the independent model; Ctrl hold and grip-delayed Up
 use that gate, while existing protected-climb port tolerances stay explicit.
+The [low handoff](research/low-input-handoff.md) now replaces the low/prone
+slot and raw-held crawl routing with that bank. Protected rise clears released
+Up instead of replaying a jump; low-step conflicts and prone taps use the
+recovered priorities.25,928 production/model observations reuse the existing
+native audit. Source46 recovery and intentional low-repeat/release policies
+remain explicit exceptions; armed and special-family migration is still pending.
 
 1. Translate five native latches, sampling, facing remap and consume/reset
    operations in `mac_input`. Test every directional/modifier transition.

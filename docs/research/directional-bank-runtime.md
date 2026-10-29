@@ -9,6 +9,8 @@ The fourth extends it through vertical14/28 and landing11, described in
 [vertical input handoff](vertical-input-handoff.md).
 The fifth carries it through native hanging, release and protected climbing:
 [ledge input handoff](ledge-input-handoff.md).
+The sixth extends ownership through ordinary crouch/rise and prone movement:
+[low input handoff](low-input-handoff.md).
 This does **not** replace input across every controller yet.
 
 ## Ownership
@@ -29,7 +31,8 @@ release. No pending-input expiry was added.
 | Ordinary forward jump3, running jump4 and their grounded return | Same production bank through `AirborneControls` |
 | Vertical jump14/28, landing11 and the early67-69 Forward gate | Same production bank through `AirborneControls` |
 | Native ledge entry, hanging, release, protected climb and grounded return | Same production bank through `LedgeControls` |
-| Other airborne, low/prone, non-native ledge fallback and armed controllers | Existing host policies, pending later migrations |
+| Ordinary crouch/lower/low step/rise, soft landing17 and prone lie/crawl/stand | Same production bank through `LowControls` |
+| Other airborne, SEQS46 wall/climb recovery, non-native ledge fallback and armed controllers | Existing host policies, pending later migrations |
 | Host pause/focus/menu/restart boundaries | Existing held-key rules and explicit reset |
 
 While the bank owns input, physical callbacks and internal directional

@@ -117,6 +117,12 @@ Seventeen asset-free tests run in CI alongside the prior input tests.
 
 ## Runtime consequence and remaining migration
 
+The subsequent [runtime handoff](low-input-handoff.md) now replaces the
+ordinary low/prone command slot with the production bank, using this audit.
+It records the actual resource modes, preserved host tolerances and remaining
+special contexts. The text below records the earlier correction and boundary
+before that migration; it is not the current ownership checklist.
+
 The recovered Shift rule exposed a concrete port mismatch: while crouched,
 Shift + Forward was classified as a standing cautious step and left pending,
 so the Prince did not make the low step. The same happened if Forward arrived
