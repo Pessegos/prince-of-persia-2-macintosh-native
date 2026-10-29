@@ -1,10 +1,11 @@
 # Windows portable builds
 
-These packages are development builds. Preparing a package does not declare
-the game complete or publish a release. The first public alpha is planned
-after the current input-queue milestone and a playtest of the packaged game.
-Later releases should group meaningful playable improvements; research-only
-temple modules do not require a new executable release.
+These packages are development builds. Public alphas can be released while
+input handling, enemy AI and later levels are still being completed; release
+notes must describe the current playable scope and known limitations.
+Preparing a package does not automatically publish it. Releases should group
+meaningful playable improvements, rather than follow every commit or
+research-only temple module.
 
 ## Build locally
 
