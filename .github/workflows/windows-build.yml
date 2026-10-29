@@ -1,0 +1,52 @@
+name: Windows portable build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Build label (no release is published)
+        required: true
+        default: dev
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      BUILD_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
+      PYGAME_HIDE_SUPPORT_PROMPT: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-build.txt
+      - run: python -m pip install -r requirements-build.txt
+      - name: Packaging contracts without original game files
+        run: python -m unittest -q tests.test_windows_distribution tests.test_project_layout tests.test_asset_import tests.test_preview_cache
+      - name: Prepare Unicorn-compatible helper bootloaders
+        run: python -m tools.prepare_windows_bootloader
+      - name: Package portable ZIP
+        run: python -m tools.build_windows --version "$env:BUILD_VERSION"
+      - name: Test ZIP outside the checkout, without Python on PATH
+        run: |
+          $archive = Get-ChildItem -LiteralPath rendered/windows -Filter '*.zip' | Select-Object -First 1
+          python -m tools.smoke_windows $archive.FullName --report rendered/windows/smoke-report.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: PoP2Mac-${{ env.BUILD_VERSION }}-windows-x64
+          if-no-files-found: error
+          path: |
+            rendered/windows/*.zip
+            rendered/windows/*.zip.sha256
+            rendered/windows/smoke-report.json
