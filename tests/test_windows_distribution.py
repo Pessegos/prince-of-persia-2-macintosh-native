@@ -54,7 +54,9 @@ class WindowsDistributionTests(unittest.TestCase):
 
     def test_frozen_writable_paths_are_beside_the_executable_not_internal_code(self):
         with tempfile.TemporaryDirectory() as directory:
-            executable = Path(directory) / 'portable game/PoP2Mac.exe'
+            # Actions may supply an 8.3 TEMP alias (RUNNER~1). The production
+            # path deliberately resolves it to the long name before use.
+            executable = (Path(directory) / 'portable game/PoP2Mac.exe').resolve()
             script = (f'import sys; sys.frozen=True; sys.executable={str(executable)!r}; '
                       'from pop2.paths import PROJECT_DIR, ASSET_DIR, OUTPUT_DIR; '
                       'import run_game, json; '
