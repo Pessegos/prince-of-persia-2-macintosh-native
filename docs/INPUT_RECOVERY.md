@@ -666,6 +666,13 @@ The independent research models remain separate from runtime. Continue the
 remaining families using the recovered gates, extending native-bank ownership
 and removing each superseded producer/consumer together.
 
+The [airborne handoff audit](research/airborne-handoff-audit.md) identifies a
+concrete remaining boundary: late Up/Down taps during an ordinary jump still
+replace one another before reaching the migrated standing gate. Eight actual
+host scenes and84 bounded native steps distinguish that priority difference
+from the already-working pose26 reset. Runtime airborne ownership is not yet
+enabled; reuse this fixture for the next migration.
+
 1. Translate five native latches, sampling, facing remap and consume/reset
    operations in `mac_input`. Test every directional/modifier transition.
 2. Integrate standing/turn/step/run, jump resets, crouch, ledges, then sword
