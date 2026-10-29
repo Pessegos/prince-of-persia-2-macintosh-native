@@ -548,7 +548,10 @@ class MenuSceneTests(unittest.TestCase):
                 self.assertFalse(scene.ctrl_held)
                 self.assertIsNone(scene.pending_action)
                 self.assertEqual(scene.dev_key_release(event), "break")
-                self.assertIsNone(scene.dev_key_press(event))
+                # Fresh Space now requests the time HUD; other text keys
+                # still fall through once the pause-resume hold is released.
+                self.assertEqual(scene.dev_key_press(event),
+                                 'break' if key == 'space' else None)
 
     def test_command_lock_function_and_media_keys_leave_the_game_paused(self):
         scene = self.scene
