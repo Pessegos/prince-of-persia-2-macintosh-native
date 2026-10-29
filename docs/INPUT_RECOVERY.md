@@ -687,6 +687,13 @@ recovered priorities.25,928 production/model observations reuse the existing
 native audit. Source46 recovery and intentional low-repeat/release policies
 remain explicit exceptions; armed and special-family migration is still pending.
 
+The first [armed priority stage](research/armed-input-priority.md) checks
+OnAlert6:24bc-2584 against19,440 original/model cases. Conflicting buffered
+armed requests now use its eventual guard-gate priority, so a later movement,
+block or sheathe request cannot erase a queued strike. The rapid-attack
+rejection policy still runs first. This is a bounded correction to the
+existing armed slot, not armed bank ownership or full SwordCtrl parity.
+
 1. Translate five native latches, sampling, facing remap and consume/reset
    operations in `mac_input`. Test every directional/modifier transition.
 2. Integrate standing/turn/step/run, jump resets, crouch, ledges, then sword

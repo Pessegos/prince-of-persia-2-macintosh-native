@@ -87,6 +87,7 @@ from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COM
 from pop2.running_controls import RUN_INPUT_SEQUENCES
 from pop2.airborne_controls import AIRBORNE_TAKEOFF_SEQUENCES
 from pop2.low_controls import LowControls, LOW_INPUT_SEQUENCES
+from pop2.sword_controls import buffered_sword_request
 
 
 SCALE = 2
@@ -661,6 +662,9 @@ class ScenePrototype(WindowControls, LowControls):
                 and state.sequence_id in SWORD_ATTACK_START_SEQUENCES
                 and state.action in SWORD_ATTACK_START_POSES):
             return False
+        if (self.pending_action is not None
+                and buffered_sword_request(self.pending_action.kind, kind) != kind):
+            return False
         if self.sword_drawn and self.sequence_state.sequence_id == SWORD_GUARD_SEQUENCE:
             self.pending_action = None
             if self.start_sword_action(kind):
@@ -691,6 +695,9 @@ class ScenePrototype(WindowControls, LowControls):
                 and command == getattr(self, "queue_grace_command", None)):
             return False
         self.pending_potion_pickup = None
+        if (self.sword_drawn and self.pending_action is not None
+                and buffered_sword_request(self.pending_action.kind, command.kind) != command.kind):
+            return False
         if (self.waiting_controls_available()
                 and command.kind in ('horizontal', 'jump', 'crouch', 'crawl')):
             self.latch_waiting_command(command)

@@ -2888,7 +2888,7 @@ class AnimationDataTests(unittest.TestCase):
                 self.assertEqual(scene.player_x, start_x - (16 if kind == "sword_attack" else 15))
                 self.assertIsNone(scene.pending_action)
 
-    def test_latest_sword_step_command_replaces_only_buffered_command(self):
+    def test_sword_step_does_not_replace_a_pending_strike(self):
         scene = self.guarded_sword_scene(facing=1)
         scene.horizontal_key(None, 1, True)
         scene.horizontal_key(None, 1, False)
@@ -2896,8 +2896,10 @@ class AnimationDataTests(unittest.TestCase):
         scene.set_key_state("ctrl", False)
         scene.horizontal_key(None, -1, True)
         scene.horizontal_key(None, -1, False)
-        self.assertEqual(scene.pending_action, BufferedCommand("sword_retreat"))
-        for action in (164, 165, 158, 160, 157, 158, 170, 171):
+        # OnAlert6:250c selects Ctrl before Backward. The old assertion
+        # encoded last-event replacement, not a native controller rule.
+        self.assertEqual(scene.pending_action, BufferedCommand("sword_attack"))
+        for action in (164, 165, 151, 152, 153, 154, 155, 156, 157, 158):
             scene.advance_animation()
             self.assertEqual(scene.action, action)
         self.assertIsNone(scene.pending_action)

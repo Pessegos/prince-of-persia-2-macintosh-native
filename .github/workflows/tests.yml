@@ -23,7 +23,7 @@ jobs:
       - name: Native input sampling, routing and consumption without original game files
         run: python -m unittest -q tests.test_input_bank tests.test_input_routes tests.test_input_actions tests.test_input_traces tests.test_player_input tests.test_low_input
       - name: Runtime directional bank and migrated ground-jump input gates
-        run: python -m unittest -q tests.test_directional_input tests.test_running_controls.RunningBankTests tests.test_vertical_controls.VerticalSelectorTests tests.test_ledge_controls.LedgeSelectorTests tests.test_low_controls.LowSelectorTests
+        run: python -m unittest -q tests.test_directional_input tests.test_running_controls.RunningBankTests tests.test_vertical_controls.VerticalSelectorTests tests.test_ledge_controls.LedgeSelectorTests tests.test_low_controls.LowSelectorTests tests.test_armed_input.ArmedSelectorTests
       - name: Ruins exit admission, head half-life HUD and waiting selection
         run: python -m unittest -q tests.test_ruins_fixes tests.test_opponent_selection
       - name: Coordinate conversions, frame phases and slot drawing
