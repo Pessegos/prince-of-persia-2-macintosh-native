@@ -4,11 +4,11 @@ import argparse
 from importlib import import_module
 import json
 import os
-from pathlib import Path
 import sys
 
+from pop2.paths import PROJECT_DIR
 
-PROJECT = Path(__file__).resolve().parent
+PROJECT = PROJECT_DIR
 REQUIRED_ASSETS = (
     "Prince.rsrc",
     "Kid.rsrc",

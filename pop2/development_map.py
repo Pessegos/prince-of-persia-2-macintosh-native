@@ -356,14 +356,15 @@ def start_map_warmup():
     import sys
 
     from pop2.paths import PROJECT_DIR
+    from pop2.child_process import worker_command, worker_environment
 
     options = {}
     if sys.platform == 'win32':
         options['creationflags'] = subprocess.CREATE_NO_WINDOW | subprocess.BELOW_NORMAL_PRIORITY_CLASS
     try:
-        return subprocess.Popen([sys.executable, '-m', 'pop2.development_map', '--warm'], cwd=PROJECT_DIR,
+        return subprocess.Popen(worker_command('pop2.development_map', '--warm'), cwd=PROJECT_DIR,
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL, **options)
+                                stderr=subprocess.DEVNULL, env=worker_environment(), **options)
     except OSError:
         return None  # The map is then prepared when it is opened.
 

@@ -10,6 +10,7 @@ from threading import Event
 
 from pop2.paths import PROJECT_DIR
 from pop2.process_job import terminate_tree
+from pop2.child_process import worker_command, worker_environment
 
 
 class ImportCancelled(Exception):
@@ -47,15 +48,15 @@ class AssetImport:
         # recovery process cannot leave its staging files installed or orphaned.
         with tempfile.TemporaryDirectory(prefix='.setup-', dir=assets) as directory:
             staging = Path(directory)
-            command = [sys.executable, '-u', '-m', 'tools.extract_assets', str(Path(image_path).resolve()),
-                       '--output', str(staging.resolve()), '--progress-json']
+            command = worker_command('tools.extract_assets', Path(image_path).resolve(),
+                                     '--output', staging.resolve(), '--progress-json')
             options = {'creationflags': subprocess.CREATE_NO_WINDOW} if sys.platform == 'win32' else {}
             with log.open('w', encoding='utf-8') as output:
                 output.write(f'Python: {sys.version}\n')
                 output.flush()
                 with subprocess.Popen(command, cwd=PROJECT_DIR, stdout=subprocess.PIPE,
                                       stderr=subprocess.STDOUT, text=True, encoding='utf-8',
-                                      errors='replace', **options) as process:
+                                      errors='replace', env=worker_environment(), **options) as process:
                     self.process = process
                     errors = deque(maxlen=12)
                     try:

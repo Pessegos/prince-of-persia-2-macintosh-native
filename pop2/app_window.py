@@ -5,11 +5,12 @@ from pathlib import Path
 import sys
 import tkinter as tk
 import traceback
+from pop2.paths import OUTPUT_DIR
 
 
 ICON_DIR = Path(__file__).resolve().parent / "icons"
 APP_ID = "Pessegos.PrinceOfPersia2.MacintoshNative"
-ERROR_LOG = Path(__file__).resolve().parent.parent / "rendered" / "error.log"
+ERROR_LOG = OUTPUT_DIR / "error.log"
 
 
 def log_callback_exception(kind, value, trace):

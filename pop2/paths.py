@@ -2,9 +2,11 @@
 
 import os
 from pathlib import Path
+import sys
 
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_DIR = (Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False)
+               else Path(__file__).resolve().parent.parent)
 ASSET_DIR = PROJECT_DIR / "assets"
 OUTPUT_DIR = PROJECT_DIR / "rendered"
 # POP2_USER_DATA redirects the player's saves and screenshot preferences (the

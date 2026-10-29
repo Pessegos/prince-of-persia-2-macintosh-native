@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import sys
 from zipfile import BadZipFile, ZipFile, ZIP_STORED
 
 from PIL import Image
@@ -15,6 +16,8 @@ from pop2.paths import ASSET_DIR
 def preview_fingerprint(directory=ASSET_DIR, code_directory=None):
     code_directory = Path(code_directory or Path(__file__).parent)
     digest = hashlib.sha256(b'pop2-developer-preview-1')
+    if getattr(sys, 'frozen', False):
+        digest.update((code_directory.parent / 'build-info.json').read_bytes())
     for root, patterns in ((Path(directory), ('*.rsrc', '*.json')),
                            (code_directory, ('*.py', 'cavern_retouch.json', 'cavern_retouch.png'))):
         for path in sorted({path for pattern in patterns for path in root.glob(pattern)}):
