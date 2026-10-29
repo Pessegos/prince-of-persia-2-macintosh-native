@@ -7,6 +7,8 @@ end. The second stage extends ownership through grounded running; the third
 carries the same bank through ordinary/running jumps3/4 and grounded return.
 The fourth extends it through vertical14/28 and landing11, described in
 [vertical input handoff](vertical-input-handoff.md).
+The fifth carries it through native hanging, release and protected climbing:
+[ledge input handoff](ledge-input-handoff.md).
 This does **not** replace input across every controller yet.
 
 ## Ownership
@@ -26,7 +28,8 @@ release. No pending-input expiry was added.
 | Run start 1, cycles 200/201/202, drift 6, running turn 43 and brake 13 | Production directional bank through `RunningControls` |
 | Ordinary forward jump3, running jump4 and their grounded return | Same production bank through `AirborneControls` |
 | Vertical jump14/28, landing11 and the early67-69 Forward gate | Same production bank through `AirborneControls` |
-| Other airborne, low/prone, ledge and armed controllers | Existing host policies, pending later migrations |
+| Native ledge entry, hanging, release, protected climb and grounded return | Same production bank through `LedgeControls` |
+| Other airborne, low/prone, non-native ledge fallback and armed controllers | Existing host policies, pending later migrations |
 | Host pause/focus/menu/restart boundaries | Existing held-key rules and explicit reset |
 
 While the bank owns input, physical callbacks and internal directional

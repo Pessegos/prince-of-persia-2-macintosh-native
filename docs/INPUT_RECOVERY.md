@@ -659,9 +659,9 @@ bank/controller audit or add an expiry to the current slot.
 
 ## Implementation Order
 
-The first four production stages cover deferred standing-turn,
+The first five production stages cover deferred standing-turn,
 cautious-step, grounded running, ordinary/running jump3/4 and vertical14/28
-through landing11 input:
+through landing11, plus native hanging/release/climb input:
 [scope and validation](research/directional-bank-runtime.md).
 The independent research models remain separate from runtime. Continue the
 remaining families using the recovered gates, extending native-bank ownership
@@ -675,7 +675,11 @@ SEQS3/4 and its pose26/44 clears replaces the old arc slot/reset paths;
 The [vertical handoff](research/vertical-input-handoff.md) extends this into
 14/28/11, with early67-69 Forward admission and protected83 clearing. Its
 16 actual host cases now agree with112 bounded original/model steps. Other
-airborne and ledge families are still separate work.
+airborne families are still separate work. The
+[ledge handoff](research/ledge-input-handoff.md) now carries the bank through
+native entry, hanging, release and protected climbing. Its1170 bounded original
+gate/prefix cases match the independent model; Ctrl hold and grip-delayed Up
+use that gate, while existing protected-climb port tolerances stay explicit.
 
 1. Translate five native latches, sampling, facing remap and consume/reset
    operations in `mac_input`. Test every directional/modifier transition.

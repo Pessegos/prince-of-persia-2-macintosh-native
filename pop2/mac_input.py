@@ -86,6 +86,17 @@ def standing_input_request(bank, pose, *, mode=0, sequence=2, sword=True):
     return bank, 'run' if forward else None
 
 
+def ledge_input_request(bank, *, grip=0, alive=True, sequence_mode=0):
+    """GenCtrl6:18e0-191e, before the separate terrain/support decisions."""
+    if not alive:
+        return 'release'
+    if grip == 0 and bank.up:
+        return 'climb'
+    if not bank.modifier or sequence_mode == 11:
+        return 'release'
+    return None
+
+
 def vertical_input_request(bank, pose, *, mode=1):
     """GenCtrl6:0576-059c/064c-0660; bank.left is facing-relative Forward."""
     if mode in (4, 5, 9):

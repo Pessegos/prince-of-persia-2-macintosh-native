@@ -116,7 +116,7 @@ class VerticalSceneTests(unittest.TestCase):
 
 
 class VerticalLedgeBoundaryTests(unittest.TestCase):
-    def test_actual_cavern_ledge_entry_retires_the_bank_before_its_same_67_pose(self):
+    def test_actual_cavern_ledge_entry_transfers_bank_without_ordinary_forward_gate(self):
         from unittest.mock import patch
         from pop2.mac_input import DirectionalInput
         from tests.test_game_ui import GameWindowTests
@@ -138,7 +138,8 @@ class VerticalLedgeBoundaryTests(unittest.TestCase):
                         for _ in range(3):
                             fixture.tick()
                             self.assertEqual(scene.sequence_state.sequence_id, 24)
-                            self.assertIsNone(scene.directional_input)
+                            self.assertEqual(scene.directional_input.words(), (0, 0, 0, 0, 0))
+                            self.assertIsNone(scene.pending_action)
                         self.assertEqual(scene.action, 69)
         finally:
             fixture.doCleanups()

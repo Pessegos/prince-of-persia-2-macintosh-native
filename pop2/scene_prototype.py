@@ -89,7 +89,8 @@ from pop2.crevices import (
 from pop2.game_ui import MacintoshFont
 from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS
 from pop2.running_controls import RUN_INPUT_SEQUENCES
-from pop2.airborne_controls import AirborneControls, AIRBORNE_TAKEOFF_SEQUENCES
+from pop2.airborne_controls import AIRBORNE_TAKEOFF_SEQUENCES
+from pop2.ledge_controls import LedgeControls
 
 
 SCALE = 2
@@ -160,7 +161,7 @@ def next_animation_deadline(previous_deadline, now, interval_ms=ANIMATION_INTERV
     return deadline, delay_ms
 
 
-class ScenePrototype(WindowControls, AirborneControls):
+class ScenePrototype(WindowControls, LedgeControls):
     @property
     def room_id(self):
         return self.game.room_id
@@ -588,14 +589,10 @@ class ScenePrototype(WindowControls, AirborneControls):
             # Physical Down becomes logical Up in the inverted world. Use
             # the same press handler as upright Up, including deferred jumps.
             return self.press_up()
-        if self.native_ledge:
-            previous = getattr(self, f"{key}_held")
-            setattr(self, f"{key}_held", pressed)
-            if self.ledge_climbing and pressed and not previous:
-                if key == "down" and not self.up_held:
-                    self.buffer_input(BufferedCommand("crouch"))
-            return "break"
         if self.waiting_key(key, pressed):
+            return "break"
+        if self.native_ledge:
+            setattr(self, f"{key}_held", pressed)
             return "break"
         if key == "up":
             if (
@@ -902,11 +899,11 @@ class ScenePrototype(WindowControls, AirborneControls):
             return "break"
         if self._opening_active():
             return "break"
-        if self.native_ledge and not self.ledge_climbing:
-            return "break"
-
         if self.waiting_controls_available():
             self.waiting_horizontal(direction, pressed)
+            return "break"
+
+        if self.native_ledge and not self.ledge_climbing:
             return "break"
 
         self.queue_released_jump_direction(previous_direction)
@@ -1677,7 +1674,8 @@ class ScenePrototype(WindowControls, AirborneControls):
             return False
         if self.native_ledge:
             if self.ledge_grip_delay or self.sequence_state.action not in range(87, 100):
-                self.ledge_climb_requested = True
+                self.waiting_controls_available()
+                self.latch_waiting_command(BufferedCommand("jump"))
                 return False
             self.ledge_climb_requested = False
             self.ledge_climbing = True
@@ -1694,6 +1692,7 @@ class ScenePrototype(WindowControls, AirborneControls):
                 player.sword_lost = True
                 if sequence == 10:
                     sequence = 236
+            self.consume_ledge_input("climb")
             self.start_sequence(sequence)
             self.status.set("Boarding the ship" if ship else
                             "Blocked climb: original SEQS:73" if sequence == 73 else
@@ -1720,6 +1719,7 @@ class ScenePrototype(WindowControls, AirborneControls):
         self.player_x += offset
         self.sequence_state.horizontal_velocity = self.sequence_state.vertical_velocity = 0
         self.sequence_state.sequence_mode = 0
+        self.begin_ledge_controls(sequence_id)
         self.start_sequence(sequence_id)
         if sequence_id == 15:
             if getattr(self, "audio", None) is not None:
@@ -1759,13 +1759,15 @@ class ScenePrototype(WindowControls, AirborneControls):
         if state.action not in range(87, 100):
             return
         self.ledge_grip_delay = max(0, self.ledge_grip_delay - 1)
-        # GenCtrl 6:18f2-1968: climbing takes priority over releasing Shift.
-        if (self.up_held or self.ledge_climb_requested) and not self.ledge_grip_delay:
+        # GenCtrl6:18e0-191e reads the same bank before terrain/support.
+        request = self.native_ledge_request()
+        if request == "climb":
             self.start_ledge_climb()
-        elif not self.shift_held or state.sequence_mode == 11:
+        elif request == "release":
             sequence, offset = self.level_map.release_ledge(
                 self.room_id, self.terrain_motion.row, state, self.frames[state.action],
                 next_action=self.sequence_runtime.peek_frame().action)
+            self.consume_ledge_input("release")
             self.ledge_hanging = self.native_ledge = False
             self.ledge_climb_requested = False
             self.terrain_motion.falling = sequence in (23, 99)
@@ -2034,7 +2036,7 @@ class ScenePrototype(WindowControls, AirborneControls):
             self.resume_queued_turn_during_standing_turn()
         self.update_native_ledge()
         if (
-            self.ledge_climb_requested
+            self.ledge_climb_requested and not self.native_ledge
             and self.sequence_state.sequence_id == LEDGE_HANG_SEQUENCE
         ):
             self.start_ledge_climb()
@@ -2070,12 +2072,15 @@ class ScenePrototype(WindowControls, AirborneControls):
                 frame = self.sequence_runtime.next_frame()
         climb_completed = self.ledge_climbing and frame.sequence_id == IDLE_SEQUENCE
         if climb_completed:
+            native_climb = self.native_ledge
+            if native_climb:
+                self.finish_native_ledge_controls()
             self.ledge_hanging = self.ledge_climbing = self.native_ledge = False
             self.sequence_state.current_y = 0
             self.sequence_state.horizontal_velocity = self.sequence_state.vertical_velocity = 0
             command = self.pending_action
             direction = self.horizontal_input
-            if (command is not None and command.kind == "jump" and direction
+            if (not native_climb and command is not None and command.kind == "jump" and direction
                     and command.direction == direction and not self.up_held):
                 # A brief overlap with the climb's Up is not a latched jump
                 # when only the horizontal half of the chord remains held.

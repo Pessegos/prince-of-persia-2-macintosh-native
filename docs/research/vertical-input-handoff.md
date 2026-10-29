@@ -86,6 +86,12 @@ The selector test is also included in asset-free GitHub CI.
 
 ## Boundary with ledges and next stage
 
+Historical boundary for this fourth stage: the subsequent
+[ledge migration](ledge-input-handoff.md) now transfers the same bank into
+native24 and through hanging/release/climb. The two terrain regressions retain
+their67-69 pose checks and now assert that new ownership instead of retirement.
+The remaining text records the boundary before that fifth stage.
+
 Real level3 ledge entries in both facings select24 and retire the bank before
 their first67-69 poses. They must not be mistaken for ordinary14/28 just
 because the pose numbers coincide. Two actual terrain fixtures verify this

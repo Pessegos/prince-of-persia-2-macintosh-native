@@ -677,12 +677,16 @@ class GameWindowTests(unittest.TestCase):
                             scene.set_key_state(key, True)
                             if kind != 'sword_held':
                                 scene.set_key_state(key, False)
-                        if kind.startswith('sword'):
-                            # Ctrl is sampled at standing; a released climb tap
-                            # no longer creates a future draw command.
-                            self.assertIsNone(scene.pending_action)
-                        else:
-                            self.assertIsNotNone(scene.pending_action)
+                        # The native ledge now owns one directional bank,
+                        # including protected-climb taps. Ctrl still draws
+                        # only if held through the standing gate.
+                        self.assertIsNone(scene.pending_action)
+                        if kind == 'turn':
+                            self.assertLess(scene.directional_input.remap(
+                                facing_right=bool(facing)).right, 0)
+                        elif kind in ('crouch', 'jump'):
+                            self.assertLess(getattr(scene.directional_input,
+                                                    'down' if kind == 'crouch' else 'up'), 0)
                         self.assertEqual(scene.action, action)
                         for _ in range(30):
                             self.tick()
@@ -958,7 +962,10 @@ class GameWindowTests(unittest.TestCase):
                             self.assertTrue(scene.ledge_climbing)
                             self.assertEqual(scene.action, release_pose)
                             scene.horizontal_key(None, direction, True)
-                            self.assertEqual(scene.pending_action.kind, 'jump')
+                            self.assertIsNone(scene.pending_action)
+                            self.assertLess(scene.directional_input.up, 0)
+                            self.assertLess(getattr(scene.directional_input,
+                                                    'right' if direction > 0 else 'left'), 0)
                             if paused_release:
                                 scene.set_paused(True)
                             scene.set_key_state('up', False)
