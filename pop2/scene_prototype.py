@@ -584,6 +584,10 @@ class ScenePrototype(WindowControls, RunningControls):
         if self._opening_active():
             setattr(self, f"{key}_held", pressed)
             return "break"
+        if key == 'up' and pressed:
+            # Physical Down becomes logical Up in the inverted world. Use
+            # the same press handler as upright Up, including deferred jumps.
+            return self.press_up()
         if self.native_ledge:
             previous = getattr(self, f"{key}_held")
             setattr(self, f"{key}_held", pressed)
@@ -1006,6 +1010,9 @@ class ScenePrototype(WindowControls, RunningControls):
             # Physical Up is logical Down under GenCtrl's 4:3e1c swap.
             # Its dedicated binding must use the same mapping as key release.
             return self.set_key_state('up', True)
+        return self.press_up()
+
+    def press_up(self):
         if self.paused or self.dev_menu is not None:
             return "break"
         if self.up_held:

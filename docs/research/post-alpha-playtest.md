@@ -16,3 +16,23 @@ top-level HWND before auto-pausing on empty Tk focus; a real focus transfer to
 another window retains the previous pause behavior. Unit checks cover this
 distinction without taking physical focus. Reproducing NVIDIA's first-recording
 overlay on the user's machine remains a manual check.
+
+## Inverted jump key admission
+
+The inverted key mapping already maps physical Down to logical Up. Grounded
+running uses the migrated directional bank and correctly starts a held jump.
+The remaining host paths were inconsistent: upright Up used `up_key` on the
+press, whereas inverted Down reached a generic branch which deferred the same
+request until release. Both now call one logical-Up press handler, after the
+existing mapping and modal guards. No new queue, expiry or native rule is added.
+
+Hidden scene checks compare upright/inverted held run-jump traces and a second
+jump press during an ongoing jump. The latter failed before the correction:
+only the upright key created the deferred request. This is host input parity,
+not a claim that all upside-down controls match the Macintosh frame for frame.
+
+## Retry report
+
+The user retested Alt+R and could no longer reproduce the reported gate state
+problem. Existing checkpoint-world restoration remains unchanged, including
+its saved collected-item state and intentional persistent native globals.
