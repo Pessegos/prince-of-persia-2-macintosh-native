@@ -3101,6 +3101,15 @@ class ScenePrototype(WindowControls, RunningControls):
         self.next_animation_at = time.perf_counter()
         self.render()
 
+    def show_remaining_time(self):
+        # ReadKeyboard 2:4850-485e: Space requests KeepTime's HUD message;
+        # it does not start or rewind the deferred campaign clock.
+        if not self.game.story.clock_started:
+            return
+        self.time_message = self.game.story.message_text()
+        self.time_message_frames = MESSAGE_FRAMES
+        self.render()
+
     def advance_story_clock(self):
         # KeepTime 2:51f4 runs once per FrameAdv for a living Prince; at zero
         # FrameAdv calls TimeUp 2:7194 (PlayNIS 28 -> tree variant 9).

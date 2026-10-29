@@ -448,6 +448,13 @@ class ExternalCaptureKeyTests(unittest.TestCase):
 
 
 class FocusPauseTests(unittest.TestCase):
+    def test_native_menu_focus_is_not_a_switch_to_another_application(self):
+        host = self.host
+        host.root.focus_get.return_value = None
+        with patch('pop2.window_controls.window_is_foreground', return_value=True):
+            host.pause_if_unfocused()
+        host.set_paused.assert_not_called()
+
     def setUp(self):
         self.host = WindowControls()
         self.host.root = Mock()

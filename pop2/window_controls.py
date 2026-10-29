@@ -23,6 +23,25 @@ RESUME_COMMAND_KEYS = frozenset({
 EXTERNAL_CAPTURE_KEYS = frozenset({'F9', 'F10'})
 
 
+def window_is_foreground(root):
+    """Native menu/capture activation can clear Tk focus without leaving us."""
+    if sys.platform != 'win32':
+        return False
+    try:
+        handle = root.winfo_id()
+        if not isinstance(handle, int):
+            return False
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        user32.GetForegroundWindow.restype = wintypes.HWND
+        user32.GetAncestor.argtypes = (wintypes.HWND, wintypes.UINT)
+        user32.GetAncestor.restype = wintypes.HWND
+        return user32.GetAncestor(handle, 2) == user32.GetForegroundWindow()
+    except (tk.TclError, OSError):
+        return False
+
+
 def alt_pressed(event, held_keys=()):
     # Tk's Mod1 (0x8) is Num Lock on Windows, but Alt on X11.
     mask = (0x10 | 0x20000) if sys.platform == "win32" else (0x8 | 0x20000)
@@ -191,6 +210,8 @@ class WindowControls:
         try:
             focused = self.root.focus_get()
         except tk.TclError:
+            return
+        if focused is None and window_is_foreground(self.root):
             return
         if focused is None or focused.winfo_toplevel() is not self.root:
             if getattr(self, "game_menu", None) is not None:
@@ -1103,6 +1124,12 @@ class WindowControls:
                                      or is_resume_key(event, self.window_keys_down)):
                     self.restart_after_death(preserve_controls=True)
                 return "break"
+            if (event.keysym == 'space' and not alt and not event.state & (0x4 | 0x40)
+                    and self.gameplay_controls_available()
+                    and (show_time := getattr(self, 'show_remaining_time', None)) is not None):
+                if not repeated:
+                    show_time()
+                return 'break'
             if (event.keysym.lower() == 'k' and getattr(self, 'god_mode', False)
                     and not self.paused and self.gameplay_controls_available()
                     and self.combat is not None and self.combat.player.alive
