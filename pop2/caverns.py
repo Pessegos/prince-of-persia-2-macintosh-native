@@ -12,7 +12,7 @@ from pop2.paths import ASSET_DIR
 from pop2.cavern_retouch import retouched_door_sprite, retouched_room_commands, retouched_sprite
 from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.render_opening import OpeningRoom, decode_ctbl, decode_shap, load_resource_file
-from pop2.terrain import character_row, floor_contact_x, floor_y
+from pop2.terrain import character_row, floor_contact_x
 
 
 def drawn_actor_columns(bounds, facing):
@@ -72,9 +72,10 @@ class CavernRoom(OpeningRoom):
                 and (state.animation_state in (1, 2, 6)
                      or 79 <= state.action <= 99)):
             # DrawFloorBuf omits intact ruins loose floors. Their near surface
-            # must still cover a head/reaching body below the supporting plane,
-            # while the hand above that plane remains visible. Reuse the exact
-            # cached surface alpha, not a rectangular crop of the actor.
+            # must still cover a reaching actor inside the drawn slab. Its
+            # perspective surface extends above the logical floor plane too;
+            # leaving that part out exposes detached fingers. Reuse the exact
+            # cached silhouette, not a rectangular crop of the actor.
             mask = mask.copy()
             for surface_row, (cover, (x, y)) in self.floor_surface.items():
                 if surface_row < row:
@@ -1161,15 +1162,12 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         cell = tuple(command[8:10])
         if (level_number in RUINS_LEVELS and layer == 'back' and library == 4
                 and 3514 <= index <= 3519 and 0 <= row < 3):
-            # Ruins floor surface pieces; retain only the part below the
-            # logical supporting plane. Commands already reflect fallen slabs.
-            top = max(0, floor_y(row) - position[1])
-            if top < sprite.height:
-                cover = sprite.getchannel('A').crop((0, top, sprite.width, sprite.height))
-                combined = merge_positioned_mask(floor_surface.get(row), cover,
-                                                  (position[0], position[1] + top))
-                if combined is not None:
-                    floor_surface[row] = combined
+            # Preserve the full drawn slab surface, including its perspective
+            # top. Commands already reflect fallen slabs and their exact clips.
+            combined = merge_positioned_mask(floor_surface.get(row),
+                                              sprite.getchannel('A'), position)
+            if combined is not None:
+                floor_surface[row] = combined
         if layer == 'back' and library == 4 and index in (3563, 3542) and cell in gate_cells:
             # DrawCaveGate anchors the stone one column right of its tile.
             # The repaint caller may be a different cell, even on another row.

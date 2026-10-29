@@ -47,9 +47,9 @@ room4 `floor_redraw` list is empty for the intact loose-platform layout;
 QuickFloor2:69e6-6ac4 alone cannot repaint those pixels. Static scenery already
 contains the corresponding Ruins surface SHAPs3514-3519.
 
-Cache their clipped alpha below the supporting plane (row*120+106), and apply
-it only to the Prince reaching/hanging below a higher floor. The hand above
-the plane and the turban below the slab stay visible. No actor position,
+Cache their full clipped surface alpha, and apply it only to the Prince
+reaching/hanging below a higher floor. Pixels outside the drawn slab, including
+the turban below its face, stay visible. No actor position,
 animation, collision, resource or save schema changes. Commands come from the
 current scenery variant, so fallen slabs rebuild the cover; reveal redraws
 erase previous covers just as they erase other foreground masks. This is a
@@ -59,6 +59,15 @@ Scene regressions cover both visible leaks and disappearing slab surfaces.
 Viewport samples include the one-pixel room origin; background samples must
 subtract that origin. Incorrect unshifted samples initially compared neighboring
 rock pixels rather than the actual covered pixel.
+
+The user's follow-up screenshot exposed detached fingers above the logical
+supporting plane (Y226). The initial cover deliberately omitted that band,
+which was incorrect: the perspective surface begins higher than the logical
+plane. It now includes the entire surface silhouette. The regression samples
+the actual finger pixels at viewport (104,222), (105,223) and (107,224), and
+checks all hanging/swing poses87-99 against the scenery under that silhouette.
+The former hand-preservation expectation is replaced by the user's corrected
+requirement; pixels outside the slab are still tested for visibility.
 
 The room8 body split during climb poses135-144 is separate: the native DrawHalf
 surface pass itself crosses the body. The committed repair preserves it. A
