@@ -63,7 +63,7 @@ class RunningSceneTests(unittest.TestCase):
                 scene.level_map.run_jump_offset.return_value = 0
                 self.assertTrue(scene.update_waiting_controls())
                 self.assertEqual(scene.sequence_state.sequence_id, 4)
-                self.assertIsNone(scene.directional_input)
+                self.assertEqual(scene.directional_input.words(), (0, 0, 1, 0, 0))
                 self.assertIsNone(scene.pending_action)
 
     def test_released_up_and_down_taps_do_not_replace_each_other_during_drift(self):

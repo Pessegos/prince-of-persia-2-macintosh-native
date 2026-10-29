@@ -3,8 +3,9 @@
 The input research is now used by a production `DirectionalInput` bank in
 `pop2/mac_input.py`. The first stage replaces deferred input during
 standing turns and cautious steps, including the ordinary ready gate at their
-end. The second stage extends ownership through grounded running, described
-below. This does **not** replace input across every controller yet.
+end. The second stage extends ownership through grounded running; the third
+carries the same bank through ordinary/running jumps3/4 and grounded return.
+This does **not** replace input across every controller yet.
 
 ## Ownership
 
@@ -21,7 +22,8 @@ release. No pending-input expiry was added.
 | --- | --- |
 | Standing turn entered through the scene, cautious step, their subsequent ordinary ready/idle gate | Production directional bank |
 | Run start 1, cycles 200/201/202, drift 6, running turn 43 and brake 13 | Production directional bank through `RunningControls` |
-| Airborne, low/prone, ledge and armed controllers | Existing host policies, pending later migrations |
+| Ordinary forward jump3, running jump4 and their grounded return | Same production bank through `AirborneControls` |
+| Other airborne/vertical, low/prone, ledge and armed controllers | Existing host policies, pending later migrations |
 | Host pause/focus/menu/restart boundaries | Existing held-key rules and explicit reset |
 
 While the bank owns input, physical callbacks and internal directional
@@ -158,11 +160,10 @@ legacy requests can be imported once, as in the first stage.
   Remapping uses the current facing, including the drift's direction flip.
 
 DoRunJump (6:1c14) still checks pose 7-14 and the existing geometry admission.
-Rejecting a jump preserves pending Up. An accepted jump retires the grounded
-bank on entry to sequence 4. The running-jump arc itself remains outside this
-stage: its existing pose-44 clear runs, and grounded return seeds the bank
-from the held keys. This is not full native saved-bank continuity through
-airborne controllers.
+Rejecting a jump preserves pending Up. In this second stage an accepted jump
+retired the grounded bank on entry to sequence4 and grounded return seeded
+it again. The third stage below replaces that boundary with continuous bank
+ownership and native takeoff consumption.
 
 Existing host tolerances remain explicit and tested:
 
@@ -207,6 +208,80 @@ animation/physics/FrameAdv parity or native equivalence for host tolerances.
 ```
 
 Output digest: `226500f57e6f0add94a1498100e5e89a9a3acc2e53add05b7e8f605fba4a7470`.
-Original executable digest is unchanged. Airborne/low/prone/ledge/armed
-migration, ordinary vertical/pickup admission and full update ordering remain
-separate work; do not restart the already completed bank/action audits.
+Original executable digest is unchanged. The remaining controller migrations,
+ordinary vertical/pickup admission and full update ordering remain separate
+work; do not restart the already completed bank/action audits.
+
+## Third stage: ordinary and running jump arcs
+
+`pop2/airborne_controls.py` keeps the existing bank alive through SEQS3/4.
+Takeoff follows the already recovered action bodies: forward jump6:15ea
+consumes Forward/Up while preserving other directions and the modifier;
+accepted running jump6:1c14 clears directions and consumes Up. A rejected
+running jump still leaves pending Up intact. These are the same operations
+as the independent [action model](input-action-consumption.md), not a new
+recovery of those routines.
+
+Airborne physical callbacks sample the bank without dispatching. At the
+simulation boundary GenCtrl6:074a-0760 clears its four directional latches
+at displayed poses26/44, preserving the modifier. That clear does not run
+on every event callback, nor against a just-selected arc's previous displayed
+pose. The grounded selector receives this same bank after the SEQS link.
+The old SEQS3 directional pending-slot reset and running-jump slot/reset
+flag are removed. Scripted directional requests entering an owned arc are
+imported once; callbacks do not also populate `pending_action`.
+
+The [handoff diagnostic](airborne-handoff-audit.md) now has zero host priority
+differences in its eight actual platform cases. Early released taps still
+clear at26. Late Up/Down taps now choose Up in both orders and facings.
+When Forward stays held after an ordinary jump and Up is released, the
+grounded gate can select Run directly instead of displaying a transient idle
+frame. The prior animation test waited forever for that idle; it now checks
+the full16..33 arc and immediate Run1 with a bounded loop. This follows
+the existing sampler and ready-gate rules, not an added landing shortcut.
+
+Preserved port policies are explicit:
+
+- Automatic held-jump repetition can be cancelled by releasing Up. A fresh
+  late tap remains distinct from that automatic repeat.
+- Releasing horizontal while Up remains held can request vertical wall
+  alignment/climb. A policy flag accompanies the same Up latch; it is not
+  a second executable directional queue. Physics snapshots that intent
+  before retiring the bank on a wall/fall interruption.
+- Rapid identical-jump filtering and the startup chord windows remain.
+- Upside-down physical key mapping occurs once before the bank. Ctrl does
+  not interrupt the arc or brake, and released Ctrl cannot draw later.
+- Pause preserves ordinary held-key semantics; menu/focus/restart clears
+  discard the bank and followup flags. Fall/death/ledge/armed interruptions
+  retire ownership rather than replaying the interrupted takeoff.
+
+`tests/test_airborne_controls.py` rejects the old priority/slot behavior on
+real scenery and checks takeoff consumption, modifier-preserving resets,
+inverted late taps, automatic-repeat cancellation and modal reset. Existing
+animation/input/wall-climb tests now inspect bank metadata in migrated arcs;
+their movement/pose/facing and successful-climb expectations remain, except
+for the direct grounded Run described above. Vertical jump28/14, wall recovery,
+low/prone, ledge and armed controllers are still outside this stage.
+
+### Stage validation
+
+- The six new airborne tests plus the existing running/input/animation tests:
+  173 tests passed. The actual wall-climb tests passed in both facings and
+  with horizontal release during pause.
+- Full discovery with `POP2_SHARED_DESKTOP=1`: 3,236 tests in540.382s,
+  ten explicit skips and one old assertion expecting `pending_action` in
+  the inverted-jump regression. Its fixture was updated to supply a real
+  takeoff key/release before the fresh press and compare the directional
+  banks instead. All nine playtest regressions then passed in2.696s.
+  Production code did not change during/after that full run; no second full
+  import was needed for the fixture-only correction. The full run's sole
+  failure is recorded here rather than reported as a green discovery run.
+- Ruff F/E9, dependency check, recovery catalog and whitespace checks pass.
+  The native/host handoff diagnostic retains the exclusions recorded above.
+
+The obsolete running-jump-clear flag remains accepted by the version-one save
+decoder for compatibility only. It is no longer produced/read by the runtime.
+Current progress saves reset input on load rather than persisting a live bank;
+the format and entry/checkpoint semantics are unchanged. No original assets
+were modified, no live game/emulator was operated, and the physical-focus
+tests remain for an exclusive-desktop session.

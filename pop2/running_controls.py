@@ -30,8 +30,6 @@ class RunningControls(WaitingControls):
                     bank = bank.consume('right' if state.facing else 'left')
                 self.directional_input = bank
                 self.waiting_step_direction = 0
-                if getattr(self, 'running_jump_controls_cleared', False):
-                    self.run_repeat_up = self.up_held and self.jump_repeat_armed
         return super().waiting_controls_available()
 
     def begin_running_controls(self, direction):

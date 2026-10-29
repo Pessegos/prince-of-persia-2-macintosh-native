@@ -88,7 +88,8 @@ from pop2.crevices import (
 )
 from pop2.game_ui import MacintoshFont
 from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS
-from pop2.running_controls import RunningControls, RUN_INPUT_SEQUENCES
+from pop2.running_controls import RUN_INPUT_SEQUENCES
+from pop2.airborne_controls import AirborneControls, AIRBORNE_INPUT_SEQUENCES
 
 
 SCALE = 2
@@ -159,7 +160,7 @@ def next_animation_deadline(previous_deadline, now, interval_ms=ANIMATION_INTERV
     return deadline, delay_ms
 
 
-class ScenePrototype(WindowControls, RunningControls):
+class ScenePrototype(WindowControls, AirborneControls):
     @property
     def room_id(self):
         return self.game.room_id
@@ -278,7 +279,6 @@ class ScenePrototype(WindowControls, RunningControls):
         self.pending_potion_pickup = None
         self.queue_grace_remaining_ms = 0
         self.queue_grace_command = None
-        self.running_jump_controls_cleared = False
         self.run_cycle_boundary_pending = False
         self.horizontal_input = 0
         self.up_held = False
@@ -1383,17 +1383,7 @@ class ScenePrototype(WindowControls, RunningControls):
         if command is None:
             return
         state = self.sequence_state
-        if (state.sequence_id == JUMP_FORWARD_SEQUENCE and state.action == 26
-                and command.kind in ('horizontal', 'jump', 'crouch', 'crawl')):
-            # GenCtrl 6:074a-0760 clears all four directions at pose26.
-            # A still-held key can be sampled afresh at the next legal gate.
-            # Keep the host's explicit vertical follow-up from releasing the
-            # horizontal half of a held-Up chord. Wall contact must still
-            # receive that held climb request; a released Up is discarded.
-            held_vertical = command.kind == 'jump' and not command.direction and self.up_held
-            self.pending_action = command if held_vertical else None
-            self.jump_started_for_press = self.up_held
-        elif (state.sequence_id == CROUCH_RISE_SEQUENCE and state.animation_state == 5
+        if (state.sequence_id == CROUCH_RISE_SEQUENCE and state.animation_state == 5
               and command.kind in ('horizontal', 'crawl')):
             # 6:0576-059c also clears released turns during the low rise.
             # Keep the separately documented vertical wall-bump/climb
@@ -1420,27 +1410,6 @@ class ScenePrototype(WindowControls, RunningControls):
             self.pending_action = None
         self.jump_started_for_press = self.up_held
         self.jump_repeat_armed = self.up_held
-
-    def update_running_jump_controls(self):
-        state = self.sequence_state
-        if state.sequence_id == RUN_JUMP_SEQUENCE and state.action == 44:
-            # GenCtrl 6:074a-0760 -> ClearControls 4:3e3a. Directional
-            # requests from the arc do not survive the final landing pose.
-            if self.pending_action is not None and self.pending_action.kind in (
-                "horizontal", "jump", "crouch", "crawl"
-            ):
-                self.pending_action = None
-            self.running_jump_controls_cleared = True
-            return
-        if not getattr(self, "running_jump_controls_cleared", False):
-            return
-        self.running_jump_controls_cleared = False
-        if state.sequence_id not in RUN_CYCLE_SEQUENCES:
-            return
-        # The grounded bank samples held directions after the arc's clear.
-        # No executable command is copied out of the old airborne slot here.
-        self.waiting_controls_available()
-        self.run_repeat_up = self.up_held and self.jump_repeat_armed
 
     def resume_queued_crouch_during_run(self):
         # Compatibility entry point; the directional bank is the sole dispatcher.
@@ -1478,6 +1447,8 @@ class ScenePrototype(WindowControls, RunningControls):
         return self.update_waiting_controls()
 
     def start_sequence(self, sequence_id):
+        if sequence_id in AIRBORNE_INPUT_SEQUENCES:
+            self.begin_airborne_controls(sequence_id)
         if sequence_id in RUN_INPUT_SEQUENCES:
             self.waiting_step_direction = 0
         if not self.waiting_sequence(sequence_id):
@@ -1847,7 +1818,6 @@ class ScenePrototype(WindowControls, RunningControls):
         if self.run_active:
             self.run_stop_requested = True
         self.pending_action = None
-        self.running_jump_controls_cleared = False
         self.pending_potion_pickup = None
 
     def prepare_next_sequence(self, run_cycle_boundary=False):
@@ -2050,7 +2020,7 @@ class ScenePrototype(WindowControls, RunningControls):
             return
         self.update_native_input_boundaries()
         self.update_fall_recovery_controls()
-        self.update_running_jump_controls()
+        self.update_airborne_controls()
         if not self.resume_combat_turn():
             if not self.resume_sword_attack_after_block():
                 self.resume_sword_parry_recoil()
@@ -2374,10 +2344,11 @@ class ScenePrototype(WindowControls, RunningControls):
         before_x = self.sequence_state.target_x
         command = self.pending_action
         if (command is None and self.waiting_controls_available()
-                and self.directional_input.up < 0
-                and not self.directional_input.left and not self.directional_input.right):
-            # Carry the existing grounded wall-bump/climb tolerance across
-            # an interruption into the still-unmigrated airborne controller.
+                and (getattr(self, "airborne_vertical_followup", False) and self.up_held
+                     or self.directional_input.up < 0
+                     and not self.directional_input.left and not self.directional_input.right)):
+            # Snapshot the held vertical wall-climb policy before physics
+            # retires the bank on an actual wall/fall interruption.
             command = BufferedCommand('jump')
         from pop2.jump_descent import capture_jump_end, descent_drawing
 

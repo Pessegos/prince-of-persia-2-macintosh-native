@@ -1024,9 +1024,8 @@ class AnimationDataTests(unittest.TestCase):
                     scene.horizontal_key(None, -direction, True)
                     self.assertEqual(vars(scene.sequence_state), before)
                     if facing:
-                        self.assertEqual(
-                            scene.pending_action, BufferedCommand("jump", -1, running=True)
-                        )
+                        self.assertIsNone(scene.pending_action)
+                        self.assertLess(scene.directional_input.left, 0)
                     else:
                         # ReadKeyboard gives Left priority over Right.
                         self.assertIsNone(scene.pending_action)
@@ -1053,9 +1052,8 @@ class AnimationDataTests(unittest.TestCase):
                 scene.horizontal_key(None, -1, True)
                 scene.horizontal_key(None, -1, False)
                 self.assertEqual(vars(scene.sequence_state), before)
-                self.assertEqual(
-                    scene.pending_action, BufferedCommand("jump", 1, running=True)
-                )
+                self.assertIsNone(scene.pending_action)
+                self.assertLess(scene.directional_input.right, 0)
                 actions = [scene.action]
                 for _ in range(46 - pose):
                     scene.advance_animation()
@@ -1113,9 +1111,8 @@ class AnimationDataTests(unittest.TestCase):
                         before = vars(scene.sequence_state).copy()
                         scene.up_key(None)
                         self.assertEqual(vars(scene.sequence_state), before)
-                        self.assertEqual(
-                            scene.pending_action, BufferedCommand("jump", direction, running=True)
-                        )
+                        self.assertIsNone(scene.pending_action)
+                        self.assertLess(scene.directional_input.up, 0)
                         if not held:
                             scene.set_key_state("up", False)
                         actions = [scene.action]
@@ -1141,7 +1138,8 @@ class AnimationDataTests(unittest.TestCase):
         for _ in range(4):
             scene.advance_animation()
         scene.up_key(None)
-        self.assertEqual(scene.pending_action, BufferedCommand("jump", 1, running=True))
+        self.assertIsNone(scene.pending_action)
+        self.assertLess(scene.directional_input.up, 0)
 
     def test_running_jump_discards_released_opposite_chord_at_final_landing_pose(self):
         for pose in range(34, 45):
@@ -1153,7 +1151,8 @@ class AnimationDataTests(unittest.TestCase):
                 scene.set_key_state("up", False)
                 scene.horizontal_key(None, 1, False)
                 scene.horizontal_key(None, -1, False)
-                self.assertIsNotNone(scene.pending_action)
+                self.assertIsNone(scene.pending_action)
+                self.assertLess(scene.directional_input.left, 0)
                 actions = [scene.action]
                 for _ in range(46 - pose):
                     scene.advance_animation()
@@ -1179,7 +1178,8 @@ class AnimationDataTests(unittest.TestCase):
                     scene.advance_animation()
                 self.assertEqual(scene.action, 44)
                 scene.pending_action = command
-                scene.update_running_jump_controls()
+                scene.update_airborne_controls()
+                self.assertEqual(scene.directional_input.words()[:4], (0, 0, 0, 0))
                 self.assertEqual(
                     scene.pending_action, command if command.kind == "sword_draw" else None
                 )
@@ -1449,10 +1449,15 @@ class AnimationDataTests(unittest.TestCase):
                     self.assertIsNone(scene.pending_action)
                     scene.set_key_state("up", False)
                     actions = [scene.action]
-                    while scene.sequence_state.sequence_id != IDLE_SEQUENCE:
+                    for _ in range(25):
                         scene.advance_animation()
                         actions.append(scene.action)
-                    self.assertEqual(actions, [*range(16, 34), 15])
+                        if scene.sequence_state.sequence_id != JUMP_FORWARD_SEQUENCE:
+                            break
+                    # Forward is still held. Native ClearControls26 lets it
+                    # be sampled again; the ready gate selects Run directly.
+                    self.assertEqual(actions, [*range(16, 34), 1])
+                    self.assertEqual(scene.sequence_state.sequence_id, RUN_START_SEQUENCE)
                     self.assertNotIn(160, actions)
 
     def test_forward_then_up_has_a_full_first_pose_chord_window(self):
@@ -1759,7 +1764,8 @@ class AnimationDataTests(unittest.TestCase):
 
         scene.horizontal_key(None, -1, True)
         scene.horizontal_key(None, -1, False)
-        self.assertEqual(scene.pending_action, BufferedCommand("horizontal", -1, "turn"))
+        self.assertIsNone(scene.pending_action)
+        self.assertLess(scene.directional_input.left, 0)
 
         actions = [scene.action]
         for _ in range(18):
@@ -1796,7 +1802,8 @@ class AnimationDataTests(unittest.TestCase):
                 else:
                     scene.horizontal_key(None, -1, True)
                     scene.up_key(None)
-                self.assertEqual(scene.pending_action, BufferedCommand("jump", -1))
+                self.assertIsNone(scene.pending_action)
+                self.assertEqual((scene.directional_input.left, scene.directional_input.up), (-1, -1))
                 scene.set_key_state("up", False)
                 scene.horizontal_key(None, -1, False)
 
@@ -1871,7 +1878,8 @@ class AnimationDataTests(unittest.TestCase):
         scene.set_key_state("up", False)
         scene.horizontal_key(None, 1, False)
 
-        self.assertEqual(scene.pending_action, BufferedCommand("jump", 1))
+        self.assertIsNone(scene.pending_action)
+        self.assertEqual((scene.directional_input.right, scene.directional_input.up), (-1, -1))
         for _ in range(13):
             scene.advance_animation()
         self.assertEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)

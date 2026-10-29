@@ -808,9 +808,14 @@ class GameWindowTests(unittest.TestCase):
                         scene.horizontal_key(None, -1, False)
                         self.assertEqual((scene.sequence_state.sequence_id, scene.action,
                                           scene.player_x), before)
-                        self.assertIsNotNone(scene.pending_action)
-                        self.assertEqual((scene.pending_action.kind, scene.pending_action.direction),
-                                         ('jump', 0))
+                        if scene.sequence_state.sequence_id in (3, 4):
+                            self.assertIsNone(scene.pending_action)
+                            self.assertLess(scene.directional_input.up, 0)
+                            self.assertTrue(scene.airborne_vertical_followup)
+                        else:
+                            self.assertIsNotNone(scene.pending_action)
+                            self.assertEqual((scene.pending_action.kind, scene.pending_action.direction),
+                                             ('jump', 0))
                         if paused_release:
                             scene.set_paused(False)
                         poses = []
@@ -864,9 +869,14 @@ class GameWindowTests(unittest.TestCase):
                             if paused_release:
                                 scene.set_paused(True)
                             scene.horizontal_key(None, direction, False)
-                            self.assertIsNotNone(scene.pending_action)
-                            self.assertEqual((scene.pending_action.kind, scene.pending_action.direction),
-                                             ('jump', 0))
+                            if scene.sequence_state.sequence_id in (3, 4):
+                                self.assertIsNone(scene.pending_action)
+                                self.assertLess(scene.directional_input.up, 0)
+                                self.assertTrue(scene.airborne_vertical_followup)
+                            else:
+                                self.assertIsNotNone(scene.pending_action)
+                                self.assertEqual((scene.pending_action.kind, scene.pending_action.direction),
+                                                 ('jump', 0))
                             if paused_release:
                                 scene.set_paused(False)
                             poses = []

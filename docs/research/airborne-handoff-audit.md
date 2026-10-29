@@ -3,7 +3,7 @@
 This block applies the already recovered input-bank rules to a missing runtime
 boundary. It does not redo the sampler/action matrices or enable another queue.
 
-## Concrete remaining difference
+## Difference recorded before migration
 
 On the actual level6 room8 platform, start an ordinary forward jump (SEQS3),
 then press/release Up followed by Down after displayed pose27. The current host
@@ -17,7 +17,7 @@ replace `pending_action`. The new standing gate can import only the last request
 The recovered original bank retains both fresh directional latches and chooses
 Up before Down at its ordinary ready gate.
 
-| Window / tap order | Original routing | Current host, both facings |
+| Window / tap order | Original routing | Host before migration, both facings |
 | --- | --- | --- |
 | Before pose26 / Up then Down | No action after reset | No extra action |
 | Before pose26 / Down then Up | No action after reset | No extra action |
@@ -67,7 +67,26 @@ Report SHA256:
 `c5acbd5d1ba9591aa4a5419c900e8d846a654a3728889af0587eac6d972c8beb`.
 The original file was read only and checked unchanged after execution.
 
-## Next runtime block
+## Runtime migration and repeat check
+
+The [third runtime stage](directional-bank-runtime.md#third-stage-ordinary-and-running-jump-arcs)
+now carries the same bank through SEQS3/4, including native takeoff consumption
+and pose26/44 resets. The old slot-based arc clears are removed. Repeating
+the unchanged diagnostic produces eight agreeing host cases, zero host
+priority differences and84 matching native/model steps. The original file
+digest remains unchanged. The new report is
+`rendered/input-queue-audit/airborne-bank-handoff.json`; the previous report
+above remains the recorded pre-migration result.
+Post-migration report SHA256:
+`4c596b6b0ffc527e5d41d4b3f5266fbb09a39a00aaf4cf765f0023d5b18f7060`.
+
+This repeat checks the concrete boundary; it does not rerun the earlier
+large sampler/action matrices or expand the native fixture's exclusions.
+Separate runtime tests cover running-jump44, inversion, modifiers, automatic
+repeat/cancellation, actual wall-climb paths and modal clears. Vertical/ledge,
+low/prone and armed bank ownership remains later work.
+
+## Migration requirements recorded before implementation
 
 Extend the existing directional bank through ordinary/running jump families3/4
 and their grounded return. Transfer ownership at takeoff rather than recreate

@@ -87,14 +87,19 @@ class PlaytestSceneTests(unittest.TestCase):
             scene.held_directions = [1]
             scene.horizontal_input = 1
             scene.run_active = True
+            scene.up_held = True
             scene.start_sequence(4)
             scene.sequence_runtime.next_frame()
+            # A real takeoff consumes its held Up. Supply the release before
+            # testing a new press in the arc, in physical key coordinates.
+            scene.set_key_state('down' if flipped else 'up', False)
             if flipped:
                 scene.set_key_state('down', True)
             else:
                 scene.up_key(None)
-            requests.append(scene.pending_action)
-        self.assertIsNotNone(requests[0])
+            self.assertIsNone(scene.pending_action)
+            requests.append(scene.directional_input)
+        self.assertLess(requests[0].up, 0)
         self.assertEqual(requests[0], requests[1])
 
     def test_ruins_loose_slab_covers_the_turban_and_fingers_inside_its_surface(self):

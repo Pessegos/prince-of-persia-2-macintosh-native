@@ -216,8 +216,13 @@ class InputRecoveryTests(unittest.TestCase):
                         self.assertEqual((scene.sequence_state.sequence_id, scene.action,
                                           scene.player_x), before)
                         if held_up:
-                            self.assertEqual((scene.pending_action.kind, scene.pending_action.direction,
-                                              scene.pending_action.running), ('jump', 0, False))
+                            if sequence == RUN_JUMP_SEQUENCE:
+                                self.assertIsNone(scene.pending_action)
+                                self.assertLess(scene.directional_input.up, 0)
+                                self.assertTrue(scene.airborne_vertical_followup)
+                            else:
+                                self.assertEqual((scene.pending_action.kind, scene.pending_action.direction,
+                                                  scene.pending_action.running), ('jump', 0, False))
                         else:
                             self.assertIsNone(scene.pending_action)
 
@@ -267,9 +272,9 @@ class InputRecoveryTests(unittest.TestCase):
                                 self.assertLess(scene.directional_input.up, 0)
                                 self.assertTrue(scene.run_vertical_followup)
                             else:
-                                self.assertIsNotNone(scene.pending_action)
-                                self.assertEqual((scene.pending_action.kind, scene.pending_action.direction,
-                                                  scene.pending_action.running), ('jump', 0, False))
+                                self.assertIsNone(scene.pending_action)
+                                self.assertLess(scene.directional_input.up, 0)
+                                self.assertTrue(scene.airborne_vertical_followup)
                         else:
                             self.assertIsNone(scene.pending_action)
 
@@ -460,8 +465,8 @@ class InputRecoveryTests(unittest.TestCase):
                 scene = self.forward_jump(21, facing)
                 scene.up_key(None)
                 scene.set_key_state('up', False)
-                self.assertEqual((scene.pending_action.kind, scene.pending_action.direction),
-                                 ('jump', 0))
+                self.assertIsNone(scene.pending_action)
+                self.assertLess(scene.directional_input.up, 0)
                 for _ in range(20):
                     scene.advance_animation()
                 self.assertEqual((scene.sequence_state.sequence_id, scene.action),
