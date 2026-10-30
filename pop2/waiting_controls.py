@@ -18,6 +18,12 @@ SHEATHE_SEQUENCES = (SWORD_SHEATHE_SEQUENCE, 93)
 # branch for their poses (IsDeadPos 4:47a0 is false there): latches survive
 # to the next standing or sheathe gate.
 ITEM_SEQUENCES = (78, 91)
+# The throne collapse (SEQS 237: 323/324, 180-183, then 185 held) and the
+# wake (SEQS 231: 185, 183-179, then SEQS 2) are mode 1 too. GenCtrl sends
+# 179-183 and IsDeadPos 185 to 6:0b5a, which for the Prince (slot 10) neither
+# reads nor clears a latch. The pickup (6:0b4c) and the vision (7:39ca) clear
+# them; a press during the wake waits for SEQS 2's pose 15.
+THRONE_SEQUENCES = (237, 231)
 
 
 class WaitingControls:
@@ -25,7 +31,7 @@ class WaitingControls:
     def waiting_sequence(sequence):
         return (sequence in (IDLE_SEQUENCE, STANDING_TURN_SEQUENCE, RUN_STOP_SEQUENCE, 44)
                 or 29 <= sequence <= 42 or sequence in SHEATHE_SEQUENCES
-                or sequence in ITEM_SEQUENCES)
+                or sequence in ITEM_SEQUENCES or sequence in THRONE_SEQUENCES)
 
     def begin_sheathe_controls(self):
         """PutSwordAway 6:2598: ClearControls, then Down=1, on the same bank.

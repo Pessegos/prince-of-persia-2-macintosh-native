@@ -423,6 +423,77 @@ class RuinsControllerTests(unittest.TestCase):
         environment.entered_room()
         self.assertEqual(heard, [181, 182])
 
+    def test_presses_during_the_throne_wake_wait_for_the_standing_gate(self):
+        # SEQS 237/231 are mode 1; GenCtrl's 6:0b5a branch for 179-183 and
+        # IsDeadPos 185 touches no latch for the Prince. The vision's
+        # ClearControls (7:39ca) discards presses made during the collapse;
+        # a press during the wake waits for SEQS 2's pose 15 (6:05fe). The
+        # previous code had no bank there and dropped both.
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+
+        def press(key, release=True):
+            if key in ('up', 'down'):
+                scene.set_key_state(key, True)
+                if release:
+                    scene.set_key_state(key, False)
+            else:
+                scene.horizontal_key(None, key, True)
+                if release:
+                    scene.horizontal_key(None, key, False)
+
+        def run(phase, key, release=True):
+            scene.load_level(8)
+            scene.directional_input = None
+            for x in range(240, 320, 3):
+                scene.jump_to_room(8, 2, x, 1)
+                scene.shift_held = scene.down_held = True
+                for _ in range(10):
+                    RooftopSceneTests.tick(self)
+                    if scene.sequence_state.selected_sequence_id == 237:
+                        break
+                scene.shift_held = scene.down_held = False
+                if scene.sequence_state.selected_sequence_id == 237:
+                    break
+            self.assertEqual(scene.sequence_state.selected_sequence_id, 237)
+            visions = []
+            scene.start_vision = lambda wake: visions.append(wake) or True
+            for _ in range(200):
+                if phase == 'collapse' and scene.action == 181 and key is not None:
+                    press(key, release)
+                    key = None
+                RooftopSceneTests.tick(self)
+                if visions:
+                    break
+            visions[0]()
+            sequences = []
+            for _ in range(40):
+                if phase == 'wake' and scene.action == 182 and key is not None:
+                    press(key, release)
+                    key = None
+                RooftopSceneTests.tick(self)
+                sequence = scene.sequence_state.sequence_id
+                if sequence != (sequences[-1] if sequences else None):
+                    sequences.append(sequence)
+            for name in ('up', 'down'):
+                scene.set_key_state(name, False)
+            scene.held_directions.clear()
+            return sequences
+
+        # The wake faces right: Backward is Left (turn, SEQS 5).
+        for phase, key, release, first in (
+                ('wake', 'up', True, 28), ('wake', -1, True, 5), ('wake', 1, True, 1),
+                ('collapse', 'up', True, 2), ('collapse', -1, True, 2),
+                ('collapse', 'up', False, 28)):
+            with self.subTest(phase=phase, key=key, release=release):
+                sequences = run(phase, key, release)
+                self.assertEqual(sequences[0], 231)
+                self.assertEqual(sequences[1], first)
+                if first == 2:
+                    self.assertEqual(sequences, [231, 2])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -117,7 +117,7 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 | Vertical preparation 67-69 | Active Forward: standing forward jump | 6:15de-15e8 | Vertical bank integrated, independent route model and actual takeoff windows tested; 35 ms rest chord delay remains a host approximation |
 | Running 4-14 | Both horizontals zero: brake only at 7/11; otherwise Backward before fresh Up, then fresh Down; finally consume fresh Forward | 6:11e4-1274 | Grounded run bank integrated; direct production/native routing comparison and scene conflict/geometry regressions; airborne continuity remains partial |
 | Run-jump takeoff | Legal run poses plus two-cell geometry; accepted jump clears directions, consumes Up | 6:1c14-1d5e | Ordinary geometry tested |
-| Other unarmed poses | No general dispatch; pending latches remain unless reset/special branch intervenes | 6:0560-07e0 | Drink (SEQS 78, 191-205) and sword pickup (SEQS 91, 229-232) keep the bank to the next standing/sheathe gate; dead/wake poses (IsDeadPos 4:47a0, 179-183) and other special branches not migrated |
+| Other unarmed poses | No general dispatch; pending latches remain unless reset/special branch intervenes | 6:0560-07e0 | Drink (SEQS 78, 191-205) and sword pickup (SEQS 91, 229-232) keep the bank to the next standing/sheathe gate; the throne collapse/wake (SEQS 237/231; 6:0b5a touches no Prince latch) keep it too, cleared at the pickup and the vision (7:39ca); other special branches not migrated |
 | Crouch pose 109 | Down active: fresh Forward selects low step/lie-down, including with Shift; Down zero: rise unless terrain vetoes | 6:099a-0b58 | Low/prone native consumption and saved-player traces recovered; Shift low-step classification corrected; full runtime bank migration missing |
 | Cautious step | Consume Forward and modifier; no unconditional ClearControls at ordinary step entry | 6:1276-128a | Common repeat/late requests tested |
 | Ledge poses 87-99 | Up active, grip delay zero: climb before release check; otherwise zero modifier or sequence-mode 11 releases | 6:18e0-1994 | Up/Shift and expiry tested; modifier/special branches partial |
@@ -718,7 +718,10 @@ writer of the old host slot across all 3,291 tests; the drink and the sword
 pickup, which tests did not press through, were the last reachable writers.
 Both now keep the bank, and the slot, its dispatcher and every family's
 one-shot import are removed. A tap made where no bank owns the pose (the
-throne collapse/wake, the prototype rooftop without a level map) is not kept.
+prototype rooftop without a level map) is not kept. The throne collapse and
+wake (SEQS 237/231) later joined the waiting bank: the vision's ClearControls
+(7:39ca) discards presses made during the collapse, and a press during the
+wake waits for the standing gate.
 A later census of the producers that fed it found every production call
 already latching into a bank; the generic bridge became `latch_request` for
 scripted requests, and a release made while paused now follows the owning

@@ -268,3 +268,37 @@ non-resting branches of `queue_sampled_horizontal_action` (jump chord) and
 `tests.test_game_ui` "releasing the arrow of a run chord during pause acts as
 without pause" (paused and live traces equal, no SEQS 4; pose 5 is a control
 that matched before too).
+
+## Throne collapse and wake (2026-10-30)
+
+The last poses a level reaches with no owning bank were level eight's throne
+collapse and wake. Both sequences are mode 1 (raw SEQS 237: `-7 1`, 323/324
+three times, 180, 181, 182, 183, 185 held by `-23`; SEQS 231: `-7 1`, 185,
+183, 182, 181, 179, then `-1 2`), so the 6:0576 clear never runs. Static
+decode of GenCtrl 6:0560-07e0: 323/324 match no branch; 179-183 and IsDeadPos
+185 go to 6:0b5a. There, a dead pose only acts on level one at 185 (DecLifePts
+on a5-0x5038) or for the shadow (kind 1); 180-182 save, swap and damage a
+kind-0 actor in another slot; slot 10, the player value GenCtrl also tests at
+6:1014 and 6:216a, is excluded.
+No branch reads or clears a latch. Two ClearControls calls frame the
+sequences:
+
+- 6:0b4c, after the crouched pickup routine (6:1350 -> 13d4, whose throne
+  branch 6:14d6-152a starts SEQS 237 and returns 1): directions cleared,
+  modifier 1. The port already applied this before the throne branch.
+- 7:39ca-39d0, after PlayNIS(6), JumpSeq 231 and SaveKid: directions cleared,
+  modifier 0.
+
+So a press made during the collapse is discarded at the vision, a key still
+held there is a fresh request, and a press during the wake waits for SEQS 2's
+pose 15 (6:05fe). Before, neither sequence had a bank: every tap was dropped,
+and Up held through the vision did not jump.
+
+Done: `THRONE_SEQUENCES` (237, 231) join `WaitingControls.waiting_sequence`,
+and `wake_from_vision` zeroes the bank and modifier after starting SEQS 231
+(as `leave_cliff` does for 7:379a). Regression (fails on the previous code in
+four of six subcases): `tests.test_ruins_ai` "presses during the throne wake
+wait for the standing gate" (Up, Backward and Forward tapped at wake pose 182
+jump up, turn and run; Up and Backward tapped at collapse pose 181 do nothing;
+Up held from the collapse jumps). Held Up then repeats the vertical jump as it
+does from any standing pose in the port; that is not throne-specific.

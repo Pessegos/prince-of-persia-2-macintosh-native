@@ -1099,6 +1099,10 @@ class Ruins(Caverns):
         state, caverns = scene.sequence_state, scene.game.caverns
         state.facing = 1
         scene.start_sequence(THRONE_WAKE_SEQUENCE)
+        # 7:39ca-39d0: ClearControls and a zero modifier. Presses made during
+        # the collapse are gone; a key still held is a fresh request.
+        scene.directional_input = DirectionalInput()
+        scene.modifier_input = 0
         state.current_y = state.vertical_velocity = 0
         player = scene.combat.player
         player.life = player.max_life

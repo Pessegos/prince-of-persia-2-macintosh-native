@@ -688,9 +688,9 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
     def latch_request(self, command):
         """Latch a scripted request into the bank that owns the pose.
 
-        There is no host buffer: where no bank owns the pose (the throne
-        collapse/wake, the prototype rooftop without a level map) the request
-        is not kept. Held keys are still read at rest.
+        There is no host buffer: where no bank owns the pose (the prototype
+        rooftop without a level map) the request is not kept. Held keys are
+        still read at rest.
         """
         if command.kind in SWORD_SEQUENCES:
             if not self.armed_controls_available():
