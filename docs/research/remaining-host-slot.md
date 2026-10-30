@@ -134,7 +134,8 @@ the low bank by `source_sequence_id == 46` checks. The SEQS 46 tail branch of
 Done: 46 and 47 joined `LOW_INPUT_SEQUENCES`; the source-46 exclusions, the
 wall-event snapshot/keep, the 46/47 release producer and
 `update_native_input_boundaries` are removed. The port's legacy rooftop climb
-(SEQS 46 with `ledge_hanging`, prototype without a level map) keeps its owner.
+(SEQS 46, prototype without a level map) later joined the low bank too: the
+climb now clears `ledge_hanging` when it starts.
 Changed behaviour: an Up tap during the bump no longer climbs; holding Up and
 the arrow into a wall repeats the jump instead of stopping once. As at the
 other bank-owned stops, a held key dispatches at the transition to idle, so
@@ -218,7 +219,8 @@ now latches the Up into the brake's bank instead. `buffer_input` latches into
 the bank where a family owns the pose and otherwise drops the tap; this is a
 port approximation for the poses no family owns yet (throne collapse 237 and
 wake 231, which run IsDeadPos/wake branches; the prototype rooftop without a
-level map). Held keys are still read at rest there.
+level map). Both have owners now: the throne poses the waiting bank and the
+prototype climb the low bank. Held keys are still read at rest there.
 
 Regressions (fail on the previous code): `tests.test_potions` "taps during
 the drink wait in the bank for the standing gate" (Backward/Down in both

@@ -48,7 +48,7 @@ from pop2.control_mapping import (
     facing_for_direction,
     jump_sequence_for_input,
 )
-from pop2.mac_input import plan_cautious_step, plan_step, read_keyboard, sample_modifier
+from pop2.mac_input import DirectionalInput, plan_cautious_step, plan_step, read_keyboard, sample_modifier
 from pop2.opening_animation import GLASS_POSITIONS
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
 from pop2.rebirth import RebirthSnapshot
@@ -689,9 +689,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
     def latch_request(self, command):
         """Latch a scripted request into the bank that owns the pose.
 
-        There is no host buffer: where no bank owns the pose (the prototype
-        rooftop without a level map) the request is not kept. Held keys are
-        still read at rest.
+        There is no host buffer: where no bank owns the pose the request is
+        not kept. Held keys are still read at rest.
         """
         if command.kind in SWORD_SEQUENCES:
             if not self.armed_controls_available():
@@ -1470,6 +1469,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             or not self._at_rooftop_ledge()
             or self.ledge_action_consumed
             or self.ledge_hanging
+            # Mode-4/5 poses (the climb's 107-116) reach no gate.
+            or self.sequence_state.animation_state in (4, 5)
         ):
             return False
         self.ledge_test_active = True
@@ -1510,8 +1511,12 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             if not self.in_animation_tick:
                 self.advance_animation_now()
             return True
+        # Prototype rooftop (no level map): its climb is the wall stop SEQS
+        # 46 -> 49, so the low bank owns it as it owns the real stop. The
+        # climbing Up is consumed; mode-5 poses 107-116 clear the latches.
         self.ledge_climb_requested = False
-        self.ledge_climbing = True
+        self.ledge_hanging = False
+        self.directional_input = DirectionalInput().consume('up')
         self.start_sequence(LEDGE_CLIMB_SEQUENCE)
         self.status.set("Climbing back onto the rooftop")
         if not self.in_animation_tick:

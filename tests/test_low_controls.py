@@ -217,5 +217,49 @@ class LowSceneTests(unittest.TestCase):
                 self.assertEqual(scene.sequence_state.sequence_id, 122 if forward else 123)
 
 
+    def prototype_climb(self, key, pose):
+        """Prototype rooftop (no level map): hang, climb, tap at the pose."""
+        scene = self.fixture.sword_scene()
+        scene.sequence_state.facing = 1
+        scene.player_x = scene.sequence_state.current_x = scene.right_platform_edge_x
+        scene.sequence_state.target_x = scene.player_x
+        scene.action = scene.sequence_runtime.next_frame().action
+        scene.in_animation_tick = True
+        scene.set_key_state('shift', True)
+        scene.set_key_state('down', True)
+        seen = []
+        for _ in range(60):
+            if scene.sequence_state.sequence_id == 12 and not scene.ledge_climbing and 46 not in seen:
+                scene.set_key_state('down', False)
+                scene.up_key(None)
+                scene.set_key_state('up', False)
+            if scene.action == pose and scene.sequence_state.sequence_id in (46, 49):
+                if key == 'right':
+                    scene.horizontal_key(None, 1, True)
+                    scene.horizontal_key(None, 1, False)
+                else:
+                    scene.set_key_state(key, True)
+                    scene.set_key_state(key, False)
+                pose = None
+            scene.advance_animation()
+            seen.append(scene.sequence_state.sequence_id)
+        return seen
+
+    def test_prototype_climb_taps_follow_the_low_bank(self):
+        # The prototype climb plays the wall stop SEQS 46 -> 49. Taps were
+        # dropped (no bank owned it); the low bank now keeps a tap made at
+        # the mode-1 poses 117-119 for the standing gate, and the mode-5
+        # poses 107-116 still discard it.
+        for key, sequence in (('right', 29), ('up', 28)):
+            for pose in (117, 119):
+                with self.subTest(key=key, pose=pose):
+                    seen = self.prototype_climb(key, pose)
+                    self.assertIn(46, seen)
+                    self.assertIn(sequence, seen[seen.index(46):])
+            for pose in (108, 112):
+                with self.subTest(key=key, pose=pose):
+                    seen = self.prototype_climb(key, pose)
+                    self.assertNotIn(sequence, seen[seen.index(46):])
+
 if __name__ == '__main__':
     unittest.main()

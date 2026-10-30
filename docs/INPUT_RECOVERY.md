@@ -755,8 +755,13 @@ The [slot census](research/remaining-host-slot.md) then found no production
 writer of the old host slot across all 3,291 tests; the drink and the sword
 pickup, which tests did not press through, were the last reachable writers.
 Both now keep the bank, and the slot, its dispatcher and every family's
-one-shot import are removed. A tap made where no bank owns the pose (the
-prototype rooftop without a level map) is not kept. The throne collapse and
+one-shot import are removed. The prototype rooftop without a level map
+dropped taps during its host climb; that climb plays the wall stop SEQS
+46 -> 49, so the low bank now owns it as it owns the real stop: taps at the
+mode-5 poses 107-116 are discarded, taps at 117-119 act at the standing gate,
+and a held key acts at the transition to idle (regression:
+`tests.test_low_controls` "prototype climb taps follow the low bank"). Its
+host hang (SEQS 7/12, fall poses) keeps the Up climb request. The throne collapse and
 wake (SEQS 237/231) later joined the waiting bank: the vision's ClearControls
 (7:39ca) discards presses made during the collapse, and a press during the
 wake waits for the standing gate.
