@@ -28,6 +28,7 @@ OPERATIONS = {
     # The vision at the throne (NIS 6).
     "rgb": 4, "set_palette": 2, "remap": 2, "combine": 0, "fade_out_all": 1,
     "save_rect": 2, "restore_rect": 1, "ensure_sound": 2, "dissolve_area": 1, "text_panel": 1,
+    "blit": 2,
 }
 
 
@@ -557,6 +558,10 @@ class IntroPlayer:
         elif op == "ensure_sound":
             if self.sound_end(args[1], args[0]) <= self.time + 1e-9:
                 self.sound(*args)
+        elif op == "blit":
+            # CopyBits 17:5048 within the offscreen picture.
+            source, target = self.box(args[0]), self.box(args[1])
+            self.target.paste(self.target.crop(source), target[:2])
         elif op == "text_panel":
             self.text_panel = args[0]
         elif op == "dissolve_area":

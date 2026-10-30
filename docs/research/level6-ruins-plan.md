@@ -313,6 +313,32 @@ after the back pieces. Planes 1 of level 14's room 1 and level 10's room
 22 (a5-0x4aee/-0x4af2, while a5-0x5000 = -1) are the later horse scenes
 and are not drawn.
 
+## Cutscene 2: The Ride To The Temple (research, 2026-10-30)
+
+CheckPlayNIS(9, 10) plays NIS 2, NISTemple 15:5fd4 (dispatcher table entry
+2). The scene harness now runs it to the end with these additions (no
+existing scene program changes; the baseline comparison is identical):
+
+- Files: Ruins (A5 record -0x470c), Horse (-0x26a4) and TempleNIS (-0x269e).
+- DrawSkyForNIS 15:3384 runs inline: Ruins SHAP 4265 at the top, then four
+  CopyBits 17:5048 within the offscreen (new `blit` operation) tile it
+  across; AddNIS 15:331e's rectangle result is supplied for it
+  (`rect_out`).
+- PlayTheAnimation flags 0x14 (16 + 4: ANI bounds origin, no background
+  restore) are accepted.
+- The callbacks TransFunc4-8 (15:640a/64ee/656a/65ac/65d4) call FlipHorses
+  15:042a(1) at frame 0, which mirrors the animation's shapes 301-360 (the
+  horse), and set palettes/brightness at frames 1-9. TransFunc5 returns -1
+  (ends the animation) once the music position a5-0x1f6e reaches cue 97.
+- The last shot calls DrawRoomFromNIS 2:03d4(10, 22): level ten's room 22,
+  the temple, with the horse in plane 1 (GetHorsePtInPlane a5-0x4af2), and
+  a final animation (TransFunc8) over it. It is recorded as `game_room`.
+
+Not yet playable: the callbacks' frame operations and the horse mirroring
+must be expanded like the carpet scene's, the cue-ended animation needs the
+music timing, and the final shot needs level ten's scenery, which the port
+does not have. Until then level nine ends with its status message.
+
 ## Remaining Steps
 
 1. The retained cliff image when walking left from the start needs a visual

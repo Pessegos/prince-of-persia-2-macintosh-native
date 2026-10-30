@@ -66,7 +66,8 @@ def extract_dissolve(image):
 
 
 def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_words=None,
-                   callbacks=None, files=None, resident=None, memory=None, inline=(), follow=None):
+                   callbacks=None, files=None, resident=None, memory=None, inline=(), follow=None,
+                   rect_out=False):
     """Run CODE 15 coordinators. ``arguments`` are the Pascal word arguments
     after the return address, ``a5_words`` preset A5-relative globals and
     ``callbacks`` maps an A5 jump-table offset to an animation callback name.
@@ -189,7 +190,12 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                     emit("text_panel", panel[0])
                 if target in (0x331e, 0x0c98):
                     # 15:0c98 draws a SHAP of an open file, as AddNIS does.
-                    emit("shape", resolve("SHAP", w()), w(2), w(4), w(6))
+                    shape_id = resolve("SHAP", w())
+                    emit("shape", shape_id, w(2), w(4), w(6))
+                    if target == 0x331e and rect_out and l(8) and shape_id in shapes:
+                        # AddNIS's rectangle result: the drawn shape's bounds.
+                        _, _, width, height = struct.unpack(">HhhH", shapes[shape_id]["data"][:8])
+                        cpu.mem_write(l(8), struct.pack(">4h", w(4), w(2), w(4) + height, w(2) + width))
                 elif target == 0x0b32:
                     emit("fill", w(4) & 255, rectangle(l(6)))
                 elif target == 0x32f4:
@@ -282,8 +288,8 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                     emit("wait_sound", w(), w(2))
                 elif target == 0xf5a:
                     callback = callbacks.get(l(6) - a5) if l(6) else None
-                    if (l(6) and callback is None) or w(16) not in (6, 0x0c, 0x1c):
-                        raise ValueError("Unsupported scene animation callback or flags")
+                    if (l(6) and callback is None) or w(16) not in (6, 0x0c, 0x14, 0x1c):
+                        raise ValueError(f"Unsupported scene animation callback or flags {w(16):#x}")
                     # PlayTheAnimation 16:10ba-10e8: flag 2 places the
                     # animation at the given point, flag 16 at the ANI
                     # bounds' top-left, otherwise at the origin.
@@ -336,6 +342,9 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                 elif target == 0x1222:
                     # 17:4fe4 CopyBits: show the given rectangle.
                     emit("copy", rectangle(l(8)))
+                elif target == 0x122a and l() == l(4) == a5 - 0x523e:
+                    # 17:5048 CopyBits within the offscreen: source -> target.
+                    emit("blit", rectangle(l(8)), rectangle(l(12)))
                 elif target == 0x12da:
                     # 17:6dd6: PaintRect(rect) in palette index `color`.
                     emit("fill", w(4) & 255, rectangle(l()))
@@ -343,6 +352,13 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                     # SetSHAPColors 17:0a52 prepares the offscreen colour
                     # table; indexed drawing is unaffected by it.
                     pass
+                elif target == 0x132:
+                    # DrawRoomFromNIS 2:03d4(level, room): a game room as the
+                    # scene's picture (not a scene operation the port plays).
+                    emit("game_room", w(), w(2))
+                elif target == 0x26a:
+                    # 3:51fa(environment, ...): the environment's palettes.
+                    emit("game_palettes", w(), w(2))
                 elif target == 0x135a:
                     # ShowNthvRGB 17:130e: entry (byte at +8) := red, green, blue.
                     emit("rgb", *bytes(cpu.mem_read(sp + 8, 8))[::2])
