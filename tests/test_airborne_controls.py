@@ -14,7 +14,6 @@ class AirborneHandoffTests(unittest.TestCase):
             with self.subTest(facing=facing, late=late, order=order):
                 result = host_trace(facing, order, late)
                 self.assertEqual(result['choice'], 'up' if late else 'none')
-                self.assertTrue(all(step['pending'] is None for step in result['trace']))
 
 
 class AirborneBankTests(unittest.TestCase):
@@ -45,7 +44,6 @@ class AirborneBankTests(unittest.TestCase):
                 relative = scene.directional_input.remap(facing_right=bool(facing))
                 self.assertEqual(relative.words(), (1, -1, 1, -1, 0) if sequence == 3
                                  else (0, 0, 1, 0, 0))
-                self.assertIsNone(scene.pending_action)
 
     def test_reset_clears_all_four_directions_and_preserves_modifier(self):
         for sequence, modifier in product((3, 4), ('shift', 'ctrl')):
@@ -58,7 +56,6 @@ class AirborneBankTests(unittest.TestCase):
                 scene.update_airborne_controls()
                 self.assertEqual(scene.directional_input.words(),
                                  (0, 0, 0, 0, -1 if modifier == 'shift' else -2))
-                self.assertIsNone(scene.pending_action)
 
     def test_modal_clear_discards_the_arc_bank_and_wall_followup(self):
         for sequence in (3, 4):
@@ -99,7 +96,6 @@ class AirborneBankTests(unittest.TestCase):
                     scene.set_key_state(key, False)
                     scene.advance_animation()
                 self.assertEqual((scene.directional_input.up, scene.directional_input.down), (-1, -1))
-                self.assertIsNone(scene.pending_action)
                 for _ in range(8):
                     scene.advance_animation()
                     if scene.sequence_state.sequence_id != 3:

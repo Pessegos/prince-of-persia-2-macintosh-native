@@ -274,7 +274,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.bind_level(self.game, self.level_renderer)
         self.held_directions = []
         self.shift_turn_direction = 0
-        self.pending_action = None
         self.pending_potion_pickup = None
         self.queue_grace_remaining_ms = 0
         self.queue_grace_command = None
@@ -512,7 +511,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.reset_level_controls()
         self.bind_level(game, renderer, initialize_world=False)
         self.terrain_enabled = True
-        self.pending_action = None
         self.pause_resume_keys.update(self.window_keys_down)
         self.copy_verified = saved['copy_verified']
         if self.audio is not None:
@@ -686,7 +684,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 or self.ledge_hanging or self.ledge_climbing
                 or state.animation_state in (4, 5, 9) or state.sequence_id in (27, 110)
                 or self.horizontal_input or self.up_held or self.down_held
-                or self.pending_action is not None
                 or motion is not None and (motion.falling or motion.dead)):
             return False
         # GenCtrl6:0c90-0cba accepts only fresh Ctrl with no directions;
@@ -708,8 +705,10 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 and command.kind in ('horizontal', 'jump', 'crouch', 'crawl')):
             self.latch_waiting_command(command)
             return True
-        self.pending_action = command
-        return True
+        # No directional bank owns this pose (the throne collapse/wake, the
+        # prototype rooftop without a level map): the tap is not kept. Held
+        # keys are still read at rest.
+        return False
 
     def start_queue_grace(self, command):
         self.queue_grace_command = command
@@ -981,11 +980,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             return True
         if self.up_held:
             if self.jump_started_for_press:
-                if self.pending_action is not None and self.pending_action.kind == "jump":
-                    self.pending_action = BufferedCommand(
-                        "jump", direction, running=self.pending_action.running
-                    )
-                elif not self._is_resting():
+                if not self._is_resting():
                     self.buffer_input(BufferedCommand(
                         "jump", direction,
                         running=(self.sequence_state.sequence_id in RUN_SEGMENT_SEQUENCES
@@ -1042,7 +1037,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.sequence_state.sequence_id == STANDING_TURN_SEQUENCE
             and self.sequence_state.action == 45
             and self.horizontal_input
-            and self.pending_action is None
         ):
             # Both keys arrived during the turn's first pose: one reverse chord.
             self.jump_started_for_press = True
@@ -1090,7 +1084,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         # The first run pose allows a near-simultaneous Forward + Up chord.
         # Later startup poses preserve the run and wait for legal takeoff.
         if self._is_resting() or starting_chord or starting_reverse:
-            self.pending_action = None
             self.dispatch_jump(command)
         else:
             self.buffer_input(command)
@@ -1108,7 +1101,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
 
         command = BufferedCommand("horizontal", direction, mode)
         if self._is_resting():
-            self.pending_action = None
             dispatched = self.dispatch_horizontal_action(command)
             if dispatched:
                 self.start_queue_grace(command)
@@ -1120,12 +1112,13 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
     def dispatch_jump(self, command):
         if not command.direction and self.sequence_state.sequence_id in RUN_SEGMENT_SEQUENCES:
             # GenCtrl 6:11e4-1242 never calls DoJumpUp from a running pose.
-            # Keep the host's buffered Up, but brake before aligning its ledge.
-            self.pending_action = command
+            # Keep the Up pending in the bank, but brake before aligning its ledge.
             self.run_active = self.run_stop_requested = False
             self.run_direction = 0
             self.run_start_x = None
             self.start_sequence(RUN_STOP_SEQUENCE)
+            if self.waiting_controls_available():
+                self.latch_waiting_command(command)
             return True
         if not command.direction and self.start_cavern_exit():
             return True
@@ -1230,7 +1223,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 # StairClimbing 6:0d4c/10e8 consumes Backward on the turn;
                 # that same Shift+direction press is not a forward step.
                 self.shift_turn_direction = direction if direction in self.held_directions else 0
-                self.pending_action = None
                 self.start_standing_turn()
                 return True
             if getattr(self, "level_map", None) is not None:
@@ -1478,7 +1470,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.run_active = False
         self.run_direction = 0
         self.run_stop_requested = False
-        self.pending_action = None
         self.jump_repeat_armed = False
         self.ledge_hanging = True
         self.ledge_climbing = False
@@ -1552,7 +1543,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
     def _begin_native_ledge(self, sequence_id, offset=0):
         self.run_active = self.run_stop_requested = False
         self.run_direction = 0
-        self.pending_action = None
         self.jump_repeat_armed = False
         self.native_ledge = self.ledge_hanging = True
         self.ledge_climbing = self.ledge_climb_requested = False
@@ -1662,17 +1652,12 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.ledge_action_consumed = False
         if self.run_active:
             self.run_stop_requested = True
-        self.pending_action = None
         self.pending_potion_pickup = None
 
     def prepare_next_sequence(self, run_cycle_boundary=False):
         if self.waiting_controls_available():
             return self.update_waiting_controls()
         if run_cycle_boundary:
-            if self.pending_action is not None and self.dispatch_pending_action(
-                was_running=True
-            ):
-                return True
             if self.run_stop_requested:
                 self.run_active = False
                 self.run_stop_requested = False
@@ -1684,8 +1669,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         if self.try_draw_sword():
             return True
         if self._is_resting():
-            if self.pending_action is not None:
-                return self.dispatch_pending_action()
             if (self.down_held and not self.up_held
                     and not self.down_sheathe_consumed and not self.ledge_hanging):
                 if self._try_start_ledge_hang():
@@ -1698,55 +1681,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             if self.horizontal_input and not self.up_held and not self.ledge_hanging:
                 return self.queue_sampled_horizontal_action(self.horizontal_input)
         return False
-
-    def dispatch_pending_action(self, was_running=False):
-        if self._combat_controls_locked():
-            return False
-        command = self.pending_action
-        if command is None:
-            return False
-        if command.kind == "crouch" and was_running:
-            return False
-        self.pending_action = None
-        if command.kind == "sword_draw":
-            return self.try_draw_sword()
-        if command.kind in SWORD_SEQUENCES:
-            started = self.start_sword_action(command.kind)
-            if not started:
-                self.pending_action = command
-            return started
-        if command.kind == "crouch":
-            if self.start_native_descent() or (
-                    self.down_held and self.shift_held and self._try_start_ledge_hang()):
-                return True
-            self.start_crouch_lower()
-            return True
-        if command.kind == "crawl":
-            self.start_crouch_step(command.direction)
-            return True
-        if command.kind == "jump":
-            # GenCtrl 6:1216-1242 uses the current running pose, not the
-            # state sampled when an Up+direction chord entered the host queue.
-            if (was_running and command.direction
-                    and self.sequence_state.sequence_id in RUN_CYCLE_SEQUENCES
-                    and 4 <= self.sequence_state.action <= 14):
-                command = BufferedCommand("jump", command.direction, running=True)
-            dispatched = self.dispatch_jump(command)
-            if not dispatched and self.up_held:
-                self.pending_action = command
-            return dispatched
-        dispatched = self.dispatch_horizontal_action(command, was_running=was_running)
-        if dispatched:
-            self.start_queue_grace(command)
-        if (
-            dispatched
-            and command.mode == "run"
-            and command.direction not in self.held_directions
-            and self.run_active
-            and self.run_direction == command.direction
-        ):
-            self.run_stop_requested = True
-        return dispatched
 
     def advance_animation(self):
         self.animation_after_id = None
@@ -1912,15 +1846,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.ledge_hanging = self.ledge_climbing = self.native_ledge = False
             self.sequence_state.current_y = 0
             self.sequence_state.horizontal_velocity = self.sequence_state.vertical_velocity = 0
-            command = self.pending_action
-            direction = self.horizontal_input
-            if (not native_climb and command is not None and command.kind == "jump" and direction
-                    and command.direction == direction and not self.up_held):
-                # A brief overlap with the climb's Up is not a latched jump
-                # when only the horizontal half of the chord remains held.
-                mode = ("step" if self.shift_held else
-                        "run" if facing_for_direction(direction) == self.sequence_state.facing else "turn")
-                self.pending_action = BufferedCommand("horizontal", direction, mode)
             # Finish the protected climb before dispatching its queued input.
             self.jump_started_for_press = self.up_held
             self.jump_repeat_armed = self.up_held
@@ -1931,8 +1856,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         ):
             self.player_x = frame.target_x
             if self.waiting_controls_available() and self.update_waiting_controls(repeat=False):
-                frame = self.sequence_runtime.next_frame()
-            elif self.pending_action is not None and self.dispatch_pending_action():
                 frame = self.sequence_runtime.next_frame()
             elif (
                 self.up_held
@@ -2089,7 +2012,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             # consumes the modifier before handing off to the item action.
             self.directional_input = self.directional_input.consume(clear=True, modifier=1)
             self.modifier_input = 1
-        self.pending_action = None
         self.run_active = self.run_stop_requested = self.run_cycle_boundary_pending = False
         # 6:14d6-14ea: the Prince in level eight's room 9 (the throne).
         throne = self.game.level.number == 8 and motion.room == 8
@@ -2220,7 +2142,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                     self.run_active = False
                     self.run_stop_requested = False
                     self.run_cycle_boundary_pending = False
-                    self.pending_action = None
                     self.start_sequence(IDLE_SEQUENCE)
                     self.sequence_runtime.next_frame()
                     self.player_x = self.sequence_state.target_x
@@ -2257,10 +2178,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 self.run_active = False
                 self.run_stop_requested = False
                 self.run_cycle_boundary_pending = False
-                # A bump (46/47) is a mode-5 recovery owned by the bank: it
-                # clears every direction (6:0576-059c), so a tap made before
-                # or during it is gone and a still-held key is fresh after.
-                self.pending_action = None
                 self.jump_repeat_armed = False
                 # Do not re-arm a consumed Up on wall contact: releasing Up
                 # must not queue a second jump after an interrupted jump.
@@ -2398,7 +2315,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         if combat.choose_player_bump(old_x):
             self.run_active = self.run_stop_requested = False
             self.run_cycle_boundary_pending = False
-            self.pending_action = None
             self.jump_repeat_armed = False
             self.action = self.sequence_state.action
             self.player_x = self.sequence_state.target_x
@@ -2414,7 +2330,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 self.sequence_state.sound_events.append(sound)
             if event.actor == "player" and event.kind in ("hit", "death"):
                 self.sword_drawn = combat.player.sword_drawn
-                self.pending_action = None
                 self.run_active = False
                 self.run_direction = 0
                 self.run_stop_requested = False

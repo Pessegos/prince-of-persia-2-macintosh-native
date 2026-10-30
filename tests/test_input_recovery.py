@@ -56,7 +56,6 @@ class InputRecoveryTests(unittest.TestCase):
                     scene.set_key_state('shift', True)
                     scene.horizontal_key(None, direction, True)
                     self.assertEqual(scene.action, 45)
-                    self.assertIsNone(scene.pending_action)
                     if not held:
                         scene.horizontal_key(None, direction, False)
                     poses = [scene.action]
@@ -67,7 +66,6 @@ class InputRecoveryTests(unittest.TestCase):
                     self.assertEqual(set(poses[8:]), {15})
                     self.assertEqual(scene.player_x, 116 + 9 * direction)
                     self.assertEqual(scene.sequence_state.facing, 1 - facing)
-                    self.assertIsNone(scene.pending_action)
                     if held:
                         scene.horizontal_key(None, direction, False)
                     scene.horizontal_key(None, direction, True)
@@ -98,7 +96,6 @@ class InputRecoveryTests(unittest.TestCase):
                         self.assertEqual(scene.sequence_state.source_sequence_id,
                                          JUMP_FORWARD_SEQUENCE if held_up else 1)
                         self.assertEqual(scene.sequence_state.facing, facing)
-                        self.assertIsNone(scene.pending_action)
 
     def test_hard_fall_recovery_presses_belong_to_the_bank_not_the_host_slot(self):
         for facing in (0, 1):
@@ -123,7 +120,6 @@ class InputRecoveryTests(unittest.TestCase):
                         press(True)
                         # The old host buffered this press until the next tick
                         # discarded it; the bank owns it from the callback on.
-                        self.assertIsNone(scene.pending_action)
                         self.assertIsNotNone(scene.directional_input)
                         scene.advance_animation()
                         self.assertEqual(scene.directional_input.words()[:4], (0, 0, 0, 0))
@@ -131,7 +127,6 @@ class InputRecoveryTests(unittest.TestCase):
                             press(False)
                         for _ in range(40):
                             scene.advance_animation()
-                            self.assertIsNone(scene.pending_action)
                             if scene.sequence_state.source_sequence_id != 20:
                                 break
                         if held:
@@ -175,7 +170,6 @@ class InputRecoveryTests(unittest.TestCase):
                         break
                 self.assertEqual(scene.sequence_state.sequence_id,
                                  SWORD_DRAW_SEQUENCE if held else IDLE_SEQUENCE)
-                self.assertIsNone(scene.pending_action)
 
     def test_turn_ready_poses_accept_all_ordinary_buffered_commands(self):
         from pop2.scene_prototype import BufferedCommand
@@ -189,10 +183,9 @@ class InputRecoveryTests(unittest.TestCase):
                         scene.start_sequence(STANDING_TURN_SEQUENCE)
                         while scene.sequence_state.action != pose:
                             scene.advance_animation()
-                        scene.pending_action = BufferedCommand(kind)
+                        self.assertTrue(scene.buffer_input(BufferedCommand(kind)))
                         scene.advance_animation()
                         self.assertEqual(scene.sequence_state.sequence_id, expected)
-                        self.assertIsNone(scene.pending_action)
                         self.assertNotEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)
 
     def test_held_direction_is_reinterpreted_after_the_turn_changes_facing(self):
@@ -204,14 +197,13 @@ class InputRecoveryTests(unittest.TestCase):
             scene.sequence_state.facing = facing
             scene.start_sequence(STANDING_TURN_SEQUENCE)
             scene.held_directions = [direction]
-            scene.pending_action = BufferedCommand('horizontal', direction, 'turn')
+            self.assertTrue(scene.buffer_input(BufferedCommand('horizontal', direction, 'turn')))
             for _ in range(4):
                 scene.advance_animation()
             self.assertEqual(scene.action, 48)
             scene.advance_animation()
             self.assertEqual(scene.action, 1)
             self.assertTrue(scene.run_active)
-            self.assertIsNone(scene.pending_action)
 
     def test_climb_chord_resolves_current_holds_without_discarding_a_complete_tapped_chord(self):
         for facing in (0, 1):
@@ -241,7 +233,6 @@ class InputRecoveryTests(unittest.TestCase):
                             self.assertEqual(scene.action, 1)
                         else:
                             self.assertEqual((scene.sequence_state.sequence_id, scene.action), (3, 16))
-                        self.assertIsNone(scene.pending_action)
 
     def test_releasing_run_jump_horizontal_retargets_held_up_in_both_facings(self):
         for facing in (0, 1):
@@ -261,16 +252,12 @@ class InputRecoveryTests(unittest.TestCase):
                                           scene.player_x), before)
                         if held_up:
                             if sequence == RUN_JUMP_SEQUENCE:
-                                self.assertIsNone(scene.pending_action)
                                 self.assertLess(scene.directional_input.up, 0)
                                 self.assertTrue(scene.airborne_vertical_followup)
                             else:
                                 # The bump's mode 5 owns the bank (6:0576-059c):
                                 # no host request; the held Up is fresh after it.
-                                self.assertIsNone(scene.pending_action)
                                 self.assertGreaterEqual(scene.directional_input.up, 0)
-                        else:
-                            self.assertIsNone(scene.pending_action)
                         if sequence != RUN_JUMP_SEQUENCE:
                             sequences = []
                             for _ in range(20):
@@ -301,7 +288,6 @@ class InputRecoveryTests(unittest.TestCase):
                         for _ in range(12):
                             scene.advance_animation()
                         self.assertEqual((scene.sequence_state.sequence_id, scene.action), (IDLE_SEQUENCE, 15))
-                    self.assertIsNone(scene.pending_action)
 
     def test_releasing_standing_jump_or_run_horizontal_retargets_only_a_held_up(self):
         for facing in (0, 1):
@@ -320,15 +306,11 @@ class InputRecoveryTests(unittest.TestCase):
                                           scene.player_x), before)
                         if held_up:
                             if sequence in RUN_SEGMENT_SEQUENCES:
-                                self.assertIsNone(scene.pending_action)
                                 self.assertLess(scene.directional_input.up, 0)
                                 self.assertTrue(scene.run_vertical_followup)
                             else:
-                                self.assertIsNone(scene.pending_action)
                                 self.assertLess(scene.directional_input.up, 0)
                                 self.assertTrue(scene.airborne_vertical_followup)
-                        else:
-                            self.assertIsNone(scene.pending_action)
 
     def run_scene_at(self, facing, pose):
         scene = self.fixture.sword_scene()
@@ -351,7 +333,6 @@ class InputRecoveryTests(unittest.TestCase):
                         scene.set_key_state('ctrl', True)
                         if not held:
                             scene.set_key_state('ctrl', False)
-                        self.assertIsNone(scene.pending_action)
                         for _ in range(24):
                             scene.advance_animation()
                             baseline.advance_animation()
@@ -381,7 +362,6 @@ class InputRecoveryTests(unittest.TestCase):
                     self.assertIn(53, poses)
                     self.assertIn(56, poses)
                     self.assertEqual(scene.action, 15)
-                    self.assertIsNone(scene.pending_action)
                     scene.set_key_state('ctrl', True)
                     self.assertEqual(scene.action, 207)
 
@@ -402,7 +382,6 @@ class InputRecoveryTests(unittest.TestCase):
             self.assertIn(56, before)
             self.assertEqual(scene.action, 207)
             self.assertEqual(scene.modifier_input, 2)
-            self.assertIsNone(scene.pending_action)
 
     def test_ctrl_during_running_jump_preserves_arc_and_brakes_without_a_stored_draw(self):
         for facing in (0, 1):
@@ -426,7 +405,6 @@ class InputRecoveryTests(unittest.TestCase):
                                          (baseline.action, baseline.player_x, baseline.sequence_state.current_y))
                         self.assertFalse(scene.sword_drawn)
                     self.assertEqual(scene.action, 15)
-                    self.assertIsNone(scene.pending_action)
 
     def test_standing_draw_requires_fresh_ctrl_and_no_directions_or_shift(self):
         for other in ('up', 'down', 'shift', 'horizontal'):
@@ -440,7 +418,6 @@ class InputRecoveryTests(unittest.TestCase):
                     setattr(scene, other + '_held', True)
                 scene.set_key_state('ctrl', True)
                 self.assertFalse(scene.sword_drawn)
-                self.assertIsNone(scene.pending_action)
         scene = self.fixture.sword_scene()
         scene.modifier_input = 2
         scene.ctrl_held = True
@@ -463,7 +440,6 @@ class InputRecoveryTests(unittest.TestCase):
             # rapid-attack QoL, rather than queued.
             scene.set_key_state('ctrl', False)
             scene.set_key_state('ctrl', True)
-            self.assertIsNone(scene.pending_action)
         for _ in range(20):
             scene.advance_animation()
             if scene.sequence_state.sequence_id == SWORD_GUARD_SEQUENCE:
@@ -476,7 +452,6 @@ class InputRecoveryTests(unittest.TestCase):
         self.assertFalse(scene.sword_sheathing)
         self.assertFalse(scene.sword_drawn)
         self.assertEqual(scene.modifier_input, 2)
-        self.assertIsNone(scene.pending_action)
         scene.set_key_state('ctrl', False)
         scene.set_key_state('ctrl', True)
         self.assertTrue(scene.sword_drawn)
@@ -494,7 +469,6 @@ class InputRecoveryTests(unittest.TestCase):
                         scene.advance_animation()
                     self.assertEqual(scene.action, 15)
                     self.assertEqual(scene.sequence_state.facing, facing)
-                    self.assertIsNone(scene.pending_action)
 
     def test_released_turn_after_jump_pose_26_survives_until_landing(self):
         for facing in (0, 1):
@@ -507,7 +481,6 @@ class InputRecoveryTests(unittest.TestCase):
                     scene.advance_animation()
                 self.assertEqual((scene.sequence_state.sequence_id, scene.action),
                                  (STANDING_TURN_SEQUENCE, 45))
-                self.assertIsNone(scene.pending_action)
 
     def test_pose_26_discards_a_vertical_follow_up_when_up_is_released(self):
         # Held vertical follow-ups keep the wall-climb tolerance, but a
@@ -517,13 +490,11 @@ class InputRecoveryTests(unittest.TestCase):
                 scene = self.forward_jump(21, facing)
                 scene.up_key(None)
                 scene.set_key_state('up', False)
-                self.assertIsNone(scene.pending_action)
                 self.assertLess(scene.directional_input.up, 0)
                 for _ in range(20):
                     scene.advance_animation()
                 self.assertEqual((scene.sequence_state.sequence_id, scene.action),
                                  (IDLE_SEQUENCE, 15))
-                self.assertIsNone(scene.pending_action)
 
     def test_shift_forward_while_crouched_keeps_the_low_step_instead_of_a_standing_step(self):
         for facing in (0, 1):
@@ -544,9 +515,7 @@ class InputRecoveryTests(unittest.TestCase):
                     scene.horizontal_key(None, direction, True)
                     if ready:
                         self.assertEqual(scene.sequence_state.sequence_id, 79)
-                        self.assertIsNone(scene.pending_action)
                     else:
-                        self.assertIsNone(scene.pending_action)
                         self.assertLess(getattr(scene.directional_input,
                                                 'right' if direction > 0 else 'left'), 0)
                         for _ in range(12):
@@ -554,7 +523,6 @@ class InputRecoveryTests(unittest.TestCase):
                             if scene.sequence_state.sequence_id == 79:
                                 break
                         self.assertEqual(scene.sequence_state.sequence_id, 79)
-                        self.assertIsNone(scene.pending_action)
                     scene.horizontal_key(None, direction, False)
                     scene.set_key_state('down', False)
                     sequences = []
@@ -562,7 +530,6 @@ class InputRecoveryTests(unittest.TestCase):
                         scene.advance_animation()
                         sequences.append(scene.sequence_state.sequence_id)
                     self.assertEqual(scene.action, 15)
-                    self.assertIsNone(scene.pending_action)
                     self.assertFalse(any(29 <= sequence <= 44 for sequence in sequences))
 
     def test_released_direction_during_crouch_rise_mode_5_is_discarded(self):
@@ -581,7 +548,6 @@ class InputRecoveryTests(unittest.TestCase):
                     scene.horizontal_key(None, backward, True)
                     scene.horizontal_key(None, backward, False)
                     scene.advance_animation()
-                    self.assertIsNone(scene.pending_action)
 
     def test_released_ctrl_before_legal_block_attack_gate_cancels_attack(self):
         # 4:3f38 clears released Ctrl; 6:27e8 accepts only 150/161 here.

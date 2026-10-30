@@ -321,6 +321,40 @@ class ImportedPotionTests(unittest.TestCase):
                     self.assertFalse(s.game.caverns.potions.effect_pending)
                     self.assertIn(s.action, (15,))
 
+    def test_taps_during_the_drink_wait_in_the_bank_for_the_standing_gate(self):
+        # SEQS 78 (poses 191-205) is mode 1 and GenCtrl 6:0560-07e0 has no
+        # branch for its poses, so the latches wait for pose 15. Its priority
+        # (6:0db0-0e16) turns before crouching; the old host slot kept only the
+        # last tap, so Backward then Down crouched.
+        s = self.make_scene()
+        room, cell = list(s.game.caverns.potions.phases)[0]
+        row, column = divmod(cell, 10)
+        for facing in (0, 1):
+            backward = -1 if facing else 1
+            for order in ((backward, 'down'), ('down', backward)):
+                with self.subTest(facing=facing, order=order):
+                    s.load_level(3)
+                    s.peaceful = True
+                    s.jump_to_room(room, row=row, x=column * 51 + 35, facing=facing)
+                    s.shift_held = True
+                    sequences = []
+                    for _ in range(45):
+                        self.tick()
+                        if s.action == 195 and s.shift_held:
+                            s.shift_held = False
+                            for key in order:
+                                if key == 'down':
+                                    s.set_key_state('down', True)
+                                    s.set_key_state('down', False)
+                                else:
+                                    s.horizontal_key(None, key, True)
+                                    s.horizontal_key(None, key, False)
+                        sequences.append(s.sequence_state.sequence_id)
+                    after = [sequence for sequence in sequences[sequences.index(78):]
+                             if sequence not in (78, 2)]
+                    self.assertEqual(after[0], 5)
+                    self.assertNotIn(50, after)
+
     def test_level_four_poison_flasks_cost_a_life_and_can_kill(self):
         # Rooms 14 and 29 hold type-5 flasks (4:4678-46b0).
         s = self.make_scene()

@@ -30,14 +30,12 @@ class WaitingSceneTests(unittest.TestCase):
                         scene.set_key_state(key, True)
                     scene.set_key_state(key, False)
                 self.assertEqual((scene.directional_input.up, scene.directional_input.down), (-1, -1))
-                self.assertIsNone(scene.pending_action)
                 for _ in range(12):
                     scene.advance_animation()
                 self.assertEqual((scene.sequence_state.sequence_id, scene.action), (28, 67))
                 # Vertical takeoff now keeps ownership, consumes Up and
                 # clears the losing Down without consuming Shift again.
                 self.assertEqual(scene.directional_input.words(), (0, 0, 1, 0, 1))
-                self.assertIsNone(scene.pending_action)
 
     def test_modifier_is_read_at_dispatch_instead_of_baked_into_the_queued_direction(self):
         for facing in (0, 1):
@@ -60,7 +58,6 @@ class WaitingSceneTests(unittest.TestCase):
         scene.buffer_input(BufferedCommand('jump'))
         scene.buffer_input(BufferedCommand('crouch'))
         self.assertEqual((scene.directional_input.up, scene.directional_input.down), (-1, -1))
-        self.assertIsNone(scene.pending_action)
 
     def test_focus_clear_drops_bank_and_legacy_request_together(self):
         scene = self.step()
@@ -68,7 +65,6 @@ class WaitingSceneTests(unittest.TestCase):
         scene.set_key_state('up', False)
         scene.clear_keys(None)
         self.assertIsNone(scene.directional_input)
-        self.assertIsNone(scene.pending_action)
         for _ in range(20):
             scene.advance_animation()
         self.assertEqual(scene.action, 15)
@@ -89,7 +85,6 @@ class WaitingSceneTests(unittest.TestCase):
         scene.retire_waiting_controls()
         scene.sequence_state.select(2)
         self.assertIsNone(scene.directional_input)
-        self.assertIsNone(scene.pending_action)
         self.assertFalse(scene.waiting_controls_available())
 
     def test_a_selected_step_loads_its_first_pose_before_another_ready_gate_runs(self):
@@ -136,7 +131,6 @@ class WaitingSceneTests(unittest.TestCase):
                         scene.horizontal_key(None, backward, True)
                         scene.horizontal_key(None, backward, False)
                     # The old host kept only the last tap in its slot.
-                    self.assertIsNone(scene.pending_action)
                 sequences = []
                 for _ in range(12):
                     scene.advance_animation()
@@ -149,7 +143,6 @@ class WaitingSceneTests(unittest.TestCase):
                 if first == STANDING_TURN_SEQUENCE:
                     self.assertNotIn(CROUCH_STANDING_LOWER_SEQUENCE, sequences)
                     self.assertEqual(scene.sequence_state.facing, 1 - facing)
-                self.assertIsNone(scene.pending_action)
 
     def test_keys_held_into_a_scripted_brake_are_not_new_requests(self):
         from pop2.control_mapping import IDLE_SEQUENCE
@@ -188,7 +181,6 @@ class WaitingSceneTests(unittest.TestCase):
             direction = (1 if facing else -1) * (1 if key == 'forward' else -1)
             scene.horizontal_key(None, direction, True)
             scene.horizontal_key(None, direction, False)
-        self.assertIsNone(scene.pending_action)
 
     def test_scripted_turn_presses_are_bank_requests_with_native_priority(self):
         from pop2.control_mapping import CROUCH_STANDING_LOWER_SEQUENCE, STANDING_TURN_SEQUENCE

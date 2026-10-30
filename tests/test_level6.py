@@ -533,6 +533,43 @@ class LevelSixSwordTests(unittest.TestCase):
         self.assertEqual(scene.level_map.tile(16, 5, 1).kind, 1)
         self.assertEqual(scene.sequence_state.facing, 0)
 
+    def test_presses_during_the_pickup_meet_the_long_sheathes_gates(self):
+        # SEQS 91 (229-232) links to the long sheathe 92; GenCtrl 6:0560-07e0
+        # has no branch for their poses before 48, so the latches wait there:
+        # a pending Forward runs from 48 (6:062c/1014), pose 50 is mode 5 and
+        # discards an Up or Down tap, and a held Backward turns at 51. The old
+        # host slot ran its last tap after the sheathe (Up jumped, Down crouched).
+        scene = self.scene
+        for key, hold, expected in ((-1, False, ((92, 48), 1)), ('down', False, ((92, 52), 2)),
+                                    ('up', False, ((92, 52), 2)), (1, True, ((92, 51), 5))):
+            with self.subTest(key=key, hold=hold):
+                scene.load_level(6)
+                scene.peaceful = True
+                scene.jump_to_room(16, 1, 272, 0)
+                scene.combat.player.sword_lost = True
+                scene.set_key_state('shift', True)
+                trace, pressed = [], False
+                for _ in range(90):
+                    self.tick()
+                    if scene.sequence_state.sequence_id == 91 and not pressed:
+                        scene.set_key_state('shift', False)
+                        if key in ('up', 'down'):
+                            scene.set_key_state(key, True)
+                            scene.set_key_state(key, False)
+                        else:
+                            scene.horizontal_key(None, key, True)
+                            if not hold:
+                                scene.horizontal_key(None, key, False)
+                        pressed = True
+                    trace.append((scene.sequence_state.sequence_id, scene.action))
+                if hold:
+                    scene.horizontal_key(None, key, False)
+                self.assertEqual(scene.game.sword_type, 2)
+                last = max(index for index, step in enumerate(trace) if step[0] == 92)
+                self.assertEqual((trace[last], trace[last + 1][0]), expected)
+                if expected[1] == 2:
+                    self.assertEqual({sequence for sequence, _ in trace[last + 1:]}, {2})
+
 
 @unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported level-six resources required')
 class LevelSixSaveTests(unittest.TestCase):

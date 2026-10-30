@@ -18,7 +18,6 @@ class RunningCrouchControlTests(unittest.TestCase):
 
         scene = self.fixture.sword_scene()
         scene.sequence_state = SequenceState(200, action=action, facing=facing, cursor=1)
-        scene.pending_action = BufferedCommand('crouch')
         scene.horizontal_input = (1 if facing else -1) if forward else 0
         scene.held_directions = [scene.horizontal_input] if forward else []
         scene.run_active = True
@@ -28,6 +27,7 @@ class RunningCrouchControlTests(unittest.TestCase):
         scene.start_native_descent = Mock(return_value=True)
         scene.start_crouch_lower = Mock()
         scene.start_sequence = Mock()
+        self.assertTrue(scene.buffer_input(BufferedCommand('crouch')))
         return scene
 
     def test_every_running_pose_ducks_without_consulting_a_ledge_behind(self):
@@ -39,7 +39,6 @@ class RunningCrouchControlTests(unittest.TestCase):
                     self.assertTrue(scene.resume_queued_crouch_during_run())
                     scene.start_native_descent.assert_not_called()
                     scene.start_crouch_lower.assert_called_once_with()
-                    self.assertIsNone(scene.pending_action)
 
     def test_released_direction_still_brakes_first_on_supporting_poses(self):
         for facing in (0, 1):
@@ -52,7 +51,6 @@ class RunningCrouchControlTests(unittest.TestCase):
                     scene.start_native_descent.assert_not_called()
                     # Native brake clears pending Down (6:11e4-1206).
                     # A still-held Down can rearm later; this released tap cannot.
-                    self.assertIsNone(scene.pending_action)
                     self.assertEqual(scene.directional_input.down, 0)
 
 

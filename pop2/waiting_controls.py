@@ -13,13 +13,19 @@ from pop2.mac_input import DirectionalInput, read_keyboard, standing_input_reque
 
 
 SHEATHE_SEQUENCES = (SWORD_SHEATHE_SEQUENCE, 93)
+# Drinking (SEQS 78, poses 191-205) and the sword pickup (SEQS 91, 229-232,
+# linking to the long sheathe 92) are mode 1, and GenCtrl 6:0560-07e0 has no
+# branch for their poses (IsDeadPos 4:47a0 is false there): latches survive
+# to the next standing or sheathe gate.
+ITEM_SEQUENCES = (78, 91)
 
 
 class WaitingControls:
     @staticmethod
     def waiting_sequence(sequence):
         return (sequence in (IDLE_SEQUENCE, STANDING_TURN_SEQUENCE, RUN_STOP_SEQUENCE, 44)
-                or 29 <= sequence <= 42 or sequence in SHEATHE_SEQUENCES)
+                or 29 <= sequence <= 42 or sequence in SHEATHE_SEQUENCES
+                or sequence in ITEM_SEQUENCES)
 
     def begin_sheathe_controls(self):
         """PutSwordAway 6:2598: ClearControls, then Down=1, on the same bank.
@@ -89,7 +95,6 @@ class WaitingControls:
             # Retained host chord policy: an opposite jump chord turns once;
             # holding its Up does not create an additional jump after the turn.
             self.waiting_suppressed_up = self.up_held
-        self.pending_action = None
 
     def sample_waiting_controls(self):
         frame = self.sample_keyboard()
@@ -171,15 +176,6 @@ class WaitingControls:
             # Retained held-step repeat, only after the previous step ends.
             self.directional_input = replace(self.directional_input,
                                              **{'right' if direction > 0 else 'left': -1})
-        # Import a scripted/test request at this boundary once. Actual key
-        # callbacks use the bank directly and never write the old slot here.
-        queued = self.pending_action
-        if queued is not None:
-            if queued.kind not in ('horizontal', 'jump', 'crouch', 'crawl'):
-                return False
-            self.latch_waiting_command(queued)
-            self.pending_action = None
-        state = self.sequence_state
         facing = bool(state.facing)
         relative = self.directional_input.remap(facing_right=facing)
         if state.cursor == 0 and state.sequence_id != IDLE_SEQUENCE:

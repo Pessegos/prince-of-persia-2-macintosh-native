@@ -47,7 +47,6 @@ class AirborneControls(RunningControls):
         self.waiting_step_direction = 0
         self.airborne_vertical_followup = False
         self.run_repeat_up = False
-        self.pending_action = None
 
     def waiting_key(self, key, pressed):
         if (self.sequence_state.sequence_id not in AIRBORNE_INPUT_SEQUENCES
@@ -92,14 +91,6 @@ class AirborneControls(RunningControls):
             return self.update_waiting_controls()
         return False
 
-    def import_airborne_command(self):
-        command = self.pending_action
-        if command is not None and command.kind in ('horizontal', 'jump', 'crouch', 'crawl'):
-            self.latch_waiting_command(command)
-            if command.kind == 'jump' and not command.direction:
-                self.airborne_vertical_followup = self.up_held
-            self.pending_action = None
-
     def latch_waiting_command(self, command):
         super().latch_waiting_command(command)
         if (self.sequence_state.sequence_id in AIRBORNE_INPUT_SEQUENCES
@@ -130,7 +121,6 @@ class AirborneControls(RunningControls):
         if state.sequence_id not in AIRBORNE_INPUT_SEQUENCES or not self.waiting_controls_available():
             return
         self.sample_waiting_controls()
-        self.import_airborne_command()
         protected_landing = state.sequence_id in VERTICAL_INPUT_SEQUENCES and state.animation_state in (4, 5, 9)
         if state.cursor > 0 and (state.action in (26, 44) or protected_landing):
             # GenCtrl6:074a-0760 (26/44) and0576-059c (protected modes)

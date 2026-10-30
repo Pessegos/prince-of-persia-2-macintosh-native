@@ -40,7 +40,6 @@ class RunningControls(WaitingControls):
         self.directional_input = bank.consume('right' if direction > 0 else 'left', clear=True)
         self.waiting_step_direction = 0
         self.run_vertical_followup = False
-        self.pending_action = None
 
     def waiting_key(self, key, pressed):
         running = self.sequence_state.sequence_id in RUN_INPUT_SEQUENCES and self.waiting_controls_available()
@@ -112,14 +111,6 @@ class RunningControls(WaitingControls):
         self.sample_waiting_controls()
         if getattr(self, 'running_key_callback', False):
             return False
-        queued = self.pending_action
-        if queued is not None:
-            if queued.kind not in ('horizontal', 'jump', 'crouch', 'crawl'):
-                return False
-            self.latch_waiting_command(queued)
-            if queued.kind == 'jump' and not queued.direction:
-                self.run_vertical_followup = True
-            self.pending_action = None
         if state.cursor == 0:
             return False
         facing = bool(state.facing)

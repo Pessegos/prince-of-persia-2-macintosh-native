@@ -47,7 +47,6 @@ class LedgeControls(AirborneControls):
                      else ('down',) if sequence == 68 else ('up',))
         self.directional_input = self.directional_input.consume(*direction, clear=True)
         self.waiting_step_direction = self.ledge_jump_chord_direction = 0
-        self.pending_action = None
 
     def consume_ledge_input(self, action):
         self.waiting_controls_available()
@@ -56,7 +55,6 @@ class LedgeControls(AirborneControls):
                                   if action == 'climb' else self.directional_input.consume('down', clear=True))
         self.modifier_input = self.directional_input.modifier
         self.ledge_jump_chord_direction = 0
-        self.pending_action = None
 
     def waiting_key(self, key, pressed):
         if not getattr(self, 'native_ledge', False) or not self.waiting_controls_available():
@@ -94,17 +92,10 @@ class LedgeControls(AirborneControls):
                 and command.kind == 'jump' and command.direction):
             self.ledge_jump_chord_direction = command.direction
 
-    def import_ledge_command(self):
-        command = self.pending_action
-        if command is not None and command.kind in ('horizontal', 'jump', 'crouch', 'crawl'):
-            self.latch_waiting_command(command)
-            self.pending_action = None
-
     def update_waiting_controls(self, *, repeat=True):
         if getattr(self, 'native_ledge', False):
             if self.waiting_controls_available():
                 self.sample_waiting_controls()
-                self.import_ledge_command()
             return False
         if getattr(self, 'ledge_repeat_after_tick', False):
             return False
@@ -118,7 +109,6 @@ class LedgeControls(AirborneControls):
         if not self.waiting_controls_available():
             return None
         self.sample_waiting_controls()
-        self.import_ledge_command()
         player = getattr(getattr(self, 'combat', None), 'player', None)
         alive = (True if player is None else player.alive if player.native_alive is None else player.native_alive)
         return ledge_input_request(self.directional_input, grip=self.ledge_grip_delay,
@@ -127,7 +117,6 @@ class LedgeControls(AirborneControls):
     def finish_native_ledge_controls(self):
         self.waiting_controls_available()
         self.sample_waiting_controls()
-        self.import_ledge_command()
         chord = getattr(self, 'ledge_jump_chord_direction', 0)
         if chord and self.horizontal_input == chord and not self.up_held:
             self.directional_input = replace(self.directional_input, up=0)

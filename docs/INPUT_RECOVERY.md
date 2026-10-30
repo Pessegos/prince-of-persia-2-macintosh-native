@@ -1,9 +1,15 @@
 # Input Recovery Audit
 
-This audit compares the Macintosh controller with the current host buffer.
+This audit compares the Macintosh controller with the port's input handling.
 It records recovered conditions and known differences, not complete game
 parity. Addresses use `CODE:offset` in the original executable. The local
 recursive disassembly has unmapped ranges and indirect calls.
+
+Since 2026-10-30 the directional bank is the only store of pending requests:
+the host's single pending command (`pending_action`) and its dispatcher are
+removed ([census and retirement](research/remaining-host-slot.md)). Sections
+below that mention the "host buffer" describe the stage at which they were
+written; their tolerances now live in the bank or were removed with it.
 
 ## Native State
 
@@ -111,7 +117,7 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 | Vertical preparation 67-69 | Active Forward: standing forward jump | 6:15de-15e8 | Vertical bank integrated, independent route model and actual takeoff windows tested; 35 ms rest chord delay remains a host approximation |
 | Running 4-14 | Both horizontals zero: brake only at 7/11; otherwise Backward before fresh Up, then fresh Down; finally consume fresh Forward | 6:11e4-1274 | Grounded run bank integrated; direct production/native routing comparison and scene conflict/geometry regressions; airborne continuity remains partial |
 | Run-jump takeoff | Legal run poses plus two-cell geometry; accepted jump clears directions, consumes Up | 6:1c14-1d5e | Ordinary geometry tested |
-| Other unarmed poses | No general dispatch; pending latches remain unless reset/special branch intervenes | 6:0560-07e0 | Full native lifecycle missing |
+| Other unarmed poses | No general dispatch; pending latches remain unless reset/special branch intervenes | 6:0560-07e0 | Drink (SEQS 78, 191-205) and sword pickup (SEQS 91, 229-232) keep the bank to the next standing/sheathe gate; dead/wake poses (IsDeadPos 4:47a0, 179-183) and other special branches not migrated |
 | Crouch pose 109 | Down active: fresh Forward selects low step/lie-down, including with Shift; Down zero: rise unless terrain vetoes | 6:099a-0b58 | Low/prone native consumption and saved-player traces recovered; Shift low-step classification corrected; full runtime bank migration missing |
 | Cautious step | Consume Forward and modifier; no unconditional ClearControls at ordinary step entry | 6:1276-128a | Common repeat/late requests tested |
 | Ledge poses 87-99 | Up active, grip delay zero: climb before release check; otherwise zero modifier or sequence-mode 11 releases | 6:18e0-1994 | Up/Shift and expiry tested; modifier/special branches partial |
@@ -706,6 +712,13 @@ armed requests: refused requests stay pending, accepted ones consume as the
 original, and consumed holds no longer repeat sword steps or blocks. The
 attack-survives-Ctrl-release and rapid-attack policies stay explicit host
 extensions. This is not full SwordCtrl parity.
+
+The [slot census](research/remaining-host-slot.md) then found no production
+writer of the old host slot across all 3,291 tests; the drink and the sword
+pickup, which tests did not press through, were the last reachable writers.
+Both now keep the bank, and the slot, its dispatcher and every family's
+one-shot import are removed. A tap made where no bank owns the pose (the
+throne collapse/wake, the prototype rooftop without a level map) is not kept.
 
 1. Translate five native latches, sampling, facing remap and consume/reset
    operations in `mac_input`. Test every directional/modifier transition.

@@ -97,7 +97,6 @@ class PlaytestSceneTests(unittest.TestCase):
                 scene.set_key_state('down', True)
             else:
                 scene.up_key(None)
-            self.assertIsNone(scene.pending_action)
             requests.append(scene.directional_input)
         self.assertLess(requests[0].up, 0)
         self.assertEqual(requests[0], requests[1])

@@ -51,7 +51,6 @@ class LowControls(LedgeControls):
         if sequence in (26, 50):
             # Crouch6:1068/DoRunCrouch: the accepted Down is consumed.
             self.directional_input = self.directional_input.consume('down', clear=True)
-            self.pending_action = None
 
     def waiting_key(self, key, pressed):
         if not self.low_controls_available():
@@ -135,12 +134,6 @@ class LowControls(LedgeControls):
         self.waiting_controls_available()
         state = self.sequence_state
         self.sample_waiting_controls()
-        command = self.pending_action
-        if command is not None:
-            if command.kind not in ('horizontal', 'jump', 'crouch', 'crawl'):
-                return False
-            self.latch_waiting_command(command)
-            self.pending_action = None
         if state.cursor == 0:
             return False
         if callback and (state.action != 109 or state.animation_state in (4, 5, 9)):

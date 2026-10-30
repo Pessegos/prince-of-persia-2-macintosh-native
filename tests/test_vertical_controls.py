@@ -27,7 +27,6 @@ class VerticalHandoffTests(unittest.TestCase):
             with self.subTest(sequence=sequence, facing=facing, late=late, order=order):
                 result = host_trace(sequence, facing, late, order)
                 self.assertEqual(result['choice'], 'up' if late else 'none')
-                self.assertTrue(all(step['pending'] is None for step in result['trace']))
 
     def test_inverted_late_taps_reach_the_same_ready_gate(self):
         for facing, order in product((0, 1), (('up', 'down'), ('down', 'up'))):
@@ -62,7 +61,6 @@ class VerticalSceneTests(unittest.TestCase):
                 scene.in_animation_tick = True
                 scene.horizontal_key(None, 1 if facing else -1, True)
                 self.assertEqual(scene.sequence_state.sequence_id, 3)
-                self.assertIsNone(scene.pending_action)
                 scene.advance_animation()
                 self.assertEqual(scene.action, 16)
 
@@ -77,7 +75,6 @@ class VerticalSceneTests(unittest.TestCase):
                 scene.start_sequence(sequence)
                 self.assertEqual(scene.directional_input.words(),
                                  (0, 0, 1, 0, -1 if modifier == 'shift' else -2))
-                self.assertIsNone(scene.pending_action)
                 self.assertFalse(scene.update_waiting_controls())  # previous displayed pose15
                 self.assertEqual(scene.sequence_state.cursor, 0)
 
@@ -139,7 +136,6 @@ class VerticalLedgeBoundaryTests(unittest.TestCase):
                             fixture.tick()
                             self.assertEqual(scene.sequence_state.sequence_id, 24)
                             self.assertEqual(scene.directional_input.words(), (0, 0, 0, 0, 0))
-                            self.assertIsNone(scene.pending_action)
                         self.assertEqual(scene.action, 69)
         finally:
             fixture.doCleanups()

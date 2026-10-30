@@ -59,12 +59,10 @@ class RunningSceneTests(unittest.TestCase):
                 self.assertLess(scene.directional_input.up, 0)
                 scene.set_key_state('up', False)
                 self.assertLess(scene.directional_input.up, 0)
-                self.assertIsNone(scene.pending_action)
                 scene.level_map.run_jump_offset.return_value = 0
                 self.assertTrue(scene.update_waiting_controls())
                 self.assertEqual(scene.sequence_state.sequence_id, 4)
                 self.assertEqual(scene.directional_input.words(), (0, 0, 1, 0, 0))
-                self.assertIsNone(scene.pending_action)
 
     def test_released_up_and_down_taps_do_not_replace_each_other_during_drift(self):
         for facing, up_first in product((0, 1), (False, True)):
@@ -79,7 +77,6 @@ class RunningSceneTests(unittest.TestCase):
                     scene.set_key_state(key, True)
                     scene.set_key_state(key, False)
                 self.assertEqual((scene.directional_input.up, scene.directional_input.down), (-1, -1))
-                self.assertIsNone(scene.pending_action)
                 for _ in range(30):
                     scene.advance_animation()
                     if scene.sequence_state.sequence_id == 4:
@@ -112,7 +109,6 @@ class RunningSceneTests(unittest.TestCase):
                 self.assertEqual(poses[:4], [9, 10, 11, 53])
                 self.assertEqual(poses[4:7], [54, 55, 56])
                 self.assertEqual(scene.sword_drawn, held)
-                self.assertIsNone(scene.pending_action)
 
 
 if __name__ == '__main__':

@@ -546,7 +546,6 @@ class Caverns(Environment):
                         scene.death.begin(3)
                 if actor is scene.combat.player:
                     scene.run_active = scene.run_stop_requested = scene.run_cycle_boundary_pending = False
-                    scene.pending_action = None
                     scene.action, scene.player_x = state.action, state.target_x
         for room, cell, kind in caverns.loose.plate_events:
             scene.sequence_state.sound_events.extend(caverns.plates.impact(
@@ -645,7 +644,6 @@ class Caverns(Environment):
                 scene.clear_keys(None)
                 scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
                 scene.run_active = scene.run_stop_requested = scene.run_cycle_boundary_pending = False
-                scene.pending_action = None
                 scene.death.begin(5)
                 scene.action, scene.player_x = state.action, state.target_x
                 scene.status.set('Defeated')

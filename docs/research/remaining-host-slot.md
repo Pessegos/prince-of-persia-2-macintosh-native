@@ -1,11 +1,11 @@
 # Remaining host-slot writers (2026-10-30)
 
-Inventory for the next queue/input migration stages, after armed requests
-moved to the directional bank (see `armed-input-priority.md`). It lists the
-code paths that still **write** `ScenePrototype.pending_action`, the native
-rule each one stands in for, and the proposed migration with the regression
-that should reject today's behavior. No production behavior changed here,
-except the armed Up-release fix noted below.
+Inventory of the queue/input migration stages after armed requests moved to
+the directional bank (see `armed-input-priority.md`). It lists the code paths
+that wrote `ScenePrototype.pending_action`, the native rule each one stood in
+for, and the migration with the regression that rejects the old behavior.
+The slot is now retired (last section); the numbered sections are the record
+of how each writer went.
 
 ## Method
 
@@ -181,8 +181,44 @@ the release no longer starts or queues a jump. Regression:
 `tests.test_armed_input` "releasing up held through a hurt" (fails on the
 previous code).
 
-## Consumers still reading the slot
+## Retirement of the slot and its consumers (2026-10-30)
 
-`dispatch_pending_action`, the airborne/ledge/low/running families' one-shot imports of
-scripted requests, and the ledge-climb completion re-classification. Each
-should be removed with its producer above, not separately.
+Final census, same method over the whole discovery set (3,291 tests): no
+production code wrote the slot; only fixtures did. A static review of the
+remaining writers found two that ordinary play reaches but no test pressed
+through, both item actions started from a crouch:
+
+| Sequence | Poses | Mode | Old slot behaviour |
+| --- | --- | --- | --- |
+| 78 (drink) | 191-205 | 1 | last tap ran at pose 15 (Backward then Down crouched) |
+| 91 (sword pickup) -> 92 | 229-232, then the long sheathe | 1 (92's pose 50 is 5) | last tap ran after 52 (Up jumped, Down crouched) |
+
+Native: GenCtrl 6:0560-07e0 (static decode) has no branch for these poses:
+they are not in IsDeadPos 4:47a0 (185, 242/243, 266, 271 for the Prince) or
+179-183, nor in any later range (246-263, 217-226, 272-281, 295, 26/44). With
+mode 1 the 6:0576 clear does not run either, so the latches simply wait for
+the next gate: pose 15 after the drink (6:05fe, standing priority 6:0db0-0e16),
+and the long sheathe's own gates after the pickup (48 resumes a pending
+Forward as SEQS 43, 50 is mode 5, 51-52 standing).
+
+Done: `ITEM_SEQUENCES` (78, 91) joined `WaitingControls.waiting_sequence`, so
+the bank survives the item action (the pickup's own 6:0b4c clear and modifier
+consumption still run first). With no writer left, the slot was removed:
+`pending_action`, `dispatch_pending_action`, the airborne/ledge/low/running/
+waiting one-shot imports, the run-cycle and landing dispatch calls, the
+non-native climb reclassification and the slot retarget in
+`queue_sampled_horizontal_action`. `dispatch_jump`'s vertical-Up run brake
+now latches the Up into the brake's bank instead. `buffer_input` latches into
+the bank where a family owns the pose and otherwise drops the tap; this is a
+port approximation for the poses no family owns yet (throne collapse 237 and
+wake 231, which run IsDeadPos/wake branches; the prototype rooftop without a
+level map). Held keys are still read at rest there.
+
+Regressions (fail on the previous code): `tests.test_potions` "taps during
+the drink wait in the bank for the standing gate" (Backward/Down in both
+orders and facings turn and never crouch) and `tests.test_level6` "presses
+during the pickup meet the long sheathe's gates" (Forward tap runs from 48;
+Up/Down taps are discarded at 50; held Backward turns at 51). Fixtures that
+assigned the slot now latch through `buffer_input`, and the 198 assertions
+that only checked the slot stayed empty were dropped with it. The airborne
+and vertical handoff audits no longer record a `pending` field.

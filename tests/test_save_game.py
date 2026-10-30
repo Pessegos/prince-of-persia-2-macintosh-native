@@ -468,7 +468,6 @@ class SaveSceneTests(unittest.TestCase):
         scene.load_game_from(self.path)
         self.assertEqual(scene.room_id, scene.game.level.start_room)
         self.assertTrue(scene.opening.active)
-        self.assertIsNone(scene.pending_action)
 
     def test_bad_retained_pixel_does_not_replace_live_game(self):
         scene = self.scene
@@ -706,7 +705,6 @@ class SaveSceneTests(unittest.TestCase):
         scene.window_keys_down.add('Up')
         scene.load_game_from(self.path)
         self.assertFalse(scene.up_held or scene.shift_held)
-        self.assertIsNone(scene.pending_action)
 
     def test_saved_preview_matches_real_resume_and_never_mutates_live_world(self):
         from pop2.save_game import decode_preview, read_document

@@ -106,7 +106,6 @@ class GameWindowTests(unittest.TestCase):
                     self.assertIn(scene.sequence_state.sequence_id, (46, 47))
                     self.assertFalse(scene.run_active)
                     self.assertFalse(scene.jump_repeat_armed)
-                    self.assertIsNone(scene.pending_action)
 
     def test_jump_contact_with_live_ai_interrupts_before_passing_the_guard(self):
         scene = self.scene
@@ -198,7 +197,6 @@ class GameWindowTests(unittest.TestCase):
                 self.assertIsNone(scene.dev_key_press(event))
                 scene.horizontal_key(event, direction, True)
                 self.assertEqual(scene.held_directions, [direction])
-                self.assertIsNone(scene.pending_action)
                 self.assertIsNone(scene.dev_key_release(event))
                 scene.horizontal_key(event, direction, False)
                 self.assertEqual(scene.held_directions, [])
@@ -240,7 +238,6 @@ class GameWindowTests(unittest.TestCase):
             self.tick()
         self.assertEqual(scene.action, 15)
         self.assertFalse(scene.jump_repeat_armed)
-        self.assertIsNone(scene.pending_action)
 
     def test_up_already_held_before_escape_pause_keeps_its_repeat_state(self):
         scene = self.scene
@@ -354,7 +351,6 @@ class GameWindowTests(unittest.TestCase):
         self.assertEqual(scene.horizontal_input, 0)
         self.assertFalse(scene.ctrl_held)
         self.assertFalse(scene.up_held)
-        self.assertIsNone(scene.pending_action)
         self.tick(20)
         self.assertFalse(scene.run_active)
 
@@ -449,7 +445,6 @@ class GameWindowTests(unittest.TestCase):
                 else:
                     self.fail("Recorded rooftop chord did not reach running takeoff")
                 self.assertEqual([action for action, x, face in trace], [61, 62, 63, 64, 65, 13, 34])
-                self.assertIsNone(scene.pending_action)
                 traces.append(trace)
         self.assertEqual(traces[0], traces[1])
 
@@ -504,7 +499,6 @@ class GameWindowTests(unittest.TestCase):
                     scene.set_key_state("up", False)
                 self.tick(20)
                 self.assertEqual((scene.action, scene.terrain_motion.row), (15, 0))
-                self.assertIsNone(scene.pending_action)
                 self.assertFalse(scene.jump_repeat_armed)
 
     def test_held_up_chains_real_cavern_ledges_across_the_upper_room_link(self):
@@ -531,7 +525,6 @@ class GameWindowTests(unittest.TestCase):
                           scene.player_x), (15, 0, 2, 367))
         self.assertFalse(scene.native_ledge)
         self.assertFalse(scene.terrain_motion.falling)
-        self.assertIsNone(scene.pending_action)
 
     def test_cavern_entry_accepts_horizontal_holds_through_every_turn_pose(self):
         scene = self.scene
@@ -552,9 +545,8 @@ class GameWindowTests(unittest.TestCase):
                         self.assertEqual(scene.run_direction, direction)
                         self.assertFalse(scene.native_ledge)
 
-    def test_alt_restart_preserves_live_horizontal_holds_but_not_the_old_queue(self):
+    def test_alt_restart_preserves_live_horizontal_holds(self):
         from types import SimpleNamespace
-        from pop2.scene_prototype import BufferedCommand
 
         scene = self.scene
         with patch.object(scene, 'render'):
@@ -565,7 +557,6 @@ class GameWindowTests(unittest.TestCase):
                     scene.jump_to_room(0, row=1, x=234, facing=int(direction > 0))
                     self.control_key(key)
                     self.tick(2)
-                    scene.pending_action = BufferedCommand('sword_draw')
                     event = SimpleNamespace(keysym='r', state=0x20000, char='r')
                     self.assertEqual(scene.dev_key_press(event), 'break')
                     scene.dev_key_release(event)
@@ -573,7 +564,6 @@ class GameWindowTests(unittest.TestCase):
                     self.assertEqual(scene.held_directions, [direction])
                     self.assertNotIn(key, scene.pause_resume_keys)
                     self.assertFalse(scene.sword_drawn)
-                    self.assertNotEqual(scene.pending_action, BufferedCommand('sword_draw'))
                     for _ in range(14):
                         if scene.run_active:
                             break
@@ -602,7 +592,6 @@ class GameWindowTests(unittest.TestCase):
                     self.assertNotIn(modifier, scene.pause_resume_keys)
                     # The restart's SEQS 5 starts with a zeroed bank (4:3e70):
                     # the live holds are bank requests, not a host slot.
-                    self.assertIsNone(scene.pending_action)
                     self.assertEqual(scene.directional_input.right, -1)
                     for _ in range(10):
                         self.tick()
@@ -627,7 +616,6 @@ class GameWindowTests(unittest.TestCase):
         scene.dev_key_press(event)
         scene.dev_key_release(event)
         self.assertEqual(scene.held_directions, [])
-        self.assertIsNone(scene.pending_action)
         self.assertIn('Right', scene.pause_resume_keys)
         self.tick(12)
         self.assertFalse(scene.run_active)
@@ -644,7 +632,6 @@ class GameWindowTests(unittest.TestCase):
         scene.dev_key_press(event)
         scene.dev_key_release(event)
         self.assertEqual(scene.held_directions, [])
-        self.assertIsNone(scene.pending_action)
         self.assertIn('Right', scene.pause_resume_keys)
         self.assertTrue(scene.combat.player.alive)
 
@@ -683,7 +670,6 @@ class GameWindowTests(unittest.TestCase):
                         # The native ledge now owns one directional bank,
                         # including protected-climb taps. Ctrl still draws
                         # only if held through the standing gate.
-                        self.assertIsNone(scene.pending_action)
                         if kind == 'turn':
                             self.assertLess(scene.directional_input.remap(
                                 facing_right=bool(facing)).right, 0)
@@ -696,7 +682,6 @@ class GameWindowTests(unittest.TestCase):
                             if not scene.ledge_climbing:
                                 break
                         self.assertFalse(scene.ledge_climbing)
-                        self.assertIsNone(scene.pending_action)
                         if kind.startswith('sword'):
                             # The climb has a standing tail after releasing
                             # its ledge state. Let that reach the draw gate.
@@ -773,7 +758,6 @@ class GameWindowTests(unittest.TestCase):
                         scene.up_key(None)
                         if not held:
                             scene.set_key_state('up', False)
-                        self.assertIsNone(scene.pending_action)
                         poses = []
                         for _ in range(45):
                             self.tick()
@@ -788,7 +772,6 @@ class GameWindowTests(unittest.TestCase):
                                          (25, 0 if held else 1, 15))
                         scene.set_key_state('up', False)
                         self.assertFalse(scene.terrain_motion.falling or scene.native_ledge)
-                        self.assertIsNone(scene.pending_action)
 
     def test_run_jump_keeps_held_up_when_only_horizontal_is_released(self):
         scene = self.scene
@@ -818,12 +801,8 @@ class GameWindowTests(unittest.TestCase):
                         self.assertEqual((scene.sequence_state.sequence_id, scene.action,
                                           scene.player_x), before)
                         if scene.sequence_state.sequence_id in (3, 4):
-                            self.assertIsNone(scene.pending_action)
                             self.assertLess(scene.directional_input.up, 0)
                             self.assertTrue(scene.airborne_vertical_followup)
-                        else:
-                            # The bump's mode 5 owns the bank: no host request.
-                            self.assertIsNone(scene.pending_action)
                         if paused_release:
                             scene.set_paused(False)
                         poses = []
@@ -839,7 +818,6 @@ class GameWindowTests(unittest.TestCase):
                         self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action),
                                          (25, 0, 15))
                         self.assertFalse(scene.terrain_motion.falling or scene.native_ledge)
-                        self.assertIsNone(scene.pending_action)
 
     def test_cavern_room_21_dev_warp_starts_on_the_lower_floor(self):
         scene = self.scene
@@ -878,11 +856,8 @@ class GameWindowTests(unittest.TestCase):
                                 scene.set_paused(True)
                             scene.horizontal_key(None, direction, False)
                             if scene.sequence_state.sequence_id in (3, 4):
-                                self.assertIsNone(scene.pending_action)
                                 self.assertLess(scene.directional_input.up, 0)
                                 self.assertTrue(scene.airborne_vertical_followup)
-                            else:
-                                self.assertIsNone(scene.pending_action)
                             if paused_release:
                                 scene.set_paused(False)
                             poses = []
@@ -898,7 +873,6 @@ class GameWindowTests(unittest.TestCase):
                             self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action),
                                              (destination, row - 1, 15))
                             self.assertFalse(scene.terrain_motion.falling or scene.native_ledge)
-                            self.assertIsNone(scene.pending_action)
 
     def test_run_wall_contact_keeps_a_climb_requested_before_or_during_the_bump(self):
         scene = self.scene
@@ -920,13 +894,8 @@ class GameWindowTests(unittest.TestCase):
                         scene.up_key(None)
                         scene.horizontal_key(None, direction, False)
                         if queue_pose == 6:
-                            self.assertIsNone(scene.pending_action)
                             self.assertLess(scene.directional_input.up, 0)
                             self.assertTrue(scene.run_vertical_followup)
-                        else:
-                            # Pressed during the wall stop (47, mode 5): the
-                            # bank owns it; the held Up is fresh after 52.
-                            self.assertIsNone(scene.pending_action)
                         poses = []
                         for _ in range(65):
                             self.tick()
@@ -940,7 +909,6 @@ class GameWindowTests(unittest.TestCase):
                         self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action),
                                          (room, row - 1, 15))
                         self.assertFalse(scene.terrain_motion.falling or scene.native_ledge)
-                        self.assertIsNone(scene.pending_action)
 
     def test_climb_releases_the_old_up_chord_into_the_still_held_run(self):
         scene = self.scene
@@ -964,7 +932,6 @@ class GameWindowTests(unittest.TestCase):
                             self.assertTrue(scene.ledge_climbing)
                             self.assertEqual(scene.action, release_pose)
                             scene.horizontal_key(None, direction, True)
-                            self.assertIsNone(scene.pending_action)
                             self.assertLess(scene.directional_input.up, 0)
                             self.assertLess(getattr(scene.directional_input,
                                                     'right' if direction > 0 else 'left'), 0)
@@ -981,7 +948,6 @@ class GameWindowTests(unittest.TestCase):
                             self.assertEqual(scene.run_direction, direction)
                             self.assertEqual(scene.action, 1)
                             self.assertFalse(scene.native_ledge)
-                            self.assertIsNone(scene.pending_action)
 
     def test_fullscreen_remembers_normal_and_maximized_state(self):
         scene = self.scene
@@ -1150,7 +1116,6 @@ class GameWindowTests(unittest.TestCase):
         self.assertGreater(scene.player_x, anchor)
         self.assertFalse(scene.sword_sheathing)
         self.assertFalse(scene.combat.player.controls_locked)
-        self.assertIsNone(scene.pending_action)
 
     def test_repeated_standing_turns_at_wall_preserve_all_native_poses_and_position(self):
         from dataclasses import replace
@@ -1271,7 +1236,6 @@ class GameWindowTests(unittest.TestCase):
                             sequence = scene.sequence_state.sequence_id
                             if collided:
                                 replayed |= sequence in (3, 4, 28)
-                                self.assertIsNone(scene.pending_action)
                             collided |= sequence == 47
                             self.assertFalse(scene.terrain_motion.falling)
                         self.assertTrue(collided)
@@ -1352,7 +1316,6 @@ class GameWindowTests(unittest.TestCase):
                         previous_x = scene.player_x
                     self.assertEqual((scene.player_x, scene.action), (end_x, 15))
                     self.assertFalse(scene.shift_held)
-                    self.assertIsNone(scene.pending_action)
 
     def test_screen_five_repeated_taps_match_native_short_step_and_actual_bump(self):
         scene = self.scene
@@ -1368,7 +1331,6 @@ class GameWindowTests(unittest.TestCase):
                 self.assertGreaterEqual(scene.player_bounds()[0], 225)
                 self.assertFalse(scene.terrain_motion.falling)
             self.assertEqual((scene.action, scene.player_x), (15, expected_x))
-            self.assertIsNone(scene.pending_action)
 
     def test_screen_five_crouch_tap_reaches_low_pose_before_native_rise_bump(self):
         scene = self.scene
@@ -1387,7 +1349,6 @@ class GameWindowTests(unittest.TestCase):
         self.assertEqual(frames, [(50, 107, 245), (50, 108, 239), (117, 109, 232),
                                   (49, 110, 229), (49, 111, 227), (47, 50, 242),
                                   (47, 51, 242), (47, 52, 242), (2, 15, 242)])
-        self.assertIsNone(scene.pending_action)
 
     def test_screen_five_held_crouch_keeps_low_pose_and_release_remains_controllable(self):
         scene = self.scene
@@ -1423,7 +1384,6 @@ class GameWindowTests(unittest.TestCase):
             self.tick()
             frames.append((scene.sequence_state.sequence_id, scene.action, scene.player_x))
         self.assertEqual(frames, [(47, 50, 247), (47, 51, 247), (47, 52, 247), (2, 15, 247)])
-        self.assertIsNone(scene.pending_action)
 
     def test_development_menu_teleports_without_a_live_input_or_pause_backlog(self):
         scene = self.scene
@@ -1525,7 +1485,6 @@ class GameWindowTests(unittest.TestCase):
         scene.start_sword_action("sword_sheathe")
         scene.horizontal_key(None, -1, True)
         # The press is a bank request (PutSwordAway shares the bank), not a slot.
-        self.assertIsNone(scene.pending_action)
         self.assertEqual(scene.directional_input.left, -1)
         actions = []
         for _ in range(25):
@@ -1658,7 +1617,6 @@ class GameWindowTests(unittest.TestCase):
                 if index < 12:
                     self.tick()
             self.assertEqual([frame[3] for frame in trace], [*range(34, 45), 7, 34 if held else 8])
-            self.assertIsNone(scene.pending_action)
             return trace
 
         for facing in (0, 1):
@@ -1703,7 +1661,6 @@ class GameWindowTests(unittest.TestCase):
                 self.assertEqual(actions, [40, 41, 42, 43, 44, 7, 53])
                 self.assertEqual(scene.sequence_state.sequence_id, 6 if held else 13)
                 self.assertEqual(scene.sequence_state.current_y, 0)
-                self.assertIsNone(scene.pending_action)
                 if not held:
                     self.tick(12)
                     self.assertEqual((scene.action, scene.sequence_state.facing), (15, 1))
@@ -2331,11 +2288,9 @@ class GameWindowTests(unittest.TestCase):
         scene.in_animation_tick = True
         scene.start_native_descent()
         scene.horizontal_key(None, -1, True)
-        self.assertIsNone(scene.pending_action)
         scene.up_held = True
         scene.start_jump_if_needed()
         self.assertEqual(scene.sequence_state.sequence_id, 68)
-        self.assertIsNone(scene.pending_action)
 
     def test_upper_guard_uses_generator_alternate_floor_and_lands_to_pursue(self):
         scene = self.scene

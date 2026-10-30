@@ -77,7 +77,6 @@ class LowSceneTests(unittest.TestCase):
                 for key in order:
                     scene.set_key_state(key, True)
                     scene.set_key_state(key, False)
-                self.assertIsNone(scene.pending_action)
                 poses = []
                 for _ in range(30):
                     scene.advance_animation()
@@ -97,7 +96,6 @@ class LowSceneTests(unittest.TestCase):
                     poses.append(scene.action)
                 self.assertNotIn(67, poses)
                 self.assertEqual(scene.action, 15)
-                self.assertIsNone(scene.pending_action)
 
     def test_released_up_survives_only_after_the_last_protected_rise_pose(self):
         for facing, pose in product((0, 1), (116, 117)):
@@ -110,7 +108,6 @@ class LowSceneTests(unittest.TestCase):
                     scene.advance_animation()
                     seen.append(scene.action)
                 self.assertEqual(67 in seen, pose == 117)
-                self.assertIsNone(scene.pending_action)
 
     def test_prone_body_clears_a_released_tap_but_held_direction_rearms_at_idle(self):
         for held in (False, True):
@@ -171,10 +168,8 @@ class LowSceneTests(unittest.TestCase):
                                 scene.horizontal_key(None, 1, False)
                             else:
                                 scene.set_key_state(key, False)
-                        self.assertIsNone(scene.pending_action)
                         while scene.action != last:
                             scene.advance_animation()
-                            self.assertIsNone(scene.pending_action)
                         self.assertEqual(scene.directional_input.words()[:4], (0, 0, 0, 0))
                         for _ in range(4):
                             scene.advance_animation()
@@ -220,7 +215,6 @@ class LowSceneTests(unittest.TestCase):
                     scene.horizontal_key(None, direction, False)
                     scene.update_crawl()
                 self.assertEqual(scene.sequence_state.sequence_id, 122 if forward else 123)
-                self.assertIsNone(scene.pending_action)
 
 
 if __name__ == '__main__':

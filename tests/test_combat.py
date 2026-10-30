@@ -482,7 +482,6 @@ class GuardCombatTests(unittest.TestCase):
             scene.start_sequence(69)
             scene.sequence_runtime.next_frame()
             self.assertEqual(scene.sequence_state.action, 167)
-            scene.pending_action = None
             poses = []
             for _ in range(4):
                 scene.advance_animation()
@@ -799,12 +798,10 @@ class GuardCombatTests(unittest.TestCase):
         c.guard.state.target_x = c.guard.state.current_x = 200
         c.guard.sword_drawn = True
         c.guard.state.action = 154
-        scene.pending_action = BufferedCommand("jump")
         with patch.object(c, "advance_guard"):
             scene.advance_combat()
             self.assertTrue(scene.sword_drawn)
             self.assertTrue(c.player.sword_drawn)
-            self.assertIsNone(scene.pending_action)
             self.assertAlmostEqual(scene.current_animation_interval_ms(), 100)
             for _ in range(10):
                 scene.advance_animation()
@@ -888,14 +885,12 @@ class GuardCombatTests(unittest.TestCase):
         scene.up_held = scene.jump_repeat_armed = True
         scene.start_sequence(28)
         scene.sequence_runtime.next_frame()
-        scene.pending_action = BufferedCommand("jump")
         with patch.object(c, "advance_guard"):
             scene.advance_combat()
             self.assertEqual(c.player.life, 0)
             self.assertFalse(scene.sword_drawn)
             self.assertFalse(scene.up_held)
             self.assertFalse(scene.jump_repeat_armed)
-            self.assertIsNone(scene.pending_action)
             for _ in range(15):
                 scene.advance_animation()
             self.assertEqual(scene.action, 185)
@@ -967,13 +962,13 @@ class GuardCombatTests(unittest.TestCase):
         scene.combat.guard.life = 0
         scene.combat.player.life = 0
         scene.combat.last_guard_at = 400
-        scene.pending_action = BufferedCommand("sword_attack")
+        scene.armed_attack_requested = True
         scene.restart_opening()
+        self.assertFalse(scene.armed_attack_requested)
         self.assertEqual(scene.combat.player.life, 3)
         self.assertEqual(scene.combat.guard.life, 1)
         self.assertEqual(scene.combat.guard.state.target_x, 149)
         self.assertIsNone(scene.combat.last_guard_at)
-        self.assertIsNone(scene.pending_action)
         self.assertTrue(scene.opening.active)
 
     def test_dead_player_cannot_queue_or_start_commands(self):
@@ -982,9 +977,8 @@ class GuardCombatTests(unittest.TestCase):
         scene.set_key_state("ctrl", True)
         scene.horizontal_key(None, -1, True)
         scene.up_key(None)
-        self.assertIsNone(scene.pending_action)
         self.assertFalse(scene.sword_drawn)
-        self.assertFalse(scene.dispatch_pending_action())
+        self.assertFalse(getattr(scene, 'armed_attack_requested', False))
 
     def test_complete_opening_defence_counterattack_and_guard_defeat(self):
         fixture = animation_tests.AnimationDataTests()

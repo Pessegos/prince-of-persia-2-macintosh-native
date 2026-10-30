@@ -418,7 +418,6 @@ class MenuSceneTests(unittest.TestCase):
             self.assertEqual(scene.paused, was_paused)
             self.assertEqual(scene.held_directions, [])
             self.assertFalse(scene.up_held)
-            self.assertIsNone(scene.pending_action)
 
     def test_escape_autorepeat_does_not_pause_again_after_closing(self):
         scene = self.scene
@@ -546,7 +545,6 @@ class MenuSceneTests(unittest.TestCase):
                 self.assertEqual(scene.horizontal_input, 0)
                 self.assertFalse(scene.up_held)
                 self.assertFalse(scene.ctrl_held)
-                self.assertIsNone(scene.pending_action)
                 self.assertEqual(scene.dev_key_release(event), "break")
                 # Fresh Space now requests the time HUD; other text keys
                 # still fall through once the pause-resume hold is released.

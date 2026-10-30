@@ -6,7 +6,6 @@ separate experiments, not an original/port FrameAdv lockstep replay.
 """
 
 import argparse
-from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
@@ -63,11 +62,11 @@ def host_trace(facing, order, late):
 
     def record(label):
         state = scene.sequence_state
-        pending, bank = scene.pending_action, scene.directional_input
+        bank = scene.directional_input
         trace.append(dict(label=label, pose=state.action, sequence=state.sequence_id,
                           selected_sequence=state.source_sequence_id,
                           room=scene.room_id, row=scene.terrain_motion.row,
-                          x=state.target_x, pending=asdict(pending) if pending else None,
+                          x=state.target_x,
                           bank=bank.words() if bank is not None else None))
 
     try:

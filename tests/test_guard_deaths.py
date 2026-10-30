@@ -293,7 +293,6 @@ class RunStopDistanceTests(unittest.TestCase):
                         scene.advance_animation()
                     self.assertEqual(scene.player_x, stopped_x)
                     self.assertFalse(scene.run_active)
-                    self.assertIsNone(scene.pending_action)
 
 
 if __name__ == "__main__":

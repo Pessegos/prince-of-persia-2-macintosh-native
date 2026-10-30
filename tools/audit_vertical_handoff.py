@@ -29,8 +29,7 @@ def host_trace(sequence, facing, late, order, *, inverted=False):
         state, bank = scene.sequence_state, scene.directional_input
         trace.append(dict(label=label, sequence=state.sequence_id, pose=state.action,
                           mode=state.animation_state, x=state.target_x,
-                          bank=bank.words() if bank else None,
-                          pending=scene.pending_action.kind if scene.pending_action else None))
+                          bank=bank.words() if bank else None))
 
     def key(name, pressed):
         physical = ('down' if name == 'up' else 'up') if inverted else name

@@ -163,7 +163,6 @@ class ArmedBufferSceneTests(unittest.TestCase):
         scene.up_held = True
         scene.jump_started_for_press = False
         scene.set_key_state('up', False)
-        self.assertIsNone(scene.pending_action)
         scene.set_key_state('down', True)
         scene.set_key_state('down', False)
         sequences = set()
@@ -236,7 +235,6 @@ class SheatheBankTests(unittest.TestCase):
                         scene.horizontal_key(None, -1 if key == 'left' else 1, pressed)
                     else:
                         scene.set_key_state(key, pressed)
-                    self.assertIsNone(scene.pending_action)
             scene.advance_animation()
             trace.append((scene.sequence_state.source_sequence_id, scene.action))
         return scene, trace

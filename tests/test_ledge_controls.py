@@ -31,12 +31,11 @@ class LedgeSelectorTests(unittest.TestCase):
             scene = SimpleNamespace(directional_input=DirectionalInput(*bank.words()),
                                     waiting_controls_available=lambda: True,
                                     sample_waiting_controls=lambda: None,
-                                    pending_action=object(), ledge_jump_chord_direction=1)
+                                    ledge_jump_chord_direction=1)
             LedgeControls.consume_ledge_input(scene, action)
             expected = climb_input(bank) if action == 'climb' else release_input(bank)
             self.assertEqual(scene.directional_input.words(), expected.words())
             self.assertEqual(scene.modifier_input, expected.modifier)
-            self.assertIsNone(scene.pending_action)
             self.assertEqual(scene.ledge_jump_chord_direction, 0)
 
 
@@ -57,7 +56,6 @@ class LedgeSceneTests(unittest.TestCase):
                 scene.ledge_grip_delay = 2
                 scene.set_key_state('up', True)
                 scene.set_key_state('up', False)
-                self.assertIsNone(scene.pending_action)
                 fixture.tick()
                 self.assertFalse(scene.ledge_climbing)
                 self.assertEqual(scene.directional_input.up, -1)
@@ -125,7 +123,6 @@ class LedgeSceneTests(unittest.TestCase):
                 for name in order:
                     scene.set_key_state(name, True)
                     scene.set_key_state(name, False)
-                self.assertIsNone(scene.pending_action)
                 self.assertEqual((scene.directional_input.up, scene.directional_input.down), (-1, -1))
                 for _ in range(30):
                     scene.advance_animation()

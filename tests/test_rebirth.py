@@ -8,7 +8,6 @@ from PIL import Image, ImageChops
 from pop2.audio import AudioEngine
 from pop2.rebirth import Checkpoint, DeathState, level_checkpoints
 from pop2.render_opening import load_resource_file, ROOM_HEIGHT
-from pop2.scene_prototype import BufferedCommand
 from pop2.terrain import floor_contact_x
 import tests.test_terrain as terrain_tests
 from tests.test_audio import TimedPlayback
@@ -201,7 +200,6 @@ class RebirthSceneTests(unittest.TestCase):
         self.assertEqual(scene.room_id, 3)
         self.assertEqual(scene.death.counter, -1)
         self.assertTrue(scene.up_held)
-        self.assertIsNone(scene.pending_action)
         self.assertNotIn("Up", scene.pause_resume_keys)
         for _ in range(90):
             self.tick()
@@ -295,7 +293,6 @@ class RebirthSceneTests(unittest.TestCase):
         self.assertIn('a', scene.pause_resume_keys)
         self.assertEqual(scene.horizontal_input, 0)
         self.assertFalse(scene.up_held or scene.down_held or scene.ctrl_held or scene.shift_held)
-        self.assertIsNone(scene.pending_action)
 
     def test_held_space_restarts_at_the_first_eligible_poll(self):
         scene = self.scene
@@ -335,7 +332,6 @@ class RebirthSceneTests(unittest.TestCase):
         scene.combat.room_encounters[3][1].clear()
         scene.combat.player.max_life = 6
         scene.sequence_state.facing = 1
-        scene.pending_action = BufferedCommand("jump", 1)
         scene.harbor.ship_frame = 90
         self.die()
         self.eligible()
@@ -346,7 +342,6 @@ class RebirthSceneTests(unittest.TestCase):
         self.assertEqual((scene.combat.player.life, scene.combat.player.max_life), (5, 5))
         self.assertFalse(scene.opening.active)
         self.assertEqual(scene.harbor.ship_frame, 0)
-        self.assertIsNone(scene.pending_action)
         self.assertEqual(scene.combat.room_encounters[3][0][0].life, life)
         self.assertTrue(scene.combat.room_encounters[3][1])
         restored = scene.combat.room_encounters[3][0][0]

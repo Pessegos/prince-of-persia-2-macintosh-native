@@ -701,7 +701,6 @@ class GameMenuSceneTests(unittest.TestCase):
         self.assertIsNone(scene.game_menu)
         self.assertFalse(scene.paused)
         self.assertTrue(scene.opening.active)
-        self.assertIsNone(scene.pending_action)
         self.assertEqual(scene.dev_key_press(self.event("Return")), "break")
 
     def test_sound_shortcuts_work_when_paused_and_do_not_repeat_or_resume(self):

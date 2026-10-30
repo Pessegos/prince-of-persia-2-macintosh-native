@@ -855,7 +855,6 @@ class RooftopSceneTests(unittest.TestCase):
                 self.assertEqual(scene.room_id, 3)
                 self.assertTrue(any(room == 0 and row == 2 and action == 110
                                     for room, row, action, x in trace))
-                self.assertIsNone(scene.pending_action)
                 traces.append(trace)
         self.assertEqual(traces[1:], [traces[0], traces[0]])
 
@@ -920,7 +919,6 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertEqual(rises, list(range(110, 120)))
         self.assertEqual((scene.action, scene.room_id, scene.terrain_motion.row,
                           scene.player_x), (15, 0, 2, 379))
-        self.assertIsNone(scene.pending_action)
 
     def test_cavern_sword_draw_contacts_wall_with_attachment_and_recoils(self):
         scene = self.scene
@@ -1423,11 +1421,10 @@ class RooftopSceneTests(unittest.TestCase):
         scene.horizontal_key(None, 1, False)
         self.tick(5)
         scene.shift_held = False
-        scene.pending_action = BufferedCommand("jump", 1)
+        self.assertTrue(scene.buffer_input(BufferedCommand("jump", 1)))
         self.tick(6)
         self.assertEqual((scene.sequence_state.sequence_id, scene.action), (3, 16))
         self.assertFalse(scene.terrain_motion.falling)
-        self.assertIsNone(scene.pending_action)
 
     def test_secret_guard_palette_persists_on_revisit(self):
         self.place(4, 0, 300, 1)
@@ -1488,7 +1485,6 @@ class RooftopSceneTests(unittest.TestCase):
                 self.assertEqual(poses, [*range(34, 45), 7, 53, 54, 55, 56, 49, 50, 51, 52, 15])
                 self.assertFalse(scene.sword_drawn)
                 self.assertFalse(scene.run_active)
-                self.assertIsNone(scene.pending_action)
 
     def test_queued_sword_draw_cannot_interrupt_running_jump_that_misses_the_floor(self):
         scene = self.scene
