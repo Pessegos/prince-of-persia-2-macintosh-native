@@ -308,7 +308,7 @@ GetHorsePtInPlane (3:4584-459a: plane 0, room 2, level 9 -> a5-0x4af6 =
 masked (flags 16) and mirrored in level nine (3:46a0-46b6 -> FreeShpInfo
 1). Its colours are Prince CTBL 25360, loaded at entry 1 for that room
 (3:1004-1022). The slot export does not contain it (the exporter draws the
-cells, not the drawing list's horse object);  adds it
+cells, not the drawing list's horse object); `caverns.cavern_room` adds it
 after the back pieces. Planes 1 of level 14's room 1 and level 10's room
 22 (a5-0x4aee/-0x4af2, while a5-0x5000 = -1) are the later horse scenes
 and are not drawn.
