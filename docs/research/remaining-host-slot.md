@@ -56,13 +56,19 @@ the legacy path), presses go to the slot and `resume_queued_action_during
 _run_stop` dispatches them at 50-52; a released turn or crouch tap waits
 there as a host command.
 
-Proposed: create the bank on the first key event in a waiting sequence
-(sampling the held keys as consumed, as `begin_waiting_controls` does) so
-the waiting family always owns these presses. Remove the run-stop branch of
-`resume_queued_action_during_run_stop` together with it; keep the sheathe
-stop (SEQS 92 at 50-52) until that family moves. Tests: a turn tapped at
-pose 47-49 of the brake turns at 50; a crouch tapped there crouches; with
-both, the original priority (backward before down) applies.
+Done: `WaitingControls.ensure_run_stop_controls` creates the bank for a
+SEQS 13 that has none, with the keys already held marked consumed. The key
+callbacks call it before they change the held state (so the press itself
+stays fresh), and the tick reaches it through `waiting_controls_available`.
+The run-stop branch of `resume_queued_action_during_run_stop` is removed;
+the sheathe stop (SEQS 92 at 50-52) keeps it until that family moves.
+Regressions in `tests.test_waiting_controls`: Backward/Down taps at 55 and
+49, alone and in both orders, turn before crouching and never crouch after
+the turn (the old slot kept the last tap: Backward then Down crouched);
+keys held into a scripted brake are not requests. Three fixture tests in
+`test_animation_data` that started SEQS 13 without a bank now follow the
+production timing of a real run's brake: a press at 50 starts the turn or
+crouch in the callback, so the next tick shows 46/108, not 45/107.
 
 ## 3. Releasing the horizontal half of a held Up chord
 

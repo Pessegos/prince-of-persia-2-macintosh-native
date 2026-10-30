@@ -560,6 +560,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
     def set_key_state(self, key, pressed):
         if key in ('up', 'down') and getattr(self, 'controls_flipped', False):
             key = 'down' if key == 'up' else 'up'  # GenCtrl 4:3e1c, upside down.
+        self.ensure_run_stop_controls()
         if self.paused:
             if self.gameplay_controls_available():
                 previous = getattr(self, f"{key}_held")
@@ -891,6 +892,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             return "break"
         if self.dev_menu is not None:
             return "break"
+        self.ensure_run_stop_controls()
         previous_direction = self.horizontal_input
         if pressed:
             if direction in self.held_directions:
@@ -1010,6 +1012,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             return "break"
         if self.up_held:
             return "break"
+        self.ensure_run_stop_controls()
         if self.waiting_key('up', True):
             return "break"
         self.up_held = True
@@ -1399,13 +1402,13 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         return self.update_waiting_controls()
 
     def resume_queued_action_during_run_stop(self):
+        # The run stop itself belongs to the waiting bank; only the sheathing
+        # stop (SEQS 92 at 50-52) still resumes a held direction here.
         state = self.sequence_state
-        command = self.pending_action
-        sheath_stop = self.sword_sheathing and state.sequence_id == 92
-        if ((state.sequence_id != RUN_STOP_SEQUENCE and not sheath_stop)
-                or state.action not in (50, 51, 52)):
+        if not (self.sword_sheathing and state.sequence_id == 92 and state.action in (50, 51, 52)):
             return False
-        if (sheath_stop and command is None and self.horizontal_input
+        command = self.pending_action
+        if (command is None and self.horizontal_input
                 and not self.up_held and not self.down_held):
             direction = self.horizontal_input
             mode = ("step" if self.shift_held else
@@ -1421,8 +1424,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             return False
 
         # GenCtrl routes stop actions 50-52 through the normal input handler.
-        if sheath_stop:
-            self.sword_sheathing = self.sword_drawn = False
+        self.sword_sheathing = self.sword_drawn = False
         return self.dispatch_pending_action()
 
     def resume_run_stop(self):

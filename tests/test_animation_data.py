@@ -577,10 +577,13 @@ class AnimationDataTests(unittest.TestCase):
             scene.advance_animation()
         self.assertEqual(scene.action, 50)
 
+        # The brake belongs to the bank, as after a real run: the press at
+        # the standing gate starts the turn at once and the tick shows 46.
         scene.horizontal_key(None, -1, True)
+        self.assertEqual(scene.action, 45)
         scene.advance_animation()
 
-        self.assertEqual(scene.action, 45)
+        self.assertEqual(scene.action, 46)
         self.assertEqual(scene.sequence_state.sequence_id, STANDING_TURN_SEQUENCE)
         self.assertEqual(scene.sequence_state.facing, 0)
 
@@ -616,7 +619,8 @@ class AnimationDataTests(unittest.TestCase):
 
         self.assertEqual(actions, [53, 54, 55, 56, 49, 50, 1, 2, 3])
         self.assertTrue(scene.run_active)
-        self.assertTrue(scene.run_stop_requested)
+        # The run's bank, not the legacy stop flag, brakes the released run.
+        self.assertEqual(scene.directional_input.right, 0)
         self.assertIsNone(scene.pending_action)
 
         for _ in range(30):
@@ -2159,10 +2163,13 @@ class AnimationDataTests(unittest.TestCase):
             scene.advance_animation()
         self.assertEqual(scene.action, 50)
 
+        # As in a bank-owned brake after a real run, Down at the standing
+        # gate starts the crouch at once; the tick then shows 108.
         scene.set_key_state("down", True)
+        self.assertEqual(scene.action, 107)
         scene.advance_animation()
 
-        self.assertEqual(scene.action, 107)
+        self.assertEqual(scene.action, 108)
         self.assertEqual(scene.sequence_state.sequence_id, CROUCH_STANDING_LOWER_SEQUENCE)
 
     def test_standing_crouch_uses_native_sixteen_pixel_lower_both_directions(self):

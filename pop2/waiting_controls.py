@@ -7,7 +7,7 @@ The bank stays in keyboard coordinates; facing is applied only at dispatch.
 from dataclasses import replace
 
 from pop2.control_mapping import IDLE_SEQUENCE, RUN_STOP_SEQUENCE, STANDING_TURN_SEQUENCE
-from pop2.mac_input import DirectionalInput, standing_input_request
+from pop2.mac_input import DirectionalInput, read_keyboard, standing_input_request
 
 
 class WaitingControls:
@@ -15,7 +15,27 @@ class WaitingControls:
     def waiting_sequence(sequence):
         return sequence in (IDLE_SEQUENCE, STANDING_TURN_SEQUENCE, RUN_STOP_SEQUENCE, 44) or 29 <= sequence <= 42
 
+    def ensure_run_stop_controls(self):
+        """Own a brake that began without a bank (a scripted SEQS 13 start).
+
+        Its poses 50-52 reach GenCtrl's standing gate (6:05fe-0618), so the
+        presses there are bank requests. Keys already held count as consumed;
+        call this before a key callback changes the held state.
+        """
+        if (getattr(self, 'directional_input', None) is not None
+                or self.sequence_state.sequence_id != RUN_STOP_SEQUENCE):
+            return
+        frame = read_keyboard(self.held_directions, self.up_held, self.down_held, self.shift_held)
+        bank = DirectionalInput().sample(frame.horizontal, frame.vertical)
+        held = [name for name, word in zip(('left', 'right', 'up', 'down'), bank.words()) if word]
+        modifier = 1 if self.shift_held else 2 if self.ctrl_held else None
+        self.directional_input = bank.consume(*held, modifier=modifier)
+        self.waiting_step_direction = 0
+        if not self.waiting_controls_available():
+            self.directional_input = None
+
     def waiting_controls_available(self):
+        self.ensure_run_stop_controls()
         state = self.sequence_state
         motion = getattr(self, 'terrain_motion', None)
         return (getattr(self, 'directional_input', None) is not None
