@@ -93,6 +93,25 @@ class PressurePlateTests(unittest.TestCase):
         self.plates.active[0, 15] = 3
         self.assertEqual(self.plates.advance(self.terrain), (274,))
 
+    def test_pressing_an_open_gates_plate_restarts_its_wait_without_sounds(self):
+        # TriggerGate 5:1dac-1dcc: at 184 or more an ordinary plate writes 237
+        # and adds no trob, so the "opened" sound is not requested again.
+        for environment, opened in ((3, 18), (4, 273)):
+            with self.subTest(environment=environment):
+                self.setUp()
+                struct.pack_into('>H', self.level, 0x2186, environment)
+                self.set_tile(0, 14, 5, 1)
+                self.push()
+                trace = []
+                for tick in range(100):
+                    cues = self.plates.advance(self.terrain)
+                    if 40 <= tick < 80:
+                        self.push()
+                    trace.append((self.terrain.tile(0, 5, 1).foreground & 255, cues))
+                self.assertEqual(sum(cues.count(opened) for _, cues in trace), 1)
+                self.assertEqual(trace[79], (237, ()))
+                self.assertEqual(trace[80][0], 236)
+
     def test_holding_keeps_the_gate_open_without_repeated_plate_clicks(self):
         self.push()
         for tick in range(200):

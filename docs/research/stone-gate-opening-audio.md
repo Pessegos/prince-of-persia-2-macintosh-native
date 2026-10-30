@@ -169,3 +169,12 @@ The rock-impact duck stays a stone-gate feature. Before this the port played
 the stone gate's sounds for the ruins' iron gates. Regressions:
 `tests.test_pressure_plates` (iron gate phases and slam) and
 `tests.test_gate_audio` (iron cues on the mechanism voices).
+
+Pressing an ordinary plate (kind 5) of a gate already at 184 or more only
+writes 237 back (TriggerGate 5:1dac-1dcc) and adds no trob, so the gate's
+wait restarts without a new "opened" request. The port used to restart the
+gate's opening phase on every press, so a held or re-pressed plate asked
+for 18/273 every frame and the sound repeated; the regression is
+`tests.test_pressure_plates` "pressing an open gate's plate". A dead or
+off-screen presser instead opens the gate for good (255, 5:1de8); that
+branch is not modelled yet.

@@ -163,7 +163,13 @@ class PressurePlates:
         elif how == 5:
             if position == 255:
                 return
-            self.foreground[key] = high | (237 if position >= 184 else (position + 3) & 0xfc)
+            if position >= 184:
+                # TriggerGate 5:1dac-1dcc: an open gate only restarts its
+                # wait at 237; no new trob, so no repeated "opened" sound.
+                # (A dead or off-screen presser opens it for good, 1de8.)
+                self.foreground[key] = high | 237
+                return
+            self.foreground[key] = high | (position + 3) & 0xfc
             self.add(key, 2)
         elif how == 6:
             if phase != 4 and (phase is not None or position != 0):
