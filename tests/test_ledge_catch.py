@@ -118,3 +118,31 @@ class CavernSecondLedgeTests(unittest.TestCase):
         self.assertEqual((scene.room_id, scene.terrain_motion.row), (21, 2))
         self.assertFalse(scene.terrain_motion.falling or scene.terrain_motion.dead)
         self.assertTrue(scene.combat.player.alive)
+
+    def test_ctrl_held_through_the_collapse_catches_the_same_ledge(self):
+        # Catch 4:37cc admits any nonzero modifier word (a5-0x3480), and
+        # 4:3f08 writes -2 for a held Ctrl as -1 for Shift. Previously only
+        # Shift caught, although Ctrl already kept the hang (6:18e0).
+        from tests.test_terrain import RooftopSceneTests
+
+        scene = self.scene
+        for key in ('shift', 'ctrl'):
+            with self.subTest(key=key):
+                scene.load_level(3)
+                scene.jump_to_room(21, row=0, x=460, facing=0)
+                scene.peaceful = True
+                scene.game.caverns.loose.trigger(scene.level_map.tile(21, 4, 0), force=True)
+                RooftopSceneTests.tick(self, 2)
+                scene.horizontal_key(None, -1, True)
+                grips = []
+                for _ in range(60):
+                    if scene.terrain_motion.falling and not grips:
+                        scene.set_key_state(key, True)
+                        scene.horizontal_key(None, -1, False)
+                    RooftopSceneTests.tick(self)
+                    if scene.action == 80:
+                        grips.append((scene.room_id, scene.terrain_motion.row, scene.player_x))
+                hanging = scene.ledge_hanging
+                scene.set_key_state(key, False)
+                self.assertEqual(grips, [(21, 1, 219)])
+                self.assertTrue(hanging)

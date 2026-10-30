@@ -446,6 +446,38 @@ in both facings, a late tap at pose 117 and held/released Ctrl. A real-terrain
 fall checks that the complete recovery/run trace matches the no-Up baseline
 in both directions, with exactly one life lost.
 
+## Input During Falls
+
+Every fall starts in mode 3: StartFall's SEQS 7 (-> 214), 18, 21, 81, 95 and
+228 show poses 102-105 (198 starts in mode 5). The free fall is mode 4: pose
+106 at the end of 214 and the loop SEQS 12. Every landing starts in mode 5
+(SEQS 17 at 107/108, 20 -> 212 -> 49, death 22). PlayerCtrl 4:3cae samples
+the keys every frame and GenCtrl runs for the falling Prince, but no branch
+matches poses 100-106; mode 4 and mode 5 reach ClearControls at 6:0576-059c.
+A directional tap made during a fall therefore never reaches a gate: the
+free fall or the landing discards it, and a key still held becomes a fresh
+request after the landing's mode-5 poses. The modifier is not cleared there,
+so Ctrl held through a landing draws at the standing gate.
+
+The port has no bank while `terrain_motion.falling` (the bank families check it)
+and reads held keys at the landing's gates, which gives the same outcomes.
+A 2026-10-30 trace (level 3, room 21, collapsing floor, Ctrl held) lands
+through 20, 212 and 49 and draws (SEQS 55) after pose 119.
+
+Catch 4:37cc tests the modifier word, not Shift: Shift and Ctrl share it
+(4:3f08), so either held key catches. The port caught only with Shift,
+although Ctrl already kept the hang (6:18e0); `catch_falling_ledge` now takes
+either (regression: `tests.test_ledge_catch` "Ctrl held through the collapse
+catches the same ledge").
+
+Open difference, not changed: Catch and SEQS 15 (mode 3), 9 and 210 (mode 2)
+clear nothing, so a catch made before the first mode-4 frame keeps the
+directions still pending. In the same room-21 collapse the catch comes right
+after pose 105: an Up tapped at poses 102-104 is still pending at the catch
+and natively climbs once the 12-tick grip delay ends. The port's
+`begin_ledge_controls` discards pre-catch directions (retained from the host
+buffer, documented in the ledge handoff), so the Prince keeps hanging.
+
 ## Holding Up After A Climb
 
 The native climb consumes Up at 6:19c8-19d0, but its pose 149 is mode 5.
