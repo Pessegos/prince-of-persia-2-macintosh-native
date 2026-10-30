@@ -146,3 +146,66 @@ class CavernSecondLedgeTests(unittest.TestCase):
                 scene.set_key_state(key, False)
                 self.assertEqual(grips, [(21, 1, 219)])
                 self.assertTrue(hanging)
+
+    def collapse(self, *, catch=True, up_at=None, release_up=True):
+        """Room-21 collapse; the press is made while that fall pose shows."""
+        from tests.test_terrain import RooftopSceneTests
+
+        scene = self.scene
+        scene.load_level(3)
+        scene.jump_to_room(21, row=0, x=460, facing=0)
+        scene.peaceful = True
+        scene.game.caverns.loose.trigger(scene.level_map.tile(21, 4, 0), force=True)
+        RooftopSceneTests.tick(self, 2)
+        scene.horizontal_key(None, -1, True)
+        falling, sequences, mode4_pending = False, [], []
+        for _ in range(45):
+            if scene.terrain_motion.falling and not falling:
+                falling = True
+                if catch:
+                    scene.set_key_state('shift', True)
+                scene.horizontal_key(None, -1, False)
+            if falling and scene.action == up_at:
+                scene.set_key_state('up', True)
+                if release_up:
+                    scene.set_key_state('up', False)
+                up_at = None
+            RooftopSceneTests.tick(self)
+            sequences.append(scene.sequence_state.sequence_id)
+            if scene.terrain_motion.falling and scene.sequence_state.animation_state == 4:
+                mode4_pending.append(scene.fall_pending_up)
+        scene.set_key_state('shift', False)
+        scene.set_key_state('up', False)
+        return sequences, mode4_pending
+
+    def test_up_pressed_at_the_falls_mode_three_poses_climbs_after_the_grip(self):
+        # Catch 4:37ca, SEQS 15 (mode 3) and 9/210 (mode 2) clear nothing;
+        # fall poses 102-105 are mode 3, which GenCtrl's ClearControls gate
+        # (6:0576-059c) skips. The pending Up climbs at the end of the 12-tick
+        # grip delay, released or not. The port previously discarded it.
+        for pose in (102, 103, 104):
+            for release in (True, False):
+                with self.subTest(pose=pose, release=release):
+                    sequences, _ = self.collapse(up_at=pose, release_up=release)
+                    self.assertIn(15, sequences)
+                    self.assertIn(10, sequences)
+                    self.assertEqual(sequences.index(10) - sequences.index(15), 13)
+
+    def test_a_mode_four_frame_discards_the_pending_up(self):
+        # Without a catch the fall reaches pose 106 (mode 4), whose GenCtrl
+        # pass clears the directions; a later Up press in mode 4 is not kept.
+        sequences, mode4_pending = self.collapse(catch=False, up_at=103)
+        self.assertTrue(mode4_pending)
+        self.assertFalse(any(mode4_pending))
+        self.assertNotIn(15, sequences)
+        scene = self.scene
+        scene.terrain_motion.falling = True
+        scene.sequence_state.animation_state = 4
+        scene.set_key_state('up', True)
+        self.assertFalse(scene.fall_pending_up)
+
+    def test_a_catch_without_a_fall_press_keeps_hanging(self):
+        sequences, _ = self.collapse()
+        self.assertIn(15, sequences)
+        self.assertNotIn(10, sequences)
+        self.assertTrue(self.scene.ledge_hanging)

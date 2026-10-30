@@ -39,13 +39,18 @@ class LedgeControls(AirborneControls):
             self.directional_input = DirectionalInput()
         self.waiting_suppressed_up = False
         self.sample_waiting_controls()
-        # Entry keeps the existing port's discard of pre-catch commands.
         # Up/descent entries have the already recovered action consumption.
         # A takeoff Up still held at catch is an inherited hold, not a fresh
         # released climb tap. Releasing it during grip must cancel that hold.
         direction = (() if sequence == 15 and not self.up_held
                      else ('down',) if sequence == 68 else ('up',))
         self.directional_input = self.directional_input.consume(*direction, clear=True)
+        if sequence == 15 and getattr(self, 'fall_pending_up', False):
+            # Catch 4:37ca, SEQS 15 (mode 3) and 9/210 (mode 2) clear
+            # nothing: an Up pressed at the fall's mode-3 poses is still
+            # pending and climbs once the grip delay ends, even if released.
+            self.directional_input = replace(self.directional_input, up=-1)
+        self.fall_pending_up = False
         self.waiting_step_direction = self.ledge_jump_chord_direction = 0
 
     def consume_ledge_input(self, action):
@@ -55,6 +60,16 @@ class LedgeControls(AirborneControls):
                                   if action == 'climb' else self.directional_input.consume('down', clear=True))
         self.modifier_input = self.directional_input.modifier
         self.ledge_jump_chord_direction = 0
+
+    def latch_fall_key(self, key, pressed):
+        """Fall poses 102-105 are mode 3: GenCtrl has no branch for them and
+        only modes 4/5 reach ClearControls (6:0576-059c), so a fresh Up stays
+        pending until the first mode-4 frame or a catch. The port keeps no
+        bank in the air; Up is the only latch the hang gate reads."""
+        motion = getattr(self, 'terrain_motion', None)
+        if (key == 'up' and pressed and not self.up_held and motion is not None
+                and motion.falling and self.sequence_state.animation_state == 3):
+            self.fall_pending_up = True
 
     def waiting_key(self, key, pressed):
         if not getattr(self, 'native_ledge', False) or not self.waiting_controls_available():
@@ -133,10 +148,15 @@ class LedgeControls(AirborneControls):
     def clear_waiting_controls(self):
         super().clear_waiting_controls()
         self.ledge_jump_chord_direction = 0
+        self.fall_pending_up = False
         self.ledge_auto_repeat = self.ledge_repeat_after_tick = False
 
     def retire_waiting_controls(self):
         super().retire_waiting_controls()
+        motion = getattr(self, 'terrain_motion', None)
+        if not (motion is not None and motion.falling and self.sequence_state.animation_state == 3):
+            # A mode-4 free-fall or mode-5 landing frame clears the latch.
+            self.fall_pending_up = False
         if getattr(self, 'ledge_repeat_after_tick', False):
             if self.directional_input is not None and self.up_held:
                 self.directional_input = replace(self.directional_input, up=-1)

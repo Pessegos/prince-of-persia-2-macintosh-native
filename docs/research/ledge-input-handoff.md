@@ -32,8 +32,9 @@ the complete native FrameAdv order.
 `pop2/ledge_controls.py` carries the same `DirectionalInput` through the
 `native_ledge` lifecycle, including protected climbing and its grounded tail.
 The flag distinguishes native ledge24's67-69 poses from ordinary vertical
-preparation. Entry discards pre-catch directions as before; it does not replay
-the interrupted jump. Native ledge callbacks now sample this bank instead of
+preparation. Entry does not replay the interrupted jump. A fall catch keeps
+a fresh Up pressed at the fall's mode-3 poses (native, see INPUT_RECOVERY
+"Input During Falls"); other pre-catch directions are discarded. Native ledge callbacks now sample this bank instead of
 classifying a second executable pending command. Legacy scripted directional
 requests are imported once and removed from that slot.
 

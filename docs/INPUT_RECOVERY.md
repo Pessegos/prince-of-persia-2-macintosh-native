@@ -470,13 +470,19 @@ although Ctrl already kept the hang (6:18e0); `catch_falling_ledge` now takes
 either (regression: `tests.test_ledge_catch` "Ctrl held through the collapse
 catches the same ledge").
 
-Open difference, not changed: Catch and SEQS 15 (mode 3), 9 and 210 (mode 2)
-clear nothing, so a catch made before the first mode-4 frame keeps the
-directions still pending. In the same room-21 collapse the catch comes right
-after pose 105: an Up tapped at poses 102-104 is still pending at the catch
-and natively climbs once the 12-tick grip delay ends. The port's
-`begin_ledge_controls` discards pre-catch directions (retained from the host
-buffer, documented in the ledge handoff), so the Prince keeps hanging.
+Catch and SEQS 15 (mode 3), 9 and 210 (mode 2) clear nothing, so a catch
+made before the first mode-4 frame keeps the directions still pending. In the
+same room-21 collapse the catch comes right after pose 105: an Up pressed at
+poses 102-105 is still pending at the catch and climbs once the 12-tick grip
+delay ends, released or not. The port discarded it at `begin_ledge_controls`
+(a policy retained from the host buffer); on the user's 2026-10-30 decision
+it now follows the native rule. The port still keeps no bank in the air, so
+`latch_fall_key` records only a fresh Up pressed while a mode-3 fall pose
+shows (the hang gate reads no other latch), and the end of a tick with a
+mode-4 or mode-5 pose discards it. An Up held from the takeoff keeps its
+existing inherited-hold handling: releasing it during the grip cancels the
+climb. Regressions in `tests.test_ledge_catch`: an Up at 102-104 climbs 13
+ticks after SEQS 15, and the free fall's first mode-4 frame drops it.
 
 ## Holding Up After A Climb
 

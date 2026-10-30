@@ -577,6 +577,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         if self.dev_menu is not None:
             return "break"
         if self._combat_controls_locked():
+            self.latch_fall_key(key, pressed)
             setattr(self, f"{key}_held", pressed)
             if self.sword_drawn and not pressed:
                 self.sample_armed_controls()
@@ -990,6 +991,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.ensure_run_stop_controls()
         if self.waiting_key('up', True):
             return "break"
+        self.latch_fall_key('up', True)
         self.up_held = True
         if self._combat_controls_locked():
             return "break"
