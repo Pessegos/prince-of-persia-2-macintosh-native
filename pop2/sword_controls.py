@@ -39,3 +39,9 @@ def consume_armed_request(bank, request):
         return replace(bank, up=1)
     word = {'sheathe': 'down', 'advance': 'left', 'retreat': 'right'}[request]
     return replace(DirectionalInput(modifier=bank.modifier), **{word: 1})
+
+
+def advance_sequence(level, opponent_room, opponent_column):
+    """DoAdvance 6:1e28-1e46: in level five, with the opponent in native room
+    19 (port 18) at column 5, the Prince advances with SEQS 86."""
+    return 86 if (level, opponent_room, opponent_column) == (5, 18, 5) else None

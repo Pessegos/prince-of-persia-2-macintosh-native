@@ -380,7 +380,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,DoJumpHang,0x1b7e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,4
 6,Characters 1,DoRunJump,0x1c14,jump_table,partial,pop2/terrain.py,ordinary two-cell takeoff alignment,7,8
 6,Characters 1,DoRetreat,0x1d6e,decoded,partial,pop2/armed_controls.py;pop2/sword_controls.py,"ordinary Prince: guard poses 158/170/171, SEQS 57, ClearControls and Backward=1",3,2
-6,Characters 1,DoAdvance,0x1dda,decoded,partial,pop2/armed_controls.py;pop2/sword_controls.py,"ordinary Prince: guard poses 158/170/171, SEQS 56, ClearControls and Forward=1; level-five special sequence 86 not reproduced",1,2
+6,Characters 1,DoAdvance,0x1dda,decoded,partial,pop2/armed_controls.py;pop2/sword_controls.py,"ordinary Prince: guard poses 158/170/171, SEQS 56, ClearControls and Forward=1; level five with the opponent in native room 19 at column 5: SEQS 86",1,2
 6,Characters 1,DoEngarde,0x1e78,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,5
 6,Characters 1,DoKidEngarde,0x1f04,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,15
 6,Characters 1,OppToFight,0x2392,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,3

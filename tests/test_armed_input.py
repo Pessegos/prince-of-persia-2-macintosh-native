@@ -56,6 +56,16 @@ class ArmedConsumptionTests(unittest.TestCase):
         self.assertEqual(consume_armed_request(bank, 'advance'), DirectionalInput(left=1))
 
 
+class AdvanceSequenceTests(unittest.TestCase):
+    def test_level_five_room_nineteen_opponent_selects_the_alternative_advance(self):
+        # DoAdvance 6:1e28-1e46: level 5 and the opponent (a5-0x5094 copy)
+        # in native room 19 (+0x16) at column 5 (+0xc): SEQS 86, not 56.
+        from pop2.sword_controls import advance_sequence
+        self.assertEqual(advance_sequence(5, 18, 5), 86)
+        for level, room, column in ((5, 18, 4), (5, 17, 5), (4, 18, 5)):
+            self.assertIsNone(advance_sequence(level, room, column))
+
+
 class ArmedBufferSceneTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

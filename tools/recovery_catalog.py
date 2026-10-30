@@ -140,7 +140,7 @@ REVIEWS = {
     (6, "GetOppIdxClosestToKid"): ("partial", "pop2/opponent_selection.py;pop2/combat.py;pop2/ruins_ai.py;tools/probe_ruins_hud_exit.py", "native-ALIVE candidates, vertical 80-unit boundary, serpent fallback, fleeing-head exclusion; 15000 native multi-actor selections plus14961 nearest-on-side checks; complete frame/bank lifecycle partial"),
     (6, "AutoCtrl"): ("partial", "pop2/combat.py", "ordinary unarmed/armed dispatch and shared timer decrement per processed NPC; special actor controllers missing"),
     (6, "OnAlert"): ("partial", "pop2/combat.py;pop2/armed_controls.py;pop2/sword_controls.py", "ordinary combat gates; native-checked request priority and action-body consumption (71,280 cases) owning the armed bank, counter priority, forced parry recoil and sword lowering"),
-    (6, "DoAdvance"): ("partial", "pop2/armed_controls.py;pop2/sword_controls.py", "ordinary Prince: guard poses 158/170/171, SEQS 56, ClearControls and Forward=1; level-five special sequence 86 not reproduced"),
+    (6, "DoAdvance"): ("partial", "pop2/armed_controls.py;pop2/sword_controls.py", "ordinary Prince: guard poses 158/170/171, SEQS 56, ClearControls and Forward=1; level five with the opponent in native room 19 at column 5: SEQS 86"),
     (6, "DoRetreat"): ("partial", "pop2/armed_controls.py;pop2/sword_controls.py", "ordinary Prince: guard poses 158/170/171, SEQS 57, ClearControls and Backward=1"),
     (6, "IsOppGenPtWithTumbleOn"): ("partial", "pop2/opponent_generation.py;pop2/combat.py", "current room packed-life 0x80 flag"),
     (23, "DrawRoofBackWall"): ("partial", "pop2/render_opening.py", "ordinary and harbor background SHAP tables; ordinary fill"),

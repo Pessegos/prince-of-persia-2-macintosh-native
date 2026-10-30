@@ -88,6 +88,7 @@ from pop2.running_controls import RUN_INPUT_SEQUENCES
 from pop2.airborne_controls import AIRBORNE_TAKEOFF_SEQUENCES
 from pop2.low_controls import LowControls, LOW_INPUT_SEQUENCES
 from pop2.armed_controls import ArmedControls
+from pop2.sword_controls import advance_sequence
 
 
 SCALE = 2
@@ -763,6 +764,13 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 if any(guard.alive and guard.room in nearby_rooms
                        for guard in self.combat.active_guards()):
                     sequence_id = 93
+        if kind == "sword_advance" and sequence_id is None and self.combat is not None:
+            # DoAdvance 6:1e28-1e46: in level five, with the opponent in
+            # native room 19 at column 5, the Prince advances with SEQS 86.
+            guard = self.combat.guard
+            if guard is not None:
+                sequence_id = advance_sequence(self.game.level.number, guard.room,
+                                               self.combat._supporting_column(guard))
         if kind == "sword_attack" and sequence_id is None and self.combat is not None:
             # 6:27d0-27da: against a serpent the Prince's strike is the low
             # strike SEQS 96, the only one its strike ranges accept.

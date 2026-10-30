@@ -51,3 +51,36 @@ def armed_action(bank, pose, *, opponent_pose=0, distance=0, fight=0):
         return (replace(InputBank(modifier=bank.modifier), **{word: 1}),
                 (('sequence', 56 if request == 'advance' else 57),))
     return bank, ()
+
+
+def sword_ctrl(bank, *, mode, engagement, distance, opponent_type, actor_type, automatic,
+               level, room, row, bridge, wounded, bridge_test=False):
+    """SwordCtrl 6:2206-2390 for the Prince: (events, bank, automatic flag).
+
+    `engagement` is 4:35a6's result, `distance` 4:49ee's (negative: the
+    opponent is behind), `automatic` a5-0x5010 (0 disables the automatic
+    turn), `wounded` a pending hit at least as large as the life."""
+    if mode >= 2 or wounded:
+        return (), bank, automatic
+    events, pending = [], True
+    if engagement in (11, 15):
+        if -15 <= distance < 331:
+            events.append(('alert',))
+            pending = False
+        elif distance < 0:
+            pending = False
+            if actor_type == 11:
+                pass
+            elif not automatic or opponent_type == 6 or (
+                    row and level == 5 and room in (10, 7, 12) and bridge_test):
+                events.append(('alert',))
+            else:
+                events.append(('turn',))
+    if bank.right < 0 and bank.modifier in (-1, 1) and not (level == 5 and room == 10 and bridge > 0):
+        # The voluntary turn: Backward=1 after ClearControls, modifier 2, and
+        # the automatic-turn flag toggles (6:2336-2350).
+        events.append(('voluntary',))
+        return tuple(events), InputBank(right=1, modifier=2), 0 if automatic else 1
+    if pending:
+        events.append(('sheathe',) if bank.down < 0 else ('alert',))
+    return tuple(events), bank, automatic

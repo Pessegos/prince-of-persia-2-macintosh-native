@@ -153,9 +153,53 @@ now press each step (`tap_sword_step`). The screen-five kill test states
 its turn timing through the mode-5 rule instead of a fixed offset, because
 the tapped fight now ends with SEQS 203.
 
-Not covered: outer SwordCtrl routing (opponent distance, special actors),
-DoAdvance's level-five sequence, recordings of real key timing, and other
-fighters' controllers.
+Not covered here: recordings of real key timing and other fighters'
+controllers. The outer routing and DoAdvance's level-five sequence follow.
+
+## Outer SwordCtrl routing (2026-10-30)
+
+`tools/probe_sword_ctrl.py` runs the Prince's SwordCtrl 6:2166-2390 with
+the turn 6:2638, OnAlert 6:24bc and PutSwordAway 6:2592 as sinks and the
+engagement 4:35a6, distance 4:49ee, target 6:36f2/4:3312 and level-five
+bridge test 8:02ae supplied. 110,592 cases (24 bank shapes, two animation
+modes, three engagement results, eight distances, three opponent types,
+actor types 0/11, both automatic-turn flags, rooms 1/10, the bridge word
+and a fatal pending hit) match `tools/reference_armed_input.py:sword_ctrl`
+with zero mismatches.
+
+- Result SHA256: `838908062cb098cdf83294831cf2ebe28d097a4be8c7229f30b1d2039307a2be`.
+
+Recovered routing, for a living Prince in animation mode 0/1 without a
+fatal pending hit (otherwise nothing runs):
+
+1. Engaged (4:35a6 returns 11 or 15): a distance of -15..330 runs OnAlert.
+   An opponent farther behind (below -15) selects the automatic turn
+   6:2638 instead of OnAlert, unless the automatic-turn flag a5-0x5010 is 0,
+   the opponent type is 6, or (level five, rows 1-2, rooms 7/10/12) the
+   bridge test passes; those run OnAlert. Actor type 11 does neither.
+   Farther ahead than 330 falls through to step 3.
+2. Shift or a consumed Shift (modifier -1/1) with a pending Backward then
+   takes the voluntary turn, except in level five's room 10 while a5-0x3130
+   (the breaking bridge) is positive: modifier 2, ClearControls, Backward 1,
+   the automatic-turn flag toggles, and the target is chosen again.
+3. Otherwise, when neither step 1 ran OnAlert nor turned: a pending Down
+   calls PutSwordAway **directly** (no OnAlert pose gate), else OnAlert.
+
+Port status: the automatic turn's distance rule (-15) and its precedence
+over OnAlert in the same frame match `combat.choose_player_turn` and
+`resume_combat_turn`. Differences, not changed here: the port keeps the
+automatic turn always enabled (the approved voluntary-turn exception), it
+does not exempt opponent type 6 or the level-five bridge rooms from the
+automatic turn, and it sheathes only at guard poses 158/170/171 even when
+SwordCtrl would call PutSwordAway directly (step 3 when not engaged).
+Engagement 4:35a6 itself is not modelled here.
+
+## DoAdvance's level-five sequence
+
+DoAdvance 6:1e28-1e46 selects SEQS 86 instead of 56 in level five when the
+opponent copy (a5-0x5094) is in native room 19 (+0x16) at column 5 (+0xc).
+`pop2/sword_controls.py:advance_sequence` implements it for the Prince's
+current target (port room 18, supporting column 5).
 
 ## Validation of the first stage
 
