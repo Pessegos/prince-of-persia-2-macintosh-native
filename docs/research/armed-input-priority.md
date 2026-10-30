@@ -161,24 +161,31 @@ controllers. The outer routing and DoAdvance's level-five sequence follow.
 
 `tools/probe_sword_ctrl.py` runs the Prince's SwordCtrl 6:2166-2390 with
 the turn 6:2638, OnAlert 6:24bc and PutSwordAway 6:2592 as sinks and the
-engagement 4:35a6, distance 4:49ee, target 6:36f2/4:3312 and level-five
-bridge test 8:02ae supplied. 110,592 cases (24 bank shapes, two animation
-modes, three engagement results, eight distances, three opponent types,
-actor types 0/11, both automatic-turn flags, rooms 1/10, the bridge word
-and a fatal pending hit) match `tools/reference_armed_input.py:sword_ctrl`
-with zero mismatches.
+current-cell kind 4:35a6, distance 4:49ee, target 6:36f2/4:3312 and
+level-five bridge test 8:02ae supplied. 442,368 cases (24 bank shapes, two
+animation modes, three cell kinds, the opponent alert word a5-0x5062 at
+0-3, eight distances, three opponent types, actor types 0/11, both
+automatic-turn flags, rooms 1/10, the bridge word and a fatal pending hit)
+match `tools/reference_armed_input.py:sword_ctrl` with zero mismatches.
 
-- Result SHA256: `838908062cb098cdf83294831cf2ebe28d097a4be8c7229f30b1d2039307a2be`.
+- Result SHA256: `1fcb91c8da292ebf1af48d8c6d326eb91b33c7ff4542e6c44ee4dfd78ff99664`.
+- Correction (2026-10-30): the first run (110,592 cases, digest
+  `8389...a2be`) kept a5-0x5062 at 0 and called 4:35a6 "engagement". 4:35a6
+  is CurrentCell (ReadCell 4:27ee of the Prince's room, stored column and
+  row), and 6:2248 also admits the distance routing when the opponent copy's
+  alert word (+0x32, a5-0x5062) is 2 or more. The model now takes both.
 
 Recovered routing, for a living Prince in animation mode 0/1 without a
 fatal pending hit (otherwise nothing runs):
 
-1. Engaged (4:35a6 returns 11 or 15): a distance of -15..330 runs OnAlert.
-   An opponent farther behind (below -15) selects the automatic turn
-   6:2638 instead of OnAlert, unless the automatic-turn flag a5-0x5010 is 0,
-   the opponent type is 6, or (level five, rows 1-2, rooms 7/10/12) the
-   bridge test passes; those run OnAlert. Actor type 11 does neither.
-   Farther ahead than 330 falls through to step 3.
+1. Distance routing (6:2236-2274) runs when the Prince's own cell is a
+   loose floor (11) or ruins shelf (15), or the opponent is at alert 2 or
+   more. There a distance of -15..330 runs OnAlert. An opponent farther
+   behind (below -15) selects the automatic turn 6:2638 instead of OnAlert,
+   unless the automatic-turn flag a5-0x5010 is 0, the opponent type is 6,
+   or (level five, rows 1-2, rooms 7/10/12) the bridge test passes; those
+   run OnAlert. Actor type 11 does neither. Farther ahead than 330 falls
+   through to step 3.
 2. Shift or a consumed Shift (modifier -1/1) with a pending Backward then
    takes the voluntary turn, except in level five's room 10 while a5-0x3130
    (the breaking bridge) is positive: modifier 2, ClearControls, Backward 1,
@@ -187,15 +194,33 @@ fatal pending hit (otherwise nothing runs):
    therefore disables the automatic turn until the next voluntary turn or
    level; this is the original's answer to opponents on both sides.
 3. Otherwise, when neither step 1 ran OnAlert nor turned: a pending Down
-   calls PutSwordAway **directly** (no OnAlert pose gate), else OnAlert.
+   calls PutSwordAway **directly** (6:2382; no OnAlert pose gate and ahead
+   of a pending attack), else OnAlert. PutSwordAway 6:2592 has no pose gate
+   of its own: it clears sword mode, ClearControls, Down=1, then SEQS 93
+   while OppToFight finds a fighter, else 92.
 
 Port status: the automatic turn's distance rule (-15), its precedence
-over OnAlert in the same frame and the flag toggle (since 2026-10-30) match
-`combat.choose_player_turn`, `choose_voluntary_turn` and
-`resume_combat_turn`. Differences, not changed here: the port does not exempt opponent type 6 or the level-five bridge rooms from the
-automatic turn, and it sheathes only at guard poses 158/170/171 even when
-SwordCtrl would call PutSwordAway directly (step 3 when not engaged).
-Engagement 4:35a6 itself is not modelled here.
+over OnAlert in the same frame, the flag toggle (since 2026-10-30) and the
+room-10 bridge refusal match `combat.choose_player_turn`,
+`choose_voluntary_turn` and `resume_combat_turn`.
+
+Step 3 is in production since 2026-10-30
+(`combat.player_distance_routed`, `ArmedControls.sheathe_unengaged`): the
+cell is the Prince's supporting-foot cell, the alert is the current
+target's (`combat.guard`, the effective target the death-target audit
+checked), and the distance is `opponent_distance` (999, i.e. beyond reach,
+in another room or row). USER-VISIBLE: after a kill, or with the target at
+alert 0/1 (another room, sight blocked) or more than 330 ahead, Down
+sheathes at the next frame, even mid-strike, mid-step or mid-block, and
+wins over a pending attack. An engaged opponent within reach keeps OnAlert's
+priority (attack first) and its guard-pose gate. Regressions (fail on the
+previous code, 6 subcases): `tests.test_armed_input.UnengagedSheatheTests`.
+The port's first-pose wait (cursor 0) is unchanged.
+
+Still different, not changed: the automatic turn does not exempt opponent
+type 6 or the level-five bridge rooms (8:02ae evaluated for the Prince),
+and the distance routing ignores the cell kind for the turn itself
+(`choose_player_turn` still requires alert 2 or more).
 
 ## DoAdvance's level-five sequence
 

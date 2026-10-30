@@ -124,6 +124,21 @@ class ArmedControls:
             self.armed_attack_requested = False
             self.modifier_input = 2
 
+    def sheathe_unengaged(self):
+        """SwordCtrl 6:2368-2386: with no engaged opponent within reach, a
+        pending Down calls PutSwordAway directly, at any mode-0/1 pose and
+        ahead of a pending attack; OnAlert's guard-pose gate does not apply."""
+        combat = getattr(self, 'combat', None)
+        if combat is not None and combat.player_distance_routed():
+            return False
+        relative = self.armed_relative_input()
+        if relative is None or relative.down >= 0:
+            return False
+        if not self.start_sword_action('sword_sheathe'):
+            return False
+        self.accept_armed_request('sword_sheathe')
+        return True
+
     def armed_admits(self, kind):
         """The port's existing pose admission for each action body."""
         from pop2.scene_prototype import SWORD_GUARD_SEQUENCE, SWORD_STEP_SEQUENCES

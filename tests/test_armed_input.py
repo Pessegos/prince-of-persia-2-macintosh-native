@@ -93,12 +93,14 @@ class ArmedBufferSceneTests(unittest.TestCase):
                 self.assertEqual(scene.armed_pending().kind, min(pair, key=kinds.index))
 
     def test_real_key_callbacks_cannot_replace_a_queued_strike_with_other_commands(self):
-        for facing, key in product((0, 1), ('up', 'down', 'forward', 'backward')):
+        # No opponent here: a pending Down would sheathe at once (6:2382,
+        # UnengagedSheatheTests covers both cases), so it is not tested here.
+        for facing, key in product((0, 1), ('up', 'forward', 'backward')):
             with self.subTest(facing=facing, key=key):
                 scene = self.during_draw(facing)
                 scene.set_key_state('ctrl', True)
                 scene.set_key_state('ctrl', False)
-                if key in ('up', 'down'):
+                if key == 'up':
                     scene.set_key_state(key, True)
                     scene.set_key_state(key, False)
                 else:
@@ -281,3 +283,125 @@ class SheatheBankTests(unittest.TestCase):
         self.assertIn(50, {sequence for sequence, _ in long_held})
         _, tapped = self.sheathe(((1, 'down', True), (2, 'down', False)), 93)
         self.assertIn(50, {sequence for sequence, _ in tapped})
+
+
+class UnengagedSheatheTests(unittest.TestCase):
+    """SwordCtrl 6:2236-2274 and 6:2368-2386: with no engaged opponent within
+    reach a pending Down calls PutSwordAway at once, at any mode-0/1 pose and
+    ahead of a pending attack. Against an engaged opponent OnAlert keeps its
+    priority and its guard-pose gate."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tests.test_combat import GuardCombatTests
+        GuardCombatTests.setUpClass()
+        cls.fixture = GuardCombatTests()
+
+    def scene(self, alert, guard_x=150, player_x=260):
+        from pop2.combat import select_sequence
+        from pop2.scene_prototype import SWORD_GUARD_SEQUENCE
+
+        scene = self.fixture.scene()
+        guard = scene.combat.guard
+        guard.alert_mode = alert
+        guard.sword_drawn = True
+        select_sequence(guard, 227)
+        guard.runtime.next_frame()
+        guard.state.target_x = guard.state.current_x = guard_x
+        scene.sword_drawn = True
+        scene.sequence_state.facing = 0
+        scene.player_x = scene.sequence_state.target_x = player_x
+        scene.start_sequence(SWORD_GUARD_SEQUENCE)
+        scene.advance_animation()
+        return scene
+
+    def trace(self, scene, ticks=12):
+        """Poses, with 'sheathe' for the first frame of PutSwordAway's SEQS
+        92/93 (93 here: OppToFight still finds the living guard)."""
+        from unittest.mock import patch
+
+        poses = []
+        with patch.object(scene.combat, 'step', return_value=[]):
+            for _ in range(ticks):
+                scene.advance_animation()
+                sheathing = scene.sequence_state.sequence_id in (92, 93)
+                poses.append('sheathe' if sheathing and 'sheathe' not in poses
+                             else scene.action)
+        return poses
+
+    def tap(self, scene, key):
+        scene.set_key_state(key, True)
+        scene.set_key_state(key, False)
+
+    def test_down_during_a_strike_sheathes_at_once_without_an_engaged_opponent(self):
+        from pop2.combat import opponent_distance
+
+        for alert in (0, 1, 2, 3):
+            with self.subTest(alert=alert):
+                scene = self.scene(alert)
+                self.assertLess(opponent_distance(scene.combat.player, scene.combat.guard), 331)
+                self.tap(scene, 'ctrl')
+                self.assertEqual(scene.action, 151)
+                self.tap(scene, 'down')
+                poses = self.trace(scene)
+                if alert >= 2:
+                    # OnAlert admits Down only at the guard poses: the strike
+                    # finishes and guard pose 158 sheathes before it is shown.
+                    self.assertEqual(poses[:7], [152, 153, 154, 155, 156, 157, 'sheathe'])
+                else:
+                    self.assertEqual(poses[0], 'sheathe')
+                self.assertFalse(scene.sword_drawn)
+
+    def test_down_beats_a_pending_attack_only_without_an_engaged_opponent(self):
+        from pop2.scene_prototype import SWORD_STEP_SEQUENCES
+
+        for alert, order in product((0, 3), (('ctrl', 'down'), ('down', 'ctrl'))):
+            with self.subTest(alert=alert, order=order):
+                scene = self.scene(alert)
+                # A retreat step (mode 1) is not a guard pose.
+                scene.start_sequence(min(SWORD_STEP_SEQUENCES))
+                scene.sequence_runtime.next_frame()
+                for key in order:
+                    self.tap(scene, key)
+                poses = self.trace(scene)
+                if alert:
+                    self.assertIn(151, poses)
+                    self.assertTrue(scene.sword_drawn)
+                else:
+                    self.assertEqual(poses[0], 'sheathe')
+                    self.assertNotIn(151, poses)
+
+    def test_down_held_after_a_block_sheathes_after_it_only_when_engaged(self):
+        for alert in (0, 3):
+            with self.subTest(alert=alert):
+                scene = self.scene(alert)
+                scene.up_key(None)
+                scene.set_key_state('up', False)
+                self.assertEqual(scene.action, 169)
+                scene.set_key_state('down', True)
+                poses = self.trace(scene, 4)
+                self.assertNotIn(151, poses)
+                self.assertEqual(poses[0], 150 if alert else 'sheathe')
+                self.assertIn('sheathe', poses)
+
+    def test_an_engaged_opponent_beyond_reach_ahead_leaves_down_unrouted(self):
+        from pop2.combat import opponent_distance
+
+        scene = self.scene(3, guard_x=40, player_x=400)
+        self.assertGreaterEqual(opponent_distance(scene.combat.player, scene.combat.guard), 331)
+        self.tap(scene, 'ctrl')
+        self.tap(scene, 'down')
+        self.assertEqual(self.trace(scene)[0], 'sheathe')
+
+    def test_a_loose_floor_routes_by_distance_even_at_alert_zero(self):
+        from pop2.terrain import Tile
+
+        for kind in (0, 11, 15):
+            with self.subTest(kind=kind):
+                scene = self.scene(0)
+                scene.combat.terrain = type('Cells', (), {'tile': lambda *_: Tile(kind)})()
+                self.assertEqual(scene.combat.player_distance_routed(), kind != 0)
+                self.tap(scene, 'ctrl')
+                self.tap(scene, 'down')
+                poses = self.trace(scene)
+                self.assertEqual(poses[0], 'sheathe' if kind == 0 else 152)

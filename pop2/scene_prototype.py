@@ -855,6 +855,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         if state.animation_state >= 2 or state.cursor == 0:
             self.sample_armed_controls()
             return False
+        if self.sheathe_unengaged():
+            return True
         # OnAlert 6:24bc: the bank's highest pending request; a refused one
         # stays pending (an inadmissible strike or Down also holds back the
         # lower requests). Consumed holds do not repeat.

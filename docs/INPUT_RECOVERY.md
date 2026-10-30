@@ -749,7 +749,10 @@ the action bodies too (71,280 cases) and makes the bank the sole owner of
 armed requests: refused requests stay pending, accepted ones consume as the
 original, and consumed holds no longer repeat sword steps or blocks. The
 attack-survives-Ctrl-release and rapid-attack policies stay explicit host
-extensions. This is not full SwordCtrl parity.
+extensions. This is not full SwordCtrl parity. SwordCtrl's last step is now
+in production as well: with no engaged opponent within reach (alert below 2
+and no loose floor or shelf underfoot, or more than 330 ahead), a pending
+Down sheathes at once at any mode-0/1 pose (6:2382), ahead of an attack.
 
 The [slot census](research/remaining-host-slot.md) then found no production
 writer of the old host slot across all 3,291 tests; the drink and the sword

@@ -2628,12 +2628,13 @@ class AnimationDataTests(unittest.TestCase):
         scene.up_key(None)
         scene.set_key_state("up", False)
         scene.set_key_state("down", True)
-        scene.advance_animation()
-        self.assertEqual(scene.action, 150)
+        # No opponent: the pending Down sheathes at the next frame (SwordCtrl
+        # 6:2382); against an engaged one the block finishes first
+        # (tests.test_armed_input.UnengagedSheatheTests).
         scene.advance_animation()
         self.assertEqual(scene.action, 233)
         self.assertEqual(scene.sequence_state.sequence_id, SWORD_SHEATHE_SEQUENCE)
-        self.assertEqual(scene.player_x, start_x + 10)
+        self.assertEqual(scene.player_x, start_x + 9)
 
     def test_attack_pressed_during_draw_waits_for_draw_to_finish(self):
         scene = self.sword_scene()

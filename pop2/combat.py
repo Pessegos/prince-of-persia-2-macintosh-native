@@ -849,6 +849,23 @@ class CombatEncounter:
         select_sequence(player, PLAYER_COMBAT_TURN_SEQUENCE, offset=offset)
         return True
 
+    def player_distance_routed(self):
+        """SwordCtrl 6:2236-2274: does the distance routing claim this frame?
+
+        It runs on a loose floor or shelf (CurrentCell 4:35a6 kinds 11/15) or
+        against an opponent at alert 2 or more, and claims the frame (OnAlert
+        or the turn) unless the opponent is farther ahead than 330. Otherwise
+        SwordCtrl's last step runs: a pending Down calls PutSwordAway with no
+        pose gate (6:2368-2386), anything else goes to OnAlert."""
+        player, guard = self.player, self.guard
+        terrain = getattr(self, 'terrain', None)
+        cell = (self._guard_tile(player, self._supporting_column(player)).kind
+                if terrain is not None or self.level is not None else 0)
+        if guard is None or cell not in (11, 15) and guard.alert_mode < 2:
+            return False
+        view = self._project_fighter(guard, player.room)
+        return view is not None and opponent_distance(player, view) < 331
+
     def choose_voluntary_turn(self, frame_record=None, bounds=None):
         # SwordCtrl 6:22f2-2366: fresh Backward with Shift turns through the
         # same DoTurn (6:2638 -> 26b8), toggles the automatic-turn flag

@@ -53,17 +53,21 @@ def armed_action(bank, pose, *, opponent_pose=0, distance=0, fight=0):
     return bank, ()
 
 
-def sword_ctrl(bank, *, mode, engagement, distance, opponent_type, actor_type, automatic,
+def sword_ctrl(bank, *, mode, cell, alert, distance, opponent_type, actor_type, automatic,
                level, room, row, bridge, wounded, bridge_test=False):
     """SwordCtrl 6:2206-2390 for the Prince: (events, bank, automatic flag).
 
-    `engagement` is 4:35a6's result, `distance` 4:49ee's (negative: the
-    opponent is behind), `automatic` a5-0x5010 (0 disables the automatic
-    turn), `wounded` a pending hit at least as large as the life."""
+    `cell` is the kind of the Prince's own cell (CurrentCell 4:35a6: 11 loose
+    floor, 15 ruins shelf), `alert` the opponent copy's alert word +0x32
+    (a5-0x5062), `distance` 4:49ee's result (negative: the opponent is
+    behind), `automatic` a5-0x5010 (0 disables the automatic turn),
+    `wounded` a pending hit at least as large as the life."""
     if mode >= 2 or wounded:
         return (), bank, automatic
     events, pending = [], True
-    if engagement in (11, 15):
+    # 6:2236-224e: the distance routing runs on a loose floor or shelf, or
+    # against an opponent at alert 2 or more; otherwise only step 3 runs.
+    if cell in (11, 15) or alert >= 2:
         if -15 <= distance < 331:
             events.append(('alert',))
             pending = False
