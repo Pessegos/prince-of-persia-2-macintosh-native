@@ -320,10 +320,11 @@ class CavernDrawingTests(unittest.TestCase):
 
     def test_export_draws_only_environments_with_a_known_piece_table(self):
         # a5-0x4aea holds one piece-drawing table per LEVL environment; only
-        # the caverns (3, kinds 0-44) and ruins (4, kinds 0-23) are decoded.
+        # the temple (2, kinds 0-43), caverns (3, kinds 0-44) and ruins (4,
+        # kinds 0-23) are decoded.
         from tools.extract_caverns import DRAW_KINDS
 
-        self.assertEqual(DRAW_KINDS, {3: 45, 4: 24})
+        self.assertEqual(DRAW_KINDS, {2: 44, 3: 45, 4: 24})
         level = bytearray(0x49ca)
         struct.pack_into('>H', level, 0x2186, 5)
         with (patch('tools.extract_caverns.recovery_inputs',
