@@ -37,5 +37,29 @@ class LevelNineHorseTests(unittest.TestCase):
                 self.assertNotEqual(region.tobytes(), sprite.tobytes())
 
 
+class LevelNineExitTests(unittest.TestCase):
+    def test_leaving_level_nine_plays_the_ride_then_completes(self):
+        # CheckPlayNIS(9, 10): NIS 2 first; level ten is not available, so
+        # the level ends with its status message after the scene.
+        from types import SimpleNamespace
+        from pop2.environments import Ruins
+
+        calls = []
+        status = SimpleNamespace(set=calls.append)
+        scene = SimpleNamespace(game=SimpleNamespace(level=SimpleNamespace(number=9), exit=object()),
+                                status=status)
+        finishes = []
+        scene.start_temple_ride = lambda finish: finishes.append(finish) or True
+        Ruins(scene).finish_exit()
+        self.assertEqual(calls, [])
+        finishes[0]()
+        self.assertIsNone(scene.game.exit)
+        self.assertEqual(calls, ['Level 9 complete'])
+        scene.start_temple_ride = lambda finish: False
+        scene.game.exit = object()
+        Ruins(scene).finish_exit()
+        self.assertIsNone(scene.game.exit)
+
+
 if __name__ == '__main__':
     unittest.main()

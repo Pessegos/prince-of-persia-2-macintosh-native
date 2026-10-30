@@ -1048,10 +1048,13 @@ class Ruins(Caverns):
         if scene.game.level.number in (6, 7, 8):
             self.finish_via_story(scene.game.level.number + 1)
         elif scene.game.level.number == 9:
-            # CheckPlayNIS(9, 10) shows NIS 2 before the temple, neither of
-            # which is available yet.
-            scene.game.exit = None
-            scene.status.set('Level 9 complete')
+            # CheckPlayNIS(9, 10) shows NIS 2, the ride to the temple, up to
+            # its last shot; level ten itself is not available yet.
+            def finish():
+                scene.game.exit = None
+                scene.status.set('Level 9 complete')
+            if not scene.start_temple_ride(finish):
+                finish()
         else:
             scene.start_ending()
 

@@ -334,10 +334,17 @@ existing scene program changes; the baseline comparison is identical):
   the temple, with the horse in plane 1 (GetHorsePtInPlane a5-0x4af2), and
   a final animation (TransFunc8) over it. It is recorded as `game_room`.
 
-Not yet playable: the callbacks' frame operations and the horse mirroring
-must be expanded like the carpet scene's, the cue-ended animation needs the
-music timing, and the final shot needs level ten's scenery, which the port
-does not have. Until then level nine ends with its status message.
+Playable since 2026-10-30 up to its last shot (`recover_temple`,
+`temple.json`, `ScenePrototype.start_temple_ride`): leaving level nine plays
+the desert gallop, the canyon with the temple's tower and the bridge, then
+the level ends with its status message. The callbacks' frames 0-63 are
+expanded like the carpet scene's (their raw ids resolved through the open
+files, then NIS, then Prince.rsrc, whose SHAP 25360 is the horse's last
+frame); FlipHorses mirrors shapes 301-360 from frame 0. Approximations:
+TransFunc5's animation runs to its script's end instead of stopping at
+music cue 97, and the last shot (level ten's room 22 with the horse, then
+TransFunc8 with FlipKids) is omitted until level ten's scenery exists.
+The scene needs a reimport (Horse.rsrc, TempleNIS.rsrc, temple.json).
 
 ## Remaining Steps
 

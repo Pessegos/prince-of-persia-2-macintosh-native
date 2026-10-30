@@ -230,6 +230,10 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                     emit("flash", w(), l(2), l(6), l(10), l(14))
                 elif target == 0x2b70:
                     emit("wait_current", w())
+                elif target == 0x042a:
+                    # FlipHorses 15:042a(direction): FreeShpInfo on the
+                    # animation's shapes 301-360 (the horse).
+                    emit("flip_horses", w())
                 elif target == 0x2d60:
                     # MakeDisolveData 15:2d60 frees the dissolve data: a
                     # dissolve then copies the whole screen at once (15:2c06).
@@ -444,6 +448,18 @@ def expand_animations(operations, nis, callbacks=None):
         previous = []
         if restore:
             emit('save_background')
+        horses_mirrored = False
+
+        def add_frame_operations(frame):
+            nonlocal horses_mirrored
+            for operation in frame_operations.get(frame, ()):
+                if operation['op'] == 'flip_horses':
+                    horses_mirrored = bool(operation['args'][0] & 3)
+                else:
+                    result.append(operation)
+
+        # A callback's frame 0 runs before the first frame is drawn.
+        add_frame_operations(0)
         while not animation.done:
             animation.step()
             for opcode, argument in animation.events:
@@ -466,10 +482,11 @@ def expand_animations(operations, nis, callbacks=None):
                                 base + shape)
                 data = resources['SHAP'][shape_id]['data']
                 _encoding, _stride, width, height = struct.unpack_from('>HhhH', data)
-                emit('shape', shape_id, x + dx, y + dy, flags)
+                mirror = 256 if horses_mirrored and 301 <= shape <= 360 else 0
+                emit('shape', shape_id, x + dx, y + dy, flags | mirror)
                 rectangles.append([y + dy, x + dx, y + dy + height, x + dx + width])
             frame += 1
-            result.extend(frame_operations.get(frame, ()))
+            add_frame_operations(frame)
             for rectangle in previous + rectangles:
                 emit('copy', rectangle)
             if restore:
@@ -701,6 +718,89 @@ def extract_throne(image, program, nis, files, directory, progress=lambda _text:
               'prince': list(THRONE_PRINCE), 'variants': variants, 'operations': variants['-1'],
               'audio': audio}
     (directory / 'throne.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')
+
+
+# NISTemple (NIS 2, CheckPlayNIS(9, 10)): the ride from level nine to the
+# temple. It opens Ruins, Horse and TempleNIS (A5 file records) and animates
+# with TransFunc4-8, whose frame 0 calls FlipHorses(1).
+TEMPLE_FILES = {0x470c: ('Ruins.rsrc', 400000), 0x26a4: ('Horse.rsrc', 700000),
+                0x269e: ('TempleNIS.rsrc', 600000)}
+TEMPLE_CALLBACKS = {0xeb2: ('temple4', 0x640a), 0xeba: ('temple5', 0x64ee), 0xec2: ('temple6', 0x656a),
+                    0xeca: ('temple7', 0x65ac), 0xed2: ('temple8', 0x65d4)}
+TEMPLE_CALLBACK_FRAMES = range(0, 64)
+
+
+# The game's own Prince.rsrc stays open below them (its SHAP 25360 is the
+# horse's last frame).
+TEMPLE_RESIDENT = ('Prince.rsrc', 800000)
+
+
+def temple_resources(nis, files):
+    merged = {kind: dict(items) for kind, items in parse_resource_fork(nis).items()}
+    for name, offset in (*TEMPLE_FILES.values(), TEMPLE_RESIDENT):
+        for kind, items in parse_resource_fork(files[name]).items():
+            merged.setdefault(kind, {}).update({offset + key: value for key, value in items.items()})
+    return merged
+
+
+def recover_temple(program, nis, files):
+    """NISTemple 15:5fd4 up to its last shot.
+
+    The last shot, DrawRoomFromNIS 2:03d4(10, 22), draws level ten's room 22
+    (the temple) with the horse, which the port cannot draw yet: the scene
+    ends on the black screen before it. TransFunc5 ends its animation once
+    the music reaches cue 97 (a5-0x1f6e); here it runs to its script's end.
+    """
+    parsed = {record: (offset, parse_resource_fork(files[name]))
+              for record, (name, offset) in TEMPLE_FILES.items()}
+    names = {offset: name for offset, (name, _entry) in TEMPLE_CALLBACKS.items()}
+    resident = ((TEMPLE_RESIDENT[1], parse_resource_fork(files[TEMPLE_RESIDENT[0]])),)
+    operations = recover_scenes(program, nis, entries=(0x5fd4,), callbacks=names, files=parsed,
+                                resident=resident, inline=(0x3384,), rect_out=True)
+    end = next((index for index, item in enumerate(operations) if item['op'] == 'game_room'),
+               len(operations))
+    operations = [item for item in operations[:end] if item['op'] != 'game_palettes']
+    for item in operations:
+        if 'search' in item:
+            item['search'] = [*item['search'], TEMPLE_RESIDENT[1]]
+    resources = temple_resources(nis, files)
+    nis_resources = parse_resource_fork(nis)
+
+    def scene_file_id(item):
+        # A callback runs while the scene's files are open: search them
+        # like the Resource Manager (last opened first), then NIS, then the
+        # game's Prince.rsrc.
+        kind = {'palette': 'CTBL', 'shape': 'SHAP'}.get(item['op'])
+        if kind is None or item['args'][0] >= 100000 or item['args'][0] in nis_resources.get(kind, {}):
+            return item
+        for offset in (600000, 700000, 400000, TEMPLE_RESIDENT[1]):
+            if offset + item['args'][0] in resources.get(kind, {}):
+                return {**item, 'args': [offset + item['args'][0], *item['args'][1:]]}
+        return item
+
+    callbacks = {}
+    for name, entry in TEMPLE_CALLBACKS.values():
+        if name == 'temple8':
+            continue  # TransFunc8 belongs to the omitted last shot.
+        frames = {}
+        for frame in TEMPLE_CALLBACK_FRAMES:
+            frame_operations = recover_scenes(program, nis, entries=(entry,), arguments=(frame,),
+                                              files=parsed, resident=resident)
+            if frame_operations:
+                frames[frame] = [scene_file_id(item) for item in frame_operations]
+        callbacks[name] = frames
+    return expand_animations(operations, resources, callbacks)
+
+
+def extract_temple(image, program, nis, files, directory, progress=lambda _text: None):
+    """Write the ride to the temple shown after level nine."""
+    directory = Path(directory)
+    operations = recover_temple(program, nis, files)
+    audio = extract_scene_audio(image, operations, directory, progress, banked=True)
+    result = {'schema': 1, 'kind': 'temple',
+              'resource_files': {name: offset for name, offset in (*TEMPLE_FILES.values(), TEMPLE_RESIDENT)},
+              'operations': operations, 'audio': audio}
+    (directory / 'temple.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')
 
 
 TREE_VARIANTS = range(1, 10)

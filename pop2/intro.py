@@ -143,8 +143,9 @@ class IntroAssets:
         # The throne scene also draws a few of the game's own shapes: only the
         # drawn ones are decoded.
         drawn = None
-        if self.program.get("kind") == "throne":
-            drawn = {item["args"][0] for operations in self.program["variants"].values()
+        if self.program.get("kind") in ("throne", "temple"):
+            programs = [*self.program.get("variants", {}).values(), self.program["operations"]]
+            drawn = {item["args"][0] for operations in programs
                      for item in operations if item["op"] == "shape"}
         for name, offset in self.program.get("resource_files", {}).items():
             for kind, items in parse_resource_fork((directory / name).read_bytes()).items():
@@ -154,7 +155,9 @@ class IntroAssets:
                         if kind == "CTBL" or drawn is None or offset + key in drawn})
         kid = parse_resource_fork((directory / "Kid.rsrc").read_bytes())
         self.kid_palettes = {key: palette_colors(value["data"]) for key, value in kid["CTBL"].items()}
-        self.shapes = {key: indexed_shape(value["data"]) for key, value in resources["SHAP"].items()}
+        # Shapes of the game's own files may carry trailing bytes.
+        self.shapes = {key: indexed_shape(value["data"], allow_trailing=key >= 100000)
+                       for key, value in resources["SHAP"].items()}
         kid_offset = self.program.get('resource_files', {}).get('Kid.rsrc')
         if kid_offset is not None:
             # Resident Kid shapes use local inks 1..16. SetKidPalette puts
@@ -612,7 +615,7 @@ class IntroPlayer:
                 self.started_fades.add(fade)
         elif op == "cue":
             playing = self.playing.get(0)
-            if playing is None and self.program_kind == "carpet":
+            if playing is None and self.program_kind in ("carpet", "temple"):
                 return  # 16:26d0 returns at once when no music plays.
             if playing is None:
                 raise ValueError("Intro cue without music")

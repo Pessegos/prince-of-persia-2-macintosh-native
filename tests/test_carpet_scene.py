@@ -303,3 +303,26 @@ class ThroneVisionPlayerTests(unittest.TestCase):
         player.advance(10)
         self.assertTrue(player.done)
         self.assertEqual(player.frame().crop((0, 365, 512, 384)).tobytes(), status.tobytes())
+
+
+class TempleRideTests(unittest.TestCase):
+    def test_flip_horses_mirrors_the_horse_shapes_from_frame_zero(self):
+        # TransFunc4-7 call FlipHorses 15:042a(1) at frame 0: the animation's
+        # shapes 301-360 are drawn mirrored; other shapes are not.
+        import struct
+        from tools.extract_intro import expand_animations
+
+        body = (bytes((5, 6)) + struct.pack('>2h', 1, 301) + bytes((5, 6)) + struct.pack('>2h', 2, 5)
+                + bytes((1, 2)) + bytes((0, 2)))
+        script = struct.pack('>I', len(body)) + body
+        resources = {'ANI ': {100001: {'data': struct.pack('>9h', 0, 0, 10, 10, 2, 7, 0, 0, 0)}},
+                     'SCRP': {100007: {'data': script}},
+                     'SHAP': {100301: {'data': struct.pack('>HhhH', 0, 0, 4, 3)},
+                              100005: {'data': struct.pack('>HhhH', 0, 0, 4, 3)}}}
+        operations = [{'op': 'animation', 'args': [100000, 1, 0, 0, 'ride'], 'pc': 0, 'flags': 0x14}]
+        callbacks = {'ride': {0: [{'op': 'flip_horses', 'args': [1], 'pc': 0},
+                                  {'op': 'sound', 'args': [25004, 0], 'pc': 0}]}}
+        result = expand_animations(operations, resources, callbacks)
+        self.assertEqual(result[0]['op'], 'sound')
+        shapes = {item['args'][0]: item['args'][3] for item in result if item['op'] == 'shape'}
+        self.assertEqual(shapes, {100301: 16 | 256, 100005: 16})

@@ -54,6 +54,11 @@ class AssetImportTests(unittest.TestCase):
         self.throne.side_effect = lambda _image, _program, _nis, _files, directory, _progress: (
             directory / 'throne.json').write_bytes(b'prepared throne')
         self.addCleanup(throne.stop)
+        temple = patch.object(extract_assets, 'extract_temple')
+        self.temple = temple.start()
+        self.temple.side_effect = lambda _image, _program, _nis, _files, directory, _progress: (
+            directory / 'temple.json').write_bytes(b'prepared temple')
+        self.addCleanup(temple.stop)
         caverns = patch.object(extract_assets, "extract_cavern_levels")
         self.caverns = caverns.start()
 
@@ -90,7 +95,7 @@ class AssetImportTests(unittest.TestCase):
                                      "ending.json", "discovery.json", "attract.json",
                                      "caverns_entry.json", "caverns_level4.json", "caverns_level5.json",
                                      "ruins_level6.json", "ruins_level7.json", "ruins_level8.json", "ruins_level9.json",
-                                     "carpet.json", "throne.json",
+                                     "carpet.json", "throne.json", "temple.json",
                                      *(f"tree-{n}.json" for n in extract_assets.TREE_VARIANTS)})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
         for name in extract_assets.RESOURCE_FILES:

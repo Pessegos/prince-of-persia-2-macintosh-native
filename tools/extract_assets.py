@@ -11,8 +11,8 @@ import tempfile
 from tools.extract_enemy_profiles import extract_bytes
 from tools.extract_audio import extract_audio
 from tools.extract_intro import (
-    TREE_VARIANTS, extract_carpet, extract_intro, extract_ending, extract_discovery, extract_throne,
-    extract_trees,
+    TREE_VARIANTS, extract_carpet, extract_intro, extract_ending, extract_discovery, extract_temple,
+    extract_throne, extract_trees,
 )
 from tools.extract_attract import extract_attract, extract_credits_music
 from tools.extract_caverns import extract_cavern_levels, scenery_name
@@ -22,7 +22,8 @@ from pop2.paths import ASSET_DIR
 
 
 RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Skeleton.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc", "NISTree.rsrc",
-                  "Ruins.rsrc", "Head.rsrc", "TNIS1.rsrc", "TNIS2.rsrc", "TNIS3.rsrc", "ThroneNIS.rsrc")
+                  "Ruins.rsrc", "Head.rsrc", "TNIS1.rsrc", "TNIS2.rsrc", "TNIS3.rsrc", "ThroneNIS.rsrc",
+                  "Horse.rsrc", "TempleNIS.rsrc")
 REQUIRED_RESOURCES = {
     "Prince.rsrc": {"LEVL", "SEQS", "SHAP", "SHPL", "CTBL", "NFNT"},
     "Kid.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
@@ -43,6 +44,9 @@ REQUIRED_RESOURCES = {
     "TNIS3.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
     # The vision at the throne in level eight (NIS 6).
     "ThroneNIS.rsrc": {"SHAP", "CTBL"},
+    # The ride to the temple after level nine (NIS 2).
+    "Horse.rsrc": {"SHAP", "CTBL"},
+    "TempleNIS.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
 }
 
 
@@ -95,6 +99,9 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         progress("Recovering the original vision at the throne...")
         extract_throne(image, program, resources["NIS.rsrc"], resources, staging, progress)
         resources["throne.json"] = (staging / "throne.json").read_bytes()
+        progress("Recovering the original ride to the temple...")
+        extract_temple(image, program, resources["NIS.rsrc"], resources, staging, progress)
+        resources["temple.json"] = (staging / "temple.json").read_bytes()
         for variant in TREE_VARIANTS:
             resources[f"tree-{variant}.json"] = (staging / f"tree-{variant}.json").read_bytes()
         caverns.result()

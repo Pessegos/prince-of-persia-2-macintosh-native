@@ -2955,6 +2955,27 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.status.set('Vision')
         return True
 
+    def start_temple_ride(self, finish):
+        """NISTemple (15:5fd4) after level nine; `finish` runs after it.
+        Returns False when the scene is not imported."""
+        from pop2.intro import IntroAssets, IntroPlayer
+        from pop2.paths import ASSET_DIR
+
+        if not (ASSET_DIR / 'temple.json').is_file():
+            return False
+        if getattr(self, 'temple_assets', None) is None:
+            self.temple_assets = IntroAssets(program_name='temple.json')
+        self.clear_keys(None)
+        self.attract_stage = 'tree'
+        self.tree_variant = None
+        self.after_vision = finish
+        if self.audio is not None:
+            self.audio.reset()
+        self.intro = IntroPlayer(self.temple_assets, self.audio)
+        self.last_intro_at = time.perf_counter()
+        self.status.set('The ride to the temple')
+        return True
+
     def finish_level_four(self):
         # CheckPlayNIS(4, 5) (2:0180) shows the first tree scene here when no
         # level-four restart has, then RestartGame loads level five.
