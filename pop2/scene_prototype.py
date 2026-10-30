@@ -1394,20 +1394,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             # during an attack/draw are separate from this block request.
             self.armed_attack_requested = False
 
-    def update_fall_recovery_controls(self):
-        state = self.sequence_state
-        if state.source_sequence_id != 20 or state.animation_state != 5:
-            return
-        # GenCtrl 6:0576-059c clears directions throughout the hard-fall
-        # recovery (20 -> 212 -> 49), but not Ctrl. Re-read held Up at rest;
-        # a released tap must not outlive this protected part of the rise.
-        if self.pending_action is not None and self.pending_action.kind in (
-            "horizontal", "jump", "crouch", "crawl"
-        ):
-            self.pending_action = None
-        self.jump_started_for_press = self.up_held
-        self.jump_repeat_armed = self.up_held
-
     def resume_queued_crouch_during_run(self):
         # Compatibility entry point; the directional bank is the sole dispatcher.
         return self.update_waiting_controls()
@@ -1954,7 +1940,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             return
         self.update_native_input_boundaries()
         self.update_armed_input_boundaries()
-        self.update_fall_recovery_controls()
         self.update_airborne_controls()
         if not self.resume_combat_turn():
             if not self.resume_sword_attack_after_block():

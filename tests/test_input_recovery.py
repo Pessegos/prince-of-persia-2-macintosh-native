@@ -99,6 +99,49 @@ class InputRecoveryTests(unittest.TestCase):
                         self.assertEqual(scene.sequence_state.facing, facing)
                         self.assertIsNone(scene.pending_action)
 
+    def test_hard_fall_recovery_presses_belong_to_the_bank_not_the_host_slot(self):
+        for facing in (0, 1):
+            forward = 1 if facing else -1
+            for key in ('up', 'down', 'forward', 'backward'):
+                for held in (False, True):
+                    with self.subTest(facing=facing, key=key, held=held):
+                        scene = self.fixture.sword_scene()
+                        scene.sequence_state.facing = facing
+                        scene.start_sequence(20)
+                        for _ in range(6):
+                            scene.advance_animation()
+                        self.assertEqual(scene.sequence_state.sequence_id, 212)
+
+                        def press(pressed):
+                            if key in ('up', 'down'):
+                                scene.set_key_state(key, pressed)
+                            else:
+                                scene.horizontal_key(
+                                    None, forward if key == 'forward' else -forward, pressed)
+
+                        press(True)
+                        # The old host buffered this press until the next tick
+                        # discarded it; the bank owns it from the callback on.
+                        self.assertIsNone(scene.pending_action)
+                        self.assertIsNotNone(scene.directional_input)
+                        scene.advance_animation()
+                        self.assertEqual(scene.directional_input.words()[:4], (0, 0, 0, 0))
+                        if not held:
+                            press(False)
+                        for _ in range(40):
+                            scene.advance_animation()
+                            self.assertIsNone(scene.pending_action)
+                            if scene.sequence_state.source_sequence_id != 20:
+                                break
+                        if held:
+                            expected = {'up': 28, 'down': 50, 'forward': 1,
+                                        'backward': STANDING_TURN_SEQUENCE}[key]
+                            self.assertEqual(scene.sequence_state.source_sequence_id, expected)
+                        else:
+                            # A released tap leaves the Prince at rest.
+                            self.assertEqual((scene.sequence_state.source_sequence_id,
+                                              scene.action), (20, 15))
+
     def test_up_tap_after_hard_fall_protected_recovery_still_queues_jump(self):
         for facing in (0, 1):
             scene = self.fixture.sword_scene()

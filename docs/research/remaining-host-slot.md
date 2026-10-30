@@ -37,10 +37,13 @@ Port today: `start_jump` buffers a jump; `update_fall_recovery_controls`
 discards it in mode 5 and re-reads the held Up afterwards. The result
 matches for these two cases, through two mechanisms.
 
-Proposed: let the waiting bank own the recovery: clear its directions in
-mode 5 (as 6:059c) and drop the slot write from `start_jump` there. Tests:
-a released tap during 212 never jumps; a hold jumps at the first standing
-gate; a held Forward is fresh after the recovery (both facings).
+Done: SEQS 20/212 joined `LOW_INPUT_SEQUENCES` (49 was already there),
+so the bank's mode-5 clear covers 108/109 and the key callbacks no longer
+reach `start_jump`/`buffer_input`; `update_fall_recovery_controls` is
+removed. Regression: `tests.test_input_recovery` "presses belong to the
+bank" (Up/Down/Forward/Backward, tap and hold, both facings; the old code
+fails all 16 at the slot assertion). A tap leaves the Prince at rest; a
+hold selects 28/50/1/6 at the standing gate.
 
 ## 2. Presses during the run stop (SEQS 13) without a bank
 
@@ -95,7 +98,6 @@ previous code).
 ## Consumers still reading the slot
 
 `dispatch_pending_action`, `resume_queued_action_during_run_stop`,
-`update_native_input_boundaries` (SEQS 46 tail), `update_fall_recovery_
-controls`, the airborne/ledge/low/running families' one-shot imports of
+`update_native_input_boundaries` (SEQS 46 tail), the airborne/ledge/low/running families' one-shot imports of
 scripted requests, and the ledge-climb completion re-classification. Each
 should be removed with its producer above, not separately.

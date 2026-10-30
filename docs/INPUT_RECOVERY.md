@@ -415,13 +415,14 @@ reset/resampling cases across both facings, nine protected poses, held or
 released Up, and fresh or consumed old Up. With Forward still held, a
 released Up resumes running at rest; keeping Up held selects a jump instead.
 
-The host now clears pending horizontal/jump/crouch/crawl commands on each
-protected recovery pass, leaving physical key holds alone. Ctrl uses the
-modifier lifecycle above rather than a stored draw request.
-Held Up uses the existing idle-transition repeat admission, marked consumed
-until then so releasing it cannot invoke the short-tap fallback. Released Up
-does not produce a delayed standing forward jump. Requests sampled after the
-mode-5 portion can still queue normally. Animation poses, recovery duration,
+The directional bank owns the whole recovery: SEQS 20 and 212 joined the
+low family that already owned 49, so its mode-5 clear runs at 108/109 too
+and key callbacks never write the host slot there (the former per-tick
+slot discard is removed). Physical holds stay; a held key becomes a fresh
+request at the first sample after mode 5 and is admitted at the standing
+gate. Ctrl uses the modifier lifecycle above rather than a stored draw
+request. Released Up does not produce a delayed standing forward jump.
+Requests sampled after the mode-5 portion are ordinary bank requests. Animation poses, recovery duration,
 impact damage, ordinary soft landings and wall-impact/climb queues are unchanged.
 
 Controller regressions cover taps and holds at 14 protected recovery updates

@@ -10,7 +10,9 @@ from pop2.mac_input import DirectionalInput, low_input_request
 from pop2.opponent_generation import character_column
 
 
-LOW_INPUT_SEQUENCES = frozenset((17, 26, 49, 50, 79, 117, 121, 122, 123, 124, 125))
+# 20/212 are the hard-fall recovery before its rise through 49: GenCtrl's
+# mode-5 gate (6:0576-059c) clears the bank there, as in the low family.
+LOW_INPUT_SEQUENCES = frozenset((17, 20, 26, 49, 50, 79, 117, 121, 122, 123, 124, 125, 212))
 
 
 class LowControls(LedgeControls):
