@@ -749,7 +749,8 @@ def recover_temple(program, nis, files):
     The last shot, DrawRoomFromNIS 2:03d4(10, 22), draws level ten's room 22
     (the temple) with the horse, which the port cannot draw yet: the scene
     ends on the black screen before it. TransFunc5 ends its animation once
-    the music reaches cue 97 (a5-0x1f6e); here it runs to its script's end.
+    the music reaches cue 97 (a5-0x1f6e); here its last frame is held until
+    that cue.
     """
     parsed = {record: (offset, parse_resource_fork(files[name]))
               for record, (name, offset) in TEMPLE_FILES.items()}
@@ -763,6 +764,12 @@ def recover_temple(program, nis, files):
     for item in operations:
         if 'search' in item:
             item['search'] = [*item['search'], TEMPLE_RESIDENT[1]]
+    # TransFunc5 (15:654a-6552) keeps its animation going until the music
+    # reaches cue 97; the port holds its last frame until that cue.
+    held = next((index for index, item in enumerate(operations)
+                 if item['op'] == 'animation' and item['args'][4:] == ['temple5']), None)
+    if held is not None:
+        operations.insert(held + 1, {'op': 'cue', 'args': [97], 'pc': operations[held]['pc']})
     resources = temple_resources(nis, files)
     nis_resources = parse_resource_fork(nis)
 

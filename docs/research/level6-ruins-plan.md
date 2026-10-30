@@ -341,8 +341,9 @@ the level ends with its status message. The callbacks' frames 0-63 are
 expanded like the carpet scene's (their raw ids resolved through the open
 files, then NIS, then Prince.rsrc, whose SHAP 25360 is the horse's last
 frame); FlipHorses mirrors shapes 301-360 from frame 0. Approximations:
-TransFunc5's animation runs to its script's end instead of stopping at
-music cue 97, and the last shot (level ten's room 22 with the horse, then
+TransFunc5's animation keeps going in the original until music cue 97;
+the port plays its script once and holds the last frame until that cue
+(about 38 s for the whole scene), and the last shot (level ten's room 22 with the horse, then
 TransFunc8 with FlipKids) is omitted until level ten's scenery exists.
 The scene needs a reimport (Horse.rsrc, TempleNIS.rsrc, temple.json).
 
