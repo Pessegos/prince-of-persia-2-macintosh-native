@@ -181,7 +181,10 @@ fatal pending hit (otherwise nothing runs):
 2. Shift or a consumed Shift (modifier -1/1) with a pending Backward then
    takes the voluntary turn, except in level five's room 10 while a5-0x3130
    (the breaking bridge) is positive: modifier 2, ClearControls, Backward 1,
-   the automatic-turn flag toggles, and the target is chosen again.
+   the automatic-turn flag toggles, and the target is chosen again. The
+   flag starts at 1 (enabled) with each level (2:5e5c). One voluntary turn
+   therefore disables the automatic turn until the next voluntary turn or
+   level; this is the original's answer to opponents on both sides.
 3. Otherwise, when neither step 1 ran OnAlert nor turned: a pending Down
    calls PutSwordAway **directly** (no OnAlert pose gate), else OnAlert.
 
