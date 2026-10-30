@@ -198,8 +198,11 @@ def cavern_clip_top(terrain, room, row, state, bounds):
 
 # Levels whose scenery is the original renderer's export, by LEVL environment:
 # caverns (3) and ruins (4, levels six and seven).
-SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7, 8, 9)}
+# Native scenery by LEVL environment: caverns (3), ruins (4) and the
+# temple (2, levels 10-13; exported, not yet playable).
+SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7, 8, 9), 2: (10, 11, 12, 13)}
 RUINS_LEVELS = SCENERY_LEVELS[4]
+TEMPLE_LEVELS = SCENERY_LEVELS[2]
 # CUST room enter hooks loading a CTBL over the room palette (S03_508A):
 # level five's carpet room (CheckCarpetImg 8:0d30, CTBL 3501 at 64), level
 # six's start room (CUST kind 22, 7:37a6, CTBL 3502 at 64) and level eight's
@@ -210,7 +213,8 @@ ROOM_PALETTES = {(5, 2): 3501, (6, 26): 3502, (8, 8): 3501}
 def scenery_name(level_number):
     if level_number == 3:
         return 'caverns_entry.json'
-    return f"{'ruins' if level_number in RUINS_LEVELS else 'caverns'}_level{level_number}.json"
+    kind = 'ruins' if level_number in RUINS_LEVELS else 'temple' if level_number in TEMPLE_LEVELS else 'caverns'
+    return f"{kind}_level{level_number}.json"
 
 
 # The room whose exit closes behind the Prince as he enters. Level six's
@@ -230,6 +234,8 @@ def scenery_available(level_number):
 
 
 def scenery_resource(level_number):
+    if level_number in TEMPLE_LEVELS:
+        return 'Temple.rsrc'
     return 'Ruins.rsrc' if level_number in RUINS_LEVELS else 'Caverns.rsrc'
 
 

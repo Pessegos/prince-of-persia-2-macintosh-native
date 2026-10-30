@@ -63,3 +63,13 @@ class LevelNineExitTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TempleSceneryNamingTests(unittest.TestCase):
+    def test_temple_levels_use_temple_scenery_files(self):
+        from pop2.caverns import TEMPLE_LEVELS, scenery_name, scenery_resource
+
+        self.assertEqual(TEMPLE_LEVELS, (10, 11, 12, 13))
+        self.assertEqual((scenery_name(10), scenery_resource(13)), ('temple_level10.json', 'Temple.rsrc'))
+        self.assertEqual((scenery_name(9), scenery_resource(9)), ('ruins_level9.json', 'Ruins.rsrc'))
+        self.assertEqual(scenery_name(3), 'caverns_entry.json')
