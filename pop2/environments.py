@@ -18,6 +18,7 @@ import time
 from types import SimpleNamespace
 
 from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, bridge_sag, on_bridge
+from pop2.mac_input import DirectionalInput
 from pop2.carpet import (
     CARPET_ROOM, CARPET_TILE, CLOSED_SONG, CRASH_SEQUENCE, OPEN_SONG, RIDE_FRAME, ROOM_SONG, SIT_SEQUENCE,
     carpet_room,
@@ -1026,9 +1027,18 @@ class Ruins(Caverns):
         # Load the open backdrop before drawing the arrival. The same tick's
         # later level-events phase must not consume its first visible frame.
         scene.game.caverns.start_entry()
+        held = (list(scene.held_directions), scene.up_held, scene.down_held,
+                scene.shift_held, scene.ctrl_held)
         scene.jump_to_room(2, 2, 4 * TILE_WIDTH + 22, 1, reset_guards=False,
                           preserve_checkpoint=True, redraw=False)
         scene.start_sequence(5)
+        # The keys stay held through the cut. 7:379a-379e then calls
+        # ClearControls and zeroes the modifier: a key still held is a fresh
+        # request, so a held Left turns into a run at SEQS 5's pose 48.
+        (scene.held_directions, scene.up_held, scene.down_held,
+         scene.shift_held, scene.ctrl_held) = held
+        scene.sample_keyboard()
+        scene.directional_input = DirectionalInput()
         scene.sequence_runtime.next_frame()
         scene.action = scene.sequence_state.action
         scene.render()

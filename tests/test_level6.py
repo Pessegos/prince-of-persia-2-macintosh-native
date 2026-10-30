@@ -295,6 +295,56 @@ class LevelSixSceneryTests(unittest.TestCase):
 
 
 @unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported level-six resources required')
+class LevelSixDoorEntryTests(unittest.TestCase):
+    """S07_373E: stepping out of native room 3's door after leaving the cliff."""
+
+    def setUp(self):
+        LevelSixSceneryTests.setUp(self)
+
+    def tick(self, count=1):
+        LevelSixSceneryTests.tick(self, count)
+
+    def run_jump_into_the_door(self, hold):
+        from types import SimpleNamespace
+
+        scene = self.scene
+        self.tick(5)
+        scene.horizontal_key(SimpleNamespace(keysym='Left'), -1, True)
+        self.tick(10)
+        scene.press_up()
+        self.tick()
+        scene.set_key_state('up', False)
+        if not hold:
+            scene.horizontal_key(SimpleNamespace(keysym='Left'), -1, False)
+        trace = []
+        for _ in range(12):
+            self.tick()
+            state = scene.sequence_state
+            trace.append((scene.room_id, state.source_sequence_id, state.action, state.target_x))
+        return trace
+
+    def test_a_held_left_turns_into_a_run_after_the_door(self):
+        # 7:379a-379e clears the latches as the Prince steps out (SEQS 5);
+        # the still-held Left is then fresh, so pose 48 turns into a run
+        # (SEQS 43). Previously the cut dropped the held key: he only turned.
+        trace = self.run_jump_into_the_door(hold=True)
+        arrival = next(index for index, step in enumerate(trace) if step[0] == 2)
+        poses = [step[2] for step in trace[arrival:]]
+        self.assertIn(48, poses)
+        after = trace[arrival + poses.index(48) + 1:]
+        self.assertTrue(after and all(step[1] == 43 for step in after))
+        self.assertLess(after[-1][3], after[0][3])
+        self.assertEqual(self.scene.held_directions, [-1])
+
+    def test_without_a_held_key_the_prince_stands_after_the_door(self):
+        trace = self.run_jump_into_the_door(hold=False)
+        self.assertEqual(trace[-1][0], 2)
+        arrival = [step for step in trace if step[0] == 2]
+        # Only the arrival's turn (SEQS 5), no run.
+        self.assertEqual({step[1] for step in arrival}, {5})
+
+
+@unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported level-six resources required')
 class LevelSixScytheTests(unittest.TestCase):
     """5:57bc, TriggerScythe 5:5fde, AnimScythe 5:4584 and CheckScytheHit 5:588a."""
 
