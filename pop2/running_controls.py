@@ -39,7 +39,6 @@ class RunningControls(WaitingControls):
                            -1 if self.shift_held else -2 if self.ctrl_held else 0)
         self.directional_input = bank.consume('right' if direction > 0 else 'left', clear=True)
         self.waiting_step_direction = 0
-        self.run_vertical_followup = False
 
     def waiting_key(self, key, pressed):
         running = self.sequence_state.sequence_id in RUN_INPUT_SEQUENCES and self.waiting_controls_available()
@@ -56,7 +55,6 @@ class RunningControls(WaitingControls):
             self.running_key_callback = False
         if fresh:
             self.jump_started_for_press = True
-            self.run_vertical_followup = not self.horizontal_input
             self.try_startup_jump_chord()
         elif cancel_repeat:
             # A continuously held takeoff key is an automatic repeat, not a
@@ -69,28 +67,16 @@ class RunningControls(WaitingControls):
         running = self.sequence_state.sequence_id in RUN_INPUT_SEQUENCES
         if not running:
             return super().waiting_horizontal(direction, pressed)
+        # A release creates no request (4:3e84): an Up still pending meets
+        # GenCtrl's running gate as it is, a consumed held Up stays consumed.
         self.sample_waiting_controls()
-        if not pressed:
-            self.latch_released_chord()
         self.run_stop_requested = self.horizontal_input != self.run_direction
         return False
-
-    def latch_released_chord(self):
-        if (self.sequence_state.sequence_id not in RUN_INPUT_SEQUENCES
-                or self.horizontal_input or not self.up_held):
-            return super().latch_released_chord()
-        # Existing host tolerance: release the horizontal half of a held
-        # chord to request vertical alignment/climb after the brake.
-        self.run_vertical_followup = True
-        self.directional_input = replace(self.directional_input, up=-1)
-        self.jump_started_for_press = True
-        return True
 
     def request_running_jump(self):
         self.jump_started_for_press = True
         self.sample_waiting_controls()
         self.directional_input = replace(self.directional_input, up=-1)
-        self.run_vertical_followup = not self.horizontal_input
         self.try_startup_jump_chord()
 
     def try_startup_jump_chord(self):
@@ -111,7 +97,6 @@ class RunningControls(WaitingControls):
     def update_waiting_controls(self, *, repeat=True):
         state = self.sequence_state
         if state.sequence_id not in RUN_INPUT_SEQUENCES:
-            self.run_vertical_followup = False
             return super().update_waiting_controls(repeat=repeat)
         if not self.waiting_controls_available():
             return False
@@ -122,13 +107,11 @@ class RunningControls(WaitingControls):
             return False
         facing = bool(state.facing)
         relative = self.directional_input.remap(facing_right=facing)
-        vertical = getattr(self, 'run_vertical_followup', False) and not relative.left and not relative.right
-        if vertical and 4 <= state.action <= 14 and state.action not in (7, 11):
-            return False
+        # 6:11e4-1274: with no arrow a pending Up takes off as a running jump
+        # at any pose but 7/11, where the brake clears it (a held Up is then
+        # fresh at the brake's standing gate).
         relative, request = running_input_request(
             relative, state.action, mode=state.animation_state, sequence=state.sequence_id)
-        if vertical and request == 'brake':
-            relative = replace(relative, up=-1)
         self.directional_input = relative.remap(facing_right=facing)
         self.modifier_input = relative.modifier
         if request is None:
@@ -150,5 +133,4 @@ class RunningControls(WaitingControls):
 
     def clear_waiting_controls(self):
         super().clear_waiting_controls()
-        self.run_vertical_followup = False
         self.run_repeat_up = False

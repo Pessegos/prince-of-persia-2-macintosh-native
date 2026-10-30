@@ -179,9 +179,10 @@ Existing host tolerances remain explicit and tested:
 
 - The initial pose-1 forward chord window, and the opposite startup chord
   which turns from the original start position.
-- Releasing the horizontal half of a chord, or requesting Up after release,
-  can brake before the existing vertical wall alignment/climb. This is a
-  bank Up plus a vertical-followup flag, not another executable command slot.
+- (Removed 2026-10-30, see `remaining-host-slot.md` section 3.) Releasing
+  the horizontal half of a chord, or requesting Up after release, used to
+  brake before a vertical jump through a vertical-followup flag. The native
+  running gate now decides: running jump except at 7/11.
 - A continuously held jump key can repeat after landing; releasing that
   automatic repeat cancels it. A genuine new Up tap remains pending when
   geometry rejects takeoff, even after release.
@@ -254,15 +255,14 @@ Preserved port policies are explicit:
 
 - Automatic held-jump repetition can be cancelled by releasing Up. A fresh
   late tap remains distinct from that automatic repeat.
-- Releasing horizontal while Up remains held can request vertical wall
-  alignment/climb. A policy flag accompanies the same Up latch; it is not
-  a second executable directional queue. Physics snapshots that intent
-  before retiring the bank on a wall/fall interruption.
+- (Removed 2026-10-30.) Releasing horizontal while Up remained held used
+  to re-latch Up with a policy flag. A release now creates no request; the
+  takeoff's consumed Up becomes fresh at the landing clear.
 - Rapid identical-jump filtering and the startup chord windows remain.
 - Upside-down physical key mapping occurs once before the bank. Ctrl does
   not interrupt the arc or brake, and released Ctrl cannot draw later.
 - Pause preserves ordinary held-key semantics; menu/focus/restart clears
-  discard the bank and followup flags. Fall/death/ledge/armed interruptions
+  discard the bank and repeat flags. Fall/death/ledge/armed interruptions
   retire ownership rather than replaying the interrupted takeoff.
 
 `tests/test_airborne_controls.py` rejects the old priority/slot behavior on

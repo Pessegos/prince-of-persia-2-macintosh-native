@@ -178,6 +178,40 @@ The same release rule remains a host tolerance inside the running (SEQS 1,
 `latch_released_chord`; the native-latch replacement proposed here is still
 open.
 
+Done (user decision 2026-10-30: fully native). The release rule and the
+running bank's vertical follow-up flag are removed together; the flag was the
+second entrance of the same tolerance (an Up pressed with no arrow held set
+it too) and, in the jump bank, had no reader left. A release now only samples
+the bank. GenCtrl 6:11e4-1274 then decides with the bank as it stands: a
+pending Up with no arrow takes off as a running jump (SEQS 4) at any run pose
+4-14 but 7/11; at 7/11 the brake clears the bank, and a still-held Up is fresh
+at the brake's standing gate (jump up, 14/28). The proposal above expected a
+standing jump in the pending case; that holds only from the next 7/11 gate.
+
+Bounded trace (level 3, native room 21; scratch harness, 50 cases with the
+old tolerance and with the native rule): running jump released at 34-52,
+wall bumps 102-111 and wall stops 50-52, standing jumps (16-52, both facings),
+and run wall contact (6, 50-52, both facings) are identical (same sequences,
+climb, end room/row/pose): the takeoff consumed Up (DoFwdJump 6:15ea, DoRunJump
+6:1c14 write 1) and the landing or bump clear makes a held Up fresh anyway.
+Only the open run differs. Run from X 250 facing left, Up pressed and the
+arrow released at poses 8-13: old `[201, 13, 14, 11, 14]` (brake, jump up),
+native `[4, 201, 13, 47, 24]` or `[4, 47, 24, 9, 10]` (running jump). Pose 5
+brakes at 7 and jumps up in both. With only the release made native, the
+order inside one frame mattered (Up then release: running jump; release then
+Up: brake and jump up); removing the flag makes both orders native.
+
+Regressions (fail on the previous code, 26 subcases): `tests.test_game_ui`
+"up without an arrow in a run meets the native running gate" (poses 5-13,
+both orders, paused or not), `tests.test_input_recovery` "releasing ...
+adds no up request" (the release leaves the Up word unchanged in SEQS 1, 3,
+4, 6, 43, 200-202). The wall-climb scene tests keep their climbs; their bank
+assertions now expect the consumed Up (1) after the takeoff. The level-one
+building test that released the run arrow and then pressed Up (room 10,
+X 480) used to brake at `(13, 53, 247)` and jump up; it now takes off as a
+running jump, stops at the wall `(47, 50, 241)` and climbs with the held Up,
+ending at the same row, pose and X (0, 15, 214).
+
 ## 4. Releasing Up with the sword drawn (fixed)
 
 `set_key_state('up', False)` called `start_jump` when Up had been held

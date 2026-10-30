@@ -234,7 +234,7 @@ class InputRecoveryTests(unittest.TestCase):
                         else:
                             self.assertEqual((scene.sequence_state.sequence_id, scene.action), (3, 16))
 
-    def test_releasing_run_jump_horizontal_retargets_held_up_in_both_facings(self):
+    def test_releasing_run_jump_horizontal_adds_no_up_request_in_both_facings(self):
         for facing in (0, 1):
             direction = 1 if facing else -1
             for sequence in (RUN_JUMP_SEQUENCE, 46, 47):
@@ -247,17 +247,16 @@ class InputRecoveryTests(unittest.TestCase):
                         if not held_up:
                             scene.set_key_state('up', False)
                         before = (scene.sequence_state.sequence_id, scene.action, scene.player_x)
+                        up = scene.directional_input.up
                         scene.horizontal_key(None, direction, False)
                         self.assertEqual((scene.sequence_state.sequence_id, scene.action,
                                           scene.player_x), before)
                         if held_up:
-                            if sequence == RUN_JUMP_SEQUENCE:
-                                self.assertLess(scene.directional_input.up, 0)
-                                self.assertTrue(scene.airborne_vertical_followup)
-                            else:
-                                # The bump's mode 5 owns the bank (6:0576-059c):
-                                # no host request; the held Up is fresh after it.
-                                self.assertGreaterEqual(scene.directional_input.up, 0)
+                            # A release creates no request (4:3e84): the Up
+                            # word keeps what the takeoff or the bump's mode-5
+                            # clear (6:0576-059c) left there.
+                            self.assertGreaterEqual(scene.directional_input.up, 0)
+                            self.assertEqual(scene.directional_input.up, up)
                         if sequence != RUN_JUMP_SEQUENCE:
                             sequences = []
                             for _ in range(20):
@@ -289,7 +288,7 @@ class InputRecoveryTests(unittest.TestCase):
                             scene.advance_animation()
                         self.assertEqual((scene.sequence_state.sequence_id, scene.action), (IDLE_SEQUENCE, 15))
 
-    def test_releasing_standing_jump_or_run_horizontal_retargets_only_a_held_up(self):
+    def test_releasing_standing_jump_or_run_horizontal_adds_no_up_request(self):
         for facing in (0, 1):
             direction = 1 if facing else -1
             for sequence in (JUMP_FORWARD_SEQUENCE, *sorted(RUN_SEGMENT_SEQUENCES)):
@@ -301,16 +300,13 @@ class InputRecoveryTests(unittest.TestCase):
                         if not held_up:
                             scene.set_key_state('up', False)
                         before = (scene.sequence_state.sequence_id, scene.action, scene.player_x)
+                        up = scene.directional_input.up
                         scene.horizontal_key(None, direction, False)
                         self.assertEqual((scene.sequence_state.sequence_id, scene.action,
                                           scene.player_x), before)
                         if held_up:
-                            if sequence in RUN_SEGMENT_SEQUENCES:
-                                self.assertLess(scene.directional_input.up, 0)
-                                self.assertTrue(scene.run_vertical_followup)
-                            else:
-                                self.assertLess(scene.directional_input.up, 0)
-                                self.assertTrue(scene.airborne_vertical_followup)
+                            # No request from the release (4:3e84).
+                            self.assertEqual(scene.directional_input.up, up)
 
     def run_scene_at(self, facing, pose):
         scene = self.fixture.sword_scene()

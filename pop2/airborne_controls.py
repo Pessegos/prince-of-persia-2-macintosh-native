@@ -45,7 +45,6 @@ class AirborneControls(RunningControls):
         self.directional_input = (self.directional_input.consume('up', clear=True) if sequence != 3
                                   else self.directional_input.consume(forward, 'up'))
         self.waiting_step_direction = 0
-        self.airborne_vertical_followup = False
         self.run_repeat_up = False
 
     def waiting_key(self, key, pressed):
@@ -59,7 +58,6 @@ class AirborneControls(RunningControls):
         if fresh:
             self.jump_started_for_press = True
             self.run_repeat_up = False
-            self.airborne_vertical_followup = not self.horizontal_input
             # Preserve the existing rapid identical-jump filter. It consumes
             # this tap only, without erasing another directional request.
             from pop2.scene_prototype import BufferedCommand
@@ -74,35 +72,18 @@ class AirborneControls(RunningControls):
             # repeat, not a new tap. Retain the port's release cancellation.
             self.directional_input = replace(self.directional_input, up=0)
             self.run_repeat_up = False
-        if key == 'up' and not pressed:
-            self.airborne_vertical_followup = False
         return handled
 
     def waiting_horizontal(self, direction, pressed):
         if self.sequence_state.sequence_id not in AIRBORNE_INPUT_SEQUENCES:
             return super().waiting_horizontal(direction, pressed)
+        # A release creates no request (4:3e84); the takeoff consumed Up, and
+        # the landing clear (26/44 or the protected modes) makes a held Up fresh.
         self.sample_waiting_controls()
-        if not pressed:
-            self.latch_released_chord()
         self.run_stop_requested = self.run_active and self.horizontal_input != self.run_direction
         if self.sequence_state.sequence_id in VERTICAL_INPUT_SEQUENCES:
             return self.update_waiting_controls()
         return False
-
-    def latch_released_chord(self):
-        if (self.sequence_state.sequence_id not in AIRBORNE_INPUT_SEQUENCES
-                or self.horizontal_input or not self.up_held):
-            return super().latch_released_chord()
-        self.airborne_vertical_followup = True
-        self.directional_input = replace(self.directional_input, up=-1)
-        self.jump_started_for_press = True
-        return True
-
-    def latch_waiting_command(self, command):
-        super().latch_waiting_command(command)
-        if (self.sequence_state.sequence_id in AIRBORNE_INPUT_SEQUENCES
-                and command.kind == 'jump' and not command.direction and self.up_held):
-            self.airborne_vertical_followup = True
 
     def update_waiting_controls(self, *, repeat=True):
         state = self.sequence_state
@@ -135,12 +116,3 @@ class AirborneControls(RunningControls):
             self.directional_input = self.directional_input.clear_directions()
             self.jump_started_for_press = self.up_held
             self.run_repeat_up = self.up_held and self.jump_repeat_armed
-
-    def clear_waiting_controls(self):
-        super().clear_waiting_controls()
-        self.airborne_vertical_followup = False
-
-    def retire_waiting_controls(self):
-        super().retire_waiting_controls()
-        if self.sequence_state.sequence_id not in AIRBORNE_INPUT_SEQUENCES:
-            self.airborne_vertical_followup = False

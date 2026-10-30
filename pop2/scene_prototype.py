@@ -882,11 +882,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 if not pressed and getattr(self, "step_warning_direction", 0) == direction:
                     self.step_warning_direction = 0
                 self.sample_keyboard()
-                if (not pressed and self.up_held and not self.horizontal_input
-                        and self.waiting_controls_available()):
-                    # The family's release rule latches without moving.
-                    self.sample_waiting_controls()
-                    self.latch_released_chord()
                 if self.run_active:
                     self.run_stop_requested = self.horizontal_input != self.run_direction
             return "break"

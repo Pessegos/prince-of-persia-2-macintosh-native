@@ -769,6 +769,10 @@ A later census of the producers that fed it found every production call
 already latching into a bank; the generic bridge became `latch_request` for
 scripted requests, and a release made while paused now follows the owning
 family's release rule (it used to turn a running chord into a running jump).
+That release rule was then retired for the native one (user decision): a
+release creates no request (4:3e84), so an Up pending in a run with no arrow
+held takes off as a running jump except at the 7/11 brake gate, in either
+order of Up and release (`docs/research/remaining-host-slot.md` section 3).
 
 1. Translate five native latches, sampling, facing remap and consume/reset
    operations in `mac_input`. Test every directional/modifier transition.

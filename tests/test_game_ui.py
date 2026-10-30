@@ -773,13 +773,16 @@ class GameWindowTests(unittest.TestCase):
                         scene.set_key_state('up', False)
                         self.assertFalse(scene.terrain_motion.falling or scene.native_ledge)
 
-    def test_releasing_the_arrow_of_a_run_chord_during_pause_acts_as_without_pause(self):
-        # The running bank's release rule (brake, then jump up) applies to a
-        # release made while paused too; the old host producer latched a bare
-        # Up there and the run took off as a running jump (SEQS 4).
+    def test_up_without_an_arrow_in_a_run_meets_the_native_running_gate(self):
+        # A release creates no request (4:3e84). GenCtrl 6:11e4-1274 with a
+        # pending Up and no arrow takes off as a running jump at any pose but
+        # 7/11, where the brake clears the bank; a still-held Up is then fresh
+        # at the brake's standing gate and jumps up. The order of the Up press
+        # and the arrow release does not matter, nor does a pause between them.
+        # The old host tolerance braked and jumped up from every pose.
         scene = self.scene
 
-        def trace(up_pose, paused):
+        def trace(up_pose, order, paused):
             scene.load_level(3)
             scene.peaceful = True
             scene.jump_to_room(20, row=1, x=250, facing=0)
@@ -790,26 +793,38 @@ class GameWindowTests(unittest.TestCase):
                 if scene.action == up_pose:
                     break
             self.assertEqual(scene.action, up_pose)
-            scene.up_key(None)
+            # Pause ignores Up presses, so only the release happens paused.
+            if order == 'up_first':
+                scene.up_key(None)
             if paused:
                 scene.set_paused(True)
             scene.horizontal_key(None, -1, False)
             if paused:
                 scene.set_paused(False)
+            if order == 'release_first':
+                scene.up_key(None)
             sequences = []
             for _ in range(30):
                 self.tick()
                 if not sequences or sequences[-1] != scene.sequence_state.sequence_id:
                     sequences.append(scene.sequence_state.sequence_id)
+                if scene.ledge_climbing:
+                    scene.set_key_state('up', False)
+            scene.clear_keys(None)
             return sequences, scene.action, scene.room_id
 
         with patch.object(scene, 'render'):
             for up_pose in (5, 8, 9, 10, 12, 13):
-                with self.subTest(up_pose=up_pose):
-                    live = trace(up_pose, False)
-                    self.assertNotIn(4, live[0])
-                    self.assertIn(13, live[0])
-                    self.assertEqual(trace(up_pose, True), live)
+                for order in ('up_first', 'release_first'):
+                    with self.subTest(up_pose=up_pose, order=order):
+                        live = trace(up_pose, order, False)
+                        if up_pose == 5:
+                            # The next gate is pose 7: brake, then jump up.
+                            self.assertNotIn(4, live[0])
+                            self.assertLess(live[0].index(13), live[0].index(14))
+                        else:
+                            self.assertEqual(live[0][0], 4)
+                        self.assertEqual(trace(up_pose, order, True), live)
 
     def test_run_jump_keeps_held_up_when_only_horizontal_is_released(self):
         scene = self.scene
@@ -839,8 +854,9 @@ class GameWindowTests(unittest.TestCase):
                         self.assertEqual((scene.sequence_state.sequence_id, scene.action,
                                           scene.player_x), before)
                         if scene.sequence_state.sequence_id in (3, 4):
-                            self.assertLess(scene.directional_input.up, 0)
-                            self.assertTrue(scene.airborne_vertical_followup)
+                            # The takeoff consumed Up; the release adds no
+                            # request (4:3e84). The landing clear makes it fresh.
+                            self.assertEqual(scene.directional_input.up, 1)
                         if paused_release:
                             scene.set_paused(False)
                         poses = []
@@ -894,8 +910,7 @@ class GameWindowTests(unittest.TestCase):
                                 scene.set_paused(True)
                             scene.horizontal_key(None, direction, False)
                             if scene.sequence_state.sequence_id in (3, 4):
-                                self.assertLess(scene.directional_input.up, 0)
-                                self.assertTrue(scene.airborne_vertical_followup)
+                                self.assertEqual(scene.directional_input.up, 1)
                             if paused_release:
                                 scene.set_paused(False)
                             poses = []
@@ -933,7 +948,6 @@ class GameWindowTests(unittest.TestCase):
                         scene.horizontal_key(None, direction, False)
                         if queue_pose == 6:
                             self.assertLess(scene.directional_input.up, 0)
-                            self.assertTrue(scene.run_vertical_followup)
                         poses = []
                         for _ in range(65):
                             self.tick()
@@ -1788,7 +1802,11 @@ class GameWindowTests(unittest.TestCase):
         self.assertFalse(scene.terrain_motion.falling)
         self.assertFalse(scene.terrain_motion.dead)
 
-    def test_queued_vertical_jump_brakes_before_aligning_a_building_climb(self):
+    def test_up_after_releasing_the_run_arrow_jumps_into_the_building_climb(self):
+        # Native running gate 6:11e4-1274: a pending Up with no arrow takes
+        # off as a running jump (not 7/11), meets the wall stop 47, and the
+        # held Up climbs from there. The old host flag braked (13, 53, 247)
+        # and jumped up instead; the climb and its end are the same.
         scene = self.scene
         scene.jump_to_room(9, row=1, x=480, facing=0)
         scene.set_peaceful(True)
@@ -1805,8 +1823,9 @@ class GameWindowTests(unittest.TestCase):
             poses.append((state.sequence_id, state.action, state.target_x))
             if scene.ledge_climbing:
                 scene.set_key_state("up", False)
-        self.assertIn((13, 53, 247), poses)
-        self.assertIn((47, 50, 249), poses)
+        self.assertEqual(poses[0][:2], (4, 34))
+        self.assertNotIn(13, [sequence for sequence, _action, _x in poses])
+        self.assertIn((47, 50, 241), poses)
         self.assertIn((24, 67, 246), poses)
         self.assertIn((10, 140, 225), poses)
         self.assertEqual((scene.terrain_motion.row, scene.action, scene.player_x), (0, 15, 214))

@@ -57,7 +57,7 @@ class AirborneBankTests(unittest.TestCase):
                 self.assertEqual(scene.directional_input.words(),
                                  (0, 0, 0, 0, -1 if modifier == 'shift' else -2))
 
-    def test_modal_clear_discards_the_arc_bank_and_wall_followup(self):
+    def test_modal_clear_discards_the_arc_bank(self):
         for sequence in (3, 4):
             with self.subTest(sequence=sequence):
                 scene = self.jump_at(sequence, 22 if sequence == 3 else 40)
@@ -66,10 +66,9 @@ class AirborneBankTests(unittest.TestCase):
                 scene.sample_keyboard()
                 scene.horizontal_key(None, 1, False)
                 scene.set_key_state('down', True)
-                self.assertTrue(scene.airborne_vertical_followup)
                 scene.clear_keys(None)
                 self.assertIsNone(scene.directional_input)
-                self.assertFalse(scene.airborne_vertical_followup or scene.run_repeat_up)
+                self.assertFalse(scene.run_repeat_up)
                 scene.advance_animation()
                 self.assertEqual(scene.directional_input.words(), (0, 0, 0, 0, 0))
 
