@@ -330,8 +330,9 @@ class OriginalLevelSessionTests(unittest.TestCase):
     def test_missing_later_level_scenery_is_reported_before_opening_a_window(self):
         from pop2.level_rendering import LevelRenderer
 
+        # Level 14 (environment 6) has no scenery renderer.
         with self.assertRaisesRegex(ValueError, "scenery is not implemented"):
-            LevelRenderer(self.resources.level(10))
+            LevelRenderer(self.resources.level(14))
 
     def test_initial_visited_and_generated_guards_inherit_the_player_environment(self):
         data = bytearray(self.resources.level(1).data)
@@ -369,7 +370,7 @@ class LevelHostTests(unittest.TestCase):
         viewport = scene.native_viewport.tobytes()
         with patch.object(scene, "render") as render, \
                 self.assertRaisesRegex(ValueError, "entry controller is not implemented"):
-            scene.load_level(10)
+            scene.load_level(14)
         render.assert_not_called()
         self.assertIs(scene.game, game)
         self.assertIs(scene.level_renderer, renderer)

@@ -47,6 +47,25 @@ claim about what is done. No production code changed with it.
    once stage 1 exists, then the level 9 -> 10 transition; the later
    temple scenes and levels 11-13 transitions.
 
+## Progress (2026-10-30, Claude)
+
+- Stage 1, mostly done: the native scenery exporter draws environment 2.
+  The temple drawers call trap glue the caverns/ruins never reached:
+  EmptyRect (a5-0x1f60), UnionRect (a5-0x1f5c) and SectRect (a5-0x1f58),
+  supplied as small Pascal routines, and EqualRect (A8A6) in EncloseRect
+  17:6c58. Every room of levels 10-12 exports, and level 13 except native
+  room 4, whose CUST image is Kid.rsrc SHAP 4077 (the exporter searches only
+  the environment file). Exports for caverns and ruins are unchanged
+  (compared room by room). Plates/gates/exit shapes for the pressure export:
+  gate 3576, exit 3583, plates 3541/3543 and 3542/3544.
+- Stage 2 groundwork: with `temple_levelN.json` and Temple.rsrc installed,
+  level ten loads and the Prince walks through the rooms (native scenery,
+  SetKidDefaults 2:5dee-5e0e: room 22, X 430, SEQS 2). Not done: the
+  importer does not export temple levels yet (level 13 room 4 first), the
+  level menu lists 1-9, level nine still ends after the ride, and the
+  mechanisms, temple gate collision, birdheads and Prince palette 25002 are
+  not wired. Do not expose this to players before those.
+
 ## Division of work
 
 Codex owns the temple mechanism research and its reference models. A

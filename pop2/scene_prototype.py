@@ -3450,7 +3450,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             clip_top = cavern_clip_top(self.level_map, self.room_id, row, state, bounds)
             if clip_top > 0:
                 layer.paste((0, 0, 0, 0), (0, 0, layer.width, clip_top))
-        if level_kind in (3, 4) and state is not None and bounds is not None and row is not None:
+        if level_kind in (2, 3, 4) and state is not None and bounds is not None and row is not None:
             exit_clip = cavern_exit_clip(self.level_map, self.room_id, row, state, record)
             if exit_clip is not None:
                 top, right = exit_clip
@@ -3465,7 +3465,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             # SetupSand 18:057a draws the surface at bottom 243.
             layer.paste((0, 0, 0, 0), (0, 243, layer.width, layer.height))
         frame = Image.alpha_composite(frame, layer)
-        if level_kind in (3, 4) and room is not None and state is not None and bounds is not None:
+        if level_kind in (2, 3, 4) and room is not None and state is not None and bounds is not None:
             frame = room.draw_actor_foreground(frame, state, bounds)
             if (state.actor_type in (0, 2, 4) and record is not None
                     and actor_draw_order(state, record, bounds, row)[0] == 0):

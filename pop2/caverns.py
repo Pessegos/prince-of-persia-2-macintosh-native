@@ -259,7 +259,7 @@ def custom_foreground_records(resources, room_id):
 
 
 def cavern_assets(level_number=3):
-    if type(level_number) is not int or level_number not in (3, 4, 5, *RUINS_LEVELS):
+    if type(level_number) is not int or level_number not in (3, 4, 5, *RUINS_LEVELS, *TEMPLE_LEVELS):
         raise ValueError(f'Unsupported cavern scenery level {level_number}')
     return _cavern_assets(level_number)
 
