@@ -2626,7 +2626,7 @@ class AnimationDataTests(unittest.TestCase):
                         if not held:
                             scene.set_key_state("ctrl", False)
                         self.assertEqual(scene.action, attack_pose)
-                        self.assertEqual(scene.pending_action, BufferedCommand("sword_attack"))
+                        self.assertEqual(scene.armed_pending(), BufferedCommand("sword_attack"))
                         while len(frames) < 10:
                             scene.advance_animation()
                             frames.append((scene.action, scene.player_x))
@@ -2638,19 +2638,23 @@ class AnimationDataTests(unittest.TestCase):
                                              [169, 150, 158, 170, *([171] * 6)])
                             self.assertEqual([x for _, x in frames],
                                              [start_x + sign * dx for dx in (1, 2, *([0] * 8))])
-                            self.assertIsNone(scene.pending_action)
+                            self.assertIsNone(scene.armed_pending())
                             self.assertEqual(scene.sequence_state.sequence_id, SWORD_GUARD_SEQUENCE)
                             continue
+                        # The strike's ClearControls (4:3e3a) zeroes Up; the
+                        # still-held Up is then a fresh request (4:3e84), so
+                        # the guard pose after the counter is a new block.
                         self.assertEqual(
                             [action for action, _ in frames],
-                            [169, 150, 162, 152, 153, 154, 155, 156, 157, 158],
+                            [169, 150, 162, 152, 153, 154, 155, 156, 157, 169],
                         )
                         self.assertEqual(
-                            [x for _, x in frames],
-                            [start_x + sign * dx for dx in (1, 2, -4, 0, 0, 0, 0, 0, 0, 0)],
+                            [x for _, x in frames[:9]],
+                            [start_x + sign * dx for dx in (1, 2, -4, 0, 0, 0, 0, 0, 0)],
                         )
-                        self.assertIsNone(scene.pending_action)
-                        for expected in ((169, 150, 158) if held else (170, 171, 171)):
+                        self.assertIsNone(scene.armed_pending())
+                        # DoBlock consumes Up (6:28d4): the hold does not repeat.
+                        for expected in (150, 158, 170):
                             scene.advance_animation()
                             self.assertEqual(scene.action, expected)
 
@@ -2668,7 +2672,9 @@ class AnimationDataTests(unittest.TestCase):
             scene.set_key_state("ctrl", True)
             self.assertEqual(scene.action, 169)
             self.assertEqual(scene.next_animation_at, deadline)
-            for action in (150, 162, 152, 153, 154, 155, 156, 157, 158):
+            # Up is still held: after the strike's ClearControls it is a
+            # fresh request, so the guard pose becomes a new block (169).
+            for action in (150, 162, 152, 153, 154, 155, 156, 157, 169):
                 clock.return_value = scene.next_animation_at
                 scene.advance_animation()
                 self.assertEqual(scene.action, action)
@@ -2715,11 +2721,11 @@ class AnimationDataTests(unittest.TestCase):
         scene.set_key_state("ctrl", True)
         scene.set_key_state("ctrl", False)
 
-        self.assertEqual(scene.pending_action, BufferedCommand("sword_attack"))
+        self.assertEqual(scene.armed_pending(), BufferedCommand("sword_attack"))
         for action in (208, 209, 210, 151):
             scene.advance_animation()
             self.assertEqual(scene.action, action)
-        self.assertIsNone(scene.pending_action)
+        self.assertIsNone(scene.armed_pending())
 
     def test_rapid_ctrl_during_attack_start_does_not_queue_an_extra_swing(self):
         for facing in (0, 1):
@@ -2751,14 +2757,14 @@ class AnimationDataTests(unittest.TestCase):
                     self.assertEqual(scene.action, 154)
                     scene.set_key_state("ctrl", True)
                     scene.set_key_state("ctrl", False)
-                    self.assertEqual(scene.pending_action, BufferedCommand("sword_attack"))
+                    self.assertEqual(scene.armed_pending(), BufferedCommand("sword_attack"))
                     actions = []
                     for _ in range(18):
                         scene.advance_animation()
                         actions.append(scene.action)
                     self.assertEqual(actions.count(151), 1)
                     self.assertEqual(scene.sequence_state.sequence_id, SWORD_GUARD_SEQUENCE)
-                    self.assertIsNone(scene.pending_action)
+                    self.assertIsNone(scene.armed_pending())
 
     def test_attack_start_filter_does_not_discard_block_or_sheathe_requests(self):
         for kind in ("sword_block", "sword_sheathe"):
@@ -2768,7 +2774,7 @@ class AnimationDataTests(unittest.TestCase):
                 scene.queue_sword_action(kind)
                 scene.set_key_state("ctrl", True)
                 scene.set_key_state("ctrl", False)
-                self.assertEqual(scene.pending_action, BufferedCommand(kind))
+                self.assertEqual(scene.armed_pending(), BufferedCommand(kind))
 
     def test_sword_step_tap_preserves_facing_and_source_offsets(self):
         for facing in (0, 1):
@@ -2795,7 +2801,10 @@ class AnimationDataTests(unittest.TestCase):
                         scene.advance_animation()
                         self.assertEqual(scene.action, expected)
 
-    def test_held_sword_steps_repeat_at_original_guard_boundary_and_cadence(self):
+    def test_held_sword_step_waits_for_a_new_press(self):
+        # DoAdvance/DoRetreat (6:1e5a/1db6) consume their direction as 1, and
+        # a held consumed direction stays 1 (4:3e84): holding an arrow steps
+        # once. Releasing and pressing again steps at the guard cadence.
         for facing in (0, 1):
             sign = 1 if facing else -1
             for direction in (-1, 1):
@@ -2808,18 +2817,17 @@ class AnimationDataTests(unittest.TestCase):
                         clock.return_value = 10.0
                         scene.horizontal_key(None, direction, True)
                         actions = [scene.action]
-                        for _ in range(len(cycle) * 3 - 1):
+                        for _ in range(len(cycle) + 3):
                             clock.return_value = scene.next_animation_at
                             scene.advance_animation()
                             actions.append(scene.action)
                             self.assertEqual(scene.root.scheduled[-1][0], 100)
-                        self.assertEqual(actions, cycle * 3)
-                        self.assertAlmostEqual(clock.return_value - 10.0, (len(actions) - 1) * 0.1)
-                    self.assertEqual(scene.player_x, start_x + sign * (54 if forward else -48))
+                        self.assertEqual(actions, cycle + [170, 171, 171, 171])
+                        self.assertEqual(scene.player_x, start_x + sign * (18 if forward else -16))
+                        scene.horizontal_key(None, direction, False)
+                        scene.horizontal_key(None, direction, True)
+                        self.assertEqual(scene.action, cycle[0])
                     self.assertEqual(scene.sequence_state.facing, facing)
-                    scene.horizontal_key(None, direction, False)
-                    scene.advance_animation()
-                    self.assertEqual(scene.action, 170)
 
     def test_queued_sword_reversal_finishes_step_then_retreats_without_turning(self):
         scene = self.guarded_sword_scene(facing=1)
@@ -2829,13 +2837,13 @@ class AnimationDataTests(unittest.TestCase):
         scene.horizontal_key(None, -1, True)
         scene.horizontal_key(None, -1, False)
         self.assertEqual(scene.action, 163)
-        self.assertEqual(scene.pending_action, BufferedCommand("sword_retreat"))
+        self.assertEqual(scene.armed_pending(), BufferedCommand("sword_retreat"))
         for action in (164, 165, 158, 160, 157, 158):
             scene.advance_animation()
             self.assertEqual(scene.action, action)
         self.assertEqual(scene.player_x, start_x + 2)
         self.assertEqual(scene.sequence_state.facing, 1)
-        self.assertIsNone(scene.pending_action)
+        self.assertIsNone(scene.armed_pending())
 
     def test_sword_step_queued_during_draw_waits_for_first_guard_pose(self):
         scene = self.sword_scene()
@@ -2864,12 +2872,15 @@ class AnimationDataTests(unittest.TestCase):
                     scene.set_key_state("up", False)
                 # OS key repeat must not overwrite the buffered combat command.
                 scene.horizontal_key(None, 1, True)
-                self.assertEqual(scene.pending_action, BufferedCommand(kind))
+                self.assertEqual(scene.armed_pending(), BufferedCommand(kind))
                 for action in (164, 165, first_action):
                     scene.advance_animation()
                     self.assertEqual(scene.action, action)
                 self.assertEqual(scene.player_x, start_x + (16 if kind == "sword_attack" else 17))
-                self.assertIsNone(scene.pending_action)
+                # The strike clears the directions (4:3e3a), so the held
+                # Forward is fresh again; DoBlock consumes only Up.
+                self.assertEqual(scene.armed_pending(),
+                                 BufferedCommand("sword_advance") if kind == "sword_attack" else None)
 
     def test_block_after_retreat_waits_for_guard_while_attack_can_chain(self):
         for kind, expected in (("sword_attack", [157, 151]), ("sword_block", [157, 158, 169])):
@@ -2898,11 +2909,11 @@ class AnimationDataTests(unittest.TestCase):
         scene.horizontal_key(None, -1, False)
         # OnAlert6:250c selects Ctrl before Backward. The old assertion
         # encoded last-event replacement, not a native controller rule.
-        self.assertEqual(scene.pending_action, BufferedCommand("sword_attack"))
+        self.assertEqual(scene.armed_pending(), BufferedCommand("sword_attack"))
         for action in (164, 165, 151, 152, 153, 154, 155, 156, 157, 158):
             scene.advance_animation()
             self.assertEqual(scene.action, action)
-        self.assertIsNone(scene.pending_action)
+        self.assertIsNone(scene.armed_pending())
 
     def test_held_sword_direction_resumes_after_attack_and_focus_loss_stops_it(self):
         scene = self.guarded_sword_scene(facing=1)

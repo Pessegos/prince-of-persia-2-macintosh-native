@@ -688,11 +688,12 @@ native audit. Source46 recovery and intentional low-repeat/release policies
 remain explicit exceptions; armed and special-family migration is still pending.
 
 The first [armed priority stage](research/armed-input-priority.md) checks
-OnAlert6:24bc-2584 against19,440 original/model cases. Conflicting buffered
-armed requests now use its eventual guard-gate priority, so a later movement,
-block or sheathe request cannot erase a queued strike. The rapid-attack
-rejection policy still runs first. This is a bounded correction to the
-existing armed slot, not armed bank ownership or full SwordCtrl parity.
+OnAlert6:24bc-2584 against19,440 original/model cases. Its second stage runs
+the action bodies too (71,280 cases) and makes the bank the sole owner of
+armed requests: refused requests stay pending, accepted ones consume as the
+original, and consumed holds no longer repeat sword steps or blocks. The
+attack-survives-Ctrl-release and rapid-attack policies stay explicit host
+extensions. This is not full SwordCtrl parity.
 
 1. Translate five native latches, sampling, facing remap and consume/reset
    operations in `mac_input`. Test every directional/modifier transition.

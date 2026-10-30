@@ -1,8 +1,9 @@
 # Armed request priority
 
-This is the first armed stage after the low/prone bank migration. It recovers
-OnAlert's request arbitration and fixes conflicting requests in the existing
-armed host buffer. It does **not** migrate armed input to the directional bank.
+The first stage below recovered OnAlert's request arbitration as an interim
+fix of the armed host buffer. The second stage (2026-10-30, "Action-body
+consumption and bank ownership") replaced that buffer: the five-word bank is
+now the sole owner of armed directional and modifier requests.
 
 ## Original evidence
 
@@ -95,7 +96,68 @@ turns must use the facing captured at dispatch; queued horizontal requests
 currently have their kind fixed at event time. The present priority adapter
 must be retired when that bank becomes the sole armed directional owner.
 
-## Validation of this stage
+## Action-body consumption and bank ownership (2026-10-30)
+
+`tools/probe_armed_consumption.py` runs OnAlert 6:24bc **with** its action
+bodies DoRetreat 6:1d6e, DoAdvance 6:1dda, DoStrike 6:2780, DoBlock 6:282a
+and PutSwordAway 6:2592 and the real ClearControls 4:3e3a. JumpSeq 6:0006
+records the sequence. 71,280 cases (all 405 banks, eleven poses, opponent
+poses 0/152/153/168, two distances, with and without an opponent) match the
+independent `tools/reference_armed_input.py:armed_action`, with zero
+mismatches. Supplied: AddCharX 4:2bae, OppToFight 6:2392, distance 4:49ee,
+4:2c0c and the sheathe tail 6:25ee; the fixture uses LEVL2004's header,
+ALIVE type-0 Prince and the opponent pose a5-0x508a. Excluded: outer
+SwordCtrl/turn routing, actor types 1/7/8, terrain, animation, FrameAdv and
+DoAdvance's level-five sequence 86 (a5-0x507e/-0x5088 are zero).
+
+- Result SHA256: `a2c02902f7dd65269254384c79f96b7cf781d39857c98ac08cdf4d70200f3a7b`.
+
+Recovered rules:
+
+| Request | Admitting own poses | Sequence | Words after acceptance |
+| --- | --- | --- | --- |
+| Attack (Ctrl -2) | 150/161 (66), 157/158/165/170/171 (75) | 66/75 | all directions 0, modifier 2 |
+| Sheathe (Down) | 158, 170, 171 | 92, 93 with an opponent | directions 0, Down 1 |
+| Block (Up) | 158/165/168/170/171 unless the opponent is at 168; 167 | 62; 61 | **Up 1 only** |
+| Advance (Forward) | 158, 170, 171 | 56 | directions 0, Forward 1 |
+| Retreat (Backward, modifier 0) | 158, 170, 171 | 57 | directions 0, Backward 1 |
+
+A refused request changes no word: a released tap stays pending (-1) and
+acts at the next admitting pose. A consumed hold stays 1 (4:3e84), so
+**holding an arrow or Up acts once**; release and press again to repeat.
+ClearControls writes 0, so a direction still held after a strike, sheathe
+or step becomes a fresh request at the next sample; DoBlock alone leaves
+the other words pending (Up+Forward blocks, then advances).
+
+Runtime: `pop2/armed_controls.py` samples the bank on armed key events
+(presses and releases) and every armed tick, remaps it with the facing at
+dispatch, selects with `armed_input_request` and calls the existing
+`start_sword_action` admission; only an accepted action consumes
+(`consume_armed_request`). The sword keys, guard return, post-frame 158
+dispatch, counter (66 at 150/161), forced recoil and voluntary turn now use
+it. `buffered_sword_request`, the armed use of `pending_action` and the
+raw-held step/block repetition were removed together. The voluntary turn
+consumes Backward and the modifier (6:2330-233c). A press at a displayed
+guard pose still starts at once when it is the selected request.
+
+Retained host policies, explicit in that module: a fresh Ctrl press is an
+attack request that survives releasing Ctrl (the original cancels it,
+4:3f38), except that a released Ctrl is still cancelled before the counter
+gates; rapid Ctrl repeats during the first attack poses are discarded and
+consumed; the automatic sword turn stays enabled.
+
+Changed expectations, each from the rules above: held sword steps and held
+Up blocks no longer repeat; a held Up after a counter blocks again at the
+guard; a held Forward after a strike advances again. Scripted combat tests
+now press each step (`tap_sword_step`). The screen-five kill test states
+its turn timing through the mode-5 rule instead of a fixed offset, because
+the tapped fight now ends with SEQS 203.
+
+Not covered: outer SwordCtrl routing (opponent distance, special actors),
+DoAdvance's level-five sequence, recordings of real key timing, and other
+fighters' controllers.
+
+## Validation of the first stage
 
 - Final focused input/animation/catalogue run:173 tests pass; asset-free
   directional/selector CI selection:10 tests pass.

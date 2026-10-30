@@ -87,7 +87,7 @@ from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COM
 from pop2.running_controls import RUN_INPUT_SEQUENCES
 from pop2.airborne_controls import AIRBORNE_TAKEOFF_SEQUENCES
 from pop2.low_controls import LowControls, LOW_INPUT_SEQUENCES
-from pop2.sword_controls import buffered_sword_request
+from pop2.armed_controls import ArmedControls
 
 
 SCALE = 2
@@ -158,7 +158,7 @@ def next_animation_deadline(previous_deadline, now, interval_ms=ANIMATION_INTERV
     return deadline, delay_ms
 
 
-class ScenePrototype(WindowControls, LowControls):
+class ScenePrototype(WindowControls, ArmedControls, LowControls):
     @property
     def room_id(self):
         return self.game.room_id
@@ -578,6 +578,8 @@ class ScenePrototype(WindowControls, LowControls):
             return "break"
         if self._combat_controls_locked():
             setattr(self, f"{key}_held", pressed)
+            if self.sword_drawn and not pressed:
+                self.sample_armed_controls()
             return "break"
         if self._opening_active():
             setattr(self, f"{key}_held", pressed)
@@ -609,11 +611,11 @@ class ScenePrototype(WindowControls, LowControls):
             if pressed and self.up_held:
                 return "break"
             if self.sword_drawn:
-                if pressed:
-                    self.down_sheathe_consumed = True
-                    self.queue_sword_action("sword_sheathe")
-                else:
-                    self.down_sheathe_consumed = False
+                self.down_sheathe_consumed = pressed
+                if not self.sword_sheathing:
+                    self.sample_armed_controls()
+                    if pressed:
+                        self.dispatch_armed_at_guard("sword_sheathe")
                 return "break"
             if not pressed:
                 self.down_sheathe_consumed = False
@@ -635,10 +637,17 @@ class ScenePrototype(WindowControls, LowControls):
             fresh = pressed and not self.ctrl_held
             self.ctrl_held = pressed
             self.sample_keyboard()
-            if fresh:
-                self.queue_sword_action(
-                    "sword_attack" if self.sword_drawn else "sword_draw"
-                )
+            if self.sword_drawn:
+                if fresh:
+                    self.queue_sword_action("sword_attack")
+                else:
+                    self.sample_armed_controls()
+            elif fresh:
+                self.queue_sword_action("sword_draw")
+        if self.sword_drawn and not pressed:
+            # A release reaches the bank: a consumed word becomes 0 (4:3e84),
+            # so the next press is fresh even between two animation ticks.
+            self.sample_armed_controls()
         return "break"
 
     def sword_lost(self):
@@ -651,26 +660,15 @@ class ScenePrototype(WindowControls, LowControls):
         if kind == "sword_draw":
             self.pending_potion_pickup = None
             return self.try_draw_sword()
+        if not self.armed_controls_available() or kind not in SWORD_SEQUENCES:
+            return False
         if kind == "sword_attack":
-            # The existing armed buffer/repeat policy owns this press now;
-            # do not replay it later through the unarmed draw gate.
-            self.modifier_input = 2
-        state = self.sequence_state
-        # Port QoL: a rapid repeat during the first three attack poses must
-        # not schedule another swing. Drawing/blocking still accepts Ctrl.
-        if (kind == "sword_attack"
-                and state.sequence_id in SWORD_ATTACK_START_SEQUENCES
-                and state.action in SWORD_ATTACK_START_POSES):
-            return False
-        if (self.pending_action is not None
-                and buffered_sword_request(self.pending_action.kind, kind) != kind):
-            return False
-        if self.sword_drawn and self.sequence_state.sequence_id == SWORD_GUARD_SEQUENCE:
-            self.pending_action = None
-            if self.start_sword_action(kind):
-                return True
-        self.buffer_input(BufferedCommand(kind))
-        return False
+            # The armed attack request survives releasing Ctrl (host
+            # extension); the rapid-repeat filter runs first.
+            return self.armed_press_ctrl()
+        # A scripted request latches its word, as a key press would.
+        self.latch_armed_request(kind)
+        return self.dispatch_armed_at_guard(kind)
 
     def try_draw_sword(self):
         """Standing Ctrl gate; a released tap is never a future draw command."""
@@ -695,9 +693,12 @@ class ScenePrototype(WindowControls, LowControls):
                 and command == getattr(self, "queue_grace_command", None)):
             return False
         self.pending_potion_pickup = None
-        if (self.sword_drawn and self.pending_action is not None
-                and buffered_sword_request(self.pending_action.kind, command.kind) != command.kind):
-            return False
+        if command.kind in SWORD_SEQUENCES:
+            if command.kind == "sword_attack":
+                self.armed_attack_requested = self.armed_controls_available()
+            elif self.armed_controls_available():
+                self.latch_armed_request(command.kind)
+            return self.armed_controls_available()
         if (self.waiting_controls_available()
                 and command.kind in ('horizontal', 'jump', 'crouch', 'crawl')):
             self.latch_waiting_command(command)
@@ -740,6 +741,9 @@ class ScenePrototype(WindowControls, LowControls):
                     motion.room, motion.row, state, self.frames[state.action], self.player_bounds())
                 self.player_x += offset * (1 if state.facing else -1)
             self.sword_drawn = True
+            # The drawn sword's bank starts with the holds consumed (6:0cb6).
+            self.armed_input = None
+            self.armed_attack_requested = False
             self.sequence_state.sound_events.append(14)
         elif kind == "sword_sheathe":
             self.sword_sheathing = True
@@ -781,26 +785,29 @@ class ScenePrototype(WindowControls, LowControls):
         self.start_queue_grace(BufferedCommand(kind))
         return True
 
+    def armed_attack_pending(self):
+        relative = self.armed_relative_input()
+        return relative is not None and relative.modifier == -2
+
     def resume_sword_attack_after_block(self):
         if (
-            self.sword_drawn
-            and not self.sword_sheathing
+            self.armed_controls_available()
             and self.sequence_state.action in (150, 161)
-            and self.pending_action is not None
-            and self.pending_action.kind == "sword_attack"
+            and self.armed_attack_pending()
         ):
             # CODE:6 0x27e8 selects SEQS:66 before the block's return to guard.
-            self.pending_action = None
-            return self.start_sword_action(
+            started = self.start_sword_action(
                 "sword_attack", sequence_id=SWORD_BLOCK_ATTACK_SEQUENCE
             )
+            if started:
+                self.accept_armed_request("sword_attack")
+            return started
         return False
 
     def resume_sword_parry_recoil(self):
         if (not self.sword_drawn or self.sword_sheathing
                 or self.sequence_state.action != 161
-                or (self.pending_action is not None
-                    and self.pending_action.kind == "sword_attack")):
+                or self.armed_attack_pending()):
             return False
         # GenCtrl 6:24da-2506: a parried block without a counter selects
         # SEQS:57 and AddCharX(-9). This forced retreat has no floor veto.
@@ -808,54 +815,42 @@ class ScenePrototype(WindowControls, LowControls):
         self.player_x = state.target_x - 9 * (1 if state.facing else -1)
         return self.start_sword_action("sword_retreat")
 
+    def latch_armed_request(self, kind):
+        """Bridge a scripted armed request into its native word."""
+        bank = self.sample_armed_controls()
+        if bank is None:
+            return
+        word = {"sword_block": "up", "sword_sheathe": "down", "sword_advance": "left",
+                "sword_retreat": "right"}[kind]
+        relative = bank.remap(facing_right=bool(self.sequence_state.facing))
+        self.armed_input = replace(relative, **{word: -1}).remap(
+            facing_right=bool(self.sequence_state.facing))
+
     def queue_sword_step(self, direction):
-        kind = (
-            "sword_advance"
-            if facing_for_direction(direction) == self.sequence_state.facing
-            else "sword_retreat"
-        )
-        if kind == "sword_retreat" and self.shift_held:
+        """A fresh horizontal press with the sword drawn."""
+        bank = self.sample_armed_controls()
+        if bank is None:
+            return False
+        if facing_for_direction(direction) != self.sequence_state.facing and self.shift_held:
             # SwordCtrl 6:22f2-2312: fresh Backward with Shift requests the
             # voluntary turn; DoRetreat requires a zero modifier (6:256e).
             self.voluntary_turn_requested = True
             return False
-        return self.queue_sword_action(kind)
+        return self.dispatch_armed_at_guard(
+            "sword_advance" if facing_for_direction(direction) == self.sequence_state.facing
+            else "sword_retreat")
 
     def resume_sword_controls(self):
-        if not self.sword_drawn or self.sword_sheathing:
+        if not self.armed_controls_available():
             return False
         state = self.sequence_state
         if state.animation_state >= 2 or state.cursor == 0:
+            self.sample_armed_controls()
             return False
-        command = self.pending_action
-        # OnAlert gives a pending strike priority, even at a pose where it
-        # cannot yet execute. Held Up must not replace that counter request.
-        if command is not None and command.kind == "sword_attack":
-            if (state.sequence_id in SWORD_STEP_SEQUENCES | {SWORD_GUARD_SEQUENCE}
-                    and state.action in (157, 158, 170, 171, 165)):
-                return self.dispatch_pending_action()
-            return False
-        if command is not None and command.kind == "sword_sheathe":
-            if state.action in (158, 170, 171):
-                return self.dispatch_pending_action()
-            return False
-        if (command is not None and command.kind == "sword_block"
-                or self.up_held and not self.down_held):
-            if self.start_sword_action("sword_block"):
-                if command is not None and command.kind == "sword_block":
-                    self.pending_action = None
-                return True
-            return False
-        if state.sequence_id in SWORD_STEP_SEQUENCES:
-            return False
-        # DoAdvance/DoRetreat accept only guard actions 158, 170 and 171.
-        if state.sequence_id != SWORD_GUARD_SEQUENCE or state.action not in (158, 170, 171):
-            return False
-        if command is not None and command.kind in SWORD_SEQUENCES:
-            return self.dispatch_pending_action()
-        if self.horizontal_input:
-            return self.queue_sword_step(self.horizontal_input)
-        return False
+        # OnAlert 6:24bc: the bank's highest pending request; a refused one
+        # stays pending (an inadmissible strike or Down also holds back the
+        # lower requests). Consumed holds do not repeat.
+        return self.dispatch_armed_request()
 
     def update_ledge_test_state(self):
         requested = self.down_held and self.shift_held
@@ -919,6 +914,8 @@ class ScenePrototype(WindowControls, LowControls):
         if self.sword_drawn:
             if pressed and self.horizontal_input != previous_direction and self.horizontal_input:
                 self.queue_sword_step(self.horizontal_input)
+            else:
+                self.sample_armed_controls()
             return "break"
 
         if not pressed and self.run_active and self.run_direction == direction:
@@ -956,8 +953,8 @@ class ScenePrototype(WindowControls, LowControls):
                 and not self._combat_controls_locked() and not self.sword_sheathing
                 and (self.sword_drawn or not self.sword_lost())):
             if self.sword_drawn:
+                self.armed_attack_requested = True
                 self.modifier_input = 2
-                self.buffer_input(BufferedCommand("sword_attack"))
             else:
                 self.try_draw_sword()
         self.paused_ctrl_request = False
@@ -1012,7 +1009,9 @@ class ScenePrototype(WindowControls, LowControls):
         if self.sword_drawn:
             self.jump_started_for_press = True
             self.jump_repeat_armed = False
-            self.queue_sword_action("sword_block")
+            if not self.sword_sheathing:
+                self.sample_armed_controls()
+                self.dispatch_armed_at_guard("sword_block")
             return "break"
         if self.ledge_hanging:
             if self.ledge_climbing:
@@ -1373,13 +1372,16 @@ class ScenePrototype(WindowControls, LowControls):
             # The unmigrated SEQS46 wall/climb tail retains its old policy:
             # discard these directions while preserving its vertical request.
             self.pending_action = None
-        elif (command.kind == 'sword_attack' and not self.ctrl_held
-              and (state.sequence_id in (61, SWORD_BLOCK_SEQUENCE)
-                   or state.action in (150, 161, 169))):
+
+    def update_armed_input_boundaries(self):
+        state = self.sequence_state
+        if (getattr(self, 'armed_attack_requested', False) and not self.ctrl_held
+                and (state.sequence_id in (61, SWORD_BLOCK_SEQUENCE)
+                     or state.action in (150, 161, 169))):
             # 4:3f38 cancels a released Ctrl before a legal counter gate.
             # Already-started attacks and the port's queued-swing extension
             # during an attack/draw are separate from this block request.
-            self.pending_action = None
+            self.armed_attack_requested = False
 
     def update_fall_recovery_controls(self):
         state = self.sequence_state
@@ -1722,6 +1724,8 @@ class ScenePrototype(WindowControls, LowControls):
         self.held_directions.clear()
         self.shift_turn_direction = 0
         self.voluntary_turn_requested = False
+        self.armed_input = None
+        self.armed_attack_requested = False
         self.step_warning_direction = 0
         self.horizontal_input = 0
         self.up_held = False
@@ -1938,6 +1942,7 @@ class ScenePrototype(WindowControls, LowControls):
             self.run_world_phases('opening', old_x, old_bounds)
             return
         self.update_native_input_boundaries()
+        self.update_armed_input_boundaries()
         self.update_fall_recovery_controls()
         self.update_airborne_controls()
         if not self.resume_combat_turn():
@@ -1971,14 +1976,12 @@ class ScenePrototype(WindowControls, LowControls):
         if (
             frame.sequence_id == SWORD_GUARD_SEQUENCE
             and frame.action == 158
-            and self.pending_action is not None
-            and self.pending_action.kind in SWORD_SEQUENCES
-            and self.pending_action.kind not in SWORD_STEP_KINDS
             and not sword_step_before_frame
+            and self.armed_request() in SWORD_SEQUENCES.keys() - SWORD_STEP_KINDS
         ):
             self.player_x = frame.target_x
-            self.dispatch_pending_action()
-            frame = self.sequence_runtime.next_frame()
+            if self.dispatch_armed_request(SWORD_SEQUENCES.keys() - SWORD_STEP_KINDS):
+                frame = self.sequence_runtime.next_frame()
         if self.sword_sheathing and frame.sequence_id == IDLE_SEQUENCE:
             self.sword_sheathing = False
             self.sword_drawn = False
@@ -2457,9 +2460,11 @@ class ScenePrototype(WindowControls, LowControls):
         if turned:
             self.status.set("Turning toward opponent")
         # SwordCtrl reaches the voluntary branch after its automatic part.
+        facing_before = bool(self.sequence_state.facing)
         if (getattr(self, "voluntary_turn_requested", False)
                 and combat.choose_voluntary_turn(record, bounds)):
             self.voluntary_turn_requested = False
+            self.consume_voluntary_turn(facing_before)
             self.status.set("Turning with sword")
             return True
         return turned

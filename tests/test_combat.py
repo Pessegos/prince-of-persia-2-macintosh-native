@@ -360,18 +360,17 @@ class GuardCombatTests(unittest.TestCase):
         scene.combat.guard.sword_drawn = True
         scene.start_sequence(227)
         scene.sequence_runtime.next_frame()
-        command = BufferedCommand("sword_attack")
-        scene.pending_action = command
+        scene.armed_attack_requested = True
         with patch.object(scene.combat, "step", return_value=[]):
             scene.advance_animation()
             self.assertEqual(scene.action, 177)
-            self.assertIs(scene.pending_action, command)
+            self.assertTrue(scene.armed_attack_requested)
             poses = [scene.action]
             for _ in range(8):
                 scene.advance_animation()
                 poses.append(scene.action)
         self.assertEqual(poses, [177, 178, 211, 213, 212, 171, 160, 157, 151])
-        self.assertIsNone(scene.pending_action)
+        self.assertFalse(scene.armed_attack_requested)
 
     def test_sheathing_does_not_start_an_automatic_turn(self):
         scene = self.scene()
@@ -467,10 +466,16 @@ class GuardCombatTests(unittest.TestCase):
                 scene.advance_animation()
                 poses.append(scene.action)
             self.assertEqual(poses, [159, 160, 150, 158])
+            # That recovery was the held Up's block (DoBlock at 167, SEQS
+            # 61), which consumed it: the hold does not block again.
             scene.advance_animation()
+            self.assertEqual(scene.action, 170)
+            scene.set_key_state('up', False)
+            scene.up_key(None)
             self.assertEqual(scene.action, 169)
 
-    def test_held_up_repeats_blocks_and_release_stops_repetition(self):
+    def test_held_up_blocks_once_until_pressed_again(self):
+        # DoBlock 6:28d4 consumes Up (1); held, it stays consumed (4:3e84).
         scene = self.scene()
         scene.sword_drawn = True
         scene.advance_combat = lambda *args: None
@@ -478,14 +483,17 @@ class GuardCombatTests(unittest.TestCase):
         scene.advance_animation()
         scene.up_key(None)
         poses = [scene.action]
-        for _ in range(8):
+        for _ in range(5):
             scene.advance_animation()
             poses.append(scene.action)
-        self.assertEqual(poses, [169, 150, 158] * 3)
+        self.assertEqual(poses, [169, 150, 158, 170, 171, 171])
         scene.set_key_state('up', False)
-        for pose in (170, 171, 171):
+        scene.up_key(None)
+        poses = [scene.action]
+        for _ in range(2):
             scene.advance_animation()
-            self.assertEqual(scene.action, pose)
+            poses.append(scene.action)
+        self.assertEqual(poses, [169, 150, 158])
 
     def test_late_up_block_parries_before_buffered_counter_in_both_directions(self):
         for actor_type, facing in ((2, 0), (2, 1), (4, 0), (4, 1)):
@@ -511,7 +519,7 @@ class GuardCombatTests(unittest.TestCase):
                 self.assertEqual(guard.state.action, 167)
                 self.assertEqual(scene.combat.player.life, 3)
                 scene.set_key_state('ctrl', True)
-                self.assertEqual(scene.pending_action, BufferedCommand('sword_attack'))
+                self.assertEqual(scene.armed_pending(), BufferedCommand('sword_attack'))
                 with patch('pop2.scene_prototype.time.perf_counter', return_value=10.1):
                     scene.advance_animation()
                 self.assertEqual(scene.action, 162)
@@ -539,13 +547,13 @@ class GuardCombatTests(unittest.TestCase):
         scene.sequence_runtime.next_frame()
         scene.combat.guard.state.action = 168
         self.assertFalse(scene.queue_sword_action('sword_block'))
-        self.assertEqual(scene.pending_action, BufferedCommand('sword_block'))
+        self.assertEqual(scene.armed_pending(), BufferedCommand('sword_block'))
         self.assertFalse(scene.resume_sword_controls())
-        self.assertEqual(scene.pending_action, BufferedCommand('sword_block'))
+        self.assertEqual(scene.armed_pending(), BufferedCommand('sword_block'))
         scene.combat.guard.state.action = 151
         self.assertTrue(scene.resume_sword_controls())
         self.assertEqual(scene.sequence_state.sequence_id, 62)
-        self.assertIsNone(scene.pending_action)
+        self.assertIsNone(scene.armed_pending())
 
     def test_successful_player_parry_recoils_nine_pixels_before_retreat(self):
         for facing in (0, 1):
@@ -556,11 +564,11 @@ class GuardCombatTests(unittest.TestCase):
                 state = scene.sequence_state
                 state.facing, state.action = facing, 161
                 state.current_x = state.target_x = scene.player_x = 260
-                scene.pending_action = BufferedCommand("sword_block")
+                scene.buffer_input(BufferedCommand("sword_block"))
                 self.assertTrue(scene.resume_sword_parry_recoil())
                 self.assertEqual(state.target_x, 269 if facing == 0 else 251)
                 self.assertEqual(state.source_sequence_id, 57)
-                self.assertEqual(scene.pending_action.kind, "sword_block")
+                self.assertEqual(scene.armed_pending().kind, "sword_block")
                 state.action = 160
                 self.assertFalse(scene.resume_sword_parry_recoil())
 
@@ -571,12 +579,12 @@ class GuardCombatTests(unittest.TestCase):
         state = scene.sequence_state
         state.action = 161
         x = state.target_x
-        scene.pending_action = BufferedCommand("sword_attack")
+        scene.armed_attack_requested = True
         self.assertFalse(scene.resume_sword_parry_recoil())
         self.assertTrue(scene.resume_sword_attack_after_block())
         self.assertEqual(state.source_sequence_id, 66)
         self.assertEqual(state.target_x, x)
-        self.assertIsNone(scene.pending_action)
+        self.assertIsNone(scene.armed_pending())
 
     def test_uncontacted_block_and_unarmed_pose_do_not_recoil(self):
         scene = self.scene()

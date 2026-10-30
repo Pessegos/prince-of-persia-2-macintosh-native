@@ -699,6 +699,11 @@ class RooftopSceneTests(unittest.TestCase):
             with patch("pop2.scene_prototype.time.perf_counter", return_value=self.now):
                 self.scene.advance_animation()
 
+    def tap_sword_step(self, direction):
+        """A fresh arrow press: a consumed hold does not repeat (4:3e84)."""
+        self.scene.horizontal_key(None, direction, False)
+        self.scene.horizontal_key(None, direction, True)
+
     def place(self, room, row, x, facing=0):
         scene = self.scene
         scene.clear_keys(None)
@@ -1013,6 +1018,7 @@ class RooftopSceneTests(unittest.TestCase):
         jumped = False
         first = incoming = None
         killed_at = turned_at = None
+        modes = []
         for tick in range(90):
             with patch("pop2.scene_prototype.time.perf_counter", return_value=self.now):
                 if not jumped and scene.player_x < 385:
@@ -1036,12 +1042,13 @@ class RooftopSceneTests(unittest.TestCase):
                     scene.set_key_state("ctrl", False)
                 if first is not None and first.alive and scene.action in (158, 170, 171):
                     if opponent_distance(scene.combat.player, first) >= 100:
-                        scene.horizontal_key(None, -1, True)
+                        self.tap_sword_step(-1)
                     else:
                         scene.horizontal_key(None, -1, False)
                         scene.set_key_state("ctrl", True)
                         scene.set_key_state("ctrl", False)
             self.tick()
+            modes.append(scene.sequence_state.animation_state)
             if first is not None and not first.alive:
                 if killed_at is None:
                     killed_at = tick
@@ -1052,9 +1059,11 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertIsNotNone(killed_at)
         self.assertIsNotNone(turned_at)
         # The zero-HP guard remains native-ALIVE until next NPC control.
-        # Reselection then occurs during attack pose 155 (mode 5), which
-        # cannot turn. Pose 156 returns to mode 1 before the facing flips.
-        self.assertEqual(turned_at, killed_at + 3)
+        # Reselection then waits while the attack is in mode 5 (SEQS 75's
+        # pose 155), which cannot turn; the facing flips at the first tick
+        # after a turnable pose. Each sword step here is a fresh press.
+        ready = next(tick for tick in range(killed_at, len(modes)) if modes[tick] != 5)
+        self.assertEqual(turned_at, ready + 1)
         self.assertIs(scene.combat.guard, incoming)
         self.assertEqual(scene.combat.player.life, 3)
         self.assertTrue(incoming.alive)
@@ -1137,7 +1146,7 @@ class RooftopSceneTests(unittest.TestCase):
         events = scene.combat.resolve_contacts()
         self.assertEqual([(e.kind, e.actor) for e in events], [("parry", "player")])
         scene.up_held = True
-        scene.pending_action = BufferedCommand("sword_block")
+        scene.buffer_input(BufferedCommand("sword_block"))
         self.tick(3)
         self.assertTrue(scene.terrain_motion.falling)
         self.assertFalse(scene.terrain_motion.hit_fall)
@@ -1191,7 +1200,8 @@ class RooftopSceneTests(unittest.TestCase):
                 scene.sequence_runtime.next_frame()
                 scene.set_key_state("shift", shift)
                 scene.horizontal_key(None, 1, True)
-                seen = set()
+                # A press at a displayed guard pose starts at once.
+                seen = {scene.sequence_state.source_sequence_id, scene.sequence_state.action}
                 for _ in range(4):
                     self.tick()
                     seen.add(scene.sequence_state.source_sequence_id)
@@ -1377,8 +1387,10 @@ class RooftopSceneTests(unittest.TestCase):
         scene.sequence_runtime.next_frame()
         scene.action = scene.sequence_state.action
         with patch("pop2.scene_prototype.time.perf_counter", return_value=self.now):
-            scene.horizontal_key(None, 1, True)
-        self.tick(80)
+            for _ in range(80):
+                if scene.sword_drawn and scene.action in (158, 170, 171):
+                    self.tap_sword_step(1)
+                self.tick()
         self.assertTrue(scene.terrain_motion.dead)
         self.assertEqual(scene.room_id, 3)
         self.assertEqual((incoming.state.sequence_id, incoming.state.action), (77, 166))
@@ -1577,8 +1589,9 @@ class RooftopSceneTests(unittest.TestCase):
                 self.tick(10)
                 scene.set_key_state("ctrl", False)
                 self.assertTrue(scene.sword_drawn)
-                scene.horizontal_key(None, 1, True)
                 for _ in range(12):
+                    if scene.sword_drawn and scene.action in (158, 170, 171):
+                        self.tap_sword_step(1)
                     self.tick()
                     if scene.terrain_motion.falling:
                         break
@@ -1611,8 +1624,7 @@ class RooftopSceneTests(unittest.TestCase):
                 guard.sword_drawn = True
                 scene.combat.guards = [guard]
                 scene.combat.guard = guard
-                command = BufferedCommand("sword_attack")
-                scene.pending_action = command
+                scene.armed_attack_requested = True
                 poses = []
                 with patch.object(scene.combat, "step", return_value=[]):
                     for _ in range(9):
@@ -1622,7 +1634,7 @@ class RooftopSceneTests(unittest.TestCase):
                         self.assertFalse(scene.terrain_motion.dead)
                 self.assertEqual(poses, [177, 178, 211, 213, 212, 171, 160, 157, 151])
                 self.assertEqual(scene.sequence_state.facing, 1 - facing)
-                self.assertIsNone(scene.pending_action)
+                self.assertFalse(scene.armed_attack_requested)
                 self.assertEqual(scene.combat.player.life, 3)
 
     def test_running_left_enters_next_room_and_keeps_run(self):
@@ -1821,7 +1833,7 @@ class RooftopSceneTests(unittest.TestCase):
                 c = scene.combat
                 if scene.action in (158, 170, 171) and scene.sequence_state.sequence_id == 227:
                     if c.guard.alive and opponent_distance(c.player, c.guard) >= 100:
-                        scene.horizontal_key(None, -1, True)
+                        self.tap_sword_step(-1)
                     else:
                         scene.horizontal_key(None, -1, False)
                         if c.guard.alive and c.guard.state.action in (152, 153):

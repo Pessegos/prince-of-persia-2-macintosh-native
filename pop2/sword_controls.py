@@ -1,8 +1,10 @@
-"""Recovered OnAlert arbitration and a bridge for existing armed buffering.
+"""Recovered OnAlert arbitration and its action bodies' input consumption.
 
-This selects requests, not their action-body admission or lifetime. The host
-armed buffer/repeat policy remains explicit until its bank migration.
+Admission (which poses an action body accepts) stays with the scene's
+sword actions; pop2/armed_controls.py owns the bank while the sword is drawn.
 """
+
+from dataclasses import replace
 
 from pop2.mac_input import DirectionalInput
 
@@ -27,19 +29,13 @@ def armed_input_request(bank, pose, *, actor_type=0):
     return None
 
 
-_REQUEST_WORD = {'sword_attack': 'modifier', 'sword_sheathe': 'down',
-                 'sword_block': 'up', 'sword_advance': 'left', 'sword_retreat': 'right'}
-
-
-def buffered_sword_request(current, incoming):
-    """Arbitrate existing requests at the eventual guard gate, not this pose.
-
-Only the winner occupies the old host slot. This does not invent another
-queue, alter the rapid-attack filter, or claim native armed bank ownership.
-Unrelated/scripted commands retain their existing replacement behavior.
-"""
-    if current not in _REQUEST_WORD or incoming not in _REQUEST_WORD:
-        return incoming
-    words = {_REQUEST_WORD[kind]: -2 if kind == 'sword_attack' else -1
-             for kind in (current, incoming)}
-    return 'sword_' + armed_input_request(DirectionalInput(**words), 158)
+def consume_armed_request(bank, request):
+    """An accepted action body's words (facing-relative): ClearControls
+    4:3e3a and the consumed word, except DoBlock 6:28d4, which consumes Up
+    alone. DoStrike 6:280c-2812 consumes Ctrl as 2."""
+    if request == 'attack':
+        return DirectionalInput(modifier=2)
+    if request == 'block':
+        return replace(bank, up=1)
+    word = {'sheathe': 'down', 'advance': 'left', 'retreat': 'right'}[request]
+    return replace(DirectionalInput(modifier=bank.modifier), **{word: 1})
