@@ -600,7 +600,10 @@ class GameWindowTests(unittest.TestCase):
                     self.assertEqual(scene.held_directions, [1])
                     self.assertTrue(scene.up_held if modifier == 'Up' else scene.shift_held)
                     self.assertNotIn(modifier, scene.pause_resume_keys)
-                    self.assertEqual(scene.pending_action.kind, 'jump' if modifier == 'Up' else 'horizontal')
+                    # The restart's SEQS 5 starts with a zeroed bank (4:3e70):
+                    # the live holds are bank requests, not a host slot.
+                    self.assertIsNone(scene.pending_action)
+                    self.assertEqual(scene.directional_input.right, -1)
                     for _ in range(10):
                         self.tick()
                         if scene.sequence_state.sequence_id != 5:

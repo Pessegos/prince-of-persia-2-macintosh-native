@@ -1335,45 +1335,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.status.set("Standing turn: original SEQS:5")
         self.advance_animation_now()
 
-    def resume_run_during_standing_turn(self):
-        state = self.sequence_state
-        direction = self.horizontal_input
-        if (
-            state.sequence_id != STANDING_TURN_SEQUENCE
-            or state.action != 48
-            or not direction
-            or facing_for_direction(direction) != state.facing
-            or self.shift_held
-            or self.up_held
-            or self.down_held
-        ):
-            return False
-        if self.pending_action is not None:
-            command = self.pending_action
-            if (command.kind != "horizontal" or command.direction != direction
-                    or command.mode not in ("run", "turn")):
-                return False
-
-        # GenCtrl 6:062c/1014 dispatches by pose, not sequence; the long
-        # sheath reaches the same pose-48 gate through the waiting bank.
-        self.pending_action = None
-        self.start_running_turn(direction)
-        return True
-
-    def resume_queued_turn_during_standing_turn(self):
-        state = self.sequence_state
-        command = self.pending_action
-        if (
-            state.sequence_id != STANDING_TURN_SEQUENCE
-            or state.action not in (50, 51, 52)
-            or command is None
-        ):
-            return False
-
-        # GenCtrl 6:05fe-0618 admits the ordinary standing controller on
-        # poses 50-52, including the turn used when entering the caverns.
-        return self.dispatch_pending_action()
-
     def update_native_input_boundaries(self):
         """Discard stale host requests at verified Macintosh control gates."""
         command = self.pending_action
@@ -1922,9 +1883,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.resume_sword_controls()
         if self.waiting_controls_available():
             self.update_waiting_controls()
-        else:
-            self.resume_run_during_standing_turn()
-            self.resume_queued_turn_during_standing_turn()
         self.update_native_ledge()
         if (
             self.ledge_climb_requested and not self.native_ledge

@@ -79,6 +79,44 @@ keys held into a scripted brake are not requests. Three fixture tests in
 production timing of a real run's brake: a press at 50 starts the turn or
 crouch in the callback, so the next tick shows 46/108, not 45/107.
 
+## 2b. Presses during a scripted standing turn (SEQS 5) without a bank
+
+Native: level entry, restart and the level-six cliff door start SEQS 5
+(45-52). The latches are 0 there (4:3e70 at 2:5bdc; ClearControls and a
+zero modifier at 7:379a), so a key still held is a fresh request. GenCtrl's
+pose-48 gate (6:062c/1014) resumes a pending or held Forward as SEQS 43;
+50-52 are the standing gate.
+
+Port before: presses went to the slot (`queue_sampled_horizontal_action`);
+`resume_run_during_standing_turn` ran a held Forward at 48 and
+`resume_queued_turn_during_standing_turn` dispatched the last tap at 50.
+
+Done: `ensure_run_stop_controls` also creates a zeroed bank for a bankless
+SEQS 5, and both resume functions are removed. Regressions in
+`tests.test_waiting_controls`: Backward/Down taps in both orders turn and
+never crouch (the old slot crouched on Backward-then-Down); a released
+Forward tap runs from pose 48 as SEQS 43 (the old slot started SEQS 1 at 50).
+The restart chord test now checks the bank instead of the slot.
+
+## Census after the sheathe and scripted-turn stages (2026-10-30)
+
+Same method, 688 tests (animation, armed, recovery, waiting, combat,
+terrain, level six, caverns, game UI and every `test_input_*`/`*_controls`
+module). Every remaining non-fixture write is in the wall-bump climb
+family: SEQS 46 (bump), its rise 49, and 47 (wall stop) or the idle after it.
+
+| Writes | Path | Sequence |
+| --- | --- | --- |
+| 60 | `advance_terrain` wall event keeps an unfulfilled vertical Up | 47, 46 |
+| 50 | `queue_released_jump_direction` | 47, 46, 49, 2 |
+| 18 | `press_up` -> `start_jump` -> `buffer_input` | 46, 47, 49 |
+
+These are the retained host wall-climb tolerances (a climb requested before
+or during a bump survives later wall contact; see `ledge-input-handoff.md`
+and section 3). Moving them to the bank changes control feel and needs the
+user's decision; no slot writer outside this family remains in the traced
+suites.
+
 ## 3. Releasing the horizontal half of a held Up chord
 
 Port today: `queue_released_jump_direction` turns the release of the arrow

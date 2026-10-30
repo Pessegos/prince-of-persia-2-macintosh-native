@@ -167,5 +167,61 @@ class WaitingSceneTests(unittest.TestCase):
                                  (IDLE_SEQUENCE, 15))
 
 
+    def scripted_turn(self, facing, pose):
+        from pop2.control_mapping import STANDING_TURN_SEQUENCE
+        # Level entry, restart and the level-six cliff door start SEQS 5
+        # (45-52) without a bank; 4:3e70/7:379a leave its latches at 0.
+        scene = self.fixture.scene(sequence_id=STANDING_TURN_SEQUENCE, facing=facing)
+        scene.root, scene.next_animation_at = self.fixture.sword_scene().root, 0
+        scene.animation_after_id, scene.render = None, lambda: None
+        scene.advance_animation()
+        while scene.action != pose:
+            scene.advance_animation()
+        return scene
+
+    def tap(self, scene, key):
+        if key == 'down':
+            scene.set_key_state('down', True)
+            scene.set_key_state('down', False)
+        else:
+            facing = scene.sequence_state.facing
+            direction = (1 if facing else -1) * (1 if key == 'forward' else -1)
+            scene.horizontal_key(None, direction, True)
+            scene.horizontal_key(None, direction, False)
+        self.assertIsNone(scene.pending_action)
+
+    def test_scripted_turn_presses_are_bank_requests_with_native_priority(self):
+        from pop2.control_mapping import CROUCH_STANDING_LOWER_SEQUENCE, STANDING_TURN_SEQUENCE
+        for facing, keys in product((0, 1), (('backward', 'down'), ('down', 'backward'))):
+            with self.subTest(facing=facing, keys=keys):
+                scene = self.scripted_turn(facing, 46)
+                facing_after = scene.sequence_state.facing
+                for key in keys:
+                    self.tap(scene, key)
+                sequences = []
+                for _ in range(10):
+                    scene.advance_animation()
+                    sequences.append(scene.sequence_state.source_sequence_id)
+                # Backward wins at 50 and DoTurn clears the Down; the old slot
+                # kept the last tap, so Backward then Down crouched.
+                self.assertNotIn(CROUCH_STANDING_LOWER_SEQUENCE, sequences)
+                self.assertIn(STANDING_TURN_SEQUENCE, sequences[4:])
+                self.assertEqual(scene.sequence_state.facing, 1 - facing_after)
+
+    def test_forward_tap_in_a_scripted_turn_runs_from_pose_48(self):
+        # GenCtrl 6:062c/1014: a pending Forward at pose 48 is SEQS 43, even
+        # when released; the old slot waited for 50 and started SEQS 1.
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                scene = self.scripted_turn(facing, 46)
+                self.tap(scene, 'forward')
+                trace = []
+                for _ in range(4):
+                    scene.advance_animation()
+                    trace.append((scene.sequence_state.source_sequence_id, scene.action))
+                self.assertIn((43, 1), trace)
+                self.assertNotIn(1, [sequence for sequence, _ in trace])
+
+
 if __name__ == '__main__':
     unittest.main()

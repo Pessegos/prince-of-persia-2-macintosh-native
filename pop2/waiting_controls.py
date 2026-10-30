@@ -34,20 +34,30 @@ class WaitingControls:
         self.waiting_suppressed_up = False
 
     def ensure_run_stop_controls(self):
-        """Own a brake that began without a bank (a scripted SEQS 13 start).
+        """Own a brake or standing turn that began without a bank.
 
-        Its poses 50-52 reach GenCtrl's standing gate (6:05fe-0618), so the
-        presses there are bank requests. Keys already held count as consumed;
-        call this before a key callback changes the held state.
+        A scripted SEQS 13 start: its poses 50-52 reach GenCtrl's standing
+        gate (6:05fe-0618), so the presses there are bank requests. Keys
+        already held count as consumed; call this before a key callback
+        changes the held state.
+
+        A scripted SEQS 5 start (level entry, restart, leaving the level-six
+        cliff): the latches start at 0 (4:3e70 at 2:5bdc; ClearControls and
+        a zero modifier at 7:379a), so a key still held is a fresh request at
+        pose 48 or 50-52.
         """
+        sequence = self.sequence_state.sequence_id
         if (getattr(self, 'directional_input', None) is not None
-                or self.sequence_state.sequence_id != RUN_STOP_SEQUENCE):
+                or sequence not in (RUN_STOP_SEQUENCE, STANDING_TURN_SEQUENCE)):
             return
-        frame = read_keyboard(self.held_directions, self.up_held, self.down_held, self.shift_held)
-        bank = DirectionalInput().sample(frame.horizontal, frame.vertical)
-        held = [name for name, word in zip(('left', 'right', 'up', 'down'), bank.words()) if word]
-        modifier = 1 if self.shift_held else 2 if self.ctrl_held else None
-        self.directional_input = bank.consume(*held, modifier=modifier)
+        if sequence == STANDING_TURN_SEQUENCE:
+            self.directional_input = DirectionalInput()
+        else:
+            frame = read_keyboard(self.held_directions, self.up_held, self.down_held, self.shift_held)
+            bank = DirectionalInput().sample(frame.horizontal, frame.vertical)
+            held = [name for name, word in zip(('left', 'right', 'up', 'down'), bank.words()) if word]
+            modifier = 1 if self.shift_held else 2 if self.ctrl_held else None
+            self.directional_input = bank.consume(*held, modifier=modifier)
         self.waiting_step_direction = 0
         if not self.waiting_controls_available():
             self.directional_input = None
