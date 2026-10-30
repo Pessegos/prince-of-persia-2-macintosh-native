@@ -43,7 +43,7 @@ class CavernLevelIsolationTests(unittest.TestCase):
             with (patch('pop2.caverns.ASSET_DIR', directory),
                   self.assertRaisesRegex(ValueError, 'different level')):
                 cavern_assets(4)
-        for number in (True, 2, 10, '4'):
+        for number in (True, 2, 14, '4'):
             with self.subTest(number=number), self.assertRaisesRegex(ValueError, 'Unsupported cavern'):
                 cavern_assets(number)
 
