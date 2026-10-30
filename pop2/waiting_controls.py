@@ -150,6 +150,15 @@ class WaitingControls:
             self.directional_input = self.directional_input.consume('right' if direction > 0 else 'left')
         return self.update_waiting_controls()
 
+    def latch_released_chord(self):
+        """Releasing the arrow of a held Up chord (sampled bank).
+
+        Native 4:3e84 creates no request on a release; the running and jump
+        families keep a host tolerance that turns the still-held Up into a
+        pending request. Standing families have none.
+        """
+        return False
+
     def latch_waiting_command(self, command):
         """Bridge an internal directional producer without creating a second slot."""
         self.sample_waiting_controls()

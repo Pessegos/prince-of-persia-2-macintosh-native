@@ -585,7 +585,7 @@ class GuardCombatTests(unittest.TestCase):
                 state = scene.sequence_state
                 state.facing, state.action = facing, 161
                 state.current_x = state.target_x = scene.player_x = 260
-                scene.buffer_input(BufferedCommand("sword_block"))
+                scene.latch_request(BufferedCommand("sword_block"))
                 self.assertTrue(scene.resume_sword_parry_recoil())
                 self.assertEqual(state.target_x, 269 if facing == 0 else 251)
                 self.assertEqual(state.source_sequence_id, 57)

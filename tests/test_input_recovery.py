@@ -183,7 +183,7 @@ class InputRecoveryTests(unittest.TestCase):
                         scene.start_sequence(STANDING_TURN_SEQUENCE)
                         while scene.sequence_state.action != pose:
                             scene.advance_animation()
-                        self.assertTrue(scene.buffer_input(BufferedCommand(kind)))
+                        self.assertTrue(scene.latch_request(BufferedCommand(kind)))
                         scene.advance_animation()
                         self.assertEqual(scene.sequence_state.sequence_id, expected)
                         self.assertNotEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)
@@ -197,7 +197,7 @@ class InputRecoveryTests(unittest.TestCase):
             scene.sequence_state.facing = facing
             scene.start_sequence(STANDING_TURN_SEQUENCE)
             scene.held_directions = [direction]
-            self.assertTrue(scene.buffer_input(BufferedCommand('horizontal', direction, 'turn')))
+            self.assertTrue(scene.latch_request(BufferedCommand('horizontal', direction, 'turn')))
             for _ in range(4):
                 scene.advance_animation()
             self.assertEqual(scene.action, 48)

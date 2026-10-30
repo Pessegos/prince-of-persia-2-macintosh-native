@@ -1144,7 +1144,7 @@ class AnimationDataTests(unittest.TestCase):
                 for _ in range(10):
                     scene.advance_animation()
                 self.assertEqual(scene.action, 44)
-                self.assertTrue(scene.buffer_input(command))
+                self.assertTrue(scene.latch_request(command))
                 scene.ctrl_held = True
                 scene.update_airborne_controls()
                 self.assertEqual(scene.directional_input.words(), (0, 0, 0, 0, -2))
@@ -1209,7 +1209,7 @@ class AnimationDataTests(unittest.TestCase):
         scene.render = lambda: None
         scene.sequence_state.action = 14
         scene.run_cycle_boundary_pending = True
-        self.assertTrue(scene.buffer_input(BufferedCommand("jump", 1, running=True)))
+        self.assertTrue(scene.latch_request(BufferedCommand("jump", 1, running=True)))
         scene.run_stop_requested = True
 
         scene.advance_animation()
@@ -1246,7 +1246,7 @@ class AnimationDataTests(unittest.TestCase):
         scene.player_x = scene.sequence_state.target_x
         scene.run_cycle_boundary_pending = True
         scene.held_directions = [1]
-        self.assertTrue(scene.buffer_input(BufferedCommand("horizontal", 1, "turn")))
+        self.assertTrue(scene.latch_request(BufferedCommand("horizontal", 1, "turn")))
         scene.root = DummyRoot()
         scene.animation_after_id = None
         scene.next_animation_at = 0
@@ -2183,7 +2183,7 @@ class AnimationDataTests(unittest.TestCase):
                 scene.start_sequence(CROUCH_HOLD_SEQUENCE)
                 scene.sequence_runtime.next_frame()
                 scene.down_held = True
-                self.assertTrue(scene.buffer_input(command))
+                self.assertTrue(scene.latch_request(command))
                 scene.resume_crouch()
                 if command.kind == "crawl":
                     self.assertEqual(scene.sequence_state.sequence_id, CROUCH_STEP_SEQUENCE)

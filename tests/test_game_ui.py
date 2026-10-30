@@ -773,6 +773,44 @@ class GameWindowTests(unittest.TestCase):
                         scene.set_key_state('up', False)
                         self.assertFalse(scene.terrain_motion.falling or scene.native_ledge)
 
+    def test_releasing_the_arrow_of_a_run_chord_during_pause_acts_as_without_pause(self):
+        # The running bank's release rule (brake, then jump up) applies to a
+        # release made while paused too; the old host producer latched a bare
+        # Up there and the run took off as a running jump (SEQS 4).
+        scene = self.scene
+
+        def trace(up_pose, paused):
+            scene.load_level(3)
+            scene.peaceful = True
+            scene.jump_to_room(20, row=1, x=250, facing=0)
+            scene.in_animation_tick = True
+            scene.horizontal_key(None, -1, True)
+            for _ in range(30):
+                self.tick()
+                if scene.action == up_pose:
+                    break
+            self.assertEqual(scene.action, up_pose)
+            scene.up_key(None)
+            if paused:
+                scene.set_paused(True)
+            scene.horizontal_key(None, -1, False)
+            if paused:
+                scene.set_paused(False)
+            sequences = []
+            for _ in range(30):
+                self.tick()
+                if not sequences or sequences[-1] != scene.sequence_state.sequence_id:
+                    sequences.append(scene.sequence_state.sequence_id)
+            return sequences, scene.action, scene.room_id
+
+        with patch.object(scene, 'render'):
+            for up_pose in (5, 8, 9, 10, 12, 13):
+                with self.subTest(up_pose=up_pose):
+                    live = trace(up_pose, False)
+                    self.assertNotIn(4, live[0])
+                    self.assertIn(13, live[0])
+                    self.assertEqual(trace(up_pose, True), live)
+
     def test_run_jump_keeps_held_up_when_only_horizontal_is_released(self):
         scene = self.scene
         with patch.object(scene, 'render'):

@@ -27,7 +27,7 @@ class RunningCrouchControlTests(unittest.TestCase):
         scene.start_native_descent = Mock(return_value=True)
         scene.start_crouch_lower = Mock()
         scene.start_sequence = Mock()
-        self.assertTrue(scene.buffer_input(BufferedCommand('crouch')))
+        self.assertTrue(scene.latch_request(BufferedCommand('crouch')))
         return scene
 
     def test_every_running_pose_ducks_without_consulting_a_ledge_behind(self):

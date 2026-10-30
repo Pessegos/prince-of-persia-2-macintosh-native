@@ -70,14 +70,21 @@ class RunningControls(WaitingControls):
         if not running:
             return super().waiting_horizontal(direction, pressed)
         self.sample_waiting_controls()
-        if not pressed and not self.horizontal_input and self.up_held:
-            # Existing host tolerance: release the horizontal half of a held
-            # chord to request vertical alignment/climb after the brake.
-            self.run_vertical_followup = True
-            self.directional_input = replace(self.directional_input, up=-1)
-            self.jump_started_for_press = True
+        if not pressed:
+            self.latch_released_chord()
         self.run_stop_requested = self.horizontal_input != self.run_direction
         return False
+
+    def latch_released_chord(self):
+        if (self.sequence_state.sequence_id not in RUN_INPUT_SEQUENCES
+                or self.horizontal_input or not self.up_held):
+            return super().latch_released_chord()
+        # Existing host tolerance: release the horizontal half of a held
+        # chord to request vertical alignment/climb after the brake.
+        self.run_vertical_followup = True
+        self.directional_input = replace(self.directional_input, up=-1)
+        self.jump_started_for_press = True
+        return True
 
     def request_running_jump(self):
         self.jump_started_for_press = True

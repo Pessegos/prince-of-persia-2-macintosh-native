@@ -55,8 +55,8 @@ class WaitingSceneTests(unittest.TestCase):
     def test_internal_producers_merge_directions_instead_of_using_the_old_slot(self):
         from pop2.scene_prototype import BufferedCommand
         scene = self.step()
-        scene.buffer_input(BufferedCommand('jump'))
-        scene.buffer_input(BufferedCommand('crouch'))
+        scene.latch_request(BufferedCommand('jump'))
+        scene.latch_request(BufferedCommand('crouch'))
         self.assertEqual((scene.directional_input.up, scene.directional_input.down), (-1, -1))
 
     def test_focus_clear_drops_bank_and_legacy_request_together(self):

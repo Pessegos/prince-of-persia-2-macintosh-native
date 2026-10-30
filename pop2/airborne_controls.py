@@ -82,14 +82,21 @@ class AirborneControls(RunningControls):
         if self.sequence_state.sequence_id not in AIRBORNE_INPUT_SEQUENCES:
             return super().waiting_horizontal(direction, pressed)
         self.sample_waiting_controls()
-        if not pressed and not self.horizontal_input and self.up_held:
-            self.airborne_vertical_followup = True
-            self.directional_input = replace(self.directional_input, up=-1)
-            self.jump_started_for_press = True
+        if not pressed:
+            self.latch_released_chord()
         self.run_stop_requested = self.run_active and self.horizontal_input != self.run_direction
         if self.sequence_state.sequence_id in VERTICAL_INPUT_SEQUENCES:
             return self.update_waiting_controls()
         return False
+
+    def latch_released_chord(self):
+        if (self.sequence_state.sequence_id not in AIRBORNE_INPUT_SEQUENCES
+                or self.horizontal_input or not self.up_held):
+            return super().latch_released_chord()
+        self.airborne_vertical_followup = True
+        self.directional_input = replace(self.directional_input, up=-1)
+        self.jump_started_for_press = True
+        return True
 
     def latch_waiting_command(self, command):
         super().latch_waiting_command(command)

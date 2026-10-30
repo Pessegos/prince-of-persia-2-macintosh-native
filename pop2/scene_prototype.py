@@ -623,14 +623,9 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             if not pressed:
                 self.down_sheathe_consumed = False
             self.update_ledge_test_state()
-            if pressed and not self.ledge_hanging:
-                if self._is_resting():
-                    if not self.start_native_descent():
-                        self.start_crouch_lower()
-                elif self.sequence_state.sequence_id not in CROUCH_SEQUENCES:
-                    queued = self.buffer_input(BufferedCommand("crouch"))
-                    if queued and self.run_active and self.sequence_state.sequence_id not in RUN_CYCLE_SEQUENCES:
-                        self.run_stop_requested = True
+            if pressed and not self.ledge_hanging and self._is_resting():
+                if not self.start_native_descent():
+                    self.start_crouch_lower()
         elif key == "shift":
             if pressed and not self.shift_held:
                 self.queue_potion_pickup()
@@ -690,24 +685,24 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         # running6:11e4 does not consume it or request a sword animation.
         return self.start_sword_action('sword_draw')
 
-    def buffer_input(self, command):
-        if (getattr(self, "queue_grace_remaining_ms", 0) > 0
-                and command == getattr(self, "queue_grace_command", None)):
-            return False
-        self.pending_potion_pickup = None
+    def latch_request(self, command):
+        """Latch a scripted request into the bank that owns the pose.
+
+        There is no host buffer: where no bank owns the pose (the throne
+        collapse/wake, the prototype rooftop without a level map) the request
+        is not kept. Held keys are still read at rest.
+        """
         if command.kind in SWORD_SEQUENCES:
+            if not self.armed_controls_available():
+                return False
             if command.kind == "sword_attack":
-                self.armed_attack_requested = self.armed_controls_available()
-            elif self.armed_controls_available():
+                self.armed_attack_requested = True
+            else:
                 self.latch_armed_request(command.kind)
-            return self.armed_controls_available()
-        if (self.waiting_controls_available()
-                and command.kind in ('horizontal', 'jump', 'crouch', 'crawl')):
+            return True
+        if self.waiting_controls_available():
             self.latch_waiting_command(command)
             return True
-        # No directional bank owns this pose (the throne collapse/wake, the
-        # prototype rooftop without a level map): the tap is not kept. Held
-        # keys are still read at rest.
         return False
 
     def start_queue_grace(self, command):
@@ -887,7 +882,11 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 if not pressed and getattr(self, "step_warning_direction", 0) == direction:
                     self.step_warning_direction = 0
                 self.sample_keyboard()
-                self.queue_released_jump_direction(previous_direction)
+                if (not pressed and self.up_held and not self.horizontal_input
+                        and self.waiting_controls_available()):
+                    # The family's release rule latches without moving.
+                    self.sample_waiting_controls()
+                    self.latch_released_chord()
                 if self.run_active:
                     self.run_stop_requested = self.horizontal_input != self.run_direction
             return "break"
@@ -918,8 +917,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         if self.native_ledge and not self.ledge_climbing:
             return "break"
 
-        self.queue_released_jump_direction(previous_direction)
-
         if self.sword_sheathing:
             if pressed and self.horizontal_input != previous_direction and self.horizontal_input:
                 self.queue_sampled_horizontal_action(self.horizontal_input)
@@ -938,19 +935,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         if self.horizontal_input != previous_direction and self.horizontal_input:
             self.queue_sampled_horizontal_action(self.horizontal_input)
         return "break"
-
-    def queue_released_jump_direction(self, previous_direction):
-        if (not previous_direction or self.horizontal_input or not self.up_held
-                or self.sword_drawn or self._combat_controls_locked()
-                or self._opening_active() or self.native_ledge
-                or self.sequence_state.source_sequence_id not in (
-                    RUN_SEGMENT_SEQUENCES | {JUMP_FORWARD_SEQUENCE, RUN_JUMP_SEQUENCE})):
-            return
-        # Releasing the horizontal half of a held Up chord requests Up next,
-        # during either jump or a run. Wall contact alone must not replay
-        # the consumed takeoff command.
-        self.jump_started_for_press = True
-        self.buffer_input(BufferedCommand("jump"))
 
     def sample_keyboard(self):
         frame = read_keyboard(
@@ -980,12 +964,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             return True
         if self.up_held:
             if self.jump_started_for_press:
-                if not self._is_resting():
-                    self.buffer_input(BufferedCommand(
-                        "jump", direction,
-                        running=(self.sequence_state.sequence_id in RUN_SEGMENT_SEQUENCES
-                                 or self.sequence_state.sequence_id == RUN_JUMP_SEQUENCE),
-                    ))
                 return False
             return self.start_jump_if_needed()
         elif self.shift_held:
@@ -1086,7 +1064,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         if self._is_resting() or starting_chord or starting_reverse:
             self.dispatch_jump(command)
         else:
-            self.buffer_input(command)
+            self.latch_request(command)
 
     def queue_horizontal_action(self, direction, mode):
         if (
@@ -1105,9 +1083,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             if dispatched:
                 self.start_queue_grace(command)
             return dispatched
-        else:
-            self.buffer_input(command)
-            return False
+        return False
 
     def dispatch_jump(self, command):
         if not command.direction and self.sequence_state.sequence_id in RUN_SEGMENT_SEQUENCES:

@@ -89,7 +89,7 @@ class ArmedBufferSceneTests(unittest.TestCase):
             with self.subTest(facing=facing, pair=pair):
                 scene = self.during_draw(facing)
                 for kind in pair:
-                    scene.buffer_input(BufferedCommand(kind))
+                    scene.latch_request(BufferedCommand(kind))
                 self.assertEqual(scene.armed_pending().kind, min(pair, key=kinds.index))
 
     def test_real_key_callbacks_cannot_replace_a_queued_strike_with_other_commands(self):

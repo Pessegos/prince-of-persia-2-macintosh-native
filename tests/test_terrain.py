@@ -1149,7 +1149,7 @@ class RooftopSceneTests(unittest.TestCase):
         events = scene.combat.resolve_contacts()
         self.assertEqual([(e.kind, e.actor) for e in events], [("parry", "player")])
         scene.up_held = True
-        scene.buffer_input(BufferedCommand("sword_block"))
+        scene.latch_request(BufferedCommand("sword_block"))
         self.tick(3)
         self.assertTrue(scene.terrain_motion.falling)
         self.assertFalse(scene.terrain_motion.hit_fall)
@@ -1421,7 +1421,7 @@ class RooftopSceneTests(unittest.TestCase):
         scene.horizontal_key(None, 1, False)
         self.tick(5)
         scene.shift_held = False
-        self.assertTrue(scene.buffer_input(BufferedCommand("jump", 1)))
+        self.assertTrue(scene.latch_request(BufferedCommand("jump", 1)))
         self.tick(6)
         self.assertEqual((scene.sequence_state.sequence_id, scene.action), (3, 16))
         self.assertFalse(scene.terrain_motion.falling)

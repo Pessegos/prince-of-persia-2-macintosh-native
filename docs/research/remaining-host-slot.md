@@ -171,6 +171,12 @@ the arrow after an accepted running jump: no second jump; release it while
 Up is still pending in the run: standing jump at the brake/standing gate.
 The SEQS 46/47 part now belongs to the bank (section 5).
 
+Update (producer census below): `queue_released_jump_direction` is removed.
+The same release rule remains a host tolerance inside the running (SEQS 1,
+6, 43, 200-202) and jump (3, 4, 14, 28, 11) banks, now one method,
+`latch_released_chord`; the native-latch replacement proposed here is still
+open.
+
 ## 4. Releasing Up with the sword drawn (fixed)
 
 `set_key_state('up', False)` called `start_jump` when Up had been held
@@ -222,3 +228,43 @@ Up/Down taps are discarded at 50; held Backward turns at 51). Fixtures that
 assigned the slot now latch through `buffer_input`, and the 198 assertions
 that only checked the slot stayed empty were dropped with it. The airborne
 and vertical handoff audits no longer record a `pending` field.
+
+## Census of the remaining producers (2026-10-30)
+
+With the slot gone, `buffer_input` was the last generic bridge: the key
+callbacks that no bank intercepted still built a command and handed it over,
+and it latched into the owning bank or dropped the tap. A census replaced
+`buffer_input` and `queue_released_jump_direction` with recorders and ran the
+whole discovery set (3,293 tests). Every production call latched into a bank;
+none was dropped and none was armed:
+
+| Calls | Path | Sequence/poses | Test |
+| --- | --- | --- | --- |
+| 6 | paused `horizontal_key` -> `queue_released_jump_direction` | 3 (16, 19, 22) | standing jump keeps held Up for the wall climb |
+| 3 | paused `horizontal_key` -> `queue_released_jump_direction` | 4 (34, 39, 40) | run jump keeps held Up when the arrow is released |
+| 1 | `start_jump` called directly | 42 (pose 0) | fixture-style call |
+
+All other calls (119, among them every armed one) came from test code. The
+unpaused key callbacks never reach the bridge: each bank family intercepts
+its keys first (`waiting_key`, `waiting_horizontal`), and where no family owns
+the pose the bridge could only drop the tap.
+
+The paused release was a real difference. Pausing, releasing the arrow of a
+running Up chord and resuming latched a bare Up without the running bank's
+follow-up flag, so the run took off as a running jump (SEQS 4) and met the
+wall; the same release without pause brakes (13) and jumps up (14 or 28).
+Trace: level 3, native room 21, X 250, facing left, Up pressed at run poses
+8-13; old paused runs `[4, 201, 13, 47, 24]` or `[4, 47, 24, 9, 10]`, live
+and new paused `[201, 13, 14, 11, 14]` or `[202, 13, 28, 11]`.
+
+Done: the paused branch calls the owning family's `latch_released_chord`
+(the rule the running and jump banks already applied on a live release), and
+`queue_released_jump_direction` is removed. `buffer_input` becomes
+`latch_request` (scripted requests only: `start_jump` from a pose a bank owns,
+and fixtures); its queue-grace filter and potion-pickup reset went with it.
+The dropping producers are removed: Down pressed outside a crouch, and the
+non-resting branches of `queue_sampled_horizontal_action` (jump chord) and
+`queue_horizontal_action`. Regression (fails on the previous code):
+`tests.test_game_ui` "releasing the arrow of a run chord during pause acts as
+without pause" (paused and live traces equal, no SEQS 4; pose 5 is a control
+that matched before too).

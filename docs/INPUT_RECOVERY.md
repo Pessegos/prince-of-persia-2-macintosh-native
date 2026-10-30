@@ -719,6 +719,10 @@ pickup, which tests did not press through, were the last reachable writers.
 Both now keep the bank, and the slot, its dispatcher and every family's
 one-shot import are removed. A tap made where no bank owns the pose (the
 throne collapse/wake, the prototype rooftop without a level map) is not kept.
+A later census of the producers that fed it found every production call
+already latching into a bank; the generic bridge became `latch_request` for
+scripted requests, and a release made while paused now follows the owning
+family's release rule (it used to turn a running chord into a running jump).
 
 1. Translate five native latches, sampling, facing remap and consume/reset
    operations in `mac_input`. Test every directional/modifier transition.
