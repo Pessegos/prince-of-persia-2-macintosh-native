@@ -43,8 +43,9 @@ dispatchers are bypassed while this owner is active.
 
 Entering another controller family retires the bank. Physics/combat can
 select sequences directly, so retirement also runs after world phases and
-on fall/wall/gate/death events. A pending vertical wall-climb request can
-cross a grounded wall interruption into the existing host climb policy.
+on fall/wall/gate/death events. A grounded wall interruption selects the
+bump 46/47, which the low bank owns again with its mode-5 clear (taps are
+discarded, held keys act afterwards; `remaining-host-slot.md` section 5).
 Focus/modal clearing drops both representations. Sequence 43 is a running
 turn, not a cautious step despite lying between step resource IDs.
 After selecting a non-idle sequence, the controller waits for its first pose

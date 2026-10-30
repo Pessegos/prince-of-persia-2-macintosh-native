@@ -945,7 +945,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 or self.sword_drawn or self._combat_controls_locked()
                 or self._opening_active() or self.native_ledge
                 or self.sequence_state.source_sequence_id not in (
-                    RUN_SEGMENT_SEQUENCES | {JUMP_FORWARD_SEQUENCE, RUN_JUMP_SEQUENCE, 46, 47})):
+                    RUN_SEGMENT_SEQUENCES | {JUMP_FORWARD_SEQUENCE, RUN_JUMP_SEQUENCE})):
             return
         # Releasing the horizontal half of a held Up chord requests Up next,
         # during either jump or a run. Wall contact alone must not replay
@@ -1334,18 +1334,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.start_sequence(STANDING_TURN_SEQUENCE)
         self.status.set("Standing turn: original SEQS:5")
         self.advance_animation_now()
-
-    def update_native_input_boundaries(self):
-        """Discard stale host requests at verified Macintosh control gates."""
-        command = self.pending_action
-        if command is None:
-            return
-        state = self.sequence_state
-        if (state.sequence_id == CROUCH_RISE_SEQUENCE and state.source_sequence_id == LEDGE_CLIMB_SEQUENCE
-              and state.animation_state == 5 and command.kind in ('horizontal', 'crawl')):
-            # The unmigrated SEQS46 wall/climb tail retains its old policy:
-            # discard these directions while preserving its vertical request.
-            self.pending_action = None
 
     def update_armed_input_boundaries(self):
         state = self.sequence_state
@@ -1874,7 +1862,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.player_x = self.sequence_state.target_x
             self.run_world_phases('opening', old_x, old_bounds)
             return
-        self.update_native_input_boundaries()
         self.update_armed_input_boundaries()
         self.update_airborne_controls()
         if not self.resume_combat_turn():
@@ -2199,14 +2186,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.action = self.sequence_state.action
         old_room = self.room_id
         before_x = self.sequence_state.target_x
-        command = self.pending_action
-        if (command is None and self.waiting_controls_available()
-                and (getattr(self, "airborne_vertical_followup", False) and self.up_held
-                     or self.directional_input.up < 0
-                     and not self.directional_input.left and not self.directional_input.right)):
-            # Snapshot the held vertical wall-climb policy before physics
-            # retires the bank on an actual wall/fall interruption.
-            command = BufferedCommand('jump')
         from pop2.jump_descent import capture_jump_end, descent_drawing
 
         jump_end = capture_jump_end(motion, self.sequence_state)
@@ -2278,11 +2257,10 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 self.run_active = False
                 self.run_stop_requested = False
                 self.run_cycle_boundary_pending = False
-                # Keep an unfulfilled Up through repeated grounded bumps,
-                # including recovery from a run jump. Do not replay its arc.
-                self.pending_action = (command if event.kind == "wall" and not motion.falling
-                                       and command is not None and command.kind == "jump"
-                                       and not command.direction else None)
+                # A bump (46/47) is a mode-5 recovery owned by the bank: it
+                # clears every direction (6:0576-059c), so a tap made before
+                # or during it is gone and a still-held key is fresh after.
+                self.pending_action = None
                 self.jump_repeat_armed = False
                 # Do not re-arm a consumed Up on wall contact: releasing Up
                 # must not queue a second jump after an interrupted jump.

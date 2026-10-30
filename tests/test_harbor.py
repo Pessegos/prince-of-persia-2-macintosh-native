@@ -534,7 +534,9 @@ class HarborSceneTests(unittest.TestCase):
                     scene.up_key(None)
                     jumps.add(scene.room_id)
             elif (scene.room_id == 9 and not climbed and scene.player_x < 250
-                  and scene.action == 15 and not scene.run_active):
+                  and scene.action in (15, 50, 51, 52) and not scene.run_active):
+                # At rest or in the wall stop (47): a held Forward no longer
+                # rests at 15 between the stop and the next step.
                 scene.horizontal_key(None, -1, False)
                 scene.up_key(None)
                 climbed = True

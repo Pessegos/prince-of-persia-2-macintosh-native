@@ -38,7 +38,8 @@ There is no new timeout or second directional queue.
 
 The early Forward gate can convert to SEQS3, whose existing bank ownership
 and reset26 then apply. Ordinary held-jump repeat/cancellation, the rapid-jump
-filter, startup chords and the explicit wall-climb tolerance remain. Shift/Ctrl
+filter and startup chords remain; the wall-climb tolerance was removed on
+2026-10-30 (the bank owns the bump 46/47). Shift/Ctrl
 normalization and the upside-down physical mapping are unchanged.
 
 ## Evidence and scope

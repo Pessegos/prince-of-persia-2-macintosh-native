@@ -2,7 +2,6 @@
 
 from dataclasses import replace
 
-from pop2.control_mapping import LEDGE_CLIMB_SEQUENCE
 from pop2.coordinates import column_left
 from pop2.crevices import CREVICE_TILE
 from pop2.ledge_controls import LedgeControls
@@ -10,9 +9,10 @@ from pop2.mac_input import DirectionalInput, low_input_request
 from pop2.opponent_generation import character_column
 
 
-# 20/212 are the hard-fall recovery before its rise through 49: GenCtrl's
-# mode-5 gate (6:0576-059c) clears the bank there, as in the low family.
-LOW_INPUT_SEQUENCES = frozenset((17, 20, 26, 49, 50, 79, 117, 121, 122, 123, 124, 125, 212))
+# 20/212 are the hard-fall recovery before its rise through 49, 46 the
+# wall bump (also rising through 49) and 47 the wall stop: GenCtrl's mode-5
+# gate (6:0576-059c) clears the bank there, as in the low family.
+LOW_INPUT_SEQUENCES = frozenset((17, 20, 26, 46, 47, 49, 50, 79, 117, 121, 122, 123, 124, 125, 212))
 
 
 class LowControls(LedgeControls):
@@ -22,15 +22,11 @@ class LowControls(LedgeControls):
     def low_controls_available(self):
         state, motion = self.sequence_state, getattr(self, 'terrain_motion', None)
         return (state.sequence_id in LOW_INPUT_SEQUENCES and not self.native_ledge
-                and state.source_sequence_id != LEDGE_CLIMB_SEQUENCE
                 and not self.ledge_hanging and not self.sword_drawn and not self.sword_sheathing
                 and not self._combat_controls_locked() and not self._opening_active()
                 and not (motion is not None and (motion.falling or motion.sinking or motion.dead)))
 
     def waiting_controls_available(self):
-        if (self.sequence_state.sequence_id in LOW_INPUT_SEQUENCES
-                and self.sequence_state.source_sequence_id == LEDGE_CLIMB_SEQUENCE):
-            return False
         if self.low_controls_available():
             if getattr(self, 'directional_input', None) is None:
                 self.directional_input = DirectionalInput()
@@ -39,10 +35,7 @@ class LowControls(LedgeControls):
         return super().waiting_controls_available()
 
     def begin_low_controls(self, sequence):
-        # The existing SEQS46 wall/climb recovery links through49 too.
-        # Its separate vertical-request tolerance retains the old owner.
-        if (self.native_ledge or self.ledge_hanging or self.ledge_climbing
-                or self.sequence_state.source_sequence_id == LEDGE_CLIMB_SEQUENCE):
+        if self.native_ledge or self.ledge_hanging or self.ledge_climbing:
             return
         if getattr(self, 'directional_input', None) is None:
             self.directional_input = DirectionalInput()

@@ -71,12 +71,10 @@ calls within a tick and held input becoming eligible on the next tick.
   pending. This existing fluid-release tolerance is explicit, rather than
   changing the native selector's ordinary consumption rule.
 - Shift/Down still starts the existing rooftop hang in either key order.
-- SEQS46 recovery links through49 with selected source46, often without a
-  live ledge flag. It retains its existing owner and vertical wall-climb
-  tolerance. Its old protected horizontal/crawl clear is retained only for
-  that source. Ordinary49 is owned by the bank and clears released Up too.
-  Real cavern wall-recovery tests keep their previous poses, pause behavior,
-  climb success and final positions.
+- SEQS46 recovery links through49 with selected source46. Since 2026-10-30
+  it, and the wall stop47, are owned by this bank like ordinary49 (see
+  `remaining-host-slot.md` section 5); the former vertical wall-climb
+  tolerance and source46 exception are removed.
 - Menu/focus/restart clears discard the bank and low repeat/poll markers.
   Existing pause and upside-down physical mapping are reused.
 

@@ -77,8 +77,12 @@ Examples from original SEQS data:
   This subset is implemented in `AirborneControls.update_airborne_controls`.
 - Hard-fall recovery: SEQS:20 -> 212 -> 49 stays in mode 5 through pose 116.
   The low bank's mode-5 clear discards directional taps during that part;
-  held keys become fresh requests afterward. This does not apply a global mode-5
-  reset to the port's separate wall-climb buffering extensions.
+  held keys become fresh requests afterward.
+- Wall bump SEQS:46 (102-109, rising through 49 to 116) and wall stop
+  SEQS:47 (50-52) are mode 5 too and, since 2026-10-30, belong to the same
+  low bank: a tap made before or during the bump is discarded, and a key
+  still held at the end is a fresh request (Up alone climbs; Up and Forward
+  still held jump forward again). The former host wall-climb slot is removed.
 - Vertical landing: pose 83 is mode 5; later landing poses return to mode 1.
 - Crouch rise: poses 110-116 are mode 5; 117-119 return to mode 1.
 - Ordinary climb: pose 149 is mode 5 before 118/119.

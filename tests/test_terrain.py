@@ -928,7 +928,12 @@ class RooftopSceneTests(unittest.TestCase):
         scene.jump_to_room(0, row=2, x=115, facing=1)
         scene.in_animation_tick = True
         scene.horizontal_key(None, 1, True)
-        self.tick(35)
+        self.tick(30)
+        # Held Forward repeats step and wall stop (47); release at a step's end.
+        for _ in range(12):
+            if scene.action == 132:
+                break
+            self.tick()
         scene.horizontal_key(None, 1, False)
         self.tick(10)
         self.assertEqual((scene.action, scene.player_x), (15, 119))

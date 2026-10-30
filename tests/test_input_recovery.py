@@ -6,6 +6,7 @@ from pop2.control_mapping import (
     CROUCH_RISE_SEQUENCE,
     IDLE_SEQUENCE,
     JUMP_FORWARD_SEQUENCE,
+    JUMP_VERTICAL_SEQUENCE,
     RUN_JUMP_SEQUENCE,
     STANDING_TURN_SEQUENCE,
     SHIFT_STEP_SEQUENCE,
@@ -264,10 +265,18 @@ class InputRecoveryTests(unittest.TestCase):
                                 self.assertLess(scene.directional_input.up, 0)
                                 self.assertTrue(scene.airborne_vertical_followup)
                             else:
-                                self.assertEqual((scene.pending_action.kind, scene.pending_action.direction,
-                                                  scene.pending_action.running), ('jump', 0, False))
+                                # The bump's mode 5 owns the bank (6:0576-059c):
+                                # no host request; the held Up is fresh after it.
+                                self.assertIsNone(scene.pending_action)
+                                self.assertGreaterEqual(scene.directional_input.up, 0)
                         else:
                             self.assertIsNone(scene.pending_action)
+                        if sequence != RUN_JUMP_SEQUENCE:
+                            sequences = []
+                            for _ in range(20):
+                                scene.advance_animation()
+                                sequences.append(scene.sequence_state.sequence_id)
+                            self.assertEqual(JUMP_VERTICAL_SEQUENCE in sequences, held_up)
 
     def test_climb_overlap_keeps_shift_steps_and_turn_only_behavior_after_releasing_up(self):
         for facing in (0, 1):

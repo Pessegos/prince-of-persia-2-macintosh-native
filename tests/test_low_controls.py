@@ -148,21 +148,38 @@ class LowSceneTests(unittest.TestCase):
         self.assertTrue(scene.update_waiting_controls())
         self.assertEqual(scene.sequence_state.sequence_id, 79)
 
-    def test_unmigrated_wall_recovery_keeps_its_old_directional_clear(self):
-        from pop2.scene_prototype import BufferedCommand
-        for kind in ('horizontal', 'crawl'):
-            with self.subTest(kind=kind):
-                scene = self.fixture.sword_scene()
-                scene.start_sequence(46)
-                for _ in range(30):
-                    scene.sequence_runtime.next_frame()
-                    if scene.sequence_state.sequence_id == 49:
-                        break
-                self.assertEqual(scene.sequence_state.source_sequence_id, 46)
-                self.assertFalse(scene.waiting_controls_available())
-                scene.pending_action = BufferedCommand(kind, 1)
-                scene.update_native_input_boundaries()
-                self.assertIsNone(scene.pending_action)
+    def test_wall_bump_and_wall_stop_belong_to_the_bank_and_clear_in_mode_5(self):
+        # SEQS 46 (102-109, rising through 49 to 116) and 47 (50-52) are
+        # mode 5: GenCtrl 6:0576-059c clears every direction there, so a
+        # tap made during the bump is gone and a held key is fresh after it.
+        for sequence, last in ((46, 116), (47, 52)):
+            for key in ('up', 'down', 'right'):
+                for held in (False, True):
+                    with self.subTest(sequence=sequence, key=key, held=held):
+                        scene = self.fixture.sword_scene()
+                        scene.start_sequence(sequence)
+                        scene.advance_animation()
+                        self.assertTrue(scene.waiting_controls_available())
+                        if key == 'right':
+                            scene.horizontal_key(None, 1, True)
+                        elif key == 'up':
+                            scene.up_key(None)
+                        else:
+                            scene.set_key_state('down', True)
+                        if not held:
+                            if key == 'right':
+                                scene.horizontal_key(None, 1, False)
+                            else:
+                                scene.set_key_state(key, False)
+                        self.assertIsNone(scene.pending_action)
+                        while scene.action != last:
+                            scene.advance_animation()
+                            self.assertIsNone(scene.pending_action)
+                        self.assertEqual(scene.directional_input.words()[:4], (0, 0, 0, 0))
+                        for _ in range(4):
+                            scene.advance_animation()
+                        moved = scene.sequence_state.sequence_id not in (sequence, 49, 2)
+                        self.assertEqual(moved, held)
 
     def test_real_tunnel_approach_does_not_repeat_the_first_lie_down_pose(self):
         from tests.test_level6 import LevelSixSceneryTests

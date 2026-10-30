@@ -744,7 +744,9 @@ class GameWindowTests(unittest.TestCase):
                     self.tick(5)
                     self.assertEqual((scene.room_id, scene.terrain_motion.row), (destination, floor))
 
-    def test_cavern_run_jump_bump_keeps_a_new_climb_request_through_later_wall_contact(self):
+    def test_cavern_run_jump_bump_discards_an_up_tap_but_climbs_on_a_held_up(self):
+        # SEQS 46 -> 49 is mode 5 through pose 116 (6:0576-059c clears the
+        # bank): a tap made there is gone, a held Up is fresh afterwards.
         scene = self.scene
         with patch.object(scene, 'render'):
             for queue_pose in (102, 107, 108, 109, 110, 111):
@@ -771,7 +773,7 @@ class GameWindowTests(unittest.TestCase):
                         scene.up_key(None)
                         if not held:
                             scene.set_key_state('up', False)
-                        self.assertIsNotNone(scene.pending_action)
+                        self.assertIsNone(scene.pending_action)
                         poses = []
                         for _ in range(45):
                             self.tick()
@@ -780,18 +782,18 @@ class GameWindowTests(unittest.TestCase):
                                 scene.set_key_state('up', False)
                             if 135 in poses and not scene.native_ledge:
                                 break
-                        self.assertIn(67, poses)
-                        self.assertIn(80, poses)
+                        self.assertEqual(67 in poses, held)
                         self.assertEqual(135 in poses, held)
                         self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action),
                                          (25, 0 if held else 1, 15))
+                        scene.set_key_state('up', False)
                         self.assertFalse(scene.terrain_motion.falling or scene.native_ledge)
                         self.assertIsNone(scene.pending_action)
 
     def test_run_jump_keeps_held_up_when_only_horizontal_is_released(self):
         scene = self.scene
         with patch.object(scene, 'render'):
-            for release_pose in (34, 39, 40, 102, 107, 108, 109, 110, 111, 50, 51, 52, 15):
+            for release_pose in (34, 39, 40, 102, 107, 108, 109, 110, 111, 50, 51, 52):
                 for paused_release in (False, True):
                     with self.subTest(release_pose=release_pose, paused_release=paused_release):
                         scene.load_level(3)
@@ -820,9 +822,8 @@ class GameWindowTests(unittest.TestCase):
                             self.assertLess(scene.directional_input.up, 0)
                             self.assertTrue(scene.airborne_vertical_followup)
                         else:
-                            self.assertIsNotNone(scene.pending_action)
-                            self.assertEqual((scene.pending_action.kind, scene.pending_action.direction),
-                                             ('jump', 0))
+                            # The bump's mode 5 owns the bank: no host request.
+                            self.assertIsNone(scene.pending_action)
                         if paused_release:
                             scene.set_paused(False)
                         poses = []
@@ -858,7 +859,7 @@ class GameWindowTests(unittest.TestCase):
         scene = self.scene
         with patch.object(scene, 'render'):
             for room, row, x, facing, destination in ((20, 1, 60, 0, 25), (0, 2, 80, 1, 0)):
-                for release_pose in (16, 19, 22, 50, 51, 52, 15):
+                for release_pose in (16, 19, 22, 50, 51, 52):
                     for paused_release in (False, True):
                         with self.subTest(facing=facing, pose=release_pose, paused=paused_release):
                             scene.load_level(3)
@@ -881,9 +882,7 @@ class GameWindowTests(unittest.TestCase):
                                 self.assertLess(scene.directional_input.up, 0)
                                 self.assertTrue(scene.airborne_vertical_followup)
                             else:
-                                self.assertIsNotNone(scene.pending_action)
-                                self.assertEqual((scene.pending_action.kind, scene.pending_action.direction),
-                                                 ('jump', 0))
+                                self.assertIsNone(scene.pending_action)
                             if paused_release:
                                 scene.set_paused(False)
                             poses = []
@@ -925,9 +924,9 @@ class GameWindowTests(unittest.TestCase):
                             self.assertLess(scene.directional_input.up, 0)
                             self.assertTrue(scene.run_vertical_followup)
                         else:
-                            self.assertIsNotNone(scene.pending_action)
-                            self.assertEqual((scene.pending_action.kind, scene.pending_action.direction),
-                                             ('jump', 0))
+                            # Pressed during the wall stop (47, mode 5): the
+                            # bank owns it; the held Up is fresh after 52.
+                            self.assertIsNone(scene.pending_action)
                         poses = []
                         for _ in range(65):
                             self.tick()
@@ -1243,13 +1242,17 @@ class GameWindowTests(unittest.TestCase):
         self.tick(12)
         self.assertGreater(scene.player_x, 245)
 
-    def test_wall_bump_cannot_replay_the_same_jump_on_up_release_or_hold(self):
+    def test_wall_bump_repeats_a_jump_only_while_its_keys_stay_held(self):
+        # The wall stop (47, poses 50-52) is mode 5: ClearControls (6:0576)
+        # zeroes the consumed takeoff keys, so keys released before it ends
+        # never replay, while keys still held are fresh at its end and jump
+        # again (4:3e84 sampling), as on the Macintosh.
         scene = self.scene
         scene.advance_animation_now = lambda: None
         for room, row, x, facing in ((9, 1, 233, 0), (20, 0, 272, 1)):
             direction = 1 if facing else -1
             for up_first in (False, True):
-                for release_tick in (1, 3, 6, 10, None):
+                for release_tick in (1, 3, None):
                     with self.subTest(facing=facing, up_first=up_first, release=release_tick):
                         scene.jump_to_room(room, row=row, x=x, facing=facing)
                         scene.set_peaceful(True)
@@ -1259,7 +1262,7 @@ class GameWindowTests(unittest.TestCase):
                         else:
                             scene.horizontal_key(None, direction, True)
                             scene.up_key(None)
-                        collided = False
+                        collided = replayed = False
                         for tick in range(20):
                             if tick == release_tick:
                                 scene.set_key_state("up", False)
@@ -1267,11 +1270,19 @@ class GameWindowTests(unittest.TestCase):
                             self.tick()
                             sequence = scene.sequence_state.sequence_id
                             if collided:
-                                self.assertNotIn(sequence, (3, 4, 28))
+                                replayed |= sequence in (3, 4, 28)
                                 self.assertIsNone(scene.pending_action)
                             collided |= sequence == 47
                             self.assertFalse(scene.terrain_motion.falling)
                         self.assertTrue(collided)
+                        self.assertEqual(replayed, release_tick is None)
+                        if release_tick is None:
+                            scene.set_key_state("up", False)
+                            scene.horizontal_key(None, direction, False)
+                            for _ in range(20):
+                                self.tick()
+                                if scene.action == 15:
+                                    break
                         self.assertEqual(scene.action, 15)
                         self.assertFalse(scene.jump_repeat_armed)
                         # A genuinely new chord remains usable after the bump.

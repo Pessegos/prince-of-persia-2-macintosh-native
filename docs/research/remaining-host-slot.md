@@ -111,11 +111,45 @@ family: SEQS 46 (bump), its rise 49, and 47 (wall stop) or the idle after it.
 | 50 | `queue_released_jump_direction` | 47, 46, 49, 2 |
 | 18 | `press_up` -> `start_jump` -> `buffer_input` | 46, 47, 49 |
 
-These are the retained host wall-climb tolerances (a climb requested before
-or during a bump survives later wall contact; see `ledge-input-handoff.md`
-and section 3). Moving them to the bank changes control feel and needs the
-user's decision; no slot writer outside this family remains in the traced
-suites.
+These were the retained host wall-climb tolerances (a climb requested before
+or during a bump survived later wall contact). No slot writer outside this
+family remained in the traced suites.
+
+## 5. Wall bump and wall stop (SEQS 46 -> 49, 47) (done, user approved)
+
+Native: Collide (terrain.py, 4:5826-584c) selects 46 (poses 102, 107-109,
+rising through 49: 110-116 mode 5, 117-119 mode 1) or 47 (50-52, all mode
+5). GenCtrl's mode-5 gate (6:0576-059c) runs ClearControls every frame
+there, so a tap made before or during the bump is discarded, and a key
+still held when mode 5 ends is a fresh request at the next sample (4:3e84).
+Up alone then climbs (DoJumpUp 6:1600); Up and Forward still held jump
+forward again, so holding a jump chord into a wall repeats the jump.
+
+Port before: the wall event kept an unfulfilled vertical slot request
+(`advance_terrain`), `queue_released_jump_direction` turned an arrow release
+in 46/47 into a jump, and `press_up` buffered into the slot, all excluded from
+the low bank by `source_sequence_id == 46` checks. The SEQS 46 tail branch of
+`update_native_input_boundaries` discarded only horizontal/crawl requests.
+
+Done: 46 and 47 joined `LOW_INPUT_SEQUENCES`; the source-46 exclusions, the
+wall-event snapshot/keep, the 46/47 release producer and
+`update_native_input_boundaries` are removed. The port's legacy rooftop climb
+(SEQS 46 with `ledge_hanging`, prototype without a level map) keeps its owner.
+Changed behaviour: an Up tap during the bump no longer climbs; holding Up and
+the arrow into a wall repeats the jump instead of stopping once. As at the
+other bank-owned stops, a held key dispatches at the transition to idle, so
+a held Forward goes from 52 straight into the next step without showing
+pose 15 (the old slot path showed one idle frame). Two scripted tests that
+waited for that frame (`test_terrain` sword-draw wall contact, `test_harbor`
+complete route) now release or climb at a phase-independent point.
+Regressions (fail on the previous code): `tests.test_low_controls` "wall bump
+and wall stop belong to the bank" (Up/Down/Forward, tap and hold, 46 and 47),
+`tests.test_game_ui` "cavern run jump bump discards an Up tap but climbs on a
+held Up" (6 poses) and "wall bump repeats a jump only while its keys stay
+held", and the 46/47 cases of `tests.test_input_recovery` "releasing run jump
+horizontal". The held-Up wall-climb tests keep their climbs; their slot
+assertions now check that no slot is written, and pose 15 left their release
+lists because a held chord no longer rests there.
 
 ## 3. Releasing the horizontal half of a held Up chord
 
@@ -135,8 +169,7 @@ the latch rules; the airborne and vertical handoff models cover the gates).
 Replace the release producer with the bank's own pending Up. Tests: release
 the arrow after an accepted running jump: no second jump; release it while
 Up is still pending in the run: standing jump at the brake/standing gate.
-The SEQS 46 wall/climb tail stays an explicit exception (see
-`ledge-input-handoff.md`).
+The SEQS 46/47 part now belongs to the bank (section 5).
 
 ## 4. Releasing Up with the sword drawn (fixed)
 
@@ -150,7 +183,6 @@ previous code).
 
 ## Consumers still reading the slot
 
-`dispatch_pending_action`,
-`update_native_input_boundaries` (SEQS 46 tail), the airborne/ledge/low/running families' one-shot imports of
+`dispatch_pending_action`, the airborne/ledge/low/running families' one-shot imports of
 scripted requests, and the ledge-climb completion re-classification. Each
 should be removed with its producer above, not separately.
