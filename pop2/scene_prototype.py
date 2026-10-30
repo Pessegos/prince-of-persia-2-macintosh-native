@@ -594,11 +594,14 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             setattr(self, f"{key}_held", pressed)
             return "break"
         if key == "up":
+            # With the sword drawn Up belongs to the armed bank (DoBlock);
+            # its release must not leave a jump for after sheathing.
             if (
                 not pressed
                 and self.up_held
                 and not self.jump_started_for_press
                 and not self.ledge_hanging
+                and not self.sword_drawn
             ):
                 self.start_jump()
             self.up_held = pressed

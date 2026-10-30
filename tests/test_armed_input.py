@@ -143,6 +143,26 @@ class ArmedBufferSceneTests(unittest.TestCase):
         scene.sequence_state.facing = 1
         self.assertEqual(scene.armed_pending().kind, 'sword_advance')
 
+    def test_releasing_up_held_through_a_hurt_leaves_no_jump_after_sheathing(self):
+        # Up pressed while the controls were locked (a hurt) and released
+        # with the sword drawn used to queue a jump in the host slot, which
+        # then fired once the sword was sheathed.
+        scene = self.during_draw(1)
+        for _ in range(6):
+            scene.advance_animation()
+        scene.up_held = True
+        scene.jump_started_for_press = False
+        scene.set_key_state('up', False)
+        self.assertIsNone(scene.pending_action)
+        scene.set_key_state('down', True)
+        scene.set_key_state('down', False)
+        sequences = set()
+        for _ in range(40):
+            scene.advance_animation()
+            sequences.add(scene.sequence_state.source_sequence_id)
+        self.assertFalse(scene.sword_drawn)
+        self.assertFalse(sequences & {3, 4, 17, 18})
+
     def test_discarded_rapid_attack_does_not_erase_a_queued_block(self):
         scene = self.fixture.guarded_sword_scene()
         scene.in_animation_tick = True
