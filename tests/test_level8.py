@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from pop2.paths import ASSET_DIR
 
@@ -47,7 +48,10 @@ class LevelEightAndNineTests(unittest.TestCase):
             environment_for(scene).finish_exit()
             self.assertEqual(scene.game.level.number, number + 1)
         scene.game.exit = object()
-        environment_for(scene).finish_exit()
+        # With Horse.rsrc/TempleNIS.rsrc installed the ride plays first and
+        # finishes the level later; check the stop itself without it.
+        with patch.object(scene, 'start_temple_ride', return_value=False):
+            environment_for(scene).finish_exit()
         self.assertIsNone(scene.game.exit)
         self.assertEqual(scene.game.level.number, 9)
 
