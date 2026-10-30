@@ -22,8 +22,25 @@ from tools.extract_attract import jump_targets
 SECT_RECT_7 = (0x1f2e, 0x1f8c, 0x2760, 0x2b1a)
 UNION_RECT_7 = (0x1f48, 0x1fa2)
 # Entries of each environment's piece-drawing table (a5-0x4aea + 4 * env):
-# the caverns' table covers kinds 0-44, the ruins' kinds 0-23.
-DRAW_KINDS = {3: 45, 4: 24}
+# the caverns' table covers kinds 0-44, the ruins' kinds 0-23 and the
+# temple's (levels 10-13, Temple.rsrc) kinds 0-43.
+DRAW_KINDS = {2: 44, 3: 45, 4: 24}
+# EmptyRect(r): Boolean, the empty test (bottom <= top or right <= left).
+EMPTY_RECT = 0x96000
+EMPTY_RECT_CODE = bytes.fromhex('225f205f3010b06800046c0e30280002b06800066c0442174ed11ebc00014ed1')
+# UnionRect(src1, src2, dst) for EncloseRect 17:6c46 (a5-0x1f5c).
+UNION_RECT = 0x96040
+UNION_RECT_CODE = bytes.fromhex(
+    '225f205f241f221f2f092241209121690004000422423011b0506c0230803029'
+    '0002b06800026c043140000230290004b06800046f0431400004302900'
+    '06b06800066f04314000064e75')
+# SectRect(src1, src2, dst): Boolean for the temple drawers (a5-0x1f58).
+SECT_RECT = 0x96100
+SECT_RECT_CODE = bytes.fromhex(
+    '225f205f241f221f2f092241209121690004000422423011b0506f0230803029'
+    '0002b06800026f043140000230290004b06800046c043140000430290006b068'
+    '00066c04314000063010b06800046c1230280002b06800066c081f7c00010004'
+    '4e75429042a80004422f00044e75')
 # Shape libraries: 0 sword items and 1 flasks (Prince.rsrc), 4 scenery.
 LIBRARY_BASE = {0: 1000, 1: 3000, 4: 3500}
 
@@ -37,6 +54,9 @@ def recovery_inputs(program, caverns, prince):
     # The ruins drawers (CODE 7) call the same SectRect (a5-0x1f58) and
     # UnionRect (a5-0x1f5c) glue.
     primitives.update((7, offset) for offset in SECT_RECT_7 + UNION_RECT_7)
+    # The temple drawers (environment 2) reach EncloseRect 17:6c34, whose
+    # EqualRect trap (A8A6) is at 17:6c58.
+    primitives.add((17, 0x6c58))
     # Every OffsetRect trap (A8A8): bridge and custom-room pieces use it at
     # 8:07fe, 8:085a and 3:120a, besides 5:021c.
     for segment in (3, 5, 7, 8):
@@ -192,6 +212,14 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         cpu.mem_write(0x94000, custom['data'])
         put_long(a5 - 0x4c9e, 0x94000)
     put_long(a5 - 0x4ab2, 0)  # No actor-specific gate peeling in a static scene.
+    # a5-0x1f60 holds the EmptyRect trap glue the temple drawers call
+    # (10:0198-019c); a small Pascal routine stands in for the trap.
+    cpu.mem_write(EMPTY_RECT, EMPTY_RECT_CODE)
+    put_long(a5 - 0x1f60, EMPTY_RECT)
+    cpu.mem_write(UNION_RECT, UNION_RECT_CODE)
+    put_long(a5 - 0x1f5c, UNION_RECT)
+    cpu.mem_write(SECT_RECT, SECT_RECT_CODE)
+    put_long(a5 - 0x1f58, SECT_RECT)
     # DoCleanCut 2:608c-6096 builds scenery with full-room repaint enabled.
     # Per-cell redraws change the overlap order of adjacent exit pieces.
     put_word(a5 - 0x4832, int(climb_action is None and not floor_redraw and not cell_redraw))
@@ -238,6 +266,13 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         segment = (address - 0x100000) // 0x10000
         offset = address - bases.get(segment, address)
         result = None
+        if opcode == b'\xa8\xa6':  # EqualRect(r1, r2): Boolean
+            second, first = long(sp), long(sp + 4)
+            equal = cpu.mem_read(first, 8) == cpu.mem_read(second, 8)
+            cpu.mem_write(sp + 8, bytes([int(equal), 0]))
+            cpu.reg_write(UC_M68K_REG_A7, sp + 8)
+            cpu.reg_write(UC_M68K_REG_PC, address + 2)
+            return
         if opcode == b'\xa8\xa8':  # OffsetRect(rect, dh, dv)
             dy, dx, rect_pointer = word(sp), word(sp + 2), long(sp + 4)
             top, left, bottom, right = struct.unpack('>4h', cpu.mem_read(rect_pointer, 8))
