@@ -144,7 +144,8 @@ Retained host policies, explicit in that module: a fresh Ctrl press is an
 attack request that survives releasing Ctrl (the original cancels it,
 4:3f38), except that a released Ctrl is still cancelled before the counter
 gates; rapid Ctrl repeats during the first attack poses are discarded and
-consumed; the automatic sword turn stays enabled.
+consumed. (The automatic sword turn was then also always enabled; since
+2026-10-30 a voluntary turn toggles it as in the original.)
 
 Changed expectations, each from the rules above: held sword steps and held
 Up blocks no longer repeat; a held Up after a counter blocks again at the
@@ -188,11 +189,10 @@ fatal pending hit (otherwise nothing runs):
 3. Otherwise, when neither step 1 ran OnAlert nor turned: a pending Down
    calls PutSwordAway **directly** (no OnAlert pose gate), else OnAlert.
 
-Port status: the automatic turn's distance rule (-15) and its precedence
-over OnAlert in the same frame match `combat.choose_player_turn` and
-`resume_combat_turn`. Differences, not changed here: the port keeps the
-automatic turn always enabled (the approved voluntary-turn exception), it
-does not exempt opponent type 6 or the level-five bridge rooms from the
+Port status: the automatic turn's distance rule (-15), its precedence
+over OnAlert in the same frame and the flag toggle (since 2026-10-30) match
+`combat.choose_player_turn`, `choose_voluntary_turn` and
+`resume_combat_turn`. Differences, not changed here: the port does not exempt opponent type 6 or the level-five bridge rooms from the
 automatic turn, and it sheathes only at guard poses 158/170/171 even when
 SwordCtrl would call PutSwordAway directly (step 3 when not engaged).
 Engagement 4:35a6 itself is not modelled here.

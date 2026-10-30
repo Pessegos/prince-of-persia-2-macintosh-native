@@ -291,6 +291,9 @@ class CombatEncounter:
         else:
             self._reset_initial_guard()
         self.world_frame = 0
+        # a5-0x5010: the automatic sword turn starts enabled (2:5e5c); each
+        # voluntary turn toggles it (SwordCtrl 6:2344-2350).
+        self.automatic_turn = True
         self.parry_timer = 0
         self.advance_pause = 0
         self.attack_pause = 0
@@ -836,8 +839,9 @@ class CombatEncounter:
                 or player.room != guard.room or player.row != guard.row):
             return False
         # CODE:6 0x2258-0x22ea: -15..330 stays in ordinary sword control.
-        # A farther target behind selects the Prince's turn at 0x2770.
-        if opponent_distance(player, guard) >= -15:
+        # A farther target behind selects the Prince's turn at 0x2770,
+        # unless a voluntary turn switched it off (6:22a6, a5-0x5010 = 0).
+        if opponent_distance(player, guard) >= -15 or not getattr(self, 'automatic_turn', True):
             return False
         terrain = getattr(self, "terrain", None)
         offset = (terrain.combat_turn_offset(player.room, player.row, state, frame_record, bounds)
@@ -847,10 +851,9 @@ class CombatEncounter:
 
     def choose_voluntary_turn(self, frame_record=None, bounds=None):
         # SwordCtrl 6:22f2-2366: fresh Backward with Shift turns through the
-        # same DoTurn (6:2638 -> 26b8) and stores the nearest native-ALIVE
-        # candidate on the new side (6:2354-2362), or none. Port exception:
-        # the toggle of the automatic-turn flag a5-0x5010 (6:2344) is not
-        # reproduced; the automatic turn stays enabled.
+        # same DoTurn (6:2638 -> 26b8), toggles the automatic-turn flag
+        # a5-0x5010 (6:2344-2350) and stores the nearest native-ALIVE
+        # candidate on the new side (6:2354-2362), or none.
         player = self.player
         state = player.state
         if (not player.alive or not player.sword_drawn or not player.targetable
@@ -860,6 +863,7 @@ class CombatEncounter:
         offset = (terrain.combat_turn_offset(player.room, player.row, state, frame_record, bounds)
                   if terrain is not None and frame_record is not None else 0)
         select_sequence(player, PLAYER_COMBAT_TURN_SEQUENCE, offset=offset)
+        self.automatic_turn = not getattr(self, 'automatic_turn', True)
         target = self._nearest_guard(-1 if state.facing else 1)
         if target is not None:
             self.guard = target

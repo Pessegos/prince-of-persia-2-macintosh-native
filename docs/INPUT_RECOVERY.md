@@ -106,7 +106,7 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 | Cautious step | Consume Forward and modifier; no unconditional ClearControls at ordinary step entry | 6:1276-128a | Common repeat/late requests tested |
 | Ledge poses 87-99 | Up active, grip delay zero: climb before release check; otherwise zero modifier or sequence-mode 11 releases | 6:18e0-1994 | Up/Shift and expiry tested; modifier/special branches partial |
 | Climb/release | Clear directions; consume Up + modifier on climb, Down on release | 6:1998-19d0, 1a84-1a8c | Terrain transitions tested; full latch reset missing |
-| Sword controls | Fresh Ctrl before fresh Down, Up, Forward, Backward; retreat requires modifier zero | 6:24bc-2584 | Actions tested; Shift+Backward selects the voluntary turn instead of a retreat (auto-turn toggle intentionally omitted); conflict priority missing |
+| Sword controls | Fresh Ctrl before fresh Down, Up, Forward, Backward; retreat requires modifier zero | 6:24bc-2584 | Actions tested; Shift+Backward selects the voluntary turn instead of a retreat and toggles the automatic turn; conflict priority missing |
 | Attack | Legal poses 157/158/170/171/165 or block 150/161; consume Ctrl and clear directions | 6:2780-281c | Gates/chains and released-Ctrl block cancellation tested; queued ordinary swing during attack/draw remains a host tolerance |
 | Block | Ordinary legal poses 158/170/171/168/165; special branch at 167; consume Up without clearing other latches | 6:282a-28ee | Ordinary block/attack chain tested; opponent-dependent branches partial |
 | Sword steps/sheath | Steps at 158/170/171 clear/consume Forward or Backward; sheath clears/consumes Down | 6:1d6e-1e68, 2592-25ec | Common flow tested; host buffer is not complete native state |
@@ -316,9 +316,10 @@ before/on pose 109 and preservation of other pending commands.
 ## Intentional Port Extensions
 
 The voluntary sword turn (Shift + fresh Backward, SwordCtrl 6:22f2-2366)
-turns and retargets like the original, but does not toggle the
-automatic-turn flag a5-0x5010 (6:2344). The automatic sword turn therefore
-always stays enabled. This was chosen deliberately; see
+turns, retargets and toggles the automatic-turn flag a5-0x5010 (6:2344)
+like the original since 2026-10-30, at the user's request: one voluntary
+turn disables the automatic turn until the next one or the next level
+(2:5e5c). The former always-enabled exception was removed; see
 [voluntary-sword-turn.md](research/voluntary-sword-turn.md).
 
 Alt+R during ordinary gameplay restores currently held gameplay keys after

@@ -276,6 +276,28 @@ class GuardCombatTests(unittest.TestCase):
         c.player.state.action = 154
         self.assertEqual(c.resolve_contacts(), [])
 
+    def test_a_voluntary_turn_toggles_the_automatic_turn(self):
+        # SwordCtrl 6:2344-2350 toggles a5-0x5010; 6:22a6 skips the
+        # automatic turn while it is 0. It starts enabled (2:5e5c).
+        c = self.encounter(player_x=260, player_facing=1)
+        self.assertTrue(c.automatic_turn)
+        self.assertTrue(c.choose_voluntary_turn())
+        self.assertFalse(c.automatic_turn)
+        c.player.state.facing = 1
+        select_sequence(c.player, 227)
+        c.player.runtime.next_frame()
+        c.player.state.animation_state = 1
+        self.assertFalse(c.choose_player_turn())
+        self.assertTrue(c.choose_voluntary_turn())
+        self.assertTrue(c.automatic_turn)
+        c.player.state.facing = 1
+        select_sequence(c.player, 227)
+        c.player.runtime.next_frame()
+        c.player.state.animation_state = 1
+        self.assertTrue(c.choose_player_turn())
+        c.reset()
+        self.assertTrue(c.automatic_turn)
+
     def test_player_auto_turn_uses_native_sword_sequence_both_directions(self):
         for facing, x in ((1, 260), (0, 140)):
             c = self.encounter(player_x=x, player_facing=facing)

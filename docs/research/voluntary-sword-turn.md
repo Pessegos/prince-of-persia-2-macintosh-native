@@ -7,10 +7,10 @@ Research note, 2026-10-21, `claude/ai-research`.
   `combat_turn_offset`. It stores the nearest native-ALIVE guard on the new
   side, or none.
 - Shift + Back no longer retreats. Back without Shift still does.
-- **Intentional exception:** the a5-0x5010 toggle is not reproduced, so the
-  automatic turn always stays enabled. The user preferred this to the
-  original behaviour, in which every voluntary turn switches the automatic
-  turn on or off.
+- The a5-0x5010 toggle is reproduced since 2026-10-30 (the user chose the
+  original after all): each voluntary turn switches the automatic turn off
+  or on (`CombatEncounter.automatic_turn`, enabled again by `reset`). The
+  former always-enabled exception is gone.
 - Code: `CombatEncounter.choose_voluntary_turn`; in `scene_prototype.py`,
   `queue_sword_step` and `resume_combat_turn`.
 - **Not modelled:** the level-5 room-10 exception, which depends on
