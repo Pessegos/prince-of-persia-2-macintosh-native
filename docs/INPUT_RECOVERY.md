@@ -76,14 +76,20 @@ Examples from original SEQS data:
 - Running jump: pose 44 clears; the next run pass samples held keys afresh.
   This subset is implemented in `AirborneControls.update_airborne_controls`.
 - Hard-fall recovery: SEQS:20 -> 212 -> 49 stays in mode 5 through pose 116.
-  `update_fall_recovery_controls` discards directional taps during that part;
-  held keys remain available afterward. This does not apply a global mode-5
+  The low bank's mode-5 clear discards directional taps during that part;
+  held keys become fresh requests afterward. This does not apply a global mode-5
   reset to the port's separate wall-climb buffering extensions.
 - Vertical landing: pose 83 is mode 5; later landing poses return to mode 1.
 - Crouch rise: poses 110-116 are mode 5; 117-119 return to mode 1.
 - Ordinary climb: pose 149 is mode 5 before 118/119.
-- Long sheath: pose 50 is mode 5. The same pose in a standing turn or run
-  brake is not mode 5, so a pose-only gate is insufficient.
+- Long sheath: pose 50 is mode 5 (raw SEQS 92: `-7 5, 50, -7 1, 51`). The
+  same pose in a standing turn or run brake is not mode 5, so a pose-only
+  gate is insufficient. `WaitingControls.begin_sheathe_controls` hands the
+  bank from PutSwordAway (directions 0, Down 1) to the standing gates:
+  pose 48 resumes a pending or held Forward as SEQS 43, pose 50 discards
+  taps made during the sheathe, and held keys act at 51. A Down still held
+  from the sheathe request therefore crouches at 51; the short sheath
+  (SEQS 93, no mode-5 pose) keeps it consumed.
 
 ## Ordinary Controller Gates
 
@@ -92,7 +98,7 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 
 | Context | Recovered gate / priority | Source | Port status |
 | --- | --- | --- | --- |
-| Rest/stop poses 15, 50-52 | Standing handler, after mode/sequence reset gate | 6:05fe-0618, 0c32 | Tested subset; mode-5 exception missing |
+| Rest/stop poses 15, 50-52 | Standing handler, after mode/sequence reset gate | 6:05fe-0618, 0c32 | Tested subset, including the long sheath's mode-5 pose 50 |
 | Standing without Shift | Fresh Forward + fresh Up: jump; otherwise fresh Forward, Backward, Up, Down; active Forward is final run fallback | 6:0db0-0e16 | Independent pending directions integrated at migrated ready gates; other family handoffs partial |
 | Standing with Shift pending/consumed | Fresh Backward, Up, Down before a fresh Forward-only step | 6:0d4c-0db0 | Migrated bank reads current modifier and priorities; native selector compared directly |
 | Draw from rest | Fresh Ctrl and no directional latches; consume modifier, clear directions, DoEngarde | 6:0c90-0cb6, 1e78 | Migrated selector and running/braking Ctrl lifecycle tested; armed controller migration remains partial |

@@ -6,14 +6,32 @@ The bank stays in keyboard coordinates; facing is applied only at dispatch.
 
 from dataclasses import replace
 
-from pop2.control_mapping import IDLE_SEQUENCE, RUN_STOP_SEQUENCE, STANDING_TURN_SEQUENCE
+from pop2.control_mapping import (
+    IDLE_SEQUENCE, RUN_STOP_SEQUENCE, STANDING_TURN_SEQUENCE, SWORD_SHEATHE_SEQUENCE,
+)
 from pop2.mac_input import DirectionalInput, read_keyboard, standing_input_request
+
+
+SHEATHE_SEQUENCES = (SWORD_SHEATHE_SEQUENCE, 93)
 
 
 class WaitingControls:
     @staticmethod
     def waiting_sequence(sequence):
-        return sequence in (IDLE_SEQUENCE, STANDING_TURN_SEQUENCE, RUN_STOP_SEQUENCE, 44) or 29 <= sequence <= 42
+        return (sequence in (IDLE_SEQUENCE, STANDING_TURN_SEQUENCE, RUN_STOP_SEQUENCE, 44)
+                or 29 <= sequence <= 42 or sequence in SHEATHE_SEQUENCES)
+
+    def begin_sheathe_controls(self):
+        """PutSwordAway 6:2598: ClearControls, then Down=1, on the same bank.
+
+        SEQS 92/93 clear sword mode first, so GenCtrl's standing gates own
+        the bank: pose 48 resumes a run, 50 is mode 5 (all directions
+        cleared, so taps made during the sheathe are discarded and held keys
+        become fresh), 51-52 and the final 15 are the standing gate.
+        """
+        self.directional_input = self.armed_input_bank().consume('down', clear=True)
+        self.waiting_step_direction = 0
+        self.waiting_suppressed_up = False
 
     def ensure_run_stop_controls(self):
         """Own a brake that began without a bank (a scripted SEQS 13 start).
@@ -40,7 +58,8 @@ class WaitingControls:
         motion = getattr(self, 'terrain_motion', None)
         return (getattr(self, 'directional_input', None) is not None
                 and self.waiting_sequence(state.sequence_id)
-                and not self.sword_drawn and not self.sword_sheathing
+                and not self.sword_drawn
+                and (not self.sword_sheathing or state.sequence_id in SHEATHE_SEQUENCES + (IDLE_SEQUENCE,))
                 and not self.ledge_hanging and not self.native_ledge
                 and not self._combat_controls_locked() and not self._opening_active()
                 and not (motion is not None and (motion.falling or motion.sinking or motion.dead)))
@@ -171,6 +190,9 @@ class WaitingControls:
             return False
         if request is None:
             return False
+        if self.sword_sheathing:
+            # GenCtrl leaves the sheathe at this gate; the sword is away.
+            self.sword_sheathing = self.sword_drawn = False
         direction = 1 if facing else -1
         if request in ('turn', 'run'):
             relative = relative.consume('right' if request == 'turn' else 'left', clear=True)

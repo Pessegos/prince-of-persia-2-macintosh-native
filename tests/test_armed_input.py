@@ -210,3 +210,76 @@ class ArmedBufferSceneTests(unittest.TestCase):
                 self.assertFalse(scene.sword_drawn)
                 self.assertFalse(scene.sword_sheathing)
                 self.assertEqual(scene.action, 15)
+
+
+class SheatheBankTests(unittest.TestCase):
+    """PutSwordAway hands the bank to GenCtrl's standing gates (SEQS 92/93)."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tests.test_animation_data import AnimationDataTests
+        AnimationDataTests.setUpClass()
+        cls.fixture = AnimationDataTests()
+
+    def sheathe(self, events, sequence_id, facing=1, ticks=30, down_held=False):
+        scene = self.fixture.guarded_sword_scene(facing)
+        # down_held: the Down that requested the sheathe is still held.
+        scene.down_held = down_held
+        scene.start_sword_action('sword_sheathe', sequence_id=sequence_id)
+        # ClearControls, then Down=1 (a released Down samples back to 0).
+        self.assertEqual(scene.directional_input.words()[:4], (0, 0, 0, int(down_held)))
+        trace = []
+        for tick in range(ticks):
+            for when, key, pressed in events:
+                if when == tick:
+                    if key in ('left', 'right'):
+                        scene.horizontal_key(None, -1 if key == 'left' else 1, pressed)
+                    else:
+                        scene.set_key_state(key, pressed)
+                    self.assertIsNone(scene.pending_action)
+            scene.advance_animation()
+            trace.append((scene.sequence_state.source_sequence_id, scene.action))
+        return scene, trace
+
+    def test_long_sheath_pose_fifty_discards_taps_made_during_the_sheathe(self):
+        # SEQS 92 sets mode 5 for pose 50 (-7 5, 50, -7 1): GenCtrl clears
+        # every direction there. The old host slot kept the tap and turned
+        # or crouched at 50.
+        for facing, key in product((0, 1), ('down', 'backward')):
+            with self.subTest(facing=facing, key=key):
+                if key == 'backward':
+                    key = 'left' if facing else 'right'
+                scene, trace = self.sheathe(((5, key, True), (6, key, False)), 92, facing)
+                self.assertEqual({sequence for sequence, _ in trace}, {92})
+                self.assertEqual(trace[-1], (92, 15))
+                self.assertFalse(scene.sword_sheathing)
+
+    def test_long_sheath_held_keys_act_after_the_mode_five_clear(self):
+        for facing, key in product((0, 1), ('down', 'backward', 'up')):
+            with self.subTest(facing=facing, key=key):
+                name = ('left' if facing else 'right') if key == 'backward' else key
+                _, trace = self.sheathe(((10, name, True),), 92, facing)
+                poses = [action for _, action in trace]
+                start = next(index for index, (seq, _) in enumerate(trace) if seq != 92)
+                # Pose 51 is the first standing gate after 50 cleared the bank.
+                self.assertEqual(poses[start - 1], 51)
+                self.assertEqual(trace[start][0], {'down': 50, 'backward': 5, 'up': 28}[key])
+
+    def test_forward_tap_during_long_sheath_runs_from_pose_48(self):
+        # GenCtrl 6:062c/1014: a pending Forward at pose 48 turns into SEQS 43.
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                key = 'right' if facing else 'left'
+                _, trace = self.sheathe(((3, key, True), (4, key, False)), 92, facing)
+                start = next(index for index, (seq, _) in enumerate(trace) if seq != 92)
+                self.assertEqual((trace[start - 1], trace[start][0]), ((92, 48), 43))
+
+    def test_short_sheath_keeps_down_consumed_and_taps_pending(self):
+        # SEQS 93 has no mode-5 pose: the held Down stays consumed (1), a tap
+        # made during it acts at the final standing gate.
+        _, held = self.sheathe((), 93, down_held=True)
+        self.assertEqual({sequence for sequence, _ in held}, {93})
+        _, long_held = self.sheathe((), 92, down_held=True)
+        self.assertIn(50, {sequence for sequence, _ in long_held})
+        _, tapped = self.sheathe(((1, 'down', True), (2, 'down', False)), 93)
+        self.assertIn(50, {sequence for sequence, _ in tapped})

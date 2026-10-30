@@ -482,10 +482,12 @@ may spawn; this is not a global one-guard cap.
 F3 exposes traversal-order screens 1-10 and the right-hand secret, with
 fixed supported entry positions. It no longer exposes native room IDs,
 floor selection or arbitrary X coordinates. Pause centers the original
-font's visible ink in the 19-pixel HUD band. The long sheath accepts
-buffered or held horizontal input at poses 50-52 (GenCtrl 6:0c32); the
+font's visible ink in the 19-pixel HUD band. The long sheath's directional
+bank reaches the standing gate at poses 51-52 (GenCtrl 6:0c32); its pose 50
+is mode 5, which discards taps made during the sheathe, so only held keys
+act there (corrected 2026-10-30; the host slot used to keep the taps). The
 short sheath retains all five poses before locomotion without an idle gap.
-For a held forward run, the long sheath also uses the earlier pose-48
+For a pending or held Forward, the long sheath also uses the earlier pose-48
 transition to SEQS:43 (GenCtrl 6:062c/1014), like the standing turn.
 
 ### Catch After Releasing A Ledge

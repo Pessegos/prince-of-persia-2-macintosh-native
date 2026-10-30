@@ -62,6 +62,15 @@ callbacks call it before they change the held state (so the press itself
 stays fresh), and the tick reaches it through `waiting_controls_available`.
 The run-stop branch of `resume_queued_action_during_run_stop` is removed;
 the sheathe stop (SEQS 92 at 50-52) keeps it until that family moves.
+
+Sheathe (done): `start_sword_action('sword_sheathe')` hands the bank to
+`WaitingControls.begin_sheathe_controls` (PutSwordAway 6:2598: ClearControls,
+Down=1), and the waiting bank owns SEQS 92/93 and the idle pose after them.
+`resume_queued_action_during_run_stop` and the sheath branch of
+`resume_run_during_standing_turn` are removed. Raw SEQS 92 sets mode 5 for
+pose 50, so taps made during the long sheathe are discarded there and held
+keys act at 51 (previously 50, and taps were kept); a pending Forward runs
+from pose 48. Regressions: `tests.test_armed_input.SheatheBankTests`.
 Regressions in `tests.test_waiting_controls`: Backward/Down taps at 55 and
 49, alone and in both orders, turn before crouching and never crouch after
 the turn (the old slot kept the last tap: Backward then Down crouched);
@@ -103,7 +112,7 @@ previous code).
 
 ## Consumers still reading the slot
 
-`dispatch_pending_action`, `resume_queued_action_during_run_stop`,
+`dispatch_pending_action`,
 `update_native_input_boundaries` (SEQS 46 tail), the airborne/ledge/low/running families' one-shot imports of
 scripted requests, and the ledge-climb completion re-classification. Each
 should be removed with its producer above, not separately.

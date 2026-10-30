@@ -2604,10 +2604,11 @@ class AnimationDataTests(unittest.TestCase):
             scene.advance_animation()
             if scene.action == 15:
                 break
-        self.assertEqual(scene.action, 15)
+        # PutSwordAway consumes the held Down (1); the long sheath's mode-5
+        # pose 50 clears it (0), so the still-held Down crouches at 51.
+        self.assertEqual(scene.sequence_state.source_sequence_id, 50)
         self.assertFalse(scene.sword_drawn)
-        scene.advance_animation()
-        self.assertEqual(scene.action, 15)
+        self.assertFalse(scene.sword_sheathing)
         scene.set_key_state("down", False)
 
     def test_block_then_queued_attack_uses_original_transition_and_offsets(self):

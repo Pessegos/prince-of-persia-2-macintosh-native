@@ -1128,6 +1128,8 @@ class GameWindowTests(unittest.TestCase):
         scene.horizontal_key(None, -1, False)
         self.tick(3)
         scene.set_key_state("down", True)
+        # A held Down would crouch at 51 after the mode-5 clear at pose 50.
+        scene.set_key_state("down", False)
         reference = SequenceRuntime(scene.sequences, replace(scene.sequence_state))
         self.assertTrue(scene.sword_sheathing)
         self.assertFalse(scene.sword_drawn)
@@ -1140,7 +1142,6 @@ class GameWindowTests(unittest.TestCase):
             self.assertFalse(scene.terrain_motion.falling)
         self.assertFalse(scene.sword_sheathing)
         self.assertEqual(scene.action, 15)
-        scene.set_key_state("down", False)
         anchor = scene.player_x
         scene.horizontal_key(None, 1, True)
         self.tick(8)
@@ -1509,7 +1510,9 @@ class GameWindowTests(unittest.TestCase):
         scene.sword_drawn = True
         scene.start_sword_action("sword_sheathe")
         scene.horizontal_key(None, -1, True)
-        self.assertEqual(scene.pending_action.kind, "horizontal")
+        # The press is a bank request (PutSwordAway shares the bank), not a slot.
+        self.assertIsNone(scene.pending_action)
+        self.assertEqual(scene.directional_input.left, -1)
         actions = []
         for _ in range(25):
             self.tick()
@@ -1727,20 +1730,32 @@ class GameWindowTests(unittest.TestCase):
         self.assertFalse(scene.sword_drawn)
         self.assertEqual(scene.player_x, 320 + 10 + 9 + 2 - 3)
 
-    def test_direction_released_during_sheath_is_not_relatched_from_old_hold(self):
-        scene = self.scene
-        scene.jump_to_screen("2")
-        self.clear_guards()
-        scene.sword_drawn = True
-        scene.held_directions = [-1]
-        scene.sample_keyboard()
-        scene.in_animation_tick = True
-        scene.start_sword_action("sword_sheathe")
-        self.tick(5)
-        scene.horizontal_key(None, -1, False)
-        self.tick(20)
-        self.assertFalse(scene.run_active)
-        self.assertEqual(scene.action, 15)
+    def test_direction_held_into_the_sheath_is_a_request_after_put_sword_away(self):
+        # PutSwordAway 6:2598 calls ClearControls (0), so a direction held
+        # when the sheathe starts is fresh at the next sample; released
+        # mid-sheathe it stays pending. Forward reaches the pose-48 run gate;
+        # Backward waits for 50-52, and pose 50 (mode 5) clears it.
+        for direction, runs in ((-1, True), (1, False)):
+            with self.subTest(direction=direction):
+                scene = self.scene
+                scene.jump_to_screen("2")
+                self.clear_guards()
+                self.assertEqual(scene.sequence_state.facing, 0)
+                scene.sword_drawn = True
+                scene.held_directions = [direction]
+                scene.sample_keyboard()
+                scene.in_animation_tick = True
+                scene.start_sword_action("sword_sheathe", sequence_id=92)
+                self.tick(5)
+                scene.horizontal_key(None, direction, False)
+                sequences = []
+                for _ in range(40):
+                    self.tick()
+                    sequences.append(scene.sequence_state.source_sequence_id)
+                self.assertEqual(43 in sequences, runs)
+                self.assertNotIn(5, sequences)
+                self.assertEqual(scene.action, 15)
+                self.assertFalse(scene.sword_sheathing)
 
     def test_building_climb_works_after_running_to_the_wall(self):
         scene = self.scene

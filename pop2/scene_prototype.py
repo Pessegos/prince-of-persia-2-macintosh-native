@@ -782,6 +782,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.run_stop_requested = False
         self.run_direction = 0
         self.start_sequence(SWORD_SEQUENCES[kind] if sequence_id is None else sequence_id)
+        if kind == "sword_sheathe":
+            self.begin_sheathe_controls()
         if fast_block:
             self.sequence_runtime.next_frame()
         self.status.set({
@@ -1336,9 +1338,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
     def resume_run_during_standing_turn(self):
         state = self.sequence_state
         direction = self.horizontal_input
-        sheath_stop = self.sword_sheathing and state.sequence_id == SWORD_SHEATHE_SEQUENCE
         if (
-            (state.sequence_id != STANDING_TURN_SEQUENCE and not sheath_stop)
+            state.sequence_id != STANDING_TURN_SEQUENCE
             or state.action != 48
             or not direction
             or facing_for_direction(direction) != state.facing
@@ -1353,11 +1354,9 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                     or command.mode not in ("run", "turn")):
                 return False
 
-        # GenCtrl 6:062c/1014 dispatches by pose, not sequence: both the
-        # standing turn and long sheath can resume a held run on pose 48.
+        # GenCtrl 6:062c/1014 dispatches by pose, not sequence; the long
+        # sheath reaches the same pose-48 gate through the waiting bank.
         self.pending_action = None
-        if sheath_stop:
-            self.sword_sheathing = self.sword_drawn = False
         self.start_running_turn(direction)
         return True
 
@@ -1400,32 +1399,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
     def resume_queued_crouch_during_run(self):
         # Compatibility entry point; the directional bank is the sole dispatcher.
         return self.update_waiting_controls()
-
-    def resume_queued_action_during_run_stop(self):
-        # The run stop itself belongs to the waiting bank; only the sheathing
-        # stop (SEQS 92 at 50-52) still resumes a held direction here.
-        state = self.sequence_state
-        if not (self.sword_sheathing and state.sequence_id == 92 and state.action in (50, 51, 52)):
-            return False
-        command = self.pending_action
-        if (command is None and self.horizontal_input
-                and not self.up_held and not self.down_held):
-            direction = self.horizontal_input
-            mode = ("step" if self.shift_held else
-                    "run" if facing_for_direction(direction) == state.facing else "turn")
-            command = self.pending_action = BufferedCommand("horizontal", direction, mode)
-        if (
-            command is None
-            or not (
-                command.kind == "crouch"
-                or (command.kind == "horizontal" and command.mode in ("run", "turn", "step"))
-            )
-        ):
-            return False
-
-        # GenCtrl routes stop actions 50-52 through the normal input handler.
-        self.sword_sheathing = self.sword_drawn = False
-        return self.dispatch_pending_action()
 
     def resume_run_stop(self):
         # Compatibility entry point; the directional bank is the sole dispatcher.
@@ -1950,7 +1923,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         if self.waiting_controls_available():
             self.update_waiting_controls()
         else:
-            self.resume_queued_action_during_run_stop()
             self.resume_run_during_standing_turn()
             self.resume_queued_turn_during_standing_turn()
         self.update_native_ledge()
