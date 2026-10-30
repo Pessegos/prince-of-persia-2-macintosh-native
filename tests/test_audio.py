@@ -890,7 +890,7 @@ class SdlPlaybackTests(unittest.TestCase):
             with patch.dict(os.environ, {'SDL_AUDIODRIVER': 'dummy'}):
                 playback = MixerPlayback(directory, cues)
                 try:
-                    playback.gate_lifetime = 1000
+                    playback.gate_lifetimes = {17: 1000}
                     playback.play('effect', 17)
                     playback.play('effect', 18)
                     time.sleep(.04)
@@ -1011,7 +1011,7 @@ class MixerGateTransitionTests(unittest.TestCase):
         self.playback.effect_channel, self.playback.tail_channel = 0, 2
         self.playback.gate_release = Mock()
         self.playback.gate_duck = None
-        self.playback.gate_lifetime = 1045
+        self.playback.gate_lifetimes = {17: 1045}
         self.effect.get_sound.return_value = self.playback.sounds[17]
         self.effect.get_busy.return_value = True
         self.effect.get_volume.return_value = 0.5

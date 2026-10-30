@@ -79,8 +79,8 @@ class SustainSdlTests(unittest.TestCase):
                 18: {'file': 'stop.wav'}, 26: {'file': 'stop.wav'}}
         self.playback = MixerPlayback(path, cues, mix_mechanisms=True, split_mechanisms=True)
         self.addCleanup(self.playback.close)
-        self.playback.gate_lifetime = 1000
-        self.sustain = self.playback.gate_sustain
+        self.playback.gate_lifetimes[17] = 1000
+        self.sustain = self.playback.gate_sustains[17]
         self.blocks = []
         callback_type = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int)
 

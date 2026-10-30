@@ -11,6 +11,13 @@ from pop2.terrain import floor_contact_x
 from pop2.opponent_generation import character_column
 from pop2.mechanism_audio import GateSound
 
+# ATMGate's AddGateSound calls (5:42b4, 4360, 43dc, 4416) and StopGate
+# (5:14b6-14cc) test LEVL 0x2186: the caverns' stone gates sound 17/18/20,
+# the iron gates of every other environment 272 (moving), 273 (opened),
+# 274 (stopped) and 275 (slam). Exit doors (ATMExit 5:15c0) keep 17/18/20.
+IRON_GATE_CUES = {'moving': 272, 'opened': 273, 'stopped': 274, 'slam': 275}
+STONE_GATE_CUES = {'moving': 17, 'opened': 18, 'stopped': 18, 'slam': 20}
+
 
 def can_trigger_exit(level, room, sword_type):
     """TriggerObject 5:1f18-1f3c: level eight needs the father's sword.
@@ -220,6 +227,9 @@ class PressurePlates:
             if cue is not None:
                 cues.append(cue)
 
+        stone = struct.unpack_from('>H', terrain.level, 0x2186)[0] == 3
+        gate_cues = STONE_GATE_CUES if stone else IRON_GATE_CUES
+
         for key, phase in tuple(self.active.items()):
             room, cell = key
             tile = terrain.tile(room, cell % 10, cell // 10)
@@ -285,21 +295,21 @@ class PressurePlates:
                         # shut opponents out (the level-four "phew").
                         self.slams.append(key)
                     self.slam_sounds.append(key)
-                    gate_sound(20, False, key)
+                    gate_sound(gate_cues['slam'], False, key)
             elif position == 255:
                 phase = -1
-                gate_sound(18, opening, key)
+                gate_sound(gate_cues['stopped'], opening, key)
             else:
                 position += (-1, -4, 4, 4)[phase]
                 if phase in (0, 1):
                     if position <= 0:
                         position, phase = 56 if squashing else 0, -1
-                        gate_sound(18, False, key)
+                        gate_sound(gate_cues['stopped'], False, key)
                         if self.fingers_under_gate(key, state, motion, record):
                             cues.append(29)
                     elif position < 184:
                         phase = 1
-                        gate_sound(17, False, key)
+                        gate_sound(gate_cues['moving'], False, key)
                         # SEQS:118 signals the final slam with mode 3 on
                         # its last kneeling frame, before the flattened poses.
                         if squashing and self.crushing_body_under_gate(terrain, key, state, motion, record):
@@ -321,13 +331,15 @@ class PressurePlates:
                         # its waiting step, so once open it stays open.
                         position -= (-1, -4)[phase]
                 elif position < 184:
-                    gate_sound(17, True, key)
+                    # 5:43d4-43da: a rising iron gate asks every eighth pixel.
+                    if stone or not position & 7:
+                        gate_sound(gate_cues['moving'], True, key)
                 elif phase == 2:
                     position, phase = 237, 0
-                    gate_sound(18, True, key)
+                    gate_sound(gate_cues['opened'], True, key)
                 else:
                     position, phase = 255, -1
-                    gate_sound(18, True, key)
+                    gate_sound(gate_cues['stopped'], True, key)
             self.foreground[key] = (value & 0xff00) | position
             if phase < 0:
                 del self.active[key]

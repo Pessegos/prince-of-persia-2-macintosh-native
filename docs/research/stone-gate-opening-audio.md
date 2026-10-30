@@ -148,3 +148,24 @@ the same six block graphs,516 admission comparisons and fingerprint above.
 
 The README's historical Before example remains old-port audio, not evidence
 of repeated Macintosh gaps. Its presentation is reserved for user review.
+
+## Iron gates outside the caverns (2026-10-30)
+
+Cues 17/18/20 are the caverns' stone gates only. ATMGate's AddGateSound
+calls (5:42b4, 4360, 43dc, 4416, in a region the listing leaves unmapped)
+and StopGate 5:14b6-14cc test LEVL 0x2186: with any environment but 3 the
+gate asks for 272 while moving, 273 when it reaches the open-wait position
+237, 274 when it stops (closed, or fully open at 255) and 275 for the slam.
+A rising iron gate asks for 272 only when its position is a multiple of
+eight (5:43d4-43da), i.e. every other frame; a closing one every frame.
+Exit doors (ATMExit 5:15c0-1670) keep 17/18/20 in every environment.
+
+Cue 272 has an active sustain loop (frames 2368-13120 of 13195, repeat count
+65535), so the mixer's sustain, PCM release, direction voices and the
+11/60 s slam lead-in now apply to 272/275 as to 17/20. Only the stone gate
+ends its loop on a frame without a request; an iron gate's loop ends with
+273/274 or, if those are lost, the sustain's expiry (the sample length).
+The rock-impact duck stays a stone-gate feature. Before this the port played
+the stone gate's sounds for the ruins' iron gates. Regressions:
+`tests.test_pressure_plates` (iron gate phases and slam) and
+`tests.test_gate_audio` (iron cues on the mechanism voices).

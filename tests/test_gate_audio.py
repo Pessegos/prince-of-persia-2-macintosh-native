@@ -69,7 +69,8 @@ class GateEngineAudioTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.directory = directory.name
         cues = {str(cue): {'file': 'sample.wav', 'mode': 1, 'priority': priority, 'duration': 1}
-                for cue, priority in ((17, 110), (18, 110), (20, 80), (26, 8))}
+                for cue, priority in ((17, 110), (18, 110), (20, 80), (26, 8),
+                                               (272, 48), (273, 48), (274, 48), (275, 45))}
         Path(directory.name, 'manifest.json').write_text(json.dumps({'schema': 1, 'cues': cues}))
         self.audio = AudioEngine(directory.name, playback=object())
         self.backend = TimedPlayback(self.audio.cues)
@@ -142,6 +143,18 @@ class GateEngineAudioTests(unittest.TestCase):
         self.assertFalse(self.backend.busy('mechanism'))
         self.assertEqual(self.audio.current_closing, 20)
         self.assertTrue(self.backend.busy('closing'))
+
+    def test_iron_gate_sounds_use_the_mechanism_voices(self):
+        # A rising iron gate asks for 272 every other frame (5:43d4): the
+        # silent frame between must not end it; 273 replaces it at the top.
+        self.frame(GateSound(272, True, (0, 1)), GateSound(272, False, (0, 2)))
+        self.assertEqual((self.audio.current_mechanism, self.audio.current_closing), (272, 272))
+        self.frame(GateSound(272, False, (0, 2)))
+        self.assertEqual(self.audio.current_mechanism, 272)
+        self.assertTrue(self.backend.busy('mechanism'))
+        self.frame(GateSound(273, True, (0, 1)), GateSound(275, False, (0, 2)),
+                   GateSound(274, False, (0, 2)))
+        self.assertEqual((self.audio.current_mechanism, self.audio.current_closing), (273, 275))
 
     def test_pause_and_reset_cancel_unflushed_attribution(self):
         self.audio.pause(True)

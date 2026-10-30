@@ -63,6 +63,36 @@ class PressurePlateTests(unittest.TestCase):
         self.assertEqual(trace[-1], (0, None, (18,)))
         self.assertEqual(self.terrain.tile(0, 5, 1).foreground, 0x300)
 
+    def test_iron_gates_outside_the_caverns_use_their_own_sounds(self):
+        # ATMGate/StopGate test LEVL 0x2186: environment 4 (ruins) selects
+        # 272-275, and a rising iron gate asks for 272 every eighth pixel.
+        struct.pack_into('>H', self.level, 0x2186, 4)
+        self.push()
+        trace = []
+        for tick in range(146):
+            cues = self.plates.advance(self.terrain)
+            trace.append((self.terrain.tile(0, 5, 1).foreground & 255,
+                          self.plates.active.get((0, 15)), cues))
+        self.assertEqual(trace[0], (4, 2, ()))
+        self.assertEqual(trace[1], (8, 2, (272,)))
+        self.assertEqual(trace[44], (180, 2, ()))
+        self.assertEqual(trace[43], (176, 2, (272,)))
+        self.assertEqual(trace[45], (237, 0, (273,)))
+        self.assertEqual(trace[99], (183, 1, (272,)))
+        self.assertEqual(trace[-1], (0, None, (274,)))
+        self.assertFalse({17, 18, 20} & {cue for *_, cues in trace for cue in cues})
+
+    def test_iron_gate_slam_and_full_open_stop(self):
+        struct.pack_into('>H', self.level, 0x2186, 4)
+        self.plates.foreground[0, 15] = 0x300 | 10
+        self.plates.active[0, 15] = 4
+        record = SimpleNamespace(offset_x=0, aux=0)
+        state = SequenceState(2, action=15, target_x=100, facing=1)
+        self.assertEqual(self.plates.advance(self.terrain, state, TerrainMotion(0, 1), record), (275,))
+        self.plates.foreground[0, 15] = 0x300 | 184
+        self.plates.active[0, 15] = 3
+        self.assertEqual(self.plates.advance(self.terrain), (274,))
+
     def test_holding_keeps_the_gate_open_without_repeated_plate_clicks(self):
         self.push()
         for tick in range(200):

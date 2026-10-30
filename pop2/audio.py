@@ -16,7 +16,13 @@ from pop2.mechanism_audio import GateVoice
 
 
 GATE_SLAM_DELAY = 11 / 60
-MECHANISM_CUES = frozenset((17, 18, 20))
+# Cavern stone gates use 17 (movement), 18 (stop) and 20 (slam); the iron
+# gates elsewhere 272 (movement), 273/274 (open/stop) and 275 (slam), see
+# PressurePlates.advance. Both movement sounds sustain a native loop.
+GATE_LOOP_CUES = frozenset((17, 272))
+GATE_SLAM_CUES = frozenset((20, 275))
+GATE_PRIORITY = (20, 275, 17, 272, 18, 273, 274)
+MECHANISM_CUES = frozenset(GATE_PRIORITY)
 
 
 def scene_sound_key(resource_id, kind):
@@ -53,27 +59,28 @@ class MixerPlayback:
         self.ui_sounds = {kind: mixer.Sound(buffer=menu_pcm(kind, rate, channels)) for kind in self.ui_channels}
         self.sounds = {cue: mixer.Sound(str(Path(directory) / item["file"]))
                        for cue, item in cues.items() if item.get("file")}
-        if 20 in self.sounds:
+        for cue in GATE_SLAM_CUES & self.sounds.keys():
             # Sample-clock delay: independent of the slower gameplay tick,
             # and automatically paused/cancelled with the effect channel.
             rate, bits, channels = mixer.get_init()
             silence = bytes(round(rate * GATE_SLAM_DELAY) * (abs(bits) // 8) * channels)
-            self.sounds[20] = mixer.Sound(buffer=silence + self.sounds[20].get_raw())
+            self.sounds[cue] = mixer.Sound(buffer=silence + self.sounds[cue].get_raw())
         self.gate_release = PcmRelease(mixer) if 17 in self.sounds and 18 in self.sounds else None
         self.gate_duck = (PcmGateDuck(mixer) if mix_mechanisms
                           and 17 in self.sounds and 26 in self.sounds else None)
-        self.gate_sustain = None
+        self.gate_sustains, self.gate_lifetimes = {}, {}
         if self.gate_release is not None:
             rate, _bits, channels = mixer.get_init()
-            original = self.sounds[17]
-            self.gate_lifetime = max(1, round(original.get_length() * 1000))
-            bounds = gate_loop_bounds(Path(directory) / cues[17]['file'], cues[17], rate)
-            if bounds is not None:
-                self.gate_sustain = PcmSustain(
-                    self.gate_release.library, original.get_raw(), channels, *bounds)
-            else:
-                self.sounds[17] = mixer.Sound(buffer=seamless_loop(
-                    original.get_raw(), channels, rate * 12 // 1000))
+            for cue in sorted(GATE_LOOP_CUES & self.sounds.keys()):
+                original = self.sounds[cue]
+                self.gate_lifetimes[cue] = max(1, round(original.get_length() * 1000))
+                bounds = gate_loop_bounds(Path(directory) / cues[cue]['file'], cues[cue], rate)
+                if bounds is not None:
+                    self.gate_sustains[cue] = PcmSustain(
+                        self.gate_release.library, original.get_raw(), channels, *bounds)
+                else:
+                    self.sounds[cue] = mixer.Sound(buffer=seamless_loop(
+                        original.get_raw(), channels, rate * 12 // 1000))
 
     def _gate_voice(self, bus):
         if bus == getattr(self, 'gate_bus', 'effect'):
@@ -87,15 +94,21 @@ class MixerPlayback:
         if getattr(self, 'closing_voice', None) is not None:
             yield self.closing_voice.gate_tail
 
+    def _gate_loop(self, channel):
+        """The movement cue a busy channel is sustaining, if any."""
+        if not channel.get_busy():
+            return None
+        sound = channel.get_sound()
+        return next((cue for cue in GATE_LOOP_CUES if sound is self.sounds.get(cue)), None)
+
     def sustain_gate(self, bus=None):
         bus = bus or getattr(self, 'gate_bus', 'effect')
         voice = self._gate_voice(bus)
-        channel = self.channels[bus]
-        if (self.gate_release is not None and channel.get_busy()
-                and channel.get_sound() is self.sounds[17]):
+        cue = self._gate_loop(self.channels[bus])
+        if self.gate_release is not None and cue is not None:
             # Renew only while the controller still requests movement. A lost
-            # stop cue must not leave an infinite stone sound behind.
-            self.gate_release.expire(voice.effect_channel, self.gate_lifetime)
+            # stop cue must not leave an infinite gate sound behind.
+            self.gate_release.expire(voice.effect_channel, self.gate_lifetimes[cue])
 
     def release_gate(self, bus):
         voice = self._gate_voice(bus)
@@ -116,8 +129,8 @@ class MixerPlayback:
                 self.stop(bus)
                 return
             sound = self.mixer.Sound(buffer=remaining)
-        if (voice is not None and cue in (18, 20) and self.channels[bus].get_busy()
-                and self.channels[bus].get_sound() is self.sounds.get(17)):
+        if (voice is not None and cue in MECHANISM_CUES - GATE_LOOP_CUES
+                and self._gate_loop(self.channels[bus]) is not None):
             # Fade PCM samples, not SDL's stepped per-buffer channel volume.
             voice.gate_tail.stop()
             voice.gate_tail.set_volume(self.channels[bus].get_volume())
@@ -128,12 +141,14 @@ class MixerPlayback:
             voice.gate_tail.stop()
         if voice is not None and self.gate_release is not None:
             self.gate_release.cancel(voice.effect_channel)
-        if voice is not None and cue == 17 and not offset and self.gate_release is not None:
-            if getattr(self, 'gate_sustain', None) is not None:
+        if (voice is not None and cue in GATE_LOOP_CUES and not offset
+                and self.gate_release is not None):
+            sustain = getattr(self, 'gate_sustains', {}).get(cue)
+            if sustain is not None:
                 # Inactive channels retain registered SDL effects when started.
                 # The sustain callback runs before subsequent duck/release effects.
                 self.channels[bus].stop()
-                self.gate_sustain.start(voice.effect_channel)
+                sustain.start(voice.effect_channel)
             self.channels[bus].play(sound, loops=-1)
             self.sustain_gate(bus)
         else:
@@ -217,8 +232,8 @@ class MixerPlayback:
         self.effects.clear()
         if self.gate_duck is not None:
             self.gate_duck.close()
-        if getattr(self, 'gate_sustain', None) is not None:
-            self.gate_sustain.close()
+        for sustain in getattr(self, 'gate_sustains', {}).values():
+            sustain.close()
         if self.gate_release is not None:
             for bus in self.channels:
                 voice = self._gate_voice(bus)
@@ -445,7 +460,7 @@ class AudioEngine:
             if interrupt:
                 self.playback.play(bus, cue)
                 setattr(self, f"current_{bus}", cue)
-            elif cue == current == 17:
+            elif cue == current and cue in GATE_LOOP_CUES:
                 sustain = getattr(self.playback, "sustain_gate", None)
                 if sustain is not None:
                     sustain(bus) if bus == 'closing' else sustain()
@@ -465,13 +480,16 @@ class AudioEngine:
         sources = {}
         for event in self.gate_events:
             previous = sources.get(event.source)
-            if previous is None or previous.cue != 20:
+            if previous is None or previous.cue not in GATE_SLAM_CUES:
                 sources[event.source] = event
         self.gate_events = None
         for bus, opening in (('mechanism', True), ('closing', False)):
             cues = {event.cue for event in sources.values() if event.opening == opening}
-            cue = next((item for item in (20, 17, 18) if item in cues), None)
+            cue = next((item for item in GATE_PRIORITY if item in cues), None)
             setattr(self, f'pending_{bus}', cue)
+            # The stone gate asks every frame, so a silent frame ends it. A
+            # rising iron gate asks only every other frame (5:43d4); its loop
+            # ends with 273/274 or, if those are lost, the sustain's expiry.
             if cue is None and getattr(self, f'current_{bus}') == 17:
                 if self.playback.busy(bus):
                     release = getattr(self.playback, 'release_gate', None)
