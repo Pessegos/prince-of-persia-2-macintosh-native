@@ -80,9 +80,12 @@ def initial_state(spawn):
         # Column anchor + 47, facing left (native -1), SEQS 130, unarmed,
         # mode 0. Port facing 0 is left.
         return RuinsStart(scene_x(207 + spawn.column * 51 + 47), 0, 130, 0, False)
+    # A serpent keeps the facing the generic loader copied from its record's
+    # +4 word (6:2ca4-2ca8): native 0 (right) or -1 (left).
+    facing = 1 if spawn.words[2] == 0 else 0
     if spawn.mode <= 0:
-        return RuinsStart(scene_x(spawn.native_x), 0, 170, -1, True, sound=128)
-    return RuinsStart(scene_x(spawn.native_x), 0, 175, spawn.mode, True, special=6, sound=128)
+        return RuinsStart(scene_x(spawn.native_x), facing, 170, -1, True, sound=128)
+    return RuinsStart(scene_x(spawn.native_x), facing, 175, spawn.mode, True, special=6, sound=128)
 
 
 def frame_index(actor_type, pose):

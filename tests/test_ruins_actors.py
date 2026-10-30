@@ -45,6 +45,24 @@ class RuinsSpawnTests(unittest.TestCase):
                 self.assertEqual((start.sequence_id, start.mode, start.armed), (130, 0, False))
                 self.assertEqual(start.x, spawn.column * 51 + 47)
 
+    def test_a_serpent_starts_with_its_record_facing(self):
+        # 6:2ca4-2ca8 copies the record's +4 word into the facing; 7:0596
+        # leaves it. Level six's native room 25 serpent (word 0) faces right,
+        # toward the Prince's tunnel; heads are always forced left.
+        from pop2.game_session import GameResources
+        from pop2.ruins_actors import initial_state, ruins_spawns
+
+        resources = GameResources.load()
+        serpent, = ruins_spawns(resources.level(6).data, 24)
+        self.assertEqual(serpent.words[2], 0)
+        self.assertEqual(initial_state(serpent).facing, 1)
+        for number in (6, 7, 8, 9):
+            level = resources.level(number).data
+            for room in range(32):
+                for spawn in ruins_spawns(level, room):
+                    expected = (1 if spawn.words[2] == 0 else 0) if spawn.actor_type == 11 else 0
+                    self.assertEqual(initial_state(spawn).facing, expected, (number, room, spawn.slot))
+
     def test_other_opponent_sets_have_no_ruins_actors(self):
         from pop2.game_session import GameResources
         from pop2.ruins_actors import ruins_spawns
