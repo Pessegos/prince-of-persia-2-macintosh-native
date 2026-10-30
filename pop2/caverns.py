@@ -759,6 +759,22 @@ def draw_carpet(frame, room_id, state, prince=None, *, level_number=3):
     return frame
 
 
+# Level nine's native room 2 (port room 1): the rearing horse. DoCleanCut
+# (2:608e) sets a5-0x4832 while the room is drawn; the back plane then adds
+# Prince SHAP 25360 (3:23e4-2418, GetHorsePtInPlane 3:4584-459a, DrawHorse
+# 3:4608) at the point a5-0x4af6, mirrored in level nine (3:46a0-46b6) and
+# masked, in Prince CTBL 25360 at entry 1 (3:1004-1022).
+HORSE_ROOM = (9, 1)
+HORSE_TOP_LEFT = (252, 40)
+
+
+@lru_cache(maxsize=1)
+def horse_sprite():
+    resources = load_resource_file('Prince.rsrc')
+    palette = decode_ctbl(resources['CTBL'][25360]['data'])
+    return ImageOps.mirror(decode_shap(resources['SHAP'][25360]['data'], palette))
+
+
 def cavern_command_sprite(command, resources, palette, shapes):
     library = command[7] if len(command) >= 8 else 4
     index, flags = command[1], command[4]
@@ -1187,6 +1203,10 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                 merged = merge_positioned_mask(cell_masks.get(cell), sprite.getchannel('A'), position)
                 if merged is not None:
                     cell_masks[cell] = merged
+    if (level_number, room_id) == HORSE_ROOM:
+        # Drawn after the room's back pieces (3:23ca-23e2), before the front.
+        sprite = horse_sprite()
+        background.paste(sprite, HORSE_TOP_LEFT, sprite)
     redraw = {}
     climb_commands = (variant['climb_redraw'] if variant is not None else
                       program.get('climb_redraw', {}).get(str(room_id), {}))

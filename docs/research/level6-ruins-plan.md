@@ -298,6 +298,21 @@ father's sword without an ordinary floor patch over the custom throne floor;
 runtime weapon ownership is unchanged. A local old/new native command audit
 of all 224 base rooms in levels 3-9 changes only level 8 room 9.
 
+## Level Nine's Horse (2026-10-30)
+
+Native room 2 of level nine (port room 1) shows the rearing horse on its
+pedestal. DoCleanCut (2:608e-60b2) sets a5-0x4832 while it draws the room;
+the back plane of the drawing list (3:23e4-2418) then asks
+GetHorsePtInPlane (3:4584-459a: plane 0, room 2, level 9 -> a5-0x4af6 =
+(40, 252)) and DrawHorse (3:4608) adds Prince SHAP 25360 at x 252, y 40,
+masked (flags 16) and mirrored in level nine (3:46a0-46b6 -> FreeShpInfo
+1). Its colours are Prince CTBL 25360, loaded at entry 1 for that room
+(3:1004-1022). The slot export does not contain it (the exporter draws the
+cells, not the drawing list's horse object);  adds it
+after the back pieces. Planes 1 of level 14's room 1 and level 10's room
+22 (a5-0x4aee/-0x4af2, while a5-0x5000 = -1) are the later horse scenes
+and are not drawn.
+
 ## Remaining Steps
 
 1. The retained cliff image when walking left from the start needs a visual
