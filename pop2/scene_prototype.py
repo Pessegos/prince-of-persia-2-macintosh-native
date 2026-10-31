@@ -97,7 +97,6 @@ ANIMATION_FPS = 12
 ANIMATION_INTERVAL_MS = 1000 / ANIMATION_FPS
 COMBAT_ANIMATION_FPS = 10
 COMBAT_ANIMATION_INTERVAL_MS = 1000 / COMBAT_ANIMATION_FPS
-QUEUE_GRACE_MS = 300
 RUN_CYCLE_SEQUENCES = {1, 200, 201, 202}
 REST_SEQUENCES = {IDLE_SEQUENCE}
 CROUCH_SEQUENCES = {
@@ -272,8 +271,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.held_directions = []
         self.shift_turn_direction = 0
         self.pending_potion_pickup = None
-        self.queue_grace_remaining_ms = 0
-        self.queue_grace_command = None
         self.run_cycle_boundary_pending = False
         self.horizontal_input = 0
         self.up_held = False
@@ -700,10 +697,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             return True
         return False
 
-    def start_queue_grace(self, command):
-        self.queue_grace_command = command
-        self.queue_grace_remaining_ms = QUEUE_GRACE_MS
-
     def start_sword_action(self, kind, sequence_id=None):
         fast_block = False
         if kind == "sword_block":
@@ -787,7 +780,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         }[kind])
         if not self.in_animation_tick:
             self.advance_animation_now()
-        self.start_queue_grace(BufferedCommand(kind))
         return True
 
     def armed_attack_pending(self):
@@ -1074,10 +1066,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
 
         command = BufferedCommand("horizontal", direction, mode)
         if self._is_resting():
-            dispatched = self.dispatch_horizontal_action(command)
-            if dispatched:
-                self.start_queue_grace(command)
-            return dispatched
+            return self.dispatch_horizontal_action(command)
         return False
 
     def dispatch_jump(self, command):
@@ -1145,7 +1134,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.status.set(f"Jump: original SEQS:{sequence_id}")
         if not self.in_animation_tick:
             self.advance_animation_now()
-        self.start_queue_grace(command)
         return True
 
     def start_cavern_exit(self):
@@ -1338,7 +1326,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.status.set(f"Crouch: original SEQS:{sequence}")
         if not self.in_animation_tick:
             self.advance_animation_now()
-        self.start_queue_grace(BufferedCommand("crouch"))
 
     def crawl_cell(self, offset):
         """GetCellsInFront 4:39fc (offset > 0) or the cell behind (4:3a48).
@@ -1383,7 +1370,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.status.set("Crouch step: original SEQS:79")
         if not self.in_animation_tick:
             self.advance_animation_now()
-        self.start_queue_grace(BufferedCommand("crawl", direction))
 
     def start_crouch_rise(self):
         self.start_sequence(CROUCH_RISE_SEQUENCE)
@@ -1659,10 +1645,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         if self.paused:
             return
         self.in_animation_tick = True
-        self.queue_grace_remaining_ms = max(
-            0, getattr(self, "queue_grace_remaining_ms", 0)
-            - self.current_animation_interval_ms()
-        )
         if getattr(self, "copy_challenge", None) is not None:
             now = time.perf_counter()
             last = getattr(self, 'last_copy_at', None)
@@ -2908,8 +2890,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.jump_descent_frame = None
         self.cancel_gate_presentation()
         self.pending_potion_pickup = None
-        self.queue_grace_remaining_ms = 0
-        self.queue_grace_command = None
         self.run_active = False
         self.run_stop_requested = False
         self.run_direction = 0

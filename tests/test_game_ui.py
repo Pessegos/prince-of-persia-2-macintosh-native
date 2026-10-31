@@ -424,7 +424,6 @@ class GameWindowTests(unittest.TestCase):
                 scene.horizontal_key(None, -1, False)
                 self.tick(4)
                 self.assertEqual((scene.sequence_state.sequence_id, scene.action), (6, 60))
-                self.assertEqual(scene.queue_grace_remaining_ms, 0)
                 if up_first:
                     scene.up_key(None)
                     scene.horizontal_key(None, -1, True)

@@ -41,7 +41,6 @@ class WaitingSceneTests(unittest.TestCase):
         for facing in (0, 1):
             scene = self.step(facing)
             direction = 1 if facing else -1
-            scene.queue_grace_remaining_ms = 0
             scene.horizontal_key(None, direction, True)
             scene.horizontal_key(None, direction, False)
             scene.up_key(None)

@@ -79,7 +79,6 @@ class ArmedBufferSceneTests(unittest.TestCase):
         scene.sequence_state.facing = facing
         scene.start_sword_action('sword_draw')
         scene.advance_animation()
-        scene.queue_grace_remaining_ms = 0
         return scene
 
     def test_conflicting_armed_requests_have_priority_in_either_arrival_order(self):

@@ -88,12 +88,6 @@ class LowControls(LedgeControls):
             return super().waiting_horizontal(direction, pressed)
         self.waiting_controls_available()
         self.sample_waiting_controls()
-        command = getattr(self, 'queue_grace_command', None)
-        if (pressed and self.sequence_state.sequence_id == 79
-                and getattr(self, 'queue_grace_remaining_ms', 0) > 0
-                and command is not None and command.kind == 'crawl' and command.direction == direction):
-            # Existing rapid-repeat tolerance, scoped to the same low step.
-            self.directional_input = self.directional_input.consume('right' if direction > 0 else 'left')
         return self.update_low_controls(callback=True)
 
     def update_waiting_controls(self, *, repeat=True):
@@ -145,12 +139,6 @@ class LowControls(LedgeControls):
             ahead_low = ahead.kind in (12, 13) or ahead.kind == CREVICE_TILE and ahead.foreground & 3 != 3
         facing = bool(state.facing)
         relative = self.directional_input.remap(facing_right=facing)
-        if (state.sequence_id == 117 and state.action == 109 and relative.down and relative.left >= 0
-                and self.horizontal_input == getattr(self, 'low_step_direction', 0)
-                and self.horizontal_input):
-            # Retained held-low-step repeat: start the next complete step at
-            #109, without inserting another stationary frame to rearm Forward.
-            relative = replace(relative, left=-1)
         relative, sequence = low_input_request(
             relative, state.action,
             mode=state.animation_state, selected=state.selected_sequence_id,

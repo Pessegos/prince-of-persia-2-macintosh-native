@@ -408,7 +408,11 @@ class AnimationDataTests(unittest.TestCase):
             scene.player_x = scene._clamp_rooftop_x(frame.target_x, frame.sequence_id)
         self.assertEqual(scene.player_x, 404)
 
-    def test_held_shift_step_repeats_only_after_previous_step_finishes(self):
+    def test_held_shift_step_does_not_repeat(self):
+        # DoStepFwd 6:1286-128a writes Forward=1 and modifier=1 with no
+        # ClearControls, and no step or idle pose is mode 5: a held
+        # Shift+Forward stays consumed, so it steps once (the port used to
+        # repeat it). Release and press the arrow again for the next step.
         scene = self.scene(facing=1)
         scene.root = DummyRoot()
         scene.animation_after_id = None
@@ -423,31 +427,36 @@ class AnimationDataTests(unittest.TestCase):
         self.assertEqual(scene.action, 15)
         self.assertEqual(scene.player_x, 158)
 
-        scene.advance_animation()
+        for _ in range(6):
+            scene.advance_animation()
+            self.assertEqual(scene.action, 15)
+
+        scene.horizontal_key(None, 1, False)
+        scene.horizontal_key(None, 1, True)
         self.assertEqual(scene.action, 121)
         self.assertEqual(scene.sequence_state.sequence_id, SHIFT_STEP_SEQUENCE)
 
-        scene.horizontal_key(None, 1, False)
-        for _ in range(12):
-            scene.advance_animation()
-        self.assertEqual(scene.action, 15)
-        scene.advance_animation()
-        self.assertEqual(scene.action, 15)
-
-    def test_rapid_step_repeat_is_ignored_but_later_step_is_buffered(self):
+    def test_rapid_step_repeat_is_a_second_step(self):
+        # A re-tap during the step is a fresh -1 (4:3e84) that the next
+        # standing gate admits; the port's 300 ms repeat filter is removed.
         scene = self.sword_scene()
         scene.sequence_state.facing = 1
         scene.shift_held = True
         scene.horizontal_key(None, 1, True)
         scene.horizontal_key(None, 1, False)
+        first = scene.sequence_state.sequence_id
+        self.assertTrue(29 <= first <= 42)
 
         scene.horizontal_key(None, 1, True)
         scene.horizontal_key(None, 1, False)
-        for _ in range(4):
-            scene.advance_animation()
-
-        scene.horizontal_key(None, 1, True)
         self.assertEqual(scene.directional_input.right, -1)
+        poses = []
+        for _ in range(30):
+            scene.advance_animation()
+            poses.append(scene.action)
+        # The second step follows the first at its final standing gate.
+        self.assertEqual(poses.count(121), 1)
+        self.assertEqual(poses[-1], 15)
 
     def test_different_command_survives_a_rapid_step_repeat(self):
         scene = self.sword_scene()
@@ -709,7 +718,6 @@ class AnimationDataTests(unittest.TestCase):
                                     scene.advance_animation()
                                 before = scene.action
                                 self.assertEqual(scene.sequence_state.sequence_id, RUNNING_DRIFT_SEQUENCE)
-                                self.assertEqual(scene.queue_grace_remaining_ms, 0)
                                 if up_first:
                                     scene.up_key(None)
                                     scene.horizontal_key(None, -direction, True)
@@ -1100,10 +1108,13 @@ class AnimationDataTests(unittest.TestCase):
                         )
                         self.assertTrue(scene.run_active)
 
-    def test_rapid_up_repeat_during_jump_does_not_queue_an_extra_jump(self):
+    def test_rapid_up_repeat_during_jump_is_pending(self):
+        # No rapid-jump filter: a re-tap after the takeoff consumed Up is a
+        # fresh -1 until the arc's pose-26/44 clear (6:074a).
         scene = self.running_jump_scene()
         scene.set_key_state("up", False)
         scene.up_key(None)
+        self.assertLess(scene.directional_input.up, 0)
 
         scene.set_key_state("up", False)
         for _ in range(4):
@@ -1949,13 +1960,15 @@ class AnimationDataTests(unittest.TestCase):
         scene.set_key_state("down", True)
         scene.horizontal_key(None, -1, True)
         actions = [scene.action]
-        for _ in range(15):
+        for _ in range(16):
             scene.advance_animation()
             actions.append(scene.action)
+        # Native held repetition: one 109 frame rearms the consumed Forward
+        # (the port's seamless repeat tolerance was removed on 2026-10-31).
         self.assertEqual(
             actions,
             [107, 108, 109, 110, 111, 112, 108, 109,
-             110, 111, 112, 108, 109, 110, 111, 112],
+             109, 110, 111, 112, 108, 109, 109, 110, 111],
         )
         self.assertEqual(scene.sequence_state.sequence_id, CROUCH_STEP_SEQUENCE)
 
@@ -1965,24 +1978,28 @@ class AnimationDataTests(unittest.TestCase):
         for _ in range(14):
             scene.advance_animation()
             actions.append(scene.action)
-        self.assertEqual(actions, [108, 109, *range(110, 120), 15, 15])
+        self.assertEqual(actions, [112, 108, 109, *range(110, 120), 15])
         self.assertEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)
 
-    def test_rapid_crawl_repeat_does_not_queue_an_extra_step(self):
+    def test_rapid_crawl_repeat_is_a_second_low_step(self):
+        # A re-tap during SEQS 79 stays pending (no mode-5 pose clears it)
+        # and pose 109 starts the next low step (6:099a).
         scene = self.sword_scene()
         scene.set_key_state("down", True)
         for _ in range(4):
             scene.advance_animation()
         scene.horizontal_key(None, -1, True)
         scene.horizontal_key(None, -1, False)
+        self.assertEqual(scene.sequence_state.sequence_id, CROUCH_STEP_SEQUENCE)
 
         scene.horizontal_key(None, -1, True)
         scene.horizontal_key(None, -1, False)
-        for _ in range(4):
+        self.assertEqual(scene.directional_input.left, -1)
+        poses = []
+        for _ in range(10):
             scene.advance_animation()
-        scene.horizontal_key(None, -1, True)
-        self.assertEqual(scene.sequence_state.sequence_id, CROUCH_STEP_SEQUENCE)
-        self.assertEqual(scene.action, 110)
+            poses.append(scene.action)
+        self.assertEqual(poses.count(110), 1)
 
     def test_crouch_step_tap_during_descent_is_queued(self):
         scene = self.scene()
@@ -2047,10 +2064,12 @@ class AnimationDataTests(unittest.TestCase):
         for _ in range(14):
             scene.advance_animation()
             actions.append(scene.action)
+        # Each low step's 109 consumes Down with ClearControls (6:0b2e), so
+        # the held Forward is fresh again only at the next 109 frame.
         self.assertEqual(
             actions,
             [107, 108, 109, 110, 111, 112, 108, 109,
-             110, 111, 112, 108, 109, 110, 111],
+             109, 110, 111, 112, 108, 109, 109],
         )
 
     def test_releasing_direction_at_run_pose_seven_stops_before_crouch(self):

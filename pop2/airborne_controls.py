@@ -58,15 +58,6 @@ class AirborneControls(RunningControls):
         if fresh:
             self.jump_started_for_press = True
             self.run_repeat_up = False
-            # Preserve the existing rapid identical-jump filter. It consumes
-            # this tap only, without erasing another directional request.
-            from pop2.scene_prototype import BufferedCommand
-            command = BufferedCommand('jump', self.horizontal_input,
-                                      running=self.sequence_state.sequence_id == 4
-                                      and bool(self.horizontal_input))
-            if (getattr(self, 'queue_grace_remaining_ms', 0) > 0
-                    and command == getattr(self, 'queue_grace_command', None)):
-                self.directional_input = self.directional_input.consume('up')
         elif cancel_repeat:
             # A held takeoff key re-read after a native clear is automatic
             # repeat, not a new tap. Retain the port's release cancellation.

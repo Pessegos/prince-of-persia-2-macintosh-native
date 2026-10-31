@@ -147,13 +147,6 @@ class WaitingControls:
 
     def waiting_horizontal(self, direction, pressed):
         self.sample_waiting_controls()
-        command = getattr(self, 'queue_grace_command', None)
-        if (pressed and getattr(self, 'waiting_step_direction', 0) and self.shift_held
-                and getattr(self, 'queue_grace_remaining_ms', 0) > 0
-                and command is not None and command.kind == 'horizontal'
-                and command.mode == 'step' and command.direction == direction):
-            # Existing rapid-step repeat policy; other pending directions stay.
-            self.directional_input = self.directional_input.consume('right' if direction > 0 else 'left')
         return self.update_waiting_controls()
 
     def latch_waiting_command(self, command):
@@ -175,13 +168,6 @@ class WaitingControls:
 
         self.sample_waiting_controls()
         state = self.sequence_state
-        direction = getattr(self, 'waiting_step_direction', 0)
-        if (repeat and state.sequence_id == IDLE_SEQUENCE and direction and self.shift_held
-                and self.horizontal_input == direction
-                and not any(value < 0 for value in self.directional_input.words()[:4])):
-            # Retained held-step repeat, only after the previous step ends.
-            self.directional_input = replace(self.directional_input,
-                                             **{'right' if direction > 0 else 'left': -1})
         facing = bool(state.facing)
         relative = self.directional_input.remap(facing_right=facing)
         if state.cursor == 0 and state.sequence_id != IDLE_SEQUENCE:
