@@ -76,10 +76,9 @@ The first run found two port differences, both in the gate test, which
 
 Both now match (`tests.test_terrain`
 `test_combat_turn_gate_rule_covers_the_desert_and_the_temple`, which fails
-on the previous code). Open lead: the port's other desert-gate collisions
-use `exit_open` (phase 20); 4:5b0e has six more callers (4:1486, 5688,
-6050, 6168, 6340/636a, 6572), so the original may already pass at phase 19.
-Not checked here.
+on the previous code). The port's other desert-gate tests used
+`exit_open` (phase 20); the step distance and CheckCollide now share the
+same 4:5b0e rule ([gate barriers](gate-barrier-distances.md)).
 
 Excluded: the callers (SwordCtrl's automatic turn, the voluntary turn), the
 opponent branches of 6:2638 (types 7/8/10 and the ordinary JumpSeq(60)),

@@ -22,7 +22,11 @@ Returning to the stone room schedules a fresh delayed rise for stones at phase 0
 Keeping only the marked stone raised starts the original counter and cues 46,
 55 and 53, then opens the exit with song 47 (18:0050-0166). The gate takes twenty
 animation steps; effect 17 waits for cue 55 to finish and stops after phase 20
-(18:067c-0706). DrawDsrtExit (18:074c-0788) shifts the door and its wall symbol
+(18:067c-0706). The phase lives in the exit cell's five low foreground bits.
+The gate collision 4:5b0e lets the body through from phase 19, one frame
+before the phase-20 cavern entry; DoRunJump's gate test (low byte below 104)
+always obstructs a running jump, open or not
+([gate barriers](research/gate-barrier-distances.md)). DrawDsrtExit (18:074c-0788) shifts the door and its wall symbol
 three pixels **left** per phase, at unchanged heights, on background pass 11.
 The foreground cliff stays fixed. RedrawStone (18:0aa8-0b36) shows the small
 marked-stone symbol at phase 9 and its raised version only above that phase.

@@ -78,6 +78,9 @@ Player Shift steps now use the ordinary subset of `GetBarrDistances`, CODE:4
 neighbor, with linked-room lookup. Gap/loose/plate distances use `GetFCharDist`
 at `0x3a92`; ordinary wall types use the body's barrier distance and the DATA
 offsets. Tiles 23/24 keep their native asymmetric current/next-tile distances.
+A gate is a barrier only while the gate collision 4:5b0e blocks, in every
+environment (the desert's below phase 19), and a barrier 51 or more away
+reports the clear 42 ([gate barriers](research/gate-barrier-distances.md)).
 Clear floor returns 42 before `DoStepFwd` reserves four pixels, producing a
 38-pixel step (SEQS:40 plus two pixels). The earlier isolated no-guard test
 retains its previous 42-pixel step. NPC patrol bounds still use the older scan.

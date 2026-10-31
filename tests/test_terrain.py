@@ -283,6 +283,57 @@ class TerrainTests(unittest.TestCase):
         self.assertEqual(level_map(2, 0).combat_turn_offset(0, 1, state, record, bounds), wall)
         self.assertEqual(level_map(2, 255).combat_turn_offset(0, 1, state, record, bounds), 0)
 
+    def test_step_distance_measures_a_gate_only_while_4_5b0e_blocks(self):
+        # GetBarrDistFromFace 4:6562 asks 4:5b0e first, in every environment:
+        # the desert's exit is a type-1 barrier below phase 19, the temple's
+        # by body height; 51 or more away the distance is the clear 42.
+        from pop2.desert_state import DesertState
+
+        def level_map(environment, foreground):
+            level = bytearray(0x49ca)
+            struct.pack_into('>H', level, 0x2186, environment)
+            for cell in range(30):
+                struct.pack_into('>H', level, cell * 2, 1)
+            struct.pack_into('>H', level, 15 * 2, 4)
+            struct.pack_into('>H', level, 0x780 + 15 * 4, foreground)
+            return LevelMap(level)
+
+        record = self.frames[15]
+        x = 230 - (record.offset_x - (record.aux & 0x3f))
+        state = SequenceState(1, action=15, target_x=x, facing=1, level_kind=1)
+        near, far = (260, 155, 280, 226), (230, 155, 250, 226)
+        for phase, near_result, far_result in ((0, (36, 1), (42, 2)), (18, (36, 1), (42, 2)),
+                                               (19, (42, 2), (42, 2)), (20, (42, 2), (42, 2))):
+            with self.subTest(desert=phase):
+                terrain = level_map(1, 0)
+                terrain.desert = DesertState(gate=phase)
+                self.assertEqual(terrain.tile(0, 5, 1).foreground & 0x1f, phase)
+                for bounds, expected in ((near, near_result), (far, far_result)):
+                    boundary = terrain.step_boundary(0, 1, state, record, bounds)
+                    self.assertEqual((boundary.clearance, boundary.barrier_type), expected)
+        state.level_kind = 2
+        self.assertEqual(level_map(2, 0).step_boundary(0, 1, state, record, near).barrier_type, 1)
+        self.assertEqual(level_map(2, 255).step_boundary(0, 1, state, record, near).barrier_type, 2)
+
+    def test_open_desert_exit_still_obstructs_a_running_jump(self):
+        # DoRunJump's 6:5eca compares the gate's low byte with 104 in every
+        # environment; the desert's holds the phase (0-20), never 104.
+        from pop2.desert_state import DesertState
+
+        level = bytearray(0x49ca)
+        struct.pack_into('>H', level, 0x2186, 1)
+        for cell in range(30):
+            struct.pack_into('>H', level, cell * 2, 1)
+        struct.pack_into('>H', level, 10 * 2, 4)
+        terrain = LevelMap(level)
+        state = SequenceState(1, action=7, target_x=142, facing=0, actor_type=0, level_kind=1)
+        for gate in (0, 20):
+            with self.subTest(gate=gate):
+                terrain.desert = DesertState(gate=gate)
+                self.assertEqual(terrain.run_jump_offset(0, 1, state), -20)
+        struct.pack_into('>H', level, 10 * 2, 1)
+        self.assertEqual(LevelMap(level).run_jump_offset(0, 1, state), 0)
+
     def test_drawing_sword_reserves_native_distance_before_an_immediate_gap(self):
         state = SequenceState(2, action=15, target_x=411, facing=1)
         self.assertEqual(self.map.combat_draw_offset(

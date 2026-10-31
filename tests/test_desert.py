@@ -554,8 +554,11 @@ class OriginalDesertTests(unittest.TestCase):
         terrain = self.scene.level_map
         bounds = (60, 160, 80, 226)
         self.assertEqual(terrain.wall_correction(0, 90, 80, bounds, facing=0), 92)
-        self.scene.game.desert.gate = 20
-        self.assertEqual(terrain.wall_correction(0, 90, 80, bounds, facing=0), 80)
+        # CheckCollide asks 4:5b0e, which lets the body through from phase 19.
+        for gate, expected in ((18, 92), (19, 80), (20, 80)):
+            with self.subTest(gate=gate):
+                self.scene.game.desert.gate = gate
+                self.assertEqual(terrain.wall_correction(0, 90, 80, bounds, facing=0), expected)
 
     def test_cave_music_and_puzzle_effects_use_separate_audio_channels(self):
         from unittest.mock import Mock

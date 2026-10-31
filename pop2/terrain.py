@@ -151,11 +151,20 @@ class LevelMap:
             fg = self.caverns.foreground(room, index, fg)
             kind, fg = self.caverns.bridge.tile(room, index, kind, fg)
         if kind == 4 and self.desert is not None:
-            fg = (fg & 0xff00) | (104 if self.desert.exit_open else 0)
+            # The exit's five low bits hold its phase (18:067c writes 1-20).
+            fg = (fg & 0xffe0) | self.desert.gate
         elif kind == 30 and self.desert is not None and room == 0 and row == 1 and 2 <= column <= 7:
             stone = self.desert.stones[column - 2]
             fg = (fg & 0xfe00) | stone.phase | (stone.delay << 4)
         return Tile(kind, fg, bg, room, column, row)
+
+    def gate_collides(self, tile, bounds, state=None):
+        # Gate collision 4:5b0e has no environment table: the desert's
+        # (LEVL 0x2186 = 1) blocks below phase 19 whatever the body; every
+        # other gate compares the clipped body height with its position.
+        if struct.unpack_from('>H', self.level, 0x2186)[0] == 1:
+            return tile.foreground & 0x1f < 19
+        return stone_gate_blocks(tile.foreground, bounds, state)
 
     def supports(self, room, column, row):
         tile = self.tile(room, column, row)
@@ -206,16 +215,17 @@ class LevelMap:
         current = self.tile(room, column, row)
         ahead = self.tile(room, column + direction, row)
         distance = floor_edge_distance(contact, state.facing)
+        environment = struct.unpack_from('>H', self.level, 0x2186)[0]
         for col, tile in ((column, current), (column + direction, ahead)):
             # GetBarrierType/DistToBarrier; c944 enables type 3 for tile 2.
-            stone_gate = (tile.kind == 4 and struct.unpack_from('>H', self.level, 0x2186)[0] == 3
-                          and stone_gate_blocks(tile.foreground, bounds, state))
-            throne_gate = self.throne_gate(room, tile)
-            ruins_gate = (tile.kind == 4 and not throne_gate
-                          and struct.unpack_from('>H', self.level, 0x2186)[0] == 4
-                          and stone_gate_blocks(tile.foreground, bounds, state))
-            if tile.kind in WALL_TILES | {12} or stone_gate or ruins_gate or throne_gate:
-                barrier = (5 if stone_gate else 8 if throne_gate else 1 if ruins_gate else 6 if tile.kind == 12 else
+            # GetBarrDistFromFace 4:6562 measures a gate only when 4:5b0e
+            # blocks; GetBarrCode 4:531c gives 5 in the caverns, 8 at the
+            # throne, else 1.
+            gate = tile.kind == 4 and self.gate_collides(tile, bounds, state)
+            throne_gate = gate and self.throne_gate(room, tile)
+            stone_gate = gate and environment == 3
+            if tile.kind in WALL_TILES | {12} or gate:
+                barrier = (5 if stone_gate else 8 if throne_gate else 1 if gate else 6 if tile.kind == 12 else
                            3 if cautious and tile.kind == 2 and (tile.foreground & 255) < 3 else 4)
                 # DATA a5-0x3620/-0x360e by barrier type.
                 left_offset = {1: 40, 3: -22, 4: 3, 5: 18, 6: 8, 8: 16}[barrier]
@@ -226,8 +236,11 @@ class LevelMap:
                                     if state.facing else
                                     bounds[0] - (col * TILE_WIDTH + 72 - right_offset))
                 if barrier_distance >= 0:
-                    return StepBoundary(barrier_distance,
-                                        1 if barrier_distance < 51 else 2, tile.kind)
+                    # 4:5fe8: a barrier 51 or more away is reported as the
+                    # ordinary clear 42.
+                    if barrier_distance < 51:
+                        return StepBoundary(barrier_distance, 1, tile.kind)
+                    return StepBoundary(42, 2, tile.kind)
             if tile.kind in (23, 24):
                 # 4:5fa2/5fc6 use opposite offsets inside/approaching the tile.
                 if (tile.kind == 24 and not state.facing) or (tile.kind == 23 and state.facing):
@@ -267,19 +280,10 @@ class LevelMap:
         column = character_column(contact_x)
         direction = 1 if state.facing else -1
         allowance = None
-        environment = struct.unpack_from('>H', self.level, 0x2186)[0]
         for ahead in (1, 2):
             tile = self.tile(room, column + direction * ahead, row)
             kind = tile.kind
-            if kind != 4 or bounds is None:
-                gate = False
-            elif environment == 1:
-                # The port's desert tile carries a drawing value; its gate
-                # phase lives in DesertState (TriggerDsrtExit 18:07b6).
-                phase = self.desert.gate if self.desert is not None else tile.foreground & 0x1f
-                gate = phase < 19
-            else:
-                gate = stone_gate_blocks(tile.foreground, bounds, state)
+            gate = kind == 4 and bounds is not None and self.gate_collides(tile, bounds, state)
             if kind in EMPTY_TILES | WALL_TILES or gate:
                 allowance = (ahead - 1) * TILE_WIDTH
                 break
@@ -641,8 +645,9 @@ class LevelMap:
         for row in rows:
             for col in range(-1, 11):
                 tile = self.tile(room, col, row)
+                # CheckCollide 4:5688 asks 4:5b0e: the exit passes at phase 19.
                 desert_exit = (tile.kind == 4 and self.desert is not None
-                               and not self.desert.exit_open)
+                               and self.gate_collides(tile, bounds, state))
                 stone_gate = (tile.kind == 4 and struct.unpack_from('>H', self.level, 0x2186)[0] == 3
                               and (state is None or state.actor_type != 11)
                               and stone_gate_blocks(tile.foreground, bounds, state))
