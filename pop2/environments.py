@@ -1051,11 +1051,18 @@ class Ruins(Caverns):
         if scene.game.level.number in (6, 7, 8):
             self.finish_via_story(scene.game.level.number + 1)
         elif scene.game.level.number == 9:
-            # CheckPlayNIS(9, 10) shows NIS 2, the ride to the temple, up to
-            # its last shot; level ten itself is not available yet.
+            # CheckPlayNIS(9, 10) shows NIS 2, the ride to the temple, whose
+            # last shot is level ten's room 22; RestartGame then loads level
+            # ten there (SetKidDefaults 2:5dee). Without the temple scenery
+            # the game stops after the ride.
+            from pop2.caverns import scenery_available
+
             def finish():
                 scene.game.exit = None
-                scene.status.set('Level 9 complete')
+                if scenery_available(10):
+                    scene.enter_next_level(10)
+                else:
+                    scene.status.set('Level 9 complete')
             if not scene.start_temple_ride(finish):
                 finish()
         else:

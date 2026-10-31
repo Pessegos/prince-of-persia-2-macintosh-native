@@ -38,26 +38,49 @@ class LevelNineHorseTests(unittest.TestCase):
 
 
 class LevelNineExitTests(unittest.TestCase):
-    def test_leaving_level_nine_plays_the_ride_then_completes(self):
-        # CheckPlayNIS(9, 10): NIS 2 first; level ten is not available, so
-        # the level ends with its status message after the scene.
+    def scene(self):
         from types import SimpleNamespace
-        from pop2.environments import Ruins
 
         calls = []
-        status = SimpleNamespace(set=calls.append)
         scene = SimpleNamespace(game=SimpleNamespace(level=SimpleNamespace(number=9), exit=object()),
-                                status=status)
+                                status=SimpleNamespace(set=calls.append),
+                                enter_next_level=lambda number: calls.append(number))
+        return scene, calls
+
+    def test_leaving_level_nine_plays_the_ride_then_completes(self):
+        # CheckPlayNIS(9, 10): NIS 2 first; without the temple scenery the
+        # level ends with its status message after the scene.
+        from unittest.mock import patch
+        from pop2.environments import Ruins
+
+        scene, calls = self.scene()
         finishes = []
         scene.start_temple_ride = lambda finish: finishes.append(finish) or True
-        Ruins(scene).finish_exit()
-        self.assertEqual(calls, [])
-        finishes[0]()
+        with patch('pop2.caverns.scenery_available', return_value=False):
+            Ruins(scene).finish_exit()
+            self.assertEqual(calls, [])
+            finishes[0]()
+            self.assertIsNone(scene.game.exit)
+            self.assertEqual(calls, ['Level 9 complete'])
+            scene.start_temple_ride = lambda finish: False
+            scene.game.exit = object()
+            Ruins(scene).finish_exit()
         self.assertIsNone(scene.game.exit)
-        self.assertEqual(calls, ['Level 9 complete'])
-        scene.start_temple_ride = lambda finish: False
-        scene.game.exit = object()
-        Ruins(scene).finish_exit()
+
+    def test_the_ride_leads_into_level_ten(self):
+        # RestartGame after NIS 2 loads level ten (room 22, the horse's
+        # arrival); the port used to stop at 'Level 9 complete'.
+        from unittest.mock import patch
+        from pop2.environments import Ruins
+
+        scene, calls = self.scene()
+        finishes = []
+        scene.start_temple_ride = lambda finish: finishes.append(finish) or True
+        with patch('pop2.caverns.scenery_available', return_value=True):
+            Ruins(scene).finish_exit()
+            self.assertEqual(calls, [])
+            finishes[0]()
+        self.assertEqual(calls, [10])
         self.assertIsNone(scene.game.exit)
 
 

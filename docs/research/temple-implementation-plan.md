@@ -73,3 +73,18 @@ natural split: Claude takes stages 1-2 (exporter, environment, level
 loading), which reuse the ruins pipeline Claude built; Codex wires its own
 models in stages 3-4. Birdheads (5) and story (6) can be assigned later.
 Each stage integrates separately with the usual reservation.
+
+## Progress (2026-10-31, Claude)
+
+- Stage 6, first part: the ride's last shot is imported. NISTemple's
+  DrawRoomFromNIS(10, 22) is played by drawing the exported room's scenery
+  as palette indices (`caverns.room_indices`) with Temple CTBL 3500 at 64
+  (2:047c-048a); TransFunc8 15:65d4 then animates the horse and the Prince.
+  The Prince's shapes come from the resident Kid.rsrc (now a temple scene
+  file at offset 900000), mirrored by FlipKids 15:047a(1, 40) and FlipKid
+  15:66bc(1); SetKidPalette(2) puts Kid CTBL 25002 at 16; frames 43-46 load
+  the statue palettes 25362/25361. Frame 1 copies the game rectangle
+  a5-0x4fec into the animation's copy (15:6630); the port shows the room at
+  once. After the scene level ten starts in room 22 (SetKidDefaults
+  2:5dee) when its scenery is installed, otherwise the game stops after the
+  ride as before. A reimport is needed for the new `temple.json`.

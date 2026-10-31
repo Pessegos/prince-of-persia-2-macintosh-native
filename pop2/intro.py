@@ -29,6 +29,8 @@ OPERATIONS = {
     "rgb": 4, "set_palette": 2, "remap": 2, "combine": 0, "fade_out_all": 1,
     "save_rect": 2, "restore_rect": 1, "ensure_sound": 2, "dissolve_area": 1, "text_panel": 1,
     "blit": 2,
+    # NISTemple's last shot: DrawRoomFromNIS 2:03d4(level, room).
+    "game_room": 2,
 }
 
 
@@ -623,6 +625,24 @@ class IntroPlayer:
             if marker is None:
                 raise ValueError(f"Missing cue {args[0]} in intro music {playing[0]}")
             self.wait_until = max(self.time, playing[1] + marker)
+        elif op == "game_room":
+            # DrawRoomFromNIS 2:03d4(level, one-based room) draws the room
+            # offscreen; for level ten 2:047c-048a sets CTBL 3500 at 64.
+            from pop2.caverns import room_indices, room_palette
+
+            level, room = args
+            self.target.paste(room_indices(level, room - 1), (0, 0))
+            if level == 10:
+                colors = room_palette(level)
+                if next(iter(colors), 64) != 64:
+                    colors = {64 + offset: color for offset, color in enumerate(colors.values())}
+                for index, color in colors.items():
+                    if 0 <= index < 256:
+                        self.palette[index] = color
+            # TransFunc8's frame 1 (15:6630-663a) adds the game rectangle
+            # (a5-0x4fec) to the animation's copy; the port shows it at once.
+            self.display = self.target.copy()
+            self.changed()
         elif op == "save_background":
             self.background = self.target.copy()
         elif op == "restore":

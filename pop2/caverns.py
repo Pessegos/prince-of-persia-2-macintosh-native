@@ -293,6 +293,42 @@ def _cavern_assets(level_number):
     return program, resources, decode_ctbl(resources['CTBL'][3500]['data']), {}
 
 
+def room_indices(level_number, room_id):
+    """The exported room as palette indices (back, then front pieces),
+    for a scene that draws a game room (DrawRoomFromNIS 2:03d4).
+
+    Only the scenery set (library 4) is drawn: items and torches are
+    animated by the game, not part of the static picture."""
+    from pop2.intro import indexed_shape
+
+    program, resources, _palette, _shapes = cavern_assets(level_number)
+    layers = {name: Image.new('LA', (510, 365)) for name in ('back', 'front')}
+    shapes = {}
+    for command in program['rooms'][str(room_id)]:
+        layer, index, _x, _bottom, flags = command[:5]
+        if (command[7] if len(command) >= 8 else 4) != 4:
+            continue
+        if (index, flags) not in shapes:
+            shape = indexed_shape(resources['SHAP'][index]['data'], allow_trailing=True)
+            # Transfer mode 0 copies index zero too; mode 16 masks it.
+            mask = Image.new('L', shape.size, 255) if flags == 0 else shape.point([0] + [255] * 255)
+            shapes[index, flags] = Image.merge('LA', (shape, mask))
+        clipped = clipped_sprite(shapes[index, flags], command)
+        if clipped is not None:
+            sprite, position = clipped
+            layers[layer].paste(sprite, position, sprite.getchannel('A'))
+    picture = layers['back'].getchannel('L')
+    picture.paste(layers['front'].getchannel('L'), (0, 0), layers['front'].getchannel('A'))
+    return picture
+
+
+def room_palette(level_number, palette_id=3500):
+    """The scenery file's CTBL as {index: (r, g, b)}."""
+    _program, resources, _palette, _shapes = cavern_assets(level_number)
+    return {index: tuple(color[:3]) for index, color in
+            decode_ctbl(resources['CTBL'][palette_id]['data']).items()}
+
+
 def flask_shape(data, palette, draw_mode):
     flags, stride, width, height = struct.unpack_from('>HhhH', data)
     if flags & 0xf000 != 0x9000:

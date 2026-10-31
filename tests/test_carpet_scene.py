@@ -326,3 +326,26 @@ class TempleRideTests(unittest.TestCase):
         self.assertEqual(result[0]['op'], 'sound')
         shapes = {item['args'][0]: item['args'][3] for item in result if item['op'] == 'shape'}
         self.assertEqual(shapes, {100301: 16 | 256, 100005: 16})
+
+    def test_flip_kids_and_flip_kid_mirror_the_prince_in_the_last_shot(self):
+        # TransFunc8 15:65d4 frame 0: FlipKids 15:047a(1, 40) mirrors shapes
+        # 40-262, FlipKid 15:66bc(1) shape 16; FlipHorses(0) leaves the horse.
+        import struct
+        from tools.extract_intro import expand_animations
+
+        body = b''.join(bytes((5, 6)) + struct.pack('>2h', layer, shape)
+                        for layer, shape in ((1, 16), (2, 40), (3, 262), (4, 263), (5, 301)))
+        body += bytes((1, 2)) + bytes((0, 2))
+        script = struct.pack('>I', len(body)) + body
+        resources = {'ANI ': {100001: {'data': struct.pack('>9h', 0, 0, 10, 10, 5, 7, 0, 0, 0)}},
+                     'SCRP': {100007: {'data': script}},
+                     'SHAP': {100000 + shape: {'data': struct.pack('>HhhH', 0, 0, 4, 3)}
+                              for shape in (16, 40, 262, 263, 301)}}
+        operations = [{'op': 'animation', 'args': [100000, 1, 0, 0, 'last'], 'pc': 0, 'flags': 0x14}]
+        callbacks = {'last': {0: [{'op': 'flip_kids', 'args': [1, 40], 'pc': 0},
+                                  {'op': 'flip_kids', 'args': [1, 16, 16], 'pc': 0},
+                                  {'op': 'flip_horses', 'args': [0], 'pc': 0}]}}
+        result = expand_animations(operations, resources, callbacks)
+        shapes = {item['args'][0]: item['args'][3] for item in result if item['op'] == 'shape'}
+        self.assertEqual(shapes, {100016: 16 | 256, 100040: 16 | 256, 100262: 16 | 256,
+                                  100263: 16, 100301: 16})

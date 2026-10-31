@@ -50,7 +50,7 @@ class LevelEightAndNineTests(unittest.TestCase):
         scene.game.exit = object()
         # With Horse.rsrc/TempleNIS.rsrc installed the ride plays first and
         # finishes the level later; check the stop itself without it.
-        with patch.object(scene, 'start_temple_ride', return_value=False):
+        with patch.object(scene, 'start_temple_ride', return_value=False),                 patch('pop2.caverns.scenery_available', return_value=False):
             environment_for(scene).finish_exit()
         self.assertIsNone(scene.game.exit)
         self.assertEqual(scene.game.level.number, 9)
