@@ -167,3 +167,12 @@ Each stage integrates separately with the usual reservation.
   temple's gates take the ruins' type-1 barrier and 4:5b0e admission, and
   tile 43 (IsWall, level 13 only) has no barrier (GetBarrCode 0). Rock
   overlays in CheckBarr (nonempty MOB bank) remain unrecovered.
+- Level 13's flame (native room 4, CUST 4075 kind 0x20): 10:2cc2 advances
+  a5-0x4818 from 0 to 11 and back to 0 each frame and DrawTempSacredFlame
+  10:2d5a draws record counter + 2 (SHAP 4077-4088 from Kid.rsrc) at the
+  record's X/bottom; the animated room leaves the exported flame out and
+  the Temple environment draws the current record (the animated room plus
+  record 2 equals the static export, pixel for pixel). Not ported: the
+  counter's 0x80 sequence (DATA a5-0x2b7c, records up to 16) and what sets
+  it; 10:2cc2's caller is reached through a function pointer (assumed once
+  per frame while the room is shown).

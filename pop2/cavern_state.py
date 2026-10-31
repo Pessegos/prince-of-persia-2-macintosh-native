@@ -39,6 +39,8 @@ class CavernState:
     # The temple's sliding rocks (MOB type 6).
     rocks: SlideRocks = field(default_factory=SlideRocks)
     trapdoors: TrapDoors = field(default_factory=TrapDoors)
+    # a5-0x4818 in level 13's flame room (CUST 4075): 10:2cc2's counter.
+    flame: int = 0
     # Level seven entered by its upper door (alternate entry export).
     alternate_entry: bool = False
     # a5-0x5008: the level-four relief countdown; -1 idle, -2 already used.

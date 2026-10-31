@@ -1151,6 +1151,10 @@ class Temple(Caverns):
             return
         # MakeRubble 5:29e8 advances the trap doors (10:24fa), then ATMLoose
         # presents them (10:225c), which closes the finished ones.
+        if (scene.game.level.number, scene.room_id) == (13, 3):
+            from pop2.caverns import advance_flame
+
+            caverns.flame = advance_flame(caverns.flame)
         audio = getattr(scene, 'audio', None)
         if (caverns.trapdoors.advance() and audio is not None
                 and not audio.sound_playing(OPEN_CUE) and not audio.sound_playing(LOOP_CUE)):
@@ -1245,10 +1249,12 @@ class Temple(Caverns):
         scene.action, scene.player_x = state.action, state.target_x
 
     def scenery_layer(self, frame, motion):
-        from pop2.caverns import draw_slide_rocks, draw_trapdoors
+        from pop2.caverns import draw_slide_rocks, draw_temple_flame, draw_trapdoors
 
         scene = self.scene
         frame = super().scenery_layer(frame, motion)
+        frame = draw_temple_flame(frame, scene.room_id, scene.game.caverns.flame,
+                                  level_number=scene.game.level.number)
         frame = draw_trapdoors(frame, scene.room_id, scene.game.caverns.trapdoors.drawn,
                                level_number=scene.game.level.number)
         return draw_slide_rocks(frame, scene.room_id, scene.game.caverns.rocks, scene.level_map,

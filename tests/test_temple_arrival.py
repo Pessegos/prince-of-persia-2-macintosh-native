@@ -95,6 +95,17 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.assertEqual((scene.game.level.number, scene.room_id), (12, 18))
         self.assertIsNotNone(scene.native_viewport.getbbox())
 
+    def test_level_thirteen_flame_room_animates(self):
+        scene = self.scene
+        scene.load_level(13)
+        scene.jump_to_room(3, row=2, x=100, facing=1)
+        shots = set()
+        for _ in range(4):
+            self.tick()
+            shots.add(scene.native_viewport.tobytes())
+        self.assertGreater(len(shots), 1)
+        self.assertNotEqual(scene.game.caverns.flame, 0)
+
     def test_temple_levels_use_the_temple_environment(self):
         # The cavern environment's exit would have started level one's
         # voyage (start_ending) after a temple level.
@@ -351,9 +362,27 @@ class LevelThirteenFlameTests(unittest.TestCase):
         pixel = room.background.getpixel((x + 20, bottom - 40))
         self.assertGreater(pixel[2], pixel[0])  # Blue, not the magenta of a missing colour.
 
+    def test_the_flame_cycles_through_records_2_to_13(self):
+        # 10:2cc2 advances a5-0x4818 0..11 and DrawTempSacredFlame 10:2d5a
+        # draws CUST 4075 record counter + 2. Before, the flame stood still
+        # (record 2 baked into the room).
+        from PIL import Image
+        from pop2.caverns import advance_flame, cavern_room, draw_temple_flame
 
-if __name__ == '__main__':
-    unittest.main()
+        counters = [0]
+        for _ in range(13):
+            counters.append(advance_flame(counters[-1]))
+        self.assertEqual(counters, [*range(12), 0, 1])
+        room = cavern_room(3, animated=True, level_number=13)
+        still = cavern_room(3, level_number=13).background
+        self.assertNotEqual(room.background.tobytes(), still.tobytes())
+        frames = {draw_temple_flame(Image.new('RGBA', (510, 365)), 3, counter).tobytes()
+                  for counter in range(12)}
+        self.assertGreater(len(frames), 6)
+        first = room.background.copy()
+        first.alpha_composite(draw_temple_flame(Image.new('RGBA', (510, 365)), 3, 0))
+        self.assertEqual(first.tobytes(), still.tobytes())
+
 
 
 @unittest.skipUnless(TEMPLE_INSTALLED, 'Imported temple scene and scenery required')
@@ -386,3 +415,7 @@ class TempleWallCorrectionTests(unittest.TestCase):
                     physical_row=1, state=state)
                 self.assertEqual(corrected - new, native)
                 self.assertEqual(native != 0, kind in (4, 20) and foreground == 0)
+
+
+if __name__ == '__main__':
+    unittest.main()

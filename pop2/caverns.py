@@ -430,6 +430,35 @@ def cavern_flask_instances(program, room_id, terrain):
             yield command, tile
 
 
+FLAME_LEVEL, FLAME_ROOM, FLAME_CUSTOM = 13, 3, 4075
+
+
+def advance_flame(counter):
+    """10:2cc2 (CUST kind 0x20) without bit 0x80: 0..11, then 0 again."""
+    return counter + 1 if counter < 11 else 0
+
+
+def draw_temple_flame(frame, room_id, counter, *, level_number=FLAME_LEVEL):
+    """DrawTempSacredFlame 10:2d5a: CUST 4075 record counter + 2 (SHAP
+    4077 + counter, Kid.rsrc), at the record's X and bottom. The counter's
+    0x80 sequence (DATA a5-0x2b7c, records up to 16) is not ported."""
+    if (level_number, room_id) != (FLAME_LEVEL, FLAME_ROOM):
+        return frame
+    import struct
+
+    _program, resources, palette, shapes = room_assets(level_number, room_id)
+    custom = resources.get('CUST', {}).get(FLAME_CUSTOM)
+    if custom is None:
+        return frame
+    data = custom['data']
+    shape_index, bottom, x, _pass, mode = struct.unpack_from('>5h', data, 30 + (counter + 2) * 32)
+    shape = struct.unpack_from('>H', data, 2)[0] + shape_index
+    sprite = cavern_command_sprite(['back', shape, x, bottom, mode, 0, [], 5], resources, palette, shapes)
+    frame = frame.copy()
+    frame.paste(sprite, (x, bottom - sprite.height), sprite)
+    return frame
+
+
 def draw_cavern_flasks(frame, room_id, state, terrain, *, level_number=3):
     program, resources, palette, shapes = cavern_assets(level_number)
     terrain.caverns = state
@@ -1234,8 +1263,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     for position_index, command in enumerate(commands):
         layer, index, _, _, _, row = command[:6]
         library = command[7] if len(command) >= 8 else 4
-        if animated and library in (0, 1):
-            continue
+        if animated and library in (0, 1, 5):
+            continue  # Items and the temple flame animate separately.
         # These IDs animate torches only in Caverns.rsrc. Ruins.rsrc uses
         # the same numbers for tunnel fronts and floor decorations/cracks.
         if (animated and level_number in SCENERY_LEVELS[3] and program.get('version') >= 4
