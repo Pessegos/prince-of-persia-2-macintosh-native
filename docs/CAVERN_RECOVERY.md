@@ -1268,6 +1268,26 @@ sequences, pause and restart. Pure tests run on CI without game resources.
 Temple-specific behavior, skeleton interactions and a unified shared MOB
 bank are not claimed by this cavern implementation.
 
+### Armed retreat into level five's trap (2026-10-31, open)
+
+User report: retreating with the sword into the room-23 trap (cell 22)
+should normally not impale; on the Mac it only happens after the trap
+extended, the Prince backed off until it retracted and then stepped
+straight back in. The port impales in 4 of every 16 start alignments of
+tapped retreats (X 237-240 before the step, X 221-224 after it): the trap
+is first triggered when the body is already in reach.
+
+`tools/probe_wall_spike_frames.py` executes LoadFrame, SetupSword,
+GetCharEdges, CheckSpikes and CheckSpikeHit on the real Kid frames for
+LEVL2004 room 23 (25,600 single-frame cases: 40 poses, both facings,
+armed or not, 160 X values; result SHA256 `697dd03d...991b`). For the
+armed retreat poses facing right the original triggers at X <= 231 (157),
+236 (158), 216 (160) and impales at X <= 224 (157/158), exactly the
+port's thresholds. The single-frame geometry is therefore not the cause.
+Still to check: the whole-frame order (AnimChar 2:6c1c runs after the
+spike checks, the MOB controller's place in the frame) and the retreat's
+X per frame, which a FrameAdv-level trace has to settle.
+
 ## Custom Foreground Beyond Its Admission Cell
 
 The level-five room-three videos exposed two actor leaks: the right-hand
