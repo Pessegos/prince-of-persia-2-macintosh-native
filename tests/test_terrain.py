@@ -13,7 +13,7 @@ from pop2.render_opening import build_opening_room, load_resource_file
 from pop2.scene_prototype import BufferedCommand, ScenePrototype
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.terrain import (LevelMap, RooftopPhysics, TerrainMotion, character_column,
-                     character_row, floor_y, floor_contact_x)
+                     TILE_WIDTH, character_row, floor_y, floor_contact_x)
 
 
 class TerrainTests(unittest.TestCase):
@@ -732,6 +732,58 @@ class TerrainTests(unittest.TestCase):
                     self.assertEqual(runtime.state.horizontal_velocity, 0)
                     self.assertEqual(10 in runtime.state.sound_events, front)
 
+    def collide_after_correction(self, sequence, action, front, *, facing=1, sword=True,
+                                 velocity=0, y=0, falling_support=True):
+        runtime = self.runtime(sequence, x=250, facing=facing)
+        runtime.state.action = action
+        runtime.state.vertical_velocity = velocity
+        runtime.state.current_y = y
+        direction = 1 if facing else -1
+        corrected = runtime.state.target_x + 5 * direction * (-1 if front else 1)
+        calls = []
+
+        def correction(_room, _old, new, *_args, **_kwargs):
+            calls.append(new)
+            return corrected if len(calls) == 1 else new
+
+        motion = TerrainMotion(1, 1)
+        with patch.object(self.map, "wall_correction", side_effect=correction), \
+                patch.object(self.map, "supports", return_value=falling_support):
+            RooftopPhysics(self.map).advance(
+                motion, runtime, 250, (225, 160, 275, 228), sword_drawn=sword,
+                frame_record=self.frames[56], cut_enabled=False)
+        return runtime.state, motion, corrected
+
+    def test_collide_response_offsets_follow_4_589e(self):
+        # Collide 4:592a-5998: a front bump from a strike pose moves 25
+        # forward before SEQS 64; SEQS 55's pose 207 adds 17 to the rear
+        # bump's 6. The old port added nothing to the swept correction.
+        for facing in (0, 1):
+            direction = 1 if facing else -1
+            with self.subTest(facing=facing):
+                strike, _motion, _ = self.collide_after_correction(56, 153, True, facing=facing)
+                plain, _motion, _ = self.collide_after_correction(56, 158, True, facing=facing)
+                self.assertEqual((strike.sequence_id, plain.sequence_id), (64, 64))
+                self.assertEqual(strike.target_x - plain.target_x, 25 * direction)
+                drawn, _motion, _ = self.collide_after_correction(55, 207, False, facing=facing)
+                other, _motion, _ = self.collide_after_correction(55, 208, False, facing=facing)
+                self.assertEqual((drawn.sequence_id, other.sequence_id), (65, 65))
+                self.assertEqual(drawn.target_x - other.target_x, 17 * direction)
+
+    def test_collide_fast_body_backs_off_and_ground_bump_steps_back(self):
+        # 4:58e4-58fe: vertical speed 50 or more backs off 17, no bump pose.
+        state, motion, corrected = self.collide_after_correction(56, 158, True, velocity=50)
+        self.assertEqual((state.target_x, state.sequence_id, state.vertical_velocity),
+                         (corrected - 17, 56, 50))
+        self.assertFalse(motion.falling)
+        # GroundBump 4:5868: ten back, then SEQS 45, over empty support.
+        state, motion, corrected = self.collide_after_correction(
+            2, 15, True, facing=0, sword=False, falling_support=False)
+        self.assertEqual(state.sequence_id, 45)
+        self.assertTrue(motion.falling)
+        unchecked = self.runtime(45, x=corrected + 10, facing=0)
+        self.assertEqual(state.target_x, unchecked.state.target_x)
+
     def test_armed_opponent_meets_walls_through_enemycollide(self):
         # FrameAdv 2:65f6: an armed opponent in animation state 1 takes
         # EnemyCollide 4:62b0, not Collide. Six pixels into the wall ahead
@@ -778,6 +830,31 @@ class TerrainTests(unittest.TestCase):
                     cut_enabled=False, frame_record=record)
                 self.assertEqual(runtime.state.target_x, expected)
                 self.assertEqual(runtime.state.source_sequence_id, 150)
+
+    def test_extended_scythe_is_a_barrier_for_tall_bodies(self):
+        # CheckCollide 4:5674/5c76 and ScytheBladeExtended 5:5fa0: LEVL 2006
+        # room 2's scythe (cell 7, tile 12) stops a body taller than 48 while
+        # its phase is 3-15, with GetBarrCode's barrier 6 (edges +8/-16).
+        # The port previously walked through the closed blade.
+        data = bytearray(load_resource_file("Prince.rsrc")["LEVL"][2006]["data"])
+        offset = 0x780 + 2 * 120 + 7 * 4
+        self.assertEqual(struct.unpack_from(">H", data, 2 * 60 + 7 * 2)[0], 12)
+        wall_left = 7 * TILE_WIDTH + 22 + 8
+        for phase, height, actor, blocked in ((8, 79, 0, True), (3, 79, 0, True),
+                                              (15, 79, 0, True), (2, 79, 0, False),
+                                              (16, 79, 0, False), (0, 79, 0, False),
+                                              (8, 48, 0, False), (8, 79, 11, False)):
+            with self.subTest(phase=phase, height=height, actor=actor):
+                struct.pack_into(">H", data, offset,
+                                 (struct.unpack_from(">H", data, offset)[0] & 0xff00) | phase)
+                level = LevelMap(bytes(data))
+                state = SequenceState(2, actor_type=actor, level_kind=4)
+                right = wall_left + 4
+                bounds = (right - 20, 226 - height + 1 - 120 * 2, right, 226 - 120 * 2)
+                old = (bounds[0] - 10, bounds[1], bounds[2] - 10, bounds[3])
+                corrected = level.wall_correction(2, 300, 310, bounds, old, 1,
+                                                  physical_row=0, state=state)
+                self.assertEqual(corrected, 305 if blocked else 310)
 
     def test_unarmed_wall_bump_does_not_request_sword_contact(self):
         for action, sequence in ((7, 47), (40, 46)):

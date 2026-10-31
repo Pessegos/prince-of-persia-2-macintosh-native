@@ -21,6 +21,8 @@ MAX_FALL_SPEED = 63
 VOID_DEATH_Y = 730
 # Prone poses: lying down (SEQS 125), idle (251) and crawling (SEQS 122/123).
 PRONE_FRAMES = (246, 261)
+# IsStrikingPos 6:5d60 for the Kid.
+KID_STRIKE_POSES = frozenset((153, 154, 244, 245))
 DOWN_CUT_Y = 440
 # Idle width18 - anchor4, plus SEQS:13's final one-pixel backward step.
 RUN_STOP_GATE_REAR_REACH = 15
@@ -860,8 +862,14 @@ class LevelMap:
                               and struct.unpack_from('>H', self.level, 0x2186)[0] == 4
                               and (state is None or state.actor_type != 11)
                               and stone_gate_blocks(tile.foreground, bounds, state))
+                # CheckCollide 4:5674/5c76: an extended scythe (ScytheBlade-
+                # Extended 5:5fa0, phase 3-15) stops a body taller than 48;
+                # actors 1/7/8/11 pass. GetBarrCode gives it barrier 6.
+                scythe = (tile.kind == 12 and 3 <= tile.foreground & 0x1f <= 15
+                          and bottom - top + 1 > 48
+                          and (state is None or state.actor_type not in (1, 7, 8, 11)))
                 if (tile.kind not in WALL_TILES and not desert_exit and not stone_gate
-                        and not ruins_gate and not throne_gate):
+                        and not ruins_gate and not throne_gate and not scythe):
                     continue
                 if (tile.kind == CREVICE_TILE and bottom - top + 1 <= 34 and tile.foreground & 3 != 3
                         and (state is None or state.actor_type not in (7, 8))):
@@ -870,11 +878,12 @@ class LevelMap:
                     continue
                 # GetLeftBarr/GetRightBarr, code 4, DATA c9e0/c9f2[barrier].
                 barrier = (5 if stone_gate else 1 if desert_exit or ruins_gate else 8 if throne_gate else
-                           2 if tile.kind == 7 and bottom - top + 1 <= 34 else 4)
+                           6 if scythe else 2 if tile.kind == 7 and bottom - top + 1 <= 34 else 4)
                 # Tile 2's extended barrier (type 3) exists only while
                 # DoStepFwd queries clearance with c944 set, not in Collide.
                 left_offset, right_offset = {1: (40, 0), 2: (0, 50), 3: (-22, -22),
-                                             4: (3, 0), 5: (18, 0), 8: (16, 24)}[barrier]
+                                             4: (3, 0), 5: (18, 0), 6: (8, 16),
+                                             8: (16, 24)}[barrier]
                 wall_left = col * TILE_WIDTH + 22 + left_offset
                 wall_right = col * TILE_WIDTH + 72 - right_offset
                 # CheckBarr 4:4f8a-4fb4 only raises a gate side collision
@@ -1356,13 +1365,30 @@ class RooftopPhysics:
                 # Opponents bump as armed characters: HitFloor arms them on
                 # landing (6:038c) and their FRAM has no Prince bump poses 50-52.
                 armed = sword_drawn or state.actor_type not in (0, None)
-                if supported and (armed or state.current_y > -30):
+                direction = 1 if state.facing else -1
+                if supported and (armed or state.current_y > -30) and state.vertical_velocity >= 50:
+                    # Collide 4:58e4-58fe: SetCharFloor, then a fast body backs
+                    # off 17 pixels and keeps its pose and vertical speed.
+                    state.current_y = 0
+                    state.target_x -= 17 * direction
+                    state.current_x = state.target_x
+                elif supported and (armed or state.current_y > -30):
                     action = state.action
                     state.current_y = state.vertical_velocity = 0
-                    direction = 1 if state.facing else -1
                     sequence = ((64 if delta * direction < 0 else 65) if armed else
                                 46 if action in (24, 25) or 40 <= action < 43
                                 or 102 <= action <= 106 else 47)
+                    if armed:
+                        # Collide 4:592a-5998 (AddCharX 4:2bae): the rear bump
+                        # moves 6 forward (17 more from SEQS 55's pose 207); a
+                        # front bump from a strike pose (IsStrikingPos 6:5d60)
+                        # moves 25 forward before SEQS 64's backward slice.
+                        if sequence == 65:
+                            shift = 6 + (17 if state.source_sequence_id == 55 and action == 207 else 0)
+                        else:
+                            shift = 25 if state.actor_type in (0, None) and action in KID_STRIKE_POSES else 0
+                        state.target_x += shift * direction
+                        state.current_x = state.target_x
                     if not armed and PRONE_FRAMES[0] <= action <= PRONE_FRAMES[1]:
                         # Collide 4:59b6-59dc: a prone body backs off 5 pixels
                         # and stays down (SEQS 121), not a standing bump.
@@ -1374,8 +1400,15 @@ class RooftopPhysics:
                     if sequence == 64:
                         state.sound_events.append(10)
                 else:
-                    self.select(runtime, 45)
-                    motion.falling = True
+                    # GroundBump 4:5868: ten pixels back, then SEQS 45
+                    # (animation state 4 only stops drifting).
+                    state.target_x -= 10 * direction
+                    state.current_x = state.target_x
+                    if state.animation_state == 4:
+                        state.horizontal_velocity = 0
+                    else:
+                        self.select(runtime, 45)
+                        motion.falling = True
                 if bounds_for_state is not None:
                     previous_bounds = collision_bounds
                     bounds = bounds_for_state()

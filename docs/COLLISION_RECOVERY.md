@@ -735,3 +735,40 @@ are supplied, not executed; this is not a complete FrameAdv/CutChar or audio
 waveform comparison. Scene regressions cover the actual level6 running jump,
 forward arc, single scream, no floor impact and death audio waiting for the
 full imported scream. Existing ordinary rooftop/landing tests remain required.
+
+### The Kid's Collide Response
+
+Collide 4:5738 (2026-10-31, static reading checked against Codex's native
+reference probes `probe_temple_armed_collision`, `probe_temple_ground_bump`
+and `probe_temple_ground_collision`, which execute these branches):
+
+- A dead actor (ALIVE >= 0) or poses 242/243 return first. The signed
+  correction is added to X; the cell in the push direction (two cells from
+  selected sequence 75) decides support: IsSpace selects GroundBump 4:5868.
+- GroundBump moves ten pixels back (AddCharX -10), then SEQS 45; animation
+  state 4 only clears horizontal speed. The port selected 45 in place.
+- 4:589e: an unarmed body 30 or more above the floor also takes GroundBump.
+  SetCharFloor aligns Y; vertical speed 50 or more backs off 17 and keeps
+  pose and speed (no bump). Otherwise speed is cleared.
+- Armed: pushed forward (side = facing) is the rear bump 65, six forward,
+  17 more from SEQS 55's pose 207; otherwise front bump 64, and from a strike
+  pose (IsStrikingPos 6:5d60: 153/154/244/245) 25 forward first, unless the
+  cached cell is a gate with low byte above 60 (no response at all). A rock
+  edge (temple) overrides with 93 and disarms. 64 requests cue 10 unless the
+  selected sequence becomes 56.
+- Unarmed: prone poses 246-261 back off five with 121; with HP plus pending
+  damage positive, 46 from 24/25, 40-42 or 102-106, else 47.
+
+The port now applies these offsets on top of its swept correction. The
+correction distance itself still comes from `wall_correction`, not from
+CheckBarr's history banks (Codex's `temple-collision-*` probes), and the
+cached cell behind the open-gate suppression is not reproduced. Those
+remain part of the temple collision stage.
+
+CheckCollide 4:5654 sends tile 12 (the ruins scythe) to 4:5c76: actors
+1/7/8/11 and bodies at most 48 high pass; a taller body collides while
+ScytheBladeExtended 5:5fa0 holds (phase 3-15). GetBarrCode gives barrier 6
+(face +8, back -16). `wall_correction` had no scythe barrier, so the Prince
+ran through a closed blade; it now stops at its edge. Tile 43 (temple only,
+LEVL 2012) is IsWall but GetBarrCode 0, no CheckBarr barrier: noted for the
+temple stage, not changed.
