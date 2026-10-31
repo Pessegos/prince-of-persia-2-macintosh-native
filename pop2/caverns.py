@@ -306,14 +306,16 @@ def room_indices(level_number, room_id):
     shapes = {}
     for command in program['rooms'][str(room_id)]:
         layer, index, _x, _bottom, flags = command[:5]
-        if (command[7] if len(command) >= 8 else 4) != 4:
+        library = command[7] if len(command) >= 8 else 4
+        if library not in (4, 5):
             continue
-        if (index, flags) not in shapes:
-            shape = indexed_shape(resources['SHAP'][index]['data'], allow_trailing=True)
+        if (library, index, flags) not in shapes:
+            source = resources if library == 4 else load_resource_file('Kid.rsrc')
+            shape = indexed_shape(source['SHAP'][index]['data'], allow_trailing=True)
             # Transfer mode 0 copies index zero too; mode 16 masks it.
             mask = Image.new('L', shape.size, 255) if flags == 0 else shape.point([0] + [255] * 255)
-            shapes[index, flags] = Image.merge('LA', (shape, mask))
-        clipped = clipped_sprite(shapes[index, flags], command)
+            shapes[library, index, flags] = Image.merge('LA', (shape, mask))
+        clipped = clipped_sprite(shapes[library, index, flags], command)
         if clipped is not None:
             sprite, position = clipped
             layers[layer].paste(sprite, position, sprite.getchannel('A'))
@@ -820,7 +822,7 @@ def horse_sprite():
 def cavern_command_sprite(command, resources, palette, shapes):
     library = command[7] if len(command) >= 8 else 4
     index, flags = command[1], command[4]
-    key = (library, index, flags) if library == 1 or flags == 0 else index
+    key = (library, index, flags) if library in (1, 5) or flags == 0 else index
     if key not in shapes:
         if library == 1:
             source, colors = flask_assets()
@@ -829,6 +831,16 @@ def cavern_command_sprite(command, resources, palette, shapes):
             shapes[key] = decode_shap(resources['SHAP'][index]['data'], palette)
             if flags == 0:
                 # Native transfer mode 0 copies zero/black too; mode 16 masks it.
+                shapes[key].putalpha(255)
+        elif library == 5:
+            # A CUST image from Kid.rsrc: level 13's flame (room 4, SHAP
+            # 4077-4091). Its local inks 1-15 take Kid CTBL 4077, which the
+            # file numbers 224-239 (hypothesis: by colour, as CopyBits does).
+            kid = load_resource_file('Kid.rsrc')
+            flame = decode_ctbl(kid['CTBL'][4077]['data'])
+            colors = {ink: flame[entry] for ink, entry in enumerate(sorted(flame), 1)}
+            shapes[key] = decode_shap(kid['SHAP'][index]['data'], colors)
+            if flags == 0:
                 shapes[key].putalpha(255)
         elif library == 0:
             # A sword item (tile 22): the sword set (SHPL 1000), drawn with

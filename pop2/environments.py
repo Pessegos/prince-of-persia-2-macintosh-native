@@ -1131,6 +1131,22 @@ class Ruins(Caverns):
         return 2 if character_column(scene.sequence_state.target_x) >= 6 else 1
 
 
+class Temple(Caverns):
+    """Levels 10-13 (environment 2). Scenery, terrain and saves only: the
+    temple mechanisms and birdheads are not wired yet."""
+
+    def finish_exit(self):
+        scene = self.scene
+        number = scene.game.level.number
+        if number in (10, 11, 12):
+            # CheckPlayNIS 2:0180 (a tree scene at most), then RestartGame.
+            self.finish_via_story(number + 1)
+        else:
+            # CheckPlayNIS(13, 14) selects NIS 3; level fourteen is not ported.
+            scene.game.exit = None
+            scene.status.set(f'Level {number} complete')
+
+
 def environment_for(scene):
     """The environment of the scene's current level.
 
@@ -1139,7 +1155,7 @@ def environment_for(scene):
     """
     game = scene.game
     if getattr(game, 'caverns', None) is not None:
-        return (Ruins if game.level.kind == 4 else Caverns)(scene)
+        return {4: Ruins, 2: Temple}.get(game.level.kind, Caverns)(scene)
     if getattr(game, 'desert', None) is not None:
         return Desert(scene)
     if getattr(game, 'harbor', None) is not None:

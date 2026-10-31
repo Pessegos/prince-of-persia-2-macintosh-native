@@ -16,14 +16,14 @@ from tools.extract_intro import (
 )
 from tools.extract_attract import extract_attract, extract_credits_music
 from tools.extract_caverns import extract_cavern_levels, scenery_name
-from pop2.caverns import scenery_resource
+from pop2.caverns import TEMPLE_LEVELS, scenery_resource
 from pop2.mac_resources import get_resource_fork, parse_resource_fork
 from pop2.paths import ASSET_DIR
 
 
 RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Skeleton.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc", "NISTree.rsrc",
                   "Ruins.rsrc", "Head.rsrc", "TNIS1.rsrc", "TNIS2.rsrc", "TNIS3.rsrc", "ThroneNIS.rsrc",
-                  "Horse.rsrc", "TempleNIS.rsrc")
+                  "Horse.rsrc", "TempleNIS.rsrc", "Temple.rsrc")
 REQUIRED_RESOURCES = {
     "Prince.rsrc": {"LEVL", "SEQS", "SHAP", "SHPL", "CTBL", "NFNT"},
     "Kid.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
@@ -47,6 +47,8 @@ REQUIRED_RESOURCES = {
     # The ride to the temple after level nine (NIS 2).
     "Horse.rsrc": {"SHAP", "CTBL"},
     "TempleNIS.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
+    # Levels 10-13 (environment 2).
+    "Temple.rsrc": {"PIEC", "SHAP", "CTBL", "CUST"},
 }
 
 
@@ -77,9 +79,13 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         # resource forks: they run beside the music and scenes. The scenery
         # is drawn by worker processes, the demo by a single simulation.
         demo = background.submit(extract_attract, program, dict(resources), staging, lambda _text: None)
-        numbers = (3, 4, 5, 6, 7, 8, 9)
+        numbers = (3, 4, 5, 6, 7, 8, 9, *TEMPLE_LEVELS)
+        # A temple CUST image can come from Kid.rsrc (level 13's room 4).
+        sceneries = {number: (resources[scenery_resource(number)], resources["Kid.rsrc"])
+                     if number in TEMPLE_LEVELS else resources[scenery_resource(number)]
+                     for number in numbers}
         caverns = background.submit(
-            extract_cavern_levels, program, {number: resources[scenery_resource(number)] for number in numbers},
+            extract_cavern_levels, program, sceneries,
             resources["Prince.rsrc"], staging, progress, workers=os.cpu_count() or 1)
         extract_audio(image, program, resources["Prince.rsrc"], staging / "audio", progress)
         progress("Recovering the original opening scenes...")

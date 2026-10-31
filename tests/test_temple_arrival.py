@@ -40,6 +40,27 @@ class RideLastShotTests(unittest.TestCase):
 
 
 @unittest.skipUnless(TEMPLE_INSTALLED, 'Imported temple scene and scenery required')
+class TempleSaveTests(unittest.TestCase):
+    def test_level_ten_round_trips_through_a_save(self):
+        from pathlib import Path
+        import tempfile
+        from pop2.game_session import GameResources, GameSession
+        from pop2.save_game import capture_snapshot, read_snapshot, write_save
+
+        resources = GameResources.load()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'temple.pop2save'
+            original = GameSession.load(resources, 10)
+            original.combat.player.life = 2
+            write_save(path, capture_snapshot(original))
+            restored, _saved = read_snapshot(path, resources)
+        self.assertEqual((restored.level.number, restored.motion.room), (10, 21))
+        self.assertEqual(vars(restored.runtime.state), vars(original.runtime.state))
+        self.assertEqual(restored.combat.player.life, 2)
+        self.assertIs(restored.level_map.caverns, restored.caverns)
+
+
+@unittest.skipUnless(TEMPLE_INSTALLED, 'Imported temple scene and scenery required')
 class LevelTenArrivalTests(unittest.TestCase):
     def setUp(self):
         from tests.test_terrain import RooftopSceneTests
@@ -63,6 +84,54 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.tick(20)
         self.assertTrue(scene.combat.player.alive)
         self.assertEqual(scene.game.level.number, 10)
+
+    def test_temple_levels_use_the_temple_environment(self):
+        # The cavern environment's exit would have started level one's
+        # voyage (start_ending) after a temple level.
+        from unittest.mock import patch
+        from pop2.environments import Temple, environment_for
+
+        scene = self.scene
+        scene.enter_next_level(10)
+        environment = environment_for(scene)
+        self.assertIsInstance(environment, Temple)
+        with patch.object(scene, 'start_ending') as ending,                 patch.object(environment, 'finish_via_story') as story:
+            environment.finish_exit()
+        ending.assert_not_called()
+        story.assert_called_once_with(11)
+
+
+    def test_every_temple_level_loads_and_walks(self):
+        # LEVL 2010-2012 start rooms 5/19/3 (one-based) with SetKidDefaults'
+        # ordinary standing entry (SEQS 5).
+        scene = self.scene
+        for number, room in ((11, 4), (12, 18), (13, 2)):
+            if not (ASSET_DIR / f'temple_level{number}.json').is_file():
+                continue
+            with self.subTest(level=number):
+                scene.enter_next_level(number)
+                self.assertEqual((scene.game.level.number, scene.room_id), (number, room))
+                self.assertEqual(scene.sequence_state.source_sequence_id, 5)
+                self.tick(15)
+                self.assertTrue(scene.combat.player.alive)
+
+
+@unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level-13 scenery required')
+class LevelThirteenFlameTests(unittest.TestCase):
+    def test_room_four_draws_the_kid_file_flame(self):
+        # CUST 4075 (native room 4) uses SHAP 4077-4091, found in Kid.rsrc
+        # (the Resource Manager chain), not Temple.rsrc: the exporter marks
+        # them library 5. Before, level 13 could not be exported.
+        import json
+        from pop2.caverns import cavern_room
+
+        program = json.loads((ASSET_DIR / 'temple_level13.json').read_text(encoding='ascii'))
+        flames = [command for command in program['rooms']['3'] if command[7:8] == [5]]
+        self.assertEqual([command[1] for command in flames], [4077])
+        room = cavern_room(3, level_number=13)
+        x, bottom = flames[0][2:4]
+        pixel = room.background.getpixel((x + 20, bottom - 40))
+        self.assertGreater(pixel[2], pixel[0])  # Blue, not the magenta of a missing colour.
 
 
 if __name__ == '__main__':

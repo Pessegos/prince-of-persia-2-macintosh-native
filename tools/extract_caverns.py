@@ -70,9 +70,26 @@ def recovery_inputs(program, caverns, prince):
         code = resources['CODE'].get(segment, {}).get('data', b'')
         if offset + 2 <= len(code):
             intercepts[0x100000 + segment * 0x10000 + offset] = code[offset:offset + 2]
-    return (resources, parse_resource_fork(caverns),
+    return (resources, scenery_artwork(caverns),
             parse_resource_fork(prince) if prince is not None else None,
             expand_a5_data(resources), intercepts)
+
+
+# A CUST image the environment file lacks is found further down the
+# Resource Manager chain: level 13's room 4 uses Kid.rsrc SHAP 4077.
+# Exported commands mark such a shape as library 5 (Kid.rsrc).
+KID_LIBRARY = 5
+
+
+def scenery_artwork(caverns):
+    """The environment file's resources; ``caverns`` may also be a tuple
+    (environment file, Kid.rsrc) whose Kid shapes are kept apart."""
+    if isinstance(caverns, tuple):
+        caverns, kid = caverns
+        artwork = parse_resource_fork(caverns)
+        artwork['KIDSHAP'] = parse_resource_fork(kid).get('SHAP', {})
+        return artwork
+    return parse_resource_fork(caverns)
 
 
 class CavernRecovery:
@@ -376,15 +393,18 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                 word(record + i * 2) for i in range(6))
             if base and hidden != -1 and record_pass == draw_pass:
                 shape = struct.unpack('>H', cpu.mem_read(base + 2, 2))[0] + shape_index
-                if shape not in artwork['SHAP']:
+                library, shapes = 4, artwork['SHAP']
+                if shape not in shapes and shape in artwork.get('KIDSHAP', {}):
+                    library, shapes = KID_LIBRARY, artwork['KIDSHAP']
+                if shape not in shapes:
                     raise ValueError(f'Missing custom cavern shape {shape}')
-                width, height = struct.unpack_from('>hH', artwork['SHAP'][shape]['data'], 4)
+                width, height = struct.unpack_from('>hH', shapes[shape]['data'], 4)
                 clip = list(struct.unpack('>4h', cpu.mem_read(a5 - 0x4600, 8)))
                 rect = [max(bottom - height, clip[0]), max(x, clip[1]),
                         min(bottom, clip[2]), min(x + width, clip[3])]
                 if rect[0] < rect[2] and rect[1] < rect[3]:
                     layer = 'back' if draw_pass in (0, 5, 11) else 'front'
-                    commands.append([layer, shape, x, bottom, mode, word(a5 - 0x45f6), rect, 4,
+                    commands.append([layer, shape, x, bottom, mode, word(a5 - 0x45f6), rect, library,
                                      word(a5 - 0x45f8), word(a5 - 0x45f6)])
                     command_kinds.append(word(info + 0x12) if long(a5 - 0x4f8c) else 0)
                     command_slots.append(current_slot[0])

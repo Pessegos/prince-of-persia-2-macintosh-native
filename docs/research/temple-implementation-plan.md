@@ -88,3 +88,14 @@ Each stage integrates separately with the usual reservation.
   once. After the scene level ten starts in room 22 (SetKidDefaults
   2:5dee) when its scenery is installed, otherwise the game stops after the
   ride as before. A reimport is needed for the new `temple.json`.
+- Stage 1 done: the importer exports levels 10-13 (Temple.rsrc is a
+  required import file). Level 13's room 4 CUST 4075 draws SHAP 4077-4091,
+  which only Kid.rsrc holds (the Resource Manager chain); the exporter now
+  receives (Temple.rsrc, Kid.rsrc) for temple levels and marks those images
+  library 5. The runtime colours them with Kid CTBL 4077 (stored at
+  224-239) by ink order: the blue flame. That colour mapping and the flame's
+  animation (pass 11 records 2-16) are hypotheses / not ported.
+- Stage 2: a `Temple` environment (levels 10-13) ends levels 10-12 through
+  CheckPlayNIS/RestartGame like the ruins and stops after level 13 (NIS 3
+  and level 14 are not ported); saves accept levels 1-13. Every temple level
+  loads and walks (scripted test). The level menu still lists 1-9.

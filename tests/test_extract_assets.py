@@ -95,6 +95,7 @@ class AssetImportTests(unittest.TestCase):
                                      "ending.json", "discovery.json", "attract.json",
                                      "caverns_entry.json", "caverns_level4.json", "caverns_level5.json",
                                      "ruins_level6.json", "ruins_level7.json", "ruins_level8.json", "ruins_level9.json",
+                                     *(f"temple_level{n}.json" for n in (10, 11, 12, 13)),
                                      "carpet.json", "throne.json", "temple.json",
                                      *(f"tree-{n}.json" for n in extract_assets.TREE_VARIANTS)})
         self.assertEqual({p.name for p in self.output.iterdir()}, set(files))
@@ -110,7 +111,10 @@ class AssetImportTests(unittest.TestCase):
                          {3: self.forks['Caverns.rsrc'], 4: self.forks['Caverns.rsrc'],
                           5: self.forks['Caverns.rsrc'], 6: self.forks['Ruins.rsrc'],
                           7: self.forks['Ruins.rsrc'], 8: self.forks['Ruins.rsrc'],
-                          9: self.forks['Ruins.rsrc']})
+                          9: self.forks['Ruins.rsrc'],
+                          # Temple levels also search Kid.rsrc (level 13's CUST 4077).
+                          **{n: (self.forks['Temple.rsrc'], self.forks['Kid.rsrc'])
+                             for n in (10, 11, 12, 13)}})
 
     def test_level_four_scenery_failure_preserves_installed_resources(self):
         self.output.mkdir()
