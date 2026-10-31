@@ -49,14 +49,14 @@ class SkeletonLavaPersistenceTests(unittest.TestCase):
         for facing in (0, 1):
             with self.subTest(facing=facing):
                 actor = self.lava_entry(facing)
-                self.assertEqual(actor.state.special_flag, 5)
+                self.assertEqual(actor.state.sequence_mode, 5)
                 self.assertTrue(removed_on_room_save(actor))
 
     def test_zero_hp_heap_also_sinks_instead_of_becoming_a_revivable_lava_heap(self):
         for facing in (0, 1):
             with self.subTest(facing=facing):
                 actor = self.lava_entry(facing, collapsed=True)
-                self.assertEqual(actor.state.special_flag, 5)
+                self.assertEqual(actor.state.sequence_mode, 5)
                 self.scene.combat.enter_room(1, 2)
                 self.scene.combat.enter_room(22, 2)
                 self.assertEqual(self.scene.combat.guards, [])
@@ -85,7 +85,7 @@ class SkeletonLavaPersistenceTests(unittest.TestCase):
             write_save(path, capture_snapshot(self.scene.game))
             game, _document = read_snapshot(path, self.scene.resources)
         actor = game.combat.guards[0]
-        self.assertEqual((actor.skeleton.phase, actor.state.special_flag), ('lava', 5))
+        self.assertEqual((actor.skeleton.phase, actor.state.sequence_mode), ('lava', 5))
         game.combat.enter_room(1, 2)
         self.assertNotIn(actor, game.combat.room_encounters[22][0])
         game.combat.enter_room(22, 2)
@@ -112,7 +112,7 @@ class SkeletonLavaPersistenceTests(unittest.TestCase):
         game.restart()
         game.place(22, 2, 280, 1, reset_guards=False)
         self.assertEqual(len(game.combat.guards), 1)
-        self.assertEqual(game.combat.guards[0].state.special_flag, 0)
+        self.assertEqual(game.combat.guards[0].state.sequence_mode, 0)
         self.assertIsNotNone(game.combat.guards[0].skeleton)
 
 

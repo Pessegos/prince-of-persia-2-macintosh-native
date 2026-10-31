@@ -83,11 +83,11 @@ class GuardRecordTests(unittest.TestCase):
 
     def test_negative_exact_tenth_cell_and_stale_motion_flags(self):
         actor = self.actor()
-        actor.state.special_flag, actor.state.horizontal_velocity = 5, 27
+        actor.state.sequence_mode, actor.state.horizontal_velocity = 5, 27
         actor.state.sound_events.append(61)
         GuardRoomRecord(227, 3, 2, True, -10).restore(actor, 0)
         self.assertEqual((actor.row, actor.state.current_y, actor.state.animation_state), (-2, 0, 1))
-        self.assertEqual((actor.state.special_flag, actor.state.horizontal_velocity, actor.state.sound_events), (0, 0, []))
+        self.assertEqual((actor.state.sequence_mode, actor.state.horizontal_velocity, actor.state.sound_events), (0, 0, []))
         self.assertFalse(actor.terrain_motion.falling)
         self.assertEqual(actor.terrain_motion.row, -2)
 
@@ -95,7 +95,7 @@ class GuardRecordTests(unittest.TestCase):
         for flag, source, expected in ((0, 227, False), (4, 227, True), (5, 227, True),
                                        (0, 154, True), (0, 196, True)):
             actor = self.actor()
-            actor.state.special_flag, actor.state.selected_sequence_id = flag, source
+            actor.state.sequence_mode, actor.state.selected_sequence_id = flag, source
             self.assertEqual(removed_on_room_save(actor), expected)
 
 

@@ -107,7 +107,7 @@ class GuardRoomTests(unittest.TestCase):
 
     def test_terminal_removed_guard_does_not_reappear_on_revisit(self):
         combat, actor = self.actor()
-        actor.state.special_flag = 5
+        actor.state.sequence_mode = 5
         combat.enter_room(31, 1)
         combat.enter_room(3, 1)
         self.assertNotIn(actor, combat.guards)

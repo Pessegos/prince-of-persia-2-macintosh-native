@@ -172,6 +172,13 @@ def _unpack(value, resources, lava_tables, depth=0):
         optional.add('caverns')
     if cls is SequenceState:
         optional.add('floating')
+        if isinstance(record, dict) and 'special_flag' in record:
+            # Older saves split native +0x34 (a5-0x5022) in two fields;
+            # keep whichever was set (SEQS -21 or the host writers).
+            record = dict(record)
+            legacy = record.pop('special_flag')
+            if record.get('sequence_mode', 0) == 0:
+                record['sequence_mode'] = legacy
     if cls.__name__ == 'Fighter':
         optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive', 'sword_lost',
                          'ruins'))

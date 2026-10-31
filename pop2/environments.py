@@ -414,6 +414,8 @@ class Caverns(Environment):
             scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
             motion.dead, motion.falling = True, False
             state.horizontal_velocity = state.vertical_velocity = 0
+            # GetLavaInfoHnd 8:3546-3548 marks the Kid too (IsCharNonViewable).
+            state.sequence_mode = 5
             scene.combat.player.life = 0
             scene.death.begin(5)
             scene.physics.select(scene.sequence_runtime, sequence)
@@ -425,7 +427,7 @@ class Caverns(Environment):
         for guard in scene.combat.active_guards():
             # CheckLavaBoil 8:3480 gates repeated entry on special5, not HP:
             # a zero-HP skeleton heap can still be consumed by the pool.
-            if (guard.skeleton is None or guard.state.special_flag == 5
+            if (guard.skeleton is None or guard.state.sequence_mode == 5
                     or guard.terrain_motion is None):
                 continue
             state, motion = guard.state, guard.terrain_motion
@@ -438,7 +440,7 @@ class Caverns(Environment):
                 guard.skeleton.phase = 'lava'
                 # GetLavaInfoHnd 8:3546-3548 marks the actor for removal;
                 # UpdateOppInfo 6:30c4-30d4 must not save a revivable heap.
-                state.special_flag = 5
+                state.sequence_mode = 5
                 motion.dead, motion.falling = True, False
                 state.horizontal_velocity = state.vertical_velocity = 0
                 scene.physics.select(guard.runtime, sequence)

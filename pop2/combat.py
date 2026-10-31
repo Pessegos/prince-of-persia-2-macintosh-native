@@ -605,7 +605,7 @@ class CombatEncounter:
         # Alert 1 (separated by a gap) qualifies too; sword reach is irrelevant.
         player = self.player
         if (self.rooftop_escape or not player.alive or player.state.actor_type == 1
-                or player.state.special_flag == 13
+                or player.state.sequence_mode == 13
                 or player.state.animation_state in (3, 4)
                 or player.state.action in (185, 242, 243, 266, 271)):
             return False
@@ -1195,7 +1195,7 @@ class CombatEncounter:
                          character_column(state.target_x) < character_column(other.target_x))
         if (guard.row == self.player.row and spacing_brake) or passed_player:
             self._brake_guard(guard, 2)
-        elif not self.player.alive or other.special_flag == 13:
+        elif not self.player.alive or other.sequence_mode == 13:
             self._brake_guard(guard, 0)
         elif guard.skeleton is not None and exit_guarded(self, guard) and distance <= 127:
             # AutoCtrl 4:0780-0798: in the exit-guarded rooms a runner within

@@ -94,7 +94,7 @@ class SkeletonRoomTests(unittest.TestCase):
 
     def test_reload_discards_stale_control_events_and_resets_floor_and_velocity(self):
         _, _combat, actor = self.encounter()
-        actor.state.current_y, actor.state.special_flag = -27, 13
+        actor.state.current_y, actor.state.sequence_mode = -27, 13
         actor.state.horizontal_velocity = actor.state.vertical_velocity = 10
         actor.state.sound_events[:] = [99]
         actor.state.sequence_events[:] = [(-10, (99,))]
@@ -104,7 +104,7 @@ class SkeletonRoomTests(unittest.TestCase):
         actor.skeleton.restore_room(actor, 0)
         self.assertEqual((actor.state.current_y, actor.state.animation_state,
                           actor.state.horizontal_velocity, actor.state.vertical_velocity,
-                          actor.state.special_flag), (0, 1, 0, 0, 0))
+                          actor.state.sequence_mode), (0, 1, 0, 0, 0))
         self.assertEqual((actor.alert_mode, actor.recovering, actor.contact_consumed), (0, False, False))
         self.assertEqual((actor.state.sound_events, actor.state.sequence_events), ([], []))
         self.assertFalse(actor.terrain_motion.dead or actor.terrain_motion.falling)
@@ -159,7 +159,7 @@ class SkeletonRoomTests(unittest.TestCase):
         for special, sequence in ((4, 119), (5, 119), (0, 154), (0, 196)):
             with self.subTest(special=special, sequence=sequence):
                 _, combat, actor = self.encounter()
-                actor.state.special_flag = special
+                actor.state.sequence_mode = special
                 actor.state.selected_sequence_id = sequence
                 combat.enter_room(0, 2)
                 combat.enter_room(14, 2)

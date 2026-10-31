@@ -199,6 +199,36 @@ class SaveFormatTests(unittest.TestCase):
                          (None, 0))
         self.assertIn(loaded.combat.guards[0], loaded.combat.active_guards())
 
+    def test_legacy_special_flag_merges_into_the_single_native_word(self):
+        # Native +0x34 (a5-0x5022) is one word; old saves stored two fields.
+        original = GameSession.load(self.resources, 3)
+        original.place(10, 2, 230, 1)
+        original.combat.guards[0].state.sequence_mode = 0
+        original.runtime.state.sequence_mode = 4
+        value = capture(original)
+        states = []
+
+        def collect(item):
+            if isinstance(item, dict):
+                if item.get('record') == 'SequenceState':
+                    states.append(item['fields'])
+                for child in item.values():
+                    collect(child)
+            elif isinstance(item, list):
+                for child in item:
+                    collect(child)
+
+        collect(value)
+        self.assertTrue(states)
+        for fields in states:
+            self.assertNotIn('special_flag', fields)
+            fields['special_flag'] = 5 if fields['sequence_mode'] == 0 else 13
+        write_save(self.path, value)
+        loaded, _saved = read_save(self.path, self.resources)
+        self.assertEqual(loaded.combat.guards[0].state.sequence_mode, 5)
+        self.assertEqual(loaded.runtime.state.sequence_mode, 4)
+        self.assertFalse(hasattr(loaded.runtime.state, 'special_flag'))
+
     def test_inactive_skeleton_room_record_survives_snapshot_and_resumes_native_reload(self):
         original = GameSession.load(self.resources, 3)
         original.place(10, 2, 230, 1)

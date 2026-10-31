@@ -28,7 +28,6 @@ class SequenceState:
     sound_events: list[int] = field(default_factory=list)
     sequence_events: list[tuple[int, tuple[int, ...]]] = field(default_factory=list)
     sequence_mode: int = 0
-    special_flag: int = 0
     engine_counter: int = 0
     horizontal_velocity: int = 0
     vertical_velocity: int = 0

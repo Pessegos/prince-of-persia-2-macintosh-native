@@ -220,11 +220,25 @@ class GuardDecisionTests(unittest.TestCase):
                 if condition == 'dead':
                     c.player.life = 0
                 elif condition == 'special13':
-                    c.player.state.special_flag = 13
+                    c.player.state.sequence_mode = 13
                 c._choose_unarmed_guard_action(g)
                 self.assertEqual(g.selected_sequence == 101, condition != 'close')
                 if condition != 'close':
                     self.assertEqual(g.alert_mode, 2 if condition == 'passed' else 0)
+
+    def test_seqs232_minus21_13_reaches_the_special13_brake_and_ambient(self):
+        # SEQS:232 word 12 is -21 13: AnimChar 4:2f92 writes the same word
+        # (a5-0x5022) that the guard brake and OppToFight 6:23b2 test for 13.
+        c, g = self.runner()
+        c.player.row = g.alternate_row = 0
+        c.player.state.target_x = 230
+        state = c.player.state
+        state.sequence_id, state.cursor = 232, 12
+        SequenceRuntime(self.sequences, state).next_frame()
+        self.assertEqual(state.sequence_mode, 13)
+        self.assertFalse(c.opponent_to_fight())
+        c._choose_unarmed_guard_action(g)
+        self.assertEqual((g.selected_sequence, g.alert_mode), (101, 0))
 
     def test_final_jump_brake_moves_forward12_only_when_rear_cannot_support(self):
         for facing in (0, 1):

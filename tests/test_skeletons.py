@@ -470,7 +470,7 @@ class SkeletonTests(unittest.TestCase):
                 elif condition == 'shadow':
                     combat.player.state.actor_type = 1
                 elif condition == 'special13':
-                    combat.player.state.special_flag = 13
+                    combat.player.state.sequence_mode = 13
                 elif condition == 'dead_pose':
                     combat.player.state.action = 185
                 elif condition == 'dead_guard':
@@ -1048,7 +1048,7 @@ class SkeletonTests(unittest.TestCase):
         self.assertEqual(combat.active_guards(), residents)
         self.assertNotIn(actor, combat.active_guards())
 
-    def test_shake_bones_obeys_marker_pose_row_and_special_flag_without_reset(self):
+    def test_shake_bones_obeys_marker_pose_row_and_sequence_mode_without_reset(self):
         for marker in (-1, 0, 1):
             for pose in (206, 207):
                 for row in (1, 2):
@@ -1056,7 +1056,7 @@ class SkeletonTests(unittest.TestCase):
                         with self.subTest(marker=marker, pose=pose, row=row, special=special):
                             combat, actor = self.stationary_bones(timer=120, shakes=1)
                             actor.skeleton.marker = marker
-                            actor.state.action, actor.state.special_flag = pose, special
+                            actor.state.action, actor.state.sequence_mode = pose, special
                             combat.shake_bones(actor.room, row)
                             changes = marker == 0 and pose == 206 and row == 2 and special != 5
                             self.assertEqual(actor.selected_sequence, 112 if changes else 119)

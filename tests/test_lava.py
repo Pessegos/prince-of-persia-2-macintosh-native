@@ -559,6 +559,7 @@ class ImportedLavaTests(unittest.TestCase):
         self.assertEqual(scene.death.method, 5)
         self.assertEqual(scene.death.music_method, 1)
         self.assertEqual(scene.sequence_state.selected_sequence_id, 116)
+        self.assertEqual(scene.sequence_state.sequence_mode, 5)
         self.assertEqual(scene.game.caverns.lava.pools[5, 27].flags, 0xa000)
         self.assertTrue(scene.terrain_motion.dead)
         self.assertFalse(scene.combat.player.alive)

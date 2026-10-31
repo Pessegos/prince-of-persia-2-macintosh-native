@@ -72,4 +72,4 @@ class GuardRoomRecord:
 
 def removed_on_room_save(actor):
     state = actor.state
-    return state.special_flag in (4, 5) or state.source_sequence_id in (154, 196)
+    return state.sequence_mode in (4, 5) or state.source_sequence_id in (154, 196)

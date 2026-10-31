@@ -110,7 +110,7 @@ Native, with `+0x28 = 0`, takes the JumpSeq(112) at `4:15ce` on that frame.
 Native `+0x34` (a5-0x5022) is a single word. The port splits it in two:
 - `sequence_mode` is written by `-21`, by `-18` and by the scene
   (`scene_prototype.py`). Its readers test for 3, 4 and 11.
-- `special_flag` is read for 13 (OppToFight `6:23b2`, guard brake) and for
+- `special_flag` (merged 2026-10-31, see below) was read for 13 (OppToFight `6:23b2`, guard brake) and for
   4/5 (UpdateOppInfo, skeleton). Only attract playback writes it (record word
   26). In gameplay it stays 0.
 
@@ -161,3 +161,44 @@ is optional.
     link;
   - the second skeleton shake replaying 112 with sound 61;
   - a save round trip with selected 0.
+
+## One field for the one word (2026-10-31)
+
+`special_flag` is gone; every reader and writer uses `sequence_mode`, the
+port's name for `+0x34` (a5-0x5022). The lava writer (GetLavaInfoHnd
+`8:3546`, 5), attract record word 26 and SEQS `-21` now share it, so:
+- the `-21 13` at `SEQS:232` word 12 reaches the guard brake and OppToFight
+  `6:23b2` (both test 13), as natively;
+- a lava-consumed skeleton (5) is also IsCharNonViewable `4:471e` (4, 5, 6,
+  7, 10, 12), which `composite_actor` already honoured for `sequence_mode`.
+  Its sinking poses are drawn by the lava animation, so nothing visible
+  changes.
+
+Older saves carry both keys. Loading keeps `sequence_mode` when non-zero,
+else the old `special_flag`, and drops the old key (no format bump).
+
+Native readers of a5-0x5022 (`a5_data_references.csv`, 59 references, 26
+reads) and the port's reader, if any:
+
+| Native reader | Value | Port |
+| --- | --- | --- |
+| CheckAlert `2:6f48` | 6 | not modelled |
+| Opponent1 `3:07e4/07f0/099e`; SetupSword `3:0b42/0e22`; `3:089e/09ea` | 8, 1, 5 | not modelled (opponent load/sword setup) |
+| OpponentClose `4:13d0` | 5 | `skeleton.py` wake/shake (5) |
+| IsShadowImbued `4:2594`; GenCtrl `6:0cea` | 13 | not modelled |
+| CheckBarr `4:4e80/4ff8`; DoKidEngarde `6:20f4` | 4 | `terrain.py` reserve/step (4) |
+| DecLifePts `4:3986` | 4 | not checked |
+| IsCharNonViewable `4:4724` | 4-7, 10, 12 | `composite_actor` |
+| IsDeadPos `4:4832` | 10 | `scene_prototype` dead-pose test (10) |
+| EnemyCollide `4:650c`; TestStrike `6:5a22` | 1 | `ruins_ai` (1) |
+| DoJumpHigh `6:190c` | 11 | `mac_input.ledge_input_request` (11) |
+| OppToFight `6:23b2` | 13 | `combat.opponent_to_fight`, guard brake (13) |
+| UpdateOppInfo `6:30c4` | 5 | `opponent_records`, `skeleton` (4/5) |
+| CheckLavaBoil `8:3480` | 5 | `environments` lava pass (5) |
+| Segments 7, 9, 10 (heads, Jaffar, temple) | 1, 2, 9, 12, 13 | `ruins_ai` for segment 7; others not ported |
+
+With one field, a port reader can no longer miss a value that another writer
+stored. The unmodelled readers are unchanged by this merge.
+Regressions: `test_seqs232_minus21_13_reaches_the_special13_brake_and_ambient`
+(`tests/test_enemy_ai.py`), `test_legacy_special_flag_merges_into_the_single_native_word`
+(`tests/test_save_game.py`).

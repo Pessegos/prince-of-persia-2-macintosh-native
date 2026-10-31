@@ -116,7 +116,7 @@ class Skeleton:
     def removed_on_room_save(self, actor):
         # UpdateOppInfo removes these terminal/hidden records instead of
         # leaving a heap that could be revived by re-entering the room.
-        return actor.state.special_flag in (4, 5) or actor.state.source_sequence_id in (154, 196)
+        return actor.state.sequence_mode in (4, 5) or actor.state.source_sequence_id in (154, 196)
 
     def restore_room(self, actor, slot):
         record = self.room_record
@@ -174,7 +174,7 @@ class Skeleton:
         # check to SkelDoneShaking; elsewhere it blocks proximity.
         timer_blocks = self.timer and not exit_guarded(encounter, actor)
         if (self.marker == -1 or timer_blocks or actor.alive or self.native_alive or not player.alive
-                or player.state.actor_type != 0 or actor.state.special_flag == 5
+                or player.state.actor_type != 0 or actor.state.sequence_mode == 5
                 or player.state.animation_state in (3, 4, 5)
                 or actor.room != player.room or actor.row != player.row):
             return False
@@ -329,7 +329,7 @@ class Skeleton:
         from pop2.combat import select_sequence
 
         # ShakeBones 4:1900-1946 does not reset recovery or remaining shakes.
-        if self.marker != 0 or actor.state.action != 206 or actor.state.special_flag == 5:
+        if self.marker != 0 or actor.state.action != 206 or actor.state.sequence_mode == 5:
             return False
         select_sequence(actor, 112)
         return True

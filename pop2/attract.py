@@ -58,7 +58,7 @@ def actor_state(words, actor_type):
                          facing=int(words[1] == 0), animation_state=words[8],
                          actor_type=actor_type, level_kind=5, callback_flag=words[12],
                          horizontal_velocity=words[9], vertical_velocity=words[10],
-                         special_flag=words[26], engine_counter=words[27],
+                         sequence_mode=words[26], engine_counter=words[27],
                          selected_sequence_id=words[20])
 
 

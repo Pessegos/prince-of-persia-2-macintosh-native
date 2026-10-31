@@ -27,7 +27,6 @@ class OpeningEscape:
         state.animation_state = 0
         state.horizontal_velocity = 0
         state.vertical_velocity = 0
-        state.special_flag = 0
         state.sequence_mode = 0
         state.callback_counter = 0
         state.callback_flag = 0
