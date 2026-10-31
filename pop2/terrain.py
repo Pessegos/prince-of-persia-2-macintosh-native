@@ -260,16 +260,26 @@ class LevelMap:
 
     def combat_turn_offset(self, room, row, state, record, bounds=None):
         # DoTurn, CODE:6 0x26dc-0x276c. A gate cell is a barrier only when
-        # the gate collision 4:5b0e blocks the current body (0x26f6/0x2720).
+        # the gate collision 4:5b0e blocks the current body (0x26f6/0x2720),
+        # in every environment; the desert's (LEVL 0x2186 = 1) blocks below
+        # phase 19 of its five low foreground bits, whatever the body.
         contact_x = floor_contact_x(state.target_x, state.facing, record)
         column = character_column(contact_x)
         direction = 1 if state.facing else -1
         allowance = None
+        environment = struct.unpack_from('>H', self.level, 0x2186)[0]
         for ahead in (1, 2):
             tile = self.tile(room, column + direction * ahead, row)
             kind = tile.kind
-            gate = (kind == 4 and bounds is not None and state.level_kind in (3, 4)
-                    and stone_gate_blocks(tile.foreground, bounds, state))
+            if kind != 4 or bounds is None:
+                gate = False
+            elif environment == 1:
+                # The port's desert tile carries a drawing value; its gate
+                # phase lives in DesertState (TriggerDsrtExit 18:07b6).
+                phase = self.desert.gate if self.desert is not None else tile.foreground & 0x1f
+                gate = phase < 19
+            else:
+                gate = stone_gate_blocks(tile.foreground, bounds, state)
             if kind in EMPTY_TILES | WALL_TILES or gate:
                 allowance = (ahead - 1) * TILE_WIDTH
                 break

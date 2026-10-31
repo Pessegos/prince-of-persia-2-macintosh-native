@@ -251,6 +251,38 @@ class TerrainTests(unittest.TestCase):
                 self.assertEqual(opened.combat_turn_offset(0, 1, state, record, bounds), 0)
                 self.assertEqual(closed.combat_turn_offset(0, 1, state, record), 0)
 
+    def test_combat_turn_gate_rule_covers_the_desert_and_the_temple(self):
+        # 4:5b0e has no environment test: the desert's gate (LEVL 0x2186 = 1)
+        # blocks below phase 19 whatever the body, the temple's (2) by height.
+        from pop2.desert_state import DesertState
+
+        def level_map(environment, phase):
+            level = bytearray(0x49ca)
+            struct.pack_into('>H', level, 0x2186, environment)
+            for cell in range(30):
+                struct.pack_into('>H', level, cell * 2, 1)
+            struct.pack_into('>H', level, 15 * 2, 4)
+            struct.pack_into('>H', level, 0x780 + 15 * 4, 0x300 | phase)
+            return LevelMap(level)
+
+        record, bounds = self.frames[158], (270, 155, 290, 226)
+        x = 250 - (record.offset_x - (record.aux & 0x3f))
+        state = SequenceState(227, action=158, target_x=x, facing=1, level_kind=1)
+        wall = level_map(1, 0).combat_turn_offset(0, 1, state, record, bounds)
+        self.assertLess(wall, 0)
+        for phase, expected in ((0, wall), (18, wall), (19, 0), (20, 0)):
+            with self.subTest(desert=phase):
+                self.assertEqual(level_map(1, phase).combat_turn_offset(
+                    0, 1, state, record, (270, 220, 290, 226)), expected)
+                # The runtime desert tile draws 0/104; DesertState holds the phase.
+                terrain = level_map(1, 104)
+                terrain.desert = DesertState(gate=phase)
+                self.assertEqual(terrain.combat_turn_offset(0, 1, state, record, bounds),
+                                 expected)
+        state.level_kind = 2
+        self.assertEqual(level_map(2, 0).combat_turn_offset(0, 1, state, record, bounds), wall)
+        self.assertEqual(level_map(2, 255).combat_turn_offset(0, 1, state, record, bounds), 0)
+
     def test_drawing_sword_reserves_native_distance_before_an_immediate_gap(self):
         state = SequenceState(2, action=15, target_x=411, facing=1)
         self.assertEqual(self.map.combat_draw_offset(

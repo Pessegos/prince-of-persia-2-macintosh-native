@@ -1204,9 +1204,10 @@ harness, not a second independent emulator. Scripts/reports require private
 local original data and are not bundled in the public checkout.
 
 Remaining work: prove ordinary gameplay reachability of the cached-target
-and turn-flag state; execute the `6:26b8` floor checks, position adjustment
-and JumpSeq(127); then test combined frame/cache persistence and any proposed
-port change. Reaching the routine proves a control decision, not a completed
+and turn-flag state, then test combined frame/cache persistence and any
+proposed port change. The `6:26b8` floor checks, position adjustment and
+JumpSeq(127) are executed natively since 2026-10-31
+([prince-turn-routine.md](research/prince-turn-routine.md)). Reaching the routine proves a control decision, not a completed
 visible turn. Special actors, skeletons, global cadence and full scheduling
 remain outside this audit. Preserve the zero-HP/death-registration regression
 when implementing the separate target layers.

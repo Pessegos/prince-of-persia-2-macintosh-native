@@ -42,6 +42,53 @@ decodes it and compares it with `LevelMap.combat_turn_offset`
 IsSpace `3:4eb2` (0, 9, 27, 47, 49) and IsWall `3:4ef2` (20, 2, 7, 25, 43)
 equal the port's `EMPTY_TILES` and `WALL_TILES`.
 
+## Native execution (2026-10-31)
+
+`tools/probe_prince_turn.py` runs 6:26b8 with its real helpers:
+GetCellsInFront 4:39fc, ReadCell 4:27ee (room links 4:26e2,
+GetUndefineCellId 4:28b6), IsFloor 3:4da6 with IsWall/IsSpace, the gate
+collision 4:5b0e, GetFCharX/GetDist1/GetCharCol 4:3a72-3aea with the DIVS
+helper 5:48b0, and AddCharX 4:2bae. The column word comes from LoadFrame's
+own 4:2a7c. Only JumpSeq 6:0006 is supplied; it records the sequence.
+
+- Terrain sweep: every room and row of LEVL 2000-2013, X from -40 to 553
+  in steps of 7, both facings, three FRAM foot offsets, cycling the
+  94/207 allowances, plus a5-0x3130 at -1/0/1 in level five's room 10.
+- Gate sweep: every tile-4 cell one or two columns ahead, both facings,
+  three remainders, 29 gate phases, body heights 60/90/120, actor types 0/1
+  and sequence 68.
+- 316,128 cases (182,148 terrain, 133,980 gate) match
+  `LevelMap.combat_turn_offset`, with the refusal checked against the
+  room-10 rule; zero mismatches.
+- 187,504 cases move X. Result SHA256 (native results only):
+  `119f83ea2d30fa75a27ec0f080645a7a79430ef871daf65cc4775a0cfab8b490`.
+
+The first run found two port differences, both in the gate test, which
+4:5b0e makes in every environment:
+- **Desert** (LEVL 0x2186 = 1, level two): 4:5b0e ignores the body and
+  blocks while the gate's five low foreground bits (its phase, which
+  TriggerDsrtExit 18:07b6 reads) are below 19. The port ignored the gate,
+  so a voluntary sword turn beside the closed exit kept its position. The
+  port's desert tile carries a drawing value (0/104), so the phase comes
+  from `DesertState.gate`. 873 cases.
+- **Temple** (2, levels 10-13, not playable): the ordinary height rule.
+  24,876 cases.
+
+Both now match (`tests.test_terrain`
+`test_combat_turn_gate_rule_covers_the_desert_and_the_temple`, which fails
+on the previous code). Open lead: the port's other desert-gate collisions
+use `exit_open` (phase 20); 4:5b0e has six more callers (4:1486, 5688,
+6050, 6168, 6340/636a, 6572), so the original may already pass at phase 19.
+Not checked here.
+
+Excluded: the callers (SwordCtrl's automatic turn, the voluntary turn), the
+opponent branches of 6:2638 (types 7/8/10 and the ordinary JumpSeq(60)),
+and vertical room traversal (rows stay 0-2).
+
+```powershell
+python -m tools.probe_prince_turn --source PATH_TO_RECOVERY --output rendered/prince-turn-routine.json
+```
+
 ## Port comparison
 
 `combat_turn_offset` implements steps 2-3 for walls and gaps, the 94/207

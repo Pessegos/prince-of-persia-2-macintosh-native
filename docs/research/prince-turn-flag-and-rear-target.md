@@ -107,8 +107,9 @@ gameplay produces these exact transitions frame by frame is not executed [?].
 
 ## Not established / next
 
-- The `6:26b8` floor checks, position adjustment and JumpSeq(127) are not
-  executed; the visible turn remains a decision-level claim.
+- The `6:26b8` floor checks, position adjustment and JumpSeq(127) are
+  executed since 2026-10-31 ([prince-turn-routine.md](prince-turn-routine.md));
+  the S1 visible turn in a full frame is still a decision-level claim.
 - A full frame trace (AnimChar, NPC control, TestStrike/CheckStab, cadence)
   of the S1 sequence is not done.
 - Other writers of the Prince target (TestStrike `6:5a06/5a48`, GenCtrl dead-NPC
