@@ -477,33 +477,25 @@ class ImportedPotionTests(unittest.TestCase):
         self.tick(release_frame)
         scene.horizontal_key(None, direction, False)
 
-    def test_shift_tap_survives_run_braking_from_both_sides(self):
+    def test_shift_tap_released_during_run_braking_does_not_pick_up(self):
+        # 6:0c50 needs the modifier word -1 at the standing gate; a Shift
+        # released during the skid writes 0 first (4:3f08). The port used
+        # to keep the tap as a queued pickup (removed 2026-10-31).
         s = self.make_scene()
         with patch.object(s, 'render'):
             for direction in (-1, 1):
                 for release_frame in (6, 7):
-                    for delay in (0, 2, 6):
-                        with self.subTest(direction=direction, release_frame=release_frame, delay=delay):
-                            self.stop_at_room_10_potion(s, direction, release_frame)
-                            self.tick(delay)
-                            # Both events arrive before the next simulation tick.
-                            s.set_key_state('shift', True)
-                            s.set_key_state('shift', False)
-                            self.assertIsNotNone(s.pending_potion_pickup)
-                            previous = None
-                            for _ in range(16):
-                                previous = s.sequence_state.sequence_id, s.action
-                                self.tick()
-                                if s.sequence_state.sequence_id == 50:
-                                    break
-                            self.assertEqual(previous, (13, 50))
-                            self.assertEqual((s.sequence_state.sequence_id, s.action), (50, 107))
-                            self.assertFalse(s.shift_held)
-                            self.assertIsNone(s.pending_potion_pickup)
-                            self.assertEqual(s.combat.player.max_life, 3)
-                            self.tick(24)
-                            self.assertEqual((s.combat.player.life, s.combat.player.max_life), (4, 4))
-                            self.assertEqual(s.level_map.tile(9, 7, 1).kind, 1)
+                    with self.subTest(direction=direction, release_frame=release_frame):
+                        self.stop_at_room_10_potion(s, direction, release_frame)
+                        s.set_key_state('shift', True)
+                        s.set_key_state('shift', False)
+                        self.assertIsNone(s.pending_potion_pickup)
+                        sequences = set()
+                        for _ in range(16):
+                            self.tick()
+                            sequences.add(s.sequence_state.sequence_id)
+                        self.assertNotIn(50, sequences)
+                        self.assertEqual(s.level_map.tile(9, 7, 1).kind, 10)
 
     def test_held_shift_can_pick_up_at_first_braking_control_pose(self):
         s = self.make_scene()

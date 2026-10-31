@@ -1892,11 +1892,11 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         if (self.game.caverns is None or motion is None or self.sword_drawn
                 or self._combat_controls_locked() or self.native_ledge
                 or self.horizontal_input or self.up_held or self.down_held
-                or not (self._is_resting() or state.sequence_id == RUN_STOP_SEQUENCE
-                        or self.run_stop_requested and state.sequence_id in RUN_CYCLE_SEQUENCES)):
+                or not self._is_resting()):
             return
-        # The remaining skid can bring the flask into reach. Try once at the
-        # first standing-control pose, without retaining Shift as a modifier.
+        # At rest a press is tried at the next tick, as a key sampled in
+        # that frame would be (6:0c50 needs the fresh word -1). A tap during
+        # a skid is not kept: its release writes 0 (4:3f08) before pose 50.
         self.pending_potion_pickup = motion.room, motion.row, state.facing
 
     def carpet_dead_pose(self):
@@ -1936,7 +1936,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.pending_potion_pickup = queued = None
         # StandingCtrl 6:0c50/0c58 tests held Shift every eligible frame.
         # A failed try must not consume a still-held key: later eligible
-        # poses retry. Released taps retain their single queued attempt.
+        # poses retry. A tap at rest gets the next tick's attempt only.
         requested = self.shift_held or queued is not None
         # PickItUp 6:1466-1482 permits the ordinary landing crouch, but
         # explicitly excludes SEQS:20's protected hard-fall recovery.
