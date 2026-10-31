@@ -770,6 +770,20 @@ class TerrainTests(unittest.TestCase):
                 self.assertEqual((drawn.sequence_id, other.sequence_id), (65, 65))
                 self.assertEqual(drawn.target_x - other.target_x, 17 * direction)
 
+    def test_collide_beside_a_temple_rock_disarms_with_sequence_93(self):
+        # 4:5998-59b4: X strictly left of GetSlideRockX's edge selects 93 and
+        # clears armed; outside the temple (edge 0) the bump stays 64.
+        with patch.object(self.map, 'slide_rock_edge', return_value=10_000):
+            state, _motion, _ = self.collide_after_correction(56, 158, True)
+        self.assertEqual(state.sequence_id, 93)
+        self.assertNotIn(10, state.sound_events)
+        with patch.object(self.map, 'slide_rock_edge', return_value=0):
+            state, _motion, _ = self.collide_after_correction(56, 158, True)
+        self.assertEqual(state.sequence_id, 64)
+        with patch.object(self.map, 'slide_rock_edge', return_value=1):
+            state, _motion, _ = self.collide_after_correction(56, 158, True)
+        self.assertEqual(state.sequence_id, 64)
+
     def test_collide_fast_body_backs_off_and_ground_bump_steps_back(self):
         # 4:58e4-58fe: vertical speed 50 or more backs off 17, no bump pose.
         state, motion, corrected = self.collide_after_correction(56, 158, True, velocity=50)

@@ -125,6 +125,29 @@ class SlideRockTests(unittest.TestCase):
                                        (clip[0], clip[1] - 510, clip[2], clip[3] - 510)))
         self.assertEqual(rocks.objects(terrain, 3), [])
 
+    def test_barrier_edge_matches_the_armed_collide_rock_lookup(self):
+        # 4:589e's GetSlideRockX: right edge X+279; left of it, the left edge
+        # (Codex's left_edge_reference, raw wall/gate clipping, frame width).
+        from tools.probe_temple_controller_geometry import left_edge_reference
+
+        generator = random.Random(93)
+        for _ in range(400):
+            level = bytearray(0x2200)
+            for offset in range(0, 32 * 60, 2):
+                struct.pack_into('>h', level, offset, generator.choice((0, 1, 1, 4, 20, 2)))
+            x = generator.randrange(102, 460)
+            record = (x, 236, generator.randrange(1, 4), 0, -2, 6, generator.randrange(3), 459)
+            rocks = SlideRocks([record])
+            facing, width = generator.choice((0, 1)), generator.choice((0, 40, 57))
+            prince = generator.randrange(200, 800)
+            expected = signed_word(x + 279)
+            if prince < expected:
+                expected = left_edge_reference(bytes(level), record, 0 if facing else -1, width)['edge']
+            self.assertEqual(rocks.barrier_edge(bytes(level), record[2], record[6], prince, facing, width),
+                             expected)
+            self.assertEqual(rocks.barrier_edge(bytes(level), record[2] + 1, record[6], prince, facing,
+                                                width), 0)
+
     def test_objects_and_shapes_follow_atm_slide_rock_and_draw_mob(self):
         rocks = SlideRocks([(300, 236, 1, 0, -2, 6, 1, 408)])
         objects = rocks.objects(None, 1)

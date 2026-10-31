@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import struct
 
 from pop2.bridge import BRIDGE_LEVEL, BRIDGE_ROOM, bridge_tension
-from pop2.coordinates import character_column_parts
+from pop2.coordinates import character_column_parts, native_x
 from pop2.crevices import CREVICE_TILE
 from pop2.opponent_generation import character_column, EMPTY_TILES, WALL_TILES
 from pop2.mac_input import StepBoundary
@@ -357,6 +357,16 @@ class LevelMap:
             allowance += TILE_WIDTH
         distance = floor_edge_distance(contact_x, state.facing) + allowance
         return min(0, distance - 84)
+
+    def slide_rock_edge(self, room, row, state, bounds):
+        """GetSlideRockX 5:21f6 for Collide (temple only, else 0): the
+        sliding rock's barrier edge in port ``room``/row, native X."""
+        if struct.unpack_from('>H', self.level, 0x2186)[0] != 2 or self.caverns is None:
+            return 0
+        # The frame width (a5-0x3570): ShapeBounds' image width + 1.
+        width = bounds[2] - bounds[0] + 2
+        return self.caverns.rocks.barrier_edge(self.level, room + 1, row, native_x(state.target_x),
+                                               state.facing, width)
 
     def combat_draw_offset(self, room, row, state, record, bounds):
         """DoKidEngarde 6:1f04-2126 for the Kid: the facing-relative offset
@@ -1389,6 +1399,13 @@ class RooftopPhysics:
                             shift = 25 if state.actor_type in (0, None) and action in KID_STRIKE_POSES else 0
                         state.target_x += shift * direction
                         state.current_x = state.target_x
+                        # 4:5998-59b4: left of the temple's sliding rock
+                        # (GetSlideRockX), the bump disarms instead (SEQS 93).
+                        edge = (self.map.slide_rock_edge(motion.room, motion.row, state, collision_bounds)
+                                if state.actor_type in (0, None) else 0)
+                        if edge and native_x(state.target_x) < edge:
+                            sequence = 93
+                            events.append(TerrainEvent("disarm"))
                     if not armed and PRONE_FRAMES[0] <= action <= PRONE_FRAMES[1]:
                         # Collide 4:59b6-59dc: a prone body backs off 5 pixels
                         # and stays down (SEQS 121), not a standing bump.

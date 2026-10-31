@@ -2149,6 +2149,9 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.status.set(f"Screen {self.screen_label(self.room_id)}")
         self.combat.player.row = motion.row
         for event in events:
+            if event.kind == "disarm":
+                # Collide 4:59a6: the bump beside a sliding rock clears armed.
+                self.sword_drawn = self.combat.player.sword_drawn = False
             if event.kind == "fall":
                 self.native_ledge = self.ledge_hanging = self.ledge_climbing = False
                 self.ledge_climb_requested = False

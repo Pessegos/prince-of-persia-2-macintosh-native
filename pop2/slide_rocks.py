@@ -7,6 +7,7 @@ type 6, row, original X); X is room-local, without the 207 origin.
 """
 
 from dataclasses import dataclass, field
+import struct
 
 SLIDE_ROCK_TILE = 25
 # The native MOB bank holds 30 records (5:2914).
@@ -14,6 +15,8 @@ CAPACITY = 30
 # IsSpace 3:4eb2 kinds and the rock marker stop the band scan 10:1ca4.
 SCAN_STOPS = frozenset((0, 9, 27, 47, 49, SLIDE_ROCK_TILE))
 EDGE_WALLS = frozenset((20, 2, 7, 25, 43, 4))
+# IsWall 3:4ef2 kinds.
+WALLS = frozenset((2, 7, 20, 25, 43))
 # DATA a5-0x4518/-0x44fc: object heights and widths by MOB type.
 HEIGHTS = (43, 0, 5, 31, 65, 79, 132, 132, 27, 27, 37, 37, 18, 0)
 WIDTHS = (87, 0, 5, 91, 45, 33, 82, 82, 36, 36, 69, 57, 17, 0)
@@ -237,3 +240,31 @@ class SlideRocks:
             if mob[5] == 6 and mob[3] != -1 and mob[2] == room and mob[6] == row:
                 return signed_word(mob[0] + 279)
         return 0
+
+    def barrier_edge(self, level, room, row, x, facing, width):
+        """GetSlideRockX 5:21f6 -> 10:20fe/180e as Collide 4:589e asks it:
+        the first live rock's right edge (X + 279) in native ``room`` and
+        row; a ``x`` left of it gets the rock's left edge, raised to the
+        boundary of a wall or gate cell there (raw LEVL kind). ``facing`` is
+        the port's (1 right); facing right (native 0), that boundary adds
+        ``width``."""
+        record = next((mob for mob in self.bank if mob[5] == 6 and mob[3] != -1
+                       and mob[2] == room and mob[6] == row), None)
+        if record is None:
+            return 0
+        edge = signed_word(record[0] + 279)
+        if not edge or x >= edge:
+            return edge
+        edge = signed_word(record[0] + 223 - 5)
+        before_divide = signed_word(signed_word(edge - 51) - 22)
+        quotient = trunc_div(signed_word(before_divide - 4))
+        column = signed_word(quotient - 4 - int(before_divide < 0))
+        offset = (record[2] - 1) * 60 + (record[6] * 10 + column) * 2
+        if 0 <= offset <= len(level) - 2:
+            kind = struct.unpack_from('>h', level, offset)[0]
+            if kind in WALLS or kind == 4:
+                boundary = signed_word(258 + column * 51 + 39)
+                if facing:
+                    boundary = signed_word(boundary + width)
+                edge = max(edge, boundary)
+        return edge
