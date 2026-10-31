@@ -1570,7 +1570,7 @@ class AnimationDataTests(unittest.TestCase):
         scene.advance_animation()
         self.assertEqual(scene.action, 17)
 
-    def test_opposite_jump_chord_from_rest_only_turns(self):
+    def test_opposite_jump_chord_from_rest_turns_then_jumps_forward(self):
         for facing in (0, 1):
             for up_first in (False, True):
                 with self.subTest(facing=facing, up_first=up_first):
@@ -1592,13 +1592,11 @@ class AnimationDataTests(unittest.TestCase):
                     self.assertEqual(scene.action, 45)
 
                     actions = [scene.action]
-                    for _ in range(16):
+                    for _ in range(6):
                         scene.advance_animation()
                         actions.append(scene.action)
-                    self.assertEqual(actions[:8], list(range(45, 53)))
-                    self.assertNotIn(67, actions)
-                    self.assertNotIn(16, actions)
-                    self.assertEqual(scene.action, 15)
+                    # Native: the held Up jumps forward from the turn's 50.
+                    self.assertEqual(actions, [45, 46, 47, 48, 49, 50, 16])
                     self.assertEqual(scene.sequence_state.facing, 1 - facing)
 
     def test_opposite_jump_chord_during_run_uses_drift(self):
@@ -1767,7 +1765,10 @@ class AnimationDataTests(unittest.TestCase):
                 self.assertEqual(scene.action, 15)
                 self.assertEqual(scene.sequence_state.facing, 1)
 
-    def test_held_opposite_jump_chord_does_not_jump_after_turn(self):
+    def test_held_opposite_jump_chord_jumps_forward_after_turn(self):
+        # DoTurn clears the bank; the held Up is fresh again at the turn's
+        # pose 50 and the Up handler 6:0e7a sees Forward set (the turned
+        # arrow, consumed): DoFwdJump 6:15ea. The port used to suppress it.
         scene = self.scene(facing=1)
         scene.root = DummyRoot()
         scene.animation_after_id = None
@@ -1787,19 +1788,14 @@ class AnimationDataTests(unittest.TestCase):
         for _ in range(36):
             scene.advance_animation()
             actions.append(scene.action)
+            if actions[-1] == 16:
+                break
 
         self.assertEqual(actions.count(45), 1)
         self.assertNotIn(67, actions)
-        self.assertNotIn(16, actions)
-        self.assertEqual(scene.sequence_state.facing, 0)
-        self.assertEqual(scene.action, 15)
-
-        scene.set_key_state("up", False)
-        scene.horizontal_key(None, -1, False)
-        scene.up_key(None)
-        scene.horizontal_key(None, -1, True)
+        self.assertEqual(actions[actions.index(45):], [45, 46, 47, 48, 49, 50, 16])
         self.assertEqual(scene.sequence_state.sequence_id, JUMP_FORWARD_SEQUENCE)
-        self.assertEqual(scene.action, 16)
+        self.assertEqual(scene.sequence_state.facing, 0)
 
     def test_pose_26_clears_the_latest_early_released_chord_too(self):
         scene = self.scene(facing=1)

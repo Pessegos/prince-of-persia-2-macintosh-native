@@ -43,7 +43,6 @@ class WaitingControls:
         """
         self.directional_input = self.armed_input_bank().consume('down', clear=True)
         self.waiting_step_direction = 0
-        self.waiting_suppressed_up = False
 
     def ensure_run_stop_controls(self):
         """Own a brake or standing turn that began without a bank.
@@ -97,45 +96,28 @@ class WaitingControls:
         self.directional_input = bank.consume('right' if direction > 0 else 'left',
                                                clear=turning, modifier=None if turning else 1)
         self.waiting_step_direction = 0 if turning else direction
-        if turning:
-            # Retained host chord policy: an opposite jump chord turns once;
-            # holding its Up does not create an additional jump after the turn.
-            self.waiting_suppressed_up = self.up_held
 
     def sample_waiting_controls(self):
         frame = self.sample_keyboard()
-        if not self.up_held:
-            self.waiting_suppressed_up = False
-        vertical = frame.vertical
-        if vertical == -1 and getattr(self, 'waiting_suppressed_up', False):
-            vertical = 0
         self.directional_input = self.directional_input.sample(
-            frame.horizontal, vertical, -1 if self.shift_held else -2 if self.ctrl_held else 0)
+            frame.horizontal, frame.vertical, -1 if self.shift_held else -2 if self.ctrl_held else 0)
         self.modifier_input = self.directional_input.modifier
 
     def waiting_key(self, key, pressed):
         if key not in ('up', 'down', 'shift', 'ctrl') or not self.waiting_controls_available():
             return False
         previous = getattr(self, key + '_held')
-        release_suppressed_up = key == 'up' and not pressed and getattr(self, 'waiting_suppressed_up', False)
         setattr(self, key + '_held', pressed)
         if key == 'ctrl' and pressed and not previous:
             self.pending_potion_pickup = None
         if key == 'up' and not pressed:
             self.jump_started_for_press = False
-        elif (key == 'up' and pressed and not previous
-              and self.sequence_state.sequence_id == STANDING_TURN_SEQUENCE
-              and self.sequence_state.action == 45 and self.horizontal_input):
-            self.waiting_suppressed_up = True
         if key == 'down' and not pressed:
             self.down_sheathe_consumed = False
         if key == 'shift' and pressed and not previous:
             self.queue_potion_pickup()
         if key in ('shift', 'down'):
             self.update_ledge_test_state()
-        if release_suppressed_up:
-            self.sample_waiting_controls()
-            return True
         if (key == 'up' and pressed and not previous and self._is_resting()
                 and not self.horizontal_input):
             # Keep the existing host chord window at rest/ready poses.
@@ -184,8 +166,6 @@ class WaitingControls:
             relative, state.action, mode=state.animation_state,
             sequence=state.sequence_id, sword=not self.sword_lost())
         self.directional_input = relative.remap(facing_right=facing)
-        if getattr(self, 'waiting_suppressed_up', False) and self.up_held:
-            return False
         if request is None:
             return False
         if self.sword_sheathing:
@@ -223,7 +203,6 @@ class WaitingControls:
     def clear_waiting_controls(self):
         self.directional_input = None
         self.waiting_step_direction = 0
-        self.waiting_suppressed_up = False
 
     def retire_waiting_controls(self):
         # Physics/combat can select a sequence directly, bypassing start_sequence.

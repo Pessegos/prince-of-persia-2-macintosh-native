@@ -39,7 +39,6 @@ class LedgeControls(AirborneControls):
     def begin_ledge_controls(self, sequence):
         if getattr(self, 'directional_input', None) is None:
             self.directional_input = DirectionalInput()
-        self.waiting_suppressed_up = False
         self.sample_waiting_controls()
         # Up/descent entries have the already recovered action consumption.
         # A takeoff Up still held at catch is an inherited hold, not a fresh
