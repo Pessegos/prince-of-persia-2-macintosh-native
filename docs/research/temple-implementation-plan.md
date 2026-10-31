@@ -155,7 +155,8 @@ Each stage integrates separately with the usual reservation.
   left of it 10:180e's left edge, clipped at a wall/gate cell): X below it
   selects SEQS 93 and disarms. DoKidEngarde 6:1fba-2070/20ce-20f2 measures
   the draw from a rock within one column (|edge - X| - GetDist - 6) and
-  refuses with the rock behind (`tools/probe_kid_engarde.py` rock sweep).
+  refuses with the rock behind (`tools/probe_kid_engarde.py` rock sweep:
+  237,900 supplied-edge cases, 0 mismatches; terrain/gate sweeps unchanged).
 - Stage 4, collision: `tools/audit_temple_collision.py` runs Codex's
   CheckBarr/CheckCollide1 references for two frames against the port's
   wall correction in every temple room/row (X 10-500 step 7, steps +/-1/4/9,

@@ -111,7 +111,11 @@ SEQS 55 or -1 (no draw; Ctrl stays consumed, 6:20fc clears a5-0x503c):
 1. Refused at poses 246-261, in the desert (LEVL 0x2186 = 1) and in level
    fourteen's native rooms 1-2. Type 1 in the palace rooms 7-8 takes 9:2674.
 2. The temple's sliding rock (GetSlideRockX 5:21f6, zero elsewhere) within a
-   column measures from the rock instead (6:2020-2070). Not modelled.
+   column measures from the rock instead (6:2020-2070): ahead of the Kid
+   the extra is |edge - X| - GetDist 4:3a92 - 6 (-1 before the 6 becomes
+   -3); behind him an obstructed draw is refused (6:20ce-20f2). Modelled
+   since 2026-10-31; the probe's rock sweep supplies the same edge to both
+   (237,900 temple cases, zero mismatches).
 3. Facing right with the Kid's own cell (CurrentCell 4:35a6) a gate that
    4:5b0e blocks: the extra is -51.
 4. Otherwise the cell ahead (4:39fc) must be an obstruction: not IsFloor
