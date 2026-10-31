@@ -15,8 +15,8 @@ from pop2.combat import (
     PLAYER_COMBAT_TURN_SEQUENCE, actor_frame_index, contact_allowed,
 )
 from pop2.combat_art import (
-    GuardArtwork, HealthArtwork, HitArtwork, actor_draw_order, slab_crush_draw_state,
-    sword_palette_for_level,
+    GuardArtwork, HealthArtwork, HitArtwork, actor_draw_order, guard_artwork_file,
+    slab_crush_draw_state, sword_palette_for_level,
 )
 from pop2.control_mapping import (
     IDLE_SEQUENCE,
@@ -354,7 +354,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         guard_art = health_art = hit_art = None
         if game.combat is not None:
             artwork = ("Head.rsrc" if getattr(game.combat, 'ruins', None) is not None
-                       else "Skeleton.rsrc" if game.level.kind == 3 else "Guard.rsrc")
+                       else guard_artwork_file(game.level))
             guard_art = GuardArtwork(load_resource_file(artwork), self.sword_shapes,
                                      self.first_sword_shape_id, sword_palette)
             health_art = HealthArtwork(self.kid, palette, self.first_shape_id)
@@ -495,7 +495,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             renderer.animated_layer(Image.alpha_composite(frame, room.foreground), game.room_id,
                 game.harbor, front=True, desert=game.desert, caverns=game.caverns)
             artwork = GuardArtwork(load_resource_file(
-                'Skeleton.rsrc' if game.level.kind == 3 else 'Guard.rsrc'), self.sword_shapes,
+                guard_artwork_file(game.level)), self.sword_shapes,
                 self.first_sword_shape_id, sword_palette_for_level(self.resources.prince, game.level.kind))
             for guard in game.combat.visible_guards():
                 artwork.bounds(guard.state, floor_y(guard.row))

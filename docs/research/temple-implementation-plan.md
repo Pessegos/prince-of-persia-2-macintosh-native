@@ -124,3 +124,11 @@ Each stage integrates separately with the usual reservation.
   (PrinceSndOn arbitration), the opened cell's static-floor redraw (the
   exported room keeps the closed floor under the panel), neighbour rooms.
 - DrawObjLoose 3:4168: falling temple floors draw pieces 28/29.
+- Stage 5, birdheads (first part): opponent set 7's initial records spawn
+  as ordinary type-2 opponents (6:2bca: raw 7 -> actor 2; raw 1/3/9/10 ->
+  10/6/12/0 are skipped, so level 12's raw-1 SEQS 105 actor is missing),
+  drawn from Birdhead.rsrc (now imported). Its SHAP 751 is LZ-packed
+  (flag 0x0400): `unpack_shape_lz` follows UnpackLZ 17:3aa8 (LZSS, 1,024
+  ring from 958). The AI is the ordinary guard's (no Birdhead-specific
+  controller found yet); the set-7 generation points (0x3986) are not
+  enabled. A level-ten birdhead engages and kills an idle Prince.

@@ -334,7 +334,57 @@ def decompress_rows(data, height, row_bytes):
     return bytes(output)
 
 
+def unpack_shape_lz(data):
+    """UnpackShapeLZ 17:359e -> UnpackLZ 17:3aa8-3c74 (flag 0x0400).
+
+    The long at +12 is the unpacked size, header included; LZSS data
+    follows at +16: a 1,024-byte ring (958 zeroed, writing from 958), flag
+    bytes read low bit first, a literal per set bit, else two bytes giving
+    a 10-bit ring position and length (first byte >> 2) + 3. The header's
+    flags then keep only 0xf100 (17:5fb2)."""
+    size = struct.unpack_from(">I", data, 12)[0]
+    if not 12 <= size <= 0x100000:
+        raise ValueError("Invalid packed SHAP size")
+    ring, position = bytearray(1024), 958
+    output, cursor, flags = bytearray(), 16, 0
+    while len(output) < size - 12:
+        flags >>= 1
+        if not flags & 0x100:
+            if cursor >= len(data):
+                break
+            flags = data[cursor] | 0xff00
+            cursor += 1
+        if flags & 1:
+            if cursor >= len(data):
+                break
+            value = data[cursor]
+            cursor += 1
+            output.append(value)
+            ring[position] = value
+            position = (position + 1) & 0x3ff
+            continue
+        if cursor + 1 >= len(data):
+            break
+        first, second = data[cursor], data[cursor + 1]
+        cursor += 2
+        start = ((first << 8) | second) & 0x3ff
+        for offset in range((first >> 2) + 3):
+            value = ring[(start + offset) & 0x3ff]
+            output.append(value)
+            ring[position] = value
+            position = (position + 1) & 0x3ff
+            if len(output) >= size - 12:
+                break
+    if len(output) != size - 12:
+        raise ValueError("Truncated packed SHAP")
+    header = bytearray(data[:12])
+    struct.pack_into(">H", header, 0, struct.unpack_from(">H", header, 0)[0] & 0xf100)
+    return bytes(header + output)
+
+
 def decode_shap(data, palette):
+    if struct.unpack_from(">H", data, 0)[0] & 0x0400:
+        data = unpack_shape_lz(data)
     flags, row_stride, width, height = struct.unpack_from(">HhhH", data, 0)
     compression = (flags & 0x0F00) >> 8
     pixels = data[12:]

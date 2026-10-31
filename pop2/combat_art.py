@@ -1,5 +1,6 @@
 """Original guard rendering, damage bursts and the game's health-bottle HUD."""
 
+import struct
 from dataclasses import replace
 
 from PIL import ImageOps
@@ -19,6 +20,14 @@ def sword_palette_for_level(prince, level_kind):
     # A few sword SHAPs use index 250, absent from CTBL:1005.
     palette[250] = (150, 69, 0, 255)
     return palette
+
+
+def guard_artwork_file(level):
+    """The ordinary opponents' file by LEVL opponent set (0x21a4; 3:5f58):
+    the caverns' skeletons, the temple's birdheads (set 7), else guards."""
+    if struct.unpack_from('>h', level.data, 0x21a4)[0] == 7:
+        return 'Birdhead.rsrc'
+    return 'Skeleton.rsrc' if level.kind == 3 else 'Guard.rsrc'
 
 
 def actor_draw_order(state, record, bounds, row):

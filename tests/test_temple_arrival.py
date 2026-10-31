@@ -180,6 +180,28 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.tick(12)
         self.assertEqual(terrain.tile(7, 5, 2).kind, 26)
 
+    def test_level_ten_birdheads_are_ordinary_armed_opponents(self):
+        # Opponent set 7: 6:2bca maps raw kind 7 to actor 2 and 3:5f58 loads
+        # Birdhead.rsrc. Native room 10 has one (SEQS 77). Before, set 7 had
+        # no opponents at all. Its SHAP 751 is LZ-packed (UnpackLZ 17:3aa8).
+        from pop2.render_opening import decode_ctbl, decode_shap, load_resource_file
+
+        scene = self.scene
+        scene.enter_next_level(10)
+        scene.jump_to_room(9, row=1, x=420, facing=0)
+        guards = scene.combat.guards
+        self.assertEqual([(guard.state.actor_type, guard.life, guard.state.target_x) for guard in guards],
+                         [(2, 3, 302)])
+        self.assertEqual(scene.combat.guard_art.base, 751)
+        self.assertEqual(len(scene.combat.guard_art.frames), 108)
+        birdhead = load_resource_file('Birdhead.rsrc')
+        self.assertEqual(decode_shap(birdhead['SHAP'][751]['data'],
+                                     decode_ctbl(birdhead['CTBL'][750]['data'])).size, (47, 72))
+        # It engages and kills a Prince who does not defend himself.
+        self.tick(60)
+        self.assertTrue(guards[0].alive)
+        self.assertFalse(scene.combat.player.alive)
+
 @unittest.skipUnless(TEMPLE_INSTALLED, 'Imported temple scene and scenery required')
 class TempleLooseFloorTests(unittest.TestCase):
     def test_a_falling_temple_floor_draws_pieces_28_and_29(self):

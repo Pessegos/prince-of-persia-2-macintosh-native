@@ -83,6 +83,14 @@ def opponent_follows_cut(guard, direction, count, *, in_destination=False, bridg
     return guard.row < 0 if direction == 'up' else guard.row >= 3
 
 
+def temple_actor(raw_kind):
+    """6:2bca-2c12 for opponent set 7: raw kinds other than 1/3/9/10 are
+    kind 7, and DATA maps 1/3/7/9/10 to actors 10/6/2/12/0. The birdheads
+    (raw 7) are ordinary type-2 opponents with Birdhead.rsrc's artwork."""
+    kind = raw_kind if raw_kind in (1, 3, 9, 10) else 7
+    return {1: 10, 3: 6, 7: 2, 9: 12, 10: 0}[kind]
+
+
 @dataclass(frozen=True)
 class GuardSpawn:
     room: int
@@ -114,7 +122,7 @@ class GuardSpawn:
             return []
         offset = 0x20E6 + native_room(room) * 0xC0
         count = struct.unpack_from(">H", level, offset)[0]
-        if opponent_type not in (0, 2):
+        if opponent_type not in (0, 2, 7):
             if count == 0:
                 return []
             raise ValueError("Special opponent types are not implemented here")
@@ -126,12 +134,16 @@ class GuardSpawn:
             skill = fields[3]
             if not 0 <= skill < len(ADVANCE_CHANCE):
                 raise ValueError(f"Unsupported guard skill {skill}")
+            if opponent_type == 7 and temple_actor(fields[12]) != 2:
+                # 6:2bca: the temple's raw kinds 1/3/9/10 become actors
+                # 10/6/12/0 (level 12's raw 1, SEQS 105); not ported yet.
+                continue
             spawns.append(cls(room, fields[0] // 10, scene_x(fields[1]),
                               int(fields[2] == 0), skill, fields[4], fields[13] or 3,
                               fields[6] or 1, fields[10], fields[16],
                               4 if opponent_type == 2 else 2,
                               tuple(fields) if opponent_type == 2 else (),
-                              tuple(fields) if opponent_type == 0 else ()))
+                              tuple(fields) if opponent_type in (0, 7) else ()))
         return spawns
 
 
@@ -335,7 +347,7 @@ class CombatEncounter:
         if self.level is None:
             raise ValueError("Room changes require LEVL data")
         if room not in self.room_encounters:
-            if struct.unpack_from(">h", self.level, 0x21a4)[0] not in (0, 2):
+            if struct.unpack_from(">h", self.level, 0x21a4)[0] not in (0, 2, 7):
                 self.room_encounters[room] = ([], [])
                 return
             guards = []
