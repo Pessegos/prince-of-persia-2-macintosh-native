@@ -11,7 +11,7 @@ from pop2.paths import ASSET_DIR
 from pop2.render_opening import decode_ctbl, load_resource_file
 from pop2.scene_prototype import sword_palette_for_level
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
-from pop2.terrain import Tile
+from pop2.terrain import Tile, stone_gate_blocks
 from pop2.environments import environment_for
 
 
@@ -223,6 +223,26 @@ class SkeletonTests(unittest.TestCase):
         c.terrain = SimpleNamespace(tile=lambda *_args: Tile(1))
         self.assertTrue(actor.skeleton.can_wake(c, actor))
 
+    def test_wake_path_lets_type_ten_cross_impassable_cells_and_asks_4_5b0e(self):
+        # OpponentClose 4:147e: IsImpassable blocks every opponent except
+        # type 10; 4:1486 asks the shared gate collision (the desert's has
+        # no body test).
+        from types import SimpleNamespace
+        from pop2.skeleton import opponent_path_clear
+
+        terrain = SimpleNamespace(tile=lambda *_args: Tile(11),
+                                  gate_collides=lambda *_args: False)
+        self.assertFalse(opponent_path_clear(terrain, 0, 1, 2, 4, (0, 150, 0, 206),
+                                             SequenceState(88, actor_type=4)))
+        self.assertTrue(opponent_path_clear(terrain, 0, 1, 2, 4, (0, 150, 0, 206),
+                                            SequenceState(106, actor_type=10)))
+        asked = []
+        terrain = SimpleNamespace(tile=lambda *_args: Tile(4, 200),
+                                  gate_collides=lambda *args: asked.append(args) or True)
+        self.assertFalse(opponent_path_clear(terrain, 0, 1, 4, 4, (0, 150, 0, 206),
+                                             SequenceState(88, actor_type=4)))
+        self.assertEqual(len(asked), 1)
+
     def test_waking_gate_uses_bone_pose_height_not_fixed120_threshold(self):
         from types import SimpleNamespace
 
@@ -233,7 +253,11 @@ class SkeletonTests(unittest.TestCase):
         for opening, expected in ((0, False), (47, False), (48, True),
                                   (103, True), (119, True), (120, True)):
             with self.subTest(opening=opening):
-                c.terrain = SimpleNamespace(tile=lambda *_args: Tile(4, 0x200 | opening))
+                # OpponentClose 4:1486 asks the shared gate collision 4:5b0e.
+                c.terrain = SimpleNamespace(
+                    tile=lambda *_args: Tile(4, 0x200 | opening),
+                    gate_collides=lambda tile, bounds, state: stone_gate_blocks(
+                        tile.foreground, bounds, state))
                 self.assertEqual(actor.skeleton.can_wake(c, actor), expected)
 
     def test_wake_distance_uses_supporting_feet_and_rejects_shadow(self):

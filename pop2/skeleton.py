@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import struct
 
 from pop2.opponent_generation import EMPTY_TILES, WALL_TILES, OBSTACLE_TILES
-from pop2.terrain import floor_y, stone_gate_blocks
+from pop2.terrain import floor_y
 from pop2.sequence_runtime import SequenceState
 
 
@@ -16,6 +16,20 @@ EXIT_GUARDED_ROOMS = frozenset((21, 23, 24, 25, 26, 27))
 EXIT_DOOR = 21, 4, 2
 EXIT_OPEN = 0x4f
 RISE_SONG = 112
+
+
+def opponent_path_clear(terrain, room, row, start, end, bounds, state):
+    """OpponentClose 4:144c-14a8: from the Prince's column to the opponent's,
+    each cell is IsFloor 3:4da6, not IsImpassable 3:4de2 (type 10 excepted)
+    and not a gate that 4:5b0e blocks for the opponent's stored body."""
+    step = 1 if end > start else -1
+    for column in range(start, end + step, step):
+        tile = terrain.tile(room, column, row)
+        if (tile.kind in EMPTY_TILES | WALL_TILES
+                or tile.kind in OBSTACLE_TILES | {23} and state.actor_type != 10
+                or tile.kind == 4 and terrain.gate_collides(tile, bounds, state)):
+            return False
+    return True
 
 
 def exit_guarded(encounter, actor):
@@ -171,19 +185,12 @@ class Skeleton:
         if abs(own - other) > (8 if exit_guarded(encounter, actor) else 4):
             return False
         terrain = getattr(encounter, 'terrain', None)
-        if terrain is not None:
-            for column in range(min(own, other), max(own, other) + 1):
-                tile = terrain.tile(actor.room, column, actor.row)
-                if tile.kind in EMPTY_TILES | WALL_TILES | OBSTACLE_TILES | {23}:
-                    return False
-                if tile.kind == 4:
-                    art = getattr(encounter, 'guard_art', None)
-                    # Retain the old conservative clearance for art-free callers.
-                    bounds = (art.bounds(actor.state, floor_y(actor.row))
-                              if art is not None else (0, 0, 0, 57))
-                    if stone_gate_blocks(tile.foreground, bounds, actor.state):
-                        return False
-        return True
+        if terrain is None:
+            return True
+        art = getattr(encounter, 'guard_art', None)
+        # Retain the old conservative clearance for art-free callers.
+        bounds = art.bounds(actor.state, floor_y(actor.row)) if art is not None else (0, 0, 0, 57)
+        return opponent_path_clear(terrain, actor.room, actor.row, other, own, bounds, actor.state)
 
     def control(self, encounter, actor):
         if not actor.alive and not self.native_alive:
