@@ -94,6 +94,23 @@ class SlideRockTests(unittest.TestCase):
         self.assertTrue(SlideRocks.crushes(mob, 1, 1, 0, sequence_mode=4))
         self.assertFalse(SlideRocks.crushes(mob, 1, 2, 530))
 
+    def test_crush_admission_matches_10_16f6_with_the_saved_width(self):
+        # Facing right, the front adds the saved ShapeBounds width (a5-0x3570);
+        # before, the width was taken as 0.
+        from tools.probe_temple_slide_rock_update import crush_admission_reference, make_prince
+
+        generator = random.Random(0x3570)
+        mob = (300, 236, 1, 0, -2, 6, 1, 408)
+        for _ in range(500):
+            room, row, facing = generator.choice((1, 2)), generator.choice((1, 2)), generator.choice((0, 1))
+            width, mode = generator.randrange(0, 60), generator.choice((0, 0, 4))
+            front = 523 + generator.randrange(-70, 30)
+            prince = make_prince(room=room, row=row, x=front, facing=facing, mode=mode)
+            self.assertEqual(SlideRocks.crushes(mob, room, row, front, mode, facing, width),
+                             crush_admission_reference(mob, prince, width))
+        self.assertTrue(SlideRocks.crushes(mob, 1, 1, 500, facing=1, width=30))
+        self.assertFalse(SlideRocks.crushes(mob, 1, 1, 500, facing=0, width=30))
+
     def test_objects_and_shapes_follow_atm_slide_rock_and_draw_mob(self):
         rocks = SlideRocks([(300, 236, 1, 0, -2, 6, 1, 408)])
         objects = rocks.objects(None, 1)

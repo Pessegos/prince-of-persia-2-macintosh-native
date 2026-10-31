@@ -151,11 +151,14 @@ class SlideRocks:
         return moved
 
     @staticmethod
-    def crushes(mob, room, row, front, sequence_mode=0):
+    def crushes(mob, room, row, front, sequence_mode=0, facing=0, width=0):
         """CheckSlideRockCrush 10:16f6: the Prince's (native) front within
-        the 24 pixels ahead of the rock's face, in its room and row."""
+        the 24 pixels ahead of the rock's face, in its room and row. Facing
+        right, the front is X plus the saved ShapeBounds width a5-0x3570."""
         if mob[2] != room or mob[6] != row:
             return False
+        if facing:
+            front = signed_word(front + width)
         lower = signed_word(mob[0] + 223)
         return sequence_mode == 4 or lower < front < lower + 25
 

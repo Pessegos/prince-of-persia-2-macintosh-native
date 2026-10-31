@@ -1159,12 +1159,16 @@ class Temple(Caverns):
         player = scene.combat.player
         row = motion.row if motion is not None else -1
         column = scene.combat._supporting_column(player)
+        # a5-0x3570: the ShapeBounds width (image + 1, with the sword's
+        # extension) saved from the last drawn frame (2:6454, 4:23ae).
+        left, _top, right, _bottom = scene.player_collision_bounds()
+        width = right - left + 2
         # The type-6 case of MakeRubble 5:2afa: motion 10:1d5c, then
         # CheckSlideRockCrush 10:16f6 against the Prince.
         for mob, _events in caverns.rocks.update(scene.level_map, (state.action, column, row)):
             if (motion is not None and player.alive
                     and caverns.rocks.crushes(mob, motion.room + 1, row, native_x(state.target_x),
-                                              state.sequence_mode)):
+                                              state.sequence_mode, state.facing, width)):
                 self.rock_contact(mob)
         for kind, cue in caverns.rocks.sounds:
             if kind == 'play':
