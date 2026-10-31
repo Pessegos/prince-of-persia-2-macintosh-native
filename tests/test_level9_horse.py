@@ -84,6 +84,71 @@ class LevelNineExitTests(unittest.TestCase):
         self.assertIsNone(scene.game.exit)
 
 
+@unittest.skipUnless((ASSET_DIR / 'ruins_level9.json').is_file(), 'Imported level-nine resources required')
+class HorseLeapTests(unittest.TestCase):
+    """CutChar 6:4a68-4ad6: the leap off native room 8's top ledge (port 7)."""
+
+    def setUp(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        self.scene.load_level(9)
+        self.scene.peaceful = True
+
+    def test_running_jump_off_the_ledge_tip_starts_the_ride(self):
+        from unittest.mock import patch
+        from tests.test_terrain import RooftopSceneTests
+
+        s = self.scene
+        rides = []
+        s.start_temple_ride = lambda finish: rides.append(finish) or True
+        # The upper columns' route: run left along the top row, leaving the
+        # ledge tip (column 1) with the running jump.
+        s.jump_to_room(7, 0, 190, 0)
+        s.in_animation_tick = True
+        s.horizontal_key(None, -1, True)
+        poses = []
+        with patch.object(s, 'render'), patch.object(s, 'advance_audio'):
+            for tick in range(20):
+                if tick == 6:
+                    s.set_key_state('up', True)
+                RooftopSceneTests.tick(self)
+                poses.append(s.sequence_state.action)
+                if s.level_complete:
+                    break
+            self.assertEqual(s.sequence_state.source_sequence_id, 4)
+            self.assertEqual(poses[-1], 41)
+            self.assertLessEqual(s.player_bounds()[0], -16)
+            # The level ends instead of cutting into native room 2, where
+            # the port used to drop him onto the floor below the horse.
+            self.assertEqual((s.room_id, s.terrain_motion.row), (7, 0))
+            self.assertFalse(s.terrain_motion.falling)
+            self.assertEqual(rides, [])
+            RooftopSceneTests.tick(self)
+        self.assertEqual(len(rides), 1)
+        self.assertIsNone(s.game.exit)
+        self.assertFalse(s.level_complete)
+
+    def test_only_pose_41_on_the_top_row_of_that_room_ends_the_level(self):
+        from types import SimpleNamespace
+
+        s = self.scene
+        physics = s.physics
+        motion = SimpleNamespace(room=7, row=0, falling=False, void_fall=False)
+        state = SimpleNamespace(facing=0, action=41, actor_type=0, animation_state=0)
+        bounds = (-41, 26, 40, 80)
+        self.assertTrue(physics.horse_leap(motion, state, bounds))
+        for change in ({'action': 40}, {'facing': 1}, {'actor_type': 2}):
+            with self.subTest(change=change):
+                self.assertFalse(physics.horse_leap(motion, SimpleNamespace(**{**vars(state), **change}), bounds))
+        for change in ({'room': 6}, {'row': 1}, {'falling': True}):
+            with self.subTest(change=change):
+                self.assertFalse(physics.horse_leap(SimpleNamespace(**{**vars(motion), **change}), state, bounds))
+        self.assertFalse(physics.horse_leap(motion, state, (-15, 26, 66, 80)))
+        s.load_level(8)
+        self.assertFalse(s.physics.horse_leap(motion, state, bounds))
+
+
 if __name__ == '__main__':
     unittest.main()
 

@@ -351,8 +351,15 @@ The scene needs a reimport (Horse.rsrc, TempleNIS.rsrc, temple.json).
 
 1. The retained cliff image when walking left from the start needs a visual
    comparison with the original game (playtesting).
-2. Level nine's exit leads to the temple (NIS 2 and level ten), which the
-   port does not support yet.
+2. Done 2026-10-31: level nine does not end at a door. CutChar 6:4a68-4ad6
+   ends it when the Prince leaves native room 8 (port 7) to the left on its
+   top row in running-jump pose 41 (drawn left X <= 191 native, -16 scene):
+   a5-0x4f92 + 1 replaces the cut into the horse's room 2. The route runs
+   along the upper columns and jumps from the ledge tip (column 1). The main
+   loop then waits only for the current effect (no end song, 2:6134-6168)
+   and CheckPlayNIS(9, 10) plays NIS 2, whose first shots draw the Prince
+   landing on the horse (shape 825360 at 252, 40). Before this the port cut
+   into room 2 and dropped him onto the floor below the horse.
 
 The scythes' climbing redraw layers, listed here earlier, are covered by
 the slot export (schema 2): every room's `climb_source`/`climb_141` lists

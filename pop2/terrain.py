@@ -1026,6 +1026,17 @@ class RooftopPhysics:
         motion.room = room
         return True
 
+    def horse_leap(self, motion, state, bounds):
+        """CutChar 6:4a68-4ad6: leaving level nine's native room 8 (port 7)
+        to the left on its top row in running-jump pose 41 ends the level
+        (a5-0x4f92 + 1) instead of cutting; CheckPlayNIS(9, 10) shows NIS 2."""
+        if (motion.void_fall or motion.falling or state.facing or state.action != 41
+                or state.actor_type not in (0, None) or state.animation_state == 7):
+            return False
+        level_number = struct.unpack_from('>H', self.map.level, 0x218a)[0]
+        # -0x3572 (drawn left, native X) <= 191 is scene X <= -16.
+        return level_number == 9 and motion.room == 7 and motion.row == 0 and bounds[0] <= -16
+
     def cut_up(self, motion, state):
         if motion.void_fall:
             return False
@@ -1487,6 +1498,8 @@ class RooftopPhysics:
         if (cut_enabled and state.actor_type in (0, None)
                 and self.cut_up(motion, state)):
             events.append(TerrainEvent("room"))
+        elif cut_enabled and self.horse_leap(motion, state, bounds):
+            events.append(TerrainEvent("next_level"))
         elif cut_enabled and self.cut_horizontal(motion, state, bounds):
             events.append(TerrainEvent("room"))
         if (cut_enabled and state.actor_type in (0, None)

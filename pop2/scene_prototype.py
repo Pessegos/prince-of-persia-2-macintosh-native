@@ -2116,6 +2116,14 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.status.set(f"Screen {self.screen_label(self.room_id)}")
         self.combat.player.row = motion.row
         for event in events:
+            if event.kind == "next_level":
+                # CutChar's level change has no end song: the main loop
+                # (2:6134-6168) waits only for the current sound effect.
+                from pop2.level_transition import LevelExit
+
+                self.level_complete = True
+                self.game.exit = LevelExit(None, 0)
+                self.clear_keys(None)
             if event.kind == "disarm":
                 # Collide 4:59a6: the bump beside a sliding rock clears armed.
                 self.sword_drawn = self.combat.player.sword_drawn = False

@@ -1077,7 +1077,12 @@ class Ruins(Caverns):
                 if scenery_available(10):
                     scene.enter_next_level(10)
                 else:
+                    scene.level_complete = True
                     scene.status.set('Level 9 complete')
+            # The ride runs as a scene: the completed level must not keep
+            # calling this exit while it plays.
+            scene.game.exit = None
+            scene.level_complete = False
             if not scene.start_temple_ride(finish):
                 finish()
         else:
