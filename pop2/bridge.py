@@ -180,6 +180,24 @@ def bridge_column(room, column):
     return column - 10 if room == 6 else column + 10 if room == 11 else column
 
 
+def bridge_engage(room, column, facing_right, x, opponent_room, opponent_column, opponent_x,
+                  opponent_armed, gate_open, tension_level, tension):
+    """8:02ae: may a character in the bridge rooms press forward?
+
+    Facing left, from bridge column 8 on. Facing right, from a column below
+    2, when the opponent stands behind room 7's open gate (8:0424: bridge
+    column below 2), or against an armed opponent less than 204 pixels
+    ahead in its own column 6 or lower while the bridge tension is level 2
+    with at least 20. Rooms and columns are port numbers."""
+    own = bridge_column(room, column)
+    if not facing_right:
+        return own >= 8
+    if own < 2 or gate_open and bridge_column(opponent_room, opponent_column) < 2:
+        return True
+    return (opponent_armed and -204 < x - opponent_x < 0 and opponent_column <= 6
+            and tension_level == 2 and tension >= 20)
+
+
 def bridge_gate_open(terrain):
     # IsBrgGateOpen 8:0458: room 7's gate (cell 13) has a trob in phase 0 or 2.
     caverns = getattr(terrain, 'caverns', None)

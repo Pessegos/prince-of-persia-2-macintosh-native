@@ -200,10 +200,13 @@ check of the redraw at each collapse stage.
 
 **Bridge skeleton AI (implemented, cross-checked with dmucli/pop2-port):**
 `roof_fight_room` means level 5, rooms 7/10/12, row not 0.
-- `8:02ae` engage: facing right, bridge column >= 8; facing left, column < 2,
-  or the Prince behind room 7's open gate (`8:0424`: gate trob phase 0/2,
-  Prince bridge column < 2), or an armed Prince within 204 pixels to the
-  right in column <= 6 with tension level 2 and amount >= 20. An engaging
+- `8:02ae` engage (native-checked 2026-10-31, `tools/probe_bridge_engage.py`;
+  the sides were swapped before): facing left, bridge column >= 8; facing
+  right, column < 2, or the Prince behind room 7's open gate (`8:0424`: gate
+  trob phase 0/2, Prince bridge column < 2), or an armed Prince less than
+  204 pixels ahead in column <= 6 with tension level 2 and amount >= 20.
+  SwordCtrl `6:22de` also asks it for the Prince (no automatic turn while
+  he may press forward). An engaging
   skeleton advances (EnGarde `4:0a30-0a7e`, GenFight, OpponentClose
   `4:1128-1154`) and does not back off from a gap (`4:0fb8`).
 - `8:04a2` near its end (column < 3 facing right, > 3 facing left): away

@@ -54,21 +54,21 @@ def run_probe(source):
     digest, count = hashlib.sha256(), 0
     banks = [InputBank(0, right, 0, down, modifier) for right in (-1, 0, 1) for down in (-1, 0)
              for modifier in (-2, -1, 0, 1)]
-    for (bank, mode, cell, alert, distance, opponent, actor, automatic, room, bridge,
-         wounded) in product(
+    for (bank, mode, cell, alert, distance, opponent, actor, automatic, room, row, bridge,
+         engage, wounded) in product(
             banks, (1, 2), (0, 11, 15), (0, 1, 2, 3), (-40, -16, -15, -1, 0, 100, 330, 331),
-            (0, 6, 7), (0, 11), (0, 1), (1, 10), (0, 1), (False, True)):
+            (0, 6, 7), (0, 11), (0, 1), (1, 7, 10, 12), (0, 1), (0, 1), (0, 1), (False, True)):
         machine.fixture(level, bank, 158, mode=mode, sword=1)
         machine.put_word(-0x501c, 0)
         machine.put_word(-0x508c, opponent)
         machine.put_word(-0x504e, actor)
         machine.put_word(-0x5010, automatic)
         machine.put_word(-0x5040, room)
-        machine.put_word(-0x5048, 1)
+        machine.put_word(-0x5048, row)
         machine.put_word(-0x3130, bridge)
         machine.put_word(-0x5062, alert)
         machine.put_word(-0x5034, -3 if wounded else 0)
-        machine.results = {'cell': cell, 'distance': distance, 'bridge': 0, 'target': 0}
+        machine.results = {'cell': cell, 'distance': distance, 'bridge': engage, 'target': 0}
         machine.call(6, 0x2166)
         # The hook can report one sink call twice: keep one per call site.
         calls = [event for event in machine.events if len(event) == 2 and isinstance(event[1], int)]
@@ -77,10 +77,11 @@ def run_probe(source):
         actual = events, machine.bank(), machine.word(-0x5010)
         expected = sword_ctrl(bank, mode=mode, cell=cell, alert=alert, distance=distance,
                               opponent_type=opponent, actor_type=actor, automatic=automatic,
-                              level=5, room=room, row=1, bridge=bridge, wounded=wounded)
+                              level=5, room=room, row=row, bridge=bridge, wounded=wounded,
+                              bridge_test=bool(engage))
         if actual != expected:
             raise AssertionError((bank, mode, cell, alert, distance, opponent, actor, automatic, room,
-                                  bridge, wounded, actual, expected))
+                                  row, bridge, engage, wounded, actual, expected))
         digest.update(repr(actual).encode())
         count += 1
     if path.read_bytes() != raw:
@@ -91,7 +92,8 @@ def run_probe(source):
                           ' opponent alert word a5-0x5062 0-3',
                           'Turn 6:2638, OnAlert 6:24bc and PutSwordAway 6:2592 are sinks;'
                           ' 4:35a6 (current cell kind), 4:49ee (distance), 6:36f2/4:3312 (target)'
-                          ' and the level-five bridge test 8:02ae are supplied'],
+                          ' and the level-five bridge test 8:02ae (0/1, rooms 1/7/10/12, rows 0/1)'
+                          ' are supplied; tools/probe_bridge_engage.py executes 8:02ae itself'],
                 exclusions=['Action bodies, opponent geometry and target choice',
                             'Other characters (6:2206 onward is common, 6:2166-2204 Prince-only)'])
 

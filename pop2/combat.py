@@ -9,7 +9,8 @@ from pop2.enemy_profiles import (
     STRIKE_CHANCE, HIT_PAUSE, QuickDrawRandom,
 )
 from pop2.coordinates import native_room, scene_x
-from pop2.bridge import bridge_checked, bridge_column, bridge_gate_open, bridge_tension
+from pop2.bridge import (bridge_checked, bridge_column, bridge_engage, bridge_gate_open,
+                         bridge_tension)
 from pop2.enemy_alerts import alert_path_mode
 from pop2.opponent_records import GuardRoomRecord, removed_on_room_save
 from pop2.skeleton import exit_guarded
@@ -727,18 +728,19 @@ class CombatEncounter:
         return (bridge_gate_open(getattr(self, 'terrain', None))
                 and bridge_column(player.room, self._supporting_column(player)) < 2)
 
-    def _bridge_engage(self, guard):
-        """8:02ae: may the bridge skeleton press forward?"""
-        column = bridge_column(guard.room, self._supporting_column(guard))
-        if guard.state.facing:
-            return column >= 8
-        if column < 2 or self._kid_behind_bridge_gate():
-            return True
-        player = getattr(self, '_true_player', None) or self.player
-        offset = guard.state.target_x - self.player.state.target_x
-        level, tension = bridge_tension(getattr(self, 'terrain', None))
-        return (player.sword_drawn and -204 < offset < 0
-                and self._supporting_column(player) <= 6 and level == 2 and tension >= 20)
+    def _bridge_engage(self, fighter, opponent=None, view=None):
+        """8:02ae: may the bridge skeleton (or, for the automatic sword turn,
+        the Prince) press forward against its opponent? `view` is the
+        opponent in the fighter's coordinates; by default the Prince."""
+        if opponent is None:
+            opponent = getattr(self, '_true_player', None) or self.player
+            view = self.player
+        terrain = getattr(self, 'terrain', None)
+        return bridge_engage(
+            fighter.room, self._supporting_column(fighter), bool(fighter.state.facing),
+            fighter.state.target_x, opponent.room, self._supporting_column(opponent),
+            (view or opponent).state.target_x, opponent.sword_drawn,
+            bridge_gate_open(terrain), *bridge_tension(terrain))
 
     def _bridge_holds(self, guard):
         return self._bridge_fight_room(guard) and not self._bridge_near_end(guard)
@@ -834,14 +836,20 @@ class CombatEncounter:
         state = player.state
         if (guard is None or not player.alive or not guard.alive
                 or not player.sword_drawn or not player.targetable
-                or not guard.targetable or guard.alert_mode < 2
+                or not guard.targetable or not self._distance_routing(self.guard)
                 or state.animation_state >= 2
                 or player.room != guard.room or player.row != guard.row):
             return False
         # CODE:6 0x2258-0x22ea: -15..330 stays in ordinary sword control.
         # A farther target behind selects the Prince's turn at 0x2770,
-        # unless a voluntary turn switched it off (6:22a6, a5-0x5010 = 0).
-        if opponent_distance(player, guard) >= -15 or not getattr(self, 'automatic_turn', True):
+        # unless a voluntary turn switched it off (6:22a6, a5-0x5010 = 0),
+        # the opponent is of type 6 (6:22ac) or, in level five's bridge
+        # rooms off row 0, the Prince may press forward himself (6:22b4-22e4,
+        # 8:02ae for the Prince against his opponent): OnAlert runs instead.
+        if (opponent_distance(player, guard) >= -15 or not getattr(self, 'automatic_turn', True)
+                or guard.state.actor_type == 6
+                or self._bridge_fight_room(player)
+                and self._bridge_engage(player, self.guard, guard)):
             return False
         terrain = getattr(self, "terrain", None)
         offset = (terrain.combat_turn_offset(player.room, player.row, state, frame_record, bounds)
@@ -858,13 +866,20 @@ class CombatEncounter:
         SwordCtrl's last step runs: a pending Down calls PutSwordAway with no
         pose gate (6:2368-2386), anything else goes to OnAlert."""
         player, guard = self.player, self.guard
-        terrain = getattr(self, 'terrain', None)
-        cell = (self._guard_tile(player, self._supporting_column(player)).kind
-                if terrain is not None or self.level is not None else 0)
-        if guard is None or cell not in (11, 15) and guard.alert_mode < 2:
+        if guard is None or not self._distance_routing(guard):
             return False
         view = self._project_fighter(guard, player.room)
         return view is not None and opponent_distance(player, view) < 331
+
+    def _distance_routing(self, guard):
+        # SwordCtrl 6:2236-224e: the Prince's own cell is a loose floor or
+        # shelf (CurrentCell 4:35a6 kinds 11/15), or the opponent is at
+        # alert 2 or more.
+        player = self.player
+        terrain = getattr(self, 'terrain', None)
+        cell = (self._guard_tile(player, self._supporting_column(player)).kind
+                if terrain is not None or self.level is not None else 0)
+        return guard is not None and (cell in (11, 15) or guard.alert_mode >= 2)
 
     def choose_voluntary_turn(self, frame_record=None, bounds=None):
         # SwordCtrl 6:22f2-2366: fresh Backward with Shift turns through the

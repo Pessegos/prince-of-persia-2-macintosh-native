@@ -5,8 +5,40 @@ import unittest
 
 from pop2.bridge import (
     bridge_column, BREAK_SONG, BREAK_SOUND, CREAK_SOUND, PLANK_FRAMES, Bridge, bridge_checked,
+    bridge_engage,
 )
+from pop2.combat import select_sequence
 from pop2.paths import ASSET_DIR
+
+
+class BridgeEngageRuleTests(unittest.TestCase):
+    """8:02ae (tools/probe_bridge_engage.py: 1,244,160 native cases)."""
+
+    def engage(self, column, facing_right, room=9, dx=-100, opponent_room=9, opponent_column=5,
+               armed=True, gate=False, level=2, tension=20):
+        return bridge_engage(room, column, facing_right, 300 + dx, opponent_room,
+                             opponent_column, 300, armed, gate, level, tension)
+
+    def test_facing_left_presses_from_column_eight(self):
+        self.assertEqual([self.engage(c, False) for c in (7, 8)], [False, True])
+        # Rooms 7 and 12 continue room 10's columns.
+        self.assertTrue(self.engage(0, False, room=11))
+        self.assertFalse(self.engage(9, False, room=6))
+        # The swapped sides the port used before: right from 8, left below 2.
+        self.assertFalse(self.engage(9, True, armed=False))
+        self.assertFalse(self.engage(0, False))
+
+    def test_facing_right_presses_at_the_left_end_or_toward_the_gate(self):
+        self.assertEqual([self.engage(c, True, armed=False) for c in (1, 2)], [True, False])
+        self.assertTrue(self.engage(5, True, armed=False, gate=True, opponent_room=6,
+                                    opponent_column=9))
+        self.assertFalse(self.engage(5, True, armed=False, gate=True, opponent_column=2))
+
+    def test_facing_right_presses_an_armed_opponent_ahead_on_a_taut_bridge(self):
+        self.assertTrue(self.engage(5, True))
+        for change in (dict(armed=False), dict(dx=-204), dict(dx=0), dict(opponent_column=7),
+                       dict(level=1), dict(tension=19)):
+            self.assertFalse(self.engage(5, True, **change), change)
 
 
 class FixedRandom:
@@ -459,16 +491,23 @@ class BridgeGuardAiTests(unittest.TestCase):
     def test_engage_and_hold_follow_the_bridge_columns(self):
         combat, skeleton = self.combat, self.skeleton
         self.assertTrue(combat._bridge_fight_room(skeleton))
-        self.place(60, 0)
+        # 8:02c2-0332 (native facing word -1 = left): facing left the
+        # skeleton presses from column 8 on, facing right below column 2.
+        # The port had the two sides swapped until 2026-10-31.
+        self.place(440, 0)
         self.assertTrue(combat._bridge_engage(skeleton))
+        self.place(60, 1)
+        self.assertTrue(combat._bridge_engage(skeleton))
+        self.place(60, 0)
+        self.assertFalse(combat._bridge_engage(skeleton))
+        self.place(440, 1)
+        self.assertFalse(combat._bridge_engage(skeleton))
         for x in range(100, 200, 4):
             self.place(x, 0)
             if bridge_column(9, combat._supporting_column(skeleton)) in (2, 3):
                 break
         self.assertFalse(combat._bridge_engage(skeleton))
         self.assertTrue(combat._bridge_holds(skeleton))
-        self.place(440, 1)
-        self.assertTrue(combat._bridge_engage(skeleton))
 
     def test_skeleton_turns_back_when_the_prince_hides_behind_room_sevens_gate(self):
         scene, skeleton = self.scene, self.skeleton
@@ -484,19 +523,38 @@ class BridgeGuardAiTests(unittest.TestCase):
         # skeleton (8:02ae) keeps its inputs; otherwise DoTurn selects SEQS 60.
         combat, skeleton = self.combat, self.skeleton
         player = combat.player
-        player.state.target_x = player.state.current_x = 60
         skeleton.sword_drawn, skeleton.alert_mode = True, 3
         selected = []
-        for x, facing in ((470, 1), (200, 1)):
+        player.state.target_x = player.state.current_x = 20
+        for x, facing in ((50, 1), (470, 1)):
             self.place(x, facing)
             skeleton.state.action, skeleton.state.animation_state = 158, 0
             skeleton.selected_sequence = None
-            self.assertEqual(combat._bridge_engage(skeleton), x == 470)
+            self.assertEqual(combat._bridge_engage(skeleton), x == 50)
             combat.choose_guard_action(skeleton)
             selected.append(skeleton.selected_sequence)
         self.assertNotEqual(selected[0], 60)
         self.assertEqual(selected[1], 60)
 
+
+    def test_a_pressing_prince_does_not_turn_to_the_skeleton_behind_him(self):
+        # SwordCtrl 6:22b4-22e4 asks 8:02ae for the Prince as well: facing
+        # left from bridge column 8 on, he keeps his inputs (OnAlert) rather
+        # than turning to the skeleton behind him; nearer the middle he turns.
+        combat, skeleton, player = self.combat, self.skeleton, self.combat.player
+        player.sword_drawn = skeleton.sword_drawn = True
+        skeleton.alert_mode = 3
+        turns = []
+        for x in (440, 200):
+            select_sequence(player, 227)
+            player.runtime.next_frame()
+            player.state.facing, player.state.animation_state = 0, 1
+            player.state.target_x = player.state.current_x = x
+            self.place(x + 40, 0)
+            column = bridge_column(player.room, combat._supporting_column(player))
+            self.assertEqual(combat._bridge_engage(player, skeleton, skeleton), column >= 8)
+            turns.append(combat.choose_player_turn())
+        self.assertEqual(turns, [False, True])
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level-five resources required')
 class BridgeSwordLossTests(unittest.TestCase):

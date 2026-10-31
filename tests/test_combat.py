@@ -326,6 +326,26 @@ class GuardCombatTests(unittest.TestCase):
             setattr(c.guard, field, value)
             self.assertFalse(c.choose_player_turn(), field)
 
+    def test_auto_turn_skips_an_opponent_of_type_six(self):
+        # SwordCtrl 6:22ac: against type 6 (raw kind 3, level 14) OnAlert
+        # runs instead of the automatic turn.
+        for actor_type, turns in ((2, True), (6, False)):
+            c = self.encounter(player_facing=1)
+            c.guard.state.actor_type = actor_type
+            self.assertEqual(c.choose_player_turn(), turns, actor_type)
+
+    def test_auto_turn_on_a_loose_floor_or_shelf_needs_no_alert(self):
+        # SwordCtrl 6:2236-224e: the Prince's own loose floor (11) or shelf
+        # (15) admits the distance routing, and so the turn, at alert 0/1.
+        from types import SimpleNamespace
+
+        for kind, alert, turns in ((0, 1, False), (11, 1, True), (15, 0, True), (0, 2, True)):
+            c = self.encounter(player_facing=1)
+            c.guard.alert_mode = alert
+            c.terrain = SimpleNamespace(tile=lambda room, column, row, kind=kind:
+                                        SimpleNamespace(kind=kind))
+            self.assertEqual(c.choose_player_turn(), turns, (kind, alert))
+
     def test_auto_turn_preserves_protected_player_animations(self):
         for field, value in (("life", 0), ("targetable", False),
                              ("sword_drawn", False)):

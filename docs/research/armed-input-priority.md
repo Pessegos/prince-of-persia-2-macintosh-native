@@ -162,13 +162,15 @@ controllers. The outer routing and DoAdvance's level-five sequence follow.
 `tools/probe_sword_ctrl.py` runs the Prince's SwordCtrl 6:2166-2390 with
 the turn 6:2638, OnAlert 6:24bc and PutSwordAway 6:2592 as sinks and the
 current-cell kind 4:35a6, distance 4:49ee, target 6:36f2/4:3312 and
-level-five bridge test 8:02ae supplied. 442,368 cases (24 bank shapes, two
+level-five bridge test 8:02ae supplied. 3,538,944 cases (24 bank shapes, two
 animation modes, three cell kinds, the opponent alert word a5-0x5062 at
 0-3, eight distances, three opponent types, actor types 0/11, both
-automatic-turn flags, rooms 1/10, the bridge word and a fatal pending hit)
+automatic-turn flags, rooms 1/7/10/12, rows 0/1, the bridge word, the
+8:02ae result 0/1 and a fatal pending hit)
 match `tools/reference_armed_input.py:sword_ctrl` with zero mismatches.
 
-- Result SHA256: `1fcb91c8da292ebf1af48d8c6d326eb91b33c7ff4542e6c44ee4dfd78ff99664`.
+- Result SHA256: `5c6706d24410f7642fd1c13e19474df5a5c251c8910a897a7ba44283095318c7`
+  (2026-10-31; the 442,368-case run before the 8:02ae dimension: `1fcb...9664`).
 - Correction (2026-10-30): the first run (110,592 cases, digest
   `8389...a2be`) kept a5-0x5062 at 0 and called 4:35a6 "engagement". 4:35a6
   is CurrentCell (ReadCell 4:27ee of the Prince's room, stored column and
@@ -217,10 +219,46 @@ priority (attack first) and its guard-pose gate. Regressions (fail on the
 previous code, 6 subcases): `tests.test_armed_input.UnengagedSheatheTests`.
 The port's first-pose wait (cursor 0) is unchanged.
 
-Still different, not changed: the automatic turn does not exempt opponent
-type 6 or the level-five bridge rooms (8:02ae evaluated for the Prince),
-and the distance routing ignores the cell kind for the turn itself
-(`choose_player_turn` still requires alert 2 or more).
+The turn exemptions are in production since 2026-10-31
+(`combat.choose_player_turn`): an opponent of working type 6 (raw kind 3,
+only in level 14) and, in level five's bridge rooms off row 0, a Prince
+for whom 8:02ae says "press forward" run OnAlert instead of the automatic
+turn; a loose floor or shelf underfoot admits the turn at alert 0/1 as it
+does the rest of the distance routing (`combat._distance_routing`).
+Regressions: `tests.test_combat` (`test_auto_turn_skips_an_opponent_of_type_six`,
+`test_auto_turn_on_a_loose_floor_or_shelf_needs_no_alert`) and
+`tests.test_bridge.BridgeGuardAiTests.test_a_pressing_prince_does_not_turn_to_the_skeleton_behind_him`.
+The SwordCtrl probe now supplies 8:02ae's result 0/1 in rooms 1/7/10/12 at
+rows 0/1 (3,538,944 cases, 0 mismatches).
+
+### BridgeEngage 8:02ae, and a swapped port rule
+
+`tools/probe_bridge_engage.py` executes 8:02ae with BridgeGetCharCol
+8:0188, 8:0424 and IsBrgGateOpen 8:0458; only the trob lookup 5:38a6 is
+supplied (none, or phase 0-3 for room 7 cell 13). 1,244,160 cases (rooms
+1/7/10/12, columns -1..10, both facings, X differences around 0 and -204,
+opponent room/column, sword word 0-2, the trob, tension level/amount)
+match `pop2.bridge.bridge_engage` with zero mismatches; the trob lookup is
+called with (7, 13) or not at all.
+
+- Result SHA256: `d4932e6c41fbe7b678dab7bc79cda6a9190f5e0d8f1e27b8edd9a463e18d976b`.
+
+Rule: with the facing word -1 (**left**) the character presses from bridge
+column 8 on; with 0 (**right**) below column 2, when its opponent is behind
+room 7's open gate (opponent bridge column below 2), or against an opponent
+with sword word 1 less than 204 pixels ahead, in its own (unadjusted)
+column 6 or lower, while the tension is level 2 with at least 20.
+
+Correction: the port's `_bridge_engage` (implemented 2026-10-23 for the
+bridge skeleton) had the two facings swapped: right from column 8, left
+below 2 or toward the gate, with the Prince *behind* the skeleton. 8:04a2
+uses the same word with the port's facing correctly, so the swap was
+local. USER-VISIBLE on level five's bridge: the skeleton now presses
+forward from its post at the right end (facing left, column 8+) and,
+facing right, from the left end or back toward its post when the Prince
+hides behind the gate; it no longer presses at the left end while facing
+the Prince there. EnGarde, GenFight, OpponentClose, the pursuit gap rule
+and the skeleton's SwordCtrl turn all use the corrected rule.
 
 ## DoAdvance's level-five sequence
 
