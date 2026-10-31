@@ -226,6 +226,25 @@ class GuardDecisionTests(unittest.TestCase):
                 if condition != 'close':
                     self.assertEqual(g.alert_mode, 2 if condition == 'passed' else 0)
 
+    def test_runner_tests_the_cell_ahead_of_its_supporting_foot_not_its_anchor(self):
+        # GetCellsInFront 4:39fc reads the column word (GetFCharX 4:3a72):
+        # a foot 20 pixels ahead can put the wall one cell nearer.
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                c, g = self.runner(facing=facing)
+                step = 1 if facing else -1
+                x = next(x for x in range(100, 400)
+                         if character_column(x + 20 * step) != character_column(x))
+                g.state.target_x = g.state.current_x = x
+                c.player.state.target_x = x + 300 * step
+                c.guard_art = SimpleNamespace(frames={i: SimpleNamespace(offset_x=20, aux=0)
+                                                      for i in range(256)})
+                wall = character_column(x + 20 * step) + step
+                c.terrain = SimpleNamespace(tile=lambda _room, col, _row:
+                                            Tile(20) if col == wall else Tile(1))
+                c._choose_unarmed_guard_action(g)
+                self.assertEqual((g.selected_sequence, g.alert_mode), (101, 0))
+
     def test_seqs232_minus21_13_reaches_the_special13_brake_and_ambient(self):
         # SEQS:232 word 12 is -21 13: AnimChar 4:2f92 writes the same word
         # (a5-0x5022) that the guard brake and OppToFight 6:23b2 test for 13.

@@ -1172,7 +1172,9 @@ class CombatEncounter:
         crowd_distance = (127 if nearest is guard else
                           abs(state.target_x - nearest.state.target_x) if nearest else 0)
         direction = 1 if state.facing else -1
-        column = character_column(state.target_x)
+        # GetCellsInFront 4:39fc and the passing test 4:0606-0618 read the
+        # column words (supporting foot), not the anchors.
+        column = self._supporting_column(guard)
         front = self._guard_tile(guard, column + direction)
         target_row = (guard.room == self.player.room
                       and self.player.row in (guard.row, guard.alternate_row))
@@ -1190,9 +1192,8 @@ class CombatEncounter:
         # chasing a same-facing run, but still checks passing/death below.
         spacing_brake = (not (same_direction_run and distance >= 102)
                          and (crowd_distance <= 126 or distance <= 178))
-        passed_player = (character_column(state.target_x) > character_column(other.target_x)
-                         if state.facing else
-                         character_column(state.target_x) < character_column(other.target_x))
+        player_column = self._supporting_column(self.player)
+        passed_player = column > player_column if state.facing else column < player_column
         if (guard.row == self.player.row and spacing_brake) or passed_player:
             self._brake_guard(guard, 2)
         elif not self.player.alive or other.sequence_mode == 13:
@@ -1208,8 +1209,9 @@ class CombatEncounter:
         guard.alert_mode = alert_mode
         select_sequence(guard, 101)
         # AutoCtrl 4:07ae-07d6: the last jump pose gets a forward 12-pixel
-        # correction if the cell behind cannot support the braking pose.
-        column = character_column(state.target_x)
+        # correction if the cell behind (GetCellBehind 4:3a48, column word)
+        # cannot support the braking pose.
+        column = self._supporting_column(guard)
         direction = 1 if state.facing else -1
         rear = self._guard_tile(guard, column - direction)
         if state.action == 212 and not advancable_tile(rear, state.actor_type):
