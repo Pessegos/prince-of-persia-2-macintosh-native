@@ -1975,10 +1975,12 @@ class AnimationDataTests(unittest.TestCase):
         scene.horizontal_key(None, -1, False)
         scene.set_key_state("down", False)
         actions = []
-        for _ in range(14):
+        for _ in range(15):
             scene.advance_animation()
             actions.append(scene.action)
-        self.assertEqual(actions, [112, 108, 109, *range(110, 120), 15])
+        # The Down re-read after the step's clear is still pending (-1) when
+        # released, so 109 consumes it once before rising (no host cancel).
+        self.assertEqual(actions, [112, 108, 109, 109, *range(110, 120), 15])
         self.assertEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)
 
     def test_rapid_crawl_repeat_is_a_second_low_step(self):

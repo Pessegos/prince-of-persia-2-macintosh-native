@@ -5,7 +5,6 @@ GenCtrl's pose26/44 and protected-landing clears run at the simulation boundary,
 and the existing grounded selector handles the eventual return.
 """
 
-from dataclasses import replace
 
 from pop2.mac_input import DirectionalInput, vertical_input_request
 from pop2.running_controls import RunningControls
@@ -45,24 +44,16 @@ class AirborneControls(RunningControls):
         self.directional_input = (self.directional_input.consume('up', clear=True) if sequence != 3
                                   else self.directional_input.consume(forward, 'up'))
         self.waiting_step_direction = 0
-        self.run_repeat_up = False
 
     def waiting_key(self, key, pressed):
         if (self.sequence_state.sequence_id not in AIRBORNE_INPUT_SEQUENCES
                 or not self.waiting_controls_available()):
             return super().waiting_key(key, pressed)
         fresh = key == 'up' and pressed and not self.up_held
-        cancel_repeat = key == 'up' and not pressed and getattr(self, 'run_repeat_up', False)
         handled = super().waiting_key(key, pressed)
         self.sample_waiting_controls()
         if fresh:
             self.jump_started_for_press = True
-            self.run_repeat_up = False
-        elif cancel_repeat:
-            # A held takeoff key re-read after a native clear is automatic
-            # repeat, not a new tap. Retain the port's release cancellation.
-            self.directional_input = replace(self.directional_input, up=0)
-            self.run_repeat_up = False
         return handled
 
     def waiting_horizontal(self, direction, pressed):
@@ -106,4 +97,3 @@ class AirborneControls(RunningControls):
             # call ClearControls4:3e3a. Ctrl/Shift survives.
             self.directional_input = self.directional_input.clear_directions()
             self.jump_started_for_press = self.up_held
-            self.run_repeat_up = self.up_held and self.jump_repeat_armed

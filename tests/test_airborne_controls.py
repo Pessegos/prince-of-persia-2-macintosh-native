@@ -68,7 +68,6 @@ class AirborneBankTests(unittest.TestCase):
                 scene.set_key_state('down', True)
                 scene.clear_keys(None)
                 self.assertIsNone(scene.directional_input)
-                self.assertFalse(scene.run_repeat_up)
                 scene.advance_animation()
                 self.assertEqual(scene.directional_input.words(), (0, 0, 0, 0, 0))
 
@@ -77,12 +76,32 @@ class AirborneBankTests(unittest.TestCase):
         scene.up_held = scene.jump_repeat_armed = True
         scene.advance_animation()  # display26
         scene.advance_animation()  # clear26 then load27/re-sample on release
-        self.assertTrue(scene.run_repeat_up)
+        # The release reaches the first sample after the clear: the word
+        # stays 0 (4:3e84), so no marker is needed to cancel the repeat.
+        self.assertEqual(scene.directional_input.up, 0)
         scene.set_key_state('up', False)
         self.assertEqual(scene.directional_input.up, 0)
         for _ in range(10):
             scene.advance_animation()
         self.assertEqual((scene.sequence_state.sequence_id, scene.action), (2, 15))
+
+    def test_held_up_resampled_after_the_clear_survives_its_release(self):
+        # Once a sample after the pose-26 clear has read the held Up (-1), a
+        # release keeps it pending (4:3e84), and the standing gate jumps up.
+        # The port used to cancel this "automatic repeat" on release.
+        scene = self.jump_at(3, 25)
+        scene.up_held = scene.jump_repeat_armed = True
+        scene.advance_animation()  # display26
+        scene.advance_animation()  # clear26
+        scene.advance_animation()  # the held Up is sampled fresh
+        self.assertEqual(scene.directional_input.up, -1)
+        scene.set_key_state('up', False)
+        self.assertEqual(scene.directional_input.up, -1)
+        sequences = set()
+        for _ in range(12):
+            scene.advance_animation()
+            sequences.add(scene.sequence_state.sequence_id)
+        self.assertTrue(sequences & {14, 28})
 
     def test_inverted_callbacks_have_the_same_late_up_priority(self):
         for facing in (0, 1):

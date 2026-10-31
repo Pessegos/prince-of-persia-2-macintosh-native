@@ -1,6 +1,5 @@
 """Carry the directional bank through crouch, rise and prone movement."""
 
-from dataclasses import replace
 
 from pop2.coordinates import column_left
 from pop2.crevices import CREVICE_TILE
@@ -42,12 +41,6 @@ class LowControls(LedgeControls):
         self.sample_waiting_controls()
         self.waiting_step_direction = 0
         self.low_polled_this_tick = False
-        if sequence == 79:
-            self.low_step_direction = 1 if self.sequence_state.facing else -1
-            self.low_inherited_down = self.down_held
-        elif sequence in (26, 49, 50):
-            self.low_step_direction = 0
-            self.low_inherited_down = False
         if sequence in (26, 50):
             # Crouch6:1068/DoRunCrouch: the accepted Down is consumed.
             self.directional_input = self.directional_input.consume('down', clear=True)
@@ -61,14 +54,6 @@ class LowControls(LedgeControls):
         fresh = pressed and not getattr(self, key + '_held')
         setattr(self, key + '_held', pressed)
         self.sample_waiting_controls()
-        if key == 'down':
-            if fresh:
-                self.low_inherited_down = False
-            elif not pressed and getattr(self, 'low_inherited_down', False):
-                # Retained low-step release policy: an inherited Down hold
-                # may cancel before109; a new released Down tap stays pending.
-                self.directional_input = replace(self.directional_input, down=0)
-                self.low_inherited_down = False
         if key == 'up':
             self.jump_started_for_press = pressed
         elif key == 'down' and not pressed:
@@ -170,11 +155,7 @@ class LowControls(LedgeControls):
     def clear_waiting_controls(self):
         super().clear_waiting_controls()
         self.low_polled_this_tick = False
-        self.low_step_direction = 0
-        self.low_inherited_down = False
 
     def retire_waiting_controls(self):
         super().retire_waiting_controls()
         self.low_polled_this_tick = False
-        if self.sequence_state.sequence_id not in LOW_INPUT_SEQUENCES:
-            self.low_step_direction = 0

@@ -45,9 +45,6 @@ class RunningControls(WaitingControls):
         if not running:
             return super().waiting_key(key, pressed)
         fresh = key == 'up' and pressed and not self.up_held
-        cancel_repeat = key == 'up' and not pressed and getattr(self, 'run_repeat_up', False)
-        if fresh:
-            self.run_repeat_up = False
         self.running_key_callback = True
         try:
             handled = super().waiting_key(key, pressed)
@@ -56,11 +53,6 @@ class RunningControls(WaitingControls):
         if fresh:
             self.jump_started_for_press = True
             self.try_startup_jump_chord()
-        elif cancel_repeat:
-            # A continuously held takeoff key is an automatic repeat, not a
-            # new tap. Keep the host's cancellation when it is released.
-            self.directional_input = replace(self.directional_input, up=0)
-            self.run_repeat_up = False
         return handled
 
     def waiting_horizontal(self, direction, pressed):
@@ -131,6 +123,3 @@ class RunningControls(WaitingControls):
             self.start_crouch_lower()
         return True
 
-    def clear_waiting_controls(self):
-        super().clear_waiting_controls()
-        self.run_repeat_up = False
