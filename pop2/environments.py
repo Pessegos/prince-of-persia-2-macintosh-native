@@ -591,26 +591,32 @@ class Caverns(Environment):
                          scene.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
             hit = spikes.contact(scene.level_map, motion, state, record, collision,
                                  actor.alive, actor.sword_drawn)
-            if hit is None:
-                continue
-            sequence, state.target_x = hit
-            state.current_x = state.target_x
-            state.current_y = state.horizontal_velocity = state.vertical_velocity = 0
-            state.facing = 0
-            actor.life, actor.recovering = 0, False
-            motion.dead, motion.falling = True, False
-            if not player:
-                sequence = 189 if sequence == 54 else 188
-                actor.targetable = False
-            scene.physics.select(actor.runtime, sequence)
-            state.sound_events.append(281)
-            if player:
-                scene.clear_keys(None)
-                scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
-                scene.death.begin(4)
-                scene.death.music_method = 4
-                scene.action, scene.player_x = state.action, state.target_x
-                scene.status.set('Defeated')
+            if hit is not None:
+                self.impale(actor, *hit)
+
+    def impale(self, actor, sequence, x):
+        """5:3cee after a spike hit: the actor is pinned at X and dies."""
+        scene = self.scene
+        state, motion = actor.state, actor.terrain_motion
+        player = actor is scene.combat.player
+        state.target_x = x
+        state.current_x = state.target_x
+        state.current_y = state.horizontal_velocity = state.vertical_velocity = 0
+        state.facing = 0
+        actor.life, actor.recovering = 0, False
+        motion.dead, motion.falling = True, False
+        if not player:
+            sequence = 189 if sequence == 54 else 188
+            actor.targetable = False
+        scene.physics.select(actor.runtime, sequence)
+        state.sound_events.append(281)
+        if player:
+            scene.clear_keys(None)
+            scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
+            scene.death.begin(4)
+            scene.death.music_method = 4
+            scene.action, scene.player_x = state.action, state.target_x
+            scene.status.set('Defeated')
 
     def check_scythes(self):
         scene = self.scene
@@ -1160,12 +1166,15 @@ class Temple(Caverns):
         row = motion.row if motion is not None else -1
         column = scene.combat._supporting_column(player)
         # a5-0x3570: the ShapeBounds width (image + 1, with the sword's
-        # extension) saved from the last drawn frame (2:6454, 4:23ae).
+        # extension, 4:5d20-5d56) saved from the last drawn frame (2:6454,
+        # 4:23ae); the current bounds stand in for that copy.
         left, _top, right, _bottom = scene.player_collision_bounds()
         width = right - left + 2
         # The type-6 case of MakeRubble 5:2afa: motion 10:1d5c, then
         # CheckSlideRockCrush 10:16f6 against the Prince.
-        for mob, _events in caverns.rocks.update(scene.level_map, (state.action, column, row)):
+        for mob, events in caverns.rocks.update(scene.level_map, (state.action, column, row)):
+            if motion is not None and player.alive:
+                self.rock_events(mob, events)
             if (motion is not None and player.alive
                     and caverns.rocks.crushes(mob, motion.room + 1, row, native_x(state.target_x),
                                               state.sequence_mode, state.facing, width)):
@@ -1175,6 +1184,26 @@ class Temple(Caverns):
                 state.sound_events.append(cue)
             elif getattr(scene, 'audio', None) is not None:
                 scene.audio.stop_sound(cue)
+
+    def rock_events(self, mob, events):
+        """The actor endpoints of 10:1d5c, for the Prince."""
+        from pop2.slide_rocks import face_column
+
+        scene = self.scene
+        player, state = scene.combat.player, scene.sequence_state
+        if '5:3cee' in events and not getattr(scene, 'god_mode', False):
+            # A rock stopping at spikes (its face tile 2) runs the spike
+            # impalement 5:3cee on the Prince: the spike cell bloodied
+            # (0xf0), the Prince pinned in his own column (4:3b30).
+            spike = scene.level_map.tile(mob[2] - 1, face_column(mob[0] - 3), mob[6])
+            if spike.room is not None:
+                scene.game.caverns.spikes.foreground[spike.room, spike.row * 10 + spike.column] = 240
+            record = scene.frames[state.action]
+            own = character_column(floor_contact_x(state.target_x, state.facing, record))
+            self.impale(player, 54 if state.facing else 51, own * 51 + 90)
+        elif '6:1a84' in events and scene.native_ledge:
+            # A rock reaching the hanging Prince's ledge makes him let go.
+            scene.release_native_ledge()
 
     def rock_contact(self, mob):
         """10:1b04: the rock pushes the Prince to its face; against a wall it

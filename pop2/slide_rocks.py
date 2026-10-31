@@ -35,6 +35,12 @@ def object_shape(kind, phase=0):
     return 3500 + {6: 0x5d, 7: 0x54, 8: 0x59 + phase, 9: 0x55 + phase}[kind]
 
 
+def face_column(candidate):
+    """10:1d5c's obstacle column ahead of a rock at ``candidate`` X."""
+    front = signed_word(candidate - 31)
+    return trunc_div(front) - int(front <= 0)
+
+
 @dataclass
 class SlideRocks:
     bank: list = field(default_factory=list)
@@ -105,8 +111,7 @@ class SlideRocks:
             return tuple(result), events
         if result[4] in (0, 100):
             return tuple(result), events
-        front = signed_word(candidate - 31)
-        column = trunc_div(front) - int(front <= 0)
+        column = face_column(candidate)
         front_tile = self.kind(terrain, result[2], column, result[6])
         if result[3] == 1:
             result[3], result[4] = 0, 100
@@ -154,10 +159,11 @@ class SlideRocks:
     def crushes(mob, room, row, front, sequence_mode=0, facing=0, width=0):
         """CheckSlideRockCrush 10:16f6: the Prince's (native) front within
         the 24 pixels ahead of the rock's face, in its room and row. Facing
-        right, the front is X plus the saved ShapeBounds width a5-0x3570."""
+        left (native facing -1; ``facing`` is the port's 1 right / 0 left),
+        the front is X plus the saved ShapeBounds width a5-0x3570."""
         if mob[2] != room or mob[6] != row:
             return False
-        if facing:
+        if not facing:
             front = signed_word(front + width)
         lower = signed_word(mob[0] + 223)
         return sequence_mode == 4 or lower < front < lower + 25

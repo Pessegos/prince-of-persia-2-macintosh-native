@@ -151,6 +151,42 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.assertNotEqual(scene.native_viewport.crop((300, 250, 400, 340)).tobytes(), background)
 
 
+    def test_a_rock_stopping_at_spikes_impales_the_prince(self):
+        # 10:1d5c's mark-1 path with face tile 2 calls 5:3cee: the spike cell
+        # bloodied (0xf0), SEQS 54 (facing right), cue 281, death method 4.
+        # Before, the event was ignored.
+        from pop2.coordinates import column_left
+        from pop2.environments import environment_for
+
+        scene = self.scene
+        scene.enter_next_level(10)
+        scene.jump_to_room(28, row=2, x=column_left(1) + 25, facing=1)
+        self.tick()
+        # A rock record whose face column (10:1d5c) is native room 29's
+        # spike cell 20.
+        mob = (3 + 31 + 20, 356, 29, 0, 100, 6, 2, 459)
+        environment_for(scene).rock_events(mob, ['5:3cee'])
+        self.assertFalse(scene.combat.player.alive)
+        self.assertEqual(scene.sequence_state.source_sequence_id, 54)
+        self.assertEqual(scene.game.caverns.spikes.foreground[28, 20], 240)
+        self.assertIn(281, scene.sequence_state.sound_events)
+
+    def test_a_rock_above_the_hanging_prince_makes_him_let_go(self):
+        # 10:1d5c's frame 87-99 / row / column admission calls 6:1a84.
+        from unittest.mock import patch
+        from pop2.environments import environment_for
+
+        scene = self.scene
+        scene.enter_next_level(10)
+        scene.native_ledge = True
+        with patch.object(scene, 'release_native_ledge') as release:
+            environment_for(scene).rock_events((200, 236, 22, 0, 2, 6, 1, 459), ['6:1a84'])
+        release.assert_called_once_with()
+        scene.native_ledge = False
+        with patch.object(scene, 'release_native_ledge') as release:
+            environment_for(scene).rock_events((200, 236, 22, 0, 2, 6, 1, 459), ['6:1a84'])
+        release.assert_not_called()
+
     def test_a_shaken_trap_door_opens_drops_the_prince_and_closes(self):
         # Level ten, native room 8 cell 25 (tile 26). ShakeEm 5:28c8 calls
         # TriggerTrapDoor 10:25aa: the floor is space at once; under the

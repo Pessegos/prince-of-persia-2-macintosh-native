@@ -1578,22 +1578,28 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         if request == "climb":
             self.start_ledge_climb()
         elif request == "release":
-            sequence, offset = self.level_map.release_ledge(
-                self.room_id, self.terrain_motion.row, state, self.frames[state.action],
-                next_action=self.sequence_runtime.peek_frame().action)
             self.consume_ledge_input("release")
-            self.ledge_hanging = self.native_ledge = False
-            self.ledge_climb_requested = False
-            self.terrain_motion.falling = sequence in (23, 99)
-            self.sequence_state.sequence_mode = 0
-            self.player_x += offset
-            self.start_sequence(sequence)
-            self.status.set("Released ledge")
+            self.release_native_ledge()
         elif self.level_map.wall_supported_hang(
                 self.room_id, self.terrain_motion.row, state, self.frames[state.action]):
             # Ordinary wall support enters SEQS:25 once. Mode 6 bypasses
             # that test so its settling poses can finish at stationary 91.
             self.start_sequence(25)
+
+    def release_native_ledge(self):
+        """The release helper 6:1a84: GenCtrl on a release request, or a
+        sliding rock above the hanging Prince (10:1d5c)."""
+        state = self.sequence_state
+        sequence, offset = self.level_map.release_ledge(
+            self.room_id, self.terrain_motion.row, state, self.frames[state.action],
+            next_action=self.sequence_runtime.peek_frame().action)
+        self.ledge_hanging = self.native_ledge = False
+        self.ledge_climb_requested = False
+        self.terrain_motion.falling = sequence in (23, 99)
+        self.sequence_state.sequence_mode = 0
+        self.player_x += offset
+        self.start_sequence(sequence)
+        self.status.set("Released ledge")
 
     def _is_running(self):
         return self.run_active or self.sequence_state.sequence_id in RUN_SEGMENT_SEQUENCES
