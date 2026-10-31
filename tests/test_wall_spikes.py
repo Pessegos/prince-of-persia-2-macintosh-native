@@ -253,6 +253,11 @@ class ImportedWallSpikeTests(unittest.TestCase):
                     scene.shift_held = cautious
                     scene.horizontal_key(None, -1, True)
                     for _ in range(60):
+                        if cautious and scene.action == 15:
+                            # A held Shift step steps once (6:1286-128a):
+                            # press the arrow again for each cautious step.
+                            scene.horizontal_key(None, -1, False)
+                            scene.horizontal_key(None, -1, True)
                         RooftopSceneTests.tick(self)
                         if scene.terrain_motion.dead:
                             break
