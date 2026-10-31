@@ -143,6 +143,30 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.assertNotEqual(scene.native_viewport.crop((300, 250, 400, 340)).tobytes(), background)
 
 
+@unittest.skipUnless(TEMPLE_INSTALLED, 'Imported temple scene and scenery required')
+class TempleLooseFloorTests(unittest.TestCase):
+    def test_a_falling_temple_floor_draws_pieces_28_and_29(self):
+        # DrawObjLoose 3:4168: environment 2 draws pieces 28 and 29 at the
+        # slab's bottom; the port drew the caverns' 3557/3604.
+        from types import SimpleNamespace
+        from PIL import Image
+        from pop2.caverns import cavern_command_sprite, draw_cavern_falling, room_assets
+        from pop2.game_session import GameResources
+        from pop2.loose_floors import FallingFloor
+
+        level = GameResources.load().level(10).data
+        block = FallingFloor(21, 4, 1, 250)
+        state = SimpleNamespace(loose=SimpleNamespace(falling=[block]))
+        art = SimpleNamespace(draw_falling_foreground=lambda *args: None)
+        frame = draw_cavern_falling(Image.new('RGBA', (510, 365)), 21, state, level, art, level_number=10)
+        _program, resources, palette, shapes = room_assets(10, 21)
+        expected = Image.new('RGBA', (510, 365))
+        for index in (3528, 3529):
+            sprite = cavern_command_sprite(['back', index, block.x, 250, 16], resources, palette, shapes)
+            expected.paste(sprite, (block.x, 250 - sprite.height), sprite)
+        self.assertEqual(frame.tobytes(), expected.tobytes())
+
+
 @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level-13 scenery required')
 class LevelThirteenFlameTests(unittest.TestCase):
     def test_room_four_draws_the_kid_file_flame(self):
