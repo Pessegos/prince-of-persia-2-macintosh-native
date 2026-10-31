@@ -52,6 +52,18 @@ correction prevents walking through walls in port paths whose controller is
 not yet native (for example the unarmed running skeleton of 21c5606). That
 safeguard is a port exception, not recovered behaviour.
 
+Decision (2026-10-31): the safeguard stays. The unarmed runner's decision
+4:057c is now native over every LEVL (`probe_unarmed_brake`, 75,472 cases)
+and brakes before a non-advancable cell, but the motion between decisions
+is not: the braking slide (SEQS 101 and the 212 correction), the jump
+4:0834/DoRunJump, falls and knockbacks are not executed natively end to end,
+and FrameAdv's own admission (2:6550-65da) is not modelled. In the level-four
+bump scenario of 21c5606 the runner still reaches the wall between two
+decisions; without the correction it would sink into the rock. Natively it
+would overlap the wall too (no barrier), so removing the correction would
+trade a visible bump for a visible overlap without proving either native.
+Gates are now native for every opponent (CheckGateForOpp below).
+
 ### Native execution
 
 `tools/probe_enemy_collide.py` runs 4:62b0 with ReadCell, CurrentCell/

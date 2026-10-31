@@ -69,3 +69,25 @@ callers (GenFight 4:0df2/0e68/1056, caverns 8:03e8) were not probed here.
 ```powershell
 python -m tools.probe_unarmed_brake --source PATH_TO_RECOVERY --output rendered/unarmed-brake.json
 ```
+
+## Level-four exit rooms: can a skeleton pass the exit door? (2026-10-31)
+
+Native [D]: the exit door cells (tiles 16/17, room 22 cells 23-24) are
+ordinary advancable floor for an opponent (IsAdvancableId 6:5eca: not
+IsWall, not IsImpassable 3:4de2, not a space). Nothing in AutoCtrl,
+EnemyCollide or CheckGateForOpp stops an opponent at the door; a runner
+stops relative to the Kid (spacing <= 178, the pass, the 87 lunge within
+127 in the exit-chasing rooms 22, 24-28 of IsExitChasingSkel 4:17aa). The
+skeletons sleep in rooms 26-28 (zero-based 25-27); the wake needs the door
+fully open (SkelDoneShaking 4:1ae0-1b34) and the Kid in the skeleton's room
+to its left, within eight columns on a clear path (OpponentClose 4:1522-1570).
+
+Port (offscreen, withdrawn Tk root, god mode, door forced open): a skeleton
+set running left in room 22 from X 480 with the Kid standing at X 230 brakes
+at 333 (alert 2, SEQS 101, the 4:057c rule probed above), draws (90) and
+fights; it never reaches the door cells while the Kid is there. Rising in
+room 26 next to the Kid, it fights him there. No pass through the door was
+observed, and the native rules give no reason for one: the door is not a
+barrier, the Kid is. Not reproduced: a full native multi-room chase (no
+whole-frame native emulation exists here); the cross-room following of
+running opponents (FrameAdv 2:6550-65da, item 7 of the plan) remains open.
