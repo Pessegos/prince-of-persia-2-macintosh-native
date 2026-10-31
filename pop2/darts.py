@@ -3,7 +3,12 @@
 from dataclasses import dataclass, field
 
 from pop2.opponent_generation import EMPTY_TILES, WALL_TILES
-from pop2.terrain import floor_contact_x, floor_edge_distance, stone_gate_blocks
+from pop2.terrain import floor_contact_x, floor_edge_distance
+
+
+def _column(x):
+    # MobDart 8:3092/30be: DIVS truncates toward zero.
+    return x // 51 if x >= 0 else -(-x // 51)
 
 
 @dataclass
@@ -61,14 +66,15 @@ class Darts:
                     dart.dy = -3
             if dart.dy == -3:
                 continue
-            column = x // 51
+            column = _column(x)
             if y <= dart.row * 120 + 5:
                 dart.row -= 1
                 blocked = terrain.tile(dart.room, column, dart.row).kind not in EMPTY_TILES
-            elif column != dart.x // 51:
+            elif column != _column(dart.x):
+                # 8:30ec-3102: IsWall, or a gate that 4:5b0e blocks.
                 tile = terrain.tile(dart.room, column, dart.row)
                 blocked = (tile.kind in WALL_TILES or tile.kind == 4
-                           and stone_gate_blocks(tile.foreground, bounds, state))
+                           and terrain.gate_collides(tile, bounds, state))
             else:
                 blocked = False
             if blocked:

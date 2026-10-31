@@ -96,6 +96,18 @@ class DartTests(unittest.TestCase):
         self.assertEqual(self.advance(), ())
         self.assertEqual(self.darts.projectiles[0].dy, -19)
 
+    def test_columns_truncate_toward_zero_like_divs(self):
+        # MobDart 8:3092/30be divides with DIVS: X -27 and 0 are both column
+        # 0, so moving between them crosses no column and meets no wall
+        # (floor division made -27 column -1 and tested the wall in 0).
+        from pop2.darts import Dart
+
+        self.set_tile(10, 20)
+        self.darts.projectiles.append(Dart(0, -27, 160, 1))
+        self.assertEqual(self.advance(), ())
+        self.assertEqual(self.darts.projectiles[0].dy, -19)
+        self.assertEqual(self.darts.projectiles[0].x, 0)
+
     def test_room_boundary_rebases_only_the_visible_incoming_neighbors(self):
         struct.pack_into('>4H', self.level, 0x2080, 2, 3, 0, 0)
         self.darts.projectiles = [Dart(1, 500, 200, 1)]
