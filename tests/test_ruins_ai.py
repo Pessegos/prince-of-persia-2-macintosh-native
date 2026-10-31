@@ -497,3 +497,26 @@ class RuinsControllerTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ColumnRebaseTests(unittest.TestCase):
+    def test_4_3b30_rebases_by_the_kid_rooms_links(self):
+        # An undefined cell (room 0, column wrapped to 9) matches the first
+        # missing link: the room above here, so the column stays 9 (the head
+        # snaps 510 pixels right). Before, the requested column -1 was used.
+        from types import SimpleNamespace
+        from pop2.ruins_ai import RuinsCreatures
+
+        links = {(4, 'left'): None, (4, 'right'): 5, (4, 'up'): None, (4, 'down'): 7,
+                 (7, 'left'): 6, (7, 'right'): 8}
+        terrain = SimpleNamespace(neighbor=lambda room, side: links.get((room, side)))
+        encounter = SimpleNamespace(terrain=terrain)
+        actor = SimpleNamespace(room=4)
+        tile = SimpleNamespace(room=None, column=0)
+        self.assertEqual(RuinsCreatures.rebased_column(actor, encounter, tile, -1), 9)
+        self.assertEqual(RuinsCreatures.rebased_column(actor, encounter, SimpleNamespace(room=5, column=0), 10), 10)
+        self.assertEqual(RuinsCreatures.rebased_column(actor, encounter, SimpleNamespace(room=6, column=9), -1), -1)
+        links[(4, 'up')] = 3
+        links[(3, 'left')] = 2
+        links[(3, 'right')] = 9
+        self.assertEqual(RuinsCreatures.rebased_column(actor, encounter, tile, -1), -1)

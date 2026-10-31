@@ -434,8 +434,10 @@ left, down-left or up-left neighbour (-0x4fc0/-0x4fb4/-0x4fb8); plus 10 for
 the right, down-right or up-right one (-0x4fbe/-0x4fb2/-0x4fb6). A missing
 link is word 0, so room 0 (the undefined cell) matches the first zero slot
 in that order. `LevelMap.barrier_x` (AdjustRoom 4:56e6) has no up/down or
-up-left/up-right slots, so it cannot stand in for 3b30 unchanged; the two
-cases stay open until the head path gets its own 3b30 translation.
+up-left/up-right slots, so it cannot stand in for 3b30 unchanged.
+`RuinsCreatures.rebased_column` now translates 3b30 for the column snap
+(an undefined cell keeps its wrapped column); the barrier run is 20,000
+cases, zero mismatches (the two open cases closed).
 
 Not compared yet: the per-frame scheduling.
 

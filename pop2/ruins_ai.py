@@ -1289,6 +1289,38 @@ class RuinsCreatures:
             return point - width, point, width, body.height
         return point, point + width, width, body.height
 
+    @staticmethod
+    def rebased_column(actor, encounter, tile, requested):
+        """4:3b30: ReadCell's column rebased to the Kid's room (a5-0x4fc2):
+        unchanged for it or the rooms above/below, -10 for the left, down-
+        left or up-left one, +10 for the right side. Missing links are room
+        0, so an undefined cell (room 0, column wrapped) matches the first
+        missing link in that order."""
+        terrain = encounter.terrain
+        player = getattr(encounter, 'player', None)
+        kid = player.room if player is not None else actor.room
+
+        def link(room, side):
+            linked = terrain.neighbor(room, side) if room is not None else None
+            return linked
+
+        left, right, up, down = (link(kid, side) for side in ('left', 'right', 'up', 'down'))
+        slots = [kid, up, down,
+                 left, link(down, 'left') if down is not None else link(left, 'down'),
+                 link(up, 'left') if up is not None else link(left, 'up'),
+                 right, link(down, 'right') if down is not None else link(right, 'down'),
+                 link(up, 'right') if up is not None else link(right, 'up')]
+        native = [0 if room is None else room + 1 for room in slots]
+        room = 0 if tile.room is None else tile.room + 1
+        column = requested % 10 if tile.room is None else tile.column
+        if room in native[:3]:
+            return column
+        if room in native[3:6]:
+            return column - 10
+        if room in native[6:]:
+            return column + 10
+        return column
+
     def _wall_contact(self, actor, encounter):
         """CheckBarrier 4:62b0 for a head, with HeadEnemyCollide 7:0b6e."""
         state, mind = actor.state, actor.ruins
@@ -1364,7 +1396,7 @@ class RuinsCreatures:
             elif selected != 164:
                 if state.action <= 191:
                     result = 164
-                    anchor = NATIVE_X_ORIGIN + cell_column * 51 + 22
+                    anchor = NATIVE_X_ORIGIN + self.rebased_column(actor, encounter, cell, cell_column) * 51 + 22
                     self.set_native_x(actor, anchor + (51 if self.facing(actor) == -1 else 0))
                 else:
                     self.jump(actor, 145)
