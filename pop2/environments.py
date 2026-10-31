@@ -31,6 +31,7 @@ from pop2.loose_floors import crush_sequence, floor_hits_actor
 from pop2.opponent_generation import character_column
 from pop2.render_opening import TILE_HEIGHT, TILE_WIDTH
 from pop2.terrain import floor_contact_x, floor_y
+from pop2.trapdoors import LOOP_CUE, OPEN_CUE
 
 DESERT_FAR_SHORE_SOUND_X = 0x30B
 
@@ -1144,8 +1145,13 @@ class Temple(Caverns):
             return
         # MakeRubble 5:29e8 advances the trap doors (10:24fa), then ATMLoose
         # presents them (10:225c), which closes the finished ones.
-        caverns.trapdoors.advance()
+        audio = getattr(scene, 'audio', None)
+        if (caverns.trapdoors.advance() and audio is not None
+                and not audio.sound_playing(OPEN_CUE) and not audio.sound_playing(LOOP_CUE)):
+            audio.add_sound(LOOP_CUE)
         cues, caverns.trapdoors.drawn = caverns.trapdoors.present(scene.level_map)
+        if cues and audio is not None:
+            audio.stop_sound(LOOP_CUE)
         scene.sequence_state.sound_events.extend(cues)
         if not caverns.rocks.bank:
             return

@@ -135,3 +135,9 @@ Each stage integrates separately with the usual reservation.
 - Level menu: at the user's request (2026-10-31) the F3/tools level list
   shows levels 10-13 when their scenery is imported; the packaged smoke test
   renders levels 1-13. The temple is still incomplete (see the open items).
+- Trap doors, gaps closed: the exporter adds tile-26 cells as two-state slot
+  units (closed, or space with foreground 0x81 as TriggerTrapDoor leaves
+  it), so an opening door's cell is redrawn without its floor and the
+  closed drawing returns with tile 26 (a reimport is needed). The loop cue
+  198 follows 10:24fa (requested while a door remains and neither 197 nor
+  198 plays) and 10:2328 (stopped when a door closes, then cue 27).

@@ -188,6 +188,57 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.tick(12)
         self.assertEqual(terrain.tile(7, 5, 2).kind, 26)
 
+    def test_an_open_trap_door_cell_is_redrawn_as_space(self):
+        # TriggerTrapDoor 10:25aa leaves tile 0 / foreground 0x81: the
+        # exported slot variant drops the floor under the panel. Before, the
+        # room kept the closed floor drawn until the door closed.
+        from pop2.caverns import cavern_scene_signature
+        from pop2.coordinates import column_left
+
+        scene = self.scene
+        scene.enter_next_level(10)
+        caverns, terrain = scene.game.caverns, scene.level_map
+        scene.jump_to_room(7, row=2, x=column_left(1) + 25, facing=1)
+        program = scene.level_renderer.cavern_program
+        closed_key = cavern_scene_signature(program, 7, caverns)
+        closed = scene.level_renderer.room(7, caverns).background.tobytes()
+        caverns.trapdoors.trigger(terrain, terrain.tile(7, 5, 2), 1)
+        self.assertNotEqual(cavern_scene_signature(program, 7, caverns), closed_key)
+        opened = scene.level_renderer.room(7, caverns).background
+        self.assertNotEqual(opened.tobytes(), closed)
+        self.tick(8)
+        self.assertEqual(terrain.tile(7, 5, 2).kind, 26)
+        self.assertEqual(cavern_scene_signature(program, 7, caverns), closed_key)
+        self.assertEqual(scene.level_renderer.room(7, caverns).background.tobytes(), closed)
+
+    def test_an_opening_trap_door_loops_cue_198_until_it_closes(self):
+        # 10:24fa: with a door in the bank and neither 197 nor 198 playing,
+        # AddSound(198); 10:2328 stops 198 and requests 27 on closing.
+        from unittest.mock import Mock
+        from pop2.environments import environment_for
+
+        scene = self.scene
+        scene.enter_next_level(10)
+        caverns, terrain = scene.game.caverns, scene.level_map
+        scene.jump_to_room(7, row=2, x=300, facing=1)
+        environment = environment_for(scene)
+        audio = Mock()
+        audio.sound_playing.side_effect = lambda cue: cue == playing
+        scene.audio, playing = audio, 197
+        caverns.trapdoors.trigger(terrain, terrain.tile(7, 5, 2), 1)
+        environment.frame_start()
+        audio.add_sound.assert_not_called()
+        playing = None
+        environment.frame_start()
+        audio.add_sound.assert_called_once_with(198)
+        playing = 198
+        while caverns.trapdoors.bank and caverns.trapdoors.bank[0][3] != -1:
+            scene.sequence_state.sound_events.clear()
+            environment.frame_start()
+        audio.add_sound.assert_called_once_with(198)
+        audio.stop_sound.assert_called_once_with(198)
+        self.assertEqual(scene.sequence_state.sound_events, [27])
+
     def test_level_ten_birdheads_are_ordinary_armed_opponents(self):
         # Opponent set 7: 6:2bca maps raw kind 7 to actor 2 and 3:5f58 loads
         # Birdhead.rsrc. Native room 10 has one (SEQS 77). Before, set 7 had

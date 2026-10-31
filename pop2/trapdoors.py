@@ -11,6 +11,9 @@ from dataclasses import dataclass, field
 TRAPDOOR_TILE = 26
 CAPACITY = 30
 OPEN_CUE, CLOSE_CUE = 197, 27
+# 10:24fa requests the loop cue 198 while neither 197 nor 198 plays;
+# 10:2328 stops it when a door closes.
+LOOP_CUE = 198
 # DATA a5-0x2866: animation record by low phase; a5-0x2842: the records'
 # (shape, dx, dy), shapes numbered from Temple SHPL 3500's first (3501).
 PHASE_FRAMES = (66, 0, 0, 1, 1, 1, 1, 2, 2, 3, 4, 0, 1, 2, 3, 4, 0, 4)
@@ -41,11 +44,13 @@ class TrapDoors:
 
     def advance(self):
         """10:24fa through MakeRubble 5:29e8: low phases up to 16 advance;
-        records marked -1 are compacted out."""
+        records marked -1 are compacted out. True when a door asked for the
+        loop sound (every remaining record queries PrinceSndOn)."""
         self.bank = [record for record in self.bank if record[3] != -1]
         for index, record in enumerate(self.bank):
             if record[7] & 31 <= 16:
                 self.bank[index] = (*record[:7], record[7] + 1)
+        return bool(self.bank)
 
     def present(self, terrain):
         """ATMTrapDoor 10:225c: past low phase 16 the floor returns (tile 26,

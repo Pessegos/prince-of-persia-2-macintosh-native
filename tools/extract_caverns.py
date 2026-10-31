@@ -10,6 +10,7 @@ from math import prod
 from pop2.caverns import SCENERY_LEVELS, entry_room, scenery_name
 from pop2.slot_drawing import clip_climbing, draw_order_key
 from pop2.crevices import CREVICE_TILE, hide_crevices
+from pop2.trapdoors import TRAPDOOR_TILE
 from pop2.mac_resources import parse_resource_fork
 from pop2.terrain import LevelMap
 from tools.extract_enemy_profiles import expand_a5_data
@@ -784,6 +785,10 @@ def loose_floor_cells(terrain):
                 # A ruins crevice: covered, or revealed by 7:332a (bit 0x80).
                 cells[room, cell] = ((CREVICE_TILE, tile.foreground & 0xff7f),
                                      (CREVICE_TILE, tile.foreground | 0x80))
+            elif tile.kind == TRAPDOOR_TILE and struct.unpack_from('>H', terrain.level, 0x2186)[0] == 2:
+                # A temple trap door: TriggerTrapDoor 10:25aa makes the cell
+                # space (foreground 0x81) while ATMTrapDoor draws the panel.
+                cells[room, cell] = ((TRAPDOOR_TILE, tile.foreground), (0, 0x81))
     return cells
 
 
