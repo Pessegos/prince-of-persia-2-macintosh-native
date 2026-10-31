@@ -300,15 +300,37 @@ class LevelMap:
         return min(0, distance - 84)
 
     def combat_draw_offset(self, room, row, state, record, bounds):
-        # DrawSword, CODE:6 0x2072-0x2122 reserves 56 pixels before a
-        # gap OR a solid barrier, using GetBarrDistances (4:5eae).
-        contact_x = floor_contact_x(state.target_x, state.facing, record)
-        column = character_column(contact_x)
+        """DoKidEngarde 6:1f04-2126 for the Kid: the facing-relative offset
+        before SEQS 55, or None when the draw is refused.
+
+        The temple's sliding-rock branch (GetSlideRockX 5:21f6) is not
+        modelled: no rock is ever close."""
+        environment = struct.unpack_from('>H', self.level, 0x2186)[0]
+        number = struct.unpack_from('>H', self.level, 0x218a)[0]
+        if (246 <= state.action <= 261 or environment == 1
+                or number == 14 and room in (0, 1)):
+            return None
+
+        def obstruction(tile):
+            # Not IsFloor 3:4da6, loose floor, or a gate 4:5b0e blocks.
+            return (tile.kind in EMPTY_TILES | WALL_TILES or tile.kind == 11
+                    or tile.kind == 4 and self.gate_collides(tile, bounds, state))
+
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
         direction = 1 if state.facing else -1
-        if (self.tile(room, column, row).kind in EMPTY_TILES | WALL_TILES
-                or self.tile(room, column + direction, row).kind not in EMPTY_TILES | WALL_TILES):
+        here = self.tile(room, column, row)
+        if state.facing and here.kind == 4 and self.gate_collides(here, bounds, state):
+            # 6:1ffc-201c: facing right inside a blocking gate's cell.
+            extra = -51
+        elif obstruction(self.tile(room, column + direction, row)):
+            extra = 0
+        else:
             return 0
-        return min(0, self.step_boundary(room, row, state, record, bounds).clearance - 56)
+        # 6:20a8-20fa: refused when the cell behind is obstructed too, or in
+        # animation mode 4; else 56 pixels are reserved (GetBarrDistances).
+        if obstruction(self.tile(room, column - direction, row)) or state.animation_state == 4:
+            return None
+        return min(0, self.step_boundary(room, row, state, record, bounds).clearance + extra - 56)
 
     def align_fall(self, room, row, state, record):
         # CODE:4 4b16 runs after advancing the floor row, before the fall pose.

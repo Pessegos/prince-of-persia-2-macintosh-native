@@ -738,6 +738,9 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 state = self.sequence_state
                 offset = self.level_map.combat_draw_offset(
                     motion.room, motion.row, state, self.frames[state.action], self.player_bounds())
+                if offset is None:
+                    # DoKidEngarde 6:1f04 refuses: Ctrl stays consumed, no SEQS 55.
+                    return False
                 self.player_x += offset * (1 if state.facing else -1)
             self.sword_drawn = True
             # The drawn sword's bank starts with the holds consumed (6:0cb6).

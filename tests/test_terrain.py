@@ -375,12 +375,54 @@ class TerrainTests(unittest.TestCase):
         self.assertEqual(self.map.combat_draw_offset(
             2, 1, state, self.frames[15], (296, 147, 318, 226)), -32)
 
-    def test_drawing_sword_does_not_adjust_clear_floor_or_already_missing_support(self):
-        for room, x, facing in ((3, 250, 1), (3, 25, 0), (1, 490, 1), (3, 450, 1)):
+    def test_drawing_sword_does_not_adjust_clear_floor(self):
+        for room, x, facing in ((3, 250, 1), (3, 25, 0), (1, 490, 1)):
             with self.subTest(room=room, x=x, facing=facing):
                 state = SequenceState(2, action=15, target_x=x, facing=facing)
                 self.assertEqual(self.map.combat_draw_offset(
                     room, 1, state, self.frames[15], (x - 4, 147, x + 18, 226)), 0)
+
+    def test_drawing_sword_follows_dokidengarde_cells_behind_and_ahead(self):
+        # DoKidEngarde 6:1f04 tests the cell ahead and the one behind (4:3a48),
+        # not the supporting cell: with the foot already over the gap and
+        # floor behind, it still reserves 56 pixels (formerly 0).
+        state = SequenceState(2, action=15, target_x=450, facing=1)
+        self.assertEqual(self.map.combat_draw_offset(
+            3, 1, state, self.frames[15], (446, 147, 468, 226)), -23)
+        # Obstructed behind as well (gap, wall, loose floor, blocking gate):
+        # refused; also in animation mode 4, at poses 246-261 and in the desert.
+        from pop2.terrain import Tile
+
+        state = SequenceState(2, action=15, target_x=420, facing=1)
+        column = character_column(floor_contact_x(420, 1, self.frames[15]))
+        bounds = (416, 147, 438, 226)
+
+        def tiles(behind, ahead):
+            def tile(_room, col, _row):
+                return Tile({column - 1: behind, column + 1: ahead}.get(col, 1), 0, 0, 3, col, 1)
+            return tile
+
+        original = self.map.tile
+        try:
+            for behind, ahead, expected in ((0, 0, None), (20, 0, None), (11, 0, None),
+                                            (4, 0, None), (1, 0, 'reserve'), (0, 1, 0),
+                                            (11, 11, None), (1, 11, 'reserve')):
+                with self.subTest(behind=behind, ahead=ahead):
+                    self.map.tile = tiles(behind, ahead)
+                    offset = self.map.combat_draw_offset(3, 1, state, self.frames[15], bounds)
+                    if expected == 'reserve':
+                        self.assertIsNotNone(offset)
+                        self.assertLessEqual(offset, 0)
+                    else:
+                        self.assertEqual(offset, expected)
+            self.map.tile = tiles(1, 0)
+            state.animation_state = 4
+            self.assertIsNone(self.map.combat_draw_offset(3, 1, state, self.frames[15], bounds))
+            state.animation_state = 0
+            state.action = 246
+            self.assertIsNone(self.map.combat_draw_offset(3, 1, state, self.frames[15], bounds))
+        finally:
+            self.map.tile = original
 
     def test_ledge_release_distinguishes_wall_floor_and_free_air_both_facings(self):
         from pop2.terrain import Tile
@@ -1073,6 +1115,17 @@ class RooftopSceneTests(unittest.TestCase):
         self.tick(10)
         self.assertEqual((scene.action, scene.player_x), (171, 272))
         self.assertFalse(scene.terrain_motion.falling)
+
+    def test_refused_sword_draw_keeps_the_prince_unarmed_where_he_stands(self):
+        # DoKidEngarde 6:1f04 refuses in the desert (1f3a-1f46) whatever the
+        # cells; nothing moves and SEQS 55 is not selected.
+        scene = self.scene
+        scene.load_level(2)
+        scene.in_animation_tick = True
+        before = (scene.action, scene.player_x, scene.sequence_state.sequence_id)
+        self.assertFalse(scene.start_sword_action("sword_draw"))
+        self.assertFalse(scene.sword_drawn)
+        self.assertEqual((scene.action, scene.player_x, scene.sequence_state.sequence_id), before)
 
     def test_missed_screen_six_jump_does_not_show_unused_lower_room(self):
         scene = self.scene

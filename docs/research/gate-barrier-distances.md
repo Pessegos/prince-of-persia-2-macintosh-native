@@ -102,3 +102,48 @@ the SEQS 5 selection).
 ```powershell
 python -m tools.probe_standing_turn --source PATH_TO_RECOVERY --output rendered/standing-turn.json
 ```
+
+## Drawing the sword (DoKidEngarde 6:1f04)
+
+DoEngarde 6:1e78 calls DoKidEngarde for the Kid (type 0 or 1). It returns
+SEQS 55 or -1 (no draw; Ctrl stays consumed, 6:20fc clears a5-0x503c):
+
+1. Refused at poses 246-261, in the desert (LEVL 0x2186 = 1) and in level
+   fourteen's native rooms 1-2. Type 1 in the palace rooms 7-8 takes 9:2674.
+2. The temple's sliding rock (GetSlideRockX 5:21f6, zero elsewhere) within a
+   column measures from the rock instead (6:2020-2070). Not modelled.
+3. Facing right with the Kid's own cell (CurrentCell 4:35a6) a gate that
+   4:5b0e blocks: the extra is -51.
+4. Otherwise the cell ahead (4:39fc) must be an obstruction: not IsFloor
+   3:4da6, loose floor (11) or a blocking gate; else the draw needs nothing.
+5. Then the cell behind (4:3a48, column -/+ 1 by facing) is tested the same
+   way: obstructed there too, or animation mode a5-0x5022 = 4, refuses.
+6. Else GetBarrDistances 4:5eae + extra; below 56 the Kid moves back
+   (AddCharX) to 56.
+
+The port reserved 56 only before a gap or wall with a non-gap supporting
+cell. It never refused and ignored loose floors and gates ahead, the cell
+behind and the right-facing gate cell. `combat_draw_offset` now follows the
+rules above and returns None for a refusal; `start_sword_action` then
+returns without selecting SEQS 55 (Ctrl already consumed).
+
+`tools/probe_kid_engarde.py` runs 6:1f04 with everything native except the
+draw sound 5:4d84 (recorded) and, in the temple, TempGetSlideRockX 10:20fe
+(0, no rock). A terrain sweep (every room/row of LEVL 2000-2013, X -40..559
+step 9, both facings, three FRAM dx/flags; poses 15/246/261/262, modes
+0/2/4) and a gate sweep (the supporting cell is the gate, one behind or one
+ahead; desert phases 0-20 or the low byte 0-252 step 9; heights 79/30,
+sequence 68, edges -/+ 10 or 22): 262,056 cases (141,906 terrain, 120,150
+gate), 127,735 refusals, 32,458 moved. 30 mismatches remain, all in levels
+13-14 at a room edge without a neighbour (column -1/0/9/10): the 4:5eae
+distance to the undefined cell there differs from `step_boundary`; those
+levels are not playable. Before the change: 150,938 mismatches (mostly
+refusals). Result SHA256:
+`f6c15fcde04feb72def317cf583165ea3fec4feada4e999eb8ca4cdac0a02313`.
+
+Excluded: the sliding-rock branch, type 1 and 9:2674, a5-0x503c, DoEngarde
+and GenCtrl's admission (`try_draw_sword`).
+
+```powershell
+python -m tools.probe_kid_engarde --source PATH_TO_RECOVERY --output rendered/kid-engarde.json
+```

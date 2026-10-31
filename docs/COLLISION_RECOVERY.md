@@ -126,10 +126,12 @@ than the former geometric tile-edge stop at X=404. No new floor height offset
 was added: the warning's original FRAM records supply their own -1 Y offsets.
 
 Sword drawing and automatic turns also need terrain checks before selecting
-their animation. The ordinary gap/solid-wall branch of CODE:6 `0x2072`-`0x2122`
-reserves 56 pixels when drawing toward an immediate obstruction, using
-`GetBarrDistances`: supporting-foot distance for gaps, body/barrier distance
-for solid walls. The turn routine at CODE:6
+their animation. DoKidEngarde (CODE:6 `0x1f04`-`0x2154`) reserves 56 pixels
+when drawing toward an immediate obstruction (gap, wall, loose floor or
+blocking gate), using `GetBarrDistances`: supporting-foot distance for gaps,
+body/barrier distance for solid walls. With the cell behind obstructed too,
+in the desert or in animation mode 4 it refuses the draw; see
+[gate barrier distances](research/gate-barrier-distances.md). The turn routine at CODE:6
 `0x26dc`-`0x276c` checks the next two tiles, reserves 84 pixels and applies
 the original extra allowances for drawing pose 207 and hurt sequence 94.
 These facing-relative adjustments happen before `SEQS:55` / `127`; the
