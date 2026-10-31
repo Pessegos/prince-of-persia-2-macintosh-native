@@ -11,6 +11,30 @@ removed ([census and retirement](research/remaining-host-slot.md)). Sections
 below that mention the "host buffer" describe the stage at which they were
 written; their tolerances now live in the bank or were removed with it.
 
+## Tolerance Audit (2026-10-31)
+
+On the user's request every remaining host input tolerance was compared
+with the native rule; it now follows the original unless it only emulates
+the original's once-per-frame keyboard sample. This supersedes the
+"retained tolerance" statements in older sections below.
+
+| Former tolerance | Native rule | Decision |
+| --- | --- | --- |
+| Ctrl strike survives its release; Ctrl at 151-153 discarded | Release writes 0 (4:3f38); DoStrike admits a pending -2 at 157/guard | Removed; a double tap swings once (512 native frame traces, `tools/probe_attack_taps.py`) |
+| 300 ms rapid-repeat filters (step, low step, jump) | A re-tap is a fresh -1 (4:3e84) | Removed: a re-tap is the next action |
+| Held Shift step repeats | DoStepFwd writes Forward=1, modifier=1 (6:1286-128a), no clear | Removed: a held step steps once |
+| Held low step repeats seamlessly | 109 consumes Down with ClearControls (6:0b2e) | Native repeat with one 109 frame to rearm Forward |
+| Release cancels a held Up/Down re-read after a clear (run, arc, low step) | Release keeps -1; before the next sample the word is still 0 | Removed (no marker needed) |
+| Taps kept through the climb; chord re-latch; completion auto-repeat; Shift+Backward no-run | Climb pose 149 is mode 5 (6:0576-059c clears) | Removed; held keys are fresh after 149; the completion 15 is shown before its gate |
+| Back+Up held turns only | DoTurn clears; the Up handler 6:0e7a sees Forward set and calls DoFwdJump 6:15ea | Removed: turn, then a forward jump |
+| Shift tap during a skid picks up at pose 50 | 6:0c50 needs -1 at the gate; release writes 0 | Removed; a tap at rest is still tried at the next tick |
+| Up 35 ms window at rest; Forward/Backward + Up chord in run pose 1 (1-3 reversed); chord before the first pose loads | Keys within one frame are one sample | Kept: the port dispatches at event time, these windows (at most one frame) stand in for the frame sample |
+| Source46 wall-bump recovery | Mode-5 clears in 46/47/49 | Already native since 2026-10-30 (low bank owns 46/47) |
+
+Not changed and still different: the port acts at a ready pose (15, 158)
+in the same tick in which it is loaded, one frame earlier than the
+original, which shows it first; only the climb's completion now shows it.
+
 ## Native State
 
 The original does not store one chronological next-command slot. It maintains
@@ -404,7 +428,7 @@ facings at every run pose 4-14 and running-jump pose 34-44. A released tap keeps
 the complete brake (53,54,55,56,49,50,51,52,15), including the real-terrain
 jump/landing case. A held Ctrl reaches the native standing brake gate before
 drawing. Hard-fall and climb taps no longer queue a future draw either.
-Other approved input tolerances and ordinary armed attack buffering remain.
+The armed attack buffering was later removed (2026-10-31 tolerance audit).
 
 Forward + Up remains a standing jump in either key order. When Forward
 arrives first, the initial run pose (1) leaves one full animation interval
@@ -744,13 +768,13 @@ airborne families are still separate work. The
 [ledge handoff](research/ledge-input-handoff.md) now carries the bank through
 native entry, hanging, release and protected climbing. Its1170 bounded original
 gate/prefix cases match the independent model; Ctrl hold and grip-delayed Up
-use that gate, while existing protected-climb port tolerances stay explicit.
+use that gate; the protected-climb tolerances were removed on 2026-10-31.
 The [low handoff](research/low-input-handoff.md) now replaces the low/prone
 slot and raw-held crawl routing with that bank. Protected rise clears released
 Up instead of replaying a jump; low-step conflicts and prone taps use the
 recovered priorities.25,928 production/model observations reuse the existing
-native audit. Source46 recovery and intentional low-repeat/release policies
-remain explicit exceptions; armed and special-family migration is still pending.
+native audit. Source46 recovery (native since 2026-10-30) and the
+low-repeat/release policies (removed 2026-10-31) are no longer exceptions.
 
 The first [armed priority stage](research/armed-input-priority.md) checks
 OnAlert6:24bc-2584 against19,440 original/model cases. Its second stage runs

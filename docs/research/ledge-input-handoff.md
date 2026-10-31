@@ -45,6 +45,11 @@ tap regressions rejected the previous runtime before this migration.
 
 Existing port tolerances remain explicit:
 
+**Superseded 2026-10-31:** the tolerances below were removed in the input
+tolerance audit (`docs/INPUT_RECOVERY.md`, "Tolerance Audit"); the list is
+kept as the record of that stage.
+
+
 - Complete tapped commands are retained through protected climbing. This
   deliberately differs from clearing every protected-mode input as the native
   controller does; no complete protected-climb timing parity is claimed.

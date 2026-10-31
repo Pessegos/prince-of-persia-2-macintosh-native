@@ -61,6 +61,11 @@ calls within a tick and held input becoming eligible on the next tick.
 
 ## Preserved host policies and boundaries
 
+**Superseded 2026-10-31:** the tolerances below were removed in the input
+tolerance audit (`docs/INPUT_RECOVERY.md`, "Tolerance Audit"); the list is
+kept as the record of that stage.
+
+
 - Held low steps repeat complete animations at109 without an extra stationary
   rearming frame. The established rapid repeated-tap filter remains scoped
   to the same low step; it does not expire other pending directions.
