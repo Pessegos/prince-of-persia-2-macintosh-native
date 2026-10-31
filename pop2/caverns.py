@@ -353,6 +353,27 @@ def draw_slide_rocks(frame, room_id, rocks, terrain, *, level_number=10):
     return frame
 
 
+def draw_trapdoors(frame, room_id, objects, *, level_number=10):
+    """ATMTrapDoor 10:225c's opening door: the animation piece at its
+    offset, within ComputeMobRect's rectangle (height + 1 up, at least to
+    the cell's X + 77 across)."""
+    objects = [item for item in objects if item[0] == room_id]
+    if not objects:
+        return frame
+    _program, resources, palette, shapes = room_assets(level_number, room_id)
+    frame = frame.copy()
+    for _room, index, x, y, origin in objects:
+        sprite = cavern_command_sprite(['back', index, x, y, 16], resources, palette, shapes)
+        right = x + max(sprite.width + 1, origin + 77 - x)
+        clip = (max(x, 0), max(y - sprite.height, 0), min(right, frame.width), min(y + 1, frame.height))
+        if clip[0] < clip[2] and clip[1] < clip[3]:
+            top = y - sprite.height
+            piece = sprite.crop((clip[0] - x, clip[1] - top, min(clip[2] - x, sprite.width),
+                                 min(clip[3] - top, sprite.height)))
+            frame.paste(piece, clip[:2], piece)
+    return frame
+
+
 def flask_shape(data, palette, draw_mode):
     flags, stride, width, height = struct.unpack_from('>HhhH', data)
     if flags & 0xf000 != 0x9000:

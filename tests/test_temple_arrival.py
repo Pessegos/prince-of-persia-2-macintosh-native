@@ -143,6 +143,43 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.assertNotEqual(scene.native_viewport.crop((300, 250, 400, 340)).tobytes(), background)
 
 
+    def test_a_shaken_trap_door_opens_drops_the_prince_and_closes(self):
+        # Level ten, native room 8 cell 25 (tile 26). ShakeEm 5:28c8 calls
+        # TriggerTrapDoor 10:25aa: the floor is space at once; under the
+        # Prince's column the door starts at phase 1 and closes after 16
+        # presentations (tile 26 again, 10:2328), away from it at 75 (6).
+        # Before, tile 26 was a plain floor and nothing opened.
+        from pop2.coordinates import column_left
+
+        scene = self.scene
+        scene.enter_next_level(10)
+        caverns, terrain = scene.game.caverns, scene.level_map
+        scene.jump_to_room(7, row=2, x=column_left(1) + 25, facing=1)
+        self.tick()
+        state, motion = scene.sequence_state, scene.terrain_motion
+        record = scene.frames[state.action]
+        self.assertEqual(caverns.loose.shake_row(terrain, 7, 2, state, motion, record), (197,))
+        self.assertEqual(terrain.tile(7, 5, 2).kind, 0)
+        self.assertEqual(caverns.trapdoors.bank[0][7], 75)
+        closed = scene.native_viewport.crop((250, 280, 360, 365)).tobytes()
+        self.tick(2)
+        # The door's animation piece (10:23d0 table) is drawn in the room.
+        self.assertEqual([item[:2] for item in caverns.trapdoors.drawn], [(7, 3553)])
+        self.assertNotEqual(scene.native_viewport.crop((250, 280, 360, 365)).tobytes(), closed)
+        self.tick(4)
+        self.assertEqual(terrain.tile(7, 5, 2).kind, 26)
+        self.tick()
+        self.assertEqual(caverns.trapdoors.bank, [])
+        scene.jump_to_room(7, row=2, x=column_left(5) + 25, facing=1)
+        self.tick()
+        state, motion = scene.sequence_state, scene.terrain_motion
+        caverns.loose.shake_row(terrain, 7, 2, state, motion, scene.frames[state.action])
+        self.assertEqual(caverns.trapdoors.bank[0][7], 1)
+        self.tick(8)
+        self.assertTrue(scene.terrain_motion.falling or scene.room_id != 7 or scene.terrain_motion.row != 2)
+        self.tick(12)
+        self.assertEqual(terrain.tile(7, 5, 2).kind, 26)
+
 @unittest.skipUnless(TEMPLE_INSTALLED, 'Imported temple scene and scenery required')
 class TempleLooseFloorTests(unittest.TestCase):
     def test_a_falling_temple_floor_draws_pieces_28_and_29(self):

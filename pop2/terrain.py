@@ -1522,12 +1522,15 @@ class RooftopPhysics:
                     motion.lava_landing = True
                     events.append(TerrainEvent('lava'))
                     break
-                if tile.kind in (11, 15) and self.map.caverns is not None and velocity:
-                    # Falling 6:01ee-0260: strike the slab, halve velocity and
-                    # remain airborne at the native slab-contact position.
+                if tile.kind in (11, 15, 26) and self.map.caverns is not None and velocity:
+                    # Falling 6:01ee-0260: strike the slab (or open the temple's
+                    # trap door, 6:0210), halve velocity and remain airborne
+                    # at the native slab-contact position.
                     loose = self.map.caverns.loose
-                    state.sound_events.extend(loose.break_shelf(self.map, tile, motion.room)
-                        if tile.kind == 15 else loose.trigger(tile, force=velocity))
+                    state.sound_events.extend(
+                        loose.break_shelf(self.map, tile, motion.room) if tile.kind == 15 else
+                        self.map.caverns.trapdoors.trigger(self.map, tile, column) if tile.kind == 26
+                        else loose.trigger(tile, force=velocity))
                     state.vertical_velocity //= 2
                     # 6:0248-025c uses DATA row bottom (125+120*row),
                     # minus13, not SetCharFloor's106+120*row. Thus the

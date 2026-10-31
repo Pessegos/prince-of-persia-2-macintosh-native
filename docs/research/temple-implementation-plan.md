@@ -115,3 +115,12 @@ Each stage integrates separately with the usual reservation.
   a neighbouring room, the gap redraw, Collide's rock edge (93) and
   DoKidEngarde's GetSlideRockX, guards. Level ten's room 28 rock moves and
   crushes a Prince waiting at the wall (scripted test).
+- Stage 3, trap doors (`pop2/trapdoors.py`, Codex's 10:25aa/24fa/225c
+  rules): ShakeEm 5:28c8 and a landing (Falling 6:0210) open a tile 26
+  (space, foreground 0x81 at once; phase 1 under the actor's column, else
+  75); MakeRubble advances low phases to 17, ATMTrapDoor draws the
+  animation piece (DATA a5-0x2866/-0x2842) and past 16 restores tile 26
+  (foreground low byte cleared, cue 27). Saved. Not yet: loop cue 198
+  (PrinceSndOn arbitration), the opened cell's static-floor redraw (the
+  exported room keeps the closed floor under the panel), neighbour rooms.
+- DrawObjLoose 3:4168: falling temple floors draw pieces 28/29.

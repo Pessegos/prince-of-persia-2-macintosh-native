@@ -133,6 +133,10 @@ class LooseFloors:
             if tile.kind == 15:
                 self.break_shelf(terrain, tile, motion.room if motion is not None else None)
                 continue
+            if tile.kind == 26 and getattr(terrain, 'caverns', None) is not None:
+                # 5:28c8: the temple's trap doors open (TriggerTrapDoor 10:25aa).
+                sounds.extend(terrain.caverns.trapdoors.trigger(terrain, tile, column))
+                continue
             if tile.room is None or tile.kind != 11 or tile.foreground & 15:
                 continue
             key = tile.room, tile.row * 10 + tile.column

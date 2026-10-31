@@ -14,6 +14,7 @@ from pop2.gate_crush import GateCrush
 from pop2.mechanism_audio import GateSound
 from pop2.scythes import Scythes
 from pop2.slide_rocks import SlideRocks
+from pop2.trapdoors import TrapDoors
 
 
 @dataclass
@@ -37,6 +38,7 @@ class CavernState:
     scythes: Scythes = field(default_factory=Scythes)
     # The temple's sliding rocks (MOB type 6).
     rocks: SlideRocks = field(default_factory=SlideRocks)
+    trapdoors: TrapDoors = field(default_factory=TrapDoors)
     # Level seven entered by its upper door (alternate entry export).
     alternate_entry: bool = False
     # a5-0x5008: the level-four relief countdown; -1 idle, -2 already used.

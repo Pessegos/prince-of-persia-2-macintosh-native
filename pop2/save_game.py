@@ -39,6 +39,7 @@ from pop2.skeleton import Skeleton, SkeletonRoomRecord
 from pop2.terrain import TerrainMotion
 from pop2.scythes import SCYTHE_STATES, Scythes
 from pop2.slide_rocks import SlideRocks
+from pop2.trapdoors import TrapDoors
 from pop2.wall_spikes import WallSpikes
 
 
@@ -54,11 +55,11 @@ CLASSES = {cls.__name__: cls for cls in (
     WaterEntry, Lava, LavaPool, FallingFloor, LooseFloors, OpponentGenerationPoint,
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
     Skeleton, SkeletonRoomRecord, GuardRoomRecord, TerrainMotion, WallSpikes, Scythes,
-    RuinsMind, SlideRocks,
+    RuinsMind, SlideRocks, TrapDoors,
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
         CavernState: {'entry_pending'},
-        LooseFloors: {'shake_events'}, SlideRocks: {'sounds'}, PressurePlates: {'slams', 'slam_sounds', 'gate_sounds'}}
+        LooseFloors: {'shake_events'}, SlideRocks: {'sounds'}, TrapDoors: {'drawn'}, PressurePlates: {'slams', 'slam_sounds', 'gate_sounds'}}
 GAME_FIELDS = ('room_id', 'checkpoint', 'death', 'complete', 'harbor', 'desert', 'caverns')
 CONTROL_FIELDS = (
     'run_active', 'run_stop_requested', 'run_direction', 'run_start_x',

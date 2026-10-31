@@ -1140,7 +1140,14 @@ class Temple(Caverns):
         super().frame_start()
         scene = self.scene
         caverns = scene.game.caverns
-        if caverns is None or not caverns.rocks.bank:
+        if caverns is None:
+            return
+        # MakeRubble 5:29e8 advances the trap doors (10:24fa), then ATMLoose
+        # presents them (10:225c), which closes the finished ones.
+        caverns.trapdoors.advance()
+        cues, caverns.trapdoors.drawn = caverns.trapdoors.present(scene.level_map)
+        scene.sequence_state.sound_events.extend(cues)
+        if not caverns.rocks.bank:
             return
         state, motion = scene.sequence_state, scene.terrain_motion
         player = scene.combat.player
@@ -1199,10 +1206,12 @@ class Temple(Caverns):
         scene.action, scene.player_x = state.action, state.target_x
 
     def scenery_layer(self, frame, motion):
-        from pop2.caverns import draw_slide_rocks
+        from pop2.caverns import draw_slide_rocks, draw_trapdoors
 
         scene = self.scene
         frame = super().scenery_layer(frame, motion)
+        frame = draw_trapdoors(frame, scene.room_id, scene.game.caverns.trapdoors.drawn,
+                               level_number=scene.game.level.number)
         return draw_slide_rocks(frame, scene.room_id, scene.game.caverns.rocks, scene.level_map,
                                 level_number=scene.game.level.number)
 
