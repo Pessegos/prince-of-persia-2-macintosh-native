@@ -113,7 +113,8 @@ It is not a completion percentage. Run `python -m tools.recovery_catalog --check
 to verify that the catalog matches its source inventories/current reviews.
 
 The r3 subset adds GenCtrl's solid-barrier automatic short step at distance
-<27 (6:11a0), front/rear sword bumps 64/65 (4:64f6), all eleven native rooftop
+<27 (6:11a0), front/rear sword bumps 64/65 (Collide 4:5738; opponents take
+EnemyCollide 4:62b0, always 65), all eleven native rooftop
 decoration entries (23:018e, DATA cca8/ccea), and per-guard drawing state.
 F3 peaceful mode is a separate developer feature: it disables NPC simulation
 and rendering, never floor/wall physics. A collision that replaces the

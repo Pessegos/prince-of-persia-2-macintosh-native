@@ -732,6 +732,31 @@ class TerrainTests(unittest.TestCase):
                     self.assertEqual(runtime.state.horizontal_velocity, 0)
                     self.assertEqual(10 in runtime.state.sound_events, front)
 
+    def test_armed_opponent_meets_walls_through_enemycollide(self):
+        # FrameAdv 2:65f6: an armed opponent in animation state 1 takes
+        # EnemyCollide 4:62b0, not Collide. Six pixels into the wall ahead
+        # it is pushed out with SEQS 65 and no sword-contact cue (Collide
+        # selected 64 and cue 10); under five pixels 4:6416-6472 lets it
+        # stand. Room 6 row 1: floor to column 8, a wall in column 9.
+        from types import SimpleNamespace
+
+        record = SimpleNamespace(offset_x=0, aux=0x40)
+        for x, expected_x, sequence in ((477, 471, 65), (475, 475, 150)):
+            with self.subTest(x=x):
+                runtime = SequenceRuntime(self.sequences, SequenceState(
+                    150, action=158, current_x=x, target_x=x, facing=1, actor_type=2,
+                    level_kind=5, animation_state=1))
+                motion = TerrainMotion(5, 1)
+                frames = dict.fromkeys(range(149, 255), record)
+                events = RooftopPhysics(self.map, frames).advance(
+                    motion, runtime, x - 6, (x - 10, 150, x + 12, 228), sword_drawn=True,
+                    cut_enabled=False, frame_record=record)
+                self.assertEqual(runtime.state.target_x, expected_x)
+                self.assertEqual(runtime.state.source_sequence_id, sequence)
+                self.assertNotIn(10, runtime.state.sound_events)
+                self.assertEqual([event.kind for event in events if event.kind == "wall"],
+                                 ["wall"] if sequence == 65 else [])
+
     def test_unarmed_wall_bump_does_not_request_sword_contact(self):
         for action, sequence in ((7, 47), (40, 46)):
             with self.subTest(action=action):

@@ -1415,7 +1415,8 @@ class CombatEncounter:
         events = self.guard_physics.advance(
             motion, guard.runtime, old_x, bounds(), sword_drawn=guard.sword_drawn,
             bounds_for_state=bounds, cut_enabled=guard.entry_x is None, alive=guard.alive,
-            old_bounds=old_bounds, collision_bounds_for_state=collision_bounds)
+            old_bounds=old_bounds, collision_bounds_for_state=collision_bounds,
+            native_alive=_native_alive(guard))
         guard.room, guard.row = motion.room, motion.row
         guard.targetable = not motion.falling and not motion.dead
         for event in events:

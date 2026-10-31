@@ -158,6 +158,39 @@ class LevelMap:
             fg = (fg & 0xfe00) | stone.phase | (stone.delay << 4)
         return Tile(kind, fg, bg, room, column, row)
 
+    def barrier_x(self, room, column):
+        """Scene X of a cell's barrier anchor (column table + 22), rebased to
+        ``room`` the way ReadCell 4:26e2-27d6 and AdjustRoom 4:56e6 do.
+
+        A cell past an edge without a neighbour reads as room 0 at the wrapped
+        column; AdjustRoom then matches room 0 against the first missing link
+        of a5-0x4fc0/-0x4fb4 (left, down-left: -510) or -0x4fbe/-0x4fb2
+        (right, down-right: +510), as 3:1ab0 fills them.
+        """
+        current = room
+        while current is not None and not 0 <= column < 10:
+            side = 'left' if column < 0 else 'right'
+            linked = self.neighbor(current, side)
+            if linked is None:
+                current, column = None, column % 10
+            else:
+                current, column = linked, column + (10 if column < 0 else -10)
+        x = column * TILE_WIDTH + 22
+        if current == room:
+            return x
+        left, right, down = (self.neighbor(room, side) for side in ('left', 'right', 'down'))
+
+        def below(side, beside):
+            if down is not None:
+                return self.neighbor(down, side)
+            return self.neighbor(beside, 'down') if beside is not None else None
+
+        if current in (left, below('left', left)):
+            return x - ROOM_WIDTH
+        if current in (right, below('right', right)):
+            return x + ROOM_WIDTH
+        return x
+
     def gate_collides(self, tile, bounds, state=None):
         # Gate collision 4:5b0e has no environment table: the desert's
         # (LEVL 0x2186 = 1) blocks below phase 19 whatever the body; every
@@ -332,6 +365,71 @@ class LevelMap:
         if obstruction(self.tile(room, column - direction, row)) or state.sequence_mode == 4:
             return None
         return min(0, self.step_boundary(room, row, state, record, bounds).clearance + extra - 56)
+
+    def enemy_collide(self, room, row, state, record, bounds, *, alive=True, armed=True):
+        """EnemyCollide 4:62b0 for an ordinary opponent (the heads add 7:0b6e).
+
+        FrameAdv 2:65f6 calls it after Move, instead of the Kid's CheckBarr/
+        Collide. Returns (dx, sequence) or None; the caller selects the
+        sequence and advances one frame (6:0006, 4:2c0c, 4:2a72).
+        """
+        # 4:62e2-631e: animation state 1, native ALIVE, armed, not SEQS 58.
+        if (state.animation_state != 1 or not alive or not armed
+                or state.source_sequence_id == 58 or state.actor_type == 11):
+            return None
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        direction = 1 if state.facing else -1
+
+        def barrier(tile):
+            # IsWall 3:4ef2, or a gate that 4:5b0e blocks.
+            return tile.kind in WALL_TILES or tile.kind == 4 and self.gate_collides(tile, bounds, state)
+
+        # CurrentCell 4:35a6, then GetCellsInFront 4:39fc.
+        for col in (column, column + direction):
+            tile = self.tile(room, col, row)
+            if barrier(tile):
+                break
+        else:
+            return None
+        left, top, right, bottom = bounds
+        height, width = bottom - top + 1, right + 1 - left
+        # CheckCollide 4:5654: a crevice passes a body at most 34 high
+        # unless both low bits are set (4:5ade).
+        if tile.kind == CREVICE_TILE and height <= 34 and tile.foreground & 3 != 3:
+            return None
+        # GetBarrCode 4:52bc (caution word clear) and DATA a5-0x3620/-0x360e.
+        environment = struct.unpack_from('>H', self.level, 0x2186)[0]
+        if tile.kind == 4:
+            code = (5 if environment == 3 else 8 if room == 8
+                    and struct.unpack_from('>H', self.level, 0x218a)[0] == 8 else 1)
+        elif tile.kind == 7:
+            code = 4 if height > 34 else 2
+        else:
+            code = 4 if tile.kind in (2, 20, 25) else 0
+        face_offset = (0, 40, 0, -22, 3, 18, 8, 0, 16)[code]
+        back_offset = (0, 0, 50, -22, 0, 0, 16, 0, 24)[code]
+        cell_x = self.barrier_x(room, col)
+        near_side = cell_x + face_offset - (right + 1)
+        far_side = left - (cell_x + 50 - back_offset)
+        # GetBarrDistFromFace 4:6562 / GetBarrDistFromBack 4:6610.
+        to_face = -1 if not code else near_side if state.facing else far_side
+        to_back = 200 if not code else far_side if state.facing else near_side
+        nearest = to_face if abs(to_face) < abs(to_back) else to_back
+        wall = tile.kind in WALL_TILES
+        if abs(nearest) < 5:
+            # 4:6416-6472: at least five pixels out, away from a wall face.
+            if nearest:
+                nearest = -5 if nearest < 0 else 5
+            else:
+                nearest = 5 if (to_face or to_back) >= 0 else -5
+            if wall and nearest < 0 and abs(to_face) < 5:
+                nearest = -nearest
+        if not -width <= nearest < 5:
+            return None
+        # 4:64a8-6532: pushed out (AddCharX); SEQS 64 out of a gate, else 65.
+        if tile.kind == 4 and nearest > 0 or wall and nearest < 0 and nearest == to_face:
+            nearest = -nearest
+        return -nearest * direction, 64 if nearest >= 0 and tile.kind == 4 else 65
 
     def align_fall(self, room, row, state, record):
         # CODE:4 4b16 runs after advancing the floor row, before the fall pose.
@@ -1017,7 +1115,7 @@ class RooftopPhysics:
     def advance(self, motion, runtime, old_x, bounds, sword_drawn=False, protected=False,
                 frame_flags=0x40, frame_record=None, bounds_for_state=None, cut_enabled=True,
                 alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None,
-                invulnerable=False):
+                invulnerable=False, native_alive=None):
         state = runtime.state
         if motion.dead:
             return ()
@@ -1117,9 +1215,33 @@ class RooftopPhysics:
         gate_contact = (collision_bounds,
                         cached[2] if cached is not None and cached[:2] == (motion.room, motion.row)
                         else old_bounds or collision_bounds)
+        # FrameAdv 2:65f6: an armed opponent in animation state 1 meets
+        # barriers only through EnemyCollide 4:62b0, not CheckBarr/Collide.
+        # Other opponent states keep the port's swept wall correction.
+        native_alive = alive if native_alive is None else native_alive
+        enemy_record = self.frames.get(state.action) if isinstance(self.frames, dict) else None
+        enemy = (state.actor_type not in (0, 1, None, 7, 8) and enemy_record is not None
+                 and not motion.void_fall and state.animation_state == 1 and sword_drawn
+                 and native_alive)
+        if enemy:
+            response = self.map.enemy_collide(motion.room, motion.row, state, enemy_record,
+                                              collision_bounds, alive=native_alive,
+                                              armed=sword_drawn)
+            if response is not None:
+                state.target_x += response[0]
+                state.current_x = state.target_x
+                # JumpSeq 6:0006, AnimChar 4:2c0c and LoadFrame 4:2a72.
+                self.select(runtime, response[1])
+                if bounds_for_state is not None:
+                    bounds = bounds_for_state()
+                else:
+                    bounds = (bounds[0] + response[0], bounds[1], bounds[2] + response[0], bounds[3])
+                collision_bounds = (collision_bounds_for_state()
+                                    if collision_bounds_for_state is not None else bounds)
+                events.append(TerrainEvent("wall"))
         # Collide 4:5740-5746 returns before displacement or bump selection
         # for a dead actor. A death pose must never become a live wall bump.
-        corrected = (state.target_x if motion.void_fall or not alive or state.animation_state == 7
+        corrected = (state.target_x if enemy or motion.void_fall or not alive or state.animation_state == 7
                      or state.source_sequence_id in (70, 78) else
                      self.map.wall_correction(motion.room, old_x, state.target_x,
                                               collision_bounds, old_bounds, collision_facing,
