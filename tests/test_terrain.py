@@ -390,7 +390,9 @@ class TerrainTests(unittest.TestCase):
         self.assertEqual(self.map.combat_draw_offset(
             3, 1, state, self.frames[15], (446, 147, 468, 226)), -23)
         # Obstructed behind as well (gap, wall, loose floor, blocking gate):
-        # refused; also in animation mode 4, at poses 246-261 and in the desert.
+        # refused; also with a5-0x5022 (sequence_mode, SEQS -21) at 4, at
+        # poses 246-261 and in the desert. 6:20f4 does not read the
+        # animation state a5-0x5046 (SEQS -7).
         from pop2.terrain import Tile
 
         state = SequenceState(2, action=15, target_x=420, facing=1)
@@ -416,8 +418,10 @@ class TerrainTests(unittest.TestCase):
                     else:
                         self.assertEqual(offset, expected)
             self.map.tile = tiles(1, 0)
-            state.animation_state = 4
+            state.sequence_mode = 4
             self.assertIsNone(self.map.combat_draw_offset(3, 1, state, self.frames[15], bounds))
+            state.sequence_mode, state.animation_state = 0, 4
+            self.assertIsNotNone(self.map.combat_draw_offset(3, 1, state, self.frames[15], bounds))
             state.animation_state = 0
             state.action = 246
             self.assertIsNone(self.map.combat_draw_offset(3, 1, state, self.frames[15], bounds))

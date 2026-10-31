@@ -5,7 +5,7 @@ poses 246-261, in the desert and in level fourteen's rooms 1-2; otherwise,
 when the cell ahead is not IsFloor 3:4da6, is a loose floor or a gate that
 4:5b0e blocks (or, facing right, the Kid stands in such a gate's cell), it
 refuses when the cell behind (4:3a48) is obstructed the same way or the
-animation mode a5-0x5022 is 4, and else reserves 56 pixels with
+sequence mode a5-0x5022 (SEQS -21) is 4, and else reserves 56 pixels with
 GetBarrDistances 4:5eae (AddCharX 4:2bae) before SEQS 55.
 
 Everything runs natively (CurrentCell, ReadCell, the gate collision, the
@@ -80,7 +80,7 @@ def run_probe(source):
             terrain.desert = DesertState(gate=phase or 0)
         state = SequenceState(sequence, action=pose, target_x=x, facing=int(facing),
                               actor_type=0, level_kind=environment)
-        state.animation_state = mode
+        state.sequence_mode = mode
         record = SimpleNamespace(offset_x=frame[0], aux=frame[1])
         offset = terrain.combat_draw_offset(room, row, state, record, (left, top, right, bottom - 1))
         expected = (-1, x) if offset is None else (55, x + (offset if facing else -offset))

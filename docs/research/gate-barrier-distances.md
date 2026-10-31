@@ -117,7 +117,8 @@ SEQS 55 or -1 (no draw; Ctrl stays consumed, 6:20fc clears a5-0x503c):
 4. Otherwise the cell ahead (4:39fc) must be an obstruction: not IsFloor
    3:4da6, loose floor (11) or a blocking gate; else the draw needs nothing.
 5. Then the cell behind (4:3a48, column -/+ 1 by facing) is tested the same
-   way: obstructed there too, or animation mode a5-0x5022 = 4, refuses.
+   way: obstructed there too, or a5-0x5022 = 4 (SEQS -21, the port's
+   `sequence_mode`; not the animation state a5-0x5046), refuses.
 6. Else GetBarrDistances 4:5eae + extra; below 56 the Kid moves back
    (AddCharX) to 56.
 

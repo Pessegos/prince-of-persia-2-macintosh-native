@@ -326,9 +326,10 @@ class LevelMap:
             extra = 0
         else:
             return 0
-        # 6:20a8-20fa: refused when the cell behind is obstructed too, or in
-        # animation mode 4; else 56 pixels are reserved (GetBarrDistances).
-        if obstruction(self.tile(room, column - direction, row)) or state.animation_state == 4:
+        # 6:20a8-20fa: refused when the cell behind is obstructed too, or when
+        # a5-0x5022 (SEQS -21, sequence_mode) is 4; else 56 pixels are
+        # reserved (GetBarrDistances).
+        if obstruction(self.tile(room, column - direction, row)) or state.sequence_mode == 4:
             return None
         return min(0, self.step_boundary(room, row, state, record, bounds).clearance + extra - 56)
 
