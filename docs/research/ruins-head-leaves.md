@@ -427,6 +427,16 @@ that cell as room 0, which 4:3b30 then matches against a zero link and snaps
 the head 510 pixels to the right; the port keeps it in place. Special flag 1
 (neck drawing) and the imageless pose 289 are not supplied.
 
+2026-10-31 (static): 4:3b30 is a column rebase, not AdjustRoom. From
+ReadCell's room a5-0x34aa it returns the column a5-0x34a8 unchanged for the
+Kid room, the room above (-0x4fba) or below (-0x4fbc); minus 10 for the
+left, down-left or up-left neighbour (-0x4fc0/-0x4fb4/-0x4fb8); plus 10 for
+the right, down-right or up-right one (-0x4fbe/-0x4fb2/-0x4fb6). A missing
+link is word 0, so room 0 (the undefined cell) matches the first zero slot
+in that order. `LevelMap.barrier_x` (AdjustRoom 4:56e6) has no up/down or
+up-left/up-right slots, so it cannot stand in for 3b30 unchanged; the two
+cases stay open until the head path gets its own 3b30 translation.
+
 Not compared yet: the per-frame scheduling.
 
 ## Neck Alignment In Play

@@ -37,6 +37,10 @@ right/down-right (+510) filled by 3:1ab0. A right-edge cell therefore lands
 510 pixels to the left of the room whenever the left or down-left neighbour
 is missing, and the opponent meets no barrier there.
 `LevelMap.barrier_x` reproduces this; `LevelMap.enemy_collide` is 4:62b0.
+AdjustRoom's precedence (4:56f0-571a) is the Kid room, then left/down-left,
+then right/down-right; when two neighbour words are equal (a wrapping room
+linked to itself or the same room on both sides) the earlier test wins, and
+`barrier_x` tests in the same order (checked statically 2026-10-31).
 
 ### Port before this change
 
