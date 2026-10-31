@@ -117,7 +117,9 @@ request every 17th case; every gate behind or ahead across phases: 241,290
 cases (167,322 terrain, 73,968 gate); 6 mismatches, all in level thirteen's
 room 4 row 1 (the temple, not playable: the port reserves where 4:5eae does
 not, presumably a temple cell kind step_boundary does not model). Elsewhere
-zero. Result SHA256
+zero. Closed 2026-10-31: the cell is tile 43 (IsWall, GetBarrCode 0), no
+barrier for 4:5eae; level 13 reruns: opponent draw 18,048 cases, Kid draw
+79,962 cases (with the rock sweep), zero mismatches. Result SHA256
 `a8545f5d9a5173f989b57563e46d9e9dce50b3ec08ce2b470136d06e0e4ecca9`.
 Excluded: the decision to request the draw (AutoCtrl 4:04fc).
 

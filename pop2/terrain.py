@@ -283,7 +283,8 @@ class LevelMap:
             gate = tile.kind == 4 and self.gate_collides(tile, bounds, state)
             throne_gate = gate and self.throne_gate(room, tile)
             stone_gate = gate and environment == 3
-            if tile.kind in WALL_TILES | {12} or gate:
+            # Tile 43 is IsWall with GetBarrCode 0: no barrier (level 13).
+            if tile.kind in (WALL_TILES - {43}) | {12} or gate:
                 barrier = (5 if stone_gate else 8 if throne_gate else 1 if gate else 6 if tile.kind == 12 else
                            3 if cautious and tile.kind == 2 and (tile.foreground & 255) < 3 else 4)
                 # DATA a5-0x3620/-0x360e by barrier type.
