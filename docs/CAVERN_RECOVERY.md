@@ -555,8 +555,8 @@ it reserves eleven pixels by moving backward before selecting SEQS:5.
 For example, a left-facing anchor at 29 moves to 32 first, then the
 ordinary turn finishes at 41; turning back finishes at 32. Repeating the
 turns does not keep shifting the Prince. Open gates need no adjustment.
-This is the cavern branch, not the separate six-pixel rule for other
-environments or the special level-8 branch.
+This is the cavern branch; the six-pixel rule for other environments and
+the throne's none are in [gate barrier distances](research/gate-barrier-distances.md).
 
 CheckBarr (4:4e46/4fce) also bypasses ordinary collision-buffer updates in
 turning mode 7. CheckGateForKid (4:613c-6164) consequently uses the previous

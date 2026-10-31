@@ -315,6 +315,38 @@ class TerrainTests(unittest.TestCase):
         self.assertEqual(level_map(2, 0).step_boundary(0, 1, state, record, near).barrier_type, 1)
         self.assertEqual(level_map(2, 255).step_boundary(0, 1, state, record, near).barrier_type, 2)
 
+    def test_standing_turn_reserves_foot_space_before_any_blocking_gate(self):
+        # Standing Backward 6:10f6-1154 asks 4:5b0e in every environment and
+        # reserves 11 pixels in the caverns, none at the throne, else 6.
+        from types import SimpleNamespace
+
+        from pop2.desert_state import DesertState
+
+        def level_map(environment, foreground, number=1, room=0):
+            level = bytearray(0x49ca)
+            struct.pack_into('>H', level, 0x2186, environment)
+            struct.pack_into('>H', level, 0x218a, number)
+            for cell in range(30):
+                struct.pack_into('>H', level, room * 60 + cell * 2, 1)
+            struct.pack_into('>H', level, room * 60 + 14 * 2, 4)
+            struct.pack_into('>H', level, 0x780 + room * 120 + 14 * 4, foreground)
+            return LevelMap(level)
+
+        record = SimpleNamespace(offset_x=0, aux=0)
+        bounds = (205, 148, 225, 226)
+        state = SequenceState(2, action=15, target_x=222, facing=1, actor_type=0)
+        for phase, expected in ((0, -2), (18, -2), (19, 0), (20, 0)):
+            with self.subTest(desert=phase):
+                terrain = level_map(1, 0)
+                terrain.desert = DesertState(gate=phase)
+                self.assertEqual(terrain.standing_turn_offset(0, 1, state, record, bounds), expected)
+        for environment, number, room, foreground, expected in (
+                (3, 3, 0, 0, -7), (4, 6, 0, 0, -2), (4, 6, 0, 255, 0), (2, 10, 0, 0, -2),
+                (4, 8, 8, 0, 0), (4, 8, 7, 0, -2)):
+            with self.subTest(environment=environment, level=number, room=room, gate=foreground):
+                self.assertEqual(level_map(environment, foreground, number, room).standing_turn_offset(
+                    room, 1, state, record, bounds), expected)
+
     def test_open_desert_exit_still_obstructs_a_running_jump(self):
         # DoRunJump's 6:5eca compares the gate's low byte with 104 in every
         # environment; the desert's holds the phase (0-20), never 104.

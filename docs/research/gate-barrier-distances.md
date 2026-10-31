@@ -75,3 +75,30 @@ DoRunJump 6:1c50 and the climb test are read statically, not executed.
 ```powershell
 python -m tools.probe_gate_barriers --source PATH_TO_RECOVERY --output rendered/gate-barriers.json
 ```
+
+## Standing turn (6:10f6-1158)
+
+The standing Backward handler 6:10e4 asks GetCellsInFront 4:39fc for the cell
+ahead of the supporting foot. When it is a gate that 4:5b0e blocks, it moves
+the Kid back (AddCharX 4:2bae) until GetDist1 4:3a92 leaves a reserve before
+SEQS 5 changes facing: 11 pixels in the caverns (LEVL 0x2186 = 3), -100 (that
+is, never) when the Kid is in room 9 of level eight, 6 elsewhere. The port
+had only the cavern branch: a standing turn at a closed desert exit (below
+phase 19), ruins or temple gate kept the Kid up to 6 pixels too close.
+`standing_turn_offset` now uses `gate_collides` and the three reserves.
+
+`tools/probe_standing_turn.py` runs 6:10f6-1158 with nothing supplied (same
+helpers as above, plus 4:3a92). A terrain sweep over every room/row of LEVL
+2000-2013 (X -40..559 step 11, both facings, three FRAM dx/flags) and a gate
+sweep (the gate one cell ahead, foot distance 0-12, 20, 40, desert phases 0-20
+or the low byte 0-252 step 9, heights 79/30, type 1, sequence 68): 383,490
+cases (116,490 terrain, 267,000 gate), zero mismatches. Before the change:
+915 desert, 3,899 ruins and 13,341 temple mismatches. Result SHA256:
+`0fec63fc2433f96bab3ece739bafa72a2b2fb383128a1340cc0e348b2aadcc39`.
+
+Excluded: the 6:10e4 prologue (3E3A/-503e) and everything from 6:1158 (1FB2,
+the SEQS 5 selection).
+
+```powershell
+python -m tools.probe_standing_turn --source PATH_TO_RECOVERY --output rendered/standing-turn.json
+```

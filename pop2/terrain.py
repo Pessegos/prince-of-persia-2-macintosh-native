@@ -260,16 +260,19 @@ class LevelMap:
         return StepBoundary(42, 2, kind)
 
     def standing_turn_offset(self, room, row, state, record, bounds):
-        # Standing Backward 6:10f6-1154 reserves eleven foot-space pixels
-        # before a blocking cavern gate, before SEQS:5 changes facing.
-        if state.level_kind != 3:
-            return 0
+        # Standing Backward 6:10f6-1154 reserves foot space before a gate
+        # the gate collision 4:5b0e blocks, before SEQS:5 changes facing:
+        # 11 pixels in the caverns, none at the throne (-100), else 6.
         direction = 1 if state.facing else -1
         contact = floor_contact_x(state.target_x, state.facing, record)
         ahead = self.tile(room, character_column(contact) + direction, row)
-        if ahead.kind != 4 or not stone_gate_blocks(ahead.foreground, bounds, state):
+        if ahead.kind != 4 or not self.gate_collides(ahead, bounds, state):
             return 0
-        return min(0, floor_edge_distance(contact, state.facing) - 11) * direction
+        environment = struct.unpack_from('>H', self.level, 0x2186)[0]
+        if environment != 3 and self.throne_gate(room, ahead):
+            return 0
+        reserve = 11 if environment == 3 else 6
+        return min(0, floor_edge_distance(contact, state.facing) - reserve) * direction
 
     def combat_turn_offset(self, room, row, state, record, bounds=None):
         # DoTurn, CODE:6 0x26dc-0x276c. A gate cell is a barrier only when
