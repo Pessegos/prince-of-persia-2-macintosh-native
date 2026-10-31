@@ -91,3 +91,50 @@ observed, and the native rules give no reason for one: the door is not a
 barrier, the Kid is. Not reproduced: a full native multi-room chase (no
 whole-frame native emulation exists here); the cross-room following of
 running opponents (FrameAdv 2:6550-65da, item 7 of the plan) remains open.
+
+## The opponent's draw: GenCtrl 4:4996 and DoEngarde 6:1e78 (2026-10-31)
+
+At pose 166 with a draw request (a5-0x3482 < 0) GenCtrl's opponent branch
+turns instead when a turn is requested (SEQS 80). Otherwise, when the cell
+behind (GetCellBehind 4:3a48, column word) is not IsAdvancableId, AddCharX(8)
+moves the body forward; DoEngarde clears the inputs (4:3e3a), arms the
+opponent and, for every type but the Kid and the heads, asks
+GetBarrDistances 4:5eae: 0 < d < 18 gives AddCharX(d - 18); then SEQS 90.
+
+4:5eae reads its cells through the column word a5-0x504a and its barrier
+distances through the character edges, both from before that AddCharX(8),
+but its edge distance (GetFCharX/GetDist1) from the moved X. The port used
+the anchor column for the cell behind and recomputed everything from the
+moved X, so a draw beside a wall could reserve when the original did not.
+`CombatEncounter._draw_guard_sword` now takes the column word and the edges
+before the step and passes the column to `step_boundary(column=...)`.
+
+`tools/probe_opp_engarde.py` runs 4:4996 + DoEngarde with the whole 4:5eae
+(as in probe_kid_engarde), IsAdvancableId and AddCharX; JumpSeq is recorded,
+edges/heights are fixtures. Every LEVL 2000-2013 room and row, X -20..529
+step 7, both facings, three FRAM fixtures, types 2/4, two heights, a turn
+request every 17th case; every gate behind or ahead across phases: 241,290
+cases (167,322 terrain, 73,968 gate); 6 mismatches, all in level thirteen's
+room 4 row 1 (the temple, not playable: the port reserves where 4:5eae does
+not, presumably a temple cell kind step_boundary does not model). Elsewhere
+zero. Result SHA256
+`a8545f5d9a5173f989b57563e46d9e9dce50b3ec08ce2b470136d06e0e4ecca9`.
+Excluded: the decision to request the draw (AutoCtrl 4:04fc).
+
+## Which opponents get physics: FrameAdv 2:6550-65d6 (2026-10-31, static)
+
+After AnimChar (2:6538) the opponent pass runs Move 4:341a/3464, LoadFrame,
+the drawing setup, GetCharEdges and, outside animation state 9,
+EnemyCollide 4:62b0, CheckGateForOpp 4:5ffc and the hazards 5:1202/127e,
+then the environment's own checks, only when:
+- native X a5-0x5052 is 54..869 (scene -153..662, in the Kid room's frame)
+  and Y a5-0x5050 <= 730 or the opponent's room has a room below; else
+- level 11 or 13 with Y < 730; else
+- level five, row not 0, rooms 7/10/12 (the bridge rooms); else
+- the palace (environment 6), rooms 7-8.
+Otherwise AnimChar still moves the opponent, but it neither falls, collides
+nor changes room. The port ran the terrain step for every active opponent;
+`CombatEncounter._physics_admitted` now gates `_advance_guard_terrain`.
+The earlier skip of the whole decision below Y 484 without a room below
+(2:64f2-6512) was already modelled. Not probed natively (a pure branch);
+`test_frameadv_admits_opponent_physics_only_inside_the_native_x_window`.

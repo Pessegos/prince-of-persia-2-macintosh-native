@@ -8,7 +8,7 @@ from pop2.enemy_profiles import (
     ADVANCE_CHANCE, BLOCK_CHANCE, PARRY_BLOCK_CHANCE, COUNTER_CHANCE,
     STRIKE_CHANCE, HIT_PAUSE, QuickDrawRandom,
 )
-from pop2.coordinates import native_room, scene_x
+from pop2.coordinates import NATIVE_X_ORIGIN, native_room, scene_x
 from pop2.bridge import (bridge_checked, bridge_column, bridge_engage, bridge_gate_open,
                          bridge_tension)
 from pop2.enemy_alerts import alert_path_mode
@@ -1408,8 +1408,32 @@ class CombatEncounter:
             if guard.recovering and guard.state.sequence_id == 227:
                 guard.recovering = False
 
+    def _physics_admitted(self, guard):
+        # FrameAdv 2:6550-65d6: Move, the terrain checks, EnemyCollide and
+        # CheckGateForOpp run for an opponent with native X 54..869 in the
+        # Kid room's frame (Y <= 730 or a room below); outside it only on
+        # levels 11/13 above Y 730, level five's bridge rooms 7/10/12 off
+        # row 0, or the palace rooms 7-8. AnimChar still moves it.
+        terrain, level = getattr(self, 'terrain', None), getattr(self, 'level', None)
+        if terrain is None or level is None:
+            return True
+        offset = self._room_offset(guard.room, self.player.room)
+        x = guard.state.target_x + (offset or 0) + NATIVE_X_ORIGIN
+        y = floor_y(guard.row) + guard.state.current_y
+        if 54 <= x <= 869 and (y <= 730 or terrain.neighbor(guard.room, 'down') is not None):
+            return True
+        number = struct.unpack_from('>H', level, 0x218a)[0]
+        environment = struct.unpack_from('>H', level, 0x2186)[0]
+        if number in (11, 13) and y < 730:
+            return True
+        if guard.row != 0 and number == 5 and guard.room in (6, 9, 11):
+            return True
+        return guard.room in (6, 7) and environment == 6
+
     def _advance_guard_terrain(self, guard, old_x, old_bounds=None):
         if guard.skeleton is not None and guard.skeleton.phase == 'lava':
+            return
+        if not self._physics_admitted(guard):
             return
         if guard.terrain_motion is None:
             guard.terrain_motion = TerrainMotion(guard.room, guard.row)

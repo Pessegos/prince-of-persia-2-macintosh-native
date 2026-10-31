@@ -262,6 +262,23 @@ class GuardDecisionTests(unittest.TestCase):
         c._draw_guard_sword(g)
         self.assertEqual((g.selected_sequence, g.state.target_x, g.sword_drawn), (90, 191, True))
 
+    def test_frameadv_admits_opponent_physics_only_inside_the_native_x_window(self):
+        # FrameAdv 2:6550-65d6: native X 54..869 (scene -153..662) in the
+        # Kid room; level five's bridge rooms 7/10/12 off row 0 always.
+        for number, room, row, x, admitted in ((3, 4, 2, 662, True), (3, 4, 2, 663, False),
+                                               (3, 4, 2, -153, True), (3, 4, 2, -154, False),
+                                               (5, 9, 1, 700, True), (5, 9, 0, 700, False),
+                                               (5, 8, 1, 700, False)):
+            with self.subTest(number=number, room=room, row=row, x=x):
+                c, g = self.runner()
+                c.level = self.prince['LEVL'][1999 + number]['data']
+                c.terrain = LevelMap(c.level)
+                c.player.room = g.room = room
+                g.row = row
+                g.state.current_y = 0
+                g.state.target_x = x
+                self.assertEqual(c._physics_admitted(g), admitted)
+
     def test_seqs232_minus21_13_reaches_the_special13_brake_and_ambient(self):
         # SEQS:232 word 12 is -21 13: AnimChar 4:2f92 writes the same word
         # (a5-0x5022) that the guard brake and OppToFight 6:23b2 test for 13.
