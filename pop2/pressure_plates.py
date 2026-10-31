@@ -129,6 +129,9 @@ class PressurePlates:
                 # TriggerCaveBars 8:1672-16d0: a fresh plate opens fully closed
                 # bars (trob direction 0) and closes fully open ones (1).
                 self.add(key, int(tile.foreground == 3))
+            elif tile.kind == 25 and getattr(terrain, 'caverns', None) is not None:
+                # TriggerObject 5:1fba-1fda: TriggerSlideRock, no TROB.
+                terrain.caverns.rocks.trigger(room, cell, how)
             elif (tile.kind == 17 and not tile.foreground & 255
                   and can_trigger_exit(terrain.level, tile.room, sword_type)):
                 # TriggerObject 5:1f40: only a completely closed exit starts.

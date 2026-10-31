@@ -99,3 +99,19 @@ Each stage integrates separately with the usual reservation.
   CheckPlayNIS/RestartGame like the ruins and stops after level 13 (NIS 3
   and level 14 are not ported); saves accept levels 1-13. Every temple level
   loads and walks (scripted test). The level menu still lists 1-9.
+- Stage 3, sliding rocks (`pop2/slide_rocks.py`): Codex's trigger, motion,
+  band-scan and crush-admission rules as production code, checked against
+  his references (`tests/test_slide_rocks.py`, 400 trigger and 600 motion
+  randomized cases, zero differences). A plate chain reaching tile 25 calls
+  TriggerSlideRock (mode 5 resumes, else starts); the Temple environment
+  updates the bank every frame (MakeRubble's type 6 case), checks
+  CheckSlideRockCrush 10:16f6 and applies 10:1b04 to the Prince (pushed to
+  the face; pinned against a wall: pose 185 at control 100, else SEQS 71;
+  in the open 93/47/48). The rocks are drawn with DrawMob 10:1788's pieces
+  (type 6 3593, 7 3584, 8 3589+phase, 9 3585+phase) clipped to
+  ComputeMobRect's rectangle (a filled upper band: heights 109/111) and
+  saved. Not yet: the a5-0x3570 width correction (taken as 0), the actor
+  events 5:3cee and 6:1a84 (a hanging Prince letting go), rocks drawn from
+  a neighbouring room, the gap redraw, Collide's rock edge (93) and
+  DoKidEngarde's GetSlideRockX, guards. Level ten's room 28 rock moves and
+  crushes a Prince waiting at the wall (scripted test).

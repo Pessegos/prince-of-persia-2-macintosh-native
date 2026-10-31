@@ -331,6 +331,28 @@ def room_palette(level_number, palette_id=3500):
             decode_ctbl(resources['CTBL'][palette_id]['data']).items()}
 
 
+def draw_slide_rocks(frame, room_id, rocks, terrain, *, level_number=10):
+    """The temple's sliding rocks in the room (DrawMob 10:1788 pieces,
+    clipped to ComputeMobRect's rectangle)."""
+    objects = rocks.objects(terrain, room_id + 1)
+    if not objects:
+        return frame
+    from pop2.slide_rocks import object_shape
+
+    _program, resources, palette, shapes = room_assets(level_number, room_id)
+    frame = frame.copy()
+    for kind, x, y, phase, (top, left, bottom, right) in objects:
+        sprite = cavern_command_sprite(['back', object_shape(kind, phase), x, y, 16],
+                                       resources, palette, shapes)
+        sprite_top = y - sprite.height
+        clip = (max(left, x, 0), max(top, sprite_top, 0),
+                min(right, x + sprite.width, frame.width), min(bottom, y, frame.height))
+        if clip[0] < clip[2] and clip[1] < clip[3]:
+            piece = sprite.crop((clip[0] - x, clip[1] - sprite_top, clip[2] - x, clip[3] - sprite_top))
+            frame.paste(piece, clip[:2], piece)
+    return frame
+
+
 def flask_shape(data, palette, draw_mode):
     flags, stride, width, height = struct.unpack_from('>HhhH', data)
     if flags & 0xf000 != 0x9000:

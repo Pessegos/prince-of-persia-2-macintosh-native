@@ -52,11 +52,13 @@ class TempleSaveTests(unittest.TestCase):
             path = Path(directory) / 'temple.pop2save'
             original = GameSession.load(resources, 10)
             original.combat.player.life = 2
+            original.caverns.rocks.bank.append((339, 356, 28, 0, -2, 6, 2, 459))
             write_save(path, capture_snapshot(original))
             restored, _saved = read_snapshot(path, resources)
         self.assertEqual((restored.level.number, restored.motion.room), (10, 21))
         self.assertEqual(vars(restored.runtime.state), vars(original.runtime.state))
         self.assertEqual(restored.combat.player.life, 2)
+        self.assertEqual(restored.caverns.rocks.bank, [(339, 356, 28, 0, -2, 6, 2, 459)])
         self.assertIs(restored.level_map.caverns, restored.caverns)
 
 
@@ -114,6 +116,31 @@ class LevelTenArrivalTests(unittest.TestCase):
                 self.assertEqual(scene.sequence_state.source_sequence_id, 5)
                 self.tick(15)
                 self.assertTrue(scene.combat.player.alive)
+
+
+    def test_level_ten_plate_starts_the_sliding_rock_that_crushes_the_prince(self):
+        # Native room 28: plate cell 24 (kind 6) links (61) to the rock marker
+        # at cell 29. TriggerSlideRock 10:2152 creates it at control -2; it
+        # slides two pixels per update; against the wall at column 3 the
+        # Prince is crushed (10:1b04, control 100: pose 185). Before, the
+        # plate chain ignored tile 25 and nothing moved.
+        from pop2.coordinates import column_left
+
+        scene = self.scene
+        scene.enter_next_level(10)
+        scene.jump_to_room(27, row=2, x=column_left(4) + 25, facing=0)
+        rocks = scene.game.caverns.rocks
+        self.tick(5)
+        self.assertEqual(rocks.bank[0][2:], (28, 0, -2, 6, 2, 459))
+        start = rocks.bank[0][0]
+        self.tick(50)
+        self.assertEqual(rocks.bank[0][0], start - 100)
+        background = scene.native_viewport.crop((300, 250, 400, 340)).tobytes()
+        self.tick(100)
+        self.assertFalse(scene.combat.player.alive)
+        self.assertEqual(rocks.bank[0][4], 100)
+        self.assertEqual(scene.sequence_state.action, 185)
+        self.assertNotEqual(scene.native_viewport.crop((300, 250, 400, 340)).tobytes(), background)
 
 
 @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level-13 scenery required')

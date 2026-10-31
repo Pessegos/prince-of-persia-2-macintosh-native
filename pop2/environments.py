@@ -24,6 +24,7 @@ from pop2.carpet import (
     carpet_room,
 )
 from pop2.control_mapping import IDLE_SEQUENCE
+from pop2.coordinates import native_x, scene_x
 from pop2.crevices import CREVICE_TILE
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
 from pop2.loose_floors import crush_sequence, floor_hits_actor
@@ -1134,6 +1135,76 @@ class Ruins(Caverns):
 class Temple(Caverns):
     """Levels 10-13 (environment 2). Scenery, terrain and saves only: the
     temple mechanisms and birdheads are not wired yet."""
+
+    def frame_start(self):
+        super().frame_start()
+        scene = self.scene
+        caverns = scene.game.caverns
+        if caverns is None or not caverns.rocks.bank:
+            return
+        state, motion = scene.sequence_state, scene.terrain_motion
+        player = scene.combat.player
+        row = motion.row if motion is not None else -1
+        column = scene.combat._supporting_column(player)
+        # The type-6 case of MakeRubble 5:2afa: motion 10:1d5c, then
+        # CheckSlideRockCrush 10:16f6 against the Prince.
+        for mob, _events in caverns.rocks.update(scene.level_map, (state.action, column, row)):
+            if (motion is not None and player.alive
+                    and caverns.rocks.crushes(mob, motion.room + 1, row, native_x(state.target_x),
+                                              state.sequence_mode)):
+                self.rock_contact(mob)
+        for kind, cue in caverns.rocks.sounds:
+            if kind == 'play':
+                state.sound_events.append(cue)
+            elif getattr(scene, 'audio', None) is not None:
+                scene.audio.stop_sound(cue)
+
+    def rock_contact(self, mob):
+        """10:1b04: the rock pushes the Prince to its face; against a wall it
+        crushes him (control 100: pose 185, else SEQS 71), in the open he
+        bumps (armed 93, else 47 facing right / 48 left)."""
+        scene = self.scene
+        player, state, motion = scene.combat.player, scene.sequence_state, scene.terrain_motion
+        if state.action == 5:
+            return
+        if native_x(state.target_x) - 229 > mob[0]:
+            state.target_x = scene_x(mob[0] + 223)
+        column = character_column(state.target_x - 12)
+        tile = scene.level_map.tile(motion.room, column, motion.row).kind
+        if tile in (20, 2, 7, 25, 43, 4):
+            state.target_x = column * TILE_WIDTH + 63 + (6 if state.facing else 0)
+            state.current_x = state.target_x
+            if tile == 2:
+                return
+            if mob[4] == 100:
+                player.life = 0
+                state.action = 185
+                motion.dead = True
+                scene.death.begin(13)
+                return
+            # 10:1c04-1c4c: crushed against the wall (SetKidDeathMethod 13
+            # when the rock's face is close enough), sequence mode 4, SEQS 71.
+            state.sequence_mode = 4
+            scene.physics.select(player.runtime, 71)
+            player.life = 0
+            motion.dead = True
+            scene.death.begin(13)
+        elif player.sword_drawn:
+            player.sword_drawn = False
+            scene.physics.select(player.runtime, 93)
+        else:
+            scene.physics.select(player.runtime, 47 if state.facing else 48)
+        state.current_x = state.target_x
+        state.current_y = state.vertical_velocity = 0
+        scene.action, scene.player_x = state.action, state.target_x
+
+    def scenery_layer(self, frame, motion):
+        from pop2.caverns import draw_slide_rocks
+
+        scene = self.scene
+        frame = super().scenery_layer(frame, motion)
+        return draw_slide_rocks(frame, scene.room_id, scene.game.caverns.rocks, scene.level_map,
+                                level_number=scene.game.level.number)
 
     def finish_exit(self):
         scene = self.scene
