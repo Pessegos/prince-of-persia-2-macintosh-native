@@ -67,7 +67,7 @@ on another PC or clean Windows VM as well.
 
 For a local original-image integration check, add `--image PATH_TO_IMAGE.hfs`.
 That runs the actual hidden first-run UI through cancellation and full import,
-validates the resulting installation, renders the intro and levels 1-9, and
+validates the resulting installation, renders the intro and levels 1-13, and
 prepares map caches through the frozen helper. All generated files and user
 data stay inside the disposable test directory. Never upload the disk image
 or the imported installation as build artifacts.

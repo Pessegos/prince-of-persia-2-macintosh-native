@@ -132,3 +132,6 @@ Each stage integrates separately with the usual reservation.
   ring from 958). The AI is the ordinary guard's (no Birdhead-specific
   controller found yet); set-7 generation points (0x3986) create them
   too (GenerateOpponent 6:3be0, DATA a5-0x5280[7] = 2). A level-ten birdhead engages and kills an idle Prince.
+- Level menu: at the user's request (2026-10-31) the F3/tools level list
+  shows levels 10-13 when their scenery is imported; the packaged smoke test
+  renders levels 1-13. The temple is still incomplete (see the open items).

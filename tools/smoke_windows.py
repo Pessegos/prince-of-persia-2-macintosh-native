@@ -55,7 +55,7 @@ def smoke(archive, image=None):
             run('PoP2Mac-tools.exe', '--smoke-import', Path(image).resolve(), timeout=900)
             run('PoP2Mac-tools.exe', '--check')
             prepared = json.loads(run('PoP2Mac-tools.exe', '--smoke-test').strip().splitlines()[-1])
-            if prepared['levels'] != list(range(1, 10)):
+            if prepared['levels'] != list(range(1, 14)):
                 raise RuntimeError('Imported build did not render every currently supported level')
             run('PoP2Mac-tools.exe', '--warm-map-cache')
         run('PoP2Mac.exe', '--smoke-test')

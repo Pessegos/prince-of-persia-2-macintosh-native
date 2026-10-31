@@ -87,6 +87,14 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.assertTrue(scene.combat.player.alive)
         self.assertEqual(scene.game.level.number, 10)
 
+    def test_the_level_menu_lists_the_temple_levels(self):
+        scene = self.scene
+        numbers = [option[0] for option in scene.development_levels()]
+        self.assertEqual(numbers[-4:], [10, 11, 12, 13])
+        scene.load_level(12)
+        self.assertEqual((scene.game.level.number, scene.room_id), (12, 18))
+        self.assertIsNotNone(scene.native_viewport.getbbox())
+
     def test_temple_levels_use_the_temple_environment(self):
         # The cavern environment's exit would have started level one's
         # voyage (start_ending) after a temple level.

@@ -2984,7 +2984,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         options = []
         from pop2.caverns import scenery_available
 
-        for number in (1, 2, 3, 4, 5, 6, 7, 8, 9):
+        for number in range(1, 14):
             if number >= 6 and not scenery_available(number):
                 continue
             renderer = (self.level_renderer if self.game.level.number == number else
