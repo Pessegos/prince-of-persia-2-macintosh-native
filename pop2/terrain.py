@@ -260,11 +260,14 @@ class LevelMap:
             adjustment = -13
         return (13 + adjustment) * direction
 
-    def step_boundary(self, room, row, state, record, bounds, *, cautious=False):
+    def step_boundary(self, room, row, state, record, bounds, *, cautious=False, column=None):
         # GetBarrDistances (4:5eae): inspect the supporting foot's tile and
         # its immediate neighbor, not a geometric edge or a whole-room scan.
+        # The cells come from the column word a5-0x504a (``column`` when an
+        # AddCharX has moved X since LoadFrame); the edge distance from X.
         contact = floor_contact_x(state.target_x, state.facing, record)
-        column = character_column(contact)
+        if column is None:
+            column = character_column(contact)
         direction = 1 if state.facing else -1
         current = self.tile(room, column, row)
         ahead = self.tile(room, column + direction, row)
@@ -451,6 +454,62 @@ class LevelMap:
         if tile.kind == 4 and nearest > 0 or wall and nearest < 0 and nearest == to_face:
             nearest = -nearest
         return -nearest * direction, 64 if nearest >= 0 and tile.kind == 4 else 65
+
+    def gate_for_opp(self, room, row, state, record, bounds, *, alive=True):
+        """CheckGateForOpp 4:5ffc-60e2 and 4:6202-62ae: the horizontal push
+        out of a gate that blocks an opponent, or None.
+
+        FrameAdv 2:65fa calls it after EnemyCollide. ``room`` is also the
+        Kid room (the opponents' bank); ``bounds`` are the clipped edges.
+        """
+        if not alive or state.actor_type == 12:
+            return None
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        direction = 1 if state.facing else -1
+        # CurrentCell 4:35a6, GetCellBehind 4:3a48, GetCellsInFront 4:39fc.
+        for col in (column, column - direction, column + direction):
+            tile = self.tile(room, col, row)
+            if tile.kind == 4:
+                break
+        else:
+            return None
+        current, cell = room, col
+        while current is not None and not 0 <= cell < 10:
+            linked = self.neighbor(current, 'left' if cell < 0 else 'right')
+            current, cell = (None, cell % 10) if linked is None else (
+                linked, cell + (10 if cell < 0 else -10))
+        number = struct.unpack_from('>H', self.level, 0x218a)[0]
+        # 4:602e-6042: level eight's room 9 gate; 4:6050: the gate collision.
+        if current == 8 and number == 8 or not self.gate_collides(tile, bounds, state):
+            return None
+        environment = struct.unpack_from('>H', self.level, 0x2186)[0]
+        code = 5 if environment == 3 else 1
+        face_offset = (0, 40, 0, -22, 3, 18, 8, 0, 16)[code]
+        back_offset = (0, 0, 50, -22, 0, 0, 16, 0, 24)[code]
+        # GetLeftBarr/GetRightBarr 4:541a/547c, rebased to the Kid room only
+        # for its left or right neighbour (4:609a-60cc).
+        x = cell * TILE_WIDTH + 22
+        if current != room:
+            if current is not None and current == self.neighbor(room, 'left'):
+                x -= ROOM_WIDTH
+            elif current is not None and current == self.neighbor(room, 'right'):
+                x += ROOM_WIDTH
+            else:
+                return None
+        left, _top, right, _bottom = bounds
+        if not (x + face_offset < right + 1 and x + 50 - back_offset > left):
+            return None
+        # 4:6202-62ae: the nearer of |GetBarrDistFromFace| and |...FromBack|.
+        cell_x = self.barrier_x(room, col)
+        near_side = cell_x + face_offset - (right + 1)
+        far_side = left - (cell_x + 50 - back_offset)
+        to_face = abs(near_side if state.facing else far_side)
+        to_back = abs(far_side if state.facing else near_side)
+        if to_face < to_back:
+            push = -(to_face + 3) - (8 if state.actor_type == 4 else 0)
+        else:
+            push = to_back
+        return push * direction
 
     def align_fall(self, room, row, state, record):
         # CODE:4 4b16 runs after advancing the floor row, before the fall pose.
@@ -1260,6 +1319,17 @@ class RooftopPhysics:
                 collision_bounds = (collision_bounds_for_state()
                                     if collision_bounds_for_state is not None else bounds)
                 events.append(TerrainEvent("wall"))
+        if (state.actor_type not in (0, 1, None, 7, 8) and enemy_record is not None
+                and not motion.void_fall and native_alive):
+            # CheckGateForOpp 4:5ffc (FrameAdv 2:65fa): out of a blocking gate.
+            push = self.map.gate_for_opp(motion.room, motion.row, state, enemy_record,
+                                         collision_bounds, alive=native_alive)
+            if push:
+                state.target_x += push
+                state.current_x = state.target_x
+                bounds = (bounds[0] + push, bounds[1], bounds[2] + push, bounds[3])
+                collision_bounds = (collision_bounds[0] + push, collision_bounds[1],
+                                    collision_bounds[2] + push, collision_bounds[3])
         # Collide 4:5740-5746 returns before displacement or bump selection
         # for a dead actor. A death pose must never become a live wall bump.
         corrected = (state.target_x if enemy or motion.void_fall or not alive or state.animation_state == 7

@@ -757,6 +757,28 @@ class TerrainTests(unittest.TestCase):
                 self.assertEqual([event.kind for event in events if event.kind == "wall"],
                                  ["wall"] if sequence == 65 else [])
 
+    def test_opponent_in_front_of_a_closed_gate_behind_is_pushed_out(self):
+        # FrameAdv 2:65fa: CheckGateForOpp 4:5ffc after EnemyCollide. Level
+        # three, room 3 row 2: a closed gate in column 5. Facing right in
+        # column 6 the gate is behind, which EnemyCollide never looks at;
+        # 4:6202 pushes the body out by the nearer barrier distance.
+        from types import SimpleNamespace
+
+        level = LevelMap(load_resource_file("Prince.rsrc")["LEVL"][2002]["data"])
+        record = SimpleNamespace(offset_x=0, aux=0x40)
+        for x, expected in ((332, 337), (336, 337), (340, 340)):
+            with self.subTest(x=x):
+                runtime = SequenceRuntime(self.sequences, SequenceState(
+                    150, action=158, current_x=x, target_x=x, facing=1, actor_type=2,
+                    level_kind=3, animation_state=1))
+                motion = TerrainMotion(2, 2)
+                frames = dict.fromkeys(range(149, 255), record)
+                RooftopPhysics(level, frames).advance(
+                    motion, runtime, x, (x - 10, 148, x + 10, 226), sword_drawn=True,
+                    cut_enabled=False, frame_record=record)
+                self.assertEqual(runtime.state.target_x, expected)
+                self.assertEqual(runtime.state.source_sequence_id, 150)
+
     def test_unarmed_wall_bump_does_not_request_sword_contact(self):
         for action, sequence in ((7, 47), (40, 46)):
             with self.subTest(action=action):

@@ -76,10 +76,64 @@ LoadFrame 4:2a72 (inert).
   `4e30ed9b6c014fd7c688650edabedb7e2333887b2623ca869f63268972a9d441`.
 
 Excluded: the heads, opponents outside the Kid room, the caution word
-a5-0x36bc, and which opponents FrameAdv 2:6550-65da lets reach the call.
+a5-0x36bc (set only inside DoStepFwd, see gate-barrier-distances), and which
+opponents FrameAdv 2:6550-65da lets reach the call.
 
 ```powershell
 python -m tools.probe_enemy_collide --source PATH_TO_RECOVERY --output rendered/enemy-collide.json
+```
+
+## CheckGateForOpp 4:5ffc (opponents in a gate)
+
+FrameAdv 2:65fa calls it right after EnemyCollide, for every opponent the
+pass reaches, whatever its animation state or sword:
+
+1. Native ALIVE (a5-0x503a < 0).
+2. The supporting cell (CurrentCell 4:35a6) is a gate, else the cell behind
+   (GetCellBehind 4:3a48), else the one ahead (GetCellsInFront 4:39fc).
+3. Not level eight's room 9 (the read cell's room) and not a type-12 actor.
+4. The gate collision 4:5b0e blocks the body.
+5. The gate's barrier edges, GetLeftBarr/GetRightBarr 4:541a/547c (column
+   table + 22 plus the gate code's face/back offsets), rebased only when the
+   cell's room is the Kid room's left (-510) or right (+510) neighbour, must
+   overlap the character edges a5-0x3564/-0x3566.
+6. 4:6202-62ae: the nearer of |GetBarrDistFromFace| and |GetBarrDistFromBack|
+   (4:6562/6610); towards the face the push is that distance + 3 backwards
+   (+ 8 more for a skeleton, type 4), else the back distance forwards
+   (AddCharX). No sequence, no sound.
+
+### Port before this change
+
+There was none: `RooftopPhysics.check_gate` is the Kid's CheckGateForKid and
+returns at once for an opponent. An armed opponent in animation state 1
+skips the swept correction (EnemyCollide replaced it), and EnemyCollide only
+looks at the supporting cell and the one ahead, so an opponent with a closed
+gate just behind stood inside it. `LevelMap.gate_for_opp` is 4:5ffc;
+`RooftopPhysics.advance` applies it after EnemyCollide for every opponent
+except the heads (7/8, `ruins_ai`), with native ALIVE.
+
+### Native execution
+
+`tools/probe_gate_for_opp.py` runs 4:5ffc with CurrentCell, GetCellBehind,
+GetCellsInFront, ReadCell (room links, GetUndefineCellId), the gate
+collision, GetBarrCode, GetLeftBarr/GetRightBarr, both distance routines,
+AdjustRoom, AddCharX, the neighbour words (3:1ab0-1c3c) and the column word
+(4:2a7c). Nothing is supplied; the character edges, width, height and
+clipped top/bottom are fixtures (GetCharEdges output, read but not called).
+
+- Gate sweep: every gate of LEVL 2000-2013, desert phases 0-20 or the low
+  byte step 9, X from 70 before to 122 past the cell in steps of 5, both
+  facings, three FRAM fixtures, four bodies, types 2/4/12, ALIVE and
+  sequence 68 variants.
+- Edge sweep: every room and row, X near both edges (-60..560).
+- 198,966 cases (173,550 gate, 25,416 edge), 13,616 pushed, zero mismatches.
+  Before: no push at all. Result SHA256 `814d62cf46948e1848a3b89101e4ccd1aeaf3a47c7a23b5bfc459ec511a3027b`.
+
+Excluded: opponents outside the Kid room, the heads' own path, and which
+opponents FrameAdv 2:6550-65da lets reach the call.
+
+```powershell
+python -m tools.probe_gate_for_opp --source PATH_TO_RECOVERY --output rendered/gate-for-opp.json
 ```
 
 ## OpponentClose 4:13a4 (dormant opponents)

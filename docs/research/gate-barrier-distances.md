@@ -148,3 +148,16 @@ and GenCtrl's admission (`try_draw_sword`).
 ```powershell
 python -m tools.probe_kid_engarde --source PATH_TO_RECOVERY --output rendered/kid-engarde.json
 ```
+
+## The caution word a5-0x36bc end to end (2026-10-31, static) [D]
+
+`a5_data_references.csv` lists three uses: DoStepFwd 6:1276 sets it to 1 on
+entry (6:1280) and clears it on exit (6:1336); GetBarrCode 4:52fe is the
+only reader (tile 2 with a foreground low byte below 3 gives code 3 instead
+of 4). DoStepFwd reaches GetBarrCode only through GetBarrDistances 4:5eae,
+which it calls when its argument is 0 (6:128e-1298). The ordinary callers
+GenCtrl 6:0da0 and 6:11c4 pass 0; the other callers are the final battle
+(9:0e5e, 0e86, 1474) and the temple (10:288e, 2916, 2944), not ported.
+The port asks `step_boundary(..., cautious=True)` only from the scene's step
+command, the same path; every other barrier query keeps code 4. Nothing to
+change.

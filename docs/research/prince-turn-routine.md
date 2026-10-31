@@ -125,3 +125,18 @@ are the level-four track.
   - a closed gate one cell ahead gives the offset of a wall;
   - an open gate does not;
   - the existing rooftop turn tests stay unchanged.
+
+## DoTurn's opponent branches (2026-10-31, static) [D]
+
+6:2638 (catalogued under the neighbouring name DoStrike) dispatches on the
+actor type a5-0x504e:
+- heads 7/8: nothing when the selected sequence is 156 or 166, or when
+  7:16b8 refuses; else JumpSeq 156 (`ruins_ai` selects 156; its callers'
+  preconditions are not re-audited here);
+- the Kid 0/1: 6:26b8 (this note's subject);
+- type 10 in poses 213-217: nothing (that actor is not ported);
+- everyone else: JumpSeq 60 with no displacement of its own.
+
+The port's ordinary-opponent turn (`combat.choose_guard_action`,
+`Skeleton.bridge_guard`) selects SEQS 60 the same way; any shift comes from
+SEQS 60 itself through the shared AnimChar. Nothing to change.
