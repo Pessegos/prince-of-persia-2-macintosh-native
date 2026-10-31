@@ -153,18 +153,27 @@ The stone gate closing animation in the Macintosh version looks pretty rough, es
 
 <br/>
 <img src="docs/github readme/stone-gate-macintosh-dos-port.gif" alt="Stone gate closing animation comparison between Macintosh, DOS and the port" >
+
 <br/>
-I also smoothed out the gate opening sound. It now plays continuously and fades out gently when the gate stops.
+
+## Gate Sounds
+
+I smoothed out the gate opening sound for every type. It now plays continuously and fades out gently when the gate stops.
+
 <br/>
-<br/>
+
 <table>
   <tr>
     <th width="50%">Original</th>
     <th width="50%">Corrected</th>
   </tr>
   <tr>
-    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/93d19282-c557-45a0-95d7-0e74aef274f8"></video></td>
-    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/a5feb663-9b60-491f-9362-99387d268d2c"></video></td>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/c515ea65-b26d-4a24-9eb8-73df7e1dc63d"></video></td>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/59302ec2-5b36-4cfc-97b2-ac47dafdd015"></video></td>
+  </tr>
+  <tr>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/defd1068-93d3-4b8e-abbf-ceac87edae8c"></video></td>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/9538508f-22b0-43e5-9f8c-16faa653b446"></video></td>
   </tr>
 </table>
 
