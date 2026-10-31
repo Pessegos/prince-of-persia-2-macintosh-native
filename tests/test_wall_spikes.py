@@ -343,3 +343,80 @@ class ImportedWallSpikeTests(unittest.TestCase):
         with patch.object(scene, 'render'):
             RooftopSceneTests.tick(self)
         self.assertEqual(spikes.foreground[20, 24], 2)
+
+    def retreat_frames(self, x, extended=False, advance_first=False):
+        """Tapped armed retreats at level five's trap (native room 23,
+        cell 22), facing right; one entry per animation tick."""
+        from tests.test_terrain import RooftopSceneTests
+
+        scene = self.scene
+        frames = []
+        tick = scene.advance_animation
+
+        def recorded():
+            tick()
+            frames.append((scene.action, scene.player_x,
+                           scene.game.caverns.spikes.foreground.get((22, 22), 0)))
+        scene.advance_animation = recorded
+        scene.load_level(5)
+        scene.peaceful = True
+        scene.jump_to_room(22, row=2, x=x, facing=1)
+        scene.in_animation_tick = False
+        scene.sword_drawn = True
+        scene.start_sequence(227)
+        scene.sequence_runtime.next_frame()
+        scene.action = scene.sequence_state.action
+        if extended:
+            scene.game.caverns.spikes.foreground[22, 22] = 143
+            scene.game.caverns.spikes.active.add((22, 22))
+        RooftopSceneTests.tick(self, 4)
+        steps = [1] if advance_first else []
+        for _ in range(60 if advance_first else 12):
+            if scene.action in (158, 170, 171) and (
+                    not advance_first or steps or
+                    scene.game.caverns.spikes.foreground.get((22, 22), 0) == 0):
+                RooftopSceneTests.tap_sword_step(self, steps.pop() if steps else -1)
+            RooftopSceneTests.tick(self)
+            if scene.terrain_motion.dead:
+                break
+        return frames
+
+    def test_armed_retreat_follows_the_native_frame_order_and_alignments(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        with patch.object(self.scene, 'render'):
+            frames = self.retreat_frames(257)
+            # PlayerCtrl and AnimChar 2:6342-6372 run before the checks at
+            # 2:63ca-63d8, and the MOB controller (2:622c) before the Kid:
+            # SEQS 57 is three whole frames (160, X-16 with 157, 227's 158),
+            # each checked; a first trigger at 157 (X<=231) is two lethal
+            # phases while the body is still out of reach (X>224).
+            start = frames.index((160, 241, 0))
+            self.assertEqual(frames[start:start + 6], [(160, 241, 0), (157, 225, 1), (158, 225, 2),
+                                            (160, 225, 143), (157, 209, 143), (158, 209, 143)])
+            self.assertTrue(self.scene.combat.player.alive)
+            dead = set()
+            for x in range(237, 253):
+                self.retreat_frames(x)
+                if self.scene.terrain_motion.dead:
+                    dead.add(x)
+            # Native single-frame thresholds (tools/probe_wall_spike_frames.py):
+            # no ready pose triggers at X>236, and 157 impales at X<=224 in
+            # the frame that triggers it. Only these alignments die.
+            self.assertEqual(dead, {237, 238, 239, 240})
+
+    def test_stepping_back_in_as_the_trap_retracts_impales(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        with patch.object(self.scene, 'render'):
+            # The user's Macintosh case: in front of the extended trap, step
+            # out of its reach (X 221 + 18), wait for the retraction, then
+            # retreat straight back into it.
+            frames = self.retreat_frames(221, extended=True, advance_first=True)
+        self.assertTrue(self.scene.terrain_motion.dead, frames)
+        # 129 counts down to the 4/5/6/0 retraction; the retreat that
+        # starts at 0 triggers and impales at 157 (X 223) in one frame.
+        self.assertEqual(frames[-6:], [(171, 239, 4), (171, 239, 5), (171, 239, 6),
+                                       (171, 239, 0), (160, 239, 0), (188, 184, 240)])

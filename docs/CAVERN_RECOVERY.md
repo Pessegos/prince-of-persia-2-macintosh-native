@@ -1268,7 +1268,7 @@ sequences, pause and restart. Pure tests run on CI without game resources.
 Temple-specific behavior, skeleton interactions and a unified shared MOB
 bank are not claimed by this cavern implementation.
 
-### Armed retreat into level five's trap (2026-10-31, open)
+### Armed retreat into level five's trap (2026-10-31)
 
 User report: retreating with the sword into the room-23 trap (cell 22)
 should normally not impale; on the Mac it only happens after the trap
@@ -1282,11 +1282,38 @@ GetCharEdges, CheckSpikes and CheckSpikeHit on the real Kid frames for
 LEVL2004 room 23 (25,600 single-frame cases: 40 poses, both facings,
 armed or not, 160 X values; result SHA256 `697dd03d...991b`). For the
 armed retreat poses facing right the original triggers at X <= 231 (157),
-236 (158), 216 (160) and impales at X <= 224 (157/158), exactly the
-port's thresholds. The single-frame geometry is therefore not the cause.
-Still to check: the whole-frame order (AnimChar 2:6c1c runs after the
-spike checks, the MOB controller's place in the frame) and the retreat's
-X per frame, which a FrameAdv-level trace has to settle.
+236 (158), 234 (170/171), 216 (160) and impales at X <= 224 (157/158/170/
+171), exactly the port's thresholds. The single-frame geometry is
+therefore not the cause.
+
+Whole-frame order (CODE:2 Kid frame 2:62e6): the MOB controllers run first
+(FrameAdv 2:622c), then PlayerCtrl 4:3b88 (DoRetreat 6:1d6e selects
+SEQS 57 at 158/170/171 only, with no floor veto), AnimChar 4:2c0c, the
+gravity/MoveChar step (4:341a/3464: SEQS 57's `-8 -2 0` velocity is not
+applied to an action-1 sequence), LoadFrame/SetupSword/GetCharEdges again,
+CheckBarr/CheckCollide1/CheckGateForKid and then, for caverns, CheckSpikes
+5:3c42 and CheckSpikeHit 5:3af8 on the new frame. MobSpikes 5:3fa4 reads
+the cell byte after TriggerSpikes, so a trigger is lethal in its own frame.
+SEQS 57 is three whole frames: 160 at X, 157 at X-16, then 227's 158.
+The port matches this order frame by frame: a key press at a ready pose
+runs one full tick at once (`advance_animation_now`, spikes advanced and
+checked), so 160 is a checked frame as in the original.
+
+Result: with these rules a tapped retreat dies only from X 237-240 (no
+ready pose triggers above 236, and 157 at X-16 <= 224 triggers and impales
+together); from X 241-252 the trap is triggered at 225-236, its two
+outward phases pass while the body is out of reach, and the Prince stands
+safely in front of the extended trap. The user's case (step out of reach,
+let it retract, step straight back in) is the same rule. No production
+change is justified: the port's 4-in-16 alignment death is the recovered
+native behaviour. Regressions: `test_armed_retreat_follows_the_native_
+frame_order_and_alignments` and `test_stepping_back_in_as_the_trap_
+retracts_impales`. Not executed natively as a whole frame: CheckBarr and
+CheckCollide1 between AnimChar and the checks (a fixture with consistent
+previous-frame edges did not move the Kid at all in X 120-236, so it is
+not evidence either way), CheckGateForKid, CheckPress and PlayerCtrl's
+key consumption. A Macintosh recording of a straight retreat surviving
+from X 237-240 would reopen this.
 
 ## Custom Foreground Beyond Its Admission Cell
 

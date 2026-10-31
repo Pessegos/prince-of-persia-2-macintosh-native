@@ -85,3 +85,5 @@ poses1/2 end before contact and he reaches an extended stationary trap.
 MobSpikes5:3fa4 and CheckSpikeHit5:3af8 distinguish those phases. No stationary
 trap lethality change is justified from this reproduction alone. The user
 explicitly deferred this point until a Macintosh recording is available.
+Resolved 2026-10-31 without a recording: the whole-frame order matches the
+original and only alignments X 237-240 die (docs/CAVERN_RECOVERY.md).
