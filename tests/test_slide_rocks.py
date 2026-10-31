@@ -111,6 +111,20 @@ class SlideRockTests(unittest.TestCase):
         self.assertTrue(SlideRocks.crushes(mob, 1, 1, 500, facing=0, width=30))
         self.assertFalse(SlideRocks.crushes(mob, 1, 1, 500, facing=1, width=30))
 
+    def test_a_rock_in_the_left_room_is_drawn_510_pixels_left(self):
+        # ComputeMobRect 5:32f6 projects a neighbour's rectangle: -510 for
+        # both horizontal relations (native), -365 above, +365 below. Before,
+        # only rocks in the view room were drawn.
+        rocks = SlideRocks([(500, 236, 2, 0, -2, 6, 1, 459)])
+        terrain = FakeTerrain({})
+        own = rocks.objects(terrain, 2)
+        seen = rocks.objects(terrain, 1)
+        self.assertEqual(len(own), len(seen))
+        for (kind, x, y, phase, clip), shifted in zip(own, seen):
+            self.assertEqual(shifted, (kind, x - 510, y, phase,
+                                       (clip[0], clip[1] - 510, clip[2], clip[3] - 510)))
+        self.assertEqual(rocks.objects(terrain, 3), [])
+
     def test_objects_and_shapes_follow_atm_slide_rock_and_draw_mob(self):
         rocks = SlideRocks([(300, 236, 1, 0, -2, 6, 1, 408)])
         objects = rocks.objects(None, 1)

@@ -168,14 +168,43 @@ class SlideRocks:
         lower = signed_word(mob[0] + 223)
         return sequence_mode == 4 or lower < front < lower + 25
 
+    @staticmethod
+    def room_offsets(terrain, room):
+        """ComputeMobRect 5:32f6's projection of the eight rooms around the
+        native view ``room`` (a5-0x4fc0..-0x4fb2): every horizontal relation
+        passes -510 (5:3364/3380 both load 0xfe02), above -365, below +365."""
+        if terrain is None:
+            return {room: (0, 0)}
+
+        def link(native, side):
+            if not native:
+                return None
+            linked = terrain.neighbor(native - 1, side)
+            return None if linked is None else linked + 1
+
+        left, right, up, down = (link(room, side) for side in ('left', 'right', 'up', 'down'))
+        related = {left: (-510, 0), right: (-510, 0), up: (0, -365), down: (0, 365),
+                   link(up, 'left') or link(left, 'up'): (-510, -365),
+                   link(up, 'right') or link(right, 'up'): (-510, -365),
+                   link(down, 'left') or link(left, 'down'): (-510, 365),
+                   link(down, 'right') or link(right, 'down'): (-510, 365)}
+        related.pop(None, None)
+        related[room] = (0, 0)
+        return related
+
     def objects(self, terrain, room):
         """ATMSlideRock 10:1456: drawn objects (type, x, y, phase, clip) of the
-        rocks in native ``room``; x/y are room-local, y the bottom, clip the
-        ComputeMobRect 5:32f6 rectangle (top, left, bottom, right)."""
+        rocks seen from native ``room``; x/y are view coordinates, y the
+        bottom, clip the ComputeMobRect 5:32f6 rectangle (top, left, bottom,
+        right). Rocks of neighbouring rooms are offset like their rectangle
+        (the drawing position's projection is assumed to match it)."""
         drawn = []
+        offsets = self.room_offsets(terrain, room)
         for mob in self.bank:
-            if mob[5] != 6 or mob[3] == -1 or mob[2] != room:
+            if mob[5] != 6 or mob[3] == -1 or mob[2] not in offsets:
                 continue
+            shift_x, shift_y = offsets[mob[2]]
+            start = len(drawn)
             heights = list(HEIGHTS)
             if terrain is not None and self.span(terrain, mob, -1, 82):
                 # A filled upper band draws the body shorter (10:15a6).
@@ -195,6 +224,10 @@ class SlideRocks:
                 while strip < anchor:
                     add(kind, strip, y + dy, phase)
                     strip += 36
+            if shift_x or shift_y:
+                drawn[start:] = [(kind, x + shift_x, y + shift_y, phase,
+                                  (top + shift_y, left + shift_x, bottom + shift_y, right + shift_x))
+                                 for kind, x, y, phase, (top, left, bottom, right) in drawn[start:]]
         return drawn
 
     def edge(self, room, row):
