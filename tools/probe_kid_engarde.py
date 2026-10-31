@@ -11,7 +11,9 @@ GetBarrDistances 4:5eae (AddCharX 4:2bae) before SEQS 55.
 Everything runs natively (CurrentCell, ReadCell, the gate collision, the
 whole 4:5eae and GetSlideRockX 5:21f6 outside the temple). Supplied: the
 draw sound 5:4d84 (recorded) and, in the temple only, TempGetSlideRockX
-10:20fe (no rock: 0).
+10:20fe: 0 (no rock) in the terrain and gate sweeps; the rock sweep supplies
+edges around the Kid's X to the native and the port alike, so it checks
+DoKidEngarde's rock branch 6:1fba-2070/20ce-20f2, not the edge lookup.
 """
 
 import argparse
@@ -40,6 +42,18 @@ class NativeKidEngarde(NativeGateBarriers):
     RANGES[5] = RANGES[5] + ((0x21f6, 0x2224),)
     RANGES[6] = RANGES.get(6, ()) + ((0x1f04, 0x2154),)
     SUPPLIED = {(5, 0x4d84): 'sound', (10, 0x20fe): 'slide_rock'}
+    rock_edge = 0
+
+    def dispatch(self, cpu, address, size, user):
+        segment, offset = divmod(address - self.CODE_BASE, 0x10000)
+        if (segment, offset) == (10, 0x20fe) and self.rock_edge:
+            self.services['slide_rock'] += 1
+            cpu.reg_write(self.registers['d0'], self.rock_edge & 0xffff)
+            stack = cpu.reg_read(self.registers['a7'])
+            cpu.reg_write(self.registers['a7'], stack + 4)
+            cpu.reg_write(self.registers['pc'], struct.unpack('>I', cpu.mem_read(stack, 4))[0])
+            return
+        super().dispatch(cpu, address, size, user)
 
 
 MODE, SWORD_STATE = -0x5022, -0x503c
@@ -56,10 +70,11 @@ def run_probe(source):
     examples, services = {}, Counter()
 
     def case(label, level, environment, room, row, x, facing, frame, phase=None, pose=15,
-             mode=0, sequence=0, height=79, width=10):
+             mode=0, sequence=0, height=79, width=10, rock=0):
         top, bottom = 148, 148 + height
         left, right = x - width, x + width
         machine.reset(level)
+        machine.rock_edge = rock
         machine.cpu.mem_write(machine.A5 - 0x34b0, struct.pack('>6h', 0, 0, 0, 0, -32768, -32768))
         for field, value in ((ROOM, room + 1), (ROW, row), (FACING, 0 if facing else -1),
                              (X, x + NATIVE_X_ORIGIN), (TYPE, 0), (POSE, pose),
@@ -82,6 +97,7 @@ def run_probe(source):
                               actor_type=0, level_kind=environment)
         state.sequence_mode = mode
         record = SimpleNamespace(offset_x=frame[0], aux=frame[1])
+        terrain.slide_rock_edge = lambda *_args: rock
         offset = terrain.combat_draw_offset(room, row, state, record, (left, top, right, bottom - 1))
         expected = (-1, x) if offset is None else (55, x + (offset if facing else -offset))
         digest.update(struct.pack('>hh', *native))
@@ -113,6 +129,20 @@ def run_probe(source):
                         case('terrain', level, environment, room, row, x, facing,
                              FRAMES[index % 3], pose=pose, mode=mode)
                         index += 1
+        if environment == 2:
+            # Rock sweep: a supplied GetSlideRockX edge around the Kid's X
+            # (within and beyond the one-column window), both facings.
+            index = 0
+            for room in range(rooms):
+                for row in range(3):
+                    for x in range(-20, 540, 23):
+                        for facing in (True, False):
+                            for delta in (-120, -60, -52, -30, -9, -1, 0, 1, 9, 30, 52, 60, 120):
+                                pose, mode = ((15, 0), (15, 4), (15, 0))[index % 3]
+                                case('rock', level, environment, room, row, x, facing,
+                                     FRAMES[index % 3], pose=pose, mode=mode,
+                                     rock=x + NATIVE_X_ORIGIN + delta)
+                                index += 1
         # Gate sweep: the supporting cell is the gate, one behind it or one
         # ahead of it; phases, body heights, sequence 68.
         phases = range(21) if environment == 1 else range(0, 256, 9)
@@ -145,14 +175,15 @@ def run_probe(source):
                 services=dict(services),
                 result_sha256=digest.hexdigest(), executable_sha256=hashlib.sha256(raw).hexdigest(),
                 supplied=['Draw sound 5:4d84 (recorded only)',
-                          'TempGetSlideRockX 10:20fe in the temple: 0 (no sliding rock)'],
+                          'TempGetSlideRockX 10:20fe in the temple: 0 (no sliding rock), or in'
+                          ' the rock sweep the same supplied edge for the native and the port'],
                 fixtures=['LEVL 2000-2013 as stored (gate sweep patches the phase: desert five'
                           ' low bits 0-20, elsewhere the low byte 0-252 step 9)',
                           'Kid words: room, row, facing, X, type 0, pose, mode a5-0x5022,'
                           ' sequence 0/68, clipped top/bottom (heights 79/30), FRAM dx/flags,'
                           ' collision edges X -/+ 10 or 22; the Kid room equals the character'
                           ' room; column from LoadFrame 4:2a7c'],
-                exclusions=['The temple sliding-rock branch (GetSlideRockX nonzero)',
+                exclusions=['The edge lookup 10:20fe/180e itself (see test_slide_rocks)',
                             'Type-1 actors and the level-14 type-1 branch (S09_2674)',
                             'The a5-0x503c sword-state word (written, not compared)',
                             'DoEngarde 6:1e78 and its callers (GenCtrl admission)'])

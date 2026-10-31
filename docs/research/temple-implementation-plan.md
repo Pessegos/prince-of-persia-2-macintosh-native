@@ -141,3 +141,28 @@ Each stage integrates separately with the usual reservation.
   closed drawing returns with tile 26 (a reimport is needed). The loop cue
   198 follows 10:24fa (requested while a door remains and neither 197 nor
   198 plays) and 10:2328 (stopped when a door closes, then cue 27).
+- Stage 3, rock gaps closed: the crush admission adds the saved ShapeBounds
+  width a5-0x3570 (copied at 2:6454/4:23ae from 4:5d20-5d56, image width + 1
+  plus the sword extension) when the Prince faces left (native -1); a rock
+  stopping at spikes runs 5:3cee (spike bloodied 0xf0, Prince impaled in his
+  own column, SEQS 54/51, cue 281, death method 4); a rock reaching the
+  hanging Prince runs the release helper 6:1a84. Rocks in neighbouring rooms
+  draw with ComputeMobRect's projection (5:3364/3380 both pass -510, so a
+  right-hand neighbour stays off screen; -365 above, +365 below); that the
+  drawing position follows the rectangle is an assumption. The gap's
+  MarkMobRedraw rectangle is not needed (the port repaints whole frames).
+  Collide 4:589e's armed bump asks GetSlideRockX (10:20fe: right edge X+279,
+  left of it 10:180e's left edge, clipped at a wall/gate cell): X below it
+  selects SEQS 93 and disarms. DoKidEngarde 6:1fba-2070/20ce-20f2 measures
+  the draw from a rock within one column (|edge - X| - GetDist - 6) and
+  refuses with the rock behind (`tools/probe_kid_engarde.py` rock sweep).
+- Stage 4, collision: `tools/audit_temple_collision.py` runs Codex's
+  CheckBarr/CheckCollide1 references for two frames against the port's
+  wall correction in every temple room/row (X 10-500 step 7, steps +/-1/4/9,
+  both facings, armed and unarmed, empty MOB bank): 371,592 clean starts,
+  0 differences. The 113,212 differences all start already inside a
+  barrier, where the native finds no new contact and the port's deliberate
+  recovery still stops inward motion. Two rules were needed for that: the
+  temple's gates take the ruins' type-1 barrier and 4:5b0e admission, and
+  tile 43 (IsWall, level 13 only) has no barrier (GetBarrCode 0). Rock
+  overlays in CheckBarr (nonempty MOB bank) remain unrecovered.

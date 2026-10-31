@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import struct
 
 from pop2.bridge import BRIDGE_LEVEL, BRIDGE_ROOM, bridge_tension
-from pop2.coordinates import character_column_parts, native_x
+from pop2.coordinates import NATIVE_X_ORIGIN, character_column_parts, native_x
 from pop2.crevices import CREVICE_TILE
 from pop2.opponent_generation import character_column, EMPTY_TILES, WALL_TILES
 from pop2.mac_input import StepBoundary
@@ -370,10 +370,7 @@ class LevelMap:
 
     def combat_draw_offset(self, room, row, state, record, bounds):
         """DoKidEngarde 6:1f04-2126 for the Kid: the facing-relative offset
-        before SEQS 55, or None when the draw is refused.
-
-        The temple's sliding-rock branch (GetSlideRockX 5:21f6) is not
-        modelled: no rock is ever close."""
+        before SEQS 55, or None when the draw is refused."""
         environment = struct.unpack_from('>H', self.level, 0x2186)[0]
         number = struct.unpack_from('>H', self.level, 0x218a)[0]
         if (246 <= state.action <= 261 or environment == 1
@@ -385,20 +382,37 @@ class LevelMap:
             return (tile.kind in EMPTY_TILES | WALL_TILES or tile.kind == 11
                     or tile.kind == 4 and self.gate_collides(tile, bounds, state))
 
-        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        contact = floor_contact_x(state.target_x, state.facing, record)
+        column = character_column(contact)
         direction = 1 if state.facing else -1
+        x = native_x(state.target_x)
+        # 6:1fba-1ffa: the temple's sliding rock (GetSlideRockX 5:21f6)
+        # counts only within one column of the Kid's.
+        edge = self.slide_rock_edge(room, row, state, bounds)
+        if edge and abs(character_column(edge - NATIVE_X_ORIGIN) - column) > 1:
+            edge = 0
+        # Ahead: facing right up to the edge, facing left from it.
+        ahead = edge and (x <= edge if state.facing else x >= edge)
         here = self.tile(room, column, row)
         if state.facing and here.kind == 4 and self.gate_collides(here, bounds, state):
             # 6:1ffc-201c: facing right inside a blocking gate's cell.
             extra = -51
+        elif ahead:
+            # 6:2048-2070: measure from the rock (GetDist 4:3a92).
+            extra = abs(edge - x) - floor_edge_distance(contact, state.facing)
+            extra = (-3 if extra == -1 else extra) - 6
+            if extra == -1:
+                return 0
         elif obstruction(self.tile(room, column + direction, row)):
             extra = 0
         else:
             return 0
-        # 6:20a8-20fa: refused when the cell behind is obstructed too, or when
-        # a5-0x5022 (SEQS -21, sequence_mode) is 4; else 56 pixels are
-        # reserved (GetBarrDistances).
-        if obstruction(self.tile(room, column - direction, row)) or state.sequence_mode == 4:
+        # 6:20a8-20fa: refused when the cell behind is obstructed too, the
+        # rock is behind, or a5-0x5022 (SEQS -21, sequence_mode) is 4; else
+        # 56 pixels are reserved (GetBarrDistances).
+        if (obstruction(self.tile(room, column - direction, row))
+                or edge and not (x <= edge if state.facing else x >= edge)
+                or state.sequence_mode == 4):
             return None
         return min(0, self.step_boundary(room, row, state, record, bounds).clearance + extra - 56)
 
@@ -868,8 +882,11 @@ class LevelMap:
                               and (state is None or state.actor_type != 11)
                               and stone_gate_blocks(tile.foreground, bounds, state))
                 throne_gate = self.throne_gate(room, tile)
+                # The temple's gates (environment 2) take the same type-1
+                # barrier and 4:5b0e admission as the ruins' (CheckCollide1
+                # 4:54da with the temple sweep 4:536a).
                 ruins_gate = (tile.kind == 4 and not throne_gate
-                              and struct.unpack_from('>H', self.level, 0x2186)[0] == 4
+                              and struct.unpack_from('>H', self.level, 0x2186)[0] in (2, 4)
                               and (state is None or state.actor_type != 11)
                               and stone_gate_blocks(tile.foreground, bounds, state))
                 # CheckCollide 4:5674/5c76: an extended scythe (ScytheBlade-
@@ -880,6 +897,9 @@ class LevelMap:
                           and (state is None or state.actor_type not in (1, 7, 8, 11)))
                 if (tile.kind not in WALL_TILES and not desert_exit and not stone_gate
                         and not ruins_gate and not throne_gate and not scythe):
+                    continue
+                if tile.kind == 43:
+                    # IsWall, but GetBarrCode gives it no barrier (4:536a).
                     continue
                 if (tile.kind == CREVICE_TILE and bottom - top + 1 <= 34 and tile.foreground & 3 != 3
                         and (state is None or state.actor_type not in (7, 8))):

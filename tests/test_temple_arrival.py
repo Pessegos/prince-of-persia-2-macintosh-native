@@ -354,3 +354,35 @@ class LevelThirteenFlameTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+@unittest.skipUnless(TEMPLE_INSTALLED, 'Imported temple scene and scenery required')
+class TempleWallCorrectionTests(unittest.TestCase):
+    def test_temple_gates_block_and_tile_43_does_not(self):
+        # CheckBarr's sweep 4:536a gives a temple gate barrier 1 (admitted by
+        # 4:5b0e) and tile 43 no barrier (GetBarrCode 0), as Codex's
+        # references do. Before, temple gates never blocked and 43 did.
+        import struct
+        from types import SimpleNamespace
+        from pop2.game_session import GameResources
+        from pop2.terrain import LevelMap
+        from tools.audit_temple_collision import native_step
+
+        original = GameResources.load().level(10).data
+        state = SimpleNamespace(actor_type=0, source_sequence_id=2, facing=1)
+        # The step reaches the barrier's face (gate: offset 40, wall: 3).
+        for kind, foreground, old in ((4, 0, 354), (43, 0, 316), (20, 0, 316), (4, 184, 354)):
+            with self.subTest(kind=kind, foreground=foreground):
+                level = bytearray(original)
+                for column in range(10):
+                    struct.pack_into('>H', level, 21 * 60 + (10 + column) * 2, 1)
+                struct.pack_into('>H', level, 21 * 60 + 16 * 2, kind)
+                struct.pack_into('>H', level, 0x780 + 21 * 120 + 16 * 4, foreground)
+                new = old + 4
+                native, overlapped = native_step(bytes(level), 22, 1, old, new, 0, 0, 12)
+                self.assertFalse(overlapped)
+                corrected = LevelMap(bytes(level)).wall_correction(
+                    21, old, new, (new - 12, 0, new + 12, 73), (old - 12, 0, old + 12, 73), 1,
+                    physical_row=1, state=state)
+                self.assertEqual(corrected - new, native)
+                self.assertEqual(native != 0, kind in (4, 20) and foreground == 0)
