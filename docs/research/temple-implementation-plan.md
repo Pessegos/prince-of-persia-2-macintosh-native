@@ -176,3 +176,18 @@ Each stage integrates separately with the usual reservation.
   counter's 0x80 sequence (DATA a5-0x2b7c, records up to 16) and what sets
   it; 10:2cc2's caller is reached through a function pointer (assumed once
   per frame while the room is shown).
+- Backlog: the heads' column snap rebases with 4:3b30 (barrier run 20,000
+  cases, 0 mismatches) and GetBarrDistances treats tile 43 as no barrier
+  (level 13's six opponent-draw cases close).
+
+## Still open (2026-10-31)
+
+- Level 12's raw-1 opponent (actor type 10, native room 7, SEQS 105 holds
+  pose 213; SEQS 106/107 animate 213-217 with cues 241/239): about thirty
+  type-10 branches in CODE 2/3/4/6 (AutoCtrl 4:0372, LoadFrame 4:2ca2,
+  OpponentClose, DoEngarde 6:1e1c ...) need their own research block.
+- The end of level 13 (CheckPlayNIS(13, 14): NIS 3) and level 14.
+- CheckBarr's sliding-rock overlays with a non-empty MOB bank; the flame's
+  0x80 sequence; cross-room following of running opponents (FrameAdv
+  2:6550-65da).
+- A reimport is needed for the new trap-door units in temple_level10-13.
