@@ -205,7 +205,10 @@ class InputRecoveryTests(unittest.TestCase):
             self.assertEqual(scene.action, 1)
             self.assertTrue(scene.run_active)
 
-    def test_climb_chord_resolves_current_holds_without_discarding_a_complete_tapped_chord(self):
+    def test_climb_mode_five_pose_discards_taps_and_resamples_holds(self):
+        # SEQS 235's pose 149 is mode 5 (6:0576-059c clears every direction):
+        # an arrow/Up tapped at 135 is discarded, keys still held are fresh
+        # at the next sample. The port used to keep the complete tapped chord.
         for facing in (0, 1):
             direction = 1 if facing else -1
             for held_up in (False, True):
@@ -227,12 +230,21 @@ class InputRecoveryTests(unittest.TestCase):
                             scene.advance_animation()
                             if not scene.ledge_climbing:
                                 break
+                        # The completion pose 15 is shown; its gate acts next.
+                        self.assertEqual(scene.action, 15)
+                        scene.advance_animation()
                         self.assertFalse(scene.native_ledge or scene.ledge_hanging)
-                        if not held_up and held_direction:
+                        if held_up and held_direction:
+                            self.assertEqual((scene.sequence_state.sequence_id, scene.action), (3, 16))
+                        elif held_direction:
                             self.assertTrue(scene.run_active)
                             self.assertEqual(scene.action, 1)
+                        elif held_up:
+                            self.assertEqual((scene.sequence_state.sequence_id, scene.action), (28, 67))
                         else:
-                            self.assertEqual((scene.sequence_state.sequence_id, scene.action), (3, 16))
+                            for _ in range(4):
+                                scene.advance_animation()
+                            self.assertEqual((scene.sequence_state.sequence_id, scene.action), (2, 15))
 
     def test_releasing_run_jump_horizontal_adds_no_up_request_in_both_facings(self):
         for facing in (0, 1):
@@ -264,7 +276,11 @@ class InputRecoveryTests(unittest.TestCase):
                                 sequences.append(scene.sequence_state.sequence_id)
                             self.assertEqual(JUMP_VERTICAL_SEQUENCE in sequences, held_up)
 
-    def test_climb_overlap_keeps_shift_steps_and_turn_only_behavior_after_releasing_up(self):
+    def test_climb_overlap_with_shift_steps_or_turns_then_runs_from_the_turn(self):
+        # After the 149 clear the held arrow is fresh and Shift stays
+        # consumed (1, the climb's 6:19d0): Forward steps, Backward turns,
+        # and the turn's pose 48 then runs (6:062c: modifier >= 0 and
+        # Forward set). The port used to stop after the turn.
         for facing in (0, 1):
             for reverse in (False, True):
                 with self.subTest(facing=facing, reverse=reverse):
@@ -281,12 +297,14 @@ class InputRecoveryTests(unittest.TestCase):
                         scene.advance_animation()
                         if not scene.ledge_climbing:
                             break
+                    scene.advance_animation()
                     self.assertEqual(scene.sequence_state.sequence_id,
                                      STANDING_TURN_SEQUENCE if reverse else SHIFT_STEP_SEQUENCE)
                     if reverse:
                         for _ in range(12):
                             scene.advance_animation()
-                        self.assertEqual((scene.sequence_state.sequence_id, scene.action), (IDLE_SEQUENCE, 15))
+                        self.assertTrue(scene.run_active)
+                        self.assertIn(scene.sequence_state.sequence_id, (1, 200, 201, 202))
 
     def test_releasing_standing_jump_or_run_horizontal_adds_no_up_request(self):
         for facing in (0, 1):

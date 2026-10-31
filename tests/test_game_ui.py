@@ -1,3 +1,4 @@
+from itertools import product
 import unittest
 from unittest.mock import patch
 
@@ -480,6 +481,9 @@ class GameWindowTests(unittest.TestCase):
 
     def test_releasing_up_during_or_immediately_after_climb_does_not_jump(self):
         scene = self.scene
+        # Up released by the climb's mode-5 pose 149 leaves no request; one
+        # still held there is re-read fresh at 118 (4:3e84), so releasing it
+        # at the completion pose no longer cancels the next jump (native).
         for release_during in (False, True):
             with self.subTest(release_during=release_during):
                 scene.jump_to_room(9, row=1, x=240, facing=0)
@@ -496,6 +500,9 @@ class GameWindowTests(unittest.TestCase):
                 self.assertEqual(scene.action, 15)
                 if not release_during:
                     scene.set_key_state("up", False)
+                    self.tick()
+                    self.assertIn(scene.sequence_state.sequence_id, (14, 24, 28))
+                    continue
                 self.tick(20)
                 self.assertEqual((scene.action, scene.terrain_motion.row), (15, 0))
                 self.assertFalse(scene.jump_repeat_armed)
@@ -512,13 +519,15 @@ class GameWindowTests(unittest.TestCase):
         for _ in range(75):
             climbing = scene.native_ledge
             self.tick()
+            if finished and scene.ledge_climbing and scene.action == 149:
+                # Released before the 118 sample: no third jump.
+                scene.set_key_state("up", False)
             if climbing and not scene.native_ledge:
                 self.assertEqual(scene.action, 15)
                 finished.append((scene.room_id, scene.terrain_motion.row, scene.player_x))
                 if len(finished) == 2:
                     break
         self.assertEqual(finished, [(3, 0, 418), (0, 2, 367)])
-        scene.set_key_state("up", False)
         self.tick(20)
         self.assertEqual((scene.action, scene.room_id, scene.terrain_motion.row,
                           scene.player_x), (15, 0, 2, 367))
@@ -638,8 +647,8 @@ class GameWindowTests(unittest.TestCase):
         scene = self.scene
         with patch.object(scene, 'render'):
             for facing in (0, 1):
-                for kind in ('turn', 'sword', 'sword_held', 'crouch', 'jump'):
-                    with self.subTest(facing=facing, kind=kind):
+                for kind, late in product(('turn', 'sword', 'sword_held', 'crouch', 'jump'), (False, True)):
+                    with self.subTest(facing=facing, kind=kind, late=late):
                         scene.load_level(3)
                         scene.peaceful = True
                         scene.jump_to_room(0, row=2, x=80 if facing else 330, facing=facing)
@@ -652,6 +661,10 @@ class GameWindowTests(unittest.TestCase):
                                 break
                         self.assertTrue(scene.ledge_climbing)
                         scene.set_key_state('up', False)
+                        if late:
+                            # After the climb's mode-5 pose 149 (6:0576).
+                            while scene.action != 118:
+                                self.tick()
                         action = scene.action
                         if kind == 'turn':
                             scene.set_key_state('shift', False)
@@ -666,9 +679,9 @@ class GameWindowTests(unittest.TestCase):
                             scene.set_key_state(key, True)
                             if kind != 'sword_held':
                                 scene.set_key_state(key, False)
-                        # The native ledge now owns one directional bank,
-                        # including protected-climb taps. Ctrl still draws
-                        # only if held through the standing gate.
+                        # The native ledge owns one directional bank. A tap
+                        # pends until pose 149 clears it; a tap after 149
+                        # acts at the floor. Ctrl draws only if held.
                         if kind == 'turn':
                             self.assertLess(scene.directional_input.remap(
                                 facing_right=bool(facing)).right, 0)
@@ -688,10 +701,17 @@ class GameWindowTests(unittest.TestCase):
                                 if scene.sword_drawn or (kind == 'sword' and scene.action == 15):
                                     break
                                 self.tick()
-                        if kind == 'jump':
+                        if not late and kind in ('turn', 'crouch', 'jump'):
+                            self.tick(2)
+                            self.assertEqual(scene.sequence_state.sequence_id, IDLE_SEQUENCE)
+                            self.assertFalse(scene.native_ledge)
+                        elif kind == 'jump':
+                            self.tick()
                             self.assertIn(scene.sequence_state.sequence_id, (14, 24, 28))
                             self.assertEqual(scene.native_ledge, scene.sequence_state.sequence_id == 24)
                         else:
+                            if kind in ('turn', 'crouch'):
+                                self.tick()
                             self.assertEqual(scene.native_ledge, kind == 'crouch')
                             self.assertEqual(scene.ledge_hanging, kind == 'crouch')
                             self.assertEqual(scene.sequence_state.sequence_id,
@@ -983,7 +1003,9 @@ class GameWindowTests(unittest.TestCase):
                             self.assertTrue(scene.ledge_climbing)
                             self.assertEqual(scene.action, release_pose)
                             scene.horizontal_key(None, direction, True)
-                            self.assertLess(scene.directional_input.up, 0)
+                            # The climb consumed Up (6:19c8); the arrow does
+                            # not re-pend it (former host chord tolerance).
+                            self.assertEqual(scene.directional_input.up, 1)
                             self.assertLess(getattr(scene.directional_input,
                                                     'right' if direction > 0 else 'left'), 0)
                             if paused_release:
@@ -995,6 +1017,7 @@ class GameWindowTests(unittest.TestCase):
                                 self.tick()
                                 if not scene.ledge_climbing:
                                     break
+                            self.tick()
                             self.assertTrue(scene.run_active)
                             self.assertEqual(scene.run_direction, direction)
                             self.assertEqual(scene.action, 1)

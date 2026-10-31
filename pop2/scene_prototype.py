@@ -1808,7 +1808,10 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             JUMP_LANDING_SEQUENCE, IDLE_SEQUENCE
         ):
             self.player_x = frame.target_x
-            if self.waiting_controls_available() and self.update_waiting_controls(repeat=False):
+            # The climb's 15 is shown first: no GenCtrl branch admits 118/119,
+            # so the standing gate acts on the frame after it (native order).
+            if (not climb_completed and self.waiting_controls_available()
+                    and self.update_waiting_controls(repeat=False)):
                 frame = self.sequence_runtime.next_frame()
             elif (
                 self.up_held

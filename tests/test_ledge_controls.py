@@ -30,13 +30,11 @@ class LedgeSelectorTests(unittest.TestCase):
             # exactly as in the native probe. No terrain/animation claim.
             scene = SimpleNamespace(directional_input=DirectionalInput(*bank.words()),
                                     waiting_controls_available=lambda: True,
-                                    sample_waiting_controls=lambda: None,
-                                    ledge_jump_chord_direction=1)
+                                    sample_waiting_controls=lambda: None)
             LedgeControls.consume_ledge_input(scene, action)
             expected = climb_input(bank) if action == 'climb' else release_input(bank)
             self.assertEqual(scene.directional_input.words(), expected.words())
             self.assertEqual(scene.modifier_input, expected.modifier)
-            self.assertEqual(scene.ledge_jump_chord_direction, 0)
 
 
 class LedgeSceneTests(unittest.TestCase):
@@ -73,13 +71,8 @@ class LedgeSceneTests(unittest.TestCase):
         AnimationDataTests.setUpClass()
         scene = AnimationDataTests().sword_scene()
         scene.directional_input = DirectionalInput(-1, -1, -1, -1, -2)
-        scene.ledge_jump_chord_direction = -1
-        scene.ledge_auto_repeat = scene.ledge_repeat_after_tick = True
         scene.clear_waiting_controls()
         self.assertIsNone(scene.directional_input)
-        self.assertEqual(scene.ledge_jump_chord_direction, 0)
-        self.assertFalse(scene.ledge_auto_repeat)
-        self.assertFalse(scene.ledge_repeat_after_tick)
 
     def test_ctrl_can_keep_a_native_free_air_hang_after_shift_is_released(self):
         from tests.test_game_ui import GameWindowTests
@@ -120,15 +113,42 @@ class LedgeSceneTests(unittest.TestCase):
                 scene.start_sequence(10)
                 scene.advance_animation()
                 scene.set_key_state('up', False)
+                # Taps before pose 149 (mode 5) are cleared there; taps
+                # after it stay pending and Up wins at the standing gate.
+                while scene.action != 118:
+                    scene.advance_animation()
                 for name in order:
                     scene.set_key_state(name, True)
                     scene.set_key_state(name, False)
                 self.assertEqual((scene.directional_input.up, scene.directional_input.down), (-1, -1))
                 for _ in range(30):
                     scene.advance_animation()
-                    if not scene.native_ledge:
+                    if scene.sequence_state.sequence_id == 28:
                         break
                 self.assertEqual((scene.sequence_state.sequence_id, scene.action), (28, 67))
+
+    def test_climb_taps_before_the_mode_five_pose_are_discarded(self):
+        from tests.test_animation_data import AnimationDataTests
+        AnimationDataTests.setUpClass()
+        fixture = AnimationDataTests()
+        for facing, key in product((0, 1), ('up', 'down')):
+            with self.subTest(facing=facing, key=key):
+                scene = fixture.sword_scene()
+                scene.sequence_state.facing = facing
+                scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = True
+                scene.up_held = scene.jump_started_for_press = True
+                scene.in_animation_tick = True
+                scene.start_sequence(10)
+                scene.advance_animation()
+                scene.set_key_state('up', False)
+                scene.set_key_state(key, True)
+                scene.set_key_state(key, False)
+                poses = []
+                for _ in range(24):
+                    scene.advance_animation()
+                    poses.append((scene.sequence_state.sequence_id, scene.action))
+                self.assertIn((235, 149), poses)
+                self.assertEqual(poses[-1], (2, 15))
 
 
 if __name__ == '__main__':

@@ -1,7 +1,9 @@
-"""One input bank through native hanging, release and protected climbing.
+"""One input bank through native hanging, release and climbing.
 
-The input gate is native. Retaining complete tapped commands during the
-protected climb is an existing port tolerance, kept in this same bank.
+The climb (SEQS 10 -> 235) is mode 1 except pose 149, which is mode 5:
+GenCtrl's gate (6:0576-059c) clears every direction there, so taps made
+earlier in the climb are discarded and keys still held are fresh requests
+at the next sample, admitted at the standing gate after 119.
 """
 
 from dataclasses import replace
@@ -51,7 +53,7 @@ class LedgeControls(AirborneControls):
             # pending and climbs once the grip delay ends, even if released.
             self.directional_input = replace(self.directional_input, up=-1)
         self.fall_pending_up = False
-        self.waiting_step_direction = self.ledge_jump_chord_direction = 0
+        self.waiting_step_direction = 0
 
     def consume_ledge_input(self, action):
         self.waiting_controls_available()
@@ -59,7 +61,6 @@ class LedgeControls(AirborneControls):
         self.directional_input = (self.directional_input.consume('up', clear=True, modifier=1)
                                   if action == 'climb' else self.directional_input.consume('down', clear=True))
         self.modifier_input = self.directional_input.modifier
-        self.ledge_jump_chord_direction = 0
 
     def latch_fall_key(self, key, pressed):
         """Fall poses 102-105 are mode 3: GenCtrl has no branch for them and
@@ -73,19 +74,13 @@ class LedgeControls(AirborneControls):
 
     def waiting_key(self, key, pressed):
         if not getattr(self, 'native_ledge', False) or not self.waiting_controls_available():
-            if key == 'up' and not pressed and getattr(self, 'ledge_auto_repeat', False):
-                self.directional_input = replace(self.directional_input, up=0)
-                self.ledge_auto_repeat = self.ledge_repeat_after_tick = False
             return super().waiting_key(key, pressed)
         if key not in ('up', 'down', 'shift', 'ctrl'):
             return False
-        fresh = pressed and not getattr(self, key + '_held')
         setattr(self, key + '_held', pressed)
         self.sample_waiting_controls()
         if key == 'up':
             self.jump_started_for_press = pressed
-            if fresh and self.ledge_climbing and self.horizontal_input:
-                self.ledge_jump_chord_direction = self.horizontal_input
         elif key == 'down' and not pressed:
             self.down_sheathe_consumed = False
         return True
@@ -94,30 +89,16 @@ class LedgeControls(AirborneControls):
         if not getattr(self, 'native_ledge', False):
             return super().waiting_horizontal(direction, pressed)
         self.sample_waiting_controls()
-        if pressed and self.ledge_climbing and self.up_held:
-            # Retained protected-climb chord tolerance, including a complete
-            # released tap. Holding only Forward at completion instead runs.
-            self.directional_input = replace(self.directional_input, up=-1)
-            self.ledge_jump_chord_direction = self.horizontal_input
         return False
-
-    def latch_waiting_command(self, command):
-        super().latch_waiting_command(command)
-        if (getattr(self, 'native_ledge', False) and self.ledge_climbing
-                and command.kind == 'jump' and command.direction):
-            self.ledge_jump_chord_direction = command.direction
 
     def update_waiting_controls(self, *, repeat=True):
         if getattr(self, 'native_ledge', False):
             if self.waiting_controls_available():
                 self.sample_waiting_controls()
+                state = self.sequence_state
+                if self.ledge_climbing and state.cursor > 0 and state.animation_state in (4, 5, 9):
+                    self.directional_input = self.directional_input.clear_directions()
             return False
-        if getattr(self, 'ledge_repeat_after_tick', False):
-            return False
-        if getattr(self, 'ledge_auto_repeat', False):
-            if not self.up_held:
-                self.directional_input = replace(self.directional_input, up=0)
-            self.ledge_auto_repeat = False
         return super().update_waiting_controls(repeat=repeat)
 
     def native_ledge_request(self):
@@ -132,24 +113,10 @@ class LedgeControls(AirborneControls):
     def finish_native_ledge_controls(self):
         self.waiting_controls_available()
         self.sample_waiting_controls()
-        chord = getattr(self, 'ledge_jump_chord_direction', 0)
-        if chord and self.horizontal_input == chord and not self.up_held:
-            self.directional_input = replace(self.directional_input, up=0)
-        elif self.up_held and self.directional_input.up >= 0:
-            # Keep the existing host's completion pose before automatic held
-            # repetition. Fresh tapped requests still dispatch at completion.
-            self.ledge_auto_repeat = self.ledge_repeat_after_tick = True
-        if self.shift_held and self.directional_input.remap(facing_right=bool(self.sequence_state.facing)).right < 0:
-            # Retained Shift+Backward policy: complete one turn, without a
-            # run at48 from the modifier consumed by the preceding climb.
-            self.directional_input = replace(self.directional_input, modifier=-1)
-        self.ledge_jump_chord_direction = 0
 
     def clear_waiting_controls(self):
         super().clear_waiting_controls()
-        self.ledge_jump_chord_direction = 0
         self.fall_pending_up = False
-        self.ledge_auto_repeat = self.ledge_repeat_after_tick = False
 
     def retire_waiting_controls(self):
         super().retire_waiting_controls()
@@ -157,7 +124,3 @@ class LedgeControls(AirborneControls):
         if not (motion is not None and motion.falling and self.sequence_state.animation_state == 3):
             # A mode-4 free-fall or mode-5 landing frame clears the latch.
             self.fall_pending_up = False
-        if getattr(self, 'ledge_repeat_after_tick', False):
-            if self.directional_input is not None and self.up_held:
-                self.directional_input = replace(self.directional_input, up=-1)
-            self.ledge_repeat_after_tick = False
