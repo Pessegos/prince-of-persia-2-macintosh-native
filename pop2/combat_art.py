@@ -22,6 +22,25 @@ def sword_palette_for_level(prince, level_kind):
     return palette
 
 
+FLAME_SWORD_FILE = 'FlameSword.rsrc'
+
+
+def opponent_artwork(level, sword_shapes, sword_base, sword_palette, artwork=None):
+    """The level's ordinary opponent artwork, plus level twelve's flaming
+    sword (opponent set 1, 3:5f58) when FlameSword.rsrc is imported."""
+    from pop2.render_opening import load_resource_file
+
+    default = GuardArtwork(load_resource_file(artwork or guard_artwork_file(level)),
+                           sword_shapes, sword_base, sword_palette)
+    flame = None
+    if struct.unpack_from('>h', level.data, 0x21a4)[0] == 7:
+        try:
+            flame = FlameSwordArtwork(load_resource_file(FLAME_SWORD_FILE))
+        except (FileNotFoundError, KeyError):
+            flame = None
+    return OpponentArtwork(default, flame)
+
+
 def guard_artwork_file(level):
     """The ordinary opponents' file by LEVL opponent set (0x21a4; 3:5f58):
     the caverns' skeletons, the temple's birdheads (set 7), else guards."""
@@ -149,6 +168,118 @@ class GuardArtwork:
         record = self.frames[actor_frame_index(state)]
         return character_collision_bounds(state, self.bounds(state, floor_y),
                                           self.attachments[record.afrm_index], sword_drawn)
+
+
+class FlameSwordArtwork(GuardArtwork):
+    """FlameSword.rsrc: no body, only the AFRM piece in its own SHAP bank
+    (SetupSword 3:0b16-0b2a, image set 3) at AddFCharX of the piece's X."""
+
+    def __init__(self, resource):
+        self.shapes = resource["SHAP"]
+        self.base = int.from_bytes(resource["SHPL"][750]["data"][:2], "big")
+        self.frames = parse_frame_records(resource["FRAM"][750]["data"])
+        self.attachments = parse_aframe_records(resource["AFRM"][750]["data"])
+        self.palette = decode_ctbl(resource["CTBL"][750]["data"])
+        self.cache = {}
+
+    def body(self, state, palette_variant=1):
+        return None
+
+    def placement(self, state, floor_y, piece=None):
+        from pop2.combat import actor_frame_index
+
+        record = self.frames[actor_frame_index(state)]
+        kind, shape, dx, dy = self.attachments[record.afrm_index]
+        piece = shape if piece is None else piece
+        if piece < 0 or kind != 1:
+            return None
+        if piece not in self.cache:
+            image = decode_shap(self.shapes[self.base + piece]["data"], self.palette)
+            self.cache[piece] = (image, ImageOps.mirror(image))
+        image, mirrored = self.cache[piece]
+        # Native X = X +/- (FRAM X + AFRM X), Y = Y + FRAM Y + AFRM Y, with
+        # the same edge rule as an attached guard sword.
+        offset = record.offset_x + dx
+        bottom = floor_y + state.current_y + record.offset_y + dy
+        if state.facing:
+            return mirrored, state.target_x + offset - mirrored.width, bottom
+        return image, state.target_x - offset, bottom
+
+    def draw(self, image, state, floor_y, palette_variant=1, piece=None):
+        placed = self.placement(state, floor_y, piece)
+        if placed is None:
+            return
+        sprite, x, bottom = placed
+        image.paste(sprite, (x, character_sprite_top(bottom, sprite.height)), sprite)
+
+    def bounds(self, state, floor_y, piece=None):
+        placed = self.placement(state, floor_y, piece)
+        if placed is None:
+            return (state.target_x, floor_y, state.target_x, floor_y)
+        sprite, x, bottom = placed
+        return (x, character_sprite_top(bottom, sprite.height), x + sprite.width - 1, bottom)
+
+    def collision_bounds(self, state, floor_y, sword_drawn):
+        return self.bounds(state, floor_y)
+
+
+class OpponentArtwork:
+    """The loaded opponent set (a5-0x46dc, CheckLoadedOppSet 3:5278). Frame
+    records follow the set loaded for the Prince's room; each actor is drawn
+    with its own file (the port does not reproduce mismatched side rooms)."""
+
+    def __init__(self, default, flame=None):
+        self.default, self.flame = default, flame
+        self.current = default
+
+    def select_room(self, actors):
+        self.current = (self.flame if self.flame is not None
+                        and any(actor.state.actor_type == 10 for actor in actors) else self.default)
+
+    def _art(self, state):
+        return self.flame if state.actor_type == 10 and self.flame is not None else self.default
+
+    @property
+    def frames(self):
+        return self.current.frames
+
+    @property
+    def base(self):
+        return self.current.base
+
+    @property
+    def attachments(self):
+        return self.current.attachments
+
+    def body(self, state, palette_variant=1):
+        return self._art(state).body(state, palette_variant)
+
+    def draw(self, image, state, floor_y, palette_variant=1, piece=None):
+        art = self._art(state)
+        if state.actor_type == 10 and art is not self.flame:
+            return  # FlameSword.rsrc is not imported.
+        if art is self.flame:
+            art.draw(image, state, floor_y, palette_variant, piece)
+        else:
+            art.draw(image, state, floor_y, palette_variant)
+
+    def bounds(self, state, floor_y, piece=None):
+        art = self._art(state)
+        return art.bounds(state, floor_y, piece) if art is self.flame else art.bounds(state, floor_y)
+
+    def collision_bounds(self, state, floor_y, sword_drawn):
+        return self._art(state).collision_bounds(state, floor_y, sword_drawn)
+
+
+class _CurrentFrames:
+    def __init__(self, artwork):
+        self.artwork = artwork
+
+    def __getitem__(self, index):
+        return self.artwork.frames[index]
+
+    def __len__(self):
+        return len(self.artwork.frames)
 
 
 class HealthArtwork:

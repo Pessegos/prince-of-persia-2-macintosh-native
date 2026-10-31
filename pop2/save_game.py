@@ -36,6 +36,7 @@ from pop2.ruins_ai import RuinsMind
 from pop2.story_progress import FRAMES_PER_MINUTE, StoryProgress
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.skeleton import Skeleton, SkeletonRoomRecord
+from pop2.flame_sword import FlameSword
 from pop2.terrain import TerrainMotion
 from pop2.scythes import SCYTHE_STATES, Scythes
 from pop2.slide_rocks import SlideRocks
@@ -54,7 +55,7 @@ CLASSES = {cls.__name__: cls for cls in (
     Bridge, Carpet, CavernState, Dart, Darts, DesertState, Stone, GateCrush, Harbor,
     WaterEntry, Lava, LavaPool, FallingFloor, LooseFloors, OpponentGenerationPoint,
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
-    Skeleton, SkeletonRoomRecord, GuardRoomRecord, TerrainMotion, WallSpikes, Scythes,
+    Skeleton, SkeletonRoomRecord, FlameSword, GuardRoomRecord, TerrainMotion, WallSpikes, Scythes,
     RuinsMind, SlideRocks, TrapDoors,
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
@@ -185,7 +186,7 @@ def _unpack(value, resources, lava_tables, depth=0):
                 record['sequence_mode'] = legacy
     if cls.__name__ == 'Fighter':
         optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive', 'sword_lost',
-                         'ruins'))
+                         'ruins', 'flame_sword'))
     if cls is RebirthSnapshot:
         optional.add('ruins_rooms')
     if cls is Skeleton:
@@ -222,7 +223,10 @@ def _fighter_valid(actor, resources):
             or not 0 <= actor.bank_slot < 5
             or not 0 <= actor.life <= actor.max_life <= 120 or not 0 <= actor.skill < 12
             or actor.skeleton is not None and not isinstance(actor.skeleton, Skeleton)
-            or state.facing not in (0, 1) or state.actor_type not in (0, 2, 4)
+            or actor.flame_sword is not None and (not isinstance(actor.flame_sword, FlameSword)
+                                                  or state.actor_type != 10)
+            or state.facing not in (0, 1) or state.actor_type not in (0, 2, 4, 10)
+            or state.actor_type == 10 and actor.flame_sword is None
             or state.sequence_id not in resources.sequences
             or state.source_sequence_id not in resources.sequences and state.source_sequence_id != 0
             or not 0 <= state.cursor <= len(resources.sequences[state.sequence_id])
@@ -401,7 +405,7 @@ def read_snapshot(path, resources):
                 raise SaveGameError('Invalid room actors')
             for actor in actors:
                 _fighter_valid(actor, resources)
-                if actor.room != room or actor.state.actor_type not in (2, 4):
+                if actor.room != room or actor.state.actor_type not in (2, 4, 10):
                     raise SaveGameError('Invalid enemy room')
             if any(not isinstance(point, OpponentGenerationPoint) for point in points):
                 raise SaveGameError('Invalid generation point')
@@ -633,7 +637,7 @@ def restore_progress(document, resources):
                     raise SaveGameError('Invalid checkpoint room')
                 for actor in entry[0]:
                     _fighter_valid(actor, resources)
-                    if actor.room != room or actor.state.actor_type not in (2, 4):
+                    if actor.room != room or actor.state.actor_type not in (2, 4, 10):
                         raise SaveGameError('Invalid checkpoint opponent')
                 if any(not isinstance(point, OpponentGenerationPoint) for point in entry[1]):
                     raise SaveGameError('Invalid checkpoint generation point')

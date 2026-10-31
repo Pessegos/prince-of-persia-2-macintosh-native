@@ -14,6 +14,11 @@ from pop2.bridge import (bridge_checked, bridge_column, bridge_engage, bridge_ga
 from pop2.enemy_alerts import alert_path_mode
 from pop2.opponent_records import GuardRoomRecord, removed_on_room_save
 from pop2.skeleton import exit_guarded
+from pop2.flame_sword import (
+    ADVANCE_SEQUENCE as FLAME_ADVANCE, DEATH_METHOD as FLAME_DEATH_METHOD,
+    GLIDE_SEQUENCE as FLAME_GLIDE, PARRY_CUE as FLAME_PARRY_CUE,
+    PARRY_WINDOW as FLAME_PARRY_WINDOW, STRIKE_RANGE,
+)
 from pop2.opponent_selection import nearest_opponent
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.control_mapping import IDLE_SEQUENCE
@@ -134,14 +139,17 @@ class GuardSpawn:
             skill = fields[3]
             if not 0 <= skill < len(ADVANCE_CHANCE):
                 raise ValueError(f"Unsupported guard skill {skill}")
-            if opponent_type == 7 and temple_actor(fields[12]) != 2:
+            actor_type = 4 if opponent_type == 2 else 2
+            if opponent_type == 7:
                 # 6:2bca: the temple's raw kinds 1/3/9/10 become actors
-                # 10/6/12/0 (level 12's raw 1, SEQS 105); not ported yet.
-                continue
+                # 10/6/12/0; only level 12's flaming sword (raw 1) is ported.
+                actor_type = temple_actor(fields[12])
+                if actor_type not in (2, 10):
+                    continue
             spawns.append(cls(room, fields[0] // 10, scene_x(fields[1]),
                               int(fields[2] == 0), skill, fields[4], fields[13] or 3,
                               fields[6] or 1, fields[10], fields[16],
-                              4 if opponent_type == 2 else 2,
+                              actor_type,
                               tuple(fields) if opponent_type == 2 else (),
                               tuple(fields) if opponent_type in (0, 7) else ()))
         return spawns
@@ -177,6 +185,8 @@ class Fighter:
     sword_lost: bool = False
     # Ruins heads and serpents: their generator-record state (RuinsMind).
     ruins: object | None = None
+    # Level twelve's flaming sword (actor type 10).
+    flame_sword: object | None = None
 
     @property
     def state(self):
@@ -222,6 +232,9 @@ def opponent_distance(attacker, defender):
 
 def strike_range(attacker, defender):
     # CODE:6 0x5b38, ordinary guards (actor type 2), no special-level actors.
+    if attacker.state.actor_type == 10:
+        # 6:5c58: the flaming sword's own reach.
+        return STRIKE_RANGE
     opposed = attacker.state.facing != defender.state.facing
     if attacker.state.actor_type in (0, 1):
         low, high = 61, 99
@@ -367,6 +380,10 @@ class CombatEncounter:
                     fighter.skeleton = Skeleton.from_spawn(spawn)
                     fighter.skeleton.initialize(fighter, slot)
                     fighter.skeleton.settle_heap(self, fighter)
+                elif spawn.actor_type == 10:
+                    from pop2.flame_sword import FlameSword
+                    fighter.flame_sword = FlameSword()
+                    fighter.flame_sword.initialize(self, fighter)
                 else:
                     words = spawn.guard_words
                     fighter.guard_record = (GuardRoomRecord(
@@ -386,7 +403,7 @@ class CombatEncounter:
         room_records = []
         if previous_room != room:
             for actor in previous_active:
-                if actor.state.actor_type in (2, 4):
+                if actor.state.actor_type in (2, 4, 10):
                     view = self._project_fighter(actor, previous_room)
                     if view is not None:
                         room_records.append((actor, view))
@@ -419,12 +436,19 @@ class CombatEncounter:
             else:
                 self._capture_opponent_record(actor, restart_living=False, cell=opponent_row_cell(actor.row))
         self._select_opponent_bank(room)
+        art = getattr(self, 'guard_art', None)
+        if hasattr(art, 'select_room'):
+            # InitOpps -> CheckLoadedOppSet 3:5278 loads the room's set.
+            art.select_room(self.guards)
         self._restore_opponent_records()
         self.guard = self._nearest_guard() or next(iter(self.active_guards()), None)
 
     def _restore_opponent_records(self):
         for actor in self.active_guards():
-            if actor.skeleton is not None:
+            if actor.flame_sword is not None:
+                restored = actor.flame_sword.restore_pending(self, actor)
+                living = actor.flame_sword.native_alive
+            elif actor.skeleton is not None:
                 restored = actor.skeleton.restore_room(actor, actor.bank_slot)
                 living = actor.skeleton.native_alive
             else:
@@ -436,7 +460,9 @@ class CombatEncounter:
 
     @staticmethod
     def _capture_opponent_record(actor, *, restart_living, cell=None, update_height=True):
-        if actor.skeleton is not None:
+        if actor.flame_sword is not None:
+            actor.flame_sword.store_room(actor, restart_living=restart_living)
+        elif actor.skeleton is not None:
             actor.skeleton.store_room(actor, restart_living=restart_living, cell=cell)
         else:
             actor.guard_record = GuardRoomRecord.capture(
@@ -716,7 +742,8 @@ class CombatEncounter:
         # Defence and Strike both write inputs. GenCtrl then gives an attack
         # input priority over block, even if that attack pose cannot execute it.
         block = False
-        if other.action in (152, 153, 162):
+        # Defence 4:1206: the flaming sword never blocks.
+        if other.action in (152, 153, 162) and state.actor_type != 10:
             table = PARRY_BLOCK_CHANCE if self.parry_timer else BLOCK_CHANCE
             block = self._chance(table, guard)
         strike = False
@@ -840,7 +867,8 @@ class CombatEncounter:
             return
         if state.action in GUARD_POSES:
             if intent.advance:
-                select_sequence(guard, 86)
+                # 6:1e1c: the flaming sword glides 13 pixels (SEQS 108).
+                select_sequence(guard, FLAME_ADVANCE if state.actor_type == 10 else 86)
             elif intent.retreat:
                 select_sequence(guard, 57)
 
@@ -975,6 +1003,8 @@ class CombatEncounter:
                     guard.skeleton.phase = 'collapsing'
         if guard.skeleton is not None and guard.skeleton.control(self, guard):
             return
+        if guard.flame_sword is not None and guard.flame_sword.control(guard):
+            return
         if not guard.alive:
             return
         if self.rooftop_escape:
@@ -989,6 +1019,8 @@ class CombatEncounter:
                 self._brake_guard(guard, 0)
             return
         if self.level is not None and not guard.sword_drawn:
+            if guard.flame_sword is not None:
+                return  # Its unarmed AutoCtrl paths are not recovered.
             self._choose_unarmed_guard_action(guard)
             bank = (self.guards if getattr(self, '_local_opponent_bank', False)
                     else self.active_guards())
@@ -1000,9 +1032,10 @@ class CombatEncounter:
             if (state.actor_type != 4 and state.action in GUARD_POSES
                     and state.animation_state < 2):
                 # EnGarde 4:09c0-09e2 -> OnAlert 6:2536-254c ->
-                # 6:2592/25ee: lower the sword only at a ready pose.
+                # 6:2592/25ee: lower the sword only at a ready pose
+                # (6:25d4: the flaming sword glides on, SEQS 90).
                 guard.sword_drawn = False
-                select_sequence(guard, 77)
+                select_sequence(guard, FLAME_GLIDE if state.actor_type == 10 else 77)
             return
         if guard.room != player.room or guard.row != player.row:
             return
@@ -1091,6 +1124,10 @@ class CombatEncounter:
             if guard.skeleton is not None:
                 with self._local_opponents(guard):
                     guard.skeleton.try_wake(self, guard)
+            elif guard.flame_sword is not None:
+                # FrameAdv 2:6242-624a runs 4:14c6 for a type-10 bank too.
+                with self._local_opponents(guard):
+                    guard.flame_sword.try_wake(self, guard)
 
     def shake_bones(self, room, row):
         for guard in self.active_guards():
@@ -1114,7 +1151,8 @@ class CombatEncounter:
             return
         guard.alert_mode = alert_path_mode(
             lambda column: self._guard_tile(guard, column),
-            self._supporting_column(guard), self._supporting_column(self.player), self.level_kind)
+            self._supporting_column(guard), self._supporting_column(self.player), self.level_kind,
+            floating=guard.state.actor_type == 10)
         if guard.alert_mode == 3 and not any(g is guard for g in primary):
             guard.alert_mode = 2
         if guard.alert_mode:
@@ -1125,7 +1163,7 @@ class CombatEncounter:
         state = fighter.state
         art = getattr(self, "guard_art", None)
         frames = getattr(self, "player_frames", None)
-        if state.actor_type in (2, 4):
+        if state.actor_type in (2, 4, 10):
             record = art.frames[guard_frame_index(state.action)] if art is not None else None
         else:
             record = frames[state.action] if frames is not None else None
@@ -1412,15 +1450,39 @@ class CombatEncounter:
             # Allow native offscreen entry; each room has its own floor extent.
             entry = guard.entry_x or 0
             low, high = min(0, entry), max(self.platform_edge, entry)
-            if terrain is not None and getattr(self, "guard_art", None) is not None:
+            if (terrain is not None and getattr(self, "guard_art", None) is not None
+                    and guard.flame_sword is None):
                 self._advance_guard_terrain(guard, old_x, old_bounds)
             else:
+                # CheckFloor 4:35ca skips the floating sword; its barrier
+                # collisions without a body shape are not recovered, so it
+                # stays within its room's floor extent.
                 guard.state.target_x = max(low, min(high, guard.state.target_x))
             guard.state.current_x = guard.state.target_x
             if 0 <= guard.state.target_x < 510:
                 guard.entry_x = None
             if guard.recovering and guard.state.sequence_id == 227:
                 guard.recovering = False
+        self._present_flame_swords()
+
+    def _present_flame_swords(self):
+        # SetupSword 3:0b1c/4:1be4 and SetupOpponent 3:0f3e run as the Kid
+        # room's opponents are drawn, after this frame's animation.
+        art = getattr(self, 'guard_art', None)
+        for guard in self.active_guards():
+            flame = guard.flame_sword
+            if flame is None or art is None or guard.room != self.player.room:
+                continue
+            state = guard.state
+            if state.action == 0:
+                flame.piece = None
+                continue
+            record = art.frames[guard_frame_index(state.action)]
+            piece = art.attachments[record.afrm_index][1]
+            if piece < 0:
+                flame.piece = None
+                continue
+            flame.present(guard, piece, self.rng)
 
     def _physics_admitted(self, guard):
         # FrameAdv 2:6550-65d6: Move, the terrain checks, EnemyCollide and
@@ -1455,9 +1517,11 @@ class CombatEncounter:
         motion.room, motion.row = guard.room, guard.row
         old_room = guard.room
         if not hasattr(self, "guard_physics"):
-            frames = {action: self.guard_art.frames[guard_frame_index(action)]
+            # The flaming sword has no terrain physics (CheckFloor 4:35ca).
+            source = getattr(self.guard_art, 'default', self.guard_art).frames
+            frames = {action: source[guard_frame_index(action)]
                       for action in (*range(149, 255), *range(102, 107))
-                      if guard_frame_index(action) < len(self.guard_art.frames)}
+                      if guard_frame_index(action) < len(source)}
             self.guard_physics = RooftopPhysics(self.terrain, frames)
         bounds = lambda: self.guard_art.bounds(guard.state, floor_y(motion.row))
         collision_bounds = lambda: self.guard_art.collision_bounds(
@@ -1645,7 +1709,8 @@ class CombatEncounter:
         if name == "player" and not target.alive:
             # CheckStab 6:5704-5748: ordinary type-2 guards on supported
             # levels (LEVL 21a4 == 0) select 14, not skeleton method 2.
-            death_method = 14 if attacker.state.actor_type == 2 else 2
+            death_method = (14 if attacker.state.actor_type == 2 else
+                            FLAME_DEATH_METHOD if attacker.state.actor_type == 10 else 2)
         return CombatEvent("hit" if target.alive else "death", name, death_method)
 
     def kill_room_enemies(self, room):
@@ -1653,6 +1718,13 @@ class CombatEncounter:
         actors = self.room_encounters.get(room, ((), ()))[0]
         for actor in tuple(actors):
             if actor.room != room:
+                continue
+            if actor.flame_sword is not None:
+                # CheckCheatKeys 2:4c4a-4c70: SetSkelTimer(480) and SEQS 107.
+                if actor.alive:
+                    actor.flame_sword.fall(actor)
+                    actor.flame_sword.song_pending = False
+                    actor.runtime.next_frame()
                 continue
             if actor.alive:
                 actor.life = 1
@@ -1696,21 +1768,31 @@ class CombatEncounter:
             if view is None or not contact_allowed(attacker, view):
                 continue
             distance = opponent_distance(attacker, view)
+            flame = attacker.flame_sword
+            low, high = FLAME_PARRY_WINDOW if flame is not None else (61, 99)
+            if defender.flame_sword is not None:
+                # TestStrike 6:590a: the Prince's strikes never reach it.
+                continue
             if (attacker.state.facing != defender.state.facing
-                    and 61 <= distance <= 99
+                    and low <= distance <= high
                     and defender.sword_drawn and defender.state.action in BLOCK_POSES):
                 # CODE:6 0x5a3c: blocked attacker SEQS:69, defender action 161.
+                # 6:5a74: a parried flaming sword loses a life instead.
                 attacker.contact_consumed = True
-                select_sequence(attacker, 69)
-                attacker.runtime.next_frame()
-                attacker.state.current_x = attacker.state.target_x
+                if flame is not None:
+                    flame.parried(attacker)
+                else:
+                    select_sequence(attacker, 69)
+                    attacker.runtime.next_frame()
+                    attacker.state.current_x = attacker.state.target_x
                 defender.state.action = 161
                 if name == "guard":
                     self.parry_timer = 4
                 else:
                     # TestStrike 6:5a48: a blocked Prince targets the blocker.
                     self.target_cache = defender
-                events.append(CombatEvent("parry", target_name))
+                events.append(CombatEvent("parry", target_name,
+                                          sound=FLAME_PARRY_CUE if flame is not None else None))
             elif attacker.state.action == 154:
                 attacker.contact_consumed = True
                 low, high = strike_range(attacker, defender)

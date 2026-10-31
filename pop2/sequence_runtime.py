@@ -119,6 +119,10 @@ class SequenceRuntime:
                 self.state.sequence_id = target_sequence
                 self.state.cursor = 0
             elif opcode == -2:
+                if self.state.actor_type == 10:
+                    # AnimChar 4:2ca2-2cb4: the flaming sword's turn first
+                    # moves it AddCharX(25) along its old facing.
+                    self.state.target_x += 25 if self.state.facing else -25
                 self.state.facing = 1 - self.state.facing
             elif opcode == -5:
                 delta = self._next_operand(opcode, opcode_cursor)

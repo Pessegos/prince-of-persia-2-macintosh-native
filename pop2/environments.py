@@ -942,6 +942,13 @@ class Caverns(Environment):
                     and not any(audio.sound_playing(cue) for cue in (61, 68, 69))):
                 audio.add_song(63)
                 skeleton.victory_pending = False
+            flame = guard.flame_sword
+            if flame is not None and flame.song_pending:
+                from pop2.flame_sword import FALL_SONG
+
+                # FlameSwordDecLifePts 4:1cb6: AddSong(238) as it drops.
+                audio.add_song(FALL_SONG)
+                flame.song_pending = False
             if skeleton is not None and skeleton.rise_song_pending:
                 # SkelDoneShaking 4:1b1c-1b30: AddSong(112) unless playing.
                 if not audio.song_playing(112):

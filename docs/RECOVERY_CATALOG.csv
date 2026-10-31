@@ -205,7 +205,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,ShakeBones,0x1898,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,4
 4,Characters 2,SkelAddOpponent,0x198a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,7
 4,Characters 2,SkelDoneShaking,0x1a86,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,12
-4,Characters 2,FlameSwordDecLifePts,0x1c36,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,5
+4,Characters 2,FlameSwordDecLifePts,0x1c36,jump_table,partial,pop2/flame_sword.py;pop2/combat.py,"parried type-10 strike: one life, SEQS 103 + cue 10 + SetCharFloor, last life SEQS 107/SetSkelTimer 480/song 238; source reading with focused regressions, no native probe",1,5
 4,Characters 2,TriggerJinnee,0x1d64,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,12
 4,Characters 2,CutToKidRoom,0x2338,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,9
 4,Characters 2,GetKidIdxAsOpp,0x2442,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,0
@@ -241,7 +241,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,MakeFCharClipRect,0x4432,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,2
 4,Characters 2,IndexChar,0x4558,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,1
 4,Characters 2,IsCharNonViewable,0x471e,jump_table,partial,pop2/render_opening.py,settled Prince/ordinary guard rooftop corpses except native rooms 15/16/19; guard variant 228 included,3,1
-4,Characters 2,IsDeadPos,0x47a0,jump_table,partial,pop2/rebirth.py,Prince dead-pose IDs only,10,0
+4,Characters 2,IsDeadPos,0x47a0,jump_table,partial,pop2/rebirth.py;pop2/flame_sword.py,Prince dead-pose IDs; type-10 pose 213,10,0
 4,Characters 2,LoadShad,0x4ac0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,31,0
 4,Characters 2,CheckBarr,0x4e34,jump_table,partial,pop2/terrain.py;tools/probe_temple_collision_banks.py,"temple4:4e34 history/generated interval/three row sweeps/incoming masks verified26370 native calls; real rock queries/overlays against empty MOB bank, supplied body/previous banks; nonempty rocks/floating ceiling/response excluded",1,20
 4,Characters 2,InitColDetBufs,0x50da,decoded,partial,tools/probe_temple_floating_ceiling.py,"decoded marker4:50da actually executes floating ceiling contact, not history entry4:5152; actual ReadCell/IsSpace/backoff/JumpSeq229 and CheckBarr caller, supplied body/empty MOB/Resource Manager; no animation or full frame",1,9

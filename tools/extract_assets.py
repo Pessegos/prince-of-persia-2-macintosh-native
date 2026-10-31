@@ -23,7 +23,8 @@ from pop2.paths import ASSET_DIR
 
 RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Skeleton.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc", "NISTree.rsrc",
                   "Ruins.rsrc", "Head.rsrc", "TNIS1.rsrc", "TNIS2.rsrc", "TNIS3.rsrc", "ThroneNIS.rsrc",
-                  "Horse.rsrc", "TempleNIS.rsrc", "Temple.rsrc", "Birdhead.rsrc")
+                  "Horse.rsrc", "TempleNIS.rsrc", "Temple.rsrc", "Birdhead.rsrc",
+                  "FlameSword.rsrc")
 REQUIRED_RESOURCES = {
     "Prince.rsrc": {"LEVL", "SEQS", "SHAP", "SHPL", "CTBL", "NFNT"},
     "Kid.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
@@ -51,6 +52,8 @@ REQUIRED_RESOURCES = {
     "Temple.rsrc": {"PIEC", "SHAP", "CTBL", "CUST"},
     # The temple's opponents (set 7).
     "Birdhead.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
+    # Level twelve's flaming sword (opponent set 1, actor type 10).
+    "FlameSword.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
 }
 
 

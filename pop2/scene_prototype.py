@@ -15,7 +15,7 @@ from pop2.combat import (
     PLAYER_COMBAT_TURN_SEQUENCE, actor_frame_index, contact_allowed,
 )
 from pop2.combat_art import (
-    GuardArtwork, HealthArtwork, HitArtwork, actor_draw_order, guard_artwork_file,
+    HealthArtwork, HitArtwork, _CurrentFrames, actor_draw_order, opponent_artwork,
     slab_crush_draw_state, sword_palette_for_level,
 )
 from pop2.control_mapping import (
@@ -347,13 +347,13 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         sword_palette = sword_palette_for_level(self.resources.prince, game.level.kind)
         guard_art = health_art = hit_art = None
         if game.combat is not None:
-            artwork = ("Head.rsrc" if getattr(game.combat, 'ruins', None) is not None
-                       else guard_artwork_file(game.level))
-            guard_art = GuardArtwork(load_resource_file(artwork), self.sword_shapes,
-                                     self.first_sword_shape_id, sword_palette)
+            artwork = "Head.rsrc" if getattr(game.combat, 'ruins', None) is not None else None
+            guard_art = opponent_artwork(game.level, self.sword_shapes, self.first_sword_shape_id,
+                                         sword_palette, artwork)
+            guard_art.select_room(game.combat.guards)
             health_art = HealthArtwork(self.kid, palette, self.first_shape_id)
             hit_art = HitArtwork(self.kid, palette, self.first_shape_id,
-                                 self.frames, guard_art.frames)
+                                 self.frames, _CurrentFrames(guard_art))
             game.combat.guard_art = guard_art
         if game.caverns is not None and initialize_world:
             game.caverns.configure_level_entry(renderer.cavern_program, game)
@@ -488,9 +488,9 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 desert=game.desert, caverns=game.caverns)
             renderer.animated_layer(Image.alpha_composite(frame, room.foreground), game.room_id,
                 game.harbor, front=True, desert=game.desert, caverns=game.caverns)
-            artwork = GuardArtwork(load_resource_file(
-                guard_artwork_file(game.level)), self.sword_shapes,
-                self.first_sword_shape_id, sword_palette_for_level(self.resources.prince, game.level.kind))
+            artwork = opponent_artwork(
+                game.level, self.sword_shapes, self.first_sword_shape_id,
+                sword_palette_for_level(self.resources.prince, game.level.kind))
             for guard in game.combat.visible_guards():
                 artwork.bounds(guard.state, floor_y(guard.row))
         except (ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
@@ -3351,8 +3351,9 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                     shift = record.offset_x if state.facing else -record.offset_x
                     state = replace(state, target_x=neck[0] - shift,
                                     current_y=neck[1] - ground - record.offset_y)
-                self.guard_art.draw(layer, state, ground, guard.palette_variant)
-                bounds = self.guard_art.bounds(state, ground)
+                piece = getattr(getattr(guard, 'flame_sword', None), 'piece', None)
+                self.guard_art.draw(layer, state, ground, guard.palette_variant, piece=piece)
+                bounds = self.guard_art.bounds(state, ground, piece=piece)
                 actors.append((state, record, bounds, guard.row, layer))
         player_layer = Image.new("RGBA", frame.size)
         draw_state, draw_height = environment.drawn_player(self.sequence_state)

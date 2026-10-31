@@ -3,7 +3,7 @@
 from pop2.opponent_generation import EMPTY_TILES, OBSTACLE_TILES, WALL_TILES
 
 
-def alert_path_mode(tile_at, guard_column, player_column, level_kind):
+def alert_path_mode(tile_at, guard_column, player_column, level_kind, floating=False):
     low, high = sorted((guard_column, player_column))
     # 2:6fc2-6fce excludes a gate at the right endpoint, then skips
     # the scan entirely if its endpoints meet.
@@ -15,6 +15,10 @@ def alert_path_mode(tile_at, guard_column, player_column, level_kind):
         tile = tile_at(column)
         if tile.kind in WALL_TILES:
             return 0
+        if floating:
+            # CheckAlert 2:704c-7068: for the flaming sword (type 10) gaps,
+            # obstacles and closed gates neither limit nor block it.
+            continue
         if (tile.kind in EMPTY_TILES | OBSTACLE_TILES
                 or tile.kind == 4 and tile.foreground & 255 < 104):
             # 2:7084-709c uses GetBlock's room-normalized column.

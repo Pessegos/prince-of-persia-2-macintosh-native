@@ -126,7 +126,7 @@ Each stage integrates separately with the usual reservation.
 - DrawObjLoose 3:4168: falling temple floors draw pieces 28/29.
 - Stage 5, birdheads (first part): opponent set 7's initial records spawn
   as ordinary type-2 opponents (6:2bca: raw 7 -> actor 2; raw 1/3/9/10 ->
-  10/6/12/0 are skipped, so level 12's raw-1 SEQS 105 actor is missing),
+  10/6/12/0 were skipped; raw 1, the flaming sword, is now ported: flame-sword.md),
   drawn from Birdhead.rsrc (now imported). Its SHAP 751 is LZ-packed
   (flag 0x0400): `unpack_shape_lz` follows UnpackLZ 17:3aa8 (LZSS, 1,024
   ring from 958). The AI is the ordinary guard's (no Birdhead-specific
@@ -182,10 +182,9 @@ Each stage integrates separately with the usual reservation.
 
 ## Still open (2026-10-31)
 
-- Level 12's raw-1 opponent (actor type 10, native room 7, SEQS 105 holds
-  pose 213; SEQS 106/107 animate 213-217 with cues 241/239): about thirty
-  type-10 branches in CODE 2/3/4/6 (AutoCtrl 4:0372, LoadFrame 4:2ca2,
-  OpponentClose, DoEngarde 6:1e1c ...) need their own research block.
+- Level 12's raw-1 opponent is the flaming sword (actor type 10,
+  FlameSword.rsrc): first port in `pop2/flame_sword.py`, rules and gaps in
+  `flame-sword.md` (a reimport is needed for FlameSword.rsrc).
 - The end of level 13 (CheckPlayNIS(13, 14): NIS 3) and level 14.
 - CheckBarr's sliding-rock overlays with a non-empty MOB bank; the flame's
   0x80 sequence; cross-room following of running opponents (FrameAdv
