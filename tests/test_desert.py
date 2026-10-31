@@ -550,6 +550,18 @@ class OriginalDesertTests(unittest.TestCase):
         self.assertIsNone(scene.game.desert)
         self.assertGreater(len(scene.native_viewport.getcolors(512 * 384)), 100)
 
+    def test_cave_exit_hands_over_at_phase_nineteen(self):
+        # DesertFunc 18:02f8 tests only X < 207 in native room 1; 4:5b0e
+        # already lets the body through at phase 19 (formerly the port
+        # waited for exit_open, phase 20).
+        scene = self.scene
+        scene.copy_protection_enabled = False
+        scene.jump_to_room(0, x=90)
+        scene.game.desert.gate = 19
+        scene.sequence_state.current_x = scene.sequence_state.target_x = scene.player_x = -1
+        scene.advance_level_events()
+        self.assertEqual((scene.game.level.number, scene.room_id), (3, 0))
+
     def test_closed_gate_blocks_walk_and_open_gate_does_not(self):
         terrain = self.scene.level_map
         bounds = (60, 160, 80, 226)

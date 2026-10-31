@@ -267,7 +267,10 @@ class Desert(Environment):
                         scene.audio.add_song(cue)
                 else:
                     scene.sequence_state.sound_events.append(cue)
-            entering_cavern = scene.room_id == 0 and desert.exit_open and scene.player_x < 0
+            # DesertFunc 18:02f8-0332: in native room 1 the level ends once
+            # the Kid's X is left of the origin, whatever the exit's phase;
+            # only the gate collision (4:5b0e, open from phase 19) holds him.
+            entering_cavern = scene.room_id == 0 and scene.player_x < 0
             if (entering_cavern and getattr(scene, "copy_protection_enabled", True)
                     and not getattr(scene, "copy_verified", False)):
                 from pop2.copy_protection import CopyProtection

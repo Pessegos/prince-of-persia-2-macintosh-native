@@ -23,8 +23,10 @@ Keeping only the marked stone raised starts the original counter and cues 46,
 55 and 53, then opens the exit with song 47 (18:0050-0166). The gate takes twenty
 animation steps; effect 17 waits for cue 55 to finish and stops after phase 20
 (18:067c-0706). The phase lives in the exit cell's five low foreground bits.
-The gate collision 4:5b0e lets the body through from phase 19, one frame
-before the phase-20 cavern entry; DoRunJump's gate test (low byte below 104)
+The gate collision 4:5b0e lets the body through from phase 19. DesertFunc's
+exit check (18:02f8-0332) then ends the level as soon as the Kid's X in native
+room 1 is left of the origin (native X < 207), whatever the phase: the port
+waited for phase 20 (`exit_open`) until 2026-10-31. DoRunJump's gate test (low byte below 104)
 always obstructs a running jump, open or not
 ([gate barriers](research/gate-barrier-distances.md)). DrawDsrtExit (18:074c-0788) shifts the door and its wall symbol
 three pixels **left** per phase, at unchanged heights, on background pass 11.
