@@ -46,7 +46,9 @@ def run_probe(source):
     count = 0
     # Imported geometry; compare only undefined cells reached by real links.
     # The caller's origin remains in a5-4fc2 during GetUndefineCellId.
-    for number in range(3, 10):
+    # Every level; a5-0x4fbc is the Kid room's real upper link (3:1ab0),
+    # so the ruins' top-row air (4:2944-2954) is compared as well.
+    for number in range(1, 15):
         data = levels[2000 + number - 1]['data']
         terrain = LevelMap(data)
         for room, column, row in product(range(32), range(-2, 12), range(-2, 6)):
@@ -55,7 +57,7 @@ def run_probe(source):
                 continue
             cells.reset(data)
             cells.put_word(-0x4fc2, room + 1)
-            cells.put_word(-0x4fbc, 1)  # Ordinary ReadCell, not the top-row override.
+            cells.put_word(-0x4fbc, struct.unpack_from('>H', data, 0x2080 + room * 8 + 4)[0])
             original = cells.call(4, 0x28b6, (column, row))
             if original != tile.kind:
                 raise AssertionError((number, room + 1, column, row, original, tile.kind))
@@ -76,7 +78,8 @@ def run_probe(source):
                 sources=['4:28b6-29c0', '4:374a-3786'],
                 supplied=['Void death: DecLifePts and SetMode recorded, not executed'],
                 exclusions=['Not a full FrameAdv/CutChar trace or audio waveform comparison',
-                            'Undefined cells: imported levels 3-9, ordinary top-row flag',
+                            'Undefined cells: rooms 1-32 of LEVL 2000-2013, the Kid room as the'
+                            ' lookup origin',
                             'Void death: Prince only; NPC/redraw endpoints excluded'])
 
 

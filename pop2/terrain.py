@@ -118,7 +118,7 @@ class LevelMap:
 
     def tile(self, room, column, row):
         # Same vertical-before-horizontal link traversal as GetBlock/Cut.
-        origin = room
+        origin, wanted = room, (column, row)
         while not 0 <= column < 10 or not 0 <= row < 3:
             if row < 0:
                 direction, row = "up", row + 3
@@ -130,13 +130,7 @@ class LevelMap:
                 direction, column = "right", column - 10
             room = self.neighbor(room, direction)
             if room is None:
-                # GetUndefineCellId 4:28e8/2956-2988: rooftop void and the
-                # level-six cliff / level-nine outside room are air. Ordinary
-                # ruins boundaries stay walls, including their AI clearances.
-                level_kind = struct.unpack_from(">H", self.level, 0x2186)[0]
-                number = struct.unpack_from(">H", self.level, 0x218a)[0]
-                air = level_kind == 5 or level_kind == 4 and (number, origin) in ((6, 26), (9, 15))
-                return Tile(0 if air else 20)
+                return Tile(self.undefined_cell(origin, *wanted))
         index = row * 10 + column
         kind = struct.unpack_from(">H", self.level, room * 60 + index * 2)[0]
         fg, bg = struct.unpack_from(">2H", self.level, 0x780 + room * 120 + index * 4)
@@ -190,6 +184,33 @@ class LevelMap:
         if current in (right, below('right', right)):
             return x + ROOM_WIDTH
         return x
+
+    def undefined_cell(self, room, column, row):
+        """GetUndefineCellId 4:28b6-29b8 for a cell past a missing link.
+
+        ReadCell passes its original column and row; the room tests read the
+        Kid room a5-0x4fc2, taken here as the room the lookup started from.
+        """
+        environment = struct.unpack_from(">H", self.level, 0x2186)[0]
+        number = struct.unpack_from(">H", self.level, 0x218a)[0]
+        if environment == 5:
+            return 0  # Rooftop void.
+        if environment == 6:
+            # 4:28ee-2942: native rooms 7-8 are walled above the floor rows;
+            # room 3's left/right edge on the bottom row.
+            if room in (6, 7):
+                return 20 if row < 3 else 0
+            return 20 if room == 2 and (column < 0 or column == 9) and row == 2 else 0
+        if environment == 4:
+            # 4:2944-2988: the row above a room without an upper link, the
+            # level-six cliff and the level-nine outside room are air.
+            if row == -1 and self.neighbor(room, "up") is None:
+                return 0
+            return 0 if (number, room) in ((6, 26), (9, 15)) else 20
+        if environment == 2:
+            # 4:298a-29b4: level thirteen's chasm rooms 4 and 13.
+            return 0 if number == 13 and room in (3, 12) else 20
+        return 20
 
     def gate_collides(self, tile, bounds, state=None):
         # Gate collision 4:5b0e has no environment table: the desert's

@@ -2065,5 +2065,41 @@ class RooftopSceneTests(unittest.TestCase):
             self.assertEqual(c.guards[0].life, 1)
 
 
+
+class UndefinedCellTests(unittest.TestCase):
+    @staticmethod
+    def level(environment, number, rooms=14):
+        level = bytearray(0x49ca)
+        struct.pack_into('>3H', level, 0x2186, environment, 0, number)
+        struct.pack_into('>H', level, 0x2180, rooms)
+        return LevelMap(bytes(level))
+
+    def test_cells_past_missing_links_follow_getundefinecellid(self):
+        # GetUndefineCellId 4:28b6-29b8 by environment and Kid room.
+        cases = (
+            (5, 2, 0, 10, 1, 0),     # rooftop void
+            (1, 2, 0, -1, 1, 20),    # desert and caverns: wall
+            (3, 4, 5, 10, 1, 20),
+            (4, 6, 5, 10, 1, 20),    # ruins: wall beside the room
+            (4, 6, 5, 4, -1, 0),     # ruins: air above a room without an upper link
+            (4, 6, 26, 10, 1, 0),    # level-six cliff room 27
+            (4, 9, 15, -1, 1, 0),    # level-nine outside room 16
+            (2, 10, 3, 10, 1, 20),   # temple: wall
+            (2, 13, 3, -1, 1, 0),    # level-thirteen chasm rooms 4 and 13
+            (2, 13, 12, 10, 1, 0),
+            (6, 14, 6, 10, 1, 20),   # palace rooms 7-8 above the floor rows
+            (6, 14, 7, 4, 3, 0),
+            (6, 14, 2, -1, 2, 20),   # palace room 3, bottom row edges
+            (6, 14, 2, -1, 1, 0),
+            (6, 14, 5, 10, 1, 0),
+        )
+        for environment, number, room, column, row, kind in cases:
+            with self.subTest(environment=environment, number=number, room=room,
+                              column=column, row=row):
+                tile = self.level(environment, number).tile(room, column, row)
+                self.assertIsNone(tile.room)
+                self.assertEqual(tile.kind, kind)
+
+
 if __name__ == "__main__":
     unittest.main()

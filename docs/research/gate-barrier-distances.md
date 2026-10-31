@@ -135,11 +135,11 @@ step 9, both facings, three FRAM dx/flags; poses 15/246/261/262, modes
 0/2/4) and a gate sweep (the supporting cell is the gate, one behind or one
 ahead; desert phases 0-20 or the low byte 0-252 step 9; heights 79/30,
 sequence 68, edges -/+ 10 or 22): 262,056 cases (141,906 terrain, 120,150
-gate), 127,735 refusals, 32,458 moved. 30 mismatches remain, all in levels
-13-14 at a room edge without a neighbour (column -1/0/9/10): the 4:5eae
-distance to the undefined cell there differs from `step_boundary`; those
-levels are not playable. Before the change: 150,938 mismatches (mostly
-refusals). Result SHA256:
+gate), 127,735 refusals, 32,458 moved, zero mismatches. The last 30 (levels
+13-14, a room edge without a neighbour) came from `LevelMap.tile` lacking
+GetUndefineCellId's temple and palace branches, translated since
+([opponent barriers](opponent-barriers.md)). Before the change: 150,938
+mismatches (mostly refusals). Result SHA256:
 `f6c15fcde04feb72def317cf583165ea3fec4feada4e999eb8ca4cdac0a02313`.
 
 Excluded: the sliding-rock branch, type 1 and 9:2674, a5-0x503c, DoEngarde

@@ -69,10 +69,9 @@ LoadFrame 4:2a72 (inert).
   216.
 - Gate sweep: every gate, desert phases 0-20 or the low byte 0-252 step 9.
 - 511,788 cases (413,888 barrier, 97,900 gate): 188,633 responses, all SEQS
-  65; zero mismatches in levels 1-12. 55 level-13 cases differ: room 4
-  (native) column -1, where GetUndefineCellId 4:298a gives a space, not a
-  wall (`LevelMap.tile` lacks the temple and palace branches; see the open
-  task below).
+  65; zero mismatches. The last 55 (level 13, native room 4, column -1) came
+  from `LevelMap.tile` lacking GetUndefineCellId's temple branch (a space
+  there, not a wall); see below.
 - Result SHA256 (native results only):
   `4e30ed9b6c014fd7c688650edabedb7e2333887b2623ca869f63268972a9d441`.
 
@@ -136,3 +135,29 @@ trajectory reaches a gate cell, so the question has no gameplay effect.
 ```powershell
 python -m tools.probe_mob_dart --source PATH_TO_RECOVERY --output rendered/mob-dart.json
 ```
+
+## GetUndefineCellId 4:28b6 (cells past a missing link)
+
+ReadCell passes its original column and row to 4:28b6 when a link is
+missing; the room tests read the Kid room a5-0x4fc2:
+
+- Rooftops (environment 5): space. Desert and caverns: wall 20.
+- Ruins (4): space for the row above a Kid room without an upper link
+  (a5-0x4fbc = 0, row -1), outside level six's room 27 and level nine's room
+  16; else wall.
+- Temple (2): space in level thirteen's rooms 4 and 13 (the chasms), else
+  wall.
+- Palace (6): wall beside rooms 7-8 above the floor rows (row < 3) and at
+  room 3's bottom-row edges (column < 0 or 9, row 2); else space.
+
+`LevelMap.undefined_cell` translates all of it, taking the room the lookup
+started from as the Kid room. Before, only the rooftop void and the two ruins
+exteriors were air. `tools/probe_cliff_void.py` now covers every level with
+the room's real upper link: 19,794 undefined cells, zero mismatches (the old
+rule differed in 3,082: 840 ruins top-row cells, 116 in level 13, 2,126 in
+level 14). The DoKidEngarde, gate-barrier, standing-turn and Prince-turn
+probes reran with their native hashes unchanged; DoKidEngarde's 30 and
+EnemyCollide's 55 remaining cases now match.
+
+Player-visible: in the ruins (levels 6-7 here) the cell above a room with no
+upper link is now air instead of a wall, as natively.

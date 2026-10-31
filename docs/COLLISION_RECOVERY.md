@@ -706,7 +706,16 @@ is unchanged.
 ### Ruins Cliff Exterior And Terminal Fall
 
 GetUndefineCellId 4:2956-2988 returns air outside native room27 of level6
-and native room16 of level9. Ordinary ruins boundaries still return wall20.
+and native room16 of level9. Ordinary ruins boundaries still return wall20,
+except the row above a Kid room without an upper link (4:2944-2954), which
+is air. Since 2026-10-31 `LevelMap.undefined_cell` also has the temple
+branch (level thirteen's chasm rooms 4 and 13 are air, 4:298a-29b4) and the
+palace's (environment 6: air except walls beside rooms 7-8 above the floor
+rows and room 3's bottom-row edges, 4:28ee-2942); rooftops stay air and the
+desert/caverns walls. `tools/probe_cliff_void.py` compares 19,794 undefined
+cells of LEVL 2000-2013 with the room's real upper link (formerly 8,800 in
+levels 3-9 with the top-row branch forced off); the old rule differed in
+3,082 of them (840 in the ruins).
 The port previously used wall20 for both exteriors: the collision sweep pulled
 the running jump backwards after the Prince left the cliff. Restoring those
 air cells preserves the existing native sequences, gravity and velocities.
