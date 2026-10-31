@@ -128,9 +128,31 @@ cases (110,424 terrain, 22,968 gate), zero mismatches. Before the change:
 1,485 gate cases at negative X (floor division). Result SHA256:
 `ff0dc79ba812cab08a71d490c281ecb3f8f4f281779c78ec45eb997053344719`.
 
-Open: the body 4:5b0e reads is whatever character copy the mob animator
-leaves in a5-0x5056; the port passes the Prince's. No shipped dart
-trajectory reaches a gate cell, so the question has no gameplay effect.
+### Which body MobDart's 4:5b0e reads (2026-10-31, static) [D]
+
+The mob animator is MakeRubble 5:29e8, the first call of the frame body
+2:6224 (2:622c, only when a5-0x4fee is set). For every mob it copies the
+16-byte record to a5-0x44a6 and dispatches on its type a5-0x449c through the
+table at 5:2ab0 (unmapped bytes, decoded from CODE 5): 0/3 -> 5:2b10 (then
+5:3572), 2 -> $c32(a5) = MobDart 8:2f98, 4 -> 5:3fda, 6 -> temple 10:1d5c
+then 10:16f6, 10 -> temple 10:24fa, 11 -> caverns 8:0ba2, 12 -> final
+battle 9:27a0, 13 -> rooftops 23:1480; 1, 5, 7-9 do nothing.
+Neither MakeRubble nor MobDart loads a character, so the body in a5-0x5056 is
+the last copy the previous frame left there:
+
+- the frame body ends its Kid pass with SaveKid (2:6472) and its opponent
+  pass with the last opponent loaded (LoadShad 2:64d8/66f4);
+- CutAllOpponents 6:4382 reloads the Kid (LoadKid 6:4390) unless its timer
+  a5-0x4fc8 runs, and its cutting loop 6:4476 leaves a shadow loaded;
+- the drawing pass loads shadows without restoring the Kid: MarkPeelForeBufs
+  3:048a and DrawOppMeter 3:4af6;
+- ResetFrameVars 2:68c0, which runs before 2:6224, loads nothing.
+
+So the body is the Prince only when no opponent was loaded after the last
+LoadKid of the previous frame; with a visible opponent it is that opponent.
+The port keeps passing the Prince: no shipped dart trajectory reaches a gate
+cell (`probe_mob_dart` gate cases are synthetic), so no gameplay rule
+depends on it. Not changed; recorded as a frame-history dependency.
 
 ```powershell
 python -m tools.probe_mob_dart --source PATH_TO_RECOVERY --output rendered/mob-dart.json
