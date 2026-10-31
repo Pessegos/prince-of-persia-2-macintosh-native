@@ -123,7 +123,7 @@ branches. `fresh` means a negative latch; `active` means any nonzero latch.
 | Ledge poses 87-99 | Up active, grip delay zero: climb before release check; otherwise zero modifier or sequence-mode 11 releases | 6:18e0-1994 | Up/Shift and expiry tested; modifier/special branches partial |
 | Climb/release | Clear directions; consume Up + modifier on climb, Down on release | 6:1998-19d0, 1a84-1a8c | Terrain transitions tested; full latch reset missing |
 | Sword controls | Fresh Ctrl before fresh Down, Up, Forward, Backward; retreat requires modifier zero | 6:24bc-2584 | Actions tested; Shift+Backward selects the voluntary turn instead of a retreat and toggles the automatic turn; conflict priority missing |
-| Attack | Legal poses 157/158/170/171/165 or block 150/161; consume Ctrl and clear directions | 6:2780-281c | Gates/chains and released-Ctrl block cancellation tested; queued ordinary swing during attack/draw remains a host tolerance |
+| Attack | Legal poses 157/158/170/171/165 or block 150/161; consume Ctrl and clear directions | 6:2780-281c | Gates/chains tested; a released Ctrl cancels a pending strike everywhere (4:3f38), so a double tap swings once unless the second press is held at the gate (512 native frame traces) |
 | Block | Ordinary legal poses 158/170/171/168/165; special branch at 167; consume Up without clearing other latches | 6:282a-28ee | Ordinary block/attack chain tested; opponent-dependent branches partial |
 | Sword steps/sheath | Steps at 158/170/171 clear/consume Forward or Backward; sheath clears/consumes Down | 6:1d6e-1e68, 2592-25ec | Common flow tested; host buffer is not complete native state |
 
@@ -413,13 +413,22 @@ running-jump request until the first legal run pose (7), without rewinding
 the startup into a standing jump. This narrower input-tolerance extension
 preserves the ordinary standing chord; takeoff alignment/range are unchanged.
 
-Rapid Ctrl repeats during the first three attack poses do not buffer another
-swing. Normal attacks close the buffer at poses 151/152/153; counters at 162/152/153.
-The buffer opens at pose 154, about 300 ms into either attack at 10 fps.
-This is another intentional extension, not a recovered native timing rule.
-Drawing the sword still accepts a first queued attack, and block/counter,
-movement and sheathing commands are not delayed. Using animation poses keeps
-the window frozen while paused and avoids depending on OS key-repeat timing.
+### Ctrl Taps During An Attack (2026-10-31)
+
+The port used to keep two attack extensions: a Ctrl press survived its
+release until the next gate, and a press during poses 151-153 (162 for a
+counter) was consumed without a swing. Both are removed (user decision);
+the armed bank's modifier word is now the only attack request.
+`tools/probe_attack_taps.py` executes the sample 4:3e84-3f42 and OnAlert
+6:24bc with its bodies frame by frame over 512 Ctrl patterns from the guard
+pose (SEQS 75 poses supplied): zero mismatches against the closed rule. A
+strike consumes Ctrl (2); a release writes 0; a new press is -2 and DoStrike
+admits it at pose 157 or the guard poses. A second tap released before that
+gate is therefore cancelled, so a double tap swings once, as on the Mac.
+A second press still held at the gate swings again. The scene regression
+(`test_ctrl_taps_during_an_attack_swing_as_the_native_frame_trace`) replays
+all 512 patterns in both facings through the key callbacks and gives the
+same strike frames; both former extensions fail it.
 
 ## Hard-Fall Recovery Input
 
@@ -748,8 +757,8 @@ OnAlert6:24bc-2584 against19,440 original/model cases. Its second stage runs
 the action bodies too (71,280 cases) and makes the bank the sole owner of
 armed requests: refused requests stay pending, accepted ones consume as the
 original, and consumed holds no longer repeat sword steps or blocks. The
-attack-survives-Ctrl-release and rapid-attack policies stay explicit host
-extensions. This is not full SwordCtrl parity. SwordCtrl's last step is now
+former attack-survives-Ctrl-release and rapid-attack policies were removed
+on 2026-10-31 (native frame traces above). This is not full SwordCtrl parity. SwordCtrl's last step is now
 in production as well: with no engaged opponent within reach (alert below 2
 and no loose floor or shelf underfoot, or more than 330 ahead), a pending
 Down sheathes at once at any mode-0/1 pose (6:2382), ahead of an attack.

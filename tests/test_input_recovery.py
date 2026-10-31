@@ -432,8 +432,8 @@ class InputRecoveryTests(unittest.TestCase):
         scene = self.sword_guard(facing)
         scene.set_key_state('ctrl', True)
         if repeat:
-            # This second press is deliberately rejected by the retained
-            # rapid-attack QoL, rather than queued.
+            # A second press held to pose 157 swings again (4:3f08), and
+            # that strike consumes Ctrl as well.
             scene.set_key_state('ctrl', False)
             scene.set_key_state('ctrl', True)
         for _ in range(20):

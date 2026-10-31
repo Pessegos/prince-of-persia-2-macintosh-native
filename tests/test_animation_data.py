@@ -254,13 +254,13 @@ class AnimationDataTests(unittest.TestCase):
         scene.start_tile = 2
         scene.held_directions = [-1]
         scene.ctrl_held = True
-        scene.armed_attack_requested = True
+        scene.latch_armed_attack()
         scene.restart_opening()
         self.assertTrue(scene.opening.active)
         self.assertEqual((scene.action, scene.player_x), (43, 324))
         self.assertFalse(scene.sword_drawn)
         self.assertFalse(scene.ctrl_held)
-        self.assertFalse(scene.armed_attack_requested)
+        self.assertIsNone(scene.armed_input)
         self.assertEqual(scene.held_directions, [])
         self.assertEqual(len(scene.root.cancelled), 1)
 
@@ -2548,7 +2548,8 @@ class AnimationDataTests(unittest.TestCase):
                         if not held:
                             scene.set_key_state("ctrl", False)
                         self.assertEqual(scene.action, attack_pose)
-                        self.assertEqual(scene.armed_pending(), BufferedCommand("sword_attack"))
+                        self.assertEqual(scene.armed_pending(),
+                                         BufferedCommand("sword_attack") if held else None)
                         while len(frames) < 10:
                             scene.advance_animation()
                             frames.append((scene.action, scene.player_x))
@@ -2641,7 +2642,6 @@ class AnimationDataTests(unittest.TestCase):
         scene.set_key_state("ctrl", True)
         scene.set_key_state("ctrl", False)
         scene.set_key_state("ctrl", True)
-        scene.set_key_state("ctrl", False)
 
         self.assertEqual(scene.armed_pending(), BufferedCommand("sword_attack"))
         for action in (208, 209, 210, 151):
@@ -2649,45 +2649,37 @@ class AnimationDataTests(unittest.TestCase):
             self.assertEqual(scene.action, action)
         self.assertIsNone(scene.armed_pending())
 
-    def test_rapid_ctrl_during_attack_start_does_not_queue_an_extra_swing(self):
+    def test_ctrl_taps_during_an_attack_swing_as_the_native_frame_trace(self):
+        # tools/probe_attack_taps.py runs 4:3e84 + OnAlert 6:24bc frame by
+        # frame on these 512 Ctrl patterns (0 mismatches): a second tap
+        # released before the gate (157, then guard) is cancelled (4:3f38);
+        # one still held there swings again. The port's former filter
+        # (consume a press at 151-153) and release-surviving strike are gone.
+        from tools.probe_attack_taps import patterns, reference_swings
+        from tools.reference_input_bank import InputBank
+        checked = {1: 0, 2: 0}
         for facing in (0, 1):
-            for counter in (False, True):
-                for elapsed_frames in (0, 1, 2):
-                    with self.subTest(facing=facing, counter=counter,
-                                      elapsed_frames=elapsed_frames):
-                        scene = self.guarded_sword_scene(facing)
-                        scene.start_sword_action(
-                            "sword_attack", sequence_id=66 if counter else None)
-                        for _ in range(elapsed_frames):
-                            scene.advance_animation()
-                        for _ in range(8):
-                            scene.set_key_state("ctrl", True)
-                            scene.set_key_state("ctrl", False)
-                        for _ in range(12):
-                            scene.advance_animation()
-                        self.assertEqual(scene.sequence_state.sequence_id, SWORD_GUARD_SEQUENCE)
-
-    def test_spaced_ctrl_after_attack_start_preserves_one_queued_swing(self):
-        for facing in (0, 1):
-            for counter in (False, True):
-                with self.subTest(facing=facing, counter=counter):
+            for pattern in patterns():
+                with self.subTest(facing=facing, pattern=pattern):
                     scene = self.guarded_sword_scene(facing)
-                    scene.start_sword_action("sword_attack", sequence_id=66 if counter else None)
-                    for _ in range(3):
-                        scene.advance_animation()
-                    self.assertEqual(scene.action, 154)
-                    scene.set_key_state("ctrl", True)
-                    scene.set_key_state("ctrl", False)
-                    self.assertEqual(scene.armed_pending(), BufferedCommand("sword_attack"))
-                    actions = []
-                    for _ in range(18):
-                        scene.advance_animation()
-                        actions.append(scene.action)
-                    self.assertEqual(actions.count(151), 1)
-                    self.assertEqual(scene.sequence_state.sequence_id, SWORD_GUARD_SEQUENCE)
-                    self.assertIsNone(scene.armed_pending())
+                    starts = []
+                    for frame, held in enumerate(pattern):
+                        before = scene.action
+                        if held != scene.ctrl_held:
+                            scene.set_key_state("ctrl", bool(held))
+                        if scene.action == 151 and before != 151:
+                            starts.append(frame)
+                        if frame:
+                            before = scene.action
+                            scene.advance_animation()
+                            if scene.action == 151 and before != 151:
+                                starts.append(frame)
+                    expected = reference_swings(pattern, InputBank())[0]
+                    self.assertEqual(tuple(starts), expected)
+                    checked[len(expected)] += 1
+        self.assertEqual(checked, {1: 134, 2: 890})
 
-    def test_attack_start_filter_does_not_discard_block_or_sheathe_requests(self):
+    def test_released_ctrl_during_an_attack_keeps_a_block_or_sheathe_request(self):
         for kind in ("sword_block", "sword_sheathe"):
             with self.subTest(kind=kind):
                 scene = self.guarded_sword_scene()
@@ -2784,8 +2776,8 @@ class AnimationDataTests(unittest.TestCase):
                 start_x = scene.player_x
                 scene.horizontal_key(None, 1, True)
                 if kind == "sword_attack":
+                    # Held: a released Ctrl is cancelled before the gate.
                     scene.set_key_state("ctrl", True)
-                    scene.set_key_state("ctrl", False)
                 else:
                     scene.up_key(None)
                     scene.set_key_state("up", False)
@@ -2822,7 +2814,6 @@ class AnimationDataTests(unittest.TestCase):
         scene.horizontal_key(None, 1, True)
         scene.horizontal_key(None, 1, False)
         scene.set_key_state("ctrl", True)
-        scene.set_key_state("ctrl", False)
         scene.horizontal_key(None, -1, True)
         scene.horizontal_key(None, -1, False)
         # OnAlert6:250c selects Ctrl before Backward. The old assertion

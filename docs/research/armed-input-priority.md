@@ -140,11 +140,10 @@ raw-held step/block repetition were removed together. The voluntary turn
 consumes Backward and the modifier (6:2330-233c). A press at a displayed
 guard pose still starts at once when it is the selected request.
 
-Retained host policies, explicit in that module: a fresh Ctrl press is an
-attack request that survives releasing Ctrl (the original cancels it,
-4:3f38), except that a released Ctrl is still cancelled before the counter
-gates; rapid Ctrl repeats during the first attack poses are discarded and
-consumed. (The automatic sword turn was then also always enabled; since
+Retained host policies at the time (removed 2026-10-31, see below): a
+fresh Ctrl press was an attack request that survived releasing Ctrl (the
+original cancels it, 4:3f38), except before the counter gates; rapid Ctrl
+repeats during the first attack poses were discarded and consumed. (The automatic sword turn was then also always enabled; since
 2026-10-30 a voluntary turn toggles it as in the original.)
 
 Changed expectations, each from the rules above: held sword steps and held
@@ -280,3 +279,33 @@ current target (port room 18, supporting column 5).
   for a documentation/module-cache mismatch.
 - Ruff F/E9, dependency and whitespace checks pass. Tests use isolated
   temporary data and hidden fixtures; no live game window is operated.
+
+## Ctrl taps: the native modifier alone (2026-10-31)
+
+User decision: remove both attack extensions, provided a double tap still
+swings once as on the Mac. `tools/probe_attack_taps.py` runs the sample
+4:3e84-3f42 and OnAlert 6:24bc with its action bodies frame by frame over
+every Ctrl pattern of ten frames starting with a press at the guard pose
+(512 patterns, 5,120 frames). Supplied: guard pose 158 and SEQS 75's poses
+151..157 after each accepted strike, LEVL2004 header, no opponent pose.
+Excluded: outer SwordCtrl routing, FrameAdv, taps shorter than a frame.
+Zero mismatches against `reference_swings` and the closed rule: the second
+strike starts at the first gate frame (pose 157, then guard) where Ctrl is
+held after a release. All 62 patterns whose second tap is released before
+the gate swing once. The reason is the modifier update itself: DoStrike
+writes 2 (6:280c), the release writes 0 and a later press -2; a release
+before the next admitting pose writes 0 again (4:3f38). No pose filter or
+consumed latch is needed.
+
+- Result SHA256: `f6571f4d85f4e3d5aa2197f0f1a267b9ac631ff6088a08a49bf5092357d02591`.
+
+Runtime: `armed_attack_requested` and the 151-153/162 filter are removed;
+a Ctrl press writes -2 into the armed bank (`latch_armed_attack`, also used
+for a press made while paused and still held at resume) and every armed
+sample can cancel it. USER-VISIBLE: a Ctrl tap released before the Prince
+reaches a striking pose (during a draw, step, turn or the end of a strike)
+no longer strikes later; hold Ctrl until the swing starts. A press made
+during 151-153 and held to 157 now swings again. The scene regression
+replays the 512 patterns in both facings through the key callbacks and
+matches the native strike frames; both removed extensions fail it. Tests
+that queued a strike with a released tap now hold Ctrl to the gate.

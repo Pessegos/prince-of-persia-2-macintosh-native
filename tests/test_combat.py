@@ -402,17 +402,19 @@ class GuardCombatTests(unittest.TestCase):
         scene.combat.guard.sword_drawn = True
         scene.start_sequence(227)
         scene.sequence_runtime.next_frame()
-        scene.armed_attack_requested = True
+        # Ctrl held through the turn (a release cancels the strike).
+        scene.ctrl_held = True
+        scene.latch_armed_attack()
         with patch.object(scene.combat, "step", return_value=[]):
             scene.advance_animation()
             self.assertEqual(scene.action, 177)
-            self.assertTrue(scene.armed_attack_requested)
+            self.assertTrue(scene.armed_attack_pending())
             poses = [scene.action]
             for _ in range(8):
                 scene.advance_animation()
                 poses.append(scene.action)
         self.assertEqual(poses, [177, 178, 211, 213, 212, 171, 160, 157, 151])
-        self.assertFalse(scene.armed_attack_requested)
+        self.assertFalse(scene.armed_attack_pending())
 
     def test_sheathing_does_not_start_an_automatic_turn(self):
         scene = self.scene()
@@ -620,7 +622,8 @@ class GuardCombatTests(unittest.TestCase):
         state = scene.sequence_state
         state.action = 161
         x = state.target_x
-        scene.armed_attack_requested = True
+        scene.ctrl_held = True
+        scene.latch_armed_attack()
         self.assertFalse(scene.resume_sword_parry_recoil())
         self.assertTrue(scene.resume_sword_attack_after_block())
         self.assertEqual(state.source_sequence_id, 66)
@@ -982,9 +985,10 @@ class GuardCombatTests(unittest.TestCase):
         scene.combat.guard.life = 0
         scene.combat.player.life = 0
         scene.combat.last_guard_at = 400
-        scene.armed_attack_requested = True
+        scene.sword_drawn = scene.ctrl_held = True
+        scene.latch_armed_attack()
         scene.restart_opening()
-        self.assertFalse(scene.armed_attack_requested)
+        self.assertIsNone(scene.armed_input)
         self.assertEqual(scene.combat.player.life, 3)
         self.assertEqual(scene.combat.guard.life, 1)
         self.assertEqual(scene.combat.guard.state.target_x, 149)
@@ -998,7 +1002,7 @@ class GuardCombatTests(unittest.TestCase):
         scene.horizontal_key(None, -1, True)
         scene.up_key(None)
         self.assertFalse(scene.sword_drawn)
-        self.assertFalse(getattr(scene, 'armed_attack_requested', False))
+        self.assertIsNone(getattr(scene, 'armed_input', None))
 
     def test_complete_opening_defence_counterattack_and_guard_defeat(self):
         fixture = animation_tests.AnimationDataTests()

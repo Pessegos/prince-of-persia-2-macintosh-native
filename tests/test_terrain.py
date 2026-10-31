@@ -1375,7 +1375,9 @@ class RooftopSceneTests(unittest.TestCase):
         # Reselection then waits while the attack is in mode 5 (SEQS 75's
         # pose 155), which cannot turn; the facing flips at the first tick
         # after a turnable pose. Each sword step here is a fresh press.
-        ready = next(tick for tick in range(killed_at, len(modes)) if modes[tick] != 5)
+        # The kill tick itself is not a reselection (the guard is still
+        # native-ALIVE there), so the wait starts at the next tick.
+        ready = next(tick for tick in range(killed_at + 1, len(modes)) if modes[tick] != 5)
         self.assertEqual(turned_at, ready + 1)
         self.assertIs(scene.combat.guard, incoming)
         self.assertEqual(scene.combat.player.life, 3)
@@ -1935,7 +1937,9 @@ class RooftopSceneTests(unittest.TestCase):
                 guard.sword_drawn = True
                 scene.combat.guards = [guard]
                 scene.combat.guard = guard
-                scene.armed_attack_requested = True
+                # Ctrl held through the turn (a release cancels the strike).
+                scene.ctrl_held = True
+                scene.latch_armed_attack()
                 poses = []
                 with patch.object(scene.combat, "step", return_value=[]):
                     for _ in range(9):
@@ -1945,7 +1949,8 @@ class RooftopSceneTests(unittest.TestCase):
                         self.assertFalse(scene.terrain_motion.dead)
                 self.assertEqual(poses, [177, 178, 211, 213, 212, 171, 160, 157, 151])
                 self.assertEqual(scene.sequence_state.facing, 1 - facing)
-                self.assertFalse(scene.armed_attack_requested)
+                self.assertFalse(scene.armed_attack_pending())
+                scene.ctrl_held = False
                 self.assertEqual(scene.combat.player.life, 3)
 
     def test_running_left_enters_next_room_and_keeps_run(self):

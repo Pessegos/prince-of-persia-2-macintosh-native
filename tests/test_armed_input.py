@@ -89,6 +89,8 @@ class ArmedBufferSceneTests(unittest.TestCase):
             with self.subTest(facing=facing, pair=pair):
                 scene = self.during_draw(facing)
                 for kind in pair:
+                    # A strike request is the Ctrl word: pending while held.
+                    scene.ctrl_held = scene.ctrl_held or kind == 'sword_attack'
                     scene.latch_request(BufferedCommand(kind))
                 self.assertEqual(scene.armed_pending().kind, min(pair, key=kinds.index))
 
@@ -98,8 +100,8 @@ class ArmedBufferSceneTests(unittest.TestCase):
         for facing, key in product((0, 1), ('up', 'forward', 'backward')):
             with self.subTest(facing=facing, key=key):
                 scene = self.during_draw(facing)
+                # Ctrl held until the strike starts (a release cancels it).
                 scene.set_key_state('ctrl', True)
-                scene.set_key_state('ctrl', False)
                 if key == 'up':
                     scene.set_key_state(key, True)
                     scene.set_key_state(key, False)
@@ -112,6 +114,8 @@ class ArmedBufferSceneTests(unittest.TestCase):
                 for _ in range(25):
                     scene.advance_animation()
                     poses.append(scene.action)
+                    if scene.action == 151:
+                        scene.set_key_state('ctrl', False)
                 self.assertIn(151, poses)
                 self.assertTrue(scene.sword_drawn)
                 self.assertFalse(scene.sword_sheathing)
@@ -174,19 +178,36 @@ class ArmedBufferSceneTests(unittest.TestCase):
         self.assertFalse(scene.sword_drawn)
         self.assertFalse(sequences & {3, 4, 17, 18})
 
-    def test_discarded_rapid_attack_does_not_erase_a_queued_block(self):
+    def test_released_ctrl_during_a_strike_does_not_erase_a_queued_block(self):
         scene = self.fixture.guarded_sword_scene()
         scene.in_animation_tick = True
-        scene.queue_sword_action('sword_attack')
+        scene.set_key_state('ctrl', True)
+        scene.set_key_state('ctrl', False)
         scene.advance_animation()
+        self.assertEqual(scene.action, 151)
         scene.queue_sword_action('sword_block')
-        scene.queue_sword_action('sword_attack')
+        scene.set_key_state('ctrl', True)
+        self.assertEqual(scene.armed_pending().kind, 'sword_attack')
+        scene.set_key_state('ctrl', False)
         self.assertEqual(scene.armed_pending().kind, 'sword_block')
+
+    def test_a_released_ctrl_tap_before_the_gate_is_cancelled(self):
+        # 4:3f38: no modifier held writes 0, even over a pending -2. The
+        # port used to keep the strike (host extension, removed 2026-10-31).
+        scene = self.during_draw()
+        scene.set_key_state('ctrl', True)
+        scene.set_key_state('ctrl', False)
+        self.assertIsNone(scene.armed_pending())
+        poses = []
+        for _ in range(12):
+            scene.advance_animation()
+            poses.append(scene.action)
+        self.assertNotIn(151, poses)
 
     def test_lower_priority_request_does_not_clear_attack_at_first_guard_boundary(self):
         from pop2.scene_prototype import SWORD_GUARD_SEQUENCE
         scene = self.during_draw()
-        scene.armed_attack_requested = True
+        scene.set_key_state('ctrl', True)
         # JumpSeq has selected guard, but AnimChar has not loaded its pose.
         scene.start_sequence(SWORD_GUARD_SEQUENCE)
         scene.queue_sword_action('sword_sheathe')
@@ -362,7 +383,10 @@ class UnengagedSheatheTests(unittest.TestCase):
                 scene.start_sequence(min(SWORD_STEP_SEQUENCES))
                 scene.sequence_runtime.next_frame()
                 for key in order:
-                    self.tap(scene, key)
+                    # Ctrl stays held: a released one is no strike (4:3f38).
+                    scene.set_key_state(key, True)
+                    if key != 'ctrl':
+                        scene.set_key_state(key, False)
                 poses = self.trace(scene)
                 if alert:
                     self.assertIn(151, poses)

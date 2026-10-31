@@ -7,10 +7,10 @@ accept it and consume (`consume_armed_request`). The bank stays in keyboard
 coordinates and is remapped with the facing at dispatch, so a turn between
 the press and the guard pose changes Forward/Backward as in the original.
 
-Host extension, kept explicitly: a fresh Ctrl press is an attack request
-that survives releasing Ctrl (the original cancels it, 4:3f38), except at
-the counter gates, and rapid repeats during the first attack poses are
-discarded. See docs/research/armed-input-priority.md.
+Ctrl follows the native modifier word: releasing it before an admitting
+pose cancels the strike (4:3f38 writes 0), so a double tap swings once
+unless the second press is still held at the next gate
+(tools/probe_attack_taps.py). See docs/research/armed-input-priority.md.
 """
 
 from dataclasses import replace
@@ -39,7 +39,6 @@ class ArmedControls:
         """4:3e84-3f42 on the current keyboard state."""
         if not self.armed_controls_available():
             self.armed_input = None
-            self.armed_attack_requested = False
             return None
         bank = self.armed_input_bank()
         frame = self.sample_keyboard()
@@ -50,10 +49,7 @@ class ArmedControls:
         bank = self.sample_armed_controls()
         if bank is None:
             return None
-        relative = bank.remap(facing_right=bool(self.sequence_state.facing))
-        if getattr(self, 'armed_attack_requested', False):
-            relative = replace(relative, modifier=-2)
-        return relative
+        return bank.remap(facing_right=bool(self.sequence_state.facing))
 
     def armed_request(self):
         """The OnAlert request at the guard gate (158), as 'sword_<kind>'."""
@@ -71,22 +67,15 @@ class ArmedControls:
         return None if request is None else BufferedCommand(request)
 
     def armed_press_ctrl(self):
-        from pop2.scene_prototype import SWORD_ATTACK_START_POSES, SWORD_ATTACK_START_SEQUENCES
-
-        bank = self.sample_armed_controls()
-        if bank is None:
-            return False
-        state = self.sequence_state
-        if (state.sequence_id in SWORD_ATTACK_START_SEQUENCES
-                and state.action in SWORD_ATTACK_START_POSES):
-            # Port QoL: a rapid repeat during the first three attack poses
-            # does not schedule another swing.
-            self.armed_input = replace(bank, modifier=2)
-            self.modifier_input = 2
-            return False
-        self.armed_attack_requested = True
-        self.modifier_input = 2
+        self.latch_armed_attack()
         return self.dispatch_armed_at_guard('sword_attack')
+
+    def latch_armed_attack(self):
+        """A fresh Ctrl word (-2), as the sample of a new press writes it.
+        It stays pending only while Ctrl is held."""
+        bank = self.sample_armed_controls()
+        if bank is not None:
+            self.armed_input = replace(bank, modifier=-2)
 
     def dispatch_armed_at_guard(self, kind):
         """A press at a guard pose starts at once when it is the request
@@ -121,7 +110,6 @@ class ArmedControls:
         relative = consume_armed_request(bank.remap(facing_right=facing), kind[len('sword_'):])
         self.armed_input = relative.remap(facing_right=facing)
         if kind == 'sword_attack':
-            self.armed_attack_requested = False
             self.modifier_input = 2
 
     def sheathe_unengaged(self):

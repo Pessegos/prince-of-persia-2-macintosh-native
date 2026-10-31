@@ -120,9 +120,6 @@ SWORD_STEP_KINDS = {"sword_advance", "sword_retreat"}
 SWORD_STEP_SEQUENCES = {SWORD_ADVANCE_SEQUENCE, SWORD_RETREAT_SEQUENCE}
 # DoStrike 6:27d8 selects SEQS 96 when the Prince's opponent is a serpent.
 SERPENT_ATTACK_SEQUENCE = 96
-SWORD_ATTACK_START_SEQUENCES = {SWORD_ATTACK_SEQUENCE, SWORD_BLOCK_ATTACK_SEQUENCE, 203,
-                                SERPENT_ATTACK_SEQUENCE}
-SWORD_ATTACK_START_POSES = {151, 152, 153, 162}
 SWORD_COMBAT_SEQUENCES = set(SWORD_SEQUENCES.values()) | {
     SWORD_GUARD_SEQUENCE, SWORD_BLOCK_ATTACK_SEQUENCE, 69, 203, 204, 205, 206,
     PLAYER_COMBAT_TURN_SEQUENCE, 245,
@@ -662,8 +659,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         if not self.armed_controls_available() or kind not in SWORD_SEQUENCES:
             return False
         if kind == "sword_attack":
-            # The armed attack request survives releasing Ctrl (host
-            # extension); the rapid-repeat filter runs first.
             return self.armed_press_ctrl()
         # A scripted request latches its word, as a key press would.
         self.latch_armed_request(kind)
@@ -696,7 +691,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             if not self.armed_controls_available():
                 return False
             if command.kind == "sword_attack":
-                self.armed_attack_requested = True
+                self.latch_armed_attack()
             else:
                 self.latch_armed_request(command.kind)
             return True
@@ -745,7 +740,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.sword_drawn = True
             # The drawn sword's bank starts with the holds consumed (6:0cb6).
             self.armed_input = None
-            self.armed_attack_requested = False
             self.sequence_state.sound_events.append(14)
         elif kind == "sword_sheathe":
             self.sword_sheathing = True
@@ -951,8 +945,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 and not self._combat_controls_locked() and not self.sword_sheathing
                 and (self.sword_drawn or not self.sword_lost())):
             if self.sword_drawn:
-                self.armed_attack_requested = True
-                self.modifier_input = 2
+                # The first sample after the pause sees a fresh press.
+                self.latch_armed_attack()
             else:
                 self.try_draw_sword()
         self.paused_ctrl_request = False
@@ -1304,16 +1298,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.status.set("Standing turn: original SEQS:5")
         self.advance_animation_now()
 
-    def update_armed_input_boundaries(self):
-        state = self.sequence_state
-        if (getattr(self, 'armed_attack_requested', False) and not self.ctrl_held
-                and (state.sequence_id in (61, SWORD_BLOCK_SEQUENCE)
-                     or state.action in (150, 161, 169))):
-            # 4:3f38 cancels a released Ctrl before a legal counter gate.
-            # Already-started attacks and the port's queued-swing extension
-            # during an attack/draw are separate from this block request.
-            self.armed_attack_requested = False
-
     def resume_queued_crouch_during_run(self):
         # Compatibility entry point; the directional bank is the sole dispatcher.
         return self.update_waiting_controls()
@@ -1625,7 +1609,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.shift_turn_direction = 0
         self.voluntary_turn_requested = False
         self.armed_input = None
-        self.armed_attack_requested = False
         self.step_warning_direction = 0
         self.horizontal_input = 0
         self.up_held = False
@@ -1785,7 +1768,6 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.player_x = self.sequence_state.target_x
             self.run_world_phases('opening', old_x, old_bounds)
             return
-        self.update_armed_input_boundaries()
         self.update_airborne_controls()
         if not self.resume_combat_turn():
             if not self.resume_sword_attack_after_block():
