@@ -373,8 +373,10 @@ class CombatEncounter:
                         words[4], words[5], words[9], bool(words[8]), words[0], words[14])
                         if words else GuardRoomRecord(spawn.sequence_id, 0, spawn.life, False, spawn.row * 10))
                 guards.append(fighter)
+            # GenerateOpponent 6:3be0 types a new opponent by DATA a5-0x5280
+            # [set]: actor 2 for sets 0 and 7 (the temple's birdheads).
             points = (OpponentGenerationPoint.from_level(self.level, room)
-                      if struct.unpack_from(">h", self.level, 0x21a4)[0] == 0 else [])
+                      if struct.unpack_from(">h", self.level, 0x21a4)[0] in (0, 7) else [])
             self.room_encounters[room] = (guards, points)
 
     def enter_room(self, room, row):

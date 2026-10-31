@@ -202,6 +202,19 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.assertTrue(guards[0].alive)
         self.assertFalse(scene.combat.player.alive)
 
+    def test_temple_generation_points_create_birdheads(self):
+        # Level ten's native room 2 has one generation point (0x3986). The
+        # set-7 actor of GenerateOpponent 6:3be0 (DATA a5-0x5280) is 2;
+        # before, generation points were read for set 0 only.
+        scene = self.scene
+        scene.enter_next_level(10)
+        scene.jump_to_room(1, row=2, x=350, facing=0)
+        self.assertEqual(len(scene.combat.generation_points), 1)
+        self.assertEqual(scene.combat.guards, [])
+        self.tick(80)
+        self.assertEqual([(guard.state.actor_type, guard.room, guard.row) for guard in scene.combat.guards],
+                         [(2, 1, 2)])
+
 @unittest.skipUnless(TEMPLE_INSTALLED, 'Imported temple scene and scenery required')
 class TempleLooseFloorTests(unittest.TestCase):
     def test_a_falling_temple_floor_draws_pieces_28_and_29(self):
