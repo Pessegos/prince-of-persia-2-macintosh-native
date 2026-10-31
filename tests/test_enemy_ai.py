@@ -245,6 +245,23 @@ class GuardDecisionTests(unittest.TestCase):
                 c._choose_unarmed_guard_action(g)
                 self.assertEqual((g.selected_sequence, g.alert_mode), (101, 0))
 
+    def test_draw_reserve_reads_the_geometry_from_before_the_rear_step(self):
+        # GenCtrl 4:4996: the cell behind (column word) is a wall, so the
+        # body moves 8 forward; DoEngarde's GetBarrDistances 4:5eae still
+        # sees 19 pixels (stale column word and edges), so no reserve.
+        # Level three, room 26 row 2, X 183 facing right (native: 191).
+        c, g = self.runner()
+        c.level = self.prince['LEVL'][2002]['data']
+        c.terrain = LevelMap(c.level)
+        record = SimpleNamespace(offset_x=-7, aux=2)
+        c.guard_art = SimpleNamespace(frames={i: record for i in range(256)},
+                                      bounds=lambda _state, _floor: (173, 148, 193, 226))
+        g.room, g.row = 25, 2
+        g.state.action, g.state.facing, g.state.level_kind = 166, 1, 3
+        g.state.target_x = g.state.current_x = 183
+        c._draw_guard_sword(g)
+        self.assertEqual((g.selected_sequence, g.state.target_x, g.sword_drawn), (90, 191, True))
+
     def test_seqs232_minus21_13_reaches_the_special13_brake_and_ambient(self):
         # SEQS:232 word 12 is -21 13: AnimChar 4:2f92 writes the same word
         # (a5-0x5022) that the guard brake and OppToFight 6:23b2 test for 13.
@@ -350,9 +367,9 @@ class GuardDecisionTests(unittest.TestCase):
                 with self.subTest(facing=facing, clearance=clearance):
                     c, g = self.runner(facing=facing)
                     g.state.action = 166
-                    c.guard_art = SimpleNamespace(frames=[None] * 256,
+                    c.guard_art = SimpleNamespace(frames=[SimpleNamespace(offset_x=0, aux=0)] * 256,
                                                   bounds=lambda *_args: (0, 0, 0, 0))
-                    c.terrain.step_boundary = lambda *_args: SimpleNamespace(clearance=clearance)
+                    c.terrain.step_boundary = lambda *_args, **_kwargs: SimpleNamespace(clearance=clearance)
                     c._choose_unarmed_guard_action(g)
                     shift = (clearance - 18) * (1 if facing else -1) if 0 < clearance < 18 else 0
                     self.assertEqual((g.state.target_x, g.state.current_x), (200 + shift,) * 2)

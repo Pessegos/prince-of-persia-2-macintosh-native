@@ -1140,24 +1140,7 @@ class CombatEncounter:
             else:
                 draw = 0 <= distance <= 663 and guard.alert_mode != 0
             if draw:
-                direction = 1 if state.facing else -1
-                rear = self._guard_tile(guard, character_column(state.target_x) - direction)
-                if not advancable_tile(rear, state.actor_type):
-                    state.target_x += 8 * direction
-                    state.current_x = state.target_x
-                guard.sword_drawn = True
-                art = getattr(self, 'guard_art', None)
-                terrain = getattr(self, 'terrain', None)
-                if art is not None and terrain is not None:
-                    record = art.frames[guard_frame_index(state.action)]
-                    clearance = terrain.step_boundary(
-                        guard.room, guard.row, state, record,
-                        art.bounds(state, floor_y(guard.row))).clearance
-                    # DoEngarde 6:1ebe-1eda reserves eighteen pixels.
-                    if 0 < clearance < 18:
-                        state.target_x += (clearance - 18) * direction
-                        state.current_x = state.target_x
-                select_sequence(guard, 90)
+                self._draw_guard_sword(guard)
             return
         # CODE:4 057c tests odd running poses and the final jump pose 212.
         if not (194 <= state.action <= 199 and state.action & 1 or state.action == 212):
@@ -1203,6 +1186,33 @@ class CombatEncounter:
             # 127 pixels lunges straight into SEQS:87 with its sword drawn.
             select_sequence(guard, 87)
             guard.sword_drawn = True
+
+    def _draw_guard_sword(self, guard):
+        # GenCtrl 4:4996-49d4 for pose 166: eight pixels forward when the cell
+        # behind (GetCellBehind 4:3a48, column word) is not advancable, then
+        # DoEngarde 6:1e78. Its GetBarrDistances 4:5eae still reads the
+        # column word and edges from before that AddCharX, but the new X.
+        state = guard.state
+        direction = 1 if state.facing else -1
+        art = getattr(self, 'guard_art', None)
+        terrain = getattr(self, 'terrain', None)
+        column = self._supporting_column(guard)
+        bounds = art.bounds(state, floor_y(guard.row)) if art is not None else None
+        rear = self._guard_tile(guard, column - direction)
+        if not advancable_tile(rear, state.actor_type):
+            state.target_x += 8 * direction
+            state.current_x = state.target_x
+        guard.sword_drawn = True
+        clearance = 0
+        if art is not None and terrain is not None:
+            record = art.frames[guard_frame_index(state.action)]
+            clearance = terrain.step_boundary(guard.room, guard.row, state, record, bounds,
+                                              column=column).clearance
+        # DoEngarde 6:1ebe-1eda reserves eighteen pixels.
+        if 0 < clearance < 18:
+            state.target_x += (clearance - 18) * direction
+            state.current_x = state.target_x
+        select_sequence(guard, 90)
 
     def _brake_guard(self, guard, alert_mode):
         state = guard.state
