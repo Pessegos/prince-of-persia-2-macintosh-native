@@ -130,5 +130,5 @@ Each stage integrates separately with the usual reservation.
   drawn from Birdhead.rsrc (now imported). Its SHAP 751 is LZ-packed
   (flag 0x0400): `unpack_shape_lz` follows UnpackLZ 17:3aa8 (LZSS, 1,024
   ring from 958). The AI is the ordinary guard's (no Birdhead-specific
-  controller found yet); the set-7 generation points (0x3986) are not
-  enabled. A level-ten birdhead engages and kills an idle Prince.
+  controller found yet); set-7 generation points (0x3986) create them
+  too (GenerateOpponent 6:3be0, DATA a5-0x5280[7] = 2). A level-ten birdhead engages and kills an idle Prince.
