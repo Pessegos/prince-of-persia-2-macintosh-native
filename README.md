@@ -26,7 +26,8 @@ I'm trying to stay as close to the original as possible, while still making some
   - [Lava Overhaul](#lava-overhaul)
   - [Cavern Artwork](#cavern-artwork)
   - [Stone Gates](#stone-gates)
-- [Quality of Life](#quality-of-life)
+  - [Gate Sounds](#gate-sounds)
+- [Other Quality of Life Improvements](#other-quality-of-life-improvements)
 - [Run](#run)
 - [Controls](#controls)
 - [Development](#development)
@@ -36,13 +37,9 @@ I'm trying to stay as close to the original as possible, while still making some
 
 ## Gameplay Status
 
-Levels 1–9 are playable, with ongoing bug fixes and side-by-side testing
-against the Macintosh version. Most current playtesting is focused on the
-ruins, especially the heads and serpents, whose AI still needs work.
-
-The temple levels (10–13) are not playable yet. Research into their rules is
-well underway, but they still need to be added to the game, along with the
-horse cutscene between levels 9 and 10.
+Levels 1–9 are playable from start to finish, although I'm still finding and fixing differences here and there.
+The horse cutscene that leads to the temple (9-10) is a bit broken.
+Levels 10–13 are now in the game too. They can already be explored, with some of their mechanics working, but there's still quite a bit left to do before they're fully playable.
 
 <br/>
 
@@ -179,249 +176,85 @@ I smoothed out the gate opening sound for every type. It now plays continuously 
 
 <br/>
 
-## Quality of Life
+## Other Quality of Life Improvements
 
-- A dedicated in-game menu replacing the original Macintosh menu bar, with game options and settings accessible directly through F1.
+- The original Macintosh copy protection can be disabled.
+- Window resizing and fullscreen scaling preserve the original aspect ratio without stretching the image.
+- The game automatically pauses when switching to another window and stays paused until manually resumed.
 - Confirmation before starting a new game, to prevent accidental progress loss.
-- An integrated Save & Load browser with named saves, resume-point previews, renaming, smooth scrolling and confirmation before overwriting or deleting. The current save is highlighted and focused automatically.
-- Both Alt+O and Alt+L open Load Game; the F1 menu keeps the original Macintosh Alt+O label.
-- Capture clean PNG screenshots with F8, or include visible menus and pause overlays with Shift+F8.
-- An in-game F2 screenshot gallery with paired thumbnails, a larger preview, capture-size settings and a folder picker supporting typed or pasted paths. Open the destination in Windows Explorer, or delete screenshots by tossing them into animated lava.
-- Automatic pause on focus loss; returning to the window, mouse clicks and system or multimedia keys do not resume the game.
-- You can pause cutscenes now without skipping them.
-- Aspect-preserving window resizing and fullscreen scaling, without stretching the game image.
-- A 0.3-second filter for rapid repeated commands in the input queue, while preserving combinations of different commands.
-- Clouds keep moving during the intro's fades, like the DOS version does.
-- The level 1 screen 7-8 drop preserves the full landing and stand-up animation, matching DOS behavior instead of the abrupt interruption in the Macintosh original.
-- Completely overhauled lava pools with detailed rocky edges, convincing depth like the DOS version, seamless bubbling, and properly layered splashes and particles.
-- Reworked stone-gate closing and crushing animation, with a timed slam and a short fade when the opening sound stops.
-- Dock guards stay in standby once the Prince catches the boat, instead of switching back into combat during the escape.
-- Shift+Back with the sword drawn turns the Prince manually. Unlike the original toggle, this leaves automatic turning enabled.
-- While floating, the Prince is pushed back from obstructing scenery instead of scraping along it as in the Macintosh original.
-- Original copy protection is optional.
+- Clouds keep moving during cutscene fades, like the DOS version does.
+- The level 1 screen 7-8 drop landing animation is no longer interrupted, matching the DOS version.
+- Really small but the dock guards stay in standby once the Prince catches the boat, instead of switching back and forth into combat mode. More cinematic.
 
+<br/>
 
-## Run
+## Download & Play
 
-On 64-bit Windows, install Python 3.10 or newer with Tcl/Tk support, then
-double-click `Launch.cmd`.
-The launcher prepares a local `.venv` and installs its dependencies on the first run;
-internet access is needed for that installation. It does not change your
-global Python installation.
+Download the latest Windows build from the [Releases](https://github.com/Pessegos/prince-of-persia-2-macintosh-native/releases/latest) page.
 
-Original game files are not bundled. At the first launch, select your Macintosh
-Prince of Persia 2 disk image. The importer extracts the resources, enemy data
-and audio, then starts the game. The first import prepares all scenery and music
-using every processor core: it takes about 20 seconds on an 8-core PC and somewhat
-longer on machines with fewer cores. The window shows the current recovery step and elapsed
-time; Cancel or closing the window stops the import and removes its temporary files.
-Import diagnostics are saved in `rendered/setup.log`.
-Subsequent launches use those local files without
-asking for the disk image again.
+Extract the ZIP to a folder and run `PoP2Mac.exe`. No Python installation is required.
 
-Compatible images contain an HFS volume, the named resource files below,
-the `Prince of Persia 2` application, `DigiSnd.dat`, `MIDISnd.dat`,
-`NISDIGI.dat` and `NISMIDI.dat`.
-Raw or wrapped `.hfs`, `.hfv`, `.dsk`
-and `.img` files can be used; the extension alone does not establish compatibility.
-Files whose catalog or resource forks need HFS extents-overflow records are not
-supported by this importer.
+On the first launch, you'll be asked to select your original Macintosh Prince of Persia 2 disk image. If you don't have one, [PoPOT's Macintosh release page](https://www.popot.org/get_the_games.php?game=2_Mac) lists an English version: [download `pop2.hfs` (17 MB)](https://www.popot.org/get_the_games/software/pop2.hfs).
 
-[PoPOT's Macintosh release page](https://www.popot.org/get_the_games.php?game=2_Mac)
-lists an English disk image: [download `pop2.hfs` (17 MB)](https://www.popot.org/get_the_games/software/pop2.hfs).
-Select the downloaded file when the launcher asks for a disk image.
-PoPOT is an independent archive; availability there is not a redistribution
-license. This project does not host or automatically download the game image.
+The game will then extract and prepare the necessary files. This currently takes a minute and may take longer as more content is added. I plan to optimize this process eventually to make the initial setup faster.
 
-For manual setup:
+The original game files are not included or downloaded automatically. PoPOT is an independent archive, and the availability of the disk image there does not grant redistribution rights.
+
+## Running from Source
+
+If you'd rather run the game directly from the source code, you'll need Python 3.10 or newer with Tcl/Tk support.
+
+Download or clone the repository, then run `Launch.cmd`. It will create a local Python environment and install the required dependencies automatically.
+
+Once everything is set up, the game can also be started with:
 
 ```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe run_game.py
 ```
 
-Run `.\.venv\Scripts\python.exe run_game.py` to import the game files or play.
-`python run_game.py --check` checks dependencies and required files without
-opening a window; `--check-dependencies` checks only the Python installation.
-An activated virtual environment can use the shorter `python` commands below.
+The original Macintosh disk image is still required for the first launch.
 
-The project folder is self-contained: no sibling tools, ROM, Macintosh system
-disk or other development folders are needed. Import creates these local files
-in `assets/`:
-
-- `Prince.rsrc`
-- `Kid.rsrc`
-- `Guard.rsrc`
-- `Skeleton.rsrc`
-- `Rooftops.rsrc`
-- `Desert.rsrc`
-- `Caverns.rsrc`, `caverns_entry.json`, `caverns_level4.json` and `caverns_level5.json` (independent scenery for levels 3-5)
-- `Ruins.rsrc`, `Head.rsrc` and `ruins_level6.json` through `ruins_level9.json` (ruins scenery and enemy resources)
-- `ThroneNIS.rsrc` (throne vision resources)
-- `TNIS1.rsrc`, `TNIS2.rsrc` and `TNIS3.rsrc` (carpet scene resources)
-- `NIS.rsrc`, `NISTree.rsrc` and `Title.rsrc`
-- `enemy_profiles.json`
-- `intro.json` (recovered scene instructions and audio markers)
-- `ending.json` (voyage after level 1)
-- `discovery.json` (story sequence after level 3)
-- `carpet.json` (flight between levels 5 and 6)
-- `throne.json` (vision in level 8)
-- `tree-1.json` through `tree-9.json` (tree scenes and timeout sequence)
-- `attract.json` (original level-one demo and credits program)
-- `audio/` (original samples, voices, instruments and prepared music)
-
-The same import can be performed without a file picker:
-
-```powershell
-.\.venv\Scripts\python.exe -m tools.extract_assets "C:\path\to\pop2.hfs"
-```
-
-To reimport after an update, close the game and rerun the same command from the
-project folder. It refreshes generated files in `assets/`, not your saves or
-screenshots. Each separate worktree has its own imported assets.
-
-The importer leaves the disk image unchanged and does not retain the game
-executable or any ROM or system files. Generated game files are ignored by Git.
-Existing installations missing the new scene resources will ask for the disk image once more.
-Music is prepared during import using the bundled `smssynth` renderer and the
-game's Macintosh instruments, not a General MIDI sound bank. Playback uses SDL
-through pygame; the game does not generate diagnostic recordings.
-The importer uses Unicorn to recover the scene coordinators' drawing and
-timing calls and resolve the original recorded demo into actor states. The game
-itself plays the resulting data natively, without a CPU emulator or the original
-executable. Demo recovery adds time to the first import, not to later launches.
+<br/>
 
 ## Controls
 
-| Key | Action |
-| --- | --- |
-| Space during intro | Skip to level 1 |
-| Space during voyage | Skip to the level-2 arrival |
-| Space during Discovery or a tree scene | Finish the scene and continue its transition |
-| Gameplay key during demo or credits | Start a new game |
-| Left / Right | Run, turn, or move in sword mode |
-| Shift + Left / Right | Careful step when unarmed; Shift+Back turns with the sword drawn |
-| Up | Jump, climb, or block in sword mode |
-| Direction + Up | Forward or running jump |
-| Down | Crouch, descend a ledge, or sheath the sword |
-| Shift | Retain a ledge grip |
-| Ctrl | Draw the sword or attack |
-| Esc | Pause; text keys or arrows resume (not mouse clicks, modifiers, F-keys, multimedia, Insert/Delete/Home/End/Page Up/Page Down or system shortcuts) |
-| Alt + Enter | Toggle fullscreen |
-| F1 | Game menu with command shortcuts |
-| Alt + N | New game, after confirmation |
-| Alt + R | Restart from the latest checkpoint or level start |
-| Alt + S | Open Save Game |
-| Alt + O / Alt + L | Open Load Game |
-| Alt + T | Toggle all sound |
-| Alt + M | Toggle ambient music |
-| Alt + V | About the port |
-| F2 | Screenshot gallery, folder picker, PNG size and capture |
-| F3 | Developer Tools: levels 1-5, cutscene/demo playback and debug display |
-| F8 | Save a clean PNG screenshot to the configured folder |
-| Shift + F8 | Save a PNG including visible menus and pause overlays |
-| Resume key after the death prompt | Retry from the checkpoint or level start |
+| Key               | Action                                           |
+| ----------------- | ------------------------------------------------ |
+| Left / Right      | Run, turn or move in sword mode                  |
+| Up                | Jump, climb or block with the sword              |
+| Down              | Crouch, descend or sheath the sword              |
+| Shift + Direction | Careful step or manual turn with the sword drawn |
+| Shift             | Hold onto ledges                                 |
+| Ctrl              | Draw the sword or attack                         |
+| Esc               | Pause the game                                   |
+| Space             | Skip supported cutscenes                         |
+| Alt + Enter       | Toggle fullscreen                                |
+| F1                | Game Menu                                        |
+| F2                | Screenshot Gallery                               |
+| F3                | Developer Tools                                  |
+| F8                | Take a clean screenshot                          |
+| Shift + F8        | Take a screenshot including menus and overlays   |
 
-The game menu accepts mouse, arrows and Tab/Shift+Tab; Enter/Space activates
-the selected option. New game defaults to Cancel. Escape backs out without
-discarding progress. Save and Load are implemented; saving is unavailable during
-cutscenes, death and transitions. Hall of Fame remains disabled. There are no
-Alt+Q or Alt+F commands; fullscreen remains Alt+Enter.
-The original manual-symbol challenge is enabled by default. The F1 option
-`Copy protection` disables only that challenge, not the stone puzzle.
+The F1 menu also includes the rest of the shortcuts for starting or restarting a game, saving and loading, audio controls, the Hall of Fame, version info, and fullscreen.
 
-The developer menu accepts mouse, Tab/Shift+Tab and arrow navigation.
-Its level/map tools include levels 1-3 and the level-4 and level-5 playtests, including
-cavern mechanisms and skeletons. Choose `2 (Stones)` to jump directly to the level-2
-puzzle without replaying the beach arrival. Left/Right moves between `Go to screen`
-and `Resume`; Enter/Space activates
-a control. Focus the tab row to switch between `Level`, `Playback` and `Display`
-with Left/Right. Escape closes the dropdown before closing the menu.
-Screen jumps also set the latest checkpoint along the selected route. During
-the attract cycle, only playback and display controls are available. Playback
-selects a sequence first, then a story part, animated title, demo screen or
-credits page. `Next part` follows playback order across sequence boundaries.
-The Windows debug status bar is hidden by default; enable it in `Display`.
-F2 opens the integrated screenshot gallery. `Capture PNG` (with `With menus` unchecked) or
-F8 captures the game image without window borders, fullscreen letterboxing,
-menus or pause overlays. The original in-game HUD remains part of the image.
-Sizes range from native 510 x 384 to 4x, using nearest-neighbor integer scaling;
-the default is 3x (1530 x 1152). Folder and size are remembered locally in
-`rendered/screenshot-settings.json`. The default folder is `rendered/screenshots/`;
-captures use Minecraft-style `PoP2_YYYY-MM-DD_HH.mm.ss.png` filenames, with a numeric
-suffix if multiple screenshots are saved in the same second. They are not published
-by Git.
-The gallery's `With menus` option includes menus in a capture; Shift+F8 always
-includes the visible UI. `Change folder` chooses the destination inside the game,
-while `Open folder` opens it in Windows Explorer for sharing or editing images.
-F2 or Escape closes the gallery and restores the previous pause state; Escape
-first cancels an open folder picker or deletion confirmation.
-`python run_game.py --peaceful` starts with guards disabled and terrain intact.
+<br/>
 
 ## Development
 
-[Level loading](docs/LEVEL_LOADING.md) describes the separation between original
-level data, gameplay state, scenery and the window host.
-[Level transitions](docs/LEVEL_TRANSITION.md) documents the boat-to-beach sequence.
-[Desert recovery](docs/DESERT_RECOVERY.md) covers the stones and manual challenge.
-[Cavern recovery](docs/CAVERN_RECOVERY.md) tracks level-3 scenery and remaining mechanics.
-[Level four and story progression](docs/LEVEL4_RECOVERY.md) covers Discovery,
-the tree scenes, countdown and current later-level limitations.
+Most of the game code is in `pop2/`, while `tools/` contains the asset extraction and reverse-engineering utilities. I've also kept a lot of the research and technical notes in [`docs/`](docs/).
+
+To run the tests after setting up the project:
 
 ```powershell
-python -m pip install -r requirements-dev.txt
-python -m ruff check --select F,E9 .
-python -m unittest -q tests.test_bootstrap tests.test_extract_assets tests.test_extract_audio tests.test_extract_intro tests.test_extract_attract tests.test_recorded_game tests.test_attract tests.test_intro tests.test_audio tests.test_playback_navigation tests.test_mac_resources tests.test_run_game tests.test_setup_game tests.test_recovery_catalog tests.test_project_layout tests.test_window_controls tests.test_bitmap_presenter tests.test_game_menu.GameMenuModelTests tests.test_palettes tests.test_game_session tests.test_level_ending
-python -m tools.recovery_catalog --check
-python -m unittest -q tests.test_desert tests.test_caverns tests.test_loose_floors tests.test_ceiling
-python -m unittest -q tests.test_screenshots
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m unittest discover -s tests -t . -q
 ```
 
-These checks run without original game files and are used in GitHub Actions.
-After importing the game files, run the full gameplay suite with
-`python -m unittest discover -s tests -t . -q`.
+Some tests require the original Macintosh game files to have been imported first.
 
-Python 3.10 with Pillow 10.4 and 12.3 has been tested. The gameplay suite needs
-the generated files in `assets/`, but not external research folders.
-An optional developer test re-extracts enemy
-data from the original Macintosh game files and checks that it matches
-`assets/enemy_profiles.json`. Without those original files, this test is skipped.
-To enable it, set `POP2_RESEARCH_DIR` to a recovery directory containing
-`resource_forks/`.
-The routine catalog can also be rebuilt from that directory with
-`python -m tools.recovery_catalog --source PATH_TO_RECOVERY`.
+For more details, there's the [reverse-engineering index](docs/RECOVERY_INDEX.md), [enemy AI research](docs/AI_RECOVERY.md), and [Windows build instructions](docs/WINDOWS_BUILDS.md).
 
-The old isolated animation comparison remains available through
-`python -m pop2.scene_prototype --no-guard`. It is a test harness with simplified
-opening-room boundaries, not the playable terrain mode.
-
-The launcher stays in the project root. Runtime modules, tests and research
-utilities are separate:
-
-```text
-Launch.cmd          Windows launcher
-bootstrap.py        Local environment setup
-run_game.py         Installation checks and game entry point
-pop2/               Game runtime and first-run import window
-tests/              Regression tests
-tools/              Game-file import and recovery utilities
-docs/               Technical notes and routine catalog
-assets/             Locally imported game files (not bundled)
-vendor/             Import-time MIDI renderer and its license notices
-.github/            Automated checks
-```
-
-[Behavior map](docs/BEHAVIOR_MAP.md), [rule recovery index](docs/RECOVERY_INDEX.md),
-[collision notes](docs/COLLISION_RECOVERY.md), [enemy AI notes](docs/AI_RECOVERY.md),
-[harbor and ship notes](docs/HARBOR_RECOVERY.md),
-[audio notes](docs/AUDIO_RECOVERY.md), [death/checkpoint notes](docs/REBIRTH_RECOVERY.md),
-[intro notes](docs/INTRO_RECOVERY.md),
-[demo and credits notes](docs/ATTRACT_RECOVERY.md),
-[game commands](docs/GAME_COMMANDS.md),
-[development history](docs/DEVELOPMENT_HISTORY.md).
-
-Source addresses in comments identify the recovered Macintosh routine behind a
-condition. Passing tests cover those documented subsets, not full-game parity.
+<br/>
 
 ## License
 
