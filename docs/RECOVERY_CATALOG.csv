@@ -556,7 +556,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 10,Temple,GetFlameImgHnd,0x2e10,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 10,Temple,GetFlameImgSize,0x2e68,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,1
 10,Temple,MakeFlameFCharClipRect,0x2f1e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,1
-10,Temple,SetupFlame,0x2fbe,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,5
+10,Temple,SetupFlame,0x2fbe,jump_table,partial,pop2/scene_prototype.py,"burning poses 306-318: AFRM type 4 -> SHAP 4092 + index, CTBL 4077 colours, drawn as the attachment; source reading, no native probe",2,5
 11,Mohawk Libs 2,advance__7midiObj,0x0754,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,7,1
 11,Mohawk Libs 2,calcTempo__7midiObj,0x08e0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 11,Mohawk Libs 2,calcTime2Next__7midiObj,0x09e8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,1

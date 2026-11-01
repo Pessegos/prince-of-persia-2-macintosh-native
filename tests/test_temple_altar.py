@@ -215,14 +215,19 @@ class AltarSceneTests(unittest.TestCase):
         self.assertFalse(scene.combat.player.alive)
         self.assertEqual(scene.death.method, BURN_DEATH_METHOD)
         self.assertTrue(scene.game.caverns.flame & 0x80)
+        flames = []
         for _ in range(30):
             self.tick()
             flashes.append(getattr(scene, 'palette_flash', None))
             poses.append(scene.sequence_state.action)
+            if 306 <= scene.action <= 315:
+                # SetupFlame 10:2fbe: AFRM type 4 draws SHAP 4092 + index.
+                flames.append(scene.sword_sprite() is not None)
         # SEQS 230: white flash over poses 50/51, burning 306-315, then 185.
         self.assertIn(225, flashes)
         self.assertIsNone(flashes[-1])
         self.assertIn(306, poses)
+        self.assertTrue(flames and all(flames))
         self.assertEqual(poses[-1], 185)
         self.assertEqual(scene.sequence_state.sequence_mode, 12)
 

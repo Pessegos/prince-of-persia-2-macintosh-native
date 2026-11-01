@@ -3206,6 +3206,17 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             if key not in self.sword_sprite_cache:
                 self.sword_sprite_cache[key] = decode_shap(resources['SHAP'][shape_id]['data'], palette)
             return self.sword_sprite_cache[key], dx, dy
+        if attachment_type == 4 and self.game.caverns is not None:
+            # SetupFlame 10:2fbe (poses 306-318, before the sword branch):
+            # SHAP 4092 + index at palette base 224 (Kid CTBL 4077).
+            shape_id = 4092 + shape_index
+            key = 'flame', shape_id
+            if key not in self.sword_sprite_cache:
+                colours = decode_ctbl(self.kid['CTBL'][4077]['data'])
+                self.sword_sprite_cache[key] = decode_shap(
+                    self.kid['SHAP'][shape_id]['data'],
+                    {index - 223: colour for index, colour in colours.items()})
+            return self.sword_sprite_cache[key], dx, dy
         if attachment_type != 1 or shape_index < 0:
             return None
         base = self.first_sword_shape_id

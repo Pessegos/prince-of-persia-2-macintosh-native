@@ -43,8 +43,11 @@ Read from the saved Kid (a5-0x50d2): row 1 and selected SEQS other than 230:
 | otherwise | the shadow (next section) when pose 185, mode (+0x34) != 12 and a5-0x4fd4 = 1 |
 
 SEQS 230: mode 0, opcode -24 (palette flash) to colour 225, poses 50/51,
-restore, the burning poses 306-315 (SetupOpponent 3:0852/3:0a76 draw
-SetupFlame 10:2fbe over poses 306-318, not ported), mode 12, pose 185 held.
+restore, the burning poses 306-315, mode 12, pose 185 held. SetupOpponent
+3:0852 runs SetupFlame 10:2fbe for poses 306-318 before the sword branch: the
+pose's AFRM record (a5-0x521a type 4) gives SHAP 4092 + index and its
+offsets, drawn at palette base 224 (CTBL 4077). The port draws it as that
+attachment.
 Mode 12 excludes the burned Kid from the shadow.
 
 Opcode -24 (AnimChar 4:2fb0): flag 1 fills palette entries 1-254 with the
@@ -132,7 +135,6 @@ revived Kid (SEQS 235) leaves mode 13.
 
 ## Open
 
-- SetupFlame 10:2fbe over the burning poses 306-318.
 - What ends level 13 after the merge (CheckPlayNIS(13, 14): NIS 3), and the
   mode-13 Kid in level 14 (2001 at palette base 48, environment 6).
 - A native probe of AutoCtrl 10:2850 and the rise/merge.
