@@ -1544,9 +1544,16 @@ class Temple(Caverns):
             # CheckPlayNIS 2:0180 (a tree scene at most), then RestartGame.
             self.finish_via_story(number + 1)
         else:
-            # CheckPlayNIS(13, 14) selects NIS 3; level fourteen is not ported.
+            # CheckPlayNIS(13, 14) shows NIS 3, the flight to the tower;
+            # level fourteen is not ported, so the game stops after it.
+            def finish():
+                scene.game.exit = None
+                scene.level_complete = True
+                scene.status.set(f'Level {number} complete')
             scene.game.exit = None
-            scene.status.set(f'Level {number} complete')
+            scene.level_complete = False
+            if not scene.start_tower_flight(finish):
+                finish()
 
 
 def environment_for(scene):

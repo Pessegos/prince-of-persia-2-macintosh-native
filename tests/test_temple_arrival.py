@@ -417,5 +417,50 @@ class TempleWallCorrectionTests(unittest.TestCase):
                 self.assertEqual(native != 0, kind in (4, 20) and foreground == 0)
 
 
+TOWER_INSTALLED = all((ASSET_DIR / name).is_file() for name in ('tower.json', 'TowerNIS.rsrc', 'Final.rsrc'))
+
+
+@unittest.skipUnless(TOWER_INSTALLED, 'Imported tower scene required')
+class TowerFlightTests(unittest.TestCase):
+    def test_the_flight_draws_the_horse_and_erases_its_trail(self):
+        # NIS 3 (15:7226): TowerNIS.rsrc's shots with Horse.rsrc
+        # actors. PlayTheAnimation 16:13be repaints the bounds with the fill
+        # colour each frame when flag 8 is clear; before, the horse left a
+        # trail across the second shot.
+        from pop2.intro import IntroAssets, IntroPlayer
+
+        assets = IntroAssets(program_name='tower.json')
+        operations = assets.program['operations']
+        self.assertEqual(assets.program['kind'], 'tower')
+        drawn = {item['args'][0] for item in operations if item['op'] == 'shape'}
+        self.assertTrue(any(700000 < shape < 800000 for shape in drawn))
+        self.assertTrue(any(1000000 < shape < 1100000 for shape in drawn))
+        erases = [item for item in operations if item['op'] == 'fill' and item['args'][0] == 93]
+        self.assertGreater(len(erases), 50)
+        player = IntroPlayer(assets)
+        player.seek_operation(len(operations) - 1)
+        self.assertTrue(player.done or player.position >= len(operations) - 1)
+
+
+class TowerExitTests(unittest.TestCase):
+    def test_leaving_level_thirteen_plays_the_flight_then_completes(self):
+        # CheckPlayNIS(13, 14): NIS 3, then the level-14 restart (not ported).
+        from types import SimpleNamespace
+        from pop2.environments import Temple
+
+        calls, flights = [], []
+        scene = SimpleNamespace(game=SimpleNamespace(level=SimpleNamespace(number=13), exit=object()),
+                                status=SimpleNamespace(set=calls.append), level_complete=None,
+                                start_tower_flight=lambda finish: flights.append(finish) or True)
+        Temple(scene).finish_exit()
+        self.assertEqual((calls, scene.level_complete), ([], False))
+        self.assertIsNone(scene.game.exit)
+        flights[0]()
+        self.assertEqual((calls, scene.level_complete), (['Level 13 complete'], True))
+        scene.start_tower_flight = lambda finish: False
+        Temple(scene).finish_exit()
+        self.assertEqual(calls[-1], 'Level 13 complete')
+
+
 if __name__ == '__main__':
     unittest.main()

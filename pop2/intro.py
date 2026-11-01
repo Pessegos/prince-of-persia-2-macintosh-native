@@ -145,7 +145,7 @@ class IntroAssets:
         # The throne scene also draws a few of the game's own shapes: only the
         # drawn ones are decoded.
         drawn = None
-        if self.program.get("kind") in ("throne", "temple"):
+        if self.program.get("kind") in ("throne", "temple", "tower"):
             programs = [*self.program.get("variants", {}).values(), self.program["operations"]]
             drawn = {item["args"][0] for operations in programs
                      for item in operations if item["op"] == "shape"}

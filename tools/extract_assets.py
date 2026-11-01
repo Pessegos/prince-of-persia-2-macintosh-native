@@ -12,7 +12,7 @@ from tools.extract_enemy_profiles import extract_bytes
 from tools.extract_audio import extract_audio
 from tools.extract_intro import (
     TREE_VARIANTS, extract_carpet, extract_intro, extract_ending, extract_discovery, extract_temple,
-    extract_throne, extract_trees,
+    extract_throne, extract_tower, extract_trees,
 )
 from tools.extract_attract import extract_attract, extract_credits_music
 from tools.extract_caverns import extract_cavern_levels, scenery_name
@@ -24,7 +24,7 @@ from pop2.paths import ASSET_DIR
 RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Skeleton.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc", "NISTree.rsrc",
                   "Ruins.rsrc", "Head.rsrc", "TNIS1.rsrc", "TNIS2.rsrc", "TNIS3.rsrc", "ThroneNIS.rsrc",
                   "Horse.rsrc", "TempleNIS.rsrc", "Temple.rsrc", "Birdhead.rsrc",
-                  "FlameSword.rsrc")
+                  "FlameSword.rsrc", "TowerNIS.rsrc", "Final.rsrc")
 REQUIRED_RESOURCES = {
     "Prince.rsrc": {"LEVL", "SEQS", "SHAP", "SHPL", "CTBL", "NFNT"},
     "Kid.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
@@ -54,6 +54,10 @@ REQUIRED_RESOURCES = {
     "Birdhead.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
     # Level twelve's flaming sword (opponent set 1, actor type 10).
     "FlameSword.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
+    # The flight to the tower after level thirteen (NIS 3), whose last shot
+    # draws level fourteen's environment (Final.rsrc).
+    "TowerNIS.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
+    "Final.rsrc": {"SHAP", "CTBL"},
 }
 
 
@@ -113,6 +117,9 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         progress("Recovering the original ride to the temple...")
         extract_temple(image, program, resources["NIS.rsrc"], resources, staging, progress)
         resources["temple.json"] = (staging / "temple.json").read_bytes()
+        progress("Recovering the original flight to the tower...")
+        extract_tower(image, program, resources["NIS.rsrc"], resources, staging, progress)
+        resources["tower.json"] = (staging / "tower.json").read_bytes()
         for variant in TREE_VARIANTS:
             resources[f"tree-{variant}.json"] = (staging / f"tree-{variant}.json").read_bytes()
         caverns.result()

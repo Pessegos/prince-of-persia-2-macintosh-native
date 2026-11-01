@@ -2745,22 +2745,31 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
     def start_temple_ride(self, finish):
         """NISTemple (15:5fd4) after level nine; `finish` runs after it.
         Returns False when the scene is not imported."""
+        return self.start_story_scene('temple.json', finish, 'The ride to the temple')
+
+    def start_tower_flight(self, finish):
+        """NIS 3 (15:7226) after level thirteen: the horse flies from the
+        temple to the tower. Returns False when the scene is not imported."""
+        return self.start_story_scene('tower.json', finish, 'The flight to the tower')
+
+    def start_story_scene(self, program_name, finish, status):
         from pop2.intro import IntroAssets, IntroPlayer
         from pop2.paths import ASSET_DIR
 
-        if not (ASSET_DIR / 'temple.json').is_file():
+        if not (ASSET_DIR / program_name).is_file():
             return False
-        if getattr(self, 'temple_assets', None) is None:
-            self.temple_assets = IntroAssets(program_name='temple.json')
+        cache = self.__dict__.setdefault('story_scene_assets', {})
+        if program_name not in cache:
+            cache[program_name] = IntroAssets(program_name=program_name)
         self.clear_keys(None)
         self.attract_stage = 'tree'
         self.tree_variant = None
         self.after_vision = finish
         if self.audio is not None:
             self.audio.reset()
-        self.intro = IntroPlayer(self.temple_assets, self.audio)
+        self.intro = IntroPlayer(cache[program_name], self.audio)
         self.last_intro_at = time.perf_counter()
-        self.status.set('The ride to the temple')
+        self.status.set(status)
         return True
 
     def finish_level_four(self):

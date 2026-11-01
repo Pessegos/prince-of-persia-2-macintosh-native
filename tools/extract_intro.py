@@ -315,14 +315,18 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                         x, y = left, top
                     else:
                         x = y = 0
+                    bounds = [max(0, y), max(0, x), min(384, y + bottom - top), min(512, x + right - left)]
                     if w(18):
                         # 16:11b8-11ce: PaintRect of the animation's bounds
                         # within the screen in palette index $1a.
-                        emit("fill", w(18) & 255, [max(0, y), max(0, x), min(384, y + bottom - top),
-                                                   min(512, x + right - left)])
+                        emit("fill", w(18) & 255, bounds)
                     emit("animation", first, w(2), x, y, *([callback] if callback else []))
                     if w(16) & 8:
                         operations[-1]["flags"] = w(16)
+                    elif w(18):
+                        # 16:13be-13d2: without flag 8 every frame first
+                        # paints the bounds again.
+                        operations[-1]["erase"] = [w(18) & 255, bounds]
                     if opened:
                         # The Resource Manager's search order for its shapes.
                         operations[-1]["search"] = [files[record][0] for record in reversed(opened)] + [0]
@@ -486,6 +490,10 @@ def expand_animations(operations, nis, callbacks=None):
             rectangles = []
             for rectangle in previous:
                 emit('restore', rectangle)
+            erase = item.get('erase')
+            if erase is not None:
+                emit('fill', *erase)
+                rectangles.append(erase[1])
             for shape, dx, dy, flags in animation.layers:
                 if not shape:
                     continue
@@ -819,6 +827,86 @@ def extract_temple(image, program, nis, files, directory, progress=lambda _text:
               'resource_files': {name: offset for name, offset in (*TEMPLE_FILES.values(), *TEMPLE_RESIDENTS)},
               'operations': operations, 'audio': audio}
     (directory / 'temple.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')
+
+
+# NIS 3 (CheckPlayNIS(13, 14), the 15:07c8 dispatcher's third entry
+# 15:7226, unmapped in the listing): the tower after the temple. It opens
+# Horse and TowerNIS (A5 file records -0x26a4/-0x26b6) and animates with
+# TransFunc9-11. RestartGame has already opened level fourteen's
+# environment: its last shot draws Final.rsrc SHAP 4000/4001 with Final CTBL
+# 3500 at 64 and Kid CTBL 25006.
+TOWER_FILES = {0x26a4: ('Horse.rsrc', 700000), 0x26b6: ('TowerNIS.rsrc', 1000000)}
+TOWER_CALLBACKS = {0xee2: ('tower9', 0x755a), 0xeea: ('tower10', 0x759e), 0xef2: ('tower11', 0x75e2)}
+TOWER_RESIDENTS = (('Prince.rsrc', 800000), ('Kid.rsrc', 900000), ('Final.rsrc', 1100000))
+TOWER_CALLBACK_FRAMES = range(0, 64)
+
+
+def tower_resources(nis, files):
+    merged = {kind: dict(items) for kind, items in parse_resource_fork(nis).items()}
+    for name, offset in (*TOWER_FILES.values(), *TOWER_RESIDENTS):
+        for kind, items in parse_resource_fork(files[name]).items():
+            merged.setdefault(kind, {}).update({offset + key: value for key, value in items.items()})
+    return merged
+
+
+def recover_tower(program, nis, files):
+    """NIS 3, 15:7226, with TransFunc9 (song 25009, until cue 97), TransFunc10
+    (a fade on frame 2) and TransFunc11 (palettes on frames 40-42)."""
+    parsed = {record: (offset, parse_resource_fork(files[name]))
+              for record, (name, offset) in TOWER_FILES.items()}
+    names = {offset: name for offset, (name, _entry) in TOWER_CALLBACKS.items()}
+    resident = tuple((offset, parse_resource_fork(files[name])) for name, offset in TOWER_RESIDENTS)
+    operations = recover_scenes(program, nis, entries=(0x7226,), callbacks=names, files=parsed,
+                                resident=resident)
+    operations = [item for item in operations if item['op'] != 'game_palettes']
+    nis_resources = parse_resource_fork(nis)
+    # 15:26fc keeps a palette in a5-0x2454 when its flags word has bit 0
+    # (index 69 here, not 82): TransFunc10's fade on frame 2 reads it.
+    faded, palette = {}, 0
+    for item in operations:
+        if 'search' in item:
+            item['search'] = [*item['search'], *(offset for _name, offset in TOWER_RESIDENTS)]
+        if item['op'] == 'palette' and item['args'][1] & 1:
+            palette = item['args'][0]
+        if item['op'] == 'animation' and len(item['args']) == 5:
+            faded[item['args'][4]] = palette
+
+    def scene_file_id(item):
+        # A callback runs while the coordinator's files are open: TowerNIS
+        # (opened last), Horse, then NIS and the game's files.
+        kind = {'palette': 'CTBL', 'shape': 'SHAP'}.get(item['op'])
+        if kind is None or item['args'][0] >= 100000 or item['args'][0] in nis_resources.get(kind, {}):
+            return item
+        for offset in (1000000, 700000, *(offset for _name, offset in TOWER_RESIDENTS)):
+            if offset + item['args'][0] in resources.get(kind, {}):
+                return {**item, 'args': [offset + item['args'][0], *item['args'][1:]]}
+        return item
+
+    resources = tower_resources(nis, files)
+    callbacks = {}
+    for name, entry in TOWER_CALLBACKS.values():
+        frames = {}
+        for frame in TOWER_CALLBACK_FRAMES:
+            frame_operations = recover_scenes(program, nis, entries=(entry,), arguments=(frame,),
+                                              files=parsed, resident=resident)
+            for operation in frame_operations:
+                if operation['op'] == 'fade':
+                    operation['args'][0] = faded.get(name, operation['args'][0])
+            if frame_operations:
+                frames[frame] = [scene_file_id(item) for item in frame_operations]
+        callbacks[name] = frames
+    return expand_animations(operations, resources, callbacks)
+
+
+def extract_tower(image, program, nis, files, directory, progress=lambda _text: None):
+    """Write the tower scene shown after level thirteen."""
+    directory = Path(directory)
+    operations = recover_tower(program, nis, files)
+    audio = extract_scene_audio(image, operations, directory, progress, banked=True)
+    result = {'schema': 1, 'kind': 'tower',
+              'resource_files': {name: offset for name, offset in (*TOWER_FILES.values(), *TOWER_RESIDENTS)},
+              'operations': operations, 'audio': audio}
+    (directory / 'tower.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')
 
 
 TREE_VARIANTS = range(1, 10)

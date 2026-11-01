@@ -138,3 +138,22 @@ revived Kid (SEQS 235) leaves mode 13.
 - What ends level 13 after the merge (CheckPlayNIS(13, 14): NIS 3), and the
   mode-13 Kid in level 14 (2001 at palette base 48, environment 6).
 - A native probe of AutoCtrl 10:2850 and the rise/merge.
+
+## NIS 3: the flight to the tower
+
+Leaving level 13, `CheckPlayNIS(13, 14)` dispatches (15:07c8) NIS 3 at
+15:7226 (unmapped in the listing; disassemble 15:7226 onwards). It loads
+TowerNIS.rsrc and uses Horse.rsrc, Prince.rsrc, Kid.rsrc and Final.rsrc
+(SHAP 4000/4001, CTBL 3500) through TransFunc9-11 (15:755a, 759e, 75e2).
+
+- The importer (`tools/extract_intro.py` `extract_tower`) writes
+  `tower.json`. Callback shape ids are searched in TowerNIS, Horse, then the
+  residents. The fade takes the palette that 15:26fc stores only when the
+  flags word has bit 0 set.
+- PlayTheAnimation without flag 8 but with a fill colour repaints the
+  animation bounds every frame (16:13be-13d2). The port emits a `fill`
+  operation per frame. Only this scene uses that path.
+- `Temple.finish_exit` plays the scene and then marks level 13 complete.
+  Level 14 (the Final environment, CODE 9) is not ported.
+- Known gap: there are small artifacts at the right edge (x ≈ 507) of the
+  flight shots.
