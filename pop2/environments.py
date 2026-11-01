@@ -1201,6 +1201,54 @@ class Temple(Caverns):
             elif getattr(scene, 'audio', None) is not None:
                 scene.audio.stop_sound(cue)
 
+    def frame_hook(self):
+        super().frame_hook()
+        self.altar()
+        self.palette_flash(self.scene.sequence_state)
+
+    def altar(self):
+        """10:27ba -> 2a62: the Kid at level 13's sacred flame."""
+        from pop2.caverns import FLARE
+        from pop2.temple_altar import (
+            APPROACH_SONG, BURN_DEATH_METHOD, BURN_SEQUENCE, BURN_SOUND, BURN_X, altar_event,
+        )
+
+        scene = self.scene
+        caverns, motion, state = scene.game.caverns, scene.terrain_motion, scene.sequence_state
+        if caverns is None or motion is None or motion.dead or getattr(scene, 'god_mode', False):
+            return
+        audio = getattr(scene, 'audio', None)
+        event = altar_event(scene.game.level.number, scene.room_id, motion.row, native_x(state.target_x),
+                            state.selected_sequence_id,
+                            audio is not None and audio.song_playing(APPROACH_SONG))
+        if event == 'song':
+            if audio is not None:
+                audio.add_song(APPROACH_SONG)
+        elif event == 'burn':
+            # 10:2a7e-2ab4: JumpSeq(230) without AnimChar, X 335,
+            # DecLifePts(100), AddSound(249), SetKidDeathMethod(16) and the
+            # flame cell's foreground 0x85 (a flare).
+            scene.clear_keys(None)
+            scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
+            state.select(BURN_SEQUENCE)
+            state.target_x = state.current_x = scene_x(BURN_X)
+            state.horizontal_velocity = state.vertical_velocity = 0
+            motion.dead, motion.falling = True, False
+            scene.combat.player.life = 0
+            state.sound_events.append(BURN_SOUND)
+            scene.death.begin(BURN_DEATH_METHOD)
+            scene.death.music_method = BURN_DEATH_METHOD
+            caverns.flame = FLARE
+            scene.player_x = state.target_x
+            scene.status.set('Defeated')
+
+    def palette_flash(self, state):
+        """SEQS opcode -24: fill palette entries 1-254 with one colour
+        (SetPaletteToColorIdx 3:4fbc), or restore them (3:4f30)."""
+        for event in [event for event in state.sequence_events if event[0] == -24]:
+            state.sequence_events.remove(event)
+            self.scene.palette_flash = event[1][0] if event[1] else None
+
     def rock_events(self, mob, events):
         """The actor endpoints of 10:1d5c, for the Prince."""
         from pop2.slide_rocks import face_column

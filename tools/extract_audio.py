@@ -56,7 +56,7 @@ def audio_tables(program):
                         "counts": words(counts_at, groups) if groups else [],
                         "combat_group": words(-0x40c6 + bank * 2, 1)[0]})
     return {"schema": AUDIO_SCHEMA, "cues": cues,
-            "death_cues": words(-0x4396, 16), "ambient": ambient}
+            "death_cues": words(-0x4396, 17), "ambient": ambient}
 
 
 def instrument_bank(program, directory):

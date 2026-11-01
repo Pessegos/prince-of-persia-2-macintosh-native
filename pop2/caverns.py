@@ -431,17 +431,50 @@ def cavern_flask_instances(program, room_id, terrain):
 
 
 FLAME_LEVEL, FLAME_ROOM, FLAME_CUSTOM = 13, 3, 4075
+# DATA a5-0x2b7c: the CUST 4075 records of a flare (counter bit 0x80).
+FLARE_RECORDS = (14, 14, 15, 16, 16, 14)
+# 10:29f8/2ab4: the flame cell's foreground (native room 4, cell 11) set to
+# a five-step flare.
+FLARE = 0x85
+
+
+def flash_viewport(image, index):
+    """SetPaletteToColorIdx 3:4fbc: entries 1-254 take colour `index`;
+    entry 0 (white) and 255 (black) keep theirs. The port's frames hold
+    colours, not indices: pure white and black pixels stand for 0 and 255.
+    Index 225 is the flame's white (Kid CTBL 4077, stored at 224-239)."""
+    import numpy
+
+    kid = load_resource_file('Kid.rsrc')
+    color = decode_ctbl(kid['CTBL'][4077]['data']).get(index)
+    if color is None:
+        return image
+    pixels = numpy.array(image.convert('RGBA'))
+    rgb = pixels[..., :3]
+    kept = numpy.all(rgb == 0, axis=-1) | numpy.all(rgb == 255, axis=-1)
+    pixels[~kept, :3] = color[:3]
+    return Image.fromarray(pixels, 'RGBA')
 
 
 def advance_flame(counter):
-    """10:2cc2 (CUST kind 0x20) without bit 0x80: 0..11, then 0 again."""
+    """AnimTrob 5:0d0a's tile-43 case 10:2cc2: 0..11, then 0 again; a flare
+    (bit 0x80) counts its low four bits down to 0x80, then returns to 0."""
+    if counter & 0x80:
+        return 0 if not counter & 15 else counter - 1
     return counter + 1 if counter < 11 else 0
 
 
+def flame_record(counter):
+    """DrawTempSacredFlame 10:2d5a: a flare draws a5-0x2b7c[counter & 0x7f],
+    otherwise CUST 4075 record counter + 2."""
+    return FLARE_RECORDS[counter & 0x7f] if counter & 0x80 else counter + 2
+
+
 def draw_temple_flame(frame, room_id, counter, *, level_number=FLAME_LEVEL):
-    """DrawTempSacredFlame 10:2d5a: CUST 4075 record counter + 2 (SHAP
-    4077 + counter, Kid.rsrc), at the record's X and bottom. The counter's
-    0x80 sequence (DATA a5-0x2b7c, records up to 16) is not ported."""
+    """DrawTempSacredFlame 10:2d5a: the CUST 4075 record of `flame_record`
+    (SHAP 4077 + record - 2, Kid.rsrc), at the record's X and bottom. A
+    flare record is drawn with pass 1 instead of 11; the port draws both in
+    the same layer."""
     if (level_number, room_id) != (FLAME_LEVEL, FLAME_ROOM):
         return frame
     import struct
@@ -451,7 +484,7 @@ def draw_temple_flame(frame, room_id, counter, *, level_number=FLAME_LEVEL):
     if custom is None:
         return frame
     data = custom['data']
-    shape_index, bottom, x, _pass, mode = struct.unpack_from('>5h', data, 30 + (counter + 2) * 32)
+    shape_index, bottom, x, _pass, mode = struct.unpack_from('>5h', data, 30 + flame_record(counter) * 32)
     shape = struct.unpack_from('>H', data, 2)[0] + shape_index
     sprite = cavern_command_sprite(['back', shape, x, bottom, mode, 0, [], 5], resources, palette, shapes)
     frame = frame.copy()

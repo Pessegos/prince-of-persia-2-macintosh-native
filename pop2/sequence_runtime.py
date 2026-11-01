@@ -227,6 +227,17 @@ class SequenceRuntime:
                 second = self._next_operand(opcode, opcode_cursor)
                 self.reading = self.state.sequence_id
                 self.state.select(first if self.rng.randrange(limit + 1) else second)
+            elif opcode == -24:
+                # AnimChar 4:2fb0: a nonzero flag fills the palette with one
+                # colour index (SetPaletteToColorIdx 3:4fbc; 225 is 209 in
+                # environment 6); zero restores it (3:4f30).
+                if self._next_operand(opcode, opcode_cursor):
+                    color = self._next_operand(opcode, opcode_cursor)
+                    if color == 225 and self.state.level_kind == 6:
+                        color = 209
+                    self.state.sequence_events.append((opcode, (color,)))
+                else:
+                    self.state.sequence_events.append((opcode, ()))
             elif opcode == -21:
                 self.state.sequence_mode = self._next_operand(opcode, opcode_cursor)
             elif opcode == -23:

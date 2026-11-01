@@ -29,6 +29,10 @@ def scene_sound_key(resource_id, kind):
     return f"scene-{kind}-{resource_id}"
 
 
+
+# a5-0x4396[16]: the altar burn (SetKidDeathMethod(16), 10:2aa6).
+LATE_DEATH_CUES = {16: 250}
+
 class MixerPlayback:
     def __init__(self, directory, cues, mix_mechanisms=False, split_mechanisms=False):
         os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
@@ -414,7 +418,10 @@ class AudioEngine:
                    or not self._effect_busy(bus) for bus in self.effect_buses)
 
     def death_song(self, method):
-        self.add_song(self.manifest["death_cues"][method])
+        cues = self.manifest["death_cues"]
+        # AddKidDeathSong 5:4afc indexes a5-0x4396 without a bound; manifests
+        # imported before the burn (method 16) hold only entries 0-15.
+        self.add_song(cues[method] if method < len(cues) else LATE_DEATH_CUES[method])
 
     def stop_sound(self, cue):
         self.stopped_effects.add(cue)

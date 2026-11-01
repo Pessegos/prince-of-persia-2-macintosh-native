@@ -518,6 +518,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.schedule_next_animation()
 
     def load_level(self, number, keep_music=False):
+        self.palette_flash = None
         # Prepare the complete destination before replacing a running session.
         previous = getattr(self, 'game', None)
         # Only the level-six exit chooses level seven's entrance.
@@ -2396,6 +2397,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         # FirstFrame 2:601e-6024 removes a time message at every level start;
         # the Prince initializer 2:5e9c also clears the float timer.
         self.time_message, self.time_message_frames = None, 0
+        self.palette_flash = None
         if self.game.caverns is not None:
             self.game.caverns.potions.float_timer = 0
         self.remember_development_room()
@@ -3446,6 +3448,11 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             player_life = environment.display_life(combat.player.life)
             self.health_art.draw(viewport, combat, show_opponent=not hide_guards,
                                  player_life=player_life)
+        flash = getattr(self, 'palette_flash', None)
+        if flash is not None:
+            from pop2.caverns import flash_viewport
+
+            viewport = flash_viewport(viewport, flash)
         self.screenshot_viewport = viewport.copy()
         if self.death.prompt_visible:
             text = self.restart_text

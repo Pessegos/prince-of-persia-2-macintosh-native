@@ -186,7 +186,10 @@ Each stage integrates separately with the usual reservation.
   FlameSword.rsrc): first port in `pop2/flame_sword.py`, rules and gaps in
   `flame-sword.md` (a reimport is needed for FlameSword.rsrc).
 - The end of level 13 (CheckPlayNIS(13, 14): NIS 3) and level 14.
-- CheckBarr's sliding-rock overlays with a non-empty MOB bank; the flame's
-  0x80 sequence; cross-room following of running opponents (FrameAdv
-  2:6550-65da).
+- CheckBarr's sliding-rock overlays with a non-empty MOB bank; cross-room
+  following of running opponents (FrameAdv 2:6550-65da).
+- Level 13's altar (`temple-altar.md`): the flame's flare (0x80 sequence)
+  and the burn at the flame (SEQS 230, palette flash, death song 250) are
+  ported; the shadow that rises from the dead Kid, takes the flame and
+  revives him (actor type 1, 10:2850/2b32/27d8) is recovered, not ported.
 - A reimport is needed for the new trap-door units in temple_level10-13.
