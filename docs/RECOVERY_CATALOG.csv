@@ -210,8 +210,8 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,CutToKidRoom,0x2338,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,9
 4,Characters 2,GetKidIdxAsOpp,0x2442,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,0
 4,Characters 2,IsShadowBlinkOn,0x24b2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,4
-4,Characters 2,IsShadowImbued,0x2590,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,0
-4,Characters 2,SetupShadowFlame,0x2630,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,8
+4,Characters 2,IsShadowImbued,0x2590,decoded,partial,pop2/temple_shadow.py;pop2/environments.py,"level-13 shadow in mode 13 (after SEQS 232); environment 6 life > 2 not reached; source reading with focused regressions, no native probe",2,0
+4,Characters 2,SetupShadowFlame,0x2630,jump_table,partial,pop2/temple_shadow.py;pop2/environments.py,"SHAP 4102 + frame % 9 over the imbued shadow, CTBL 4077 colours, centred with bottoms aligned; source reading, no native probe",2,8
 4,Characters 2,Handler,0x26e0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,4
 4,Characters 2,ReadCell,0x27ee,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,81,4
 4,Characters 2,GetUndefineCellId,0x28b6,decoded,partial,pop2/terrain.py;tools/probe_cliff_void.py,"every branch (rooftop air, ruins top-row air and the level-six/nine exteriors, temple level-13 chasm rooms, palace rooms 3/7/8, other boundaries solid); 19794 native comparisons over LEVL 2000-2013 with the real upper link; the Kid room is taken as the lookup origin",1,0

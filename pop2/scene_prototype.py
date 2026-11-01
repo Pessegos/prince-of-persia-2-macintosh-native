@@ -2017,14 +2017,18 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         return floor_y(motion.row) if motion is not None else START_FLOOR_Y
 
     def player_bounds(self):
-        action = self.sequence_state.action
-        sprite = self.player_sprite(action)
-        if sprite is None:
+        state = self.sequence_state
+        if self.player_sprite(state.action) is None:
             return (self.player_x, self.player_floor_y(), self.player_x, self.player_floor_y())
-        record = self.frames[action]
-        anchor = sprite.width - record.offset_x if self.sequence_state.facing else record.offset_x
-        left = self.sequence_state.target_x - anchor
-        bottom = self.player_floor_y() + self.sequence_state.current_y + record.offset_y
+        return self.kid_bounds(state, self.player_floor_y())
+
+    def kid_bounds(self, state, floor):
+        """Image bounds of a Kid-framed actor (the Prince or the shadow)."""
+        sprite = self.player_sprite(state.action)
+        record = self.frames[state.action]
+        anchor = sprite.width - record.offset_x if state.facing else record.offset_x
+        left = state.target_x - anchor
+        bottom = floor + state.current_y + record.offset_y
         return left, character_sprite_top(bottom, sprite.height), left + sprite.width - 1, bottom
 
     def player_collision_bounds(self):
@@ -2400,6 +2404,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.palette_flash = None
         if self.game.caverns is not None:
             self.game.caverns.potions.float_timer = 0
+            # 2:5bfe clears a5-0x4fd4 at every level start.
+            self.game.caverns.altar, self.game.caverns.shadow = 0, None
         self.remember_development_room()
         held = set(self.window_keys_down)
         snapshot = self.checkpoint
@@ -3365,6 +3371,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 self.guard_art.draw(layer, state, ground, guard.palette_variant, piece=piece)
                 bounds = self.guard_art.bounds(state, ground, piece=piece)
                 actors.append((state, record, bounds, guard.row, layer))
+        actors.extend(environment.extra_actors(frame.size))
         player_layer = Image.new("RGBA", frame.size)
         draw_state, draw_height = environment.drawn_player(self.sequence_state)
         draw_action = self.action if draw_height is None else draw_state.action

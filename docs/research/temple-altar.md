@@ -1,10 +1,11 @@
 # Level 13's Altar: the Sacred Flame and the Shadow
 
 Status: 2026-11-01. Static reading of CODE 2/3/4/5/6/10 (two call sites sit in
-unmapped regions and were disassembled from the CODE bytes). The burn and the
-flare are ported (`pop2/temple_altar.py`, `pop2/caverns.py`, the Temple
-environment, `tests/test_temple_altar.py`); the shadow below is recovered but
-not ported. No native probe yet. Native rooms are one-based.
+unmapped regions and were disassembled from the CODE bytes). The burn, the
+flare and the shadow are ported (`pop2/temple_altar.py`,
+`pop2/temple_shadow.py`, `pop2/caverns.py`, the Temple environment,
+`tests/test_temple_altar.py`). No native probe yet. Native rooms are
+one-based.
 
 ## Where it runs
 
@@ -52,7 +53,7 @@ environment 6), flag 0 restores the game palette (3:4f30). In level 13 index
 225 is white (Kid CTBL 4077 at 224-239). The port's frames hold colours: it
 keeps pure black and white pixels and fills the rest.
 
-## The shadow (recovered, not ported)
+## The shadow
 
 Level 13 room 4 row 1: floor at columns 0-2 (the flame at column 1, tile 43),
 a gap at columns 3-5 (room 4 is a chasm room, 6:4cd2), floor at 6-9 and one
@@ -89,18 +90,49 @@ burns him for good.
 4. Merge 10:27d8: the Kid is reloaded, JumpSeq(231), ALIVE -1, full life,
    the death message cleared (a5-0x4fcc/-4fca = 0), DrawKidMeter, Kid mode
    13, unarmed; LoadShad, 4:48f8 (the shadow removed), AddSong(252).
-5. IsShadowImbued 4:2590: mode 13 (or environment 6 with life > 2).
-   SetupShadowFlame 4:2630 then draws the blue flame over the Kid each frame
-   (GetFlameImgSize 10:2e68, SHAP 4102 + frame % 9).
+5. IsShadowImbued 4:2590 tests the working actor: mode 13 (or environment
+   6 with life > 2). SetupOpponent (3:0852 in environment 6, 3:0a4c for any
+   kind-1 actor) calls SetupShadowFlame 4:2630, which draws SHAP 4102 +
+   (a5-0x349a % 9) with palette base 224 (a5-0x2b70; CTBL 4077, loaded by
+   10:2edc at the level start) over the imbued shadow: AddFCharX centres it
+   on the image and MakeFlameFCharClipRect 10:2f1e aligns the bottoms. The
+   flame burns over the shadow on its way back, not over the Kid.
 
-The type-1 actor is drawn from the Kid's image set (SetupSword 3:0b00) with
-draw mode 0x30 (AddCharObj 3:01a4 copies +0x36); the blitter's mode 0x30 is
-not recovered.
+Colours: AddCharObj copies the draw mode 0x30 (+0x36) into the object; it is
+the palette base 48. 10:2edc loads CTBL 2000 there (2001 when the Kid's mode
+is 13), 4:1fea and 2:4b58 likewise, and pose 153 in mode 13 replaces it with
+CTBL 4077 (PoPSetPalette 3:508a). Kid.rsrc holds CTBL 2000 (dark blues),
+2001 and 4077; the Kid images use indices 1-16, so the port decodes the
+shadow's images with those tables.
+
+## In the port
+
+The Temple environment runs the shadow before the altar hook: AutoCtrl
+(`auto_ctrl`), AnimChar, then the Kid's terrain rules with the Kid's frames
+(`RooftopPhysics`, no room cuts, hang/climb sequences protected).
+DoStepFwd uses `step_boundary`/`plan_cautious_step` (arg 0) or
+`StepBoundary(d)`; DoRunJump(4) uses `run_jump_offset` with the Prince's
+reserve 48. The catch at poses 103-106 uses `catch_ledge`/`align_catch`
+(JumpSeq 15 and its first pose); at pose 91 the AnimChar preview (DoJumpHang)
+decides the climb (SEQS 10; 6:1998 skips the gate test for kind 1).
+
+From a death at native X 600 the port's shadow steps to the chasm edge,
+takes the standing jump (SEQS 3, about 146 pixels for a 153-pixel gap),
+falls short, catches the altar's ledge, swings (SEQS 210) and climbs, takes
+the flame (flare, white flash, CTBL 4077), turns (song 251), jumps back with
+SEQS 247 (about 197 pixels), walks to the body, turns, lies down and merges
+(about 130 frames). The state is saved: `CavernState.altar` (a5-0x4fd4) and
+`CavernState.shadow`; every level start clears them (2:5bfe).
+
+Exclusions: the facing-right climb's 4:5cbc/5:19f8 calls (10:29d2), the
+-3480/-3484 inputs DoStepFwd sets, and 10:2036's failed climb (SEQS 73).
+The shadow's footsteps join the Kid's sounds. The port's SEQS -18 also
+clears the mode (native 4:2d7e clears only +0x28), so a later climb by the
+revived Kid (SEQS 235) leaves mode 13.
 
 ## Open
 
-- Port the shadow: a Kid-framed opponent (type 1) with the AutoCtrl above,
-  the DoStepFwd/DoRunJump/DoJumpHang helpers and Kid terrain physics, the
-  merge and the imbued flame (SetupShadowFlame); the draw mode 0x30.
-- SetupFlame 10:2fbe over the burning poses.
-- What ends level 13 after the merge (CheckPlayNIS(13, 14): NIS 3).
+- SetupFlame 10:2fbe over the burning poses 306-318.
+- What ends level 13 after the merge (CheckPlayNIS(13, 14): NIS 3), and the
+  mode-13 Kid in level 14 (2001 at palette base 48, environment 6).
+- A native probe of AutoCtrl 10:2850 and the rise/merge.

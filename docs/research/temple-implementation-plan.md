@@ -190,6 +190,7 @@ Each stage integrates separately with the usual reservation.
   following of running opponents (FrameAdv 2:6550-65da).
 - Level 13's altar (`temple-altar.md`): the flame's flare (0x80 sequence)
   and the burn at the flame (SEQS 230, palette flash, death song 250) are
-  ported; the shadow that rises from the dead Kid, takes the flame and
-  revives him (actor type 1, 10:2850/2b32/27d8) is recovered, not ported.
+  ported, as is the shadow that rises from the dead Kid, takes the flame and
+  revives him (actor type 1, 10:2850/2b32/27d8, `pop2/temple_shadow.py`);
+  SetupFlame over the burning poses is not.
 - A reimport is needed for the new trap-door units in temple_level10-13.

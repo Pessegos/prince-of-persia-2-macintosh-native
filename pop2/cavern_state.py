@@ -14,6 +14,7 @@ from pop2.gate_crush import GateCrush
 from pop2.mechanism_audio import GateSound
 from pop2.scythes import Scythes
 from pop2.slide_rocks import SlideRocks
+from pop2.temple_shadow import TempleShadow
 from pop2.trapdoors import TrapDoors
 
 
@@ -41,6 +42,10 @@ class CavernState:
     trapdoors: TrapDoors = field(default_factory=TrapDoors)
     # a5-0x4818 in level 13's flame room (CUST 4075): 10:2cc2's counter.
     flame: int = 0
+    # a5-0x4fd4: 1 once KeepTime shows the death message there, -1 once the
+    # shadow (type 1, 10:2b32) has risen.
+    altar: int = 0
+    shadow: TempleShadow | None = None
     # Level seven entered by its upper door (alternate entry export).
     alternate_entry: bool = False
     # a5-0x5008: the level-four relief countdown; -1 idle, -2 already used.

@@ -138,6 +138,10 @@ class Environment:
         """Drawn over the actors, before the front scenery."""
         return frame
 
+    def extra_actors(self, size):
+        """(state, record, bounds, row, layer) actors drawn among the others."""
+        return ()
+
     def display_life(self, life):
         """The life the meter shows."""
         return life
@@ -1203,6 +1207,9 @@ class Temple(Caverns):
 
     def frame_hook(self):
         super().frame_hook()
+        # The opponents (the shadow's AutoCtrl/AnimChar) run before the
+        # environment hook (FrameAdv 2:7124).
+        self.shadow()
         self.altar()
         self.palette_flash(self.scene.sequence_state)
 
@@ -1210,12 +1217,25 @@ class Temple(Caverns):
         """10:27ba -> 2a62: the Kid at level 13's sacred flame."""
         from pop2.caverns import FLARE
         from pop2.temple_altar import (
-            APPROACH_SONG, BURN_DEATH_METHOD, BURN_SEQUENCE, BURN_SOUND, BURN_X, altar_event,
+            ALTAR_LEVEL, ALTAR_ROOM, APPROACH_SONG, BURN_DEATH_METHOD, BURN_SEQUENCE, BURN_SOUND,
+            BURN_X, altar_event,
         )
+        from pop2.temple_shadow import shadow_rises
 
         scene = self.scene
         caverns, motion, state = scene.game.caverns, scene.terrain_motion, scene.sequence_state
-        if caverns is None or motion is None or motion.dead or getattr(scene, 'god_mode', False):
+        if caverns is None or motion is None or getattr(scene, 'god_mode', False):
+            return
+        if (scene.game.level.number, scene.room_id) != (ALTAR_LEVEL, ALTAR_ROOM):
+            return
+        if motion.dead:
+            # KeepTime 2:6838-685e: the death message there sets a5-0x4fd4.
+            if caverns.altar == 0 and scene.death.prompt_visible:
+                caverns.altar = 1
+            if (state.selected_sequence_id != BURN_SEQUENCE
+                    and shadow_rises(motion.row, native_x(state.target_x), state.action,
+                                     state.sequence_mode, caverns.altar)):
+                self.raise_shadow()
             return
         audio = getattr(scene, 'audio', None)
         event = altar_event(scene.game.level.number, scene.room_id, motion.row, native_x(state.target_x),
@@ -1248,6 +1268,203 @@ class Temple(Caverns):
         for event in [event for event in state.sequence_events if event[0] == -24]:
             state.sequence_events.remove(event)
             self.scene.palette_flash = event[1][0] if event[1] else None
+
+    def raise_shadow(self):
+        """10:2b32: the dead Kid's double rises in his place (type 1)."""
+        from pop2.sequence_runtime import SequenceRuntime, SequenceState
+        from pop2.temple_shadow import RISE_SEQUENCE, RISE_SONG, SHADOW_TYPE, TempleShadow
+        from pop2.terrain import TerrainMotion
+
+        scene = self.scene
+        caverns, kid, motion = scene.game.caverns, scene.sequence_state, scene.terrain_motion
+        # A new opponent record (count + 1, 6:3642) at the Kid's cell, X and
+        # facing; SetCharFloor, Y - 1, mode 0, then JumpSeq(231) and AnimChar.
+        state = SequenceState(RISE_SEQUENCE, action=kid.action, current_x=kid.target_x,
+                              target_x=kid.target_x, current_y=-1, facing=kid.facing,
+                              actor_type=SHADOW_TYPE, level_kind=kid.level_kind)
+        caverns.shadow = TempleShadow(state, TerrainMotion(motion.room, motion.row),
+                                      getattr(scene, 'step_cautious', True))
+        SequenceRuntime(scene.sequence_runtime.sequences, state).next_frame()
+        caverns.altar = -1
+        audio = getattr(scene, 'audio', None)
+        if audio is not None:
+            audio.add_song(RISE_SONG)
+
+    def shadow(self):
+        """One opponent frame for the shadow: AutoCtrl 10:2850 (native room 4
+        of level 13 only, 6:4f44), AnimChar, then the Kid's terrain rules."""
+        from pop2.caverns import FLARE
+        from pop2.mac_input import StepBoundary, plan_cautious_step
+        from pop2.sequence_runtime import SequenceRuntime
+        from pop2.temple_altar import ALTAR_LEVEL, ALTAR_ROOM
+        from pop2.temple_shadow import (
+            CATCH_SEQUENCE, CLIMB_SEQUENCE, FLAME_PALETTE, IMBUED_MODE, LEDGE_SEQUENCES, TURN_SONG,
+            add_char_x, auto_ctrl,
+        )
+        from pop2.terrain import RooftopPhysics
+
+        scene = self.scene
+        caverns = scene.game.caverns
+        shadow = getattr(caverns, 'shadow', None)
+        if shadow is None or shadow.motion.room != scene.room_id:
+            return
+        state, motion = shadow.state, shadow.motion
+        runtime = SequenceRuntime(scene.sequence_runtime.sequences, state)
+        audio = getattr(scene, 'audio', None)
+
+        def bounds(view=None):
+            return scene.kid_bounds(state if view is None else view, floor_y(motion.row))
+
+        def step(distance):
+            # DoStepFwd 6:1276; 0 measures GetBarrDistances (4:5eae).
+            boundary = (StepBoundary(distance) if distance else scene.level_map.step_boundary(
+                motion.room, motion.row, state, scene.frames[state.action], bounds(), cautious=True))
+            plan, shadow.cautious = plan_cautious_step(boundary, shadow.cautious)
+            add_char_x(state, plan.pre_offset)
+            if plan.sequence_id is not None:
+                state.select(plan.sequence_id)
+            return state.selected_sequence_id
+
+        def run_jump():
+            # DoRunJump(4) 6:1c14 (poses 7-14, reserve 48): the port's
+            # Prince rule, whose actor type 0 stands for argument 4.
+            if not 7 <= state.action <= 14:
+                return
+            from dataclasses import replace
+
+            offset = scene.level_map.run_jump_offset(motion.room, motion.row,
+                                                     replace(state, actor_type=0))
+            if offset is not None:
+                state.target_x += offset
+                state.current_x = state.target_x
+                state.select(4)
+
+        animated = False
+        if (scene.game.level.number, scene.room_id) == (ALTAR_LEVEL, ALTAR_ROOM):
+            record = scene.frames[state.action]
+            column = character_column(floor_contact_x(state.target_x, state.facing, record))
+            kid = scene.sequence_state
+            sequence, event = auto_ctrl(state, column, native_x(kid.target_x), kid.facing,
+                                        step, run_jump)
+            if event == 'merge':
+                self.merge_shadow()
+                return
+            if event == 'turn' and audio is not None:
+                audio.add_song(TURN_SONG)
+            elif event == 'catch':
+                if motion.falling and scene.level_map.catch_ledge(motion.room, motion.row, state, record):
+                    # Catch 4:37ca: JumpSeq(15) and its first pose (80),
+                    # aligned with that pose's frame (4:38da).
+                    motion.falling = False
+                    state.select(CATCH_SEQUENCE)
+                    runtime.next_frame()
+                    scene.level_map.align_catch(motion.room, motion.row, state,
+                                                scene.frames[state.action])
+                    state.sound_events.append(9)
+                    animated = True
+            elif event == 'hang':
+                # DoJumpHang 6:1b7e previews AnimChar: a later pose climbs
+                # (6:1998 gives the shadow SEQS 10 without the gate test).
+                if runtime.peek_frame().action > state.action:
+                    sequence = CLIMB_SEQUENCE
+                    if state.sequence_mode == IMBUED_MODE:
+                        state.current_y -= 2
+            elif event == 'flare':
+                caverns.flame = FLARE
+            elif event == 'palette':
+                shadow.palette = FLAME_PALETTE
+            if sequence is not None:
+                state.select(sequence)
+        old_x = state.target_x
+        if not animated:
+            runtime.next_frame()
+        # SEQS -3/-4 change the floor row, -6 the absolute Y.
+        if state.engine_counter:
+            motion.row += state.engine_counter
+            state.current_y -= state.engine_counter * TILE_HEIGHT
+            state.engine_counter = 0
+        self.palette_flash(state)
+        state.sequence_events.clear()
+        RooftopPhysics(scene.level_map, scene.frames).advance(
+            motion, runtime, old_x, bounds(), frame_record=scene.frames[state.action],
+            bounds_for_state=bounds, cut_enabled=False,
+            protected=state.sequence_id in LEDGE_SEQUENCES)
+        state.current_x = state.target_x
+        # The shadow's footsteps join the Kid's cues (both actor sounds).
+        scene.sequence_state.sound_events.extend(state.sound_events)
+        state.sound_events.clear()
+
+    def extra_actors(self, size):
+        """The shadow: Kid frames in palette entries 48-63 (draw mode 0x30)."""
+        from PIL import Image, ImageOps
+
+        from pop2.animation_data import shape_id_for_action
+        from pop2.render_opening import character_sprite_top, decode_ctbl, decode_shap
+        from pop2.temple_shadow import FLAME_PALETTE, IMBUED_MODE, flame_shape
+
+        scene = self.scene
+        shadow = getattr(scene.game.caverns, 'shadow', None)
+        if shadow is None or shadow.motion.room != scene.room_id:
+            return ()
+        state = shadow.state
+        shape_id = shape_id_for_action(scene.frames, scene.first_shape_id, state.action)
+        if shape_id is None or shape_id not in scene.kid['SHAP']:
+            return ()
+        cache = scene.__dict__.setdefault('shadow_sprites', {})
+
+        def image(palette, shape):
+            if (palette, shape) not in cache:
+                colours = decode_ctbl(scene.kid['CTBL'][palette]['data'])
+                if palette == FLAME_PALETTE:
+                    # CTBL 4077 holds entries 224-239: loaded at 48 (or the
+                    # flame's base 224) it colours the images' 1-16.
+                    colours = {index - 223: colour for index, colour in colours.items()}
+                cache[palette, shape] = decode_shap(scene.kid['SHAP'][shape]['data'], colours)
+            return cache[palette, shape]
+
+        sprite, record = image(shadow.palette, shape_id), scene.frames[state.action]
+        anchor = record.offset_x
+        if state.facing:
+            sprite = ImageOps.mirror(sprite)
+            anchor = sprite.width - anchor
+        floor = floor_y(shadow.motion.row)
+        x = state.target_x - anchor
+        y = character_sprite_top(floor + record.offset_y + state.current_y, sprite.height)
+        layer = Image.new('RGBA', size)
+        layer.paste(sprite, (x, y), sprite)
+        if state.sequence_mode == IMBUED_MODE:
+            # SetupOpponent 3:0a4c -> SetupShadowFlame 4:2630: while
+            # IsShadowImbued (4:2590, mode 13) SHAP 4102 + frame % 9, palette
+            # base 224 (CTBL 4077, 10:2edc), burns over the shadow, centred
+            # on its image with the bottoms aligned (10:2f1e).
+            combat = getattr(scene, 'combat', None)
+            flame = image(FLAME_PALETTE, flame_shape(combat.world_frame if combat is not None else 0))
+            if state.facing:
+                flame = ImageOps.mirror(flame)
+            layer.paste(flame, (x + sprite.width // 2 - flame.width // 2,
+                                y + sprite.height - flame.height), flame)
+        return ((state, record, scene.kid_bounds(state, floor), shadow.motion.row, layer),)
+
+    def merge_shadow(self):
+        """10:27d8: the shadow lying on the body revives the Kid."""
+        from pop2.rebirth import DeathState
+        from pop2.temple_shadow import IMBUED_MODE, MERGE_SONG, RISE_SEQUENCE
+
+        scene = self.scene
+        kid, motion, player = scene.sequence_state, scene.terrain_motion, scene.combat.player
+        # JumpSeq(231), ALIVE -1, full life, the death message cleared
+        # (a5-0x4fcc/-4fca), mode 13, unarmed; the shadow removed (4:48f8).
+        kid.select(RISE_SEQUENCE)
+        kid.sequence_mode = IMBUED_MODE
+        motion.dead = motion.falling = False
+        player.life = player.max_life
+        scene.death = DeathState()
+        scene.sword_drawn = False
+        scene.game.caverns.shadow = None
+        scene.status.set('Ready')
+        audio = getattr(scene, 'audio', None)
+        if audio is not None:
+            audio.add_song(MERGE_SONG)
 
     def rock_events(self, mob, events):
         """The actor endpoints of 10:1d5c, for the Prince."""

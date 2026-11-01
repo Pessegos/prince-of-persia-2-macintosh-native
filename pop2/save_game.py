@@ -37,6 +37,7 @@ from pop2.story_progress import FRAMES_PER_MINUTE, StoryProgress
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.skeleton import Skeleton, SkeletonRoomRecord
 from pop2.flame_sword import FlameSword
+from pop2.temple_shadow import TempleShadow
 from pop2.terrain import TerrainMotion
 from pop2.scythes import SCYTHE_STATES, Scythes
 from pop2.slide_rocks import SlideRocks
@@ -56,7 +57,7 @@ CLASSES = {cls.__name__: cls for cls in (
     WaterEntry, Lava, LavaPool, FallingFloor, LooseFloors, OpponentGenerationPoint,
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
     Skeleton, SkeletonRoomRecord, FlameSword, GuardRoomRecord, TerrainMotion, WallSpikes, Scythes,
-    RuinsMind, SlideRocks, TrapDoors,
+    RuinsMind, SlideRocks, TrapDoors, TempleShadow,
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
         CavernState: {'entry_pending'},
@@ -197,7 +198,7 @@ def _unpack(value, resources, lava_tables, depth=0):
         optional.update(('fatal', 'float_timer', 'flip_timer'))
     if cls is CavernState:
         optional.update(('bridge', 'carpet', 'phew_countdown', 'scythes', 'alternate_entry',
-                         'throne_done', 'throne_seen'))
+                         'throne_done', 'throne_seen', 'altar', 'shadow'))
     if cls is Bridge:
         optional.update(('tension_level', 'tension', 'marks', 'wobble'))
     if (not isinstance(record, dict) or set(record) - allowed

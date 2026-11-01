@@ -176,7 +176,7 @@ class SequenceRuntime:
                     continue
                 if (
                     callback_id != 1
-                    or self.state.actor_type not in (0, 2, 4)
+                    or self.state.actor_type not in (0, 1, 2, 4)
                     or self.state.level_kind is None
                 ):
                     raise UnsupportedSequenceOpcode(
