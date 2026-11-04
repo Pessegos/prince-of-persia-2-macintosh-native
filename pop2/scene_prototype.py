@@ -3075,7 +3075,9 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         elif self.game.level.kind == 4:
             from pop2.development_entry import room_entry
 
-            row, column = room_entry(self.level_map, room)
+            # Level nine's room8 is the upper-column horse-leap test entry.
+            preferred = 0 if (self.game.level.number, room) == (9, 7) else None
+            row, column = room_entry(self.level_map, room, preferred_row=preferred)
             x = column * TILE_WIDTH + 30
         else:
             rows = [row for row in range(3)

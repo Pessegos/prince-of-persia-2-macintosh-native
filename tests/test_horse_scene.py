@@ -29,7 +29,7 @@ HORSE_INSTALLED = all((ASSET_DIR / name).is_file() for name in (
 
 @unittest.skipUnless(HORSE_INSTALLED, 'Imported horse scene and scenery required')
 class HorseSceneTests(unittest.TestCase):
-    def test_chasm_starts_at_takeoff_after_the_empty_view_and_approach(self):
+    def test_templ2_starts_at_takeoff_after_the_empty_view_and_approach(self):
         from unittest.mock import Mock
         from pop2.intro import IntroAssets, IntroPlayer, MAC_TICKS_PER_SECOND
 
@@ -42,10 +42,10 @@ class HorseSceneTests(unittest.TestCase):
                 frames += 1
                 with self.subTest(frame=frames):
                     self.assertEqual(audio.play_intro.call_args_list.count(
-                        unittest.mock.call(292, 0)), 0 if frames < 34 else 1)
+                        unittest.mock.call(25006, 0)), 0 if frames < 34 else 1)
             player.advance(6 / MAC_TICKS_PER_SECOND)
         self.assertEqual(frames, 46)
-        self.assertNotIn(unittest.mock.call(25006, 0), audio.play_intro.call_args_list)
+        self.assertNotIn(unittest.mock.call(292, 0), audio.play_intro.call_args_list)
 
     def test_the_distant_rider_disappears_behind_the_marked_door_jamb(self):
         from PIL import ImageChops
@@ -142,7 +142,7 @@ class HorseSceneTests(unittest.TestCase):
         scene.load_level(9)
         prepared = scene.story_scene_assets['temple.json']
         scene.peaceful = True
-        scene.jump_to_room(7, 0, 190, 0)
+        scene.jump_to_screen('Room 8')
         scene.in_animation_tick = True
         scene.horizontal_key(None, -1, True)
         scene.audio = Mock()

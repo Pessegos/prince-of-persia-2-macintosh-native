@@ -129,6 +129,19 @@ class HorseLeapTests(unittest.TestCase):
         self.assertIsNone(s.game.exit)
         self.assertFalse(s.level_complete)
 
+    def test_dev_room_eight_entry_stands_on_the_upper_platform(self):
+        from unittest.mock import patch
+        from tests.test_terrain import RooftopSceneTests
+
+        scene = self.scene
+        scene.jump_to_screen('Room 8')
+        x = scene.player_x
+        self.assertEqual((scene.room_id, scene.terrain_motion.row), (7, 0))
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+            RooftopSceneTests.tick(self, 4)
+        self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.player_x), (7, 0, x))
+        self.assertFalse(scene.terrain_motion.falling or scene.terrain_motion.dead)
+
     def test_only_pose_41_on_the_top_row_of_that_room_ends_the_level(self):
         from types import SimpleNamespace
 

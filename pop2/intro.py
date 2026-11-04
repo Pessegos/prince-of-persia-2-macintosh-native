@@ -54,9 +54,9 @@ def read_program(path):
         data['operations'] = [item for item in data['operations']
                               if not (item['op'] == 'cue' and item['args'] == [97]
                                       and item.get('pc') == 0x615e)]
-        # User-approved presentation: Chasm replaces TransFunc6's song at
-        # takeoff (ANI25013 frame34 / Horse333), after the empty establishing
-        # view and approach. Native TransFunc6 starts song25006 on frame2.
+        # Start the approved ToTempl2 theme at takeoff (ANI25013 frame34 /
+        # Horse333), after the empty establishing view and approach.
+        # Native TransFunc6 starts this same song25006 on frame2.
         takeoff = next((item for item in data['operations'] if item['op'] == 'shape'
                         and item.get('pc') == 0x6234 and item['args'][0] == 725333), None)
         if takeoff is not None:
@@ -64,7 +64,7 @@ def read_program(path):
                                   if not (item['op'] == 'sound' and item['args'] == [25006, 0]
                                           and item.get('pc') == 0x6592)]
             index = data['operations'].index(takeoff)
-            data['operations'].insert(index, {'op': 'sound', 'args': [292, 0], 'pc': 0x6592})
+            data['operations'].insert(index, {'op': 'sound', 'args': [25006, 0], 'pc': 0x6592})
         entry = [index for index, item in enumerate(data['operations'])
                  if item.get('pc') == 0x6318]
         if entry:
@@ -164,8 +164,6 @@ class IntroAssets:
     def __init__(self, directory=ASSET_DIR, program_name="intro.json"):
         directory = Path(directory)
         self.program = read_program(directory / program_name)
-        if self.program.get('kind') == 'temple':
-            self.program['audio']['292'] = game_song(292, directory)
         resources = parse_resource_fork((directory / "NIS.rsrc").read_bytes())
         tree = directory / "NISTree.rsrc"
         if tree.is_file():

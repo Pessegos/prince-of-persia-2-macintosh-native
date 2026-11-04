@@ -331,7 +331,7 @@ class RuinsControllerTests(unittest.TestCase):
         scene.load_level(6)
         self.assertIs(scene.attachment_frames, scene.ordinary_attachment_frames)
 
-    def test_level_nine_horse_song_stays_on_entry_but_chasm_waits_for_the_ride(self):
+    def test_level_nine_custom_rooms_request_their_gameplay_songs_on_entry(self):
         from tests.test_terrain import RooftopSceneTests
         from pop2.environments import environment_for
 
@@ -340,8 +340,8 @@ class RuinsControllerTests(unittest.TestCase):
         scene.load_level(9)
         ruins = scene.game.combat.ruins
         environment = environment_for(scene)
-        # Preserve room2's native 7:37d6 hook. User choice moves room16's
-        # Chasm to the horse's actual takeoff during NIS2.
+        # Native 7:37d6: Horse185/room2 and Chasm292/room16 are gameplay
+        # songs, separate from the horse cutscene's ToTempl2/scene25006.
         scene.jump_to_room(1, 1, 60, 1)
         environment.entered_room()
         environment.entered_room()
@@ -349,7 +349,7 @@ class RuinsControllerTests(unittest.TestCase):
         ruins.songs.clear()
         scene.jump_to_room(15, 1, 505, 1)
         environment.entered_room()
-        self.assertEqual(ruins.songs, [])
+        self.assertEqual(ruins.songs, [292])
         scene.jump_to_room(15, 1, 100, 1)
         ruins.songs.clear()
         environment.entered_room()

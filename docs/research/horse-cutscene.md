@@ -115,7 +115,7 @@ test failures. Publication commit is recorded in the local handoff.
 Remaining limits: no complete audio waveform/timing or native pixel parity
 claim; later temple work remains deferred.
 
-## Follow-up: continuous leap, Chasm and doorway (2026-11-04)
+## Follow-up: continuous leap, music and doorway (2026-11-04)
 
 The user requested three further adjustments after ca72756, and supplied a
 marked still of the distant temple entrance. These are presentation choices;
@@ -131,17 +131,20 @@ The user explicitly requested removal of the initial delay, so this bypasses
 the native current-effect wait at `2:6134-6168`. Other level exits retain
 their gates. No per-frame animation intervals are shortened.
 
-There were two different songs, confirmed with the user before changing
-them. Native `7:37d6-3836` requests game song292 (`Chasm.mmf`) on entering
-level9/native room16 with column >=9. NIS2's `TransFunc6 15:6580-6596` starts
-scene song25006 at frame2 of ANI25013, while the chasm is still empty. The
-script first shows the horse at frame30; frame34, Horse SHAP25333 (exported
-725333), is the takeoff pose. The approved port behavior removes the
-gameplay room16 request and replaces song25006 with Chasm292 at that
-takeoff pose. Chasm does not play before takeoff; the earlier riding theme
-keeps its existing ending and is not restarted.
-The original room2 Horse185 one-shot remains. Playback uses the existing
-game-song MIDI metadata and WAV; it needs no new import or synthesized file.
+There are two different songs. Native `7:37d6-3836` requests game song292
+(`Chasm.mmf`) on entering level9/native room16 with column >=9. NIS2's
+`TransFunc6 15:6580-6596` starts scene song25006 (`ToTempl2.mmf`) at frame2
+of ANI25013, while the chasm is still empty. The first follow-up3092b9d
+misinterpreted the request and moved Chasm into the scene. The user corrected
+that interpretation, heard an18s ToTempl2 preview and explicitly approved it.
+
+The current port keeps both gameplay hooks: Chasm292/room16 and the
+Horse185/room2 one-shot. It delays the original ToTempl2/scene25006 until
+the actual takeoff pose: ANI25013 frame34, Horse SHAP25333 (exported725333),
+at17.257598s. Frames1-29 are the empty establishing view, and frames30-33
+the approach. The earlier riding theme keeps its existing ending and is
+not restarted. Scene audio uses its existing banked metadata/WAV, with no
+game-song metadata dependency, resource reimport or new synthesis.
 
 For ANI25014, the marked entrance's inner right edge is picture x362. Apply
 a temporary drawing clip with right362 for this shot, leaving its saved
@@ -162,23 +165,32 @@ that reports busy, forbid asset construction during the leap, follow the
 ride into level10, check all46 canyon frames for the music trigger, and
 compare all94 distant-entry frames against the saved backdrop past x362.
 They also require intermediate visibility followed by complete occlusion.
-The existing room-entry regression now asserts the explicitly approved
-room16 exception instead of the original292 request. On ca72756, these four
-methods reject the old behavior (22 failing cases, zero errors); for the
-old-scheduler comparison only, prepared assets were supplied separately so
-the assertion reaches the delayed trigger instead of missing its cache.
-The focused horse/arrival/ruins/carpet/throne group passes82 tests, no skips.
-An AudioEngine run with a recording playback sink resolves the cue to the
-existing `cue-292.wav` on the music bus at17.257598s, with no25006 request.
-The scene's nominal duration remains34.465319s. A second local timing sample
+The room-entry regression asserts the native Horse185 and Chasm292 requests;
+the cutscene regression requires scene25006 exactly once at takeoff and
+rejects game292 throughout the ride. The scene's nominal duration remains
+34.465319s. A second local timing sample
 measured228ms of preparation moved to loading and7ms for a prepared player;
 these samples exclude rendering and are not a hardware-wide latency claim.
 Offscreen frame sheets confirm the marked jamb and gradual disappearance.
 The user reviewed the before/after GIF and explicitly approved this entrance.
-Full shared-desktop discovery with worktree-local Python3.10 passes3413 tests
-in642.705s, with ten explicit exclusive-desktop skips. GUI import cancellation
-and completion both pass. Dependencies, Ruff F/E9, recovery catalogue and
-whitespace checks pass. This is the follow-up's run, separate from the earlier
-ca72756 validation above.
+
+For easier playtesting, the user also requested the upper platform when
+choosing level9's Room8 in the development menu. Give the existing safe-entry
+selector preferred row0 only for level9/port room7. The selected floor is
+column3 (x183), facing left. A regression idles there without falling, and the
+real ride integration test now starts from this actual menu entry. Campaign
+entry data and ordinary movement/physics rules are unchanged.
+
+The first follow-up3092b9d passed82 focused tests and full shared-desktop
+Python3.10 discovery3413 tests in642.705s, with ten explicit exclusive-desktop
+skips. Its current-effect-wait and scheduling changes remain unchanged by
+the subsequent music correction and development-menu entry preference.
+The correction passes222 focused horse/arrival/ruins/development-entry/menu/
+cliff/audio/carpet/throne tests, no skips (39.067s), plus dependencies, Ruff
+F/E9, catalogue and whitespace checks. Its three changed regressions reject
+3092b9d (16 failing cases, no errors). An AudioEngine recording sink resolves
+ToTempl2 to `scene-0-25006` on the music bus at17.257598s, with no292 request
+in the cutscene; the complete scene still lasts34.465319s. Full discovery was
+not repeated for these audio-presentation and development-menu changes.
 No live user game/emulator, focus/input, user saves/settings, source-resource
 writes, source-assets import or release build was used.
