@@ -29,23 +29,32 @@ HORSE_INSTALLED = all((ASSET_DIR / name).is_file() for name in (
 
 @unittest.skipUnless(HORSE_INSTALLED, 'Imported horse scene and scenery required')
 class HorseSceneTests(unittest.TestCase):
-    def test_templ2_starts_at_takeoff_after_the_empty_view_and_approach(self):
-        from unittest.mock import Mock
+    def test_templ2_leads_takeoff_by_85ms_without_moving_picture_frames(self):
+        from unittest.mock import Mock, call
         from pop2.intro import IntroAssets, IntroPlayer, MAC_TICKS_PER_SECOND
 
         audio = Mock()
         player = IntroPlayer(IntroAssets(program_name='temple.json'), audio)
-        frames = 0
-        while not player.done:
-            item = player.operations[player.position - 1]
-            if item['op'] == 'wait' and item.get('pc') == 0x6234:
-                frames += 1
-                with self.subTest(frame=frames):
-                    self.assertEqual(audio.play_intro.call_args_list.count(
-                        unittest.mock.call(25006, 0)), 0 if frames < 34 else 1)
-            player.advance(6 / MAC_TICKS_PER_SECOND)
-        self.assertEqual(frames, 46)
-        self.assertNotIn(unittest.mock.call(292, 0), audio.play_intro.call_args_list)
+        # ANI25011/12 have64/76 frames, then33 approach frames in25013,
+        # all six native ticks. Frame34's picture deadline must stay fixed.
+        takeoff = (64 + 76 + 33) * 6 / MAC_TICKS_PER_SECOND
+        start = takeoff - .085
+        player.advance(start - .000001)
+        self.assertNotIn(call(25006, 0), audio.play_intro.call_args_list)
+        approach = player.frame().tobytes()
+        player.advance(.000001)
+        self.assertEqual(audio.play_intro.call_args_list.count(call(25006, 0)), 1)
+        self.assertAlmostEqual(player.playing[0][1], start)
+        self.assertEqual(player.frame().tobytes(), approach)
+        player.advance(.085 - .000001)
+        self.assertEqual(player.frame().tobytes(), approach)
+        player.advance(.000001)
+        self.assertNotEqual(player.frame().tobytes(), approach)
+        player.advance(60)
+        self.assertTrue(player.done)
+        self.assertEqual(audio.play_intro.call_args_list.count(call(25006, 0)), 1)
+        self.assertNotIn(call(292, 0), audio.play_intro.call_args_list)
+        self.assertAlmostEqual(player.time, 34.465319, places=6)
 
     def test_the_distant_rider_disappears_behind_the_marked_door_jamb(self):
         from PIL import ImageChops

@@ -54,8 +54,8 @@ def read_program(path):
         data['operations'] = [item for item in data['operations']
                               if not (item['op'] == 'cue' and item['args'] == [97]
                                       and item.get('pc') == 0x615e)]
-        # Start the approved ToTempl2 theme at takeoff (ANI25013 frame34 /
-        # Horse333), after the empty establishing view and approach.
+        # Start ToTempl2 85ms before takeoff (ANI25013 frame34 / Horse333),
+        # the user's alignment after comparing 60fps recordings.
         # Native TransFunc6 starts this same song25006 on frame2.
         takeoff = next((item for item in data['operations'] if item['op'] == 'shape'
                         and item.get('pc') == 0x6234 and item['args'][0] == 725333), None)
@@ -64,7 +64,18 @@ def read_program(path):
                                   if not (item['op'] == 'sound' and item['args'] == [25006, 0]
                                           and item.get('pc') == 0x6592)]
             index = data['operations'].index(takeoff)
-            data['operations'].insert(index, {'op': 'sound', 'args': [25006, 0], 'pc': 0x6592})
+            wait_index = next(i for i in range(index - 1, -1, -1)
+                              if data['operations'][i]['op'] == 'wait')
+            wait = data['operations'][wait_index]
+            lead_ticks = .085 * MAC_TICKS_PER_SECOND
+            if wait['args'][0] <= lead_ticks:
+                raise ValueError('Horse takeoff interval is too short for its music lead')
+            # Preserve the full wait and all picture timestamps. Only the
+            # sound starts partway through the preceding displayed frame.
+            data['operations'][wait_index:wait_index + 1] = [
+                {**wait, 'args': [wait['args'][0] - lead_ticks]},
+                {'op': 'sound', 'args': [25006, 0], 'pc': 0x6592},
+                {**wait, 'args': [lead_ticks]}]
         entry = [index for index, item in enumerate(data['operations'])
                  if item.get('pc') == 0x6318]
         if entry:

@@ -140,8 +140,9 @@ that interpretation, heard an18s ToTempl2 preview and explicitly approved it.
 
 The current port keeps both gameplay hooks: Chasm292/room16 and the
 Horse185/room2 one-shot. It delays the original ToTempl2/scene25006 until
-the actual takeoff pose: ANI25013 frame34, Horse SHAP25333 (exported725333),
-at17.257598s. Frames1-29 are the empty establishing view, and frames30-33
+85ms before the takeoff pose: ANI25013 frame34, Horse SHAP25333 (exported725333).
+The music starts at17.172598s; the takeoff picture stays at17.257598s.
+Frames1-29 are the empty establishing view, and frames30-33
 the approach. The earlier riding theme keeps its existing ending and is
 not restarted. Scene audio uses its existing banked metadata/WAV, with no
 game-song metadata dependency, resource reimport or new synthesis.
@@ -166,7 +167,7 @@ ride into level10, check all46 canyon frames for the music trigger, and
 compare all94 distant-entry frames against the saved backdrop past x362.
 They also require intermediate visibility followed by complete occlusion.
 The room-entry regression asserts the native Horse185 and Chasm292 requests;
-the cutscene regression requires scene25006 exactly once at takeoff and
+the cutscene regression requires scene25006 exactly once85ms before takeoff and
 rejects game292 throughout the ride. The scene's nominal duration remains
 34.465319s. A second local timing sample
 measured228ms of preparation moved to loading and7ms for a prepared player;
@@ -194,3 +195,29 @@ in the cutscene; the complete scene still lasts34.465319s. Full discovery was
 not repeated for these audio-presentation and development-menu changes.
 No live user game/emulator, focus/input, user saves/settings, source-resource
 writes, source-assets import or release build was used.
+
+### Music fine alignment after the user's frame comparison
+
+The user compared the port and Macintosh in Premiere with60fps timecode.
+Their initial "5ms" meant five video frames (about83.3ms); they explicitly
+allowed85ms for the adjustment. Advance the existing cue by85ms relative to
+fe0828e. Split ANI25013 frame33's six-tick wait into two waits surrounding the
+sound call. Their sum remains six native ticks, so the picture stays on its
+original deadline. No scheduler, source waveform, frame interval or inter-shot
+hold changes are involved. This remains an approved presentation alignment,
+not a recovered native music-onset claim.
+
+A complete old/new interpreter trace compared4,642 visual/control operations,
+including2,304 copy/game-room snapshots with matching pixel hashes and times.
+Every other sound retains its timestamp. Only scene25006 moves from
+17.2575980815s to17.1725980815s; duration stays34.4653187119s. These are nominal
+scene-clock values, not an independent audio-device/capture latency measurement.
+The regression checks no ToTempl2 call before the new deadline, its single call
+at it, the unchanged approach image through the remaining85ms, then the
+original takeoff image deadline and total duration.
+
+Focused horse/level9/arrival/intro/audio/carpet/throne/tree/discovery suites:
+196 tests OK, no skips (24.667s). Dependencies, Ruff F/E9, catalogue and
+whitespace checks pass. The new timing regression rejects fe0828e (one failure,
+no errors). Full discovery was not repeated for this scene-program
+timing-only adjustment.
