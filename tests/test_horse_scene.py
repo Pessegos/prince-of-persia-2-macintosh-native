@@ -29,7 +29,7 @@ HORSE_INSTALLED = all((ASSET_DIR / name).is_file() for name in (
 
 @unittest.skipUnless(HORSE_INSTALLED, 'Imported horse scene and scenery required')
 class HorseSceneTests(unittest.TestCase):
-    def test_templ2_leads_takeoff_by_85ms_without_moving_picture_frames(self):
+    def test_templ2_leads_takeoff_by_335ms_without_moving_picture_frames(self):
         from unittest.mock import Mock, call
         from pop2.intro import IntroAssets, IntroPlayer, MAC_TICKS_PER_SECOND
 
@@ -38,7 +38,8 @@ class HorseSceneTests(unittest.TestCase):
         # ANI25011/12 have64/76 frames, then33 approach frames in25013,
         # all six native ticks. Frame34's picture deadline must stay fixed.
         takeoff = (64 + 76 + 33) * 6 / MAC_TICKS_PER_SECOND
-        start = takeoff - .085
+        # The user requested another15 video frames beyond the prior85ms.
+        start = takeoff - (.085 + 15 / 60)
         player.advance(start - .000001)
         self.assertNotIn(call(25006, 0), audio.play_intro.call_args_list)
         approach = player.frame().tobytes()
@@ -46,7 +47,11 @@ class HorseSceneTests(unittest.TestCase):
         self.assertEqual(audio.play_intro.call_args_list.count(call(25006, 0)), 1)
         self.assertAlmostEqual(player.playing[0][1], start)
         self.assertEqual(player.frame().tobytes(), approach)
-        player.advance(.085 - .000001)
+        # Later approach frames still advance on their original deadlines.
+        last_approach = takeoff - 6 / MAC_TICKS_PER_SECOND
+        player.advance(last_approach - player.time)
+        approach = player.frame().tobytes()
+        player.advance(6 / MAC_TICKS_PER_SECOND - .000001)
         self.assertEqual(player.frame().tobytes(), approach)
         player.advance(.000001)
         self.assertNotEqual(player.frame().tobytes(), approach)

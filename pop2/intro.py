@@ -54,8 +54,8 @@ def read_program(path):
         data['operations'] = [item for item in data['operations']
                               if not (item['op'] == 'cue' and item['args'] == [97]
                                       and item.get('pc') == 0x615e)]
-        # Start ToTempl2 85ms before takeoff (ANI25013 frame34 / Horse333),
-        # the user's alignment after comparing 60fps recordings.
+        # Start ToTempl2 335ms before takeoff (ANI25013 frame34 / Horse333):
+        # the user's initial85ms alignment plus another15 frames at60fps.
         # Native TransFunc6 starts this same song25006 on frame2.
         takeoff = next((item for item in data['operations'] if item['op'] == 'shape'
                         and item.get('pc') == 0x6234 and item['args'][0] == 725333), None)
@@ -64,14 +64,20 @@ def read_program(path):
                                   if not (item['op'] == 'sound' and item['args'] == [25006, 0]
                                           and item.get('pc') == 0x6592)]
             index = data['operations'].index(takeoff)
-            wait_index = next(i for i in range(index - 1, -1, -1)
-                              if data['operations'][i]['op'] == 'wait')
-            wait = data['operations'][wait_index]
-            lead_ticks = .085 * MAC_TICKS_PER_SECOND
-            if wait['args'][0] <= lead_ticks:
-                raise ValueError('Horse takeoff interval is too short for its music lead')
+            lead_ticks = (.085 + 15 / 60) * MAC_TICKS_PER_SECOND
+            for wait_index in range(index - 1, -1, -1):
+                wait = data['operations'][wait_index]
+                if wait['op'] != 'wait':
+                    continue
+                if wait.get('pc') != takeoff.get('pc'):
+                    raise ValueError('Horse music lead extends before its animation')
+                if wait['args'][0] >= lead_ticks:
+                    break
+                lead_ticks -= wait['args'][0]
+            else:
+                raise ValueError('Horse animation has no interval for its music lead')
             # Preserve the full wait and all picture timestamps. Only the
-            # sound starts partway through the preceding displayed frame.
+            # sound starts partway through an earlier displayed frame.
             data['operations'][wait_index:wait_index + 1] = [
                 {**wait, 'args': [wait['args'][0] - lead_ticks]},
                 {'op': 'sound', 'args': [25006, 0], 'pc': 0x6592},

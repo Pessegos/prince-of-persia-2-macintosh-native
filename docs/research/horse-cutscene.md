@@ -140,8 +140,8 @@ that interpretation, heard an18s ToTempl2 preview and explicitly approved it.
 
 The current port keeps both gameplay hooks: Chasm292/room16 and the
 Horse185/room2 one-shot. It delays the original ToTempl2/scene25006 until
-85ms before the takeoff pose: ANI25013 frame34, Horse SHAP25333 (exported725333).
-The music starts at17.172598s; the takeoff picture stays at17.257598s.
+335ms before the takeoff pose: ANI25013 frame34, Horse SHAP25333 (exported725333).
+The music starts at16.922598s; the takeoff picture stays at17.257598s.
 Frames1-29 are the empty establishing view, and frames30-33
 the approach. The earlier riding theme keeps its existing ending and is
 not restarted. Scene audio uses its existing banked metadata/WAV, with no
@@ -167,7 +167,7 @@ ride into level10, check all46 canyon frames for the music trigger, and
 compare all94 distant-entry frames against the saved backdrop past x362.
 They also require intermediate visibility followed by complete occlusion.
 The room-entry regression asserts the native Horse185 and Chasm292 requests;
-the cutscene regression requires scene25006 exactly once85ms before takeoff and
+the cutscene regression requires scene25006 exactly once335ms before takeoff and
 rejects game292 throughout the ride. The scene's nominal duration remains
 34.465319s. A second local timing sample
 measured228ms of preparation moved to loading and7ms for a prepared player;
@@ -221,3 +221,15 @@ Focused horse/level9/arrival/intro/audio/carpet/throne/tree/discovery suites:
 whitespace checks pass. The new timing regression rejects fe0828e (one failure,
 no errors). Full discovery was not repeated for this scene-program
 timing-only adjustment.
+
+The user subsequently requested another15 video frames at60fps, i.e.250ms
+in addition to the85ms alignment. Current total lead is335ms. Walk backward
+over the earlier waits of ANI25013, then split frame30's wait around the
+sound call; the other waits and all visual operations remain in order.
+This moves only ToTempl2 from17.1725980815s (10a5085) to16.9225980815s.
+The new complete old/new trace again matches4,642 visual/control operations,
+2,304 copy/game-room snapshots and their pixel hashes/timestamps, and every
+other sound timestamp. Total scene duration remains34.4653187119s.
+Focused horse/level9/arrival/intro/audio/carpet/throne/tree/discovery checks:
+196 tests OK, no skips (23.300s), with dependencies/Ruff/catalogue/whitespace
+checks passing. No full suite rerun for this scene-program-only adjustment.
