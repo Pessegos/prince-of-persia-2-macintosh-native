@@ -379,7 +379,7 @@ class WindowControls:
             playback_provider=self.development_playback_preview if parts else None,
             gallery_pages=self.development_gallery_pages,
             current_section=(self.current_playback_part() if self.attract_stage is not None
-                             or self.game.level.number == 2 else None),
+                             or self.game.level.number in (2, 10) else None),
             current_level=self.game.level.number, current_screen=self.screen_label(self.room_id),
             god_mode=getattr(self, 'god_mode', False),
         )

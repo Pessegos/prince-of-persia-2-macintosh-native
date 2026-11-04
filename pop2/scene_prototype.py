@@ -2479,7 +2479,9 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         from pop2.attract import read_attract
         from pop2.intro import read_program
         from pop2.paths import ASSET_DIR
-        from pop2.playback_navigation import playback_parts, ending_parts, discovery_parts
+        from pop2.playback_navigation import (
+            playback_parts, ending_parts, discovery_parts, temple_parts,
+        )
 
         if self.attract_data is None:
             self.attract_data = read_attract(ASSET_DIR / "attract.json")
@@ -2499,15 +2501,19 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             screen_label = lambda room: labels.get(room, f"Room ID {room + 1}")
         self.development_playback_parts = (playback_parts(intro_program, self.attract_data, screen_label)
                                            + ending_parts(ending_program) + discovery_parts(discovery_program))
+        if (ASSET_DIR / 'temple.json').is_file():
+            self.development_playback_parts += temple_parts(read_program(ASSET_DIR / 'temple.json'))
         return self.development_playback_parts
 
     def current_playback_part(self):
         stage = self.attract_stage
-        if stage is None and self.game.level.number in (2, 4):
+        if stage == 'tree' and getattr(self.intro, 'program_kind', None) == 'temple':
+            stage = 'temple'
+        if stage is None and self.game.level.number in (2, 4, 10):
             return next((index for index, part in enumerate(self.development_parts())
                          if part.stage == "level" and part.index == self.game.level.number), 0)
         position = (self.demo.index if stage == "demo" else
-                    self.intro.position - 1 if stage in ("intro", "ending", "discovery") else
+                    self.intro.position - 1 if stage in ("intro", "ending", "discovery", "temple") else
                     self.intro.page_index if stage == "credits" else -1)
         matches = [index for index, part in enumerate(self.development_parts())
                    if part.stage == stage and part.index <= position]
@@ -2517,6 +2523,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         # Always construct the destination's own state; demo actors never
         # become live combat actors or carry their inputs into gameplay.
         self.intro = None
+        self.after_vision = self.next_level_after_tree = None
         if part.stage == "intro":
             self.start_intro(part.index)
         elif part.stage == "demo":
@@ -2527,6 +2534,13 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.start_ending(part.index)
         elif part.stage == "discovery":
             self.start_discovery(part.index)
+        elif part.stage == 'temple':
+            self.load_level(9)
+            def arrive(keep_music=False):
+                self.enter_next_level(10, keep_music=keep_music)
+
+            if not self.start_temple_ride(arrive, part_index=part.index):
+                raise ValueError('The horse cutscene has not been imported')
         elif part.stage == "level":
             self.load_level(part.index)
         else:
@@ -2753,10 +2767,11 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.status.set('Vision')
         return True
 
-    def start_temple_ride(self, finish):
+    def start_temple_ride(self, finish, part_index=None):
         """NISTemple after level nine; `finish(keep_music=...)` runs after it.
         Returns False when the scene is not imported."""
-        return self.start_story_scene('temple.json', finish, 'The ride to the temple')
+        return self.start_story_scene('temple.json', finish, 'The ride to the temple',
+                                      part_index=part_index)
 
     def start_tower_flight(self, finish):
         """NIS 3 (15:7226) after level thirteen: the horse flies from the
@@ -2774,7 +2789,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             cache[program_name] = IntroAssets(program_name=program_name)
         return cache[program_name]
 
-    def start_story_scene(self, program_name, finish, status):
+    def start_story_scene(self, program_name, finish, status, part_index=None):
         from pop2.intro import IntroPlayer
 
         assets = self.prepare_story_scene(program_name)
@@ -2786,7 +2801,10 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.after_vision = finish
         if self.audio is not None:
             self.audio.reset()
-        self.intro = IntroPlayer(assets, self.audio)
+        self.intro = IntroPlayer(assets, self.audio if part_index is None else None)
+        if part_index is not None:
+            self.intro.audio = self.audio
+            self.intro.seek_operation(part_index)
         self.last_intro_at = time.perf_counter()
         self.status.set(status)
         return True

@@ -285,3 +285,34 @@ in660.564s, with ten explicit exclusive-desktop skips. Fresh GUI import
 cancellation and completion both pass. Dependencies/installed assets, Ruff
 F/E9, recovery catalogue and whitespace checks pass. Existing Tk theme and
 Pillow deprecation messages remain in the local log, with no test failures.
+
+## Developer playback access (2026-11-04)
+
+The user requested direct access through Developer Tools. F3 -> Playback ->
+After Level 9 now contains Mounting the Horse, Desert Ride, The Great Leap,
+Temple Approach, Dismount and Temple (level 10 gameplay). Existing groups and
+indices remain unchanged; append the new group after After Level 3.
+
+The five scene bookmarks use the normalized program and original coordinator
+call-site PCs, so the 335 ms music lead and doorway clipping are the same as
+the campaign. Playback constructs level 9's own state, then starts the actual
+NIS2 player at the selected operation. Natural completion enters level 10 and
+uses the approved retained-theme/fade handoff. Direct Temple selection loads
+level 10 normally. Current-part tracking recognizes the horse movie and its
+arrival. Seeking to another sequence discards its unfinished story callbacks.
+
+As with the existing movies, construct a sought scene silently and attach
+audio only for its active cues at the correct offsets; do not briefly play
+the opening theme when selecting a later shot. Gallery snapshots use private,
+silent players and the existing code/asset fingerprint cache. Live actors,
+scene clock and random state remain unchanged while browsing. No imported
+artwork or cache files are committed.
+
+Focused navigation/horse playback/gallery/development menu/discovery/attract/
+music/horse/arrival suites pass 148 tests, no skips (55.748s). New gallery and
+playback regressions reject f589d2f (two failures, no errors). An offscreen
+gallery render verifies all six thumbnails and labels. The existing exact
+catalog expectations were extended for the requested new group/stage; the
+horse stage deliberately prepares its own level 9 combat bank while playing
+through the common story player. Full discovery was not repeated for these
+development-playback/UI changes; ordinary campaign timing remains unchanged.

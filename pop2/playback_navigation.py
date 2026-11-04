@@ -81,3 +81,16 @@ def discovery_parts(program):
             parts.append(PlaybackPart(names.pop(item['args'][0]), 'discovery', index, 'After Level 3'))
     parts.append(PlaybackPart('Caverns', 'level', 4, 'After Level 3'))
     return tuple(parts)
+
+
+def temple_parts(program):
+    parts = [PlaybackPart('Mounting the Horse', 'temple', 0, 'After Level 9')]
+    # NISTemple's original ANI25012-25015 call sites. Indices refer to the
+    # normalized playback program, including the approved music alignment.
+    names = {0x615e: 'Desert Ride', 0x6234: 'The Great Leap',
+             0x6318: 'Temple Approach', 0x63cc: 'Dismount'}
+    for index, item in enumerate(program['operations']):
+        if item.get('pc') in names:
+            parts.append(PlaybackPart(names.pop(item['pc']), 'temple', index, 'After Level 9'))
+    parts.append(PlaybackPart('Temple', 'level', 10, 'After Level 9'))
+    return tuple(parts)

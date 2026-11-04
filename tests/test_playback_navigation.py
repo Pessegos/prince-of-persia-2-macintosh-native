@@ -4,6 +4,20 @@ from pop2.playback_navigation import PlaybackPart, playback_groups, playback_par
 
 
 class PlaybackNavigationTests(unittest.TestCase):
+    def test_horse_parts_use_first_shot_operations_and_keep_arrival_separate(self):
+        from pop2.playback_navigation import temple_parts
+
+        program = {'operations': [{'pc': pc} for pc in (
+            0x6096, 0x615e, 0x615e, 0x6234, 0x6592, 0x6318, 0x6318, 0x63cc)]}
+        parts = temple_parts(program)
+        self.assertEqual([(p.stage, p.index) for p in parts], [
+            ('temple', 0), ('temple', 1), ('temple', 3), ('temple', 5),
+            ('temple', 7), ('level', 10)])
+        self.assertEqual([p.label for p in parts], [
+            'Mounting the Horse', 'Desert Ride', 'The Great Leap',
+            'Temple Approach', 'Dismount', 'Temple'])
+        self.assertEqual(playback_groups(parts)[0].label, 'After Level 9')
+
     def test_parts_use_scene_operations_and_first_recorded_room_entries(self):
         intro = {"operations": [
             {"op": "text", "args": [0, 0]}, {"op": "text", "args": [0, 10]},
