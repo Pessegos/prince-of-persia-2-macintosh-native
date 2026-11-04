@@ -114,3 +114,71 @@ test failures. Publication commit is recorded in the local handoff.
 
 Remaining limits: no complete audio waveform/timing or native pixel parity
 claim; later temple work remains deferred.
+
+## Follow-up: continuous leap, Chasm and doorway (2026-11-04)
+
+The user requested three further adjustments after ca72756, and supplied a
+marked still of the distant temple entrance. These are presentation choices;
+they do not change the recovered CutChar trigger or claim native equivalence.
+
+The first leap still paid for `IntroAssets('temple.json')` on the gameplay
+thread, then waited another gameplay tick and any current effect through
+`LevelExit(None, 0)`. One local cold preparation measured 196ms for assets
+and 8ms for the initial player, excluding rendering and effect completion.
+Prepare/cache NIS2 assets while binding level9 instead. On the horse trigger
+tick, stop the remaining gameplay phases and enter/render NIS2 immediately.
+The user explicitly requested removal of the initial delay, so this bypasses
+the native current-effect wait at `2:6134-6168`. Other level exits retain
+their gates. No per-frame animation intervals are shortened.
+
+There were two different songs, confirmed with the user before changing
+them. Native `7:37d6-3836` requests game song292 (`Chasm.mmf`) on entering
+level9/native room16 with column >=9. NIS2's `TransFunc6 15:6580-6596` starts
+scene song25006 at frame2 of ANI25013, while the chasm is still empty. The
+script first shows the horse at frame30; frame34, Horse SHAP25333 (exported
+725333), is the takeoff pose. The approved port behavior removes the
+gameplay room16 request and replaces song25006 with Chasm292 at that
+takeoff pose. Chasm does not play before takeoff; the earlier riding theme
+keeps its existing ending and is not restarted.
+The original room2 Horse185 one-shot remains. Playback uses the existing
+game-song MIDI metadata and WAV; it needs no new import or synthesized file.
+
+For ANI25014, the marked entrance's inner right edge is picture x362. Apply
+a temporary drawing clip with right362 for this shot, leaving its saved
+background untouched. The horse disappears progressively behind that jamb,
+including the Prince and tail, rather than drawing across the facade.
+Restore the 510x365 picture clip before the next shot so the arrival/dismount
+and red statue remain intact. The original ANI header's rectangle is
+`(top231,left0,bottom365,right365)`; the requested x362 alignment is a port
+presentation decision, not an independently recovered native raster bound.
+
+All adjustments occur when reading a `kind: temple` program. Both an older
+temple.json and a fresh export therefore receive them without changing the
+preserved extraction data or requiring resource reimport. Tower, carpet,
+throne and tree programs do not receive these adjustments.
+
+Regression checks exercise the real running jump with a current effect
+that reports busy, forbid asset construction during the leap, follow the
+ride into level10, check all46 canyon frames for the music trigger, and
+compare all94 distant-entry frames against the saved backdrop past x362.
+They also require intermediate visibility followed by complete occlusion.
+The existing room-entry regression now asserts the explicitly approved
+room16 exception instead of the original292 request. On ca72756, these four
+methods reject the old behavior (22 failing cases, zero errors); for the
+old-scheduler comparison only, prepared assets were supplied separately so
+the assertion reaches the delayed trigger instead of missing its cache.
+The focused horse/arrival/ruins/carpet/throne group passes82 tests, no skips.
+An AudioEngine run with a recording playback sink resolves the cue to the
+existing `cue-292.wav` on the music bus at17.257598s, with no25006 request.
+The scene's nominal duration remains34.465319s. A second local timing sample
+measured228ms of preparation moved to loading and7ms for a prepared player;
+these samples exclude rendering and are not a hardware-wide latency claim.
+Offscreen frame sheets confirm the marked jamb and gradual disappearance.
+The user reviewed the before/after GIF and explicitly approved this entrance.
+Full shared-desktop discovery with worktree-local Python3.10 passes3413 tests
+in642.705s, with ten explicit exclusive-desktop skips. GUI import cancellation
+and completion both pass. Dependencies, Ruff F/E9, recovery catalogue and
+whitespace checks pass. This is the follow-up's run, separate from the earlier
+ca72756 validation above.
+No live user game/emulator, focus/input, user saves/settings, source-resource
+writes, source-assets import or release build was used.

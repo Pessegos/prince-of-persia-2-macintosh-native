@@ -341,6 +341,9 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         )
 
     def bind_level(self, game, renderer, initialize_world=True):
+        if game.level.number == 9:
+            # Decode NIS 2 while loading the level, before the running leap.
+            self.prepare_story_scene('temple.json')
         if self.audio is not None and hasattr(self.audio, 'configure_level'):
             self.audio.configure_level(game.level.data)
         palette = kid_palette_for_level(self.kid, game.level.kind)
@@ -1864,6 +1867,13 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 trace.append((mode, phase))
             if phase == 'terrain':
                 self.advance_terrain(old_x, old_bounds)
+                if self.level_complete and self.game.level.number == 9 and self.game.exit is not None:
+                    # The horse leap is continuous with NIS 2's falling Kid.
+                    # Do not hold the last jump pose for another gameplay
+                    # tick or wait for a footstep/jump effect to finish.
+                    environment_for(self).finish_exit()
+                    self.render()
+                    break
             elif phase == 'combat':
                 # A room cut rebases X; it must not be swept as a cross-room jump.
                 swept = sweep_combat and (motion is None or motion.room == old_room)
@@ -2753,22 +2763,30 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         temple to the tower. Returns False when the scene is not imported."""
         return self.start_story_scene('tower.json', finish, 'The flight to the tower')
 
-    def start_story_scene(self, program_name, finish, status):
-        from pop2.intro import IntroAssets, IntroPlayer
+    def prepare_story_scene(self, program_name):
+        from pop2.intro import IntroAssets
         from pop2.paths import ASSET_DIR
 
         if not (ASSET_DIR / program_name).is_file():
-            return False
+            return None
         cache = self.__dict__.setdefault('story_scene_assets', {})
         if program_name not in cache:
             cache[program_name] = IntroAssets(program_name=program_name)
+        return cache[program_name]
+
+    def start_story_scene(self, program_name, finish, status):
+        from pop2.intro import IntroPlayer
+
+        assets = self.prepare_story_scene(program_name)
+        if assets is None:
+            return False
         self.clear_keys(None)
         self.attract_stage = 'tree'
         self.tree_variant = None
         self.after_vision = finish
         if self.audio is not None:
             self.audio.reset()
-        self.intro = IntroPlayer(cache[program_name], self.audio)
+        self.intro = IntroPlayer(assets, self.audio)
         self.last_intro_at = time.perf_counter()
         self.status.set(status)
         return True

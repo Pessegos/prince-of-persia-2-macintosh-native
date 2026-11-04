@@ -1010,12 +1010,11 @@ class Ruins(Caverns):
                 caverns.throne_seen = True
         if scene.game.level.number != 9:
             return
-        # The enter hook 7:37d6 of CUST kinds 20/21 (level nine's native
-        # rooms 2 and 16), with the Prince's column.
+        # The enter hook 7:37d6 of CUST kind 20 (native room 2).
+        # User choice: room 16's Chasm (292) plays at the NIS 2 horse
+        # leap instead of entering that room on foot (native 7:37f6).
         column = scene.combat._supporting_column(scene.combat.player)
-        if scene.room_id == 15 and column >= 9:
-            ruins.songs.append(292)
-        elif scene.room_id == 1 and column < 5 and not ruins.room_two_song:
+        if scene.room_id == 1 and column < 5 and not ruins.room_two_song:
             ruins.songs.append(185)
             ruins.room_two_song = True
 

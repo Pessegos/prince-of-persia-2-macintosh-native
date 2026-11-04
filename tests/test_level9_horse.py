@@ -114,7 +114,7 @@ class HorseLeapTests(unittest.TestCase):
                     s.set_key_state('up', True)
                 RooftopSceneTests.tick(self)
                 poses.append(s.sequence_state.action)
-                if s.level_complete:
+                if rides:
                     break
             self.assertEqual(s.sequence_state.source_sequence_id, 4)
             self.assertEqual(poses[-1], 41)
@@ -123,8 +123,8 @@ class HorseLeapTests(unittest.TestCase):
             # the port used to drop him onto the floor below the horse.
             self.assertEqual((s.room_id, s.terrain_motion.row), (7, 0))
             self.assertFalse(s.terrain_motion.falling)
-            self.assertEqual(rides, [])
-            RooftopSceneTests.tick(self)
+            # User choice: enter NIS2 in this very tick, with no exit hold.
+            self.assertEqual(len(rides), 1)
         self.assertEqual(len(rides), 1)
         self.assertIsNone(s.game.exit)
         self.assertFalse(s.level_complete)

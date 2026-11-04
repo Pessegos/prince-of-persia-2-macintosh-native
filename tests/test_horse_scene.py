@@ -29,6 +29,47 @@ HORSE_INSTALLED = all((ASSET_DIR / name).is_file() for name in (
 
 @unittest.skipUnless(HORSE_INSTALLED, 'Imported horse scene and scenery required')
 class HorseSceneTests(unittest.TestCase):
+    def test_chasm_starts_at_takeoff_after_the_empty_view_and_approach(self):
+        from unittest.mock import Mock
+        from pop2.intro import IntroAssets, IntroPlayer, MAC_TICKS_PER_SECOND
+
+        audio = Mock()
+        player = IntroPlayer(IntroAssets(program_name='temple.json'), audio)
+        frames = 0
+        while not player.done:
+            item = player.operations[player.position - 1]
+            if item['op'] == 'wait' and item.get('pc') == 0x6234:
+                frames += 1
+                with self.subTest(frame=frames):
+                    self.assertEqual(audio.play_intro.call_args_list.count(
+                        unittest.mock.call(292, 0)), 0 if frames < 34 else 1)
+            player.advance(6 / MAC_TICKS_PER_SECOND)
+        self.assertEqual(frames, 46)
+        self.assertNotIn(unittest.mock.call(25006, 0), audio.play_intro.call_args_list)
+
+    def test_the_distant_rider_disappears_behind_the_marked_door_jamb(self):
+        from PIL import ImageChops
+        from pop2.intro import IntroAssets, IntroPlayer
+
+        player = IntroPlayer(IntroAssets(program_name='temple.json'))
+        counts, frames = [], 0
+        while not player.done:
+            item = player.operations[player.position - 1]
+            if item['op'] == 'wait' and item.get('pc') == 0x6318:
+                frames += 1
+                difference = ImageChops.difference(player.target, player.background)
+                with self.subTest(frame=frames):
+                    self.assertIsNone(difference.crop((362, 0, 510, 365)).getbbox())
+                # Count the visible rider on the bridge; he must disappear
+                # progressively at the jamb, leaving the doorway unchanged.
+                counts.append(sum(value != 0 for value in difference.crop(
+                    (330, 220, 362, 275)).tobytes()))
+            player.advance(max(0, player.wait_until - player.time))
+        self.assertEqual(frames, 94)
+        self.assertGreater(max(counts), 20)
+        self.assertEqual(counts[-1], 0)
+        self.assertGreater(len(set(counts[-15:])), 3)
+
     def test_the_gallop_cuts_to_the_canyon_without_waiting_on_empty_scenery(self):
         from pop2.intro import IntroAssets, IntroPlayer
 
@@ -93,25 +134,32 @@ class HorseSceneTests(unittest.TestCase):
                              sprite.getpixel((dx, dy)))
 
     def test_the_column_leap_plays_the_real_scene_then_enters_level_ten(self):
-        from unittest.mock import patch
+        from unittest.mock import Mock, patch
         from tests.test_terrain import RooftopSceneTests
 
         RooftopSceneTests.setUp(self)
         scene = self.scene
         scene.load_level(9)
+        prepared = scene.story_scene_assets['temple.json']
         scene.peaceful = True
         scene.jump_to_room(7, 0, 190, 0)
         scene.in_animation_tick = True
         scene.horizontal_key(None, -1, True)
-        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+        scene.audio = Mock()
+        scene.audio.death_ready.return_value = False  # A jump effect is still playing.
+        with (patch.object(scene, 'render'), patch.object(scene, 'advance_audio'),
+              patch('pop2.intro.IntroAssets', side_effect=AssertionError('Loading during the leap'))):
             for tick in range(21):
                 if tick == 6:
                     scene.set_key_state('up', True)
                 RooftopSceneTests.tick(self)
                 if scene.intro is not None:
                     break
+                self.assertFalse(scene.level_complete, 'The jump pose must not wait an extra tick')
         self.assertIsNotNone(scene.intro)
         self.assertEqual(scene.intro.program_kind, 'temple')
+        self.assertIs(scene.intro.assets, prepared)
+        scene.audio.death_ready.assert_not_called()
         self.assertEqual(scene.sequence_state.action, 41)
         self.assertEqual(scene.room_id, 7)
         scene.intro.advance(60)
