@@ -72,6 +72,45 @@ class ImportedAudioTests(unittest.TestCase):
                     59, 60, 61, 65, 66, 67, 68, 69, 70, 281, 282, 284, 294, 295, 296, 300)
         self.assertTrue(all(audio.available(cue) for cue in required))
 
+    def test_temple_room_groups_and_combat_can_play_their_last_native_pool_song(self):
+        from pop2.game_session import GameResources
+        from tools.extract_audio import TEMPLE_SONGS
+
+        audio = AudioEngine(playback=Mock())
+        audio.playback.busy.return_value = False
+        audio.playback.playing_effects.return_value = ()
+        self.assertTrue(all(audio.available(cue) for cue in TEMPLE_SONGS))
+        self.assertTrue(all((ASSET_DIR / 'audio' / audio.cues[cue]['file']).is_file()
+                            for cue in TEMPLE_SONGS))
+        self.assertEqual(audio.manifest['ambient'][2],
+                         {'starts': [200, 216, 232], 'counts': [15, 15, 3], 'combat_group': 2})
+        audio.rng = SimpleNamespace(randrange=lambda stop: stop - 1)
+        resources = GameResources.load()
+        for level in range(10, 14):
+            audio.configure_level(resources.level(level).data)
+            for group, expected in ((0, 215), (1, 231), (2, 235)):
+                with self.subTest(level=level, group=group):
+                    cell = audio.level_music['groups'].index(0 if group == 2 else group)
+                    room, cell = divmod(cell, 30)
+                    row, column = divmod(cell, 10)
+                    audio.reset()
+                    audio.ambient(room, row, column, fighting=group == 2)
+                    audio.flush()
+                    self.assertEqual(audio.current_music, expected)
+                    audio.playback.play.assert_called_with('music', expected)
+
+    def test_level_ten_arrival_requests_temple_music_through_the_real_environment(self):
+        terrain_tests.RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.audio = AudioEngine(playback=Mock())
+        scene.audio.playback.busy.return_value = False
+        scene.audio.playback.playing_effects.return_value = ()
+        scene.enter_next_level(10)
+        scene.advance_audio()
+        self.assertIn(scene.audio.current_music, range(200, 232))
+        self.assertTrue(scene.audio.current_music_ambient)
+        scene.audio.playback.play.assert_called_with('music', scene.audio.current_music)
+
     def test_fresh_import_and_launcher_work_without_sibling_research_folders(self):
         project = Path(__file__).resolve().parents[1]
         image = project.parent / "pop2.hfs"

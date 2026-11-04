@@ -11,13 +11,16 @@ import wave
 import mido
 import numpy as np
 
-from tools.extract_audio import audio_tables, extract_audio, render_midi, DESERT_SONGS, LEVEL_ONE_SONGS, CAVERN_SONGS, LATE_CAVERN_SONGS
+from tools.extract_audio import (
+    audio_tables, extract_audio, render_midi, DESERT_SONGS, LEVEL_ONE_SONGS,
+    CAVERN_SONGS, LATE_CAVERN_SONGS, TEMPLE_SONGS,
+)
 from pop2.audio_formats import Sample
 
 
 class AudioTableTests(unittest.TestCase):
-    def test_import_prepares_desert_and_exit_door_songs_from_original_midi(self):
-        songs = LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS
+    def test_import_prepares_gameplay_and_temple_songs_from_original_midi(self):
+        songs = LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS + TEMPLE_SONGS
         effects = (7, 8, 9, 10, 11, 12, 13, 14, 17, 30, 31, 34, 35, 36, 294, 295, 296)
         manifest = {'schema': 1, 'cues': {
             str(cue): {'kind': 'midi' if cue in songs else 'pcm'}
@@ -43,8 +46,8 @@ class AudioTableTests(unittest.TestCase):
                 self.assertEqual(reader.readframes(8), bytes(16))
             self.assertEqual(result['cues']['17']['loop'],
                              dict(rate=22050, start=2, end=7, count=65535))
-        for cue in DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS:
-            self.assertEqual(result['cues'][str(cue)]['file'], f'cue-{cue}.wav')
+        for cue in DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS + TEMPLE_SONGS:
+            self.assertEqual(result['cues'][str(cue)].get('file'), f'cue-{cue}.wav')
             self.assertIn(f'cue-{cue}.mid', [call.args[1] for call in render.call_args_list])
 
     def test_rooftop_pool_has_one_group_not_three_adjacent_tables(self):

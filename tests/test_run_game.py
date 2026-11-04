@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import run_game
 from tests.test_attract import fixture
-from tools.extract_audio import CAVERN_SONGS, LATE_CAVERN_SONGS
+from tools.extract_audio import CAVERN_SONGS, LATE_CAVERN_SONGS, TEMPLE_SONGS
 
 
 PREPARED_CUES = tuple(map(str, (10019, 24, 32, 46, 47, 48, 49, 50, 297, *CAVERN_SONGS, *LATE_CAVERN_SONGS)))
@@ -199,6 +199,31 @@ class InstallationTests(unittest.TestCase):
         path.write_text(json.dumps(manifest))
         self.assertIn('audio/manifest.json (needs potion music)',
                       run_game.missing_assets(self.project))
+
+    def test_installed_temple_requires_its_prepared_music(self):
+        assets = self.project / 'assets'
+        (assets / 'Temple.rsrc').touch()
+        path = assets / 'audio/manifest.json'
+        manifest = json.loads(path.read_text())
+        manifest['cues'].update({str(cue): self.credit_cue for cue in TEMPLE_SONGS})
+        path.write_text(json.dumps(manifest))
+        self.assertEqual(run_game.missing_assets(self.project), [])
+        for cue in (200, 216, 232, 238, 253):
+            with self.subTest(cue=cue):
+                incomplete = {**manifest, 'cues': {**manifest['cues'], str(cue): {}}}
+                path.write_text(json.dumps(incomplete))
+                self.assertIn('audio/manifest.json (needs temple music)',
+                              run_game.missing_assets(self.project))
+
+    def test_temple_validation_does_not_import_the_synthesis_tools(self):
+        assets = self.project / 'assets'
+        (assets / 'Temple.rsrc').touch()
+        path = assets / 'audio/manifest.json'
+        manifest = json.loads(path.read_text())
+        manifest['cues'].update({str(cue): self.credit_cue for cue in TEMPLE_SONGS})
+        path.write_text(json.dumps(manifest))
+        with patch.dict('sys.modules', {'tools.extract_audio': None}):
+            self.assertEqual(run_game.missing_assets(self.project), [])
 
     def test_cavern_export_without_native_upper_border_requests_reimport(self):
         (self.project / 'assets/caverns_entry.json').write_text(json.dumps({

@@ -14,6 +14,7 @@ import numpy as np
 
 from pop2.audio_formats import digitized_sound, mohawk_resources, standard_sound
 from pop2.mac_resources import get_data_fork, parse_resource_fork, _span
+from pop2.music_cues import TEMPLE_SONGS
 from tools.extract_enemy_profiles import expand_a5_data
 
 
@@ -186,7 +187,8 @@ def extract_audio(image, program_bytes, prince_bytes, directory, progress=lambda
             entry["duration"] = sequence.length
             entry["name"] = next((message.name for track in sequence.tracks for message in track
                                    if message.type == "track_name"), "")
-            if int(cue) in LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS + RUINS_SONGS:
+            if int(cue) in (LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS
+                            + LATE_CAVERN_SONGS + RUINS_SONGS + TEMPLE_SONGS):
                 entry["file"] = f"cue-{cue}.wav"
                 songs.append((entry, raw_name))
     # Each song is a separate renderer process: render them side by side.
@@ -201,7 +203,9 @@ def extract_audio(image, program_bytes, prince_bytes, directory, progress=lambda
         "bank": struct.unpack_from(">h", level, 0x2186)[0],
         "groups": list(struct.unpack_from(">960h", level, 0x424a)),
     }
-    required = set(LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS + LATE_CAVERN_SONGS) | {7, 8, 9, 10, 11, 12, 13, 14, 30, 31, 34, 35, 36, 294, 295, 296}
+    required = set(LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS
+                   + LATE_CAVERN_SONGS + TEMPLE_SONGS) | {
+                       7, 8, 9, 10, 11, 12, 13, 14, 30, 31, 34, 35, 36, 294, 295, 296}
     missing = sorted(cue for cue in required if not manifest["cues"].get(str(cue), {}).get("file"))
     if missing:
         raise ValueError(f"Game audio is incomplete (missing cues: {missing})")

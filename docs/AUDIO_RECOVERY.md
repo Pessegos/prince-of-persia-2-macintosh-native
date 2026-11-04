@@ -1,5 +1,11 @@
 # Gameplay Audio
 
+Temple gameplay music is prepared as of2026-11-04: bank2's36 ambient/combat
+tracks and11 associated temple songs. The previous importer retained their
+MIDI files but omitted their WAVs. See [temple music](research/temple-music.md)
+for the bounded fix, existing native selection rules and validation. This
+does not change the horse scene's music-ending policy.
+
 ## Import And Playback
 
 The importer reads `DigiSnd.dat` and `MIDISnd.dat` data forks as Mohawk

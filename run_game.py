@@ -7,6 +7,7 @@ import os
 import sys
 
 from pop2.paths import PROJECT_DIR
+from pop2.music_cues import TEMPLE_SONGS
 
 PROJECT = PROJECT_DIR
 REQUIRED_ASSETS = (
@@ -97,6 +98,9 @@ def missing_assets(project=PROJECT):
             if any(not manifest["cues"].get(str(cue), {}).get("file")
                    for cue in (111, 112, 114, 115, 116, 119, 120, 121)):
                 missing.append("audio/manifest.json (needs level-four and level-five music)")
+            if (project / 'assets/Temple.rsrc').is_file():
+                if any(not manifest['cues'].get(str(cue), {}).get('file') for cue in TEMPLE_SONGS):
+                    missing.append('audio/manifest.json (needs temple music)')
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append("audio/manifest.json (needs reimport)")
     for name in ("intro.json", "ending.json", "discovery.json", "carpet.json",
