@@ -44,7 +44,7 @@ class LevelNineExitTests(unittest.TestCase):
         calls = []
         scene = SimpleNamespace(game=SimpleNamespace(level=SimpleNamespace(number=9), exit=object()),
                                 status=SimpleNamespace(set=calls.append),
-                                enter_next_level=lambda number: calls.append(number))
+                                enter_next_level=lambda number, keep_music=False: calls.append(number))
         return scene, calls
 
     def test_leaving_level_nine_plays_the_ride_then_completes(self):

@@ -13,6 +13,7 @@ from pop2.audio_release import PcmRelease, seamless_loop
 from pop2.audio_loop import PcmSustain, gate_loop_bounds
 from pop2.ui_audio import menu_pcm
 from pop2.mechanism_audio import GateVoice
+from pop2.music_transition import fade_pcm, horse_music_ending, TEMPLE_FADE_IN
 
 
 GATE_SLAM_DELAY = 11 / 60
@@ -63,6 +64,10 @@ class MixerPlayback:
         self.ui_sounds = {kind: mixer.Sound(buffer=menu_pcm(kind, rate, channels)) for kind in self.ui_channels}
         self.sounds = {cue: mixer.Sound(str(Path(directory) / item["file"]))
                        for cue, item in cues.items() if item.get("file")}
+        horse_theme = scene_sound_key(25006, 0)
+        if horse_theme in self.sounds:
+            self.sounds[horse_theme] = mixer.Sound(buffer=horse_music_ending(
+                self.sounds[horse_theme].get_raw(), rate, channels))
         for cue in GATE_SLAM_CUES & self.sounds.keys():
             # Sample-clock delay: independent of the slower gameplay tick,
             # and automatically paused/cancelled with the effect channel.
@@ -121,7 +126,7 @@ class MixerPlayback:
         else:
             self.channels[bus].stop()
 
-    def play(self, bus, cue, offset=0):
+    def play(self, bus, cue, offset=0, *, fade_in=0):
         sound = self.sounds[cue]
         voice = self._gate_voice(bus)
         if offset:
@@ -133,6 +138,9 @@ class MixerPlayback:
                 self.stop(bus)
                 return
             sound = self.mixer.Sound(buffer=remaining)
+        if bus == 'music' and fade_in:
+            rate, _bits, channels = self.mixer.get_init()
+            sound = self.mixer.Sound(buffer=fade_pcm(sound.get_raw(), rate, channels, into=fade_in))
         if (voice is not None and cue in MECHANISM_CUES - GATE_LOOP_CUES
                 and self._gate_loop(self.channels[bus]) is not None):
             # Fade PCM samples, not SDL's stepped per-buffer channel volume.
@@ -283,6 +291,7 @@ class AudioEngine:
         self.room_song_scope = None
         self.room_song_requested = False
         self.last_ui_hover_at = float('-inf')
+        self.music_fade_in_pending = False
 
     def play_ui(self, kind):
         if not self.sound_enabled:
@@ -313,6 +322,7 @@ class AudioEngine:
             raise ValueError(f"Intro audio {resource_id} is missing; import the game again")
         bus = "music" if kind == 0 else "effect"
         if kind == 0:
+            self.music_fade_in_pending = False
             self.current_music = resource_id
             self.current_music_ambient = False
             self.pending_song = None
@@ -328,6 +338,13 @@ class AudioEngine:
             self.playback.play(bus, cue)
         if self.paused:
             self.playback.pause(True)
+
+    def carry_story_music(self, cue):
+        """Keep a completed scene's theme and soften the following ambience."""
+        if self.current_music != cue or not self.playback.busy('music'):
+            return False
+        self.music_fade_in_pending = True
+        return True
 
     def add_sound(self, cue, actor_type=0):
         # Distinct effects mix; repeated cues coalesce. Mechanisms and the
@@ -477,7 +494,11 @@ class AudioEngine:
             self.current_music_group = self.pending_music_group
             self.pending_song = None
             self.pending_song_ambient = False
-            self.playback.play("music", self.current_music)
+            if self.music_fade_in_pending and self.current_music_ambient:
+                self.playback.play('music', self.current_music, fade_in=TEMPLE_FADE_IN)
+            else:
+                self.playback.play("music", self.current_music)
+            self.music_fade_in_pending = False
             self.music_clock = [time.monotonic(), 0.0]
         self.stopped_effects.clear()
 
@@ -596,6 +617,7 @@ class AudioEngine:
         if not keep_music:
             self.playback.stop("music")
             self.current_music = None
+            self.music_fade_in_pending = False
         self.current_effect = None
         self.pending_effect = self.pending_song = None
         self.current_mechanism = self.pending_mechanism = None

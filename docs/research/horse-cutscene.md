@@ -233,3 +233,55 @@ other sound timestamp. Total scene duration remains34.4653187119s.
 Focused horse/level9/arrival/intro/audio/carpet/throne/tree/discovery checks:
 196 tests OK, no skips (23.300s), with dependencies/Ruff/catalogue/whitespace
 checks passing. No full suite rerun for this scene-program-only adjustment.
+
+## Approved ending into temple gameplay (2026-11-04)
+
+After the temple music preparation, the user approved an improvement over
+the original hard stop: retain the horse theme during the first roughly9s
+of level10, soften its ending over1-1.5s, then fade ambience in over1s.
+Gameplay and picture timing remain immediate. The335ms lead, doorway x362
+and upper Room8 development entry stay unchanged.
+
+ToTempl2's prepared WAV is31.546s long, but has audible content only to about
+26.2s. At scene end it has played17.542721s. Waiting for the full WAV would
+insert several seconds of silent padding before temple ambience. Instead,
+the mixer makes an in-memory variant: last sample over a-60dBFS peak threshold,
+100ms release padding, and a raised-cosine fade over the final1.25s. Its
+duration is26.279875s, leaving about8.737s at arrival. The source waveform,
+MIDI, manifest and imported resources are unchanged.
+
+Natural NIS2 completion explicitly asks the audio engine to retain song25006
+and forwards keep_music into level10 loading. The existing foreground-song
+protection keeps ambience from interrupting it. When it ends, the first
+ambient cue receives a one-shot1s PCM fade in. There is one music voice, so
+themes do not overlap. Later ambient cues use their original waveforms.
+Other foreground requests can interrupt normally and consume/cancel the
+pending fade. Skip and ordinary restart/load/warp resets do not retain it.
+
+Both envelopes are baked into temporary Sound buffers; no frame-volume timer,
+user-volume override, background thread or extra gameplay wait is introduced.
+Pausing the mixer freezes the sound and its envelope together. Effects,
+mechanism voices, other scenes and normal reset defaults keep their existing
+behavior. NIS6's callback remains unchanged; NIS2's completion callback now
+accepts the explicit keep_music flag.
+
+Regression scope includes PCM endpoints/channel balance/untouched samples,
+the real SDL dummy mixer's retained sound and faded ambient buffer, actual
+NIS2-to-level10 completion, pause, natural-ending handoff, a single ambient
+fade, skip, restart and foreground interruption. The deterministic clock
+supplies the transformed duration; the separate SDL check verifies the actual
+PCM buffer and duration. No live user game/emulator/audio-device capture or
+native Sound Manager equivalence is claimed. A local preview uses the
+remaining ending followed by Temple1A; gameplay still chooses its normal
+random pool member.
+
+Focused horse/music/arrival/audio/carpet/throne checks pass147 tests with no
+skips (21.700s). Both the natural-completion and real SDL-buffer regressions
+reject cf003f8 (two failures, no errors). Preparing the first faded ambient
+buffer took about2ms in one local dummy-mixer sample using the longer
+Temple2F cue; this is not a general device-latency guarantee.
+Full shared-desktop discovery with worktree-local Python3.10 passes3425 tests
+in660.564s, with ten explicit exclusive-desktop skips. Fresh GUI import
+cancellation and completion both pass. Dependencies/installed assets, Ruff
+F/E9, recovery catalogue and whitespace checks pass. Existing Tk theme and
+Pillow deprecation messages remain in the local log, with no test failures.

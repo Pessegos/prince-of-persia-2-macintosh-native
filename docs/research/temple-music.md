@@ -66,7 +66,7 @@ files matched before copying the47 newly generated WAVs. Original metadata
 and unrelated cues are preserved; only file/playback-duration fields are
 added. Users with older caches on other installations need to reimport.
 
-The horse scene remains unchanged: current music onset16.922598s, immediate
-transition on scene end, approved doorway and seamless cuts. Whether its last
-music should carry into level10 remains a user decision after hearing the
-temple. No outro hold/fade/carry-over policy is introduced here.
+This preparation fix left the horse scene unchanged. After hearing the
+temple, the user approved carrying the horse theme's ending into level10
+and gently fading into ambience. That subsequent presentation improvement
+is described in [the horse scene note](horse-cutscene.md).

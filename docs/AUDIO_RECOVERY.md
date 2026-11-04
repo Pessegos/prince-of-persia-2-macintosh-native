@@ -6,6 +6,11 @@ MIDI files but omitted their WAVs. See [temple music](research/temple-music.md)
 for the bounded fix, existing native selection rules and validation. This
 does not change the horse scene's music-ending policy.
 
+The subsequent approved horse-to-temple transition carries ToTempl2's audible
+ending into level10, with a1.25s PCM fade out and a1s fade in for the first
+ambient cue. Source WAVs remain intact; the in-memory theme drops its silent
+renderer padding. See [the horse scene note](research/horse-cutscene.md).
+
 ## Import And Playback
 
 The importer reads `DigiSnd.dat` and `MIDISnd.dat` data forks as Mohawk

@@ -2754,7 +2754,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         return True
 
     def start_temple_ride(self, finish):
-        """NISTemple (15:5fd4) after level nine; `finish` runs after it.
+        """NISTemple after level nine; `finish(keep_music=...)` runs after it.
         Returns False when the scene is not imported."""
         return self.start_story_scene('temple.json', finish, 'The ride to the temple')
 
@@ -2826,9 +2826,15 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         wake = getattr(self, 'after_vision', None)
         if wake is not None:
             # NIS 6 returns to the throne room; its last song plays on.
+            horse_ride = getattr(self.intro, 'program_kind', None) == 'temple'
+            keep_music = bool(horse_ride and not skipped and self.intro.done
+                              and self.audio is not None and self.audio.carry_story_music(25006))
             self.after_vision = None
             self.intro = self.attract_stage = None
-            wake()
+            if horse_ride:
+                wake(keep_music=keep_music)
+            else:
+                wake()
             self.pause_resume_keys.update(held)
             self.next_animation_at = time.perf_counter()
             self.render()

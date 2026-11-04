@@ -1077,10 +1077,10 @@ class Ruins(Caverns):
             # the game stops after the ride.
             from pop2.caverns import scenery_available
 
-            def finish():
+            def finish(keep_music=False):
                 scene.game.exit = None
                 if scenery_available(10):
-                    scene.enter_next_level(10)
+                    scene.enter_next_level(10, keep_music=keep_music)
                 else:
                     scene.level_complete = True
                     scene.status.set('Level 9 complete')
