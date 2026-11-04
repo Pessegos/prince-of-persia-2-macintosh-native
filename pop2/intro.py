@@ -47,6 +47,13 @@ def read_program(path):
                     or not isinstance(item.get("args"), list)
                     or len(item["args"]) != OPERATIONS[item["op"]]):
                 raise ValueError("Invalid intro scene instruction")
+    if data.get('kind') == 'temple':
+        # Imports before the horse-scene repair appended a synthetic wait
+        # after ANI 25012. Native 16:14c4 ends on isRunning == 0; the cue
+        # checked by TransFunc5 is an early exit, not a required wait.
+        data['operations'] = [item for item in data['operations']
+                              if not (item['op'] == 'cue' and item['args'] == [97]
+                                      and item.get('pc') == 0x615e)]
     return data
 
 
@@ -311,7 +318,7 @@ class IntroPlayer:
         self.sounds = program["audio"]
         self.program_kind = program.get("kind") or ("carpet" if "resource_files" in program else None)
         self.status = status.copy() if status is not None else None
-        if self.status is None and self.program_kind == 'throne':
+        if self.status is None and self.program_kind in ('throne', 'temple'):
             self.status = Image.new('RGBA', (SIZE[0], SIZE[1] - 365), 'black')
         self.position = 0
         self.time = 0.0
@@ -325,9 +332,12 @@ class IntroPlayer:
             self.playing[0] = self.carried_music[0] = (cue, -played, metadata["duration"])
         self.palette = [(0, 0, 0)] * 256
         self.loaded = {}
-        self.target = Image.new("L", SIZE, 1)
+        # NIS 2 occupies the 510x365 game picture. Its moving layers can
+        # extend below it; those pixels must not enter the black HUD strip
+        # or the unused right edge (SetGameRect 17:1ada: width 510).
+        self.target = Image.new("L", SIZE, 255 if self.program_kind == 'temple' else 1)
         self.display = self.target.copy()
-        self.clip = (0, 0, *SIZE)
+        self.clip = (0, 0, 510, 365) if self.program_kind == 'temple' else (0, 0, *SIZE)
         self.transition = None
         self.deferred_palette = None
         self.title_animation = None

@@ -315,6 +315,14 @@ and are not drawn.
 
 ## Cutscene 2: The Ride To The Temple (research, 2026-10-30)
 
+**2026-11-04 correction:** the early music-cue abort was misread as a required
+wait after the desert animation. That synthetic wait is removed, old imports
+are normalized without reimport, NIS2's margins stay black, and the arrival
+statue persists in level10. See [horse-cutscene.md](horse-cutscene.md) for the
+original-code checks, current behavior and exclusions. The old "holds until
+cue" and omitted-last-shot descriptions below are historical, superseded by
+this repair and the existing level10 arrival implementation.
+
 CheckPlayNIS(9, 10) plays NIS 2, NISTemple 15:5fd4 (dispatcher table entry
 2). The scene harness now runs it to the end with these additions (no
 existing scene program changes; the baseline comparison is identical):

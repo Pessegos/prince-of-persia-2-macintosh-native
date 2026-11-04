@@ -147,8 +147,8 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 3,Modular Set 1,ClrLifeBar,0x444a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,1
 3,Modular Set 1,ClrMessage,0x448a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,2
 3,Modular Set 1,GetHorseShape,0x44f0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
-3,Modular Set 1,GetHorsePtInPlane,0x4572,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
-3,Modular Set 1,DrawHorse,0x4608,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,0
+3,Modular Set 1,GetHorsePtInPlane,0x4572,decoded,partial,pop2/caverns.py;tools/probe_horse_scene.py,"level9 room2 plane0 static reading and original level10 room22 plane1 call at global -1: point74,198; level14 omitted",1,0
+3,Modular Set 1,DrawHorse,0x4608,decoded,partial,pop2/caverns.py;docs/research/horse-cutscene.md,"Prince SHAP25360, level9 mirrored/CTBL25360 back and level10 unmirrored/CTBL25361 front; original drawing-list code inspected, pixel rasterization not probed",1,0
 3,Modular Set 1,GetFlaskBubbleColor,0x46fc,jump_table,partial,pop2/caverns.py,level-three normal/mega body and two mirrored monochrome particle layers; all 196 native phase/room layers pixel matched; other environments incomplete,0,7
 3,Modular Set 1,DrawKidMeter,0x4902,jump_table,partial,pop2/combat_art.py,ordinary health icons; upgrade effects missing,7,5
 3,Modular Set 1,DrawOppMeter,0x4a8e,jump_table,partial,pop2/combat_art.py;pop2/combat.py;tools/probe_ruins_hud_exit.py,ordinary icons and head half-points (60 native positive-HP shape/position loops); nearest active-head HUD handoff; no level5 bridge-skeleton meter; native redraw cache and rasterization excluded,9,8
@@ -627,9 +627,9 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 15,NISs,JaffarBurnBabyBurn,0x44e2,prologue,indexed-only,,No semantic review recorded in this prototype catalog,1,9
 15,NISs,Opening1,0x45c2,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,132
 15,NISs,Opening2,0x4ee8,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,232
-15,NISs,NISTemple,0x5fd4,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,62
+15,NISs,NISTemple,0x5fd4,prologue,partial,tools/extract_intro.py;pop2/intro.py;docs/research/horse-cutscene.md,"five-shot level9-to10 ride, exported ANI/SCRP/coordinator and last room; synthetic post-gallop wait removed, legacy imports normalized; native early music exit/event-loop timing omitted",0,62
 15,NISs,TransFunc4,0x640a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,9
-15,NISs,TransFunc5,0x64ee,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,3
+15,NISs,TransFunc5,0x64ee,jump_table,partial,tools/extract_intro.py;tools/probe_horse_scene.py,16 original callback frame/music-marker cases: cue >=97 returns -1 (early termination); script may finish sooner; full PlayTheAnimation not probed,0,3
 15,NISs,TransFunc6,0x656a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,2
 15,NISs,TransFunc7,0x65ac,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
 15,NISs,TransFunc8,0x65d4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,9
@@ -665,7 +665,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 16,Anim & Audio,shapeDraw__10tAnimationFiiii,0x084a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 16,Anim & Audio,shapeTestPixel__10tAnimationFiiii,0x0878,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
 16,Anim & Audio,soundControl__10tAnimationFP23tAnimationScriptCommand,0x08aa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,0
-16,Anim & Audio,runScript__10tAnimationFiUs,0x08ee,jump_table,partial,pop2/intro.py;tools/extract_intro.py,12 Discovery/tree scripts and 481 native incremental steps; carried layers/events/interval/end checked; tree callbacks and maintain cadence not executed,0,0
+16,Anim & Audio,runScript__10tAnimationFiUs,0x08ee,jump_table,partial,pop2/intro.py;tools/extract_intro.py;tools/probe_horse_scene.py,12 Discovery/tree scripts and 481 native steps; five horse scripts and 338 native steps including terminators; layers/events/interval/end checked; maintain cadence omitted,0,0
 16,Anim & Audio,__ct__11KBAnimationFv,0x0b00,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,1
 16,Anim & Audio,__sd__11KBAnimationFUi,0x0b38,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,2
 16,Anim & Audio,maintain__11KBAnimationFUl,0x0b80,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
@@ -675,7 +675,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 16,Anim & Audio,prepare__11KBAnimationFv,0x0c84,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,11
 16,Anim & Audio,soundControl__11KBAnimationFP23tAnimationScriptCommand,0x0f34,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
 16,Anim & Audio,shapeDraw__11KBAnimationFiiii,0x0f96,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
-16,Anim & Audio,PlayTheAnimation,0x100c,jump_table,partial,tools/extract_intro.py;pop2/intro.py,"Discovery flags 6/no callback/no background fill only; portable nominal intervals, no Macintosh event-loop or stall parity; other modes fail explicitly",17,29
+16,Anim & Audio,PlayTheAnimation,0x100c,jump_table,partial,tools/extract_intro.py;pop2/intro.py,Discovery flags 6; horse flags 12/20/28 with callbacks/background restore; isRunning terminates without waiting for TransFunc5 music cue; native event-loop/stall/pixel parity omitted,17,29
 16,Anim & Audio,CombineBounds__Fv,0x15b6,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,2
 16,Anim & Audio,RectArea__FP4Rect,0x16ea,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,1
 16,Anim & Audio,MohawkInit,0x1738,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,30

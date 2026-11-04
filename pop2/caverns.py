@@ -62,8 +62,9 @@ class CavernRoom(OpeningRoom):
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
         mask = super().actor_mask(row, bottom, state, bounds, record)
         if self.custom_occlusion is not None:
-            # DrawCustomRoomImgs 3:239e-23b2 repeats the CUST foreground for
-            # every dirty cell, not just its clean-cut admission cell (9, 0).
+            # Global front items: DrawCustomRoomImgs 3:239e-23b2 repeats
+            # CUST for every dirty cell; DrawHorse 3:23f0-2414 adds the
+            # arrival statue to plane 1 independently of the actor's cell.
             mask = ImageChops.lighter(mask, self.custom_occlusion)
         # Ruins back-layer slabs must not mask reaching/gripping hands.
         # QuickFloor's native repaint commands supply their foreground below.
@@ -902,13 +903,18 @@ def draw_carpet(frame, room_id, state, prince=None, *, level_number=3):
 # masked, in Prince CTBL 25360 at entry 1 (3:1004-1022).
 HORSE_ROOM = (9, 1)
 HORSE_TOP_LEFT = (252, 40)
+# GetHorsePtInPlane 3:45ce-45e4, a5-0x4af2; DrawHorse uses the same
+# Prince SHAP 25360, unmirrored, with CTBL 25361 (3:1058-1076).
+ARRIVAL_HORSE_ROOM = (10, 21)
+ARRIVAL_HORSE_TOP_LEFT = (74, 198)
 
 
-@lru_cache(maxsize=1)
-def horse_sprite():
+@lru_cache(maxsize=2)
+def horse_sprite(level_number=9):
     resources = load_resource_file('Prince.rsrc')
-    palette = decode_ctbl(resources['CTBL'][25360]['data'])
-    return ImageOps.mirror(decode_shap(resources['SHAP'][25360]['data'], palette))
+    palette = decode_ctbl(resources['CTBL'][25360 if level_number == 9 else 25361]['data'])
+    sprite = decode_shap(resources['SHAP'][25360]['data'], palette)
+    return ImageOps.mirror(sprite) if level_number == 9 else sprite
 
 
 def cavern_command_sprite(command, resources, palette, shapes):
@@ -1337,6 +1343,14 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         # Drawn after the room's back pieces (3:23ca-23e2), before the front.
         sprite = horse_sprite()
         background.paste(sprite, HORSE_TOP_LEFT, sprite)
+    elif (level_number, room_id) == ARRIVAL_HORSE_ROOM:
+        # The statue remains after NIS 2, in the room's front plane.
+        sprite = horse_sprite(10)
+        foreground.paste(sprite, ARRIVAL_HORSE_TOP_LEFT, sprite)
+        horse_mask = Image.new('L', background.size)
+        horse_mask.paste(sprite.getchannel('A'), ARRIVAL_HORSE_TOP_LEFT)
+        custom_mask = (ImageChops.lighter(custom_mask, horse_mask)
+                       if custom_mask is not None else horse_mask)
     redraw = {}
     climb_commands = (variant['climb_redraw'] if variant is not None else
                       program.get('climb_redraw', {}).get(str(room_id), {}))
