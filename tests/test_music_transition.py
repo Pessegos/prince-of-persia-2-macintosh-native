@@ -37,6 +37,14 @@ class MusicEnvelopeTests(unittest.TestCase):
         silent = bytes(800)
         self.assertEqual(horse_music_ending(silent, 1000, 2), silent)
 
+    def test_long_horse_theme_ends_with_a_short_fade_after_the_movie(self):
+        samples = np.full((32000, 2), 10000, dtype='<i2')
+        ending = np.frombuffer(horse_music_ending(samples.tobytes(), 1000, 2), dtype='<i2').reshape(-1, 2)
+        self.assertEqual(len(ending), 19000)
+        np.testing.assert_array_equal(ending[:17750], samples[:17750])
+        self.assertGreater(ending[18000, 0], ending[18500, 0])
+        np.testing.assert_array_equal(ending[-1], [0, 0])
+
 
 class RecordingPlayback(TimedPlayback):
     def __init__(self, cues):
@@ -89,8 +97,8 @@ class HorseMusicHandoffTests(unittest.TestCase):
         self.assertEqual((self.scene.game.level.number, self.scene.room_id), (10, 21))
         self.assertEqual(self.audio.current_music, 25006)
         remaining = self.playback.remaining['music']
-        self.assertGreater(remaining, 8)
-        self.assertLess(remaining, 10)
+        self.assertGreater(remaining, 1.4)
+        self.assertLess(remaining, 1.6)
         self.scene.advance_audio()
         self.assertEqual([p for p in self.playback.plays if p[0] == 'music'], music_plays)
         self.audio.pause(True)
@@ -147,8 +155,7 @@ class MixerMusicEnvelopeTests(unittest.TestCase):
                 rate, _bits, channels = playback.mixer.get_init()
                 original = playback.mixer.Sound(str(ASSET_DIR / 'audio/scene-0-25006.wav')).get_raw()
                 self.assertEqual(playback.sounds[key].get_raw(), horse_music_ending(original, rate, channels))
-                self.assertGreater(playback.sounds[key].get_length(), 26)
-                self.assertLess(playback.sounds[key].get_length(), 27)
+                self.assertAlmostEqual(playback.sounds[key].get_length(), 19, places=4)
                 playback.set_volume('music', .5)
                 playback.play('music', 200, fade_in=1)
                 played = playback.channels['music'].get_sound()

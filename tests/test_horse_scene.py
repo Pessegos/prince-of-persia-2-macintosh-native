@@ -29,6 +29,34 @@ HORSE_INSTALLED = all((ASSET_DIR / name).is_file() for name in (
 
 @unittest.skipUnless(HORSE_INSTALLED, 'Imported horse scene and scenery required')
 class HorseSceneTests(unittest.TestCase):
+    def test_interior_reveals_every_palette_with_the_existing_fade_cadence(self):
+        from pop2.intro import IntroAssets, IntroPlayer, fade_ticks, MAC_TICKS_PER_SECOND
+
+        player = IntroPlayer(IntroAssets(program_name='temple.json'))
+        reveals = [i for i, item in enumerate(player.operations) if item['op'] == 'fade_in_all']
+        self.assertEqual(len(reveals), 1)
+        reveal = reveals[0]
+        player.seek_operation(reveal)
+        start = player.time
+        self.assertIsNone(player.frame().convert('RGB').getbbox())
+        _kind, _start, duration, _source, colors = player.transition
+        self.assertAlmostEqual(duration, fade_ticks(0x40001) / MAC_TICKS_PER_SECOND)
+        first_pose = player.target.tobytes()
+        player.advance(duration / 2)
+        self.assertNotEqual(player.target.tobytes(), first_pose)
+        # Fade the temple, horse and Prince together, including palettes
+        # set directly by game_room/palette_at rather than loaded tables.
+        for index, color in colors.items():
+            for actual, full in zip(player.palette[index], color):
+                self.assertLessEqual(abs(actual - full / 2), .51)
+        self.assertIsNotNone(player.frame().convert('RGB').getbbox())
+        player.advance(duration / 2)
+        self.assertIsNone(player.transition)
+        self.assertEqual(player.palette, list(colors.values()))
+        self.assertAlmostEqual(player.time, start + duration)
+        player.advance(60)
+        self.assertAlmostEqual(player.time, 34.465319, places=6)
+
     def test_templ2_leads_takeoff_by_335ms_without_moving_picture_frames(self):
         from unittest.mock import Mock, call
         from pop2.intro import IntroAssets, IntroPlayer, MAC_TICKS_PER_SECOND

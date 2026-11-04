@@ -4,6 +4,9 @@ import numpy as np
 
 
 HORSE_FADE_OUT = 1.25
+# ToTempl2 starts at 16.922598s; NIS2 ends at 34.465319s. Cap the
+# in-memory cue at 19s, leaving about 1.46s after arrival, rather than 8.74s.
+HORSE_END_SECONDS = 19.0
 TEMPLE_FADE_IN = 1.0
 
 
@@ -22,10 +25,11 @@ def fade_pcm(raw, rate, channels, *, into=0, out=0):
 
 
 def horse_music_ending(raw, rate, channels):
-    """Remove ToTempl2's silent renderer padding and soften its final phrase.
+    """Shorten ToTempl2 to the temple handoff and soften its ending.
 
     A -60dBFS peak threshold plus100ms of release padding retains the quiet
-    ending. Source files and all samples before the final fade are preserved.
+    ending of short sources. Cap the full theme at the approved transition;
+    source files and all samples before the final fade are preserved.
     """
     samples = np.frombuffer(raw, dtype='<i2').reshape(-1, channels)
     if not len(samples):
@@ -34,5 +38,6 @@ def horse_music_ending(raw, rate, channels):
     active = np.flatnonzero(peak > 33)
     if not len(active):
         return raw
-    end = min(len(samples), int(active[-1]) + 1 + round(.1 * rate))
+    end = min(len(samples), int(active[-1]) + 1 + round(.1 * rate),
+              round(HORSE_END_SECONDS * rate))
     return fade_pcm(samples[:end].tobytes(), rate, channels, out=HORSE_FADE_OUT)

@@ -130,8 +130,14 @@ class PlaybackPreviews:
                 if player.transition is not None:
                     # Finish this reveal without executing the following text clear
                     # or animation: the destination picture belongs to this caption.
-                    player.advance(max(0, player.wait_until - player.time),
-                                   stop_position=player.position)
+                    finish = player.transition[1] + player.transition[2]
+                    if player.wait_until + 1e-9 < finish:
+                        # Animated reveals keep drawing during the fade. A
+                        # fixed operation stop would freeze at the first wait.
+                        player.advance(max(0, finish - player.time), stop_position=following)
+                    else:
+                        player.advance(max(0, player.wait_until - player.time),
+                                       stop_position=player.position)
                     continue
                 frame = player.frame()
                 stats = ImageStat.Stat(frame.crop((64, 62, 448, 292)).convert('L'))

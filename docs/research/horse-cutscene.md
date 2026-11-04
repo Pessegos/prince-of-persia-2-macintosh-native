@@ -316,3 +316,49 @@ catalog expectations were extended for the requested new group/stage; the
 horse stage deliberately prepares its own level 9 combat bank while playing
 through the common story player. Full discovery was not repeated for these
 development-playback/UI changes; ordinary campaign timing remains unchanged.
+
+## Shorter outro and interior reveal (2026-11-04)
+
+After listening, the user found the retained 8.737s of horse music too long
+after arrival, and requested a fade-in for the interior dismount shot after
+the distant entrance fades to black. Both are deliberate port improvements.
+
+Cap the in-memory ToTempl2 variant at 19s from its approved onset. With the
+unchanged 16.922598s onset and 34.465319s movie ending, this leaves 1.457279s
+in gameplay. The final 1.25s raised-cosine fade and first ambience's one-shot
+1s fade-in remain. Earlier samples, source audio files, manifest and user
+volume are unchanged. The actual scene/SDL duration regression constrains
+the retained tail to 1.4-1.6s, so later picture/onset edits must reconsider
+this cutoff rather than silently lengthening the handoff again.
+
+Normalize the interior shot on read: after drawing the complete first pose
+and before its first wait, add `fade_in_all(0x40001)`. It captures the current
+palette, starts it at black, and uses the existing linear palette transition
+for 25 Macintosh ticks (0.415645s). Include all current entries, particularly
+the room's direct palette and Prince's palette-at entries; loaded tables
+alone would leave parts of the image bright. This reveal is nonblocking:
+the horse and Prince animate while fading, and every picture deadline and
+the movie's total duration remain unchanged. Existing fades keep their
+behavior. No resource reimport is needed.
+
+Developer previews advance animated reveals through their transition deadline
+within the current bookmark. Stopping at a fixed operation would stall at
+the first animation wait and cache a black Dismount thumbnail. Blocking
+reveals still stop before following text/animation changes. The existing
+whole-gallery visibility/isolation checks cover both paths.
+
+An offscreen six-frame sheet and GIF verify black, quarter, half, three-quarter
+and full brightness while the rider keeps moving. A short audio preview uses
+the last 2s of the movie, the 1.457s tail and Temple1A's fade-in; the gameplay
+ambient pool remains random. Two new regressions reject a5a3b5f (two failures,
+zero errors). The earlier room-arrival expectation of an immediately visible
+palette is intentionally replaced by black followed by the revealed room;
+the indexed scenery and arrival state assertions remain.
+
+Focused movie, scheduling, gallery, navigation, development menu, music,
+audio integration and arrival suites: 339 tests OK, one explicit exclusive-
+desktop skip (149.295s). Fresh-import GUI cancellation/completion pass
+(6.3s/63.5s), maximum heartbeat gap 0.094s. Dependencies/installed assets,
+Ruff F/E9, recovery catalogue and whitespace pass. Full gameplay discovery
+was not repeated: this is a NIS2-only presentation change, with existing
+movie deadlines, gameplay scheduling and audio arbitration unchanged.

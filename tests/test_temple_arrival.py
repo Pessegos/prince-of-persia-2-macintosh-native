@@ -29,9 +29,14 @@ class RideLastShotTests(unittest.TestCase):
             pixels = player.display.crop((0, 0, 510, 365)).tobytes()
             return sum(a == b for a, b in zip(pixels, room)) / len(room)
 
-        # The first frame shows the whole room (the horse covers a part).
+        # The whole indexed room is drawn at once (partly covered by the
+        # horse), then revealed by the user's added nonblocking fade-in.
         player = IntroPlayer(assets)
         player.seek_operation(shot)
+        self.assertGreater(shown(player), 0.9)
+        self.assertEqual(player.palette[64:80], [(0, 0, 0)] * 16)
+        self.assertIsNone(player.frame().convert('RGB').getbbox())
+        player.advance(player.transition[2])
         self.assertGreater(shown(player), 0.9)
         self.assertNotEqual(player.palette[64:80], [(0, 0, 0)] * 16)
         player.seek_operation(len(operations) - 1)

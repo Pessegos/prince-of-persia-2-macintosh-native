@@ -28,6 +28,7 @@ OPERATIONS = {
     # The vision at the throne (NIS 6).
     "rgb": 4, "set_palette": 2, "remap": 2, "combine": 0, "fade_out_all": 1,
     "save_rect": 2, "restore_rect": 1, "ensure_sound": 2, "dissolve_area": 1, "text_panel": 1,
+    "fade_in_all": 1,
     "blit": 2,
     # NISTemple's last shot: DrawRoomFromNIS 2:03d4(level, room).
     "game_room": 2,
@@ -94,6 +95,15 @@ def read_program(path):
                 *data['operations'][first:last + 1],
                 {'op': 'clip', 'args': [[0, 0, 365, 510]], 'pc': 0x632e},
                 *data['operations'][last + 1:]]
+        room = next((index for index, item in enumerate(data['operations'])
+                     if item['op'] == 'game_room' and item['args'] == [10, 22]), None)
+        if room is not None and not any(item['op'] == 'fade_in_all' for item in data['operations']):
+            first_wait = next(index for index in range(room + 1, len(data['operations']))
+                              if data['operations'][index]['op'] == 'wait')
+            # User-approved reveal: draw the room and first rider pose under
+            # black, then use the exterior's 25-tick fade while they animate.
+            data['operations'].insert(first_wait, {
+                'op': 'fade_in_all', 'args': [0x40001], 'pc': 0x63cc})
     return data
 
 
@@ -604,6 +614,11 @@ class IntroPlayer:
             self.loaded = {1: {**self.loaded.get(1, {}), **self.loaded.get(2, {})}}
         elif op == "fade_out_all":
             self.fade({index: (0, 0, 0) for index in range(256)}, False, args[0])
+        elif op == "fade_in_all":
+            colors = dict(enumerate(self.palette))
+            self.palette = [(0, 0, 0)] * 256
+            self.changed()
+            self.fade(colors, True, args[0], blocking=False)
         elif op == "save_rect":
             box = self.box(args[1])
             self.saved_rects[args[0]] = box, self.target.crop(box)
