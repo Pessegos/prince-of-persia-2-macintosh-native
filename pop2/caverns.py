@@ -58,7 +58,6 @@ class CavernRoom(OpeningRoom):
     retained_mask: Image.Image | None = None
     gate_occlusion: dict | None = None
     custom_occlusion: Image.Image | None = None
-    floor_surface: dict | None = None
 
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
         mask = super().actor_mask(row, bottom, state, bounds, record)
@@ -66,21 +65,8 @@ class CavernRoom(OpeningRoom):
             # DrawCustomRoomImgs 3:239e-23b2 repeats the CUST foreground for
             # every dirty cell, not just its clean-cut admission cell (9, 0).
             mask = ImageChops.lighter(mask, self.custom_occlusion)
-        if (self.floor_surface and state is not None and row is not None
-                and getattr(state, 'actor_type', None) == 0
-                and not 135 <= state.action <= 144
-                and (state.animation_state in (1, 2, 6)
-                     or 79 <= state.action <= 99)):
-            # DrawFloorBuf omits intact ruins loose floors. Their near surface
-            # must still cover a reaching actor inside the drawn slab. Its
-            # perspective surface extends above the logical floor plane too;
-            # leaving that part out exposes detached fingers. Reuse the exact
-            # cached silhouette, not a rectangular crop of the actor.
-            mask = mask.copy()
-            for surface_row, (cover, (x, y)) in self.floor_surface.items():
-                if surface_row < row:
-                    rect = (x, y, x + cover.width, y + cover.height)
-                    mask.paste(ImageChops.lighter(mask.crop(rect), cover), (x, y))
+        # Ruins back-layer slabs must not mask reaching/gripping hands.
+        # QuickFloor's native repaint commands supply their foreground below.
         # CheckGateInFore 3:2722-2762/2860 peels the movable gate over
         # actors in its own/preceding column, except hanging modes 2/6.
         if (not self.gate_occlusion or state is None or record is None
@@ -1289,7 +1275,6 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     gate_masks = {}
     custom_records = custom_foreground_records(resources, room_id)
     custom_mask = Image.new('L', background.size) if custom_records else None
-    floor_surface = {}
     # A crevice reveal's redraw paints over the displayed screen: its back
     # pieces also cover the earlier front pieces (slot_variant `redrawn`).
     redraw_start = variant.get('redraw_start', len(commands)) if variant is not None else len(commands)
@@ -1328,22 +1313,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                         cell_masks[key] = cover, (x, y)
             if custom_mask is not None:
                 custom_mask = ImageChops.multiply(custom_mask, uncovered)
-            for surface_row, (cover, (x, y)) in tuple(floor_surface.items()):
-                cover = ImageChops.multiply(cover, uncovered.crop(
-                    (x, y, x + cover.width, y + cover.height)))
-                if cover.getbbox() is None:
-                    del floor_surface[surface_row]
-                else:
-                    floor_surface[surface_row] = cover, (x, y)
         cell = tuple(command[8:10])
-        if (level_number in RUINS_LEVELS and layer == 'back' and library == 4
-                and 3514 <= index <= 3519 and 0 <= row < 3):
-            # Preserve the full drawn slab surface, including its perspective
-            # top. Commands already reflect fallen slabs and their exact clips.
-            combined = merge_positioned_mask(floor_surface.get(row),
-                                              sprite.getchannel('A'), position)
-            if combined is not None:
-                floor_surface[row] = combined
         if layer == 'back' and library == 4 and index in (3563, 3542) and cell in gate_cells:
             # DrawCaveGate anchors the stone one column right of its tile.
             # The repaint caller may be a different cell, even on another row.
@@ -1405,4 +1375,4 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         background.getchannel('A'), foreground.getchannel('A')))
     background = Image.alpha_composite(Image.new('RGBA', background.size, 'black'), background)
     return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
-                      redraw, floors, retained, gate_masks, custom_mask, floor_surface)
+                      redraw, floors, retained, gate_masks, custom_mask)

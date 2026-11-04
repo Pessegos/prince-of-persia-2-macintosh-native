@@ -39,35 +39,34 @@ its saved collected-item state and intentional persistent native globals.
 
 ## Ruins slab surfaces and the reported clipping
 
-The room4 screenshot can be reproduced with the stable wall-supported hang
-pose91 at X108, physical row2, facing right. Blue turban pixels at viewport
-(107,237) and (100,238) appeared on the platform above the near edge. A normal
-vertical reach at X95 also leaked through its surface at pose79. The exported
-room4 `floor_redraw` list is empty for the intact loose-platform layout;
-QuickFloor2:69e6-6ac4 alone cannot repaint those pixels. Static scenery already
-contains the corresponding Ruins surface SHAPs3514-3519.
+**Corrected 2026-11-04 using the user's Macintosh recording.** The former
+full-slab actor mask was excessive: it erased the hands and forearms during
+the reach/catch poses79,80,91. In `macintosh correct arms hands.mp4`, around
+2.03 seconds, the hands cross the slab's perspective surface intact. The
+corresponding pose around2.28 seconds in `port clippedarms hands.mp4` loses
+both hands. The later supplied stills isolate the same difference. These are
+pose comparisons, not a replay of identical recorded inputs.
 
-Cache their full clipped surface alpha, and apply it only to the Prince
-reaching/hanging below a higher floor. Pixels outside the drawn slab, including
-the turban below its face, stay visible. No actor position,
-animation, collision, resource or save schema changes. Commands come from the
-current scenery variant, so fallen slabs rebuild the cover; reveal redraws
-erase previous covers just as they erase other foreground masks. This is a
-port drawing repair, not a claim of executing the complete native draw order.
+The matching scene is level6 native room4 (port room3), lower row2, facing
+left, after loose cells12,13,22,23 have fallen. Starting at X108 and pressing
+Up reaches poses79,80,91 at X122 before climbing. The old tests instead forced
+a right-facing hang over intact slabs. That different geometry did not
+establish how the original should layer the hands in this route.
 
-Scene regressions cover both visible leaks and disappearing slab surfaces.
-Viewport samples include the one-pixel room origin; background samples must
-subtract that origin. Incorrect unshifted samples initially compared neighboring
-rock pixels rather than the actual covered pixel.
+Remove the additional alpha mask made from back-layer Ruins SHAPs3514-3519.
+Ordinary foreground masks and the exported native QuickFloor/DrawFloorBuf
+and DrawHalf repaints continue to determine occlusion. Cutting the extra mask
+only at the logical floor plane would still erase the lower forearm visible
+in the recording. No sprite, movement or native repaint command changes.
 
-The user's follow-up screenshot exposed detached fingers above the logical
-supporting plane (Y226). The initial cover deliberately omitted that band,
-which was incorrect: the perspective surface begins higher than the logical
-plane. It now includes the entire surface silhouette. The regression samples
-the actual finger pixels at viewport (104,222), (105,223) and (107,224), and
-checks all hanging/swing poses87-99 against the scenery under that silhouette.
-The former hand-preservation expectation is replaced by the user's corrected
-requirement; pixels outside the slab are still tested for visibility.
+The scene regression follows the fallen-slab jump through the three affected
+poses and the completed climb. It checks the fingers at viewport(124,224) and
+forearm at(125,230), including the one-pixel room origin. It fails at all three
+poses against the preceding production code. The older tests that required
+the entire back-drawn slab to cover every actor pixel are superseded by this
+Macintosh evidence. Existing DrawHalf/pillar and falling-floor regressions
+still cover native foreground order. No new native execution probe or claim
+of complete room drawing equivalence is made here.
 
 The room8 body split during climb poses135-144 is separate: the native DrawHalf
 surface pass itself crosses the body. The committed repair preserves it. A

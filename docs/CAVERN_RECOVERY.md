@@ -955,6 +955,16 @@ pose/mode/facing/bounds combinations produced the same selected floor cells;
 the integrated upper-platform test fails without the repaint. The first
 entrance-climb regression remains covered as well.
 
+Ruins hand correction (2026-11-04): the user's Macintosh video establishes
+that the additional full-slab mask introduced after the alpha playtest was
+incorrect. In level6 native room4, after loose cells12,13,22,23 fall, the
+left-facing reach/catch at X122 keeps the hands and forearms over the slab
+in poses79,80,91. Removing the extra mask restores those pixels; the native
+QuickFloor/DrawFloorBuf and DrawHalf exports above remain unchanged. The scene
+regression follows the actual jump and rejects the former clipping in all
+three poses. This is a video-backed correction of a port mask, not a new
+native probe. See `research/post-alpha-playtest.md` for the fixture and scope.
+
 Projectile/special-actor drawing modes and
 full dirty-buffer persistence remain separate recovery work. The two aligned
 video defects are addressed; complete level-three frame parity is not claimed.

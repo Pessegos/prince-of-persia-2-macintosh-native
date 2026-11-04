@@ -101,82 +101,43 @@ class PlaytestSceneTests(unittest.TestCase):
         self.assertLess(requests[0].up, 0)
         self.assertEqual(requests[0], requests[1])
 
-    def test_ruins_loose_slab_covers_the_turban_and_fingers_inside_its_surface(self):
-        from PIL import Image
-        from pop2.scene_prototype import ROOM_ORIGIN_X
-        scene = self.scene
-        scene.load_level(6)
-        scene.jump_to_room(3, 2, 108, 1)
-        scene.action = scene.sequence_state.action = 91
-        scene.sequence_state.animation_state = 2
-        scene.render()
-        scenery = Image.alpha_composite(scene.background, scene.foreground)
-        # Stable hanging pose from the reported room4 screenshot: these blue
-        # pixels used to show through the back-drawn loose platform surface.
-        # The fingers at Y222-224 are also inside the drawn slab, despite
-        # being above its logical supporting plane (Y226).
-        for pixel in ((107, 237), (100, 238), (104, 222), (105, 223), (107, 224)):
-            self.assertEqual(scene.native_viewport.getpixel(pixel),
-                             scenery.getpixel((pixel[0] - ROOM_ORIGIN_X, pixel[1])))
-        # The part of the turban below the actual slab stays visible.
-        self.assertNotEqual(scene.native_viewport.getpixel((99, 246)),
-                            scene.background.getpixel((99 - ROOM_ORIGIN_X, 246)))
-
-    def test_room4_vertical_reach_does_not_draw_through_the_loose_slab(self):
+    def test_room4_reach_and_catch_preserve_the_macintosh_hands(self):
         from tests.test_terrain import RooftopSceneTests
         from pop2.scene_prototype import ROOM_ORIGIN_X
         scene = self.scene
         scene.load_level(6)
         scene.peaceful = True
-        scene.jump_to_room(3, 2, 95, 1)
-        scene.in_animation_tick = True
-        scene.up_key(None)
-        RooftopSceneTests.tick(self, 13)
-        self.assertEqual(scene.action, 79)
-        self.assertEqual(scene.native_viewport.getpixel((105, 226)),
-                         scene.background.getpixel((105 - ROOM_ORIGIN_X, 226)))
-
-    def test_room4_swing_cycle_does_not_expose_fingers_inside_the_slab(self):
-        from PIL import Image, ImageChops
-        from unittest.mock import patch
-        from pop2.scene_prototype import ROOM_ORIGIN_X
-        scene = self.scene
-        scene.load_level(6)
-        scene.peaceful = True
-        scene.jump_to_room(3, 2, 108, 1)
-        room = scene.level_renderer.room(3, scene.game.caverns)
-        surface, (x, y) = room.floor_surface[1]
-        cover = Image.new('L', (512, 384))
-        cover.paste(surface, (x + ROOM_ORIGIN_X, y))
-        with patch.object(scene, 'player_sprite', return_value=None):
-            scene.render()
-            scenery = scene.native_viewport.copy()
-        for pose in range(87, 100):
-            with self.subTest(pose=pose):
-                scene.action = scene.sequence_state.action = pose
-                scene.sequence_state.animation_state = 2
-                scene.render()
-                difference = ImageChops.difference(scene.native_viewport, scenery).convert('RGB')
-                inside_stone = ImageChops.multiply(difference.convert('L'), cover)
-                self.assertIsNone(inside_stone.getbbox())
-
-    def test_ruins_floor_cover_rebuilds_after_loose_slabs_fall(self):
-        scene = self.scene
-        scene.load_level(6)
-        scene.jump_to_room(3, 2, 108, 1)
-
-        def covered():
-            room = scene.level_renderer.room(3, scene.game.caverns)
-            cover, (x, y) = room.floor_surface[1]
-            point = 160 - x, 226 - y
-            return (cover.getpixel(point) if 0 <= point[0] < cover.width
-                    and 0 <= point[1] < cover.height else 0)
-
-        self.assertEqual(covered(), 255)
-        for cell in (12, 13):
+        # The supplied Macintosh/port recordings have already lost these
+        # loose slabs. Intact slabs prevent this jump from reaching the edge.
+        for cell in (12, 13, 22, 23):
             scene.game.caverns.loose.tiles[3, cell] = (0, 3)
             scene.game.caverns.loose.cleared.add((3, cell))
-        self.assertEqual(covered(), 0)
+        scene.jump_to_room(3, 2, 108, 0)
+        scene.in_animation_tick = True
+        scene.up_key(None)
+        scene.start_jump_if_needed()
+        hands = {79: (250, 168, 97, 255), 80: (220, 141, 70, 255),
+                 91: (250, 168, 97, 255)}
+        seen = set()
+        for _ in range(40):
+            RooftopSceneTests.tick(self)
+            if scene.action in hands:
+                with self.subTest(pose=scene.action):
+                    self.assertEqual((scene.player_x, scene.terrain_motion.row,
+                                      scene.sequence_state.facing), (122, 2, 0))
+                    # The fingers and forearm cross the perspective slab in
+                    # the original video; the former full-surface mask erased
+                    # both, including pixels below the logical floor plane.
+                    self.assertEqual(scene.native_viewport.getpixel((124, 224)),
+                                     hands[scene.action])
+                    self.assertNotEqual(scene.native_viewport.getpixel((125, 230)),
+                                        scene.background.getpixel((125 - ROOM_ORIGIN_X, 230)))
+                seen.add(scene.action)
+            if scene.action == 135:
+                scene.set_key_state('up', False)
+        self.assertEqual(seen, set(hands))
+        self.assertEqual((scene.action, scene.terrain_motion.row), (15, 1))
+        self.assertFalse(scene.ledge_hanging or scene.terrain_motion.falling)
 
 
 if __name__ == '__main__':
