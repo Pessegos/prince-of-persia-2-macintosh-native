@@ -139,6 +139,71 @@ class PlaytestSceneTests(unittest.TestCase):
         self.assertEqual((scene.action, scene.terrain_motion.row), (15, 1))
         self.assertFalse(scene.ledge_hanging or scene.terrain_motion.falling)
 
+    def begin_room8_descent(self, modifier='shift'):
+        scene = self.scene
+        scene.load_level(6)
+        scene.peaceful = True
+        scene.jump_to_room(7, 1, 245, 1)
+        scene.in_animation_tick = True
+        scene.shift_held = scene.down_held = True
+        self.assertTrue(scene.start_native_descent())
+        scene.set_key_state('down', False)
+        if modifier == 'ctrl':
+            scene.set_key_state('ctrl', True)
+            scene.set_key_state('shift', False)
+        return scene
+
+    def test_room8_swing_hides_the_turban_above_the_native_clip_top(self):
+        from PIL import ImageChops
+        from tests.test_terrain import RooftopSceneTests
+        from pop2.scene_prototype import ROOM_ORIGIN_X
+
+        scene = self.begin_room8_descent()
+        seen = set()
+        for _ in range(50):
+            RooftopSceneTests.tick(self)
+            if scene.sequence_state.animation_state != 2 or not 87 <= scene.action <= 99:
+                continue
+            scenery = scene.room_cache[7].flattened().convert('RGB')
+            viewport = scene.native_viewport.convert('RGB')
+            with self.subTest(pose=scene.action):
+                # Original ClipChar raises the top to245 here. In particular
+                # pose87's blue pixels at viewport(222,236..239) must vanish.
+                self.assertEqual(viewport.crop((221 + ROOM_ORIGIN_X, 221,
+                                                 260 + ROOM_ORIGIN_X, 245)).tobytes(),
+                                 scenery.crop((221, 221, 260, 245)).tobytes())
+                self.assertIsNotNone(ImageChops.difference(
+                    viewport.crop((221 + ROOM_ORIGIN_X, 245, 260 + ROOM_ORIGIN_X, 320)),
+                    scenery.crop((221, 245, 260, 320))).getbbox())
+            seen.add(scene.action)
+        self.assertEqual(seen, set(range(87, 100)))
+
+    def test_room8_grip_expiry_falls_without_catching_the_same_ledge_again(self):
+        from unittest.mock import patch
+        from tests.test_terrain import RooftopSceneTests
+
+        for modifier in ('shift', 'ctrl'):
+            with self.subTest(modifier=modifier):
+                scene = self.begin_room8_descent(modifier)
+                expired, catches, release = False, [], []
+                with patch.object(scene, 'render'):
+                    for _ in range(80):
+                        RooftopSceneTests.tick(self)
+                        state = scene.sequence_state
+                        expired |= state.sequence_mode == 11
+                        if scene.action == 80:
+                            catches.append((scene.room_id, scene.player_x))
+                        if state.source_sequence_id == 99 and state.animation_state == 3:
+                            release.append(scene.action)
+                self.assertTrue(expired)
+                self.assertEqual(catches, [])
+                # SEQS99's three mode-3 poses81 are release motion. CheckFloor
+                # 5:1254-1268 cannot call Catch during those frames.
+                self.assertEqual(release, [81, 81, 81])
+                self.assertFalse(scene.native_ledge or scene.terrain_motion.falling)
+                self.assertEqual((scene.room_id, scene.terrain_motion.row), (3, 2))
+                self.assertTrue(scene.terrain_motion.dead)
+
 
 if __name__ == '__main__':
     unittest.main()

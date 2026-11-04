@@ -965,6 +965,17 @@ regression follows the actual jump and rejects the former clipping in all
 three poses. This is a video-backed correction of a port mask, not a new
 native probe. See `research/post-alpha-playtest.md` for the fixture and scope.
 
+The subsequent turban/grip-expiry videos exposed two remaining omissions.
+The ordinary ClipChar top recrop above also applies to Ruins (environment4),
+not just caverns. It returns top245 for room8's right-facing swing, while
+leaving room4's left-facing hands intact. Separately, CheckFloor5:1254-1268
+only calls Catch at mode3 poses102-106; the host was trying to catch during
+SEQS99's release pose81 and restarting the grip. The scene now obeys that
+dispatch. Native execution agrees with2,400 Ruins clip-top cases and220
+CheckFloor routing cases; supplied drawing/visibility endpoints and routing
+sinks are enumerated in `research/ruins-hanging.md`. Combined regressions
+protect the hands, all13 swing poses and grip expiry with Shift/Ctrl.
+
 Projectile/special-actor drawing modes and
 full dirty-buffer persistence remain separate recovery work. The two aligned
 video defects are addressed; complete level-three frame parity is not claimed.

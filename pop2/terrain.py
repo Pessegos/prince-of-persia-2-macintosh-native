@@ -33,6 +33,14 @@ def floor_y(row):
     return row * TILE_HEIGHT + FLOOR_OFFSET
 
 
+def falling_catch_scheduled(state):
+    # CheckFloor 5:1202-127a: mode 3 calls Catch only at poses 102-106.
+    # In particular, a release's mode-3 pose 81 must finish before catching.
+    return (state.animation_state == 4
+            or state.animation_state == 3 and 102 <= state.action <= 106
+            or state.animation_state == 9 and state.vertical_velocity != 0)
+
+
 def character_row(y):
     # GetRow, CODE:4 0x3afa: DIVS truncates towards zero.
     value = y - 5

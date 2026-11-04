@@ -65,8 +65,10 @@ forearm at(125,230), including the one-pixel room origin. It fails at all three
 poses against the preceding production code. The older tests that required
 the entire back-drawn slab to cover every actor pixel are superseded by this
 Macintosh evidence. Existing DrawHalf/pillar and falling-floor regressions
-still cover native foreground order. No new native execution probe or claim
-of complete room drawing equivalence is made here.
+still cover native foreground order. That initial fix did not yet enable
+ordinary Ruins top clipping. The follow-up turban/grip-expiry videos exposed
+that omission; [ruins-hanging.md](ruins-hanging.md) records the native clip and
+CheckFloor scheduling checks, fixes and combined regressions.
 
 The room8 body split during climb poses135-144 is separate: the native DrawHalf
 surface pass itself crosses the body. The committed repair preserves it. A

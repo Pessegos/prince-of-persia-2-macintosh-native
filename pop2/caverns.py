@@ -147,7 +147,7 @@ def cavern_exit_clip(terrain, room, row, state, record):
 
 
 def cavern_clip_top(terrain, room, row, state, bounds):
-    """ClipChar 4:4230-43de, for the cavern environment (kind 3)."""
+    """ClipChar 4:4230-43de, shared by caverns and ruins (kinds 3/4)."""
     if state.animation_state == 9 or state.actor_type in (7, 8):
         return 0
     # Entry/exit poses use a separate environment rectangle at 4:416a-420c.

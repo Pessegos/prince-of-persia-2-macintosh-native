@@ -77,7 +77,7 @@ from pop2.render_opening import (
 )
 from pop2.opponent_generation import character_column
 from pop2.coordinates import column_left
-from pop2.terrain import TerrainMotion, floor_y, floor_contact_x
+from pop2.terrain import TerrainMotion, falling_catch_scheduled, floor_y, floor_contact_x
 from pop2.crevices import (
     CREVICE_TILE,
     LIE_DOWN_SEQUENCE,
@@ -2041,6 +2041,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         # Catch 4:37cc tests the modifier word, which Shift and Ctrl share
         # (4:3f08): either key held catches, as either keeps the hang.
         if (motion.dead or motion.hit_fall or motion.void_fall or not self.combat.player.alive
+                or not falling_catch_scheduled(state)
                 or not (self.shift_held or self.ctrl_held) or self.sword_drawn
                 or not self.level_map.catch_ledge(motion.room, motion.row,
                     state, self.frames[state.action], self.harbor)):
@@ -3251,7 +3252,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         layer.putalpha(ImageChops.multiply(layer.getchannel("A"), ImageChops.invert(mask)))
         level = getattr(getattr(self, 'game', None), 'level', None)
         level_kind = getattr(state, 'level_kind', getattr(level, 'kind', None))
-        if level_kind == 3 and state is not None and bounds is not None and row is not None:
+        if level_kind in (3, 4) and state is not None and bounds is not None and row is not None:
             clip_top = cavern_clip_top(self.level_map, self.room_id, row, state, bounds)
             if clip_top > 0:
                 layer.paste((0, 0, 0, 0), (0, 0, layer.width, clip_top))
