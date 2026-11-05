@@ -59,6 +59,16 @@ class LowSceneTests(unittest.TestCase):
         AnimationDataTests.setUpClass()
         cls.fixture = AnimationDataTests()
 
+    def setUp(self):
+        from pop2.scene_prototype import ScenePrototype
+
+        # This lightweight fixture supplies input/geometry boundaries and
+        # has no sprite attachments. Real tunnel barriers are scene-tested
+        # in test_ruins_bug_reports.
+        boundary = patch.object(ScenePrototype, 'crawl_blocked', return_value=False)
+        boundary.start()
+        self.addCleanup(boundary.stop)
+
     def at_pose(self, sequence, pose, facing=0):
         scene = self.fixture.sword_scene()
         scene.sequence_state.facing = facing

@@ -1,11 +1,14 @@
 """Carry the directional bank through crouch, rise and prone movement."""
 
+from dataclasses import replace
 
+from pop2.animation_data import character_collision_bounds
 from pop2.coordinates import column_left
 from pop2.crevices import CREVICE_TILE
 from pop2.ledge_controls import LedgeControls
 from pop2.mac_input import DirectionalInput, low_input_request
 from pop2.opponent_generation import character_column
+from pop2.sequence_runtime import SequenceRuntime
 
 
 # 20/212 are the hard-fall recovery before its rise through 49, 46 the
@@ -133,6 +136,10 @@ class LowControls(LedgeControls):
         self.modifier_input = relative.modifier
         if sequence is None:
             return False
+        if sequence in (122, 123) and self.crawl_blocked(sequence):
+            # Approved port improvement: stay prone at a tunnel's solid
+            # end instead of replaying two preparation poses on every hold.
+            return False
         if sequence == 125:
             self.start_crawl(down_active=True)
         elif sequence == 79:
@@ -145,6 +152,33 @@ class LowControls(LedgeControls):
                 state.target_x += (9 - clearance) * (1 if facing else -1)
                 state.current_x = self.player_x = state.target_x
         return True
+
+    def crawl_blocked(self, sequence):
+        motion = getattr(self, 'terrain_motion', None)
+        if motion is None:
+            return False
+        # Preview through the first translation, using the actual SEQS/FRAM
+        # body and barrier geometry. No input, RNG or live state is advanced.
+        state = replace(self.sequence_state, sound_events=[], sequence_events=[])
+        runtime = SequenceRuntime(self.sequence_runtime.sequences, state)
+        state.select(sequence)
+        origin = state.target_x
+        old_bounds = self.player_collision_bounds()
+        for _ in range(10):
+            runtime.next_frame()
+            if state.target_x == origin:
+                continue
+            bounds = character_collision_bounds(state, self.kid_bounds(state, self.player_floor_y()),
+                self.attachment_frames[self.frames[state.action].afrm_index], False)
+            direction = 1 if state.target_x > origin else -1
+            corrected = self.level_map.wall_correction(
+                motion.room, origin, state.target_x, bounds, old_bounds,
+                int(direction > 0), physical_row=motion.row, state=state)
+            if corrected != state.target_x:
+                # Collide4:59b6-59dc backs the prone body off five pixels.
+                corrected -= 5 * (1 if state.facing else -1)
+            return (corrected - origin) * direction <= 0
+        return False
 
     def update_crawl(self):
         return 246 <= self.sequence_state.action <= 261 and self.update_waiting_controls()

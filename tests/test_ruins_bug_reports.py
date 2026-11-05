@@ -143,3 +143,29 @@ class RuinsBugReportTests(unittest.TestCase):
             scene.hit_art.draw(actual, state, 346)
             self.assertIsNotNone(actual.getbbox())
             self.assertEqual(actual.tobytes(), expected.tobytes())
+
+    def test_room_two_tunnel_stops_crawling_at_the_wall_with_left_still_held(self):
+        scene = self.scene
+        scene.load_level(8)
+        scene.peaceful = True
+        scene.jump_to_room(1, 2, 310, 0)
+        scene.start_sequence(121)
+        scene.sequence_runtime.next_frame()
+        scene.action = scene.sequence_state.action
+        scene.in_animation_tick = True
+        scene.horizontal_key(None, -1, True)
+        scene.in_animation_tick = False
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+            self.tick(50)
+            stopped = scene.sequence_state.target_x
+            self.assertLess(stopped, 310)
+            for _ in range(30):
+                self.tick()
+                self.assertEqual((scene.sequence_state.target_x, scene.sequence_state.action),
+                                 (stopped, 251))
+            scene.in_animation_tick = True
+            scene.horizontal_key(None, -1, False)
+            scene.horizontal_key(None, 1, True)
+            scene.in_animation_tick = False
+            self.tick(15)
+        self.assertGreater(scene.sequence_state.target_x, stopped)
