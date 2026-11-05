@@ -744,6 +744,11 @@ def cavern_scene_signature(program, room_id, state):
                 index = second
             else:
                 index = int(bool(shift))
+        elif choices[0][0] in (12, 13):
+            # MakeRubble's saved trap foreground also contains the live
+            # AnimScythe phase/blood flags. Only bit0x20 selects the static
+            # debris drawing; cavern_scythe_signature owns the moving blade.
+            index = int(bool(foreground & 0x20))
         elif choices[0][0] in (10, 22) and kind == 1:
             # A taken pickup leaves its ordinary floor. A falling slab may
             # then clear that floor's decoration into loose.tiles. The base

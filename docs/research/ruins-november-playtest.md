@@ -138,3 +138,19 @@ restart. A checkpoint regression checks art reload and the uncollected item.
 The inspected offscreen comparison is
 `rendered/ruins-bugs/throne-sword-sequence.png`; native trace output is
 `rendered/ruins-bugs/native-throne-sword-loading.json`.
+
+## Second batch: room8 scythe scene signature
+
+The new level7 room8 God Mode recording reaches a different failure from the
+previous SCYTHE_STATES ValueError: cavern_scene_signature raises StopIteration.
+A real Up jump at row1/X180/facing0 shakes the three type15 shelves. On tick17
+their debris hits the moving trap, saving type12/13 foreground40 (phase8 plus
+rubble32). The loose-floor export only contains the static states0 and32.
+Select that slot by bit0x20 alone; phases and blood remain the separate scythe
+animation signature. This uses the existing MakeRubble5:2c36-2f2c and
+AnimScythe5:4584 recovery, without claiming a new native CPU comparison.
+
+The regression keeps real frame-start/level-event refreshes, asserts the
+shelves collapsed and God Mode preserved life, then checks both halves for all
+60 exported phases/blood combinations, with and without rubble. The earlier
+phase regression called render directly and missed the level-event signature.

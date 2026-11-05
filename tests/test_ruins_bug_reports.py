@@ -72,6 +72,35 @@ class RuinsBugReportTests(unittest.TestCase):
         self.assertEqual(phases[:20], list(range(1, 20)) + [0])
         self.assertNotIn(key, caverns.scythes.active)
 
+    def test_room_eight_jump_survives_shelves_striking_a_moving_scythe(self):
+        from pop2.caverns import cavern_scene_signature
+        from pop2.scythes import SCYTHE_STATES
+
+        scene = self.scene
+        scene.load_level(7)
+        scene.jump_to_room(7, 1, 180, 0)
+        scene.god_mode = scene.peaceful = True
+        scene.set_key_state('up', True)
+        # A real standing jump shakes all three shelves onto the active trap.
+        # Keep level-event scenery updates live: the earlier test only called
+        # render(), which never refreshed the loose-floor scene signature.
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+            self.tick(40)
+        loose = scene.game.caverns.loose
+        self.assertEqual([loose.tiles[7, cell][0] for cell in (2, 3, 4)], [0, 0, 0])
+        self.assertEqual([loose.tiles[7, cell][1] & 0x20 for cell in (12, 13)], [32, 32])
+        self.assertEqual(scene.combat.player.life, scene.combat.player.max_life)
+        program = scene.level_renderer.cavern_program
+        # Both halves have independent static-debris slots. Neither animated
+        # phase nor blood flags may affect that slot, before or after impact.
+        for debris in (0, 32):
+            for phase in SCYTHE_STATES:
+                for cell, kind in ((12, 12), (13, 13)):
+                    loose.tiles[7, cell] = kind, phase | debris
+                signature = cavern_scene_signature(program, 7, scene.game.caverns)
+                self.assertEqual(signature[3:5], str(int(bool(debris))) * 2)
+                scene.level_renderer.enter_room(7, scene.game.caverns)
+
     def test_room_seventeen_falling_tile_keeps_ordinary_opener_gate_open(self):
         from pop2.environments import environment_for
         from pop2.loose_floors import FallingFloor
