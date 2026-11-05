@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import struct
 
 from pop2.bridge import BRIDGE_LEVEL, BRIDGE_ROOM, bridge_tension
-from pop2.coordinates import NATIVE_X_ORIGIN, character_column_parts, native_x
+from pop2.coordinates import NATIVE_X_ORIGIN, character_column_parts, native_x, scene_x
 from pop2.crevices import CREVICE_TILE
 from pop2.opponent_generation import character_column, EMPTY_TILES, WALL_TILES
 from pop2.mac_input import StepBoundary
@@ -80,6 +80,11 @@ class Tile:
     room: int | None = None
     column: int = 0
     row: int = 0
+
+
+# GetLeftBarr/GetRightBarr: DATA c9e0/c9f2 offsets by barrier code.
+BARRIER_OFFSETS = {1: (40, 0), 2: (0, 50), 3: (-22, -22), 4: (3, 0), 5: (18, 0),
+                   6: (8, 16), 8: (16, 24)}
 
 
 class LevelMap:
@@ -868,12 +873,71 @@ class LevelMap:
         return self.tile(room, character_column(floor_contact_x(
             state.target_x, state.facing, record)), row)
 
+    def rock_correction(self, room, new_x, bounds, old_bounds, facing, row, state):
+        """A sliding rock's side in CheckBarr 4:4e34/CheckCollide1 4:54da:
+        (side, X corrected by Collide's argument), or None."""
+        if (row is None or state is None or self.caverns is None
+                or struct.unpack_from('>H', self.level, 0x2186)[0] != 2):
+            return None
+        rocks = self.caverns.rocks
+        here = rocks.record(room + 1, row)
+        if here is None or state.sequence_mode == 4:
+            # 4:4e6e-4e86: a pinned Prince gets no collision banks at all.
+            return None
+        # 4:54dc-54fa: no decision in these states and poses.
+        if state.animation_state in (2, 6) or 135 <= state.action < 145:
+            return None
+        left, top, right, bottom = bounds
+        width = right + 1 - left
+        hit = rocks.contact(self.level, room + 1, row, (native_x(left), native_x(right + 1)),
+                            (native_x(old_bounds[0]), native_x(old_bounds[2] + 1)),
+                            state.facing, width)
+        if hit is None:
+            return None
+        side, face, edge = hit
+        # 4:5586-5596, 4:551e-552a: unarmed, the side behind the body is free.
+        if facing == (0 if side == -1 else 1):
+            return None
+        column = character_column(scene_x(face))
+        tile = self.tile(room, column, row)
+        height = bottom - top + 1
+        # CheckCollide 4:5654: the cell under the face can still admit him.
+        if (tile.kind == 10
+                or tile.kind == CREVICE_TILE and height <= 34 and tile.foreground & 3 != 3
+                or tile.kind == 4 and not stone_gate_blocks(tile.foreground, bounds, state)
+                or tile.kind == 12 and not (height > 48 and 3 <= tile.foreground & 0x1f <= 15)):
+            return None
+        # 4:541a/547c: a barrier in that cell wins over the rock's own face.
+        barrier = {2: 4, 20: 4, 25: 4, 4: 1, 12: 6,
+                   CREVICE_TILE: 2 if height <= 34 else 4}.get(tile.kind)
+        if barrier is not None:
+            left_offset, right_offset = BARRIER_OFFSETS[barrier]
+            cell = column * TILE_WIDTH
+            edge = native_x(cell + 22 + left_offset if side == -1
+                            else cell + 72 - right_offset)
+        return side, new_x + scene_x(edge) - (right + 1 if side == -1 else left)
+
     def wall_correction(self, room, old_x, new_x, bounds, old_bounds=None, facing=None,
                         physical_row=None, state=None):
         left, top, right, bottom = bounds
         delta = new_x - old_x
-        old_left, _, old_right, _ = (old_bounds if old_bounds is not None else
-                                    (left - delta, top, right - delta, bottom))
+        if old_bounds is None:
+            old_bounds = (left - delta, top, right - delta, bottom)
+        rock = self.rock_correction(room, new_x, bounds, old_bounds, facing, physical_row, state)
+        wall = self.tile_correction(room, delta, new_x, bounds, old_bounds, facing,
+                                    physical_row, state)
+        if rock is None:
+            return wall
+        # CheckBarr 4:4f7a-4fc4 keeps the smallest column of a side, and
+        # CheckCollide1 4:54fc lets the left faces decide before the right.
+        side, rock = rock
+        if wall == new_x or side == -1 and wall > new_x:
+            return rock
+        return wall if side == 0 and wall < new_x else min(wall, rock)
+
+    def tile_correction(self, room, delta, new_x, bounds, old_bounds, facing, physical_row, state):
+        left, top, right, bottom = bounds
+        old_left, _, old_right, _ = old_bounds
         if not delta and (old_left, old_right) == (left, right):
             return new_x
         corrected = new_x
@@ -920,9 +984,7 @@ class LevelMap:
                            6 if scythe else 2 if tile.kind == 7 and bottom - top + 1 <= 34 else 4)
                 # Tile 2's extended barrier (type 3) exists only while
                 # DoStepFwd queries clearance with c944 set, not in Collide.
-                left_offset, right_offset = {1: (40, 0), 2: (0, 50), 3: (-22, -22),
-                                             4: (3, 0), 5: (18, 0), 6: (8, 16),
-                                             8: (16, 24)}[barrier]
+                left_offset, right_offset = BARRIER_OFFSETS[barrier]
                 wall_left = col * TILE_WIDTH + 22 + left_offset
                 wall_right = col * TILE_WIDTH + 72 - right_offset
                 # CheckBarr 4:4f8a-4fb4 only raises a gate side collision

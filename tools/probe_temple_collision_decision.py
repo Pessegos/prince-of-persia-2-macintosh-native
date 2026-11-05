@@ -16,7 +16,8 @@ import struct
 
 from pop2.mac_resources import parse_resource_fork
 from tools.probe_level7_sequence_selection import signed_word
-from tools.probe_temple_collision_banks import NativeTempleCollisionBanks, banks_reference
+from tools.probe_temple_collision_banks import (NativeTempleCollisionBanks, banks_reference,
+                                                 column_reference, rock_record)
 from tools.probe_temple_collision_history import TABLES
 from tools.probe_temple_gate_actor_clip import put_actor
 from tools.probe_temple_gate_admission import admission_reference
@@ -27,8 +28,29 @@ from tools.probe_temple_gate_standing import COLD_CACHE, StandingCellReader
 from tools.probe_temple_slide_rock_update import actor_word
 
 
+def rock_distance_reference(mobs, room, row, side, actor, edges, level):
+    """GetSlideRockBarrDist 10:180e: the face (and the GetCharCol remainder
+    when the low side asks). The left face rises to a wall or gate cell's
+    boundary one column behind the rock."""
+    mob = rock_record(mobs, room, row)
+    if mob is None:
+        return (921 if side == -1 else 0), None
+    if side != -1:
+        return signed_word(mob[0] + 279), None
+    face = signed_word(mob[0] + 218)
+    column, remainder = column_reference(signed_word(face - 51))
+    offset = (mob[2] - 1) * 60 + (mob[6] * 10 + column) * 2
+    kind = struct.unpack_from('>H', level, offset)[0]
+    if kind in (2, 7, 20, 25, 43, 4):
+        boundary = signed_word(258 + column * 51 + 39)
+        if actor_word(actor, 2) == 0:
+            boundary = signed_word(boundary + edges[1] - edges[0])
+        face = max(face, boundary)
+    return face, remainder
+
+
 def decision_reference(actor, edges, tags, hit_low, hit_high, reader, *, height=74,
-                       bars=0, anchor=73, neighbors=(0,) * 6, view=None):
+                       bars=0, anchor=73, neighbors=(0,) * 6, view=None, mobs=()):
     if (len(actor) != 62 or actor_word(actor, 2) not in (-1, 0) or len(tags) != 10
             or any(not -1 <= hit <= 9 for hit in (hit_low, hit_high))):
         raise ValueError('Outside the bounded CheckCollide1 domain')
@@ -87,7 +109,10 @@ def decision_reference(actor, edges, tags, hit_low, hit_high, reader, *, height=
             signed_word(anchor + 50 - BACK_OFFSETS[barrier]) if barrier else 0)
     if reader.level[0x2191] and (edge >= 921 if side == -1 else edge <= 0):
         rock_queries.append((reader.cache[3], reader.cache[5]))
-        edge = 921 if side == -1 else 0  # actual empty-MOB lookup fallback
+        edge, remainder = rock_distance_reference(mobs, reader.cache[3], reader.cache[5], side,
+                                                  actor, edges, reader.level)
+        if remainder is not None:
+            result['remainder'] = remainder
     events.append(('collide', signed_word(edge - edges[1 if side == -1 else 0]), side))
     return result
 

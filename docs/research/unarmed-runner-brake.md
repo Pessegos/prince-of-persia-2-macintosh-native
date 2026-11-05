@@ -89,8 +89,8 @@ fights; it never reaches the door cells while the Kid is there. Rising in
 room 26 next to the Kid, it fights him there. No pass through the door was
 observed, and the native rules give no reason for one: the door is not a
 barrier, the Kid is. Not reproduced: a full native multi-room chase (no
-whole-frame native emulation exists here); the cross-room following of
-running opponents (FrameAdv 2:6550-65da, item 7 of the plan) remains open.
+whole-frame native emulation exists here). The cross-room following of
+running opponents is reviewed in [temple-rock-collision.md](temple-rock-collision.md).
 
 ## The opponent's draw: GenCtrl 4:4996 and DoEngarde 6:1e78 (2026-10-31)
 

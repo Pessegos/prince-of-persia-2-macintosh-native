@@ -1169,8 +1169,8 @@ class Ruins(Caverns):
 
 
 class Temple(Caverns):
-    """Levels 10-13 (environment 2). Scenery, terrain and saves only: the
-    temple mechanisms and birdheads are not wired yet."""
+    """Levels 10-13 (environment 2): the temple's mechanisms, level 13's
+    altar and the flight to the tower (docs/research/temple-*.md)."""
 
     def frame_start(self):
         super().frame_start()
