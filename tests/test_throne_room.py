@@ -153,6 +153,27 @@ class ThroneVisualTests(unittest.TestCase):
         self.assertTrue(scene.intro.done)
         self.assertEqual(scene.intro.frame().crop((0, 365, 512, 384)).tobytes(), expected.tobytes())
 
+    def test_rendered_vision_keeps_health_and_space_message_at_live_hud_coordinates(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(8)
+        scene.peaceful = True
+        scene.jump_to_room(8, 2, 267, 1)
+        scene.game.story.tree_stage = 7
+        scene.show_remaining_time()
+        self.assertIsNotNone(scene.time_message)
+        before = scene.native_viewport.crop((0, 365, 512, 384))
+        self.assertTrue(scene.start_vision(lambda: None))
+        for advance in (0, 1, 1000):
+            scene.intro.advance(advance)
+            scene.render()
+            self.assertEqual(scene.native_viewport.crop((0, 365, 512, 384)).tobytes(),
+                             before.tobytes())
+        scene.finish_tree(skipped=False)
+        self.assertEqual(scene.native_viewport.crop((0, 365, 512, 384)).tobytes(), before.tobytes())
+
 
 if __name__ == '__main__':
     unittest.main()

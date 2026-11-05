@@ -3390,8 +3390,14 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
     def render(self):
         if getattr(self, "intro", None) is not None:
             viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
-            viewport.paste(self.intro.frame().crop((0, 0, ROOM_WIDTH, VIEWPORT_HEIGHT)),
+            intro_frame = self.intro.frame()
+            viewport.paste(intro_frame.crop((0, 0, ROOM_WIDTH, VIEWPORT_HEIGHT)),
                            (ROOM_ORIGIN_X, 0))
+            if getattr(self.intro, 'status', None) is not None:
+                # A retained live HUD already includes the viewport's
+                # one-pixel room origin. Do not apply that offset twice.
+                viewport.paste(intro_frame.crop((0, ROOM_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)),
+                               (0, ROOM_HEIGHT))
             self.screenshot_viewport = viewport.copy()
             if self.dev_menu is not None:
                 viewport = self.dev_menu.draw(viewport, self.ui_font)
