@@ -51,6 +51,47 @@ class VerticalJumpTests(unittest.TestCase):
             self.state.target_x += 1 if facing else -1
             self.assertIsNone(self.terrain.back_ledge_jump(0, 2, self.state, self.record))
 
+    def test_temple_ledges_refuse_only_a_space_marked_0x80(self):
+        # IsLedge 4:3f58-3f70: in environment 2 bit 0x80 of the space (an open
+        # trap door) refuses the ledge. Ordinary spaces keep every ledge, or
+        # level 11 cannot climb through its fallen floor in room 10.
+        struct.pack_into('>H', self.level, 0x2186, 2)
+        self.level[:0x780] = bytes(0x780)
+        self.state.target_x, self.state.facing = 253, 1
+        self.put_tile(0, 4, 1, 34)
+        self.assertEqual(self.terrain.back_ledge_jump(0, 2, self.state, self.record), (16, -17))
+        struct.pack_into('>H', self.level, 0x780 + (10 + 3) * 4, 0x81)
+        self.assertIsNone(self.terrain.back_ledge_jump(0, 2, self.state, self.record))
+
+    def test_the_forward_ledge_shares_the_refusals(self):
+        struct.pack_into('>H', self.level, 0x2186, 2)
+        self.level[:0x780] = bytes(0x780)
+        self.state.target_x, self.state.facing = 253, 1
+        self.put_tile(0, 5, 1, 34)
+        self.assertIsNotNone(self.terrain.upper_ledge(0, 2, self.state, self.record))
+        struct.pack_into('>H', self.level, 0x780 + (10 + 4) * 4, 0x81)
+        self.assertIsNone(self.terrain.upper_ledge(0, 2, self.state, self.record))
+        struct.pack_into('>H', self.level, 0x780 + (10 + 4) * 4, 0)
+        self.put_tile(0, 5, 1, 11)
+        struct.pack_into('>H', self.level, 0x780 + (10 + 5) * 4, 3)
+        self.assertIsNone(self.terrain.upper_ledge(0, 2, self.state, self.record))
+
+    def test_a_sliding_rock_within_51_pixels_refuses_the_ledges(self):
+        # DoJumpUp 6:162c-165c.
+        from pop2.coordinates import native_x
+
+        struct.pack_into('>H', self.level, 0x2186, 2)
+        self.level[:0x780] = bytes(0x780)
+        self.state.target_x, self.state.facing = 253, 1
+        self.put_tile(0, 5, 1, 34)
+        from pop2.cavern_state import CavernState
+
+        self.terrain.caverns = caverns = CavernState()
+        caverns.rocks = SimpleNamespace(edge=lambda room, row: native_x(253) + 51)
+        self.assertIsNone(self.terrain.upper_ledge(0, 2, self.state, self.record))
+        caverns.rocks = SimpleNamespace(edge=lambda room, row: native_x(253) + 52)
+        self.assertIsNotNone(self.terrain.upper_ledge(0, 2, self.state, self.record))
+
     def test_supported_back_step_uses_the_forward_grab_sequence(self):
         for facing, x, column, offset in ((0, 149, 2, 48), (1, 253, 4, -48)):
             self.level[:0x780] = bytes(0x780)

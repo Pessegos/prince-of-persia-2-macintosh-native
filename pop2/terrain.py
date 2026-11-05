@@ -611,11 +611,25 @@ class LevelMap:
         direction = 1 if state.facing else -1
         above = self.tile(room, column, row - 1)
         ahead = self.tile(room, column + direction, row - 1)
-        if (above.room is not None and ahead.room is not None
-                and above.kind in EMPTY_TILES
-                and ahead.kind not in EMPTY_TILES | WALL_TILES):
+        if self.jump_up_ledge(room, row, state, above, ahead):
             return (floor_edge_distance(contact, state.facing) - 21) * direction
         return None
+
+    def jump_up_ledge(self, room, row, state, space, ledge):
+        """IsLedge 4:3f44 as DoJumpUp 6:1670/16b0 calls it (a gate counts as
+        open there, 6:1620). In the temple a space with bit 0x80 (an open trap
+        door, 10:25aa) offers no ledge; every other space does. A sliding
+        rock's face within 51 pixels refuses both ledges (6:162c-165c)."""
+        if (space.room is None or ledge.room is None or space.kind not in EMPTY_TILES
+                or ledge.kind in EMPTY_TILES | WALL_TILES
+                or ledge.kind in (11, 15) and ledge.foreground & 15):
+            return False
+        environment = struct.unpack_from('>H', self.level, 0x2186)[0]
+        if environment == 2:
+            edge = self.caverns.rocks.edge(room + 1, row) if self.caverns is not None else 0
+            if space.foreground & 128 or edge and abs(edge - native_x(state.target_x)) <= 51:
+                return False
+        return not (environment == 5 and room == 14 and row != 0)
 
     def back_ledge_jump(self, room, row, state, record):
         # DoJumpUp 6:1684-16be tests space BEHIND the upper foot when
@@ -625,13 +639,7 @@ class LevelMap:
         direction = 1 if state.facing else -1
         space = self.tile(room, column - direction, row - 1)
         ledge = self.tile(room, column, row - 1)
-        if (space.room is None or ledge.room is None or space.kind not in EMPTY_TILES
-                or ledge.kind in EMPTY_TILES | WALL_TILES
-                or ledge.kind in (11, 15) and ledge.foreground & 15):
-            return None
-        environment = struct.unpack_from('>H', self.level, 0x2186)[0]
-        if (environment == 2 and not space.foreground & 128
-                or environment == 5 and room == 14 and row != 0):
+        if not self.jump_up_ledge(room, row, state, space, ledge):
             return None
         distance = floor_edge_distance(contact, state.facing)
         if distance < 24:
