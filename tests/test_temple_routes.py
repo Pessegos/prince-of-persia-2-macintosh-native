@@ -32,10 +32,17 @@ ROUTES = {
          'leapR11', 'leapcatchR20', 'runR8', 'leapR20', 'leapcatchR20'],
 }
 
-INSTALLED = all((ASSET_DIR / f'temple_level{number}.json').is_file() for number in (10, 11, 12, 13))
 
 
-@unittest.skipUnless(INSTALLED, 'Imported temple levels required')
+def blades_exported(number):
+    path = ASSET_DIR / f'temple_level{number}.json'
+    return path.is_file() and '"scythes"' in path.read_text(encoding='ascii')
+
+
+INSTALLED = all(blades_exported(number) for number in (10, 11, 12, 13))
+
+
+@unittest.skipUnless(INSTALLED, 'Temple levels imported with their blades required')
 class TempleRouteTests(unittest.TestCase):
     def test_each_level_can_be_finished_from_a_fresh_load(self):
         for number, route in ROUTES.items():
