@@ -1089,7 +1089,9 @@ def cavern_scythe_signature(program, room_id, state):
     if room is not None and 'scythes' in room:
         from pop2.scythes import SCYTHE_STATES
 
-        return ('slots', tuple(SCYTHE_STATES.index(state.scythes.foreground.get(tuple(key), 0))
+        # MakeRubble marks a struck scythe with bit0x20. It is not
+        # an animation/blood phase; the exported blade states omit that bit.
+        return ('slots', tuple(SCYTHE_STATES.index(state.scythes.foreground.get(tuple(key), 0) & 0xdf)
                                for key in room['scythes']))
     if slots.get('scythe_units'):
         return ()  # No scythe is drawn in this room.
@@ -1097,7 +1099,7 @@ def cavern_scythe_signature(program, room_id, state):
     signature = []
     for entry in metadata.get('rooms', {}).get(str(room_id), ()):
         key = tuple(metadata['scythes'][entry['scythe']][:2])
-        patch = entry['states'].get(str(state.scythes.foreground.get(key, 0)))
+        patch = entry['states'].get(str(state.scythes.foreground.get(key, 0) & 0xdf))
         signature.append(-1 if patch is None else patch)
     return tuple(signature)
 

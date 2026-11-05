@@ -112,6 +112,10 @@ class CavernState:
             value = (value & 0xff00) | self.scythes.foreground[room, cell]
         if (room, cell) in self.loose.tiles:
             kind, foreground = self.loose.tiles[room, cell]
+            if kind in (12, 13) and (room, cell) in self.scythes.foreground:
+                # Rubble marks the trap but cannot pin its animation to
+                # the impact phase stored by MakeRubble.
+                foreground = (foreground & 0xff00) | self.scythes.foreground[room, cell]
             if kind == 19 and (room, cell) in self.torches:
                 foreground = (foreground & 0xfff0) | (self.torches[room, cell] & 15)
             return self.plates.foreground.get((room, cell), foreground)
