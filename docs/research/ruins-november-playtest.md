@@ -177,6 +177,32 @@ method it fails because recovering remains true. The room8 regression also
 rejects the old method with the supplied StopIteration stack. Focused
 ruins/combat/deaths/potions/terrain:282 tests OK, no skips,55.400s.
 
+### Follow-up: slab interrupts a new ledge move
+
+The user reported the movement lock again after the first fix. Rechecking
+the supplied recording exposed a coverage gap: the regression above started
+at the lip, rather than running and jumping from the right platform. A new
+input reproduction starts at room9 row1/X475, holds Left, taps Up at ticks4/5,
+holds Shift from12, and releases Left/Shift at23 after the actual catch15.
+At34, either Up or Down starts another ledge move from the lower platform;
+the real falling slab interrupts it at35/36. Release that direction at38.
+
+Before this follow-up, recovery52 reaches idle2 and correctly clears
+Fighter.recovering, but native_ledge/ledge_hanging remain true. Their normal
+completion never runs because the crush replaced the sequence. The ledge
+input owner then consumes every movement request at idle. This second path
+does not require the wall-bump47 that the first fix addressed. The new test
+rejects the previous implementation for both Up and Down and tests actual
+Right movement after recovery, in addition to the flags and one-life injury.
+
+Cancel the interrupted player ledge controller at the accepted slab impact,
+including climb request and grip delay. Preserve held keys, damage, protected
+poses, God Mode and the original recovery animation. This is host state
+cleanup, not a new native rule. The original video has no input overlay:
+the exact key timing above is an independently reproducible variant, not a
+claim to recover every physical keypress from the footage. The ordinary
+catch/drop/potion-interruption path also recovers on the current code.
+
 ## Second batch: level8 map omission
 
 The user additionally requested hiding native room26 (port index25) from

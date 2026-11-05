@@ -558,6 +558,13 @@ class Caverns(Environment):
                     if actor is scene.combat.player:
                         scene.death.begin(3)
                 if actor is scene.combat.player:
+                    # The crush replaces a climb/descent before its normal
+                    # completion can retire the host ledge controller. Leaving
+                    # it active swallows movement even after recovery reaches
+                    # idle (and need not involve a subsequent wall bump).
+                    scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
+                    scene.ledge_climb_requested = False
+                    scene.ledge_grip_delay = 0
                     scene.run_active = scene.run_stop_requested = scene.run_cycle_boundary_pending = False
                     scene.action, scene.player_x = state.action, state.target_x
         for room, cell, kind in caverns.loose.plate_events:

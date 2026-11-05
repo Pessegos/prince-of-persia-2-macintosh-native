@@ -138,6 +138,56 @@ class RuinsBugReportTests(unittest.TestCase):
             self.assertTrue(scene.native_ledge)
             self.assertNotEqual(scene.action, 15)
 
+    def test_room_nine_slab_interrupts_ledge_controls_after_the_running_jump(self):
+        scene = self.scene
+        for key in ('up', 'down'):
+            with self.subTest(interrupted_key=key):
+                scene.clear_keys(None)
+                scene.load_level(9)
+                scene.jump_to_room(8, 1, 475, 0)
+                scene.peaceful = True
+                scene.horizontal_key(None, -1, True)
+                with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+                    for tick in range(85):
+                        if tick == 4:
+                            scene.set_key_state('up', True)
+                        if tick == 5:
+                            scene.set_key_state('up', False)
+                        if tick == 12:
+                            scene.set_key_state('shift', True)
+                        if tick == 23:
+                            scene.horizontal_key(None, -1, False)
+                            scene.set_key_state('shift', False)
+                        if tick == 34:
+                            scene.set_key_state(key, True)
+                        if tick == 38:
+                            scene.set_key_state(key, False)
+                        self.tick()
+                        if tick == 20:
+                            self.assertTrue(scene.native_ledge)
+                            self.assertEqual(scene.sequence_state.source_sequence_id, 15)
+                        if tick == 34:
+                            # A second climb/descent begins just before the
+                            # actual slab lands. Its host controller must be
+                            # cancelled by the crush, even without a wall bump.
+                            self.assertTrue(scene.native_ledge)
+                        if tick == 36:
+                            self.assertEqual(scene.sequence_state.source_sequence_id, 52)
+                            self.assertEqual(scene.combat.player.life, 2)
+                            self.assertFalse(scene.native_ledge)
+                            self.assertFalse(scene.ledge_hanging)
+                            self.assertFalse(scene.ledge_climbing)
+                            self.assertFalse(scene.ledge_climb_requested)
+                    self.assertEqual((scene.room_id, scene.terrain_motion.row), (8, 2))
+                    self.assertEqual(scene.level_map.tile(8, 2, 2).kind, 14)
+                    self.assertEqual(scene.action, 15)
+                    self.assertFalse(scene._combat_controls_locked())
+                    old_x = scene.player_x
+                    scene.horizontal_key(None, 1, True)
+                    self.tick(7)
+                    self.assertGreater(scene.player_x, old_x)
+                    self.assertNotEqual(scene.action, 15)
+
     def test_room_seventeen_falling_tile_keeps_ordinary_opener_gate_open(self):
         from pop2.environments import environment_for
         from pop2.loose_floors import FallingFloor
