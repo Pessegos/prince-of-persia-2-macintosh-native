@@ -165,7 +165,7 @@ class RuinsBugReportTests(unittest.TestCase):
         from pop2.development_map import _linked_positions, room_positions
 
         scene = self.scene
-        for number, hidden in ((8, (27, 15, 7)), (9, (23, 22))):
+        for number, hidden in ((8, (27, 26, 15, 7)), (9, (23, 22))):
             scene.load_level(number)
             positions = room_positions(scene.level_map)
             original = _linked_positions(scene.level_map, scene.game.level.start_room)

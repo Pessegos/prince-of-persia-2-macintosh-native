@@ -176,3 +176,11 @@ for idle, then verifies that Up starts the actual ledge climb24. With the old
 method it fails because recovering remains true. The room8 regression also
 rejects the old method with the supplied StopIteration stack. Focused
 ruins/combat/deaths/potions/terrain:282 tests OK, no skips,55.400s.
+
+## Second batch: level8 map omission
+
+The user additionally requested hiding native room26 (port index25) from
+level8's development map. Add it to the existing omission list, preserving
+native room links, tiles and gameplay access. The existing linked-layout
+regression now requires exactly rooms27/26/15/7 omitted for level8 and the
+previous23/22 for level9. Map suite plus that regression:38 OK, no skips.
