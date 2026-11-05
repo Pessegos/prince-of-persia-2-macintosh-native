@@ -2471,6 +2471,11 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.game.arm_prince()
             self.loaded_sword_type = self.game.sword_type
             point = snapshot.checkpoint
+            if (self.game.level.number == 8 and point.room == 8
+                    and self.game.caverns.throne_sword_collected):
+                # Restore the throne's post-vision theme after Alt+R,
+                # before jump_to_room resets and flushes the audio queues.
+                self.combat.ruins.songs.append(182)
             self.jump_to_room(point.room, point.row, point.x, snapshot.facing,
                               reset_guards=False, preserve_checkpoint=True, redraw=redraw)
             self.next_animation_at = time.perf_counter()

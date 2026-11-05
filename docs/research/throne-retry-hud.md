@@ -32,3 +32,25 @@ policy; no room links or level data are changed.
 retry without pickup; physical held-Shift pickup and persisted item removal
 through retry/save/load; room11 warps before/after the vision; and repair of
 an older premature snapshot. The previous implementation fails those routes.
+
+## Retained HUD coordinates
+
+Live rendering centres the510-pixel game area in a512-pixel viewport with
+one pixel at either side. The throne vision retains the already composed
+512-pixel status strip. Its presentation then applied the room offset again,
+shifting bottles and the Space-requested time text one pixel to the right.
+Render the retained HUD at viewport origin0 while keeping the existing game
+picture placement. The pixel regression compares the entire live HUD strip
+with the actually presented cutscene at its first, middle and last frames,
+and after returning to gameplay. It rejects the previous presentation.
+
+## Retry music
+
+A completed throne checkpoint now requeues Throne3/song182, the same specific
+theme requested by wake7:39d4, before the retry's audio reset/flush. Otherwise
+the logical sword word1 would select common ruins ambience after reset.
+This is the user-requested retry presentation policy; the native SpecialMusic
+leaf and ordinary exploration-room transitions remain unchanged. The audio
+regression lets the first post-vision theme finish into common ambience,
+then checks that Alt+R starts182 again at the throne checkpoint. Room12
+fallbacks continue using their ordinary ambience.

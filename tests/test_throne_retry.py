@@ -102,3 +102,23 @@ class ThroneRetryTests(unittest.TestCase):
         scene.restart_level_now(redraw=False)
         self.assertEqual(scene.room_id, 8)
         self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 1)
+
+    def test_throne_retry_restarts_its_post_vision_theme_instead_of_common_ruins_music(self):
+        from pop2.audio import AudioEngine
+        from tests.test_audio import TimedPlayback
+
+        self.reach_throne_after_earlier_checkpoint()
+        self.take_floor_sword()
+        scene = self.scene
+        scene.audio = AudioEngine(playback=object())
+        scene.audio.playback = TimedPlayback(scene.audio.cues)
+        scene.audio.configure_level(scene.game.level.data)
+        scene.advance_audio()
+        self.assertEqual(scene.audio.current_music, 182)
+        scene.audio.playback.advance(10000)
+        scene.advance_audio()
+        self.assertNotEqual(scene.audio.current_music, 182)
+        scene.restart_level()
+        self.assertEqual(scene.room_id, 8)
+        self.assertEqual(scene.audio.current_music, 182)
+        self.assertTrue(scene.audio.music_busy)
