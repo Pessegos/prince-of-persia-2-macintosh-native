@@ -14,6 +14,7 @@ import sys
 import tempfile
 from zipfile import ZipFile, ZIP_DEFLATED
 from tools.prepare_windows_bootloader import cfg_enabled
+from tools.prepare_windows_runtime import validate_runtime, signatures, trim_runtime
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,9 +39,14 @@ def validate_bundle(directory):
         if (path.suffix.lower() in FORBIDDEN_SUFFIXES
                 or any(part.lower() in ('assets', 'rendered', '.venv', 'saves') for part in relative.parts)):
             raise ValueError(f'Private/imported data must not be distributed: {relative}')
-    for name in ('PoP2Mac.exe', 'PoP2Mac-tools.exe', 'PoP2Mac-worker.exe', 'LICENSE', 'BUILD-INFO.json', 'README.txt'):
+    for name in ('PoP2Mac.exe', '_internal/python/python.exe', '_internal/python/pythonw.exe',
+                 '_internal/worker/worker_entry.py', '_internal/worker/portable-worker.json',
+                 'LICENSE', 'BUILD-INFO.json', 'README.txt'):
         if not (directory / name).is_file():
             raise ValueError(f'Incomplete portable build: {name}')
+    for name in ('PoP2Mac-tools.exe', 'PoP2Mac-worker.exe'):
+        if (directory / name).exists():
+            raise ValueError(f'Obsolete custom import executable: {name}')
 
 
 def git(*args):
@@ -50,6 +56,7 @@ def git(*args):
 def build_info(version):
     digest = hashlib.sha256()
     names = set(git('ls-files', 'pop2', 'tools', 'run_game.py', 'distribution', 'vendor').splitlines())
+    names.update(('requirements-import.txt', 'requirements-build.txt'))
     for folder in ('pop2', 'tools', 'distribution'):
         names.update(str(path.relative_to(ROOT)).replace('\\', '/') for path in (ROOT / folder).rglob('*.py'))
     for name in sorted(names):
@@ -68,7 +75,7 @@ def build_info(version):
 def copy_notices(bundle):
     licenses = bundle / 'licenses'
     licenses.mkdir()
-    for name in DEPENDENCIES:
+    for name in (*DEPENDENCIES, 'PyInstaller'):
         dist = metadata.distribution(name)
         for item in dist.files or ():
             if not any('license' in part.lower() or part.lower().startswith('copying') for part in item.parts):
@@ -88,6 +95,25 @@ def copy_notices(bundle):
             shutil.copy2(path, target)
 
 
+def copy_worker_code(bundle, info_file):
+    code = bundle / '_internal/worker'
+    code.mkdir(parents=True)
+    for folder in ('pop2', 'tools'):
+        for source in (ROOT / folder).rglob('*.py'):
+            destination = code / source.relative_to(ROOT)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+    for name in SUPPORT_FILES:
+        destination = code / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / name, destination)
+    shutil.copy2(ROOT / 'run_game.py', code / 'run_game.py')
+    shutil.copy2(ROOT / 'distribution/worker_entry.py', code / 'worker_entry.py')
+    shutil.copy2(info_file, code / 'build-info.json')
+    shutil.copytree(ROOT / 'vendor/smssynth', code / 'vendor/smssynth')
+    (code / 'portable-worker.json').write_text('{"schema": 1}\n', encoding='ascii')
+
+
 def build(version, output):
     if sys.platform != 'win32' or sys.maxsize <= 2**32:
         raise RuntimeError('Build on 64-bit Windows with a 64-bit Python installation')
@@ -96,20 +122,21 @@ def build(version, output):
     version = validate_version(version)
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
-    bootloader = ROOT / 'rendered/windows/bootloader/run.exe'
-    if not bootloader.is_file() or cfg_enabled(bootloader):
-        raise RuntimeError('Prepare the Unicorn helper first: python -m tools.prepare_windows_bootloader')
+    runtime = ROOT / 'rendered/windows/runtime'
+    runtime_info = validate_runtime(runtime)
+    signatures(runtime)
     # Unique work directory: a repeated build never overwrites an installation
     # in which someone might already have imported assets or made saves.
     work = Path(tempfile.mkdtemp(prefix='build-', dir=output))
+    # Preserve the prepared interpreter/wheel cache for subsequent builds.
+    # Static linker libraries, dependency tests/examples and headers are not
+    # needed on a player's PC. Signed executables/DLLs and notices stay intact.
+    packaged_runtime = work / 'import-runtime'
+    shutil.copytree(runtime, packaged_runtime)
+    runtime_info = trim_runtime(packaged_runtime)
+    signatures(packaged_runtime)
     info = build_info(version)
-    info['import_bootloader'] = json.loads(bootloader.with_name('bootloader.json').read_text())
-    if hashlib.sha256(bootloader.read_bytes()).hexdigest() != info['import_bootloader']['bootloader_sha256']:
-        raise RuntimeError('Import bootloader checksum does not match its build record')
-    worker_bootloader = bootloader.with_name('runw.exe')
-    if (cfg_enabled(worker_bootloader) or hashlib.sha256(worker_bootloader.read_bytes()).hexdigest()
-            != info['import_bootloader']['worker_bootloader_sha256']):
-        raise RuntimeError('Worker bootloader does not match its build record')
+    info['import_runtime'] = {key: value for key, value in runtime_info.items() if key != 'files'}
     info_file = work / 'build-info.json'
     info_file.write_text(json.dumps(info, indent=2) + '\n', encoding='utf-8')
     data = [(str(ROOT / name), str(Path(name).parent)) for name in SUPPORT_FILES]
@@ -125,19 +152,9 @@ a = Analysis([{str(ROOT / 'distribution/windows_entry.py')!r}], pathex=[{str(ROO
              hiddenimports=['pygame.mixer', 'mido', 'numpy', 'unicorn', 'tkinter'],
              excludes=['pytest', 'IPython'])
 pyz = PYZ(a.pure)
-class ImportEXE(EXE):
-    def _bootloader_file(self, exe, extension=None):
-        return {str(bootloader)!r}
-class WorkerEXE(EXE):
-    def _bootloader_file(self, exe, extension=None):
-        return {str(worker_bootloader)!r}
 gui = EXE(pyz, a.scripts, [], exclude_binaries=True, name='PoP2Mac',
-          console=False, icon={str(ROOT / 'pop2/icons/prince.ico')!r})
-helper = ImportEXE(pyz, a.scripts, [], exclude_binaries=True, name='PoP2Mac-tools',
-             console=True, icon={str(ROOT / 'pop2/icons/prince.ico')!r})
-worker = WorkerEXE(pyz, a.scripts, [], exclude_binaries=True, name='PoP2Mac-worker',
-             console=False, icon={str(ROOT / 'pop2/icons/prince.ico')!r})
-COLLECT(gui, helper, worker, a.binaries, a.datas, name='PoP2Mac')
+          console=False, upx=False, icon={str(ROOT / 'pop2/icons/prince.ico')!r})
+COLLECT(gui, a.binaries, a.datas, upx=False, name='PoP2Mac')
 ''', encoding='utf-8')
     subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--distpath', str(work / 'dist'),
                     '--workpath', str(work / 'cache'), str(spec)], cwd=ROOT, check=True)
@@ -146,10 +163,11 @@ COLLECT(gui, helper, worker, a.binaries, a.datas, name='PoP2Mac')
     shutil.copy2(ROOT / 'distribution/README.txt', bundle / 'README.txt')
     shutil.copy2(info_file, bundle / 'BUILD-INFO.json')
     copy_notices(bundle)
-    shutil.copy2(bootloader.with_name('COPYING-PyInstaller.txt'), bundle / 'licenses/COPYING-PyInstaller.txt')
-    if (not cfg_enabled(bundle / 'PoP2Mac.exe') or cfg_enabled(bundle / 'PoP2Mac-tools.exe')
-            or cfg_enabled(bundle / 'PoP2Mac-worker.exe')):
-        raise RuntimeError('Unexpected CFG policy in the final executables')
+    shutil.copytree(packaged_runtime, bundle / '_internal/python')
+    copy_worker_code(bundle, info_file)
+    validate_runtime(bundle / '_internal/python')
+    if not cfg_enabled(bundle / 'PoP2Mac.exe'):
+        raise RuntimeError('Game launcher must retain the stock CFG bootloader')
     validate_bundle(bundle)
     archive = output / f'PoP2Mac-{version}-windows-x64.zip'
     with ZipFile(archive, 'w', compression=ZIP_DEFLATED) as target:

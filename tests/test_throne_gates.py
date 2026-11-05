@@ -10,6 +10,23 @@ from pop2.paths import ASSET_DIR
 
 
 class DrawContactScopeTests(unittest.TestCase):
+    def test_wall_sweep_sees_barriers_two_columns_across_either_room_link(self):
+        import struct
+
+        from pop2.terrain import LevelMap
+
+        level = bytearray(0x49ca)
+        struct.pack_into('>H', level, 0x2186, 4)
+        struct.pack_into('>H', level, 0x2080 + 2, 2)  # Room1 -> right room2.
+        struct.pack_into('>H', level, 0x2080 + 8, 1)  # Room2 -> left room1.
+        struct.pack_into('>H', level, (10 + 8) * 2, 20)
+        struct.pack_into('>H', level, 60 + (10 + 1) * 2, 20)
+        terrain = LevelMap(level)
+        self.assertEqual(terrain.wall_correction(
+            1, 10, 0, (-35, 150, -5, 226), (-20, 150, 10, 226), physical_row=1), 5)
+        self.assertEqual(terrain.wall_correction(
+            0, 570, 580, (560, 150, 590, 226), (550, 150, 580, 226), physical_row=1), 575)
+
     def test_other_environments_do_not_use_a_stale_cavern_contact_rectangle(self):
         import struct
         from types import SimpleNamespace
@@ -229,3 +246,34 @@ class ThroneGateTests(unittest.TestCase):
                 ScenePrototype.render(scene)
         self.assertTrue({235, 236, 237, 238, 239, 240, 133, 134, 48, 49, 50, 51, 52, 15} <= set(checked))
         self.assertTrue({235, 134} <= overlaps)
+
+    def test_repeated_armed_retreat_stops_before_the_offscreen_grille(self):
+        scene = self.scene
+        scene.jump_to_room(20, 2, 65, 1)
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+            scene.set_key_state('ctrl', True)
+            self.tick(10)
+            scene.set_key_state('ctrl', False)
+            blocked = False
+            for tick in range(100):
+                if tick % 9 == 0:
+                    scene.horizontal_key(None, -1, True)
+                if tick % 9 == 4:
+                    scene.horizontal_key(None, -1, False)
+                self.assertEqual(scene.room_id, 20)
+                self.assertGreaterEqual(scene.player_collision_bounds()[0], -30)
+                self.tick()
+                # In room21 the original barrier type1's rear face is at
+                # X-30 (throne-world480). The body must never cross it just
+                # because this cell is two columns beyond the camera edge.
+                self.assertEqual(scene.room_id, 20)
+                self.assertGreaterEqual(scene.player_collision_bounds()[0], -30)
+                blocked |= scene.sequence_state.source_sequence_id == 65
+            self.assertTrue(blocked)
+            self.assertEqual(scene.level_map.tile(8, 8, 2).foreground & 255, 0)
+            scene.horizontal_key(None, -1, False)
+            self.tick(5)
+            old_x = scene.player_x
+            scene.horizontal_key(None, 1, True)
+            self.tick(9)
+            self.assertGreater(scene.player_x, old_x)

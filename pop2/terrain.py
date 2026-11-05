@@ -954,7 +954,10 @@ class LevelMap:
         rows = (range(character_row(top), character_row(bottom) + 1)
                 if physical_row is None else (physical_row,))
         for row in rows:
-            for col in range(-1, 11):
+            # A drawn sword can delay CutChar until the body is two cells
+            # beyond the camera edge. Keep those linked-room barriers in
+            # the sweep, notably the throne grille during armed retreat.
+            for col in range(-2, 12):
                 tile = self.tile(room, col, row)
                 # CheckCollide 4:5688 asks 4:5b0e: the exit passes at phase 19.
                 desert_exit = (tile.kind == 4 and self.desert is not None
