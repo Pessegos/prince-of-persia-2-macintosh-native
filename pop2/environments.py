@@ -1241,7 +1241,8 @@ class Temple(Caverns):
             return
         if (scene.game.level.number, scene.room_id) != (ALTAR_LEVEL, ALTAR_ROOM):
             return
-        if motion.dead:
+        # A sword kill leaves the terrain motion alone: only the Fighter is dead.
+        if motion.dead or not scene.combat.player.alive:
             # KeepTime 2:6838-685e: the death message there sets a5-0x4fd4.
             if caverns.altar == 0 and scene.death.prompt_visible:
                 caverns.altar = 1
@@ -1403,6 +1404,13 @@ class Temple(Caverns):
             bounds_for_state=bounds, cut_enabled=False,
             protected=state.sequence_id in LEDGE_SEQUENCES)
         state.current_x = state.target_x
+        # FrameAdv 2:6602: every opponent runs CheckPress 5:127e, which keeps
+        # a branch for this actor type (5:12a6). Altar plate 4:12 is what
+        # opens level 13's door 32:12.
+        record = scene.frames[state.action]
+        state.sound_events.extend(caverns.loose.press(scene.level_map, motion, state, record))
+        state.sound_events.extend(caverns.plates.press(scene.level_map, motion, state, record,
+                                                       sword_type=scene.game.sword_type))
         # The shadow's footsteps join the Kid's cues (both actor sounds).
         scene.sequence_state.sound_events.extend(state.sound_events)
         state.sound_events.clear()

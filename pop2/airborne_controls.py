@@ -51,7 +51,9 @@ class AirborneControls(RunningControls):
             return super().waiting_key(key, pressed)
         fresh = key == 'up' and pressed and not self.up_held
         handled = super().waiting_key(key, pressed)
-        self.sample_waiting_controls()
+        # The key can run a frame whose fall or bump clears the bank.
+        if self.directional_input is not None:
+            self.sample_waiting_controls()
         if fresh:
             self.jump_started_for_press = True
         return handled
