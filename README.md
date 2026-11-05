@@ -38,6 +38,7 @@ I'm trying to stay as close to the original as possible, while still making some
 ## Gameplay Status
 
 Levels 1–9 are playable from start to finish, including the horse cutscene leading into Level 10.
+
 Levels 10–13 are now in the game too. They can already be explored, with some of their mechanics working, but there's still quite a bit left to do before they're fully playable.
 
 <br/>
