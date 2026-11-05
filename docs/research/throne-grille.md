@@ -56,8 +56,9 @@ both its cached drawing bounds and its collision bounds. The cache copy
 4:23b4-23ba supplies CutChar6:4922-492a. The port had supplied only the body
 sprite's rectangle to the horizontal cut. It now supplies the complete
 collision rectangle, including that same sword extension. This reaches the
-ordinary right-cut threshold and returns to native room21 at scene X-17;
-normal wall alignment then settles the Prince near X4. No room-specific
+ordinary right-cut threshold and returns to native room21 at scene X-17.
+The same throne gate stays exempt from ordinary gate responses across the
+room link, as detailed below. No room-specific
 teleport, changed sword offsets, opened bars or retimed animation is added.
 
 The extended native probe supplies the prior standing rectangle and four
@@ -81,3 +82,37 @@ grille. A separate first-draw-after-warp case covers an empty contact history.
 Removing only the history fix fails at source55 instead of65; removing only
 the complete cut bounds leaves the camera in port room8 instead of20. Both
 parts are necessary for the supplied Macintosh behavior.
+
+## Sheathing beside the grille keeps the ordinary standing finish
+
+The follow-up recording shows an unwanted crouch after putting the sword
+away. A real-input regression now extends the approach, turn and rear draw
+through a short Down tap and the complete long sheathe92. Previously, at
+pose239, CheckGateForKid selected crouch50 even after Down had been released.
+This was a collision response, rather than a second Down command.
+
+CheckGateForKid4:6124-6138 exempts level8's throne gate using ReadCell's
+resolved room at A5-0x34aa. The host used the actor's current room instead.
+In room21 the nearby gate is still the tile from native room9, column8,
+queried at camera-relative column-2. Use that tile's resolved room for this
+exemption. Keep the other gate/barrier/standing selectors' room rules intact.
+This also removes the earlier ordinary-gate ejection from X-17 to X4; it
+was not required alignment. When the sword disappears, the normal camera
+cut can return to the throne view while the Prince remains outside the bars.
+
+The regression requires sheathe92 to finish standing without crouch50/49,
+then attempts inward movement and verifies the closed bars still block it.
+It rejects the earlier code with sources50/49. Existing native sheathe input
+semantics, including a Down deliberately held through its mode5 clear, are
+unchanged. No special sheathe sequence, position clamp or camera exception
+is added.
+
+A fresh `tools.probe_temple_gate_contact` run executes original
+CheckGateForKid, cell traversal, admission and JumpSeq50 for61,382 cases,
+including the two resolved-room9 controls; zero mismatches against its
+bounded reference. The executable's4:6124-6138 reads the cell cache before
+the overlap masks or admission checks. Inputs/endpoints remain explicit:
+supplied overlap banks and actor rectangles, SEQS50 resource lookup,
+distance fixture, log-only ejection/cave response. It excludes independent
+overlap construction, AnimChar, full FrameAdv, crush damage and rasterization.
+The real sheathe/input regression exercises production behavior separately.

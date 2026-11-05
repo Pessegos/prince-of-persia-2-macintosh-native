@@ -1205,8 +1205,11 @@ class RooftopPhysics:
         if gate is None:
             return None
         tile, column = gate
-        if self.map.throne_gate(motion.room, tile):
-            return None  # 4:6124-6138 excludes the throne's special barrier.
+        # 4:6124-6138 checks ReadCell's resolved room, not the actor's room.
+        # The throne bars can still be read across the room21 -> room9 link
+        # after a rear sword bump; they must not force a sheathing crouch.
+        if self.map.throne_gate(tile.room if tile.room is not None else motion.room, tile):
+            return None
         left = column * TILE_WIDTH + (40 if state.level_kind == 3 else 62)
         right = column * TILE_WIDTH + 72
         # CheckGateForKid 4:613c-616e requires both CheckBarr masks to be

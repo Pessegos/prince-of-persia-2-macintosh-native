@@ -155,3 +155,34 @@ class ThroneGateTests(unittest.TestCase):
         self.assertEqual(scene.sequence_state.source_sequence_id, 65)
         self.tick(4)
         self.assertEqual(scene.room_id, 20)
+
+    def test_sheathing_after_the_rear_bump_does_not_force_a_crouch(self):
+        self.approach_from_room_twenty_one()
+        self.turn_back_to_grille()
+        scene = self.scene
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+            scene.set_key_state('ctrl', True)
+            self.tick(8)
+            scene.set_key_state('ctrl', False)
+            self.assertEqual(scene.room_id, 20)
+            scene.set_key_state('down', True)
+            self.tick()
+            scene.set_key_state('down', False)
+            poses = []
+            for _ in range(30):
+                self.tick()
+                poses.append((scene.sequence_state.source_sequence_id, scene.action))
+        # A short Down tap sheathes the sword. The throne bars seen across
+        # the room link must not interrupt SEQS92 with forced crouch50.
+        self.assertEqual({sequence for sequence, _ in poses}, {92})
+        self.assertNotIn(109, [action for _, action in poses])
+        self.assertEqual(scene.action, 15)
+        self.assertFalse(scene.sword_drawn)
+        self.assertFalse(scene.sword_sheathing)
+        # The normal camera cut can return to the throne view as the sword
+        # disappears. The physical position must stay outside the bars.
+        self.assertGreater(scene.player_x + (510 if scene.room_id == 20 else 0), 450)
+        scene.horizontal_key(None, -1, True)
+        self.tick(20)
+        self.assertGreater(scene.sequence_state.target_x + (510 if scene.room_id == 20 else 0), 450)
+        self.assertEqual(scene.level_map.tile(8, 8, 2).foreground & 255, 0)
