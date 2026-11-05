@@ -1,6 +1,7 @@
 """Isolated reproductions of the November ruins playtest reports."""
 
 import unittest
+from unittest.mock import patch
 
 from pop2.paths import ASSET_DIR
 
@@ -84,3 +85,17 @@ class RuinsBugReportTests(unittest.TestCase):
             self.assertIn(scene.game.level.start_room, positions)
             # Layout and native links remain available to gameplay.
             self.assertEqual(len(scene.game.level.data), len(scene.resources.level(number).data))
+
+    def test_level_eight_exit_opcode_plays_exit_and_loads_nine(self):
+        scene = self.scene
+        scene.load_level(8)
+        scene.game.story.tree_stage = 7
+        scene.sequence_state.sequence_events.append((-16, ()))
+        scene.advance_level_events()
+        self.assertTrue(scene.level_complete)
+        self.assertIsNotNone(scene.game.exit)
+        self.assertEqual(scene.game.exit.song, 124)
+        # Let the actual completion callback consume the finished exit.
+        with patch.object(scene.game.exit, 'advance', return_value=True):
+            self.tick()
+        self.assertEqual(scene.game.level.number, 9)
