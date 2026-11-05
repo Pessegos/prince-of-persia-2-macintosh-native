@@ -55,6 +55,12 @@ class CavernState:
     throne_done: bool = False
     throne_seen: bool = False
 
+    @property
+    def throne_sword_collected(self):
+        # The vision flag and physical item consumption are separate. The
+        # latter already persists in Potions.tiles; no extra saved flag.
+        return self.throne_done and self.potions.tiles.get((8, 25), (22, 0))[0] == 1
+
     def configure_lava(self, metadata, enhanced=True):
         self.lava = Lava(metadata, enhanced=enhanced)
 

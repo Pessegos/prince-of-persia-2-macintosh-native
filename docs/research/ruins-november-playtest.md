@@ -113,8 +113,9 @@ The missing distinction is native cached artwork, not the logical sword word:
 - Physical pickup6:152c-1552 selects91, consumes the cell, sets the logical
   word from the item and explicitly calls LoadSwordSet3:5a4e. The loader
   replaces the cached type with1, selects SHPL1000/AFRM25001 and loads the
-  sword palette. Checkpoint/exit/music/damage logic continues to read the
-  separate native logical word; the existing recovered gates remain intact.
+  sword palette. Exit/music/damage logic continues to read the separate
+  native logical word. The checkpoint host now also requires actual pickup,
+  following the user's later [retry clarification](throne-retry-hud.md).
 - `ScenePrototype.loaded_sword_type` now carries that runtime art cache.
   Level bind, normal restart and checkpoint restart reload from the logical
   word; physical item pickup updates it explicitly. It is not a new saved

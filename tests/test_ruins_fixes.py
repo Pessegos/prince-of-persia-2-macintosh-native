@@ -237,6 +237,11 @@ class LevelEightExitHostTests(unittest.TestCase):
             self.assertIsNone(scene.checkpoint)
             environment_for(scene).wake_from_vision()
             scene.advance_rebirth()
+            self.assertIsNone(scene.checkpoint)  # The vision alone is insufficient.
+            scene.jump_to_room(8, 2, 267, 1, reset_guards=False)
+            scene.set_key_state('shift', True)
+            RooftopSceneTests.tick(self, 20)
+            scene.set_key_state('shift', False)
             self.assertIsNotNone(scene.checkpoint)
             self.assertEqual(scene.checkpoint.checkpoint.slot, 1)
             scene.restart_level_now(redraw=False)
@@ -244,7 +249,7 @@ class LevelEightExitHostTests(unittest.TestCase):
             self.assertTrue(scene.game.caverns.throne_done)
             self.assertEqual(scene.room_id, 8)
             self.assertEqual(scene.sword_set(), 1)  # Restart reloads from the logical word.
-            self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 22)  # Still uncollected.
+            self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 1)  # Pickup persists in the snapshot.
 
     def test_actual_room_twenty_three_button_requires_the_throne_sword(self):
         from unittest.mock import patch

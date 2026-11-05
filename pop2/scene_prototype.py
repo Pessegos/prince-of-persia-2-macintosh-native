@@ -2345,6 +2345,27 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.player_x = self.sequence_state.target_x
         self.sequence_state.current_x = self.player_x
 
+    def checkpoint_available(self, checkpoint):
+        # User-requested throne retry rule: completing NIS6 alone does not
+        # activate room9. The floor sword must actually have been collected.
+        return (self.game.level.number != 8 or checkpoint.room != 8
+                or self.game.caverns.throne_sword_collected)
+
+    def repair_throne_checkpoint(self):
+        if self.game.level.number != 8:
+            return
+        snapshot = self.checkpoint
+        if snapshot is None or snapshot.checkpoint.room != 8:
+            return
+        collected = self.game.caverns.throne_sword_collected
+        if collected and snapshot.caverns is not None and snapshot.caverns.throne_sword_collected:
+            return
+        # Earlier builds captured room9 before pickup and then retained its
+        # uncollected item. Repair that snapshot, including immediate Alt+R.
+        point = (snapshot.checkpoint if collected else
+                 next(point for point in self.checkpoints if point.slot == 2))
+        self.checkpoint = RebirthSnapshot.capture(point, self.combat)
+
     def advance_rebirth(self):
         motion = getattr(self, "terrain_motion", None)
         if self.combat is None or motion is None or self.level_complete:
@@ -2353,12 +2374,14 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.death.begin(0)
             return
         state = self.sequence_state
+        self.repair_throne_checkpoint()
         contact = floor_contact_x(state.target_x, state.facing, self.frames[state.action])
         for checkpoint in self.checkpoints:
-            if checkpoint.matches(motion.room, motion.row, contact,
+            if (self.checkpoint_available(checkpoint)
+                    and checkpoint.matches(motion.room, motion.row, contact,
                                   state.animation_state, self.combat.player.alive,
                                   level_number=self.game.level.number,
-                                  story_flag=self.game.sword_type):
+                                  story_flag=self.game.sword_type)):
                 if self.checkpoint is None or self.checkpoint.checkpoint != checkpoint:
                     self.checkpoint = RebirthSnapshot.capture(checkpoint, self.combat)
                 break
@@ -2425,6 +2448,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.game.caverns.altar, self.game.caverns.shadow = 0, None
         self.remember_development_room()
         held = set(self.window_keys_down)
+        self.repair_throne_checkpoint()
         snapshot = self.checkpoint
         if snapshot is None:
             max_life = self.combat.player.max_life if self.combat is not None else None
@@ -2442,6 +2466,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 self.root.after_cancel(self.animation_after_id)
                 self.animation_after_id = None
             snapshot.restore_world(self.combat)
+            if self.game.level.number == 8:
+                self.game.sword_type = 1 if self.game.caverns.throne_sword_collected else 2
             self.game.arm_prince()
             self.loaded_sword_type = self.game.sword_type
             point = snapshot.checkpoint
@@ -3123,8 +3149,14 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         # A dev warp simulates progress along the route, including the last
         # LEVL checkpoint it would pass. Normal play still uses the cell gate.
         route = list(screens.values())[:list(screens).index(label) + 1]
-        checkpoint = max((point for point in self.checkpoints if point.room in route),
+        checkpoint = max((point for point in self.checkpoints
+                          if point.room in route and self.checkpoint_available(point)),
                          key=lambda point: route.index(point.room), default=None)
+        if (checkpoint is None and self.game.level.number == 8
+                and any(point.room == 8 and point.room in route for point in self.checkpoints)):
+            # Room numbers are not progression order: room12's checkpoint
+            # precedes the throne, including a pre-pickup warp to room11.
+            checkpoint = next(point for point in self.checkpoints if point.slot == 2)
         if checkpoint is not None:
             self.checkpoint = RebirthSnapshot.capture(checkpoint, self.combat)
 
