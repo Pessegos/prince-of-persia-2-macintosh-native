@@ -32,6 +32,7 @@ from pop2.terrain import floor_contact_x
 
 REST_TIMEOUT = 150
 DIRECTIONS = {'L': -1, 'R': 1}
+PRONE_REST = 251  # GenCtrl's crawl pose under a low cell.
 
 
 class Clock:
@@ -246,6 +247,8 @@ def settle(harness, limit=REST_TIMEOUT):
         motion = scene.terrain_motion
         if scene._is_resting() and not motion.falling and not scene.ledge_hanging:
             return True
+        if scene.sequence_state.action == PRONE_REST:
+            return True  # Lying under a blade waits for the next key.
         harness.tick()
     return False
 
@@ -275,22 +278,34 @@ def macros():
                                         ((side,), (), 8), (('up',), (), 24),
                                         ((), ('up', side, 'shift'), 1)]
         result[f'crawl{side}'] = [(('down',), (), 6), ((side,), (), 8), ((), (side, 'down'), 1)]
+        for ticks in (4, 8, 16, 24, 32):
+            result[f'creep{side}{ticks}'] = [((side,), (), ticks), ((), (side,), 1)]
         del other
     result['jump'] = [(('up',), (), 3), ((), ('up',), 1)]
+    result['rise'] = [(('up',), (), 10), ((), ('up',), 1)]
     result['climb'] = [(('shift', 'up'), (), 34), ((), ('up', 'shift'), 1)]
     result['down'] = [(('down',), (), 10), ((), ('down',), 1)]
     result['hangdown'] = [(('shift', 'down'), (), 16), ((), ('down', 'shift'), 1)]
     result['wait'] = [((), (), 30)]
+    for ticks in (4, 8, 12, 16, 20):
+        result[f'wait{ticks}'] = [((), (), ticks)]
     result['altar'] = altar_death
     result['drink'] = [(('shift',), (), 26), ((), ('shift',), 1)]
+    # Level 11's plate 12:4 gives about a hundred frames to reach gate 6:19,
+    # with a blade just past it: a return without stopping, jumping twice
+    # and catching the far ledge. Replays only: the search stops between moves.
+    result['rushcatchL'] = [(('L',), (), 11), (('up',), (), 3), ((), ('up',), 9),
+                            (('shift', 'up'), (), 3), ((), ('up',), 12), ((), (), 3),
+                            (('up',), (), 26), ((), ('up', 'shift', 'L'), 1)]
     return result
 
 
 MACROS = macros()
 # Fewer run lengths for the search; a replay can name any of MACROS.
 SEARCHED = {name: script for name, script in MACROS.items()
-            if not any(name.endswith(suffix) for suffix in ('R7', 'L7', 'R9', 'L9', 'R13', 'L13',
-                                                            'R15', 'L15', 'R16', 'L16', 'R28', 'L28'))}
+            if not name.startswith('rush')
+            and not any(name.endswith(suffix) for suffix in ('R7', 'L7', 'R9', 'L9', 'R13', 'L13',
+                                                             'R15', 'L15', 'R16', 'L16', 'R28', 'L28'))}
 
 
 class Search:
@@ -372,7 +387,7 @@ class Search:
             _name, room, cell = target.split(':')
             cell = int(cell)
             tile = self.harness.scene.level_map.tile(int(room) - 1, cell % 10, cell // 10)
-            return tile.foreground & 255 >= 184
+            return tile.foreground & 255 >= (184 if tile.kind == 4 else 1)
         room, *rest = (int(part) for part in target.split(':'))
         return (info['room'] + 1 == room and (len(rest) < 1 or info['row'] == rest[0])
                 and (len(rest) < 2 or info['column'] == rest[1]))
