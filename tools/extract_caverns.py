@@ -677,7 +677,7 @@ def _finish_caverns(program, caverns, prince, output, progress, recover, result,
     result['loose_floors'] = loose_floor_slot_scenery(program, caverns, prince, level, result,
                                                       progress, recover=recover, rooms=slot_rooms)
     result['pressure_plates'] = plates
-    if kind == 4:
+    if kind in (2, 4):
         from tools.extract_scythes import scythe_pairs
 
         # The scythes are slot units of result['loose_floors'] ('scythe_units');

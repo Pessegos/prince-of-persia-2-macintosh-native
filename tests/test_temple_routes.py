@@ -8,7 +8,8 @@ one, run the audit again rather than editing its keys by hand.
 import unittest
 
 from pop2.paths import ASSET_DIR
-from tools.audit_temple_routes import Harness, MACROS, altar_death, play, replay, settle
+from pop2.scythes import CUT_SEQUENCE, CUT_SOUND, START_SOUND
+from tools.audit_temple_routes import Harness, MACROS, altar_death, play, press, replay, settle
 
 ROUTES = {
     10: ['runR20', 'leapcatchR20', 'runR8', 'climb', 'hopR', 'leapR20', 'hopcatchR', 'leapR5',
@@ -30,6 +31,30 @@ class TempleRouteTests(unittest.TestCase):
                 reached, trace, harness = replay(number, route, draw=False)
                 harness.close()
                 self.assertTrue(reached, trace[-3:])
+
+    def test_a_temple_blade_starts_and_cuts_like_a_ruins_scythe(self):
+        # FrameAdv's environment 2 case (2:63e2-63f0) falls through to 5:57bc
+        # and CheckScytheHit 5:588a; the blade is drawn by 10:0772.
+        harness = Harness(10)
+        self.addCleanup(harness.close)
+        harness.number = 10
+        settle(harness, 300)
+        scene = harness.scene
+        self.assertIn('scythes', scene.level_renderer.cavern_program)
+        scene.jump_to_room(20, 0, 150, 1, redraw=False)
+        press(harness, 'R', True)
+        sounds = []
+        for _ in range(40):
+            harness.tick()
+            sounds.extend(scene.sequence_state.sound_events)
+            if not scene.combat.player.alive:
+                break
+        press(harness, 'R', False)
+        self.assertEqual(scene.sequence_state.selected_sequence_id, CUT_SEQUENCE)
+        self.assertEqual(scene.death.method, 5)
+        self.assertIn(START_SOUND, sounds)
+        self.assertIn(CUT_SOUND, sounds)
+        self.assertEqual(scene.game.caverns.scythes.foreground[20, 5] & 0x40, 0x40)
 
     def test_a_key_can_run_a_frame_that_clears_the_control_bank(self):
         # A fresh Shift during SEQS 11 ran a frame whose wall bump cleared the

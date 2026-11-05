@@ -145,6 +145,18 @@ def missing_assets(project=PROJECT):
                     raise ValueError('Upper entrance scenery needs reimport')
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append(f'{name} (needs full level-{label} scenery)')
+    for number in (10, 11, 12, 13):
+        name = f'temple_level{number}.json'
+        cavern_path = project / 'assets' / name
+        if not cavern_path.is_file():
+            continue
+        try:
+            cavern = json.loads(cavern_path.read_text(encoding='ascii'))
+            # An earlier export lacks the blades, so its traps would never run.
+            if cavern['scythes'].get('schema') != 1:
+                raise ValueError('Scythe scenery needs reimport')
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            missing.append(f'{name} (needs the temple blades)')
     attract_path = project / "assets" / "attract.json"
     if attract_path.is_file():
         from pop2.attract import read_attract

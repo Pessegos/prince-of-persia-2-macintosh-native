@@ -368,8 +368,14 @@ class Search:
         target = self.waypoints[0]
         if target == 'altar':
             return self.harness.scene.game.caverns.altar == -1 and info['alive']
-        room, _, row = target.partition(':')
-        return info['room'] + 1 == int(room) and (not row or info['row'] == int(row))
+        if target.startswith('open:'):
+            _name, room, cell = target.split(':')
+            cell = int(cell)
+            tile = self.harness.scene.level_map.tile(int(room) - 1, cell % 10, cell // 10)
+            return tile.foreground & 255 >= 184
+        room, *rest = (int(part) for part in target.split(':'))
+        return (info['room'] + 1 == room and (len(rest) < 1 or info['row'] == rest[0])
+                and (len(rest) < 2 or info['column'] == rest[1]))
 
     def route(self, node):
         names = []
@@ -493,7 +499,8 @@ def main(argv=None):
     parser.add_argument('--per-cell', type=int, default=4)
     parser.add_argument('--prefix', default='', help='Comma-separated macros that start the route')
     parser.add_argument('--waypoints', default='',
-                        help='Comma-separated native ROOM, ROOM:ROW or "altar" hints, in order')
+                        help='Comma-separated hints, in order: native ROOM, ROOM:ROW, ROOM:ROW:COLUMN, '
+                             '"altar" or open:ROOM:CELL (a gate lifted clear)')
     args = parser.parse_args(argv)
     waypoints = [item for item in args.waypoints.split(',') if item]
     search = Search(args.level, deadline=args.deadline, per_cell=args.per_cell, waypoints=waypoints,

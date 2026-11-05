@@ -633,10 +633,11 @@ class Caverns(Environment):
 
     def check_scythes(self):
         scene = self.scene
-        # FrameAdv 2:63f4-63fe and 2:664a-664e (ruins): 5:57bc may start a
-        # scythe, then CheckScytheHit 5:588a, which the Prince skips while
-        # invulnerable (a5-0x4f90).
-        if scene.game.level.kind != 4 or 'scythes' not in scene.level_renderer.cavern_program:
+        # FrameAdv 2:63f4-63fe and 2:664a-664e (ruins, and the temple's case
+        # falls through to them): 5:57bc may start a scythe, then
+        # CheckScytheHit 5:588a, which the Prince skips while invulnerable
+        # (a5-0x4f90).
+        if scene.game.level.kind not in (2, 4) or 'scythes' not in scene.level_renderer.cavern_program:
             return  # An import before the scythes' drawing: leave them still.
         from pop2.scythes import CUT_SEQUENCE, CUT_SOUND
 

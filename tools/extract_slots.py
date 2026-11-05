@@ -223,7 +223,7 @@ def slot_context(program, caverns, prince, level, base):
     return {'program': program, 'caverns': caverns, 'prince': prince, 'level': level,
             'choices': choices, 'clears': clears, 'source': source, 'rects': rects,
             'entry': base.get('entry_exit'), 'groups': crevice_groups(terrain), 'planks': planks,
-            'pairs': scythe_pairs(terrain) if struct.unpack_from('>H', level, 0x2186)[0] == 4 else []}
+            'pairs': scythe_pairs(terrain) if struct.unpack_from('>H', level, 0x2186)[0] in (2, 4) else []}
 
 
 def room_renderer(context, room, recover, progress=lambda _text: None):
