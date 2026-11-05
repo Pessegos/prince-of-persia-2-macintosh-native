@@ -31,8 +31,44 @@ def column_reference(native_x):
     return quotient - 4 - int(argument < 0), dividend - quotient * 51
 
 
+def rock_record(mobs, room, row):
+    """GetSlideRockOnRoomRow 10:1a9e: the first live type-6 record there."""
+    return next((mob for mob in mobs if mob[5] == 6 and mob[3] != -1
+                 and mob[2] == room and mob[6] == row), None)
+
+
+def rock_overlay_reference(mobs, room, row, actor_row, tags, masks, history, edges):
+    """GetSlideRockDetData 10:190c for one table row; returns the last
+    GetCharCol remainder, or None. The rock's old column hands its history
+    bits on to a new one, so its own motion is not a contact. The native
+    writes outside the ten-word banks at the room's edges: rejected here."""
+    mob = rock_record(mobs, room, row)
+    remainder = None
+    if mob is None:
+        return remainder
+    body_left, body_right = edges
+    for face, mask in ((signed_word(mob[0] + 218), 0x0f), (signed_word(mob[0] + 279), 0xf0)):
+        if (face >= body_right) if mask == 0x0f else (face <= body_left):
+            continue
+        column, remainder = column_reference(face)
+        if 0 <= column < 10:
+            masks[column] |= mask
+            tags[column] = mob[2]
+        if mob[4] == 100 or actor_row != row:
+            continue
+        beyond, remainder = column_reference(signed_word(face + 2))
+        if beyond == column:
+            continue
+        if not (0 <= column < 10 and 0 <= beyond < 10):
+            raise ValueError('Rock history transfer outside the ten-word banks')
+        history[column] |= history[beyond] & mask
+        if not masks[beyond] & mask:
+            history[beyond] &= 0xff ^ mask
+    return remainder
+
+
 def banks_reference(actor, edges, tables, reader, previous, *, current=71, first=7,
-                    last=8, anchor=73, remainder=79, height=74):
+                    last=8, anchor=73, remainder=79, height=74, mobs=()):
     if len(actor) != 62 or len(edges) != 2 or not 0 <= actor_word(actor, 14) <= 2:
         raise ValueError('Outside the bounded temple CheckBarr domain')
     output = dict(tables={name: list(bank) for name, bank in tables.items()}, current=current,
@@ -41,12 +77,13 @@ def banks_reference(actor, edges, tables, reader, previous, *, current=71, first
     mode, source = actor_word(actor, 16), actor_word(actor, 40)
     room, row = actor_word(actor, 22), actor_word(actor, 14)
     rocks = bool(reader.level[0x2191])
-    if mode == 7 or source in (70, 78):
-        if mode == 7 and rocks:
-            output['rock_queries'].append((room, row))
-        return output
-    if rocks:
+    here = rock_record(mobs, room, row) if rocks else None
+    pinned = here is not None and actor_word(actor, 52) == 4
+    bypass = mode == 7 or source in (70, 78)
+    if rocks and (not bypass or mode == 7):
         output['rock_queries'].append((room, row))
+    if pinned or (bypass and (mode != 7 or here is None)):
+        return output
     output['current'] = row
     output['tables'] = history_reference(actor, row, previous, tables)['tables']
     output['previous'] = row
@@ -56,7 +93,7 @@ def banks_reference(actor, edges, tables, reader, previous, *, current=71, first
     if not -2 <= first <= 11 or not -2 <= last <= 11:
         raise ValueError('Generated span outside the separately tested sweep/table domain')
     output.update(first=first, last=last, remainder=remainder)
-    for name, offset in (('current', 0), ('lower', 1), ('upper', -1)):
+    for name, offset in () if bypass else (('current', 0), ('lower', 1), ('upper', -1)):
         swept = sweep_reference(actor, row + offset, first, last, edges,
                                 output['tables'][name + '_tags'],
                                 output['tables'][name + '_masks'], reader, height=height)
@@ -64,7 +101,15 @@ def banks_reference(actor, edges, tables, reader, previous, *, current=71, first
         output['tables'][name + '_masks'] = swept['masks']
         output['anchor'] = swept['anchor']
     if rocks:
-        output['rock_queries'].extend((room, row + offset) for offset in (0, 1, -1))
+        for name, offset in (('current', 0), ('lower', 1), ('upper', -1)):
+            output['rock_queries'].append((room, row + offset))
+            remainder = rock_overlay_reference(
+                mobs, room, row + offset, row, output['tables'][name + '_tags'],
+                output['tables'][name + '_masks'], output['tables']['history_masks'], edges)
+            if remainder is not None:
+                output['remainder'] = remainder
+    if bypass:
+        return output
     for column in range(9, -1, -1):
         tag = output['tables']['current_tags'][column]
         if tag == 65535 or tag != output['tables']['history_tags'][column]:

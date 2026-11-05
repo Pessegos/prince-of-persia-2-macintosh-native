@@ -1,8 +1,11 @@
 import random
 import struct
+from types import SimpleNamespace
 import unittest
 
+from pop2.cavern_state import CavernState
 from pop2.slide_rocks import SlideRocks, object_shape, signed_word
+from pop2.terrain import LevelMap
 from tools.probe_temple_slide_rock_motion import motion_reference
 from tools.probe_temple_slide_rock_trigger import trigger_reference
 
@@ -160,6 +163,109 @@ class SlideRockTests(unittest.TestCase):
         self.assertEqual([object_shape(kind, 1) for kind in (6, 7, 8, 9)], [3593, 3584, 3590, 3586])
         self.assertEqual(rocks.edge(1, 1), 579)
         self.assertEqual(signed_word(struct.unpack('>h', b'\x80\x00')[0] - 1), 32767)
+
+
+class RockCollisionTests(unittest.TestCase):
+    """CheckBarr/CheckCollide1 with a live rock, on an open temple floor."""
+
+    STATE = dict(actor_type=0, source_sequence_id=2, sequence_mode=0, animation_state=0, action=15)
+
+    def terrain(self, record=(200, 236, 1, 0, 2, 6, 1, 306), walls=()):
+        level = bytearray(0x49ca)
+        for offset, value in ((0x2180, 1), (0x2186, 2), (0x218a, 10)):
+            struct.pack_into('>H', level, offset, value)
+        level[0x2191] = 1
+        for cell in range(30):
+            struct.pack_into('>H', level, cell * 2, 1)
+        for column in walls:
+            struct.pack_into('>H', level, (10 + column) * 2, 20)
+        terrain = LevelMap(bytes(level))
+        terrain.caverns = CavernState(rocks=SlideRocks([record]))
+        return terrain
+
+    def step(self, terrain, old, new, facing, *, row=1, **state):
+        state = SimpleNamespace(**{**self.STATE, **state}, facing=int(facing == 1))
+        return terrain.wall_correction(0, old, new, (new - 12, 0, new + 12, 73),
+                                       (old - 12, 0, old + 12, 73), facing,
+                                       physical_row=row, state=state)
+
+    def test_a_walking_body_stops_at_the_left_face(self):
+        # Face 211 (X + 11); the exclusive right edge rests there.
+        self.assertEqual(self.step(self.terrain(), 190, 200, 1), 198)
+        self.assertEqual(self.step(self.terrain(), 190, 196, 1), 196)
+
+    def test_a_walking_body_stops_at_the_right_face(self):
+        # Face 272 (X + 72); the left edge rests there.
+        self.assertEqual(self.step(self.terrain(), 290, 280, 0), 284)
+        self.assertEqual(self.step(self.terrain(), 290, 286, 0), 286)
+
+    def test_unarmed_backing_into_a_face_is_free_and_armed_is_not(self):
+        self.assertEqual(self.step(self.terrain(), 190, 200, 0), 200)
+        self.assertEqual(self.step(self.terrain(), 190, 200, None), 198)
+        self.assertEqual(self.step(self.terrain(), 290, 280, 1), 280)
+        self.assertEqual(self.step(self.terrain(), 290, 280, None), 284)
+
+    def test_a_body_already_past_a_face_finds_no_contact(self):
+        self.assertEqual(self.step(self.terrain(), 215, 225, 1), 225)
+
+    def test_the_rock_only_stops_its_own_room_and_row(self):
+        self.assertEqual(self.step(self.terrain((200, 236, 1, 0, 2, 6, 0, 306)), 190, 200, 1), 200)
+        self.assertEqual(self.step(self.terrain((200, 236, 2, 0, 2, 6, 1, 306)), 190, 200, 1), 200)
+
+    def test_a_dead_rock_is_no_barrier(self):
+        self.assertEqual(self.step(self.terrain((200, 236, 1, -1, 2, 6, 1, 306)), 190, 200, 1), 200)
+
+    def test_pinned_and_undecided_states_skip_the_rock(self):
+        self.assertEqual(self.step(self.terrain(), 190, 200, 1, sequence_mode=4), 200)
+        self.assertEqual(self.step(self.terrain(), 190, 200, 1, animation_state=2), 200)
+        self.assertEqual(self.step(self.terrain(), 190, 200, 1, action=140), 200)
+
+    def test_a_motionless_rock_needs_the_body_to_cross(self):
+        still = self.terrain((200, 236, 1, 0, 100, 6, 1, 306))
+        self.assertEqual(self.step(still, 200, 200, 1), 200)
+        # The travelling rock reached the idle body: last frame it was clear.
+        self.assertEqual(self.step(self.terrain(), 198, 198, 1), 198)
+        self.assertEqual(self.step(self.terrain(), 199, 199, 1), 198)
+
+    def test_the_smaller_column_of_a_side_wins(self):
+        # A wall ending at 123 (column 1) and the right face 123 + 16.
+        terrain = self.terrain((67, 236, 1, 0, 2, 6, 1, 306), walls=(1,))
+        self.assertEqual(self.step(terrain, 155, 130, 0), 135)
+        terrain = self.terrain((67, 236, 1, 0, 2, 6, 1, 306))
+        self.assertEqual(self.step(terrain, 155, 130, 0), 151)
+
+    def test_a_cell_barrier_under_the_face_replaces_the_face(self):
+        # Column 4's wall starts at 229 (22 + 204 + 3), the left face at 233.
+        terrain = self.terrain((222, 236, 1, 0, 2, 6, 1, 306), walls=(4,))
+        self.assertEqual(self.step(terrain, 205, 225, 1), 216)
+
+    def test_the_references_agree_on_a_random_walk(self):
+        from tools.audit_temple_rock_collision import native_step
+
+        generator = random.Random(190)
+        contacts = 0
+        for _ in range(1500):
+            x = generator.randrange(12, 240)
+            control, step = generator.choice(((2, 2), (100, 0)))
+            mobs = ((x + step, 236, 1, 0, control, 6, 1, 306), (x, 236, 1, 0, control, 6, 1, 306))
+            old = x + generator.choice((11, 72)) + generator.randrange(-16, 17)
+            new = old + generator.randrange(-9, 10)
+            facing, armed = generator.choice((-1, 0)), generator.choice((0, 1))
+            terrain = self.terrain(mobs[1])
+            try:
+                native, overlapped = native_step(terrain.level, 1, 1, old, new, mobs, facing, armed)
+            except ValueError:
+                continue
+            state = SimpleNamespace(**self.STATE, facing=int(facing == 0))
+            port = terrain.wall_correction(0, old, new, (new - 12, 0, new + 12, 73),
+                                           (old - 12, 0, old + 12, 73),
+                                           None if armed else state.facing, physical_row=1,
+                                           state=state)
+            if overlapped:
+                continue
+            contacts += bool(native)
+            self.assertEqual(port - new, native, (x, control, old, new, facing, armed))
+        self.assertGreater(contacts, 50)
 
 
 if __name__ == '__main__':

@@ -166,7 +166,7 @@ Each stage integrates separately with the usual reservation.
   recovery still stops inward motion. Two rules were needed for that: the
   temple's gates take the ruins' type-1 barrier and 4:5b0e admission, and
   tile 43 (IsWall, level 13 only) has no barrier (GetBarrCode 0). Rock
-  overlays in CheckBarr (nonempty MOB bank) remain unrecovered.
+  overlays in CheckBarr: see [temple-rock-collision.md](temple-rock-collision.md).
 - Level 13's flame (native room 4, CUST 4075 kind 0x20): 10:2cc2 advances
   a5-0x4818 from 0 to 11 and back to 0 each frame and DrawTempSacredFlame
   10:2d5a draws record counter + 2 (SHAP 4077-4088 from Kid.rsrc) at the
@@ -186,8 +186,8 @@ Each stage integrates separately with the usual reservation.
   FlameSword.rsrc): first port in `pop2/flame_sword.py`, rules and gaps in
   `flame-sword.md` (a reimport is needed for FlameSword.rsrc).
 - The end of level 13 (CheckPlayNIS(13, 14): NIS 3) and level 14.
-- CheckBarr's sliding-rock overlays with a non-empty MOB bank; cross-room
-  following of running opponents (FrameAdv 2:6550-65da).
+- Closed 2026-11-05: CheckBarr's sliding-rock faces and the cross-room
+  following of running opponents ([note](temple-rock-collision.md)).
 - Level 13's altar (`temple-altar.md`): the flame's flare (0x80 sequence)
   and the burn at the flame (SEQS 230, palette flash, death song 250) are
   ported, as is the shadow that rises from the dead Kid, takes the flame and

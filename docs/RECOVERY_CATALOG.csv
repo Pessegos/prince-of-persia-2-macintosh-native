@@ -243,7 +243,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,IsCharNonViewable,0x471e,jump_table,partial,pop2/render_opening.py,settled Prince/ordinary guard rooftop corpses except native rooms 15/16/19; guard variant 228 included,3,1
 4,Characters 2,IsDeadPos,0x47a0,jump_table,partial,pop2/rebirth.py;pop2/flame_sword.py,Prince dead-pose IDs; type-10 pose 213,10,0
 4,Characters 2,LoadShad,0x4ac0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,31,0
-4,Characters 2,CheckBarr,0x4e34,jump_table,partial,pop2/terrain.py;tools/probe_temple_collision_banks.py,"temple4:4e34 history/generated interval/three row sweeps/incoming masks verified26370 native calls; real rock queries/overlays against empty MOB bank, supplied body/previous banks; nonempty rocks/floating ceiling/response excluded",1,20
+4,Characters 2,CheckBarr,0x4e34,jump_table,partial,pop2/terrain.py;tools/probe_temple_collision_banks.py;tools/probe_temple_rock_overlay.py,temple4:4e34 history/generated interval/three row sweeps/incoming masks verified26370 native calls; live rock faces in probe_temple_rock_overlay; supplied body/previous banks; nonempty rocks/floating ceiling/response excluded,1,20
 4,Characters 2,InitColDetBufs,0x50da,decoded,partial,tools/probe_temple_floating_ceiling.py,"decoded marker4:50da actually executes floating ceiling contact, not history entry4:5152; actual ReadCell/IsSpace/backoff/JumpSeq229 and CheckBarr caller, supplied body/empty MOB/Resource Manager; no animation or full frame",1,9
 4,Characters 2,GetBarrCode,0x52bc,jump_table,partial,pop2/terrain.py;pop2/scene_prototype.py,wall-spike type 3 reserved for explicit DoStepFwd query; run startup and ordinary collision keep type 4; native close-start clearances 39/17 verified; other barrier special cases partial,10,0
 4,Characters 2,GetColDetData,0x536a,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,2
@@ -408,7 +408,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 6,Characters 1,IsOppGenPtWithTumbleOn,0x406e,jump_table,partial,pop2/opponent_generation.py;pop2/combat.py,current room packed-life 0x80 flag,1,1
 6,Characters 1,PresetOppBanks,0x40f6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 6,Characters 1,CutOpponent,0x424c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,9
-6,Characters 1,CutAllOpponents,0x4382,jump_table,partial,pop2/combat.py,"horizontal Prince cuts carry ordinary running/jump poses and movement flags; stationary, vertical and special-actor branches missing",2,15
+6,Characters 1,CutAllOpponents,0x4382,jump_table,partial,pop2/combat.py,horizontal and vertical Prince cuts carry ordinary running/jump poses and movement flags; see docs/research/temple-rock-collision.md; special-actor branches missing,2,15
 6,Characters 1,IsCharInKidRoom,0x463c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,1
 6,Characters 1,Cut,0x472a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,4
 6,Characters 1,CutChar,0x4918,decoded,partial,pop2/terrain.py;tools/probe_ruins_gate_void.py,"horizontal cuts, downward priority and native room-15 right-cut veto; unlinked body threshold and native-room0 continuation with Y-360 (46 native Cut rebases); rooftop/chasm branches separate, full FrameAdv excluded",1,10

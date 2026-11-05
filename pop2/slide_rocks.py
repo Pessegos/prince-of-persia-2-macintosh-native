@@ -23,6 +23,8 @@ WIDTHS = (87, 0, 5, 91, 45, 33, 82, 82, 36, 36, 69, 57, 17, 0)
 # The three decoration strips (types 8, 8, 9): offsets from the rock.
 DECORATIONS = ((8, 79, -68), (8, 76, -37), (9, 66, -57))
 MOVING_CUE, STOP_CUE, WALL_CUE = 192, 192, 18
+# 10:1d5c moves a travelling rock two pixels each frame.
+ROCK_STEP = 2
 
 
 def signed_word(value):
@@ -233,28 +235,22 @@ class SlideRocks:
                                  for kind, x, y, phase, (top, left, bottom, right) in drawn[start:]]
         return drawn
 
+    def record(self, room, row):
+        """GetSlideRockOnRoomRow 10:1a9e: the first live rock there."""
+        return next((mob for mob in self.bank if mob[5] == 6 and mob[3] != -1
+                     and mob[2] == room and mob[6] == row), None)
+
     def edge(self, room, row):
         """GetSlideRockX 5:21f6/10:20fe: the first live rock's face in the
         room and row (native X), or 0."""
-        for mob in self.bank:
-            if mob[5] == 6 and mob[3] != -1 and mob[2] == room and mob[6] == row:
-                return signed_word(mob[0] + 279)
-        return 0
+        record = self.record(room, row)
+        return signed_word(record[0] + 279) if record is not None else 0
 
-    def barrier_edge(self, level, room, row, x, facing, width):
-        """GetSlideRockX 5:21f6 -> 10:20fe/180e as Collide 4:589e asks it:
-        the first live rock's right edge (X + 279) in native ``room`` and
-        row; a ``x`` left of it gets the rock's left edge, raised to the
-        boundary of a wall or gate cell there (raw LEVL kind). ``facing`` is
-        the port's (1 right); facing right (native 0), that boundary adds
-        ``width``."""
-        record = next((mob for mob in self.bank if mob[5] == 6 and mob[3] != -1
-                       and mob[2] == room and mob[6] == row), None)
-        if record is None:
-            return 0
-        edge = signed_word(record[0] + 279)
-        if not edge or x >= edge:
-            return edge
+    def left_face(self, level, record, facing, width):
+        """GetSlideRockBarrDist 10:180e, side -1: the rock's left edge,
+        raised to the boundary of a wall or gate cell there (raw LEVL kind).
+        ``facing`` is the port's (1 right); facing right (native 0), that
+        boundary adds ``width``."""
         edge = signed_word(record[0] + 223 - 5)
         before_divide = signed_word(signed_word(edge - 51) - 22)
         quotient = trunc_div(signed_word(before_divide - 4))
@@ -268,3 +264,38 @@ class SlideRocks:
                     boundary = signed_word(boundary + width)
                 edge = max(edge, boundary)
         return edge
+
+    def barrier_edge(self, level, room, row, x, facing, width):
+        """GetSlideRockX 5:21f6 -> 10:20fe/180e as Collide 4:589e asks it:
+        the first live rock's right edge (X + 279) in native ``room`` and
+        row; a ``x`` left of it gets the rock's left edge (10:180e)."""
+        record = self.record(room, row)
+        if record is None:
+            return 0
+        edge = signed_word(record[0] + 279)
+        if not edge or x >= edge:
+            return edge
+        return self.left_face(level, record, facing, width)
+
+    def contact(self, level, room, row, body, old_body, facing, width):
+        """A rock's contact for CheckBarr 4:4e34 and CheckCollide1 4:54da.
+
+        GetSlideRockDetData 10:190c ORs the rock's faces into the sides of
+        the collision banks, so a contact is a body edge newly past a face
+        since last frame; a travelling rock hands its old column's bits on,
+        and last frame's faces lie ``ROCK_STEP`` to the right. ``body`` and
+        ``old_body`` are native (left, exclusive right) edges. Returns
+        (side, native face, native edge): side -1 is the left face, 0 the
+        right one. None without a contact."""
+        record = self.record(room, row)
+        if record is None:
+            return None
+        moved = 0 if record[4] in (0, 100) else ROCK_STEP
+        left_face, right_face = signed_word(record[0] + 218), signed_word(record[0] + 279)
+        left, right = body
+        old_left, old_right = old_body
+        if left_face < right and left_face + moved >= old_right:
+            return -1, left_face, self.left_face(level, record, facing, width)
+        if right_face > left and right_face + moved <= old_left:
+            return 0, right_face, right_face
+        return None
