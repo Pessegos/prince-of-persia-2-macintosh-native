@@ -19,7 +19,7 @@ DIRECTIONS = {'left': (-1, 0), 'right': (1, 0), 'up': (0, -1), 'down': (0, 1)}
 # Level six: native rooms 28 and 14 are never visited (the cliff's left cut
 # lands in room 3, S07_373E) and room 10 has no tiles at all; the cliff is
 # drawn beside room 1 instead.
-HIDDEN_ROOMS = {6: (27, 13, 9, 23, 25)}
+HIDDEN_ROOMS = {6: (27, 13, 9, 23, 25), 8: (26, 14, 6), 9: (22, 21)}
 DETACHED_STARTS = {6: (0, (1, 0))}
 
 
@@ -32,7 +32,7 @@ def room_positions(terrain):
         x, y = positions[anchor]
         positions[terrain.start_room] = x + dx, y + dy
         return positions
-    return _linked_positions(terrain, terrain.start_room)
+    return _linked_positions(terrain, terrain.start_room, HIDDEN_ROOMS.get(number, ()))
 
 
 def _linked_positions(terrain, origin, hidden=()):

@@ -69,3 +69,18 @@ class RuinsBugReportTests(unittest.TestCase):
         gate = scene.level_map.tile(dest_room - 1, dest_cell % 10, dest_cell // 10)
         self.assertEqual(gate.foreground & 255, 255)
         self.assertEqual(caverns.plates.timer(scene.level_map, index), 31)
+
+    def test_requested_empty_rooms_are_hidden_only_on_the_development_map(self):
+        from pop2.development_map import _linked_positions, room_positions
+
+        scene = self.scene
+        for number, hidden in ((8, (27, 15, 7)), (9, (23, 22))):
+            scene.load_level(number)
+            positions = room_positions(scene.level_map)
+            original = _linked_positions(scene.level_map, scene.game.level.start_room)
+            self.assertEqual(set(original) - set(positions), {room - 1 for room in hidden})
+            for room in hidden:
+                self.assertNotIn(room - 1, positions)
+            self.assertIn(scene.game.level.start_room, positions)
+            # Layout and native links remain available to gameplay.
+            self.assertEqual(len(scene.game.level.data), len(scene.resources.level(number).data))
