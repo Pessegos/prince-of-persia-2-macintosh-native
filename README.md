@@ -37,8 +37,8 @@ I'm trying to stay as close to the original as possible, while still making some
 
 ## Gameplay Status
 
-Levels 1–9 are playable from start to finish, although I'm still finding and fixing differences here and there.
-The horse cutscene that leads to the temple (9-10) is a bit broken.
+Levels 1–9 are playable from start to finish, including the horse cutscene leading into Level 10.
+
 Levels 10–13 are now in the game too. They can already be explored, with some of their mechanics working, but there's still quite a bit left to do before they're fully playable.
 
 <br/>
@@ -185,6 +185,7 @@ I smoothed out the gate opening sound for every type. It now plays continuously 
 - Clouds keep moving during cutscene fades, like the DOS version does.
 - The level 1 screen 7-8 drop landing animation is no longer interrupted, matching the DOS version.
 - Really small but the dock guards stay in standby once the Prince catches the boat, instead of switching back and forth into combat mode. More cinematic.
+- The transition from the horse cutscene into the temple now has a fade-in, with the cutscene music flowing smoothly into the temple music. In the original, the music just cuts abruptly from one track to the other.
 
 <br/>
 
