@@ -28,7 +28,7 @@ I'm trying to stay as close to the original as possible, while still making some
   - [Stone Gates](#stone-gates)
   - [Gate Sounds](#gate-sounds)
 - [Other Quality of Life Improvements](#other-quality-of-life-improvements)
-- [Run](#run)
+- [Download & Play](#download--play)
 - [Controls](#controls)
 - [Development](#development)
 - [License](#license)
