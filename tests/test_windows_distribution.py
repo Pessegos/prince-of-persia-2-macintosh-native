@@ -15,10 +15,56 @@ from pop2.paths import PROJECT_DIR
 from pop2.preview_cache import preview_fingerprint
 from tools.build_windows import validate_bundle, validate_version
 from tools.prepare_windows_bootloader import cfg_enabled
-from tools.prepare_windows_runtime import ARCHIVE_SHA256, MANIFEST, SIGNED_FILES, VERSION, signatures, validate_runtime
+from tools.prepare_windows_runtime import (ARCHIVE_SHA256, MANIFEST, SIGNED_FILES, VERSION,
+                                          development_file, signatures, trim_runtime, validate_runtime)
 
 
 class WindowsDistributionTests(unittest.TestCase):
+    def test_runtime_trimming_preserves_runtime_code_signatures_and_notices(self):
+        from tools.prepare_windows_runtime import ROOT
+        import shutil
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            prepared = root / 'prepared'
+            preserved = [*SIGNED_FILES, 'python313.zip',
+                         'Lib/site-packages/unicorn/lib/unicorn.dll',
+                         'Lib/site-packages/numpy/__init__.py',
+                         'Lib/site-packages/numpy/testing/__init__.py',
+                         'Lib/site-packages/pygame/freesansbold.ttf',
+                         'Lib/site-packages/numpy/tests/LICENSE.txt',
+                         'Lib/site-packages/numpy-1.dist-info/METADATA',
+                         'Lib/site-packages/numpy-1.dist-info/licenses/LICENSE.txt']
+            omitted = ['Lib/site-packages/unicorn/lib/unicorn.lib',
+                       'Lib/site-packages/numpy/tests/test_example.py',
+                       'Lib/site-packages/pygame/examples/sample.py',
+                       'Lib/site-packages/pygame/docs/index.html',
+                       'Lib/site-packages/numpy/include/example.h']
+            for name in preserved + omitted:
+                path = prepared / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(name.encode())
+            files = {name: hashlib.sha256((prepared / name).read_bytes()).hexdigest()
+                     for name in preserved + omitted}
+            info = dict(version=VERSION, archive_sha256=ARCHIVE_SHA256,
+                        dependencies=dict(line.strip().lower().split('==')
+                                          for line in (ROOT / 'requirements-import.txt').read_text().splitlines()
+                                          if line.strip() and not line.startswith('#')), files=files)
+            (prepared / MANIFEST).write_text(json.dumps(info))
+            packaged = root / 'packaged'
+            shutil.copytree(prepared, packaged)
+            result = trim_runtime(packaged)
+            self.assertEqual(set(result['files']), set(preserved))
+            self.assertEqual(result['distribution']['omitted_files'], len(omitted))
+            for name in preserved:
+                self.assertEqual((packaged / name).read_bytes(), (prepared / name).read_bytes())
+            for name in omitted:
+                self.assertTrue((prepared / name).is_file())
+                self.assertFalse((packaged / name).exists())
+            self.assertEqual(validate_runtime(prepared)['files'], files)
+            self.assertTrue(development_file('unicorn/lib/unicorn.lib'))
+            self.assertFalse(development_file('unicorn/lib/unicorn.dll'))
+
     def test_cfg_check_detects_the_launcher_mitigation(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'example.exe'

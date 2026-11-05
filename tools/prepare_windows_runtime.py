@@ -26,6 +26,39 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def development_file(relative):
+    """Wheel files used to develop/test dependencies, rather than run the app."""
+    relative = Path(relative)
+    parts = tuple(part.lower() for part in relative.parts)
+    # Keep package metadata and notices, even inside an omitted documentation
+    # directory. This does not trim any of the official interpreter's files.
+    if (any(part.endswith('.dist-info') for part in parts)
+            or any(word in relative.name.lower() for word in ('license', 'copying', 'notice', 'copyright'))):
+        return False
+    return (relative.suffix.lower() in ('.lib', '.a')
+            or any(part in ('tests', 'test', 'examples', 'docs', 'include', '__pycache__') for part in parts))
+
+
+def trim_runtime(directory):
+    """Trim only a private packaging copy; preserve signed bytes and notices."""
+    directory = Path(directory).resolve()
+    info = validate_runtime(directory)
+    site = (directory / 'Lib/site-packages').resolve()
+    removed = {}
+    for path in site.rglob('*'):
+        if not path.is_file() or not development_file(path.relative_to(site)):
+            continue
+        if not path.resolve().is_relative_to(site):
+            raise ValueError('Runtime development file escapes the packaging copy')
+        removed[path.relative_to(directory).as_posix()] = path.stat().st_size
+        path.unlink()
+    info['distribution'] = dict(policy='runtime-only-v1', omitted_files=len(removed),
+                                omitted_bytes=sum(removed.values()))
+    info['files'] = {name: checksum for name, checksum in info['files'].items() if name not in removed}
+    (directory / MANIFEST).write_text(json.dumps(info, indent=2) + '\n', encoding='utf-8')
+    return validate_runtime(directory)
+
+
 def signatures(directory):
     """Validate the existing Authenticode chains, without modifying binaries."""
     script = r'''

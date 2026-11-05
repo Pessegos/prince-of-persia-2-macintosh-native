@@ -14,7 +14,7 @@ import sys
 import tempfile
 from zipfile import ZipFile, ZIP_DEFLATED
 from tools.prepare_windows_bootloader import cfg_enabled
-from tools.prepare_windows_runtime import validate_runtime, signatures
+from tools.prepare_windows_runtime import validate_runtime, signatures, trim_runtime
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -128,6 +128,13 @@ def build(version, output):
     # Unique work directory: a repeated build never overwrites an installation
     # in which someone might already have imported assets or made saves.
     work = Path(tempfile.mkdtemp(prefix='build-', dir=output))
+    # Preserve the prepared interpreter/wheel cache for subsequent builds.
+    # Static linker libraries, dependency tests/examples and headers are not
+    # needed on a player's PC. Signed executables/DLLs and notices stay intact.
+    packaged_runtime = work / 'import-runtime'
+    shutil.copytree(runtime, packaged_runtime)
+    runtime_info = trim_runtime(packaged_runtime)
+    signatures(packaged_runtime)
     info = build_info(version)
     info['import_runtime'] = {key: value for key, value in runtime_info.items() if key != 'files'}
     info_file = work / 'build-info.json'
@@ -156,7 +163,7 @@ COLLECT(gui, a.binaries, a.datas, upx=False, name='PoP2Mac')
     shutil.copy2(ROOT / 'distribution/README.txt', bundle / 'README.txt')
     shutil.copy2(info_file, bundle / 'BUILD-INFO.json')
     copy_notices(bundle)
-    shutil.copytree(runtime, bundle / '_internal/python')
+    shutil.copytree(packaged_runtime, bundle / '_internal/python')
     copy_worker_code(bundle, info_file)
     validate_runtime(bundle / '_internal/python')
     if not cfg_enabled(bundle / 'PoP2Mac.exe'):

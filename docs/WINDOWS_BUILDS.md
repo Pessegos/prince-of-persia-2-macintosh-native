@@ -37,6 +37,13 @@ Software Foundation Authenticode signatures on both interpreters and their
 Python DLLs. The runtime manifest records every file checksum; packaging checks
 them again. The executable names and signed bytes are preserved.
 
+Packaging trims a private copy of the wheel dependencies: static linker
+libraries, tests, examples, documentation and C headers are omitted. Package
+metadata and license notices are retained, as are all files from the official
+interpreter. The prepared runtime cache is unchanged. The distributed manifest
+records the trimming policy/count and hashes of every retained file; both
+signature checks and the full packaged import must still pass.
+
 The package contains the windowed `PoP2Mac.exe`, `_internal`, instructions and
 license notices. There are no custom `PoP2Mac-tools.exe`/`PoP2Mac-worker.exe`
 executables. The game starts `_internal/python/python.exe` without a console;
