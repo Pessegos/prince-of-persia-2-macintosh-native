@@ -2432,12 +2432,12 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         scene = self.game.story.select_scene(level, level) if level >= 4 else None
         tree_due = scene is not None and 20 <= scene <= 28
         # Reset the world without flashing its entry frame before the NIS.
-        self.restart_level_now(redraw=not tree_due)
+        self.restart_level_now(redraw=not tree_due, restore_theme=not tree_due)
         if tree_due:
             self.start_tree(scene - 19)
             self.render()
 
-    def restart_level_now(self, *, redraw=True):
+    def restart_level_now(self, *, redraw=True, restore_theme=True):
         # FirstFrame 2:601e-6024 removes a time message at every level start;
         # the Prince initializer 2:5e9c also clears the float timer.
         self.time_message, self.time_message_frames = None, 0
@@ -2471,7 +2471,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.game.arm_prince()
             self.loaded_sword_type = self.game.sword_type
             point = snapshot.checkpoint
-            if (self.game.level.number == 8 and point.room == 8
+            if (restore_theme and self.game.level.number == 8 and point.room == 8
                     and self.game.caverns.throne_sword_collected):
                 # Restore the throne's post-vision theme after Alt+R,
                 # before jump_to_room resets and flushes the audio queues.
@@ -2917,6 +2917,13 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.clear_keys(None)
         self.pause_resume_keys.update(held)
         self.next_animation_at = time.perf_counter()
+        if (self.game.level.number == 8 and self.room_id == 8
+                and self.checkpoint is not None and self.checkpoint.checkpoint.room == 8
+                and self.game.caverns.throne_sword_collected):
+            # A retry may play a tree scene first; restore its room theme
+            # after that scene's audio reset, not briefly before the NIS.
+            self.combat.ruins.songs.append(182)
+            self.advance_audio()
         self.render()
 
     def show_remaining_time(self):

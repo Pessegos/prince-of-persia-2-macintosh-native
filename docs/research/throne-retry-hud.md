@@ -54,3 +54,9 @@ leaf and ordinary exploration-room transitions remain unchanged. The audio
 regression lets the first post-vision theme finish into common ambience,
 then checks that Alt+R starts182 again at the throne checkpoint. Room12
 fallbacks continue using their ordinary ambience.
+
+When RestartGame owes an intervening tree scene, defer the throne theme until
+that scene returns (including skip). The generic tree return resets its audio,
+so queuing the theme only before the scene would lose it again. A real tree
+player regression covers that return path; picture deadlines and story-scene
+selection stay unchanged.
