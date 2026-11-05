@@ -313,12 +313,14 @@ class HealthArtwork:
 
 
 class HitArtwork:
-    def __init__(self, kid, palette, base, player_frames, guard_frames):
+    def __init__(self, kid, palette, base, player_frames, guard_frames, *, serpent_art=None):
         # CODE:3 0x0bbc uses Kid shape index 218, not a rooftop water splash.
         self.sprite = decode_shap(kid["SHAP"][base + 218]["data"], palette)
         self.mirrored = ImageOps.mirror(self.sprite)
         self.player_frames = player_frames
         self.guard_frames = guard_frames
+        self.serpent_sprite = (decode_shap(serpent_art.shapes[serpent_art.base + 127]['data'],
+                                           serpent_art.palettes[1]) if serpent_art is not None else None)
 
     def draw(self, image, state, floor_y):
         from pop2.combat import actor_frame_index
@@ -335,6 +337,11 @@ class HitArtwork:
         # 0x0ca4/0x0cb6 offset from the body's facing-relative draw anchor.
         dx, dy = (14, -30) if is_player else (11, -21)
         sprite = self.mirrored if state.facing else self.sprite
+        if state.actor_type == 11 and self.serpent_sprite is not None:
+            # SetupHit3:0bec-0c0e: Head library, shape127, Y+7 and
+            # AddCharX(-12), rather than the ordinary Kid burst218.
+            dx, dy = -12, 7
+            sprite = ImageOps.mirror(self.serpent_sprite) if state.facing else self.serpent_sprite
         anchor = record.offset_x + dx
         x = (state.target_x + anchor - sprite.width if state.facing
              else state.target_x - anchor)

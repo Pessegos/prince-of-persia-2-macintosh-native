@@ -356,7 +356,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             guard_art.select_room(game.combat.guards)
             health_art = HealthArtwork(self.kid, palette, self.first_shape_id)
             hit_art = HitArtwork(self.kid, palette, self.first_shape_id,
-                                 self.frames, _CurrentFrames(guard_art))
+                                 self.frames, _CurrentFrames(guard_art),
+                                 serpent_art=guard_art.default if artwork == 'Head.rsrc' else None)
             game.combat.guard_art = guard_art
         if game.caverns is not None and initialize_world:
             game.caverns.configure_level_entry(renderer.cavern_program, game)

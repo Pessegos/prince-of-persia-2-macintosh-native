@@ -3,6 +3,8 @@
 import unittest
 from unittest.mock import patch
 
+from PIL import Image, ImageOps
+
 from pop2.paths import ASSET_DIR
 
 
@@ -113,3 +115,31 @@ class RuinsBugReportTests(unittest.TestCase):
         scene.jump_to_room(7, 2, 200, 0, reset_guards=False)
         scene.jump_to_room(8, 2, 267, 1, reset_guards=False)
         self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 1)
+
+    def test_serpent_hit_uses_head_shape_127_at_native_offsets_in_both_facings(self):
+        from pop2.combat import actor_frame_index
+        from pop2.render_opening import character_sprite_top, decode_shap
+
+        scene = self.scene
+        scene.load_level(7)
+        scene.jump_to_room(19, 2, 200, 1)
+        serpent = scene.combat.visible_ruins()[0]
+        scene.combat.ruins.jump(serpent, 173)
+        serpent.runtime.next_frame()
+        state = serpent.state
+        state.animation_state = 10
+        art = scene.guard_art.default
+        burst = decode_shap(art.shapes[art.base + 127]['data'], art.palettes[1])
+        for facing in (0, 1):
+            state.facing = facing
+            record = art.frames[actor_frame_index(state)]
+            expected = Image.new('RGBA', (510, 365))
+            sprite = ImageOps.mirror(burst) if facing else burst
+            dx = record.offset_x - 12
+            x = state.target_x + dx - sprite.width if facing else state.target_x - dx
+            y = character_sprite_top(346 + state.current_y + record.offset_y + 7, sprite.height)
+            expected.paste(sprite, (x, y), sprite)
+            actual = Image.new('RGBA', expected.size)
+            scene.hit_art.draw(actual, state, 346)
+            self.assertIsNotNone(actual.getbbox())
+            self.assertEqual(actual.tobytes(), expected.tobytes())
