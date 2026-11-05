@@ -17,7 +17,7 @@ global Python installation to work around it.
 ```powershell
 py -3.12 -m venv rendered/build-venv
 rendered/build-venv/Scripts/python.exe -m pip install -r requirements-build.txt
-rendered/build-venv/Scripts/python.exe -m tools.prepare_windows_bootloader
+rendered/build-venv/Scripts/python.exe -m tools.prepare_windows_runtime
 rendered/build-venv/Scripts/python.exe -m tools.build_windows --version dev
 ```
 
@@ -28,22 +28,24 @@ installation. Build dependencies are pinned separately from source development.
 packager and runtime dependency versions. A public release should use a clean,
 checked commit; local dirty builds are identified as such.
 
-Preparing the import bootloader needs Visual Studio C++ build tools (already
-available on the Windows Actions runner), or an explicit MinGW compiler bin
-directory supplied via `--compiler-directory`. This compiler is needed on the
-build machine only. The preparation downloads the pinned PyInstaller source,
-verifies its SHA-256, and builds with `--no-cfg` as required by Unicorn's
-documented callback/longjmp incompatibility with Control Flow Guard. It does
-not change Windows security settings or the installed PyInstaller bootloaders.
-Only the import helper and its pool workers use custom bootloaders; the game keeps
-the stock CFG-enabled one. Build and smoke checks verify that distinction.
+The game uses Python 3.12 and PyInstaller's stock CFG-enabled, one-folder
+launcher. The import/cache helpers use the unmodified official Python 3.13.17
+embeddable distribution from python.org, with pinned CPython 3.13 wheels in
+`requirements-import.txt`. No compiler or custom import bootloader is needed.
+Preparation checks the official archive's pinned SHA-256 and the valid Python
+Software Foundation Authenticode signatures on both interpreters and their
+Python DLLs. The runtime manifest records every file checksum; packaging checks
+them again. The executable names and signed bytes are preserved.
 
-The package contains the windowed `PoP2Mac.exe`, the background console helper
-`PoP2Mac-tools.exe`, the windowed pool entry `PoP2Mac-worker.exe`, `_internal`,
-instructions and license notices. The game launches the helper without a console;
-the pool entry also avoids console flashes when new workers start.
-The importer and cache warmup use explicit helper modes; multiprocessing spawn
-is handled before app argument parsing. Original game files, imported audio,
+The package contains the windowed `PoP2Mac.exe`, `_internal`, instructions and
+license notices. There are no custom `PoP2Mac-tools.exe`/`PoP2Mac-worker.exe`
+executables. The game starts `_internal/python/python.exe` without a console;
+pool children use the official signed `pythonw.exe`. `_internal/worker` contains
+the ordinary application modules and a fixed portable-root marker. Isolated
+mode and the runtime's `_pth` exclude the user's Python installation and
+environment; pip is not shipped and no runtime download is needed to play.
+The importer and cache warmup use explicit helper modes and native Windows
+multiprocessing. Original game files, imported audio,
 disk images, saves and user settings are excluded and the output is audited.
 
 Bundled support art and the MIDI renderer live under `_internal`. Imported
@@ -58,19 +60,35 @@ rendered/build-venv/Scripts/python.exe -m tools.smoke_windows rendered/windows/P
 ```
 
 This extracts to a temporary folder containing spaces, removes Python and
-dependency directories from PATH and checks both executables, native libraries,
+dependency directories from PATH and checks the launcher, signed runtime, native libraries,
 hidden Tk startup, bundled support art, multiprocessing and a native M68k
-callback/stop. The native check reproduces the CFG failure without original
-game files. No imported game data is needed.
+callback/stop. No imported game data is needed for those checks.
 It does not prove compatibility with every Windows machine; test the release
 on another PC or clean Windows VM as well.
 
 For a local original-image integration check, add `--image PATH_TO_IMAGE.hfs`.
 That runs the actual hidden first-run UI through cancellation and full import,
 validates the resulting installation, renders the intro and levels 1-13, and
-prepares map caches through the frozen helper. All generated files and user
+prepares map caches through the signed helper. All generated files and user
 data stay inside the disposable test directory. Never upload the disk image
 or the imported installation as build artifacts.
+
+`--reference-assets PATH` optionally compares the imported JSON exports with
+a local source import. `--defender` records active real-time protection before
+and after the test, queries applicable path exclusions, requests a custom scan
+and checks for detections belonging to this disposable bundle. An exclusion
+query denied to a non-administrator is explicitly reported as unavailable,
+never treated as verified. The standalone `tools.check_windows_defender` also
+offers `--require-exclusions` for an elevated verification. These checks do not
+alter Defender settings or add exclusions. Keep the report's limitations when
+describing results; a clean scan on one PC does not guarantee every Defender
+version or cloud heuristic will accept a future build.
+
+This packaging replaces the custom import bootloaders used in the first two
+alphas after the [first-run Defender report](https://github.com/Pessegos/prince-of-persia-2-macintosh-native/issues/4).
+The detection was reported during asset generation rather than ordinary play.
+The signed runtime removes that custom-bootloader execution path; it is a
+mitigation with functional/scan evidence, not a universal antivirus guarantee.
 
 Do not enable `faulthandler` in the packaged entry. Unicorn 2.1.4 uses Windows
 vectored exception handling for demand paging; Python's fault handler can

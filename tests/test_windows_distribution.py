@@ -1,6 +1,7 @@
 """Portable paths, child routing and exclusion of imported/private files."""
 
 import json
+import hashlib
 from pathlib import Path
 import subprocess
 import struct
@@ -14,10 +15,11 @@ from pop2.paths import PROJECT_DIR
 from pop2.preview_cache import preview_fingerprint
 from tools.build_windows import validate_bundle, validate_version
 from tools.prepare_windows_bootloader import cfg_enabled
+from tools.prepare_windows_runtime import ARCHIVE_SHA256, MANIFEST, SIGNED_FILES, VERSION, signatures, validate_runtime
 
 
 class WindowsDistributionTests(unittest.TestCase):
-    def test_cfg_check_distinguishes_game_and_import_bootloaders(self):
+    def test_cfg_check_detects_the_launcher_mitigation(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'example.exe'
             data = bytearray(512)
@@ -30,25 +32,77 @@ class WindowsDistributionTests(unittest.TestCase):
                 path.write_bytes(data)
                 self.assertEqual(cfg_enabled(path), expected)
 
+    def test_runtime_manifest_rejects_modified_extra_or_stale_dependencies(self):
+        from tools.prepare_windows_runtime import ROOT
+
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            for name in SIGNED_FILES:
+                (runtime / name).write_bytes(b'signed file fixture')
+            info = dict(version=VERSION, archive_sha256=ARCHIVE_SHA256,
+                        dependencies=dict(line.strip().lower().split('==')
+                                          for line in (ROOT / 'requirements-import.txt').read_text().splitlines()
+                                          if line.strip() and not line.startswith('#')),
+                        files={name: hashlib.sha256((runtime / name).read_bytes()).hexdigest()
+                               for name in SIGNED_FILES})
+            manifest = runtime / MANIFEST
+            manifest.write_text(json.dumps(info))
+            validate_runtime(runtime)
+            changed = runtime / SIGNED_FILES[0]
+            changed.write_bytes(b'tampered')
+            with self.assertRaisesRegex(ValueError, 'checksum mismatch'):
+                validate_runtime(runtime)
+            changed.write_bytes(b'signed file fixture')
+            extra = runtime / 'unexpected.exe'
+            extra.touch()
+            with self.assertRaisesRegex(ValueError, 'file list'):
+                validate_runtime(runtime)
+            extra.unlink()
+            info['dependencies']['unicorn'] = '0.0'
+            manifest.write_text(json.dumps(info))
+            with self.assertRaisesRegex(ValueError, 'dependencies'):
+                validate_runtime(runtime)
+
+    def test_authenticode_requires_all_four_valid_psf_signatures(self):
+        records = [dict(file=name, status='Valid', signer='CN=Python Software Foundation, '
+                        'O=Python Software Foundation, C=US') for name in SIGNED_FILES]
+        with patch('tools.prepare_windows_runtime.subprocess.run') as run:
+            run.return_value.stdout = json.dumps(records)
+            self.assertEqual(signatures('.'), records)
+            for change in ({'status': 'HashMismatch'}, {'signer': 'O=Other Company,'}, {'signer': None}):
+                with self.subTest(change=change):
+                    altered = [dict(record) for record in records]
+                    altered[0].update(change)
+                    run.return_value.stdout = json.dumps(altered)
+                    with self.assertRaisesRegex(ValueError, 'Authenticode'):
+                        signatures('.')
+            run.return_value.stdout = json.dumps(records[:-1])
+            with self.assertRaisesRegex(ValueError, 'Authenticode'):
+                signatures('.')
+
     def test_source_workers_keep_the_real_python_module_entry(self):
         self.assertEqual(worker_command('tools.extract_assets', 'disk.hfs', '--progress-json'),
                          [sys.executable, '-u', '-m', 'tools.extract_assets', 'disk.hfs', '--progress-json'])
 
-    def test_frozen_helpers_reset_the_bootloader_environment_but_keep_user_settings(self):
+    def test_signed_helpers_drop_bootloader_protocol_but_keep_user_settings(self):
         with patch.dict('os.environ', {'POP2_USER_DATA': 'test settings'}, clear=True):
             self.assertEqual(worker_environment(), {'POP2_USER_DATA': 'test settings'})
             with patch.object(sys, 'frozen', True, create=True):
-                self.assertEqual(worker_environment(), {'POP2_USER_DATA': 'test settings',
-                                                       'PYINSTALLER_RESET_ENVIRONMENT': '1'})
+                with patch.dict('os.environ', {'_PYI_ARCHIVE_FILE': 'old.exe',
+                                              'PYINSTALLER_RESET_ENVIRONMENT': '1'}):
+                    self.assertEqual(worker_environment(), {'POP2_USER_DATA': 'test settings'})
 
-    def test_frozen_workers_use_the_bundled_helper_and_named_entry(self):
+    def test_frozen_workers_use_the_official_interpreter_and_named_entry(self):
         executable = str(PROJECT_DIR / 'example portable/PoP2Mac.exe')
-        with patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'executable', executable):
-            helper = str(Path(executable).with_name('PoP2Mac-tools.exe'))
+        with patch.object(sys, 'frozen', True, create=True), \
+                patch('pop2.child_process.PROJECT_DIR', Path(executable).parent):
+            internal = Path(executable).parent / '_internal'
+            helper = [str(internal / 'python/python.exe'), '-I', '-B', '-u',
+                      str(internal / 'worker/worker_entry.py')]
             self.assertEqual(worker_command('tools.extract_assets', 'disk.hfs'),
-                             [helper, '--import-assets', 'disk.hfs'])
+                             [*helper, '--import-assets', 'disk.hfs'])
             self.assertEqual(worker_command('pop2.development_map', '--warm'),
-                             [helper, '--warm-map-cache', '--warm'])
+                             [*helper, '--warm-map-cache', '--warm'])
             with self.assertRaises(KeyError):
                 worker_command('an.unapproved.module')
 
@@ -76,8 +130,12 @@ class WindowsDistributionTests(unittest.TestCase):
     def test_bundle_audit_rejects_imported_resources_saves_and_user_directories(self):
         with tempfile.TemporaryDirectory() as directory:
             bundle = Path(directory)
-            for name in ('PoP2Mac.exe', 'PoP2Mac-tools.exe', 'PoP2Mac-worker.exe', 'LICENSE', 'BUILD-INFO.json', 'README.txt'):
-                (bundle / name).touch()
+            for name in ('PoP2Mac.exe', '_internal/python/python.exe', '_internal/python/pythonw.exe',
+                         '_internal/worker/worker_entry.py', '_internal/worker/portable-worker.json',
+                         'LICENSE', 'BUILD-INFO.json', 'README.txt'):
+                path = bundle / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
             validate_bundle(bundle)
             for name in ('Prince.rsrc', 'disk.HFS', 'test.pop2save', '_internal/assets/data.json',
                          'rendered/prefs.json', '_internal/saves/state.json'):
@@ -88,6 +146,39 @@ class WindowsDistributionTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, 'Private/imported'):
                         validate_bundle(bundle)
                     path.unlink()
+            (bundle / 'PoP2Mac-tools.exe').touch()
+            with self.assertRaisesRegex(ValueError, 'Obsolete custom'):
+                validate_bundle(bundle)
+
+    def test_signed_worker_paths_point_to_the_portable_root(self):
+        import shutil
+        import pop2.paths
+
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory).resolve()
+            code = bundle / '_internal/worker'
+            (code / 'pop2').mkdir(parents=True)
+            shutil.copy2(pop2.paths.__file__, code / 'pop2/paths.py')
+            (code / 'portable-worker.json').write_text('{"schema":1}')
+            script = (f'import sys; sys.path.insert(0,{str(code)!r}); '
+                      'from pop2.paths import PROJECT_DIR,BUNDLED; '
+                      'import json;print(json.dumps([str(PROJECT_DIR),BUNDLED]))')
+            result = subprocess.run([sys.executable, '-I', '-c', script], cwd=directory,
+                                    capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(result.stdout), [str(bundle), True])
+
+    def test_gui_and_signed_worker_share_the_same_preview_cache_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            codes = [root / name / 'pop2' for name in ('gui', 'worker')]
+            for code in codes:
+                code.mkdir(parents=True)
+                (code.parent / 'build-info.json').write_text('{"commit":"same"}')
+                (code / 'cavern_retouch.json').write_text('{"same":"art"}')
+            (codes[1] / 'renderer.py').write_text('ordinary_source = True')
+            with patch('pop2.preview_cache.BUNDLED', True):
+                self.assertEqual(preview_fingerprint(root / 'assets', codes[0]),
+                                 preview_fingerprint(root / 'assets', codes[1]))
 
     def test_frozen_preview_caches_change_when_the_embedded_build_changes(self):
         with tempfile.TemporaryDirectory() as directory:
