@@ -46,3 +46,26 @@ class RuinsBugReportTests(unittest.TestCase):
             scene.render()
         self.assertEqual(phases[:20], list(range(1, 20)) + [0])
         self.assertNotIn(key, caverns.scythes.active)
+
+    def test_room_seventeen_falling_tile_keeps_ordinary_opener_gate_open(self):
+        from pop2.environments import environment_for
+        from pop2.loose_floors import FallingFloor
+
+        scene = self.scene
+        scene.load_level(8)
+        scene.jump_to_room(16, 2, 430, 0)
+        caverns = scene.game.caverns
+        buttons = [scene.level_map.tile(16, c, r) for r in range(3) for c in range(10)
+                   if scene.level_map.tile(16, c, r).kind == 5]
+        self.assertTrue(buttons)
+        tile = buttons[0]
+        index = tile.foreground & 255
+        dest_room, dest_cell, *_ = caverns.plates.link(scene.level_map, index)
+        caverns.loose.falling.append(FallingFloor(16, tile.column, tile.row,
+                                                  tile.row * 120 + 115, 8, 3))
+        environment_for(scene).frame_start()
+        for _ in range(350):
+            caverns.plates.advance(scene.level_map)
+        gate = scene.level_map.tile(dest_room - 1, dest_cell % 10, dest_cell // 10)
+        self.assertEqual(gate.foreground & 255, 255)
+        self.assertEqual(caverns.plates.timer(scene.level_map, index), 31)
