@@ -143,3 +143,30 @@ the original grille alpha, including real body/attachment layers, and that
 the test reaches overlapping poses235 and134. The previous mask fails at
 pose235, rectangle460/271..466/348. A pose sheet under
 `rendered/grille-sheathe-occlusion/` compares the old and corrected output.
+
+## Armed retreat reaches the linked-room barrier before the camera cut
+
+The next video starts in native room21 facing right, draws the sword and
+repeatedly retreats left. The complete sword bounds delay the leftward
+camera cut: the body reaches the throne gate while the camera is still in21.
+That gate resolves at relative column-2, but the host wall sweep scanned only
+columns-1 through10. It missed the gate until a later room cut, allowing the
+body to reach world X469 with its left edge435, inside the bars.
+
+Include one more linked-room column at either end of the existing bounded
+sweep (-2 through11). Keep the barrier type and collision response unchanged.
+GetBarrCode4:532e-5346 uses the displayed room A5-0x4fc2, unlike
+CheckGateForKid's resolved cell-room exemption described above. Consequently
+the gate seen from21 keeps type1: its rear boundary is local X-30/world480.
+The real retreat now contacts it before the cut and settles at local X10,
+world520 after the ordinary rear bump65, with body left at least local-30.
+Repeated presses cannot push farther inward, and a forward press moves away.
+
+The regression starts at room21/row2/X65/facing right, draws with Ctrl, then
+drives100 ticks of Left presses/releases. Every frame must remain on the
+safe side of the barrier, not merely the final pose; the gate stays closed.
+An asset-free case also checks a wall at relative-2 and11 across real links.
+Both reject the old sweep; the scene first fails at left edge-43 instead of
+at least-30. This is a bounded host collision-coverage correction, with no
+new native full-frame or offscreen-sweep equivalence claim. Original barrier,
+rear-bump, sheathe, camera-cut and approved occlusion policies are retained.
