@@ -1357,7 +1357,8 @@ class RooftopPhysics:
         # DoKidEngarde reserves room before the first SEQS55 pose. CheckBarr
         # compares with the preceding frame's bank, before that displacement;
         # bounds sampled after the reservation can already be beyond a gate.
-        wall_old_bounds = (gate_contact[1] if state.source_sequence_id == 55 and state.action == 207
+        wall_old_bounds = (gate_contact[1] if state.level_kind in (3, 4)
+                           and state.source_sequence_id == 55 and state.action == 207
                            else old_bounds)
         # FrameAdv 2:65f6: an armed opponent in animation state 1 meets
         # barriers only through EnemyCollide 4:62b0, not CheckBarr/Collide.

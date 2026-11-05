@@ -42,7 +42,10 @@ then moves the Prince farther back. CheckBarr4:4e34 uses the preceding
 frame's mask bank, retained by4:5152; a rectangle sampled after the draw
 reservation is already beyond this narrow barrier and loses that crossing.
 For this first pose only, the port's wall sweep now uses the existing previous
-contact rectangle instead of the post-reservation one. If a fresh warp/load
+contact rectangle instead of the post-reservation one in environments3/4,
+where that cache is maintained each frame. Other environments retain their
+ordinary wall-sweep input rather than reusing an old cavern-style rectangle.
+If a fresh warp/load
 has not yet sampled a frame, seed that transient rectangle before reserving
 draw space. That initialization is a host safeguard, with no new saved field.
 

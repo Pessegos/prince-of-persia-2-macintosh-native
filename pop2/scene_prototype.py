@@ -738,7 +738,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                     # DoKidEngarde 6:1f04 refuses: Ctrl stays consumed, no SEQS 55.
                     return False
                 cached = motion.gate_contact_bounds
-                if cached is None or cached[:2] != (motion.room, motion.row):
+                if state.level_kind in (3, 4) and (
+                        cached is None or cached[:2] != (motion.room, motion.row)):
                     # A fresh warp/load may precede the first CheckBarr sample.
                     # Seed its previous rectangle before the draw reservation,
                     # as ordinary frames already do through check_gate.

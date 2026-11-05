@@ -9,6 +9,39 @@ from PIL import Image, ImageChops
 from pop2.paths import ASSET_DIR
 
 
+class DrawContactScopeTests(unittest.TestCase):
+    def test_other_environments_do_not_use_a_stale_cavern_contact_rectangle(self):
+        import struct
+        from types import SimpleNamespace
+
+        from pop2.sequence_runtime import SequenceRuntime, SequenceState
+        from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion
+
+        for environment in (2, 5):
+            with self.subTest(environment=environment):
+                level = bytearray(0x49ca)
+                struct.pack_into('>H', level, 0x2186, environment)
+                struct.pack_into('>H', level, 0x218a, 10 if environment == 2 else 1)
+                struct.pack_into('>H', level, 0x2198, 1)
+                for cell in range(30):
+                    struct.pack_into('>H', level, cell * 2, 1)
+                struct.pack_into('>H', level, 15 * 2, 20)  # A wall far to the right.
+                state = SequenceState(55, action=207, animation_state=1, target_x=200, current_x=200,
+                                      facing=1, actor_type=0, level_kind=environment)
+                runtime = SequenceRuntime({55: (207,), 65: (160,)}, state)
+                motion = TerrainMotion(0, 1)
+                # This cache belongs to the earlier cavern-style gate check;
+                # it is not maintained each frame in the other environments.
+                old = (400, 150, 430, 226)
+                motion.gate_contact_bounds = (0, 1, old, old)
+                events = RooftopPhysics(LevelMap(level)).advance(
+                    motion, runtime, 206, (186, 149, 214, 226), sword_drawn=True,
+                    old_bounds=(192, 149, 220, 226), cut_enabled=False,
+                    frame_record=SimpleNamespace(offset_x=0, aux=0x40))
+                self.assertEqual(state.target_x, 200)
+                self.assertNotIn('wall', [event.kind for event in events])
+
+
 @unittest.skipUnless((ASSET_DIR / 'ruins_level8.json').is_file(), 'Imported ruins required')
 class ThroneGateTests(unittest.TestCase):
     def setUp(self):
