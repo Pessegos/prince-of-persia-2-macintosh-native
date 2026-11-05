@@ -509,6 +509,8 @@ class Caverns(Environment):
             scene.combat.shake_bones(room, row)
         caverns.loose.shake_events.clear()
         ruins = getattr(scene.combat, 'ruins', None)
+        if ruins is not None:
+            ruins.crush_offscreen(scene.combat, blocks)
         actors = (scene.combat.player, *scene.combat.active_guards(),
                   *(scene.combat.visible_ruins() if ruins is not None else ()))
         for block in blocks:

@@ -458,15 +458,19 @@ aligned head sits over the top of the bitten Prince. The object-list order
 
 ## Leaving The Room
 
-Heads stay in their room's records, as in the original: movement admission
-7:0936 lets a head reach columns -1 and 10 (one step past the edge, X beyond
-the visible room), but no ruins routine moves it into a neighbour. The
-original's opponent cuts handle actors that fall below the room (CutOpponent
-6:424c, Y >= 730) and guards that follow the Prince (CutAllOpponents
-6:4476-4626); neither applies to a flying head at the side. An earlier port
-version moved such heads into the neighbouring room; that was not original
-behavior and is removed. The development map draws heads and serpents at
-their records' starting state.
+Movement admission7:0936 lets a head reach columns -1 and10. The head
+controller does not continuously cut it into a neighbouring room. The earlier
+removal of a continuous side-cut remains correct, but the old conclusion that
+the record could never transfer was incomplete.
+
+On entering a screen, CheckSideRoomsForVisibleOpps6:2f4e-308a runs before
+InitOpps. It moves near-edge records from the left/right rooms into the
+entered room, rebases X by510, assigns destination slots and deletes source
+records. This also applies to heads and serpents. Since the November playtest
+fix the host follows that rule: level7's room20 head appears in room28 and
+level9's room13 serpent appears in room12. The capacity safeguard preserves
+an actor when the destination is full. See
+[the new evidence and limitations](ruins-november-playtest.md).
 
 ## Frame Order
 

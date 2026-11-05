@@ -231,6 +231,33 @@ class RuinsCreatures:
     def living(self, room):
         return [actor for actor in self.actors(room) if not actor.ruins.removed]
 
+    def crush_offscreen(self, encounter, blocks):
+        """MakeRubble5:3576 dispatches to records outside the loaded room."""
+        from pop2.loose_floors import floor_hits_ruins_record
+
+        for block in blocks:
+            if block.room is None or block.room == encounter.player.room:
+                continue
+            self._ensure_room(encounter, block.room)
+            for actor in self.actors(block.room):
+                if not floor_hits_ruins_record(block, actor):
+                    continue
+                actor.life = 0
+                if actor.ruins.actor_type in HEAD_TYPES:
+                    # CrushOppInfo6:2a42 removes the head's room record.
+                    actor.ruins.removed = True
+                else:
+                    # 6:2a34: the serpent remains with flattened SEQS169.
+                    self.set_floor(actor)
+                    self.jump(actor, 169)
+                    actor.runtime.next_frame()
+                if self.banked is actor:
+                    self.banked = None
+            self.rooms[block.room][:] = [actor for actor in self.actors(block.room)
+                                        if not actor.ruins.removed]
+            for slot, actor in enumerate(self.actors(block.room)):
+                actor.ruins.slot = slot
+
     # ---- native helpers -----------------------------------------------
 
     @staticmethod

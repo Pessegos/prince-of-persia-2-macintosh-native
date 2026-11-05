@@ -2,10 +2,32 @@
 
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from PIL import Image, ImageOps
 
 from pop2.paths import ASSET_DIR
+
+
+class UnloadedRuinsContactTests(unittest.TestCase):
+    def test_record_column_truncates_negative_x_and_contact_has_a_velocity_window(self):
+        from pop2.loose_floors import FallingFloor, floor_hits_ruins_record
+        from pop2.sequence_runtime import SequenceState
+
+        actor = SimpleNamespace(room=0, row=1, alive=True,
+            state=SequenceState(130, target_x=-106),
+            ruins=SimpleNamespace(kind=6, removed=False))
+        # Native X101 -> (101-229)/51 = -2 with signed long division.
+        block = FallingFloor(0, -2, 1, 170, 8, 3)
+        self.assertTrue(floor_hits_ruins_record(block, actor))
+        block.column = -3
+        self.assertFalse(floor_hits_ruins_record(block, actor))
+        block.column = -2
+        for bottom, expected in ((169, False), (170, True), (201, True), (202, False)):
+            block.y = bottom  # row1 floor226 -57 =169; velocity window32.
+            self.assertEqual(floor_hits_ruins_record(block, actor), expected)
+        block.y, block.velocity = 170, 0
+        self.assertFalse(floor_hits_ruins_record(block, actor))
 
 
 @unittest.skipUnless((ASSET_DIR / 'ruins_level9.json').is_file(), 'Imported ruins required')
@@ -202,3 +224,37 @@ class RuinsBugReportTests(unittest.TestCase):
         self.assertIn(serpent, scene.combat.visible_ruins())
         self.assertEqual(serpent.life, 0)
         self.assertFalse(any(actor.alive for actor in scene.combat.visible_ruins()))
+
+    def test_room_five_loose_floor_kills_room_nine_head_while_prince_stays_upstairs(self):
+        scene = self.scene
+        scene.load_level(7)
+        scene.peaceful = False
+        scene.jump_to_room(4, 2, 330, 0)
+        scene.in_animation_tick = True
+        scene.set_key_state('shift', True)
+        scene.set_key_state('down', True)
+        scene.in_animation_tick = False
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+            # Actual initial descent and climb from the supplied recording.
+            for tick in range(36):
+                if tick == 9:
+                    scene.set_key_state('down', False)
+                elif tick == 16:
+                    scene.set_key_state('up', True)
+                elif tick == 18:
+                    scene.set_key_state('up', False)
+                self.tick()
+            scene.clear_keys(None)
+            self.assertEqual(scene.room_id, 4)
+            head, = scene.combat.ruins.actors(8)
+            self.assertTrue(head.alive)
+            self.assertEqual(int((head.state.target_x - 22) / 51), 3)
+            # Force only the later upper slab collapse; neither head position
+            # nor its controller/timers are supplied or held constant.
+            scene.game.caverns.loose.trigger(scene.level_map.tile(4, 3, 2), force=True)
+            self.tick(25)
+        self.assertEqual(scene.room_id, 4)
+        self.assertTrue(head.ruins.removed)
+        self.assertEqual(head.life, 0)
+        scene.jump_to_room(8, 0, 150, 0, reset_guards=False)
+        self.assertNotIn(head, scene.combat.visible_ruins())

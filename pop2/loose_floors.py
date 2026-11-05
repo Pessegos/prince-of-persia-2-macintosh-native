@@ -235,6 +235,22 @@ class LooseFloors:
         return tuple(sounds), tuple(advanced)
 
 
+def floor_hits_ruins_record(block, actor):
+    """ContactOppInfo5:377e-3812 for an unloaded set-5 opponent record.
+
+    This uses the saved X/row, not a live Head FRAM supporting foot. Heads
+    use floor-57 here; the loaded-actor path instead uses head Y-38.
+    """
+    threshold = floor_y(actor.row) - (0 if actor.ruins.kind == 8 else 57)
+    # The record path uses signed long division19:4bb0 of native X-229,
+    # not GetCharCol5:48b0 (which differs for negative/offscreen X).
+    dividend = actor.state.target_x - 22
+    column = abs(dividend) // 51 * (-1 if dividend < 0 else 1)
+    return (actor.alive and not actor.ruins.removed and block.room == actor.room
+            and 0 < block.y - threshold <= block.velocity * 4
+            and block.column == column)
+
+
 def floor_hits_actor(block, motion, state, record, alive=True):
     # 5:3642 tests the native head height, physical row and supporting column.
     if not alive or block.room != motion.room or block.row != motion.row:

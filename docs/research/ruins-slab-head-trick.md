@@ -8,6 +8,15 @@ Both omissions prevented them from reaching the contact/crush path.
 
 ## Contact and crush
 
+The November level7 room5->9 report exposed a separate, previously omitted
+path: MakeRubble5:3576 tests unloaded opponent records as well as loaded
+actors. ContactOppInfo5:377e-3812 uses saved X/row and a velocity-bounded
+crossing; CrushOppInfo6:29fa removes offscreen head records, or selects169 for
+serpents. Tiles can therefore kill the head downstairs while the Prince is
+still upstairs. This is now implemented and independently probed; it does
+not change head flight speeds. See
+[the November playtest](ruins-november-playtest.md) for exact inputs/exclusions.
+
 The frame-start debris pass now includes the actual room's ruins actors and
 reads their Head FRAM records, using their physical Fighter room/row without
 assigning ordinary terrain physics to them. The native rules are:
