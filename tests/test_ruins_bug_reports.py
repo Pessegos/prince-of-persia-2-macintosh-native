@@ -99,3 +99,17 @@ class RuinsBugReportTests(unittest.TestCase):
         with patch.object(scene.game.exit, 'advance', return_value=True):
             self.tick()
         self.assertEqual(scene.game.level.number, 9)
+
+    def test_waking_with_fathers_sword_removes_the_floor_sword_and_survives_reentry(self):
+        from pop2.environments import environment_for
+
+        scene = self.scene
+        scene.load_level(8)
+        scene.jump_to_room(8, 2, 267, 1)
+        self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 22)
+        environment_for(scene).wake_from_vision()
+        self.assertEqual(scene.game.sword_type, 1)
+        self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 1)
+        scene.jump_to_room(7, 2, 200, 0, reset_guards=False)
+        scene.jump_to_room(8, 2, 267, 1, reset_guards=False)
+        self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 1)

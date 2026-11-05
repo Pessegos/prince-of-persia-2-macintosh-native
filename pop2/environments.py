@@ -1146,6 +1146,11 @@ class Ruins(Caverns):
         scene.game.sword_type = 1
         player.sword_lost = False
         caverns.throne_done = True
+        # The vision grants the sword here. Retire its floor item at the
+        # same boundary so it cannot coexist with the equipped sword.
+        sword = scene.level_map.tile(THRONE_ROOM, 5, 2)
+        if sword.kind == 22:
+            caverns.potions.take_sword(sword)
         scene.combat.ruins.songs.append(182)
         scene.status.set("The father's sword")
 
