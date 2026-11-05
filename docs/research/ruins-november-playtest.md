@@ -10,7 +10,7 @@ wording are unchanged.
 | --- | --- |
 | Level7 room5->9 falling-tile head trick | The loaded-actor contact path existed, but the unloaded-record path did not. Falling tiles now crush the downstairs head while the Prince remains upstairs. Flight speed is unchanged; the recording alone does not establish a separate speed defect. |
 | Level7 room28 head in the left room | The native screen-entry transfer was omitted. Room20's near-edge head record moves into room28 on entry, with rebased X47. |
-| Serpent hitsplash | SetupHit3:0bec-0c0e selects Head shape127, body-anchor X-12 and Y+7. The port used Kid burst218 and ordinary guard offsets. Both facings now use the serpent effect. |
+| Serpent hitsplash | SetupHit3:0bec-0c0e selects Head shape127, body-anchor X-12 and Y+7, retaining Kid palette16 from3:0bc2-0bc4. The port used Kid burst218 and ordinary guard offsets. Both facings now use the serpent effect and its correct palette. |
 | Empty map rooms | Hide level8 rooms27/15/7 and level9 rooms23/22 from F3's map. Traversal confirms these are exactly the removed rooms. Native LEVL data and gameplay links stay intact. |
 | Level8 room2 tunnel endpoint | Preview the crawl's first translated SEQS/FRAM body against the actual barrier, including the native five-pixel prone backoff. A blocked hold stays at prone pose251; reversing still works. This is the user-requested improvement over the original's repeated preparation poses. |
 | Tiles on opener buttons, level8 room17 | Ordinary kind5 impacts selected timed opening2 instead of permanent opening3. The impacted plate keeps timer31; the gate reaches255 and stays there, including an impact on an already open gate. Reversible plates retain their existing behavior. |
@@ -76,3 +76,22 @@ the incorrect negative-X column formula and unbounded debris contact.
 Local native report and visual comparisons are under `rendered/ruins-bugs/`.
 The focused ruins/mechanism/combat/map/input run passed343 tests, no skips.
 Final full-suite and integration results are recorded in the session handoff.
+
+## Serpent palette follow-up
+
+The user's comparison stills revealed that the first shape127 correction used
+Head CTBL750 to colour its pixels. SetupHit changes the library to3 but keeps
+the common effect's palette base16; that palette belongs to the Prince, whose
+SetKidPalette3:5f1c loads Kid CTBL25000+environment at16. In ruins CTBL25004,
+shape127's central ink7 is RGB220/141/70 (orange), instead of Head CTBL750's
+168/46/117 (pink/purple). The corrected effect decodes with the already loaded
+Kid palette; silhouette, positioning, timing and the serpent body stay the same.
+
+A bounded original CODE run executes3:0ba4 through the branch to3:0cc6,
+including real4:4972 and4:2bda. Supplied inputs are body draw point300/200,
+both facings, actor type11, poses252..289 and a prior palette base32. All76
+calls produce library3, shape127, palette16, the facing-relative12-pixel
+offset and Y207. No services are stubbed; AddObj/rasterization/full scheduling
+are excluded. Local evidence: `rendered/ruins-bugs/native-serpent-hit-palette.json`.
+The strengthened both-facing pixel regression rejects6b8fe08 and checks the
+actual orange colour rather than deriving its expectation from the Head palette.

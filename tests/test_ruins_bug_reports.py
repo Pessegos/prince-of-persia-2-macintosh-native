@@ -151,7 +151,13 @@ class RuinsBugReportTests(unittest.TestCase):
         state = serpent.state
         state.animation_state = 10
         art = scene.guard_art.default
-        burst = decode_shap(art.shapes[art.base + 127]['data'], art.palettes[1])
+        # SetupHit3:0bc2-0bc4 keeps palette base16 (Kid CTBL25004),
+        # even when3:0c04 selects the Head shape library. Head CTBL750
+        # would incorrectly make the orange centre pink/purple.
+        burst = decode_shap(art.shapes[art.base + 127]['data'], scene.palette)
+        colors = {rgba for _count, rgba in burst.getcolors()}
+        self.assertIn((220, 141, 70, 255), colors)
+        self.assertNotIn((168, 46, 117, 255), colors)
         for facing in (0, 1):
             state.facing = facing
             record = art.frames[actor_frame_index(state)]

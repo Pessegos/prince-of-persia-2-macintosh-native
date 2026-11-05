@@ -319,8 +319,10 @@ class HitArtwork:
         self.mirrored = ImageOps.mirror(self.sprite)
         self.player_frames = player_frames
         self.guard_frames = guard_frames
+        # SetupHit3:0bc2-0bc4 selects palette16 (Kid), including the
+        # serpent branch's Head-library shape127 at3:0c04-0c0a.
         self.serpent_sprite = (decode_shap(serpent_art.shapes[serpent_art.base + 127]['data'],
-                                           serpent_art.palettes[1]) if serpent_art is not None else None)
+                                           palette) if serpent_art is not None else None)
 
     def draw(self, image, state, floor_y):
         from pop2.combat import actor_frame_index
