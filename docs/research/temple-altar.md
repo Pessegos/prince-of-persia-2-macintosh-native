@@ -1,6 +1,6 @@
 # Level 13's Altar: the Sacred Flame and the Shadow
 
-Status: 2026-11-01. Static reading of CODE 2/3/4/5/6/10 (two call sites sit in
+Status: 2026-11-05 (the shadow presses plates and rises from a sword death: [route audit](temple-route-audit.md)). Static reading of CODE 2/3/4/5/6/10 (two call sites sit in
 unmapped regions and were disassembled from the CODE bytes). The burn, the
 flare and the shadow are ported (`pop2/temple_altar.py`,
 `pop2/temple_shadow.py`, `pop2/caverns.py`, the Temple environment,

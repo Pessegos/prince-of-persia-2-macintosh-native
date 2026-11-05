@@ -194,3 +194,9 @@ Each stage integrates separately with the usual reservation.
   revives him (actor type 1, 10:2850/2b32/27d8, `pop2/temple_shadow.py`)
   and SetupFlame over the burning poses (AFRM type 4).
 - A reimport is needed for the new trap-door units in temple_level10-13.
+
+## Route audit (2026-11-05, Claude)
+
+[temple-route-audit.md](temple-route-audit.md): levels 10, 11 and 13 finish from a
+fresh load under the port's rules, without opponents, and the audit made the
+temple's blades run. Its open questions replace those above where they differ.
