@@ -1833,6 +1833,8 @@ class CombatEncounter:
     def advance_player_recovery(self):
         player = self.player
         player.runtime.next_frame()
-        if player.recovering and (player.state.sequence_id == 227 or
-                player.state.source_sequence_id == 52 and player.state.sequence_id == IDLE_SEQUENCE):
+        # A wall bump may replace the selected crush sequence52 during its
+        # rise. Both that bump and the original recovery finish at idle2;
+        # the host lock must end there even when the selected ID is now47.
+        if player.recovering and player.state.sequence_id in (227, IDLE_SEQUENCE):
             player.recovering = False

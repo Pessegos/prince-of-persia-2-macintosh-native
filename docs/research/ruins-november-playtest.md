@@ -154,3 +154,25 @@ The regression keeps real frame-start/level-event refreshes, asserts the
 shelves collapsed and God Mode preserved life, then checks both halves for all
 60 exported phases/blood combinations, with and without rubble. The earlier
 phase regression called render directly and missed the level-event signature.
+
+## Second batch: room9 movement lock after a slab injury
+
+In level9 room9, descend from row1/X172/facing0 with Down and Shift, release
+Down at tick7 and Shift at10, press Shift at11 and release at30. The real
+loose floor falls while the Prince reaches row2; at14 it removes one life
+and selects crush recovery52. During the rise, collision with the column
+selects wall-bump47. Its return to idle2 leaves the host Fighter.recovering
+flag set because the old release condition required selected/source52.
+All commands remain locked even though animation and the world keep running.
+
+Release that host lock at the existing unarmed idle2 endpoint independently
+of the selected source; keep the existing armed227 endpoint. No timer,
+collision response, injury amount, protected recovery poses or original
+sequence bytes change. This is host state cleanup, not a newly recovered
+Macintosh rule. Existing Crushed6:28f0 and Collide4:589e evidence is retained.
+The isolated regression drives actual Down/Shift input, observes protected52
+and collision47, checks one life lost and the crushed flask's rubble, waits
+for idle, then verifies that Up starts the actual ledge climb24. With the old
+method it fails because recovering remains true. The room8 regression also
+rejects the old method with the supplied StopIteration stack. Focused
+ruins/combat/deaths/potions/terrain:282 tests OK, no skips,55.400s.

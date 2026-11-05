@@ -101,6 +101,43 @@ class RuinsBugReportTests(unittest.TestCase):
                 self.assertEqual(signature[3:5], str(int(bool(debris))) * 2)
                 scene.level_renderer.enter_room(7, scene.game.caverns)
 
+    def test_room_nine_slab_recovery_unlocks_after_bumping_the_column(self):
+        scene = self.scene
+        scene.load_level(9)
+        scene.jump_to_room(8, 1, 172, 0)
+        scene.peaceful = True
+        scene.set_key_state('shift', True)
+        scene.set_key_state('down', True)
+        poses = []
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+            for tick in range(55):
+                if tick == 7:
+                    scene.set_key_state('down', False)
+                if tick == 10:
+                    scene.set_key_state('shift', False)
+                if tick == 11:
+                    scene.set_key_state('shift', True)
+                if tick == 30:
+                    scene.set_key_state('shift', False)
+                self.tick()
+                poses.append((scene.sequence_state.source_sequence_id,
+                              scene.combat.player.recovering))
+            self.assertIn((52, True), poses)
+            self.assertIn((47, True), poses)
+            self.assertEqual((scene.room_id, scene.terrain_motion.row), (8, 2))
+            self.assertEqual(scene.level_map.tile(8, 2, 2).kind, 14)
+            self.assertEqual(scene.combat.player.life, 2)
+            self.assertEqual(scene.action, 15)
+            self.assertFalse(scene.combat.player.recovering)
+            self.assertFalse(scene._combat_controls_locked())
+            # Actual controls must work after the collision, not just a
+            # synthetic flag reset. Up starts the real climb by the column.
+            scene.set_key_state('up', True)
+            self.tick(3)
+            self.assertEqual(scene.sequence_state.source_sequence_id, 24)
+            self.assertTrue(scene.native_ledge)
+            self.assertNotEqual(scene.action, 15)
+
     def test_room_seventeen_falling_tile_keeps_ordinary_opener_gate_open(self):
         from pop2.environments import environment_for
         from pop2.loose_floors import FallingFloor
