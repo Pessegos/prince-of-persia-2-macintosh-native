@@ -737,6 +737,13 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 if offset is None:
                     # DoKidEngarde 6:1f04 refuses: Ctrl stays consumed, no SEQS 55.
                     return False
+                cached = motion.gate_contact_bounds
+                if cached is None or cached[:2] != (motion.room, motion.row):
+                    # A fresh warp/load may precede the first CheckBarr sample.
+                    # Seed its previous rectangle before the draw reservation,
+                    # as ordinary frames already do through check_gate.
+                    bounds = self.player_collision_bounds()
+                    motion.gate_contact_bounds = (motion.room, motion.row, bounds, bounds)
                 self.player_x += offset * (1 if state.facing else -1)
             self.sword_drawn = True
             # The drawn sword's bank starts with the holds consumed (6:0cb6).

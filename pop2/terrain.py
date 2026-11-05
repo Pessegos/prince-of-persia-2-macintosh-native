@@ -1354,6 +1354,11 @@ class RooftopPhysics:
         gate_contact = (collision_bounds,
                         cached[2] if cached is not None and cached[:2] == (motion.room, motion.row)
                         else old_bounds or collision_bounds)
+        # DoKidEngarde reserves room before the first SEQS55 pose. CheckBarr
+        # compares with the preceding frame's bank, before that displacement;
+        # bounds sampled after the reservation can already be beyond a gate.
+        wall_old_bounds = (gate_contact[1] if state.source_sequence_id == 55 and state.action == 207
+                           else old_bounds)
         # FrameAdv 2:65f6: an armed opponent in animation state 1 meets
         # barriers only through EnemyCollide 4:62b0, not CheckBarr/Collide.
         # Other opponent states keep the port's swept wall correction.
@@ -1394,7 +1399,7 @@ class RooftopPhysics:
         corrected = (state.target_x if enemy or motion.void_fall or not alive or state.animation_state == 7
                      or state.source_sequence_id in (70, 78) else
                      self.map.wall_correction(motion.room, old_x, state.target_x,
-                                              collision_bounds, old_bounds, collision_facing,
+                                              collision_bounds, wall_old_bounds, collision_facing,
                                               physical_row=motion.row, state=state))
         if corrected != state.target_x:
             delta = corrected - state.target_x
@@ -1508,7 +1513,9 @@ class RooftopPhysics:
             events.append(TerrainEvent("room"))
         elif cut_enabled and self.horse_leap(motion, state, bounds):
             events.append(TerrainEvent("next_level"))
-        elif cut_enabled and self.cut_horizontal(motion, state, bounds):
+        elif cut_enabled and self.cut_horizontal(motion, state, collision_bounds):
+            # CutChar6:4922-492a reads ShapeBounds' cached edges, which
+            # already include GetCharEdges4:5e6e's sword-facing extension.
             events.append(TerrainEvent("room"))
         if (cut_enabled and state.actor_type in (0, None)
                 and self.cut_down(motion, state, bounds)):

@@ -55,8 +55,10 @@ native `GetCharCol` conversion rather than simple sprite X / 51.
   the wall between frames, including horizontal drift during a fall. The
   supported low grounded bump uses `46`/`47`; unsupported/high contact uses
   `45`. Armed front/rear contact selects `64`/`65` respectively.
-- `CutChar`, CODE:6 `0x4918`: supported horizontal exits use the body's
-  facing-dependent visible bounds, not its center. A linked screen change
+- `CutChar`, CODE:6 `0x4918`: supported horizontal exits use the cached
+  facing-dependent bounds, including the sword extension, not the center.
+  The [throne grille replay](research/throne-grille.md) corrected the omitted
+  extension and first-draw contact history. A linked screen change
   rebases X by 510 without restarting the current animation or velocity.
   The native rectangle's right edge is exclusive; the sprite helper's right
   edge is inclusive and is converted before testing. Left-facing left exits

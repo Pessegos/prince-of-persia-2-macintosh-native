@@ -93,3 +93,32 @@ class ThroneGateTests(unittest.TestCase):
                     original = baseline.actor_mask(row, 346, state, (0, 200, 510, 346), record)
                     promoted = ImageChops.subtract(mask, original).getbbox() is not None
                     self.assertEqual(promoted, row == 2 and column in (7, 8) and mode not in (2, 6))
+
+    def test_back_facing_sword_draw_ejects_to_room_twenty_one_instead_of_crossing(self):
+        self.approach_from_room_twenty_one()
+        self.turn_back_to_grille()
+        scene = self.scene
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+            scene.set_key_state('ctrl', True)
+        self.assertEqual(scene.sequence_state.source_sequence_id, 65)
+        self.assertGreater(scene.player_x, 480)
+        self.tick(4)
+        self.assertEqual(scene.room_id, 20)
+        self.assertTrue(scene.sword_drawn)
+        scene.set_key_state('ctrl', False)
+        # Walk back at the closed grille with the sword still drawn. The
+        # first draw must not have put the Prince on its interior side.
+        scene.horizontal_key(None, -1, True)
+        self.tick(18)
+        self.assertGreater(scene.sequence_state.target_x + (510 if scene.room_id == 20 else 0), 450)
+        self.assertEqual(scene.level_map.tile(8, 8, 2).foreground & 255, 0)
+
+    def test_first_draw_after_a_warp_also_keeps_the_pre_draw_rectangle(self):
+        scene = self.scene
+        scene.jump_to_room(8, 2, 473, 1)
+        self.assertIsNone(scene.terrain_motion.gate_contact_bounds)
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+            scene.set_key_state('ctrl', True)
+        self.assertEqual(scene.sequence_state.source_sequence_id, 65)
+        self.tick(4)
+        self.assertEqual(scene.room_id, 20)
