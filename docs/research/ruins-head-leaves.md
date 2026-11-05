@@ -528,10 +528,12 @@ TriggerObject 5:1f18-1f3c refuses level8 exits unless sword type is1, except
 for an exit in the entrance room from LEVL:2198. The actual sword value now
 travels through player/NPC presses and falling-floor impacts. A refused exit
 does not suppress other objects on the plate's link chain. The real room23
-button opens only after the throne wake callback grants the sword. The same
-word gates room9's checkpoint (2:6bae-6bb4); the host had omitted it when
-calling Checkpoint.matches, preventing that checkpoint from activating at all.
-The corrected caller and a retry from the post-vision checkpoint are tested.
+button now additionally requires physical floor-sword pickup, following the
+user's later [exit/checkpoint clarification](throne-retry-hud.md). Wake alone
+changes the logical word and is insufficient for that host policy. The same
+word gates the native room9 checkpoint leaf (2:6bae-6bb4); the host also
+requires physical pickup there. The native leaf probes below retain their
+bounded scope and do not certify the complete pickup/cutscene route.
 
 `tools/probe_ruins_hud_exit.py` executes original instructions for300 exit
 admissions,80 checkpoint admissions,60 positive-HP meter loops,15000

@@ -18,8 +18,9 @@ current world has collected it but its older snapshot has not.
 
 When retry restores level8's checkpoint world, the logical sword and loaded
 art are reconstructed from that world's pickup state: old sword before the
-pickup, father's sword afterwards. Exit admission and the vision's separate
-logical sword word retain their existing behavior during ordinary play.
+pickup, father's sword afterwards. The vision's separate logical sword word
+retains its existing behavior. Exit admission now also requires physical
+pickup, following the user's later playtest clarification below.
 
 F3 warps previously simulated checkpoint progress using numerically ordered
 room labels. Room9 then incorrectly won for a warp to room11, even though
@@ -32,6 +33,32 @@ policy; no room links or level data are changed.
 retry without pickup; physical held-Shift pickup and persisted item removal
 through retry/save/load; room11 warps before/after the vision; and repair of
 an older premature snapshot. The previous implementation fails those routes.
+
+## Exit button after the vision
+
+The user clarified that native room23's button must keep the final level8
+exit closed after the vision until the floor sword is physically collected.
+The previous host replay explicitly expected wake alone to open it, so that
+expectation was incomplete: wake7:3958 sets logical sword1 without consuming
+the floor item or reloading its art. The raw TriggerObject5:1f18-1f3c leaf
+checks that logical word; it is not evidence for the requested pickup policy.
+
+Runtime pressure-link traversal now supplies the sword word to that leaf only
+when `CavernState.throne_sword_collected` is true. Before that, the missing
+word refuses a level8 final exit. The entrance-room exemption and exits on
+other levels remain as in the original leaf. Player/NPC presses and falling
+debris share this traversal; refusing the exit still permits other linked
+objects. No vision, sword-loading, music, checkpoint or save fields change.
+The existing consumed-item state supplies the requirement, as it does for
+retry. The native admission probe continues to test the original leaf directly.
+
+The real room23 replay now presses the actual button before the vision,
+after wake with the floor sword still present, and after ordinary held-Shift
+pickup. Only the last press may start the exit. Asset-free regressions also
+cover vision/consumption separately, logical sword types, impact activation,
+mixed links, and the entrance/other-level exemptions. The old runtime fails
+six assertions in these strengthened regressions, including exit phase9
+instead of0 after the post-vision button press.
 
 ## Retained HUD coordinates
 

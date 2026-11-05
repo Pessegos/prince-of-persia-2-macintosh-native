@@ -41,6 +41,8 @@ class RuinsExitTests(unittest.TestCase):
         for sword in (-1, 0, 1, 2, 3):
             with self.subTest(sword=sword):
                 terrain, plates = self.fixture()
+                terrain.caverns.throne_done = True
+                terrain.caverns.potions.tiles[8, 25] = 1, 0
                 plates.trigger(terrain, 0, 5, sword_type=sword)
                 self.assertEqual((0, 15) in plates.active, sword == 1)
                 if sword == 1:
@@ -53,22 +55,38 @@ class RuinsExitTests(unittest.TestCase):
                     self.assertNotIn((0, 15), plates.active)
                     self.assertEqual(plates.songs, [])
 
+    def test_logical_sword_alone_or_consumption_without_the_vision_cannot_open_exit(self):
+        for vision, consumed in ((False, False), (True, False), (False, True), (True, True)):
+            with self.subTest(vision=vision, consumed=consumed):
+                terrain, plates = self.fixture()
+                terrain.caverns.throne_done = vision
+                if consumed:
+                    terrain.caverns.potions.tiles[8, 25] = 1, 0
+                plates.trigger(terrain, 0, 5, sword_type=1)
+                self.assertEqual((0, 15) in plates.active, vision and consumed)
+                self.assertEqual(plates.songs, [297] if vision and consumed else [])
+
     def test_locked_exit_does_not_block_other_destinations_in_the_same_chain(self):
         terrain, plates = self.fixture()
         struct.pack_into('>h', terrain.level, 0x1680 + 8, 1)
         struct.pack_into('>5h', terrain.level, 0x1680 + 10, 1, 16, 0, -3, -3)
         struct.pack_into('>H', terrain.level, 16 * 2, 4)
-        plates.trigger(terrain, 0, 5, sword_type=2)
+        terrain.caverns.throne_done = True
+        plates.trigger(terrain, 0, 5, sword_type=1)
         self.assertNotIn((0, 15), plates.active)
         self.assertIn((0, 16), plates.active)
 
     def test_loose_floor_impact_obeys_the_same_sword_gate(self):
         for sword in (1, 2):
-            with self.subTest(sword=sword):
-                terrain, plates = self.fixture()
-                struct.pack_into('>H', terrain.level, 14 * 2, 5)
-                plates.impact(terrain, 0, 14, 5, sword_type=sword)
-                self.assertEqual((0, 15) in plates.active, sword == 1)
+            for collected in (False, True):
+                with self.subTest(sword=sword, collected=collected):
+                    terrain, plates = self.fixture()
+                    terrain.caverns.throne_done = True
+                    if collected:
+                        terrain.caverns.potions.tiles[8, 25] = 1, 0
+                    struct.pack_into('>H', terrain.level, 14 * 2, 5)
+                    plates.impact(terrain, 0, 14, 5, sword_type=sword)
+                    self.assertEqual((0, 15) in plates.active, sword == 1 and collected)
 
 
 class HeadMeterTests(unittest.TestCase):
@@ -274,7 +292,23 @@ class LevelEightExitHostTests(unittest.TestCase):
             environment_for(scene).wake_from_vision()
             self.assertTrue(scene.game.caverns.throne_done)
             self.assertEqual(scene.game.sword_type, 1)
+            self.assertFalse(scene.game.caverns.throne_sword_collected)
             scene.jump_to_room(22, 2, 490, 1)
+            RooftopSceneTests.tick(self, 10)
+            self.assertEqual(scene.level_map.tile(22, 2, 2).foreground & 255, 0)
+            self.assertNotIn((22, 22), plates.active)
+            self.assertNotIn(297, plates.songs)
+
+            # The vision's logical word does not consume the floor sword.
+            # Only ordinary held Shift pickup authorizes this same button.
+            scene.jump_to_room(8, 2, 267, 1, reset_guards=False)
+            self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 22)
+            scene.set_key_state('shift', True)
+            RooftopSceneTests.tick(self, 20)
+            scene.set_key_state('shift', False)
+            self.assertTrue(scene.game.caverns.throne_sword_collected)
+            self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 1)
+            scene.jump_to_room(22, 2, 490, 1, reset_guards=False)
             RooftopSceneTests.tick(self, 10)
             self.assertGreater(scene.level_map.tile(22, 2, 2).foreground & 255, 0)
 

@@ -20,7 +20,7 @@ STONE_GATE_CUES = {'moving': 17, 'opened': 18, 'stopped': 18, 'slam': 20}
 
 
 def can_trigger_exit(level, room, sword_type):
-    """TriggerObject 5:1f18-1f3c: level eight needs the father's sword.
+    """Original TriggerObject 5:1f18-1f3c sword-word/entrance admission leaf.
 
     The entrance-room exit is exempt, including before the throne vision.
     A missing sword context must not unlock the level-eight final exit.
@@ -102,6 +102,12 @@ class PressurePlates:
 
     def trigger(self, terrain, index, how, depressed=False, impact=False, shut_only=False,
                 *, sword_type=None):
+        # The vision changes the logical sword word before physical pickup.
+        # The user's level8 exit policy additionally requires that persisted
+        # pickup, as the throne checkpoint does. Other levels and the entrance
+        # exit remain exempt in the original admission leaf below.
+        collected = getattr(getattr(terrain, 'caverns', None), 'throne_sword_collected', False)
+        exit_sword = sword_type if collected else None
         seen = set()
         cues = []
         while index != -3:
@@ -133,7 +139,7 @@ class PressurePlates:
                 # TriggerObject 5:1fba-1fda: TriggerSlideRock, no TROB.
                 terrain.caverns.rocks.trigger(room, cell, how)
             elif (tile.kind == 17 and not tile.foreground & 255
-                  and can_trigger_exit(terrain.level, tile.room, sword_type)):
+                  and can_trigger_exit(terrain.level, tile.room, exit_sword)):
                 # TriggerObject 5:1f40: only a completely closed exit starts.
                 self.add(key, 1)
                 if 297 not in self.songs:
