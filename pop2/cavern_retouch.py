@@ -10,6 +10,12 @@ from PIL import Image
 
 def retouched_room_commands(level, room, commands):
     """Room-local continuations made from the existing native drawing pieces."""
+    if (level, room) == (8, 4):
+        # Approved room5 cleanup: the bottom of an offscreen upper-row
+        # column leaves a24-pixel beige triangle in the top-left corner.
+        # Expose the existing wall behind this one exact native placement.
+        return [command for command in commands if command !=
+                ['back', 3525, 0, 5, 16, -1, [0, 0, 5, 40], 4, 0, -1]]
     if (level, room) == (6, 14):
         if any(command[:6] == ['back', 3506, 40, 340, 0, 2] for command in commands):
             # Fill the unpainted strip; otherwise DoCleanCut retains the

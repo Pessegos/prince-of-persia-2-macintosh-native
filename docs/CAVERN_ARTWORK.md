@@ -136,3 +136,20 @@ building cached room images, not recomputed pixel by pixel each frame.
 Local approvals and baking reports remain under ignored
 `rendered/level5-art-review/`. README comparison selection is a separate user
 decision; this artwork review does not replace its wording.
+
+## Level8 room5: clipped upper-left column fragment
+
+The user approved the comparison's right-hand preview on2026-11-05.
+Omit only the back-layer SHAP3525 command at X0/bottom5/mode16/row-1, with
+its exact native clip and library4. That mostly offscreen column left a beige
+triangle at the upper-left corner. The existing wall underneath replaces24
+visible pixels within X0..7/Y0..4. This is an intentional port improvement,
+not a correction to the original resources or a native drawing rule.
+
+Combined RGB SHA256:
+`c05c2e3cd36ad9d88399c0ac1cba8c2edd39cd6988568dd72a10595ef414a6f9`.
+Foreground, retained pixels, actor/climb/floor/cell/gate masks are unchanged.
+The native-artwork opt-out still draws the original fragment. No atlas or
+imported-resource writes are required; the command omission applies only
+to level8 room5. The comparison is kept locally at
+`rendered/ruins-second-batch/room5-review.png`.

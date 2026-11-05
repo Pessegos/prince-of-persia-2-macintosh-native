@@ -81,6 +81,26 @@ class BundledCavernRetouchTests(unittest.TestCase):
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class CavernRetouchTests(unittest.TestCase):
+    def test_level_eight_room_five_removes_only_the_approved_corner_fragment(self):
+        native = cavern_room(4, level_number=8)
+        edited = cavern_room(4, level_number=8, retouched=True)
+        before, after = native.flattened(), edited.flattened()
+        self.assertEqual(hashlib.sha256(after.convert('RGB').tobytes()).hexdigest(),
+                         'c05c2e3cd36ad9d88399c0ac1cba8c2edd39cd6988568dd72a10595ef414a6f9')
+        changed = [(x, y) for y in range(365) for x in range(510)
+                   if before.getpixel((x, y)) != after.getpixel((x, y))]
+        self.assertEqual(len(changed), 24)
+        self.assertTrue(all(0 <= x < 8 and 0 <= y < 5 for x, y in changed))
+        self.assertEqual(native.foreground.tobytes(), edited.foreground.tobytes())
+        self.assert_masks_equal(native, edited)
+        level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 8)
+        renderer = LevelRenderer(level, preload_room=False)
+        reference = LevelRenderer(level, preload_room=False, retouch_caverns=False)
+        self.assertEqual(renderer.room(4).flattened().tobytes(),
+                         cavern_room(4, level_number=8, animated=True, retouched=True).flattened().tobytes())
+        self.assertEqual(reference.room(4).flattened().tobytes(),
+                         cavern_room(4, level_number=8, animated=True).flattened().tobytes())
+
     def assert_masks_equal(self, before, after):
         self.assertEqual(before.foreground.getchannel('A').tobytes(), after.foreground.getchannel('A').tobytes())
         self.assertEqual(before.retained_mask.tobytes(), after.retained_mask.tobytes())
