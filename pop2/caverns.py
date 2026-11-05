@@ -1329,10 +1329,13 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         cell = tuple(command[8:10])
         if (level_number, room_id, layer, library, index) == (8, 8, 'back', 4, 4206):
             # DrawRuinGateMovable7:2b22-2b4a ->7:383a temporarily promotes
-            # throne CUST record6 to the front pass. CheckGateInFore owns
-            # its actor/column/mode admission, just like the ordinary gate.
-            gate_masks[(8, 2)] = merge_positioned_mask(
-                gate_masks.get((8, 2)), sprite.getchannel('A'), position)
+            # throne CUST record6 to the front pass. Also cover its outside
+            # column: the sheathe's supporting foot moves to9 while its arm
+            # still overlaps these same bars. Keep the existing row/mode
+            # exclusions and exact alpha, without changing ordinary gates.
+            for column in (8, 9):
+                gate_masks[(column, 2)] = merge_positioned_mask(
+                    gate_masks.get((column, 2)), sprite.getchannel('A'), position)
         if layer == 'back' and library == 4 and index in (3563, 3542) and cell in gate_cells:
             # DrawCaveGate anchors the stone one column right of its tile.
             # The repaint caller may be a different cell, even on another row.

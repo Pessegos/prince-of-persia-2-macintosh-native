@@ -15,9 +15,10 @@ SHAP4206 is ordinarily a back-layer drawing, so the exported room alone did
 not provide an actor foreground mask for these bars.
 
 Retain that command's clipped alpha as the throne gate's positioned mask at
-tile column8/row2. The existing CheckGateInFore selector owns admission: the
-actor's supporting column is7 or8, its physical row is2, and hanging modes2/6
-are excluded. The ordinary foreground and the original scenery pixels stay
+tile column8/row2. The native CheckGateInFore selector admits the actor's
+supporting column7 or8, physical row2, excluding hanging modes2/6. The host
+also covers outside column9 for the sheathe follow-up described below.
+The ordinary foreground and the original scenery pixels stay
 unchanged; the affected actor pixels now show the existing grille in front.
 
 `tools.probe_throne_gate` executes the actual temporary CUST modification
@@ -116,3 +117,29 @@ supplied overlap banks and actor rectangles, SEQS50 resource lookup,
 distance fixture, log-only ejection/cave response. It excludes independent
 overlap construction, AnimChar, full FrameAdv, crush damage and rasterization.
 The real sheathe/input regression exercises production behavior separately.
+
+## Outside-column sheathe occlusion
+
+The next recording and still show the arm painting over the grille during
+the complete sheathe92. On return to the throne camera, poses235-240 and
+133/134 have supporting column9 even though their drawn arm overlaps the
+bars. Later poses48/49 briefly use column8. The earlier mask admission
+therefore switched off and on during one animation; standing-only checks
+from the initial approach did not cover this path.
+
+Expose the same positioned SHAP4206 alpha through outside column9 as well
+as the original column8 entry. Only the throne drawing is affected: the
+bar pixels stay in front while the gaps show the actor normally. Physical
+position, collision, sheathe sequence, no-crouch fix, camera cuts and source
+artwork are unchanged. Keep physical-row, hanging-mode and serpent exclusions.
+The added outside-column coverage is an explicit rendering improvement for
+the reported animation, not an expanded native CheckGateInFore equivalence
+claim; the native300-case selector evidence above retains its original scope.
+
+The new regression drives actual entry, turn, rear draw, Down tap and release,
+then uses the real scene renderer/compositor through every remaining sheathe
+pose and standing finish. It checks that the actor changes no pixels under
+the original grille alpha, including real body/attachment layers, and that
+the test reaches overlapping poses235 and134. The previous mask fails at
+pose235, rectangle460/271..466/348. A pose sheet under
+`rendered/grille-sheathe-occlusion/` compares the old and corrected output.

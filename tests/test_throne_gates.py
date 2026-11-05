@@ -109,7 +109,7 @@ class ThroneGateTests(unittest.TestCase):
                 hidden).getbbox(), None)
             self.assertNotEqual(result.tobytes(), frame.tobytes())  # Visible between the bars.
 
-    def test_throne_grille_promotion_keeps_native_column_row_and_hanging_exclusions(self):
+    def test_throne_grille_covers_its_outside_column_and_keeps_row_and_hanging_exclusions(self):
         from pop2.caverns import cavern_room
         from pop2.sequence_runtime import SequenceState
         from types import SimpleNamespace
@@ -125,7 +125,7 @@ class ThroneGateTests(unittest.TestCase):
                     mask = room.actor_mask(row, 346, state, (0, 200, 510, 346), record)
                     original = baseline.actor_mask(row, 346, state, (0, 200, 510, 346), record)
                     promoted = ImageChops.subtract(mask, original).getbbox() is not None
-                    self.assertEqual(promoted, row == 2 and column in (7, 8) and mode not in (2, 6))
+                    self.assertEqual(promoted, row == 2 and column in (7, 8, 9) and mode not in (2, 6))
 
     def test_back_facing_sword_draw_ejects_to_room_twenty_one_instead_of_crossing(self):
         self.approach_from_room_twenty_one()
@@ -186,3 +186,46 @@ class ThroneGateTests(unittest.TestCase):
         self.tick(20)
         self.assertGreater(scene.sequence_state.target_x + (510 if scene.room_id == 20 else 0), 450)
         self.assertEqual(scene.level_map.tile(8, 8, 2).foreground & 255, 0)
+
+    def test_grille_covers_every_real_sheathe_pose_from_the_outside_column(self):
+        from pop2.scene_prototype import ScenePrototype
+
+        self.approach_from_room_twenty_one()
+        self.turn_back_to_grille()
+        scene = self.scene
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+            scene.set_key_state('ctrl', True)
+            self.tick(8)
+            scene.set_key_state('ctrl', False)
+            scene.set_key_state('down', True)
+            self.tick()
+            scene.set_key_state('down', False)
+        room = scene.level_renderer.enter_room(8, scene.game.caverns)
+        cover, position = room.gate_occlusion[(8, 2)]
+        bars = Image.new('L', room.background.size)
+        bars.paste(cover, position)
+        composite = scene.composite_actor
+        checked = []
+        overlaps = set()
+
+        def check_pixels(frame, layer, row=None, bottom=None, state=None, bounds=None, record=None):
+            player = state is scene.sequence_state and layer.getbbox() is not None
+            behind = ImageChops.multiply(layer.getchannel('A'), bars) if player else None
+            before = frame.copy() if player else None
+            result = composite(frame, layer, row, bottom, state, bounds, record)
+            if player:
+                if behind.getbbox() is not None:
+                    overlaps.add(state.action)
+                difference = ImageChops.difference(result.convert('RGB'), before.convert('RGB')).convert('L')
+                self.assertIsNone(ImageChops.multiply(difference, behind).getbbox(), f'pose {state.action}')
+                checked.append(state.action)
+            return result
+
+        with patch.object(scene, 'composite_actor', side_effect=check_pixels), \
+                patch.object(scene, 'present_viewport'):
+            for _ in range(22):
+                self.tick()
+                self.assertEqual(scene.room_id, 8)
+                ScenePrototype.render(scene)
+        self.assertTrue({235, 236, 237, 238, 239, 240, 133, 134, 48, 49, 50, 51, 52, 15} <= set(checked))
+        self.assertTrue({235, 134} <= overlaps)
