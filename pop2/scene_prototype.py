@@ -341,6 +341,9 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         )
 
     def bind_level(self, game, renderer, initialize_world=True):
+        # Native LoadSwordSet caches the loaded art separately from the
+        # logical sword word. The throne vision changes only that word.
+        self.loaded_sword_type = game.sword_type
         if game.level.number == 9:
             # Decode NIS 2 while loading the level, before the running leap.
             self.prepare_story_scene('temple.json')
@@ -1996,6 +1999,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.start_sequence(237)
         elif crouched and tile.kind == SWORD_TILE:
             self.game.sword_type = potions.take_sword(tile)
+            # TryPickUp6:154c-1552 explicitly reloads LoadSwordSet here.
+            self.loaded_sword_type = self.game.sword_type
             # 6:1530-1572: the Prince has a sword again (a5-0x500a), with
             # FindSwd (song 183), except in level eight's throne room.
             self.combat.player.sword_lost = False
@@ -2438,6 +2443,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                 self.animation_after_id = None
             snapshot.restore_world(self.combat)
             self.game.arm_prince()
+            self.loaded_sword_type = self.game.sword_type
             point = snapshot.checkpoint
             self.jump_to_room(point.room, point.row, point.x, snapshot.facing,
                               reset_guards=False, preserve_checkpoint=True, redraw=redraw)
@@ -2937,6 +2943,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.animation_after_id = None
         self.clear_keys(None)
         self.game.restart()
+        self.loaded_sword_type = self.game.sword_type
         if self.game.caverns is not None:
             self.game.caverns.configure_level_entry(self.level_renderer.cavern_program, self.game)
             self.game.caverns.configure_torches(self.level_renderer.cavern_program.get('torches', {}))
@@ -3230,7 +3237,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         """LoadSwordSet 3:5a4e: sword type 2 draws SHPL 1200 with AFRM 25201
         (3:5aae-5ab6, 5b2a-5b3e); every other type SHPL 1000 with AFRM 25001."""
         game = getattr(self, 'game', None)
-        return 2 if getattr(game, 'sword_type', 1) == 2 else 1
+        loaded = getattr(self, 'loaded_sword_type', getattr(game, 'sword_type', 1))
+        return 2 if loaded == 2 else 1
 
     @property
     def attachment_frames(self):

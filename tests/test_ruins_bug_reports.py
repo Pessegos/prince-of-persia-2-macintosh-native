@@ -124,19 +124,46 @@ class RuinsBugReportTests(unittest.TestCase):
             self.tick()
         self.assertEqual(scene.game.level.number, 9)
 
-    def test_waking_with_fathers_sword_removes_the_floor_sword_and_survives_reentry(self):
+    def test_throne_keeps_floor_sword_and_old_drawn_sword_until_physical_pickup(self):
         from pop2.environments import environment_for
 
         scene = self.scene
         scene.load_level(8)
+        scene.peaceful = True
         scene.jump_to_room(8, 2, 267, 1)
         self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 22)
+        self.assertEqual(scene.sword_set(), 2)
         environment_for(scene).wake_from_vision()
+        # The native logical word changes for checkpoint/exit admission,
+        # but the loaded sword artwork does not reload until TryPickUp.
         self.assertEqual(scene.game.sword_type, 1)
+        self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 22)
+        self.assertEqual(scene.sword_set(), 2)
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+            self.tick(40)
+            scene.set_key_state('ctrl', True)
+            self.tick()
+            scene.set_key_state('ctrl', False)
+            self.tick(20)
+        self.assertTrue(scene.sword_drawn)
+        self.assertEqual(scene.sword_set(), 2)
+        self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 22)
+        # Return to the floor item and take it through ordinary held Shift,
+        # including the crouch/pickup sequence, rather than calling take_sword.
+        scene.jump_to_room(8, 2, 267, 1, reset_guards=False)
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+            scene.set_key_state('shift', True)
+            self.tick(20)
+            scene.set_key_state('shift', False)
         self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 1)
+        self.assertEqual(scene.sword_set(), 1)
         scene.jump_to_room(7, 2, 200, 0, reset_guards=False)
         scene.jump_to_room(8, 2, 267, 1, reset_guards=False)
         self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 1)
+        self.assertEqual(scene.sword_set(), 1)
+        scene.restart_opening(play_sound=False, redraw=False)
+        self.assertEqual((scene.game.sword_type, scene.sword_set()), (2, 2))
+        self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 22)
 
     def test_serpent_hit_uses_head_shape_127_at_native_offsets_in_both_facings(self):
         from pop2.combat import actor_frame_index

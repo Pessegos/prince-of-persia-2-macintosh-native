@@ -14,7 +14,7 @@ wording are unchanged.
 | Empty map rooms | Hide level8 rooms27/15/7 and level9 rooms23/22 from F3's map. Traversal confirms these are exactly the removed rooms. Native LEVL data and gameplay links stay intact. |
 | Level8 room2 tunnel endpoint | Preview the crawl's first translated SEQS/FRAM body against the actual barrier, including the native five-pixel prone backoff. A blocked hold stays at prone pose251; reversing still works. This is the user-requested improvement over the original's repeated preparation poses. |
 | Tiles on opener buttons, level8 room17 | Ordinary kind5 impacts selected timed opening2 instead of permanent opening3. The impacted plate keeps timer31; the gate reaches255 and stays there, including an impact on an already open gate. Reversible plates retain their existing behavior. |
-| Sword after level8 room9 vision | Waking grants sword type1 and consumes the floor sword in the same callback, preventing two simultaneous swords. The existing potion/item world state persists this consumption. |
+| Sword after level8 room9 vision | Corrected after the user's two follow-up videos: the floor sword stays after the vision, and Ctrl still draws the old sword. Physical pickup consumes the item and loads the father's sword art. The first batch's floor-consumption shortcut was incorrect and is superseded below. |
 | Level8 completion | The ordinary completion-opcode host stopped its supported-level list at7. It now creates the level8 exit gate and reaches the existing 8->9 story/level loader. |
 | Level9 room12 serpent | The same omitted screen-entry transfer: room13's X815 record moves left into room12 at scene X98. Death and record identity persist across room changes. |
 | Level7 room8 scythe freeze | Rubble adds low-byte bit0x20, absent from exported animation/blood states. Mask that decoration bit when selecting a rendered state. Let the dynamic scythe foreground override the stale rubble impact phase so the trap also completes its full cycle. |
@@ -95,3 +95,45 @@ offset and Y207. No services are stubbed; AddObj/rasterization/full scheduling
 are excluded. Local evidence: `rendered/ruins-bugs/native-serpent-hit-palette.json`.
 The strengthened both-facing pixel regression rejects6b8fe08 and checks the
 actual orange colour rather than deriving its expectation from the Head palette.
+
+## Father's sword pickup follow-up
+
+The supplied `macintosh dad sword behaviour.mp4` shows the floor sword still
+present after the vision, Ctrl drawing the old short sword, and the father
+sword becoming visible only after physical pickup. The port video instead
+switched the displayed sword immediately. Removing the floor item at wake,
+as the first batch did, misunderstood the report; that change is removed.
+
+The missing distinction is native cached artwork, not the logical sword word:
+
+- Post-vision7:391c-395c selects wake sequence231, restores life, marks the
+  vision complete and sets logical sword word A5-0x500a to1. It does not call
+  LoadSwordSet. The loaded sword type at A5-0x46da remains2, so SHPL1200 and
+  Kid AFRM25201 still supply the short sword. The floor item stays type22.
+- Physical pickup6:152c-1552 selects91, consumes the cell, sets the logical
+  word from the item and explicitly calls LoadSwordSet3:5a4e. The loader
+  replaces the cached type with1, selects SHPL1000/AFRM25001 and loads the
+  sword palette. Checkpoint/exit/music/damage logic continues to read the
+  separate native logical word; the existing recovered gates remain intact.
+- `ScenePrototype.loaded_sword_type` now carries that runtime art cache.
+  Level bind, normal restart and checkpoint restart reload from the logical
+  word; physical item pickup updates it explicitly. It is not a new saved
+  field. Room changes preserve the loaded art, as they already preserve the
+  floor item's consumed/unconsumed state.
+
+`tools.probe_throne_sword_loading` executes original7:391c up to395c and
+6:152c up to1554, including real LoadSwordSet3:5a4e, LoadKidAttachFrames3:5b2a
+and LoadShapeSet3:5e7e. Four traces (both input facings, low/full life) agree:
+after wake logical1/loaded2/item untouched; after pickup logical1/loaded1,
+with resource requests AFRM25001, SHPL1000 and CTBL1004 at240. Supplied
+endpoints are the already loaded working Prince, JumpSeq and ChangeCell
+effects, synthetic resource handles, resource-file/memory traps, GetResource,
+LoadShapeList and PoPSetPalette. It excludes PlayNIS, actual sequence/cell
+effects, the resource manager, rasterization and full FrameAdv equivalence.
+
+The regression drives wake completion and Ctrl with the floor item present,
+then ordinary held-Shift crouch/pickup, subsequent room reentry and fresh
+restart. A checkpoint regression checks art reload and the uncollected item.
+The inspected offscreen comparison is
+`rendered/ruins-bugs/throne-sword-sequence.png`; native trace output is
+`rendered/ruins-bugs/native-throne-sword-loading.json`.

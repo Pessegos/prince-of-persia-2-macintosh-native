@@ -243,6 +243,8 @@ class LevelEightExitHostTests(unittest.TestCase):
             self.assertEqual(scene.game.sword_type, 1)
             self.assertTrue(scene.game.caverns.throne_done)
             self.assertEqual(scene.room_id, 8)
+            self.assertEqual(scene.sword_set(), 1)  # Restart reloads from the logical word.
+            self.assertEqual(scene.level_map.tile(8, 5, 2).kind, 22)  # Still uncollected.
 
     def test_actual_room_twenty_three_button_requires_the_throne_sword(self):
         from unittest.mock import patch

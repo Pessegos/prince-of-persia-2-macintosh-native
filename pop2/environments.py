@@ -1132,7 +1132,7 @@ class Ruins(Caverns):
 
     def wake_from_vision(self):
         # 7:391c-395e after PlayNIS(6): facing right, SEQS 231 on the floor,
-        # full life, the father's sword (a5-0x500a = 1); song 182 (39d4),
+        # full life, logical sword word1 (a5-0x500a); song 182 (39d4),
         # which the scene usually leaves playing.
         scene = self.scene
         state, caverns = scene.sequence_state, scene.game.caverns
@@ -1148,11 +1148,9 @@ class Ruins(Caverns):
         scene.game.sword_type = 1
         player.sword_lost = False
         caverns.throne_done = True
-        # The vision grants the sword here. Retire its floor item at the
-        # same boundary so it cannot coexist with the equipped sword.
-        sword = scene.level_map.tile(THRONE_ROOM, 5, 2)
-        if sword.kind == 22:
-            caverns.potions.take_sword(sword)
+        # 7:3958 changes the logical word without LoadSwordSet. Keep the
+        # old sword art loaded and the floor item until actual pickup
+        # (6:152c-1552), which consumes the item and reloads the artwork.
         scene.combat.ruins.songs.append(182)
         scene.status.set("The father's sword")
 
