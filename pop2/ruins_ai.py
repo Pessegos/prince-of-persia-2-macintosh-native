@@ -143,10 +143,42 @@ class RuinsCreatures:
         # InitOpps rebuilds the room bank; a target from the old room cannot
         # prevent the new room's HeadGetAngry from banking a head.
         self.banked = None
+        existed = room in self.rooms
+        self._ensure_room(encounter, room)
+        # CheckSideRoomsForVisibleOpps6:2f4e-308a precedes InitOpps. It
+        # moves records (not merely their drawing) into the entered room,
+        # rebasing X by510 and deleting the source record. This applies to
+        # opponent sets5/6 too: e.g. level7 room20's head ->28, and level9
+        # room13's serpent ->12. No continuous head side-cut is added here.
+        from pop2.combat import visible_side_opponent
+        from pop2.terrain import LevelMap
+
+        terrain = getattr(encounter, 'terrain', None) or LevelMap(encounter.level)
+        transferred = []
+        for side, offset in (('left', -510), ('right', 510)):
+            source = terrain.neighbor(room, side)
+            if source is None or source == room:
+                continue
+            self._ensure_room(encounter, source)
+            for actor in tuple(self.rooms[source]):
+                if (len(self.rooms[room]) >= 5 or actor.ruins.removed
+                        or not visible_side_opponent(actor.state.target_x, side)):
+                    continue
+                self.rooms[source].remove(actor)
+                actor.room = room
+                actor.state.target_x += offset
+                actor.state.current_x += offset
+                self.rooms[room].append(actor)
+                transferred.append(actor)
+            for slot, actor in enumerate(self.rooms[source]):
+                actor.ruins.slot = slot
+        for slot, actor in enumerate(self.rooms[room]):
+            actor.ruins.slot = slot
+            if (existed or any(actor is moved for moved in transferred)) and actor.alive and not actor.ruins.removed:
+                self._restart(encounter, actor)
+
+    def _ensure_room(self, encounter, room):
         if room in self.rooms:
-            for actor in self.rooms[room]:
-                if actor.alive and not actor.ruins.removed:
-                    self._restart(encounter, actor)
             return
         actors = []
         for spawn in ruins_spawns(encounter.level, room):

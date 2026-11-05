@@ -169,3 +169,36 @@ class RuinsBugReportTests(unittest.TestCase):
             scene.in_animation_tick = False
             self.tick(15)
         self.assertGreater(scene.sequence_state.target_x, stopped)
+
+    def test_level_seven_room_twenty_eight_imports_its_head_without_duplication(self):
+        scene = self.scene
+        scene.load_level(7)
+        scene.jump_to_room(27, 0, 300, 0)
+        brain = scene.combat.ruins
+        heads = [actor for actor in scene.combat.visible_ruins() if actor.state.actor_type in (7, 8)]
+        self.assertEqual(len(heads), 1)
+        head = heads[0]
+        self.assertEqual((head.room, head.state.target_x), (27, 47))
+        scene.jump_to_room(19, 1, 200, 0, reset_guards=False)
+        self.assertEqual((head.room, head.state.target_x), (19, 557))
+        self.assertFalse(any(actor is head for actor in brain.actors(27)))
+        scene.jump_to_room(27, 0, 300, 0, reset_guards=False)
+        self.assertTrue(any(actor is head for actor in scene.combat.visible_ruins()))
+        self.assertEqual(sum(actor is head for actors in brain.rooms.values() for actor in actors), 1)
+
+    def test_level_nine_room_twelve_imports_its_serpent_and_preserves_its_death(self):
+        scene = self.scene
+        scene.load_level(9)
+        scene.jump_to_room(11, 2, 350, 0)
+        actors = scene.combat.visible_ruins()
+        self.assertEqual(len(actors), 1)
+        serpent = actors[0]
+        self.assertEqual((serpent.room, serpent.state.actor_type, serpent.state.target_x), (11, 11, 98))
+        serpent.life = 0
+        scene.combat.ruins.jump(serpent, 174)
+        serpent.runtime.next_frame()
+        scene.jump_to_room(12, 2, 300, 0, reset_guards=False)
+        scene.jump_to_room(11, 2, 350, 0, reset_guards=False)
+        self.assertIn(serpent, scene.combat.visible_ruins())
+        self.assertEqual(serpent.life, 0)
+        self.assertFalse(any(actor.alive for actor in scene.combat.visible_ruins()))
