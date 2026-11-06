@@ -609,8 +609,11 @@ class Caverns(Environment):
                 continue
             collision = (scene.player_collision_bounds() if player else
                          scene.guard_art.collision_bounds(state, floor_y(motion.row), actor.sword_drawn))
+            width = collision[2] + 1 - collision[0]
             hit = spikes.contact(scene.level_map, motion, state, record, collision,
-                                 actor.alive, actor.sword_drawn)
+                                 actor.alive, actor.sword_drawn,
+                                 rock_near=lambda tile, facing=state.facing, width=width:
+                                 scene.level_map.slide_rock_near_spikes(tile, facing, width))
             if hit is not None:
                 self.impale(actor, *hit)
 

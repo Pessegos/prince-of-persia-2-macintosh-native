@@ -65,20 +65,24 @@ class WallSpikes:
         if state.target_x <= threshold:
             self.trigger(tile)
 
-    def contact(self, terrain, motion, state, record, bounds, alive=True, sword_drawn=False):
-        # CheckSpikeHit 5:3af8. Idle/cautious-step/dead poses, skeletons
-        # and mice are exempt; airborne actors must clear the height gate.
+    def contact(self, terrain, motion, state, record, bounds, alive=True, sword_drawn=False,
+                rock_near=None):
+        # CheckSpikeHit 5:3af8. Dead poses, skeletons and mice never hit.
         if (not alive or state.actor_type in (1, 4) or state.source_sequence_id == 85
-                or state.action in (15, 185, 242, 243, 266, 271)
-                or 121 <= state.action <= 132
-                or floor_y(motion.row) + state.current_y < motion.row * 120 + 56):
+                or state.action in (185, 242, 243, 266, 271)):
             return None
+        # Idle and cautious-step poses, and height over the spikes, are spared
+        # (5:3b84-3bbe), like a body past the reach. All three reach 5:3bc0,
+        # which in the temple lifts the exemption beside a sliding rock.
+        spared = (state.action == 15 or 121 <= state.action <= 132
+                  or floor_y(motion.row) + state.current_y < motion.row * 120 + 56)
         column = character_column(floor_contact_x(state.target_x, state.facing, record))
         for col in (column - 1, column):
             tile = terrain.tile(motion.room, col, motion.row)
             if tile.kind != 2 or not lethal(tile.foreground):
                 continue
-            if bounds[0] - int(bool(state.facing)) >= col * 51 + (88 if sword_drawn else 95):
+            beyond = bounds[0] - int(bool(state.facing)) >= col * 51 + (88 if sword_drawn else 95)
+            if (spared or beyond) and (rock_near is None or not rock_near(tile)):
                 continue
             key = tile.room, tile.row * 10 + tile.column
             self.foreground[key] = 240

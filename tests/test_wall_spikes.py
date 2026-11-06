@@ -9,6 +9,7 @@ from pop2.cavern_state import CavernState
 from pop2.caverns import draw_cavern_spikes
 from pop2.paths import ASSET_DIR
 from pop2.sequence_runtime import SequenceState
+from pop2.slide_rocks import SlideRocks
 from pop2.terrain import LevelMap, TerrainMotion
 from pop2.wall_spikes import WallSpikes, drawing_phase, lethal
 from pop2.environments import environment_for
@@ -122,6 +123,35 @@ class WallSpikeTests(unittest.TestCase):
         self.assertIsNone(self.hit(alive=False))
         self.state.select(85)
         self.assertIsNone(self.hit())
+
+    def test_a_rock_beside_the_spikes_lifts_the_pose_and_reach_exemptions(self):
+        # 5:3bc0-3bd4. Before, the temple spared the pose beside a rock too.
+        self.state.action = 15
+        self.spikes.foreground[0, 24] = 1
+        args = self.terrain, self.motion, self.state, self.record, self.bounds
+        self.assertIsNone(self.spikes.contact(*args, rock_near=lambda tile: False))
+        self.assertIsNotNone(self.spikes.contact(*args, rock_near=lambda tile: True))
+        self.state.action = 185
+        self.assertIsNone(self.spikes.contact(*args, rock_near=lambda tile: True))
+
+    def test_slide_rock_near_spikes_asks_the_next_cell_then_two_past_it(self):
+        # 10:1fa8: the second ReadCell starts from the cached first cell, so
+        # the columns asked are +1 and +3, never +2. Only environment 2 asks.
+        struct.pack_into('>H', self.level, 0x2186, 2)
+        terrain = LevelMap(self.level)
+        spikes = terrain.tile(0, 4, 2)
+
+        def near(x):
+            terrain.caverns = CavernState(rocks=SlideRocks([(x, 356, 1, 0, 2, 6, 2, 459)]))
+            return terrain.slide_rock_near_spikes(spikes, 1, 30)
+
+        # Column 5 answers X 225..276: from there the left edge is raised to
+        # the spike wall's boundary and a right-facing body's width (10:18b6).
+        # Column 7 answers 327..388, and column 6 is skipped.
+        self.assertEqual([x for x in (224, 225, 276, 277, 326, 327, 388, 389) if near(x)],
+                         [225, 276, 327, 388])
+        struct.pack_into('>H', self.level, 0x2186, 3)
+        self.assertFalse(near(276))
 
     def test_horizontal_and_vertical_hit_thresholds_are_not_the_sprite_box(self):
         self.spikes.foreground[0, 24] = 1

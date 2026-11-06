@@ -82,5 +82,27 @@ at column*51+66, row*120+105 outside the caverns (63 and 106). The port drew
 the caverns' pieces, which in Temple.rsrc are scenery shapes. The rendered
 phases show spikes leaving the wall, and the blood bank at 240.
 
-Not done: in the temple, MobSpikes' pose exemption is lifted beside a sliding
-rock (5:3bc0-3bd4, SlideRockNearSpikes 10:1fa8).
+In the temple, CheckSpikeHit's exemptions are lifted beside a sliding rock
+(5:3bc0-3bd4). All three lead there: the body past the reach (5:3b82), too high
+(5:3ba8), and the poses 15 and 121-132 (5:3bb8, 5:3bbe). Skeletons, mice,
+sequence 85 and dead poses return earlier and stay exempt, and the spike must
+still be in a lethal phase.
+
+SlideRockNearSpikes 10:1fa8 asks SlideRockInCell (margin 25) about the next
+cell, then about `ReadCell`'s cached column plus two. That cache was moved by
+the first query, so the columns are +1 and +3 and +2 is never asked. The
+routine restores the cache afterwards. It reads like a slip, and it is the
+original's behaviour.
+
+`tools/probe_temple_spike_rock.py` runs 10:1fa8 for all 15 wall-spike cells of
+levels 10-13 with a rock in the room or up to two rooms left or right (19,032
+cases), and CheckSpikeHit on one cell with no rock, a rock near and a rock far,
+across poses, heights, armed, facing, edges, phases and actor types (7,560
+cases): 0 mismatches with real ReadCell, GetSlideRockX, IsDeadPos and MobSpikes.
+Changing +3 to +2 in the port gives 440 mismatches at a coarser sweep. The
+impalement and the MOB lookup are sinks, and the rock and the edges are supplied.
+The port still stops at the first spike of the two columns where the native
+loop goes on; that matters only for two adjacent lethal spikes.
+
+No temple spike cell has a rock cell in its row except level 12's room 10 (spike
+at 9, rock at 0), so few rooms will show this in play.

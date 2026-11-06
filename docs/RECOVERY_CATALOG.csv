@@ -544,7 +544,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 10,Temple,GetSlideRockDetData,0x190c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,5
 10,Temple,GetSlideRockOnRoomRow,0x1a9e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,6,1
 10,Temple,IsAllFloorsInDirToRock,0x1b04,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,15
-10,Temple,SlideRockNearSpikes,0x1fa8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,4
+10,Temple,SlideRockNearSpikes,0x1fa8,jump_table,partial,pop2/terrain.py,"asks columns +1 and +3 (the ReadCell cache moves) for a rock beside wall spikes; lifts every CheckSpikeHit exemption from 5:3bc0; tools/probe_temple_spike_rock.py, 0 mismatches",1,4
 10,Temple,SlideRockInCell,0x2036,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,5,2
 10,Temple,TempGetSlideRockX,0x20fe,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
 10,Temple,TriggerSlideRock,0x2152,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,3

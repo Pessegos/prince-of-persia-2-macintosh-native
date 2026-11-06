@@ -265,6 +265,18 @@ class SlideRocks:
                 edge = max(edge, boundary)
         return edge
 
+    def in_cell(self, level, room, column, row, facing, width):
+        """SlideRockInCell 10:2036 with margin 25: the rock's right edge in
+        the cell shifted 26 to the right, or its left edge in the one shifted
+        25 to the left."""
+        record = self.record(room, row)
+        if record is None:
+            return False
+        left = column * 51
+        if left + 26 <= signed_word(record[0] + 56) <= left + 77:
+            return True
+        return left - 25 <= signed_word(self.left_face(level, record, facing, width) - 223) <= left + 26
+
     def barrier_edge(self, level, room, row, x, facing, width):
         """GetSlideRockX 5:21f6 -> 10:20fe/180e as Collide 4:589e asks it:
         the first live rock's right edge (X + 279) in native ``room`` and

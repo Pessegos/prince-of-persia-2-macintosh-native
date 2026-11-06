@@ -382,6 +382,22 @@ class LevelMap:
         return self.caverns.rocks.barrier_edge(self.level, room + 1, row, native_x(state.target_x),
                                                state.facing, width)
 
+    def slide_rock_near_spikes(self, tile, facing, width):
+        """SlideRockNearSpikes 10:1fa8 for wall spikes ``tile`` (temple only):
+        a rock in the next cell, or two cells past that one. ReadCell leaves
+        its cell in the cache, so the second query starts from the first."""
+        if struct.unpack_from('>H', self.level, 0x2186)[0] != 2 or self.caverns is None:
+            return False
+        cell = tile
+        for step in (1, 2):
+            cell = self.tile(cell.room, cell.column + step, cell.row)
+            if cell.room is None:
+                return False
+            if self.caverns.rocks.in_cell(self.level, cell.room + 1, cell.column, cell.row,
+                                          facing, width):
+                return True
+        return False
+
     def combat_draw_offset(self, room, row, state, record, bounds):
         """DoKidEngarde 6:1f04-2126 for the Kid: the facing-relative offset
         before SEQS 55, or None when the draw is refused."""
