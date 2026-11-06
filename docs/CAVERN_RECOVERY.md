@@ -1286,8 +1286,9 @@ death-alignment cases across the three traps, all 256 phase-controller
 inputs, and 18 back/front drawing-command cases. Resource-backed tests cover
 running and cautious approaches at all three traps, both Prince death
 sequences, pause and restart. Pure tests run on CI without game resources.
-Temple-specific behavior, skeleton interactions and a unified shared MOB
-bank are not claimed by this cavern implementation.
+Skeleton interactions and a unified shared MOB bank are not claimed by this
+cavern implementation. The temple binds its own drawing banks (10:1296); see
+[its playtest notes](research/temple-november-playtest.md#wall-spikes).
 
 ### Armed retreat into level five's trap (2026-10-31)
 

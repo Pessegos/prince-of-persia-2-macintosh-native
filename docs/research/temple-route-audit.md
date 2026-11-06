@@ -1,6 +1,6 @@
 # Temple Route Audit, Levels 10-13
 
-Status: 2026-11-05. Port rules only: no route here has been compared with the
+Status: 2026-11-06. Port rules only: no route here has been compared with the
 native game, and a route found in the port proves that the port can finish a
 level, not that the original plays the same way. Native rooms are one-based.
 
@@ -29,7 +29,7 @@ Supplied or left out:
 | Level | Result | Macros | Frames | What the route needs |
 | --- | --- | --- | --- | --- |
 | 10 | finishes | 9 | 442 | Loose 12:21 falls on plate 19:21 (door 19:15); trap door 12:27 drops beside the door |
-| 11 | finishes | 85 | 3,558 | See below |
+| 11 | finishes | 87 | 3,627 | See below |
 | 12 | not finished | | | No route found; see the last section |
 | 13 | finishes | 35 | 1,616 | Plate 10:10 opens gate 19:11; death at the altar; the shadow lands on plate 4:12 and opens door 32:12 |
 
@@ -47,6 +47,8 @@ The order of the level, as the route found it:
    Macros that stop on the way arrive with the gate already falling. This is
    the tightest step found, and it was only checked in the port.
 4. Rooms 6, 13, 18, 17, 23, 25, 18, 24, 19, 24, 26, 28, 27, 22, 21, 32 and 29.
+   Room 26 is crossed by hopping over trap door 26:14: landing on it, or a step
+   onto it, drops the Prince, and it offers no grip.
    Loose 29:7 gives way into the sealed east end of room 29's bottom row.
 5. Plate 29:25 starts exit door 24:25, which stays open. A crawl under the
    blade 29:22-23 leads to room 20.
@@ -64,6 +66,8 @@ The order of the level, as the route found it:
 | A sword death at the altar raised no shadow | 10:2a62 reads the pose, not a fall | Level 13's only exit needs that death |
 | A key during SEQS 11 could run a frame that cleared the control bank, then crash | Port defect | `AttributeError` during play |
 | Temple blades (tiles 12/13) never ran | 2:63e2-63f4, 5:57bc, 5:588a; drawn by 10:0772 | Every blade in levels 10-13 was a harmless slot |
+
+| Catch took a ledge past an open trap door | 4:393e calls IsLedge 4:3f58-3f6e | Levels 11 and 12 had relied on it; both routes were searched again |
 
 The blades deserve a note. FrameAdv's environment 2 case falls through to the
 ruins' scythe calls; none of 5:57bc, 5:5fde, 5:588a or 5:5a1c tests the
@@ -108,6 +112,9 @@ Exit door 7:23 opens from plate 14:8 or plate 24:23.
 - 14:8 lies under hole 7:28, behind gate 12:21. Plate 18:27 is too far from that
   gate, so the way in is plate 12:2 on the northern route: gate 5:2, gate 2:9,
   plate 2:22 (gate 1:3), plate 1:5 (gate 1:9), gate 3:2, then rooms 3, 11, 7, 12.
+
+After the playtest fixes ([notes](temple-november-playtest.md)) the route to
+these gates goes round door 1:1 instead of catching the ledge past it.
 
 From a fresh load, the audit crawls under room 6's two blades and works through
 the northern gates. Real keys drop loose floors on plates 19:20, 5:28 and 9:0,

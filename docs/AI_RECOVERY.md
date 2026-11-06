@@ -1097,7 +1097,8 @@ also translated; the special room 16/19 rendering cap is still not covered.
 
 GetOppDeadSeq 4:0074-010a / FrameAdv 2:6544-654c chooses flat corpse sequence
 195 (pose 228) for odd ordinary-NPC slot IDs. The helper computes slot ID
-modulo two, not Rnd. Even slots retain pose 185. Slot order is the room's
+modulo two, not Rnd. Even slots retain pose 185. The temple's set 7 has four
+corpses instead (research/temple-november-playtest.md). Slot order is the room's
 ordered NPC list, including reinforcements/transferred actors. Special actor
 corpse variants and the complete native bank/lifecycle implementation remain
 outside this ordinary supported-room subset.

@@ -8,6 +8,8 @@ row, phase word); X is room-local.
 
 from dataclasses import dataclass, field
 
+from pop2.loose_floors import pressure_tile
+
 TRAPDOOR_TILE = 26
 CAPACITY = 30
 OPEN_CUE, CLOSE_CUE = 197, 27
@@ -41,6 +43,16 @@ class TrapDoors:
             self.bank.append((tile.column * 51, (tile.row + 1) * 120 + 5, tile.room + 1, 0, 0, 10,
                               tile.row, phase))
         return (OPEN_CUE,)
+
+    def step(self, terrain, motion, state, record):
+        """A deliberate port exception, requested by the user: the Prince's
+        foot on a closed door opens it. The original opens one only from
+        ShakeEm 5:28c8 and Falling 6:0210; CheckPress 5:13ac-13b6 ignores
+        tile 26, so natively he could walk across."""
+        if 87 <= state.action <= 99 or 135 <= state.action < 141:
+            return ()  # Hanging or climbing: CheckPress reads the cell above.
+        tile = pressure_tile(terrain, motion, state, record)
+        return self.trigger(terrain, tile, tile.column) if tile is not None else ()
 
     def advance(self):
         """10:24fa through MakeRubble 5:29e8: low phases up to 16 advance;

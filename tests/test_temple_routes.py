@@ -15,16 +15,17 @@ ROUTES = {
     10: ['runR20', 'leapcatchR20', 'runR8', 'climb', 'hopR', 'leapR20', 'hopcatchR', 'leapR5',
          'hopcatchL'],
     11: ['runL20', 'leapcatchL5', 'hopcatchL', 'hopcatchL', 'hopcatchL', 'descendL', 'tapR',
-         'climb', 'tapL', 'jump', 'tapR', 'climb', 'hopL', 'leapcatchR5', 'leapcatchR11', 'climb',
-         'climb', 'hopcatchR', 'leapcatchL14', 'climb', 'climb', 'climb', 'tapL', 'stepL',
-         'leapR5', 'rushcatchL', 'hopcatchL', 'tapL', 'tapR', 'climb', 'climb', 'climb', 'climb',
-         'climb', 'hopcatchR', 'leapcatchL5', 'runL20', 'runL20', 'hopcatchR', 'climb', 'climb',
-         'hopcatchR', 'climb', 'climb', 'climb', 'stepR', 'runR20', 'leapcatchL20', 'leapcatchL8',
-         'climb', 'down', 'leapR5', 'leapcatchL5', 'climb', 'hopcatchR', 'descendhangR',
-         'hopcatchR', 'climb', 'hopcatchR', 'climb', 'climb', 'leapR8', 'runR20', 'climb',
-         'leapcatchR11', 'tapR', 'tapL', 'tapL', 'stepL', 'crawlL', 'creepL8', 'creepL8',
-         'creepL8', 'creepL8', 'creepL8', 'creepL8', 'leapcatchL11', 'leapcatchL20', 'leapcatchL8',
-         'crawlL', 'tapL', 'descendhangL', 'descendL', 'leapR14', 'hopcatchR'],
+         'climb', 'tapL', 'jump', 'tapR', 'climb', 'hopL', 'leapcatchR5', 'leapcatchR11',
+         'climb', 'climb', 'hopcatchR', 'leapcatchL14', 'climb', 'climb', 'climb', 'tapL',
+         'stepL', 'leapR5', 'rushcatchL', 'hopcatchL', 'tapL', 'tapR', 'climb', 'climb',
+         'climb', 'climb', 'climb', 'hopcatchR', 'leapcatchL5', 'runL20', 'runL20', 'hopcatchR',
+         'climb', 'climb', 'hopcatchR', 'climb', 'climb', 'climb', 'stepR', 'runR20',
+         'leapcatchL20', 'leapL14', 'climb', 'crawlL', 'descendhangR', 'runL5', 'leapcatchL11',
+         'climb', 'hopcatchR', 'descendhangR', 'hopcatchR', 'climb', 'hopcatchR', 'climb',
+         'climb', 'leapR8', 'runR20', 'climb', 'leapcatchR11', 'tapR', 'tapL', 'tapL', 'stepL',
+         'crawlL', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8',
+         'leapcatchL11', 'leapcatchL20', 'leapcatchL8', 'crawlL', 'tapL', 'descendhangL',
+         'descendL', 'hopR', 'hopR', 'hopcatchR'],
     13: ['runL8', 'hopcatchR', 'descendhangL', 'tapL', 'climb', 'leapL5', 'hopcatchL', 'leapL5',
          'leapL20', 'leapcatchL14', 'leapcatchL8', 'stepL', 'tapL', 'leapL14', 'leapL20',
          'leapL11', 'leapL14', 'leapL11', 'drink', 'leapR20', 'leapcatchR5', 'stepR', 'leapR8',
@@ -36,13 +37,13 @@ ROUTES = {
 # Level 12 is not finished: see the audit. This far, three loose floors hold
 # gates 3:2, 5:0 and 2:9 open for good.
 LEVEL_12_GATES = ['leapR11', 'leapcatchL20', 'leapL5', 'runR5', 'runL5', 'hopcatchL', 'crawlL',
-                  'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'tapL', 'stepL', 'crawlL',
-                  'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'runL8',
-                  'hopcatchR', 'climb', 'hopcatchR', 'climb', 'climb', 'leapcatchR11', 'climb',
-                  'climb', 'climb', 'climb', 'leapcatchR5', 'leapcatchL20', 'jump', 'descendL',
-                  'leapcatchR5', 'leapR11', 'jump', 'tapL', 'climb', 'hopR', 'runR11', 'hopcatchL',
-                  'leapcatchL20', 'tapL', 'leapcatchL20', 'climb', 'hopcatchR', 'climb', 'climb',
-                  'climb', 'tapR', 'down']
+                  'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'tapL', 'stepL',
+                  'crawlL', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8',
+                  'runL8', 'hopcatchR', 'climb', 'hopcatchR', 'climb', 'climb', 'leapcatchR11',
+                  'climb', 'climb', 'climb', 'climb', 'hopcatchR', 'leapcatchL11', 'tapL',
+                  'hopcatchR', 'runL5', 'leapcatchR5', 'leapR11', 'jump', 'tapL', 'climb',
+                  'hopR', 'runR11', 'hopcatchL', 'leapcatchL20', 'tapL', 'leapcatchL20',
+                  'climb', 'leapcatchR5']
 
 def blades_exported(number):
     path = ASSET_DIR / f'temple_level{number}.json'

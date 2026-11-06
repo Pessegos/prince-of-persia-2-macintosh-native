@@ -454,6 +454,8 @@ class Caverns(Environment):
         state, motion = scene.sequence_state, scene.terrain_motion
         if motion is not None:
             state.sound_events.extend(loose.press(scene.level_map, motion, state, scene.frames[state.action]))
+            state.sound_events.extend(scene.game.caverns.trapdoors.step(
+                scene.level_map, motion, state, scene.frames[state.action]))
             state.sound_events.extend(scene.game.caverns.plates.press(
                 scene.level_map, motion, state, scene.frames[state.action], scene.combat.player.alive,
                 sword_type=scene.game.sword_type))
@@ -511,6 +513,8 @@ class Caverns(Environment):
         ruins = getattr(scene.combat, 'ruins', None)
         if ruins is not None:
             ruins.crush_offscreen(scene.combat, blocks)
+        else:
+            scene.combat.crush_offscreen(blocks)
         actors = (scene.combat.player, *scene.combat.active_guards(),
                   *(scene.combat.visible_ruins() if ruins is not None else ()))
         for block in blocks:

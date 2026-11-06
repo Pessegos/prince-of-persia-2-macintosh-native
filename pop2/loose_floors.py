@@ -235,20 +235,25 @@ class LooseFloors:
         return tuple(sounds), tuple(advanced)
 
 
-def floor_hits_ruins_record(block, actor):
-    """ContactOppInfo5:377e-3812 for an unloaded set-5 opponent record.
+def floor_hits_record(block, row, x, height=57):
+    """ContactOppInfo5:377e-3812 for an unloaded opponent record.
 
-    This uses the saved X/row, not a live Head FRAM supporting foot. Heads
-    use floor-57 here; the loaded-actor path instead uses head Y-38.
+    This uses the saved X/row, not a live FRAM supporting foot.
     """
-    threshold = floor_y(actor.row) - (0 if actor.ruins.kind == 8 else 57)
+    threshold = floor_y(row) - height
     # The record path uses signed long division19:4bb0 of native X-229,
     # not GetCharCol5:48b0 (which differs for negative/offscreen X).
-    dividend = actor.state.target_x - 22
+    dividend = x - 22
     column = abs(dividend) // 51 * (-1 if dividend < 0 else 1)
+    return 0 < block.y - threshold <= block.velocity * 4 and block.column == column
+
+
+def floor_hits_ruins_record(block, actor):
+    """The set-5 record: heads use floor-57 here, serpents the floor itself;
+    the loaded-actor path instead uses head Y-38."""
     return (actor.alive and not actor.ruins.removed and block.room == actor.room
-            and 0 < block.y - threshold <= block.velocity * 4
-            and block.column == column)
+            and floor_hits_record(block, actor.row, actor.state.target_x,
+                                  0 if actor.ruins.kind == 8 else 57))
 
 
 def floor_hits_actor(block, motion, state, record, alive=True):

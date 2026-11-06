@@ -1,6 +1,8 @@
 # Temple Trap-Door Triggering
 
 Research only, not a runtime implementation or full falling-platform model.
+The port also opens a door under the Prince's step, which the original does not:
+see [the playtest notes](temple-november-playtest.md#trap-doors-tile-26).
 `R` denotes recovered/reference behavior in the stated scope.
 
 | Rule | Source | Status |

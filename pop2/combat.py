@@ -12,7 +12,7 @@ from pop2.coordinates import NATIVE_X_ORIGIN, native_room, scene_x
 from pop2.bridge import (bridge_checked, bridge_column, bridge_engage, bridge_gate_open,
                          bridge_tension)
 from pop2.enemy_alerts import alert_path_mode
-from pop2.opponent_records import GuardRoomRecord, removed_on_room_save
+from pop2.opponent_records import CORPSE_POSES, GuardRoomRecord, corpse_sequence, removed_on_room_save
 from pop2.skeleton import exit_guarded
 from pop2.flame_sword import (
     ADVANCE_SEQUENCE as FLAME_ADVANCE, DEATH_METHOD as FLAME_DEATH_METHOD,
@@ -452,11 +452,38 @@ class CombatEncounter:
                 restored = actor.skeleton.restore_room(actor, actor.bank_slot)
                 living = actor.skeleton.native_alive
             else:
-                restored = actor.guard_record is not None and actor.guard_record.restore(actor, actor.bank_slot)
+                restored = actor.guard_record is not None and actor.guard_record.restore(
+                    actor, actor.bank_slot, self._opponent_set())
                 living = actor.native_alive
             if restored and living:
                 self.player.state.callback_flag = 0
                 self.advance_pause = self.attack_pause = 0
+
+    def _opponent_set(self):
+        return struct.unpack_from(">h", self.level, 0x21a4)[0] if self.level is not None else 0
+
+    def crush_offscreen(self, blocks):
+        """MakeRubble 5:3602-362c: debris outside the loaded room meets the
+        saved records. ContactOppInfo 5:377e tests them; CrushOppInfo 6:2aa2
+        leaves SEQS 22 at cursor 0, played on entering the room. Skeletons
+        (set 2) are not killed this way, and the ruins have their own path."""
+        if self._opponent_set() not in (0, 7):
+            return
+        from pop2.loose_floors import floor_hits_record
+
+        active = self.active_guards()
+        for block in blocks:
+            if block.room is None or block.room == self.player.room:
+                continue
+            self._load_room(block.room)
+            for guard in self.room_encounters[block.room][0]:
+                if (guard.alive and guard.state.actor_type == 2 and guard.flame_sword is None
+                        and not any(guard is other for other in active)
+                        and floor_hits_record(block, guard.row, guard.state.target_x)):
+                    guard.life = 0
+                    guard.guard_record = GuardRoomRecord(
+                        22, 0, 0, False, guard.row * 10 if guard.guard_record is None
+                        else guard.guard_record.cell)
 
     @staticmethod
     def _capture_opponent_record(actor, *, restart_living, cell=None, update_height=True):
@@ -1558,16 +1585,16 @@ class CombatEncounter:
             self.room_encounters[guard.room][0].append(guard)
 
     def _select_guard_corpse_pose(self, guard):
-        if (guard.state.actor_type == 4 or guard.state.action != 185 or self.level is None
-                or guard.state.level_kind == 6):
+        if guard.state.actor_type == 4 or guard.state.action != 185 or self.level is None:
             return
-        # GetOppDeadSeq 4:0074-010a / FrameAdv 2:6544: ordinary corpse
-        # variant follows slot parity, not a random choice.
+        # GetOppDeadSeq 4:0074-010a / FrameAdv 2:6544: the corpse variant
+        # follows the bank slot, not a random choice.
         guards = self.room_encounters[guard.room][0]
         index = (guard.bank_slot if guard.bank_room == self.player.room else
                  next(i for i, other in enumerate(guards) if other is guard))
-        if index % 2:
-            select_sequence(guard, 195)
+        corpse = corpse_sequence(self._opponent_set(), guard.state.level_kind, index)
+        if corpse is not None:
+            select_sequence(guard, corpse)
             guard.runtime.next_frame()
 
     def _opponent_tumble(self, target):
@@ -1600,7 +1627,7 @@ class CombatEncounter:
         if not candidate and dead_count:
             candidate = any(
                 other.row == target.row
-                and other.state.action in (185, 228)
+                and other.state.action in CORPSE_POSES
                 and character_column(floor_contact_x(
                     other.state.target_x, other.state.facing,
                     art.frames[guard_frame_index(other.state.action)])) == column

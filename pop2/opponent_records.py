@@ -6,6 +6,24 @@ from pop2.sequence_runtime import SequenceState
 from pop2.terrain import TerrainMotion, floor_y
 
 
+# IsDeadPos 4:4846-48de for the ordinary corpses, with set 7's four variants.
+CORPSE_POSES = frozenset((185, 228, 252, 253, 254, 255))
+
+
+def corpse_sequence(opponent_set, level_kind, slot):
+    """GetOppDeadSeq's table 4:00ac: the corpse of bank slot ``slot``, or None
+    to keep pose 185. The temple's birdheads (set 7) have four flat corpses,
+    SEQS 191-194; SEQS 195's pose 228 stands in their art."""
+    if opponent_set == 7:
+        first, count = 191, 5
+    elif opponent_set == 0 and level_kind != 6:
+        first, count = 195, 2
+    else:
+        return None
+    offset = slot % count
+    return first + offset - 1 if offset else None
+
+
 @dataclass
 class GuardRoomRecord:
     sequence: int
@@ -31,7 +49,7 @@ class GuardRoomRecord:
         return cls(sequence, 0 if restart else state.cursor, actor.life,
                    actor.sword_drawn, cell, height)
 
-    def restore(self, actor, slot):
+    def restore(self, actor, slot, opponent_set=0):
         if not self.pending:
             return False
         state = actor.state
@@ -51,12 +69,13 @@ class GuardRoomRecord:
         actor.alert_mode = 0
         actor.recovering = actor.contact_consumed = False
         actor.runtime.next_frame()
-        dead = state.action in (185, 228)
+        dead = state.action in CORPSE_POSES
         if dead:
             actor.life = 0
-            if state.action == 185 and state.level_kind != 6 and slot % 2:
-                state.select(195)
-                actor.selected_sequence = 195
+            corpse = corpse_sequence(opponent_set, state.level_kind, slot)
+            if state.action == 185 and corpse is not None:
+                state.select(corpse)
+                actor.selected_sequence = corpse
                 actor.runtime.next_frame()
         actor.native_alive = not dead
         actor.death_registered = dead

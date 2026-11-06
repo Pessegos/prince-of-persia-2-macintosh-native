@@ -836,8 +836,12 @@ class LevelMap:
         column = character_column(floor_contact_x(trial_x, state.facing, record))
         above = self.tile(room, column, row - 1)
         ahead = self.tile(room, column + direction, row - 1)
+        temple = struct.unpack_from('>H', self.level, 0x2186)[0] == 2
         ordinary = (above.room is not None and ahead.room is not None
                     and above.kind in EMPTY_TILES and ahead.kind not in EMPTY_TILES | WALL_TILES
+                    # IsLedge 4:3f58-3f6e: the temple's open trap door (space
+                    # with bit 0x80, 10:25aa) offers no grip; he just falls.
+                    and not (temple and above.foreground & 128)
                     # IsLedge 4:3fa4-3fc0: a shut gate has no left-facing grip.
                     and not (ahead.kind == 4 and not state.facing and not ahead.foreground & 255))
         ship = harbor is not None and harbor.can_grab_ship(room, row, trial_x)
