@@ -69,6 +69,7 @@ class DevelopmentMenu:
     current_screen: str | None = None
     preview_keyboard_selection: bool = False
     god_mode: bool = False
+    cutscene_viewer: bool = False
 
     CONTROLS = ((200, 138, 392, 166), (120, 180, 392, 210),
                 (120, 231, 252, 263), (264, 231, 392, 263))
@@ -429,6 +430,8 @@ class DevelopmentMenu:
             self.turn_gallery_page(-1 if self.focus == 9 else 1)
             return 'changed'
         if self.focus == 8:
+            if self.page == 'tools' and self.cutscene_viewer:
+                return 'cutscenes'
             if self.page == 'playback':
                 self.debug_status = not self.debug_status
                 return 'debug_status'
@@ -630,7 +633,7 @@ class DevelopmentMenu:
             draw.rectangle(self.control_rect(control),
                            fill='#303030' if self.focus == control else '#222222',
                            outline=gold if self.focus == control else '#626262')
-        for control, label in ((4, 'Open map'), (8, 'Playback')):
+        for control, label in ((4, 'Open map'), (8, 'Cutscene Viewer' if self.cutscene_viewer else 'Playback')):
             if control not in self.controls:
                 continue
             left, top, right, bottom = self.control_rect(control)

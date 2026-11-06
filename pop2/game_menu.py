@@ -34,8 +34,9 @@ class GameMenu:
     save_available: bool = True
     save_browser: object = None
     screenshot_gallery: object = None
+    cutscene_viewer: object = None
 
-    PANEL = centered_panel(384, 284)
+    PANEL = centered_panel(384, 306)
     DIALOG = centered_panel(352, 166)
     ABOUT_DIALOG = centered_panel(352, 184)
     BUTTONS = ((100, DIALOG[1] + 120, 242, DIALOG[1] + 150),
@@ -59,6 +60,7 @@ class GameMenu:
             MenuItem("restart", "Restart level", "Alt+R"),
             MenuItem("save", "Save game", "Alt+S", self.save_available),
             MenuItem("open", "Load game", "Alt+O"),
+            MenuItem("cutscenes", "Cutscene Viewer", ""),
             MenuItem("sound", "Sound", "Alt+T", checked=self.sound),
             MenuItem("music", "Ambient music", "Alt+M", checked=self.music),
             MenuItem("hall", "Hall of Fame", "Alt+H", False),
@@ -83,6 +85,8 @@ class GameMenu:
         return "changed"
 
     def activate(self):
+        if self.page == 'cutscenes':
+            return self.cutscene_viewer.activate()
         if self.page == 'screenshots' and self.screenshot_gallery is not None:
             return self.screenshot_gallery.activate()
         if self.page == 'saves':
@@ -101,6 +105,8 @@ class GameMenu:
         return item.action if item.enabled else "changed"
 
     def key(self, key, backwards=False, char='', control=False):
+        if self.page == 'cutscenes':
+            return self.cutscene_viewer.key(key, backwards, char, control)
         if self.page == 'screenshots' and self.screenshot_gallery is not None:
             return self.screenshot_gallery.key(key, backwards, char, control)
         if self.page == 'saves':
@@ -151,6 +157,8 @@ class GameMenu:
         return (80, top, 432, top + self.ROW_HEIGHT - 2)
 
     def hit(self, x, y):
+        if self.page == 'cutscenes':
+            return self.cutscene_viewer.hit(x, y)
         if self.page == 'screenshots' and self.screenshot_gallery is not None:
             return self.screenshot_gallery.hit(x, y)
         if self.page == 'saves':
@@ -170,6 +178,8 @@ class GameMenu:
                      if DevelopmentMenu.contains(rect, x, y)), None)
 
     def hover(self, x, y):
+        if self.page == 'cutscenes':
+            return self.cutscene_viewer.hover(x, y)
         if self.page == 'screenshots' and self.screenshot_gallery is not None:
             return self.screenshot_gallery.hover(x, y)
         if self.page == 'saves':
@@ -182,6 +192,8 @@ class GameMenu:
         return True
 
     def click(self, x, y):
+        if self.page == 'cutscenes':
+            return self.cutscene_viewer.click(x, y)
         if self.page == 'screenshots' and self.screenshot_gallery is not None:
             return self.screenshot_gallery.click(x, y)
         if self.page == 'saves':
@@ -198,6 +210,8 @@ class GameMenu:
         return self.activate()
 
     def draw(self, viewport, font):
+        if self.page == 'cutscenes':
+            return self.cutscene_viewer.draw(viewport, font)
         if self.page == 'screenshots' and self.screenshot_gallery is not None:
             return self.screenshot_gallery.draw(viewport, font)
         if self.page == 'saves':

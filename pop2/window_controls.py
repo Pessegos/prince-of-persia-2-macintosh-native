@@ -180,6 +180,8 @@ class WindowControls:
         self.root.bind("<Destroy>", self.cancel_focus_pause)
         self.root.bind("<Destroy>", self.cancel_audio_notice, add="+")
         self.root.bind("<Destroy>", self.destroy_screenshot_gallery, add="+")
+        if hasattr(self, 'destroy_cutscene_viewer'):
+            self.root.bind("<Destroy>", self.destroy_cutscene_viewer, add="+")
         self.root.bind("<Destroy>", self.close_bitmap_presenter, add="+")
         self.root.bind("<KeyPress-Escape>", self.escape_key)
         self.root.bind("<KeyRelease-Escape>", self.escape_release)
@@ -205,7 +207,8 @@ class WindowControls:
         self.focus_pause_after_id = None
         if getattr(self, "screenshot_dialog_active", False):
             return
-        if getattr(self, "copy_challenge", None) is not None:
+        if (getattr(self, "copy_challenge", None) is not None
+                and getattr(self, 'cutscene_replay', None) is None):
             return
         try:
             focused = self.root.focus_get()
@@ -214,6 +217,8 @@ class WindowControls:
         if focused is None and window_is_foreground(self.root):
             return
         if focused is None or focused.winfo_toplevel() is not self.root:
+            if getattr(self, 'cutscene_replay', None) is not None:
+                self.pause_cutscene_replay(True)
             if getattr(self, "game_menu", None) is not None:
                 self.game_was_paused = True
             if getattr(self, "dev_menu", None) is not None:
@@ -296,6 +301,8 @@ class WindowControls:
                 self.last_intro_at = now
             if getattr(self, "demo", None) is not None:
                 self.last_demo_at = now
+            if getattr(self, 'copy_challenge', None) is not None:
+                self.last_copy_at = now
             if self.combat is not None and self.combat.last_guard_at is not None:
                 self.combat.last_guard_at += elapsed
             self.pause_started_at = None
@@ -382,6 +389,7 @@ class WindowControls:
                              or self.game.level.number in (2, 10) else None),
             current_level=self.game.level.number, current_screen=self.screen_label(self.room_id),
             god_mode=getattr(self, 'god_mode', False),
+            cutscene_viewer=True,
         )
         if self.dev_menu.map_available:
             self.dev_menu.focus = 4
@@ -411,6 +419,8 @@ class WindowControls:
             return
         if action == "resume":
             self.close_dev_mode()
+        elif action == 'cutscenes':
+            self.open_cutscene_viewer()
         elif action in ('go', 'return_room') and self.level_navigation_available():
             destination = self.dev_menu.return_screen if action == 'return_room' else self.dev_menu.screen
             if destination is None:
@@ -670,7 +680,7 @@ class WindowControls:
         if self.game_menu is not None:
             if self.game_menu.page != "confirm":
                 if page == "menu":
-                    if self.game_menu.page in ("screenshots", "saves"):
+                    if self.game_menu.page in ("screenshots", "saves", 'cutscenes'):
                         self.dispose_screenshot_gallery()
                         self.game_menu.show_page("menu")
                         self.pause_resume_keys.update(self.window_keys_down)
@@ -714,6 +724,8 @@ class WindowControls:
     def close_game_menu(self, resume=False):
         if self.game_menu is None:
             return
+        if getattr(self, 'cutscene_replay', None) is not None:
+            self.stop_cutscene_replay(render=False)
         self.dispose_screenshot_gallery()
         self.game_menu = None
         self.save_scroll_dragging = False
@@ -726,6 +738,17 @@ class WindowControls:
 
     def apply_game_action(self, action, *, preserve_controls=False):
         menu = self.game_menu
+        if action == 'cutscenes':
+            self.open_cutscene_viewer()
+            return
+        if action == 'cutscene_play':
+            self.start_cutscene_replay()
+            return
+        if action == 'cutscene_back':
+            self.game_menu.show_page('menu')
+            self.pause_resume_keys.update(self.window_keys_down)
+            self.render()
+            return
         if (menu is not None and menu.page == 'screenshots' and menu.screenshot_gallery is not None
                 and (action.startswith('gallery_') or action == 'changed')):
             self.apply_gallery_action(action)
@@ -899,6 +922,14 @@ class WindowControls:
             audio.play_ui(kind)
 
     def menu_sound_target(self, menu, point=None):
+        viewer = getattr(menu, 'cutscene_viewer', None) if menu.page == 'cutscenes' else None
+        if viewer is not None:
+            index = viewer.focus if point is None else viewer.hit(*point)
+            if (index is None or index in (0, 1) and not viewer.unlocked
+                    or index == 3 and viewer.index == 0
+                    or index == 4 and viewer.index + 1 == len(viewer.chapters)):
+                return None
+            return id(menu), menu.page, viewer.index, index
         gallery = getattr(menu, 'screenshot_gallery', None) if menu.page == 'screenshots' else None
         if gallery is not None:
             index = gallery.focus if point is None else gallery.hit(*point)
@@ -939,8 +970,10 @@ class WindowControls:
                   'section_index', 'gallery_page', 'screenshot_scale')
         def state():
             browser = getattr(menu, 'save_browser', None)
+            viewer = getattr(menu, 'cutscene_viewer', None) if menu.page == 'cutscenes' else None
             return tuple(getattr(menu, name, None) for name in fields) + (
-                (browser.selected, browser.focus, browser.mode, browser.confirmation) if browser else ())
+                (browser.selected, browser.focus, browser.mode, browser.confirmation) if browser else ()) + (
+                (viewer.index, viewer.focus) if viewer else ())
 
         before = state()
         if event.keysym in ('Return', 'KP_Enter', 'space') and self.menu_sound_target(menu) is not None:
@@ -976,6 +1009,9 @@ class WindowControls:
                 else:
                     self.capture_screenshot()
             return "break"
+        if (getattr(self, 'cutscene_replay', None) is not None
+                and self.cutscene_replay_key(event, repeated, alt)):
+            return 'break'
         gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
         if self.game_menu is not None and self.game_menu.page == 'screenshots' and gallery is not None and gallery.choosing:
             if repeated and event.keysym in ('Return', 'KP_Enter', 'space') and gallery.focus != 40:
@@ -1179,6 +1215,14 @@ class WindowControls:
         )
 
     def dev_click(self, event):
+        if getattr(self, 'cutscene_replay', None) is not None:
+            if getattr(event, 'num', 1) == 1:
+                point = self.dev_pointer(event)
+                if point is not None and point[1] >= 365 and point[0] >= 256:
+                    self.stop_cutscene_replay()
+                elif point is not None:
+                    self.pause_cutscene_replay(not self.cutscene_replay.paused)
+            return 'break'
         if not self.modal_open():
             return "break" if self.paused else None
         if getattr(event, "num", 1) != 1:
@@ -1247,6 +1291,8 @@ class WindowControls:
         return "break"
 
     def dev_hover(self, event):
+        if getattr(self, 'cutscene_replay', None) is not None:
+            return 'break'
         gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
         if gallery is not None and gallery.drag_target is not None:
             point = self.dev_pointer(event)
@@ -1274,7 +1320,7 @@ class WindowControls:
                 self.schedule_save_scroll()
             return 'break'
         challenge = getattr(self, "copy_challenge", None)
-        if challenge is not None:
+        if challenge is not None and not (self.game_menu is not None and self.game_menu.page == 'cutscenes'):
             if not self.copy_pointer_held or self.paused:
                 return
             point = self.dev_pointer(event)
@@ -1299,6 +1345,8 @@ class WindowControls:
                     self.redraw_screenshot_gallery()
                 else:
                     self.render()
+            if menu is self.game_menu and menu.page == 'cutscenes':
+                self.canvas.configure(cursor='hand2' if target is not None else '')
             if menu is self.dev_menu:
                 hovered = menu.hovered_screen if menu.map_enabled else menu.hovered_part
                 cursor = 'hand2' if menu.preview_enabled and hovered is not None and not menu.dropdown else ''
@@ -1334,6 +1382,13 @@ class WindowControls:
 
     def dev_scroll(self, event):
         menu = getattr(self, 'game_menu', None)
+        if menu is not None and menu.page == 'cutscenes':
+            if getattr(self, 'cutscene_replay', None) is None:
+                delta = getattr(event, 'delta', 0)
+                menu.cutscene_viewer.move(-1 if delta > 0 or getattr(event, 'num', None) == 4 else 1)
+                self.play_menu_sound('hover')
+                self.render()
+            return 'break'
         if menu is not None and menu.page == 'screenshots' and menu.screenshot_gallery is not None:
             gallery = menu.screenshot_gallery
             point = self.dev_pointer(event)

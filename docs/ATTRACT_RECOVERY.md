@@ -5,15 +5,11 @@ credits pages and another opening. Space skips the opening; a gameplay key
 leaves the demo or credits and starts a clean game. Pause, window focus loss,
 fullscreen and the command menu remain available. Story scenes, the demo and
 credits show centered `Cutscene Paused` over a lightly dimmed frame, without a
-backing bar. Live gameplay retains `Game Paused`. Dev Mode offers contextual playback controls during the attract
-cycle, with level jumps and peaceful controls disabled. Playback navigation
-selects a sequence first, then one of its parts. The scene program's title
-operation separates Prologue, Titles and Opening story; demo rooms and credits
-pages have their own groups. Next part retains chronological playback order,
-crossing sequence boundaries and returning to the beginning after the last part.
-Both selectors retain the imported part indices, and opening Dev Mode selects
-the current sequence and part. F5 no longer
-restarts the opening; use the New Game or Restart Level commands.
+backing bar. Live gameplay retains `Game Paused`. F1 now offers the
+[Cutscene Viewer](CUTSCENE_VIEWER.md), with a shortcut in F3: whole unlocked
+story chapters replay independently of the paused campaign. The older granular
+seek helpers remain available to developer tests, rather than the player-facing
+menu. F5 no longer restarts the opening; use New Game or Restart Level.
 
 ## Recorded Controls
 
@@ -48,9 +44,9 @@ Ambient music uses the ordinary port audio selection. Playback cannot alter
 the real encounter, checkpoint or peaceful setting. The generated trace, like
 all extracted game data, stays outside Git.
 
-## Development Playback
+## Retained development seeking
 
-The F3 Playback tab derives story boundaries from the imported text operations,
+The low-level playback navigation model derives story boundaries from the imported text operations,
 the cloud title from its scene operation, demo entries from the first recorded
 frame in each room, and credits pages from the imported credits program. It
 does not keep a second hardcoded timeline. Seeking rebuilds the scene's palette,

@@ -67,16 +67,17 @@ def gallery_preview(frames, indices):
 
 
 class PlaybackPreviews:
-    def __init__(self, resources, parts, attract, fingerprint, directory=ASSET_DIR):
+    def __init__(self, resources, parts, attract, fingerprint, directory=ASSET_DIR, namespace='playback'):
         self.resources, self.parts, self.attract = resources, parts, attract
         self.fingerprint, self.directory = fingerprint, directory
         self.assets, self.frames = {}, {}
+        self.namespace = namespace
 
     def group(self, indices):
         indices = tuple(indices)
         if indices in self.frames:
             return self.frames[indices]
-        path = self.directory / '.developer-cache' / f'playback-{indices[0]}.zip'
+        path = self.directory / '.developer-cache' / f'{self.namespace}-{indices[0]}.zip'
         identity = [[self.parts[i].label, self.parts[i].stage, self.parts[i].index] for i in indices]
         cached = read_preview(path, self.fingerprint)
         if cached is not None and cached[0] == identity and set(cached[1]) == {str(i) for i in indices}:
@@ -99,7 +100,7 @@ class PlaybackPreviews:
         from pop2.intro import IntroAssets, IntroPlayer
 
         part = self.parts[index]
-        if part.stage in ('intro', 'ending', 'discovery', 'temple'):
+        if part.stage in ('intro', 'ending', 'discovery', 'temple', 'carpet', 'throne', 'tower'):
             if part.stage not in self.assets:
                 self.assets[part.stage] = IntroAssets(self.directory, program_name=f'{part.stage}.json')
             player = players.get(part.stage) if players is not None else None
