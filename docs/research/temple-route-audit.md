@@ -102,35 +102,74 @@ Every search reported zero exceptions from the game.
 
 ## Level 12
 
-Not finished, and not proven impossible. The search ran without opponents,
-and the level seems to need more than that allows.
+Not finished, and not proven impossible. The east side is now played from a fresh
+load, and the search still ran without opponents. What is left is the way to the
+door.
 
 Exit door 7:23 opens from plate 14:8 or plate 24:23.
 
-- 24:23 is easy to reach, but the Prince cannot get back. He falls through gate
-  18:19 into room 24, 24:22 shuts that gate, and 23:29 is the only plate that
-  reopens it, behind gate 23:28, which has no link. Only the flask's genie gets
-  there.
-- 14:8 lies under hole 7:28, behind gate 12:21. Plate 18:27 is too far from that
-  gate, so the way in is plate 12:2 on the northern route: gate 5:2, gate 2:9,
-  plate 2:22 (gate 1:3), plate 1:5 (gate 1:9), gate 3:2, then rooms 3, 11, 7, 12.
+### The trap at the start
 
-After the playtest fixes ([notes](temple-november-playtest.md)) the route to
-these gates no longer catches the ledge past door 1:1.
+The start rooms (19, 7 and room 8's lower floor) have one way out: hole 8:21.
+It lands on plate 16:1, which shuts gates 8:24, 8:29, 6:29 and 16:28, three of
+which start open. Plate 16:2 reopens 6:29, the road north. Plate 16:7 reopens
+16:28, the road east.
+
+### East and back
+
+`LEVEL_12_GENIE` in `tests/test_temple_routes.py` plays this with real keys, 1,147
+frames in all:
+
+1. From 16:1, a run-up of one cell and a caught leap over the four empty cells
+   reach plate 16:7. Gate 16:28 opens.
+2. Down to the lower floor and through the gate to rooms 15, 14, 22 and 18.
+   Plate 18:27 opens gate 18:19 (and 12:21).
+3. Through that gate into room 24. The landing on 24:22 shuts it behind the
+   Prince, and the next leap crosses 24:23, which starts door 7:23.
+4. The Prince takes the flask in 23:24 (`temple-jinnee.md`). 69 frames later the
+   genie has pressed 23:29 and the gate stands open.
+5. He runs back, climbs through it and is in room 18 again.
+
+Earlier searches, at the default `--per-cell 4`, never played step 1. The run that
+found it used `--prefix` and `--per-cell 12`; which of the two mattered was not
+isolated. Try both when the search stalls at a mechanism.
+
+Door 7:23 stood at 79 at the end of that replay. Why it stopped there was not
+investigated, so this route does not show that the door opens fully.
+
+### What is left
+
+From the east side the search reached rooms 12, 20 and 14 and the cell at 7:29,
+none of them on the door's side of the walls in room 7. The door's floor is
+reached from above: room 3's hole and loose 3:3, or the gap in room 7's upper
+floor. Both come after the northern route: gate 5:2, gate 2:9, plate 2:22 (gate
+1:3), plate 1:5 (gate 1:9), gate 3:2. Room 8's lower floor is no help from above,
+as the only hole there lands on 8:26, which shuts 8:29.
 
 From a fresh load, the audit crawls under room 6's two blades and works through
 the northern gates. Real keys drop loose floors on plates 19:20, 5:28 and 9:0,
-holding gates 3:2, 5:0 and 2:9 open for good (`LEVEL_12_GATES` in
-`tests/test_temple_routes.py`). Gate 5:1 only opened for a moment there, from
-the Prince on plate 4:27; loose 4:17 above that plate has not been dropped.
+holding gates 3:2, 5:0 and 2:9 open for good (`LEVEL_12_GATES`). Gate 5:1 only
+opened for a moment there, from the Prince on plate 4:27; loose 4:17 above that
+plate has not been dropped.
 
 The blocker is gate 5:2. Only plate 9:24 opens it, for one press, with no loose
 floor above. The gate stays useful for about 146 frames. From the plate to the
 gate is two cells, five climbs and a three-cell leap: roughly 195 frames by the
-measured climb of 31 frames. These figures are an estimate, not a proof: the
-search tried for a further 1,200 seconds and failed, without covering every
-timing.
+measured climb of 31 frames. These figures are an estimate, not a proof.
 
-The flask of type 6 in 23:24 explains the far side. It releases a tiny Prince
-who runs under gate 23:28 and presses plate 23:29 (`temple-jinnee.md`), so the
-rooms past gate 18:19 do have a way back. The search has yet to play it.
+### A hypothesis for gate 5:2
+
+Not tested. A guard stands at 9:1 on the floor that ends at the hole over plate
+9:24, and gates 3:2, 5:0 and 2:9 are all held by something falling on a plate.
+CheckPress treats a dead actor as a press for good (5:252e; `permanent=not alive`
+in `PressurePlates.press`), so his body on 9:24 would hold the gate.
+
+The peaceful search cannot see this. Trials that switched peaceful off partway
+gave nothing usable: the guard stood at X 115 and later 136 and did not cross
+the hole, and when the Prince dropped behind him through 5:21 he already showed as
+dead, with the Prince 64 pixels away. The cause was not found, so those trials
+prove nothing either way. A fair test needs a route with opponents on from the
+start, which means winning the fight in room 6.
+
+Rooms with generator records: 6 (cell 24), 7 (cell 6), 9 (cell 1), 20 (cell 14).
+Checkpoints: 11:10 and 2:9, both on the northern route.

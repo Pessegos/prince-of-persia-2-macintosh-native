@@ -50,6 +50,13 @@ def blades_exported(number):
     return path.is_file() and '"scythes"' in path.read_text(encoding='ascii')
 
 
+# The way east and back. Plate 16:7 reopens gate 16:28 after 16:1 shut it, and the
+# flask's genie reopens gate 18:19 after 24:22 shut it behind the Prince.
+LEVEL_12_GENIE = ['leapR11', 'leapcatchL20', 'leapL5', 'runL11', 'leapcatchR5', 'runL5', 'runR20',
+                  'leapcatchR11', 'leapL20', 'leapR11', 'descendhangR', 'descendhangR',
+                  'leapcatchR20', 'climb', 'tapR', 'leapcatchR20', 'hopR', 'leapR20', 'crawlL',
+                  'descendhangL', 'runL20', 'hopcatchL', 'runR5']
+
 INSTALLED = all(blades_exported(number) for number in (10, 11, 12, 13))
 
 
@@ -71,6 +78,20 @@ class TempleRouteTests(unittest.TestCase):
             with self.subTest(room=room, cell=cell):
                 self.assertEqual(plates.timers[link], 31)
                 self.assertEqual(terrain.tile(room - 1, cell % 10, cell // 10).foreground & 255, 255)
+
+    def test_level_12s_genie_reopens_the_gate_behind_the_prince(self):
+        shut = []
+
+        def before_the_flask(harness, name, phase):
+            if (name, phase) == ('crawlL', 'start'):
+                shut.append(harness.scene.level_map.tile(17, 9, 1).foreground & 255)
+
+        _reached, trace, harness = replay(12, LEVEL_12_GENIE, draw=False, log=before_the_flask)
+        self.addCleanup(harness.close)
+        self.assertEqual(shut, [0])
+        self.assertIn((22, 24), harness.scene.game.caverns.potions.tiles)
+        self.assertEqual(trace[-1][1:4], (18, 1, 9))
+        self.assertTrue(trace[-1][-1], trace[-3:])
 
     def test_a_temple_blade_starts_and_cuts_like_a_ruins_scythe(self):
         # FrameAdv's environment 2 case (2:63e2-63f0) falls through to 5:57bc
