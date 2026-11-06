@@ -67,6 +67,7 @@ The order of the level, as the route found it:
 | A key during SEQS 11 could run a frame that cleared the control bank, then crash | Port defect | `AttributeError` during play |
 | Temple blades (tiles 12/13) never ran | 2:63e2-63f4, 5:57bc, 5:588a; drawn by 10:0772 | Every blade in levels 10-13 was a harmless slot |
 
+| A foot on a closed trap door did not open it | CheckTrapDoor 10:2540, from 2:63e6 and 2:6642 | Doors now open under the Prince and guards |
 | Catch took a ledge past an open trap door | 4:393e calls IsLedge 4:3f58-3f6e | Levels 11 and 12 had relied on it; both routes were searched again |
 
 The blades deserve a note. FrameAdv's environment 2 case falls through to the

@@ -8,7 +8,8 @@ row, phase word); X is room-local.
 
 from dataclasses import dataclass, field
 
-from pop2.loose_floors import pressure_tile
+from pop2.opponent_generation import character_column
+from pop2.terrain import floor_contact_x
 
 TRAPDOOR_TILE = 26
 CAPACITY = 30
@@ -44,15 +45,17 @@ class TrapDoors:
                               tile.row, phase))
         return (OPEN_CUE,)
 
-    def step(self, terrain, motion, state, record):
-        """A deliberate port exception, requested by the user: the Prince's
-        foot on a closed door opens it. The original opens one only from
-        ShakeEm 5:28c8 and Falling 6:0210; CheckPress 5:13ac-13b6 ignores
-        tile 26, so natively he could walk across."""
-        if 87 <= state.action <= 99 or 135 <= state.action < 141:
-            return ()  # Hanging or climbing: CheckPress reads the cell above.
-        tile = pressure_tile(terrain, motion, state, record)
-        return self.trigger(terrain, tile, tile.column) if tile is not None else ()
+    def check(self, terrain, motion, state, record):
+        """CheckTrapDoor 10:2540, every frame for the Kid (FrameAdv 2:63e6) and
+        for each opponent (2:6642): a foot on the floor of a closed door opens
+        it. The shadow (type 1) is excused."""
+        if not record.aux & 0x40 or state.current_y or state.actor_type == 1:
+            return ()
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        tile = terrain.tile(motion.room, column, motion.row)
+        if tile.kind != TRAPDOOR_TILE or tile.foreground & 31:
+            return ()
+        return self.trigger(terrain, tile, column)
 
     def advance(self):
         """10:24fa through MakeRubble 5:29e8: low phases up to 16 advance;

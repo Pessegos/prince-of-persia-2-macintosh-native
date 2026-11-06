@@ -1,8 +1,8 @@
 # Temple Trap-Door Triggering
 
 Research only, not a runtime implementation or full falling-platform model.
-The port also opens a door under the Prince's step, which the original does not:
-see [the playtest notes](temple-november-playtest.md#trap-doors-tile-26).
+CheckTrapDoor 10:2540 opens a door under an actor's foot through the constructor
+directly: see [the playtest notes](temple-november-playtest.md#trap-doors-tile-26).
 `R` denotes recovered/reference behavior in the stated scope.
 
 | Rule | Source | Status |
@@ -42,8 +42,8 @@ Original ReadCell/CalcBlue first establish cached room, row, column, cell
 index, type/foreground and level-array pointers. This is NOT a supplied
 collision result. TriggerTrapDoor itself does not recheck the tile kind;
 the test invokes it only for actual type26 cells, with correct native caches.
-Caller admission remains separate: known callers include Falling6:0210
-and ShakeEm5:28c8.
+Caller admission remains separate: its callers are Falling6:0210 and
+ShakeEm5:28c8. CheckTrapDoor10:2540 calls the constructor itself.
 
 If cached foreground has bit0x40, return without changing the level, mob
 scratch/bank/count or issuing audio/redraw requests.

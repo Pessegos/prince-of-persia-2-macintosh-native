@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from pop2.coordinates import column_left
 from pop2.loose_floors import FallingFloor, floor_hits_record
@@ -107,19 +108,41 @@ class TemplePlaytestTests(unittest.TestCase):
                 break
         self.assertNotEqual(scene.terrain_motion.room, 11)
 
-    def test_a_closed_door_still_holds_a_guard(self):
-        # The exception is the Prince's. No native path opens a door for a
-        # guard's step, and pressure_tile is not asked for one.
+    def test_check_trap_door_admits_a_foot_on_the_floor_of_a_closed_door(self):
+        # CheckTrapDoor 10:2540: FRAM bit 0x40, exact floor height, tile 26 with
+        # a clear low foreground, any actor but the shadow (type 1).
         harness = self.harness()
         scene = harness.scene
-        terrain = scene.level_map
-        tile = terrain.tile(11, 7, 2)
-        guard = SimpleNamespace(actor_type=2)
-        self.assertEqual(tile.kind, 26)
-        self.assertEqual(scene.game.caverns.loose.press(
-            terrain, SimpleNamespace(room=11, row=2), guard_state(column_left(7) + 25),
-            scene.frames[15]), ())
-        self.assertEqual(terrain.tile(11, 7, 2).kind, 26, guard)
+        terrain, doors = scene.level_map, scene.game.caverns.trapdoors
+        motion = SimpleNamespace(room=11, row=2)
+        record = scene.frames[15]
+        foot = SimpleNamespace(aux=record.aux | 0x40, offset_x=record.offset_x)
+        x = column_left(7) + 25
+
+        def actor(**changes):
+            return SimpleNamespace(**{'actor_type': 2, 'target_x': x, 'facing': 1, 'current_y': 0,
+                                      **changes})
+
+        self.assertEqual(doors.check(terrain, motion, actor(actor_type=1), foot), ())
+        self.assertEqual(doors.check(terrain, motion, actor(current_y=-1), foot), ())
+        self.assertEqual(doors.check(terrain, motion, actor(),
+                                     SimpleNamespace(aux=0, offset_x=record.offset_x)), ())
+        self.assertEqual(terrain.tile(11, 7, 2).kind, 26)
+        self.assertEqual(doors.check(terrain, motion, actor(), foot), (197,))
+        self.assertEqual(terrain.tile(11, 7, 2).kind, 0)
+        self.assertEqual(doors.bank[0][7], 1)
+
+    def test_each_frame_checks_the_door_under_a_guard_too(self):
+        # FrameAdv 2:6642 runs CheckTrapDoor for each opponent as well.
+        harness = self.harness(peaceful=False)
+        scene = harness.scene
+        scene.jump_to_room(12, row=1, x=column_left(2) + 25, facing=1)
+        harness.tick(2)
+        doors = scene.game.caverns.trapdoors
+        with patch.object(type(doors), 'check', return_value=()) as check:
+            harness.tick()
+        guard = scene.combat.active_guards()[0]
+        self.assertIn(guard.state, [call.args[2] for call in check.call_args_list])
 
     def test_a_block_falling_into_the_next_room_kills_its_sleeping_guard(self):
         # Loose 14:25 over guard 13's column 5, the Prince above in room 14.
@@ -232,11 +255,6 @@ class TemplePlaytestTests(unittest.TestCase):
         drawn = scene.level_renderer.animated_layer(
             scene.background.copy(), 13, None, caverns=scene.game.caverns)
         self.assertNotEqual(drawn.crop((100, 270, 240, 370)).tobytes(), rest)
-
-
-def guard_state(x):
-    return SimpleNamespace(actor_type=2, target_x=x, facing=1, action=15, animation_state=1,
-                           current_y=0)
 
 
 if __name__ == '__main__':
