@@ -261,7 +261,7 @@ class CutsceneControls:
         previous = getattr(self, '_cutscene_gallery_frame', None)
 
         def appearance():
-            return (id(self.screenshot_viewport), id(self.ui_font), gallery.index, gallery.focus, gallery.hovered,
+            return (id(self.screenshot_viewport), id(self.ui_font), gallery.index, gallery.focus,
                     gallery.error, gallery.collection.error, frozenset(gallery.collection.seen),
                     gallery.developer, gallery.chapters, getattr(self, 'screenshot_toast', None))
 
@@ -330,6 +330,7 @@ class CutsceneControls:
                       round((gallery.STRIP[2] - 1) * sx) + position[0],
                       round(gallery.STRIP[3] * sy) + position[1])
             strip.show(region, grid_photo[1], moving[0] + round(gallery.GRID_PADDING * sx))
+            strip.highlight(gallery.hover_border(sx))
         self._cutscene_gallery_frame = (gallery, previous[1] if fast else frame,
                                        self.image_ref, state, moving, appearance())
         return True

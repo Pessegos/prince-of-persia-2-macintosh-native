@@ -299,16 +299,16 @@ class CutsceneGallery:
 
     def card_image(self, index, font, sx, sy):
         chapter = self.chapters[index]
-        selected, hovered = self.index == index, self.hovered == 100 + index
+        selected = self.index == index
         unlocked = self.chapter_unlocked(index)
         size = round(self.CARD_WIDTH * sx), round(self.CARD_HEIGHT * sy)
-        key = index, id(font), size, selected, hovered, unlocked
+        key = index, id(font), size, selected, unlocked
         if key in self.card_cache:
             return self.card_cache[key]
         image = Image.new('RGBA', size, '#252525')
         draw = ImageDraw.Draw(image)
         stroke = max(1, round(min(sx, sy)))
-        outline = '#f4d873' if selected else '#c6b58c' if hovered else '#626262'
+        outline = '#f4d873' if selected else '#626262'
         draw.rectangle((0, 0, size[0] - 1, size[1] - 1), outline=outline, width=stroke * (2 if selected else 1))
         thumb_bottom = 2 + (self.CARD_WIDTH - 4) * 9 / 16
         thumb_rect = (2, 2, self.CARD_WIDTH - 2, thumb_bottom)
@@ -338,6 +338,19 @@ class CutsceneGallery:
                      '#f4d873' if selected else '#eeeeee', .72, sx, sy)
         self.card_cache[key] = image
         return image
+
+    def hover_border(self, scale):
+        """Grid-relative pixels, shared by captures and the retained Tk overlay."""
+        index = self.hovered - 100 if self.hovered is not None else -1
+        if not 0 <= index < len(self.chapters) or index == self.index:
+            return None
+        rect = self.card_rect(index, offset=0)
+        x = round((rect[0] - self.STRIP[0] + self.GRID_PADDING) * scale)
+        y = round((rect[1] - self.STRIP[1]) * scale)
+        width, height = round(self.CARD_WIDTH * scale), round(self.CARD_HEIGHT * scale)
+        stroke = max(1, round(scale))
+        return ((x, y, x + width, y + stroke), (x, y + height - stroke, x + width, y + height),
+                (x, y, x + stroke, y + height), (x + width - stroke, y, x + width, y + height))
 
     def draw(self, viewport, font, *, visible=False, background_key=None):
         self.layout(viewport.size, visible=visible)
@@ -371,7 +384,7 @@ class CutsceneGallery:
         image = self.background_cache[1].copy()
         region = bounds(self.STRIP)
         width, height = region[2] - region[0], region[3] - region[1]
-        grid_key = (viewport.size, visible, id(font), self.index, self.hovered if self.hovered is not None and self.hovered >= 100 else None,
+        grid_key = (viewport.size, visible, id(font), self.index,
                     tuple(sorted(self.collection.seen)), self.chapters, self.developer)
         if self.grid_cache is None or self.grid_cache[0] != grid_key:
             grid = Image.new('RGBA', (width + round((self.max_scroll + 2 * self.GRID_PADDING) * sx), height), '#181818')
@@ -382,7 +395,12 @@ class CutsceneGallery:
                                              round((rect[1] - self.STRIP[1]) * sy)))
             self.grid_cache = grid_key, grid.convert('RGB')
         left = round(self.display_scroll * sx) + round(self.GRID_PADDING * sx)
-        image.paste(self.grid_cache[1].crop((left, 0, left + width, height)), region[:2])
+        strip = self.grid_cache[1].crop((left, 0, left + width, height))
+        if border := self.hover_border(sx):
+            draw = ImageDraw.Draw(strip)
+            for x1, y1, x2, y2 in border:
+                draw.rectangle((x1 - left, y1, x2 - left - 1, y2 - 1), fill='#c6b58c')
+        image.paste(strip, region[:2])
         self.draw_scroll_controls(image, sx, sy, ox=ox)
         if len(self.text_cache) > 600:
             self.text_cache.clear()

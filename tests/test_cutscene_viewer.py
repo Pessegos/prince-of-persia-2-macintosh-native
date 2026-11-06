@@ -414,7 +414,13 @@ class ViewerSceneTests(unittest.TestCase):
             left, top, right, bottom = strip.region
             offset = round(-strip.canvas.coords(strip.item)[0])
             source = ImageTk.getimage(strip.photo).convert('RGB')
-            image.paste(source.crop((offset, 0, offset + right - left, bottom - top)),
+            visible = source.crop((offset, 0, offset + right - left, bottom - top))
+            draw = ImageDraw.Draw(visible)
+            for item in strip.borders:
+                if strip.canvas.itemcget(item, 'state') != 'hidden':
+                    x1, y1, x2, y2 = map(round, strip.canvas.coords(item))
+                    draw.rectangle((x1, y1, x2 - 1, y2 - 1), fill=strip.canvas.itemcget(item, 'fill'))
+            image.paste(visible,
                         (round(left - parent[0]), round(top - parent[1])))
         return image
 
@@ -762,6 +768,28 @@ class ViewerSceneTests(unittest.TestCase):
         redraw.assert_not_called()
         self.assertIsNotNone(scene.image_ref)
         self.assertTrue(scene.paused)
+
+    def test_crossing_cards_changes_only_the_retained_hover_border_without_loading_or_painting_images(self):
+        from PIL import ImageChops
+
+        scene = self.scene
+        gallery = self.open_viewer()
+        photo = scene._cutscene_gallery_strip.photo
+        grid = gallery.grid_cache[1]
+        with patch.object(scene, 'cutscene_gallery_frame', side_effect=AssertionError('Composed hover frame')), \
+                patch('PIL.ImageTk.PhotoImage', side_effect=AssertionError('Uploaded hover photo')), \
+                patch.object(scene.ui_font, 'text', side_effect=AssertionError('Drew hover text')):
+            for index in (1, 2, 3, 4, 5, 0, 4):
+                rect = gallery.card_rect(index)
+                with patch.object(scene, 'dev_pointer', return_value=(rect[0] + 10, rect[1] + 10)):
+                    scene.dev_hover(SimpleNamespace())
+                self.assertEqual(gallery.hovered, index + 100)
+                self.assertIs(scene._cutscene_gallery_strip.photo, photo)
+                self.assertIs(gallery.grid_cache[1], grid)
+        source = scene._cutscene_gallery_source[2]
+        expected = gallery.draw(source, scene.ui_font, visible=True,
+            background_key=id(scene.screenshot_viewport)).convert('RGB')
+        self.assertIsNone(ImageChops.difference(self.displayed_gallery(), expected).getbbox())
 
     def test_pointer_drag_does_not_play_or_select_and_leave_cancels_the_drag(self):
         scene = self.scene

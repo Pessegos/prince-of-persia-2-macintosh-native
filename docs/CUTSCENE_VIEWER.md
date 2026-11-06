@@ -109,6 +109,9 @@ Both photos are opaque RGB after composition. Selection and static frame
 changes refresh the full frame; screenshot notices temporarily use that full
 renderer to preserve their overlay order. Replay, menu close and destruction
 dispose of the child viewport.
+Hover uses four retained border rectangles over the cached strip. Crossing
+cards changes those rectangles immediately, without rebuilding or uploading
+card artwork. The capture renderer draws the same clipped border in pixels.
 Pixel regressions compare the result to a full render, including reverse
 motion, screenshot notices, repeated hover and forced Tk redisplay.
 
