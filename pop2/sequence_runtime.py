@@ -193,7 +193,6 @@ class SequenceRuntime:
                 # AnimChar 4:2d7e clears the selected ID (+0x28) until the
                 # next JumpSeq; a following -1 link keeps it cleared.
                 self.state.selected_sequence_id = 0
-                self.state.sequence_mode = 0
             elif opcode == -16:
                 # AnimChar 4:2f2c requests the next level after boarding or exiting.
                 self.state.sequence_events.append((opcode, ()))

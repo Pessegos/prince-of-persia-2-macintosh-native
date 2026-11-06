@@ -142,7 +142,8 @@ class PressurePlates:
                   and can_trigger_exit(terrain.level, tile.room, exit_sword)):
                 # TriggerObject 5:1f40: only a completely closed exit starts.
                 self.add(key, 1)
-                if 297 not in self.songs:
+                # 5:1f72-1f7e: no OpenDoor song on level 13.
+                if struct.unpack_from('>H', terrain.level, 0x218a)[0] != 13 and 297 not in self.songs:
                     self.songs.append(297)
             index = following
         return tuple(cues)
@@ -288,9 +289,11 @@ class PressurePlates:
                 self.foreground[key] = (value & 0xff00) | position
                 if position >= 79:
                     del self.active[key]
-                    gate_sound(18, True, key)
-                else:
-                    gate_sound(17, True, key)
+                # 5:162c-1640, 5:1656-166a: the door the shadow opens makes no
+                # sound while the Prince is in native room 4 of level 13.
+                if not (motion is not None and motion.room == 3
+                        and struct.unpack_from('>H', terrain.level, 0x218a)[0] == 13):
+                    gate_sound(18 if position >= 79 else 17, True, key)
                 continue
             if tile.kind != 4:
                 del self.active[key]

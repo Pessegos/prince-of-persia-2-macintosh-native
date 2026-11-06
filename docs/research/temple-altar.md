@@ -97,9 +97,12 @@ burns him for good.
    6 with life > 2). SetupOpponent (3:0852 in environment 6, 3:0a4c for any
    kind-1 actor) calls SetupShadowFlame 4:2630, which draws SHAP 4102 +
    (a5-0x349a % 9) with palette base 224 (a5-0x2b70; CTBL 4077, loaded by
-   10:2edc at the level start) over the imbued shadow: AddFCharX centres it
-   on the image and MakeFlameFCharClipRect 10:2f1e aligns the bottoms. The
-   flame burns over the shadow on its way back, not over the Kid.
+   10:2edc at the level start) with the imbued shadow: AddFCharX centres it on
+   the image and MakeFlameFCharClipRect 10:2f1e aligns the bottoms. It is
+   object type 14 (AddCharObj 3:0130). GetObjForePriority gives it 200 (a5-0x44e0)
+   against the shadow's 127, and SortObjTable 3:3b62 puts the higher priority
+   first, so DrawObjs draws it behind the shadow. Only the shadow has it, not
+   the Kid.
 
 Colours: AddCharObj copies the draw mode 0x30 (+0x36) into the object; it is
 the palette base 48. 10:2edc loads CTBL 2000 there (2001 when the Kid's mode
@@ -129,14 +132,45 @@ SEQS 247 (about 197 pixels), walks to the body, turns, lies down and merges
 
 Exclusions: the facing-right climb's 4:5cbc/5:19f8 calls (10:29d2), the
 -3480/-3484 inputs DoStepFwd sets, and 10:2036's failed climb (SEQS 73).
-The shadow's footsteps join the Kid's sounds. The port's SEQS -18 also
-clears the mode (native 4:2d7e clears only +0x28), so a later climb by the
-revived Kid (SEQS 235) leaves mode 13.
+The shadow's footsteps join the Kid's sounds.
+
+## The riddle, and after the flame
+
+Room 2's tapestry reads "He who would steal the sacred flame... must die". The
+Prince must die to the birdhead in room 4 and press nothing. The bow and the
+door below are the reward, and the user's memory of them is confirmed by the
+code. The story guide's account agrees (popuw.com/story/pop2-13.html).
+
+- Opponents bow. AutoCtrl 6:4f8a-5018: an armed opponent runs EnGarde 4:098c
+  only while the Kid's mode (a5-0x509e) is not 13. Otherwise, with LEVL byte
+  0x2196 set and selected SEQS other than 110, 4:07fe runs: AddCharX(distance -
+  68) when GetBarrDistances gives under 68 with type other than 2, then JumpSeq(110).
+  SEQS 110 is poses 228, 230-240, held. An unarmed opponent still draws by
+  4:04fc, and is then armed and bows. `CombatEncounter._bow_guard`.
+- Mode 13 lasts. AnimChar 4:2d7e (opcode -18) clears only the selected ID, so
+  the climb's SEQS 235 keeps it. Sequences with opcode -21 still replace it, as
+  in the original.
+- Level 13's door. Tile 4:12 is an ordinary plate in the level data (kind 5,
+  foreground 0xc0b7), under the altar's pedestal. The port draws no plate there
+  and the Prince cannot reach it; the shadow steps on it (2:6602) and opens exit
+  32:12, which stays open. That is why no button is seen.
+- The door is silent. TriggerObject 5:1f72-1f7e never adds song 297 on level 13.
+  ATMExit 5:162c-1640 and 5:1656-166a skip cues 17 and 18, and the call 16:21fc
+  (0) at the end, while the Kid is in room 4 of level 13. 16:21fc is not
+  identified. These ATMExit bytes are in a gap in the listing.
+- Native room 13 of level 13: 4:0902-091e lets a running opponent jump any gap
+  until the Kid has mode 13. `_choose_guard_jump`.
+
+From room 4, a real run: the birdhead kills the Prince, the shadow fetches the
+flame, the door reaches 79, and the same birdhead then draws and kneels.
 
 ## Open
 
 - What ends level 13 after the merge (CheckPlayNIS(13, 14): NIS 3), and the
   mode-13 Kid in level 14 (2001 at palette base 48, environment 6).
+- A birdhead that draws with the Prince within 27 pixels behind it can back
+  into the chasm (seen with a warp, SEQS 90 then 60). Not compared with the
+  original.
 - A native probe of AutoCtrl 10:2850 and the rise/merge.
 
 ## NIS 3: the flight to the tower

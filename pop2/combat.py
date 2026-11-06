@@ -286,6 +286,11 @@ def select_sequence(fighter, sequence_id, offset=0):
     state.select(sequence_id)
 
 
+# Selected by the Prince's mode 13 (SEQS 232 and the merge, 10:27d8).
+IMBUED_MODE = 13
+BOW_SEQUENCE = 110
+
+
 class CombatEncounter:
     def __init__(self, player_runtime, sequences, spawn, platform_edge, rng=None, level=None):
         self.player_runtime = player_runtime
@@ -1054,6 +1059,12 @@ class CombatEncounter:
             if bank and guard is bank[-1]:
                 self.player.state.callback_flag = 0
             return
+        # AutoCtrl 6:4ffa: EnGarde runs only until the Prince carries the
+        # flame. After that an armed opponent bows, and stays bowed.
+        if self._prince_imbued():
+            if guard.selected_sequence != BOW_SEQUENCE and guard.flame_sword is None:
+                self._bow_guard(guard)
+            return
         if not player.alive:
             guard.alert_mode = 0
             if (state.actor_type != 4 and state.action in GUARD_POSES
@@ -1293,6 +1304,27 @@ class CombatEncounter:
             state.current_x = state.target_x
         select_sequence(guard, 90)
 
+    def _prince_imbued(self):
+        player = getattr(self, '_true_player', None) or self.player
+        return player.state.sequence_mode == IMBUED_MODE
+
+    def _bow_guard(self, guard):
+        # 4:07fe: step back from a barrier closer than 68 pixels, then SEQS 110.
+        # A level whose header byte 0x2196 is clear has no bow (6:500c).
+        if self.level is None or not self.level[0x2196]:
+            return
+        state = guard.state
+        art, terrain = getattr(self, 'guard_art', None), getattr(self, 'terrain', None)
+        if art is not None and terrain is not None:
+            record = art.frames[guard_frame_index(state.action)]
+            boundary = terrain.step_boundary(guard.room, guard.row, state, record,
+                                             art.bounds(state, floor_y(guard.row)))
+            if boundary.clearance < 68 and boundary.barrier_type != 2:
+                direction = 1 if state.facing else -1
+                state.target_x += (boundary.clearance - 68) * direction
+                state.current_x = state.target_x
+        select_sequence(guard, BOW_SEQUENCE)
+
     def _brake_guard(self, guard, alert_mode):
         state = guard.state
         guard.alert_mode = alert_mode
@@ -1324,6 +1356,10 @@ class CombatEncounter:
         while width <= 4 and kind(first + width) in EMPTY_TILES:
             width += 1
         allowed = width < 4 or (width == 4 and self.rng.randrange(guard.generation_flags) == 0)
+        # 4:0902-091e: level 13's native room 13 sends them over any gap,
+        # until the Prince carries the flame.
+        if not allowed and guard.room == 12 and not self._prince_imbued():
+            allowed = struct.unpack_from('>H', self.level, 0x218a)[0] == 13
         # 4:093a-0948 permits a wider drop when +0x20 names another row.
         allowed |= guard.alternate_row is not None and guard.alternate_row != guard.row
         if not allowed:

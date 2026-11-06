@@ -92,10 +92,10 @@ Every search reported zero exceptions from the game.
 ## Open questions
 
 - Level 12: the last section.
-- Level 13's birdhead stands in SEQS 77 facing left and did not turn toward a
-  Prince behind it during 1,800 frames, even with his sword drawn at 25 pixels.
-  The `altar` fixture supplies its waking. This may be a gap in the opponent's
-  rules; it has not been compared with the native game.
+- Level 13's birdhead stands in SEQS 77 facing left and ignores a still Prince
+  behind it. A step wakes it (`temple-altar.md`), so the Prince can fall to it
+  without help. The `altar` fixture still supplies the waking, to keep the route
+  short.
 - If the player kills that birdhead, the burn at X <= 347 is the only death
   left in the room, and mode 12 excludes it from raising the shadow. Whether
   the level can then still be finished is unknown.

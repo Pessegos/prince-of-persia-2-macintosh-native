@@ -1460,18 +1460,20 @@ class Temple(Caverns):
         x = state.target_x - anchor
         y = character_sprite_top(floor + record.offset_y + state.current_y, sprite.height)
         layer = Image.new('RGBA', size)
-        layer.paste(sprite, (x, y), sprite)
         if state.sequence_mode == IMBUED_MODE:
             # SetupOpponent 3:0a4c -> SetupShadowFlame 4:2630: while
             # IsShadowImbued (4:2590, mode 13) SHAP 4102 + frame % 9, palette
-            # base 224 (CTBL 4077, 10:2edc), burns over the shadow, centred
-            # on its image with the bottoms aligned (10:2f1e).
+            # base 224 (CTBL 4077, 10:2edc), centred on its image with the
+            # bottoms aligned (10:2f1e). It is object type 14: GetObjForePriority
+            # gives it 200 against the shadow's 127, and SortObjTable 3:3b62
+            # draws the higher priority first, so it burns behind the shadow.
             combat = getattr(scene, 'combat', None)
             flame = image(FLAME_PALETTE, flame_shape(combat.world_frame if combat is not None else 0))
             if state.facing:
                 flame = ImageOps.mirror(flame)
             layer.paste(flame, (x + sprite.width // 2 - flame.width // 2,
                                 y + sprite.height - flame.height), flame)
+        layer.paste(sprite, (x, y), sprite)
         return ((state, record, scene.kid_bounds(state, floor), shadow.motion.row, layer),)
 
     def merge_shadow(self):

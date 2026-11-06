@@ -1,5 +1,7 @@
 import unittest
+import unittest.mock
 
+from pop2.environments import environment_for
 from pop2.paths import ASSET_DIR
 
 
@@ -281,6 +283,131 @@ class AltarSceneTests(unittest.TestCase):
         self.assertFalse(scene.death.prompt_visible)
         self.assertEqual(native_x(state.target_x), 599)
         scene.render()
+
+    def imbued_scene(self, x=480):
+        from pop2.temple_shadow import IMBUED_MODE
+
+        scene = self.scene
+        scene.load_level(13)
+        scene.peaceful = False
+        scene.jump_to_room(3, row=1, x=x, facing=0)
+        guard = scene.combat.active_guards()[0]
+        scene.sequence_state.sequence_mode = IMBUED_MODE
+        return scene, guard
+
+    def test_an_armed_opponent_bows_to_the_flame_and_stays_bowed(self):
+        # AutoCtrl 6:4ffa: mode 13 replaces EnGarde by 4:07fe, SEQS 110. Before,
+        # the opponent fought on and killed the revived Prince.
+        from pop2.combat import select_sequence
+
+        scene, guard = self.imbued_scene(x=420)
+        guard.state.facing = 1
+        guard.sword_drawn = True
+        guard.alert_mode = 3
+        select_sequence(guard, 90)
+        life = scene.combat.player.life
+        self.tick(40)
+        self.assertEqual(guard.selected_sequence, 110)
+        self.assertEqual(guard.state.action, 240)
+        self.assertEqual(scene.combat.player.life, life)
+
+    def test_the_bow_keeps_clear_of_an_edge(self):
+        # 4:0800-0822: under 68 pixels from a barrier, AddCharX(distance - 68).
+        from pop2.mac_input import StepBoundary
+
+        scene, guard = self.imbued_scene()
+        combat, x = scene.combat, guard.state.target_x
+        for boundary, expected in ((StepBoundary(20, 1), x - 48), (StepBoundary(42, 2), x)):
+            guard.state.target_x = guard.state.current_x = x
+            guard.state.facing = 1
+            with unittest.mock.patch.object(type(combat.terrain), 'step_boundary',
+                                            return_value=boundary):
+                combat._bow_guard(guard)
+            self.assertEqual(guard.state.target_x, expected)
+        self.assertEqual(guard.selected_sequence, 110)
+
+    def test_a_climb_does_not_take_the_flame_from_the_prince(self):
+        # AnimChar 4:2d7e clears only the selected ID. SEQS 235 ends with that
+        # opcode, and before it cleared mode 13 too.
+        from pop2.temple_shadow import IMBUED_MODE
+
+        scene, _guard = self.imbued_scene()
+        state = scene.sequence_state
+        state.select(235)
+        for _ in range(30):
+            scene.sequence_runtime.next_frame()
+            if state.selected_sequence_id == 0:
+                break
+        self.assertEqual(state.selected_sequence_id, 0)
+        self.assertEqual(state.sequence_mode, IMBUED_MODE)
+
+    def test_room_13_sends_opponents_over_any_gap_until_the_flame(self):
+        # 4:0902-091e: wider than four columns, only in native room 13.
+        from types import SimpleNamespace
+
+        scene, guard = self.imbued_scene()
+        combat = scene.combat
+        guard.room, guard.generation_flags, guard.alternate_row = 12, 1, None
+        guard.state.action = 196
+        tile = lambda _room, column, _row: SimpleNamespace(
+            kind=0 if column < guard.state.target_x // 51 else 1, foreground=0, column=column)
+        guard.state.facing = 0
+        with unittest.mock.patch.object(combat, 'terrain', SimpleNamespace(tile=tile)):
+            combat._choose_guard_jump(guard)
+            self.assertEqual(guard.selected_sequence, 101)
+            scene.sequence_state.sequence_mode = 0
+            guard.state.action = 196
+            combat._choose_guard_jump(guard)
+            self.assertEqual(guard.selected_sequence, 100)
+
+    def test_the_flame_burns_behind_the_shadow(self):
+        # SortObjTable 3:3b62 draws object type 14 (priority 200) before the
+        # shadow (127). Before, the flame was pasted over it.
+        from pop2.temple_shadow import IMBUED_MODE
+
+        scene = self.scene
+        scene.load_level(13)
+        scene.jump_to_room(3, row=1, x=480, facing=0)
+        environment = environment_for(scene)
+        environment.raise_shadow()
+        shadow = scene.game.caverns.shadow
+        self.assertIsNotNone(shadow)
+        layer = lambda: environment.extra_actors((510, 365))[0][4]
+        plain = layer().copy()
+        shadow.state.sequence_mode = IMBUED_MODE
+        burning = layer()
+        self.assertNotEqual(plain.tobytes(), burning.tobytes())
+        for x, y in ((x, y) for y in range(plain.height) for x in range(plain.width)):
+            if plain.getpixel((x, y))[3]:
+                self.assertEqual(burning.getpixel((x, y)), plain.getpixel((x, y)))
+
+    def test_the_door_opens_in_silence_from_the_altar(self):
+        # 5:1f72-1f7e: no OpenDoor song on level 13. 5:162c/1656: no door
+        # cues while the Prince is in native room 4.
+        scene = self.scene
+        scene.load_level(13)
+        scene.jump_to_room(3, row=1, x=480, facing=0)
+        terrain, plates = scene.level_map, scene.game.caverns.plates
+        motion, state = scene.terrain_motion, scene.sequence_state
+        plates.push(terrain, terrain.tile(3, 2, 1))
+        self.assertNotIn(297, plates.songs)
+        heard = []
+        for _ in range(90):
+            heard.extend(plates.advance(terrain, state, motion, scene.frames[state.action]))
+            heard.extend(event.cue for event in plates.gate_sounds)
+        self.assertEqual(terrain.tile(31, 2, 1).foreground & 255, 79)
+        self.assertFalse({17, 18} & set(heard), heard)
+
+    def test_the_same_door_is_heard_from_another_room(self):
+        from types import SimpleNamespace
+
+        scene = self.scene
+        scene.load_level(13)
+        terrain, plates = scene.level_map, scene.game.caverns.plates
+        plates.add((31, 12), 1)
+        cues = plates.advance(terrain, scene.sequence_state, SimpleNamespace(room=30, row=1),
+                              scene.frames[scene.sequence_state.action])
+        self.assertIn(17, cues)
 
     def test_restarting_clears_the_altar(self):
         scene = self.scene
