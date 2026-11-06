@@ -89,6 +89,7 @@ from pop2.airborne_controls import AIRBORNE_TAKEOFF_SEQUENCES
 from pop2.low_controls import LowControls, LOW_INPUT_SEQUENCES
 from pop2.armed_controls import ArmedControls
 from pop2.sword_controls import advance_sequence
+from pop2.cavern_ambience import FRAMES_PER_TICK
 from pop2.cutscene_viewer import CutsceneControls
 
 
@@ -319,6 +320,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.native_viewport = None
         self.copy_protection_enabled = True
         self.cave_ambience_enabled = False
+        self.ambience_presented = 0.0
         self.copy_verified = False
         self.copy_challenge = None
 
@@ -510,6 +512,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             self.root.after_cancel(self.animation_after_id)
             self.animation_after_id = None
         self.cancel_gate_presentation()
+        self.cancel_ambience_presentation()
         self.demo = self.live_combat = self.intro = self.attract_stage = None
         self.copy_challenge = None
         self.clear_keys(None)
@@ -3033,6 +3036,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
     def reset_level_controls(self):
         self.jump_descent_frame = None
         self.cancel_gate_presentation()
+        self.cancel_ambience_presentation()
         self.pending_potion_pickup = None
         self.run_active = False
         self.run_stop_requested = False
@@ -3239,7 +3243,47 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 self.next_animation_at, now,
                 interval_ms=self.current_animation_interval_ms(),
             )
+            self.schedule_ambience_presentation()
         self.animation_after_id = self.root.after(delay_ms, self.advance_animation)
+
+    def cancel_ambience_presentation(self):
+        pending = getattr(self, 'ambience_after_id', None)
+        if pending is not None:
+            self.root.after_cancel(pending)
+        self.ambience_after_id = None
+
+    def schedule_ambience_presentation(self):
+        self.cancel_ambience_presentation()
+        if getattr(self, 'cave_ambience_enabled', False) and self.level_renderer.ambience is not None:
+            self.schedule_ambience_frame(FRAMES_PER_TICK - 1)
+
+    def schedule_ambience_frame(self, frames_left):
+        # Between game ticks only the ambience moves. A frame that cannot be
+        # drawn before the next tick is dropped: the tick never waits for it.
+        slot = self.current_animation_interval_ms() / FRAMES_PER_TICK
+        for left in range(frames_left, 0, -1):
+            delay = (self.next_animation_at - time.perf_counter()) * 1000 - slot * left
+            if delay >= 1:
+                self.ambience_after_id = self.root.after(
+                    math.ceil(delay), self.advance_ambience_presentation, left - 1)
+                return
+
+    def advance_ambience_presentation(self, frames_left):
+        self.ambience_after_id = None
+        renderer = self.level_renderer
+        if self.paused or renderer.ambience is None or not self.cave_ambience_enabled:
+            return
+        step = 1 / FRAMES_PER_TICK
+        self.ambience_presented += step
+        renderer.advance_ambience(self.room_id, self.level_map, step)
+        self.render()
+        self.schedule_ambience_frame(frames_left)
+
+    def advance_ambience_tick(self):
+        # Whatever part of this tick the frames between ticks did not move.
+        dt = max(1 / FRAMES_PER_TICK, 1 - self.ambience_presented)
+        self.ambience_presented = 0.0
+        self.level_renderer.advance_ambience(self.room_id, self.level_map, dt)
 
     def cancel_gate_presentation(self):
         pending = getattr(self, 'gate_presentation_after_id', None)

@@ -1,23 +1,31 @@
-"""Optional dust and water drops for cavern rooms: a port improvement.
+"""Optional dust, ash and water drops for cavern rooms.
 
-Nothing here comes from the original game, and nothing here touches it: the
-effect is pixels drawn on the frame, behind the actors, while the "Cave
-ambience" menu item is on. It reads the room and never writes game state. Its
-random numbers come from a private generator, so turning it on cannot change
-an opponent, a route or a test.
+A port improvement. Nothing here comes from the original game, and nothing
+here touches it: the effect is drawn on the frame, behind the actors, while the
+"Cave ambience" menu item is on. It reads the room and never writes game state.
+Its random numbers come from a private generator, so turning it on cannot
+change an opponent, a route or a test.
 
-The look is held to the 1993 art. Every particle is one or two opaque pixels
-in a colour of the room's own palette, with no glow, blur or transparency.
-Light is shown by stepping along a palette ramp. Particles are tied to the
-scenery: drops fall from the tips of the stalactites and end on the floor or
-in the lava, ash rises from the lava, and dust is dark until it crosses the
-light of a torch.
+The look is held to the 1993 art by one rule: every pixel it leaves on the
+frame is a colour of the room's own palette. Soft things are still possible
+the way a 256-colour game did them, with tables. A mote between two pixels
+shares itself among the four around it, and each blend lands on the nearest
+palette colour. The warmth inside a torch's recess is a table of what each
+palette colour becomes at each brightness, stepped through an ordered dither.
+
+It is meant to be barely noticed, and it is tied to the scenery. Drops hang
+from the tips of the stalactites and end on the floor or in the lava, single
+grains of ash rise from the lava and the flame, and dust can only be seen near
+them. The user rejected a wider firelight and sparks with trails as far too
+much: a change here should be small.
 """
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 import math
 import random
 
+import numpy
 from PIL import Image, ImageFilter
 
 from pop2.opponent_generation import EMPTY_TILES, WALL_TILES
@@ -45,29 +53,44 @@ SHORTEST_FALL = 48
 # How far in front of a floor's walking line a drop may land, by source.
 LANDING_DEPTH = (-3, 3)
 
-# A stalactite drips to its own steady rhythm.
+# The ambience is redrawn this often per game tick, so that it glides while the
+# game keeps its own 12 frames a second. It drops these frames if it falls late.
+FRAMES_PER_TICK = 3
+
+# A stalactite drips to its own steady rhythm. All times are game ticks.
 TICKS_BETWEEN_DROPS = (90, 230)
 DROP_RHYTHM_JITTER = 14
 SWELL_TICKS = 18
 GRAVITY = 1.15
 FASTEST_FALL = 15.0
 
-DUST_PER_AIR_PIXELS = 5200
-MOST_DUST = 14
-DUST_LIFE = (240, 620)
-# Share of the dust that starts near a torch, where it can be seen, and of the
-# dust that is a two-pixel fleck rather than a single grain.
-DUST_BY_TORCH = 0.35
-DUST_FLECKS = 0.3
-TORCH_DRAUGHT = 0.16
-HEAT_DRAUGHT = 0.3
-GLINT_CHANCE = 0.03
+MOST_DUST = 22
+DUST_LIFE = (260, 640)
+# Share of the dust kept where light can show it: the rest is near invisible.
+DUST_BY_FLAME = 0.55
+DUST_BY_POOL = 0.15
+DUST_DARK = 0.1
+DUST_FLOW = 0.13
+DUST_FADE = 40
+TORCH_DRAUGHT = 0.2
+POOL_DRAUGHT = 0.34
+DUST_TORCH_REACH = 84
+DUST_POOL_REACH = (84, 62)
+# Dust over the lava is a dull glow, so that it is not read as more ash.
+DUST_POOL_STRENGTH = 0.6
+
 ASH_LIFE = (34, 76)
-MOST_ASH = 3
-ASH_CHANCE = 0.022
-HEAT_HEIGHT = 92
-TORCH_REACH = 74
-LAVA_REACH = 62
+MOST_ASH = 5
+ASH_PER_TICK = 0.036
+EMBER_PER_TICK = 0.012
+EMBER_LIFE = (18, 34)
+
+# Only the torch's own recess, and held almost still: a wider or pulsing light
+# looked like a bomb about to go off.
+LIGHT_LEVELS = 8
+RECESS_REACH = (30, 44)
+RECESS_GAIN, RECESS_ADD = (1.15, 1.08, 1.0), (26.0, 13.0, 2.0)
+BAYER = numpy.array(((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5)), dtype=numpy.float32) / 16
 
 # Palette indices. The blues are the flasks' water.
 DROP_INKS = (218, 217, 216, 215)
@@ -75,14 +98,58 @@ SWELL_INKS = (214, 216, 217)
 SPLASH_INKS = (218, 216, 215, 214)
 STEAM_INKS = (67, 219, 110)
 FLASH_INKS = (199, 192)
-# The first entries are how a mote arrives and leaves; it rests on the others.
-DUST_INKS = (127, 110, 105, 96)
-DUST_REST = (1, 2, 3)
-TORCH_INKS = (210, 209, 208, 207)
-LAVA_INKS = (211, 210, 188)
+DUST_DARK_INK = 85
+DUST_WARM_INK = 207
+DUST_HOT_INK = 210
 ASH_INKS = (192, 189, 186, 212, 211, 110)
-ALL_INKS = frozenset((*DROP_INKS, *SWELL_INKS, *SPLASH_INKS, *STEAM_INKS, *FLASH_INKS, *DUST_INKS,
-                      *TORCH_INKS, *LAVA_INKS, *ASH_INKS))
+ALL_INKS = frozenset((*DROP_INKS, *SWELL_INKS, *SPLASH_INKS, *STEAM_INKS, *FLASH_INKS, *ASH_INKS,
+                      DUST_DARK_INK, DUST_WARM_INK, DUST_HOT_INK))
+
+
+class Colours:
+    """The room's palette, and the tables that keep every result inside it."""
+
+    def __init__(self, palette):
+        rgb = sorted({tuple(colour[:3]) for colour in palette.values()})
+        self.rgb = numpy.array(rgb, dtype=numpy.int32)
+        self.keys = (self.rgb[:, 0] << 16) | (self.rgb[:, 1] << 8) | self.rgb[:, 2]
+        # The flame and the lava are the light; they do not receive it.
+        self.receives = self.rgb[:, 0] < 240
+        self.cube = self.nearest_cube().tobytes()
+        self.firelight = self.light_table(RECESS_GAIN, RECESS_ADD)
+
+    def closest(self, values):
+        distance = (((values[:, None, :] - self.rgb[None, :, :]) * (2, 3, 2)) ** 2).sum(axis=2)
+        return distance.argmin(axis=1)
+
+    def nearest_cube(self):
+        """Nearest palette colour for every 5-bit red, green and blue."""
+        levels = numpy.arange(32, dtype=numpy.int32) * 8 + 4
+        green, blue = numpy.meshgrid(levels, levels, indexing='ij')
+        planes = []
+        for red in levels:
+            values = numpy.stack((numpy.full(green.size, red), green.ravel(), blue.ravel()), axis=1)
+            planes.append(self.rgb[self.closest(values)])
+        return numpy.concatenate(planes).astype(numpy.uint8)
+
+    def light_table(self, gain, add):
+        """[level, colour] -> what that palette colour becomes at that light."""
+        table = numpy.zeros((LIGHT_LEVELS + 1, len(self.rgb), 3), dtype=numpy.uint8)
+        for level in range(LIGHT_LEVELS + 1):
+            amount = level / LIGHT_LEVELS
+            lit = self.rgb * (1 + (numpy.array(gain) - 1) * amount) + numpy.array(add) * amount
+            table[level] = self.rgb[self.closest(lit.clip(0, 255).astype(numpy.int32))]
+        return table
+
+    def nearest(self, red, green, blue):
+        offset = ((red >> 3) << 10 | (green >> 3) << 5 | blue >> 3) * 3
+        cube = self.cube
+        return cube[offset], cube[offset + 1], cube[offset + 2], 255
+
+
+@lru_cache(maxsize=4)
+def colours_of(palette):
+    return Colours(dict(palette))
 
 
 @dataclass(frozen=True)
@@ -94,15 +161,43 @@ class Drip:
 
 
 @dataclass(frozen=True)
+class Glow:
+    """A pool of light: how far it reaches over which rectangle of the room."""
+
+    left: int
+    top: int
+    falloff: numpy.ndarray
+    dither: numpy.ndarray
+    table: numpy.ndarray
+
+    @property
+    def box(self):
+        return self.left, self.top, self.left + self.falloff.shape[1], self.top + self.falloff.shape[0]
+
+
+def glow_around(x, y, reach, table):
+    reach_x, reach_y = reach
+    left, right = max(0, x - reach_x), min(WIDTH, x + reach_x)
+    top, bottom = max(0, y - reach_y), min(HEIGHT, y + reach_y)
+    rows, columns = numpy.mgrid[top:bottom, left:right]
+    distance = numpy.hypot((columns - x) / reach_x, (rows - y) / reach_y)
+    falloff = (1 - distance).clip(0, 1).astype(numpy.float32) ** 1.4
+    return Glow(left, top, falloff, BAYER[rows % 4, columns % 4], table)
+
+
+@dataclass(frozen=True)
 class Air:
     """What the effects need to know about one room."""
 
     open: bytes
     covered: bytes
     drips: tuple
-    torches: tuple
+    flames: tuple
     pools: tuple
+    colours: Colours
     inks: dict
+    glows: tuple = ()
+    centres: tuple = ()
 
     def is_open(self, x, y):
         return 0 <= x < WIDTH and 0 <= y < HEIGHT and bool(self.open[y * WIDTH + x])
@@ -232,7 +327,15 @@ def analyze_room(program, room, art, terrain, palette):
     pools = lava_surfaces(program, room, palette)
     inks = {index: tuple(palette[index][:3]) + (255,) for index in ALL_INKS}
     drips = choose_drips(air, luminance.tobytes(), terrain, room, pools)
-    return Air(air, covered, drips, torch_flames(program, room), pools, inks)
+    colours = colours_of(tuple(sorted(palette.items())))
+    flames = torch_flames(program, room)
+    centres = tuple(pool_centre(columns) for columns in pools)
+    glows = tuple(glow_around(x, y, RECESS_REACH, colours.firelight) for x, y in flames)
+    return Air(air, covered, drips, flames, pools, colours, inks, glows, centres)
+
+
+def pool_centre(columns):
+    return sum(columns) / len(columns), sum(columns.values()) / len(columns)
 
 
 def room_air(level_number, room, art, terrain):
@@ -246,15 +349,22 @@ def room_air(level_number, room, art, terrain):
 class Mote:
     x: float
     y: float
+    phase: float
+    wander: float
+    life: float
+    size: float
+    age: float = 0.0
+
+
+@dataclass
+class Ash:
+    x: float
+    y: float
     drift: float
     rise: float
     phase: float
-    life: int
-    shade: int
-    fleck: bool = False
-    ash: bool = False
-    glint: bool = False
-    age: int = 0
+    life: float
+    age: float = 0.0
 
 
 @dataclass
@@ -267,19 +377,24 @@ class Fleck:
     dy: float
     pull: float
     inks: tuple
-    life: int
+    life: float
     floor: int
-    age: int = 0
+    age: float = 0.0
 
 
 @dataclass
 class Fall:
     source: Drip
     period: int
-    wait: int
-    swell: int = 0
+    wait: float
+    swell: float = 0.0
     y: float | None = None
     speed: float = 0.0
+
+
+def wave(time, *terms):
+    """A smooth irregular signal in -1..1: sines that never line up."""
+    return sum(weight * math.sin(time * rate + phase) for weight, rate, phase in terms)
 
 
 @dataclass
@@ -289,110 +404,137 @@ class CavernAmbience:
     rng: random.Random = field(default_factory=random.Random)
     falls: list = field(default_factory=list)
     motes: list = field(default_factory=list)
+    ash: list = field(default_factory=list)
     flecks: list = field(default_factory=list)
-    glows: tuple = ()
-    tick: int = 0
+    tick: float = 0.0
 
     def __post_init__(self):
-        self.glows = tuple((sum(columns) / len(columns), sum(columns.values()) / len(columns))
-                           for columns in self.air.pools)
         self.falls = []
         for source in self.air.drips:
             period = self.rng.randint(*TICKS_BETWEEN_DROPS)
             self.falls.append(Fall(source, period, self.rng.randrange(period)))
-        count = min(MOST_DUST, self.air.open.count(255) // DUST_PER_AIR_PIXELS)
-        for _ in range(count):
-            mote = self.new_mote()
-            if mote is not None:
-                # The room was already dusty before the Prince came in.
-                mote.age = self.rng.randrange(mote.life)
-                self.motes.append(mote)
+        if self.air.flames or self.air.pools:
+            for _ in range(MOST_DUST):
+                mote = self.new_mote()
+                if mote is not None:
+                    # The room was already dusty before the Prince came in.
+                    mote.age = self.rng.uniform(0, mote.life)
+                    self.motes.append(mote)
 
-    def new_mote(self):
-        rng = self.rng
-        torches = self.air.torches
-        near_torch = bool(torches) and rng.random() < DUST_BY_TORCH
-        for _ in range(24):
-            if near_torch:
-                flame_x, flame_y = rng.choice(torches)
-                angle, distance = rng.uniform(0, math.tau), rng.uniform(16, TORCH_REACH * 1.2)
-                x, y = int(flame_x + math.cos(angle) * distance), int(flame_y + math.sin(angle) * distance)
-            else:
-                x, y = rng.randrange(WIDTH), rng.randrange(HEIGHT)
-            if self.air.is_open(x, y):
-                return Mote(float(x), float(y), rng.uniform(-0.05, 0.05), rng.uniform(-0.03, 0.03),
-                            rng.uniform(0, math.tau), rng.randint(*DUST_LIFE), rng.choice(DUST_REST),
-                            fleck=rng.random() < DUST_FLECKS)
-        return None
+    # Light
 
-    def new_ash(self, columns):
-        rng = self.rng
-        x = rng.choice(tuple(columns))
-        return Mote(float(x), float(columns[x] - 2), rng.uniform(-0.08, 0.08), -rng.uniform(0.45, 0.8),
-                    rng.uniform(0, math.tau), rng.randint(*ASH_LIFE), 0, ash=True)
+    def flame_strength(self):
+        return 0.92 + 0.04 * wave(self.tick, (0.6, 0.41, 0.0), (0.4, 1.03, 1.3))
+
+    def light_at(self, x, y):
+        """(flame, pool): 0..1 of the light each kind of fire casts on a point."""
+        flame = pool = 0.0
+        for flame_x, flame_y in self.air.flames:
+            flame = max(flame, 1 - math.hypot(x - flame_x, y - flame_y) / DUST_TORCH_REACH)
+        for pool_x, pool_y in self.air.centres:
+            reach = 1 - math.hypot((x - pool_x) / DUST_POOL_REACH[0], (y - pool_y + 10) / DUST_POOL_REACH[1])
+            pool = max(pool, reach)
+        return flame * self.flame_strength(), pool * DUST_POOL_STRENGTH
 
     def draught(self, x, y):
         """The upward pull of the hot air over a pool or around a flame."""
         strongest = 0.0
         for columns in self.air.pools:
             surface = columns.get(int(x))
-            if surface is not None and surface - HEAT_HEIGHT < y < surface:
-                strongest = max(strongest, HEAT_DRAUGHT * (1 - (surface - y) / HEAT_HEIGHT))
-        for flame_x, flame_y in self.air.torches:
-            reach = 1 - math.hypot(x - flame_x, y - flame_y) / TORCH_REACH
+            if surface is not None and surface - DUST_POOL_REACH[1] < y < surface:
+                strongest = max(strongest, POOL_DRAUGHT * (1 - (surface - y) / DUST_POOL_REACH[1]))
+        for flame_x, flame_y in self.air.flames:
+            reach = 1 - math.hypot(x - flame_x, y - flame_y) / DUST_TORCH_REACH
             strongest = max(strongest, TORCH_DRAUGHT * reach)
         return strongest
 
-    def advance(self, terrain=None):
-        self.tick += 1
-        for fall in self.falls:
-            self.advance_fall(fall, terrain)
-        breeze = math.sin(self.tick * 0.011) * 0.07
-        kept = []
-        for mote in self.motes:
-            mote.age += 1
-            if mote.age >= mote.life:
-                if not mote.ash:
-                    mote = self.new_mote()
-                    if mote is not None:
-                        kept.append(mote)
-                continue
-            # Ash flutters in the hot air; dust only wanders.
-            sway = (math.sin(mote.phase + mote.age * 0.13) * 0.3 if mote.ash
-                    else math.sin(mote.phase + mote.age * 0.047) * 0.06)
-            mote.x += mote.drift + breeze + sway
-            mote.y += mote.rise + math.cos(mote.phase * 1.7 + mote.age * 0.031) * 0.035
-            if not mote.ash:
-                mote.y -= self.draught(mote.x, mote.y)
-                mote.glint = self.rng.random() < GLINT_CHANCE
-            kept.append(mote)
-        self.motes = kept
-        for columns in self.air.pools:
-            ash = sum(mote.ash for mote in self.motes)
-            if ash < MOST_ASH and self.rng.random() < ASH_CHANCE:
-                self.motes.append(self.new_ash(columns))
-        flecks = []
-        for fleck in self.flecks:
-            fleck.age += 1
-            fleck.x += fleck.dx
-            fleck.y += fleck.dy
-            fleck.dy += fleck.pull
-            if fleck.age < fleck.life and fleck.y <= fleck.floor:
-                flecks.append(fleck)
-        self.flecks = flecks
+    # Dust
 
-    def advance_fall(self, fall, terrain):
+    def new_mote(self):
+        rng = self.rng
+        chance = rng.random()
+        for _ in range(24):
+            if chance < DUST_BY_FLAME and self.air.flames:
+                flame_x, flame_y = rng.choice(self.air.flames)
+                angle, distance = rng.uniform(0, math.tau), rng.uniform(14, 110)
+                x, y = flame_x + math.cos(angle) * distance, flame_y + math.sin(angle) * distance * 0.9
+            elif chance < DUST_BY_FLAME + DUST_BY_POOL and self.air.pools:
+                columns = rng.choice(self.air.pools)
+                x, y = rng.choice(tuple(columns)), rng.uniform(100, 215)
+            else:
+                x, y = rng.uniform(0, WIDTH), rng.uniform(0, HEIGHT)
+            if self.air.is_open(int(x), int(y)):
+                return Mote(x, y, rng.uniform(0, math.tau), rng.uniform(0.7, 1.3),
+                            rng.uniform(*DUST_LIFE), rng.uniform(0.45, 1.0))
+        return None
+
+    def advance_dust(self, dt):
+        breeze = math.sin(self.tick * 0.009) * 0.05
+        motes = []
+        for mote in self.motes:
+            mote.age += dt
+            if mote.age >= mote.life:
+                mote = self.new_mote()
+                if mote is None:
+                    continue
+            age, phase = mote.age * mote.wander, mote.phase
+            mote.x += dt * (breeze + DUST_FLOW * wave(age, (0.65, 0.031, phase), (0.35, 0.083, phase * 2)))
+            mote.y += dt * (DUST_FLOW * 0.6 * wave(age, (0.7, 0.024, phase * 3), (0.3, 0.067, phase))
+                            - self.draught(mote.x, mote.y))
+            motes.append(mote)
+        self.motes = motes
+
+    def dust_colour(self, mote):
+        """(red, green, blue, strength) of a mote where it is now."""
+        flame, pool = self.light_at(mote.x, mote.y)
+        edge = min(mote.age, mote.life - mote.age) / DUST_FADE
+        strength = mote.size * min(1.0, edge) * min(1.0, DUST_DARK + 1.5 * max(flame, pool))
+        inks = self.air.inks
+        ink = DUST_DARK_INK if max(flame, pool) <= 0 else (DUST_WARM_INK if flame >= pool else DUST_HOT_INK)
+        return (*inks[ink][:3], strength)
+
+    # Ash
+
+    def new_ash(self, x, y, life):
+        rng = self.rng
+        return Ash(x, y, rng.uniform(-0.08, 0.08), rng.uniform(0.45, 0.8), rng.uniform(0, math.tau),
+                   rng.uniform(*life))
+
+    def advance_ash(self, dt):
+        rng = self.rng
+        for columns in self.air.pools:
+            if len(self.ash) < MOST_ASH and rng.random() < ASH_PER_TICK * dt:
+                x = rng.choice(tuple(columns))
+                self.ash.append(self.new_ash(float(x), columns[x] - 2.0, ASH_LIFE))
+        for flame_x, flame_y in self.air.flames:
+            if len(self.ash) < MOST_ASH and rng.random() < EMBER_PER_TICK * dt:
+                self.ash.append(self.new_ash(flame_x + rng.uniform(-3, 3), flame_y - rng.uniform(6, 14),
+                                             EMBER_LIFE))
+        breeze = math.sin(self.tick * 0.011) * 0.07
+        ash = []
+        for grain in self.ash:
+            grain.age += dt
+            if grain.age < grain.life:
+                # Ash flutters in the hot air.
+                grain.x += dt * (grain.drift + breeze + 0.3 * math.sin(grain.phase + grain.age * 0.13))
+                grain.y += dt * (math.cos(grain.phase * 1.7 + grain.age * 0.031) * 0.035 - grain.rise)
+                ash.append(grain)
+        self.ash = ash
+
+    # Water
+
+    def advance_fall(self, fall, terrain, dt):
         source = fall.source
         if fall.y is None:
             if fall.wait > 0:
-                fall.wait -= 1
+                fall.wait -= dt
                 return
-            fall.swell += 1
+            fall.swell += dt
             if fall.swell >= SWELL_TICKS:
-                fall.swell, fall.y, fall.speed = 0, float(source.top + 2), 0.0
+                fall.swell, fall.y, fall.speed = 0.0, float(source.top + 2), 0.0
             return
-        fall.speed = min(FASTEST_FALL, fall.speed + GRAVITY)
-        fall.y += fall.speed
+        fall.speed = min(FASTEST_FALL, fall.speed + GRAVITY * dt)
+        fall.y += fall.speed * dt
         bottom = self.fall_bottom(source, terrain)
         if fall.y < bottom:
             return
@@ -428,54 +570,44 @@ class CavernAmbience:
                                      -rng.uniform(0.5, 0.9), -0.01, STEAM_INKS,
                                      rng.randint(9, 15), y))
 
-    def light(self, x, y):
-        """The brightest ramp position a point receives, or None in the dark."""
-        best = None
-        for flame_x, flame_y in self.air.torches:
-            reach = 1 - math.hypot(x - flame_x, y - flame_y) / TORCH_REACH
-            if reach > 0:
-                level = min(len(TORCH_INKS) - 1, int(reach * len(TORCH_INKS)))
-                best = TORCH_INKS[level]
-        for glow_x, glow_y in self.glows:
-            reach = 1 - math.hypot((x - glow_x) * 0.6, y - glow_y) / LAVA_REACH
-            if reach > 0 and best is None:
-                best = LAVA_INKS[min(len(LAVA_INKS) - 1, int(reach * len(LAVA_INKS)))]
-        return best
+    def advance_flecks(self, dt):
+        flecks = []
+        for fleck in self.flecks:
+            fleck.age += dt
+            fleck.x += fleck.dx * dt
+            fleck.y += fleck.dy * dt
+            fleck.dy += fleck.pull * dt
+            if fleck.age < fleck.life and fleck.y <= fleck.floor:
+                flecks.append(fleck)
+        self.flecks = flecks
 
-    def mote_ink(self, mote):
-        if mote.ash:
-            return ASH_INKS[min(len(ASH_INKS) - 1, mote.age * len(ASH_INKS) // mote.life)]
-        lit = self.light(mote.x, mote.y)
-        if lit is not None:
-            # A grain turning in the light catches it for a moment.
-            return TORCH_INKS[-1] if mote.glint and lit in TORCH_INKS else lit
-        # Dust appears and leaves by stepping along the ramp, never by alpha.
-        edge = min(mote.age, mote.life - mote.age)
-        shade = mote.shade - (edge < 24) - (edge < 12)
-        return DUST_INKS[shade] if shade >= 0 else None
+    def advance(self, terrain=None, dt=1.0):
+        """Move everything on by dt game ticks."""
+        self.tick += dt
+        for fall in self.falls:
+            self.advance_fall(fall, terrain, dt)
+        self.advance_dust(dt)
+        self.advance_ash(dt)
+        self.advance_flecks(dt)
 
-    def pixels(self):
-        """(x, y, palette index) of everything in this tick, rear first."""
-        air = self.air
-        for mote in self.motes:
-            x, y = int(mote.x), int(mote.y)
-            ink = self.mote_ink(mote)
-            # Ash is born on the lava, in front of the floor's rear rim.
-            if ink is not None and (mote.ash or air.is_open(x, y)):
-                yield x, y, ink
-                if mote.fleck and air.is_open(x + 1, y):
-                    yield x + 1, y, ink
+    # Drawing
+
+    def crisp_pixels(self):
+        """(x, y, palette index) of the drops and the ash, which stay opaque."""
+        for grain in self.ash:
+            yield (int(grain.x), int(grain.y),
+                   ASH_INKS[min(len(ASH_INKS) - 1, int(grain.age * len(ASH_INKS) / grain.life))])
         for fall in self.falls:
             yield from self.fall_pixels(fall)
         for fleck in self.flecks:
             yield (int(fleck.x), int(fleck.y),
-                   fleck.inks[min(len(fleck.inks) - 1, fleck.age * len(fleck.inks) // fleck.life)])
+                   fleck.inks[min(len(fleck.inks) - 1, int(fleck.age * len(fleck.inks) / fleck.life))])
 
     def fall_pixels(self, fall):
         source = fall.source
         if fall.y is None:
             if fall.swell:
-                stage = fall.swell * len(SWELL_INKS) // SWELL_TICKS
+                stage = min(len(SWELL_INKS) - 1, int(fall.swell * len(SWELL_INKS) / SWELL_TICKS))
                 yield source.x, source.top + 1, SWELL_INKS[stage]
                 if stage == len(SWELL_INKS) - 1:
                     yield source.x, source.top + 2, SWELL_INKS[0]
@@ -484,10 +616,47 @@ class CavernAmbience:
         for offset in range(length):
             yield source.x, int(fall.y) - offset, DROP_INKS[offset]
 
+    def shed_light(self, frame, glow, strength):
+        """Step each lit pixel to what its palette colour becomes at that light."""
+        colours = self.air.colours
+        pixels = numpy.array(frame.crop(glow.box))
+        keys = (pixels[..., 0].astype(numpy.int32) << 16 | pixels[..., 1].astype(numpy.int32) << 8
+                | pixels[..., 2])
+        known = numpy.searchsorted(colours.keys, keys).clip(0, len(colours.keys) - 1)
+        level = numpy.minimum((glow.falloff * strength * LIGHT_LEVELS + glow.dither).astype(numpy.int32),
+                              LIGHT_LEVELS)
+        lit = (level > 0) & (colours.keys[known] == keys) & colours.receives[known]
+        pixels[..., :3][lit] = glow.table[level[lit], known[lit]]
+        frame.paste(Image.fromarray(pixels), glow.box[:2])
+
+    def share(self, canvas, x, y, colour, only_air=False):
+        """A soft point: split it among the four pixels around it, and let
+        each blend land on the nearest palette colour."""
+        red, green, blue, strength = colour
+        air, nearest = self.air, self.air.colours.nearest
+        left, top = math.floor(x), math.floor(y)
+        right_share, lower_share = x - left, y - top
+        for column, row, part in ((left, top, (1 - right_share) * (1 - lower_share)),
+                                  (left + 1, top, right_share * (1 - lower_share)),
+                                  (left, top + 1, (1 - right_share) * lower_share),
+                                  (left + 1, top + 1, right_share * lower_share)):
+            amount = part * strength
+            if (amount < 0.04 or not (0 <= column < WIDTH and 0 <= row < HEIGHT)
+                    or air.is_covered(column, row) or (only_air and not air.is_open(column, row))):
+                continue
+            under = canvas[column, row]
+            canvas[column, row] = nearest(int(under[0] + (red - under[0]) * amount),
+                                          int(under[1] + (green - under[1]) * amount),
+                                          int(under[2] + (blue - under[2]) * amount))
+
     def draw(self, frame):
         air, inks = self.air, self.air.inks
+        for glow in air.glows:
+            self.shed_light(frame, glow, self.flame_strength())
         canvas = frame.load()
-        for x, y, ink in self.pixels():
+        for mote in self.motes:
+            self.share(canvas, mote.x, mote.y, self.dust_colour(mote), only_air=True)
+        for x, y, ink in self.crisp_pixels():
             if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                 canvas[x, y] = inks[ink]
         return frame

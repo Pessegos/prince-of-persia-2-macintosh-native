@@ -504,7 +504,7 @@ class Caverns(Environment):
     def advance_ambience(self):
         scene = self.scene
         if getattr(scene, 'cave_ambience_enabled', False):
-            scene.level_renderer.advance_ambience(scene.room_id, scene.level_map)
+            scene.advance_ambience_tick()
 
     def frame_start(self):
         scene = self.scene

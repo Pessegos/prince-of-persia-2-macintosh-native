@@ -156,37 +156,65 @@ to level8 room5. The comparison is kept locally at
 
 ## Cave ambience
 
-An optional port effect, not a recovered behavior: the original has no dust
-and no water drops. `pop2/cavern_ambience.py` draws them while the F1 item
-Cave ambience (Alt+A) is on. It is off by default.
+An optional port effect, not a recovered behavior: the original has no dust,
+ash or water drops. `pop2/cavern_ambience.py` draws them while the F1 item Cave
+ambience (Alt+A) is on. It is off by default.
 
-It is a prototype awaiting the user's review. It runs in one room,
+It is a prototype under the user's review. It runs in one room,
 `AMBIENCE_ROOMS` = level 4 room 16 (Room 17 in the development menu). Adding a
 room means reviewing it in motion: the tips and the air are read from the art,
 and only this room has been looked at.
 
-The rules that keep it from looking like a modern filter:
+The one rule that keeps it from looking like a modern filter: every pixel it
+leaves on the frame is a colour of the room's own palette. The first pass also
+banned blending, and the user rejected the result for the dust, which crawled
+pixel by pixel. So soft things are done the way a 256-colour game did them,
+with tables:
 
-- Every particle is one or two opaque pixels in a colour of the room's own
-  palette. There is no glow, blur or transparency. Light is a step along a
-  palette ramp, and a mote arrives and leaves the same way.
-- Particles belong to the scenery. Drops hang from the tips of the stalactites
-  (`stalactite_tips`, read from the art), keep each source's rhythm and end in
-  a splash on the floor or a hiss in the lava. Ash rises from the lava. Dust is
-  dark until it crosses a torch's light, and rises in the warm air around it.
-- Few and slow: at most 14 motes, 3 ash and 4 sources in a room.
+- A mote between two pixels shares itself among the four around it, and each
+  blend lands on the nearest palette colour (`Colours.nearest`).
+- The warmth inside the torch's recess is a table of what each palette colour
+  becomes at each of eight brightness levels (`Colours.light_table`), stepped
+  through a 4x4 ordered dither like the stipple in the art. The flame and the
+  lava do not receive it.
+- The drops and the ash stay crisp and opaque: the user liked them as they were.
+
+The second pass went too far and the user rejected it: a wide torch light that
+"looked like a bomb about to go off", a red light from the lava on the walls,
+and sparks with trails in bursts at the lava's bubbles. "A little more presence"
+meant a small step in the style that was there. So the torch now only warms its
+own recess (`RECESS_REACH`), almost without moving, and the lava keeps the
+first pass's single grains of ash, a little more often (0.036 a tick against
+0.022, at most five in the air). Tests hold those limits.
+
+Everything is tied to the scenery. Drops hang from the stalactite tips
+(`stalactite_tips`, read from the art), keep each source's rhythm and end in a
+splash on the floor or a hiss in the lava. A grain of ash leaves the lava's
+surface, and now and then one leaves the flame. Dust is kept near the light and
+can only be seen where the light reaches it: dim grains crawling over dark rock
+were what looked strange. Over the lava it is dull, so that it is not read as
+more ash.
 
 Pixels only. Its generator is private, so turning it on changes no opponent,
 route or test. Its state is on the `LevelRenderer`, not in `CavernState`, so it
 never reaches a save. `RealSceneTests` plays the same keys with the toggle off
-and on and compares the game state and the random generators.
+and on, frames between ticks included, and compares the game state and the
+random generators.
+
+The ambience moves three times per game tick while the game keeps its 12 frames
+a second, so drops, ash and dust glide across still actors. Each frame between
+ticks is a whole `render()`, the path the gate presentation already uses. A
+frame that cannot be drawn before the next tick is dropped, and the next tick
+moves the ambience on by whatever time was left, so its speed does not depend
+on the machine.
 
 It is drawn right after `remember_scenery` and not in `animated_layer`, where
 the first idea had put it. DoCleanCut (2:608c) keeps the previous room's scenery
-in the next room's unpainted pixels, so a particle drawn before that snapshot
-could stay on screen for good. Being before the actors, particles pass behind
-them. The foreground's alpha hides them behind pillars and rock.
+in the next room's unpainted pixels, so a particle or lit pixel drawn before
+that snapshot could stay on screen for good. Being before the actors, it passes
+behind them and does not light them. The foreground's alpha hides particles
+behind pillars and rock.
 
-A tick costs about 43 microseconds (19 to advance, 24 to draw, medians over
-3,000 ticks), against frames of 14-16 ms. The first entry into a room costs
-about 34 ms once, to read the art.
+Measured in the hidden scene, the ambience costs about 2.6 ms a frame, and a
+whole frame between ticks about 14 ms against a slot of 28 ms. The first entry
+into a room costs about 120 ms once, to read the art and build the tables.
