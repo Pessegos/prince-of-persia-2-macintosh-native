@@ -114,7 +114,7 @@ Exit door 7:23 opens from plate 14:8 or plate 24:23.
   plate 2:22 (gate 1:3), plate 1:5 (gate 1:9), gate 3:2, then rooms 3, 11, 7, 12.
 
 After the playtest fixes ([notes](temple-november-playtest.md)) the route to
-these gates goes round door 1:1 instead of catching the ledge past it.
+these gates no longer catches the ledge past door 1:1.
 
 From a fresh load, the audit crawls under room 6's two blades and works through
 the northern gates. Real keys drop loose floors on plates 19:20, 5:28 and 9:0,
