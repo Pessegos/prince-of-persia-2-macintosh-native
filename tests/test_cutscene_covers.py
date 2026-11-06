@@ -14,15 +14,13 @@ from pop2.playback_navigation import PlaybackPart
 
 
 class CoverCompositionTests(unittest.TestCase):
-    def test_the_supplied_four_three_title_is_contained_without_a_stretch(self):
+    def test_the_updated_title_fills_the_sixteen_nine_card(self):
         player = Mock()
         player.frame.return_value = Image.new('RGB', (512, 384), '#ff8844')
         cover = selected_cover(player, 'opening_titles')
         self.assertEqual(cover.size, COVER_SIZE)
-        self.assertEqual(cover.getpixel((127, 100)), (16, 16, 16))
-        self.assertEqual(cover.getpixel((128, 100)), (255, 136, 68))
-        self.assertEqual(cover.getpixel((895, 100)), (255, 136, 68))
-        self.assertEqual(cover.getpixel((896, 100)), (16, 16, 16))
+        self.assertEqual(cover.getpixel((0, 0)), (255, 136, 68))
+        self.assertEqual(cover.getpixel((1023, 575)), (255, 136, 68))
 
 
 @unittest.skipUnless(all((ASSET_DIR / c.program).is_file() for c in CHAPTERS),
@@ -30,10 +28,10 @@ class CoverCompositionTests(unittest.TestCase):
 class ImportedSelectedCoverTests(unittest.TestCase):
     def test_covers_match_the_users_nine_supplied_crops(self):
         # RGB hashes of the independently supplied PNGs fitted into 1024x576,
-        # with only the 4:3 title contained. No game artwork is stored in tests.
+        # without an additional crop. No game artwork is stored in tests.
         expected = {
             'opening': '8c2a1c8e0451f0a255ce330f96ccaa47f60733a31fb28d19e01dbe51bb60cf54',
-            'opening_titles': '27b105d489dff83cda6bb7b119e5be1fb6438f6dec9a86b9f9d69fb63b0117bf',
+            'opening_titles': '6f9d1cb45cc6f096ce6dad91f81a7f8b747187e374c6dfa5e237c91559d66139',
             'opening_story': 'cb521138e947aaa4091bf525709d52767154d94bbcd366007cbc21874ebe6beb',
             'voyage': '47838e11ac0e73ad3398ff816e1c262ef4cf36f1db23112b85501976bc66d7bb',
             'discovery': '7a809b06ca73a7b7b2651915364c5b583260068df2b3af3c34bbc5bc57351df4',

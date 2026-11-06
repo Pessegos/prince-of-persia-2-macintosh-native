@@ -10,7 +10,7 @@ from PIL import Image, ImageOps
 COVER_SIZE = (1024, 576)
 COVER_SHOTS = {
     'opening': (33.5, (512, 552, 3584, 2280)),
-    'opening_titles': (8.5, (0, 0, 4096, 3072)),
+    'opening_titles': (8.5, (0, 384, 4096, 2688)),
     'opening_story': (62, (512, 496, 3584, 2224)),
     'voyage': (4.5, (512, 496, 3584, 2224)),
     'discovery': (75, (512, 548, 3584, 2276)),
@@ -26,8 +26,7 @@ def selected_cover(player, key):
     player.advance(seconds)
     frame = player.frame().convert('RGB')
     frame = frame.resize((frame.width * 8, frame.height * 8), Image.Resampling.NEAREST).crop(crop)
-    # The title was supplied in 4:3. Keep its entire composition inside the
-    # same 16:9 card area rather than cropping its logo or stretching it.
+    # Retain the supplied composition and proportions inside the card area.
     picture = ImageOps.contain(frame, COVER_SIZE, method=Image.Resampling.NEAREST)
     result = Image.new('RGB', COVER_SIZE, '#101010')
     result.paste(picture, ((result.width - picture.width) // 2,
