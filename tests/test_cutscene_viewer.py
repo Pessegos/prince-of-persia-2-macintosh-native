@@ -88,7 +88,7 @@ class GalleryTests(unittest.TestCase):
         gallery.key('End')
         self.assertEqual(gallery.index, 8)
         gallery.advance(1)
-        self.assertEqual(list(gallery.visible), [3, 4, 5, 6, 7, 8])
+        self.assertEqual(list(gallery.visible), [6, 7, 8])
         gallery.key('Right')
         self.assertEqual(gallery.index, 8)
         gallery.key('Home')
@@ -144,9 +144,41 @@ class GalleryTests(unittest.TestCase):
         gallery.preview.return_value = source
         image = gallery.draw(Image.new('RGBA', (2048, 1536)), CaptionFont())
         rect = gallery.card_rect(0)
-        thumb = tuple(round(v * 4) for v in (rect[0] + 2, rect[1] + 2, rect[2] - 2, rect[1] + 52))
-        expected = source.resize((thumb[2] - thumb[0], thumb[3] - thumb[1]), Image.Resampling.LANCZOS)
+        thumb = tuple(round(v * 4) for v in (rect[0] + 2, rect[1] + 2, rect[2] - 2, rect[1] + 112))
+        expected = source.resize((thumb[2] - thumb[0], thumb[3] - thumb[1]), Image.Resampling.NEAREST)
         self.assertIsNone(ImageChops.difference(image.crop(thumb).convert('RGB'), expected).getbbox())
+
+
+    def test_two_rows_use_reading_order_and_arrow_keys_follow_the_grid(self):
+        gallery = self.gallery()
+        first = [gallery.card_rect(i) for i in range(6)]
+        self.assertEqual([rect[1] for rect in first[:3]], [63, 63, 63])
+        self.assertEqual([rect[1] for rect in first[3:]], [201, 201, 201])
+        self.assertGreater(first[0][2] - first[0][0], 140)
+        gallery.key('Down')
+        self.assertEqual(gallery.index, 3)
+        gallery.key('Up')
+        self.assertEqual(gallery.index, 0)
+        for _ in range(3):
+            gallery.key('Right')
+        self.assertEqual(gallery.index, 6)
+        self.assertGreater(gallery.scroll_target, 0)
+        gallery.key('Left')
+        self.assertEqual(gallery.index, 2)
+
+    def test_scroll_frames_do_not_load_redraw_fonts_or_resample_images(self):
+        gallery, font = self.gallery(), CaptionFont()
+        viewport = Image.new('RGBA', (1530, 1152))
+        gallery.draw(viewport, font)
+        grid = gallery.grid_cache[1]
+        with patch.object(gallery, 'preview', side_effect=AssertionError('Loaded during scroll')), \
+                patch.object(font, 'text', side_effect=AssertionError('Drew text during scroll')), \
+                patch.object(Image.Image, 'resize', side_effect=AssertionError('Resized during scroll')):
+            gallery.wheel(.5)
+            for _ in range(20):
+                gallery.advance(1 / 60)
+                gallery.draw(viewport, font)
+                self.assertIs(gallery.grid_cache[1], grid)
 
 
 
