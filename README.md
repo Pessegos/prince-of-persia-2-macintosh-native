@@ -176,6 +176,25 @@ I smoothed out the gate opening sound for every type. It now plays continuously 
 
 <br/>
 
+## Overlapping Sound Effects
+
+Different sound effects can now play at the same time. <br/> In this example, the pressure plates finish their sound while gates move, and the skeletons can rattle over the gate sound.
+
+<br/>
+
+<table>
+  <tr>
+    <th width="50%">Macintosh</th>
+    <th width="50%">Port</th>
+  </tr>
+  <tr>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/9d0cd65e-20e7-4138-a1e0-38e2f7418d8d"></video></td>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/4b82128e-c92a-434c-bc1c-4cacdf9c8a3e"></video></td>
+  </tr>
+</table>
+
+<br/>
+
 ## Other Quality of Life Improvements
 
 - The original Macintosh copy protection can be disabled.
