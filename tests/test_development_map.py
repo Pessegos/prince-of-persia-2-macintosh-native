@@ -474,7 +474,8 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
             atlas.detail(size)
             self.assertEqual(len(atlas.scaled_images), 2)
 
-    def test_hub_playback_and_back_are_tabless_and_preserve_world_and_selection(self):
+    def test_hub_cutscene_viewer_and_back_are_tabless_and_preserve_world(self):
+        from pop2.save_game import capture_snapshot
         from tests.test_terrain import RooftopSceneTests
 
         RooftopSceneTests.setUp(self)
@@ -482,23 +483,26 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         s.load_level(3)
         s.open_dev_mode()
         menu = s.dev_menu
-        before = s.game, s.room_id, s.player_x, s.combat.world_frame
+        before, game, combat = capture_snapshot(s.game), s.game, s.combat
         selected = menu.screen, menu.section_index
         menu.focus = 8
         s.apply_dev_action(menu.activate())
-        self.assertEqual(menu.page, 'playback')
+        self.assertIsNone(s.dev_menu)
+        self.assertEqual(s.game_menu.page, 'cutscenes')
         with patch.object(s.ui_font, 'text', wraps=s.ui_font.text) as text:
-            menu.draw(s.screenshot_viewport, s.ui_font)
+            s.game_menu.draw(s.screenshot_viewport, s.ui_font)
         labels = [call.args[0] for call in text.call_args_list]
-        self.assertIn('Playback', labels)
-        self.assertIn('Debug status bar', labels)
-        self.assertNotIn('Display', labels)
-        menu.focus = 7
-        s.apply_dev_action(menu.activate())
-        self.assertEqual(menu.page, 'tools')
-        self.assertEqual(menu.focus, 8)
+        self.assertIn('Cutscene Viewer', labels)
+        for removed in ('Playback', 'Debug status bar', 'Sequence', 'Part', 'Display'):
+            self.assertNotIn(removed, labels)
+        s.game_menu.cutscene_viewer.focus = 2
+        s.apply_game_action(s.game_menu.activate())
+        self.assertEqual(s.game_menu.page, 'menu')
         self.assertEqual((menu.screen, menu.section_index), selected)
-        self.assertEqual(before, (s.game, s.room_id, s.player_x, s.combat.world_frame))
+        self.assertTrue(s.paused)
+        self.assertIs(s.game, game)
+        self.assertIs(s.combat, combat)
+        self.assertEqual(capture_snapshot(s.game), before)
 
     def test_hover_patches_existing_tk_photo_without_rendering_world_or_leaving_trails(self):
         from PIL import ImageTk
