@@ -317,7 +317,11 @@ class CutsceneControls:
                 self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)
             else:
                 self.canvas.create_image(*position, image=self.image_ref, anchor='nw')
-        self.canvas.coords(self.canvas.find_all()[0], *position)
+        item = self.canvas.find_all()[0]
+        if tuple(self.canvas.coords(item)) != tuple(position):
+            # Even identical "coords" assignments invalidate the whole Tk
+            # item. Leave the large static background alone while scrolling.
+            self.canvas.coords(item, *position)
         strip = getattr(self, '_cutscene_gallery_strip', None)
         if strip is None:
             strip = self._cutscene_gallery_strip = CutsceneStrip(self)

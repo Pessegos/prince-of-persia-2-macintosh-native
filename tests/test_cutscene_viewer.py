@@ -682,6 +682,16 @@ class ViewerSceneTests(unittest.TestCase):
                 scene.present_viewport()
         self.assertLess(strip.canvas.coords(strip.item)[0], 0)
 
+    def test_scrolling_does_not_invalidate_the_static_background_by_reassigning_its_coordinates(self):
+        scene = self.scene
+        gallery = self.open_viewer()
+        gallery.wheel(.5)
+        with patch.object(scene.canvas, 'coords', wraps=scene.canvas.coords) as coords:
+            for _ in range(10):
+                gallery.advance(1 / 120)
+                scene.present_viewport()
+        self.assertFalse(any(len(call.args) > 1 for call in coords.call_args_list))
+
     def test_wide_pointer_resize_and_replay_use_their_own_viewports(self):
         from PIL import ImageTk
         from pop2.game_ui import fit_viewport
