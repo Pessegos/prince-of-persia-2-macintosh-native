@@ -22,6 +22,7 @@ class CutsceneGallery:
     drag: tuple | None = None
     dragged: bool = False
     last_clicked: int | None = None
+    developer: bool = False
     text_cache: dict = field(default_factory=dict, repr=False)
     image_cache: dict = field(default_factory=dict, repr=False)
     background_cache: tuple | None = field(default=None, repr=False)
@@ -80,7 +81,10 @@ class CutsceneGallery:
 
     @property
     def unlocked(self):
-        return self.chapter.key in self.collection.seen
+        return self.chapter_unlocked(self.index)
+
+    def chapter_unlocked(self, index):
+        return self.developer or self.chapters[index].key in self.collection.seen
 
     @property
     def max_scroll(self):
@@ -263,7 +267,7 @@ class CutsceneGallery:
     def card_image(self, index, font, sx, sy):
         chapter = self.chapters[index]
         selected, hovered = self.index == index, self.hovered == 100 + index
-        unlocked = chapter.key in self.collection.seen
+        unlocked = self.chapter_unlocked(index)
         size = round(self.CARD_WIDTH * sx), round(self.CARD_HEIGHT * sy)
         key = index, id(font), size, selected, hovered, unlocked
         if key in self.card_cache:
@@ -317,13 +321,14 @@ class CutsceneGallery:
         # The moving region and static frame are composed once per UI state.
         # Animation only crops/pastes the cached grid and updates its scrollbar;
         # there is no font drawing, asset IO or thumbnail resampling per frame.
-        key = (viewport.size, visible, background_key or id(viewport), id(font), self.unlocked,
+        key = (viewport.size, visible, background_key or id(viewport), id(font), self.unlocked, self.developer,
                self.focus, self.hovered if self.hovered in (1, 2) else None, self.error, self.collection.error)
         if self.background_cache is None or self.background_cache[0] != key:
             base = Image.alpha_composite(viewport.convert('RGBA'), Image.new('RGBA', viewport.size, (0, 0, 0, 145)))
             draw = ImageDraw.Draw(base)
             draw.rectangle(bounds(self.PANEL), fill='#181818', outline='#8c7954', width=stroke)
-            self.caption(base, font, 'Cutscene Viewer',
+            title = 'Cutscene Viewer - Dev Tools' if self.developer else 'Cutscene Viewer'
+            self.caption(base, font, title,
                          (20 - ox, 19, self.PANEL[2] - 12 - ox, 51), '#f4d873', 1, sx, sy)
             message = self.error or self.collection.error or (
                 'Continue the story to unlock this chapter.' if not self.unlocked else '')
@@ -334,7 +339,7 @@ class CutsceneGallery:
         region = bounds(self.STRIP)
         width, height = region[2] - region[0], region[3] - region[1]
         grid_key = (viewport.size, visible, id(font), self.index, self.hovered if self.hovered is not None and self.hovered >= 100 else None,
-                    tuple(sorted(self.collection.seen)), self.chapters)
+                    tuple(sorted(self.collection.seen)), self.chapters, self.developer)
         if self.grid_cache is None or self.grid_cache[0] != grid_key:
             grid = Image.new('RGBA', (width + round(self.max_scroll * sx), height), '#181818')
             for index in range(len(self.chapters)):

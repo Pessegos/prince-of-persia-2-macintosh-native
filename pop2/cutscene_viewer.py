@@ -155,7 +155,7 @@ class CutsceneControls:
         if chapter is not None:
             self.mark_cutscene_seen(chapter.key)
 
-    def open_cutscene_viewer(self):
+    def open_cutscene_viewer(self, *, developer=False):
         from pop2.cutscene_gallery import CutsceneGallery
 
         if self.game_menu is None:
@@ -164,14 +164,15 @@ class CutsceneControls:
         self.cancel_cutscene_gallery_tick()
         self.game_menu.show_page('cutscenes')
         self.game_menu.return_to_menu = True
-        if self.cutscene_collection.error:
+        if not developer and self.cutscene_collection.error:
             self.cutscene_collection.save()
-        self.game_menu.cutscene_viewer = CutsceneGallery(self.cutscene_collection, self.cutscene_preview)
+        gallery = self.game_menu.cutscene_viewer = CutsceneGallery(
+            self.cutscene_collection, self.cutscene_preview, developer=developer)
         self.pause_resume_keys.update(self.window_keys_down)
         # Warm unlocked source thumbnails before scrolling begins: loading a
         # newly exposed story program must not stall the moving shelf.
         for index, chapter in enumerate(CHAPTERS):
-            if chapter.key in self.cutscene_collection.seen and chapter_available(chapter):
+            if gallery.chapter_unlocked(index) and chapter_available(chapter):
                 try:
                     self.cutscene_preview(index)
                 except (OSError, ValueError, KeyError, RuntimeError):

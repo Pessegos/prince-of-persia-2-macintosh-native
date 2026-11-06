@@ -498,7 +498,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
             # low-resolution menu buffer intentionally contains no UI here.
             s.cutscene_gallery_frame((1020, 768))
         labels = [call.args[0] for call in text.call_args_list]
-        self.assertIn('Cutscene Viewer', labels)
+        self.assertIn('Cutscene Viewer - Dev Tools', labels)
         for removed in ('Playback', 'Debug status bar', 'Sequence', 'Part', 'Display'):
             self.assertNotIn(removed, labels)
         s.apply_game_action(s.game_menu.key('Escape'))

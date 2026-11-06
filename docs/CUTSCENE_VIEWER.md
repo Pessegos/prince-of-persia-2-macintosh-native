@@ -1,7 +1,12 @@
 # Cutscene Viewer
 
 The F1 menu lists Cutscene Viewer with Alt+C, also available from gameplay.
-The F3 tools offer a shortcut to the same collection. The local responsive
+The F3 tools open a developer version with every chapter available, independently
+of recorded story progress. It uses the same covers and isolated replay, but
+does not add unlocks, save the collection or change the campaign. Returning to
+F1 or opening Alt+C restores the normal progress restrictions, even after
+replaying a later chapter through the developer viewer. Its title includes
+"Dev Tools" so the two entry modes can be distinguished. The local responsive
 sketch uses the full window for this page: six previews fit in two rows of
 three at 4:3 and 16:9, while wider windows fit more columns (four at 2560x1080).
 The header contains only the title; there are no Back or Play buttons.

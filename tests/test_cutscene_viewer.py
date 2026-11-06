@@ -160,6 +160,28 @@ class GalleryTests(unittest.TestCase):
         self.assertNotIn(CHAPTERS[2].title, font.values)
         self.assertEqual(gallery.index, 0)
 
+    def test_developer_access_is_read_only_and_caches_do_not_leak_to_normal_mode(self):
+        gallery = self.gallery()
+        seen = gallery.collection.seen.copy()
+        gallery.developer = True
+        with patch('pop2.cutscene_gallery.chapter_available', return_value=True), \
+                patch.object(gallery.collection, 'save', side_effect=AssertionError('Developer view saved progress')):
+            font = CaptionFont()
+            gallery.draw(Image.new('RGBA', (1024, 768)), font)
+            self.assertIn('Cutscene Viewer - Dev Tools', font.values)
+            self.assertEqual(gallery.preview.call_count, len(CHAPTERS))
+            gallery.key('End')
+            self.assertEqual(gallery.activate(), 'cutscene_play')
+            gallery.developer = False
+            gallery.preview.reset_mock()
+            font = CaptionFont()
+            gallery.draw(Image.new('RGBA', (1024, 768)), font)
+            self.assertIn('Cutscene Viewer', font.values)
+            self.assertNotIn(CHAPTERS[-1].title, font.values)
+            self.assertEqual(gallery.activate(), 'changed')
+            gallery.preview.assert_not_called()
+        self.assertEqual(gallery.collection.seen, seen)
+
     def test_wheel_is_continuous_eased_and_independent_of_selection(self):
         gallery = self.gallery()
         gallery.wheel(.25)
@@ -333,17 +355,63 @@ class ViewerSceneTests(unittest.TestCase):
         self.scene.apply_game_action('cutscenes')
         return self.scene.game_menu.cutscene_viewer
 
-    def test_f1_and_f3_offer_the_same_chapter_viewer_without_a_screen_selector(self):
+    def test_f1_keeps_progress_and_f3_offers_the_same_chapters_with_developer_access(self):
         scene = self.scene
         self.assertIn('cutscenes', {item.action for item in GameMenu().items})
         gallery = self.open_viewer()
         self.assertEqual(gallery.chapters, CHAPTERS)
+        self.assertFalse(gallery.developer)
+        self.assertFalse(gallery.chapter_unlocked(len(CHAPTERS) - 1))
         scene.close_game_menu()
         scene.open_dev_mode()
         scene.dev_menu.focus = 8
         scene.apply_dev_action(scene.dev_menu.activate())
         self.assertIsNone(scene.dev_menu)
         self.assertEqual(scene.game_menu.page, 'cutscenes')
+        developer = scene.game_menu.cutscene_viewer
+        self.assertTrue(developer.developer)
+        self.assertEqual(developer.chapters, CHAPTERS)
+        self.assertTrue(all(developer.chapter_unlocked(i) for i in range(len(CHAPTERS))))
+
+    def test_developer_replay_leaves_profile_world_and_normal_shortcut_locks_unchanged(self):
+        scene = self.scene
+        collection = scene.cutscene_collection
+        collection.save()
+        original_file, seen = collection.path.read_bytes(), collection.seen.copy()
+        before = self.snapshot()
+        scene.open_dev_mode()
+        scene.dev_menu.focus = 8
+        scene.apply_dev_action(scene.dev_menu.activate())
+        gallery = scene.game_menu.cutscene_viewer
+        gallery.key('End')
+        scene.start_cutscene_replay()
+        self.assertIsNotNone(scene.cutscene_replay)
+        self.assertEqual(scene.cutscene_replay.chapter.key, 'tower')
+        scene.cutscene_replay.player.advance(1200)
+        scene.advance_cutscene_replay()
+        self.assertIsNone(scene.cutscene_replay)
+        self.assertEqual(collection.seen, seen)
+        self.assertEqual(collection.path.read_bytes(), original_file)
+        self.assertTrue(scene.cutscene_campaign_active)
+        scene.close_game_menu()
+        event = SimpleNamespace(keysym='c', state=0x20000)
+        scene.dev_key_press(event)
+        scene.dev_key_release(event)
+        normal = scene.game_menu.cutscene_viewer
+        self.assertFalse(normal.developer)
+        normal.key('End')
+        scene.start_cutscene_replay()
+        self.assertIsNone(scene.cutscene_replay)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(collection.seen, seen)
+        self.assertEqual(collection.path.read_bytes(), original_file)
+
+    def test_developer_open_does_not_write_a_collection_with_a_save_error(self):
+        scene = self.scene
+        scene.cutscene_collection.error = 'Could not remember unlocked chapters.'
+        with patch.object(scene.cutscene_collection, 'save') as save:
+            scene.open_cutscene_viewer(developer=True)
+        save.assert_not_called()
 
     def test_alt_c_opens_the_same_viewer_and_is_listed_in_f1(self):
         scene = self.scene
@@ -351,6 +419,7 @@ class ViewerSceneTests(unittest.TestCase):
         event = SimpleNamespace(keysym='c', state=0x20000)
         scene.dev_key_press(event)
         gallery = scene.game_menu.cutscene_viewer
+        self.assertFalse(gallery.developer)
         scene.dev_key_press(event)
         self.assertIs(scene.game_menu.cutscene_viewer, gallery)
         self.assertTrue(scene.paused)

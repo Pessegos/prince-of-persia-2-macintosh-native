@@ -434,7 +434,7 @@ class WindowControls:
         if action == "resume":
             self.close_dev_mode()
         elif action == 'cutscenes':
-            self.open_cutscene_viewer()
+            self.open_cutscene_viewer(developer=True)
         elif action in ('go', 'return_room') and self.level_navigation_available():
             destination = self.dev_menu.return_screen if action == 'return_room' else self.dev_menu.screen
             if destination is None:
