@@ -123,8 +123,8 @@ class LevelRenderer:
             # Snapshot before actors/HUD; later drawing must not modify this image.
             self.cavern_scenery = frame.copy()
 
-    def advance_ambience(self, room_id, terrain, dt=1.0):
-        """Move the optional cave ambience on by dt ticks; pixels only."""
+    def advance_ambience(self, room_id, terrain):
+        """One game tick of the optional cave ambience; pixels only."""
         from pop2.cavern_ambience import AMBIENCE_ROOMS, CavernAmbience, room_air
 
         if (self.level.number, room_id) not in AMBIENCE_ROOMS:
@@ -134,7 +134,7 @@ class LevelRenderer:
             if room_id not in self.ambience_air:
                 self.ambience_air[room_id] = room_air(self.level.number, room_id, self.rooms[room_id], terrain)
             self.ambience = CavernAmbience(room_id, self.ambience_air[room_id])
-        self.ambience.advance(terrain, dt)
+        self.ambience.advance(terrain)
 
     def ambient_layer(self, frame, room_id):
         """Drawn after remember_scenery: a room cut keeps the scenery of the

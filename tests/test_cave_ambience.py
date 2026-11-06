@@ -1,6 +1,6 @@
 """The optional cave ambience: pixels only, tied to the scenery, off by default."""
 
-import math
+from dataclasses import replace
 from pathlib import Path
 import random
 from types import SimpleNamespace
@@ -11,9 +11,10 @@ import numpy
 from PIL import Image
 
 from pop2.cavern_ambience import (
-    AMBIENCE_ROOMS, ALL_INKS, ASH_INKS, Air, Ash, CavernAmbience, Colours, Drip, FLASH_INKS,
-    FRAMES_PER_TICK, HEIGHT, LIGHT_LEVELS, MOST_ASH, Mote, RECESS_REACH, SPLASH_INKS, STEAM_INKS,
-    SWELL_TICKS, WIDTH, glow_around, landing, stalactite_tips,
+    AMBIENCE_ROOMS, ALL_INKS, ASH_INKS, Air, Ash, CavernAmbience, Colours, DUST_BRIGHTEST, DUST_HEADING,
+    DUST_SPEED, Drip, FLASH_INKS, Flicker, HEIGHT, LIGHT_LEVELS, MOST_ASH, MOST_DUST, Mote, POOL_GLOW_REACH,
+    RECESS_REACH, SPLASH_INKS, STEAM_INKS, SWELL_TICKS, WALL_EASE, WIDTH, glow_along, glow_around, landing,
+    read_torch, stalactite_tips,
 )
 from pop2.game_menu import GameMenu
 from pop2.paths import ASSET_DIR
@@ -39,13 +40,16 @@ def palette():
 COLOURS = Colours(palette())
 
 
-def room_air(drips=(), flames=(), pools=(), opened=255, covered=None, glows=False):
+def room_air(drips=(), flames=(), pools=(), opened=255, covered=None, glows=False, pool_glows=False,
+             torches=()):
     centres = tuple((sum(columns) / len(columns), sum(columns.values()) / len(columns)) for columns in pools)
     lights = ()
     if glows:
         lights = tuple(glow_around(x, y, RECESS_REACH, COLOURS.firelight) for x, y in flames)
     return Air(blank(opened), covered if covered is not None else blank(), tuple(drips), tuple(flames),
-               tuple(pools), COLOURS, palette(), lights, centres)
+               tuple(pools), COLOURS, palette(), lights, centres,
+               tuple(glow_along(columns, POOL_GLOW_REACH, COLOURS.lavalight) for columns in pools if pool_glows),
+               tuple(torches))
 
 
 def still_ambience(air, **options):
@@ -104,6 +108,17 @@ class StalactiteTipTests(unittest.TestCase):
 
 
 class DropTests(unittest.TestCase):
+    def test_a_drop_moves_once_per_game_tick(self):
+        # Three times a tick was too smooth for a game that runs at twelve.
+        scene = still_ambience(room_air([Drip(100, 50, 300, False)]))
+        fall = scene.falls[0]
+        fall.y, fall.speed = 52.0, 0.0
+        heights = []
+        for _ in range(4):
+            scene.advance()
+            heights.append(fall.y)
+        self.assertEqual([round(height, 2) for height in heights], [53.15, 55.45, 58.9, 63.5])
+
     def test_a_drop_swells_on_the_tip_then_falls_straight_down_its_column(self):
         scene = still_ambience(room_air([Drip(100, 50, 200, False)]))
         scene.falls[0].wait = 0
@@ -155,31 +170,51 @@ class DropTests(unittest.TestCase):
 
 class DustTests(unittest.TestCase):
     def mote(self, x, y, size=1.0):
-        return Mote(x, y, 0.0, 1.0, 1000.0, size, age=500.0)
+        return Mote(x, y, 0.0, 0.0, 0.0, 1000.0, size, age=500.0)
 
-    def test_a_mote_between_two_pixels_shares_itself_between_them(self):
-        # The first pass snapped each grain to one pixel: it crawled.
+    def test_a_mote_is_one_pixel(self):
+        # Shared among four pixels it looked like a worm.
         scene = still_ambience(room_air(flames=[(100, 100)]))
-        frame = wall_frame()
-        canvas = frame.load()
-        scene.share(canvas, 100.0, 100.0, (*ROCK[:3], 1.0))
-        self.assertEqual(canvas[100, 100], ROCK)
-        self.assertEqual(canvas[101, 100], WALL)
-        frame = wall_frame()
-        canvas = frame.load()
-        scene.share(canvas, 100.5, 100.0, (*ROCK[:3], 1.0))
-        self.assertNotEqual(canvas[100, 100], WALL)
-        self.assertEqual(canvas[100, 100], canvas[101, 100])
-        self.assertNotEqual(canvas[100, 100], ROCK)
+        scene.motes.append(self.mote(100.6, 100.4))
+        frame = scene.draw(wall_frame())
+        changed = numpy.argwhere((numpy.asarray(frame) != WALL).any(axis=2))
+        self.assertEqual(changed.tolist(), [[100, 100]])
 
     def test_a_blend_is_still_a_palette_colour(self):
         scene = still_ambience(room_air(flames=[(100, 100)]))
-        frame = wall_frame()
-        canvas = frame.load()
         for offset in range(20):
-            scene.share(canvas, 100 + offset * 0.37, 100 + offset * 0.61, (*ROCK[:3], 0.6))
+            scene.motes.append(self.mote(100 + offset * 3, 100 + offset * 2))
         allowed = {tuple(colour) + (255,) for colour in COLOURS.rgb.tolist()}
-        self.assertLessEqual(colours_in(frame), allowed)
+        self.assertLessEqual(colours_in(scene.draw(wall_frame())), allowed)
+
+    def test_dust_drifts_fast_enough_not_to_crawl_or_hop(self):
+        # Below this a single pixel is seen hopping or creeping from pixel to pixel.
+        self.assertGreaterEqual(DUST_SPEED[0], 0.25)
+        scene = CavernAmbience(0, room_air(flames=[(200, 200)]), random.Random(6))
+        for _ in range(200):
+            mote = scene.new_mote()
+            speed = (mote.dx ** 2 + mote.dy ** 2) ** 0.5
+            self.assertGreaterEqual(speed, DUST_SPEED[0] - 1e-9)
+            self.assertLessEqual(speed, DUST_SPEED[1] + 1e-9)
+
+    def test_one_draught_crosses_the_room(self):
+        # Every heading of its own looked like insects.
+        scene = CavernAmbience(0, room_air(flames=[(200, 200)]), random.Random(6))
+        self.assertLess(DUST_HEADING[1] - DUST_HEADING[0], 1.0)
+        for _ in range(200):
+            self.assertGreater(scene.new_mote().dx, 0)
+
+    def test_a_mote_that_leaves_the_air_is_replaced(self):
+        opened = bytearray(blank())
+        for y in range(HEIGHT):
+            opened[y * WIDTH:y * WIDTH + 200] = bytes([255]) * 200
+        air = Air(bytes(opened), blank(), (), ((100, 150),), (), COLOURS, palette())
+        scene = CavernAmbience(0, air, random.Random(3))
+        self.assertEqual(len(scene.motes), MOST_DUST)
+        for _ in range(600):
+            scene.advance()
+            self.assertEqual(len(scene.motes), MOST_DUST)
+            self.assertTrue(all(mote.x < 200 for mote in scene.motes))
 
     def test_dust_is_shown_only_on_open_air(self):
         # Open air only in the left half of the room.
@@ -196,12 +231,14 @@ class DustTests(unittest.TestCase):
             box = frame.crop((WIDTH // 2, 0, WIDTH, HEIGHT))
             self.assertEqual(colours_in(box), {WALL})
 
-    def test_dust_is_seen_only_where_light_reaches_it(self):
+    def test_dust_can_be_seen_in_the_dark_and_more_by_the_fire(self):
+        # Seen only by the torch, it was as good as not there.
         scene = still_ambience(room_air(flames=[(300, 200)]))
         near = scene.dust_colour(self.mote(310, 200))[3]
         far = scene.dust_colour(self.mote(20, 20))[3]
-        self.assertGreater(near, 0.5)
-        self.assertLess(far, 0.15)
+        self.assertGreater(far, 0.4)
+        self.assertGreater(near, far)
+        self.assertLessEqual(near, DUST_BRIGHTEST)
 
     def test_dust_takes_the_colour_of_the_light_on_it(self):
         pool = {x: 200 for x in range(300, 340)}
@@ -216,7 +253,7 @@ class DustTests(unittest.TestCase):
         # The user wanted the lava's grains of ash, not a brighter haze.
         pool = {x: 200 for x in range(300, 340)}
         scene = still_ambience(room_air(flames=[(100, 100)], pools=[pool]))
-        self.assertLess(scene.dust_colour(self.mote(320, 190))[3], scene.dust_colour(self.mote(100, 100))[3])
+        self.assertLessEqual(scene.dust_colour(self.mote(320, 190))[3], scene.dust_colour(self.mote(100, 100))[3])
 
 
 class AshTests(unittest.TestCase):
@@ -283,6 +320,108 @@ class AshTests(unittest.TestCase):
         self.assertLess(born.call_count / 12000, 0.05)
 
 
+class TorchTests(unittest.TestCase):
+    """Six frames: a flame growing in one column, and a lighting painted on a square of wall."""
+
+    LEFT, TOP = 100, 120
+    LIT = (140, 115, 90, 255)
+    FLAME = (255, 127, 0, 255)
+
+    def art(self):
+        frames = numpy.zeros((6, 16, 12, 4), dtype=numpy.uint8)
+        frames[...] = WALL
+        frames[:, 0] = 0
+        for index in range(6):
+            frames[index, 12 - index:13, 3] = self.FLAME
+        frames[3:, 2:6, 6:10] = self.LIT
+        return read_torch(frames, self.LEFT, self.TOP)
+
+    def scene(self, **options):
+        art = self.art()
+        return still_ambience(room_air(torches=[art], **options)), art
+
+    def painted(self, art, index=0):
+        frame = wall_frame()
+        sprite = Image.fromarray(art.frames[index])
+        frame.paste(sprite, (self.LEFT, self.TOP), sprite)
+        return frame
+
+    def lit_wall_pixels(self, frame, art):
+        pixels = numpy.asarray(frame.crop(art.box))
+        return int((pixels[art.wall] == self.LIT).all(axis=1).sum())
+
+    def test_it_reads_the_two_lightings_and_the_closest_flames(self):
+        art = self.art()
+        self.assertEqual(art.lighting, (0, 0, 0, 1, 1, 1))
+        self.assertEqual(int(art.wall.sum()), 16)
+        self.assertEqual(art.closest[0], (1, 2, 3))
+        self.assertEqual(art.closest[5], (4, 3, 2))
+
+    def test_the_flame_only_walks_to_close_frames_and_sometimes_stays(self):
+        scene, art = self.scene()
+        previous, stayed, moved = scene.flickers[0].flame, 0, 0
+        for _ in range(500):
+            scene.advance()
+            flame = scene.flickers[0].flame
+            if flame == previous:
+                stayed += 1
+            else:
+                moved += 1
+                self.assertIn(flame, art.closest[previous])
+            previous = flame
+        self.assertGreater(stayed, 100)
+        self.assertGreater(moved, 100)
+
+    def test_the_wall_eases_to_a_new_lighting_instead_of_blinking(self):
+        scene, art = self.scene()
+        scene.flickers[0] = Flicker(5, 0.0)
+        with patch.object(scene.rng, 'random', return_value=0.0):
+            counts = []
+            for _ in range(round(1 / WALL_EASE)):
+                scene.advance()
+                counts.append(self.lit_wall_pixels(scene.draw(self.painted(art)), art))
+        self.assertEqual(counts, sorted(counts))
+        self.assertLess(counts[0], 8)
+        self.assertEqual(counts[-1], 16)
+        self.assertLess(max(after - before for before, after in zip(counts, counts[1:])), 8)
+
+    def test_it_uses_only_the_colours_of_the_torch(self):
+        scene, art = self.scene()
+        allowed = {tuple(colour) for frame in art.frames for colour in frame[frame[..., 3] > 0].tolist()}
+        for _ in range(60):
+            scene.advance()
+            self.assertLessEqual(colours_in(scene.draw(self.painted(art, 3))), allowed)
+
+    def test_it_replaces_whichever_frame_the_game_drew(self):
+        scene, art = self.scene()
+        scene.flickers[0] = Flicker(2, 0.0)
+        wanted = self.painted(art, 2).tobytes()
+        for index in range(6):
+            self.assertEqual(scene.draw(self.painted(art, index)).tobytes(), wanted)
+
+    def test_what_is_drawn_over_the_torch_stays(self):
+        scene, art = self.scene()
+        frame = self.painted(art, 4)
+        rock = Image.new('RGBA', (5, 5), ROCK)
+        frame.paste(rock, (self.LEFT + 1, self.TOP + 8))
+        scene.flickers[0] = Flicker(0, 0.0)
+        scene.draw(frame)
+        self.assertEqual(colours_in(frame.crop((self.LEFT + 1, self.TOP + 8, self.LEFT + 6, self.TOP + 13))), {ROCK})
+        self.assertEqual(frame.getpixel((self.LEFT + 3, self.TOP + 7)), WALL)
+
+    def test_a_room_without_the_torch_on_screen_gets_none(self):
+        scene, _art = self.scene()
+        self.assertEqual(colours_in(scene.draw(Image.new('RGBA', (WIDTH, HEIGHT), ROCK))), {ROCK})
+
+    def test_it_uses_no_game_randomness(self):
+        scene, art = self.scene()
+        before = random.getstate()
+        for _ in range(100):
+            scene.advance()
+            scene.draw(self.painted(art))
+        self.assertEqual(random.getstate(), before)
+
+
 class LightTests(unittest.TestCase):
     def scene(self):
         return still_ambience(room_air(flames=[(200, 200)], glows=True))
@@ -314,6 +453,8 @@ class LightTests(unittest.TestCase):
             scene.advance()
             strengths.append(scene.flame_strength())
         self.assertLess(max(strengths) - min(strengths), 0.1)
+        # A faster change makes the dither flicker around the flame.
+        self.assertLess(max(abs(after - before) for before, after in zip(strengths, strengths[1:])), 0.005)
 
     def test_light_stays_in_the_palette(self):
         scene = self.scene()
@@ -337,6 +478,37 @@ class LightTests(unittest.TestCase):
         table = COLOURS.firelight
         self.assertEqual(table.shape, (LIGHT_LEVELS + 1, len(COLOURS.rgb), 3))
         self.assertTrue((table[0] == COLOURS.rgb).all())
+
+
+class LavaGlowTests(unittest.TestCase):
+    def scene(self):
+        pool = {x: 228 for x in range(300, 340)}
+        return still_ambience(room_air(pools=[pool], pool_glows=True))
+
+    def test_it_warms_the_rock_by_the_pool_and_nothing_further(self):
+        frame = Image.new('RGBA', (WIDTH, HEIGHT), ROCK)
+        self.scene().draw(frame)
+        pixels = numpy.asarray(frame)[..., :3].astype(int)
+        changed = numpy.argwhere((pixels != ROCK[:3]).any(axis=2))
+        self.assertTrue(len(changed))
+        self.assertGreaterEqual(changed[:, 1].min(), 300 - POOL_GLOW_REACH[0])
+        self.assertLess(changed[:, 1].max(), 340 + POOL_GLOW_REACH[0])
+        self.assertGreaterEqual(changed[:, 0].min(), 228 - POOL_GLOW_REACH[1])
+        self.assertLess(changed[:, 0].max(), 228 + POOL_GLOW_REACH[1])
+        self.assertGreater(pixels[220:228, 310:330, 0].mean(), pixels[205:210, 310:330, 0].mean())
+
+    def test_the_lava_itself_receives_nothing(self):
+        frame = Image.new('RGBA', (WIDTH, HEIGHT), FIRE)
+        self.assertEqual(colours_in(self.scene().draw(frame)), {FIRE})
+
+    def test_it_breathes_too_little_and_too_slowly_to_pulse(self):
+        scene = self.scene()
+        strengths = []
+        for _ in range(1500):
+            scene.advance()
+            strengths.append(scene.pool_strength())
+        self.assertLess(max(strengths) - min(strengths), 0.2)
+        self.assertLess(max(abs(after - before) for before, after in zip(strengths, strengths[1:])), 0.01)
 
 
 class PixelArtRuleTests(unittest.TestCase):
@@ -386,7 +558,7 @@ class PixelArtRuleTests(unittest.TestCase):
         # The gate presentation renders between ticks too.
         scene = self.busy_scene(glows=True)
         for _ in range(100):
-            scene.advance(dt=0.5)
+            scene.advance()
             first, second = wall_frame(), wall_frame()
             self.assertEqual(scene.draw(first).tobytes(), scene.draw(second).tobytes())
 
@@ -396,29 +568,6 @@ class PixelArtRuleTests(unittest.TestCase):
             first.advance()
             second.advance()
         self.assertEqual(first.draw(wall_frame()).tobytes(), second.draw(wall_frame()).tobytes())
-
-    def test_frames_between_ticks_do_not_change_its_speed(self):
-        first, thirds = still_ambience(room_air()), still_ambience(room_air())
-        for scene in (first, thirds):
-            scene.motes.append(Mote(200.0, 200.0, 1.0, 1.0, 900.0, 1.0))
-            scene.ash.append(Ash(300.0, 300.0, 0.0, 0.6, 0.0, 900.0))
-        for _ in range(60):
-            first.advance()
-            for _third in range(3):
-                thirds.advance(dt=1 / 3)
-        self.assertLess(math.hypot(first.motes[0].x - thirds.motes[0].x,
-                                   first.motes[0].y - thirds.motes[0].y), 0.5)
-        self.assertLess(abs(first.ash[0].y - thirds.ash[0].y), 0.5)
-
-
-class BareSceneTests(unittest.TestCase):
-    def test_a_scene_without_the_toggle_schedules_nothing(self):
-        # The control suites drive scenes built without __init__.
-        from pop2.scene_prototype import ScenePrototype
-
-        scene = ScenePrototype.__new__(ScenePrototype)
-        scene.schedule_ambience_presentation()
-        self.assertIsNone(scene.ambience_after_id)
 
 
 class MenuTests(unittest.TestCase):
@@ -481,9 +630,33 @@ class ChosenRoomTests(unittest.TestCase):
         self.assertEqual((min(self.air.pools[0]), max(self.air.pools[0])), (331, 413))
         self.assertEqual(len(self.air.glows), 1)
 
+    def test_the_torch_is_read_from_its_nine_frames(self):
+        self.assertEqual(len(self.air.torches), 1)
+        torch = self.air.torches[0]
+        self.assertEqual(torch.box, (455, 125, 501, 209))
+        self.assertEqual(sorted(set(torch.lighting)), [0, 1])
+        self.assertIn(int(torch.wall.sum()), range(80, 120))
+        self.assertTrue(all(len(close) == 3 for close in torch.closest))
+
+    def test_the_lava_glow_is_fainter_than_the_torch_warmth(self):
+        pool = self.air.pools[0]
+        scene = CavernAmbience(16, replace(self.air, glows=()), random.Random(2))
+        scene.motes.clear()
+        frame = Image.alpha_composite(self.art.background, self.art.foreground)
+        before = numpy.asarray(frame).astype(int)
+        scene.draw(frame)
+        change = numpy.asarray(frame).astype(int)[..., :3] - before[..., :3]
+        box = self.air.pool_glows[0].box
+        self.assertGreaterEqual(box[0], min(pool) - POOL_GLOW_REACH[0])
+        self.assertLessEqual(box[2], max(pool) + POOL_GLOW_REACH[0])
+        self.assertEqual(change[:box[1]].max(initial=0), 0)
+        self.assertEqual(change[:, :box[0]].max(initial=0), 0)
+        inside = change[box[1]:box[3], box[0]:box[2]]
+        self.assertLess(numpy.abs(inside).mean(), 3)
+
     def test_the_recess_is_barely_warmer(self):
         # Rock keeps its look: a warmth only seen when the toggle is flicked.
-        scene = CavernAmbience(16, self.air, random.Random(2))
+        scene = CavernAmbience(16, replace(self.air, pool_glows=()), random.Random(2))
         scene.motes.clear()
         frame = Image.alpha_composite(self.art.background, self.art.foreground)
         before = numpy.asarray(frame).astype(int)
@@ -558,19 +731,11 @@ class RealSceneTests(unittest.TestCase):
         try:
             scene = harness.scene
             scene.cave_ambience_enabled = enabled
-
-            def ticks(count):
-                for _ in range(count):
-                    harness.tick()
-                    if enabled:
-                        for _frame in range(FRAMES_PER_TICK - 1):
-                            scene.advance_ambience_presentation(0)
-
-            ticks(20)
+            harness.tick(20)
             press(harness, 'R', True)
-            ticks(5)
+            harness.tick(5)
             press(harness, 'R', False)
-            ticks(40)
+            harness.tick(40)
             state = scene.sequence_state
             return dict(random=random.getstate(), combat=scene.combat.rng.getstate(),
                         room=scene.room_id, x=scene.player_x, action=scene.action,
@@ -593,55 +758,30 @@ class RealSceneTests(unittest.TestCase):
         # The HUD strip is not part of the room.
         self.assertFalse(changed[365:].any())
 
-    def test_frames_between_ticks_are_dropped_rather_than_late(self):
+    def test_it_moves_once_per_game_tick(self):
         harness = self.harness()
         self.addCleanup(harness.close)
         scene = harness.scene
         scene.cave_ambience_enabled = True
         harness.tick(2)
+        renderer = scene.level_renderer
+        with patch.object(renderer, 'advance_ambience', wraps=renderer.advance_ambience) as advance:
+            harness.tick(5)
+        self.assertEqual(advance.call_count, 5)
+
+    def test_it_asks_for_no_frames_between_ticks(self):
+        harness = self.harness()
+        self.addCleanup(harness.close)
+        scene = harness.scene
+        scene.cave_ambience_enabled = True
+        harness.tick(2)
+        pending = scene.root.after
         scene.root.after = Mock(return_value='timer')
-        scene.next_animation_at = harness.clock.now + 0.001
-        scene.schedule_ambience_presentation()
-        scene.root.after.assert_not_called()
-        scene.next_animation_at = harness.clock.now + 1 / 12
-        scene.schedule_ambience_presentation()
+        self.addCleanup(setattr, scene.root, 'after', pending)
+        # The harness replaces this on the instance.
+        type(scene).schedule_next_animation(scene)
         scene.root.after.assert_called_once()
-        delay, callback, left = scene.root.after.call_args.args
-        self.assertEqual(callback, scene.advance_ambience_presentation)
-        self.assertEqual(left, FRAMES_PER_TICK - 2)
-        self.assertLess(delay, 1000 / 12)
-        scene.ambience_after_id = None
-
-    def test_a_tick_moves_only_what_the_frames_between_ticks_did_not(self):
-        harness = self.harness()
-        self.addCleanup(harness.close)
-        scene = harness.scene
-        scene.cave_ambience_enabled = True
-        harness.tick(2)
-        with patch.object(scene.level_renderer, 'advance_ambience') as advance:
-            scene.advance_ambience_tick()
-            self.assertEqual(advance.call_args.args[2], 1.0)
-            scene.ambience_presented = 2 / 3
-            scene.advance_ambience_tick()
-            self.assertAlmostEqual(advance.call_args.args[2], 1 / 3)
-            self.assertEqual(scene.ambience_presented, 0.0)
-
-    def test_nothing_moves_or_is_scheduled_while_paused_or_off(self):
-        harness = self.harness()
-        self.addCleanup(harness.close)
-        scene = harness.scene
-        scene.cave_ambience_enabled = True
-        harness.tick(2)
-        scene.render = Mock()
-        scene.paused = True
-        scene.advance_ambience_presentation(0)
-        scene.render.assert_not_called()
-        scene.paused = False
-        scene.cave_ambience_enabled = False
-        scene.schedule_ambience_presentation()
-        self.assertIsNone(scene.ambience_after_id)
-        scene.advance_ambience_presentation(0)
-        scene.render.assert_not_called()
+        self.assertEqual(scene.root.after.call_args.args[1], scene.advance_animation)
 
 
 class SourceTests(unittest.TestCase):
