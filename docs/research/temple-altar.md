@@ -156,9 +156,12 @@ code. The story guide's account agrees (popuw.com/story/pop2-13.html).
   10:0c76 draw image 0 as back wall only (10:0004). The Prince cannot reach the
   cell. The shadow steps on it (2:6602) and opens exit 32:12, which stays open.
 - The door is silent. TriggerObject 5:1f72-1f7e never adds song 297 on level 13.
-  ATMExit 5:162c-1640 and 5:1656-166a skip cues 17 and 18, and the call 16:21fc
-  (0) at the end, while the Kid is in room 4 of level 13. 16:21fc is not
-  identified. These ATMExit bytes are in a gap in the listing.
+  ATMExit 5:162c-1640 and 5:1656-166a skip cues 17 and 18 while the Kid is in
+  room 4 of level 13, and with them ResetSoundItem(0). That is the call at
+  5:1644, jump-table entry 500 (`$fc2(a5)`, the stub at 16:21fc, body 16:2200).
+  It stops the current music and sound items just before cue 18, in every other
+  room. The port does not do this at any exit door. These ATMExit bytes are in a
+  gap in the listing.
 - Native room 13 of level 13: 4:0902-091e lets a running opponent jump any gap
   until the Kid has mode 13. `_choose_guard_jump`.
 
@@ -174,7 +177,11 @@ flame, the door reaches 79, and the same birdhead then draws and kneels.
   anchor, and CheckFloor drops it. SwordCtrl 6:26a8 selects SEQS 60 with no floor
   test and CheckFloor 4:35ca has no exemption for it, so this reads as original
   behaviour. It has not been run on the original.
-- A native probe of AutoCtrl 10:2850 and the rise/merge.
+- A native probe of the rise, the merge and the whole flight. The decisions are
+  checked: `tools/probe_temple_shadow_ctrl.py` runs AutoCtrl 10:2850 over poses,
+  facing, column, mode, selected SEQS and the Kid (24,576 cases), and the bow
+  6:4ffa, 4:07fe with a supplied distance (288 cases), 0 mismatches. Moving the
+  shadow's column 8 test to 9 is caught.
 
 ## NIS 3: the flight to the tower
 
