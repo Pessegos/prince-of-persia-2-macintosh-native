@@ -378,6 +378,7 @@ class WindowControls:
         was_paused = self.game_was_paused if self.game_menu is not None else self.paused
         if hasattr(self, 'cancel_cutscene_gallery_tick'):
             self.cancel_cutscene_gallery_tick()
+            self.dispose_cutscene_strip()
         self.dispose_screenshot_gallery()
         self.game_menu = None
         from pop2.playback_navigation import playback_groups

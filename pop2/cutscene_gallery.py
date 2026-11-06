@@ -1,11 +1,11 @@
 """A device-resolution story shelf with continuous horizontal scrolling."""
 
 from dataclasses import dataclass, field
-import math
 
 from PIL import Image, ImageDraw, ImageOps
 
 from pop2.cutscenes import CHAPTERS, chapter_available
+from pop2.menu_animation import spring_step
 
 
 @dataclass
@@ -19,6 +19,10 @@ class CutsceneGallery:
     chapters: tuple = CHAPTERS
     scroll: float = 0
     scroll_target: float = 0
+    scroll_velocity: float = 0
+    bounce: float = 0
+    bounce_velocity: float = 0
+    pending_bounce: float = 0
     drag: tuple | None = None
     dragged: bool = False
     last_clicked: int | None = None
@@ -40,6 +44,8 @@ class CutsceneGallery:
     CARD_HEIGHT = 104.125
     COLUMNS = 3
     ROWS = 2
+    GRID_PADDING = 16
+    BOUNCE_LIMIT = 12
 
     def layout(self, size, *, visible=False):
         """Uniform UI scale; extra width changes layout rather than stretching it."""
@@ -61,6 +67,7 @@ class CutsceneGallery:
         self.PITCH = (available - self.CARD_WIDTH) / (self.COLUMNS - 1)
         self.scroll = max(0, min(self.max_scroll, scroll * self.PITCH))
         self.scroll_target = max(0, min(self.max_scroll, target * self.PITCH))
+        self.scroll_velocity = self.bounce = self.bounce_velocity = self.pending_bounce = 0
         self.drag = None
         self.dragged = False
         self.hovered = None
@@ -102,7 +109,7 @@ class CutsceneGallery:
 
     def card_rect(self, index, *, offset=None):
         column, row = self.cell(index)
-        x = self.STRIP[0] + 1 + column * self.PITCH - (self.scroll if offset is None else offset)
+        x = self.STRIP[0] + 1 + column * self.PITCH - (self.display_scroll if offset is None else offset)
         grid_height = self.ROWS * self.CARD_HEIGHT + 10 * (self.ROWS - 1)
         y = (self.STRIP[1] + self.STRIP[3] - grid_height) / 2 + row * (self.CARD_HEIGHT + 10)
         return x, y, x + self.CARD_WIDTH, y + self.CARD_HEIGHT
@@ -113,6 +120,7 @@ class CutsceneGallery:
 
     def move(self, delta):
         self.last_clicked = None
+        self.pending_bounce = 0
         self.index = max(0, min(len(self.chapters) - 1, self.index + delta))
         left = self.cell(self.index)[0] * self.PITCH
         self.scroll_target = max(left - (self.COLUMNS - 1) * self.PITCH, min(self.scroll_target, left))
@@ -123,16 +131,37 @@ class CutsceneGallery:
 
     def wheel(self, steps):
         self.last_clicked = None
+        self.pending_bounce = 0
         # Scrolling moves the shelf, not the selected chapter. Preserve partial
         # wheel deltas from touchpads rather than snapping to cards/pages.
-        self.scroll_target = max(0, min(self.max_scroll, self.scroll_target + steps * self.PITCH * .8))
+        desired = self.scroll_target + steps * self.PITCH * .55
+        self.scroll_target = max(0, min(self.max_scroll, desired))
+        if (self.max_scroll and desired != self.scroll_target
+                and abs(self.bounce) < .05 and abs(self.bounce_velocity) < .5):
+            self.pending_bounce = 200 if desired > self.max_scroll else -200
+
+    @property
+    def display_scroll(self):
+        return self.scroll + self.bounce
 
     def advance(self, seconds):
-        difference = self.scroll_target - self.scroll
-        self.scroll += difference * (1 - math.exp(-18 * max(0, seconds)))
-        if abs(self.scroll_target - self.scroll) < .02:
+        if self.drag is not None:
+            return False
+        self.scroll, self.scroll_velocity = spring_step(
+            self.scroll, self.scroll_velocity, self.scroll_target, seconds)
+        self.scroll = max(0, min(self.max_scroll, self.scroll))
+        if abs(self.scroll_target - self.scroll) < .02 and abs(self.scroll_velocity) < .5:
             self.scroll = self.scroll_target
-        return self.scroll != self.scroll_target
+            self.scroll_velocity = 0
+        if self.pending_bounce and abs(self.scroll_target - self.scroll) < .75:
+            self.bounce_velocity, self.pending_bounce = self.pending_bounce, 0
+        self.bounce, self.bounce_velocity = spring_step(
+            self.bounce, self.bounce_velocity, 0, seconds, frequency=28, damping=.7)
+        self.bounce = max(-self.BOUNCE_LIMIT, min(self.BOUNCE_LIMIT, self.bounce))
+        if abs(self.bounce) < .02 and abs(self.bounce_velocity) < .5:
+            self.bounce = self.bounce_velocity = 0
+        return bool(self.scroll != self.scroll_target or self.scroll_velocity
+                    or self.bounce or self.bounce_velocity or self.pending_bounce)
 
     def begin_drag(self, x, y):
         if not self.contains(self.STRIP, x, y):
@@ -140,6 +169,7 @@ class CutsceneGallery:
         self.drag = (x, self.scroll)
         self.dragged = False
         self.scroll_target = self.scroll
+        self.scroll_velocity = self.bounce = self.bounce_velocity = self.pending_bounce = 0
         return True
 
     def move_drag(self, x):
@@ -150,7 +180,10 @@ class CutsceneGallery:
             self.dragged = True
         if self.dragged:
             self.last_clicked = None
-            self.scroll = self.scroll_target = max(0, min(self.max_scroll, scroll + start - x))
+            desired = scroll + start - x
+            self.scroll = self.scroll_target = max(0, min(self.max_scroll, desired))
+            excess = desired - self.scroll
+            self.bounce = excess * .25 / (1 + abs(excess) / (4 * self.BOUNCE_LIMIT))
         return self.dragged
 
     def end_drag(self, x, y):
@@ -341,16 +374,34 @@ class CutsceneGallery:
         grid_key = (viewport.size, visible, id(font), self.index, self.hovered if self.hovered is not None and self.hovered >= 100 else None,
                     tuple(sorted(self.collection.seen)), self.chapters, self.developer)
         if self.grid_cache is None or self.grid_cache[0] != grid_key:
-            grid = Image.new('RGBA', (width + round(self.max_scroll * sx), height), '#181818')
+            grid = Image.new('RGBA', (width + round((self.max_scroll + 2 * self.GRID_PADDING) * sx), height), '#181818')
             for index in range(len(self.chapters)):
                 rect = self.card_rect(index, offset=0)
                 card = self.card_image(index, font, sx, sy)
-                grid.alpha_composite(card, (round((rect[0] - self.STRIP[0]) * sx),
+                grid.alpha_composite(card, (round((rect[0] - self.STRIP[0] + self.GRID_PADDING) * sx),
                                              round((rect[1] - self.STRIP[1]) * sy)))
             self.grid_cache = grid_key, grid.convert('RGB')
-        left = round(self.scroll * sx)
+        left = round(self.display_scroll * sx) + round(self.GRID_PADDING * sx)
         image.paste(self.grid_cache[1].crop((left, 0, left + width, height)), region[:2])
+        self.draw_scroll_controls(image, sx, sy, ox=ox)
+        if len(self.text_cache) > 600:
+            self.text_cache.clear()
+        if len(self.image_cache) > 60:
+            self.image_cache.clear()
+        if len(self.card_cache) > 90:
+            self.card_cache.clear()
+        return image
+
+    def draw_scroll_controls(self, image, sx, sy, *, ox=0, origin=(0, 0)):
+        """Also draw directly into small retained-photo patches during motion."""
+        def point(x, y):
+            return round((x - ox) * sx) - origin[0], round(y * sy) - origin[1]
+
+        def bounds(rect):
+            return *point(*rect[:2]), *point(*rect[2:])
+
         draw = ImageDraw.Draw(image)
+        stroke = max(1, round(min(sx, sy)))
         for rect, direction, enabled in ((self.PREVIOUS, -1, self.scroll_target > 0),
                                          (self.NEXT, 1, self.scroll_target < self.max_scroll)):
             x, y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
@@ -362,10 +413,3 @@ class CutsceneGallery:
         thumb_width = track_width * fraction / (fraction + self.max_scroll)
         start = self.TRACK[0] + (track_width - thumb_width) * (self.scroll / self.max_scroll if self.max_scroll else 0)
         draw.rectangle(bounds((start, self.TRACK[1] + 1, start + thumb_width, self.TRACK[3] - 1)), fill='#999076')
-        if len(self.text_cache) > 600:
-            self.text_cache.clear()
-        if len(self.image_cache) > 60:
-            self.image_cache.clear()
-        if len(self.card_cache) > 90:
-            self.card_cache.clear()
-        return image
