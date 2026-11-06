@@ -180,9 +180,11 @@ What the user has reviewed and how each part ended up:
 - **Ash** is single crisp pixels. They rise from the lava's surface, and from
   the flame. A pass with sparks in bursts, with trails, was rejected: "a little
   more presence" meant a small step in the style that was there.
-- **Torch warmth** only warms its own recess (`RECESS_REACH`), and moves a little
-  like a candle (`CANDLE`). A wider light with a real pulse "looked like a bomb
-  about to go off".
+- **Torch aura** is the flame's own shape, blurred (`flame_auras`), one for each
+  of the nine frames, so it leans and stretches with the frame on screen, a
+  bigger flame lighting more. It eases halfway to that shape each tick, or it
+  would snap with the random frames. A wider light with a real pulse "looked
+  like a bomb about to go off".
 - **Lava glow** is fainter than that warmth and hugs the pool (`glow_along`). It
   is the same table and dither, and breathes over several seconds.
 - **The wall behind the torch.** `CaveGetTorchFrame` (8:3b4e) picks one of nine
@@ -190,19 +192,21 @@ What the user has reviewed and how each part ended up:
   a hundred pixels, so the wall blinks between the two. While the ambience is on
   the wall moves to the lighting of the frame on screen over five ticks, by
   ordered dither. The flame stays exactly the game's: a pass that also chose the
-  frames made it choppy. `calm_torch` only touches pixels that show the sprite,
+  frames made it choppy. `light_torch` only touches pixels that show the sprite,
   so whatever is drawn over the torch stays, and a torch that is not there gets
-  nothing.
+  no light either.
 - **Dust** went through the most tries. Slow crisp grains hopped from pixel to
-  pixel. Crisp grains fast enough to hide that looked in a hurry. The user chose
-  the soft point, shared among four pixels, moving slowly in one draught across
-  the room. At 36 Hz with a wandering path that same point looked like a worm;
-  at the game's rate on a straight path it reads as dust. A grain has a lifespan:
-  it comes up over 4 seconds and goes over 7, so it is seen to fade. A new one
-  starts unseen, in the emptiest of five places with air ahead for its whole
-  life (`new_mote`), so the amount in the room stays the same and old and new
-  never show as a swap. Dim in the dark, a little brighter by the fire, and
-  duller over the lava so that it is not read as more ash.
+  pixel. Crisp grains fast enough to hide that looked in a hurry. Grains split
+  among the four nearest pixels swelled and shrank on every pixel crossed: the
+  brightest pixel fell from all of the grain to a quarter and back, and it
+  looked like a worm going round a small square. `soft_spot` keeps one small
+  soft shape wherever the grain falls between pixels. It moves slowly in one
+  draught across the room. A grain has a lifespan: it comes up over 4 seconds
+  and goes over 7, so it is seen to fade. A new one starts unseen, in the
+  emptiest of five places with air ahead for its whole life (`new_mote`), so the
+  amount in the room stays the same and old and new never show as a swap. Dim in
+  the dark, a little brighter by the fire, and duller over the lava so that it
+  is not read as more ash.
 
 The warmth and the glow are tables of what each palette colour becomes at each
 of eight brightness levels (`Colours.light_table`), stepped through a 4x4

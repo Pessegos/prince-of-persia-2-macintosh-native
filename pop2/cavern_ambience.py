@@ -9,11 +9,10 @@ change an opponent, a route or a test.
 The look is held to the 1993 art by two rules. Every pixel it leaves on the
 frame is a colour of the room's own palette, and everything moves once per game
 tick like the rest of the game: motion any smoother stood out against it. Soft
-things are done the way a 256-colour game did them. A mote between two pixels
-shares itself among the four around it, each blend landing on the nearest
-palette colour, and the faint warmth at a torch and around the lava is a table
-of what each palette colour becomes at each brightness, stepped through an
-ordered dither.
+things are done the way a 256-colour game did them. A grain of dust is a small
+soft spot, each blend landing on the nearest palette colour, and the faint
+warmth at a torch and around the lava is a table of what each palette colour
+becomes at each brightness, stepped through an ordered dither.
 
 It is meant to be barely noticed, and it is tied to the scenery. Drops hang
 from the tips of the stalactites and end on the floor or in the lava, single
@@ -23,7 +22,7 @@ wall eases instead of blinking. The user rejected a wider firelight and sparks
 with trails as far too much: a change here should be small.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 import math
 import random
@@ -80,8 +79,10 @@ DUST_HEADING = (-0.6, 0.25)
 DUST_BY_FLAME = 0.35
 DUST_BY_POOL = 0.1
 # A little of it can be seen in the dark as well, and never much by the flame.
-DUST_DARK = 0.65
-DUST_BRIGHTEST = 0.75
+DUST_DARK = 0.52
+DUST_BRIGHTEST = 0.6
+# How wide a grain's soft spot is, in pixels.
+DUST_SOFTNESS = 0.7
 TORCH_DRAUGHT = 0.1
 POOL_DRAUGHT = 0.12
 DUST_TORCH_REACH = 84
@@ -105,12 +106,16 @@ WALL_EASE = 0.2
 # Share of a torch that must be on screen for it to be there at all.
 TORCH_SEEN = 0.5
 
-# Only the torch's own recess, and it moves like a candle: a wider light with a
-# real pulse looked like a bomb about to go off.
+# The light around a torch is the flame's own shape, blurred, so it leans and
+# stretches with the frame on screen, and eases after it instead of snapping.
+# It stays around the recess: a wide light with a real pulse looked like a bomb
+# about to go off.
 LIGHT_LEVELS = 8
-RECESS_REACH = (30, 44)
-RECESS_GAIN, RECESS_ADD = (1.15, 1.08, 1.0), (26.0, 13.0, 2.0)
-CANDLE = (0.78, 0.2)
+AURA_BLUR = 12
+AURA_MARGIN = 36
+AURA_FOLLOW = 0.5
+AURA_STRENGTH = 1.0
+AURA_GAIN, AURA_ADD = (1.17, 1.09, 1.0), (30.0, 15.0, 2.0)
 # Fainter still: the lava seems to radiate, and it must not light the room.
 POOL_GLOW_REACH = (34, 30)
 POOL_GLOW_GAIN, POOL_GLOW_ADD = (1.08, 1.03, 1.0), (18.0, 5.0, 0.0)
@@ -140,7 +145,7 @@ class Colours:
         # The flame and the lava are the light; they do not receive it.
         self.receives = self.rgb[:, 0] < 240
         self.cube = self.nearest_cube().tobytes()
-        self.firelight = self.light_table(RECESS_GAIN, RECESS_ADD)
+        self.firelight = self.light_table(AURA_GAIN, AURA_ADD)
         self.lavalight = self.light_table(POOL_GLOW_GAIN, POOL_GLOW_ADD)
 
     def closest(self, values):
@@ -200,16 +205,6 @@ class Glow:
         return self.left, self.top, self.left + self.falloff.shape[1], self.top + self.falloff.shape[0]
 
 
-def glow_around(x, y, reach, table):
-    reach_x, reach_y = reach
-    left, right = max(0, x - reach_x), min(WIDTH, x + reach_x)
-    top, bottom = max(0, y - reach_y), min(HEIGHT, y + reach_y)
-    rows, columns = numpy.mgrid[top:bottom, left:right]
-    distance = numpy.hypot((columns - x) / reach_x, (rows - y) / reach_y)
-    falloff = (1 - distance).clip(0, 1).astype(numpy.float32) ** 1.4
-    return Glow(left, top, falloff, BAYER[rows % 4, columns % 4], table)
-
-
 def glow_along(columns, reach, table):
     """A glow measured from a pool's surface, not from one point."""
     reach_x, reach_y = reach
@@ -236,13 +231,27 @@ class TorchArt:
     unlit_wall: numpy.ndarray
     lit_wall: numpy.ndarray
     order: numpy.ndarray
+    auras: numpy.ndarray
+    aura: Glow
 
     @property
     def box(self):
         return self.left, self.top, self.left + self.frames.shape[2], self.top + self.frames.shape[1]
 
 
-def read_torch(frames, left, top):
+def flame_auras(fire):
+    """For each frame, the light of its flame around it: its own shape, blurred."""
+    height, width = fire.shape[1:]
+    blurred = []
+    for flame in fire:
+        mask = Image.new('L', (width + 2 * AURA_MARGIN, height + 2 * AURA_MARGIN))
+        mask.paste(Image.fromarray(flame.astype(numpy.uint8) * 255), (AURA_MARGIN, AURA_MARGIN))
+        blurred.append(numpy.asarray(mask.filter(ImageFilter.GaussianBlur(AURA_BLUR)), dtype=numpy.float32))
+    auras = numpy.stack(blurred)
+    return auras / auras.max()
+
+
+def read_torch(frames, left, top, table):
     """frames: [frame, y, x, RGBA] of one size, all with the same outline."""
     fire = frames[..., 0] >= FIRE_RED
     plain_wall = ~fire.any(axis=0) & (frames[0, ..., 3] > 0)
@@ -258,10 +267,18 @@ def read_torch(frames, left, top):
     wall = wall_change(0, other)
     rows, columns = numpy.nonzero(wall)
     order = BAYER[(rows + top) % 4, (columns + left) % 4]
-    return TorchArt(left, top, frames, lighting, wall, frames[0][wall], frames[other][wall], order)
+    auras = flame_auras(fire)
+    aura_left, aura_top = left - AURA_MARGIN, top - AURA_MARGIN
+    # Cut the light to the room.
+    inside_left, inside_top = max(0, -aura_left), max(0, -aura_top)
+    auras = auras[:, inside_top:HEIGHT - aura_top, inside_left:WIDTH - aura_left]
+    aura_left, aura_top = aura_left + inside_left, aura_top + inside_top
+    rows, columns = numpy.mgrid[aura_top:aura_top + auras.shape[1], aura_left:aura_left + auras.shape[2]]
+    aura = Glow(aura_left, aura_top, auras[0], BAYER[rows % 4, columns % 4], table)
+    return TorchArt(left, top, frames, lighting, wall, frames[0][wall], frames[other][wall], order, auras, aura)
 
 
-def torch_art(record, resources, palette, shapes):
+def torch_art(record, resources, palette, shapes, table):
     from pop2.caverns import clipped_sprite, decode_shap
 
     sprites = []
@@ -273,7 +290,7 @@ def torch_art(record, resources, palette, shapes):
             return None
         sprites.append(clipped)
     frames = numpy.stack([numpy.array(sprite.convert('RGBA')) for sprite, _position in sprites])
-    return read_torch(frames, *sprites[0][1])
+    return read_torch(frames, *sprites[0][1], table)
 
 
 @dataclass(frozen=True)
@@ -287,7 +304,6 @@ class Air:
     pools: tuple
     colours: Colours
     inks: dict
-    glows: tuple = ()
     centres: tuple = ()
     pool_glows: tuple = ()
     torches: tuple = ()
@@ -423,13 +439,13 @@ def analyze_room(program, room, art, terrain, palette, resources=None, shapes=No
     colours = colours_of(tuple(sorted(palette.items())))
     flames = torch_flames(program, room)
     centres = tuple(pool_centre(columns) for columns in pools)
-    glows = tuple(glow_around(x, y, RECESS_REACH, colours.firelight) for x, y in flames)
     pool_glows = tuple(glow_along(columns, POOL_GLOW_REACH, colours.lavalight) for columns in pools)
     torches = ()
     if resources is not None:
         records = program.get('torches', {}).get(str(room), ())
-        torches = tuple(filter(None, (torch_art(record, resources, palette, shapes) for record in records)))
-    return Air(air, covered, drips, flames, pools, colours, inks, glows, centres, pool_glows, torches)
+        torches = tuple(filter(None, (torch_art(record, resources, palette, shapes, colours.firelight)
+                                      for record in records)))
+    return Air(air, covered, drips, flames, pools, colours, inks, centres, pool_glows, torches)
 
 
 def pool_centre(columns):
@@ -493,11 +509,22 @@ class Fall:
 
 @dataclass
 class Flicker:
-    """How far a torch's wall is towards its other lighting, and which lighting
-    the frame on screen asks for."""
+    """What a torch's light is doing: how far its wall is towards its other
+    lighting, the aura as it stands, and the tick they last moved on."""
 
+    aura: numpy.ndarray
     light: float = 0.5
-    wanted: int = 0
+    tick: int = -1
+
+
+def soft_spot(x, y):
+    """(column, row, weight) of a spot with one shape, wherever it falls between
+    pixels. Split among the four nearest pixels, a slow grain swelled and shrank
+    as it crossed each pixel, and looked like a worm going round a small square."""
+    left, top = math.floor(x), math.floor(y)
+    for row in range(top - 1, top + 3):
+        for column in range(left - 1, left + 3):
+            yield column, row, math.exp(-((column - x) ** 2 + (row - y) ** 2) / (2 * DUST_SOFTNESS ** 2))
 
 
 def wave(time, *terms):
@@ -522,7 +549,7 @@ class CavernAmbience:
         for source in self.air.drips:
             period = self.rng.randint(*TICKS_BETWEEN_DROPS)
             self.falls.append(Fall(source, period, self.rng.randrange(period)))
-        self.flickers = [Flicker() for _torch in self.air.torches]
+        self.flickers = [Flicker(torch.auras.mean(axis=0)) for torch in self.air.torches]
         if self.air.flames or self.air.pools:
             for _ in range(MOST_DUST):
                 mote = self.new_mote()
@@ -532,11 +559,6 @@ class CavernAmbience:
                     self.motes.append(mote)
 
     # Light
-
-    def flame_strength(self):
-        # A candle: it swells and dips a little, irregularly, and never beats.
-        middle, swing = CANDLE
-        return middle + swing * wave(self.tick, (0.55, 0.23, 0.0), (0.3, 0.57, 1.3), (0.15, 1.13, 2.1))
 
     def pool_strength(self):
         return 0.92 + 0.06 * wave(self.tick, (0.6, 0.07, 0.0), (0.4, 0.043, 1.0))
@@ -549,7 +571,7 @@ class CavernAmbience:
         for pool_x, pool_y in self.air.centres:
             reach = 1 - math.hypot((x - pool_x) / DUST_POOL_REACH[0], (y - pool_y + 10) / DUST_POOL_REACH[1])
             pool = max(pool, reach)
-        return flame * self.flame_strength(), pool * DUST_POOL_STRENGTH
+        return flame, pool * DUST_POOL_STRENGTH
 
     def draught(self, x, y):
         """The upward pull of the hot air over a pool or around a flame."""
@@ -629,12 +651,6 @@ class CavernAmbience:
         inks = self.air.inks
         ink = DUST_DARK_INK if max(flame, pool) <= 0 else (DUST_WARM_INK if flame >= pool else DUST_HOT_INK)
         return (*inks[ink][:3], strength)
-
-    # The torch
-
-    def advance_torches(self):
-        for flicker in self.flickers:
-            flicker.light += max(-WALL_EASE, min(WALL_EASE, flicker.wanted - flicker.light))
 
     # Ash
 
@@ -732,7 +748,6 @@ class CavernAmbience:
         self.advance_dust()
         self.advance_ash()
         self.advance_flecks()
-        self.advance_torches()
 
     # Drawing
 
@@ -773,32 +788,31 @@ class CavernAmbience:
         pixels[..., :3][lit] = glow.table[level[lit], known[lit]]
         frame.paste(Image.fromarray(pixels), glow.box[:2])
 
-    def calm_torch(self, frame, torch, flicker):
-        """Ease the wall behind the frame of the torch that the game drew."""
+    def light_torch(self, frame, torch, flicker):
+        """Ease the wall behind the frame of the torch that the game drew, and
+        light the recess after that frame's flame."""
         shown = numpy.array(frame.crop(torch.box))
         same = (torch.frames == shown).all(axis=3)
         game_frame = int(same.sum(axis=(1, 2)).argmax())
         drawn = same[game_frame]
         if drawn.sum() < TORCH_SEEN * (torch.frames[0, ..., 3] > 0).sum():
             return
-        flicker.wanted = torch.lighting[game_frame]
+        # A frame can be rendered twice: the light moves once per tick.
+        if flicker.tick != self.tick:
+            flicker.tick = self.tick
+            flicker.light += max(-WALL_EASE, min(WALL_EASE, torch.lighting[game_frame] - flicker.light))
+            flicker.aura = flicker.aura + (torch.auras[game_frame] - flicker.aura) * AURA_FOLLOW
         eased = shown.copy()
         eased[torch.wall] = numpy.where((torch.order < flicker.light)[:, None], torch.lit_wall, torch.unlit_wall)
         shown[drawn] = eased[drawn]
         frame.paste(Image.fromarray(shown), torch.box[:2])
+        self.shed_light(frame, replace(torch.aura, falloff=flicker.aura), AURA_STRENGTH)
 
-    def share(self, canvas, mote):
-        """A soft point: split a mote among the four pixels around it, and let
-        each blend land on the nearest palette colour."""
+    def dust_spot(self, canvas, mote):
         red, green, blue, strength = self.dust_colour(mote)
         air, nearest = self.air, self.air.colours.nearest
-        left, top = math.floor(mote.x), math.floor(mote.y)
-        right_share, lower_share = mote.x - left, mote.y - top
-        for column, row, part in ((left, top, (1 - right_share) * (1 - lower_share)),
-                                  (left + 1, top, right_share * (1 - lower_share)),
-                                  (left, top + 1, (1 - right_share) * lower_share),
-                                  (left + 1, top + 1, right_share * lower_share)):
-            amount = part * strength
+        for column, row, weight in soft_spot(mote.x, mote.y):
+            amount = weight * strength
             if amount < 0.04 or not air.is_open(column, row) or air.is_covered(column, row):
                 continue
             under = canvas[column, row]
@@ -809,14 +823,12 @@ class CavernAmbience:
     def draw(self, frame):
         air, inks = self.air, self.air.inks
         for torch, flicker in zip(air.torches, self.flickers):
-            self.calm_torch(frame, torch, flicker)
-        for glow in air.glows:
-            self.shed_light(frame, glow, self.flame_strength())
+            self.light_torch(frame, torch, flicker)
         for glow in air.pool_glows:
             self.shed_light(frame, glow, self.pool_strength())
         canvas = frame.load()
         for mote in self.motes:
-            self.share(canvas, mote)
+            self.dust_spot(canvas, mote)
         for x, y, ink in self.crisp_pixels():
             if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                 canvas[x, y] = inks[ink]
