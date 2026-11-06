@@ -192,6 +192,19 @@ class ViewerSceneTests(unittest.TestCase):
         self.assertIsNone(scene.dev_menu)
         self.assertEqual(scene.game_menu.page, 'cutscenes')
 
+    def test_alt_c_opens_the_same_viewer_and_is_listed_in_f1(self):
+        scene = self.scene
+        self.assertEqual(next(item.shortcut for item in GameMenu().items if item.action == 'cutscenes'), 'Alt+C')
+        event = SimpleNamespace(keysym='c', state=0x20000)
+        scene.dev_key_press(event)
+        gallery = scene.game_menu.cutscene_viewer
+        scene.dev_key_press(event)
+        self.assertIs(scene.game_menu.cutscene_viewer, gallery)
+        self.assertTrue(scene.paused)
+        self.assertEqual(scene.game_menu.page, 'cutscenes')
+        scene.dev_key_release(event)
+
+
     def test_every_chapter_finishes_in_the_gallery_without_touching_the_live_world(self):
         scene = self.scene
         scene.cutscene_collection.seen.update(CHAPTER_KEYS)

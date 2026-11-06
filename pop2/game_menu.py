@@ -60,7 +60,7 @@ class GameMenu:
             MenuItem("restart", "Restart level", "Alt+R"),
             MenuItem("save", "Save game", "Alt+S", self.save_available),
             MenuItem("open", "Load game", "Alt+O"),
-            MenuItem("cutscenes", "Cutscene Viewer", ""),
+            MenuItem("cutscenes", "Cutscene Viewer", "Alt+C"),
             MenuItem("sound", "Sound", "Alt+T", checked=self.sound),
             MenuItem("music", "Ambient music", "Alt+M", checked=self.music),
             MenuItem("hall", "Hall of Fame", "Alt+H", False),

@@ -1102,7 +1102,8 @@ class WindowControls:
                 self.play_menu_sound('click')
             return "break"
         command = {"n": "confirm_new", "r": "restart", "t": "sound", "m": "music",
-                   "s": "save", "o": "open", "l": "open", "h": "hall", "v": "about"}.get(
+                   "s": "save", "o": "open", "l": "open", "h": "hall", "v": "about",
+                   "c": "cutscenes"}.get(
                        event.keysym.lower()) if alt and not event.state & (0x4 | 0x40) else None
         if command is not None:
             confirming_save = (self.game_menu is not None and self.game_menu.page == 'saves'
