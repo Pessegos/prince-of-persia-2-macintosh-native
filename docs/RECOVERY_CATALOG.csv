@@ -206,7 +206,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 4,Characters 2,SkelAddOpponent,0x198a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,7
 4,Characters 2,SkelDoneShaking,0x1a86,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,12
 4,Characters 2,FlameSwordDecLifePts,0x1c36,jump_table,partial,pop2/flame_sword.py;pop2/combat.py,"parried type-10 strike: one life, SEQS 103 + cue 10 + SetCharFloor, last life SEQS 107/SetSkelTimer 480/song 238; source reading with focused regressions, no native probe",1,5
-4,Characters 2,TriggerJinnee,0x1d64,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,12
+4,Characters 2,TriggerJinnee,0x1d64,jump_table,partial,pop2/jinnee.py;pop2/environments.py,"the type 6 flask: type 12 actor, SEQS 180/225, passes gates, presses plates, removed outside columns -1..10; tools/probe_temple_jinnee.py, 0 mismatches, no full FrameAdv",1,12
 4,Characters 2,CutToKidRoom,0x2338,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,2,9
 4,Characters 2,GetKidIdxAsOpp,0x2442,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,0
 4,Characters 2,IsShadowBlinkOn,0x24b2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,4

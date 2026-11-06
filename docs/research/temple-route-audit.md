@@ -108,8 +108,9 @@ and the level seems to need more than that allows.
 Exit door 7:23 opens from plate 14:8 or plate 24:23.
 
 - 24:23 is easy to reach, but the Prince cannot get back. He falls through gate
-  18:19 into room 24, 24:22 shuts that gate, 23:29 is the only plate that
-  reopens it, and gate 23:28 before that plate has no link at all.
+  18:19 into room 24, 24:22 shuts that gate, and 23:29 is the only plate that
+  reopens it, behind gate 23:28, which has no link. Only the flask's genie gets
+  there.
 - 14:8 lies under hole 7:28, behind gate 12:21. Plate 18:27 is too far from that
   gate, so the way in is plate 12:2 on the northern route: gate 5:2, gate 2:9,
   plate 2:22 (gate 1:3), plate 1:5 (gate 1:9), gate 3:2, then rooms 3, 11, 7, 12.
@@ -130,15 +131,6 @@ measured climb of 31 frames. These figures are an estimate, not a proof: the
 search tried for a further 1,200 seconds and failed, without covering every
 timing.
 
-What may resolve it, none checked:
-
-- An opponent. A dead actor presses a plate for good (`push`, `permanent`),
-  and room 9 holds the flaming sword (raw kind 1 at native X 305). The peaceful
-  harness cannot show this.
-- The flask of type 6 in 23:24, which the port does not model. Disassembled
-  4:46b2 plays sound 12 and selects SEQS 111, whose -14 event 3 calls 4:1d7e.
-  That routine sets up a type-12 actor (Jinnee.rsrc, SEQS 180, then the flying
-  loop 225), a type-10 record, and removal outside columns -1..10 (4:1d64). The
-  Jinnee skips gate contact (4:6046, 6:3190). What it does for the level has not
-  been recovered, and it sits in the very rooms that have no exit.
-- A native run of this level would settle all of this, and none was done.
+The flask of type 6 in 23:24 explains the far side. It releases a tiny Prince
+who runs under gate 23:28 and presses plate 23:29 (`temple-jinnee.md`), so the
+rooms past gate 18:19 do have a way back. The search has yet to play it.
