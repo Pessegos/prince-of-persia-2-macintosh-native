@@ -522,6 +522,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.next_animation_at = time.perf_counter()
         self.pause_started_at = self.next_animation_at if self.paused else None
         self.active_save_path = Path(path).absolute()
+        self.cutscene_campaign_active = True
         self.mark_cutscene_seen('opening')
         self.cutscene_collection.admit_saved_progress(game)
         self.status.set(f'Game loaded: {path}')
@@ -2573,6 +2574,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         return matches[-1] if matches else 0
 
     def seek_playback_part(self, part):
+        self.cutscene_campaign_active = False
         # Always construct the destination's own state; demo actors never
         # become live combat actors or carry their inputs into gameplay.
         self.intro = None
@@ -2665,6 +2667,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.status.set("Credits")
 
     def new_game(self):
+        self.cutscene_campaign_active = True
         self.active_save_path = None
         self.copy_verified = False
         self.copy_challenge = None

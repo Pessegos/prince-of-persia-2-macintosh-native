@@ -28,9 +28,28 @@ class CollectionTests(unittest.TestCase):
             first, second = CutsceneCollection.load(path), CutsceneCollection.load(path)
             self.assertEqual(first.seen, set(OPENING_KEYS))
             first.unlock('voyage', 'unknown')
-            second.unlock('carpet')
-            self.assertEqual(CutsceneCollection.load(path).seen, OPENING_KEYS | {'voyage', 'carpet'})
+            second.unlock('discovery', 'carpet')
+            self.assertEqual(CutsceneCollection.load(path).seen, OPENING_KEYS | {'voyage', 'discovery', 'carpet'})
             self.assertEqual(json.loads(path.read_text())['version'], 1)
+
+    def test_isolated_horse_record_is_locked_again_without_rewriting_the_profile(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'collection.json'
+            original = json.dumps({'version': 1, 'seen': sorted(OPENING_KEYS | {'horse'})})
+            path.write_text(original)
+            collection = CutsceneCollection.load(path)
+            self.assertEqual(collection.seen, OPENING_KEYS)
+            self.assertEqual(path.read_text(), original)
+            collection.unlock('horse')
+            self.assertNotIn('horse', collection.seen)
+            collection.unlock('voyage', 'discovery', 'carpet', 'vision')
+            collection.unlock('horse')
+            self.assertIn('horse', collection.seen)
+            self.assertEqual(CutsceneCollection.load(path).seen, OPENING_KEYS | {
+                'voyage', 'discovery', 'carpet', 'vision', 'horse'})
+            keys = [chapter.key for chapter in CHAPTERS]
+            self.assertLess(keys.index('vision'), keys.index('horse'))
+            self.assertLess(keys.index('horse'), keys.index('tower'))
 
     def test_bad_profile_and_write_error_do_not_interrupt_the_game(self):
         with TemporaryDirectory() as directory:
@@ -572,6 +591,20 @@ class ViewerSceneTests(unittest.TestCase):
         with patch('pop2.window_controls.time.perf_counter', return_value=1000.0):
             scene.close_game_menu(resume=True)
         self.assertEqual(scene.last_copy_at, 1000.0)
+
+    def test_actual_f3_warp_then_horse_trigger_does_not_unlock_campaign_chapters(self):
+        scene = self.scene
+        scene.cutscene_collection.unlock('voyage', 'discovery', 'carpet', 'vision')
+        scene.load_level(9)
+        scene.open_dev_mode()
+        scene.apply_dev_action('go')
+        self.assertFalse(scene.cutscene_campaign_active)
+        scene.start_temple_ride(lambda: None)
+        self.assertNotIn('horse', scene.cutscene_collection.seen)
+        scene.new_game()
+        self.assertTrue(scene.cutscene_campaign_active)
+        scene.start_temple_ride(lambda: None)
+        self.assertIn('horse', scene.cutscene_collection.seen)
 
     def test_natural_story_starts_unlock_each_chapter_and_new_game_keeps_the_collection(self):
         scene = self.scene

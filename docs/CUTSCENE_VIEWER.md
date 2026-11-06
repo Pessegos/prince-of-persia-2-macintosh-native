@@ -27,11 +27,18 @@ through `start_story_scene` also consult that catalog when unlocking.
 ## Collection and existing saves
 
 All three opening chapters are available immediately, preserving the previous
-whole-opening availability and existing version-1 collection files. Other chapters unlock when the normal
-campaign actually starts their scene; finishing or watching every frame is
-not required. Seeking through the retained developer navigation, developer
-level jumps and gallery replays do not unlock chapters. Natural story starts
-after a developer jump still count as encountering the actual scene.
+whole-opening availability and existing version-1 collection files. Other
+chapters unlock when the normal campaign actually starts their scene and the
+preceding mandatory story chapters have been reached. Finishing or watching
+every frame is not required. Collection reads retain a chronological prefix;
+an isolated legacy/debug flag such as the horse without the earlier chapters
+is ignored, without rewriting the file on load. Valid recorded progress stays
+available across new games.
+
+A successful F3 room/level warp or retained developer seek suspends collection
+updates for that debug session, including scenes triggered afterward. Starting
+a new game or loading a validated campaign save restores normal admission.
+Gallery browsing and replays never unlock chapters.
 
 `cutscenes.json` is a small atomic JSON collection alongside the default
 Saved Games data, or in `POP2_USER_DATA` when that override is set. It survives

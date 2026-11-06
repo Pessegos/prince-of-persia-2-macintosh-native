@@ -132,11 +132,14 @@ class ChapterPreviews(PlaybackPreviews):
 class CutsceneControls:
     def init_cutscene_viewer(self):
         self.cutscene_collection = CutsceneCollection.load()
+        self.cutscene_campaign_active = True
         self.cutscene_replay = None
         self.cutscene_after_id = None
         self.cutscene_gallery_after_id = None
 
     def mark_cutscene_seen(self, key):
+        if not getattr(self, 'cutscene_campaign_active', True):
+            return
         collection = getattr(self, 'cutscene_collection', None)
         if collection is None:
             collection = self.cutscene_collection = CutsceneCollection.load()
