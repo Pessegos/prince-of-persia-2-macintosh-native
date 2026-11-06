@@ -365,7 +365,8 @@ class Search:
         rank = 0 if new_room else 1 if new_cell else 2 if new_mech else 3
         if self.reached_waypoint(info):
             # Search on from here alone: the waypoint is a hint, never a warp.
-            print(f'L{self.number} waypoint {self.waypoints[0]} at node {node}', flush=True)
+            print(f'L{self.number} waypoint {self.waypoints[0]} at node {node}:', ','.join(self.route(node)),
+                  flush=True)
             self.waypoints = self.waypoints[1:]
             self.heap.clear()
             self.seen.clear()
@@ -383,10 +384,12 @@ class Search:
         target = self.waypoints[0]
         if target == 'altar':
             return self.harness.scene.game.caverns.altar == -1 and info['alive']
-        if target.startswith('open:'):
-            _name, room, cell = target.split(':')
+        if target.startswith(('open:', 'held:')):
+            name, room, cell = target.split(':')
             cell = int(cell)
             tile = self.harness.scene.level_map.tile(int(room) - 1, cell % 10, cell // 10)
+            if name == 'held':
+                return tile.foreground & 255 == 255  # An impact holds it for good.
             return tile.foreground & 255 >= (184 if tile.kind == 4 else 1)
         room, *rest = (int(part) for part in target.split(':'))
         return (info['room'] + 1 == room and (len(rest) < 1 or info['row'] == rest[0])
@@ -515,7 +518,7 @@ def main(argv=None):
     parser.add_argument('--prefix', default='', help='Comma-separated macros that start the route')
     parser.add_argument('--waypoints', default='',
                         help='Comma-separated hints, in order: native ROOM, ROOM:ROW, ROOM:ROW:COLUMN, '
-                             '"altar" or open:ROOM:CELL (a gate lifted clear)')
+                             '"altar", open:ROOM:CELL (a gate lifted clear) or held:ROOM:CELL (for good)')
     args = parser.parse_args(argv)
     waypoints = [item for item in args.waypoints.split(',') if item]
     search = Search(args.level, deadline=args.deadline, per_cell=args.per_cell, waypoints=waypoints,

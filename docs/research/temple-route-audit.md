@@ -22,7 +22,7 @@ Supplied or left out:
   east of the chasm. See the open questions below.
 - The final macro of level 11's plate return (`rushcatchL`) was found by a
   separate timing grid, because the search stops between macros.
-- A level's lives and potions are as loaded: some routes end on one life.
+- A level's lives and potions are as loaded: level 11's route spends part of it on one life.
 
 ## Results
 
@@ -30,7 +30,7 @@ Supplied or left out:
 | --- | --- | --- | --- | --- |
 | 10 | finishes | 9 | 442 | Loose 12:21 falls on plate 19:21 (door 19:15); trap door 12:27 drops beside the door |
 | 11 | finishes | 85 | 3,558 | See below |
-| 12 | see below | | | |
+| 12 | not finished | | | No route found; see the last section |
 | 13 | finishes | 35 | 1,616 | Plate 10:10 opens gate 19:11; death at the altar; the shadow lands on plate 4:12 and opens door 32:12 |
 
 ### Level 11
@@ -76,16 +76,17 @@ reimport; `run_game.py` asks for one when an export lacks the blades.
 
 - Trap doors are on the routes: levels 10, 11 and 13 each pass one, opening
   and closing through their full cycle (`pop2/trapdoors.py`).
-- No sliding rock is on a finished route. The searches ran them in rooms 3 of
+- No sliding rock is on a finished route. The searches ran them in room 3 of
   level 11 and elsewhere over several million frames with no exception, and
   deaths by crushing were seen, but no route depends on them.
-- Blades crossed on foot: level 11's 28:27 and 29:23, by crawling.
+- Blades crossed: level 11's 28:27 and 29:23 and level 12's two in room 6, by
+  crawling. Macros that run or leap at a blade die there; crawling is the rule.
 
 Every search reported zero exceptions from the game.
 
 ## Open questions
 
-- Level 12 is the subject of the next section.
+- Level 12: the last section.
 - Level 13's birdhead stands in SEQS 77 facing left and did not turn toward a
   Prince behind it during 1,800 frames, even with his sword drawn at 25 pixels.
   The `altar` fixture supplies its waking. This may be a gap in the opponent's
@@ -93,23 +94,43 @@ Every search reported zero exceptions from the game.
 - If the player kills that birdhead, the burn at X <= 347 is the only death
   left in the room, and mode 12 excludes it from raising the shadow. Whether
   the level can then still be finished is unknown.
-- Falling into level 12's rooms 23-24 (below) may be a one-way trap.
 
 ## Level 12
 
+Not finished, and not proven impossible. The search ran without opponents,
+and the level seems to need more than that allows.
+
 Exit door 7:23 opens from plate 14:8 or plate 24:23.
 
-- 24:23 is easy to reach, but gate 18:19 then seals the Prince in: 24:22 shuts
-  it, 23:29 opens it, and gate 23:28 before that plate has no link at all.
-- 14:8 lies under hole 7:28. Its way in is gate 12:21, from plate 12:2 or 18:27.
-  18:27 is too far from the gate for a gate's hundred frames, so the route seems
-  to be the northern one, from plate 12:2: rooms 5 and 2 (gates 5:0-2 and 2:9,
-  dropping loose floors on plates 5:28, 4:27 and 9:0), plate 2:22 (gate 1:3),
-  plate 1:5 (gate 1:9), 3:20 dropped on plate 19:20 (gate 3:2), then rooms 3,
-  11, 7 and 12.
-- The flask of type 6 in 23:24 is not modelled. Disassembled 4:46b2: sound 12
-  and SEQS 111, whose -14 event 3 calls 4:1d7e. That routine creates a type-10
-  record and a type-12 actor (Jinnee.rsrc, SEQS 180 then the flying loop 225,
-  removed outside columns -1..10, and exempt from gate contact at 4:6046 and
-  6:3190). What it does for the level has not been recovered. It may be the
-  designed way out of rooms 23-24.
+- 24:23 is easy to reach, but the Prince cannot get back. He falls through gate
+  18:19 into room 24, 24:22 shuts that gate, 23:29 is the only plate that
+  reopens it, and gate 23:28 before that plate has no link at all.
+- 14:8 lies under hole 7:28, behind gate 12:21. Plate 18:27 is too far from that
+  gate, so the way in is plate 12:2 on the northern route: gate 5:2, gate 2:9,
+  plate 2:22 (gate 1:3), plate 1:5 (gate 1:9), gate 3:2, then rooms 3, 11, 7, 12.
+
+From a fresh load, the audit crawls under room 6's two blades and works through
+the northern gates. Real keys drop loose floors on plates 19:20, 5:28 and 9:0,
+holding gates 3:2, 5:0 and 2:9 open for good (`LEVEL_12_GATES` in
+`tests/test_temple_routes.py`). Gate 5:1 only opened for a moment there, from
+the Prince on plate 4:27; loose 4:17 above that plate has not been dropped.
+
+The blocker is gate 5:2. Only plate 9:24 opens it, for one press, with no loose
+floor above. The gate stays useful for about 146 frames. From the plate to the
+gate is two cells, five climbs and a three-cell leap: roughly 195 frames by the
+measured climb of 31 frames. These figures are an estimate, not a proof: the
+search tried for a further 1,200 seconds and failed, without covering every
+timing.
+
+What may resolve it, none checked:
+
+- An opponent. A dead actor presses a plate for good (`push`, `permanent`),
+  and room 9 holds the flaming sword (raw kind 1 at native X 305). The peaceful
+  harness cannot show this.
+- The flask of type 6 in 23:24, which the port does not model. Disassembled
+  4:46b2 plays sound 12 and selects SEQS 111, whose -14 event 3 calls 4:1d7e.
+  That routine sets up a type-12 actor (Jinnee.rsrc, SEQS 180, then the flying
+  loop 225), a type-10 record, and removal outside columns -1..10 (4:1d64). The
+  Jinnee skips gate contact (4:6046, 6:3190). What it does for the level has not
+  been recovered, and it sits in the very rooms that have no exit.
+- A native run of this level would settle all of this, and none was done.

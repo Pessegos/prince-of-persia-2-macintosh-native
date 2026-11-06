@@ -33,6 +33,16 @@ ROUTES = {
 }
 
 
+# Level 12 is not finished: see the audit. This far, three loose floors hold
+# gates 3:2, 5:0 and 2:9 open for good.
+LEVEL_12_GATES = ['leapR11', 'leapcatchL20', 'leapL5', 'runR5', 'runL5', 'hopcatchL', 'crawlL',
+                  'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'tapL', 'stepL', 'crawlL',
+                  'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'runL8',
+                  'hopcatchR', 'climb', 'hopcatchR', 'climb', 'climb', 'leapcatchR11', 'climb',
+                  'climb', 'climb', 'climb', 'leapcatchR5', 'leapcatchL20', 'jump', 'descendL',
+                  'leapcatchR5', 'leapR11', 'jump', 'tapL', 'climb', 'hopR', 'runR11', 'hopcatchL',
+                  'leapcatchL20', 'tapL', 'leapcatchL20', 'climb', 'hopcatchR', 'climb', 'climb',
+                  'climb', 'tapR', 'down']
 
 def blades_exported(number):
     path = ASSET_DIR / f'temple_level{number}.json'
@@ -50,6 +60,16 @@ class TempleRouteTests(unittest.TestCase):
                 reached, trace, harness = replay(number, route, draw=False)
                 harness.close()
                 self.assertTrue(reached, trace[-3:])
+
+    def test_level_12s_loose_floors_hold_their_gates_open(self):
+        _reached, trace, harness = replay(12, LEVEL_12_GATES, draw=False)
+        self.addCleanup(harness.close)
+        self.assertTrue(trace[-1][-1], trace[-3:])
+        terrain, plates = harness.scene.level_map, harness.scene.game.caverns.plates
+        for room, cell, link in ((3, 2, 103), (5, 0, 156), (2, 9, 154)):
+            with self.subTest(room=room, cell=cell):
+                self.assertEqual(plates.timers[link], 31)
+                self.assertEqual(terrain.tile(room - 1, cell % 10, cell // 10).foreground & 255, 255)
 
     def test_a_temple_blade_starts_and_cuts_like_a_ruins_scythe(self):
         # FrameAdv's environment 2 case (2:63e2-63f0) falls through to 5:57bc

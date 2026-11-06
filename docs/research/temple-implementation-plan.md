@@ -198,5 +198,5 @@ Each stage integrates separately with the usual reservation.
 ## Route audit (2026-11-05, Claude)
 
 [temple-route-audit.md](temple-route-audit.md): levels 10, 11 and 13 finish from a
-fresh load under the port's rules, without opponents, and the audit made the
-temple's blades run. Its open questions replace those above where they differ.
+fresh load under the port's rules, without opponents; level 12 does not yet,
+and the audit made the temple's blades run. Its open questions replace those above where they differ.
