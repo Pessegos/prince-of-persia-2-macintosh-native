@@ -42,10 +42,9 @@ class CutsceneGallery:
 
     @classmethod
     def cell(cls, index):
-        # Reading order within each 3x2 group; subsequent groups extend to
-        # the right, but the shelf itself scrolls freely between positions.
-        page, slot = divmod(index, cls.COLUMNS * cls.ROWS)
-        return page * cls.COLUMNS + slot % cls.COLUMNS, slot // cls.COLUMNS
+        # Fill down each column, then continue to the right. A continuous
+        # grid stays dense even between the first six and the last chapters.
+        return divmod(index, cls.ROWS)
 
     @property
     def chapter(self):

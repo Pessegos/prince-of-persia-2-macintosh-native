@@ -8,8 +8,8 @@ footer and large control row are removed.
 
 The wheel (including fractional touchpad deltas), side arrows and scrollbar
 move both rows horizontally without snapping to cards or pages; dragging moves
-them directly. Reading order is left-to-right across each row in a 3x2 group,
-with later groups to its right. Left/Right and Up/Down follow the grid and
+them directly. Chapters fill each column top-to-bottom before continuing to
+the right, keeping the two-row strip dense when later chapters come into view. Left/Right and Up/Down follow the grid and
 reveal the selection when necessary; Home/End select the first/last chapter.
 Clicking a card selects it on release, while a drag never activates a card.
 Play or Enter starts it. Locked chapters show a generic numbered card;

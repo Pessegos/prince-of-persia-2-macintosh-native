@@ -88,7 +88,7 @@ class GalleryTests(unittest.TestCase):
         gallery.key('End')
         self.assertEqual(gallery.index, 8)
         gallery.advance(1)
-        self.assertEqual(list(gallery.visible), [6, 7, 8])
+        self.assertEqual(list(gallery.visible), [4, 5, 6, 7, 8])
         gallery.key('Right')
         self.assertEqual(gallery.index, 8)
         gallery.key('Home')
@@ -149,14 +149,14 @@ class GalleryTests(unittest.TestCase):
         self.assertIsNone(ImageChops.difference(image.crop(thumb).convert('RGB'), expected).getbbox())
 
 
-    def test_two_rows_use_reading_order_and_arrow_keys_follow_the_grid(self):
+    def test_two_rows_stay_dense_and_arrow_keys_follow_the_grid(self):
         gallery = self.gallery()
         first = [gallery.card_rect(i) for i in range(6)]
-        self.assertEqual([rect[1] for rect in first[:3]], [63, 63, 63])
-        self.assertEqual([rect[1] for rect in first[3:]], [201, 201, 201])
+        self.assertEqual([rect[1] for rect in first], [63, 201, 63, 201, 63, 201])
+        self.assertEqual([rect[0] for rect in first], [21, 21, 181, 181, 341, 341])
         self.assertGreater(first[0][2] - first[0][0], 140)
         gallery.key('Down')
-        self.assertEqual(gallery.index, 3)
+        self.assertEqual(gallery.index, 1)
         gallery.key('Up')
         self.assertEqual(gallery.index, 0)
         for _ in range(3):
@@ -164,7 +164,7 @@ class GalleryTests(unittest.TestCase):
         self.assertEqual(gallery.index, 6)
         self.assertGreater(gallery.scroll_target, 0)
         gallery.key('Left')
-        self.assertEqual(gallery.index, 2)
+        self.assertEqual(gallery.index, 4)
 
     def test_scroll_frames_do_not_load_redraw_fonts_or_resample_images(self):
         gallery, font = self.gallery(), CaptionFont()
