@@ -208,7 +208,8 @@ class WindowControls:
         if getattr(self, "screenshot_dialog_active", False):
             return
         if (getattr(self, "copy_challenge", None) is not None
-                and getattr(self, 'cutscene_replay', None) is None):
+                and getattr(self, 'cutscene_replay', None) is None
+                and getattr(getattr(self, 'game_menu', None), 'page', None) != 'cutscenes'):
             return
         try:
             focused = self.root.focus_get()
@@ -217,6 +218,10 @@ class WindowControls:
         if focused is None and window_is_foreground(self.root):
             return
         if focused is None or focused.winfo_toplevel() is not self.root:
+            menu = getattr(self, 'game_menu', None)
+            if menu is not None and menu.page == 'cutscenes':
+                menu.cutscene_viewer.drag = None
+                menu.cutscene_viewer.dragged = False
             if getattr(self, 'cutscene_replay', None) is not None:
                 self.pause_cutscene_replay(True)
             if getattr(self, "game_menu", None) is not None:
@@ -364,6 +369,8 @@ class WindowControls:
             screens = tuple(entries)
             screen_index = screens.index(current) if current in entries else 0
         was_paused = self.game_was_paused if self.game_menu is not None else self.paused
+        if hasattr(self, 'cancel_cutscene_gallery_tick'):
+            self.cancel_cutscene_gallery_tick()
         self.dispose_screenshot_gallery()
         self.game_menu = None
         from pop2.playback_navigation import playback_groups
@@ -571,6 +578,11 @@ class WindowControls:
                 source = self.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
                 viewport = self.draw_screenshot_notice(self.game_menu.save_browser.draw(
                     source, self.ui_font, background_key=id(self.screenshot_viewport)))
+            elif (include_ui and self.game_menu is not None and self.game_menu.page == 'cutscenes'
+                    and getattr(self, 'cutscene_replay', None) is None):
+                scale = self.screenshot_settings.scale
+                source = self.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
+                viewport = self.draw_screenshot_notice(self.game_menu.cutscene_viewer.draw(source, self.ui_font))
             elif include_ui and menu is not None and menu.screenshot_gallery is not None:
                 scale = self.screenshot_settings.scale
                 source = self.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
@@ -726,6 +738,8 @@ class WindowControls:
             return
         if getattr(self, 'cutscene_replay', None) is not None:
             self.stop_cutscene_replay(render=False)
+        if hasattr(self, 'cancel_cutscene_gallery_tick'):
+            self.cancel_cutscene_gallery_tick()
         self.dispose_screenshot_gallery()
         self.game_menu = None
         self.save_scroll_dragging = False
@@ -745,9 +759,13 @@ class WindowControls:
             self.start_cutscene_replay()
             return
         if action == 'cutscene_back':
+            self.cancel_cutscene_gallery_tick()
             self.game_menu.show_page('menu')
             self.pause_resume_keys.update(self.window_keys_down)
             self.render()
+            return
+        if menu is not None and menu.page == 'cutscenes' and action == 'changed':
+            self.redraw_cutscene_gallery()
             return
         if (menu is not None and menu.page == 'screenshots' and menu.screenshot_gallery is not None
                 and (action.startswith('gallery_') or action == 'changed')):
@@ -926,8 +944,8 @@ class WindowControls:
         if viewer is not None:
             index = viewer.focus if point is None else viewer.hit(*point)
             if (index is None or index in (0, 1) and not viewer.unlocked
-                    or index == 3 and viewer.index == 0
-                    or index == 4 and viewer.index + 1 == len(viewer.chapters)):
+                    or index == 3 and viewer.scroll_target == 0
+                    or index == 4 and viewer.scroll_target == viewer.max_scroll):
                 return None
             return id(menu), menu.page, viewer.index, index
         gallery = getattr(menu, 'screenshot_gallery', None) if menu.page == 'screenshots' else None
@@ -1231,6 +1249,9 @@ class WindowControls:
         point = self.dev_pointer(event)
         if point is not None:
             if self.game_menu is not None:
+                if (self.game_menu.page == 'cutscenes'
+                        and self.game_menu.cutscene_viewer.begin_drag(*point)):
+                    return 'break'
                 gallery = self.game_menu.screenshot_gallery if self.game_menu.page == 'screenshots' else None
                 if gallery is not None:
                     gallery.begin_drag(*point)
@@ -1258,6 +1279,12 @@ class WindowControls:
         return "break"
 
     def dev_release(self, event):
+        viewer = self.active_cutscene_gallery() if hasattr(self, 'active_cutscene_gallery') else None
+        if viewer is not None and viewer.drag is not None and getattr(event, 'num', 1) == 1:
+            point = self.dev_pointer(event)
+            self.apply_game_action(viewer.end_drag(*(point if point is not None else (-1, -1))))
+            self.canvas.configure(cursor='')
+            return 'break'
         gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
         if gallery is not None and gallery.drag_target is not None and getattr(event, 'num', 1) == 1:
             point = self.dev_pointer(event)
@@ -1292,6 +1319,13 @@ class WindowControls:
         return "break"
 
     def dev_hover(self, event):
+        viewer = self.active_cutscene_gallery() if hasattr(self, 'active_cutscene_gallery') else None
+        if viewer is not None and viewer.drag is not None:
+            point = self.dev_pointer(event)
+            if point is not None and viewer.move_drag(point[0]):
+                self.canvas.configure(cursor='fleur')
+                self.redraw_cutscene_gallery()
+            return 'break'
         if getattr(self, 'cutscene_replay', None) is not None:
             return 'break'
         gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
@@ -1344,6 +1378,8 @@ class WindowControls:
                     self.redraw_save_menu()
                 elif menu.page == 'screenshots' and menu.screenshot_gallery is not None:
                     self.redraw_screenshot_gallery()
+                elif menu.page == 'cutscenes':
+                    self.redraw_cutscene_gallery()
                 else:
                     self.render()
             if menu is self.game_menu and menu.page == 'cutscenes':
@@ -1365,6 +1401,13 @@ class WindowControls:
         self.present_viewport()
 
     def dev_pointer_leave(self, _event):
+        viewer = self.active_cutscene_gallery() if hasattr(self, 'active_cutscene_gallery') else None
+        if viewer is not None:
+            viewer.drag = None
+            viewer.dragged = False
+            viewer.hovered = None
+            self.canvas.configure(cursor='')
+            self.redraw_cutscene_gallery()
         self.ui_hover_target = None
         if self.game_menu is not None and self.game_menu.page == 'saves':
             if self.game_menu.hover(-1, -1):
@@ -1386,9 +1429,9 @@ class WindowControls:
         if menu is not None and menu.page == 'cutscenes':
             if getattr(self, 'cutscene_replay', None) is None:
                 delta = getattr(event, 'delta', 0)
-                menu.cutscene_viewer.move(-1 if delta > 0 or getattr(event, 'num', None) == 4 else 1)
-                self.play_menu_sound('hover')
-                self.render()
+                steps = -delta / 120 if delta else (-1 if getattr(event, 'num', None) == 4 else 1)
+                menu.cutscene_viewer.wheel(steps)
+                self.redraw_cutscene_gallery()
             return 'break'
         if menu is not None and menu.page == 'screenshots' and menu.screenshot_gallery is not None:
             gallery = menu.screenshot_gallery
@@ -1509,6 +1552,8 @@ class WindowControls:
         if getattr(self, "bitmap_presenter", None) is not None:
             self.bitmap_presenter.close()
             self.bitmap_presenter = None
+        if hasattr(self, 'present_cutscene_gallery') and self.present_cutscene_gallery(size, position):
+            return
         game_menu = getattr(self, 'game_menu', None)
         gallery = getattr(game_menu, 'screenshot_gallery', None) if getattr(game_menu, 'page', None) == 'screenshots' else None
         if gallery is not None:

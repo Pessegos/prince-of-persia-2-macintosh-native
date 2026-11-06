@@ -8,7 +8,7 @@ from tkinter import TclError
 
 from PIL import Image
 
-from pop2.cutscenes import CHAPTERS, CutsceneCollection, chapter_range
+from pop2.cutscenes import CHAPTERS, CutsceneCollection, chapter_available, chapter_range
 from pop2.playback_preview import PlaybackPreviews
 
 
@@ -134,6 +134,7 @@ class CutsceneControls:
         self.cutscene_collection = CutsceneCollection.load()
         self.cutscene_replay = None
         self.cutscene_after_id = None
+        self.cutscene_gallery_after_id = None
 
     def mark_cutscene_seen(self, key):
         collection = getattr(self, 'cutscene_collection', None)
@@ -152,13 +153,95 @@ class CutsceneControls:
         if self.game_menu is None:
             self.open_game_menu()
         self.dispose_screenshot_gallery()
+        self.cancel_cutscene_gallery_tick()
         self.game_menu.show_page('cutscenes')
         self.game_menu.return_to_menu = True
         if self.cutscene_collection.error:
             self.cutscene_collection.save()
         self.game_menu.cutscene_viewer = CutsceneGallery(self.cutscene_collection, self.cutscene_preview)
         self.pause_resume_keys.update(self.window_keys_down)
+        # Warm unlocked source thumbnails before scrolling begins: loading a
+        # newly exposed story program must not stall the moving shelf.
+        for index, chapter in enumerate(CHAPTERS):
+            if chapter.key in self.cutscene_collection.seen and chapter_available(chapter):
+                try:
+                    self.cutscene_preview(index)
+                except (OSError, ValueError, KeyError, RuntimeError):
+                    pass  # The card and Play action provide the import error.
         self.render()
+
+    def active_cutscene_gallery(self):
+        menu = getattr(self, 'game_menu', None)
+        if menu is not None and menu.page == 'cutscenes' and self.cutscene_replay is None:
+            return menu.cutscene_viewer
+        return None
+
+    def redraw_cutscene_gallery(self):
+        self.present_viewport()
+        self.schedule_cutscene_gallery()
+
+    def cancel_cutscene_gallery_tick(self):
+        pending = getattr(self, 'cutscene_gallery_after_id', None)
+        self.cutscene_gallery_after_id = None
+        if pending is not None:
+            try:
+                self.root.after_cancel(pending)
+            except TclError:
+                pass
+
+    def schedule_cutscene_gallery(self):
+        gallery = self.active_cutscene_gallery()
+        if gallery is None or getattr(self, 'cutscene_gallery_after_id', None) is not None:
+            return
+        previous = time.perf_counter()
+
+        def tick():
+            nonlocal previous
+            self.cutscene_gallery_after_id = None
+            if self.active_cutscene_gallery() is not gallery:
+                return
+            now = time.perf_counter()
+            moving = gallery.advance(now - previous)
+            previous = now
+            self.present_viewport()
+            if moving:
+                elapsed = (time.perf_counter() - now) * 1000
+                self.cutscene_gallery_after_id = self.root.after(max(1, round(1000 / 60 - elapsed)), tick)
+
+        self.cutscene_gallery_after_id = self.root.after(16, tick)
+
+    def present_cutscene_gallery(self, size, position):
+        from PIL import ImageChops, ImageTk
+
+        gallery = self.active_cutscene_gallery()
+        if gallery is None:
+            self._cutscene_gallery_frame = None
+            self._cutscene_gallery_source = None
+            return False
+        cached = getattr(self, '_cutscene_gallery_source', None)
+        if cached is None or cached[0] is not self.screenshot_viewport or cached[1] != size:
+            source = self.screenshot_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
+            self._cutscene_gallery_source = self.screenshot_viewport, size, source
+        else:
+            source = cached[2]
+        frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True,
+            background_key=id(self.screenshot_viewport)), visible=True).convert('RGB')
+        previous = getattr(self, '_cutscene_gallery_frame', None)
+        if (previous is not None and previous[0] is gallery and previous[1].size == size
+                and previous[2] is self.image_ref):
+            damage = ImageChops.difference(previous[1], frame).getbbox()
+            if damage is not None:
+                patch = ImageTk.PhotoImage(frame.crop(damage))
+                self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', damage[0], damage[1])
+        else:
+            self.image_ref = ImageTk.PhotoImage(frame)
+            if self.canvas.find_all():
+                self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)
+            else:
+                self.canvas.create_image(*position, image=self.image_ref, anchor='nw')
+        self.canvas.coords(self.canvas.find_all()[0], *position)
+        self._cutscene_gallery_frame = gallery, frame, self.image_ref
+        return True
 
     def cutscene_preview_provider(self):
         from pop2.playback_navigation import PlaybackPart
@@ -197,6 +280,7 @@ class CutsceneControls:
             gallery.error = 'Could not play this cutscene. Try importing the game again.'
             self.render()
             return
+        self.cancel_cutscene_gallery_tick()
         self.cutscene_replay = CutsceneReplay(chapter, player, audio, time.perf_counter())
         self.pause_resume_keys.update(self.window_keys_down)
         self.render()
@@ -262,6 +346,7 @@ class CutsceneControls:
 
     def destroy_cutscene_viewer(self, event):
         if event.widget is self.root:
+            self.cancel_cutscene_gallery_tick()
             self.stop_cutscene_replay(render=False)
 
     def cutscene_replay_key(self, event, repeated, alt):

@@ -489,6 +489,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         s.apply_dev_action(menu.activate())
         self.assertIsNone(s.dev_menu)
         self.assertEqual(s.game_menu.page, 'cutscenes')
+        s.game_menu.cutscene_viewer.text_cache.clear()
         with patch.object(s.ui_font, 'text', wraps=s.ui_font.text) as text:
             s.game_menu.draw(s.screenshot_viewport, s.ui_font)
         labels = [call.args[0] for call in text.call_args_list]

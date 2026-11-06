@@ -81,13 +81,14 @@ class GalleryTests(unittest.TestCase):
 
     def test_horizontal_navigation_and_explicit_activation(self):
         gallery = self.gallery()
-        self.assertEqual(list(gallery.visible), [0, 1, 2])
+        self.assertEqual(list(gallery.visible), [0, 1, 2, 3, 4, 5])
         self.assertEqual(gallery.key('Return'), 'cutscene_play')
         gallery.key('Right')
         self.assertEqual(gallery.key('Return'), 'changed')
         gallery.key('End')
         self.assertEqual(gallery.index, 8)
-        self.assertEqual(list(gallery.visible), [6, 7, 8])
+        gallery.advance(1)
+        self.assertEqual(list(gallery.visible), [3, 4, 5, 6, 7, 8])
         gallery.key('Right')
         self.assertEqual(gallery.index, 8)
         gallery.key('Home')
@@ -104,6 +105,49 @@ class GalleryTests(unittest.TestCase):
         self.assertNotIn(CHAPTERS[1].title, font.values)
         self.assertNotIn(CHAPTERS[2].title, font.values)
         self.assertEqual(gallery.index, 0)
+
+    def test_wheel_is_continuous_eased_and_independent_of_selection(self):
+        gallery = self.gallery()
+        gallery.wheel(.25)
+        self.assertEqual(gallery.scroll, 0)
+        self.assertGreater(gallery.scroll_target, 0)
+        self.assertLess(gallery.scroll_target, gallery.PITCH)
+        self.assertTrue(gallery.advance(1 / 60))
+        self.assertGreater(gallery.scroll, 0)
+        self.assertLess(gallery.scroll, gallery.scroll_target)
+        self.assertEqual(gallery.index, 0)
+        gallery.wheel(100)
+        gallery.advance(1)
+        self.assertEqual(gallery.scroll, gallery.max_scroll)
+        gallery.wheel(-100)
+        gallery.advance(1)
+        self.assertEqual(gallery.scroll, 0)
+
+    def test_drag_browses_without_selecting_and_click_selects_on_release(self):
+        gallery = self.gallery()
+        self.assertTrue(gallery.begin_drag(200, 150))
+        gallery.move_drag(164.5)
+        gallery.end_drag(164.5, 150)
+        self.assertEqual(gallery.scroll, 35.5)
+        self.assertEqual(gallery.index, 0)
+        rect = gallery.card_rect(2)
+        x, y = (rect[0] + rect[2]) / 2, 150
+        gallery.begin_drag(x, y)
+        gallery.end_drag(x, y)
+        self.assertEqual(gallery.index, 2)
+
+    def test_hd_thumbnail_uses_source_pixels_instead_of_a_small_upscaled_card(self):
+        from PIL import ImageChops
+
+        gallery = self.gallery()
+        source = Image.effect_noise((510, 384), 100).convert('RGB')
+        gallery.preview.return_value = source
+        image = gallery.draw(Image.new('RGBA', (2048, 1536)), CaptionFont())
+        rect = gallery.card_rect(0)
+        thumb = tuple(round(v * 4) for v in (rect[0] + 2, rect[1] + 2, rect[2] - 2, rect[1] + 52))
+        expected = source.resize((thumb[2] - thumb[0], thumb[3] - thumb[1]), Image.Resampling.LANCZOS)
+        self.assertIsNone(ImageChops.difference(image.crop(thumb).convert('RGB'), expected).getbbox())
+
 
 
 class ReplayAudioTests(unittest.TestCase):
@@ -204,7 +248,6 @@ class ViewerSceneTests(unittest.TestCase):
         self.assertEqual(scene.game_menu.page, 'cutscenes')
         scene.dev_key_release(event)
 
-
     def test_intro_parts_reconstruct_silently_and_stop_at_their_own_boundaries(self):
         from pop2.cutscenes import chapter_range
         from pop2.cutscene_viewer import chapter_player
@@ -229,6 +272,52 @@ class ViewerSceneTests(unittest.TestCase):
                 self.assertEqual(player.position, end or len(operations))
                 self.assertEqual(assets.program['operations'], operations)
 
+    def test_device_presentation_reuses_the_photo_and_keeps_the_world_paused_while_scrolling(self):
+        from PIL import ImageChops, ImageTk
+        from pop2.game_ui import fit_viewport
+
+        scene = self.scene
+        gallery = self.open_viewer()
+        before = self.snapshot()
+        with patch.object(scene.canvas, 'winfo_width', return_value=1920), \
+                patch.object(scene.canvas, 'winfo_height', return_value=1080):
+            scene.present_viewport()
+            size, _position = fit_viewport(1920, 1080)
+            source = scene.screenshot_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
+            expected = gallery.draw(source, scene.ui_font, visible=True).convert('RGB')
+            actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+            self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
+            low = gallery.draw(scene.screenshot_viewport, scene.ui_font).crop((1, 0, 511, 384))
+            self.assertIsNotNone(ImageChops.difference(actual, low.convert('RGB').resize(size)).getbbox())
+            photo = scene.image_ref
+            scene.dev_scroll(SimpleNamespace(delta=-60, num=None))
+            self.assertGreater(gallery.scroll_target, 0)
+            self.assertEqual(gallery.index, 0)
+            gallery.advance(1 / 60)
+            scene.present_viewport()
+            self.assertIs(scene.image_ref, photo)
+        self.assertTrue(scene.paused)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_pointer_drag_does_not_play_or_select_and_leave_cancels_the_drag(self):
+        scene = self.scene
+        gallery = self.open_viewer()
+        with patch.object(scene, 'dev_pointer', return_value=(220, 150)):
+            scene.dev_click(SimpleNamespace(num=1))
+        with patch.object(scene, 'dev_pointer', return_value=(180, 150)):
+            scene.dev_hover(SimpleNamespace())
+            scene.dev_release(SimpleNamespace(num=1))
+        self.assertEqual(gallery.scroll, 40)
+        self.assertEqual(gallery.index, 0)
+        self.assertIsNone(scene.cutscene_replay)
+        with patch.object(scene, 'dev_pointer', return_value=(220, 150)):
+            scene.dev_click(SimpleNamespace(num=1))
+        scene.pause_if_unfocused()
+        self.assertIsNone(gallery.drag)
+        with patch.object(scene, 'dev_pointer', return_value=(220, 150)):
+            scene.dev_click(SimpleNamespace(num=1))
+        scene.dev_pointer_leave(SimpleNamespace())
+        self.assertIsNone(gallery.drag)
 
     def test_every_chapter_finishes_in_the_gallery_without_touching_the_live_world(self):
         scene = self.scene

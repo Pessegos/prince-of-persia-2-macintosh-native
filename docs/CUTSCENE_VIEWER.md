@@ -1,12 +1,17 @@
 # Cutscene Viewer
 
-The F1 menu opens a horizontal collection of complete story chapters. The F3
-tools offer a shortcut to the same collection. Three cards are visible at a
-time; Left/Right, the mouse wheel and the side arrows browse the chapters.
-Clicking a card selects it, and Play or Enter starts it. Locked chapters show
+The F1 menu lists Cutscene Viewer with Alt+C, also available from gameplay.
+The F3 tools offer a shortcut to the same collection. Six cards fit on one
+continuous horizontal shelf. The wheel (including fractional touchpad deltas),
+side arrows and scrollbar move the shelf independently of selection; dragging
+moves it directly. Wheel motion eases between positions, without snapping to
+cards or pages. Left/Right select a chapter and reveal it only when necessary;
+Home/End select the first/last chapter. Clicking a card selects it on release,
+while a drag never activates a card. Play or Enter starts the selected chapter. Locked chapters show
 a generic numbered card; neither their image nor their story title is drawn.
 
-The catalog in `pop2/cutscenes.py` includes the opening, voyage after level 1,
+The catalog in `pop2/cutscenes.py` includes Prologue, Title and The Palace
+Escape from the opening, voyage after level 1,
 discovery after level 3, carpet flight after level 5, the throne vision in
 level 8, the horse ride after level 9 and the flight after level 13. These are
 port chapter labels. Recurring tree scenes, the gameplay demo and attract
@@ -16,7 +21,8 @@ through `start_story_scene` also consult that catalog when unlocking.
 
 ## Collection and existing saves
 
-The opening is available immediately. Other chapters unlock when the normal
+All three opening chapters are available immediately, preserving the previous
+whole-opening availability and existing version-1 collection files. Other chapters unlock when the normal
 campaign actually starts their scene; finishing or watching every frame is
 not required. Seeking through the retained developer navigation, developer
 level jumps and gallery replays do not unlock chapters. Natural story starts
@@ -33,6 +39,27 @@ earlier mandatory chapters according to the catalog's completed-level
 thresholds. A level 8 save can also admit the vision from its existing throne
 flags. A level 13 save does not imply the subsequent tower flight was seen.
 An arbitrary developer warp is not used as evidence of campaign progress.
+
+## Presentation and opening boundaries
+
+The shelf renders directly at the aspect-fitted window resolution, using the
+original 510x384 preview images and original bitmap glyphs. It does not enlarge
+a previously reduced 512x384 menu. Resized images/text and the frozen background
+are cached, while scrolling patches the existing Tk image. The animation callback
+aims for 60 Hz including drawing time, runs only while moving, and is cancelled
+on playback/destruction or stops when its gallery is no longer active. Unlocked
+source previews are warmed before browsing so a newly revealed card does not
+synchronously load an entire scene during the scroll. Locked previews are never
+requested. UI screenshots use the same direct rendering at their capture size.
+
+Opening boundaries come from the imported title operation, the following frame
+setup and the first story music before narration resumes. Prologue ends before
+the title; Title includes its fade-out; The Palace Escape reconstructs the
+following frame setup silently and begins with its own music/reveal. This omits
+an empty transition wait owned by the preceding title song, without omitting
+narration. A private player reconstructs palette/animation/cue state, resumes
+only currently active cues at their sample offsets, and stops at its chapter's
+operation boundary. Imported operations and natural campaign playback are unchanged.
 
 ## Replay isolation
 
@@ -62,6 +89,7 @@ card. The original campaign's music carry and transitions are unchanged.
 locked-card spoilers, horizontal navigation, private audio channels, actual SDL
 channel preservation, input/focus/error cleanup and all seven real scene
 programs. The full world snapshot is identical before and after each complete
-replay. Existing low-level navigation/thumbnail tests retain direct access to
+replay, including all three opening chapters. Device presentation, continuous
+wheel motion, drag-vs-click behavior, clipping and the Alt+C route are covered. Existing low-level navigation/thumbnail tests retain direct access to
 their model, while the public F3 activation regression now checks the isolated
 chapter viewer and rejects its former destructive seek behavior.
