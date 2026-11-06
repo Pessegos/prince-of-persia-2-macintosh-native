@@ -1549,7 +1549,9 @@ class WindowControls:
             frame = self.native_viewport.crop(VISIBLE_VIEWPORT).convert("RGB").resize(size, Image.Resampling.NEAREST)
             self.bitmap_presenter.present(frame, position)
             return
-        if getattr(self, "bitmap_presenter", None) is not None:
+        native_gallery = (hasattr(self, 'active_cutscene_gallery') and self.active_cutscene_gallery() is not None
+                          and self.native_cutscene_presentation())
+        if getattr(self, "bitmap_presenter", None) is not None and not native_gallery:
             self.bitmap_presenter.close()
             self.bitmap_presenter = None
         if hasattr(self, 'present_cutscene_gallery') and self.present_cutscene_gallery(size, position):

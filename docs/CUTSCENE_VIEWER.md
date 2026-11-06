@@ -1,14 +1,19 @@
 # Cutscene Viewer
 
 The F1 menu lists Cutscene Viewer with Alt+C, also available from gameplay.
-The F3 tools offer a shortcut to the same collection. Six cards fit on one
-continuous horizontal shelf. The wheel (including fractional touchpad deltas),
-side arrows and scrollbar move the shelf independently of selection; dragging
-moves it directly. Wheel motion eases between positions, without snapping to
-cards or pages. Left/Right select a chapter and reveal it only when necessary;
-Home/End select the first/last chapter. Clicking a card selects it on release,
-while a drag never activates a card. Play or Enter starts the selected chapter. Locked chapters show
-a generic numbered card; neither their image nor their story title is drawn.
+The F3 tools offer a shortcut to the same collection. Six large previews fit
+in two rows of three, with compact Back and Play buttons beside the title.
+Chapter names sit immediately below their images; the duplicate selected-title
+footer and large control row are removed.
+
+The wheel (including fractional touchpad deltas), side arrows and scrollbar
+move both rows horizontally without snapping to cards or pages; dragging moves
+them directly. Reading order is left-to-right across each row in a 3x2 group,
+with later groups to its right. Left/Right and Up/Down follow the grid and
+reveal the selection when necessary; Home/End select the first/last chapter.
+Clicking a card selects it on release, while a drag never activates a card.
+Play or Enter starts it. Locked chapters show a generic numbered card;
+neither their image nor their story title is drawn.
 
 The catalog in `pop2/cutscenes.py` includes Prologue, Title and The Palace
 Escape from the opening, voyage after level 1,
@@ -42,15 +47,26 @@ An arbitrary developer warp is not used as evidence of campaign progress.
 
 ## Presentation and opening boundaries
 
-The shelf renders directly at the aspect-fitted window resolution, using the
-original 510x384 preview images and original bitmap glyphs. It does not enlarge
-a previously reduced 512x384 menu. Resized images/text and the frozen background
-are cached, while scrolling patches the existing Tk image. The animation callback
-aims for 60 Hz including drawing time, runs only while moving, and is cancelled
-on playback/destruction or stops when its gallery is no longer active. Unlocked
-source previews are warmed before browsing so a newly revealed card does not
-synchronously load an entire scene during the scroll. Locked previews are never
-requested. UI screenshots use the same direct rendering at their capture size.
+The grid renders directly at the aspect-fitted window resolution, using the
+original 510x384 preview images and original bitmap glyphs. Card surfaces,
+the complete two-row strip and the static frame are prepared and cached before
+scrolling. Animation crops that prepared strip and updates the scrollbar;
+it does not load assets, draw fonts or resize thumbnails on each frame.
+Unlocked source previews are warmed before browsing. Locked previews are never
+requested. UI screenshots use direct rendering at their capture size.
+
+On Windows the viewer reuses the game's existing `CanvasBitmap` surface in
+both windowed and fullscreen modes. This avoids uploading large Tk photos on
+each scroll step; the existing exposure, resize and teardown lifecycle remains
+in charge. The portable Tk fallback reuses its photo, shifts existing pixels
+and uploads exposed edges and scrollbar changes. Static frame or toast changes
+fall back to the complete affected patch. Pixel regressions compare both paths
+to a full render, including reverse motion and screenshot notices.
+
+The animation callback aims for 60 Hz including drawing time, runs only while
+moving, and is cancelled on playback/destruction or stops when its gallery is
+no longer active. Hidden-window timing measures rendering work, not physical
+input/compositor latency, so it is not a universal zero-latency guarantee.
 
 Opening boundaries come from the imported title operation, the following frame
 setup and the first story music before narration resumes. Prologue ends before

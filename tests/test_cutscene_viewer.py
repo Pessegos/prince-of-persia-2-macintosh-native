@@ -245,6 +245,9 @@ class ViewerSceneTests(unittest.TestCase):
         self.directory = TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.scene.cutscene_collection = CutsceneCollection(Path(self.directory.name) / 'cutscenes.json')
+        # Exercise the portable Tk renderer here; the native-surface test below
+        # also verifies the Windows path without mapping or focusing a window.
+        self.scene.native_cutscene_presentation = lambda: False
 
     def snapshot(self):
         from pop2.save_game import capture_snapshot
@@ -330,6 +333,74 @@ class ViewerSceneTests(unittest.TestCase):
             self.assertIs(scene.image_ref, photo)
         self.assertTrue(scene.paused)
         self.assertEqual(self.snapshot(), before)
+
+    def test_incremental_scroll_pixels_match_full_render_in_both_directions_and_after_toast(self):
+        from PIL import ImageChops, ImageTk
+
+        scene = self.scene
+        gallery = self.open_viewer()
+        with patch.object(scene.canvas, 'winfo_width', return_value=1280), \
+                patch.object(scene.canvas, 'winfo_height', return_value=960):
+            scene.present_viewport()
+            photo = scene.image_ref
+            for step in (1, 1, -1, -1, 20, -20):
+                gallery.wheel(step)
+                for _ in range(3):
+                    gallery.advance(1 / 60)
+                    with patch('PIL.ImageChops.difference', side_effect=AssertionError('Compared full frame during scroll')):
+                        scene.present_viewport()
+                    source = scene._cutscene_gallery_source[2]
+                    expected = gallery.draw(source, scene.ui_font, visible=True,
+                                            background_key=id(scene.screenshot_viewport)).convert('RGB')
+                    actual = ImageTk.getimage(photo).convert('RGB')
+                    self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
+                    self.assertIs(scene.image_ref, photo)
+            scene.screenshot_toast = 'Saved screenshot'
+            scene.present_viewport()
+            gallery.wheel(1)
+            gallery.advance(1 / 60)
+            scene.present_viewport()
+            expected = scene.draw_screenshot_notice(gallery.draw(source, scene.ui_font, visible=True,
+                background_key=id(scene.screenshot_viewport)), visible=True).convert('RGB')
+            self.assertIsNone(ImageChops.difference(ImageTk.getimage(photo).convert('RGB'), expected).getbbox())
+
+    def test_native_surface_matches_pixels_in_both_window_modes_and_returns_to_tk(self):
+        import sys
+        from PIL import ImageChops, ImageTk
+
+        if sys.platform != 'win32':
+            self.skipTest('Windows bitmap surface required')
+        scene = self.scene
+        gallery = self.open_viewer()
+        # Set the renderer flag on the hidden fixture; never map/focus a window.
+        scene.native_cutscene_presentation = lambda: True
+        scene.fullscreen = False
+        with patch.object(scene.canvas, 'winfo_width', return_value=1920), \
+                patch.object(scene.canvas, 'winfo_height', return_value=1080):
+            bitmap = None
+            for fullscreen in (False, True, True, False):
+                scene.fullscreen = fullscreen
+                gallery.wheel(.25)
+                gallery.advance(1 / 60)
+                scene.present_viewport()
+                presenter = scene.bitmap_presenter
+                if bitmap is None:
+                    bitmap = presenter.bitmap
+                self.assertIs(presenter.bitmap, bitmap)
+                self.assertIsNone(scene.image_ref)
+                raw = bitmap.tobytes()
+                width, height = bitmap.size
+                stride = (width * 3 + 3) // 4 * 4
+                actual = Image.frombytes('RGB', (width, height), raw, 'raw', 'BGR', stride, -1)
+                expected = gallery.draw(scene._cutscene_gallery_source[2], scene.ui_font, visible=True,
+                    background_key=id(scene.screenshot_viewport)).convert('RGB')
+                self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
+                scene.root.update_idletasks()  # Flush the hidden surface's idle paint.
+            scene.apply_game_action('cutscene_back')
+            self.assertIsNone(scene.bitmap_presenter)
+            self.assertIsNotNone(scene.image_ref)
+            expected_menu = scene.native_viewport.crop((1, 0, 511, 384)).convert('RGB').resize(expected.size, Image.Resampling.NEAREST)
+            self.assertIsNone(ImageChops.difference(ImageTk.getimage(scene.image_ref).convert('RGB'), expected_menu).getbbox())
 
     def test_pointer_drag_does_not_play_or_select_and_leave_cancels_the_drag(self):
         scene = self.scene
