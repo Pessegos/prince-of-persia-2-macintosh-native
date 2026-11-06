@@ -180,23 +180,29 @@ What the user has reviewed and how each part ended up:
 - **Ash** is single crisp pixels. They rise from the lava's surface, and from
   the flame. A pass with sparks in bursts, with trails, was rejected: "a little
   more presence" meant a small step in the style that was there.
-- **Torch warmth** only warms its own recess (`RECESS_REACH`), almost without
-  moving. A wider, pulsing light "looked like a bomb about to go off".
+- **Torch warmth** only warms its own recess (`RECESS_REACH`), and moves a little
+  like a candle (`CANDLE`). A wider light with a real pulse "looked like a bomb
+  about to go off".
 - **Lava glow** is fainter than that warmth and hugs the pool (`glow_along`). It
   is the same table and dither, and breathes over several seconds.
-- **The torch itself** keeps its nine frames. `CaveGetTorchFrame` (8:3b4e) picks
-  one at random each tick, and their wall has two lightings painted on about a
-  hundred pixels, so the wall blinks between the two. While the ambience is on,
-  the flame walks to one of the three frames closest in shape, or stays, and the
-  wall moves to its frame's lighting over five ticks, by ordered dither. The
-  game still picks its own frame, with the same random calls, and that frame is
-  what is replaced on screen: `calm_torch` only touches pixels that show it, so
-  whatever is drawn over the torch stays. A torch that is not there gets nothing.
+- **The wall behind the torch.** `CaveGetTorchFrame` (8:3b4e) picks one of nine
+  frames at random each tick, and their wall has two lightings painted on about
+  a hundred pixels, so the wall blinks between the two. While the ambience is on
+  the wall moves to the lighting of the frame on screen over five ticks, by
+  ordered dither. The flame stays exactly the game's: a pass that also chose the
+  frames made it choppy. `calm_torch` only touches pixels that show the sprite,
+  so whatever is drawn over the torch stays, and a torch that is not there gets
+  nothing.
 - **Dust** went through the most tries. Slow crisp grains hopped from pixel to
-  pixel. Grains shared among four pixels looked like worms. It is now one pixel
-  drifting at about the speed of the ash, faster than the eye separates into
-  hops, all in one draught across the room. Dim in the dark, a little brighter
-  by the fire, and duller over the lava so that it is not read as more ash.
+  pixel. Crisp grains fast enough to hide that looked in a hurry. The user chose
+  the soft point, shared among four pixels, moving slowly in one draught across
+  the room. At 36 Hz with a wandering path that same point looked like a worm;
+  at the game's rate on a straight path it reads as dust. A grain has a lifespan:
+  it comes up over 4 seconds and goes over 7, so it is seen to fade. A new one
+  starts unseen, in the emptiest of five places with air ahead for its whole
+  life (`new_mote`), so the amount in the room stays the same and old and new
+  never show as a swap. Dim in the dark, a little brighter by the fire, and
+  duller over the lava so that it is not read as more ash.
 
 The warmth and the glow are tables of what each palette colour becomes at each
 of eight brightness levels (`Colours.light_table`), stepped through a 4x4
