@@ -150,10 +150,11 @@ code. The story guide's account agrees (popuw.com/story/pop2-13.html).
 - Mode 13 lasts. AnimChar 4:2d7e (opcode -18) clears only the selected ID, so
   the climb's SEQS 235 keeps it. Sequences with opcode -21 still replace it, as
   in the original.
-- Level 13's door. Tile 4:12 is an ordinary plate in the level data (kind 5,
-  foreground 0xc0b7), under the altar's pedestal. The port draws no plate there
-  and the Prince cannot reach it; the shadow steps on it (2:6602) and opens exit
-  32:12, which stays open. That is why no button is seen.
+- Level 13's door. Tile 4:12 is a working plate that is drawn as nothing. Its
+  kind is 5 and its foreground 0xc0b7, but its image word is 0. Every other
+  plate in the level has 9 or 1. DrawTempUpPlate 10:0da8 and DrawTempDownPlate
+  10:0c76 draw image 0 as back wall only (10:0004). The Prince cannot reach the
+  cell. The shadow steps on it (2:6602) and opens exit 32:12, which stays open.
 - The door is silent. TriggerObject 5:1f72-1f7e never adds song 297 on level 13.
   ATMExit 5:162c-1640 and 5:1656-166a skip cues 17 and 18, and the call 16:21fc
   (0) at the end, while the Kid is in room 4 of level 13. 16:21fc is not
@@ -168,9 +169,11 @@ flame, the door reaches 79, and the same birdhead then draws and kneels.
 
 - What ends level 13 after the merge (CheckPlayNIS(13, 14): NIS 3), and the
   mode-13 Kid in level 14 (2001 at palette base 48, environment 6).
-- A birdhead that draws with the Prince within 27 pixels behind it can back
-  into the chasm (seen with a warp, SEQS 90 then 60). Not compared with the
-  original.
+- A birdhead that draws with the Prince within 27 pixels behind it, next to
+  the chasm, can turn into it: SEQS 60 flips the supporting foot across the
+  anchor, and CheckFloor drops it. SwordCtrl 6:26a8 selects SEQS 60 with no floor
+  test and CheckFloor 4:35ca has no exemption for it, so this reads as original
+  behaviour. It has not been run on the original.
 - A native probe of AutoCtrl 10:2850 and the rise/merge.
 
 ## NIS 3: the flight to the tower
