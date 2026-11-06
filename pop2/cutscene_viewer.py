@@ -8,7 +8,7 @@ from tkinter import TclError
 
 from PIL import Image
 
-from pop2.cutscenes import CHAPTERS, CutsceneCollection
+from pop2.cutscenes import CHAPTERS, CutsceneCollection, chapter_range
 from pop2.playback_preview import PlaybackPreviews
 
 
@@ -95,7 +95,21 @@ def chapter_player(chapter, assets, audio=None):
         music = OPEN_SONG, elapsed, song
         if audio is not None:
             audio.play_intro(OPEN_SONG, 0, offset=elapsed)
-    return IntroPlayer(assets, audio, music)
+    start, end = chapter_range(chapter, assets.program)
+    player = IntroPlayer(assets, None if start else audio, music)
+    if start:
+        # Reconstruct palette/animation and cue clocks silently; resume only
+        # sounds still active at this chapter boundary, on private channels.
+        player.seek_operation(start)
+        player.audio = audio
+        if audio is not None:
+            for kind, (cue, began, duration) in player.playing.items():
+                elapsed = player.time - began
+                if elapsed < duration:
+                    audio.play_intro(cue, kind, offset=elapsed)
+    if end is not None:
+        player.operations = player.operations[:end]
+    return player
 
 
 class ChapterPreviews(PlaybackPreviews):
@@ -108,10 +122,9 @@ class ChapterPreviews(PlaybackPreviews):
             self.assets[stage] = IntroAssets(self.directory, program_name=chapter.program)
         player = chapter_player(chapter, self.assets[stage])
         if chapter.key == 'opening':
-            title = next((i for i, operation in enumerate(player.operations)
-                          if operation['op'] == 'title'), None)
-            if title is not None:
-                player.seek_operation(title)
+            first_text = next(i for i, operation in enumerate(player.operations)
+                              if operation['op'] == 'text' and operation['args'][1])
+            player.seek_operation(first_text)
         player.advance(chapter.preview_seconds)
         return player.frame().crop((0, 0, 510, 384)).convert('RGB')
 
@@ -156,7 +169,7 @@ class CutsceneControls:
                                        round(chapter.preview_seconds * 1000))
                           for chapter in CHAPTERS)
             provider = self._cutscene_previews = ChapterPreviews(
-                self.resources, parts, None, self.preview_fingerprint(), namespace='cutscenes')
+                self.resources, parts, None, self.preview_fingerprint(), namespace='cutscenes-v3')
         return provider
 
     def cutscene_preview(self, index):

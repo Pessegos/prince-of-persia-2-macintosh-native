@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 from PIL import Image, ImageDraw, ImageFont
 
-from pop2.cutscenes import CHAPTERS, CHAPTER_KEYS, CutsceneCollection
+from pop2.cutscenes import CHAPTERS, CHAPTER_KEYS, OPENING_KEYS, CutsceneCollection
 from pop2.cutscene_gallery import CutsceneGallery
 from pop2.cutscene_viewer import ReplayAudio
 from pop2.game_menu import GameMenu
@@ -17,19 +17,19 @@ from pop2.paths import ASSET_DIR
 class CollectionTests(unittest.TestCase):
     def test_whole_story_catalog_includes_recent_films_and_excludes_tree_and_gameplay(self):
         self.assertEqual([chapter.program for chapter in CHAPTERS],
-                         ['intro.json', 'ending.json', 'discovery.json', 'carpet.json',
+                         ['intro.json', 'intro.json', 'intro.json', 'ending.json', 'discovery.json', 'carpet.json',
                           'throne.json', 'temple.json', 'tower.json'])
         self.assertEqual(len(CHAPTER_KEYS), len(CHAPTERS))
-        self.assertEqual(len({chapter.program for chapter in CHAPTERS}), len(CHAPTERS))
+        self.assertEqual(len({chapter.program for chapter in CHAPTERS}), 7)
 
     def test_collection_persists_and_preserves_other_instance_unlocks(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / 'collection.json'
             first, second = CutsceneCollection.load(path), CutsceneCollection.load(path)
-            self.assertEqual(first.seen, {'opening'})
+            self.assertEqual(first.seen, set(OPENING_KEYS))
             first.unlock('voyage', 'unknown')
             second.unlock('carpet')
-            self.assertEqual(CutsceneCollection.load(path).seen, {'opening', 'voyage', 'carpet'})
+            self.assertEqual(CutsceneCollection.load(path).seen, OPENING_KEYS | {'voyage', 'carpet'})
             self.assertEqual(json.loads(path.read_text())['version'], 1)
 
     def test_bad_profile_and_write_error_do_not_interrupt_the_game(self):
@@ -38,7 +38,7 @@ class CollectionTests(unittest.TestCase):
             for data in ('[]', '{bad', '{"version":1,"seen":[4]}',
                          '{"version":8,"seen":["tower"]}'):
                 path.write_text(data)
-                self.assertEqual(CutsceneCollection.load(path).seen, {'opening'})
+                self.assertEqual(CutsceneCollection.load(path).seen, set(OPENING_KEYS))
             collection = CutsceneCollection(path)
             with patch('pop2.cutscenes.tempfile.NamedTemporaryFile', side_effect=OSError):
                 collection.unlock('voyage')
@@ -51,7 +51,7 @@ class CollectionTests(unittest.TestCase):
             game = SimpleNamespace(level=SimpleNamespace(number=8),
                                    caverns=SimpleNamespace(throne_seen=False, throne_done=False))
             collection.admit_saved_progress(game)
-            self.assertEqual(collection.seen, {'opening', 'voyage', 'discovery', 'carpet'})
+            self.assertEqual(collection.seen, OPENING_KEYS | {'voyage', 'discovery', 'carpet'})
             game.caverns.throne_seen = True
             collection.admit_saved_progress(game)
             self.assertIn('vision', collection.seen)
@@ -76,7 +76,7 @@ class CaptionFont:
 
 class GalleryTests(unittest.TestCase):
     def gallery(self):
-        return CutsceneGallery(CutsceneCollection(Path('unused-test-profile.json')),
+        return CutsceneGallery(CutsceneCollection(Path('unused-test-profile.json'), seen={'opening'}),
                                Mock(return_value=Image.new('RGB', (510, 384), '#773311')))
 
     def test_horizontal_navigation_and_explicit_activation(self):
@@ -86,10 +86,10 @@ class GalleryTests(unittest.TestCase):
         gallery.key('Right')
         self.assertEqual(gallery.key('Return'), 'changed')
         gallery.key('End')
-        self.assertEqual(gallery.index, 6)
-        self.assertEqual(list(gallery.visible), [4, 5, 6])
+        self.assertEqual(gallery.index, 8)
+        self.assertEqual(list(gallery.visible), [6, 7, 8])
         gallery.key('Right')
-        self.assertEqual(gallery.index, 6)
+        self.assertEqual(gallery.index, 8)
         gallery.key('Home')
         gallery.key('Tab', backwards=True)
         self.assertEqual(gallery.key('Return'), 'cutscene_back')
@@ -205,6 +205,31 @@ class ViewerSceneTests(unittest.TestCase):
         scene.dev_key_release(event)
 
 
+    def test_intro_parts_reconstruct_silently_and_stop_at_their_own_boundaries(self):
+        from pop2.cutscenes import chapter_range
+        from pop2.cutscene_viewer import chapter_player
+        from pop2.intro import IntroAssets
+
+        assets = IntroAssets()
+        operations = assets.program['operations']
+        bounds = [chapter_range(chapter, assets.program) for chapter in CHAPTERS[:3]]
+        self.assertEqual(bounds[0][0], 0)
+        self.assertEqual(bounds[0][1], bounds[1][0])
+        handoff = operations[bounds[1][1]:bounds[2][0]]
+        self.assertFalse(any(op['op'] == 'text' and op['args'][1] for op in handoff))
+        self.assertIsNone(bounds[2][1])
+        for chapter, (_start, end) in zip(CHAPTERS[:3], bounds):
+            with self.subTest(chapter=chapter.key):
+                audio = Mock()
+                player = chapter_player(chapter, assets, audio)
+                # Seeking never dispatches prior narration to the audio adapter.
+                self.assertLessEqual(audio.play_intro.call_count, 2)
+                player.advance(1200)
+                self.assertTrue(player.done)
+                self.assertEqual(player.position, end or len(operations))
+                self.assertEqual(assets.program['operations'], operations)
+
+
     def test_every_chapter_finishes_in_the_gallery_without_touching_the_live_world(self):
         scene = self.scene
         scene.cutscene_collection.seen.update(CHAPTER_KEYS)
@@ -257,12 +282,12 @@ class ViewerSceneTests(unittest.TestCase):
         gallery.index = 5
         scene.start_cutscene_replay()
         self.assertIsNone(scene.cutscene_replay)
-        self.assertEqual(scene.cutscene_collection.seen, {'opening'})
+        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
 
         scene.close_game_menu()
         scene.with_intro = True
         scene.seek_playback_part(next(part for part in scene.development_parts() if part.stage == 'temple'))
-        self.assertEqual(scene.cutscene_collection.seen, {'opening'})
+        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
 
     def test_replay_input_blocks_game_commands_and_mouse_back_does_not_start_another_film(self):
         scene = self.scene
@@ -329,12 +354,12 @@ class ViewerSceneTests(unittest.TestCase):
 
         scene = self.scene
         scene.load_level(6)
-        self.assertEqual(scene.cutscene_collection.seen, {'opening'})
+        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
         path = Path(self.directory.name) / 'old-save.pop2save'
         write_save(path, capture(scene.game))
-        self.assertEqual(scene.cutscene_collection.seen, {'opening'})
+        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
         scene.load_game_from(path)
-        self.assertEqual(scene.cutscene_collection.seen, {'opening', 'voyage', 'discovery', 'carpet'})
+        self.assertEqual(scene.cutscene_collection.seen, OPENING_KEYS | {'voyage', 'discovery', 'carpet'})
 
     def test_viewer_over_a_copy_challenge_pauses_on_focus_loss_and_resets_its_clock_on_return(self):
         scene = self.scene

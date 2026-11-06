@@ -17,10 +17,13 @@ class CutsceneChapter:
     after_level: int | None = None
 
 
-# One complete imported story program per chapter. Demo gameplay, credits and
+# Complete story programs, with the long opening split at natural boundaries.
+# Demo gameplay, credits and
 # the recurring tree reminders are deliberately outside the story collection.
 CHAPTERS = (
-    CutsceneChapter('opening', 'The Story Begins', 'intro.json'),
+    CutsceneChapter('opening', 'Prologue', 'intro.json', 5),
+    CutsceneChapter('opening_titles', 'Title', 'intro.json', 6),
+    CutsceneChapter('opening_story', 'The Palace Escape', 'intro.json', 8),
     CutsceneChapter('voyage', 'The Voyage', 'ending.json', 5, 1),
     CutsceneChapter('discovery', 'The Impostor', 'discovery.json', 10, 3),
     CutsceneChapter('carpet', 'The Flying Carpet', 'carpet.json', 5, 5),
@@ -28,6 +31,7 @@ CHAPTERS = (
     CutsceneChapter('horse', 'The Ride to the Temple', 'temple.json', 5, 9),
     CutsceneChapter('tower', 'The Flight to the Tower', 'tower.json', 6, 13),
 )
+OPENING_KEYS = frozenset(('opening', 'opening_titles', 'opening_story'))
 CHAPTER_KEYS = frozenset(chapter.key for chapter in CHAPTERS)
 COLLECTION_PATH = (USER_DATA_DIR if USER_DATA_DIR is not None else
                    Path.home() / 'Saved Games' / 'PoP2 Macintosh Native') / 'cutscenes.json'
@@ -36,7 +40,7 @@ COLLECTION_PATH = (USER_DATA_DIR if USER_DATA_DIR is not None else
 @dataclass
 class CutsceneCollection:
     path: Path = COLLECTION_PATH
-    seen: set = field(default_factory=lambda: {'opening'})
+    seen: set = field(default_factory=lambda: set(OPENING_KEYS))
     error: str = ''
 
     @classmethod
@@ -100,3 +104,21 @@ class CutsceneCollection:
 
 def chapter_available(chapter, directory=ASSET_DIR):
     return (Path(directory) / chapter.program).is_file()
+
+
+def chapter_range(chapter, program):
+    """Half-open boundaries from the imported title and story setup operations."""
+    if chapter.program != 'intro.json':
+        return 0, None
+    operations = program['operations']
+    title = next(i for i, operation in enumerate(operations) if operation['op'] == 'title')
+    setup = next(i for i in range(title + 1, len(operations)) if operations[i]['op'] == 'fill')
+    narration = next(i for i in range(setup, len(operations))
+                     if operations[i]['op'] == 'text' and operations[i]['args'][1])
+    music = next(i for i in range(narration - 1, setup - 1, -1)
+                 if operations[i]['op'] == 'sound' and operations[i]['args'][1] == 0)
+    # The setup between these chapters waits for the preceding title's music
+    # over an empty frame. Reconstruct it silently; start the story with its
+    # own song and reveal, retaining all narration and subsequent animation.
+    return {'opening': (0, title), 'opening_titles': (title, setup),
+            'opening_story': (music, None)}[chapter.key]
