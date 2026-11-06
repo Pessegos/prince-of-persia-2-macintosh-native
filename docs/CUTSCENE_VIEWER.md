@@ -1,8 +1,10 @@
 # Cutscene Viewer
 
 The F1 menu lists Cutscene Viewer with Alt+C, also available from gameplay.
-The F3 tools offer a shortcut to the same collection. Six large previews fit
-in two rows of three, with compact Back and Play buttons beside the title.
+The F3 tools offer a shortcut to the same collection. The local responsive
+sketch uses the full window for this page: six previews fit in two rows of
+three at 4:3 and 16:9, while wider windows fit more columns (four at 2560x1080).
+Compact Back and Play buttons sit beside the title.
 Chapter names sit immediately below their images; the duplicate selected-title
 footer and large control row are removed.
 
@@ -27,11 +29,18 @@ through `start_story_scene` also consult that catalog when unlocking.
 ## Collection and existing saves
 
 All three opening chapters are available immediately, preserving the previous
-whole-opening availability and existing version-1 collection files. Other chapters unlock when the normal
-campaign actually starts their scene; finishing or watching every frame is
-not required. Seeking through the retained developer navigation, developer
-level jumps and gallery replays do not unlock chapters. Natural story starts
-after a developer jump still count as encountering the actual scene.
+whole-opening availability and existing version-1 collection files. Other
+chapters unlock when the normal campaign actually starts their scene and the
+preceding mandatory story chapters have been reached. Finishing or watching
+every frame is not required. Collection reads retain a chronological prefix;
+an isolated legacy/debug flag such as the horse without the earlier chapters
+is ignored, without rewriting the file on load. Valid recorded progress stays
+available across new games.
+
+A successful F3 room/level warp or retained developer seek suspends collection
+updates for that debug session, including scenes triggered afterward. Starting
+a new game or loading a validated campaign save restores normal admission.
+Gallery browsing and replays never unlock chapters.
 
 `cutscenes.json` is a small atomic JSON collection alongside the default
 Saved Games data, or in `POP2_USER_DATA` when that override is set. It survives
@@ -47,21 +56,44 @@ An arbitrary developer warp is not used as evidence of campaign progress.
 
 ## Presentation and opening boundaries
 
-The grid renders directly at the aspect-fitted window resolution, using the
-original 510x384 preview images and original bitmap glyphs. Card surfaces,
+The grid renders directly at the menu viewport resolution. A shared UI
+viewport/mouse transform lets this page use wide windows independently of the
+game's fitted 510x384 viewport. Text, icons and margins use one uniform scale;
+extra width changes card layout rather than stretching them. Taller windows
+retain a minimum 510:384 UI aspect. Windows' proportional sizing constraint is
+suspended while browsing this page, so it can also be resized horizontally.
+Other menus retain their existing layouts during this local design review.
+
+Chapter covers use a 16:9 image area. Current private excerpts are temporary
+center crops, with uniform scaling and no source artwork changes. Final covers
+will be chosen and supplied by the user; an already cropped 16:9 cover fits
+without further composition changes. Locked covers are never requested.
+The story films and the game still render at their original proportions, with
+bars where needed. The paused game behind the panel is centered and fitted too.
+
+Card surfaces,
 the complete two-row strip and the static frame are prepared and cached before
 scrolling. Animation crops that prepared strip and updates the scrollbar;
 it does not load assets, draw fonts or resize thumbnails on each frame.
 Unlocked source previews are warmed before browsing. Locked previews are never
-requested. UI screenshots use direct rendering at their capture size.
+requested. UI screenshots use direct rendering at their capture size, keeping
+the menu's current aspect. A private gallery copy prevents export geometry from
+changing live hit boxes, selection, hover or dragging. Ordinary game screenshots
+keep their existing native crop and integer scaling.
 
-On Windows the viewer reuses the game's existing `CanvasBitmap` surface in
-both windowed and fullscreen modes. This avoids uploading large Tk photos on
-each scroll step; the existing exposure, resize and teardown lifecycle remains
-in charge. The portable Tk fallback reuses its photo, shifts existing pixels
-and uploads exposed edges and scrollbar changes. Static frame or toast changes
-fall back to the complete affected patch. Pixel regressions compare both paths
-to a full render, including reverse motion and screenshot notices.
+The viewer keeps a retained Tk photo in both windowed and fullscreen modes.
+Tk therefore owns redisplay after hover highlights, cursor changes, exposure
+or resizing. Direct Windows bitmap painting is reserved for its existing live
+fullscreen gameplay path; it must not be used for this interactive menu, where
+a later Tk redraw could erase it and leave a black canvas. The viewer reuses
+its photo and a separate retained photo of the prepared strip. Scrolling copies
+the visible region from that strip and updates the small scrollbar region;
+it avoids Tk's expensive overlapping self-copy at wide resolutions. Both the
+static frame and strip are cached as opaque RGB after composition, avoiding a
+full-frame RGBA conversion on each tick. Static frame or toast changes update
+the complete affected patch.
+Pixel regressions compare the result to a full render, including reverse
+motion, screenshot notices, repeated hover and forced Tk redisplay.
 
 The animation callback aims for 60 Hz including drawing time, runs only while
 moving, and is cancelled on playback/destruction or stops when its gallery is

@@ -46,16 +46,21 @@ class ScreenshotSettings:
         temporary.replace(path)
 
 
-def save_screenshot(viewport, settings):
-    source_scale = viewport.width // 512
-    if not 1 <= source_scale <= 4 or viewport.size != (512 * source_scale, 384 * source_scale):
-        raise ValueError("Screenshot requires the native composition buffer")
+def save_screenshot(viewport, settings, *, framed_ui=False):
     if type(settings.scale) is not int or not 1 <= settings.scale <= 4:
         raise ValueError("Screenshot scale must be between 1 and 4")
-    image = viewport.crop(tuple(value * source_scale for value in VISIBLE_VIEWPORT)).convert("RGB")
-    if settings.scale != source_scale:
-        image = image.resize(tuple(value * settings.scale for value in VISIBLE_SIZE),
-                             Image.Resampling.NEAREST)
+    if framed_ui:
+        if viewport.height != 384 * settings.scale or viewport.width < 510 * settings.scale:
+            raise ValueError("UI screenshot requires a complete menu at the requested scale")
+        image = viewport.convert('RGB')
+    else:
+        source_scale = viewport.width // 512
+        if not 1 <= source_scale <= 4 or viewport.size != (512 * source_scale, 384 * source_scale):
+            raise ValueError("Screenshot requires the native composition buffer")
+        image = viewport.crop(tuple(value * source_scale for value in VISIBLE_VIEWPORT)).convert("RGB")
+        if settings.scale != source_scale:
+            image = image.resize(tuple(value * settings.scale for value in VISIBLE_SIZE),
+                                 Image.Resampling.NEAREST)
     folder = Path(settings.folder).expanduser().resolve()
     folder.mkdir(parents=True, exist_ok=True)
     stem = "PoP2_" + datetime.now().strftime("%Y-%m-%d_%H.%M.%S")

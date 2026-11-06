@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 import logging
 import math
-import sys
 import time
 from tkinter import TclError
 
@@ -133,11 +132,14 @@ class ChapterPreviews(PlaybackPreviews):
 class CutsceneControls:
     def init_cutscene_viewer(self):
         self.cutscene_collection = CutsceneCollection.load()
+        self.cutscene_campaign_active = True
         self.cutscene_replay = None
         self.cutscene_after_id = None
         self.cutscene_gallery_after_id = None
 
     def mark_cutscene_seen(self, key):
+        if not getattr(self, 'cutscene_campaign_active', True):
+            return
         collection = getattr(self, 'cutscene_collection', None)
         if collection is None:
             collection = self.cutscene_collection = CutsceneCollection.load()
@@ -211,8 +213,29 @@ class CutsceneControls:
 
         self.cutscene_gallery_after_id = self.root.after(16, tick)
 
-    def native_cutscene_presentation(self):
-        return sys.platform == 'win32'
+    def cutscene_gallery_frame(self, size, *, capture=False):
+        from copy import copy
+        from pop2.game_ui import fit_viewport
+
+        gallery = self.active_cutscene_gallery()
+        if capture:
+            # An export size must not change live hit boxes, hover or a drag.
+            gallery = copy(gallery)
+            for name in ('text_cache', 'image_cache', 'card_cache'):
+                setattr(gallery, name, getattr(gallery, name).copy())
+        cached = getattr(self, '_cutscene_gallery_source', None)
+        if cached is None or cached[0] is not self.screenshot_viewport or cached[1] != size:
+            source = Image.new('RGBA', size, '#080808')
+            fitted, origin = fit_viewport(*size)
+            source.paste(self.screenshot_viewport.crop((1, 0, 511, 384)).resize(
+                fitted, Image.Resampling.NEAREST), origin)
+            if not capture:
+                self._cutscene_gallery_source = self.screenshot_viewport, size, source
+        else:
+            source = cached[2]
+        frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True,
+            background_key=id(self.screenshot_viewport)), visible=True, uniform=True)
+        return frame if frame.mode == 'RGB' else frame.convert('RGB')
 
     def present_cutscene_gallery(self, size, position):
         from PIL import ImageChops, ImageTk
@@ -222,34 +245,18 @@ class CutsceneControls:
             self._cutscene_gallery_frame = None
             self._cutscene_gallery_source = None
             self._cutscene_gallery_patch = None
+            self._cutscene_gallery_grid_photo = None
             return False
-        cached = getattr(self, '_cutscene_gallery_source', None)
-        if cached is None or cached[0] is not self.screenshot_viewport or cached[1] != size:
-            source = self.screenshot_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
-            self._cutscene_gallery_source = self.screenshot_viewport, size, source
-        else:
-            source = cached[2]
-        frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True,
-            background_key=id(self.screenshot_viewport)), visible=True).convert('RGB')
-        if self.native_cutscene_presentation():
-            from pop2.bitmap_presenter import CanvasBitmap
-
-            # Use the game's existing high-refresh Windows surface.
-            # This bypasses Tk's large photo uploads; exposure and teardown stay
-            # with the existing presenter lifecycle in WindowControls.
-            if self.bitmap_presenter is None:
-                self.bitmap_presenter = CanvasBitmap(self.canvas)
-                for item in self.canvas.find_all():
-                    self.canvas.itemconfigure(item, image='')
-                self.image_ref = None
-                self._cutscene_gallery_frame = self._cutscene_gallery_patch = None
-            self.bitmap_presenter.present(frame, position)
-            return True
+        frame = self.cutscene_gallery_frame(size)
         previous = getattr(self, '_cutscene_gallery_frame', None)
         state = gallery.background_cache[0], getattr(self, 'screenshot_toast', None)
-        sx, sy = size[0] / 510, size[1] / 384
+        sx = sy = size[1] / 384
         moving = (round(gallery.scroll * sx), gallery.scroll_target > 0,
                   gallery.scroll_target < gallery.max_scroll, gallery.grid_cache[0], gallery.scroll)
+        grid_photo = getattr(self, '_cutscene_gallery_grid_photo', None)
+        if grid_photo is None or grid_photo[0] is not gallery.grid_cache[1]:
+            grid_photo = self._cutscene_gallery_grid_photo = (
+                gallery.grid_cache[1], ImageTk.PhotoImage(gallery.grid_cache[1]))
         if (previous is not None and previous[0] is gallery and previous[1].size == size
                 and previous[2] is self.image_ref):
             def upload(region):
@@ -261,23 +268,20 @@ class CutsceneControls:
                 else:
                     patch = ImageTk.PhotoImage(pixels)
                     self._cutscene_gallery_patch = pixels.size, patch
-                self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', region[0], region[1])
+                self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', region[0], region[1],
+                                       '-compositingrule', 'set')
 
             shift = moving[0] - previous[4][0]
             left, top = round((gallery.STRIP[0] - 1) * sx), round(gallery.STRIP[1] * sy)
             right, bottom = round((gallery.STRIP[2] - 1) * sx), round(gallery.STRIP[3] * sy)
             if (previous[3] == state and previous[4][3] == moving[3]
                     and getattr(self, 'screenshot_toast', None) is None and abs(shift) < right - left):
-                # Tk can shift existing pixels inside the same photo. Upload
-                # only the exposed edge, not two full rows on every tick.
-                if shift > 0:
-                    self.image_ref.tk.call(str(self.image_ref), 'copy', str(self.image_ref),
-                        '-from', left + shift, top, right, bottom, '-to', left, top)
-                    upload((right - shift, top, right, bottom))
-                elif shift < 0:
-                    self.image_ref.tk.call(str(self.image_ref), 'copy', str(self.image_ref),
-                        '-from', left, top, right + shift, bottom, '-to', left - shift, top)
-                    upload((left, top, left - shift, bottom))
+                # Copy from a separate retained strip. Overlapping self-copies
+                # made Tk allocate/copy temporary pixels at wide resolutions.
+                if shift:
+                    self.image_ref.tk.call(str(self.image_ref), 'copy', str(grid_photo[1]),
+                        '-from', moving[0], 0, moving[0] + right - left, bottom - top,
+                        '-to', left, top, '-compositingrule', 'set')
                 if previous[4] != moving:
                     regions = [gallery.TRACK]
                     if previous[4][1:3] != moving[1:3]:

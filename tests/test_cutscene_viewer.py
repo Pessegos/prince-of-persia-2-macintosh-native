@@ -28,9 +28,28 @@ class CollectionTests(unittest.TestCase):
             first, second = CutsceneCollection.load(path), CutsceneCollection.load(path)
             self.assertEqual(first.seen, set(OPENING_KEYS))
             first.unlock('voyage', 'unknown')
-            second.unlock('carpet')
-            self.assertEqual(CutsceneCollection.load(path).seen, OPENING_KEYS | {'voyage', 'carpet'})
+            second.unlock('discovery', 'carpet')
+            self.assertEqual(CutsceneCollection.load(path).seen, OPENING_KEYS | {'voyage', 'discovery', 'carpet'})
             self.assertEqual(json.loads(path.read_text())['version'], 1)
+
+    def test_isolated_horse_record_is_locked_again_without_rewriting_the_profile(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'collection.json'
+            original = json.dumps({'version': 1, 'seen': sorted(OPENING_KEYS | {'horse'})})
+            path.write_text(original)
+            collection = CutsceneCollection.load(path)
+            self.assertEqual(collection.seen, OPENING_KEYS)
+            self.assertEqual(path.read_text(), original)
+            collection.unlock('horse')
+            self.assertNotIn('horse', collection.seen)
+            collection.unlock('voyage', 'discovery', 'carpet', 'vision')
+            collection.unlock('horse')
+            self.assertIn('horse', collection.seen)
+            self.assertEqual(CutsceneCollection.load(path).seen, OPENING_KEYS | {
+                'voyage', 'discovery', 'carpet', 'vision', 'horse'})
+            keys = [chapter.key for chapter in CHAPTERS]
+            self.assertLess(keys.index('vision'), keys.index('horse'))
+            self.assertLess(keys.index('horse'), keys.index('tower'))
 
     def test_bad_profile_and_write_error_do_not_interrupt_the_game(self):
         with TemporaryDirectory() as directory:
@@ -137,22 +156,25 @@ class GalleryTests(unittest.TestCase):
         self.assertEqual(gallery.index, 2)
 
     def test_hd_thumbnail_uses_source_pixels_instead_of_a_small_upscaled_card(self):
-        from PIL import ImageChops
+        from PIL import ImageChops, ImageOps
 
         gallery = self.gallery()
         source = Image.effect_noise((510, 384), 100).convert('RGB')
         gallery.preview.return_value = source
         image = gallery.draw(Image.new('RGBA', (2048, 1536)), CaptionFont())
         rect = gallery.card_rect(0)
-        thumb = tuple(round(v * 4) for v in (rect[0] + 2, rect[1] + 2, rect[2] - 2, rect[1] + 112))
-        expected = source.resize((thumb[2] - thumb[0], thumb[3] - thumb[1]), Image.Resampling.NEAREST)
+        width = round((gallery.CARD_WIDTH - 2) * 4) - 8
+        height = round((2 + (gallery.CARD_WIDTH - 4) * 9 / 16) * 4) - 8
+        thumb = round(rect[0] * 4) + 8, round(rect[1] * 4) + 8
+        thumb = *thumb, thumb[0] + width, thumb[1] + height
+        expected = ImageOps.fit(source, (width, height), method=Image.Resampling.NEAREST)
         self.assertIsNone(ImageChops.difference(image.crop(thumb).convert('RGB'), expected).getbbox())
 
 
     def test_two_rows_stay_dense_and_arrow_keys_follow_the_grid(self):
         gallery = self.gallery()
         first = [gallery.card_rect(i) for i in range(6)]
-        self.assertEqual([rect[1] for rect in first], [63, 201, 63, 201, 63, 201])
+        self.assertEqual([rect[1] for rect in first], [88.375, 202.5, 88.375, 202.5, 88.375, 202.5])
         self.assertEqual([rect[0] for rect in first], [21, 21, 181, 181, 341, 341])
         self.assertGreater(first[0][2] - first[0][0], 140)
         gallery.key('Down')
@@ -165,6 +187,27 @@ class GalleryTests(unittest.TestCase):
         self.assertGreater(gallery.scroll_target, 0)
         gallery.key('Left')
         self.assertEqual(gallery.index, 4)
+
+    def test_wide_layout_adds_columns_without_stretching_covers_or_text(self):
+        gallery, font = self.gallery(), CaptionFont()
+        for size, columns in (((1020, 768), 3), ((1920, 1080), 3),
+                              ((2560, 1080), 4), ((3840, 1080), 6)):
+            with self.subTest(size=size):
+                gallery.draw(Image.new('RGBA', size), font, visible=True)
+                self.assertEqual(gallery.COLUMNS, columns)
+                self.assertEqual(gallery.ROWS, 2)
+                self.assertAlmostEqual((gallery.CARD_WIDTH - 4) /
+                                       (gallery.CARD_HEIGHT - 22), 16 / 9)
+                self.assertLessEqual(gallery.card_rect(columns * 2 - 2)[2], gallery.STRIP[2])
+                self.assertGreaterEqual(gallery.card_rect(0)[1], gallery.STRIP[1])
+                self.assertLessEqual(gallery.card_rect(1)[3], gallery.STRIP[3])
+                self.assertEqual(gallery.hit(*((v1 + v2) / 2 for v1, v2 in
+                    zip(gallery.PLAY[:2], gallery.PLAY[2:]))), 1)
+        gallery.key('End')
+        gallery.advance(1)
+        gallery.draw(Image.new('RGBA', (1020, 768)), font, visible=True)
+        self.assertLessEqual(gallery.scroll, gallery.max_scroll)
+        self.assertEqual(gallery.index, 8)
 
     def test_scroll_frames_do_not_load_redraw_fonts_or_resample_images(self):
         gallery, font = self.gallery(), CaptionFont()
@@ -245,9 +288,6 @@ class ViewerSceneTests(unittest.TestCase):
         self.directory = TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.scene.cutscene_collection = CutsceneCollection(Path(self.directory.name) / 'cutscenes.json')
-        # Exercise the portable Tk renderer here; the native-surface test below
-        # also verifies the Windows path without mapping or focusing a window.
-        self.scene.native_cutscene_presentation = lambda: False
 
     def snapshot(self):
         from pop2.save_game import capture_snapshot
@@ -309,7 +349,6 @@ class ViewerSceneTests(unittest.TestCase):
 
     def test_device_presentation_reuses_the_photo_and_keeps_the_world_paused_while_scrolling(self):
         from PIL import ImageChops, ImageTk
-        from pop2.game_ui import fit_viewport
 
         scene = self.scene
         gallery = self.open_viewer()
@@ -317,22 +356,44 @@ class ViewerSceneTests(unittest.TestCase):
         with patch.object(scene.canvas, 'winfo_width', return_value=1920), \
                 patch.object(scene.canvas, 'winfo_height', return_value=1080):
             scene.present_viewport()
-            size, _position = fit_viewport(1920, 1080)
-            source = scene.screenshot_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
+            size = (1920, 1080)
+            source = scene._cutscene_gallery_source[2]
             expected = gallery.draw(source, scene.ui_font, visible=True).convert('RGB')
             actual = ImageTk.getimage(scene.image_ref).convert('RGB')
             self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
-            low = gallery.draw(scene.screenshot_viewport, scene.ui_font).crop((1, 0, 511, 384))
-            self.assertIsNotNone(ImageChops.difference(actual, low.convert('RGB').resize(size)).getbbox())
+            self.assertEqual(actual.size, size)
+            self.assertEqual(tuple(scene.canvas.coords(scene.canvas.find_all()[0])), (0, 0))
             photo = scene.image_ref
+            strip_photo = scene._cutscene_gallery_grid_photo[1]
             scene.dev_scroll(SimpleNamespace(delta=-60, num=None))
             self.assertGreater(gallery.scroll_target, 0)
             self.assertEqual(gallery.index, 0)
             gallery.advance(1 / 60)
             scene.present_viewport()
             self.assertIs(scene.image_ref, photo)
+            self.assertIs(scene._cutscene_gallery_grid_photo[1], strip_photo)
         self.assertTrue(scene.paused)
         self.assertEqual(self.snapshot(), before)
+
+    def test_tall_window_keeps_ui_usable_and_rejects_pointer_in_the_bars(self):
+        from PIL import ImageTk
+        from pop2.game_ui import fit_menu_viewport
+
+        scene = self.scene
+        gallery = self.open_viewer()
+        with patch.object(scene.canvas, 'winfo_width', return_value=1020), \
+                patch.object(scene.canvas, 'winfo_height', return_value=1200):
+            scene.present_viewport()
+            size, origin = fit_menu_viewport(1020, 1200)
+            self.assertEqual(size, (1020, 768))
+            self.assertEqual(origin, (0, 216))
+            self.assertEqual(ImageTk.getimage(scene.image_ref).size, size)
+            self.assertEqual(gallery.COLUMNS, 3)
+            self.assertIsNone(scene.dev_pointer(SimpleNamespace(x=500, y=10)))
+            self.assertIsNone(scene.dev_pointer(SimpleNamespace(x=500, y=1190)))
+            x, y = scene.dev_pointer(SimpleNamespace(x=500, y=600))
+            self.assertAlmostEqual(x, 251)
+            self.assertAlmostEqual(y, 192)
 
     def test_incremental_scroll_pixels_match_full_render_in_both_directions_and_after_toast(self):
         from PIL import ImageChops, ImageTk
@@ -361,46 +422,110 @@ class ViewerSceneTests(unittest.TestCase):
             gallery.advance(1 / 60)
             scene.present_viewport()
             expected = scene.draw_screenshot_notice(gallery.draw(source, scene.ui_font, visible=True,
-                background_key=id(scene.screenshot_viewport)), visible=True).convert('RGB')
+                background_key=id(scene.screenshot_viewport)), visible=True, uniform=True).convert('RGB')
             self.assertIsNone(ImageChops.difference(ImageTk.getimage(photo).convert('RGB'), expected).getbbox())
 
-    def test_native_surface_matches_pixels_in_both_window_modes_and_returns_to_tk(self):
-        import sys
-        from PIL import ImageChops, ImageTk
+    def test_wide_pointer_resize_and_replay_use_their_own_viewports(self):
+        from PIL import ImageTk
+        from pop2.game_ui import fit_viewport
 
-        if sys.platform != 'win32':
-            self.skipTest('Windows bitmap surface required')
         scene = self.scene
         gallery = self.open_viewer()
-        # Set the renderer flag on the hidden fixture; never map/focus a window.
-        scene.native_cutscene_presentation = lambda: True
-        scene.fullscreen = False
+        before = self.snapshot()
+        with patch.object(scene.canvas, 'winfo_width', return_value=2560), \
+                patch.object(scene.canvas, 'winfo_height', return_value=1080):
+            scene.present_viewport()
+            self.assertEqual(ImageTk.getimage(scene.image_ref).size, (2560, 1080))
+            self.assertFalse(scene.window_aspect_locked())
+            scale = 1080 / 384
+            x = (gallery.PLAY[0] + gallery.PLAY[2]) / 2
+            y = (gallery.PLAY[1] + gallery.PLAY[3]) / 2
+            event = SimpleNamespace(x=(x - 1) * scale, y=y * scale, num=1)
+            self.assertEqual(gallery.hit(*scene.dev_pointer(event)), 1)
+            scene.dev_click(event)
+            self.assertIsNotNone(scene.cutscene_replay)
+            size, position = fit_viewport(2560, 1080)
+            self.assertEqual(ImageTk.getimage(scene.image_ref).size, size)
+            self.assertEqual(tuple(scene.canvas.coords(scene.canvas.find_all()[0])), position)
+            self.assertIsNone(scene.dev_pointer(SimpleNamespace(x=10, y=500)))
+            scene.stop_cutscene_replay()
+            self.assertEqual(ImageTk.getimage(scene.image_ref).size, (2560, 1080))
+            self.assertEqual(gallery.COLUMNS, 4)
+            scene.close_game_menu()
+            self.assertTrue(scene.window_aspect_locked())
+            self.assertEqual(ImageTk.getimage(scene.image_ref).size, size)
+            self.assertEqual(tuple(scene.canvas.coords(scene.canvas.find_all()[0])), position)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_wide_ui_capture_preserves_aspect_without_mutating_live_gallery(self):
+        from pop2.screenshots import ScreenshotSettings
+
+        scene = self.scene
+        gallery = self.open_viewer()
         with patch.object(scene.canvas, 'winfo_width', return_value=1920), \
                 patch.object(scene.canvas, 'winfo_height', return_value=1080):
-            bitmap = None
-            for fullscreen in (False, True, True, False):
-                scene.fullscreen = fullscreen
-                gallery.wheel(.25)
-                gallery.advance(1 / 60)
+            scene.present_viewport()
+            gallery.begin_drag(200, 150)
+            gallery.hovered = 100
+            state = (gallery.layout_size, gallery.drag, gallery.hovered,
+                     gallery.scroll, gallery.background_cache, gallery.grid_cache)
+            expected = scene.cutscene_gallery_frame((2048, 1152), capture=True)
+            self.assertEqual((gallery.layout_size, gallery.drag, gallery.hovered,
+                              gallery.scroll, gallery.background_cache, gallery.grid_cache), state)
+            scene.screenshot_settings = ScreenshotSettings(Path(self.directory.name), 3)
+            path = scene.capture_screenshot(include_ui=True)
+            with Image.open(path) as actual:
+                self.assertEqual(actual.size, (2048, 1152))
+                self.assertEqual(actual.tobytes(), expected.tobytes())
+            # The success toast redraws the live cache, but cannot change input.
+            self.assertEqual((gallery.layout_size, gallery.drag, gallery.hovered,
+                              gallery.scroll), state[:4])
+
+    def test_hover_and_tk_redraw_keep_a_retained_image_in_both_window_modes(self):
+        from PIL import ImageChops, ImageTk
+
+        scene = self.scene
+        # Exercise the real production path, including hover and Tk invalidation.
+        gallery = self.open_viewer()
+        with patch.object(scene.canvas, 'winfo_width', return_value=1280), \
+                patch.object(scene.canvas, 'winfo_height', return_value=960):
+            for fullscreen in (False, True):
+                scene.fullscreen = fullscreen  # Hidden fixture, never map/focus.
                 scene.present_viewport()
-                presenter = scene.bitmap_presenter
-                if bitmap is None:
-                    bitmap = presenter.bitmap
-                self.assertIs(presenter.bitmap, bitmap)
-                self.assertIsNone(scene.image_ref)
-                raw = bitmap.tobytes()
-                width, height = bitmap.size
-                stride = (width * 3 + 3) // 4 * 4
-                actual = Image.frombytes('RGB', (width, height), raw, 'raw', 'BGR', stride, -1)
-                expected = gallery.draw(scene._cutscene_gallery_source[2], scene.ui_font, visible=True,
-                    background_key=id(scene.screenshot_viewport)).convert('RGB')
-                self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
-                scene.root.update_idletasks()  # Flush the hidden surface's idle paint.
-            scene.apply_game_action('cutscene_back')
-            self.assertIsNone(scene.bitmap_presenter)
-            self.assertIsNotNone(scene.image_ref)
-            expected_menu = scene.native_viewport.crop((1, 0, 511, 384)).convert('RGB').resize(expected.size, Image.Resampling.NEAREST)
-            self.assertIsNone(ImageChops.difference(ImageTk.getimage(scene.image_ref).convert('RGB'), expected_menu).getbbox())
+                for point in ((70, 100), (230, 240), (450, 35), (300, 100), (-1, -1)):
+                    with patch.object(scene, 'dev_pointer', return_value=point):
+                        scene.dev_hover(SimpleNamespace())
+                    scene.root.update_idletasks()
+                    self.assertIsNone(scene.bitmap_presenter)
+                    self.assertIsNotNone(scene.image_ref)
+                    item = scene.canvas.find_all()[0]
+                    self.assertEqual(scene.canvas.itemcget(item, 'image'), str(scene.image_ref))
+                    # Tk can redisplay this same retained image after cursor,
+                    # hover, expose or item invalidation; no direct paint is lost.
+                    scene.canvas.itemconfigure(item, state='hidden')
+                    scene.root.update_idletasks()
+                    scene.canvas.itemconfigure(item, state='normal')
+                    scene.canvas.event_generate('<Expose>')
+                    scene.root.update_idletasks()
+                    source = scene._cutscene_gallery_source[2]
+                    expected = gallery.draw(source, scene.ui_font, visible=True,
+                        background_key=id(scene.screenshot_viewport)).convert('RGB')
+                    actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                    self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
+
+    def test_hover_within_the_same_card_does_not_reconfigure_or_redraw_the_canvas(self):
+        scene = self.scene
+        self.open_viewer()
+        with patch.object(scene, 'dev_pointer', return_value=(70, 100)):
+            scene.dev_hover(SimpleNamespace())
+            with patch.object(scene.canvas, 'configure', wraps=scene.canvas.configure) as configure, \
+                    patch.object(scene, 'redraw_cutscene_gallery', wraps=scene.redraw_cutscene_gallery) as redraw:
+                for _ in range(20):
+                    scene.dev_hover(SimpleNamespace())
+        configure.assert_not_called()
+        redraw.assert_not_called()
+        self.assertIsNotNone(scene.image_ref)
+        self.assertTrue(scene.paused)
 
     def test_pointer_drag_does_not_play_or_select_and_leave_cancels_the_drag(self):
         scene = self.scene
@@ -567,6 +692,20 @@ class ViewerSceneTests(unittest.TestCase):
         with patch('pop2.window_controls.time.perf_counter', return_value=1000.0):
             scene.close_game_menu(resume=True)
         self.assertEqual(scene.last_copy_at, 1000.0)
+
+    def test_actual_f3_warp_then_horse_trigger_does_not_unlock_campaign_chapters(self):
+        scene = self.scene
+        scene.cutscene_collection.unlock('voyage', 'discovery', 'carpet', 'vision')
+        scene.load_level(9)
+        scene.open_dev_mode()
+        scene.apply_dev_action('go')
+        self.assertFalse(scene.cutscene_campaign_active)
+        scene.start_temple_ride(lambda: None)
+        self.assertNotIn('horse', scene.cutscene_collection.seen)
+        scene.new_game()
+        self.assertTrue(scene.cutscene_campaign_active)
+        scene.start_temple_ride(lambda: None)
+        self.assertIn('horse', scene.cutscene_collection.seen)
 
     def test_natural_story_starts_unlock_each_chapter_and_new_game_keeps_the_collection(self):
         scene = self.scene

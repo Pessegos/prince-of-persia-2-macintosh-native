@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 import math
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 from pop2.cutscenes import CHAPTERS, chapter_available
 
@@ -26,6 +26,7 @@ class CutsceneGallery:
     background_cache: tuple | None = field(default=None, repr=False)
     grid_cache: tuple | None = field(default=None, repr=False)
     card_cache: dict = field(default_factory=dict, repr=False)
+    layout_size: float | None = field(default=None, repr=False)
 
     PANEL = (8, 10, 504, 363)
     STRIP = (20, 61, 492, 334)
@@ -36,9 +37,37 @@ class CutsceneGallery:
     PLAY = (425, 22, 490, 48)
     PITCH = 160
     CARD_WIDTH = 150
-    CARD_HEIGHT = 130
+    CARD_HEIGHT = 104.125
     COLUMNS = 3
     ROWS = 2
+
+    def layout(self, size, *, visible=False):
+        """Uniform UI scale; extra width changes layout rather than stretching it."""
+        logical_width = size[0] * 384 / size[1] + (2 if visible else 0)
+        if self.layout_size == logical_width:
+            return
+        scroll, target = self.scroll / self.PITCH, self.scroll_target / self.PITCH
+        self.layout_size = logical_width
+        self.PANEL = (8, 10, logical_width - 8, 363)
+        self.STRIP = (20, 61, logical_width - 20, 334)
+        self.TRACK = (24, 342, logical_width - 24, 348)
+        self.NEXT = (logical_width - 20, 175, logical_width - 8, 211)
+        self.PLAY = (logical_width - 87, 22, logical_width - 22, 48)
+        available = self.STRIP[2] - self.STRIP[0] - 2
+        row_height = (self.STRIP[3] - self.STRIP[1] - 12) / self.ROWS
+        maximum_width = (row_height - 22) * 16 / 9 + 4
+        self.COLUMNS = max(3, int((available + 10) // (maximum_width + 10)))
+        self.CARD_WIDTH = min(maximum_width, (available - (self.COLUMNS - 1) * 10) / self.COLUMNS)
+        self.CARD_HEIGHT = (self.CARD_WIDTH - 4) * 9 / 16 + 22
+        self.PITCH = (available - self.CARD_WIDTH) / (self.COLUMNS - 1)
+        self.scroll = max(0, min(self.max_scroll, scroll * self.PITCH))
+        self.scroll_target = max(0, min(self.max_scroll, target * self.PITCH))
+        self.drag = None
+        self.dragged = False
+        self.hovered = None
+        self.background_cache = self.grid_cache = None
+        self.card_cache.clear()
+        self.image_cache.clear()
 
     @classmethod
     def cell(cls, index):
@@ -71,7 +100,8 @@ class CutsceneGallery:
     def card_rect(self, index, *, offset=None):
         column, row = self.cell(index)
         x = self.STRIP[0] + 1 + column * self.PITCH - (self.scroll if offset is None else offset)
-        y = 63 + row * 138
+        grid_height = self.ROWS * self.CARD_HEIGHT + 10 * (self.ROWS - 1)
+        y = (self.STRIP[1] + self.STRIP[3] - grid_height) / 2 + row * (self.CARD_HEIGHT + 10)
         return x, y, x + self.CARD_WIDTH, y + self.CARD_HEIGHT
 
     @staticmethod
@@ -231,34 +261,38 @@ class CutsceneGallery:
         stroke = max(1, round(min(sx, sy)))
         outline = '#f4d873' if selected else '#c6b58c' if hovered else '#626262'
         draw.rectangle((0, 0, size[0] - 1, size[1] - 1), outline=outline, width=stroke * (2 if selected else 1))
-        thumb = (round(2 * sx), round(2 * sy), round(148 * sx), round(112 * sy))
+        thumb_bottom = 2 + (self.CARD_WIDTH - 4) * 9 / 16
+        thumb_rect = (2, 2, self.CARD_WIDTH - 2, thumb_bottom)
+        thumb = tuple(round(value * (sx if i % 2 == 0 else sy)) for i, value in enumerate(thumb_rect))
         if unlocked and chapter_available(chapter):
             try:
                 thumb_size = thumb[2] - thumb[0], thumb[3] - thumb[1]
                 image_key = index, thumb_size
                 if image_key not in self.image_cache:
                     frame = self.preview(index)
-                    self.image_cache[image_key] = frame.convert('RGBA').resize(thumb_size,
-                        Image.Resampling.LANCZOS if thumb_size[0] < frame.width else Image.Resampling.NEAREST)
+                    self.image_cache[image_key] = ImageOps.fit(frame.convert('RGBA'), thumb_size,
+                        method=Image.Resampling.LANCZOS if thumb_size[0] < frame.width else Image.Resampling.NEAREST)
                 image.alpha_composite(self.image_cache[image_key], thumb[:2])
             except (OSError, ValueError, KeyError, RuntimeError):
-                self.caption(image, font, 'Unavailable', (2, 2, 148, 112), '#999999', .7, sx, sy)
+                self.caption(image, font, 'Unavailable', thumb_rect, '#999999', .7, sx, sy)
         else:
             draw.rectangle(thumb, fill='#101010')
-            cx, cy = size[0] / 2, 55 * sy
+            cx, cy = size[0] / 2, (2 + thumb_bottom) / 2 * sy
             draw.arc((cx - 7 * sx, cy - 15 * sy, cx + 7 * sx, cy + 4 * sy), 180, 360,
                      fill='#999999', width=stroke)
             draw.rectangle((cx - 11 * sx, cy - 2 * sy, cx + 11 * sx, cy + 14 * sy),
                            fill='#101010', outline='#999999', width=stroke)
         band = '#493c25' if selected else '#252525'
-        draw.rectangle((stroke, round(113 * sy), size[0] - stroke - 1, size[1] - stroke - 1), fill=band)
+        draw.rectangle((stroke, round((thumb_bottom + 1) * sy), size[0] - stroke - 1, size[1] - stroke - 1), fill=band)
         label = chapter.title if unlocked else f'Chapter {index + 1} - Locked'
-        self.caption(image, font, label, (2, 113, 148, 129), '#f4d873' if selected else '#eeeeee', .72, sx, sy)
+        self.caption(image, font, label, (2, thumb_bottom + 1, self.CARD_WIDTH - 2, self.CARD_HEIGHT - 1),
+                     '#f4d873' if selected else '#eeeeee', .72, sx, sy)
         self.card_cache[key] = image
         return image
 
     def draw(self, viewport, font, *, visible=False, background_key=None):
-        sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
+        self.layout(viewport.size, visible=visible)
+        sx = sy = viewport.height / 384
         ox = int(visible)
         stroke = max(1, round(min(sx, sy)))
 
@@ -277,7 +311,7 @@ class CutsceneGallery:
             base = Image.alpha_composite(viewport.convert('RGBA'), Image.new('RGBA', viewport.size, (0, 0, 0, 145)))
             draw = ImageDraw.Draw(base)
             draw.rectangle(bounds(self.PANEL), fill='#181818', outline='#8c7954', width=stroke)
-            self.caption(base, font, 'Cutscene Viewer', (95 - ox, 19, 417 - ox, 51), '#f4d873', 1, sx, sy)
+            self.caption(base, font, 'Cutscene Viewer', (95 - ox, 19, self.PLAY[0] - 8 - ox, 51), '#f4d873', 1, sx, sy)
             for code, rect, label in ((2, self.BACK, 'Back'), (1, self.PLAY, 'Play')):
                 draw.rectangle(bounds(rect), fill='#303030' if self.focus == code else '#222222',
                                outline='#f4d873' if self.focus == code or self.hovered == code else '#626262', width=stroke)
@@ -285,9 +319,9 @@ class CutsceneGallery:
                 self.caption(base, font, label, local, '#eeeeee' if code == 2 or self.unlocked else '#666666', .75, sx, sy)
             message = self.error or self.collection.error or (
                 'Continue the story to unlock this chapter.' if not self.unlocked else 'Enter: Play   Scroll or drag to browse')
-            self.caption(base, font, message, (24 - ox, 350, 488 - ox, 362),
+            self.caption(base, font, message, (self.TRACK[0] - ox, 350, self.TRACK[2] - ox, 362),
                          '#ff9b9b' if self.error else '#999999', .45, sx, sy)
-            self.background_cache = key, base
+            self.background_cache = key, base.convert('RGB')
         image = self.background_cache[1].copy()
         region = bounds(self.STRIP)
         width, height = region[2] - region[0], region[3] - region[1]
@@ -300,7 +334,7 @@ class CutsceneGallery:
                 card = self.card_image(index, font, sx, sy)
                 grid.alpha_composite(card, (round((rect[0] - self.STRIP[0]) * sx),
                                              round((rect[1] - self.STRIP[1]) * sy)))
-            self.grid_cache = grid_key, grid
+            self.grid_cache = grid_key, grid.convert('RGB')
         left = round(self.scroll * sx)
         image.paste(self.grid_cache[1].crop((left, 0, left + width, height)), region[:2])
         draw = ImageDraw.Draw(image)

@@ -211,7 +211,9 @@ class GameMenu:
 
     def draw(self, viewport, font):
         if self.page == 'cutscenes':
-            return self.cutscene_viewer.draw(viewport, font)
+            # This responsive page is composed at the window's UI resolution
+            # by present_cutscene_gallery, independently of the game buffer.
+            return viewport
         if self.page == 'screenshots' and self.screenshot_gallery is not None:
             return self.screenshot_gallery.draw(viewport, font)
         if self.page == 'saves':

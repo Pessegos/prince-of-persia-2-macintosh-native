@@ -37,6 +37,18 @@ COLLECTION_PATH = (USER_DATA_DIR if USER_DATA_DIR is not None else
                    Path.home() / 'Saved Games' / 'PoP2 Macintosh Native') / 'cutscenes.json'
 
 
+def ordered_seen(keys):
+    """Story unlocks form a chronological prefix, never isolated debug scenes."""
+    seen = set(OPENING_KEYS)
+    for chapter in CHAPTERS:
+        if chapter.key in OPENING_KEYS:
+            continue
+        if chapter.key not in keys:
+            break
+        seen.add(chapter.key)
+    return seen
+
+
 @dataclass
 class CutsceneCollection:
     path: Path = COLLECTION_PATH
@@ -53,16 +65,19 @@ class CutsceneCollection:
             if (isinstance(data, dict) and data.get('version') == 1
                     and isinstance(data.get('seen'), list)
                     and all(isinstance(key, str) for key in data['seen'])):
-                collection.seen.update(CHAPTER_KEYS.intersection(data['seen']))
+                collection.seen = ordered_seen(CHAPTER_KEYS.intersection(data['seen']))
         except (OSError, ValueError):
             pass
         return collection
 
     def unlock(self, *keys):
-        new = CHAPTER_KEYS.intersection(keys) - self.seen
-        if not new:
+        # A second game instance may have recorded preceding chapters since
+        # this one opened. Only merge valid, ordered progress from disk.
+        self.seen = ordered_seen(self.seen | self.load(self.path).seen)
+        admitted = ordered_seen(self.seen | CHAPTER_KEYS.intersection(keys))
+        if admitted == self.seen:
             return
-        self.seen.update(new)
+        self.seen = admitted
         self.save()
 
     def save(self):
@@ -70,7 +85,7 @@ class CutsceneCollection:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             # Preserve chapters another instance may have recorded meanwhile.
-            self.seen.update(self.load(self.path).seen)
+            self.seen = ordered_seen(self.seen | self.load(self.path).seen)
             with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=self.path.parent,
                                              prefix='.cutscenes-', suffix='.tmp', delete=False) as stream:
                 temporary = Path(stream.name)

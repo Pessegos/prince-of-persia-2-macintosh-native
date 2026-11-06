@@ -60,6 +60,20 @@ class ScreenshotTests(unittest.TestCase):
                 with self.subTest(size=size), self.assertRaises(ValueError):
                     save_screenshot(Image.new('RGBA', size), ScreenshotSettings(Path(directory), 3))
 
+    def test_wide_ui_export_keeps_the_complete_frame_and_native_export_stays_strict(self):
+        with TemporaryDirectory() as directory:
+            settings = ScreenshotSettings(Path(directory), 3)
+            for size in ((2048, 1152), (2731, 1152)):
+                frame = Image.effect_noise(size, 40).convert('RGB')
+                path = save_screenshot(frame, settings, framed_ui=True)
+                with Image.open(path) as image:
+                    self.assertEqual(image.size, size)
+                    self.assertEqual(image.tobytes(), frame.tobytes())
+                with self.assertRaises(ValueError):
+                    save_screenshot(frame, settings)
+            with self.assertRaises(ValueError):
+                save_screenshot(Image.new('RGB', (1920, 1080)), settings, framed_ui=True)
+
     def test_folder_and_size_persist_and_bad_settings_fall_back_to_defaults(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "settings" / "capture.json"

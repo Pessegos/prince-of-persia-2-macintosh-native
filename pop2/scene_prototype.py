@@ -522,6 +522,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.next_animation_at = time.perf_counter()
         self.pause_started_at = self.next_animation_at if self.paused else None
         self.active_save_path = Path(path).absolute()
+        self.cutscene_campaign_active = True
         self.mark_cutscene_seen('opening')
         self.cutscene_collection.admit_saved_progress(game)
         self.status.set(f'Game loaded: {path}')
@@ -2573,6 +2574,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         return matches[-1] if matches else 0
 
     def seek_playback_part(self, part):
+        self.cutscene_campaign_active = False
         # Always construct the destination's own state; demo actors never
         # become live combat actors or carry their inputs into gameplay.
         self.intro = None
@@ -2665,6 +2667,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.status.set("Credits")
 
     def new_game(self):
+        self.cutscene_campaign_active = True
         self.active_save_path = None
         self.copy_verified = False
         self.copy_challenge = None
@@ -3416,7 +3419,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         viewport.paste(text, (x, y), text)
         return viewport
 
-    def draw_screenshot_notice(self, viewport, *, visible=False):
+    def draw_screenshot_notice(self, viewport, *, visible=False, uniform=False):
         gallery = (self.game_menu.screenshot_gallery if self.game_menu is not None
                    and self.game_menu.page == 'screenshots' else None)
         if gallery is not None and (gallery.choosing or gallery.deleting):
@@ -3427,9 +3430,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             return viewport
         if not showing_toast:
             message = "Take Screenshots with F8"
+        if viewport.mode != 'RGBA':
+            viewport = viewport.convert('RGBA')
         text = self.ui_font.text(message, (253, 255, 168, 255))
         sx = viewport.width / (510 if visible else VIEWPORT_WIDTH)
         sy = viewport.height / VIEWPORT_HEIGHT
+        if uniform:
+            sx = sy
         x = 8 if showing_toast else VIEWPORT_WIDTH - text.width - 8
 
         def point(x, y):
