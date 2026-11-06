@@ -454,7 +454,7 @@ class Caverns(Environment):
         state, motion = scene.sequence_state, scene.terrain_motion
         if motion is not None:
             state.sound_events.extend(loose.press(scene.level_map, motion, state, scene.frames[state.action]))
-            state.sound_events.extend(scene.game.caverns.trapdoors.step(
+            state.sound_events.extend(scene.game.caverns.trapdoors.check(
                 scene.level_map, motion, state, scene.frames[state.action]))
             state.sound_events.extend(scene.game.caverns.plates.press(
                 scene.level_map, motion, state, scene.frames[state.action], scene.combat.player.alive,
@@ -463,6 +463,9 @@ class Caverns(Environment):
                 if guard.terrain_motion is not None:
                     guard.state.sound_events.extend(loose.press(scene.level_map, guard.terrain_motion,
                         guard.state, scene.guard_art.frames[guard_frame_index(guard.state.action)]))
+                    guard.state.sound_events.extend(scene.game.caverns.trapdoors.check(
+                        scene.level_map, guard.terrain_motion, guard.state,
+                        scene.guard_art.frames[guard_frame_index(guard.state.action)]))
                     guard.state.sound_events.extend(scene.game.caverns.plates.press(
                         scene.level_map, guard.terrain_motion, guard.state,
                         scene.guard_art.frames[guard_frame_index(guard.state.action)], guard.alive,

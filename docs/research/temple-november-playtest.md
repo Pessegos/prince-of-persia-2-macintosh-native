@@ -6,7 +6,7 @@ Tests: `tests/test_temple_playtest.py`.
 
 | Report | Cause | Status |
 | --- | --- | --- |
-| Rotating tiles open only on a jump | No native path; see below | Port exception, at the user's request |
+| Rotating tiles open only on a jump | CheckTrapDoor 10:2540 was missing | Recovered |
 | The Prince could grab while falling through one | `catch_ledge` lacked IsLedge's temple rule | Recovered |
 | Loose 14:25 did not kill guard 13 | Debris was only tested against the Prince's bank | Recovered |
 | A second birdhead's body stood up | Set 0's corpse used for set 7 | Recovered |
@@ -15,19 +15,21 @@ Tests: `tests/test_temple_playtest.py`.
 
 ## Trap doors (tile 26)
 
-TriggerTrapDoor 10:25aa has two callers, confirmed by a byte search of every
-CODE resource (`4e ad 0e 5a`): ShakeEm 5:28c8 and Falling 6:0210. CheckPress
-5:13ac-13b6 dispatches kinds 11 and 15, not 26, so in the original a walk
-across a closed door does nothing. What opens one is a landing (SEQS 11, 17,
-20, 22, 46, 63), a fall onto it, a debris impact, and a foot test (SEQS 44),
-each in the door's row.
+FrameAdv calls CheckTrapDoor 10:2540 every frame in the temple, for the Kid
+(2:63e6) and for each opponent (2:6642). With FRAM bit 0x40 set, Y exactly on
+the row's floor and an actor other than the shadow (type 1), it reads the
+supporting cell. Tile 26 with low foreground bits clear goes straight to the
+constructor 10:25e8, at phase 1. So anyone who walks or runs onto a closed door
+opens it, including a guard. TriggerTrapDoor 10:25aa, from ShakeEm 5:28c8 and
+Falling 6:0210, is the second way in, for a door away from the actor's column
+or struck from above.
 
-The user wants a step to open it too, so `TrapDoors.step` does this for the
-Prince only, on the frames CheckPress would admit, and not while he hangs from
-or climbs a door's edge. **This is a deliberate port exception, not recovered
-behavior.** A door in the actor's own column starts at phase 1.
+The first reading of this report was wrong: it searched for callers of 10:25aa
+and read CheckPress, and concluded the original had no such rule. The user
+insisted it did. A search for pc-relative calls of 10:25e8 found 10:25a2.
+`TrapDoors.check` is the recovered rule, not a port exception.
 
-The fall needed no exception. IsLedge 4:3f58-3f6e refuses a temple space with
+The fall is native too. IsLedge 4:3f58-3f6e refuses a temple space with
 bit 0x80, and an open door is space 0x81. `jump_up_ledge` had that rule;
 Catch 4:393e, which also calls IsLedge, did not. `catch_ledge` now refuses it,
 so the Prince falls past the door's neighbours with Shift held.
