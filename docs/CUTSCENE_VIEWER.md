@@ -4,7 +4,7 @@ The F1 menu lists Cutscene Viewer with Alt+C, also available from gameplay.
 The F3 tools offer a shortcut to the same collection. The local responsive
 sketch uses the full window for this page: six previews fit in two rows of
 three at 4:3 and 16:9, while wider windows fit more columns (four at 2560x1080).
-Compact Back and Play buttons sit beside the title.
+The header contains only the title; there are no Back or Play buttons.
 Chapter names sit immediately below their images; the duplicate selected-title
 footer and large control row are removed.
 
@@ -13,8 +13,11 @@ move both rows horizontally without snapping to cards or pages; dragging moves
 them directly. Chapters fill each column top-to-bottom before continuing to
 the right, keeping the two-row strip dense when later chapters come into view. Left/Right and Up/Down follow the grid and
 reveal the selection when necessary; Home/End select the first/last chapter.
-Clicking a card selects it on release, while a drag never activates a card.
-Play or Enter starts it. Locked chapters show a generic numbered card;
+Clicking a card selects it on release; a double click on that same card starts
+it. A drag, scrolling, leaving the canvas or losing focus clears the pending
+click, so browsing cannot accidentally start a film. Arrow keys and Tab also
+navigate the cards; Enter remains available without an on-screen key legend.
+Escape returns to the F1 menu. Locked chapters show a generic numbered card;
 neither their image nor their story title is drawn.
 
 The catalog in `pop2/cutscenes.py` includes Prologue, Title and The Palace
@@ -120,9 +123,11 @@ The underlying game remains paused. A replay constructs its own `IntroPlayer`,
 advances on a separate Tk callback and never calls the campaign's scene-finish
 handlers, loads a level or invokes its stored continuation. The live game,
 original scene, random generators, world clock, opponents and checkpoints
-remain in place. Completion, Space, F1 or the bottom-right Back hint returns
-to the collection. Escape or a click on the film pauses/resumes the replay;
+remain in place. Completion, Escape, Backspace or F1 returns to the collection.
+Space or a click on the film pauses/resumes the replay;
 losing focus pauses it without automatically resuming on focus return.
+Playing and paused films have no overlaid keyboard legends or hidden Back
+hit area; the normal pause indicator and story captions remain.
 
 The replay borrows already-decoded audio samples and allocates two private SDL
 channels. The game's own channels remain paused and its audio-engine state is
@@ -146,3 +151,10 @@ replay, including all three opening chapters. Device presentation, continuous
 wheel motion, drag-vs-click behavior, clipping and the Alt+C route are covered. Existing low-level navigation/thumbnail tests retain direct access to
 their model, while the public F3 activation regression now checks the isolated
 chapter viewer and rejects its former destructive seek behavior.
+
+`tests.test_cutscene_covers` compares all nine reconstructed images with RGB
+hashes independently obtained from the supplied crops, verifies the uncropped
+4:3 title and checks reuse of the cover cache. Synthetic scene callbacks cover
+the first click, double-click binding and trailing release without pausing or
+changing the underlying game. Physical desktop double-click timing is not part
+of the shared-desktop suite.

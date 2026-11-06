@@ -21,6 +21,7 @@ class CutsceneGallery:
     scroll_target: float = 0
     drag: tuple | None = None
     dragged: bool = False
+    last_clicked: int | None = None
     text_cache: dict = field(default_factory=dict, repr=False)
     image_cache: dict = field(default_factory=dict, repr=False)
     background_cache: tuple | None = field(default=None, repr=False)
@@ -33,8 +34,6 @@ class CutsceneGallery:
     TRACK = (24, 342, 488, 348)
     PREVIOUS = (8, 175, 20, 211)
     NEXT = (492, 175, 504, 211)
-    BACK = (22, 22, 87, 48)
-    PLAY = (425, 22, 490, 48)
     PITCH = 160
     CARD_WIDTH = 150
     CARD_HEIGHT = 104.125
@@ -52,7 +51,6 @@ class CutsceneGallery:
         self.STRIP = (20, 61, logical_width - 20, 334)
         self.TRACK = (24, 342, logical_width - 24, 348)
         self.NEXT = (logical_width - 20, 175, logical_width - 8, 211)
-        self.PLAY = (logical_width - 87, 22, logical_width - 22, 48)
         available = self.STRIP[2] - self.STRIP[0] - 2
         row_height = (self.STRIP[3] - self.STRIP[1] - 12) / self.ROWS
         maximum_width = (row_height - 22) * 16 / 9 + 4
@@ -65,6 +63,7 @@ class CutsceneGallery:
         self.drag = None
         self.dragged = False
         self.hovered = None
+        self.last_clicked = None
         self.background_cache = self.grid_cache = None
         self.card_cache.clear()
         self.image_cache.clear()
@@ -109,6 +108,7 @@ class CutsceneGallery:
         return rect[0] <= x < rect[2] and rect[1] <= y < rect[3]
 
     def move(self, delta):
+        self.last_clicked = None
         self.index = max(0, min(len(self.chapters) - 1, self.index + delta))
         left = self.cell(self.index)[0] * self.PITCH
         self.scroll_target = max(left - (self.COLUMNS - 1) * self.PITCH, min(self.scroll_target, left))
@@ -118,6 +118,7 @@ class CutsceneGallery:
         return 'changed'
 
     def wheel(self, steps):
+        self.last_clicked = None
         # Scrolling moves the shelf, not the selected chapter. Preserve partial
         # wheel deltas from touchpads rather than snapping to cards/pages.
         self.scroll_target = max(0, min(self.max_scroll, self.scroll_target + steps * self.PITCH * .8))
@@ -144,6 +145,7 @@ class CutsceneGallery:
         if abs(x - start) > 2:
             self.dragged = True
         if self.dragged:
+            self.last_clicked = None
             self.scroll = self.scroll_target = max(0, min(self.max_scroll, scroll + start - x))
         return self.dragged
 
@@ -157,9 +159,16 @@ class CutsceneGallery:
         return 'changed' if dragged else self.click(x, y)
 
     def activate(self):
-        if self.focus == 2:
-            return 'cutscene_back'
         return 'cutscene_play' if self.unlocked else 'changed'
+
+    def double_click(self, x, y):
+        target = self.hit(x, y)
+        if (target is not None and target >= 100 and self.drag is None
+                and self.last_clicked == target - 100):
+            self.index = target - 100
+            self.last_clicked = None
+            return self.activate()
+        return self.click(x, y)
 
     def key(self, key, backwards=False, char='', control=False):
         if key == 'Escape':
@@ -175,13 +184,13 @@ class CutsceneGallery:
         if key == 'End':
             return self.move(len(self.chapters))
         if key == 'Tab':
-            self.focus = (self.focus + (-1 if backwards else 1)) % 3
+            return self.move(-1 if backwards else 1)
         elif key in ('Return', 'KP_Enter', 'space'):
             return self.activate()
         return 'changed'
 
     def hit(self, x, y):
-        for code, rect in ((3, self.PREVIOUS), (4, self.NEXT), (2, self.BACK), (1, self.PLAY), (5, self.TRACK)):
+        for code, rect in ((3, self.PREVIOUS), (4, self.NEXT), (5, self.TRACK)):
             if self.contains(rect, x, y):
                 return code
         if self.contains(self.STRIP, x, y):
@@ -198,9 +207,11 @@ class CutsceneGallery:
     def click(self, x, y):
         target = self.hit(x, y)
         if target is None:
+            self.last_clicked = None
             return 'changed'
         if target >= 100:
             self.index = target - 100
+            self.last_clicked = self.index
             self.focus = 0
             self.error = ''
             return 'changed'
@@ -208,6 +219,7 @@ class CutsceneGallery:
             self.wheel(-1 if target == 3 else 1)
             return 'changed'
         if target == 5:
+            self.last_clicked = None
             fraction = (x - self.TRACK[0]) / (self.TRACK[2] - self.TRACK[0])
             self.scroll_target = max(0, min(self.max_scroll, fraction * self.max_scroll))
             return 'changed'
@@ -311,14 +323,10 @@ class CutsceneGallery:
             base = Image.alpha_composite(viewport.convert('RGBA'), Image.new('RGBA', viewport.size, (0, 0, 0, 145)))
             draw = ImageDraw.Draw(base)
             draw.rectangle(bounds(self.PANEL), fill='#181818', outline='#8c7954', width=stroke)
-            self.caption(base, font, 'Cutscene Viewer', (95 - ox, 19, self.PLAY[0] - 8 - ox, 51), '#f4d873', 1, sx, sy)
-            for code, rect, label in ((2, self.BACK, 'Back'), (1, self.PLAY, 'Play')):
-                draw.rectangle(bounds(rect), fill='#303030' if self.focus == code else '#222222',
-                               outline='#f4d873' if self.focus == code or self.hovered == code else '#626262', width=stroke)
-                local = rect[0] - ox, rect[1], rect[2] - ox, rect[3]
-                self.caption(base, font, label, local, '#eeeeee' if code == 2 or self.unlocked else '#666666', .75, sx, sy)
+            self.caption(base, font, 'Cutscene Viewer',
+                         (20 - ox, 19, self.PANEL[2] - 12 - ox, 51), '#f4d873', 1, sx, sy)
             message = self.error or self.collection.error or (
-                'Continue the story to unlock this chapter.' if not self.unlocked else 'Enter: Play   Scroll or drag to browse')
+                'Continue the story to unlock this chapter.' if not self.unlocked else '')
             self.caption(base, font, message, (self.TRACK[0] - ox, 350, self.TRACK[2] - ox, 362),
                          '#ff9b9b' if self.error else '#999999', .45, sx, sy)
             self.background_cache = key, base.convert('RGB')

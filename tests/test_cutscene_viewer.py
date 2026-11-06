@@ -111,9 +111,44 @@ class GalleryTests(unittest.TestCase):
         gallery.key('Right')
         self.assertEqual(gallery.index, 8)
         gallery.key('Home')
+        gallery.key('Tab')
+        self.assertEqual(gallery.index, 1)
         gallery.key('Tab', backwards=True)
-        self.assertEqual(gallery.key('Return'), 'cutscene_back')
+        self.assertEqual(gallery.key('Return'), 'cutscene_play')
         self.assertEqual(gallery.key('Escape'), 'cutscene_back')
+
+    def test_double_click_plays_only_the_same_unlocked_card_and_not_a_drag(self):
+        gallery = self.gallery()
+        rect = gallery.card_rect(0)
+        point = (rect[0] + 20, rect[1] + 20)
+        self.assertEqual(gallery.double_click(*point), 'changed')
+        self.assertEqual(gallery.double_click(*point), 'cutscene_play')
+        locked = gallery.card_rect(1)
+        locked_point = locked[0] + 20, locked[1] + 20
+        gallery.click(*locked_point)
+        self.assertEqual(gallery.double_click(*locked_point), 'changed')
+        gallery.click(*point)
+        gallery.begin_drag(*point)
+        gallery.end_drag(point[0] - 20, point[1])
+        rect = gallery.card_rect(0)
+        self.assertEqual(gallery.double_click(rect[0] + 20, rect[1] + 20), 'changed')
+
+    def test_gallery_has_no_play_back_buttons_or_keyboard_hint(self):
+        gallery, font = self.gallery(), CaptionFont()
+        gallery.draw(Image.new('RGBA', (1024, 768)), font)
+        self.assertIn('Cutscene Viewer', font.values)
+        self.assertNotIn('Play', font.values)
+        self.assertNotIn('Back', font.values)
+        self.assertFalse(any('Enter:' in value for value in font.values))
+        self.assertIsNone(gallery.hit(50, 35))
+        self.assertIsNone(gallery.hit(gallery.PANEL[2] - 40, 35))
+
+    def test_a_double_click_on_a_different_card_only_selects_it(self):
+        gallery = self.gallery()
+        first, second = gallery.card_rect(0), gallery.card_rect(2)
+        gallery.click(first[0] + 20, first[1] + 20)
+        self.assertEqual(gallery.double_click(second[0] + 20, second[1] + 20), 'changed')
+        self.assertEqual(gallery.index, 2)
 
     def test_locked_chapters_leak_neither_previews_nor_story_titles(self):
         gallery = self.gallery()
@@ -201,8 +236,7 @@ class GalleryTests(unittest.TestCase):
                 self.assertLessEqual(gallery.card_rect(columns * 2 - 2)[2], gallery.STRIP[2])
                 self.assertGreaterEqual(gallery.card_rect(0)[1], gallery.STRIP[1])
                 self.assertLessEqual(gallery.card_rect(1)[3], gallery.STRIP[3])
-                self.assertEqual(gallery.hit(*((v1 + v2) / 2 for v1, v2 in
-                    zip(gallery.PLAY[:2], gallery.PLAY[2:]))), 1)
+                self.assertIsNone(gallery.hit(gallery.PANEL[2] - 40, 35))
         gallery.key('End')
         gallery.advance(1)
         gallery.draw(Image.new('RGBA', (1020, 768)), font, visible=True)
@@ -438,11 +472,14 @@ class ViewerSceneTests(unittest.TestCase):
             self.assertEqual(ImageTk.getimage(scene.image_ref).size, (2560, 1080))
             self.assertFalse(scene.window_aspect_locked())
             scale = 1080 / 384
-            x = (gallery.PLAY[0] + gallery.PLAY[2]) / 2
-            y = (gallery.PLAY[1] + gallery.PLAY[3]) / 2
+            rect = gallery.card_rect(0)
+            x, y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
             event = SimpleNamespace(x=(x - 1) * scale, y=y * scale, num=1)
-            self.assertEqual(gallery.hit(*scene.dev_pointer(event)), 1)
+            self.assertEqual(gallery.hit(*scene.dev_pointer(event)), 100)
             scene.dev_click(event)
+            scene.dev_release(event)
+            self.assertIsNone(scene.cutscene_replay)
+            scene.dev_double_click(event)
             self.assertIsNotNone(scene.cutscene_replay)
             size, position = fit_viewport(2560, 1080)
             self.assertEqual(ImageTk.getimage(scene.image_ref).size, size)
@@ -547,6 +584,23 @@ class ViewerSceneTests(unittest.TestCase):
         scene.dev_pointer_leave(SimpleNamespace())
         self.assertIsNone(gallery.drag)
 
+    def test_double_click_binding_starts_the_film_without_immediately_pausing_it(self):
+        scene = self.scene
+        gallery = self.open_viewer()
+        self.assertIn('dev_double_click', scene.canvas.bind('<Double-Button-1>'))
+        before = self.snapshot()
+        rect = gallery.card_rect(0)
+        point = rect[0] + 20, rect[1] + 20
+        with patch.object(scene, 'dev_pointer', return_value=point):
+            scene.dev_click(SimpleNamespace(num=1))
+            scene.dev_release(SimpleNamespace(num=1))
+            self.assertIsNone(scene.cutscene_replay)
+            scene.dev_double_click(SimpleNamespace(num=1))
+            scene.dev_release(SimpleNamespace(num=1))
+        self.assertIsNotNone(scene.cutscene_replay)
+        self.assertFalse(scene.cutscene_replay.paused)
+        self.assertEqual(self.snapshot(), before)
+
     def test_every_chapter_finishes_in_the_gallery_without_touching_the_live_world(self):
         scene = self.scene
         scene.cutscene_collection.seen.update(CHAPTER_KEYS)
@@ -606,7 +660,7 @@ class ViewerSceneTests(unittest.TestCase):
         scene.seek_playback_part(next(part for part in scene.development_parts() if part.stage == 'temple'))
         self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
 
-    def test_replay_input_blocks_game_commands_and_mouse_back_does_not_start_another_film(self):
+    def test_replay_input_blocks_game_commands_space_pauses_and_escape_returns(self):
         scene = self.scene
         self.open_viewer()
         scene.start_cutscene_replay()
@@ -623,7 +677,7 @@ class ViewerSceneTests(unittest.TestCase):
             new_game.assert_not_called()
         self.assertIs(scene.cutscene_replay, original)
         self.assertEqual(self.snapshot(), before)
-        event = SimpleNamespace(keysym='Escape', state=0)
+        event = SimpleNamespace(keysym='space', state=0)
         scene.dev_key_press(event)
         self.assertTrue(original.paused)
         scene.dev_key_press(event)
@@ -634,9 +688,26 @@ class ViewerSceneTests(unittest.TestCase):
         scene.dev_key_release(event)
         with patch.object(scene, 'dev_pointer', return_value=(400, 375)):
             scene.dev_click(SimpleNamespace(num=1))
+        self.assertIs(scene.cutscene_replay, original)
+        self.assertTrue(original.paused)
+        scene.dev_key_press(SimpleNamespace(keysym='Escape', state=0))
         self.assertIsNone(scene.cutscene_replay)
         self.assertEqual(scene.game_menu.page, 'cutscenes')
         self.assertEqual(self.snapshot(), before)
+
+    def test_replay_renders_no_key_legends_in_play_or_pause(self):
+        scene = self.scene
+        self.open_viewer()
+        scene.start_cutscene_replay()
+        for paused in (False, True):
+            scene.pause_cutscene_replay(paused)
+            with patch.object(scene.ui_font, 'text', wraps=scene.ui_font.text) as text:
+                scene.render_cutscene_replay()
+            self.assertFalse(any('Esc:' in call.args[0] or 'Space:' in call.args[0]
+                                 for call in text.call_args_list))
+            if not paused:
+                self.assertEqual(scene.native_viewport.convert('RGB').tobytes(),
+                                 scene.screenshot_viewport.convert('RGB').tobytes())
 
     def test_failed_film_open_is_reported_without_destroying_the_live_session(self):
         scene = self.scene

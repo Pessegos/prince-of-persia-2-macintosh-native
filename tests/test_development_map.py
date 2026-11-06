@@ -494,13 +494,14 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         viewer.card_cache.clear()
         viewer.background_cache = viewer.grid_cache = None
         with patch.object(s.ui_font, 'text', wraps=s.ui_font.text) as text:
-            s.game_menu.draw(s.screenshot_viewport, s.ui_font)
+            # The gallery has its own device-resolution presentation; the
+            # low-resolution menu buffer intentionally contains no UI here.
+            s.cutscene_gallery_frame((1020, 768))
         labels = [call.args[0] for call in text.call_args_list]
         self.assertIn('Cutscene Viewer', labels)
         for removed in ('Playback', 'Debug status bar', 'Sequence', 'Part', 'Display'):
             self.assertNotIn(removed, labels)
-        s.game_menu.cutscene_viewer.focus = 2
-        s.apply_game_action(s.game_menu.activate())
+        s.apply_game_action(s.game_menu.key('Escape'))
         self.assertEqual(s.game_menu.page, 'menu')
         self.assertEqual((menu.screen, menu.section_index), selected)
         self.assertTrue(s.paused)

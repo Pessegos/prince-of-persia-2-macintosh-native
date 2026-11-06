@@ -175,7 +175,7 @@ class CutsceneControls:
                 try:
                     self.cutscene_preview(index)
                 except (OSError, ValueError, KeyError, RuntimeError):
-                    pass  # The card and Play action provide the import error.
+                    pass  # The card and replay action provide the import error.
         self.render()
 
     def active_cutscene_gallery(self):
@@ -424,9 +424,9 @@ class CutsceneControls:
         if not repeated:
             if event.keysym == 'Return' and alt:
                 self.toggle_fullscreen()
-            elif event.keysym == 'Escape':
+            elif event.keysym == 'space':
                 self.pause_cutscene_replay(not self.cutscene_replay.paused)
-            elif event.keysym in ('space', 'BackSpace', 'F1'):
+            elif event.keysym in ('Escape', 'BackSpace', 'F1'):
                 self.stop_cutscene_replay()
         return True
 
@@ -439,9 +439,6 @@ class CutsceneControls:
         self.screenshot_viewport = viewport.copy()
         if replay.paused:
             viewport = self.draw_cutscene_pause(viewport)
-        label = 'Esc: Resume   Space: Back' if replay.paused else 'Esc: Pause   Space: Back'
-        text = self.ui_font.text(label, '#eeeeee')
-        viewport.paste(text, ((512 - text.width) // 2, 367), text)
         self.native_viewport = self.draw_screenshot_notice(viewport)
         self.present_viewport()
         return True
