@@ -51,6 +51,7 @@ from pop2.control_mapping import (
 from pop2.mac_input import DirectionalInput, plan_cautious_step, plan_step, read_keyboard, sample_modifier
 from pop2.opening_animation import GLASS_POSITIONS
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
+from pop2.preferences import load_preferences
 from pop2.rebirth import RebirthSnapshot
 from pop2.story_progress import MESSAGE_FRAMES, StoryProgress
 from pop2.game_session import GameResources, GameSession
@@ -318,7 +319,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.game_was_paused = False
         self.native_viewport = None
         self.copy_protection_enabled = True
-        self.cave_ambience_enabled = False
+        self.cave_ambience_enabled = load_preferences().cave_ambience
         self.copy_verified = False
         self.copy_challenge = None
 

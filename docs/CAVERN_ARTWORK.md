@@ -159,7 +159,8 @@ to level8 room5. The comparison is kept locally at
 An optional port effect, not a recovered behavior: the original has no dust,
 ash, water drops or cast light, and its torch does not behave like this.
 `pop2/cavern_ambience.py` draws them while the F1 item Cave ambience (Alt+A) is
-on. It is off by default.
+on, and `pop2/firelight.py` works out the light. It is off by default, and the
+choice is kept between sessions in `preferences.json` (`pop2/preferences.py`).
 
 It is a prototype under the user's review. It runs in one room,
 `AMBIENCE_ROOMS` = level 4 room 16 (Room 17 in the development menu). Adding a
@@ -180,37 +181,71 @@ What the user has reviewed and how each part ended up:
 - **Ash** is single crisp pixels. They rise from the lava's surface, and from
   the flame. A pass with sparks in bursts, with trails, was rejected: "a little
   more presence" meant a small step in the style that was there.
-- **Torch aura** is the flame's own shape, blurred (`flame_auras`), one for each
-  of the nine frames, so it leans and stretches with the frame on screen, a
-  bigger flame lighting more. It eases halfway to that shape each tick, or it
-  would snap with the random frames. A wider light with a real pulse "looked
-  like a bomb about to go off".
+- **Firelight** replaced a blurred ball of the flame's shape. The user asked for
+  light that behaves like ray tracing. The room is only a painting, so
+  `rock_height` reads its shape from the paint: lit paint stands forward, dark
+  paint falls back, and the torch's recess is its sprite's outline sunk into
+  that surface. `trace_firelight` cuts the flame into cells and runs rays from
+  each cell over the relief. A surface takes light by how much it faces the
+  cell, how far away it is, and whether rock stands in between. The result is
+  one map per flame frame, traced once on entering the room (about 150 ms, only
+  with the ambience on) and read back on each tick, so the frame's size and
+  lean move the light and the shadows. So the rock lights up along its veins,
+  the lip above the recess catches the light from below, and hollows stay dark.
+  A light laid over everything "looked like a bomb about to go off".
+- **Keeping the light calm** took as long as tracing it. The nine frames are much
+  alike, so what sets each one apart is deepened, by ratio: deepened by
+  subtraction the smallest frame came out at no light at all. Then three things
+  stop that from reading as blinking pixels, which is what the user disliked
+  about the original. The light eases after the frame on screen, it can only
+  move so far in a tick (`LIGHT_RATE`), and a pixel keeps its step until the
+  light has really moved past it (`LIGHT_HOLD`): before that, a third of the
+  changing pixels flipped straight back. With all of it, about 560 pixels change
+  a tick around the torch against 390 for the original. About 230 of those are
+  light on the rock, each a small step; the rest are the flame and the lava.
 - **Lava glow** is fainter than that warmth and hugs the pool (`glow_along`). It
   is the same table and dither, and breathes over several seconds.
 - **The wall behind the torch.** `CaveGetTorchFrame` (8:3b4e) picks one of nine
   frames at random each tick, and their wall has two lightings painted on about
   a hundred pixels, so the wall blinks between the two. While the ambience is on
-  the wall moves to the lighting of the frame on screen over five ticks, by
-  ordered dither. The flame stays exactly the game's: a pass that also chose the
-  frames made it choppy. `light_torch` only touches pixels that show the sprite,
-  so whatever is drawn over the torch stays, and a torch that is not there gets
-  no light either.
+  that painted wall is gone: `light_torch` puts the unlit recess (SHAP 3590) under
+  the flame, and the light above falls on it. Only the flame of the frame the
+  game drew is kept, so the flame stays exactly the game's: a pass that also
+  chose the frames made it choppy. `flame_pixels` tells flame from wall by colour.
+  Its dark red rim counts only next to the flame, as the same red is painted on
+  the wall's cracks. `light_torch` only touches pixels that show the sprite, so
+  whatever is drawn over the torch stays, and a torch that is not there gets no
+  light either.
 - **Dust** went through the most tries. Slow crisp grains hopped from pixel to
   pixel. Crisp grains fast enough to hide that looked in a hurry. Grains split
   among the four nearest pixels swelled and shrank on every pixel crossed: the
   brightest pixel fell from all of the grain to a quarter and back, and it
   looked like a worm going round a small square. `soft_spot` keeps one small
-  soft shape wherever the grain falls between pixels. It moves slowly in one
-  draught across the room. A grain has a lifespan: it comes up over 4 seconds
-  and goes over 7, so it is seen to fade. A new one starts unseen, in the
+  soft shape wherever the grain falls between pixels. The user then asked for a
+  realistic mix of the three variants they had seen: a soft grain, one pixel
+  sliding, and still glints. Real dust is only seen where light catches it, so
+  the light decides which of the three a grain is. In the dark it is a faint soft
+  spot. In the light it comes into focus (`on_the_pixels`): one sharp pixel that
+  waits and slides into the next, and as it tumbles a face of it catches the fire
+  for a moment. A glint is as strong as the light on the grain, so there are none
+  in the dark, and two rhythms keep any grain from flashing like a beacon. How lit
+  a grain is comes from the traced light, spread out a little (`lit_air`), so the
+  air behind a ledge stays dark.
+- **The air** moves the dust. One slow draught crosses the room and turns very
+  slowly. Fire draws the air in beside it, sends it up through the flame and
+  spreads it out above (`wind_at`). A grain has some weight, so it follows any
+  change in the air slowly, and it sways a little. With rock ahead it slows and
+  settles over 3 seconds instead of vanishing. Otherwise a grain has a lifespan:
+  it comes up over 4 seconds and goes over 7. A new one starts unseen, in the
   emptiest of five places with air ahead for its whole life (`new_mote`), so the
-  amount in the room stays the same and old and new never show as a swap. Dim in
-  the dark, a little brighter by the fire, and duller over the lava so that it
-  is not read as more ash.
+  amount in the room stays the same and old and new never show as a swap. Over
+  the lava it is duller, so that it is not read as more ash.
 
-The warmth and the glow are tables of what each palette colour becomes at each
-of eight brightness levels (`Colours.light_table`), stepped through a 4x4
-ordered dither like the stipple in the art. Flame and lava do not receive light.
+The firelight and the glow are tables of what each palette colour becomes at
+each of ten brightness levels (`Colours.light_table`), stepped through a 4x4
+ordered dither like the stipple in the art. Firelight multiplies what the paint
+already is, so hollows stay dark. Flame and lava do not receive light, and lit
+rock never turns into a colour of fire.
 
 Pixels only. Its generator is private, so turning it on changes no opponent,
 route or test. Its state is on the `LevelRenderer`, not in `CavernState`, so it

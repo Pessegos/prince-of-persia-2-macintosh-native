@@ -43,8 +43,8 @@ or a level jump actually needs it. Menu presentation remains synchronous.
 | Full Screen | Alt+Enter | Aspect-preserving nearest-neighbor scaling |
 
 Cave Ambience (Alt+A) has no original counterpart. It is a port-only item, off
-by default and not kept between sessions, like Sound and Ambient Music. See
-`docs/CAVERN_ARTWORK.md`.
+by default. Unlike Sound and Ambient Music, the choice is kept between sessions
+in `preferences.json`, beside the saves. See `docs/CAVERN_ARTWORK.md`.
 
 Dragging a window edge preserves the 510:384 game viewport: changing width
 also changes height, rather than only adding letterbox space. Fullscreen

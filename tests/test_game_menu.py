@@ -12,6 +12,7 @@ from PIL import Image, ImageChops, ImageTk
 
 from pop2.game_menu import GameMenu
 from pop2.game_ui import PLAYFIELD_VIEWPORT, fit_viewport, viewport_point
+from pop2.preferences import load_preferences
 from pop2.screenshots import ScreenshotSettings
 
 from tests.desktop import exclusive_desktop
@@ -718,7 +719,27 @@ class GameMenuSceneTests(unittest.TestCase):
             self.assertTrue(getattr(scene, field + "_enabled"))
             self.assertTrue(scene.paused)
 
+    def keep_preferences_here(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        patcher = patch('pop2.preferences.PREFERENCES_PATH', Path(directory.name) / 'preferences.json')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_cave_ambience_is_found_as_it_was_left(self):
+        self.keep_preferences_here()
+        scene = self.scene
+        scene.set_paused(True)
+        scene.dev_key_press(self.event("a", 0x20000))
+        self.assertTrue(scene.cave_ambience_enabled)
+        self.assertTrue(load_preferences().cave_ambience)
+        scene.dev_key_release(self.event("a"))
+        self.press("a", 0x20000)
+        self.assertFalse(scene.cave_ambience_enabled)
+        self.assertFalse(load_preferences().cave_ambience)
+
     def test_cave_ambience_starts_off_and_its_shortcut_works_when_paused(self):
+        self.keep_preferences_here()
         scene = self.scene
         self.assertFalse(scene.cave_ambience_enabled)
         scene.set_paused(True)

@@ -11,6 +11,7 @@ from pop2.app_window import create_root
 from pop2.game_menu import GameMenu
 from pop2.game_ui import (DevelopmentMenu, VISIBLE_SIZE, VISIBLE_VIEWPORT, fit_viewport,
                           viewport_point, fit_menu_viewport, menu_viewport_point)
+from pop2.preferences import remember
 from pop2.screenshots import ScreenshotSettings, save_screenshot
 
 
@@ -819,6 +820,7 @@ class WindowControls:
             self.show_audio_notice(action, enabled)
         elif action == "ambience":
             self.cave_ambience_enabled = not getattr(self, 'cave_ambience_enabled', False)
+            remember(cave_ambience=self.cave_ambience_enabled)
             self.show_audio_notice(action, self.cave_ambience_enabled)
         elif action == "fullscreen":
             self.toggle_fullscreen()
