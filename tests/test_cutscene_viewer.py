@@ -212,16 +212,18 @@ class GalleryTests(unittest.TestCase):
         gallery.end_drag(x, y)
         self.assertEqual(gallery.index, 2)
 
-    def test_scroll_edges_have_a_small_bounce_and_settle_without_changing_selection(self):
+    def test_scroll_edges_react_on_the_first_frame_with_a_wider_soft_return(self):
         gallery = self.gallery()
         for edge, direction in ((0, -1), (gallery.max_scroll, 1)):
             gallery.scroll = gallery.scroll_target = edge
             gallery.wheel(direction)
             positions = []
-            for _ in range(150):
+            for _ in range(240):
                 moving = gallery.advance(1 / 120)
                 positions.append(gallery.display_scroll)
-            self.assertTrue(any((p - edge) * direction > 1 for p in positions))
+            self.assertGreater((positions[0] - edge) * direction, .5)
+            self.assertGreater(max((p - edge) * direction for p in positions), 16)
+            self.assertGreater((positions[60] - edge) * direction, 1)
             self.assertTrue(all(abs(p - edge) <= gallery.BOUNCE_LIMIT for p in positions))
             self.assertFalse(moving)
             self.assertEqual(gallery.display_scroll, edge)
@@ -245,12 +247,28 @@ class GalleryTests(unittest.TestCase):
     def test_reversing_before_the_edge_cancels_a_queued_bounce(self):
         gallery = self.gallery()
         gallery.wheel(100)
-        self.assertTrue(gallery.pending_bounce)
+        self.assertTrue(gallery.edge_target)
         gallery.wheel(-.5)
-        self.assertFalse(gallery.pending_bounce)
+        self.assertFalse(gallery.edge_target)
         for _ in range(150):
             gallery.advance(1 / 120)
             self.assertEqual(gallery.bounce, 0)
+
+    def test_moving_into_the_end_flows_through_without_stopping_before_the_bounce(self):
+        gallery = self.gallery()
+        gallery.scroll = gallery.scroll_target = gallery.max_scroll - 40
+        gallery.wheel(1)
+        for _ in range(120):
+            before = gallery.display_scroll
+            velocity = gallery.scroll_velocity
+            gallery.advance(1 / 120)
+            if gallery.display_scroll > gallery.max_scroll:
+                self.assertLess(before, gallery.max_scroll)
+                self.assertGreater(velocity, 50)
+                self.assertGreater(gallery.scroll_velocity, 50)
+                break
+        else:
+            self.fail('No continuous crossing into the edge bounce')
 
     def test_a_shelf_that_fits_has_no_unnecessary_bounce(self):
         gallery = self.gallery()

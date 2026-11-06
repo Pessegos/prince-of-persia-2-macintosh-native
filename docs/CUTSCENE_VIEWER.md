@@ -118,7 +118,10 @@ motion, screenshot notices, repeated hover and forced Tk redisplay.
 The animation callback has its own adaptive clock capped at 120 Hz, with
 deadlines and rendering headroom on slower machines. It is independent of the
 game's actor ticks. A time-based spring preserves velocity when wheel input
-changes; at either end a small damped bounce settles back to the edge. Dragging
+changes. Scrolling past an end carries that same position and velocity into a
+wider overscroll, then makes a slower soft return. An outward gesture at an
+already reached edge reacts on the first animation frame; there is no wait for
+the ordinary scroll to settle before starting a separate bounce. Dragging
 past an edge gives bounded resistance and springs back on release. No bounce
 is applied if all chapters fit. The callback runs only while moving and is
 cancelled on playback/destruction or stops when its gallery is no longer active.
