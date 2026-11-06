@@ -64,10 +64,15 @@ retain a minimum 510:384 UI aspect. Windows' proportional sizing constraint is
 suspended while browsing this page, so it can also be resized horizontally.
 Other menus retain their existing layouts during this local design review.
 
-Chapter covers use a 16:9 image area. Current private excerpts are temporary
-center crops, with uniform scaling and no source artwork changes. Final covers
-will be chosen and supplied by the user; an already cropped 16:9 cover fits
-without further composition changes. Locked covers are never requested.
+Chapter covers use the nine user-selected images in a 16:9 area. Their exact
+scene moments and crop rectangles are recorded in `pop2/cutscene_covers.py`,
+so imported original resources reconstruct the covers without shipping original
+artwork or depending on private PNG paths. The 4:3 title is contained with side
+bars, keeping its full composition. An exact 8x intermediate retains the
+fractional native-pixel boundaries of the supplied crops; the source preview is
+then cached at 1024x576. No generated detail or changes to story playback are
+introduced. Locked covers are never requested. The separate cover-cache namespace
+prevents reuse of the earlier temporary screenshots.
 The story films and the game still render at their original proportions, with
 bars where needed. The paused game behind the panel is centered and fitted too.
 

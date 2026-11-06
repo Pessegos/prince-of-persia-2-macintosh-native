@@ -67,6 +67,8 @@ def gallery_preview(frames, indices):
 
 
 class PlaybackPreviews:
+    frame_sizes = frozenset(((510, 384),))
+
     def __init__(self, resources, parts, attract, fingerprint, directory=ASSET_DIR, namespace='playback'):
         self.resources, self.parts, self.attract = resources, parts, attract
         self.fingerprint, self.directory = fingerprint, directory
@@ -82,7 +84,7 @@ class PlaybackPreviews:
         cached = read_preview(path, self.fingerprint)
         if cached is not None and cached[0] == identity and set(cached[1]) == {str(i) for i in indices}:
             frames = {i: cached[1][str(i)] for i in indices}
-            if all(frame.size == (510, 384) for frame in frames.values()):
+            if all(frame.size in self.frame_sizes for frame in frames.values()):
                 self.frames[indices] = frames
                 return frames
         seed = random.getstate()

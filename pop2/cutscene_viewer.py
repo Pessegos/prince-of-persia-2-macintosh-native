@@ -113,14 +113,19 @@ def chapter_player(chapter, assets, audio=None):
 
 
 class ChapterPreviews(PlaybackPreviews):
+    frame_sizes = frozenset(((510, 384), (1024, 576)))
+
     def snapshot(self, index, players=None):
         from pop2.intro import IntroAssets
+        from pop2.cutscene_covers import COVER_SHOTS, selected_cover
 
         chapter = CHAPTERS[index]
         stage = chapter.program.removesuffix('.json')
         if stage not in self.assets:
             self.assets[stage] = IntroAssets(self.directory, program_name=chapter.program)
         player = chapter_player(chapter, self.assets[stage])
+        if chapter.key in COVER_SHOTS:
+            return selected_cover(player, chapter.key)
         if chapter.key == 'opening':
             first_text = next(i for i, operation in enumerate(player.operations)
                               if operation['op'] == 'text' and operation['args'][1])
@@ -316,7 +321,7 @@ class CutsceneControls:
                                        round(chapter.preview_seconds * 1000))
                           for chapter in CHAPTERS)
             provider = self._cutscene_previews = ChapterPreviews(
-                self.resources, parts, None, self.preview_fingerprint(), namespace='cutscenes-v3')
+                self.resources, parts, None, self.preview_fingerprint(), namespace='cutscene-covers-v1')
         return provider
 
     def cutscene_preview(self, index):
