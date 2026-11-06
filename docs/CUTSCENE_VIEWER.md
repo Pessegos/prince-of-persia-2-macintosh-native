@@ -55,13 +55,15 @@ it does not load assets, draw fonts or resize thumbnails on each frame.
 Unlocked source previews are warmed before browsing. Locked previews are never
 requested. UI screenshots use direct rendering at their capture size.
 
-On Windows the viewer reuses the game's existing `CanvasBitmap` surface in
-both windowed and fullscreen modes. This avoids uploading large Tk photos on
-each scroll step; the existing exposure, resize and teardown lifecycle remains
-in charge. The portable Tk fallback reuses its photo, shifts existing pixels
-and uploads exposed edges and scrollbar changes. Static frame or toast changes
-fall back to the complete affected patch. Pixel regressions compare both paths
-to a full render, including reverse motion and screenshot notices.
+The viewer keeps a retained Tk photo in both windowed and fullscreen modes.
+Tk therefore owns redisplay after hover highlights, cursor changes, exposure
+or resizing. Direct Windows bitmap painting is reserved for its existing live
+fullscreen gameplay path; it must not be used for this interactive menu, where
+a later Tk redraw could erase it and leave a black canvas. The viewer reuses
+its photo, shifts existing pixels and uploads exposed edges and scrollbar
+changes. Static frame or toast changes update the complete affected patch.
+Pixel regressions compare the result to a full render, including reverse
+motion, screenshot notices, repeated hover and forced Tk redisplay.
 
 The animation callback aims for 60 Hz including drawing time, runs only while
 moving, and is cancelled on playback/destruction or stops when its gallery is

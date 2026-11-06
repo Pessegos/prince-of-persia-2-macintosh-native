@@ -245,9 +245,6 @@ class ViewerSceneTests(unittest.TestCase):
         self.directory = TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.scene.cutscene_collection = CutsceneCollection(Path(self.directory.name) / 'cutscenes.json')
-        # Exercise the portable Tk renderer here; the native-surface test below
-        # also verifies the Windows path without mapping or focusing a window.
-        self.scene.native_cutscene_presentation = lambda: False
 
     def snapshot(self):
         from pop2.save_game import capture_snapshot
@@ -364,43 +361,51 @@ class ViewerSceneTests(unittest.TestCase):
                 background_key=id(scene.screenshot_viewport)), visible=True).convert('RGB')
             self.assertIsNone(ImageChops.difference(ImageTk.getimage(photo).convert('RGB'), expected).getbbox())
 
-    def test_native_surface_matches_pixels_in_both_window_modes_and_returns_to_tk(self):
-        import sys
+    def test_hover_and_tk_redraw_keep_a_retained_image_in_both_window_modes(self):
         from PIL import ImageChops, ImageTk
 
-        if sys.platform != 'win32':
-            self.skipTest('Windows bitmap surface required')
         scene = self.scene
+        # Exercise the real production path, including hover and Tk invalidation.
         gallery = self.open_viewer()
-        # Set the renderer flag on the hidden fixture; never map/focus a window.
-        scene.native_cutscene_presentation = lambda: True
-        scene.fullscreen = False
-        with patch.object(scene.canvas, 'winfo_width', return_value=1920), \
-                patch.object(scene.canvas, 'winfo_height', return_value=1080):
-            bitmap = None
-            for fullscreen in (False, True, True, False):
-                scene.fullscreen = fullscreen
-                gallery.wheel(.25)
-                gallery.advance(1 / 60)
+        with patch.object(scene.canvas, 'winfo_width', return_value=1280), \
+                patch.object(scene.canvas, 'winfo_height', return_value=960):
+            for fullscreen in (False, True):
+                scene.fullscreen = fullscreen  # Hidden fixture, never map/focus.
                 scene.present_viewport()
-                presenter = scene.bitmap_presenter
-                if bitmap is None:
-                    bitmap = presenter.bitmap
-                self.assertIs(presenter.bitmap, bitmap)
-                self.assertIsNone(scene.image_ref)
-                raw = bitmap.tobytes()
-                width, height = bitmap.size
-                stride = (width * 3 + 3) // 4 * 4
-                actual = Image.frombytes('RGB', (width, height), raw, 'raw', 'BGR', stride, -1)
-                expected = gallery.draw(scene._cutscene_gallery_source[2], scene.ui_font, visible=True,
-                    background_key=id(scene.screenshot_viewport)).convert('RGB')
-                self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
-                scene.root.update_idletasks()  # Flush the hidden surface's idle paint.
-            scene.apply_game_action('cutscene_back')
-            self.assertIsNone(scene.bitmap_presenter)
-            self.assertIsNotNone(scene.image_ref)
-            expected_menu = scene.native_viewport.crop((1, 0, 511, 384)).convert('RGB').resize(expected.size, Image.Resampling.NEAREST)
-            self.assertIsNone(ImageChops.difference(ImageTk.getimage(scene.image_ref).convert('RGB'), expected_menu).getbbox())
+                for point in ((70, 100), (230, 240), (450, 35), (300, 100), (-1, -1)):
+                    with patch.object(scene, 'dev_pointer', return_value=point):
+                        scene.dev_hover(SimpleNamespace())
+                    scene.root.update_idletasks()
+                    self.assertIsNone(scene.bitmap_presenter)
+                    self.assertIsNotNone(scene.image_ref)
+                    item = scene.canvas.find_all()[0]
+                    self.assertEqual(scene.canvas.itemcget(item, 'image'), str(scene.image_ref))
+                    # Tk can redisplay this same retained image after cursor,
+                    # hover, expose or item invalidation; no direct paint is lost.
+                    scene.canvas.itemconfigure(item, state='hidden')
+                    scene.root.update_idletasks()
+                    scene.canvas.itemconfigure(item, state='normal')
+                    scene.canvas.event_generate('<Expose>')
+                    scene.root.update_idletasks()
+                    source = scene._cutscene_gallery_source[2]
+                    expected = gallery.draw(source, scene.ui_font, visible=True,
+                        background_key=id(scene.screenshot_viewport)).convert('RGB')
+                    actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                    self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
+
+    def test_hover_within_the_same_card_does_not_reconfigure_or_redraw_the_canvas(self):
+        scene = self.scene
+        self.open_viewer()
+        with patch.object(scene, 'dev_pointer', return_value=(70, 100)):
+            scene.dev_hover(SimpleNamespace())
+            with patch.object(scene.canvas, 'configure', wraps=scene.canvas.configure) as configure, \
+                    patch.object(scene, 'redraw_cutscene_gallery', wraps=scene.redraw_cutscene_gallery) as redraw:
+                for _ in range(20):
+                    scene.dev_hover(SimpleNamespace())
+        configure.assert_not_called()
+        redraw.assert_not_called()
+        self.assertIsNotNone(scene.image_ref)
+        self.assertTrue(scene.paused)
 
     def test_pointer_drag_does_not_play_or_select_and_leave_cancels_the_drag(self):
         scene = self.scene

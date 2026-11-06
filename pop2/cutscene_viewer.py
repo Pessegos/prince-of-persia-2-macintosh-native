@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 import logging
 import math
-import sys
 import time
 from tkinter import TclError
 
@@ -211,9 +210,6 @@ class CutsceneControls:
 
         self.cutscene_gallery_after_id = self.root.after(16, tick)
 
-    def native_cutscene_presentation(self):
-        return sys.platform == 'win32'
-
     def present_cutscene_gallery(self, size, position):
         from PIL import ImageChops, ImageTk
 
@@ -231,20 +227,6 @@ class CutsceneControls:
             source = cached[2]
         frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True,
             background_key=id(self.screenshot_viewport)), visible=True).convert('RGB')
-        if self.native_cutscene_presentation():
-            from pop2.bitmap_presenter import CanvasBitmap
-
-            # Use the game's existing high-refresh Windows surface.
-            # This bypasses Tk's large photo uploads; exposure and teardown stay
-            # with the existing presenter lifecycle in WindowControls.
-            if self.bitmap_presenter is None:
-                self.bitmap_presenter = CanvasBitmap(self.canvas)
-                for item in self.canvas.find_all():
-                    self.canvas.itemconfigure(item, image='')
-                self.image_ref = None
-                self._cutscene_gallery_frame = self._cutscene_gallery_patch = None
-            self.bitmap_presenter.present(frame, position)
-            return True
         previous = getattr(self, '_cutscene_gallery_frame', None)
         state = gallery.background_cache[0], getattr(self, 'screenshot_toast', None)
         sx, sy = size[0] / 510, size[1] / 384

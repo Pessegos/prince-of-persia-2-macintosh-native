@@ -1383,7 +1383,9 @@ class WindowControls:
                 else:
                     self.render()
             if menu is self.game_menu and menu.page == 'cutscenes':
-                self.canvas.configure(cursor='hand2' if target is not None else '')
+                cursor = 'hand2' if target is not None else ''
+                if self.canvas.cget('cursor') != cursor:
+                    self.canvas.configure(cursor=cursor)
             if menu is self.dev_menu:
                 hovered = menu.hovered_screen if menu.map_enabled else menu.hovered_part
                 cursor = 'hand2' if menu.preview_enabled and hovered is not None and not menu.dropdown else ''
@@ -1549,9 +1551,7 @@ class WindowControls:
             frame = self.native_viewport.crop(VISIBLE_VIEWPORT).convert("RGB").resize(size, Image.Resampling.NEAREST)
             self.bitmap_presenter.present(frame, position)
             return
-        native_gallery = (hasattr(self, 'active_cutscene_gallery') and self.active_cutscene_gallery() is not None
-                          and self.native_cutscene_presentation())
-        if getattr(self, "bitmap_presenter", None) is not None and not native_gallery:
+        if getattr(self, "bitmap_presenter", None) is not None:
             self.bitmap_presenter.close()
             self.bitmap_presenter = None
         if hasattr(self, 'present_cutscene_gallery') and self.present_cutscene_gallery(size, position):
