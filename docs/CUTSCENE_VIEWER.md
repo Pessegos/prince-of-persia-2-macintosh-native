@@ -1,8 +1,10 @@
 # Cutscene Viewer
 
 The F1 menu lists Cutscene Viewer with Alt+C, also available from gameplay.
-The F3 tools offer a shortcut to the same collection. Six large previews fit
-in two rows of three, with compact Back and Play buttons beside the title.
+The F3 tools offer a shortcut to the same collection. The local responsive
+sketch uses the full window for this page: six previews fit in two rows of
+three at 4:3 and 16:9, while wider windows fit more columns (four at 2560x1080).
+Compact Back and Play buttons sit beside the title.
 Chapter names sit immediately below their images; the duplicate selected-title
 footer and large control row are removed.
 
@@ -54,21 +56,42 @@ An arbitrary developer warp is not used as evidence of campaign progress.
 
 ## Presentation and opening boundaries
 
-The grid renders directly at the aspect-fitted window resolution, using the
-original 510x384 preview images and original bitmap glyphs. Card surfaces,
+The grid renders directly at the menu viewport resolution. A shared UI
+viewport/mouse transform lets this page use wide windows independently of the
+game's fitted 510x384 viewport. Text, icons and margins use one uniform scale;
+extra width changes card layout rather than stretching them. Taller windows
+retain a minimum 510:384 UI aspect. Windows' proportional sizing constraint is
+suspended while browsing this page, so it can also be resized horizontally.
+Other menus retain their existing layouts during this local design review.
+
+Chapter covers use a 16:9 image area. Current private excerpts are temporary
+center crops, with uniform scaling and no source artwork changes. Final covers
+will be chosen and supplied by the user; an already cropped 16:9 cover fits
+without further composition changes. Locked covers are never requested.
+The story films and the game still render at their original proportions, with
+bars where needed. The paused game behind the panel is centered and fitted too.
+
+Card surfaces,
 the complete two-row strip and the static frame are prepared and cached before
 scrolling. Animation crops that prepared strip and updates the scrollbar;
 it does not load assets, draw fonts or resize thumbnails on each frame.
 Unlocked source previews are warmed before browsing. Locked previews are never
-requested. UI screenshots use direct rendering at their capture size.
+requested. UI screenshots use direct rendering at their capture size, keeping
+the menu's current aspect. A private gallery copy prevents export geometry from
+changing live hit boxes, selection, hover or dragging. Ordinary game screenshots
+keep their existing native crop and integer scaling.
 
 The viewer keeps a retained Tk photo in both windowed and fullscreen modes.
 Tk therefore owns redisplay after hover highlights, cursor changes, exposure
 or resizing. Direct Windows bitmap painting is reserved for its existing live
 fullscreen gameplay path; it must not be used for this interactive menu, where
 a later Tk redraw could erase it and leave a black canvas. The viewer reuses
-its photo, shifts existing pixels and uploads exposed edges and scrollbar
-changes. Static frame or toast changes update the complete affected patch.
+its photo and a separate retained photo of the prepared strip. Scrolling copies
+the visible region from that strip and updates the small scrollbar region;
+it avoids Tk's expensive overlapping self-copy at wide resolutions. Both the
+static frame and strip are cached as opaque RGB after composition, avoiding a
+full-frame RGBA conversion on each tick. Static frame or toast changes update
+the complete affected patch.
 Pixel regressions compare the result to a full render, including reverse
 motion, screenshot notices, repeated hover and forced Tk redisplay.
 

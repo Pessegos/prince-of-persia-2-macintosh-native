@@ -36,6 +36,23 @@ def viewport_point(x, y, width, height):
             (y - origin[1]) * VISIBLE_SIZE[1] / size[1])
 
 
+def fit_menu_viewport(width, height):
+    """Use wide windows for UI, keeping a usable minimum aspect in tall ones."""
+    width, height = max(1, width), max(1, height)
+    if width * 384 < height * 510:
+        return fit_viewport(width, height)
+    return (width, height), (0, 0)
+
+
+def menu_viewport_point(x, y, width, height):
+    size, origin = fit_menu_viewport(width, height)
+    if not (origin[0] <= x < origin[0] + size[0]
+            and origin[1] <= y < origin[1] + size[1]):
+        return None
+    scale = size[1] / 384
+    return 1 + (x - origin[0]) / scale, (y - origin[1]) / scale
+
+
 @dataclass
 class DevelopmentMenu:
     screens: tuple

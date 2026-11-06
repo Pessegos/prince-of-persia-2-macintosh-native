@@ -3419,7 +3419,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         viewport.paste(text, (x, y), text)
         return viewport
 
-    def draw_screenshot_notice(self, viewport, *, visible=False):
+    def draw_screenshot_notice(self, viewport, *, visible=False, uniform=False):
         gallery = (self.game_menu.screenshot_gallery if self.game_menu is not None
                    and self.game_menu.page == 'screenshots' else None)
         if gallery is not None and (gallery.choosing or gallery.deleting):
@@ -3430,9 +3430,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             return viewport
         if not showing_toast:
             message = "Take Screenshots with F8"
+        if viewport.mode != 'RGBA':
+            viewport = viewport.convert('RGBA')
         text = self.ui_font.text(message, (253, 255, 168, 255))
         sx = viewport.width / (510 if visible else VIEWPORT_WIDTH)
         sy = viewport.height / VIEWPORT_HEIGHT
+        if uniform:
+            sx = sy
         x = 8 if showing_toast else VIEWPORT_WIDTH - text.width - 8
 
         def point(x, y):

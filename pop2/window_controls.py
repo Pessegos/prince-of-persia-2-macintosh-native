@@ -9,7 +9,8 @@ from PIL import Image, ImageChops, ImageTk
 
 from pop2.app_window import create_root
 from pop2.game_menu import GameMenu
-from pop2.game_ui import DevelopmentMenu, VISIBLE_SIZE, VISIBLE_VIEWPORT, fit_viewport, viewport_point
+from pop2.game_ui import (DevelopmentMenu, VISIBLE_SIZE, VISIBLE_VIEWPORT, fit_viewport,
+                          viewport_point, fit_menu_viewport, menu_viewport_point)
 from pop2.screenshots import ScreenshotSettings, save_screenshot
 
 
@@ -190,7 +191,11 @@ class WindowControls:
         self.root.bind("<F3>", self.open_dev_mode)
         from pop2.window_aspect import constrain_window
         self.window_aspect = constrain_window(
-            self.root, self.canvas, lambda: not getattr(self, 'fullscreen', False))
+            self.root, self.canvas, self.window_aspect_locked)
+
+    def window_aspect_locked(self):
+        gallery = self.active_cutscene_gallery() if hasattr(self, 'active_cutscene_gallery') else None
+        return not getattr(self, 'fullscreen', False) and gallery is None
 
     def focus_out(self, event):
         self.clear_keys(event)
@@ -570,6 +575,7 @@ class WindowControls:
 
     def capture_screenshot(self, *, include_ui=False):
         menu = self.game_menu if self.game_menu is not None and self.game_menu.page == "screenshots" else None
+        framed_ui = False
         try:
             viewport = getattr(self, "native_viewport" if include_ui else "screenshot_viewport", None)
             if viewport is None:
@@ -582,8 +588,10 @@ class WindowControls:
             elif (include_ui and self.game_menu is not None and self.game_menu.page == 'cutscenes'
                     and getattr(self, 'cutscene_replay', None) is None):
                 scale = self.screenshot_settings.scale
-                source = self.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
-                viewport = self.draw_screenshot_notice(self.game_menu.cutscene_viewer.draw(source, self.ui_font))
+                size, _ = fit_menu_viewport(self.canvas.winfo_width(), self.canvas.winfo_height())
+                size = round(size[0] * 384 * scale / size[1]), 384 * scale
+                viewport = self.cutscene_gallery_frame(size, capture=True)
+                framed_ui = True
             elif include_ui and menu is not None and menu.screenshot_gallery is not None:
                 scale = self.screenshot_settings.scale
                 source = self.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
@@ -594,7 +602,8 @@ class WindowControls:
                 visible = source.crop((scale, 0, 511 * scale, 384 * scale))
                 source.paste(self.dev_menu.present_map(visible, self.ui_font), (scale, 0))
                 viewport = source
-            path = save_screenshot(viewport, self.screenshot_settings)
+            path = (save_screenshot(viewport, self.screenshot_settings, framed_ui=True) if framed_ui
+                    else save_screenshot(viewport, self.screenshot_settings))
         except (OSError, ValueError) as exc:
             message = "Could not save PNG. Check the screenshot folder."
             if menu is not None:
@@ -1230,6 +1239,9 @@ class WindowControls:
         return None
 
     def dev_pointer(self, event):
+        if hasattr(self, 'active_cutscene_gallery') and self.active_cutscene_gallery() is not None:
+            return menu_viewport_point(
+                event.x, event.y, self.canvas.winfo_width(), self.canvas.winfo_height())
         return viewport_point(
             event.x, event.y, self.canvas.winfo_width(), self.canvas.winfo_height()
         )
@@ -1555,7 +1567,8 @@ class WindowControls:
         if getattr(self, "bitmap_presenter", None) is not None:
             self.bitmap_presenter.close()
             self.bitmap_presenter = None
-        if hasattr(self, 'present_cutscene_gallery') and self.present_cutscene_gallery(size, position):
+        if (hasattr(self, 'present_cutscene_gallery')
+                and self.present_cutscene_gallery(*fit_menu_viewport(width, height))):
             return
         game_menu = getattr(self, 'game_menu', None)
         gallery = getattr(game_menu, 'screenshot_gallery', None) if getattr(game_menu, 'page', None) == 'screenshots' else None

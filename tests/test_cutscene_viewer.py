@@ -156,22 +156,25 @@ class GalleryTests(unittest.TestCase):
         self.assertEqual(gallery.index, 2)
 
     def test_hd_thumbnail_uses_source_pixels_instead_of_a_small_upscaled_card(self):
-        from PIL import ImageChops
+        from PIL import ImageChops, ImageOps
 
         gallery = self.gallery()
         source = Image.effect_noise((510, 384), 100).convert('RGB')
         gallery.preview.return_value = source
         image = gallery.draw(Image.new('RGBA', (2048, 1536)), CaptionFont())
         rect = gallery.card_rect(0)
-        thumb = tuple(round(v * 4) for v in (rect[0] + 2, rect[1] + 2, rect[2] - 2, rect[1] + 112))
-        expected = source.resize((thumb[2] - thumb[0], thumb[3] - thumb[1]), Image.Resampling.NEAREST)
+        width = round((gallery.CARD_WIDTH - 2) * 4) - 8
+        height = round((2 + (gallery.CARD_WIDTH - 4) * 9 / 16) * 4) - 8
+        thumb = round(rect[0] * 4) + 8, round(rect[1] * 4) + 8
+        thumb = *thumb, thumb[0] + width, thumb[1] + height
+        expected = ImageOps.fit(source, (width, height), method=Image.Resampling.NEAREST)
         self.assertIsNone(ImageChops.difference(image.crop(thumb).convert('RGB'), expected).getbbox())
 
 
     def test_two_rows_stay_dense_and_arrow_keys_follow_the_grid(self):
         gallery = self.gallery()
         first = [gallery.card_rect(i) for i in range(6)]
-        self.assertEqual([rect[1] for rect in first], [63, 201, 63, 201, 63, 201])
+        self.assertEqual([rect[1] for rect in first], [88.375, 202.5, 88.375, 202.5, 88.375, 202.5])
         self.assertEqual([rect[0] for rect in first], [21, 21, 181, 181, 341, 341])
         self.assertGreater(first[0][2] - first[0][0], 140)
         gallery.key('Down')
@@ -184,6 +187,27 @@ class GalleryTests(unittest.TestCase):
         self.assertGreater(gallery.scroll_target, 0)
         gallery.key('Left')
         self.assertEqual(gallery.index, 4)
+
+    def test_wide_layout_adds_columns_without_stretching_covers_or_text(self):
+        gallery, font = self.gallery(), CaptionFont()
+        for size, columns in (((1020, 768), 3), ((1920, 1080), 3),
+                              ((2560, 1080), 4), ((3840, 1080), 6)):
+            with self.subTest(size=size):
+                gallery.draw(Image.new('RGBA', size), font, visible=True)
+                self.assertEqual(gallery.COLUMNS, columns)
+                self.assertEqual(gallery.ROWS, 2)
+                self.assertAlmostEqual((gallery.CARD_WIDTH - 4) /
+                                       (gallery.CARD_HEIGHT - 22), 16 / 9)
+                self.assertLessEqual(gallery.card_rect(columns * 2 - 2)[2], gallery.STRIP[2])
+                self.assertGreaterEqual(gallery.card_rect(0)[1], gallery.STRIP[1])
+                self.assertLessEqual(gallery.card_rect(1)[3], gallery.STRIP[3])
+                self.assertEqual(gallery.hit(*((v1 + v2) / 2 for v1, v2 in
+                    zip(gallery.PLAY[:2], gallery.PLAY[2:]))), 1)
+        gallery.key('End')
+        gallery.advance(1)
+        gallery.draw(Image.new('RGBA', (1020, 768)), font, visible=True)
+        self.assertLessEqual(gallery.scroll, gallery.max_scroll)
+        self.assertEqual(gallery.index, 8)
 
     def test_scroll_frames_do_not_load_redraw_fonts_or_resample_images(self):
         gallery, font = self.gallery(), CaptionFont()
@@ -325,7 +349,6 @@ class ViewerSceneTests(unittest.TestCase):
 
     def test_device_presentation_reuses_the_photo_and_keeps_the_world_paused_while_scrolling(self):
         from PIL import ImageChops, ImageTk
-        from pop2.game_ui import fit_viewport
 
         scene = self.scene
         gallery = self.open_viewer()
@@ -333,22 +356,44 @@ class ViewerSceneTests(unittest.TestCase):
         with patch.object(scene.canvas, 'winfo_width', return_value=1920), \
                 patch.object(scene.canvas, 'winfo_height', return_value=1080):
             scene.present_viewport()
-            size, _position = fit_viewport(1920, 1080)
-            source = scene.screenshot_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
+            size = (1920, 1080)
+            source = scene._cutscene_gallery_source[2]
             expected = gallery.draw(source, scene.ui_font, visible=True).convert('RGB')
             actual = ImageTk.getimage(scene.image_ref).convert('RGB')
             self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
-            low = gallery.draw(scene.screenshot_viewport, scene.ui_font).crop((1, 0, 511, 384))
-            self.assertIsNotNone(ImageChops.difference(actual, low.convert('RGB').resize(size)).getbbox())
+            self.assertEqual(actual.size, size)
+            self.assertEqual(tuple(scene.canvas.coords(scene.canvas.find_all()[0])), (0, 0))
             photo = scene.image_ref
+            strip_photo = scene._cutscene_gallery_grid_photo[1]
             scene.dev_scroll(SimpleNamespace(delta=-60, num=None))
             self.assertGreater(gallery.scroll_target, 0)
             self.assertEqual(gallery.index, 0)
             gallery.advance(1 / 60)
             scene.present_viewport()
             self.assertIs(scene.image_ref, photo)
+            self.assertIs(scene._cutscene_gallery_grid_photo[1], strip_photo)
         self.assertTrue(scene.paused)
         self.assertEqual(self.snapshot(), before)
+
+    def test_tall_window_keeps_ui_usable_and_rejects_pointer_in_the_bars(self):
+        from PIL import ImageTk
+        from pop2.game_ui import fit_menu_viewport
+
+        scene = self.scene
+        gallery = self.open_viewer()
+        with patch.object(scene.canvas, 'winfo_width', return_value=1020), \
+                patch.object(scene.canvas, 'winfo_height', return_value=1200):
+            scene.present_viewport()
+            size, origin = fit_menu_viewport(1020, 1200)
+            self.assertEqual(size, (1020, 768))
+            self.assertEqual(origin, (0, 216))
+            self.assertEqual(ImageTk.getimage(scene.image_ref).size, size)
+            self.assertEqual(gallery.COLUMNS, 3)
+            self.assertIsNone(scene.dev_pointer(SimpleNamespace(x=500, y=10)))
+            self.assertIsNone(scene.dev_pointer(SimpleNamespace(x=500, y=1190)))
+            x, y = scene.dev_pointer(SimpleNamespace(x=500, y=600))
+            self.assertAlmostEqual(x, 251)
+            self.assertAlmostEqual(y, 192)
 
     def test_incremental_scroll_pixels_match_full_render_in_both_directions_and_after_toast(self):
         from PIL import ImageChops, ImageTk
@@ -377,8 +422,64 @@ class ViewerSceneTests(unittest.TestCase):
             gallery.advance(1 / 60)
             scene.present_viewport()
             expected = scene.draw_screenshot_notice(gallery.draw(source, scene.ui_font, visible=True,
-                background_key=id(scene.screenshot_viewport)), visible=True).convert('RGB')
+                background_key=id(scene.screenshot_viewport)), visible=True, uniform=True).convert('RGB')
             self.assertIsNone(ImageChops.difference(ImageTk.getimage(photo).convert('RGB'), expected).getbbox())
+
+    def test_wide_pointer_resize_and_replay_use_their_own_viewports(self):
+        from PIL import ImageTk
+        from pop2.game_ui import fit_viewport
+
+        scene = self.scene
+        gallery = self.open_viewer()
+        before = self.snapshot()
+        with patch.object(scene.canvas, 'winfo_width', return_value=2560), \
+                patch.object(scene.canvas, 'winfo_height', return_value=1080):
+            scene.present_viewport()
+            self.assertEqual(ImageTk.getimage(scene.image_ref).size, (2560, 1080))
+            self.assertFalse(scene.window_aspect_locked())
+            scale = 1080 / 384
+            x = (gallery.PLAY[0] + gallery.PLAY[2]) / 2
+            y = (gallery.PLAY[1] + gallery.PLAY[3]) / 2
+            event = SimpleNamespace(x=(x - 1) * scale, y=y * scale, num=1)
+            self.assertEqual(gallery.hit(*scene.dev_pointer(event)), 1)
+            scene.dev_click(event)
+            self.assertIsNotNone(scene.cutscene_replay)
+            size, position = fit_viewport(2560, 1080)
+            self.assertEqual(ImageTk.getimage(scene.image_ref).size, size)
+            self.assertEqual(tuple(scene.canvas.coords(scene.canvas.find_all()[0])), position)
+            self.assertIsNone(scene.dev_pointer(SimpleNamespace(x=10, y=500)))
+            scene.stop_cutscene_replay()
+            self.assertEqual(ImageTk.getimage(scene.image_ref).size, (2560, 1080))
+            self.assertEqual(gallery.COLUMNS, 4)
+            scene.close_game_menu()
+            self.assertTrue(scene.window_aspect_locked())
+            self.assertEqual(ImageTk.getimage(scene.image_ref).size, size)
+            self.assertEqual(tuple(scene.canvas.coords(scene.canvas.find_all()[0])), position)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_wide_ui_capture_preserves_aspect_without_mutating_live_gallery(self):
+        from pop2.screenshots import ScreenshotSettings
+
+        scene = self.scene
+        gallery = self.open_viewer()
+        with patch.object(scene.canvas, 'winfo_width', return_value=1920), \
+                patch.object(scene.canvas, 'winfo_height', return_value=1080):
+            scene.present_viewport()
+            gallery.begin_drag(200, 150)
+            gallery.hovered = 100
+            state = (gallery.layout_size, gallery.drag, gallery.hovered,
+                     gallery.scroll, gallery.background_cache, gallery.grid_cache)
+            expected = scene.cutscene_gallery_frame((2048, 1152), capture=True)
+            self.assertEqual((gallery.layout_size, gallery.drag, gallery.hovered,
+                              gallery.scroll, gallery.background_cache, gallery.grid_cache), state)
+            scene.screenshot_settings = ScreenshotSettings(Path(self.directory.name), 3)
+            path = scene.capture_screenshot(include_ui=True)
+            with Image.open(path) as actual:
+                self.assertEqual(actual.size, (2048, 1152))
+                self.assertEqual(actual.tobytes(), expected.tobytes())
+            # The success toast redraws the live cache, but cannot change input.
+            self.assertEqual((gallery.layout_size, gallery.drag, gallery.hovered,
+                              gallery.scroll), state[:4])
 
     def test_hover_and_tk_redraw_keep_a_retained_image_in_both_window_modes(self):
         from PIL import ImageChops, ImageTk
