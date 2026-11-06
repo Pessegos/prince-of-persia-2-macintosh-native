@@ -692,6 +692,48 @@ class ViewerSceneTests(unittest.TestCase):
                 scene.present_viewport()
         self.assertFalse(any(len(call.args) > 1 for call in coords.call_args_list))
 
+    def test_animation_accounts_for_tk_idle_paint_and_rechecks_monitor_rate(self):
+        from pop2.menu_animation import MenuFrameClock
+
+        scene = self.scene
+        gallery = self.open_viewer()
+        scene.cancel_cutscene_gallery_tick()
+        gallery.wheel(1)
+        now, clocks = [10.0], []
+
+        def clock(*args, **kwargs):
+            value = MenuFrameClock(*args, **kwargs)
+            clocks.append(value)
+            return value
+
+        with patch('pop2.cutscene_viewer.time.perf_counter', side_effect=lambda: now[0]), \
+                patch('pop2.display_refresh.window_refresh_rate', side_effect=(120, 240)) as rate, \
+                patch('pop2.menu_animation.MenuFrameClock', side_effect=clock), \
+                patch.object(gallery, 'advance', return_value=True), \
+                patch.object(scene, 'present_viewport'), \
+                patch.object(scene.root, 'after', return_value='timer') as timer, \
+                patch.object(scene.root, 'after_idle', return_value='paint') as idle, \
+                patch.object(scene.root, 'after_cancel') as cancel:
+            scene.schedule_cutscene_gallery()
+            self.assertEqual(clocks[0].refresh_hz, 120)
+            tick = timer.call_args.args[1]
+            now[0] += .009
+            tick()
+            self.assertEqual(timer.call_count, 1)  # No next frame before Tk paints.
+            self.assertEqual(scene.cutscene_gallery_after_id, 'paint')
+            now[0] += .004
+            idle.call_args.args[0]()
+            self.assertGreater(clocks[0].cost, .0005)
+            self.assertEqual(timer.call_count, 2)
+            now[0] += 1.1
+            gallery.wheel(1)
+            timer.call_args.args[1]()
+            self.assertEqual(clocks[0].refresh_hz, 240)
+            self.assertEqual(rate.call_count, 2)
+            scene.cancel_cutscene_gallery_tick()
+            cancel.assert_called_once_with('paint')
+            self.assertIsNone(scene.cutscene_gallery_after_id)
+
     def test_wide_pointer_resize_and_replay_use_their_own_viewports(self):
         from PIL import ImageTk
         from pop2.game_ui import fit_viewport

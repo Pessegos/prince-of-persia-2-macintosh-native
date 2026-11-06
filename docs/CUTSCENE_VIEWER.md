@@ -112,12 +112,30 @@ dispose of the child viewport.
 Hover uses four retained border rectangles over the cached strip. Crossing
 cards changes those rectangles immediately, without rebuilding or uploading
 card artwork. The capture renderer draws the same clipped border in pixels.
+The static parent image is repositioned only when its position changes.
+Reassigning identical canvas coordinates still invalidates a Tk image item;
+doing that every frame needlessly redraws the large background behind the strip.
 Pixel regressions compare the result to a full render, including reverse
 motion, screenshot notices, repeated hover and forced Tk redisplay.
 
-The animation callback has its own adaptive clock capped at 120 Hz, with
-deadlines and rendering headroom on slower machines. It is independent of the
-game's actor ticks. A time-based spring preserves velocity when wheel input
+The animation callback has its own adaptive clock targeting the current monitor's
+refresh rate, including 120 and 240 Hz. On Windows, `MonitorFromWindow`,
+`GetMonitorInfoW` and `EnumDisplaySettingsW(ENUM_CURRENT_SETTINGS)` identify the
+monitor containing the Tk wrapper window and read its current display frequency.
+This is read-only and never changes the display mode. Detection runs when motion
+starts and once a second during motion, so moving the window to another monitor
+updates the target. Unavailable/default driver rates use 60 Hz.
+The monitor APIs and structure layouts follow Microsoft's
+[display settings](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumdisplaysettingsw)
+and [DEVMODEW](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-devmodew)
+documentation.
+
+Frames have deadlines and rendering headroom on slower machines. Tk schedules
+canvas drawing in idle handlers; the next timer is therefore scheduled after an
+idle completion callback, including that drawing work in the measured budget.
+This avoids reentrant `update()` calls and does not change Tk's ownership of
+redisplay. The clock is independent of the game's actor ticks. A time-based
+spring preserves velocity when wheel input
 changes. Scrolling past an end carries that same position and velocity into a
 wider overscroll, then makes a slower soft return. An outward gesture at an
 already reached edge reacts on the first animation frame; there is no wait for
@@ -125,8 +143,9 @@ the ordinary scroll to settle before starting a separate bounce. Dragging
 past an edge gives bounded resistance and springs back on release. No bounce
 is applied if all chapters fit. The callback runs only while moving and is
 cancelled on playback/destruction or stops when its gallery is no longer active.
-Hidden-window timing measures rendering work, not physical input/compositor
-latency, so it is not a universal zero-latency guarantee.
+The target is a scheduling rate, not a hardware VSync or measured presentation
+FPS guarantee. Hidden-window timing omits physical painting/compositor/input
+latency; simulated 240 Hz tests do not establish physical 240 Hz presentation.
 
 Opening boundaries come from the imported title operation, the following frame
 setup and the first story music before narration resumes. Prologue ends before
@@ -179,7 +198,10 @@ hashes independently obtained from the supplied crops, verifies the updated
 16:9 title and checks reuse of the cover cache. `tests.test_menu_animation`
 checks elapsed-time motion and frame deadlines. Gallery regressions cover edge
 bounce, elastic drag, reverse input, exact retained-display pixels and child
-input/lifecycle behavior. Synthetic scene callbacks cover
+input/lifecycle behavior. `tests.test_display_refresh` checks monitor/device
+selection, current-mode frequency, Windows ABI sizes and failure fallbacks.
+Scheduler tests include the paint-idle phase, timer cancellation and a simulated
+120-to-240 Hz monitor change. Synthetic scene callbacks cover
 the first click, double-click binding and trailing release without pausing or
 changing the underlying game. Physical desktop double-click timing is not part
 of the shared-desktop suite.

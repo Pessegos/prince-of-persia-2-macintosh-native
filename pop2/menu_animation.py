@@ -23,14 +23,15 @@ def spring_step(position, velocity, target, seconds, *, frequency=24, damping=1)
 
 @dataclass
 class MenuFrameClock:
-    """Cap at 120 Hz, with a stable deadline and headroom for slower rendering."""
+    """Follow the window's display rate, leaving headroom for slower rendering."""
 
     deadline: float
+    refresh_hz: float = 60
     cost: float = 0
 
     def delay(self, now, rendered_seconds=0):
         self.cost = self.cost * .85 + max(0, rendered_seconds) * .15
-        period = max(1 / 120, self.cost * 1.25)
+        period = max(1 / self.refresh_hz, self.cost * 1.25)
         self.deadline += period
         if self.deadline <= now:
             self.deadline += (math.floor((now - self.deadline) / period) + 1) * period

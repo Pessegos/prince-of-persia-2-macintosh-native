@@ -199,26 +199,40 @@ class CutsceneControls:
                 pass
 
     def schedule_cutscene_gallery(self):
+        from pop2.display_refresh import window_refresh_rate
         from pop2.menu_animation import MenuFrameClock
 
         gallery = self.active_cutscene_gallery()
         if gallery is None or getattr(self, 'cutscene_gallery_after_id', None) is not None:
             return
         previous = time.perf_counter()
-        clock = MenuFrameClock(previous)
+        clock = MenuFrameClock(previous, refresh_hz=window_refresh_rate(self.root))
+        monitor_check = previous + 1
 
         def tick():
-            nonlocal previous
+            nonlocal previous, monitor_check
             self.cutscene_gallery_after_id = None
             if self.active_cutscene_gallery() is not gallery:
                 return
             now = time.perf_counter()
+            if now >= monitor_check:
+                clock.refresh_hz = window_refresh_rate(self.root)
+                monitor_check = now + 1
             moving = gallery.advance(now - previous)
             previous = now
             self.present_viewport()
             if moving:
-                finished = time.perf_counter()
-                self.cutscene_gallery_after_id = self.root.after(clock.delay(finished, finished - now), tick)
+                def painted():
+                    self.cutscene_gallery_after_id = None
+                    if self.active_cutscene_gallery() is not gallery:
+                        return
+                    finished = time.perf_counter()
+                    self.cutscene_gallery_after_id = self.root.after(clock.delay(finished, finished - now), tick)
+
+                # Tk paints canvas items in idle handlers queued by present().
+                # Include that work in the budget; a hidden photo update alone
+                # does not measure the visible window's GDI rendering cost.
+                self.cutscene_gallery_after_id = self.root.after_idle(painted)
 
         self.cutscene_gallery_after_id = self.root.after(clock.delay(previous), tick)
 
