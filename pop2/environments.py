@@ -400,6 +400,11 @@ class Caverns(Environment):
             scene.sequence_state.horizontal_velocity = scene.sequence_state.vertical_velocity = 0
             scene.physics.select(scene.sequence_runtime, 71)
             scene.death.begin(3)
+        if potions.jinnee_prompt:
+            from pop2.jinnee import PRINCE_SEQUENCE
+
+            potions.jinnee_prompt = False
+            scene.physics.select(scene.sequence_runtime, PRINCE_SEQUENCE)
             scene.status.set("Defeated")
         potions.advance((tile.room, tile.row * 10 + tile.column)
             for _command, tile in cavern_flask_instances(
@@ -1234,6 +1239,7 @@ class Temple(Caverns):
         # The opponents (the shadow's AutoCtrl/AnimChar) run before the
         # environment hook (FrameAdv 2:7124).
         self.shadow()
+        self.jinnee()
         self.altar()
         self.palette_flash(self.scene.sequence_state)
 
@@ -1426,7 +1432,95 @@ class Temple(Caverns):
         scene.sequence_state.sound_events.extend(state.sound_events)
         state.sound_events.clear()
 
+    def jinnee(self):
+        """Level 12's genie: released by SEQS 111, then one opponent frame of
+        AnimChar and CheckPress (2:6602) while the Prince is in his room."""
+        from pop2.jinnee import Jinnee, SONG
+        from pop2.sequence_runtime import SequenceRuntime
+
+        scene = self.scene
+        caverns = scene.game.caverns
+        potions = caverns.potions
+        kid = scene.sequence_state
+        if potions.jinnee_released:
+            potions.jinnee_released = False
+            caverns.jinnee = Jinnee.released(kid, scene.terrain_motion)
+            potions.songs.append(SONG)
+        jinnee = caverns.jinnee
+        if jinnee is None or jinnee.motion.room != scene.room_id:
+            return
+        state, motion = jinnee.state, jinnee.motion
+        SequenceRuntime(scene.sequence_runtime.sequences, state).next_frame()
+        state.current_x = state.target_x
+        state.sequence_events.clear()
+        record = jinnee.record
+        kid.sound_events.extend(caverns.loose.press(scene.level_map, motion, state, record))
+        kid.sound_events.extend(caverns.trapdoors.check(scene.level_map, motion, state, record))
+        kid.sound_events.extend(caverns.plates.press(scene.level_map, motion, state, record,
+                                                     sword_type=scene.game.sword_type))
+        state.sound_events.clear()
+        if jinnee.gone:
+            caverns.jinnee = None
+
     def extra_actors(self, size):
+        return (*self.shadow_actors(size), *self.jinnee_actors(size))
+
+    def jinnee_actors(self, size):
+        """The genie: FRAM 750's body and, as with the flaming sword, its AFRM
+        piece at the same arithmetic (3:0b4a-0b64). Drawn only if imported."""
+        from PIL import Image
+
+        from pop2.animation_data import parse_aframe_records, parse_frame_records
+        from pop2.jinnee import FIRST_POSE, SHAPE_LIST
+        from pop2.render_opening import (
+            character_sprite_top, decode_ctbl, decode_shap, load_resource_file,
+        )
+
+        scene = self.scene
+        jinnee = scene.game.caverns.jinnee
+        if jinnee is None or jinnee.motion.room != scene.room_id:
+            return ()
+        art = scene.__dict__.get('jinnee_art')
+        if art is None:
+            try:
+                resource = load_resource_file('Jinnee.rsrc')
+            except OSError:
+                return ()
+            art = scene.__dict__['jinnee_art'] = dict(
+                resource=resource, palette=decode_ctbl(resource['CTBL'][SHAPE_LIST]['data']),
+                base=int.from_bytes(resource['SHPL'][SHAPE_LIST]['data'][:2], 'big'),
+                frames=parse_frame_records(resource['FRAM'][SHAPE_LIST]['data']),
+                attachments=parse_aframe_records(resource['AFRM'][SHAPE_LIST]['data']), images={})
+
+        def image(index):
+            shape = art['base'] + index
+            if shape not in art['images']:
+                art['images'][shape] = decode_shap(art['resource']['SHAP'][shape]['data'], art['palette'])
+            return art['images'][shape]
+
+        state = jinnee.state
+        record = art['frames'][state.action - FIRST_POSE]
+        floor = floor_y(jinnee.motion.row) + state.current_y + record.offset_y
+        placed = []
+        if record.shape_index >= 0:
+            sprite = image(record.shape_index)
+            placed.append((sprite, state.target_x - record.offset_x, floor))
+        _, piece, dx, dy = art['attachments'][record.afrm_index]
+        if piece > 0:
+            sprite = image(piece)
+            placed.append((sprite, state.target_x - record.offset_x - dx, floor + dy))
+        if not placed:
+            return ()
+        layer = Image.new('RGBA', size)
+        for sprite, x, bottom in placed:
+            layer.paste(sprite, (x, character_sprite_top(bottom, sprite.height)), sprite)
+        left = min(x for _, x, _ in placed)
+        right = max(x + sprite.width - 1 for sprite, x, _ in placed)
+        bottom = max(bottom for _, _, bottom in placed)
+        top = min(character_sprite_top(bottom, sprite.height) for sprite, _, bottom in placed)
+        return ((state, record, (left, top, right, bottom), jinnee.motion.row, layer),)
+
+    def shadow_actors(self, size):
         """The shadow: Kid frames in palette entries 48-63 (draw mode 0x30)."""
         from PIL import Image, ImageOps
 

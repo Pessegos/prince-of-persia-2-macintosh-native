@@ -24,7 +24,7 @@ from pop2.paths import ASSET_DIR
 RESOURCE_FILES = ("Prince.rsrc", "Kid.rsrc", "Guard.rsrc", "Skeleton.rsrc", "Rooftops.rsrc", "NIS.rsrc", "Title.rsrc", "Desert.rsrc", "Caverns.rsrc", "NISTree.rsrc",
                   "Ruins.rsrc", "Head.rsrc", "TNIS1.rsrc", "TNIS2.rsrc", "TNIS3.rsrc", "ThroneNIS.rsrc",
                   "Horse.rsrc", "TempleNIS.rsrc", "Temple.rsrc", "Birdhead.rsrc",
-                  "FlameSword.rsrc", "TowerNIS.rsrc", "Final.rsrc")
+                  "FlameSword.rsrc", "Jinnee.rsrc", "TowerNIS.rsrc", "Final.rsrc")
 REQUIRED_RESOURCES = {
     "Prince.rsrc": {"LEVL", "SEQS", "SHAP", "SHPL", "CTBL", "NFNT"},
     "Kid.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
@@ -54,6 +54,8 @@ REQUIRED_RESOURCES = {
     "Birdhead.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
     # Level twelve's flaming sword (opponent set 1, actor type 10).
     "FlameSword.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
+    # The genie of level twelve's flask (opponent set 9, actor type 12).
+    "Jinnee.rsrc": {"FRAM", "AFRM", "SHAP", "SHPL", "CTBL"},
     # The flight to the tower after level thirteen (NIS 3), whose last shot
     # draws level fourteen's environment (Final.rsrc).
     "TowerNIS.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},

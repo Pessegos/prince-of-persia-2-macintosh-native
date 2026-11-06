@@ -46,6 +46,8 @@ class CavernState:
     # shadow (type 1, 10:2b32) has risen.
     altar: int = 0
     shadow: TempleShadow | None = None
+    # Level 12's genie (type 12, 4:1d7e), while he runs.
+    jinnee: object = None
     # Level seven entered by its upper door (alternate entry export).
     alternate_entry: bool = False
     # a5-0x5008: the level-four relief countdown; -1 idle, -2 already used.

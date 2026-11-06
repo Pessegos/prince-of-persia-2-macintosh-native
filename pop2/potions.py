@@ -6,7 +6,11 @@ import random
 from pop2.terrain import character_column, floor_contact_x, floor_edge_distance
 
 
-DRINKABLE = (1, 2, 3, 4, 5)
+# 4:46b2's flask and 4:2df0's event; pop2.jinnee imports this module's users.
+FLASK_KIND = 6
+PROMPT_SOUND = 12
+RELEASE_EVENT = (-14, (3,))
+DRINKABLE = (1, 2, 3, 4, 5, 6)
 # 2:5a26 starts a 228-update slow fall (a5-0x4fa6, decremented at 2:6c5e).
 FLOAT_UPDATES = 228
 # 2:59f6-5a24: the upside-down world (a5-0x4fa8) lasts 1080 updates, with
@@ -43,9 +47,8 @@ def _pickup_at_contact(terrain, motion, state, contact):
     current = terrain.tile(motion.room, column, motion.row)
     target = current if current.kind in ITEM_TILES else terrain.tile(
         motion.room, column + (1 if state.facing else -1), motion.row)
-    # PickItUp 6:1576-1596 takes every flask; type 6 (4:46b2) is not
-    # modelled yet and stays on the floor. 6:14ce-1574
-    # takes a sword item (tile 22) the same way.
+    # PickItUp 6:1576-1596 takes every flask. 6:14ce-1574 takes a sword item
+    # (tile 22) the same way.
     if (target.room is None or target.kind not in ITEM_TILES
             or target.kind == 10 and potion_kind(target.foreground) not in DRINKABLE):
         return None
@@ -72,6 +75,9 @@ class Potions:
     shift_was_held: bool = False
     songs: list = field(default_factory=list)
     fatal: bool = False
+    # 4:46b2 asked for SEQS 111; its -14 event 3 releases the genie.
+    jinnee_prompt: bool = False
+    jinnee_released: bool = False
     float_timer: int = 0
     flip_timer: int = 0
 
@@ -109,6 +115,9 @@ class Potions:
         events = [event for event in state.sequence_events if event[0] == -14]
         for event in events:
             state.sequence_events.remove(event)
+            if event == RELEASE_EVENT:
+                self.jinnee_released = True
+                continue
             if event != (-14, (1,)) or not self.effect_pending:
                 continue
             self.effect_pending = False
@@ -138,6 +147,10 @@ class Potions:
                 actor.life = max(0, actor.life - 1)
                 state.sound_events.append(12)
                 self.fatal = actor.life == 0
+                continue
+            elif self.held_kind == FLASK_KIND:
+                state.sound_events.append(PROMPT_SOUND)
+                self.jinnee_prompt = True
                 continue
             else:
                 continue
