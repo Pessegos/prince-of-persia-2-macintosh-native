@@ -804,7 +804,7 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, ac
 
 def draw_cavern_spikes(frame, room_id, state, terrain, front=False, *, level_number=3):
     _program, resources, palette, shapes = room_assets(level_number, room_id)
-    for command in state.spikes.drawing_commands(terrain, room_id, front):
+    for command in state.spikes.drawing_commands(terrain, room_id, front, temple=level_number >= 10):
         sprite = cavern_command_sprite(command, resources, palette, shapes)
         frame.paste(sprite, (command[2], command[3] - sprite.height + 1), sprite)
     return frame

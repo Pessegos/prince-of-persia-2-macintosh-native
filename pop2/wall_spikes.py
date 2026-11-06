@@ -11,6 +11,12 @@ BACK_PIECES = (0, 70, 73, 72, 71, 70, 69, 74)
 FRONT_PIECES = (0, 76, 79, 78, 77, 76, 75, 80)
 PIECE_OFFSETS = ((-17, 13), (-16, 13), (-15, 12), (-14, 12), (-14, 12), (-14, 12),
                  (-8, 1), (-8, 1), (-7, 0), (-3, 0), (-2, 0), (-2, 0))
+# 10:1296 binds the temple's own banks. TriggerSpikes 5:40d6-411e also puts
+# the MOB at column*51+66, row*120+105 outside the caverns (63 and 106).
+TEMPLE_BACK_PIECES = (0, 105, 108, 107, 106, 105, 104, 109)
+TEMPLE_FRONT_PIECES = (0, 111, 114, 113, 112, 111, 110, 115)
+TEMPLE_PIECE_OFFSETS = ((-17, 6), (-15, 6), (-14, 6), (-13, 5), (-13, 5), (-11, 5),
+                        (-8, 0), (-8, 0), (-7, 0), (-3, -1), (-2, -1), (-2, -1))
 
 
 def drawing_phase(value):
@@ -118,16 +124,19 @@ class WallSpikes:
             self.foreground[key] = value
         return tuple(cues)
 
-    def drawing_commands(self, terrain, view_room, front=False):
+    def drawing_commands(self, terrain, view_room, front=False, temple=False):
+        back, ahead, base, offsets, left, floor = (
+            (TEMPLE_BACK_PIECES, TEMPLE_FRONT_PIECES, 104, TEMPLE_PIECE_OFFSETS, 66, 105)
+            if temple else (BACK_PIECES, FRONT_PIECES, 69, PIECE_OFFSETS, 63, 106))
         for (room, cell), value in self.foreground.items():
             row, column = divmod(cell, 10)
             column = self.visible_column(terrain, view_room, room, column)
             if column is None:
                 continue
             phase = drawing_phase(value)
-            piece = (FRONT_PIECES if front else BACK_PIECES)[phase]
+            piece = (ahead if front else back)[phase]
             if not piece:
                 continue
-            dy, dx = PIECE_OFFSETS[piece - 69]
+            dy, dx = offsets[piece - base]
             yield ['front' if front else 'back', 3500 + piece,
-                   column * 51 + 63 + dx, row * 120 + 106 + dy, 16]
+                   column * 51 + left + dx, row * 120 + floor + dy, 16]

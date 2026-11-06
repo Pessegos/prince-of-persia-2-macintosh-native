@@ -3150,7 +3150,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             preferred = {(3, 20): 2, (5, 2): 0}.get((self.game.level.number, room))
             row, column = room_entry(self.level_map, room, preferred_row=preferred)
             return self.jump_to_room(room, row=row, x=column * TILE_WIDTH + 30, facing=0)
-        elif self.game.level.kind == 4:
+        elif self.game.level.kind in (2, 4):
             from pop2.development_entry import room_entry
 
             # Level nine's room8 is the upper-column horse-leap test entry.
