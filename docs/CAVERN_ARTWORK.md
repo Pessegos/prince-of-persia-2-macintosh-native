@@ -153,3 +153,40 @@ The native-artwork opt-out still draws the original fragment. No atlas or
 imported-resource writes are required; the command omission applies only
 to level8 room5. The comparison is kept locally at
 `rendered/ruins-second-batch/room5-review.png`.
+
+## Cave ambience
+
+An optional port effect, not a recovered behavior: the original has no dust
+and no water drops. `pop2/cavern_ambience.py` draws them while the F1 item
+Cave ambience (Alt+A) is on. It is off by default.
+
+It is a prototype awaiting the user's review. It runs in one room,
+`AMBIENCE_ROOMS` = level 4 room 16 (Room 17 in the development menu). Adding a
+room means reviewing it in motion: the tips and the air are read from the art,
+and only this room has been looked at.
+
+The rules that keep it from looking like a modern filter:
+
+- Every particle is one or two opaque pixels in a colour of the room's own
+  palette. There is no glow, blur or transparency. Light is a step along a
+  palette ramp, and a mote arrives and leaves the same way.
+- Particles belong to the scenery. Drops hang from the tips of the stalactites
+  (`stalactite_tips`, read from the art), keep each source's rhythm and end in
+  a splash on the floor or a hiss in the lava. Ash rises from the lava. Dust is
+  dark until it crosses a torch's light, and rises in the warm air around it.
+- Few and slow: at most 14 motes, 3 ash and 4 sources in a room.
+
+Pixels only. Its generator is private, so turning it on changes no opponent,
+route or test. Its state is on the `LevelRenderer`, not in `CavernState`, so it
+never reaches a save. `RealSceneTests` plays the same keys with the toggle off
+and on and compares the game state and the random generators.
+
+It is drawn right after `remember_scenery` and not in `animated_layer`, where
+the first idea had put it. DoCleanCut (2:608c) keeps the previous room's scenery
+in the next room's unpainted pixels, so a particle drawn before that snapshot
+could stay on screen for good. Being before the actors, particles pass behind
+them. The foreground's alpha hides them behind pillars and rock.
+
+A tick costs about 43 microseconds (19 to advance, 24 to draw, medians over
+3,000 ticks), against frames of 14-16 ms. The first entry into a room costs
+about 34 ms once, to read the art.

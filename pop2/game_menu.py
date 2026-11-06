@@ -25,6 +25,7 @@ class GameMenu:
     page: str = "menu"
     return_to_menu: bool = True
     copy_protection: bool = True
+    cave_ambience: bool = False
     screenshot_scale: int = 3
     screenshot_folder: str = ""
     screenshot_status: str = ""
@@ -36,7 +37,7 @@ class GameMenu:
     screenshot_gallery: object = None
     cutscene_viewer: object = None
 
-    PANEL = centered_panel(384, 306)
+    PANEL = centered_panel(384, 328)
     DIALOG = centered_panel(352, 166)
     ABOUT_DIALOG = centered_panel(352, 184)
     BUTTONS = ((100, DIALOG[1] + 120, 242, DIALOG[1] + 150),
@@ -63,6 +64,7 @@ class GameMenu:
             MenuItem("cutscenes", "Cutscene Viewer", "Alt+C"),
             MenuItem("sound", "Sound", "Alt+T", checked=self.sound),
             MenuItem("music", "Ambient music", "Alt+M", checked=self.music),
+            MenuItem("ambience", "Cave ambience", "Alt+A", checked=self.cave_ambience),
             MenuItem("hall", "Hall of Fame", "Alt+H", False),
             MenuItem("about", "About", "Alt+V"),
             MenuItem("fullscreen", "Fullscreen", "Alt+Enter", checked=self.fullscreen),

@@ -318,6 +318,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.game_was_paused = False
         self.native_viewport = None
         self.copy_protection_enabled = True
+        self.cave_ambience_enabled = False
         self.copy_verified = False
         self.copy_challenge = None
 
@@ -3508,6 +3509,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             frame = environment.scenery_layer(frame, motion)
         frame = Image.alpha_composite(frame, self.foreground)
         self.level_renderer.remember_scenery(frame)
+        if getattr(self, 'cave_ambience_enabled', False):
+            frame = self.level_renderer.ambient_layer(frame, self.room_id)
         hide_guards = getattr(self, "peaceful", False) and getattr(self, "demo", None) is None
         actors = []
         crush_poses = getattr(self, 'slab_crush_poses', {})

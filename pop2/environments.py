@@ -498,7 +498,13 @@ class Caverns(Environment):
             scene.level_renderer.cavern_program.get('torches', {}).get(str(scene.room_id), ()))
         room = scene.level_renderer.enter_room(scene.room_id, scene.game.caverns)
         scene.background, scene.foreground = room.background, room.foreground
+        self.advance_ambience()
         return False
+
+    def advance_ambience(self):
+        scene = self.scene
+        if getattr(scene, 'cave_ambience_enabled', False):
+            scene.level_renderer.advance_ambience(scene.room_id, scene.level_map)
 
     def frame_start(self):
         scene = self.scene
@@ -769,6 +775,7 @@ class Caverns(Environment):
         caverns.advance_torches(program.get('torches', {}).get(str(scene.room_id), ()))
         room = scene.level_renderer.enter_room(scene.room_id, caverns)
         scene.background, scene.foreground = room.background, room.foreground
+        self.advance_ambience()
         if getattr(scene, "audio", None) is not None:
             scene.audio.drain(state, gate_events=self.gate_audio())
         else:

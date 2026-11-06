@@ -22,6 +22,8 @@ class LevelRenderer:
         self.cavern_underlay = None
         self.cavern_scenery = None
         self.cavern_map = None
+        self.ambience = None
+        self.ambience_air = {}
         if preload_room:
             self.room(level.start_room)
 
@@ -120,6 +122,26 @@ class LevelRenderer:
         if self.level.kind in (2, 3, 4):
             # Snapshot before actors/HUD; later drawing must not modify this image.
             self.cavern_scenery = frame.copy()
+
+    def advance_ambience(self, room_id, terrain):
+        """One game tick of the optional cave ambience; pixels only."""
+        from pop2.cavern_ambience import AMBIENCE_ROOMS, CavernAmbience, room_air
+
+        if (self.level.number, room_id) not in AMBIENCE_ROOMS:
+            self.ambience = None
+            return
+        if self.ambience is None or self.ambience.room != room_id:
+            if room_id not in self.ambience_air:
+                self.ambience_air[room_id] = room_air(self.level.number, room_id, self.rooms[room_id], terrain)
+            self.ambience = CavernAmbience(room_id, self.ambience_air[room_id])
+        self.ambience.advance(terrain)
+
+    def ambient_layer(self, frame, room_id):
+        """Drawn after remember_scenery: a room cut keeps the scenery of the
+        previous room in places, and must not keep a mote or a drop with it."""
+        if self.ambience is not None and self.ambience.room == room_id:
+            return self.ambience.draw(frame)
+        return frame
 
     def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
         if self.level.kind in (2, 3, 4) and caverns is not None:

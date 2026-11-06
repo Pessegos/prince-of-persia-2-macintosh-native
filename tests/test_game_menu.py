@@ -718,6 +718,20 @@ class GameMenuSceneTests(unittest.TestCase):
             self.assertTrue(getattr(scene, field + "_enabled"))
             self.assertTrue(scene.paused)
 
+    def test_cave_ambience_starts_off_and_its_shortcut_works_when_paused(self):
+        scene = self.scene
+        self.assertFalse(scene.cave_ambience_enabled)
+        scene.set_paused(True)
+        scene.dev_key_press(self.event("a", 0x20000))
+        self.assertTrue(scene.cave_ambience_enabled)
+        scene.dev_key_press(self.event("a", 0x20000))
+        self.assertTrue(scene.cave_ambience_enabled)
+        self.assertTrue(scene.paused)
+        scene.dev_key_release(self.event("a"))
+        self.press("a", 0x20000)
+        self.assertFalse(scene.cave_ambience_enabled)
+        self.assertTrue(scene.paused)
+
     def test_audio_toggle_does_not_consume_an_existing_run_key_release(self):
         scene = self.scene
         scene.jump_to_screen("5")
