@@ -94,6 +94,13 @@ class CaptionFont:
 
 
 class GalleryTests(unittest.TestCase):
+    def setUp(self):
+        # Model cards use the supplied mock previews, independently of whether
+        # this checkout has the real game's story programs imported.
+        available = patch('pop2.cutscene_gallery.chapter_available', return_value=True)
+        available.start()
+        self.addCleanup(available.stop)
+
     def gallery(self):
         return CutsceneGallery(CutsceneCollection(Path('unused-test-profile.json'), seen={'opening'}),
                                Mock(return_value=Image.new('RGB', (510, 384), '#773311')))
