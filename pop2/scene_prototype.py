@@ -89,6 +89,7 @@ from pop2.airborne_controls import AIRBORNE_TAKEOFF_SEQUENCES
 from pop2.low_controls import LowControls, LOW_INPUT_SEQUENCES
 from pop2.armed_controls import ArmedControls
 from pop2.sword_controls import advance_sequence
+from pop2.cutscene_viewer import CutsceneControls
 
 
 SCALE = 2
@@ -155,7 +156,7 @@ def next_animation_deadline(previous_deadline, now, interval_ms=ANIMATION_INTERV
     return deadline, delay_ms
 
 
-class ScenePrototype(WindowControls, ArmedControls, LowControls):
+class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControls):
     @property
     def room_id(self):
         return self.game.room_id
@@ -319,6 +320,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.copy_protection_enabled = True
         self.copy_verified = False
         self.copy_challenge = None
+
+        self.init_cutscene_viewer()
 
         # Prepare menu metadata before the animation clock starts, not on F3.
         self.development_levels()
@@ -519,6 +522,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.next_animation_at = time.perf_counter()
         self.pause_started_at = self.next_animation_at if self.paused else None
         self.active_save_path = Path(path).absolute()
+        self.mark_cutscene_seen('opening')
+        self.cutscene_collection.admit_saved_progress(game)
         self.status.set(f'Game loaded: {path}')
         self.render()
         if not self.in_animation_tick:
@@ -2515,6 +2520,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.intro.seek_operation(part_index)
         self.last_intro_at = time.perf_counter()
         self.status.set("Introduction")
+        if part_index is None:
+            self.mark_cutscene_seen('opening')
 
     def development_parts(self):
         if not self.with_intro:
@@ -2705,6 +2712,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.intro.seek_operation(part_index)
         self.last_intro_at = time.perf_counter()
         self.status.set("Voyage")
+        if part_index is None:
+            self.mark_cutscene_seen('voyage')
 
     def finish_ending(self):
         max_life = self.combat.player.max_life if self.combat is not None else None
@@ -2731,6 +2740,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.intro.seek_operation(part_index)
         self.last_intro_at = time.perf_counter()
         self.status.set('Discovery')
+        if part_index is None:
+            self.mark_cutscene_seen('discovery')
 
     def start_tree(self, variant):
         from pop2.intro import IntroAssets, IntroPlayer
@@ -2778,6 +2789,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         self.intro = IntroPlayer(self.carpet_assets, self.audio, music)
         self.last_intro_at = time.perf_counter()
         self.status.set('Carpet')
+        self.mark_cutscene_seen('carpet')
 
     def start_vision(self, wake):
         """PlayNIS(6) from 7:38ca: the vision at the throne in level eight.
@@ -2811,6 +2823,7 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
                                  status=self.native_viewport.crop((0, 365, 512, 384)))
         self.last_intro_at = time.perf_counter()
         self.status.set('Vision')
+        self.mark_cutscene_seen('vision')
         return True
 
     def start_temple_ride(self, finish, part_index=None):
@@ -2853,6 +2866,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
             self.intro.seek_operation(part_index)
         self.last_intro_at = time.perf_counter()
         self.status.set(status)
+        if part_index is None:
+            self.mark_story_scene_seen(program_name)
         return True
 
     def finish_level_four(self):
@@ -3440,6 +3455,8 @@ class ScenePrototype(WindowControls, ArmedControls, LowControls):
         return viewport
 
     def render(self):
+        if self.render_cutscene_replay():
+            return
         if getattr(self, "intro", None) is not None:
             viewport = Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255))
             intro_frame = self.intro.frame()

@@ -187,8 +187,9 @@ class ImportedGalleryTests(unittest.TestCase):
     def open_gallery(self):
         s = self.scene
         s.open_dev_mode()
-        s.dev_menu.focus = 8
-        s.apply_dev_action(s.dev_menu.activate())
+        # Exercise the retained low-level navigation directly. The public F3
+        # button now opens the chapter viewer, tested below and separately.
+        s.dev_menu.show_page('playback')
         return s.dev_menu
 
     def test_compact_captions_fit_without_clipping_the_scaled_bitmap(self):
@@ -389,7 +390,7 @@ class ImportedGalleryTests(unittest.TestCase):
         s.redraw_dev_menu()
         self.assertFalse(menu.dropdown)
 
-    def test_held_activation_cannot_play_accidentally_and_click_starts_playback(self):
+    def test_held_activation_cannot_play_accidentally_after_opening_the_chapter_viewer(self):
         s = self.scene
         for paused in (False, True):
             s.set_paused(paused)
@@ -398,16 +399,20 @@ class ImportedGalleryTests(unittest.TestCase):
             enter = SimpleNamespace(keysym='Return', state=0)
             s.dev_key_press(enter)
             s.dev_key_press(enter)
-            menu = s.dev_menu
+            menu = s.game_menu
             self.assertIsNotNone(menu)
-            self.assertTrue(menu.gallery_enabled)
+            self.assertEqual(menu.page, 'cutscenes')
+            self.assertIsNone(s.cutscene_replay)
             s.dev_key_release(enter)
-            selected = s.development_parts()[1]
             with patch.object(s, 'seek_playback_part', wraps=s.seek_playback_part) as seek:
-                s.apply_dev_action(menu.click(*part_point(menu, 1)))
-            seek.assert_called_once_with(selected)
+                rect = menu.cutscene_viewer.PLAY
+                s.apply_game_action(menu.click((rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2))
+            seek.assert_not_called()
             self.assertIsNone(s.dev_menu)
-            self.assertFalse(s.paused)
+            self.assertIsNotNone(s.cutscene_replay)
+            self.assertTrue(s.paused)
+            s.stop_cutscene_replay()
+            s.close_game_menu()
 
     def test_play_button_autoplays_but_resume_without_seeking_preserves_pause(self):
         s = self.scene

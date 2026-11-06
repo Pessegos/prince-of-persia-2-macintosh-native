@@ -105,7 +105,8 @@ class MenuInputAudioTests(unittest.TestCase):
 
     def test_hover_sounds_only_on_new_enabled_targets_and_reentry(self):
         menu = self.host.game_menu
-        for index in (0, 0, 1, 7):
+        hall = next(i for i, item in enumerate(menu.items) if item.action == 'hall')
+        for index in (0, 0, 1, hall):
             rect = menu.row_rect(index)
             self.hover((rect[0] + 10, rect[1] + 4))
         self.hover((-1, -1))
@@ -121,7 +122,7 @@ class MenuInputAudioTests(unittest.TestCase):
         host, menu = self.host, self.host.game_menu
         host.dev_pointer.return_value = (0, 0)
         host.dev_click(SimpleNamespace(num=1))
-        rect = menu.row_rect(7)
+        rect = menu.row_rect(next(i for i, item in enumerate(menu.items) if item.action == 'hall'))
         host.dev_pointer.return_value = (rect[0] + 10, rect[1] + 4)
         host.dev_click(SimpleNamespace(num=1))
         rect = menu.row_rect(1)
@@ -137,7 +138,7 @@ class MenuInputAudioTests(unittest.TestCase):
         host.menu_key_action(menu, SimpleNamespace(keysym='Down', state=0))
         host.menu_key_action(menu, SimpleNamespace(keysym='Return', state=0))
         self.assertEqual(host.audio.play_ui.call_args_list, [call('hover'), call('click')])
-        menu.focus = 7
+        menu.focus = next(i for i, item in enumerate(menu.items) if item.action == 'hall')
         host.menu_key_action(menu, SimpleNamespace(keysym='Return', state=0))
         host.menu_key_action(menu, SimpleNamespace(keysym='x', state=0))
         self.assertEqual(host.audio.play_ui.call_count, 2)
