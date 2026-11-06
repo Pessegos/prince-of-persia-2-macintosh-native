@@ -905,7 +905,7 @@ class ViewerSceneTests(unittest.TestCase):
         scene.seek_playback_part(next(part for part in scene.development_parts() if part.stage == 'temple'))
         self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
 
-    def test_replay_input_blocks_game_commands_space_pauses_and_escape_returns(self):
+    def test_replay_input_blocks_game_commands_escape_pauses_and_space_skips(self):
         scene = self.scene
         self.open_viewer()
         scene.start_cutscene_replay()
@@ -922,7 +922,7 @@ class ViewerSceneTests(unittest.TestCase):
             new_game.assert_not_called()
         self.assertIs(scene.cutscene_replay, original)
         self.assertEqual(self.snapshot(), before)
-        event = SimpleNamespace(keysym='space', state=0)
+        event = SimpleNamespace(keysym='Escape', state=0)
         scene.dev_key_press(event)
         self.assertTrue(original.paused)
         scene.dev_key_press(event)
@@ -935,10 +935,33 @@ class ViewerSceneTests(unittest.TestCase):
             scene.dev_click(SimpleNamespace(num=1))
         self.assertIs(scene.cutscene_replay, original)
         self.assertTrue(original.paused)
-        scene.dev_key_press(SimpleNamespace(keysym='Escape', state=0))
+        event = SimpleNamespace(keysym='space', state=0)
+        scene.dev_key_press(event)
         self.assertIsNone(scene.cutscene_replay)
         self.assertEqual(scene.game_menu.page, 'cutscenes')
+        # Auto-repeat from the skip gesture must not activate the selected card.
+        scene.dev_key_press(event)
+        self.assertIsNone(scene.cutscene_replay)
+        scene.dev_key_release(event)
         self.assertEqual(self.snapshot(), before)
+
+    def test_space_skips_a_playing_film_and_escape_keeps_the_same_gallery_and_private_player(self):
+        scene = self.scene
+        gallery = self.open_viewer()
+        scene.start_cutscene_replay()
+        replay = scene.cutscene_replay
+        event = SimpleNamespace(keysym='Escape', state=0)
+        for paused in (True, False):
+            scene.dev_key_press(event)
+            self.assertIs(scene.cutscene_replay, replay)
+            self.assertEqual(replay.paused, paused)
+            self.assertIs(scene.game_menu.cutscene_viewer, gallery)
+            self.assertEqual(scene.game_menu.page, 'cutscenes')
+            scene.dev_key_release(event)
+        scene.dev_key_press(SimpleNamespace(keysym='space', state=0))
+        self.assertIsNone(scene.cutscene_replay)
+        self.assertIs(scene.game_menu.cutscene_viewer, gallery)
+        self.assertEqual(scene.game_menu.page, 'cutscenes')
 
     def test_replay_renders_no_key_legends_in_play_or_pause(self):
         scene = self.scene

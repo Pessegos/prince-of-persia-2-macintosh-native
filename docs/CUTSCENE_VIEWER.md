@@ -143,8 +143,10 @@ The underlying game remains paused. A replay constructs its own `IntroPlayer`,
 advances on a separate Tk callback and never calls the campaign's scene-finish
 handlers, loads a level or invokes its stored continuation. The live game,
 original scene, random generators, world clock, opponents and checkpoints
-remain in place. Completion, Escape, Backspace or F1 returns to the collection.
-Space or a click on the film pauses/resumes the replay;
+remain in place. Completion, Space, Backspace or F1 returns to the collection.
+Escape or a click on the film pauses/resumes the replay. This keeps Escape for
+pause and Space for skipping, as in the campaign scenes. Held-key repeats cannot
+toggle pause repeatedly or restart a chapter after skipping;
 losing focus pauses it without automatically resuming on focus return.
 Playing and paused films have no overlaid keyboard legends or hidden Back
 hit area; the normal pause indicator and story captions remain.

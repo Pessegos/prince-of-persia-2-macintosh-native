@@ -457,9 +457,9 @@ class CutsceneControls:
         if not repeated:
             if event.keysym == 'Return' and alt:
                 self.toggle_fullscreen()
-            elif event.keysym == 'space':
+            elif event.keysym == 'Escape':
                 self.pause_cutscene_replay(not self.cutscene_replay.paused)
-            elif event.keysym in ('Escape', 'BackSpace', 'F1'):
+            elif event.keysym in ('space', 'BackSpace', 'F1'):
                 self.stop_cutscene_replay()
         return True
 
