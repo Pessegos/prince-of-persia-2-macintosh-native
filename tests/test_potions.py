@@ -180,11 +180,11 @@ class PotionTests(unittest.TestCase):
         p.consume_events(SequenceState(78, sequence_events=[(-14, (1,))]), actor)
         self.assertEqual((actor.life, p.fatal), (0, True))
 
-    def test_poison_flask_can_be_picked_up_but_unmodelled_types_cannot(self):
+    def test_every_flask_type_can_be_picked_up_but_unknown_types_cannot(self):
         motion = SimpleNamespace(room=0, row=1)
         record = FrameRecord(15, 14, 0, 4, 0, 70)
         state = SequenceState(2, action=15, facing=1, target_x=188)
-        for kind, drinkable in ((1, True), (2, True), (3, True), (4, True), (5, True), (6, False)):
+        for kind, drinkable in ((1, True), (2, True), (3, True), (4, True), (5, True), (6, True), (7, False)):
             with self.subTest(kind=kind):
                 self.place(0, 13, kind << 5)
                 terrain = LevelMap(bytes(self.data))
