@@ -153,3 +153,24 @@ The native-artwork opt-out still draws the original fragment. No atlas or
 imported-resource writes are required; the command omission applies only
 to level8 room5. The comparison is kept locally at
 `rendered/ruins-second-batch/room5-review.png`.
+
+## Repeated column shadows: five-room review
+
+The user approved the V4 proposals on 2026-11-07. They retain the V2 wall
+continuation and adjust only the isolated bright sample that repeated as a
+one-pixel vertical strip. The broader V3 reduction was rejected. Preserve the
+accepted wall texture and lighting rather than reducing the whole treatment.
+
+These are placement-specific cached sprite crops. Imported resources, lit
+column bodies, transparency, actor occlusion and floor/climb/gate masks are
+unchanged. Existing approved source edits are composed into the updated crops.
+Room numbers below are native, one-based; only column 1 in each reviewed room
+is included. Other columns found during the inventory are not approved targets.
+
+| Level | Room | Column X / bottom | Added visible changes | Combined render RGB SHA256 |
+| --- | --- | --- | --- | --- |
+| 3 | 1 | 111 / 243 | 585 | `470358256d02d9371eabfc773426c3b6949e14c62852acbf6b9eac022ad44f02` |
+
+The enlarged comparisons and approval manifest remain local under
+`rendered/column-shadow-five-v4/`. Each row's hash uses the static cached room
+without separately animated scenery items, matching the gameplay renderer.

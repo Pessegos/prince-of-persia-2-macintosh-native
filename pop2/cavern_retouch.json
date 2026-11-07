@@ -98,6 +98,7 @@
       ]
     },
     {
+      "level": 3,
       "room": 0,
       "shape": 3502,
       "x": 91,
@@ -111,14 +112,14 @@
       "source_rect": [
         0,
         11,
-        35,
+        51,
         120
       ],
       "atlas_rect": [
-        63,
         0,
-        98,
-        109
+        840,
+        51,
+        949
       ]
     },
     {
@@ -2467,6 +2468,106 @@
         732,
         341,
         836
+      ]
+    },
+    {
+      "level": 3,
+      "room": 0,
+      "shape": 3513,
+      "x": 142,
+      "bottom": 220,
+      "mode": 0,
+      "size": [
+        51,
+        120
+      ],
+      "source_sha256": "b377430e4d628f84af3bf9d54df00ae0864fe3822e0d89dba4ed7468c6450106",
+      "source_rect": [
+        0,
+        30,
+        8,
+        115
+      ],
+      "atlas_rect": [
+        52,
+        840,
+        60,
+        925
+      ]
+    },
+    {
+      "level": 3,
+      "room": 0,
+      "shape": 3533,
+      "x": 111,
+      "bottom": 243,
+      "mode": 16,
+      "size": [
+        40,
+        119
+      ],
+      "source_sha256": "8b668916496bc91678d9a3d402c4a0a47ce8babd916768c117ff7e49b834dfdb",
+      "source_rect": [
+        28,
+        57,
+        37,
+        109
+      ],
+      "atlas_rect": [
+        61,
+        840,
+        70,
+        892
+      ]
+    },
+    {
+      "level": 3,
+      "room": 0,
+      "shape": 3525,
+      "x": 104,
+      "bottom": 245,
+      "mode": 16,
+      "size": [
+        89,
+        30
+      ],
+      "source_sha256": "edfd80276b3df3440c28feca0ec7b4fad4d728d1efc5bf3900bb7ba70aa0ed0f",
+      "source_rect": [
+        39,
+        0,
+        46,
+        11
+      ],
+      "atlas_rect": [
+        71,
+        840,
+        78,
+        851
+      ]
+    },
+    {
+      "level": 3,
+      "room": 0,
+      "shape": 3534,
+      "x": 138,
+      "bottom": 227,
+      "mode": 16,
+      "size": [
+        39,
+        102
+      ],
+      "source_sha256": "6b4810df4edd6314d1b169446ec89592eda0ca445545b74576a8744308057c01",
+      "source_rect": [
+        5,
+        92,
+        12,
+        100
+      ],
+      "atlas_rect": [
+        79,
+        840,
+        86,
+        848
       ]
     }
   ],

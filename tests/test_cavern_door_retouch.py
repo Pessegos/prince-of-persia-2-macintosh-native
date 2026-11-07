@@ -87,7 +87,7 @@ class CavernDoorRetouchTests(unittest.TestCase):
 
     def test_entry_and_exit_reproduce_the_user_approved_previews(self):
         for room, kwargs, expected in (
-                (0, {'entry_frame': 2}, 'dafedfbf341b66b0d7e6ad0d720b85a7ec0ce1c527977a65dfef902ae938cef9'),
+                (0, {'entry_frame': 2}, '35bd0517c80239fff889c41d842fce28b6adf15b6634ead420c0ccc13b4dd2c6'),
                 (29, {}, '595b9def05ce7fc25446c4c98e05cd881028f6dc69fae9467b167ac8510791bf')):
             pixels = cavern_room(room, retouched=True, **kwargs).flattened().convert('RGB').tobytes()
             self.assertEqual(hashlib.sha256(pixels).hexdigest(), expected)
