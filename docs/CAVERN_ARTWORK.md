@@ -198,7 +198,11 @@ What the user has reviewed and how each part ended up:
   changing place". Now the flame stands further off the rock, so the light gets
   out of the recess, and the recess takes half the light (`RECESS_LIGHT`) with a
   soft edge, as it is painted as already lit.
-- **The candle.** The light is traced once, in about 60 ms on entering the room,
+- **Keeping it in.** With the plate gone the light ran out over the back wall,
+  and the user found that it "does not make sense": a flame in a niche lights the
+  niche and a little of the rock around it. So it reaches about 15 pixels past
+  the recess, and the shape it takes moves that edge by about as much again.
+- **The candle.** The light is traced once, in about 30 ms on entering the room,
   and then changes shape instead of moving. Each frame of flame is measured all the
   way round its middle (`flame_outlines`), and where it burns further than usual
   the light reaches further that way (`Firelight.at`), so a tall flame draws the
@@ -233,31 +237,32 @@ What the user has reviewed and how each part ended up:
   pixel. Crisp grains fast enough to hide that looked in a hurry. Grains split
   among the four nearest pixels swelled and shrank on every pixel crossed: the
   brightest pixel fell from all of the grain to a quarter and back, and it
-  looked like a worm going round a small square. `soft_spot` keeps one small
-  soft shape wherever the grain falls between pixels. The user then asked for a
-  realistic mix of the three variants they had seen: a soft grain, one pixel
-  sliding, and still glints. Real dust is only seen where light catches it, so
-  the light decides which of the three a grain is. In the dark it is a faint soft
-  spot. In the light it comes into focus (`on_the_pixels`): one sharp pixel that
-  waits and slides into the next, and as it tumbles a face of it catches the fire
-  for a moment. A glint is as strong as the light on the grain, so there are none
-  in the dark, and two rhythms keep any grain from flashing like a beacon. How lit
-  a grain is comes from the traced light, spread out a little (`lit_air`), so the
-  air behind a ledge stays dark. The dark spot started so faint that only someone
-  who knew where to look could find it, so it was made paler.
-- **Sizes.** That showed only the large grains, the wrong way round: large ones
-  should be the rare ones. So a grain now has a size, and most are fine
-  (`DUST_SKEW`). A fine grain is one sharp pixel anywhere, dark or lit. Only the few
-  large ones are soft spots in the dark. The large ones keep the slow speed the
-  user liked, and the finest go half as fast again, stay with the air better, and
-  sink less often. There are 64 grains.
+  looked like a worm going round a small square. `soft_spot` keeps one shape
+  wherever the grain falls between pixels. Then the dust was hard to see away from
+  the torch, and a pass with 64 pale grains of mixed sizes "looked like snowing".
+  That had three causes, all fixed: there was a lot of it, each new grain went to
+  the emptiest place so it was evenly spread, and half of it was falling.
+- **Three kinds of dust** (`DustKind`). Fine grains, 22 of them, are nearly all of
+  it: one small opaque pixel in the colour of the rock, lasting about 30 seconds.
+  Bright grains, 4, are as small and paler, and last 3 to 7 seconds. Coarse grains,
+  3, are soft and half transparent, the slowest, and the only ones that sink. A
+  grain warms as it enters the light, a coarse one comes into focus there
+  (`on_the_pixels`), and as a grain tumbles a face of it catches the fire for a
+  moment. A glint is as strong as the light on the grain, so there are none in the
+  dark, and two rhythms keep any grain from flashing like a beacon. How lit a grain
+  is comes from the traced light, spread out a little (`lit_air`), so the air
+  behind a ledge stays dark.
+- **Where it gathers.** Each visit to the room picks four pockets of open air, far
+  apart (`find_pockets`), and grains start around those or near the fire. That
+  leaves patches of dust and clean air between them.
 - **The air** moves the dust. One slow draught crosses the room and turns very
   slowly. Fire draws the air in beside it, sends it up through the flame and
   spreads it out above (`wind_at`). A grain has some weight, so it follows any
   change in the air slowly, and it sways a little. With rock ahead it slows and
-  settles over 3 seconds instead of vanishing. Half the grains sink, the larger
-  ones more often. One that reaches a floor comes down on it (`land`), and lies there as
-  one pale speck for 7 to 14 seconds, fading. It does not land on the lava, or
+  settles over 3 seconds instead of vanishing. Most coarse grains sink, starting
+  not far above a floor. One that reaches it comes down on it (`land`), a few times
+  in two minutes, and lies there as one pale speck for 7 to 14 seconds, fading.
+  It does not land on the lava, or
   behind the foreground, and a floor that falls takes it along. Otherwise a grain
   has a lifespan:
   it comes up over 4 seconds and goes over 7. A new one starts unseen, in the

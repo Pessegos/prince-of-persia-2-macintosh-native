@@ -16,8 +16,8 @@ each brightness, stepped through an ordered dither.
 
 It is meant to be barely noticed, and it is tied to the scenery. Drops hang
 from the tips of the stalactites and end on the floor or in the lava, single
-grains of ash rise from the lava and the flame, and dust drifts through the
-open air. The flame stays exactly the game's. Its light does not: the frames'
+grains of ash rise from the lava and the flame, and a little dust drifts through
+the open air. The flame stays exactly the game's. Its light does not: the frames'
 painted wall keeps still, and the light is traced over the relief of the rock by
 pop2.firelight and changes shape with the flame, like a candle's. The user rejected
 a wider glow over everything and sparks with trails as far too much: the light
@@ -65,32 +65,60 @@ SWELL_TICKS = 18
 GRAVITY = 1.15
 FASTEST_FALL = 15.0
 
-MOST_DUST = 64
-# Most grains are fine and the largest are rare: a grain's size, from 0 to 1, is a
-# random number raised to this power.
-DUST_SKEW = 2.5
-# A grain lives this long, and is seen coming and going: all times are ticks.
-DUST_LIFE = (220, 480)
-DUST_FADE_IN = 48
-DUST_FADE_OUT = 84
+# Dust is three kinds of grain. It read as snow when there was a lot of one kind:
+# pale, evenly spread, half of it falling. So it is sparse, it gathers in patches,
+# only the coarse grains ever sink, and its colour is the rock's, not white.
+#
+# Fine grains are nearly all of it: one small opaque pixel that lasts. Bright ones
+# are the same size and catch the eye for a moment, so they do not last. Coarse
+# ones are soft and rare, the slowest, and the ones heavy enough to come down.
+@dataclass(frozen=True)
+class DustKind:
+    """Times are ticks, speeds pixels a tick."""
+
+    count: int
+    speed: tuple
+    life: tuple
+    fade_in: int
+    fade_out: int
+    # How wide its spot is in pixels, how much of what is under it it hides, and
+    # its colour in the dark.
+    softness: float
+    strength: float
+    ink: int
+    # The share of them that sink, and how soon they take up a change in the air.
+    sinkers: float
+    follows: float
+
+
+DUST_SOFTNESS = 0.72
+DUST_SHARPNESS = 0.36
+FINE_DUST = DustKind(22, (0.13, 0.26), (220, 480), 48, 84, DUST_SHARPNESS, 1.0, 83, 0.0, 0.1)
+BRIGHT_DUST = DustKind(4, (0.13, 0.26), (36, 84), 12, 30, DUST_SHARPNESS, 1.0, 67, 0.0, 0.1)
+COARSE_DUST = DustKind(3, (0.11, 0.2), (300, 600), 48, 84, DUST_SOFTNESS, 0.5, 67, 0.8, 0.06)
+DUST_KINDS = (FINE_DUST, BRIGHT_DUST, COARSE_DUST)
+MOST_DUST = sum(kind.count for kind in DUST_KINDS)
+DUST_LONGEST_LIFE = max(kind.life[1] for kind in DUST_KINDS)
 # A new grain needs this much clear air ahead, or it could only flash by.
 DUST_SHORTEST_LIFE = 140
-# Of this many places for a new grain, it takes the one furthest from the rest.
-DUST_PLACES = 5
+# Dust gathers in a few pockets of still air, this far apart at the least, and a
+# grain starts about this far from the middle of one, all in pixels. Keeping new
+# grains as far as possible from the rest spread them as evenly as snow.
+DUST_POCKETS = 4
+DUST_POCKETS_APART = 110
+DUST_PATCH = 24
 DUST_TRIES = 24
-# Pixels a tick, and radians around rightwards: one slow draught crosses the
-# room. With every heading of its own it looked like insects. That is the speed of
-# the largest grains. The finest go this much faster again.
-DUST_SPEED = (0.11, 0.2)
-DUST_FINE_SPEED = 0.5
+# Radians around rightwards: one slow draught crosses the room. With every heading
+# of its own the dust looked like insects.
 DUST_HEADING = (-0.6, 0.25)
-DUST_BY_FLAME = 0.28
+# Dust shows best where there is light, so that is where most of it starts.
+DUST_BY_FLAME = 0.25
+DUST_NEAR_FLAME = (14, 70)
 DUST_BY_POOL = 0.1
 # The draught turns very slowly, and each grain sways in it. A grain has a
 # little weight: it takes a while to follow any change in the air.
 DRAUGHT_TURN = 0.3
 DUST_SWAY = 0.05
-DUST_INERTIA = 0.06
 # Air is drawn in beside a flame, rises through it and spreads out over it.
 HEAT_REACH = 84
 HEAT_PULL = 0.1
@@ -102,30 +130,27 @@ POOL_DRAUGHT = 0.12
 DUST_LOOK_AHEAD = 16
 DUST_SETTLE = 36
 DUST_BRAKE = 0.93
-# Some grains sink as they drift, in pixels a tick: of the finest and the largest,
-# this share. One that reaches a floor comes down on it this far before the walking
-# line, in pixels, and lies there this many ticks, fading, as a single pale speck.
-DUST_SINKERS = (0.4, 0.9)
-DUST_SINK = (0.07, 0.15)
+# How fast a sinking grain sinks. It starts with a floor no further below it than
+# this, in pixels, and the draught carries it less than the others, or it would
+# only ever settle on a pillar. One that reaches a floor comes down on it this far
+# before the walking line, in pixels, and lies there this many ticks, fading, as a
+# single pale speck.
+DUST_SINK = (0.1, 0.2)
+DUST_DROP = 70
+DUST_SINKER_DRIFT = 0.5
 DUST_REST_DEPTH = (2, 12)
 DUST_REST = (80, 170)
 DUST_LANDING_REACH = 40
-# A fine grain is one sharp pixel that waits, then slides into the next, and it
-# shows like that anywhere: seeing only the large grains was the wrong way round.
-# In the dark a large grain is a soft pale spot, faint but plain to someone who
-# does not know to look for it, and in the light it comes into focus too. As a grain
-# tumbles a face of it catches the fire for a moment. There is nothing to catch in
-# the dark, so the glints are as strong as the light on the grain.
-DUST_DARK = 0.66
-DUST_FINE = 0.75
-DUST_BRIGHTEST = 0.78
-DUST_LIT = 0.5
+# A grain's colour warms as light falls on it, and a soft grain comes into focus:
+# one sharp pixel that waits, then slides into the next. As it tumbles a face of it
+# catches the fire for a moment. There is nothing to catch in the dark, so the
+# glints are as strong as the light on the grain.
+DUST_LIT = 0.3
 DUST_GLINT = 0.3
+DUST_FLASH = 1.5
+DUST_LYING = 0.75
 DUST_SPIN = (0.13, 0.27)
 DUST_FOCUS_LIGHT = 0.35
-# How wide a large grain's soft spot is, in pixels, in the dark and in focus.
-DUST_SOFTNESS = 0.72
-DUST_SHARPNESS = 0.5
 DUST_POOL_REACH = (84, 62)
 # Dust over the lava is a dull glow, so that it is not read as more ash.
 DUST_POOL_STRENGTH = 0.6
@@ -163,7 +188,7 @@ AURA_GAIN, AURA_ADD = (1.9, 1.45, 1.05), (26.0, 11.0, 1.0)
 # burns is followed too, deepened because the nine frames are much alike.
 QUICK_FOLLOW, QUICK_DEPTH = 0.3, 1.6
 SLOW_FOLLOW, SLOW_DEPTH = 0.12, 2.4
-SHORTEST_REACH, LONGEST_REACH = 0.6, 1.7
+SHORTEST_REACH, LONGEST_REACH = 0.6, 1.5
 FLICKER_FOLLOW = 0.35
 FLICKER_DEPTH = 2.5
 # How far past its step a pixel's light must go before the pixel changes, in
@@ -182,12 +207,12 @@ SWELL_INKS = (214, 216, 217)
 SPLASH_INKS = (218, 216, 215, 214)
 STEAM_INKS = (67, 219, 110)
 FLASH_INKS = (199, 192)
-DUST_DARK_INK = 67
-DUST_WARM_INK = 207
+DUST_WARM_INK = 208
+DUST_SHINE_INK = 207
 DUST_HOT_INK = 210
 ASH_INKS = (192, 189, 186, 212, 211, 110)
 ALL_INKS = frozenset((*DROP_INKS, *SWELL_INKS, *SPLASH_INKS, *STEAM_INKS, *FLASH_INKS, *ASH_INKS,
-                      DUST_DARK_INK, DUST_WARM_INK, DUST_HOT_INK))
+                      *(kind.ink for kind in DUST_KINDS), DUST_WARM_INK, DUST_SHINE_INK, DUST_HOT_INK))
 
 
 class Colours:
@@ -357,7 +382,8 @@ def read_torch(frames, unlit, left, top, scenery, table):
     rows, columns = numpy.mgrid[firelight.top:firelight.top + at_rest.shape[0],
                                 firelight.left:firelight.left + at_rest.shape[1]]
     glow = Glow(firelight.left, firelight.top, at_rest, BAYER[rows % 4, columns % 4], table)
-    lit_air = gaussian(at_rest, AIR_LIGHT_SPREAD).astype(numpy.float32)
+    # The recess takes less of the light. The air before it does not.
+    lit_air = gaussian(at_rest / firelight.taken, AIR_LIGHT_SPREAD).astype(numpy.float32)
     return TorchArt(left, top, frames, steady_wall(frames, flame, unlit), flame, firelight, glow, lit_air)
 
 
@@ -552,8 +578,7 @@ class Mote:
     dy: float
     phase: float
     life: float
-    # From 0 for the finest to 1 for the largest.
-    size: float
+    kind: DustKind
     spin: float = 0.2
     age: float = 0.0
     # Its speed now, which follows dx and dy and the air around it.
@@ -662,6 +687,7 @@ class CavernAmbience:
     rng: random.Random = field(default_factory=random.Random)
     falls: list = field(default_factory=list)
     motes: list = field(default_factory=list)
+    pockets: list = field(default_factory=list)
     ash: list = field(default_factory=list)
     flecks: list = field(default_factory=list)
     flickers: list = field(default_factory=list)
@@ -673,13 +699,15 @@ class CavernAmbience:
             period = self.rng.randint(*TICKS_BETWEEN_DROPS)
             self.falls.append(Fall(source, period, self.rng.randrange(period)))
         self.flickers = [self.new_flicker(torch) for torch in self.air.torches]
+        self.pockets = self.find_pockets()
         if self.air.flames or self.air.pools:
-            for _ in range(MOST_DUST):
-                mote = self.new_mote()
-                if mote is not None:
-                    # The room was already dusty before the Prince came in.
-                    mote.age = self.rng.uniform(0, mote.life)
-                    self.motes.append(mote)
+            for kind in DUST_KINDS:
+                for _ in range(kind.count):
+                    mote = self.new_mote(kind)
+                    if mote is not None:
+                        # The room was already dusty before the Prince came in.
+                        mote.age = self.rng.uniform(0, mote.life)
+                        self.motes.append(mote)
 
     # Light
 
@@ -722,51 +750,58 @@ class CavernAmbience:
 
     # Dust
 
+    def find_pockets(self):
+        """The places of open air where dust gathers in this visit to the room."""
+        rng, pockets = self.rng, []
+        for _ in range(DUST_TRIES * DUST_POCKETS):
+            x, y = rng.uniform(0, WIDTH), rng.uniform(0, HEIGHT)
+            if (self.air.is_open(int(x), int(y)) and len(pockets) < DUST_POCKETS
+                    and all(math.hypot(x - other_x, y - other_y) > DUST_POCKETS_APART for other_x, other_y in pockets)):
+                pockets.append((x, y))
+        return pockets
+
     def clear_air(self, x, y, dx, dy):
         """Ticks of drifting from a point before reaching rock, up to the longest life."""
-        for ticks in range(8, DUST_LIFE[1], 8):
+        for ticks in range(8, DUST_LONGEST_LIFE, 8):
             if not self.air.is_open(int(x + dx * ticks), int(y + dy * ticks)):
                 return ticks
-        return DUST_LIFE[1]
+        return DUST_LONGEST_LIFE
 
     def place_for_dust(self, near):
         rng = self.rng
         if near < DUST_BY_FLAME and self.air.flames:
             flame_x, flame_y = rng.choice(self.air.flames)
-            angle, distance = rng.uniform(0, math.tau), rng.uniform(14, 110)
+            angle, distance = rng.uniform(0, math.tau), rng.uniform(*DUST_NEAR_FLAME)
             return flame_x + math.cos(angle) * distance, flame_y + math.sin(angle) * distance * 0.9
         if near < DUST_BY_FLAME + DUST_BY_POOL and self.air.pools:
             return rng.choice(tuple(rng.choice(self.air.pools))), rng.uniform(100, 215)
+        if self.pockets:
+            x, y = rng.choice(self.pockets)
+            return rng.gauss(x, DUST_PATCH), rng.gauss(y, DUST_PATCH)
         return rng.uniform(0, WIDTH), rng.uniform(0, HEIGHT)
 
-    def new_mote(self):
-        """A new grain starts unseen where the dust is thinnest, with room to
-        drift through its whole life, so that old and new never show as a swap."""
+    def new_mote(self, kind=FINE_DUST):
+        """A new grain starts unseen, with room to drift through its whole life."""
         rng = self.rng
         near = rng.random()
-        size = rng.random() ** DUST_SKEW
-        best, room, found = None, -1.0, 0
-        for _ in range(DUST_TRIES):
+        sink = rng.uniform(*DUST_SINK) if rng.random() < kind.sinkers else 0.0
+        shortest = min(DUST_SHORTEST_LIFE, kind.life[0])
+        for attempt in range(DUST_TRIES):
             x, y = self.place_for_dust(near)
-            if not self.air.is_open(int(x), int(y)):
+            # A grain that sinks tries first for a place above a floor.
+            high_up = sink and attempt < DUST_TRIES / 2 and self.air.is_open(int(x), int(y) + DUST_DROP)
+            if high_up or not self.air.is_open(int(x), int(y)):
                 continue
             heading = rng.uniform(*DUST_HEADING)
-            speed = rng.uniform(*DUST_SPEED) * (1 + DUST_FINE_SPEED * (1 - size))
+            speed = rng.uniform(*kind.speed) * (DUST_SINKER_DRIFT if sink else 1.0)
             dx, dy = math.cos(heading) * speed, math.sin(heading) * speed
             clear = self.clear_air(x, y, dx, dy)
-            if clear < DUST_SHORTEST_LIFE:
-                continue
-            found += 1
-            apart = min((math.hypot(x - mote.x, y - mote.y) for mote in self.motes), default=WIDTH)
-            if apart > room:
-                room = apart
-                sinkers = DUST_SINKERS[0] + (DUST_SINKERS[1] - DUST_SINKERS[0]) * size
-                sink = rng.uniform(*DUST_SINK) if rng.random() < sinkers else 0.0
-                best = Mote(x, y, dx, dy, rng.uniform(0, math.tau), min(clear, rng.uniform(*DUST_LIFE)),
-                            size, rng.uniform(*DUST_SPIN), moving_x=dx, moving_y=dy, sink=sink)
-            if found == DUST_PLACES:
-                break
-        return best
+            if clear >= shortest:
+                # A grain that sinks is not going where it is heading.
+                life = rng.uniform(*kind.life)
+                return Mote(x, y, dx, dy, rng.uniform(0, math.tau), life if sink else min(clear, life), kind,
+                            rng.uniform(*DUST_SPIN), moving_x=dx, moving_y=dy, sink=sink)
+        return None
 
     def land(self, mote, terrain):
         """A sinking grain with a floor below it makes for the floor."""
@@ -814,8 +849,7 @@ class CavernAmbience:
             sway_y = DUST_SWAY * wave(slow, (0.7, 0.8, mote.phase * 3), (0.3, 2.1, mote.phase * 5))
             along_x = mote.dx * math.cos(turning) - mote.dy * math.sin(turning)
             along_y = mote.dx * math.sin(turning) + mote.dy * math.cos(turning)
-            # The finer the grain, the sooner it goes with the air.
-            follows = DUST_INERTIA * (2 - mote.size)
+            follows = mote.kind.follows
             mote.moving_x += (along_x + wind_x + sway_x - mote.moving_x) * follows
             mote.moving_y += (along_y + wind_y + sway_y + mote.sink - mote.moving_y) * follows
         mote.x += mote.moving_x
@@ -827,7 +861,7 @@ class CavernAmbience:
         motes = []
         for mote in self.motes:
             if not self.advance_mote(mote, turning, terrain):
-                mote = self.new_mote()
+                mote = self.new_mote(mote.kind)
                 if mote is None:
                     continue
             motes.append(mote)
@@ -835,19 +869,23 @@ class CavernAmbience:
 
     def dust_colour(self, mote):
         """(red, green, blue, strength) of a mote where it is now."""
+        kind = mote.kind
         flame, pool = self.light_at(mote.x, mote.y)
         light = max(flame, pool)
-        fade = smooth(min(1.0, mote.age / DUST_FADE_IN, (mote.life - mote.age) / DUST_FADE_OUT, mote.settling))
+        fade = smooth(min(1.0, mote.age / kind.fade_in, (mote.life - mote.age) / kind.fade_out, mote.settling))
         # Two rhythms, so that no grain flashes like a beacon.
         turn = mote.phase + mote.age * mote.spin
         glint = max(0.0, math.sin(turn)) ** 12 * max(0.0, math.sin(turn * 0.37 + mote.phase))
-        strength = min(DUST_BRIGHTEST, DUST_DARK + light * DUST_LIT) + DUST_GLINT * glint * light
         inks = self.air.inks
-        dark, lit = inks[DUST_DARK_INK], inks[DUST_WARM_INK if flame >= pool else DUST_HOT_INK]
+        dark, lit, shine = inks[kind.ink], inks[DUST_WARM_INK if flame >= pool else DUST_HOT_INK], inks[DUST_SHINE_INK]
         # The floor is brighter than the air, and only a warm pale speck shows on it.
-        warmth = 1.0 if mote.rest is not None else min(1.0, light / DUST_FOCUS_LIGHT)
+        if mote.rest is not None:
+            return shine[0], shine[1], shine[2], DUST_LYING * fade
+        warmth = min(1.0, light / DUST_FOCUS_LIGHT)
+        flash = min(1.0, DUST_FLASH * glint * light)
         red, green, blue = (dark[channel] + (lit[channel] - dark[channel]) * warmth for channel in range(3))
-        return red, green, blue, (DUST_FINE + (1 - DUST_FINE) * mote.size) * fade * strength
+        red, green, blue = red + (shine[0] - red) * flash, green + (shine[1] - green) * flash, blue + (shine[2] - blue) * flash
+        return red, green, blue, min(1.0, kind.strength + light * DUST_LIT + DUST_GLINT * glint * light) * fade
 
     # Ash
 
@@ -1008,8 +1046,10 @@ class CavernAmbience:
     def dust_spot(self, canvas, mote):
         red, green, blue, strength = self.dust_colour(mote)
         resting = mote.rest is not None
-        focus = 1.0 if resting else max(smooth(max(self.light_at(mote.x, mote.y)) / DUST_FOCUS_LIGHT), 1 - mote.size)
-        softness = DUST_SOFTNESS + (DUST_SHARPNESS - DUST_SOFTNESS) * focus
+        kind = mote.kind
+        sharp = resting or kind.softness <= DUST_SHARPNESS
+        focus = 1.0 if sharp else smooth(max(self.light_at(mote.x, mote.y)) / DUST_FOCUS_LIGHT)
+        softness = kind.softness + (DUST_SHARPNESS - kind.softness) * focus
         air, nearest = self.air, self.air.colours.nearest
         for column, row, weight in soft_spot(on_the_pixels(mote.x, focus), on_the_pixels(mote.y, focus), softness):
             amount = weight * strength
