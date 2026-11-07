@@ -4394,6 +4394,56 @@
         163,
         2116
       ]
+    },
+    {
+      "level": 4,
+      "room": 13,
+      "shape": 3551,
+      "x": 204,
+      "bottom": 365,
+      "mode": 16,
+      "size": [
+        40,
+        146
+      ],
+      "source_sha256": "dcaea15befac04a0fa5dd2940d11c0bf2ed06609478e458193354166c632ffcf",
+      "source_rect": [
+        20,
+        122,
+        31,
+        129
+      ],
+      "atlas_rect": [
+        0,
+        2117,
+        11,
+        2124
+      ]
+    },
+    {
+      "level": 4,
+      "room": 13,
+      "shape": 3525,
+      "x": 206,
+      "bottom": 365,
+      "mode": 16,
+      "size": [
+        89,
+        30
+      ],
+      "source_sha256": "edfd80276b3df3440c28feca0ec7b4fad4d728d1efc5bf3900bb7ba70aa0ed0f",
+      "source_rect": [
+        19,
+        6,
+        32,
+        13
+      ],
+      "atlas_rect": [
+        12,
+        2117,
+        25,
+        2124
+      ]
     }
   ],
   "doors": [

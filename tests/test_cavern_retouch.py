@@ -16,7 +16,7 @@ from pop2.terrain import LevelMap
 class BundledCavernRetouchTests(unittest.TestCase):
     def test_level_four_bundle_is_separate_and_only_targets_approved_rooms(self):
         assets = retouch_assets(4)
-        self.assertEqual(len(assets), 41)
+        self.assertEqual(len(assets), 43)
         self.assertEqual({key[0] for key in assets}, {4, 5, 11, 12, 13, 21, 22, 25, 27})
         key, (record, image) = next(iter(assets.items()))
         self.assertEqual(image.size, (record['source_rect'][2] - record['source_rect'][0],
@@ -169,7 +169,7 @@ class CavernRetouchTests(unittest.TestCase):
     def test_level_four_final_batch_matches_approved_pixels_and_preserves_masks(self):
         approved = {
             4: (382, '421ee7b40f740af3598ef7d1c3b8acf5ba6a5b4fd4394a2a684ed017f53d5290'),
-            13: (608, '6c545e48efa6fde6a208453d89c3bd5785bdb9fcf1bdee055d086521553c7933'),
+            13: (654, '1b624888aa2e8417c4305244956567b77668b8d3c59931e0b7451d7a7eda2b7b'),
             25: (481, '9ef82c6d26f7540b12e655ed87dcebaf0ab4f3ba810f609ac75d0735ab096197'),
             27: (336, 'd60832d8900669a315a5868ea9d069755f5b330f4c12b5618e6567578c8e1d63'),
         }
