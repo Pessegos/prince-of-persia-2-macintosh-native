@@ -2,8 +2,11 @@
 import hashlib
 import unittest
 
+from PIL import Image, ImageChops
+
 from pop2.cavern_retouch import retouched_sprite
-from pop2.caverns import cavern_assets, cavern_command_sprite, cavern_room
+from pop2.caverns import (cavern_assets, cavern_command_sprite, cavern_room, clipped_sprite,
+                          pressure_drawing_commands, room_assets)
 from pop2.level_data import LevelDefinition
 from pop2.level_rendering import LevelRenderer
 from pop2.paths import ASSET_DIR
@@ -13,6 +16,9 @@ from tests import test_cavern_retouch as retouch_tests
 
 # Native level/room, approved cached RGB, preserved foreground RGBA, source placements.
 APPROVED_FLOOR_JOINS = {
+    (5, 9): ('c38b6f0dc49853d652be724aa228f18c3bb603b959650be594a91443796f5ee9',
+              'd48906ee476325905e0f47d25991192a333e4fb25d07c157490204257b1320ad',
+              ((3551, 102, 365, 16),)),
     (5, 19): ('72de66968e0cb63ddf9e982da4c589e7e4926b331fc8c67c8d1d5cfee0238107',
                'a8e4eaabbe47ff8d837e488f1d29ec57da25136972034315e30a9b0832e76a2b',
                ((3551, 306, 245, 16), (3556, 331, 232, 16))),
@@ -52,6 +58,36 @@ APPROVED_FLOOR_JOINS = {
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(),
                      'Imported game resources required')
 class FloorJoinArtworkTests(unittest.TestCase):
+    def test_room9_button_pixels_stay_native_released_and_pressed(self):
+        program, resources, palette, shapes = room_assets(5, 8)
+        records = program['pressure_plates']['rooms']['8']
+        expected = ('c38b6f0dc49853d652be724aa228f18c3bb603b959650be594a91443796f5ee9',
+                    '9d7ec4ba9d172850b2a51e82d9803c2f0d736534a66226b84acc1d10b12d2984')
+        for phase in (0, 1):
+            with self.subTest(phase=phase):
+                phases = (0, 0, phase, 0)
+                native = cavern_room(8, level_number=5, animated=True, pressure_key=phases)
+                edited = cavern_room(8, level_number=5, animated=True, pressure_key=phases,
+                                     retouched=True)
+                commands = pressure_drawing_commands(program['rooms']['8'], records, phases, resources)
+                mask = Image.new('L', (510, 365))
+                for command in commands:
+                    if command[7] != 4 or command[1] not in (3554, 3555):
+                        continue
+                    source = cavern_command_sprite(command, resources, palette, shapes)
+                    self.assertIs(retouched_sprite(8, command, source, level_number=5), source)
+                    clipped = clipped_sprite(source, command)
+                    if clipped:
+                        image, (x, y) = clipped
+                        mask.paste(255, (x, y, x+image.width, y+image.height), image.getchannel('A'))
+                self.assertIsNotNone(mask.getbbox())
+                before, after = native.flattened().convert('RGB'), edited.flattened().convert('RGB')
+                difference = ImageChops.multiply(ImageChops.difference(before, after), mask.convert('RGB'))
+                self.assertIsNone(difference.getbbox(), 'The entire button drawing must stay native')
+                self.assertEqual(hashlib.sha256(after.tobytes()).hexdigest(), expected[phase])
+                retouch_tests.CavernRetouchTests().assert_masks_equal(native, edited)
+                self.assertEqual(native.foreground.tobytes(), edited.foreground.tobytes())
+
     def test_additional_approved_frames_and_foreground_match(self):
         prince = load_resource_file('Prince.rsrc')
         for (level, room), (expected, foreground, _sources) in APPROVED_FLOOR_JOINS.items():

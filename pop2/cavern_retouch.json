@@ -4719,6 +4719,31 @@
         39,
         2216
       ]
+    },
+    {
+      "level": 5,
+      "room": 8,
+      "shape": 3551,
+      "x": 102,
+      "bottom": 365,
+      "mode": 16,
+      "size": [
+        40,
+        146
+      ],
+      "source_sha256": "dcaea15befac04a0fa5dd2940d11c0bf2ed06609478e458193354166c632ffcf",
+      "source_rect": [
+        2,
+        116,
+        39,
+        139
+      ],
+      "atlas_rect": [
+        0,
+        2217,
+        37,
+        2240
+      ]
     }
   ],
   "doors": [

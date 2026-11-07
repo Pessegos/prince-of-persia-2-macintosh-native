@@ -302,3 +302,19 @@ Comparisons stay local under `rendered/floor-join-selected-v3/`.
 | 5 | 11 | 201 | `bb1b2208c8f31a0be54d692a8fdd1d9bdf2c4d4ee04a951145ec138b1fae55c6` |
 | 5 | 13 | 156 | `a97267870d5c5ca70e25822525085021a3200b9abdd9bd38ba53ebffd8214f4e` |
 | 5 | 19 | 91 | `72de66968e0cb63ddf9e982da4c589e7e4926b331fc8c67c8d1d5cfee0238107` |
+
+## Level5 room9/J21: preserve the pressure plate
+
+The user approved the corrected V4 on 2026-11-07. The earlier two-sided V3
+also changed101 pixels of SHAP3554, softening the button drawing, and was
+rejected for this location. V4 changes only64 visible pixels in the wall-side
+SHAP3551 at X102/bottom365, fading its narrow edge towards the existing floor.
+Both pressure-plate sources, SHAP3554 and3555, remain completely native.
+
+The cached RGB hash is
+`c38b6f0dc49853d652be724aa228f18c3bb603b959650be594a91443796f5ee9`.
+The approved comparison remains local under `rendered/floor-join-j21-button-v4/`.
+Tests preserve every button pixel with the plate released and pressed, along
+with all source alpha, foreground pixels and physical masks. Earlier approved
+artwork stays unchanged. This completes the user's selected floor-join batch;
+it does not certify that every cavern junction has been visually reviewed.
