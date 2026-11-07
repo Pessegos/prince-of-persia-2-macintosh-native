@@ -173,7 +173,14 @@ is included. Other columns found during the inventory are not approved targets.
 | 3 | 5 | 60 / 243 | 585 | `1dce1829805dde96885605ac6cd555351d5969147d14626401a2979da95a12a5` |
 | 3 | 13 | 213 / 243 | 591 | `d7dceac57950745d0880bdc06aea68f923d59006f722dda0a823b0d14e0f9298` |
 | 5 | 2 | 60 / 243 | 591 | `1f686b8ae78cb4885972c07d6d62baf4fb691568eb0aac6e745b6c25d08c324f` |
+| 5 | 23 | 60 / 243 | 593 | `cad5cd9c75b8de390f507820356915a8bf915adfe8eb29731e39a54f4b533f4e` |
 
 The enlarged comparisons and approval manifest remain local under
 `rendered/column-shadow-five-v4/`. Each row's hash uses the static cached room
 without separately animated scenery items, matching the gameplay renderer.
+
+Level5 room23 retains its earlier226 wall edits; the combined static artwork
+now differs from native at819 pixels. Its67 foreground changes are confined
+to the approved outer shadow fringe, with the column body and masks intact.
+These five-room goldens supersede the earlier level3 room1 and level5 room23
+whole-room hashes while preserving their other approved artwork.

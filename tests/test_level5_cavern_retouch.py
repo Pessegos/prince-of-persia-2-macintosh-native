@@ -22,7 +22,7 @@ APPROVED = {
     14: (643, '2e5bc07ca34916df66c27435e220421e87f77f0e2e4ccdd7859ab7fe42c0e756'),
     15: (1231, '5cadd904b80f1fc11fd21a8eb4fd3d44ccee4ff62b8f9ba2f831b9270e3c3413'),
     16: (1619, 'fbb686730f48d2a6e589fb13b4202a0fdcdeecddc1c3aaa751499c22ff44e471'),
-    22: (226, '0cb8d78015db256f4843c6cf58a55104476a7ad8507b345d2fc865534467e789'),
+    22: (819, '9c365261fc87ba53116fa4331aef749430e8e0c147fd903d1fea83ad1687afc7'),
     24: (1071, '4ba338d53567d00d272402a59fec0fb9664aee9fd3a164cc0ac65341f23d74a6'),
 }
 
@@ -30,7 +30,7 @@ APPROVED = {
 class BundledLevelFiveArtworkTests(unittest.TestCase):
     def test_approved_scope_and_changed_source_guards(self):
         assets = retouch_assets(5)
-        self.assertEqual(len(assets), 46)
+        self.assertEqual(len(assets), 50)
         self.assertEqual({key[0] for key in assets}, set(APPROVED))
         for key, (record, image) in assets.items():
             room, shape, x, bottom, mode = key
@@ -92,7 +92,7 @@ class LevelFiveArtworkTests(unittest.TestCase):
                 self.assertEqual(len(changed), count)
                 self.assertTrue(set(changed) <= colours)
                 self.assert_masks_equal(before, after)
-                if room in (6, 13, 22):
+                if room in (6, 13):
                     self.assertEqual(before.foreground.tobytes(), after.foreground.tobytes())
                 self.assertEqual(game.room(room).flattened().tobytes(),
                                  cavern_room(room, level_number=5, animated=True, retouched=True).flattened().tobytes())

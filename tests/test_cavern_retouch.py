@@ -298,8 +298,8 @@ class CavernRetouchTests(unittest.TestCase):
         self.assertEqual(opened.crop((35, 0, 151, 245)).tobytes(), closed.crop((35, 0, 151, 245)).tobytes())
         self.assertEqual(closed.crop((185, 135, 281, 220)).tobytes(), native.crop((185, 135, 281, 220)).tobytes())
 
-    def test_other_twenty_seven_rooms_remain_pixel_identical(self):
-        for room in set(range(32)) - {0, 1, 12, 27, 29}:
+    def test_unapproved_rooms_remain_pixel_identical(self):
+        for room in set(range(32)) - {0, 1, 4, 12, 27, 29}:
             with self.subTest(room=room):
                 native, edited = cavern_room(room), cavern_room(room, retouched=True)
                 self.assertEqual(native.background.tobytes(), edited.background.tobytes())
@@ -463,6 +463,7 @@ COLUMN_SHADOWS = {
     (3, 4): (60, '1dce1829805dde96885605ac6cd555351d5969147d14626401a2979da95a12a5'),
     (3, 12): (213, 'd7dceac57950745d0880bdc06aea68f923d59006f722dda0a823b0d14e0f9298'),
     (5, 1): (60, '1f686b8ae78cb4885972c07d6d62baf4fb691568eb0aac6e745b6c25d08c324f'),
+    (5, 22): (60, 'cad5cd9c75b8de390f507820356915a8bf915adfe8eb29731e39a54f4b533f4e'),
 }
 
 
