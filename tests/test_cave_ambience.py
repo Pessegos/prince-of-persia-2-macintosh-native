@@ -16,7 +16,8 @@ from pop2.cavern_ambience import (
     DUST_FADE_IN, DUST_FADE_OUT, DUST_HEADING, DUST_LIFE_SPREAD, DUST_PALE_INK, DUST_PATCH, DUST_POCKETS,
     DROP_INKS, DROP_LAVA_INK, DROP_SHINE_LIGHT, DROP_WARM_LIGHT, SWELL_INKS,
     DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
-    QUIET_DUST, flame_of, room_torches, shows,
+    HAZE_OVER_FLAME, HAZE_OVER_POOL, HAZE_RISE, HAZE_WAVE, Haze, QUIET_DUST, flame_of, haze_of, haze_over, room_torches,
+    shows,
     HEAT_REACH, HEIGHT, LIGHT_HOLD, LIGHT_LEVELS, LONGEST_REACH, MOST_ASH, MOST_DUST, Mote, POOL_GLOW_REACH, QUICK_DEPTH,
     QUICK_FOLLOW, SHORTEST_REACH, SLOW_DEPTH, SLOW_FOLLOW, SPLASH_INKS, STEAM_INKS, SWELL_TICKS, WIDTH,
     flame_pixels, glow_along, landing, lifespan, on_the_pixels, read_torch, soft_spot, stalactite_tips, steady_wall,
@@ -47,12 +48,12 @@ def palette():
 COLOURS = Colours(palette())
 
 
-def room_air(drips=(), flames=(), pools=(), opened=255, covered=None, pool_glows=False, torches=()):
+def room_air(drips=(), flames=(), pools=(), opened=255, covered=None, pool_glows=False, torches=(), hazes=()):
     centres = tuple((sum(columns) / len(columns), sum(columns.values()) / len(columns)) for columns in pools)
     return Air(blank(opened), covered if covered is not None else blank(), tuple(drips), tuple(flames),
                tuple(pools), COLOURS, palette(), centres,
                tuple(glow_along(columns, POOL_GLOW_REACH, COLOURS.lavalight) for columns in pools if pool_glows),
-               tuple(torches))
+               tuple(torches), tuple(hazes))
 
 
 def still_ambience(air, **options):
@@ -1247,6 +1248,129 @@ class LavaGlowTests(unittest.TestCase):
         self.assertLess(max(abs(after - before) for before, after in zip(strengths, strengths[1:])), 0.01)
 
 
+class HazeTests(unittest.TestCase):
+    TOPS = {x: 200 for x in range(100, 160)}
+
+    def haze(self, in_front=None, height=30, strength=1.1, tops=None):
+        in_front = numpy.zeros((HEIGHT, WIDTH), dtype=bool) if in_front is None else in_front
+        return haze_over(self.TOPS if tops is None else tops, in_front, height, strength)
+
+    def striped(self):
+        """A frame in which every column has its own colour, to see where pixels go."""
+        frame = numpy.zeros((HEIGHT, WIDTH, 4), dtype=numpy.uint8)
+        frame[..., 0] = numpy.arange(WIDTH)[None, :] % 251
+        frame[..., 1] = numpy.arange(WIDTH)[None, :] // 251
+        frame[..., 3] = 255
+        return Image.fromarray(frame)
+
+    def moved(self, haze, tick):
+        scene = still_ambience(room_air(hazes=[haze]))
+        scene.tick = tick
+        frame = self.striped()
+        scene.shimmer(frame, haze)
+        return numpy.array(frame).astype(numpy.int32), numpy.array(self.striped()).astype(numpy.int32)
+
+    def test_a_pixel_moves_one_pixel_at_the_most(self):
+        for options in (HAZE_OVER_FLAME, HAZE_OVER_POOL):
+            for tick in range(40):
+                after, before = self.moved(self.haze(**options), tick)
+                self.assertLessEqual(numpy.abs(after[..., 0] - before[..., 0]).max(), 1)
+
+    def test_pixels_are_only_moved_so_no_new_colour_appears(self):
+        after, before = self.moved(self.haze(), 7)
+        self.assertLessEqual({tuple(pixel) for pixel in after.reshape(-1, 4)},
+                             {tuple(pixel) for pixel in before.reshape(-1, 4)})
+
+    def test_it_is_light_only_some_of_the_air_moves(self):
+        after, before = self.moved(self.haze(**HAZE_OVER_POOL), 7)
+        rows = (after != before).any(axis=2)
+        share = rows.sum() / self.haze(**HAZE_OVER_POOL).bend.size
+        self.assertGreater(share, 0.03)
+        self.assertLess(share, 0.3)
+
+    def test_it_thins_out_as_it_rises_and_ends(self):
+        bend = self.haze().bend.max(axis=1)
+        self.assertEqual(list(bend), sorted(bend))
+        self.assertEqual(bend[0], 0)
+        self.assertGreater(bend[-1], 0.9)
+
+    def test_it_thins_out_at_the_sides(self):
+        bend = self.haze().bend.max(axis=0)
+        self.assertEqual(bend[0], 0)
+        self.assertEqual(bend[-1], 0)
+        self.assertGreater(bend[len(bend) // 2], 0.9)
+
+    def test_it_starts_above_what_burns_in_each_column(self):
+        tops = {x: 180 + (x - 100) // 3 for x in range(100, 160)}
+        haze = self.haze(tops=tops)
+        for x, top in tops.items():
+            column = haze.bend[:, x - haze.left]
+            self.assertTrue((column[top - haze.top:] == 0).all(), x)
+
+    def test_it_is_behind_what_stands_in_front(self):
+        in_front = numpy.zeros((HEIGHT, WIDTH), dtype=bool)
+        in_front[170:200, 120:140] = True
+        haze = self.haze(in_front)
+        self.assertTrue((haze.bend[:, 20:40] == 0).all())
+        self.assertGreater(haze.bend[:, :20].max(), 0.5)
+
+    def test_it_stops_at_the_top_of_the_room(self):
+        haze = self.haze(tops={x: 10 for x in range(100, 160)})
+        self.assertEqual(haze.top, 0)
+        self.assertEqual(haze.box[3], 10)
+
+    def test_the_waves_rise(self):
+        haze = self.haze()
+        steps = 10
+        rows = round(steps * HAZE_RISE)
+        self.assertEqual(rows, steps * HAZE_RISE)
+        early, _before = self.moved(haze, 20)
+        late, _before = self.moved(haze, 20 + steps)
+        box = haze.left, haze.top, haze.box[2], haze.box[3]
+        # Taken apart from how much the air thins: which way each pixel went.
+        ways = [numpy.sign(numpy.sin((numpy.arange(box[1], box[3])[:, None] + tick * HAZE_RISE) * math.tau / HAZE_WAVE
+                                     + haze.phase)) for tick in (20, 20 + steps)]
+        numpy.testing.assert_array_equal(ways[0][rows:], ways[1][:-rows])
+        self.assertFalse(numpy.array_equal(early, late))
+
+    def test_it_moves_once_per_game_tick(self):
+        haze = self.haze()
+        one, _ = self.moved(haze, 5)
+        again, _ = self.moved(haze, 5)
+        other, _ = self.moved(haze, 6)
+        numpy.testing.assert_array_equal(one, again)
+        self.assertFalse(numpy.array_equal(one, other))
+
+    def test_it_takes_no_random_numbers(self):
+        scene = still_ambience(room_air(hazes=[self.haze()]))
+        before = scene.rng.getstate()
+        scene.draw(wall_frame())
+        self.assertEqual(scene.rng.getstate(), before)
+
+    def test_drawing_the_room_bends_it_before_the_dust(self):
+        haze = self.haze()
+        scene = still_ambience(room_air(hazes=[haze]))
+        scene.tick = 3
+        frame = self.striped()
+        with patch.object(scene, 'shimmer', wraps=scene.shimmer) as shimmer:
+            scene.draw(frame)
+        shimmer.assert_called_once_with(frame, haze)
+
+    def test_a_flame_heats_the_air_from_its_top_up(self):
+        torch = burning_torch(300, 200)
+        haze = haze_of(torch, numpy.zeros((HEIGHT, WIDTH), dtype=bool))
+        rows, _columns = numpy.nonzero(torch.flame.any(axis=0))
+        self.assertEqual(haze.box[3], torch.top + rows.min())
+        self.assertEqual(haze.box[1], torch.top + rows.min() - HAZE_OVER_FLAME['height'])
+        self.assertLess(abs((haze.box[0] + haze.box[2]) / 2 - 300), 2)
+
+    def test_a_flame_by_the_edge_of_the_screen_stays_on_it(self):
+        nothing = numpy.zeros((HEIGHT, WIDTH), dtype=bool)
+        flame = numpy.ones((1, 40, 30), dtype=bool)
+        self.assertEqual(haze_of(SimpleNamespace(flame=flame, left=-10, top=100), nothing).left, 0)
+        self.assertEqual(haze_of(SimpleNamespace(flame=flame, left=495, top=100), nothing).box[2], WIDTH)
+
+
 class PixelArtRuleTests(unittest.TestCase):
     def busy_scene(self, **options):
         drips = [Drip(100, 50, 226, False), Drip(320, 50, 228, True)]
@@ -1369,6 +1493,24 @@ class EveryRoomTests(unittest.TestCase):
                 self.assertGreater(min(columns.values()), 0, place)
         for place in ((3, 12), (3, 27), (4, 23)):
             self.assertEqual(self.rooms[place].pools, (), place)
+
+    def test_every_fire_heats_the_air_over_it(self):
+        for place, air in self.rooms.items():
+            self.assertEqual(len(air.hazes), len(air.pools) + len(air.torches), place)
+            for haze in air.hazes:
+                left, top, right, bottom = haze.box
+                self.assertTrue(0 <= left < right <= WIDTH and 0 <= top < bottom <= HEIGHT, place)
+                self.assertLess(float(haze.bend.max()), 1.5, place)
+
+    def test_hot_air_over_a_pool_shows_and_over_most_torches_too(self):
+        def moves(haze):
+            return int((haze.bend >= 0.5).sum())
+
+        pools = [moves(haze) for air in self.rooms.values() for haze in air.hazes[:len(air.pools)]]
+        torches = [moves(haze) for air in self.rooms.values() for haze in air.hazes[len(air.pools):]]
+        self.assertGreater(min(pools), 300)
+        # A flame just under a ceiling has only that ceiling over it, in front of the air.
+        self.assertGreater(sum(count > 100 for count in torches), 40)
 
     def test_every_drop_falls_where_it_can_be_seen(self):
         for place, air in self.rooms.items():
@@ -1554,7 +1696,7 @@ class ChosenRoomTests(unittest.TestCase):
         self.assertLess(sum(inks[FINE_DUST.ink][:3]), sum(inks[DUST_PALE_INK][:3]))
 
     def test_the_cracks_stay_as_they_were_painted(self):
-        scene = CavernAmbience(16, replace(self.air, pool_glows=()), random.Random(2))
+        scene = CavernAmbience(16, replace(self.air, pool_glows=(), hazes=()), random.Random(2))
         scene.motes.clear()
         torch = self.air.torches[0]
         frame = Image.alpha_composite(self.art.background, self.art.foreground)
@@ -1589,7 +1731,7 @@ class ChosenRoomTests(unittest.TestCase):
 
     def test_the_lava_glow_is_fainter_than_the_torch_warmth(self):
         pool = self.air.pools[0]
-        scene = CavernAmbience(16, replace(self.air, torches=()), random.Random(2))
+        scene = CavernAmbience(16, replace(self.air, torches=(), hazes=()), random.Random(2))
         scene.motes.clear()
         frame = Image.alpha_composite(self.art.background, self.art.foreground)
         before = numpy.asarray(frame).astype(int)
@@ -1605,7 +1747,7 @@ class ChosenRoomTests(unittest.TestCase):
 
     def test_the_light_stays_on_the_rock_near_the_torch(self):
         # A wide light over everything looked like a bomb about to go off.
-        scene = CavernAmbience(16, replace(self.air, pool_glows=()), random.Random(2))
+        scene = CavernAmbience(16, replace(self.air, pool_glows=(), hazes=()), random.Random(2))
         scene.motes.clear()
         torch = self.air.torches[0]
         frame = Image.alpha_composite(self.art.background, self.art.foreground)

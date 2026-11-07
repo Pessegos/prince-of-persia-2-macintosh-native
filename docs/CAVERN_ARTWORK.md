@@ -221,6 +221,11 @@ What the user has reviewed and how each part ended up:
   but they are the light moving across the rock, not noise.
 - **Lava glow** is fainter than that warmth and hugs the pool (`glow_along`). It
   is the same table and dither, and breathes over several seconds.
+- **Heat haze** bends what is seen through the hot air over the lava and over a
+  flame (`Haze`, `shimmer`). Pixels slide one pixel aside and back in waves that
+  rise, and they are only moved, so no new colour appears. It thins out as it rises
+  and to the sides. The ceiling and stalactites are foreground, in front of the air,
+  so 27 of the 75 torches sit under rock and show next to none of it.
 - **The wall behind the torch.** `CaveGetTorchFrame` (8:3b4e) picks one of nine
   frames at random each tick. They paint a rich wall of veins and specks, but
   about a hundred loose pixels of it differ from frame to frame, so those blink.

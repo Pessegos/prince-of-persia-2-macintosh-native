@@ -19,7 +19,8 @@ from the tips of the stalactites and end on the floor or in the lava, single
 grains of ash rise from the lava and the flame, and a little dust drifts through
 the open air. The flame stays exactly the game's. Its light does not: the frames'
 painted wall keeps still, and the light is traced over the relief of the rock by
-pop2.firelight and changes shape with the flame, like a candle's. The user rejected
+pop2.firelight and changes shape with the flame, like a candle's. Hot air bends what
+is seen through it, over the lava and over a flame. The user rejected
 a wider glow over everything and sparks with trails as far too much: the light
 must stay in the rock, not on top of it.
 """
@@ -213,6 +214,17 @@ AIR_LIGHT_SPREAD = 6.0
 POOL_GLOW_REACH = (34, 30)
 POOL_GLOW_GAIN, POOL_GLOW_ADD = (1.08, 1.03, 1.0), (18.0, 5.0, 0.0)
 BAYER = numpy.array(((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5)), dtype=numpy.float32) / 16
+# Hot air bends what is seen through it. Pixels over the fire slide one pixel to the
+# side and back, in waves that rise: they are only moved, so the rule on the palette
+# holds without trying. Strength is how far the air would bend them, in pixels, and a
+# pixel moves once that passes a half. Heights and sides are in pixels, the waves in
+# rows and rows a tick.
+HAZE_OVER_FLAME = dict(height=30, strength=1.1)
+HAZE_FLAME_WIDTH = 11
+HAZE_OVER_POOL = dict(height=22, strength=0.9)
+HAZE_EDGE = 7
+HAZE_WAVE = 9
+HAZE_RISE = 1.3
 
 # Palette indices. The blues are the flasks' water.
 DROP_INKS = (218, 217, 216, 215)
@@ -347,6 +359,37 @@ class TorchArt:
         return float(self.lit_air[row, column]) if 0 <= row < height and 0 <= column < width else 0.0
 
 
+@dataclass(frozen=True)
+class Haze:
+    """Hot air: how far it bends each pixel of a rectangle of the room, and how far
+    along its waves each column is, so that the rows do not all go together."""
+
+    left: int
+    top: int
+    bend: numpy.ndarray
+    phase: numpy.ndarray
+
+    @property
+    def box(self):
+        return self.left, self.top, self.left + self.bend.shape[1], self.top + self.bend.shape[0]
+
+
+def haze_over(tops, in_front, height, strength):
+    """Hot air rising from {x: y} of the top of what burns. It thins out as it rises
+    and to the sides, and does nothing to what stands in front of it."""
+    left, right = min(tops), max(tops) + 1
+    top, bottom = max(0, min(tops.values()) - height), max(tops.values())
+    rows, columns = numpy.mgrid[top:bottom, left:right]
+    start = numpy.array([tops.get(x, bottom) for x in range(left, right)])
+    rising = (start - rows) / height
+    thinning = numpy.where(rising > 0, (1 - rising).clip(0, 1), 0.0)
+    sides = (numpy.minimum(columns - left, right - 1 - columns) / HAZE_EDGE).clip(0, 1)
+    bend = strength * thinning * sides * ~in_front[top:bottom, left:right]
+    across = numpy.arange(left, right)
+    phase = 1.7 * numpy.sin(across * 0.13) + 1.1 * numpy.sin(across * 0.31 + 1.0)
+    return Haze(left, top, bend.astype(numpy.float32), phase.astype(numpy.float32))
+
+
 def flame_pixels(frames):
     """[frame, y, x] of what is flame, leaving the painted wall out."""
     red, green, blue = (frames[..., channel].astype(numpy.int32) for channel in range(3))
@@ -442,6 +485,7 @@ class Air:
     centres: tuple = ()
     pool_glows: tuple = ()
     torches: tuple = ()
+    hazes: tuple = ()
 
     def is_open(self, x, y):
         return 0 <= x < WIDTH and 0 <= y < HEIGHT and bool(self.open[y * WIDTH + x])
@@ -535,8 +579,8 @@ def choose_drips(air, covered, shades, terrain, room, pools):
     return tuple(sorted(chosen, key=lambda drip: drip.x))
 
 
-def lava_surfaces(program, room, palette):
-    """For each pool, {x: middle of the liquid} using the recessed artwork."""
+def lava_liquid(program, room, palette):
+    """For each pool, {x: (top, bottom) of the liquid} using the recessed artwork."""
     from pop2.caverns import recessed_lava_liquid_mask, recessed_lava_surface
 
     pools = []
@@ -552,11 +596,20 @@ def lava_surfaces(program, room, palette):
         for x in range(liquid.width):
             rows = [y for y in range(liquid.height) if pixels[x, y]]
             if rows:
-                columns[left + x] = top + (rows[0] + rows[-1]) // 2
+                columns[left + x] = top + rows[0], top + rows[-1]
         # A room can list a pool that lies off the top of its screen.
-        if min(columns.values()) >= 0:
+        if min(high + low for high, low in columns.values()) >= 0:
             pools.append(columns)
     return tuple(pools)
+
+
+def surface_of(liquid):
+    """{x: middle of the liquid}."""
+    return {x: (high + low) // 2 for x, (high, low) in liquid.items()}
+
+
+def lava_surfaces(program, room, palette):
+    return tuple(surface_of(liquid) for liquid in lava_liquid(program, room, palette))
 
 
 def room_torches(program, room):
@@ -567,6 +620,15 @@ def room_torches(program, room):
 def flame_of(record):
     top, left, bottom, right = record['command'][6]
     return (left + right) // 2, (top + bottom) // 2
+
+
+def haze_of(torch, in_front):
+    """The hot air over a torch, from the highest its flame ever burns."""
+    rows, columns = numpy.nonzero(torch.flame.any(axis=0))
+    middle = torch.left + int(columns.mean())
+    top = torch.top + int(rows.min())
+    return haze_over({x: top for x in range(max(0, middle - HAZE_FLAME_WIDTH), min(WIDTH, middle + HAZE_FLAME_WIDTH + 1))},
+                     in_front, **HAZE_OVER_FLAME)
 
 
 def shows(torch, in_front):
@@ -582,23 +644,27 @@ def analyze_room(program, room, art, terrain, palette, resources=None, shapes=No
     luminance = scenery.convert('L')
     air = open_air(luminance, terrain, room)
     covered = art.foreground.getchannel('A').point(lambda value: 255 if value else 0).tobytes()
-    pools = lava_surfaces(program, room, palette)
+    liquid = lava_liquid(program, room, palette)
+    pools = tuple(surface_of(columns) for columns in liquid)
     inks = {index: tuple(palette[index][:3]) + (255,) for index in ALL_INKS}
     drips = choose_drips(air, covered, luminance.tobytes(), terrain, room, pools)
     colours = colours_of(tuple(sorted(palette.items())))
     records = room_torches(program, room)
     centres = tuple(pool_centre(columns) for columns in pools)
     pool_glows = tuple(glow_along(columns, POOL_GLOW_REACH, colours.lavalight) for columns in pools)
+    in_front = numpy.array(art.foreground.getchannel('A')) > 0
+    hazes = tuple(haze_over({x: high for x, (high, _low) in columns.items()}, in_front, **HAZE_OVER_POOL)
+                  for columns in liquid)
     torches = ()
     if resources is not None:
         pixels = numpy.array(scenery.convert('RGB'))
-        in_front = numpy.array(art.foreground.getchannel('A')) > 0
         arts = ((record, torch_art(record, resources, palette, shapes, colours.firelight, pixels, in_front))
                 for record in records)
         seen = tuple((record, torch) for record, torch in arts if torch is not None and shows(torch, in_front))
         records, torches = tuple(record for record, _ in seen), tuple(torch for _, torch in seen)
     flames = tuple(flame_of(record) for record in records)
-    return Air(air, covered, drips, flames, pools, colours, inks, centres, pool_glows, torches)
+    hazes += tuple(haze_of(torch, in_front) for torch in torches)
+    return Air(air, covered, drips, flames, pools, colours, inks, centres, pool_glows, torches, hazes)
 
 
 def pool_centre(columns):
@@ -1104,6 +1170,16 @@ class CavernAmbience:
         frame.paste(Image.fromarray(shown), torch.box[:2])
         self.shed_light(frame, torch.light, flicker.steps)
 
+    def shimmer(self, frame, haze):
+        """Bend what is seen through hot air, for this tick."""
+        height, width = haze.bend.shape
+        rows = numpy.arange(haze.top, haze.top + height)[:, None]
+        waves = numpy.sin((rows + self.tick * HAZE_RISE) * math.tau / HAZE_WAVE + haze.phase)
+        moves = numpy.rint(haze.bend * waves).astype(numpy.int32)
+        pixels = numpy.array(frame.crop(haze.box))
+        down, across = numpy.mgrid[:height, :width]
+        frame.paste(Image.fromarray(pixels[down, (across + moves).clip(0, width - 1)]), haze.box[:2])
+
     def dust_spot(self, canvas, mote):
         red, green, blue, strength = self.dust_colour(mote)
         resting = mote.rest is not None
@@ -1128,6 +1204,8 @@ class CavernAmbience:
             self.light_torch(frame, torch, flicker)
         for glow in air.pool_glows:
             self.shed_light(frame, glow, light_steps(glow.falloff, glow.dither, self.pool_strength()))
+        for haze in air.hazes:
+            self.shimmer(frame, haze)
         canvas = frame.load()
         for mote in self.motes:
             self.dust_spot(canvas, mote)
