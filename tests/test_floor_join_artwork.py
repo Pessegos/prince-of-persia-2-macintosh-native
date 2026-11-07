@@ -11,9 +11,50 @@ from pop2.render_opening import load_resource_file
 from tests import test_cavern_retouch as retouch_tests
 
 
+# Native level/room, approved cached RGB, preserved foreground RGBA, source placements.
+APPROVED_FLOOR_JOINS = {
+    (3, 12): ('9152e74b8fdb313e8d91c09d631c695bbe6e47b93c64c6695041a87df2ac6519',
+               'fb1d565baa6b3095c869f72cea16dcf7f7cb0662ca59f156f013d6b284795a60',
+               ((3550, 51, 245, 16), (3525, 53, 245, 16))),
+}
+
+
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(),
                      'Imported game resources required')
 class FloorJoinArtworkTests(unittest.TestCase):
+    def test_additional_approved_frames_and_foreground_match(self):
+        prince = load_resource_file('Prince.rsrc')
+        for (level, room), (expected, foreground, _sources) in APPROVED_FLOOR_JOINS.items():
+            with self.subTest(level=level, room=room):
+                definition = LevelDefinition.read(prince, level)
+                edited = LevelRenderer(definition, preload_room=False).room(room-1)
+                native = cavern_room(room-1, level_number=level, animated=True)
+                self.assertEqual(hashlib.sha256(edited.flattened().convert('RGB').tobytes()).hexdigest(),
+                                 expected)
+                self.assertEqual(hashlib.sha256(edited.foreground.tobytes()).hexdigest(), foreground)
+                retouch_tests.CavernRetouchTests().assert_masks_equal(native, edited)
+                original = LevelRenderer(definition, preload_room=False, retouch_caverns=False)
+                self.assertEqual(original.room(room-1).flattened().tobytes(), native.flattened().tobytes())
+
+    def test_additional_floor_source_guards_preserve_alpha(self):
+        for (level, room), (_expected, _foreground, sources) in APPROVED_FLOOR_JOINS.items():
+            program, resources, palette, shapes = cavern_assets(level)
+            for shape, x, bottom, mode in sources:
+                with self.subTest(level=level, room=room, shape=shape, x=x, bottom=bottom):
+                    command = next(c for c in program['rooms'][str(room-1)]
+                                   if c[:5] == ['back', shape, x, bottom, mode])
+                    source = cavern_command_sprite(command, resources, palette, shapes)
+                    result = retouched_sprite(room-1, command, source, level_number=level)
+                    self.assertNotEqual(source.tobytes(), result.tobytes())
+                    self.assertEqual(source.getchannel('A').tobytes(), result.getchannel('A').tobytes())
+                    altered = source.copy()
+                    altered.putpixel((0, 0), (1, 2, 3, 255))
+                    self.assertIs(retouched_sprite(room-1, command, altered, level_number=level), altered)
+                    for field, value in ((2, x+1), (3, bottom+1), (7, 1)):
+                        shifted = command.copy()
+                        shifted[field] = value
+                        self.assertIs(retouched_sprite(room-1, shifted, source, level_number=level), source)
+
     def test_room11_approved_floor_preserves_wall_foreground_and_native_opt_out(self):
         definition = LevelDefinition.read(load_resource_file('Prince.rsrc'), 3)
         edited = LevelRenderer(definition, preload_room=False).room(10)

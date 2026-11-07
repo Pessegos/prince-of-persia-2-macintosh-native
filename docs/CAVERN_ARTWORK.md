@@ -280,3 +280,15 @@ unchanged. This is a baked artwork improvement, without per-frame filtering.
 The approved comparison remains local under
 `rendered/floor-join-marked-reference-v3/`. Approval covers this room only;
 the remaining selected floor joins still require their own visual previews.
+
+## Remaining selected floor joins: approved V3
+
+The user approved these V3 floor joins on 2026-11-07, excluding level5
+room9/J21 because its button artwork needs a separate correction. They use
+the narrow two-sided transition approved for level3 room11. Earlier edits,
+foreground pixels, source alpha and physical masks remain unchanged.
+Comparisons stay local under `rendered/floor-join-selected-v3/`.
+
+| Level | Room | Added pixels | Cached RGB SHA256 |
+| --- | --- | --- | --- |
+| 3 | 12 | 169 | `9152e74b8fdb313e8d91c09d631c695bbe6e47b93c64c6695041a87df2ac6519` |
