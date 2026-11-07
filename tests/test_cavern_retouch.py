@@ -49,8 +49,8 @@ class BundledCavernRetouchTests(unittest.TestCase):
 
     def test_bundled_variants_have_valid_scope_and_crop_sizes(self):
         assets = retouch_assets()
-        self.assertEqual(len(assets), 41)
-        self.assertEqual({key[0] for key in assets}, {0, 1, 4, 27, 29})
+        self.assertEqual(len(assets), 46)
+        self.assertEqual({key[0] for key in assets}, {0, 1, 4, 12, 27, 29})
         for key, (record, image) in assets.items():
             with self.subTest(key=key):
                 x1, y1, x2, y2 = record['source_rect']
@@ -63,7 +63,7 @@ class BundledCavernRetouchTests(unittest.TestCase):
     def test_unaffected_rooms_do_not_even_load_retouch_assets(self):
         source = Image.new('RGBA', (5, 5), 'red')
         with patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Unexpected load')):
-            for room in set(range(32)) - {0, 1, 4, 27, 29}:
+            for room in set(range(32)) - {0, 1, 4, 12, 27, 29}:
                 self.assertIs(retouched_sprite(room, [], source), source)
 
     def test_unmatched_sources_and_other_shape_libraries_are_untouched(self):
@@ -461,6 +461,7 @@ class CavernRetouchTests(unittest.TestCase):
 COLUMN_SHADOWS = {
     (3, 0): (111, '470358256d02d9371eabfc773426c3b6949e14c62852acbf6b9eac022ad44f02'),
     (3, 4): (60, '1dce1829805dde96885605ac6cd555351d5969147d14626401a2979da95a12a5'),
+    (3, 12): (213, 'd7dceac57950745d0880bdc06aea68f923d59006f722dda0a823b0d14e0f9298'),
 }
 
 
