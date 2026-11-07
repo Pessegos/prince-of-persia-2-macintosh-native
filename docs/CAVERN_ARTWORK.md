@@ -205,3 +205,16 @@ masks remain unchanged. Comparisons are local under
 `rendered/column-shadow-followup-v1/`. The audit covers static contexts of this
 column model; its former exclusion list is not proof that all cavern artwork
 has been corrected. Keep visual review of genuinely different contexts separate.
+
+## Short columns: level3 room5
+
+The user approved the short-column V2 review on 2026-11-07. Room5's small
+P3 column at X212/bottom362 needs the continuation on its upper half too.
+The new treatment follows the actual SHAP3531 contour through the dark
+outer source fringe and adjacent wall, retaining native texture and palette.
+It preserves the lit stone, alpha and all actor/floor/climb/gate masks.
+
+Five source-checked crops add690 visible changes to this room. The earlier
+long-column V4 remains intact; the combined cached RGB hash is now
+`4c21295ad0cc54ed2aecc91cf40433df13f4576ee3fab320c53544783cc798a5`.
+The approved comparisons remain local under `rendered/short-column-selected-v2/`.

@@ -49,7 +49,7 @@ class BundledCavernRetouchTests(unittest.TestCase):
 
     def test_bundled_variants_have_valid_scope_and_crop_sizes(self):
         assets = retouch_assets()
-        self.assertEqual(len(assets), 56)
+        self.assertEqual(len(assets), 61)
         self.assertEqual({key[0] for key in assets}, {0, 1, 4, 6, 7, 12, 27, 29})
         for key, (record, image) in assets.items():
             with self.subTest(key=key):
@@ -460,7 +460,7 @@ class CavernRetouchTests(unittest.TestCase):
 # Values are X, bottom and RGB hash of the approved previews, including earlier retouches.
 COLUMN_SHADOWS = {
     (3, 0): (111, 243, '470358256d02d9371eabfc773426c3b6949e14c62852acbf6b9eac022ad44f02'),
-    (3, 4): (60, 243, '1dce1829805dde96885605ac6cd555351d5969147d14626401a2979da95a12a5'),
+    (3, 4): (60, 243, '4c21295ad0cc54ed2aecc91cf40433df13f4576ee3fab320c53544783cc798a5'),
     (3, 6): (366, 363, '07151ff23ba5c20cf5fbf29a65b08c80c80041705ecf7657fa18e4fcb6294d5e'),
     (3, 7): (366, 243, '9043537b7de6fc860b4b72ec272dd8c44486179d4e224914df2fd90b676c8073'),
     (3, 12): (213, 243, 'd7dceac57950745d0880bdc06aea68f923d59006f722dda0a823b0d14e0f9298'),
