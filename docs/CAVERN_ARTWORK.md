@@ -293,3 +293,4 @@ Comparisons stay local under `rendered/floor-join-selected-v3/`.
 | --- | --- | --- | --- |
 | 3 | 12 | 169 | `9152e74b8fdb313e8d91c09d631c695bbe6e47b93c64c6695041a87df2ac6519` |
 | 3 | 15 | 155 | `1eac3788306c661ce31fee4fa3c51e458189f2d1f85d16465dad67312551d430` |
+| 3 | 21 | 156 | `7ed2ab1071684891b8a2fab70a1bbefeee8327f39e2509ea64886ce9b2403912` |

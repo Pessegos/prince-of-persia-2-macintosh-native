@@ -4144,6 +4144,56 @@
         80,
         2012
       ]
+    },
+    {
+      "level": 3,
+      "room": 20,
+      "shape": 3551,
+      "x": 255,
+      "bottom": 125,
+      "mode": 16,
+      "size": [
+        40,
+        146
+      ],
+      "source_sha256": "dcaea15befac04a0fa5dd2940d11c0bf2ed06609478e458193354166c632ffcf",
+      "source_rect": [
+        2,
+        116,
+        40,
+        139
+      ],
+      "atlas_rect": [
+        0,
+        2013,
+        38,
+        2036
+      ]
+    },
+    {
+      "level": 3,
+      "room": 20,
+      "shape": 3525,
+      "x": 257,
+      "bottom": 125,
+      "mode": 16,
+      "size": [
+        89,
+        30
+      ],
+      "source_sha256": "edfd80276b3df3440c28feca0ec7b4fad4d728d1efc5bf3900bb7ba70aa0ed0f",
+      "source_rect": [
+        1,
+        0,
+        43,
+        25
+      ],
+      "atlas_rect": [
+        39,
+        2013,
+        81,
+        2038
+      ]
     }
   ],
   "doors": [
