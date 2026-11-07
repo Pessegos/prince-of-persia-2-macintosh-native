@@ -236,7 +236,7 @@ The first short-column proposal was not approved because it left the upper
 join untreated. V2 retains its lower treatment and extends through the upper
 join; none of the inventory's other similar contexts are approved targets.
 
-## Level3 room24: long-column shadow
+## Level3 room24: long-column shadow and lower wall join
 
 The user approved room24's two separate local comparisons on 2026-11-07.
 The upper/middle SHAP3533 at X264/bottom243 uses four source-checked crops
@@ -248,3 +248,15 @@ The upper adjustment alone has cached RGB hash
 `2fe216b59e1f62efb5a7376bcbb895d9d7ceebfe250a0d0cf2accf742f291d7f`.
 The separate and combined approved previews remain local under
 `rendered/level3-room24-review-v1/`.
+
+The second adjustment treats the wall join at X345/346, to the right of the
+lower column at X315/bottom363. Four more source-checked crops grade the
+lighting between SHAP3551 and3513 and continue the column's outer shadow,
+changing601 visible pixels. The central brown wall left of the columns was
+not the reported target and stays unchanged. Both neighboring background
+columns, all lit column bodies and all masks retain their native pixels.
+
+The combined1154-pixel correction has cached RGB hash
+`155016d0323e511fe037104e7edda38d6a9045cfcd70bc4ad3f7984dd206d567`.
+Only the eight approved manifest sources are bundled; intermediate proposals
+that recoloured background-column bases were excluded before visual review.

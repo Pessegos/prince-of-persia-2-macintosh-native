@@ -49,7 +49,7 @@ class BundledCavernRetouchTests(unittest.TestCase):
 
     def test_bundled_variants_have_valid_scope_and_crop_sizes(self):
         assets = retouch_assets()
-        self.assertEqual(len(assets), 65)
+        self.assertEqual(len(assets), 69)
         self.assertEqual({key[0] for key in assets}, {0, 1, 4, 6, 7, 12, 23, 27, 29})
         for key, (record, image) in assets.items():
             with self.subTest(key=key):

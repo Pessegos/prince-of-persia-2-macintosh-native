@@ -12,8 +12,8 @@ from tests import test_cavern_retouch as retouch_tests
 
 
 # Native room24 is port index23. Cached room hash excludes animated items.
-APPROVED_HASH = '2fe216b59e1f62efb5a7376bcbb895d9d7ceebfe250a0d0cf2accf742f291d7f'
-FRONT_COLUMNS = ((264, 243),)
+APPROVED_HASH = '155016d0323e511fe037104e7edda38d6a9045cfcd70bc4ad3f7984dd206d567'
+FRONT_COLUMNS = ((264, 243), (315, 363))
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(),
