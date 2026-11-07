@@ -15,6 +15,7 @@ from pop2.render_opening import load_resource_file
 
 # Port room indices; room7's approval is viewed with its stone gate fully open.
 APPROVED = {
+    12: (156, 'a97267870d5c5ca70e25822525085021a3200b9abdd9bd38ba53ebffd8214f4e'),
     10: (201, 'bb1b2208c8f31a0be54d692a8fdd1d9bdf2c4d4ee04a951145ec138b1fae55c6'),
     1: (591, '1f686b8ae78cb4885972c07d6d62baf4fb691568eb0aac6e745b6c25d08c324f'),
     5: (2747, '2ef93b2f6a12554f9f77acc4b07a523187769454c65eab587417dbebeb805eae'),
@@ -32,7 +33,7 @@ APPROVED = {
 class BundledLevelFiveArtworkTests(unittest.TestCase):
     def test_approved_scope_and_changed_source_guards(self):
         assets = retouch_assets(5)
-        self.assertEqual(len(assets), 59)
+        self.assertEqual(len(assets), 61)
         self.assertEqual({key[0] for key in assets}, set(APPROVED))
         for key, (record, image) in assets.items():
             room, shape, x, bottom, mode = key
