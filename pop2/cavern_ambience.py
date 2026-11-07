@@ -177,7 +177,7 @@ DUST_POOL_STRENGTH = 0.6
 STEP_STRIDE = 10
 STEP_SPEED = 4
 # Whatever comes down knocks up a puff of dust from the floor: a few round lobes that go
-# out low to both sides of its foot, rise a little, swell as they slow and thin away. Each
+# out low to both sides of its foot, hug the floor, swell as they slow and thin away. Each
 # lobe keeps its own outline and a lit top, and is painted in a few hard shades of warm
 # rock with crumbled edges, as an artist would draw a puff. That is the middle ground:
 # smooth it was far too realistic, as plain pixels, a spray or loose specks, it was only
@@ -197,23 +197,23 @@ class Puff:
     height: int = 26
 
 
-SLAM_PUFF = Puff(8, 3.0, (0.2, 0.9), (18, 36), (3, 6), 0.7)
-SHUT_PUFF = Puff(4, 1.4, (0.1, 0.5), (14, 28), (2.5, 4.5), 0.55)
-TILE_PUFF = Puff(9, 3.3, (0.25, 1.0), (18, 38), (3, 6), 0.8)
-STEP_PUFF = Puff(2, 0.6, (0.1, 0.35), (8, 14), (1.8, 3), 0.75, height=14)
-LANDING_PUFF = Puff(4, 1.1, (0.15, 0.5), (10, 22), (2.5, 4.5), 0.7, height=18)
+SLAM_PUFF = Puff(8, 3.0, (0.1, 0.45), (18, 36), (3, 6), 0.63)
+SHUT_PUFF = Puff(4, 1.4, (0.05, 0.25), (14, 28), (2.5, 4.5), 0.5)
+TILE_PUFF = Puff(9, 3.3, (0.12, 0.5), (18, 38), (3, 6), 0.72)
+STEP_PUFF = Puff(2, 0.6, (0.05, 0.18), (8, 14), (1.8, 3), 0.68, height=14)
+LANDING_PUFF = Puff(4, 1.1, (0.08, 0.25), (10, 22), (2.5, 4.5), 0.63, height=18)
 LANDING_FALL = 18
 MOST_LANDING_LOBES = 6
 MOST_CLOUDS = 10
 CLOUD_SPEEDS = 1.3
 CLOUD_DRAG = 0.86
-CLOUD_LIFT = 0.02
+CLOUD_LIFT = 0.01
 CLOUD_STIR = 0.1
 CLOUD_DEPTH = (-3, 6)
 CLOUD_THINNING = 1.2
 # A lobe is flatter than it is wide, as it lies along the floor, and thicker at its top
 # than at its foot, which gives it a lit top and a dull underside in the shades below.
-CLOUD_FLATTER = 0.8
+CLOUD_FLATTER = 0.55
 CLOUD_TOP_LIGHT = 0.35
 # How thick the dust must be for each step, and how far each pixel's own grain moves
 # that, which crumbles the edges of the steps.

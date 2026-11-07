@@ -1582,6 +1582,20 @@ class DoorDustTests(unittest.TestCase):
         self.assertLess(float(reach.max()), 34)
         self.assertLess(float(numpy.median(reach)), 18)
 
+    def test_it_keeps_low_and_thin(self):
+        # Eight pixels up and twenty tall was too high and too thick for the user.
+        scene = self.scene()
+        scene.thud(tile_landing(23))
+        cloud = scene.clouds[0]
+        for _ in range(TILE_PUFF.life[0]):
+            scene.advance_clouds()
+            frame = wall_frame()
+            scene.draw_cloud(frame, cloud)
+            rows = numpy.nonzero(self.painted(numpy.asarray(frame)).any(axis=1))[0]
+            if len(rows):
+                self.assertLessEqual(int(rows.max() - rows.min()), 18)
+            self.assertLess(float((cloud.floor - cloud.y).max()), 6)
+
     def test_it_is_painted_in_a_few_hard_shades(self):
         # A smooth cloud looked far too realistic for a game of 1993.
         pixels, _scene = self.puffed(door_coming_down(17, 25, True))

@@ -229,8 +229,8 @@ What the user has reviewed and how each part ended up:
   lava. As he runs he drags the air along (`wake`), so grains he passes follow him
   and let go. Dust from the floor is drawn behind him like the rest of the ambience.
 - **Gates, doors and fallen tiles.** Whatever comes down knocks up a puff of dust
-  (`Cloud`): a few round lobes that go out low to both sides of its foot, rise a little,
-  swell as they slow and thin away. Each lobe keeps its own outline, as a pixel takes
+  (`Cloud`): a few flat round lobes that go out low to both sides of its foot, hug the
+  floor, swell as they slow and thin away. Each lobe keeps its own outline, as a pixel takes
   the thickest lobe over it and not their sum, and its top is thicker than its foot, so
   it has a lit top and a dull underside. It is painted over the rock in three hard
   shades of warm rock (`CLOUD_SHADES`), each pixel landing on the palette, and each pixel
