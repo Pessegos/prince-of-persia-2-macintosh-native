@@ -1614,14 +1614,39 @@ class DoorDustTests(unittest.TestCase):
         self.assertLess(puff.x.min(), door.left)
         self.assertGreater(puff.x.max(), door.right)
 
-    def test_it_spreads_along_the_floor_more_than_it_rises(self):
-        door = door_coming_down(17, 25, True)
-        puff = self.cloud(door, 16).puffs[0]
+    def test_it_keeps_close_to_what_came_down(self):
+        # At sixty pixels and more the user found it too long.
+        door = door_coming_down(4, 25, True)
+        puff = self.cloud(door, 30).puffs[0]
         reach = numpy.maximum(door.left - puff.x, puff.x - door.right)
-        self.assertGreater(float(reach.max()), 30)
-        self.assertLess(float(numpy.median(reach)), 40)
-        self.assertLess(float((puff.floor - puff.y).max()), float(reach.max()))
+        self.assertGreater(float(reach.max()), 16)
+        self.assertLess(float(reach.max()), 48)
+        self.assertLess(float(numpy.median(reach)), 22)
+
+    def test_it_rises_as_it_slows(self):
+        puff = self.cloud(door_coming_down(4, 25, True), 16).puffs[0]
         self.assertGreater(float(numpy.median(puff.floor - puff.y)), 2)
+
+    def test_an_exit_door_blows_out_at_the_front_all_along_its_foot(self):
+        # It faces the room: going only to the sides looked odd.
+        door = door_coming_down(17, 25, True)
+        scene = self.scene()
+        scene.advance(thuds=(door,))
+        puff = scene.puffs[0]
+        self.assertTrue(((door.left <= puff.x + 2) & (puff.x - 2 <= door.right)).all())
+        self.assertGreater(float(numpy.mean(puff.dy > 0)), 0.95)
+        for _ in range(12):
+            scene.advance()
+        self.assertGreater(float(numpy.percentile(puff.y, 75)), door.left_floor + 5)
+        self.assertLess(float(puff.x.min()), door.left)
+        self.assertGreater(float(puff.x.max()), door.right)
+
+    def test_a_gate_blows_only_to_its_sides(self):
+        door = door_coming_down(4, 22, True)
+        scene = self.scene()
+        scene.advance(thuds=(door,))
+        self.assertFalse(door.forward)
+        self.assertTrue((scene.puffs[0].dy < 0.2).all())
 
     def test_a_gate_that_lowers_itself_raises_much_less(self):
         self.assertLess(SHUT_PUFF.grains, SLAM_PUFF.grains / 2)

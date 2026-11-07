@@ -232,12 +232,14 @@ What the user has reviewed and how each part ended up:
   It is a thin cloud (`Puff`), not grains: spots of one strength piled up read as balls
   of cotton wool. Many faint particles go out and rise as they slow, and what shows is
   how thick they are together, spread a little more as they age, broken into palette
-  colours with the same dither as the light. The thickest part hides 30% of what is
+  colours with the same dither as the light. The thickest part hides 48% of what is
   behind it, in the pale colour of the rest of the dust, warm in the light. A slam
   drives a good cloud, a gate lowering itself a small one, a tile the most, and slams and
-  tiles throw a few chips of rock. Dust cannot pass through a slab, which stands
-  slanted, so the cloud starts lower on its near side than on its far side. There is
-  none on the lava. The game tells this in `PressurePlates.shut` and
+  tiles throw a few chips of rock. It keeps close to what came down: at sixty pixels
+  and more it was too long, even made fainter. Dust cannot pass through a slab, which
+  stands slanted, so the cloud starts lower on its near side than on its far side. An
+  exit door faces the room, so its cloud comes out at the front, fanning out from all
+  along its foot. There is none on the lava. The game tells this in `PressurePlates.shut` and
   `LooseFloors.landed`, which are not game state and are left out of saves. The entry
   door that slams behind him at the start of a level does the same.
 - **Lava light** is traced over the rock with the same engine as the torch

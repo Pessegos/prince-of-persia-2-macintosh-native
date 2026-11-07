@@ -191,21 +191,21 @@ class PuffKind:
     rise: tuple
     life: tuple
     chips: int = 0
-    reach: int = 76
-    height: int = 44
+    reach: int = 50
+    height: int = 36
 
 
-SLAM_PUFF = PuffKind(110, 7.5, (0.1, 1.1), (30, 70), 4)
-SHUT_PUFF = PuffKind(40, 3.0, (0.05, 0.5), (22, 48))
-TILE_PUFF = PuffKind(130, 8.0, (0.15, 1.4), (30, 74), 6)
-STEP_PUFF = PuffKind(14, 1.7, (0.05, 0.4), (14, 30), reach=26, height=18)
-LANDING_PUFF = PuffKind(26, 4.2, (0.08, 0.7), (20, 46), reach=50, height=28)
+SLAM_PUFF = PuffKind(110, 4.6, (0.1, 0.9), (30, 70), 4)
+SHUT_PUFF = PuffKind(40, 2.0, (0.05, 0.4), (22, 48))
+TILE_PUFF = PuffKind(130, 5.0, (0.15, 1.1), (30, 74), 6)
+STEP_PUFF = PuffKind(22, 1.0, (0.05, 0.3), (14, 30), reach=18, height=14)
+LANDING_PUFF = PuffKind(34, 2.6, (0.08, 0.5), (20, 46), reach=34, height=22)
 LANDING_FALL = 3
-MOST_LANDING_GRAINS = 48
+MOST_LANDING_GRAINS = 54
 MOST_PUFFS = 10
 PUFF_SPEEDS = 1.3
 PUFF_DRAG = 0.88
-PUFF_LIFT = 0.045
+PUFF_LIFT = 0.03
 PUFF_STIR = 0.22
 PUFF_DEPTH = (-3, 6)
 PUFF_THINNING = 1.3
@@ -217,11 +217,16 @@ MOST_PUFF_BLUR = 10
 # How thick a cloud has to be to show, what share of what is behind it the thickest
 # part hides, and how much it breaks into pixels on the palette.
 PUFF_THICKNESS = 3.0
-PUFF_MOST = 0.3
+PUFF_MOST = 0.48
 PUFF_DITHER = 14
 PUFF_LEAST = 0.01
 # How far below its foot a cloud can show.
 PUFF_BELOW = 10
+# An exit door faces the room, so the air comes out at the front of it, fanning out
+# from all along its foot: a share of the speed towards the viewer, foreshortened as
+# the floor is, and how far out over the floor it can come.
+PUFF_FORWARD = 0.5
+PUFF_FORWARD_REACH = 18
 PUFF_CHIP_SPEED = (1.2, 3.4)
 PUFF_CHIP_RISE = (0.3, 1.1)
 PUFF_CHIP_LIFE = (8, 20)
@@ -822,6 +827,7 @@ class Thud:
     kind: PuffKind
     slab: bool = False
     only: int = 0
+    forward: bool = False
 
 
 def door_coming_down(kind, cell, slammed):
@@ -830,7 +836,7 @@ def door_coming_down(kind, cell, slammed):
     puff = SLAM_PUFF if slammed else SHUT_PUFF
     if kind == EXIT_DOOR:
         return Thud(column * TILE_WIDTH + EXIT_DOOR_FOOT[0], column * TILE_WIDTH + EXIT_DOOR_FOOT[1],
-                    floor - EXIT_DOOR_BACK, floor - EXIT_DOOR_BACK, puff)
+                    floor - EXIT_DOOR_BACK, floor - EXIT_DOOR_BACK, puff, forward=True)
     return Thud(column * TILE_WIDTH + GATE_FOOT[0], column * TILE_WIDTH + GATE_FOOT[1],
                 floor + GATE_SLANT, floor - GATE_SLANT, puff, slab=True)
 
@@ -853,8 +859,15 @@ class Puff:
         self.floor = numpy.where(sides < 0, thud.left_floor, thud.right_floor) + stir.uniform(*PUFF_DEPTH, count)
         self.x = numpy.where(sides < 0, thud.left, thud.right) + sides * stir.uniform(0, 3, count)
         self.y = self.floor.copy()
-        self.dx = sides * stir.random(count) ** PUFF_SPEEDS * kind.fastest
+        speeds = stir.random(count) ** PUFF_SPEEDS * kind.fastest
+        self.dx = sides * speeds
         self.dy = -stir.uniform(*kind.rise, count)
+        if thud.forward:
+            across = stir.random(count)
+            self.x = thud.left + (thud.right - thud.left) * across
+            self.dx = (2 * across - 1) * speeds
+            self.dy = speeds * PUFF_FORWARD
+            self.floor = self.y + stir.uniform(0.2, 1, count) * PUFF_FORWARD_REACH
         self.age = numpy.zeros(count)
         self.life = stir.uniform(*kind.life, count)
         self.ticks = 0
@@ -862,7 +875,7 @@ class Puff:
         self.right = min(WIDTH, thud.right + kind.reach)
         floor = max(thud.left_floor, thud.right_floor)
         self.top = max(0, min(thud.left_floor, thud.right_floor) - kind.height)
-        self.bottom = min(HEIGHT, floor + PUFF_BELOW)
+        self.bottom = min(HEIGHT, floor + PUFF_BELOW + (PUFF_FORWARD_REACH if thud.forward else 0))
         self.hidden = self.behind(thud) if thud.slab else None
 
     def behind(self, thud):
@@ -1288,7 +1301,7 @@ class CavernAmbience:
 
     def puff_colour(self, puff):
         """The dust of the rock, warm in the light."""
-        flame, pool = self.light_at((puff.left + puff.right) // 2, min(HEIGHT - 1, puff.bottom - PUFF_BELOW))
+        flame, pool = self.light_at((puff.left + puff.right) // 2, min(HEIGHT - 1, puff.top + (puff.bottom - puff.top) // 2))
         light = max(flame, pool)
         inks = self.air.inks
         return numpy.array(mix(inks[DUST_PALE_INK], inks[DUST_WARM_INK if flame >= pool else DUST_HOT_INK],
