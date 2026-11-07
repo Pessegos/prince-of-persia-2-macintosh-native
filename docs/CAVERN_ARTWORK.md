@@ -218,3 +218,9 @@ Five source-checked crops add690 visible changes to this room. The earlier
 long-column V4 remains intact; the combined cached RGB hash is now
 `4c21295ad0cc54ed2aecc91cf40433df13f4576ee3fab320c53544783cc798a5`.
 The approved comparisons remain local under `rendered/short-column-selected-v2/`.
+
+The same review approves level4 room6's P1 and P2 short columns, both at
+X365 with bottoms242 and362. Ten placement-specific crops add1242 visible
+changes. The upper column's overlying rock stays intact; only the visible
+dark contour and adjacent wall are treated. The combined cached RGB hash is
+`78c0838162512e9e1c29a17e6d160173e6c7c4545935e3908c20a340a3adaabb`.

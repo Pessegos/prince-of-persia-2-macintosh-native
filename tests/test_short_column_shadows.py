@@ -16,6 +16,8 @@ from tests import test_cavern_retouch as retouch_tests
 APPROVED = {
     (3, 4): ([(212, 362, 197)],
              '4c21295ad0cc54ed2aecc91cf40433df13f4576ee3fab320c53544783cc798a5'),
+    (4, 5): ([(365, 242, 150), (365, 362, 180)],
+             '78c0838162512e9e1c29a17e6d160173e6c7c4545935e3908c20a340a3adaabb'),
 }
 
 
