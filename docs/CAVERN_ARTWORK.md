@@ -184,3 +184,23 @@ now differs from native at819 pixels. Its67 foreground changes are confined
 to the approved outer shadow fringe, with the column body and masks intact.
 These five-room goldens supersede the earlier level3 room1 and level5 room23
 whole-room hashes while preserving their other approved artwork.
+
+## Level3 rooms7 and8: missed column-shadow contexts
+
+The user approved the follow-up previews on 2026-11-07. Room7's affected
+lower shadow context is pixel-identical to room5 before V4, even though the
+wall above is darker. Classifying a join from that upper colour alone missed
+this placement. Room8 is a close variant of level5 room2; its small native
+texture differences are retained when applying the approved lighting change.
+
+The follow-up extends the five-room approval only to these two placements:
+
+| Level | Room | Column X / bottom | Added visible changes | Combined render RGB SHA256 |
+| --- | --- | --- | --- | --- |
+| 3 | 7 | 366 / 363 | 585 | `07151ff23ba5c20cf5fbf29a65b08c80c80041705ecf7657fa18e4fcb6294d5e` |
+
+Earlier approved rooms, lit column bodies, transparency and physical/actor
+masks remain unchanged. Comparisons are local under
+`rendered/column-shadow-followup-v1/`. The audit covers static contexts of this
+column model; its former exclusion list is not proof that all cavern artwork
+has been corrected. Keep visual review of genuinely different contexts separate.
