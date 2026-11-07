@@ -1642,6 +1642,8 @@ class DoorDustTests(unittest.TestCase):
         cloud = scene.clouds[0]
         for name in ('x', 'y', 'age', 'life'):
             setattr(cloud, name, getattr(cloud, name)[:1])
+        # On a whole pixel, so that only the light can tell above from below.
+        cloud.y = numpy.round(cloud.y)
         thickness = cloud.thickness()
         row, column = int(round(cloud.y[0])) - cloud.top, int(round(cloud.x[0])) - cloud.left
         self.assertGreater(thickness[row - 3, column], thickness[row + 3, column])
