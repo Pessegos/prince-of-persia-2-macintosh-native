@@ -18,8 +18,8 @@ It is meant to be barely noticed, and it is tied to the scenery. Drops hang
 from the tips of the stalactites and end on the floor or in the lava, single
 grains of ash rise from the lava and the flame, and dust drifts through the
 open air. The flame stays exactly the game's. Its light does not: the frames'
-painted wall keeps still, and the light falling on it is traced over the relief
-of the rock by pop2.firelight and swings as the flame leans. The user rejected
+painted wall keeps still, and the light is traced over the relief of the rock by
+pop2.firelight and changes shape with the flame, like a candle's. The user rejected
 a wider glow over everything and sparks with trails as far too much: the light
 must stay in the rock, not on top of it.
 """
@@ -32,7 +32,7 @@ import random
 import numpy
 from PIL import Image, ImageFilter
 
-from pop2.firelight import Firelight, gaussian, trace_firelight
+from pop2.firelight import DIRECTIONS, Firelight, gaussian, trace_firelight
 from pop2.opponent_generation import EMPTY_TILES, WALL_TILES
 from pop2.terrain import TILE_HEIGHT, TILE_WIDTH, floor_y
 
@@ -65,7 +65,10 @@ SWELL_TICKS = 18
 GRAVITY = 1.15
 FASTEST_FALL = 15.0
 
-MOST_DUST = 46
+MOST_DUST = 64
+# Most grains are fine and the largest are rare: a grain's size, from 0 to 1, is a
+# random number raised to this power.
+DUST_SKEW = 2.5
 # A grain lives this long, and is seen coming and going: all times are ticks.
 DUST_LIFE = (220, 480)
 DUST_FADE_IN = 48
@@ -76,8 +79,10 @@ DUST_SHORTEST_LIFE = 140
 DUST_PLACES = 5
 DUST_TRIES = 24
 # Pixels a tick, and radians around rightwards: one slow draught crosses the
-# room. With every heading of its own it looked like insects.
+# room. With every heading of its own it looked like insects. That is the speed of
+# the largest grains. The finest go this much faster again.
 DUST_SPEED = (0.11, 0.2)
+DUST_FINE_SPEED = 0.5
 DUST_HEADING = (-0.6, 0.25)
 DUST_BY_FLAME = 0.28
 DUST_BY_POOL = 0.1
@@ -97,26 +102,28 @@ POOL_DRAUGHT = 0.12
 DUST_LOOK_AHEAD = 16
 DUST_SETTLE = 36
 DUST_BRAKE = 0.93
-# Some grains are heavier and sink as they drift, in pixels a tick. One that
-# reaches a floor comes down on it this far before the walking line, in pixels,
-# and lies there this many ticks, fading, as a single pale speck.
-DUST_SINKERS = 0.35
+# Some grains sink as they drift, in pixels a tick: of the finest and the largest,
+# this share. One that reaches a floor comes down on it this far before the walking
+# line, in pixels, and lies there this many ticks, fading, as a single pale speck.
+DUST_SINKERS = (0.4, 0.9)
 DUST_SINK = (0.07, 0.15)
 DUST_REST_DEPTH = (2, 12)
 DUST_REST = (80, 170)
 DUST_LANDING_REACH = 40
-# In the dark a grain is a soft pale spot, faint but plain to someone who does
-# not know to look for it. In the light it comes into focus: one sharp pixel that
-# waits, then slides into the next, and as it tumbles a face of it catches the
-# fire for a moment. There is nothing to catch in the dark, so the glints are as
-# strong as the light on the grain.
+# A fine grain is one sharp pixel that waits, then slides into the next, and it
+# shows like that anywhere: seeing only the large grains was the wrong way round.
+# In the dark a large grain is a soft pale spot, faint but plain to someone who
+# does not know to look for it, and in the light it comes into focus too. As a grain
+# tumbles a face of it catches the fire for a moment. There is nothing to catch in
+# the dark, so the glints are as strong as the light on the grain.
 DUST_DARK = 0.66
+DUST_FINE = 0.75
 DUST_BRIGHTEST = 0.78
 DUST_LIT = 0.5
 DUST_GLINT = 0.3
 DUST_SPIN = (0.13, 0.27)
 DUST_FOCUS_LIGHT = 0.35
-# How wide a grain's soft spot is, in pixels, in the dark and in focus.
+# How wide a large grain's soft spot is, in pixels, in the dark and in focus.
 DUST_SOFTNESS = 0.72
 DUST_SHARPNESS = 0.5
 DUST_POOL_REACH = (84, 62)
@@ -149,20 +156,19 @@ TORCH_SEEN = 0.5
 # to go off.
 LIGHT_LEVELS = 10
 AURA_GAIN, AURA_ADD = (1.9, 1.45, 1.05), (26.0, 11.0, 1.0)
-# A candle's light has two motions. It sways: the flame's frames come in random
-# order, so followed directly they only make the light tremble. Each frame
-# pushes on a damped spring instead, and the light swings about once a second as
-# if a draught had caught the flame. SWAY is how many pixels one usual lean of a
-# frame asks for. And it flickers: how hot the frame burns, deepened because the
-# nine frames are much alike, and followed quickly.
-SWAY = 12.0
-SWAY_STIFFNESS = 0.11
-SWAY_DAMPING = 0.22
-FLICKER_FOLLOW = 0.5
+# A candle's light keeps changing shape. Each frame of flame says how far it burns
+# in each direction, and the light reaches that much further or less that way:
+# quickly for the licks of the flame, slowly for the way it breathes. DEPTH is how
+# much of the light's reach one share of the flame's size moves. How hot the frame
+# burns is followed too, deepened because the nine frames are much alike.
+QUICK_FOLLOW, QUICK_DEPTH = 0.3, 1.6
+SLOW_FOLLOW, SLOW_DEPTH = 0.12, 2.4
+SHORTEST_REACH, LONGEST_REACH = 0.6, 1.7
+FLICKER_FOLLOW = 0.35
 FLICKER_DEPTH = 2.5
 # How far past its step a pixel's light must go before the pixel changes, in
 # steps. Without this a third of the pixels that changed flipped straight back.
-LIGHT_HOLD = 0.35
+LIGHT_HOLD = 0.5
 # How far the light on the rock is spread to tell how lit the air is before it.
 AIR_LIGHT_SPREAD = 6.0
 # Fainter still: the lava seems to radiate, and it must not light the room.
@@ -191,8 +197,10 @@ class Colours:
         rgb = sorted({tuple(colour[:3]) for colour in palette.values()})
         self.rgb = numpy.array(rgb, dtype=numpy.int32)
         self.keys = (self.rgb[:, 0] << 16) | (self.rgb[:, 1] << 8) | self.rgb[:, 2]
-        # The flame and the lava are the light; they do not receive it.
-        self.receives = self.rgb[:, 0] < 240
+        # The flame and the lava are the light; they do not receive it. Nor do the
+        # painted cracks: lifting them broke their thin lines into dots, and rock
+        # must not turn into them.
+        self.receives = (self.rgb[:, 0] < 240) & ~((self.rgb[:, 0] >= 100) & (self.rgb[:, 1] * 10 <= self.rgb[:, 0]))
         self.cube = self.nearest_cube().tobytes()
         self.firelight = self.light_table(AURA_GAIN, AURA_ADD)
         self.lavalight = self.light_table(POOL_GLOW_GAIN, POOL_GLOW_ADD)
@@ -345,7 +353,7 @@ def read_torch(frames, unlit, left, top, scenery, table):
     room[top:bottom, left:right][inside] = unlit[:bottom - top, :right - left, :3][inside]
     shades = (room @ numpy.array((0.30, 0.59, 0.11))) / 255
     firelight = trace_firelight(shades, outline.astype(numpy.float64), flame_heat(frames, flame), left, top)
-    at_rest = firelight.at(0.0, 0.0, 1.0)
+    at_rest = firelight.steady
     rows, columns = numpy.mgrid[firelight.top:firelight.top + at_rest.shape[0],
                                 firelight.left:firelight.left + at_rest.shape[1]]
     glow = Glow(firelight.left, firelight.top, at_rest, BAYER[rows % 4, columns % 4], table)
@@ -544,6 +552,7 @@ class Mote:
     dy: float
     phase: float
     life: float
+    # From 0 for the finest to 1 for the largest.
     size: float
     spin: float = 0.2
     age: float = 0.0
@@ -596,22 +605,23 @@ class Fall:
 
 @dataclass
 class Flicker:
-    """A torch's light as it stands: where the flame leans, how hot it burns, the
-    step each pixel holds, and the tick they last moved on."""
+    """A torch's light as it stands: how far it reaches each way, how hot it burns,
+    the step each pixel holds, and the tick they last moved on."""
 
     steps: numpy.ndarray
-    x: float = 0.0
-    y: float = 0.0
-    speed_x: float = 0.0
-    speed_y: float = 0.0
+    quick: numpy.ndarray
+    slow: numpy.ndarray
     burn: float = 1.0
     tick: int = -1
 
-    def sway(self, lean_x, lean_y):
-        self.speed_x += (lean_x * SWAY - self.x) * SWAY_STIFFNESS - self.speed_x * SWAY_DAMPING
-        self.speed_y += (lean_y * SWAY - self.y) * SWAY_STIFFNESS - self.speed_y * SWAY_DAMPING
-        self.x += self.speed_x
-        self.y += self.speed_y
+    def follow(self, outline, burn):
+        self.quick = self.quick + (outline - self.quick) * QUICK_FOLLOW
+        self.slow = self.slow + (outline - self.slow) * SLOW_FOLLOW
+        self.burn += (burn ** FLICKER_DEPTH - self.burn) * FLICKER_FOLLOW
+
+    @property
+    def reach(self):
+        return (1 + self.quick * QUICK_DEPTH + self.slow * SLOW_DEPTH).clip(SHORTEST_REACH, LONGEST_REACH)
 
 
 def soft_spot(x, y, softness=DUST_SOFTNESS):
@@ -675,7 +685,8 @@ class CavernAmbience:
 
     @staticmethod
     def new_flicker(torch):
-        return Flicker(light_steps(torch.light.falloff, torch.light.dither, 1.0))
+        still = numpy.zeros(DIRECTIONS)
+        return Flicker(light_steps(torch.light.falloff, torch.light.dither, 1.0), still, still)
 
     def pool_strength(self):
         return 0.92 + 0.06 * wave(self.tick, (0.6, 0.07, 0.0), (0.4, 0.043, 1.0))
@@ -733,12 +744,14 @@ class CavernAmbience:
         drift through its whole life, so that old and new never show as a swap."""
         rng = self.rng
         near = rng.random()
+        size = rng.random() ** DUST_SKEW
         best, room, found = None, -1.0, 0
         for _ in range(DUST_TRIES):
             x, y = self.place_for_dust(near)
             if not self.air.is_open(int(x), int(y)):
                 continue
-            heading, speed = rng.uniform(*DUST_HEADING), rng.uniform(*DUST_SPEED)
+            heading = rng.uniform(*DUST_HEADING)
+            speed = rng.uniform(*DUST_SPEED) * (1 + DUST_FINE_SPEED * (1 - size))
             dx, dy = math.cos(heading) * speed, math.sin(heading) * speed
             clear = self.clear_air(x, y, dx, dy)
             if clear < DUST_SHORTEST_LIFE:
@@ -747,9 +760,10 @@ class CavernAmbience:
             apart = min((math.hypot(x - mote.x, y - mote.y) for mote in self.motes), default=WIDTH)
             if apart > room:
                 room = apart
-                sink = rng.uniform(*DUST_SINK) if rng.random() < DUST_SINKERS else 0.0
+                sinkers = DUST_SINKERS[0] + (DUST_SINKERS[1] - DUST_SINKERS[0]) * size
+                sink = rng.uniform(*DUST_SINK) if rng.random() < sinkers else 0.0
                 best = Mote(x, y, dx, dy, rng.uniform(0, math.tau), min(clear, rng.uniform(*DUST_LIFE)),
-                            rng.uniform(0.6, 1.0), rng.uniform(*DUST_SPIN), moving_x=dx, moving_y=dy, sink=sink)
+                            size, rng.uniform(*DUST_SPIN), moving_x=dx, moving_y=dy, sink=sink)
             if found == DUST_PLACES:
                 break
         return best
@@ -800,8 +814,10 @@ class CavernAmbience:
             sway_y = DUST_SWAY * wave(slow, (0.7, 0.8, mote.phase * 3), (0.3, 2.1, mote.phase * 5))
             along_x = mote.dx * math.cos(turning) - mote.dy * math.sin(turning)
             along_y = mote.dx * math.sin(turning) + mote.dy * math.cos(turning)
-            mote.moving_x += (along_x + wind_x + sway_x - mote.moving_x) * DUST_INERTIA
-            mote.moving_y += (along_y + wind_y + sway_y + mote.sink - mote.moving_y) * DUST_INERTIA
+            # The finer the grain, the sooner it goes with the air.
+            follows = DUST_INERTIA * (2 - mote.size)
+            mote.moving_x += (along_x + wind_x + sway_x - mote.moving_x) * follows
+            mote.moving_y += (along_y + wind_y + sway_y + mote.sink - mote.moving_y) * follows
         mote.x += mote.moving_x
         mote.y += mote.moving_y
         return mote.age < mote.life and mote.settling > 0 and air.is_open(int(mote.x), int(mote.y))
@@ -831,7 +847,7 @@ class CavernAmbience:
         # The floor is brighter than the air, and only a warm pale speck shows on it.
         warmth = 1.0 if mote.rest is not None else min(1.0, light / DUST_FOCUS_LIGHT)
         red, green, blue = (dark[channel] + (lit[channel] - dark[channel]) * warmth for channel in range(3))
-        return red, green, blue, mote.size * fade * strength
+        return red, green, blue, (DUST_FINE + (1 - DUST_FINE) * mote.size) * fade * strength
 
     # Ash
 
@@ -979,9 +995,8 @@ class CavernAmbience:
         # A frame can be rendered twice: the light moves once per tick.
         if flicker.tick != self.tick:
             flicker.tick = self.tick
-            flicker.sway(*torch.firelight.lean[game_frame])
-            flicker.burn += (torch.firelight.burn[game_frame] ** FLICKER_DEPTH - flicker.burn) * FLICKER_FOLLOW
-            light = torch.firelight.at(flicker.x, flicker.y, flicker.burn)
+            flicker.follow(torch.firelight.outlines[game_frame], float(torch.firelight.burn[game_frame]))
+            light = torch.firelight.at(flicker.reach, flicker.burn)
             wanted = light * LIGHT_LEVELS + torch.light.dither
             moved = numpy.abs(wanted - 0.5 - flicker.steps) > 0.5 + LIGHT_HOLD
             flicker.steps = numpy.where(moved, light_steps(light, torch.light.dither, 1.0), flicker.steps)
@@ -993,7 +1008,7 @@ class CavernAmbience:
     def dust_spot(self, canvas, mote):
         red, green, blue, strength = self.dust_colour(mote)
         resting = mote.rest is not None
-        focus = 1.0 if resting else smooth(max(self.light_at(mote.x, mote.y)) / DUST_FOCUS_LIGHT)
+        focus = 1.0 if resting else max(smooth(max(self.light_at(mote.x, mote.y)) / DUST_FOCUS_LIGHT), 1 - mote.size)
         softness = DUST_SOFTNESS + (DUST_SHARPNESS - DUST_SOFTNESS) * focus
         air, nearest = self.air, self.air.colours.nearest
         for column, row, weight in soft_spot(on_the_pixels(mote.x, focus), on_the_pixels(mote.y, focus), softness):

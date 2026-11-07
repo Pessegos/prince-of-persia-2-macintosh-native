@@ -183,44 +183,50 @@ What the user has reviewed and how each part ended up:
   more presence" meant a small step in the style that was there.
 - **Firelight** replaced a blurred ball of the flame's shape. The user asked for
   light that behaves like ray tracing. The room is only a painting, so
-  `rock_height` reads its shape from the paint: lit paint stands forward, dark
-  paint falls back, and the torch's recess is its sprite's outline sunk into
-  that surface. `trace_firelight` cuts the flame into cells and runs rays from
-  each cell over the relief. A surface takes light by how much it faces the
-  cell, how far away it is, and whether rock stands in between. So the rock
-  lights up along its veins, the lip above the recess catches the light from
-  below, and hollows stay dark. The relief has to stay shallow against the
-  flame: deeper, and the rim of the recess shuts the light in, one steady oval
-  however the flame moves. A light laid over everything "looked like a bomb
-  about to go off".
-- **The candle.** The first traced light had one map for each of the nine frames,
-  and it read as a steady oval. The frames come in random order and their
-  middles are a pixel or two apart, so following them only made the light tremble
-  in place, and the rock by the flame sat at full light with nothing left to move.
-  Now the flame is traced five times, at rest and moved 14 pixels each way, and a
-  tick mixes those (`Firelight.at`), so the light can stand anywhere among them.
-  Each frame pushes on a damped spring (`Flicker.sway`), which turns the random
-  frames into a swing of about a second, as if a draught had caught the flame,
-  and the shadows swing with it. How hot the frame burns makes the quick flicker
-  on top. The trace takes about 180 ms on entering the room, only with the
-  ambience on, and a tick only mixes.
+  `rock_height` reads its shape from the paint: lit paint stands forward and dark
+  paint falls back. `trace_firelight` cuts the flame into cells and runs rays from
+  each cell over the relief. A surface takes light by how much it faces the cell,
+  how far away it is, and whether rock stands in between. So the rock lights up
+  along its veins and hollows stay dark. A light laid over everything "looked like
+  a bomb about to go off".
+- **The oval** was the hardest part, and took three tries to see. The user kept
+  describing one steady oval around the torch. It was not the falloff of the light:
+  drawn alone, the light was a bright plate with a sharp edge, in the shape of the
+  torch's sprite, because the sunken recess and a flame close to the rock shut the
+  light in. Following the frames could only make that plate tremble, and tracing
+  the flame in five places and swinging it on a spring only made it "the same oval,
+  changing place". Now the flame stands further off the rock, so the light gets
+  out of the recess, and the recess takes half the light (`RECESS_LIGHT`) with a
+  soft edge, as it is painted as already lit.
+- **The candle.** The light is traced once, in about 60 ms on entering the room,
+  and then changes shape instead of moving. Each frame of flame is measured all the
+  way round its middle (`flame_outlines`), and where it burns further than usual
+  the light reaches further that way (`Firelight.at`), so a tall flame draws the
+  light up and a squat one spreads it to the sides. Raising the light to a power
+  does that: the bright rock stays, the fringe goes out or comes in, and the veins
+  stay where they are, which sliding the light could not do. The frames come in
+  random order, so `Flicker` follows them at two speeds, quickly for the licks and
+  slowly for the breath. How hot the frame burns moves the whole light as well.
+  A tick only does that sum, in about a millisecond.
 - **Keeping it calm.** A pixel keeps its step of light until the light has really
   moved past it (`LIGHT_HOLD`): before that, a third of the changing pixels
-  flipped straight back. With the swing only about 5% do. More pixels change than
-  in the original, but they are the light moving across the rock, not noise.
+  flipped straight back. About 8% do now. More pixels change than in the original,
+  but they are the light moving across the rock, not noise.
 - **Lava glow** is fainter than that warmth and hugs the pool (`glow_along`). It
   is the same table and dither, and breathes over several seconds.
 - **The wall behind the torch.** `CaveGetTorchFrame` (8:3b4e) picks one of nine
   frames at random each tick. They paint a rich wall of veins and specks, but
   about a hundred loose pixels of it differ from frame to frame, so those blink.
   While the ambience is on `steady_wall` keeps each such pixel at the colour it
-  shows most often, and the light above falls on that. Replacing the whole wall
+  shows most often, and a lesser light falls on that. Replacing the whole wall
   with the unlit recess (SHAP 3590) was tried and rejected: it came out plain, as
   it was only the loose pixels that were wrong. The unlit recess is what the
   relief is read from, as lit paint there would be taken for height. The flame
   stays exactly the game's: a pass that also chose the frames made it choppy.
   `flame_pixels` tells flame from wall by colour. Its dark red rim counts only
-  next to the flame, as the same red is painted on the wall's cracks.
+  next to the flame, as the same red is painted on the wall's cracks. Those
+  cracks do not receive light, and rock does not turn into their red: lit, their
+  thin lines broke into dashes and dots.
   `light_torch` only touches pixels that show the sprite, so whatever is drawn
   over the torch stays, and a torch that is not there gets no light either.
 - **Dust** went through the most tries. Slow crisp grains hopped from pixel to
@@ -238,13 +244,19 @@ What the user has reviewed and how each part ended up:
   in the dark, and two rhythms keep any grain from flashing like a beacon. How lit
   a grain is comes from the traced light, spread out a little (`lit_air`), so the
   air behind a ledge stays dark. The dark spot started so faint that only someone
-  who knew where to look could find it, so it is paler and there are 46 grains.
+  who knew where to look could find it, so it was made paler.
+- **Sizes.** That showed only the large grains, the wrong way round: large ones
+  should be the rare ones. So a grain now has a size, and most are fine
+  (`DUST_SKEW`). A fine grain is one sharp pixel anywhere, dark or lit. Only the few
+  large ones are soft spots in the dark. The large ones keep the slow speed the
+  user liked, and the finest go half as fast again, stay with the air better, and
+  sink less often. There are 64 grains.
 - **The air** moves the dust. One slow draught crosses the room and turns very
   slowly. Fire draws the air in beside it, sends it up through the flame and
   spreads it out above (`wind_at`). A grain has some weight, so it follows any
   change in the air slowly, and it sways a little. With rock ahead it slows and
-  settles over 3 seconds instead of vanishing. A third of the grains are heavier
-  and sink. One that reaches a floor comes down on it (`land`), and lies there as
+  settles over 3 seconds instead of vanishing. Half the grains sink, the larger
+  ones more often. One that reaches a floor comes down on it (`land`), and lies there as
   one pale speck for 7 to 14 seconds, fading. It does not land on the lava, or
   behind the foreground, and a floor that falls takes it along. Otherwise a grain
   has a lifespan:
@@ -256,8 +268,8 @@ What the user has reviewed and how each part ended up:
 The firelight and the glow are tables of what each palette colour becomes at
 each of ten brightness levels (`Colours.light_table`), stepped through a 4x4
 ordered dither like the stipple in the art. Firelight multiplies what the paint
-already is, so hollows stay dark. Flame and lava do not receive light, and lit
-rock never turns into a colour of fire.
+already is, so hollows stay dark. Flame, lava and the painted cracks do not
+receive light, and lit rock never turns into one of their colours.
 
 Pixels only. Its generator is private, so turning it on changes no opponent,
 route or test. Its state is on the `LevelRenderer`, not in `CavernState`, so it
@@ -270,3 +282,8 @@ in the next room's unpainted pixels, so a particle or lit pixel drawn before
 that snapshot could stay on screen for good. Being before the actors, it passes
 behind them and does not light them. The foreground's alpha hides particles
 behind pillars and rock.
+
+Ideas the user liked and kept for later, once the torch and the dust are right:
+the Prince's shadow on the rock, the Prince stirring the dust, the lava lighting
+the rock with the same engine, drops catching the light, heat haze over the lava
+and the flame, and sound tied to all of it.

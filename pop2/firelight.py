@@ -3,23 +3,27 @@
 A port improvement for the cave ambience. The room is only a painting, so the
 rock's shape is read from it: lit paint stands forward and dark paint falls
 back, which is how the artist meant the eye to read the veins and the hollows.
-The recess a torch stands in is its sprite's outline, sunk into that surface.
 
 The flame is a light with an area, not a point: it is cut into a few cells, and
 rays run from each cell over the relief. A surface takes light by how much it
 faces the cell, how far away it is, and whether rock stands in between.
 
-That is done five times: with the flame at rest, and moved to each side, up and
-down. Between those a tick only has to mix, so the flame can stand anywhere
-among them and the shadows swing with it. One map for each of the nine frames
-could not do that. The frames come in random order, so following them made the
-light tremble in place, a steady oval around the torch, and never lean.
+That is done once. What makes it a candle is that the light then changes shape:
+each frame of flame is measured all the way round its middle, and where it burns
+further than usual the light reaches further that way. Raising the light to a
+power does that without moving the rock's veins, and nothing lit becomes dark or
+the reverse. Moving the whole light instead, tried first, only gave a steady oval
+that changed place.
+
+The torch's own recess is painted as already lit, so it takes little more. Lit
+as much as the rock, it stood out as a bright oval plate the shape of the sprite.
 
 The result is only numbers from 0 to 1. Turning them into palette colours is
 left to the ambience, which holds them to the room's palette.
 """
 
 from dataclasses import dataclass
+import math
 
 import numpy
 
@@ -29,18 +33,14 @@ import numpy
 ROCK_SHADE = 0.6
 ROCK_MASS = 12.0
 ROCK_VEINS = 16.0
-RECESS_DEPTH = 5.0
-# The flame stands this far off the rock behind it. Relief any deeper against
-# this, and the rim of the recess shuts the light in: it stays one oval, however
-# the flame moves.
-FLAME_LIFT = 20.0
+# The flame stands this far off the rock behind it. Any closer, and the rim of the
+# recess shuts the light in: a bright plate with an edge, whatever the flame does.
+FLAME_LIFT = 32.0
 # Pixels: where the light is a quarter gone, and where it has run out.
-LIGHT_NEAR = 40.0
+LIGHT_NEAR = 32.0
 LIGHT_REACH = 125
 # Cells of the flame, in pixels.
 CELL_WIDTH, CELL_HEIGHT = 10, 14
-# How far the flame is moved each way, in pixels.
-SWING = 14.0
 # Points tested along each ray, and the slope over which rock goes from letting
 # the light by to stopping it. Shadows are worked out on every other pixel: the
 # veins in the light come from which way the rock faces, on every pixel.
@@ -57,6 +57,13 @@ BOUNCE_SPREAD = 12.0
 EXPOSURE = 1.8
 # The brightest few pixels are left out of what counts as full light.
 PEAK_PERCENTILE = 99.5
+# How much of the light the torch's painted recess takes.
+RECESS_LIGHT = 0.5
+RECESS_EDGE = 7.0
+# Directions a flame is measured in, and how many of them its outline is blurred
+# over, so that one tongue of flame does not throw a spoke of light.
+DIRECTIONS = 48
+OUTLINE_SOFTNESS = 2.0
 
 
 def gaussian(values, sigma):
@@ -71,11 +78,19 @@ def gaussian(values, sigma):
                for offset, weight in zip(offsets, kernel))
 
 
-def rock_height(shades, recess):
-    """Height in pixels from brightness 0..1 and a mask of the sunken recess."""
+def around(values, softness):
+    """Blurred around the circle, along the last axis."""
+    count = values.shape[-1]
+    spectrum = numpy.fft.rfft(values, axis=-1)
+    waves = numpy.arange(spectrum.shape[-1]) * softness * math.tau / count
+    return numpy.fft.irfft(spectrum * numpy.exp(-waves ** 2 / 2), count, axis=-1)
+
+
+def rock_height(shades):
+    """Height in pixels from brightness 0..1."""
     shades = shades ** ROCK_SHADE
     veins = 0.6 * gaussian(shades, 2.2) + 0.4 * gaussian(shades, 0.9)
-    return ROCK_MASS * gaussian(shades, 7.0) + ROCK_VEINS * veins - RECESS_DEPTH * gaussian(recess, 2.0)
+    return ROCK_MASS * gaussian(shades, 7.0) + ROCK_VEINS * veins
 
 
 def flame_cells(heat):
@@ -92,18 +107,32 @@ def flame_cells(heat):
     return places, total / total.sum()
 
 
-def flame_lean(heat):
-    """[frame, (x, y)] of how far each frame's middle stands from the average one,
-    in units of how far they usually do, and [frame] of how hot it burns."""
-    burnt = heat.sum(axis=(1, 2))
+def direction_of(across, down):
+    """Where among the DIRECTIONS a point lies from the flame's middle."""
+    return (numpy.arctan2(down, across) + math.pi) / math.tau * DIRECTIONS % DIRECTIONS
+
+
+def flame_outlines(heat):
+    """(x, y) of the flame's middle, and [frame, direction] of how much further
+    than usual each frame burns that way, as a share of the flame's usual size."""
+    mass = heat.sum(axis=0)
     rows, columns = numpy.mgrid[:heat.shape[1], :heat.shape[2]]
-    alight = numpy.maximum(burnt, 1e-9)
-    middles = numpy.stack(((heat * columns).sum(axis=(1, 2)) / alight,
-                           (heat * rows).sum(axis=(1, 2)) / alight), axis=1)
-    lean = middles - middles[burnt > 0].mean(axis=0)
-    spread = lean[burnt > 0].std(axis=0)
-    lean = numpy.where(spread > 0, lean / numpy.where(spread > 0, spread, 1), 0.0)
-    return lean, burnt / burnt[burnt > 0].mean()
+    middle_x, middle_y = (mass * columns).sum() / mass.sum(), (mass * rows).sum() / mass.sum()
+    reach = numpy.zeros((len(heat), DIRECTIONS))
+    for frame, burning in enumerate(heat):
+        down, across = numpy.nonzero(burning)
+        down, across = down - middle_y, across - middle_x
+        numpy.maximum.at(reach[frame], direction_of(across, down).astype(numpy.int32), numpy.hypot(across, down))
+    reach = around(reach, OUTLINE_SOFTNESS)
+    alight = heat.any(axis=(1, 2))
+    usual = reach[alight].mean(axis=0)
+    return middle_x, middle_y, numpy.where(alight[:, None], (reach - usual) / usual.mean(), 0.0)
+
+
+def flame_burn(heat):
+    """[frame] of how hot each frame burns, one being usual."""
+    burnt = heat.sum(axis=(1, 2))
+    return burnt / burnt[burnt > 0].mean()
 
 
 class Relief:
@@ -148,10 +177,9 @@ class Relief:
         fading = (1 - squared / LIGHT_REACH ** 2).clip(0, 1) ** 2
         return facing * fading / (1 + squared / LIGHT_NEAR ** 2) * self.shadow(to_x, to_y, to_z, distance)
 
-    def flame_at(self, places, shares, x, y):
-        """All of the flame's light with the flame moved x and y pixels."""
-        return sum(share * self.light_from(place_x + x, place_y + y)
-                   for (place_x, place_y), share in zip(places, shares))
+    def flame(self, places, shares):
+        """All of the flame's light."""
+        return sum(share * self.light_from(x, y) for (x, y), share in zip(places, shares))
 
 
 def pressed(light):
@@ -165,18 +193,27 @@ class Firelight:
     left: int
     top: int
     rest: numpy.ndarray
-    # [right, left, down, up]: what moving the flame that way changes.
-    swings: numpy.ndarray
-    # For each frame of flame: where it leans, and how hot it burns.
-    lean: numpy.ndarray
+    # [y, x]: where among the directions each pixel lies, and the share of light
+    # it takes.
+    direction: numpy.ndarray
+    taken: numpy.ndarray
+    # For each frame of flame: [direction] of how far it burns, and how hot.
+    outlines: numpy.ndarray
     burn: numpy.ndarray
 
-    def at(self, x, y, strength):
-        """The light with the flame x and y pixels from rest, up to SWING, as a
-        share of what it casts at that strength. Always 0 to 1."""
-        across = self.swings[0 if x >= 0 else 1] * min(abs(x) / SWING, 1.0)
-        down = self.swings[2 if y >= 0 else 3] * min(abs(y) / SWING, 1.0)
-        return pressed(numpy.maximum(self.rest + across + down, 0) * strength).clip(0, 1)
+    def at(self, reach, strength):
+        """The light at a strength, and [direction] of how far it goes each way,
+        one being as traced. Always 0 to 1."""
+        lit = pressed(self.rest * strength).clip(1e-6, 1)
+        # Between two directions, so that no spoke of light shows.
+        way = self.direction.astype(numpy.int32)
+        between = self.direction - way
+        here = reach[way] * (1 - between) + reach[(way + 1) % DIRECTIONS] * between
+        return lit ** (1 / here) * self.taken
+
+    @property
+    def steady(self):
+        return self.at(numpy.ones(DIRECTIONS), 1.0)
 
 
 def trace_firelight(shades, recess, heat, left, top):
@@ -188,24 +225,23 @@ def trace_firelight(shades, recess, heat, left, top):
     """
     if not heat.any():
         return Firelight(left, top, numpy.zeros((1, 1), dtype=numpy.float32),
-                         numpy.zeros((4, 1, 1), dtype=numpy.float32),
-                         numpy.zeros((len(heat), 2)), numpy.zeros(len(heat)))
+                         numpy.zeros((1, 1), dtype=numpy.float32), numpy.ones((1, 1), dtype=numpy.float32),
+                         numpy.zeros((len(heat), DIRECTIONS)), numpy.zeros(len(heat)))
     room_height, room_width = shades.shape
-    rows, columns = numpy.nonzero(heat.any(axis=0))
-    middle_x, middle_y = int(columns.mean()) + left, int(rows.mean()) + top
-    window_left, window_right = max(0, middle_x - LIGHT_REACH), min(room_width, middle_x + LIGHT_REACH)
-    window_top, window_bottom = max(0, middle_y - LIGHT_REACH), min(room_height, middle_y + LIGHT_REACH)
+    middle_x, middle_y, outlines = flame_outlines(heat)
+    middle_x, middle_y = middle_x + left, middle_y + top
+    window_left, window_right = max(0, int(middle_x) - LIGHT_REACH), min(room_width, int(middle_x) + LIGHT_REACH)
+    window_top, window_bottom = max(0, int(middle_y) - LIGHT_REACH), min(room_height, int(middle_y) + LIGHT_REACH)
     outline = numpy.zeros(shades.shape)
     bottom, right = min(room_height, top + recess.shape[0]), min(room_width, left + recess.shape[1])
     outline[top:bottom, left:right] = recess[:bottom - top, :right - left]
     window = slice(window_top, window_bottom), slice(window_left, window_right)
-    relief = Relief(rock_height(shades[window], outline[window]).astype(numpy.float32))
+    relief = Relief(rock_height(shades[window]).astype(numpy.float32))
     places, shares = flame_cells(heat)
-    places = places + (left - window_left, top - window_top)
-    moves = ((0, 0), (SWING, 0), (-SWING, 0), (0, SWING), (0, -SWING))
-    casts = [relief.flame_at(places, shares, *move) for move in moves]
-    peak = max(numpy.percentile(casts[0], PEAK_PERCENTILE), 1e-6)
-    maps = numpy.stack([(cast + BOUNCE * gaussian(cast, BOUNCE_SPREAD)) / peak for cast in casts])
-    lean, burn = flame_lean(heat)
-    return Firelight(window_left, window_top, maps[0].astype(numpy.float32),
-                     (maps[1:] - maps[0]).astype(numpy.float32), lean, burn)
+    cast = relief.flame(places + (left - window_left, top - window_top), shares)
+    rest = (cast + BOUNCE * gaussian(cast, BOUNCE_SPREAD)) / max(numpy.percentile(cast, PEAK_PERCENTILE), 1e-6)
+    rows, columns = numpy.mgrid[window_top:window_bottom, window_left:window_right]
+    direction = direction_of(columns - middle_x, rows - middle_y).astype(numpy.float32)
+    taken = 1 - (1 - RECESS_LIGHT) * gaussian(outline[window], RECESS_EDGE)
+    return Firelight(window_left, window_top, rest.astype(numpy.float32), direction, taken.astype(numpy.float32),
+                     outlines, flame_burn(heat))

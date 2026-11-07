@@ -1,6 +1,7 @@
 """The optional cave ambience: pixels only, tied to the scenery, off by default."""
 
 from dataclasses import replace
+import math
 from pathlib import Path
 import random
 from types import SimpleNamespace
@@ -12,12 +13,12 @@ from PIL import Image
 
 from pop2.cavern_ambience import (
     AMBIENCE_ROOMS, ALL_INKS, ASH_INKS, Air, Ash, CavernAmbience, Colours, DUST_BRIGHTEST, DUST_FADE_IN,
-    DUST_FADE_OUT, DUST_HEADING, DUST_LIFE, DUST_REST_DEPTH, DUST_SPEED, Drip, FLASH_INKS,
-    HEAT_REACH, HEIGHT, LIGHT_LEVELS, MOST_ASH, MOST_DUST, Mote, POOL_GLOW_REACH,
-    SPLASH_INKS, STEAM_INKS, SWAY, SWELL_TICKS, WIDTH, flame_pixels, glow_along, landing, on_the_pixels,
-    read_torch, soft_spot, stalactite_tips, steady_wall,
+    DUST_FADE_OUT, DUST_FINE_SPEED, DUST_HEADING, DUST_LIFE, DUST_REST_DEPTH, DUST_SPEED, Drip, FLASH_INKS, Flicker,
+    HEAT_REACH, HEIGHT, LIGHT_HOLD, LIGHT_LEVELS, LONGEST_REACH, MOST_ASH, MOST_DUST, Mote, POOL_GLOW_REACH, QUICK_DEPTH,
+    QUICK_FOLLOW, SHORTEST_REACH, SLOW_DEPTH, SLOW_FOLLOW, SPLASH_INKS, STEAM_INKS, SWELL_TICKS, WIDTH,
+    flame_pixels, glow_along, landing, on_the_pixels, read_torch, soft_spot, stalactite_tips, steady_wall,
 )
-from pop2.firelight import LIGHT_REACH, SWING
+from pop2.firelight import DIRECTIONS, LIGHT_REACH, gaussian
 from pop2.game_menu import GameMenu
 from pop2.paths import ASSET_DIR
 
@@ -317,14 +318,17 @@ class DustTests(unittest.TestCase):
         self.assertLess(numpy.hypot(after[0] - before[0], after[1] - before[1]), 0.03)
 
     def test_dust_drifts_slowly(self):
-        # About twice this was too fast for the user.
+        # Twice what the largest do was too fast for the user, and they are the
+        # slowest: the finest stay well short of that.
+        fastest = DUST_SPEED[1] * (1 + DUST_FINE_SPEED)
         self.assertLessEqual(DUST_SPEED[1], 0.26)
+        self.assertLessEqual(fastest, 0.31)
         scene = CavernAmbience(0, room_air(flames=[(200, 200)]), random.Random(6))
         for _ in range(200):
             mote = scene.new_mote()
             speed = (mote.dx ** 2 + mote.dy ** 2) ** 0.5
             self.assertGreaterEqual(speed, DUST_SPEED[0] - 1e-9)
-            self.assertLessEqual(speed, DUST_SPEED[1] + 1e-9)
+            self.assertLessEqual(speed, fastest + 1e-9)
 
     def test_a_grain_comes_and_goes_gradually(self):
         scene = still_ambience(room_air(flames=[(300, 200)]))
@@ -503,6 +507,69 @@ class DustTests(unittest.TestCase):
         self.assertGreater(sinking, 4)
         self.assertLess(sinking, len(scene.motes) * 0.7)
 
+    def many_grains(self):
+        scene = still_ambience(room_air(flames=[(200, 200)]))
+        return [scene.new_mote() for _ in range(1500)]
+
+    def test_most_grains_are_fine_and_the_largest_are_rare(self):
+        # Only the large grains could be seen, which was the wrong way round.
+        sizes = numpy.array([mote.size for mote in self.many_grains()])
+        self.assertGreater((sizes < 0.25).mean(), 0.5)
+        self.assertLess((sizes > 0.7).mean(), 0.2)
+        self.assertGreater((sizes > 0.7).mean(), 0.05)
+        self.assertLess(sizes.max(), 1.0 + 1e-9)
+
+    def test_the_largest_grains_are_the_slowest(self):
+        grains = self.many_grains()
+        speed = {mote.phase: math.hypot(mote.dx, mote.dy) for mote in grains}
+        large = [speed[mote.phase] for mote in grains if mote.size > 0.7]
+        fine = [speed[mote.phase] for mote in grains if mote.size < 0.1]
+        self.assertGreater(numpy.mean(fine), numpy.mean(large) * 1.3)
+
+    def test_the_largest_keep_the_slow_speed_that_was_right(self):
+        speeds = [math.hypot(mote.dx, mote.dy) for mote in self.many_grains() if mote.size > 0.9]
+        self.assertTrue(speeds)
+        self.assertLess(max(speeds), DUST_SPEED[1] * 1.1)
+
+    def test_the_large_sink_more_often_than_the_fine(self):
+        grains = self.many_grains()
+        large = numpy.mean([mote.sink > 0 for mote in grains if mote.size > 0.6])
+        fine = numpy.mean([mote.sink > 0 for mote in grains if mote.size < 0.1])
+        self.assertGreater(large, fine + 0.15)
+
+    def test_a_fine_grain_goes_with_the_air_sooner(self):
+        scene = still_ambience(room_air())
+        fine, large = (Mote(100.0, 100.0, 0.2, 0.0, 0.0, 1000.0, size, age=100.0) for size in (0.0, 1.0))
+        for mote in (fine, large):
+            for _ in range(8):
+                scene.advance_mote(mote, 0.0)
+        self.assertGreater(fine.moving_x, large.moving_x * 1.3)
+
+    def test_a_fine_grain_is_one_sharp_pixel_even_in_the_dark(self):
+        scene = still_ambience(room_air())
+        scene.motes.append(self.mote(100.2, 100.2, size=0.0))
+        frame = scene.draw(wall_frame())
+        changed = numpy.argwhere((numpy.asarray(frame) != WALL).any(axis=2))
+        self.assertLessEqual(len(changed), 2)
+
+    def test_a_fine_grain_shows_in_the_dark_like_the_large_ones_nearly(self):
+        scene = still_ambience(room_air())
+        fine = scene.dust_colour(self.mote(100.0, 100.0, size=0.0))[3]
+        large = scene.dust_colour(self.mote(100.0, 100.0, size=1.0))[3]
+        self.assertGreater(fine, large * 0.6)
+        scene.motes.append(self.mote(100.2, 100.2, size=0.0))
+        brightest = numpy.asarray(scene.draw(wall_frame()))[..., :3].astype(int).sum(axis=2).max()
+        self.assertGreater(brightest, sum(WALL[:3]) + 150)
+
+    def test_a_large_grain_is_soft_in_the_dark_and_a_fine_one_is_not(self):
+        counts = []
+        for size in (0.0, 1.0):
+            scene = still_ambience(room_air())
+            scene.motes.append(self.mote(100.2, 100.2, size=size))
+            frame = scene.draw(wall_frame())
+            counts.append(int((numpy.asarray(frame) != WALL).any(axis=2).sum()))
+        self.assertGreater(counts[1], counts[0] + 2)
+
     def test_dust_is_as_lit_as_the_traced_air_it_is_in(self):
         # By distance alone, a grain behind a ledge shone as if it could see the flame.
         art = burning_torch()
@@ -597,7 +664,7 @@ class AshTests(unittest.TestCase):
 
 def without_light(art):
     """The same torch casting no light, to see the wall under it."""
-    firelight = replace(art.firelight, rest=art.firelight.rest * 0, swings=art.firelight.swings * 0)
+    firelight = replace(art.firelight, rest=art.firelight.rest * 0)
     return replace(art, firelight=firelight, light=replace(art.light, falloff=art.light.falloff * 0))
 
 
@@ -712,6 +779,73 @@ class SteadyWallTests(unittest.TestCase):
         self.assertEqual(tuple(steady_wall(frames, flame_pixels(frames), unlit)[1, 1]), ROCK)
 
 
+class FlickerTests(unittest.TestCase):
+    def flicker(self):
+        still = numpy.zeros(DIRECTIONS)
+        return Flicker(numpy.zeros((1, 1), dtype=numpy.int32), still, still)
+
+    def test_it_starts_as_traced(self):
+        self.assertTrue((self.flicker().reach == 1).all())
+
+    def test_a_frame_moves_the_licks_at_once_and_the_breath_slowly(self):
+        flicker, outline = self.flicker(), numpy.full(DIRECTIONS, 0.1)
+        flicker.follow(outline, 1.0)
+        self.assertAlmostEqual(float(flicker.quick[0]), 0.1 * QUICK_FOLLOW)
+        self.assertAlmostEqual(float(flicker.slow[0]), 0.1 * SLOW_FOLLOW)
+        self.assertGreater(QUICK_FOLLOW, SLOW_FOLLOW * 2)
+
+    def test_each_way_moves_by_itself(self):
+        flicker, outline = self.flicker(), numpy.zeros(DIRECTIONS)
+        outline[:6] = 0.2
+        outline[20:26] = -0.2
+        flicker.follow(outline, 1.0)
+        reach = flicker.reach
+        self.assertGreater(reach[3], 1)
+        self.assertLess(reach[22], 1)
+        self.assertEqual(reach[40], 1)
+
+    def test_the_light_never_runs_away_or_shuts(self):
+        flicker = self.flicker()
+        flicker.follow(numpy.full(DIRECTIONS, 9.0), 1.0)
+        self.assertEqual(float(flicker.reach.max()), LONGEST_REACH)
+        flicker = self.flicker()
+        flicker.follow(numpy.full(DIRECTIONS, -9.0), 1.0)
+        self.assertEqual(float(flicker.reach.min()), SHORTEST_REACH)
+
+    def test_a_hot_frame_burns_brighter_by_more_than_it_is_hotter(self):
+        flicker = self.flicker()
+        for _ in range(30):
+            flicker.follow(numpy.zeros(DIRECTIONS), 1.1)
+        self.assertGreater(flicker.burn, 1.2)
+
+
+class CrackTests(unittest.TestCase):
+    CRACK = (127, 0, 0, 255)
+    DARK_RED = (74, 16, 8, 255)
+
+    def colours(self):
+        colours = palette()
+        colours.update({400: self.CRACK, 401: self.DARK_RED, 402: (99, 41, 24, 255), 403: (115, 66, 33, 255)})
+        return Colours(colours)
+
+    def test_painted_cracks_do_not_receive_light(self):
+        # Lifting them broke their thin lines into dashes and dots.
+        colours = self.colours()
+        crack = int(numpy.searchsorted(colours.keys, 127 << 16))
+        self.assertFalse(colours.receives[crack])
+
+    def test_dark_rock_does_not_turn_into_a_crack(self):
+        # It came out as new red dots along the lines.
+        colours = self.colours()
+        lit = {tuple(colour) for colour in colours.firelight[:, colours.receives].reshape(-1, 3).tolist()}
+        self.assertNotIn(self.CRACK[:3], lit)
+
+    def test_rock_with_a_little_red_still_takes_light(self):
+        colours = self.colours()
+        dark_red = int(numpy.searchsorted(colours.keys, 74 << 16 | 16 << 8 | 8))
+        self.assertTrue(colours.receives[dark_red])
+
+
 class FlamePixelTests(unittest.TestCase):
     RIM = (127, 0, 0, 255)
     BLUE = (44, 94, 157, 255)
@@ -773,9 +907,11 @@ class FirelightTests(unittest.TestCase):
             scene.advance()
             scene.draw(self.painted(art, index))
 
-    def test_each_frame_leans_where_its_flame_stands(self):
-        art = self.art()
-        self.assertLess(art.firelight.lean[0, 0], art.firelight.lean[1, 0])
+    def test_each_frame_says_how_far_it_burns_each_way(self):
+        outlines = self.art().firelight.outlines
+        leftwards, rightwards = 0, DIRECTIONS // 2
+        self.assertGreater(outlines[0, leftwards], outlines[1, leftwards])
+        self.assertLess(outlines[0, rightwards], outlines[1, rightwards])
 
     def test_a_small_flame_burns_less(self):
         art = self.art()
@@ -797,40 +933,26 @@ class FirelightTests(unittest.TestCase):
         scene, art = self.scene()
         self.play(scene, art, [0] * 5)
         flicker = scene.flickers[0]
-        before = flicker.x, flicker.y, flicker.burn, flicker.steps.copy()
+        before = flicker.quick.copy(), flicker.slow.copy(), flicker.burn, flicker.steps.copy()
         scene.draw(self.painted(art, 1))
-        self.assertEqual((flicker.x, flicker.y, flicker.burn), before[:3])
+        self.assertTrue((flicker.quick == before[0]).all())
+        self.assertTrue((flicker.slow == before[1]).all())
+        self.assertEqual(flicker.burn, before[2])
         self.assertTrue((flicker.steps == before[3]).all())
 
-    def test_a_frame_only_pushes_the_light(self):
-        # Followed directly, the light jumped to each random frame and trembled.
+    def test_the_light_takes_the_shape_of_the_flame_it_follows(self):
         scene, art = self.scene()
-        self.play(scene, art, [0, 1] * 30)
-        before = scene.flickers[0].x
-        self.play(scene, art, [0])
-        jump = abs(art.firelight.lean[0, 0] - art.firelight.lean[1, 0]) * SWAY
-        self.assertLess(abs(scene.flickers[0].x - before), jump * 0.3)
-
-    def test_random_frames_make_one_slow_swing(self):
-        # The nine frames have no order, so the swing must come from the spring.
-        scene, art = self.scene()
-        order = random.Random(3)
-        places, leans = [], []
-        for _ in range(600):
-            index = order.randrange(3)
-            self.play(scene, art, [index])
-            places.append(scene.flickers[0].x)
-            leans.append(float(art.firelight.lean[index, 0]))
-        places, leans = numpy.array(places[50:]), numpy.array(leans[50:])
-        self.assertGreater(numpy.corrcoef(places[:-2], places[2:])[0, 1], 0.6)
-        self.assertLess(abs(numpy.corrcoef(leans[:-2], leans[2:])[0, 1]), 0.2)
-        self.assertGreater(numpy.ptp(places), SWING * 0.5)
+        for index in (0, 1):
+            self.play(scene, art, [index] * 80)
+            reach = scene.flickers[0].reach
+            wanted = 1 + art.firelight.outlines[index] * (QUICK_DEPTH + SLOW_DEPTH)
+            self.assertTrue(numpy.allclose(reach, wanted.clip(SHORTEST_REACH, LONGEST_REACH), atol=0.01))
 
     def test_a_pixel_keeps_its_step_while_the_light_only_trembles(self):
         # A third of the pixels that changed used to flip straight back.
         def flips(hold):
             art = self.art()
-            firelight = replace(art.firelight, lean=art.firelight.lean * 0,
+            firelight = replace(art.firelight, outlines=art.firelight.outlines * 0,
                                 burn=numpy.array((0.995, 1.005, 1.0)))
             trembling = replace(art, firelight=firelight)
             scene = still_ambience(room_air(torches=[trembling]))
@@ -843,7 +965,7 @@ class FirelightTests(unittest.TestCase):
                     count += int((scene.flickers[0].steps != before).sum())
             return count
 
-        self.assertEqual(flips(0.35), 0)
+        self.assertEqual(flips(LIGHT_HOLD), 0)
         self.assertGreater(flips(-0.5), 0)
 
     def test_a_pixel_follows_a_light_that_really_moved(self):
@@ -961,8 +1083,9 @@ class PixelArtRuleTests(unittest.TestCase):
             frame = wall_frame()
             scene.draw(frame)
             changed = int((numpy.asarray(frame) != numpy.asarray(wall_frame())).any(axis=2).sum())
-            # 46 grains, up from 30: a player who does not know must still see dust.
-            self.assertLess(changed, 320)
+            # More grains than the 30 it began with: a player who does not know must
+            # still see dust. Most are single pixels now.
+            self.assertLess(changed, 340)
 
     def test_nothing_is_drawn_over_the_foreground(self):
         scene = self.busy_scene(covered=blank(255))
@@ -1051,7 +1174,7 @@ class ChosenRoomTests(unittest.TestCase):
         self.assertEqual(len(self.air.torches), 1)
         torch = self.air.torches[0]
         self.assertEqual(torch.box, (455, 125, 501, 209))
-        self.assertEqual(len(torch.firelight.lean), 9)
+        self.assertEqual(len(torch.firelight.outlines), 9)
         # Each flame, and none of the hundreds of wall pixels painted around it.
         for flame in torch.flame:
             self.assertIn(int(flame.sum()), range(170, 240))
@@ -1072,44 +1195,110 @@ class ChosenRoomTests(unittest.TestCase):
         distance = numpy.hypot(columns - 478, rows - 172)
         return (distance >= inner) & (distance < outer)
 
-    def test_the_rock_by_the_flame_has_room_to_move(self):
-        # At full light all around the flame, it could only be one steady oval.
-        torch = self.air.torches[0]
-        near = torch.firelight.at(0.0, 0.0, 1.0)[self.ring_around_the_flame(torch, 22, 40)]
-        self.assertLess(near.mean(), 0.9)
-        brighter = torch.firelight.at(0.0, 0.0, 1.3)[self.ring_around_the_flame(torch, 22, 40)]
-        self.assertGreater(brighter.mean() - near.mean(), 0.03)
-
-    def test_the_light_changes_shape_as_the_flame_moves(self):
-        firelight = self.air.torches[0].firelight
-        apart = numpy.abs(firelight.at(-SWING, 0.0, 1.0) - firelight.at(SWING, 0.0, 1.0))
-        self.assertGreater(float(apart.max()), 0.3)
-        self.assertGreater((apart > 0.1).mean(), 0.05)
-        centre = numpy.arange(apart.shape[1])
-        left, right = firelight.at(-SWING, 0.0, 1.0).sum(axis=0), firelight.at(SWING, 0.0, 1.0).sum(axis=0)
-        self.assertGreater((right * centre).sum() / right.sum() - (left * centre).sum() / left.sum(), 3)
-
-    def test_the_swing_reaches_the_rock_around_the_recess(self):
-        # On deep relief the recess's rim shuts the light in, and the rock outside it stands still.
-        torch = self.air.torches[0]
+    def beside_the_edge_of_the_recess(self, torch, inward):
+        """Pixels a little way in from the edge of the sprite, or out from it."""
         firelight = torch.firelight
-        apart = numpy.abs(firelight.at(-SWING, 0.0, 1.0) - firelight.at(SWING, 0.0, 1.0))
+        height, width = firelight.rest.shape
+        outline = numpy.zeros((height, width), dtype=bool)
+        left, top = torch.left - firelight.left, torch.top - firelight.top
+        drawn = torch.frames[0, ..., 3] > 0
+        rows, columns = numpy.nonzero(drawn)
+        outline[rows + top, columns + left] = True
+        near = gaussian(outline.astype(float), 6.0)
+        return (near > 0.6) if inward else ((near < 0.25) & (near > 0.03))
+
+    def test_the_recess_is_no_bright_plate(self):
+        # Lit like the rock it stood out as an oval the shape of the sprite, the
+        # same oval whatever the flame did.
+        torch = self.air.torches[0]
+        steady = torch.firelight.steady
+        self.assertLess(steady[self.beside_the_edge_of_the_recess(torch, True)].mean(),
+                        steady[self.beside_the_edge_of_the_recess(torch, False)].mean() * 1.2)
+
+    def test_the_light_gets_out_of_the_recess(self):
+        # With the flame close to the rock, the rim of the recess shut the light in.
+        torch = self.air.torches[0]
+        self.assertGreater(torch.firelight.steady[self.beside_the_edge_of_the_recess(torch, False)].mean(), 0.45)
+
+    def reach_as_it_burns(self):
+        firelight = self.air.torches[0].firelight
+        order = random.Random(3)
+        still = numpy.zeros(DIRECTIONS)
+        flicker = Flicker(numpy.zeros((1, 1), dtype=numpy.int32), still, still)
+        reaches = []
+        for tick in range(400):
+            index = order.randrange(9)
+            flicker.follow(firelight.outlines[index], float(firelight.burn[index]))
+            reaches.append(flicker.reach)
+        return numpy.stack(reaches[40:]), flicker
+
+    def test_the_light_changes_shape_and_does_not_only_move(self):
+        # Sliding the old light into place made its next tick fit: an oval that
+        # moved. Here what is left after sliding is the change of shape.
+        firelight = self.air.torches[0].firelight
+        reaches, _flicker = self.reach_as_it_burns()
+        masks = numpy.stack([firelight.at(reach, 1.0) > 0.3 for reach in reaches[::40]])
+        left = []
+        for first, second in zip(masks, masks[1:]):
+            fits = [(numpy.roll(numpy.roll(first, down, 0), across, 1) & second).sum()
+                    / (numpy.roll(numpy.roll(first, down, 0), across, 1) | second).sum()
+                    for down in range(-10, 11, 2) for across in range(-10, 11, 2)]
+            left.append(1 - max(fits))
+        self.assertGreater(numpy.mean(left), 0.15)
+
+    def test_each_way_of_the_light_keeps_to_itself(self):
+        # A light that only grew and shrank would be the same oval.
+        reaches, _flicker = self.reach_as_it_burns()
+        self.assertGreater(reaches.std(axis=1).mean(), 0.15)
+        left_and_up = numpy.corrcoef(reaches[:, 0], reaches[:, DIRECTIONS // 4])[0, 1]
+        self.assertLess(abs(left_and_up), 0.8)
+
+    def test_it_breathes_as_well_as_licks(self):
+        reaches, _flicker = self.reach_as_it_burns()
+        side = reaches[:, DIRECTIONS // 4]
+        self.assertGreater(numpy.corrcoef(side[:-5], side[5:])[0, 1], 0.25)
+        self.assertGreater(numpy.abs(numpy.diff(side)).mean(), 0.05)
+
+    def test_the_light_stays_a_candle_and_no_bomb(self):
+        # The light must not take the room: how far it goes changes, not by how much.
+        firelight = self.air.torches[0].firelight
+        reaches, _flicker = self.reach_as_it_burns()
+        areas = numpy.array([(firelight.at(reach, 1.0) > 0.3).sum() for reach in reaches[::20]])
+        self.assertLess(areas.max(), 13000)
+        self.assertGreater(areas.min(), 4000)
+
+    def test_the_cracks_stay_as_they_were_painted(self):
+        scene = CavernAmbience(16, replace(self.air, pool_glows=()), random.Random(2))
+        scene.motes.clear()
+        torch = self.air.torches[0]
+        frame = Image.alpha_composite(self.art.background, self.art.foreground)
+        sprite = Image.fromarray(torch.wall)
+        frame.paste(sprite, torch.box[:2], sprite)
         left, top, right, bottom = torch.box
-        near = self.ring_around_the_flame(torch, 0, 60)
-        recess = numpy.zeros_like(near)
-        recess[top - firelight.top:bottom - firelight.top, left - firelight.left:right - firelight.left] = True
-        self.assertGreater((apart[near & ~recess] > 0.1).mean(), 0.55)
+        before = numpy.asarray(frame)[top:bottom, left:right, :3].astype(int)
+        torch_shown = Image.fromarray(torch.frames[0])
+        frame.paste(torch_shown, torch.box[:2], torch_shown)
+        painted = numpy.asarray(frame)[top:bottom, left:right, :3].astype(int)
+        scene.advance()
+        scene.draw(frame)
+        after = numpy.asarray(frame)[top:bottom, left:right, :3].astype(int)
+        crack = (painted == (127, 0, 0)).all(axis=2) & ~torch.flame[0]
+        self.assertGreater(int(crack.sum()), 10)
+        kept = crack & (before == (127, 0, 0)).all(axis=2)
+        self.assertTrue((after[kept] == (127, 0, 0)).all())
+        self.assertLessEqual(int(((after == (127, 0, 0)).all(axis=2) & ~crack & ~torch.flame.any(axis=0)).sum()), 0)
 
     def test_a_small_flame_never_puts_the_light_out(self):
         firelight = self.air.torches[0].firelight
-        small = firelight.at(0.0, 0.0, firelight.burn.min() ** 2.5).mean()
-        large = firelight.at(0.0, 0.0, firelight.burn.max() ** 2.5).mean()
+        reach = numpy.ones(DIRECTIONS)
+        small = firelight.at(reach, firelight.burn.min() ** 2.5).mean()
+        large = firelight.at(reach, firelight.burn.max() ** 2.5).mean()
         self.assertGreater(small, large * 0.3)
 
     def test_the_light_follows_the_rock_and_is_no_ball(self):
         # At one distance from the flame, a blurred ball is even all the way round.
         torch = self.air.torches[0]
-        ring = torch.firelight.at(0.0, 0.0, 1.0)[self.ring_around_the_flame(torch, 30, 60)]
+        ring = torch.firelight.steady[self.ring_around_the_flame(torch, 30, 60)]
         self.assertGreater(ring.std() / ring.mean(), 0.3)
 
     def test_the_lava_glow_is_fainter_than_the_torch_warmth(self):
