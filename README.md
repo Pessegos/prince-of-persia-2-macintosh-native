@@ -23,6 +23,7 @@ I'm trying to stay as close to the original as possible, while still making some
   - [Screenshot Gallery (F2)](#screenshot-gallery-f2)
   - [Developer Tools (F3)](#developer-tools-f3)
   - [Cutscene Pausing](#cutscene-pausing)
+  - [Overlapping Sound Effects](#overlapping-sound-effects)
   - [Lava Overhaul](#lava-overhaul)
   - [Cavern Artwork](#cavern-artwork)
   - [Stone Gates](#stone-gates)
@@ -110,6 +111,25 @@ The Playback tab provides quick access to cutscenes, making it easier to test in
 Cutscenes can now be paused and resumed at any time.
 
 <img src="docs/github readme/cutscene-pause.png" alt="Paused cutscene" width="700">
+
+<br/>
+
+## Overlapping Sound Effects
+
+Different sound effects can now play at the same time. <br/> In this example, the pressure plates finish their sound while gates move, and the skeletons can rattle over the gate sound.
+
+<br/>
+
+<table>
+  <tr>
+    <th width="50%">Macintosh</th>
+    <th width="50%">Port</th>
+  </tr>
+  <tr>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/9d0cd65e-20e7-4138-a1e0-38e2f7418d8d"></video></td>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/4b82128e-c92a-434c-bc1c-4cacdf9c8a3e"></video></td>
+  </tr>
+</table>
 
 <br/>
 

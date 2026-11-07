@@ -113,14 +113,19 @@ def chapter_player(chapter, assets, audio=None):
 
 
 class ChapterPreviews(PlaybackPreviews):
+    frame_sizes = frozenset(((510, 384), (1024, 576)))
+
     def snapshot(self, index, players=None):
         from pop2.intro import IntroAssets
+        from pop2.cutscene_covers import COVER_SHOTS, selected_cover
 
         chapter = CHAPTERS[index]
         stage = chapter.program.removesuffix('.json')
         if stage not in self.assets:
             self.assets[stage] = IntroAssets(self.directory, program_name=chapter.program)
         player = chapter_player(chapter, self.assets[stage])
+        if chapter.key in COVER_SHOTS:
+            return selected_cover(player, chapter.key)
         if chapter.key == 'opening':
             first_text = next(i for i, operation in enumerate(player.operations)
                               if operation['op'] == 'text' and operation['args'][1])
@@ -150,7 +155,7 @@ class CutsceneControls:
         if chapter is not None:
             self.mark_cutscene_seen(chapter.key)
 
-    def open_cutscene_viewer(self):
+    def open_cutscene_viewer(self, *, developer=False):
         from pop2.cutscene_gallery import CutsceneGallery
 
         if self.game_menu is None:
@@ -159,18 +164,19 @@ class CutsceneControls:
         self.cancel_cutscene_gallery_tick()
         self.game_menu.show_page('cutscenes')
         self.game_menu.return_to_menu = True
-        if self.cutscene_collection.error:
+        if not developer and self.cutscene_collection.error:
             self.cutscene_collection.save()
-        self.game_menu.cutscene_viewer = CutsceneGallery(self.cutscene_collection, self.cutscene_preview)
+        gallery = self.game_menu.cutscene_viewer = CutsceneGallery(
+            self.cutscene_collection, self.cutscene_preview, developer=developer)
         self.pause_resume_keys.update(self.window_keys_down)
         # Warm unlocked source thumbnails before scrolling begins: loading a
         # newly exposed story program must not stall the moving shelf.
         for index, chapter in enumerate(CHAPTERS):
-            if chapter.key in self.cutscene_collection.seen and chapter_available(chapter):
+            if gallery.chapter_unlocked(index) and chapter_available(chapter):
                 try:
                     self.cutscene_preview(index)
                 except (OSError, ValueError, KeyError, RuntimeError):
-                    pass  # The card and Play action provide the import error.
+                    pass  # The card and replay action provide the import error.
         self.render()
 
     def active_cutscene_gallery(self):
@@ -193,25 +199,42 @@ class CutsceneControls:
                 pass
 
     def schedule_cutscene_gallery(self):
+        from pop2.display_refresh import window_refresh_rate
+        from pop2.menu_animation import MenuFrameClock
+
         gallery = self.active_cutscene_gallery()
         if gallery is None or getattr(self, 'cutscene_gallery_after_id', None) is not None:
             return
         previous = time.perf_counter()
+        clock = MenuFrameClock(previous, refresh_hz=window_refresh_rate(self.root))
+        monitor_check = previous + 1
 
         def tick():
-            nonlocal previous
+            nonlocal previous, monitor_check
             self.cutscene_gallery_after_id = None
             if self.active_cutscene_gallery() is not gallery:
                 return
             now = time.perf_counter()
+            if now >= monitor_check:
+                clock.refresh_hz = window_refresh_rate(self.root)
+                monitor_check = now + 1
             moving = gallery.advance(now - previous)
             previous = now
             self.present_viewport()
             if moving:
-                elapsed = (time.perf_counter() - now) * 1000
-                self.cutscene_gallery_after_id = self.root.after(max(1, round(1000 / 60 - elapsed)), tick)
+                def painted():
+                    self.cutscene_gallery_after_id = None
+                    if self.active_cutscene_gallery() is not gallery:
+                        return
+                    finished = time.perf_counter()
+                    self.cutscene_gallery_after_id = self.root.after(clock.delay(finished, finished - now), tick)
 
-        self.cutscene_gallery_after_id = self.root.after(16, tick)
+                # Tk paints canvas items in idle handlers queued by present().
+                # Include that work in the budget; a hidden photo update alone
+                # does not measure the visible window's GDI rendering cost.
+                self.cutscene_gallery_after_id = self.root.after_idle(painted)
+
+        self.cutscene_gallery_after_id = self.root.after(clock.delay(previous), tick)
 
     def cutscene_gallery_frame(self, size, *, capture=False):
         from copy import copy
@@ -238,29 +261,45 @@ class CutsceneControls:
         return frame if frame.mode == 'RGB' else frame.convert('RGB')
 
     def present_cutscene_gallery(self, size, position):
-        from PIL import ImageChops, ImageTk
+        from PIL import ImageTk
+        from pop2.cutscene_strip import CutsceneStrip
 
         gallery = self.active_cutscene_gallery()
         if gallery is None:
+            self.dispose_cutscene_strip()
             self._cutscene_gallery_frame = None
             self._cutscene_gallery_source = None
             self._cutscene_gallery_patch = None
             self._cutscene_gallery_grid_photo = None
             return False
-        frame = self.cutscene_gallery_frame(size)
         previous = getattr(self, '_cutscene_gallery_frame', None)
+
+        def appearance():
+            return (id(self.screenshot_viewport), id(self.ui_font), gallery.index, gallery.focus,
+                    gallery.error, gallery.collection.error, frozenset(gallery.collection.seen),
+                    gallery.developer, gallery.chapters, getattr(self, 'screenshot_toast', None))
+
+        look = appearance()
+        fast = (previous is not None and previous[0] is gallery and previous[1].size == size
+                and previous[2] is self.image_ref and previous[5] == look
+                and gallery.background_cache is not None and gallery.grid_cache is not None
+                and previous[3][0] == gallery.background_cache[0]
+                and previous[4][3] == gallery.grid_cache[0]
+                and getattr(self, 'screenshot_toast', None) is None)
+        # Stable scroll frames use only retained Tk pixels. Rebuilding the
+        # complete PIL viewport here spent most of the animation's frame budget.
+        frame = None if fast else self.cutscene_gallery_frame(size)
         state = gallery.background_cache[0], getattr(self, 'screenshot_toast', None)
         sx = sy = size[1] / 384
-        moving = (round(gallery.scroll * sx), gallery.scroll_target > 0,
-                  gallery.scroll_target < gallery.max_scroll, gallery.grid_cache[0], gallery.scroll)
+        moving = (round(gallery.display_scroll * sx), gallery.scroll_target > 0,
+                  gallery.scroll_target < gallery.max_scroll, gallery.grid_cache[0], gallery.display_scroll)
         grid_photo = getattr(self, '_cutscene_gallery_grid_photo', None)
         if grid_photo is None or grid_photo[0] is not gallery.grid_cache[1]:
             grid_photo = self._cutscene_gallery_grid_photo = (
                 gallery.grid_cache[1], ImageTk.PhotoImage(gallery.grid_cache[1]))
         if (previous is not None and previous[0] is gallery and previous[1].size == size
                 and previous[2] is self.image_ref):
-            def upload(region):
-                pixels = frame.crop(region)
+            def upload(region, pixels):
                 cached_patch = getattr(self, '_cutscene_gallery_patch', None)
                 if cached_patch is not None and cached_patch[0] == pixels.size:
                     patch = cached_patch[1]
@@ -271,41 +310,57 @@ class CutsceneControls:
                 self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', region[0], region[1],
                                        '-compositingrule', 'set')
 
-            shift = moving[0] - previous[4][0]
-            left, top = round((gallery.STRIP[0] - 1) * sx), round(gallery.STRIP[1] * sy)
-            right, bottom = round((gallery.STRIP[2] - 1) * sx), round(gallery.STRIP[3] * sy)
-            if (previous[3] == state and previous[4][3] == moving[3]
-                    and getattr(self, 'screenshot_toast', None) is None and abs(shift) < right - left):
-                # Copy from a separate retained strip. Overlapping self-copies
-                # made Tk allocate/copy temporary pixels at wide resolutions.
-                if shift:
-                    self.image_ref.tk.call(str(self.image_ref), 'copy', str(grid_photo[1]),
-                        '-from', moving[0], 0, moving[0] + right - left, bottom - top,
-                        '-to', left, top, '-compositingrule', 'set')
+            if fast:
                 if previous[4] != moving:
                     regions = [gallery.TRACK]
                     if previous[4][1:3] != moving[1:3]:
                         regions += [gallery.PREVIOUS, gallery.NEXT]
                     for rect in regions:
-                        upload((round((rect[0] - 1) * sx), round(rect[1] * sy),
-                                round((rect[2] - 1) * sx) + 1, round(rect[3] * sy) + 1))
+                        region = (round((rect[0] - 1) * sx), round(rect[1] * sy),
+                                  round((rect[2] - 1) * sx) + 1, round(rect[3] * sy) + 1)
+                        pixels = gallery.background_cache[1].crop(region)
+                        gallery.draw_scroll_controls(pixels, sx, sy, ox=1, origin=region[:2])
+                        upload(region, pixels)
             else:
-                if previous[3] == state:
-                    damage = (round((gallery.PANEL[0] - 1) * sx), round(gallery.STRIP[1] * sy),
-                              round((gallery.PANEL[2] - 1) * sx), round(gallery.TRACK[3] * sy) + 1)
-                else:
-                    damage = ImageChops.difference(previous[1], frame).getbbox()
-                if damage is not None:
-                    upload(damage)
+                # Selection, resize and toast changes are infrequent. Repaint
+                # their complete frame; the parent photo can predate a scroll.
+                self.image_ref.paste(frame)
         else:
             self.image_ref = ImageTk.PhotoImage(frame)
             if self.canvas.find_all():
                 self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)
             else:
                 self.canvas.create_image(*position, image=self.image_ref, anchor='nw')
-        self.canvas.coords(self.canvas.find_all()[0], *position)
-        self._cutscene_gallery_frame = gallery, frame, self.image_ref, state, moving
+        item = self.canvas.find_all()[0]
+        if tuple(self.canvas.coords(item)) != tuple(position):
+            # Even identical "coords" assignments invalidate the whole Tk
+            # item. Leave the large static background alone while scrolling.
+            self.canvas.coords(item, *position)
+        strip = getattr(self, '_cutscene_gallery_strip', None)
+        if strip is None:
+            strip = self._cutscene_gallery_strip = CutsceneStrip(self)
+        if getattr(self, 'screenshot_toast', None) is not None:
+            # Toasts can overlap the strip; the full renderer owns that frame.
+            strip.hide()
+        else:
+            region = (round((gallery.STRIP[0] - 1) * sx) + position[0],
+                      round(gallery.STRIP[1] * sy) + position[1],
+                      round((gallery.STRIP[2] - 1) * sx) + position[0],
+                      round(gallery.STRIP[3] * sy) + position[1])
+            strip.show(region, grid_photo[1], moving[0] + round(gallery.GRID_PADDING * sx))
+            strip.highlight(gallery.hover_border(sx))
+        self._cutscene_gallery_frame = (gallery, previous[1] if fast else frame,
+                                       self.image_ref, state, moving, appearance())
         return True
+
+    def dispose_cutscene_strip(self):
+        strip = getattr(self, '_cutscene_gallery_strip', None)
+        self._cutscene_gallery_strip = None
+        if strip is not None:
+            try:
+                strip.close()
+            except TclError:
+                pass  # Root destruction may already have destroyed its children.
 
     def cutscene_preview_provider(self):
         from pop2.playback_navigation import PlaybackPart
@@ -316,7 +371,7 @@ class CutsceneControls:
                                        round(chapter.preview_seconds * 1000))
                           for chapter in CHAPTERS)
             provider = self._cutscene_previews = ChapterPreviews(
-                self.resources, parts, None, self.preview_fingerprint(), namespace='cutscenes-v3')
+                self.resources, parts, None, self.preview_fingerprint(), namespace='cutscene-covers-v1')
         return provider
 
     def cutscene_preview(self, index):
@@ -410,6 +465,7 @@ class CutsceneControls:
 
     def destroy_cutscene_viewer(self, event):
         if event.widget is self.root:
+            self.dispose_cutscene_strip()
             self.cancel_cutscene_gallery_tick()
             self.stop_cutscene_replay(render=False)
 
@@ -434,9 +490,6 @@ class CutsceneControls:
         self.screenshot_viewport = viewport.copy()
         if replay.paused:
             viewport = self.draw_cutscene_pause(viewport)
-        label = 'Esc: Resume   Space: Back' if replay.paused else 'Esc: Pause   Space: Back'
-        text = self.ui_font.text(label, '#eeeeee')
-        viewport.paste(text, ((512 - text.width) // 2, 367), text)
         self.native_viewport = self.draw_screenshot_notice(viewport)
         self.present_viewport()
         return True

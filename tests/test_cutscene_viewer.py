@@ -94,6 +94,13 @@ class CaptionFont:
 
 
 class GalleryTests(unittest.TestCase):
+    def setUp(self):
+        # Model cards use the supplied mock previews, independently of whether
+        # this checkout has the real game's story programs imported.
+        available = patch('pop2.cutscene_gallery.chapter_available', return_value=True)
+        available.start()
+        self.addCleanup(available.stop)
+
     def gallery(self):
         return CutsceneGallery(CutsceneCollection(Path('unused-test-profile.json'), seen={'opening'}),
                                Mock(return_value=Image.new('RGB', (510, 384), '#773311')))
@@ -111,9 +118,44 @@ class GalleryTests(unittest.TestCase):
         gallery.key('Right')
         self.assertEqual(gallery.index, 8)
         gallery.key('Home')
+        gallery.key('Tab')
+        self.assertEqual(gallery.index, 1)
         gallery.key('Tab', backwards=True)
-        self.assertEqual(gallery.key('Return'), 'cutscene_back')
+        self.assertEqual(gallery.key('Return'), 'cutscene_play')
         self.assertEqual(gallery.key('Escape'), 'cutscene_back')
+
+    def test_double_click_plays_only_the_same_unlocked_card_and_not_a_drag(self):
+        gallery = self.gallery()
+        rect = gallery.card_rect(0)
+        point = (rect[0] + 20, rect[1] + 20)
+        self.assertEqual(gallery.double_click(*point), 'changed')
+        self.assertEqual(gallery.double_click(*point), 'cutscene_play')
+        locked = gallery.card_rect(1)
+        locked_point = locked[0] + 20, locked[1] + 20
+        gallery.click(*locked_point)
+        self.assertEqual(gallery.double_click(*locked_point), 'changed')
+        gallery.click(*point)
+        gallery.begin_drag(*point)
+        gallery.end_drag(point[0] - 20, point[1])
+        rect = gallery.card_rect(0)
+        self.assertEqual(gallery.double_click(rect[0] + 20, rect[1] + 20), 'changed')
+
+    def test_gallery_has_no_play_back_buttons_or_keyboard_hint(self):
+        gallery, font = self.gallery(), CaptionFont()
+        gallery.draw(Image.new('RGBA', (1024, 768)), font)
+        self.assertIn('Cutscene Viewer', font.values)
+        self.assertNotIn('Play', font.values)
+        self.assertNotIn('Back', font.values)
+        self.assertFalse(any('Enter:' in value for value in font.values))
+        self.assertIsNone(gallery.hit(50, 35))
+        self.assertIsNone(gallery.hit(gallery.PANEL[2] - 40, 35))
+
+    def test_a_double_click_on_a_different_card_only_selects_it(self):
+        gallery = self.gallery()
+        first, second = gallery.card_rect(0), gallery.card_rect(2)
+        gallery.click(first[0] + 20, first[1] + 20)
+        self.assertEqual(gallery.double_click(second[0] + 20, second[1] + 20), 'changed')
+        self.assertEqual(gallery.index, 2)
 
     def test_locked_chapters_leak_neither_previews_nor_story_titles(self):
         gallery = self.gallery()
@@ -124,6 +166,28 @@ class GalleryTests(unittest.TestCase):
         self.assertNotIn(CHAPTERS[1].title, font.values)
         self.assertNotIn(CHAPTERS[2].title, font.values)
         self.assertEqual(gallery.index, 0)
+
+    def test_developer_access_is_read_only_and_caches_do_not_leak_to_normal_mode(self):
+        gallery = self.gallery()
+        seen = gallery.collection.seen.copy()
+        gallery.developer = True
+        with patch('pop2.cutscene_gallery.chapter_available', return_value=True), \
+                patch.object(gallery.collection, 'save', side_effect=AssertionError('Developer view saved progress')):
+            font = CaptionFont()
+            gallery.draw(Image.new('RGBA', (1024, 768)), font)
+            self.assertIn('Cutscene Viewer - Dev Tools', font.values)
+            self.assertEqual(gallery.preview.call_count, len(CHAPTERS))
+            gallery.key('End')
+            self.assertEqual(gallery.activate(), 'cutscene_play')
+            gallery.developer = False
+            gallery.preview.reset_mock()
+            font = CaptionFont()
+            gallery.draw(Image.new('RGBA', (1024, 768)), font)
+            self.assertIn('Cutscene Viewer', font.values)
+            self.assertNotIn(CHAPTERS[-1].title, font.values)
+            self.assertEqual(gallery.activate(), 'changed')
+            gallery.preview.assert_not_called()
+        self.assertEqual(gallery.collection.seen, seen)
 
     def test_wheel_is_continuous_eased_and_independent_of_selection(self):
         gallery = self.gallery()
@@ -154,6 +218,71 @@ class GalleryTests(unittest.TestCase):
         gallery.begin_drag(x, y)
         gallery.end_drag(x, y)
         self.assertEqual(gallery.index, 2)
+
+    def test_scroll_edges_react_on_the_first_frame_with_a_wider_soft_return(self):
+        gallery = self.gallery()
+        for edge, direction in ((0, -1), (gallery.max_scroll, 1)):
+            gallery.scroll = gallery.scroll_target = edge
+            gallery.wheel(direction)
+            positions = []
+            for _ in range(240):
+                moving = gallery.advance(1 / 120)
+                positions.append(gallery.display_scroll)
+            self.assertGreater((positions[0] - edge) * direction, .5)
+            self.assertGreater(max((p - edge) * direction for p in positions), 16)
+            self.assertGreater((positions[60] - edge) * direction, 1)
+            self.assertTrue(all(abs(p - edge) <= gallery.BOUNCE_LIMIT for p in positions))
+            self.assertFalse(moving)
+            self.assertEqual(gallery.display_scroll, edge)
+            self.assertEqual(gallery.index, 0)
+
+    def test_elastic_drag_stays_bounded_and_returns_after_release(self):
+        gallery = self.gallery()
+        gallery.begin_drag(100, 150)
+        gallery.move_drag(220)
+        held = gallery.display_scroll
+        self.assertLess(held, 0)
+        self.assertGreaterEqual(held, -gallery.BOUNCE_LIMIT)
+        self.assertFalse(gallery.advance(.1))
+        self.assertEqual(gallery.display_scroll, held)
+        gallery.end_drag(220, 150)
+        for _ in range(150):
+            moving = gallery.advance(1 / 120)
+        self.assertFalse(moving)
+        self.assertEqual(gallery.display_scroll, 0)
+
+    def test_reversing_before_the_edge_cancels_a_queued_bounce(self):
+        gallery = self.gallery()
+        gallery.wheel(100)
+        self.assertTrue(gallery.edge_target)
+        gallery.wheel(-.5)
+        self.assertFalse(gallery.edge_target)
+        for _ in range(150):
+            gallery.advance(1 / 120)
+            self.assertEqual(gallery.bounce, 0)
+
+    def test_moving_into_the_end_flows_through_without_stopping_before_the_bounce(self):
+        gallery = self.gallery()
+        gallery.scroll = gallery.scroll_target = gallery.max_scroll - 40
+        gallery.wheel(1)
+        for _ in range(120):
+            before = gallery.display_scroll
+            velocity = gallery.scroll_velocity
+            gallery.advance(1 / 120)
+            if gallery.display_scroll > gallery.max_scroll:
+                self.assertLess(before, gallery.max_scroll)
+                self.assertGreater(velocity, 50)
+                self.assertGreater(gallery.scroll_velocity, 50)
+                break
+        else:
+            self.fail('No continuous crossing into the edge bounce')
+
+    def test_a_shelf_that_fits_has_no_unnecessary_bounce(self):
+        gallery = self.gallery()
+        gallery.chapters = CHAPTERS[:4]
+        gallery.wheel(100)
+        self.assertFalse(gallery.advance(1 / 120))
+        self.assertEqual(gallery.display_scroll, 0)
 
     def test_hd_thumbnail_uses_source_pixels_instead_of_a_small_upscaled_card(self):
         from PIL import ImageChops, ImageOps
@@ -201,8 +330,7 @@ class GalleryTests(unittest.TestCase):
                 self.assertLessEqual(gallery.card_rect(columns * 2 - 2)[2], gallery.STRIP[2])
                 self.assertGreaterEqual(gallery.card_rect(0)[1], gallery.STRIP[1])
                 self.assertLessEqual(gallery.card_rect(1)[3], gallery.STRIP[3])
-                self.assertEqual(gallery.hit(*((v1 + v2) / 2 for v1, v2 in
-                    zip(gallery.PLAY[:2], gallery.PLAY[2:]))), 1)
+                self.assertIsNone(gallery.hit(gallery.PANEL[2] - 40, 35))
         gallery.key('End')
         gallery.advance(1)
         gallery.draw(Image.new('RGBA', (1020, 768)), font, visible=True)
@@ -299,17 +427,85 @@ class ViewerSceneTests(unittest.TestCase):
         self.scene.apply_game_action('cutscenes')
         return self.scene.game_menu.cutscene_viewer
 
-    def test_f1_and_f3_offer_the_same_chapter_viewer_without_a_screen_selector(self):
+    def displayed_gallery(self):
+        """Read the retained Tk photos and item coordinates, not the gallery model."""
+        from PIL import ImageTk
+
+        scene = self.scene
+        image = ImageTk.getimage(scene.image_ref).convert('RGB')
+        strip = getattr(scene, '_cutscene_gallery_strip', None)
+        if strip is not None and strip.shown:
+            parent = scene.canvas.coords(scene.canvas.find_all()[0])
+            left, top, right, bottom = strip.region
+            offset = round(-strip.canvas.coords(strip.item)[0])
+            source = ImageTk.getimage(strip.photo).convert('RGB')
+            visible = source.crop((offset, 0, offset + right - left, bottom - top))
+            draw = ImageDraw.Draw(visible)
+            for item in strip.borders:
+                if strip.canvas.itemcget(item, 'state') != 'hidden':
+                    x1, y1, x2, y2 = map(round, strip.canvas.coords(item))
+                    draw.rectangle((x1, y1, x2 - 1, y2 - 1), fill=strip.canvas.itemcget(item, 'fill'))
+            image.paste(visible,
+                        (round(left - parent[0]), round(top - parent[1])))
+        return image
+
+    def test_f1_keeps_progress_and_f3_offers_the_same_chapters_with_developer_access(self):
         scene = self.scene
         self.assertIn('cutscenes', {item.action for item in GameMenu().items})
         gallery = self.open_viewer()
         self.assertEqual(gallery.chapters, CHAPTERS)
+        self.assertFalse(gallery.developer)
+        self.assertFalse(gallery.chapter_unlocked(len(CHAPTERS) - 1))
         scene.close_game_menu()
         scene.open_dev_mode()
         scene.dev_menu.focus = 8
         scene.apply_dev_action(scene.dev_menu.activate())
         self.assertIsNone(scene.dev_menu)
         self.assertEqual(scene.game_menu.page, 'cutscenes')
+        developer = scene.game_menu.cutscene_viewer
+        self.assertTrue(developer.developer)
+        self.assertEqual(developer.chapters, CHAPTERS)
+        self.assertTrue(all(developer.chapter_unlocked(i) for i in range(len(CHAPTERS))))
+
+    def test_developer_replay_leaves_profile_world_and_normal_shortcut_locks_unchanged(self):
+        scene = self.scene
+        collection = scene.cutscene_collection
+        collection.save()
+        original_file, seen = collection.path.read_bytes(), collection.seen.copy()
+        before = self.snapshot()
+        scene.open_dev_mode()
+        scene.dev_menu.focus = 8
+        scene.apply_dev_action(scene.dev_menu.activate())
+        gallery = scene.game_menu.cutscene_viewer
+        gallery.key('End')
+        scene.start_cutscene_replay()
+        self.assertIsNotNone(scene.cutscene_replay)
+        self.assertEqual(scene.cutscene_replay.chapter.key, 'tower')
+        scene.cutscene_replay.player.advance(1200)
+        scene.advance_cutscene_replay()
+        self.assertIsNone(scene.cutscene_replay)
+        self.assertEqual(collection.seen, seen)
+        self.assertEqual(collection.path.read_bytes(), original_file)
+        self.assertTrue(scene.cutscene_campaign_active)
+        scene.close_game_menu()
+        event = SimpleNamespace(keysym='c', state=0x20000)
+        scene.dev_key_press(event)
+        scene.dev_key_release(event)
+        normal = scene.game_menu.cutscene_viewer
+        self.assertFalse(normal.developer)
+        normal.key('End')
+        scene.start_cutscene_replay()
+        self.assertIsNone(scene.cutscene_replay)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(collection.seen, seen)
+        self.assertEqual(collection.path.read_bytes(), original_file)
+
+    def test_developer_open_does_not_write_a_collection_with_a_save_error(self):
+        scene = self.scene
+        scene.cutscene_collection.error = 'Could not remember unlocked chapters.'
+        with patch.object(scene.cutscene_collection, 'save') as save:
+            scene.open_cutscene_viewer(developer=True)
+        save.assert_not_called()
 
     def test_alt_c_opens_the_same_viewer_and_is_listed_in_f1(self):
         scene = self.scene
@@ -317,6 +513,7 @@ class ViewerSceneTests(unittest.TestCase):
         event = SimpleNamespace(keysym='c', state=0x20000)
         scene.dev_key_press(event)
         gallery = scene.game_menu.cutscene_viewer
+        self.assertFalse(gallery.developer)
         scene.dev_key_press(event)
         self.assertIs(scene.game_menu.cutscene_viewer, gallery)
         self.assertTrue(scene.paused)
@@ -348,7 +545,7 @@ class ViewerSceneTests(unittest.TestCase):
                 self.assertEqual(assets.program['operations'], operations)
 
     def test_device_presentation_reuses_the_photo_and_keeps_the_world_paused_while_scrolling(self):
-        from PIL import ImageChops, ImageTk
+        from PIL import ImageChops
 
         scene = self.scene
         gallery = self.open_viewer()
@@ -359,7 +556,7 @@ class ViewerSceneTests(unittest.TestCase):
             size = (1920, 1080)
             source = scene._cutscene_gallery_source[2]
             expected = gallery.draw(source, scene.ui_font, visible=True).convert('RGB')
-            actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+            actual = self.displayed_gallery()
             self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
             self.assertEqual(actual.size, size)
             self.assertEqual(tuple(scene.canvas.coords(scene.canvas.find_all()[0])), (0, 0))
@@ -396,7 +593,7 @@ class ViewerSceneTests(unittest.TestCase):
             self.assertAlmostEqual(y, 192)
 
     def test_incremental_scroll_pixels_match_full_render_in_both_directions_and_after_toast(self):
-        from PIL import ImageChops, ImageTk
+        from PIL import ImageChops
 
         scene = self.scene
         gallery = self.open_viewer()
@@ -413,7 +610,7 @@ class ViewerSceneTests(unittest.TestCase):
                     source = scene._cutscene_gallery_source[2]
                     expected = gallery.draw(source, scene.ui_font, visible=True,
                                             background_key=id(scene.screenshot_viewport)).convert('RGB')
-                    actual = ImageTk.getimage(photo).convert('RGB')
+                    actual = self.displayed_gallery()
                     self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
                     self.assertIs(scene.image_ref, photo)
             scene.screenshot_toast = 'Saved screenshot'
@@ -423,7 +620,126 @@ class ViewerSceneTests(unittest.TestCase):
             scene.present_viewport()
             expected = scene.draw_screenshot_notice(gallery.draw(source, scene.ui_font, visible=True,
                 background_key=id(scene.screenshot_viewport)), visible=True, uniform=True).convert('RGB')
-            self.assertIsNone(ImageChops.difference(ImageTk.getimage(photo).convert('RGB'), expected).getbbox())
+            self.assertIsNone(ImageChops.difference(self.displayed_gallery(), expected).getbbox())
+
+    def test_fast_scroll_and_bounce_skip_full_composition_and_match_all_pixels(self):
+        from PIL import ImageChops
+
+        scene = self.scene
+        gallery = self.open_viewer()
+        with patch.object(scene.canvas, 'winfo_width', return_value=1280), \
+                patch.object(scene.canvas, 'winfo_height', return_value=960):
+            scene.present_viewport()
+            for step in (-1, 1, 20, -20):
+                gallery.wheel(step)
+                for _ in range(45):
+                    gallery.advance(1 / 120)
+                    with patch.object(scene, 'cutscene_gallery_frame',
+                                      side_effect=AssertionError('Full image composed during scrolling')):
+                        scene.present_viewport()
+                    source = scene._cutscene_gallery_source[2]
+                    expected = gallery.draw(source, scene.ui_font, visible=True,
+                        background_key=id(scene.screenshot_viewport)).convert('RGB')
+                    self.assertIsNone(ImageChops.difference(self.displayed_gallery(), expected).getbbox())
+            # A hover after fast movement must not compare against stale PIL pixels.
+            gallery.hovered = 100 + gallery.index
+            scene.present_viewport()
+            expected = gallery.draw(source, scene.ui_font, visible=True,
+                background_key=id(scene.screenshot_viewport)).convert('RGB')
+            self.assertIsNone(ImageChops.difference(self.displayed_gallery(), expected).getbbox())
+
+    def test_retained_strip_maps_input_in_a_tall_window_and_disposes_before_replay(self):
+        scene = self.scene
+        gallery = self.open_viewer()
+        with patch.object(scene.canvas, 'winfo_width', return_value=1020), \
+                patch.object(scene.canvas, 'winfo_height', return_value=1200):
+            scene.present_viewport()
+            strip = scene._cutscene_gallery_strip
+            self.assertIn('DevelopmentInput', strip.canvas.bindtags())
+            rect = gallery.card_rect(0)
+            x, y = (rect[0] + 20 - 1) * 2, (rect[1] + 20) * 2 + 216
+            event = SimpleNamespace(x=x - strip.region[0], y=y - strip.region[1], num=1)
+            strip.forward(scene.dev_click)(event)
+            strip.forward(scene.dev_release)(event)
+            self.assertEqual(gallery.last_clicked, 0)
+            self.assertIsNone(scene.cutscene_replay)
+            self.assertIs(scene._cutscene_gallery_strip, strip)
+            strip.forward(scene.dev_double_click)(event)
+            self.assertIsNotNone(scene.cutscene_replay)
+            self.assertIsNone(scene._cutscene_gallery_strip)
+            self.assertFalse(strip.canvas.winfo_exists())
+            scene.stop_cutscene_replay()
+            self.assertTrue(scene._cutscene_gallery_strip.shown)
+            scene.close_game_menu()
+            self.assertIsNone(scene._cutscene_gallery_strip)
+
+    def test_strip_leave_preserves_a_held_drag_and_parent_photo_is_not_copied_during_motion(self):
+        scene = self.scene
+        gallery = self.open_viewer()
+        strip = scene._cutscene_gallery_strip
+        with patch.object(scene, 'dev_pointer_leave') as leave:
+            strip.leave(SimpleNamespace(state=0x100))
+            leave.assert_not_called()
+            strip.leave(SimpleNamespace(state=0))
+            leave.assert_called_once()
+        gallery.wheel(.5)
+        with patch.object(scene.image_ref, 'paste', side_effect=AssertionError('Copied frame pixels')):
+            for _ in range(10):
+                gallery.advance(1 / 120)
+                scene.present_viewport()
+        self.assertLess(strip.canvas.coords(strip.item)[0], 0)
+
+    def test_scrolling_does_not_invalidate_the_static_background_by_reassigning_its_coordinates(self):
+        scene = self.scene
+        gallery = self.open_viewer()
+        gallery.wheel(.5)
+        with patch.object(scene.canvas, 'coords', wraps=scene.canvas.coords) as coords:
+            for _ in range(10):
+                gallery.advance(1 / 120)
+                scene.present_viewport()
+        self.assertFalse(any(len(call.args) > 1 for call in coords.call_args_list))
+
+    def test_animation_accounts_for_tk_idle_paint_and_rechecks_monitor_rate(self):
+        from pop2.menu_animation import MenuFrameClock
+
+        scene = self.scene
+        gallery = self.open_viewer()
+        scene.cancel_cutscene_gallery_tick()
+        gallery.wheel(1)
+        now, clocks = [10.0], []
+
+        def clock(*args, **kwargs):
+            value = MenuFrameClock(*args, **kwargs)
+            clocks.append(value)
+            return value
+
+        with patch('pop2.cutscene_viewer.time.perf_counter', side_effect=lambda: now[0]), \
+                patch('pop2.display_refresh.window_refresh_rate', side_effect=(120, 240)) as rate, \
+                patch('pop2.menu_animation.MenuFrameClock', side_effect=clock), \
+                patch.object(gallery, 'advance', return_value=True), \
+                patch.object(scene, 'present_viewport'), \
+                patch.object(scene.root, 'after', return_value='timer') as timer, \
+                patch.object(scene.root, 'after_idle', return_value='paint') as idle, \
+                patch.object(scene.root, 'after_cancel') as cancel:
+            scene.schedule_cutscene_gallery()
+            self.assertEqual(clocks[0].refresh_hz, 120)
+            tick = timer.call_args.args[1]
+            now[0] += .009
+            tick()
+            self.assertEqual(timer.call_count, 1)  # No next frame before Tk paints.
+            self.assertEqual(scene.cutscene_gallery_after_id, 'paint')
+            now[0] += .004
+            idle.call_args.args[0]()
+            self.assertGreater(clocks[0].cost, .0005)
+            self.assertEqual(timer.call_count, 2)
+            now[0] += 1.1
+            gallery.wheel(1)
+            timer.call_args.args[1]()
+            self.assertEqual(clocks[0].refresh_hz, 240)
+            self.assertEqual(rate.call_count, 2)
+            scene.cancel_cutscene_gallery_tick()
+            cancel.assert_called_once_with('paint')
+            self.assertIsNone(scene.cutscene_gallery_after_id)
 
     def test_wide_pointer_resize_and_replay_use_their_own_viewports(self):
         from PIL import ImageTk
@@ -438,11 +754,14 @@ class ViewerSceneTests(unittest.TestCase):
             self.assertEqual(ImageTk.getimage(scene.image_ref).size, (2560, 1080))
             self.assertFalse(scene.window_aspect_locked())
             scale = 1080 / 384
-            x = (gallery.PLAY[0] + gallery.PLAY[2]) / 2
-            y = (gallery.PLAY[1] + gallery.PLAY[3]) / 2
+            rect = gallery.card_rect(0)
+            x, y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
             event = SimpleNamespace(x=(x - 1) * scale, y=y * scale, num=1)
-            self.assertEqual(gallery.hit(*scene.dev_pointer(event)), 1)
+            self.assertEqual(gallery.hit(*scene.dev_pointer(event)), 100)
             scene.dev_click(event)
+            scene.dev_release(event)
+            self.assertIsNone(scene.cutscene_replay)
+            scene.dev_double_click(event)
             self.assertIsNotNone(scene.cutscene_replay)
             size, position = fit_viewport(2560, 1080)
             self.assertEqual(ImageTk.getimage(scene.image_ref).size, size)
@@ -482,7 +801,7 @@ class ViewerSceneTests(unittest.TestCase):
                               gallery.scroll), state[:4])
 
     def test_hover_and_tk_redraw_keep_a_retained_image_in_both_window_modes(self):
-        from PIL import ImageChops, ImageTk
+        from PIL import ImageChops
 
         scene = self.scene
         # Exercise the real production path, including hover and Tk invalidation.
@@ -510,7 +829,7 @@ class ViewerSceneTests(unittest.TestCase):
                     source = scene._cutscene_gallery_source[2]
                     expected = gallery.draw(source, scene.ui_font, visible=True,
                         background_key=id(scene.screenshot_viewport)).convert('RGB')
-                    actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                    actual = self.displayed_gallery()
                     self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
 
     def test_hover_within_the_same_card_does_not_reconfigure_or_redraw_the_canvas(self):
@@ -526,6 +845,28 @@ class ViewerSceneTests(unittest.TestCase):
         redraw.assert_not_called()
         self.assertIsNotNone(scene.image_ref)
         self.assertTrue(scene.paused)
+
+    def test_crossing_cards_changes_only_the_retained_hover_border_without_loading_or_painting_images(self):
+        from PIL import ImageChops
+
+        scene = self.scene
+        gallery = self.open_viewer()
+        photo = scene._cutscene_gallery_strip.photo
+        grid = gallery.grid_cache[1]
+        with patch.object(scene, 'cutscene_gallery_frame', side_effect=AssertionError('Composed hover frame')), \
+                patch('PIL.ImageTk.PhotoImage', side_effect=AssertionError('Uploaded hover photo')), \
+                patch.object(scene.ui_font, 'text', side_effect=AssertionError('Drew hover text')):
+            for index in (1, 2, 3, 4, 5, 0, 4):
+                rect = gallery.card_rect(index)
+                with patch.object(scene, 'dev_pointer', return_value=(rect[0] + 10, rect[1] + 10)):
+                    scene.dev_hover(SimpleNamespace())
+                self.assertEqual(gallery.hovered, index + 100)
+                self.assertIs(scene._cutscene_gallery_strip.photo, photo)
+                self.assertIs(gallery.grid_cache[1], grid)
+        source = scene._cutscene_gallery_source[2]
+        expected = gallery.draw(source, scene.ui_font, visible=True,
+            background_key=id(scene.screenshot_viewport)).convert('RGB')
+        self.assertIsNone(ImageChops.difference(self.displayed_gallery(), expected).getbbox())
 
     def test_pointer_drag_does_not_play_or_select_and_leave_cancels_the_drag(self):
         scene = self.scene
@@ -546,6 +887,23 @@ class ViewerSceneTests(unittest.TestCase):
             scene.dev_click(SimpleNamespace(num=1))
         scene.dev_pointer_leave(SimpleNamespace())
         self.assertIsNone(gallery.drag)
+
+    def test_double_click_binding_starts_the_film_without_immediately_pausing_it(self):
+        scene = self.scene
+        gallery = self.open_viewer()
+        self.assertIn('dev_double_click', scene.canvas.bind('<Double-Button-1>'))
+        before = self.snapshot()
+        rect = gallery.card_rect(0)
+        point = rect[0] + 20, rect[1] + 20
+        with patch.object(scene, 'dev_pointer', return_value=point):
+            scene.dev_click(SimpleNamespace(num=1))
+            scene.dev_release(SimpleNamespace(num=1))
+            self.assertIsNone(scene.cutscene_replay)
+            scene.dev_double_click(SimpleNamespace(num=1))
+            scene.dev_release(SimpleNamespace(num=1))
+        self.assertIsNotNone(scene.cutscene_replay)
+        self.assertFalse(scene.cutscene_replay.paused)
+        self.assertEqual(self.snapshot(), before)
 
     def test_every_chapter_finishes_in_the_gallery_without_touching_the_live_world(self):
         scene = self.scene
@@ -606,7 +964,7 @@ class ViewerSceneTests(unittest.TestCase):
         scene.seek_playback_part(next(part for part in scene.development_parts() if part.stage == 'temple'))
         self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
 
-    def test_replay_input_blocks_game_commands_and_mouse_back_does_not_start_another_film(self):
+    def test_replay_input_blocks_game_commands_escape_pauses_and_space_skips(self):
         scene = self.scene
         self.open_viewer()
         scene.start_cutscene_replay()
@@ -634,9 +992,49 @@ class ViewerSceneTests(unittest.TestCase):
         scene.dev_key_release(event)
         with patch.object(scene, 'dev_pointer', return_value=(400, 375)):
             scene.dev_click(SimpleNamespace(num=1))
+        self.assertIs(scene.cutscene_replay, original)
+        self.assertTrue(original.paused)
+        event = SimpleNamespace(keysym='space', state=0)
+        scene.dev_key_press(event)
         self.assertIsNone(scene.cutscene_replay)
         self.assertEqual(scene.game_menu.page, 'cutscenes')
+        # Auto-repeat from the skip gesture must not activate the selected card.
+        scene.dev_key_press(event)
+        self.assertIsNone(scene.cutscene_replay)
+        scene.dev_key_release(event)
         self.assertEqual(self.snapshot(), before)
+
+    def test_space_skips_a_playing_film_and_escape_keeps_the_same_gallery_and_private_player(self):
+        scene = self.scene
+        gallery = self.open_viewer()
+        scene.start_cutscene_replay()
+        replay = scene.cutscene_replay
+        event = SimpleNamespace(keysym='Escape', state=0)
+        for paused in (True, False):
+            scene.dev_key_press(event)
+            self.assertIs(scene.cutscene_replay, replay)
+            self.assertEqual(replay.paused, paused)
+            self.assertIs(scene.game_menu.cutscene_viewer, gallery)
+            self.assertEqual(scene.game_menu.page, 'cutscenes')
+            scene.dev_key_release(event)
+        scene.dev_key_press(SimpleNamespace(keysym='space', state=0))
+        self.assertIsNone(scene.cutscene_replay)
+        self.assertIs(scene.game_menu.cutscene_viewer, gallery)
+        self.assertEqual(scene.game_menu.page, 'cutscenes')
+
+    def test_replay_renders_no_key_legends_in_play_or_pause(self):
+        scene = self.scene
+        self.open_viewer()
+        scene.start_cutscene_replay()
+        for paused in (False, True):
+            scene.pause_cutscene_replay(paused)
+            with patch.object(scene.ui_font, 'text', wraps=scene.ui_font.text) as text:
+                scene.render_cutscene_replay()
+            self.assertFalse(any('Esc:' in call.args[0] or 'Space:' in call.args[0]
+                                 for call in text.call_args_list))
+            if not paused:
+                self.assertEqual(scene.native_viewport.convert('RGB').tobytes(),
+                                 scene.screenshot_viewport.convert('RGB').tobytes())
 
     def test_failed_film_open_is_reported_without_destroying_the_live_session(self):
         scene = self.scene

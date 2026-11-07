@@ -109,6 +109,7 @@ class WindowControls:
         self.canvas.bind("<Configure>", lambda _event: self.present_viewport())
         self.canvas.bind("<Expose>", self.expose_viewport)
         self.canvas.bind("<Button-1>", self.dev_click)
+        self.canvas.bind("<Double-Button-1>", self.dev_double_click)
         self.canvas.bind("<Button-2>", self.dev_click)
         self.canvas.bind("<Button-3>", self.dev_click)
         self.canvas.bind("<ButtonRelease-1>", self.dev_release)
@@ -228,6 +229,7 @@ class WindowControls:
             if menu is not None and menu.page == 'cutscenes':
                 menu.cutscene_viewer.drag = None
                 menu.cutscene_viewer.dragged = False
+                menu.cutscene_viewer.last_clicked = None
             if getattr(self, 'cutscene_replay', None) is not None:
                 self.pause_cutscene_replay(True)
             if getattr(self, "game_menu", None) is not None:
@@ -377,6 +379,7 @@ class WindowControls:
         was_paused = self.game_was_paused if self.game_menu is not None else self.paused
         if hasattr(self, 'cancel_cutscene_gallery_tick'):
             self.cancel_cutscene_gallery_tick()
+            self.dispose_cutscene_strip()
         self.dispose_screenshot_gallery()
         self.game_menu = None
         from pop2.playback_navigation import playback_groups
@@ -433,7 +436,7 @@ class WindowControls:
         if action == "resume":
             self.close_dev_mode()
         elif action == 'cutscenes':
-            self.open_cutscene_viewer()
+            self.open_cutscene_viewer(developer=True)
         elif action in ('go', 'return_room') and self.level_navigation_available():
             destination = self.dev_menu.return_screen if action == 'return_room' else self.dev_menu.screen
             if destination is None:
@@ -1256,9 +1259,7 @@ class WindowControls:
         if getattr(self, 'cutscene_replay', None) is not None:
             if getattr(event, 'num', 1) == 1:
                 point = self.dev_pointer(event)
-                if point is not None and point[1] >= 365 and point[0] >= 256:
-                    self.stop_cutscene_replay()
-                elif point is not None:
+                if point is not None:
                     self.pause_cutscene_replay(not self.cutscene_replay.paused)
             return 'break'
         if not self.modal_open():
@@ -1296,6 +1297,19 @@ class WindowControls:
                     self.play_menu_sound('click')
                 self.apply_dev_action(self.dev_menu.click(*point))
         return "break"
+
+    def dev_double_click(self, event):
+        viewer = self.active_cutscene_gallery() if hasattr(self, 'active_cutscene_gallery') else None
+        if viewer is None:
+            return self.dev_click(event)
+        point = self.dev_pointer(event)
+        if point is not None:
+            action = viewer.double_click(*point)
+            if action == 'cutscene_play':
+                self.play_menu_sound('click')
+            self.apply_game_action(action)
+            self.pause_resume_keys.update(self.window_keys_down)
+        return 'break'
 
     def dev_release(self, event):
         viewer = self.active_cutscene_gallery() if hasattr(self, 'active_cutscene_gallery') else None
@@ -1426,6 +1440,7 @@ class WindowControls:
         if viewer is not None:
             viewer.drag = None
             viewer.dragged = False
+            viewer.last_clicked = None
             viewer.hovered = None
             self.canvas.configure(cursor='')
             self.redraw_cutscene_gallery()

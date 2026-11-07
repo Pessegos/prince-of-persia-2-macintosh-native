@@ -405,8 +405,13 @@ class ImportedGalleryTests(unittest.TestCase):
             self.assertIsNone(s.cutscene_replay)
             s.dev_key_release(enter)
             with patch.object(s, 'seek_playback_part', wraps=s.seek_playback_part) as seek:
-                rect = menu.cutscene_viewer.PLAY
-                s.apply_game_action(menu.click((rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2))
+                rect = menu.cutscene_viewer.card_rect(0)
+                point = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+                with patch.object(s, 'dev_pointer', return_value=point):
+                    s.dev_click(SimpleNamespace(num=1))
+                    s.dev_release(SimpleNamespace(num=1))
+                    self.assertIsNone(s.cutscene_replay)
+                    s.dev_double_click(SimpleNamespace(num=1))
             seek.assert_not_called()
             self.assertIsNone(s.dev_menu)
             self.assertIsNotNone(s.cutscene_replay)

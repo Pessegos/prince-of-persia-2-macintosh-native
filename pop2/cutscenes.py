@@ -27,7 +27,7 @@ CHAPTERS = (
     CutsceneChapter('voyage', 'The Voyage', 'ending.json', 5, 1),
     CutsceneChapter('discovery', 'The Impostor', 'discovery.json', 10, 3),
     CutsceneChapter('carpet', 'The Flying Carpet', 'carpet.json', 5, 5),
-    CutsceneChapter('vision', "The Father's Vision", 'throne.json', 20, 8),
+    CutsceneChapter('vision', "The Mother's Vision", 'throne.json', 20, 8),
     CutsceneChapter('horse', 'The Ride to the Temple', 'temple.json', 5, 9),
     CutsceneChapter('tower', 'The Flight to the Tower', 'tower.json', 6, 13),
 )
