@@ -15,6 +15,7 @@ from pop2.render_opening import load_resource_file
 
 # Port room indices; room7's approval is viewed with its stone gate fully open.
 APPROVED = {
+    1: (591, '1f686b8ae78cb4885972c07d6d62baf4fb691568eb0aac6e745b6c25d08c324f'),
     5: (2747, '2ef93b2f6a12554f9f77acc4b07a523187769454c65eab587417dbebeb805eae'),
     6: (1196, 'd879511695be25224c60c436910ba09e3b6f44fa602f44dbd165966b3a13ad7f'),
     13: (764, 'dc3972e7a39d9f9499afc088edcf5b4792346376e500d5a1ff548922e86c96c5'),
@@ -29,7 +30,7 @@ APPROVED = {
 class BundledLevelFiveArtworkTests(unittest.TestCase):
     def test_approved_scope_and_changed_source_guards(self):
         assets = retouch_assets(5)
-        self.assertEqual(len(assets), 41)
+        self.assertEqual(len(assets), 46)
         self.assertEqual({key[0] for key in assets}, set(APPROVED))
         for key, (record, image) in assets.items():
             room, shape, x, bottom, mode = key
@@ -76,7 +77,7 @@ class LevelFiveArtworkTests(unittest.TestCase):
                     self.assertEqual((im1.getchannel('A') if im1.mode == 'RGBA' else im1).tobytes(),
                                      (im2.getchannel('A') if im2.mode == 'RGBA' else im2).tobytes())
 
-    def test_all_eight_approved_images_match_and_runtime_uses_them(self):
+    def test_approved_images_match_and_runtime_uses_them(self):
         colours = {tuple(c[:3]) for c in cavern_assets(5)[2].values()}
         level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 5)
         game = LevelRenderer(level, preload_room=False)

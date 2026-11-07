@@ -172,6 +172,7 @@ is included. Other columns found during the inventory are not approved targets.
 | 3 | 1 | 111 / 243 | 585 | `470358256d02d9371eabfc773426c3b6949e14c62852acbf6b9eac022ad44f02` |
 | 3 | 5 | 60 / 243 | 585 | `1dce1829805dde96885605ac6cd555351d5969147d14626401a2979da95a12a5` |
 | 3 | 13 | 213 / 243 | 591 | `d7dceac57950745d0880bdc06aea68f923d59006f722dda0a823b0d14e0f9298` |
+| 5 | 2 | 60 / 243 | 591 | `1f686b8ae78cb4885972c07d6d62baf4fb691568eb0aac6e745b6c25d08c324f` |
 
 The enlarged comparisons and approval manifest remain local under
 `rendered/column-shadow-five-v4/`. Each row's hash uses the static cached room
