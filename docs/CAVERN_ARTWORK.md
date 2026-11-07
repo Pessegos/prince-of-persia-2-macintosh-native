@@ -243,7 +243,7 @@ What the user has reviewed and how each part ended up:
   the torch, and a pass with 64 pale grains of mixed sizes "looked like snowing".
   That had three causes, all fixed: there was a lot of it, each new grain went to
   the emptiest place so it was evenly spread, and half of it was falling.
-- **Two kinds of dust** (`DustKind`). Fine grains, 21 of them, are one small opaque
+- **Two kinds of dust** (`DustKind`). Fine grains, 18 of them, are one small opaque
   pixel. The brighter one is, the shorter it lasts (`lifespan`): most are dim, in the
   colour of the rock. The dimmest last 25 seconds and a typical grain 11, and now and
   then a pale one shines for 2.5 seconds and is gone. Coarse grains, 5, are soft and partly transparent, the
