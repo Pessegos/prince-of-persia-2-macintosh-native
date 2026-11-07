@@ -198,6 +198,7 @@ The follow-up extends the five-room approval only to these two placements:
 | Level | Room | Column X / bottom | Added visible changes | Combined render RGB SHA256 |
 | --- | --- | --- | --- | --- |
 | 3 | 7 | 366 / 363 | 585 | `07151ff23ba5c20cf5fbf29a65b08c80c80041705ecf7657fa18e4fcb6294d5e` |
+| 3 | 8 | 366 / 243 | 589 | `9043537b7de6fc860b4b72ec272dd8c44486179d4e224914df2fd90b676c8073` |
 
 Earlier approved rooms, lit column bodies, transparency and physical/actor
 masks remain unchanged. Comparisons are local under
