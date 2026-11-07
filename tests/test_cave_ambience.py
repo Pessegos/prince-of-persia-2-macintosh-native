@@ -1631,7 +1631,7 @@ class DoorDustTests(unittest.TestCase):
         # It faces the room: going only to the sides looked odd.
         door = door_coming_down(17, 25, True)
         scene = self.scene()
-        scene.advance(thuds=(door,))
+        scene.thud(door)
         puff = scene.puffs[0]
         self.assertTrue(((door.left <= puff.x + 2) & (puff.x - 2 <= door.right)).all())
         self.assertGreater(float(numpy.mean(puff.dy > 0)), 0.95)
