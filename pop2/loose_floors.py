@@ -83,6 +83,9 @@ class LooseFloors:
     cleared: set = field(default_factory=set)
     plate_events: list = field(default_factory=list)
     shake_events: list = field(default_factory=list)
+    # (room, cell) of the floors that struck the ground. Not game state: only the
+    # optional cave ambience reads it, for the dust.
+    landed: list = field(default_factory=list)
     # Crevice cells revealed while their room was displayed: drawn as the
     # original's per-cell redraw until the room is entered again.
     redrawn: set = field(default_factory=set)
@@ -184,6 +187,7 @@ class LooseFloors:
     def advance_falling(self, terrain, state=None, motion=None, record=None):
         # MakeRubble 5:2b10: +8 gravity, terminal speed 64; room cut is 365.
         sounds, advanced, survivors, added = [], [], [], []
+        self.landed.clear()
         for block in tuple(self.falling):
             if block.velocity < 60:
                 block.velocity += 8
@@ -212,6 +216,7 @@ class LooseFloors:
                     block.row += 1
                 else:
                     sounds.append(26)
+                    self.landed.append((tile.room, tile.row * 10 + tile.column))
                     sounds.extend(self.shake_row(terrain, block.room, block.row, state, motion, record))
                     if tile.kind in (5, 6, 34):
                         self.plate_events.append((tile.room, tile.row * 10 + tile.column, tile.kind))

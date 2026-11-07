@@ -84,7 +84,7 @@ class RebirthSnapshot:
             for queue in (restored.plates.triggered, restored.plates.slams, restored.plates.slam_sounds, restored.plates.shut,
                           restored.plates.songs, restored.plates.stopped_sounds, restored.plates.gate_sounds,
                           restored.potions.songs,
-                          restored.bridge.songs, restored.loose.plate_events, restored.loose.shake_events):
+                          restored.bridge.songs, restored.loose.plate_events, restored.loose.shake_events, restored.loose.landed):
                 queue.clear()
             # Preserve the shared identity held by GameSession and LevelMap.
             current.__dict__.update(restored.__dict__)

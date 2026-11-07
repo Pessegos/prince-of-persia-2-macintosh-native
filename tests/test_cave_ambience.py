@@ -12,6 +12,7 @@ import numpy
 from PIL import Image
 
 from pop2.cavern_state import CavernState
+from pop2.loose_floors import FallingFloor, LooseFloors
 from pop2.pressure_plates import PressurePlates
 from pop2.save_game import OMIT
 from tests import test_pressure_plates
@@ -22,8 +23,8 @@ from pop2.cavern_ambience import (
     DROP_INKS, DROP_LAVA_INK, DROP_SHINE_LIGHT, DROP_WARM_LIGHT, SWELL_INKS,
     DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
     Footing, KICKED_DEPTH, Kicked, LANDING_FALL, LANDING_GRAINS, LANDING_THROW, MOST_KICKED, MOST_LANDING_GRAINS,
-    SHUT_GRAINS, SHUT_THROW, SLAM_GRAINS, SLAM_THROW, STEP_GRAINS, STEP_SOFTNESS, STEP_STRENGTH, STEP_THROW,
-    door_coming_down,
+    PUFF_MOST, PUFF_THICKNESS, SHUT_PUFF, SLAM_PUFF, STEP_GRAINS, STEP_SOFTNESS, STEP_STRENGTH, STEP_THROW, TILE_PUFF,
+    door_coming_down, tile_landing,
     WAKE_REACH,
     HAZE_OVER_FLAME, HAZE_OVER_POOL, HAZE_RISE, HAZE_WAVE, QUIET_DUST, flame_of, haze_of, haze_over, room_torches,
     shows,
@@ -1583,46 +1584,130 @@ class DoorDustTests(unittest.TestCase):
     def scene(self):
         return still_ambience(room_air())
 
-    def test_a_slam_throws_a_good_puff_to_both_sides_of_its_foot(self):
+    def cloud(self, thud, ticks=8):
         scene = self.scene()
-        door = door_coming_down(4, 26, True)
-        scene.advance(doors=(door,))
-        self.assertEqual(len(scene.kicked), SLAM_GRAINS)
-        for grain in scene.kicked:
-            if grain.dx < 0:
-                self.assertLessEqual(grain.x, door.left)
-                self.assertEqual(grain.floor, door.left_floor)
-            else:
-                self.assertGreaterEqual(grain.x, door.right)
-                self.assertEqual(grain.floor, door.right_floor)
-            self.assertLess(grain.dy, 0)
-        self.assertEqual(sum(grain.dx < 0 for grain in scene.kicked), SLAM_GRAINS // 2)
+        scene.advance(thuds=(thud,))
+        for _ in range(ticks):
+            scene.advance()
+        return scene
 
-    def test_a_gate_that_lowers_itself_raises_less(self):
+    def test_a_slam_drives_a_cloud_to_both_sides_of_its_foot(self):
+        door = door_coming_down(4, 22, True)
         scene = self.scene()
-        scene.advance(doors=(door_coming_down(4, 26, False),))
-        self.assertEqual(len(scene.kicked), SHUT_GRAINS)
-        self.assertLess(SHUT_GRAINS, SLAM_GRAINS)
-        self.assertLess(SHUT_THROW[1], SLAM_THROW[1])
+        scene.advance(thuds=(door,))
+        puff = scene.puffs[0]
+        self.assertEqual(len(puff.x), SLAM_PUFF.grains * 2)
+        self.assertTrue(((puff.x <= door.left + 6) | (puff.x >= door.right - 6)).all())
+        self.assertLess(puff.x.min(), door.left)
+        self.assertGreater(puff.x.max(), door.right)
+
+    def test_it_spreads_along_the_floor_more_than_it_rises(self):
+        door = door_coming_down(17, 25, True)
+        puff = self.cloud(door, 16).puffs[0]
+        reach = numpy.maximum(door.left - puff.x, puff.x - door.right)
+        self.assertGreater(float(reach.max()), 30)
+        self.assertLess(float(numpy.median(reach)), 40)
+        self.assertLess(float((puff.floor - puff.y).max()), float(reach.max()))
+        self.assertGreater(float(numpy.median(puff.floor - puff.y)), 2)
+
+    def test_a_gate_that_lowers_itself_raises_much_less(self):
+        self.assertLess(SHUT_PUFF.grains, SLAM_PUFF.grains / 2)
+        self.assertLess(SHUT_PUFF.fastest, SLAM_PUFF.fastest / 2)
+        self.assertEqual(SHUT_PUFF.chips, 0)
 
     def test_a_gate_stands_where_it_is_drawn(self):
         # Shapes 3562 and 3563 of room 23 of level 4, cell 22.
         door = door_coming_down(4, 22, True)
         self.assertEqual((door.left, door.right, door.left_floor, door.right_floor), (130, 194, 353, 339))
+        self.assertTrue(door.slab)
 
     def test_an_exit_door_stands_back_from_the_walking_line(self):
         door = door_coming_down(17, 25, True)
         self.assertEqual((door.left, door.right, door.left_floor, door.right_floor), (282, 332, 338, 338))
+        self.assertFalse(door.slab)
+
+    def test_a_fallen_tile_stands_on_its_cell(self):
+        tile = tile_landing(23)
+        # Where the rubble of column 3 lies, in room 21 of level 5.
+        self.assertEqual((tile.left, tile.right, tile.left_floor, tile.kind), (157, 233, 346, TILE_PUFF))
 
     def test_no_door_no_dust(self):
         scene = self.scene()
         scene.advance()
-        self.assertEqual(scene.kicked, [])
+        self.assertEqual(scene.puffs, [])
 
-    def test_two_doors_stay_within_the_limit(self):
+    def test_there_is_none_on_the_lava(self):
+        tile = tile_landing(23)
+        surface = 340
+        pools = ({x: surface for x in range(100, 240)},)
+        scene = still_ambience(room_air(pools=pools))
+        scene.thud(tile)
+        self.assertEqual(scene.puffs, [])
+
+    def test_it_is_a_cloud_with_no_hard_edge(self):
+        # Spots of one strength piled up read as balls of cotton wool.
+        scene = self.cloud(door_coming_down(17, 25, True))
+        thick = scene.puffs[0].thickness()
+        amount = PUFF_MOST * (1 - numpy.exp(-thick * PUFF_THICKNESS))
+        self.assertLessEqual(float(amount.max()), PUFF_MOST)
+        self.assertLess(float(numpy.abs(numpy.diff(amount, axis=1)).max()), PUFF_MOST / 2)
+
+    def test_it_never_hides_what_is_behind_it(self):
+        scene = self.cloud(door_coming_down(17, 25, True), 1)
+        self.assertLess(PUFF_MOST, 0.5)
+        frame = wall_frame()
+        scene.draw(frame)
+        colours = colours_in(frame)
+        self.assertIn(WALL, colours)
+        self.assertGreater(len(colours), 1)
+
+    def test_every_colour_is_of_the_palette(self):
+        scene = self.cloud(door_coming_down(17, 25, True))
+        frame = wall_frame()
+        scene.draw_puff(frame, scene.puffs[0])
+        known = {tuple(int(value) for value in colour) + (255,) for colour in COLOURS.rgb}
+        self.assertLessEqual(colours_in(frame), known)
+
+    def test_it_thins_out_and_goes(self):
+        scene = self.cloud(door_coming_down(17, 25, True), 2)
+        puff = scene.puffs[0]
+        early = float(puff.thickness().max())
+        for _ in range(SLAM_PUFF.life[0]):
+            scene.advance()
+        self.assertLess(float(puff.thickness().max()), early * 0.6)
+        for _ in range(SLAM_PUFF.life[1]):
+            scene.advance()
+        self.assertEqual(scene.puffs, [])
+
+    def test_it_does_not_show_through_the_slab(self):
+        door = door_coming_down(4, 22, True)
+        scene = self.cloud(door)
+        puff = scene.puffs[0]
+        frame = wall_frame()
+        scene.draw_puff(frame, puff)
+        pixels = numpy.asarray(frame)
+        rows, columns = numpy.nonzero(puff.hidden)
+        rows, columns = rows + puff.top, columns + puff.left
+        self.assertTrue((pixels[rows, columns] == WALL).all())
+        self.assertTrue((pixels != WALL).any())
+
+    def test_it_stays_behind_the_foreground(self):
+        door = door_coming_down(17, 25, True)
+        cover = bytearray(blank())
+        for y in range(HEIGHT):
+            cover[y * WIDTH:(y + 1) * WIDTH] = bytes([255]) * WIDTH
+        scene = still_ambience(room_air(covered=bytes(cover)))
+        scene.advance(thuds=(door,))
+        scene.advance()
+        frame = wall_frame()
+        scene.draw_puff(frame, scene.puffs[0])
+        self.assertEqual(colours_in(frame), {WALL})
+
+    def test_chips_fly_out_of_a_slam(self):
         scene = self.scene()
-        scene.advance(doors=(door_coming_down(4, 22, True), door_coming_down(4, 25, True)))
-        self.assertEqual(len(scene.kicked), MOST_KICKED)
+        scene.thud(door_coming_down(4, 22, True))
+        self.assertEqual(len(scene.kicked), SLAM_PUFF.chips)
+        self.assertTrue(all(grain.dy < 0 for grain in scene.kicked))
 
 
 class DoorQueueTests(unittest.TestCase):
@@ -1659,6 +1744,26 @@ class DoorQueueTests(unittest.TestCase):
 
     def test_it_is_not_saved(self):
         self.assertIn('shut', OMIT[PressurePlates])
+        self.assertIn('landed', OMIT[LooseFloors])
+
+    def test_a_floor_tile_is_told_as_it_strikes_the_ground(self):
+        terrain = SimpleNamespace(
+            tile=lambda room, column, row: SimpleNamespace(room=room, column=column, row=row, kind=1, foreground=0),
+            neighbor=lambda room, way: None)
+        floors = LooseFloors()
+        floors.shake_row = lambda *_arguments: ()
+        floors.falling.append(FallingFloor(4, 3, 1, 230, 8))
+        floors.advance_falling(terrain)
+        self.assertEqual(floors.landed, [(4, 13)])
+        floors.advance_falling(terrain)
+        self.assertEqual(floors.landed, [])
+
+    def test_a_floor_tile_still_in_the_air_is_not(self):
+        terrain = SimpleNamespace(tile=lambda *_arguments: None, neighbor=lambda room, way: None)
+        floors = LooseFloors()
+        floors.falling.append(FallingFloor(4, 3, 1, 100, 8))
+        floors.advance_falling(terrain)
+        self.assertEqual(floors.landed, [])
 
     def test_the_entry_door_is_told_once_as_it_slams(self):
         state = CavernState()
