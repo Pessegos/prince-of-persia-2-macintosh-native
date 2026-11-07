@@ -296,3 +296,34 @@ Ideas the user liked and kept for after the torch and the dust, none built yet:
 the Prince's shadow on the rock, the Prince stirring the dust, the lava lighting
 the rock with the same engine, drops catching the light, heat haze over the lava
 and the flame, and sound tied to all of it.
+
+## Repeated column shadows: five-room review
+
+The user approved the V4 proposals on 2026-11-07. They retain the V2 wall
+continuation and adjust only the isolated bright sample that repeated as a
+one-pixel vertical strip. The broader V3 reduction was rejected. Preserve the
+accepted wall texture and lighting rather than reducing the whole treatment.
+
+These are placement-specific cached sprite crops. Imported resources, lit
+column bodies, transparency, actor occlusion and floor/climb/gate masks are
+unchanged. Existing approved source edits are composed into the updated crops.
+Room numbers below are native, one-based; only column 1 in each reviewed room
+is included. Other columns found during the inventory are not approved targets.
+
+| Level | Room | Column X / bottom | Added visible changes | Combined render RGB SHA256 |
+| --- | --- | --- | --- | --- |
+| 3 | 1 | 111 / 243 | 585 | `470358256d02d9371eabfc773426c3b6949e14c62852acbf6b9eac022ad44f02` |
+| 3 | 5 | 60 / 243 | 585 | `1dce1829805dde96885605ac6cd555351d5969147d14626401a2979da95a12a5` |
+| 3 | 13 | 213 / 243 | 591 | `d7dceac57950745d0880bdc06aea68f923d59006f722dda0a823b0d14e0f9298` |
+| 5 | 2 | 60 / 243 | 591 | `1f686b8ae78cb4885972c07d6d62baf4fb691568eb0aac6e745b6c25d08c324f` |
+| 5 | 23 | 60 / 243 | 593 | `cad5cd9c75b8de390f507820356915a8bf915adfe8eb29731e39a54f4b533f4e` |
+
+The enlarged comparisons and approval manifest remain local under
+`rendered/column-shadow-five-v4/`. Each row's hash uses the static cached room
+without separately animated scenery items, matching the gameplay renderer.
+
+Level5 room23 retains its earlier226 wall edits; the combined static artwork
+now differs from native at819 pixels. Its67 foreground changes are confined
+to the approved outer shadow fringe, with the column body and masks intact.
+These five-room goldens supersede the earlier level3 room1 and level5 room23
+whole-room hashes while preserving their other approved artwork.

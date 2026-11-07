@@ -47,10 +47,10 @@ class BundledCavernRetouchTests(unittest.TestCase):
                     self.assertIs(retouched_sprite(room, command, source, level_number=level), source)
                 self.assertIs(retouched_sprite(20, command, source, level_number=4), source)
 
-    def test_only_four_rooms_have_bundled_variants_with_valid_crop_sizes(self):
+    def test_bundled_variants_have_valid_scope_and_crop_sizes(self):
         assets = retouch_assets()
-        self.assertEqual(len(assets), 32)
-        self.assertEqual({key[0] for key in assets}, {0, 1, 27, 29})
+        self.assertEqual(len(assets), 46)
+        self.assertEqual({key[0] for key in assets}, {0, 1, 4, 12, 27, 29})
         for key, (record, image) in assets.items():
             with self.subTest(key=key):
                 x1, y1, x2, y2 = record['source_rect']
@@ -63,7 +63,7 @@ class BundledCavernRetouchTests(unittest.TestCase):
     def test_unaffected_rooms_do_not_even_load_retouch_assets(self):
         source = Image.new('RGBA', (5, 5), 'red')
         with patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Unexpected load')):
-            for room in set(range(32)) - {0, 1, 27, 29}:
+            for room in set(range(32)) - {0, 1, 4, 12, 27, 29}:
                 self.assertIs(retouched_sprite(room, [], source), source)
 
     def test_unmatched_sources_and_other_shape_libraries_are_untouched(self):
@@ -120,7 +120,7 @@ class CavernRetouchTests(unittest.TestCase):
                     self.assertEqual(old_mask.tobytes(), new_mask.tobytes())
 
     def test_local_variants_reproduce_approved_images_exactly(self):
-        hashes = {0: '18f6592d8c185dbb7c224e4550172cdbde0dfaff88c28a8695e30442f5bede7b',
+        hashes = {0: 'ea1a66ebf3682d25138344923e0be9a4a5076eab04ac7bcd3ef3edcd6f99e27c',
                   1: 'd3821666a9cd7439da9d4cf9331c6a3a1892d90db22e9b2a69830bffe3e6f2d5',
                   27: 'a0220428dd30bf81285c1f4f7c28ecbe82760a0030b80a646f78e544e24dba35',
                   29: '1f7cb6240cff9746a42fe39ca156c911680bddcfc784e48f3fc7d44caca1372e'}
@@ -298,8 +298,8 @@ class CavernRetouchTests(unittest.TestCase):
         self.assertEqual(opened.crop((35, 0, 151, 245)).tobytes(), closed.crop((35, 0, 151, 245)).tobytes())
         self.assertEqual(closed.crop((185, 135, 281, 220)).tobytes(), native.crop((185, 135, 281, 220)).tobytes())
 
-    def test_other_twenty_seven_rooms_remain_pixel_identical(self):
-        for room in set(range(32)) - {0, 1, 12, 27, 29}:
+    def test_unapproved_rooms_remain_pixel_identical(self):
+        for room in set(range(32)) - {0, 1, 4, 12, 27, 29}:
             with self.subTest(room=room):
                 native, edited = cavern_room(room), cavern_room(room, retouched=True)
                 self.assertEqual(native.background.tobytes(), edited.background.tobytes())
@@ -435,17 +435,17 @@ class CavernRetouchTests(unittest.TestCase):
         game = LevelRenderer(level, preload_room=False)
         reference = LevelRenderer(level, preload_room=False, retouch_caverns=False)
         for room in range(32):
-            expected = cavern_room(room, animated=True, retouched=room in (0, 1, 12, 27, 29))
+            expected = cavern_room(room, animated=True, retouched=room in (0, 1, 4, 12, 27, 29))
             self.assertEqual(game.room(room).flattened().tobytes(), expected.flattened().tobytes())
             self.assertEqual(reference.room(room).flattened().tobytes(), cavern_room(room, animated=True).flattened().tobytes())
 
     def test_retained_pixels_do_not_propagate_retouch_into_adjacent_rooms(self):
         level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 3)
         terrain = LevelMap(level.data)
-        for source in (0, 1, 12, 27, 29):
+        for source in (0, 1, 4, 12, 27, 29):
             for direction in ('left', 'right', 'up', 'down'):
                 destination = terrain.neighbor(source, direction)
-                if destination is None or destination in (0, 1, 12, 27, 29):
+                if destination is None or destination in (0, 1, 4, 12, 27, 29):
                     continue
                 with self.subTest(source=source, destination=destination):
                     game = LevelRenderer(level, preload_room=False)
@@ -454,3 +454,53 @@ class CavernRetouchTests(unittest.TestCase):
                     native.enter_room(source)
                     self.assertEqual(game.enter_room(destination).flattened().tobytes(),
                                      native.enter_room(destination).flattened().tobytes())
+
+
+# Native room numbers are converted to zero-based indices in the keys.
+# RGB hashes are the user's approved V4 previews, including existing retouches.
+COLUMN_SHADOWS = {
+    (3, 0): (111, '470358256d02d9371eabfc773426c3b6949e14c62852acbf6b9eac022ad44f02'),
+    (3, 4): (60, '1dce1829805dde96885605ac6cd555351d5969147d14626401a2979da95a12a5'),
+    (3, 12): (213, 'd7dceac57950745d0880bdc06aea68f923d59006f722dda0a823b0d14e0f9298'),
+    (5, 1): (60, '1f686b8ae78cb4885972c07d6d62baf4fb691568eb0aac6e745b6c25d08c324f'),
+    (5, 22): (60, 'cad5cd9c75b8de390f507820356915a8bf915adfe8eb29731e39a54f4b533f4e'),
+}
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
+class ColumnShadowArtworkTests(unittest.TestCase):
+    def test_runtime_reproduces_approved_frames_without_changing_physics_masks(self):
+        prince = load_resource_file('Prince.rsrc')
+        for (level, room), (_x, expected) in COLUMN_SHADOWS.items():
+            with self.subTest(level=level, room=room+1):
+                definition = LevelDefinition.read(prince, level)
+                renderer = LevelRenderer(definition, preload_room=False)
+                edited = renderer.room(room)
+                self.assertEqual(hashlib.sha256(edited.flattened().convert('RGB').tobytes()).hexdigest(),
+                                 expected)
+                native = cavern_room(room, level_number=level, animated=True)
+                CavernRetouchTests().assert_masks_equal(native, edited)
+                auditor = LevelRenderer(definition, preload_room=False, retouch_caverns=False)
+                self.assertEqual(auditor.room(room).flattened().tobytes(), native.flattened().tobytes())
+
+    def test_column_body_alpha_and_placement_guards_are_preserved(self):
+        for (level, room), (x, _expected) in COLUMN_SHADOWS.items():
+            with self.subTest(level=level, room=room+1):
+                program, resources, palette, shapes = cavern_assets(level)
+                command = next(c for c in program['rooms'][str(room)]
+                               if c[:5] == ['front', 3533, x, 243, 16])
+                source = cavern_command_sprite(command, resources, palette, shapes)
+                original = source.tobytes()
+                edited = retouched_sprite(room, command, source, level_number=level)
+                changes = [(px, py) for py in range(source.height) for px in range(source.width)
+                           if source.getpixel((px, py)) != edited.getpixel((px, py))]
+                self.assertEqual(len(changes), 67)
+                self.assertTrue(all(28 <= px < 37 and 57 <= py < 109 for px, py in changes))
+                self.assertEqual(edited.getchannel('A').tobytes(), source.getchannel('A').tobytes())
+                self.assertEqual(source.tobytes(), original)
+                shifted = command.copy()
+                shifted[2] += 1
+                self.assertIs(retouched_sprite(room, shifted, source, level_number=level), source)
+                changed = source.copy()
+                changed.putpixel((0, 0), (1, 2, 3, 255))
+                self.assertIs(retouched_sprite(room, command, changed, level_number=level), changed)
