@@ -176,81 +176,51 @@ DUST_POOL_STRENGTH = 0.6
 # the last, with him going that way, is a new step: walking carefully raises none.
 STEP_STRIDE = 10
 STEP_SPEED = 4
-# Something heavy coming down drives the air out along the floor: a thin cloud, not
-# grains. Many faint particles go out to both sides of its foot, at all speeds, and
-# rise as they slow, and what shows is how thick they are together, spread a little more
-# as they age. A slam drives a good cloud, a gate lowering itself a small one, and a
-# falling floor tile the most, with chips of rock flying out of it. His feet raise the
-# same cloud: a landing to both sides, more the faster he came down, and a step a
-# wisp behind him. Grains are to each side, and reach and height how far from its foot
-# it can show.
+# Whatever comes down knocks dust off the floor. This is a game of 1993 and it is drawn
+# like one: a few plain pixels of the palette, thrown out, that darken through the
+# colours of the rock and are gone. A smooth cloud, faded and blurred, looked far too
+# realistic. A slam knocks up the most after a falling tile, a gate lowering itself a
+# little, a landing a little to both sides and a step two or three specks behind him,
+# in darker colours so that they hardly show. Specks are to each side.
 @dataclass(frozen=True)
-class PuffKind:
-    grains: int
+class Puff:
+    specks: int
     fastest: float
     rise: tuple
     life: tuple
-    chips: int = 0
-    reach: int = 50
-    height: int = 36
+    inks: tuple
 
 
-SLAM_PUFF = PuffKind(110, 4.6, (0.1, 0.9), (30, 70), 4)
-SHUT_PUFF = PuffKind(40, 2.0, (0.05, 0.4), (22, 48))
-TILE_PUFF = PuffKind(130, 5.0, (0.15, 1.1), (30, 74), 6)
-STEP_PUFF = PuffKind(22, 1.0, (0.05, 0.3), (14, 30), reach=18, height=14)
-LANDING_PUFF = PuffKind(34, 2.6, (0.08, 0.5), (20, 46), reach=34, height=22)
-LANDING_FALL = 3
-MOST_LANDING_GRAINS = 54
-MOST_PUFFS = 10
-PUFF_SPEEDS = 1.3
-PUFF_DRAG = 0.88
-PUFF_LIFT = 0.03
-PUFF_STIR = 0.22
-PUFF_DEPTH = (-3, 6)
-PUFF_THINNING = 1.3
-# How wide the cloud starts and how soon it spreads: the times it is blurred, and one
-# more every so many ticks.
-PUFF_BLUR = 3
-PUFF_BLUR_EVERY = 4
-MOST_PUFF_BLUR = 10
-# How thick a cloud has to be to show, what share of what is behind it the thickest
-# part hides, and how much it breaks into pixels on the palette.
-PUFF_THICKNESS = 3.0
-PUFF_MOST = 0.48
-PUFF_DITHER = 14
-PUFF_LEAST = 0.01
-# How far below its foot a cloud can show.
-PUFF_BELOW = 10
-# An exit door faces the room, so the air comes out at the front of it, fanning out
-# from all along its foot: a share of the speed towards the viewer, foreshortened as
-# the floor is, and how far out over the floor it can come.
+PUFF_INKS = (67, 78, 88, 104)
+QUIET_PUFF_INKS = (78, 88, 104)
+SLAM_PUFF = Puff(9, 2.6, (0.2, 0.9), (8, 18), PUFF_INKS)
+SHUT_PUFF = Puff(4, 1.2, (0.1, 0.5), (6, 14), PUFF_INKS)
+TILE_PUFF = Puff(11, 2.8, (0.3, 1.1), (8, 20), PUFF_INKS)
+STEP_PUFF = Puff(2, 0.7, (0.15, 0.4), (4, 9), QUIET_PUFF_INKS)
+LANDING_PUFF = Puff(3, 1.6, (0.2, 0.7), (6, 12), QUIET_PUFF_INKS)
+LANDING_FALL = 24
+MOST_LANDING_SPECKS = 5
+MOST_SPECKS = 48
+SPECK_DRAG = 0.85
+SPECK_SINK = 0.03
+# In the light the first colour of a speck is warm.
+SPECK_WARM_LIGHT = 0.2
+# An exit door faces the room: two specks in three come out at the front, all along its
+# foot and fanning out, and the rest to the sides. A share of the speed goes towards
+# the viewer, foreshortened as the floor is, and they come this far out over the floor.
 PUFF_FORWARD = 0.5
-PUFF_FORWARD_REACH = 18
-PUFF_CHIP_SPEED = (1.2, 3.4)
-PUFF_CHIP_RISE = (0.3, 1.1)
-PUFF_CHIP_LIFE = (8, 20)
-PUFF_CHIP_SOFTNESS = 0.36
+PUFF_FORWARD_FAN = 0.6
+PUFF_FORWARD_REACH = (4, 16)
 # The foot of a gate, in pixels from the left of its column. A slab stands slanted,
 # its near corner on the left and this far below the walking line, its far corner as
-# far above it, and an exit door stands back from that line. Dust cannot go through a
-# slab: its bottom edge runs between these two heights, taken from the corners.
+# far above it, and an exit door stands back from that line.
 EXIT_DOOR = 17
 GATE_FOOT = (28, 92)
 GATE_SLANT = 7
-GATE_EDGE = (3, -8)
 EXIT_DOOR_FOOT = (27, 77)
 EXIT_DOOR_BACK = 8
 # The foot of a floor tile that fell, from the left of its column.
 TILE_FOOT = (4, 80)
-# Chips thrown off the floor slow in the air, and start this far above the walking
-# line, in pixels.
-KICKED_DEPTH = (1, 6)
-KICKED_DRAG = 0.9
-KICKED_SINK = 0.012
-KICKED_STRENGTH = 0.4
-KICKED_FADE_IN = 2
-MOST_KICKED = 30
 # The air he runs through is dragged along with him: how far around the middle of
 # his body, in pixels, and what share of his speed it reaches.
 WAKE_REACH = (30, 40)
@@ -335,7 +305,7 @@ DUST_HOT_INK = 210
 ASH_INKS = (192, 189, 186, 212, 211, 110)
 ALL_INKS = frozenset((*DROP_INKS, *SWELL_INKS, *SPLASH_INKS, *STEAM_INKS, *FLASH_INKS, *ASH_INKS, DROP_LAVA_INK,
                       *(kind.ink for kind in DUST_KINDS), DUST_PALE_INK, DUST_WARM_INK, DUST_SHINE_INK,
-                      DUST_HOT_INK))
+                      DUST_HOT_INK, *PUFF_INKS))
 
 
 class Colours:
@@ -816,16 +786,15 @@ class Footing:
 
 @dataclass(frozen=True)
 class Thud:
-    """Something heavy that came down this tick, read from the game and never written
-    back: the two sides of its foot, the floor at each, whether it is a slab, and the
-    one side it goes to if not both."""
+    """Something that came down this tick, read from the game and never written back:
+    the two sides of its foot, the floor at each, and the one side the dust goes to if
+    not both."""
 
     left: int
     right: int
     left_floor: int
     right_floor: int
-    kind: PuffKind
-    slab: bool = False
+    kind: Puff
     only: int = 0
     forward: bool = False
 
@@ -838,7 +807,7 @@ def door_coming_down(kind, cell, slammed):
         return Thud(column * TILE_WIDTH + EXIT_DOOR_FOOT[0], column * TILE_WIDTH + EXIT_DOOR_FOOT[1],
                     floor - EXIT_DOOR_BACK, floor - EXIT_DOOR_BACK, puff, forward=True)
     return Thud(column * TILE_WIDTH + GATE_FOOT[0], column * TILE_WIDTH + GATE_FOOT[1],
-                floor + GATE_SLANT, floor - GATE_SLANT, puff, slab=True)
+                floor + GATE_SLANT, floor - GATE_SLANT, puff)
 
 
 def tile_landing(cell):
@@ -847,85 +816,17 @@ def tile_landing(cell):
     return Thud(column * TILE_WIDTH + TILE_FOOT[0], column * TILE_WIDTH + TILE_FOOT[1], floor, floor, TILE_PUFF)
 
 
-class Puff:
-    """A cloud of dust: its particles, and the part of the screen it can reach."""
-
-    def __init__(self, thud, rng):
-        kind = thud.kind
-        self.stir = numpy.random.default_rng(rng.getrandbits(32))
-        count = kind.grains if thud.only else kind.grains * 2
-        sides = numpy.full(count, float(thud.only)) if thud.only else numpy.where(numpy.arange(count) % 2 == 0, -1.0, 1.0)
-        stir = self.stir
-        self.floor = numpy.where(sides < 0, thud.left_floor, thud.right_floor) + stir.uniform(*PUFF_DEPTH, count)
-        self.x = numpy.where(sides < 0, thud.left, thud.right) + sides * stir.uniform(0, 3, count)
-        self.y = self.floor.copy()
-        speeds = stir.random(count) ** PUFF_SPEEDS * kind.fastest
-        self.dx = sides * speeds
-        self.dy = -stir.uniform(*kind.rise, count)
-        if thud.forward:
-            across = stir.random(count)
-            self.x = thud.left + (thud.right - thud.left) * across
-            self.dx = (2 * across - 1) * speeds
-            self.dy = speeds * PUFF_FORWARD
-            self.floor = self.y + stir.uniform(0.2, 1, count) * PUFF_FORWARD_REACH
-        self.age = numpy.zeros(count)
-        self.life = stir.uniform(*kind.life, count)
-        self.ticks = 0
-        self.left = max(0, thud.left - kind.reach)
-        self.right = min(WIDTH, thud.right + kind.reach)
-        floor = max(thud.left_floor, thud.right_floor)
-        self.top = max(0, min(thud.left_floor, thud.right_floor) - kind.height)
-        self.bottom = min(HEIGHT, floor + PUFF_BELOW + (PUFF_FORWARD_REACH if thud.forward else 0))
-        self.hidden = self.behind(thud) if thud.slab else None
-
-    def behind(self, thud):
-        """[y, x] of what stands behind the slab that came down."""
-        rows, columns = numpy.mgrid[self.top:self.bottom, self.left:self.right]
-        along = (columns - thud.left) / (thud.right - thud.left)
-        near, far = thud.left_floor + GATE_EDGE[0], thud.right_floor + GATE_EDGE[1]
-        return (0 <= along) & (along < 1) & (rows < near + (far - near) * along)
-
-    def advance(self):
-        self.ticks += 1
-        count = len(self.x)
-        self.age += 1
-        self.dx *= PUFF_DRAG
-        self.dy = self.dy * PUFF_DRAG - PUFF_LIFT
-        self.x += self.dx + self.stir.normal(0, PUFF_STIR, count)
-        self.y = numpy.minimum(self.y + self.dy + self.stir.normal(0, PUFF_STIR, count), self.floor)
-        alive = self.age < self.life
-        for name in ('x', 'y', 'dx', 'dy', 'age', 'life', 'floor'):
-            setattr(self, name, getattr(self, name)[alive])
-
-    def thickness(self):
-        """[y, x] of how much dust there is at each pixel it can reach."""
-        height, width = self.bottom - self.top, self.right - self.left
-        x, y = self.x - self.left, self.y - self.top
-        column, row = numpy.floor(x).astype(numpy.int32), numpy.floor(y).astype(numpy.int32)
-        inside = (0 <= column) & (column < width - 1) & (0 <= row) & (row < height - 1)
-        column, row, x, y = column[inside], row[inside], (x - column)[inside], (y - row)[inside]
-        weight = ((1 - self.age / self.life) ** PUFF_THINNING)[inside]
-        thick = numpy.zeros((height, width))
-        numpy.add.at(thick, (row, column), weight * (1 - x) * (1 - y))
-        numpy.add.at(thick, (row, column + 1), weight * x * (1 - y))
-        numpy.add.at(thick, (row + 1, column), weight * (1 - x) * y)
-        numpy.add.at(thick, (row + 1, column + 1), weight * x * y)
-        for _ in range(min(MOST_PUFF_BLUR, PUFF_BLUR + self.ticks // PUFF_BLUR_EVERY)):
-            thick[:, 1:-1] = (thick[:, :-2] + 2 * thick[:, 1:-1] + thick[:, 2:]) / 4
-            thick[1:-1, :] = (thick[:-2, :] + 2 * thick[1:-1, :] + thick[2:, :]) / 4
-        return thick
-
-
 @dataclass
-class Kicked:
-    """A chip of rock thrown off the floor."""
+class Speck:
+    """A plain pixel of dust knocked off the floor."""
 
     x: float
     y: float
     dx: float
     dy: float
     life: float
-    floor: int
+    floor: float
+    inks: tuple
     age: int = 0
 
 
@@ -1041,8 +942,7 @@ class CavernAmbience:
     ash: list = field(default_factory=list)
     flecks: list = field(default_factory=list)
     flickers: list = field(default_factory=list)
-    kicked: list = field(default_factory=list)
-    puffs: list = field(default_factory=list)
+    specks: list = field(default_factory=list)
     footing: Footing | None = None
     # The air he is dragging along this tick: where his body is, and how far he moved.
     wake: tuple | None = None
@@ -1273,75 +1173,48 @@ class CavernAmbience:
                        only=-1 if moved > 0 else 1))
 
     def land_on(self, footing, speed):
-        grains = min(MOST_LANDING_GRAINS, LANDING_PUFF.grains + speed // LANDING_FALL)
+        specks = min(MOST_LANDING_SPECKS, LANDING_PUFF.specks + speed // LANDING_FALL)
         self.thud(Thud(footing.foot - 3, footing.foot + 3, footing.floor, footing.floor,
-                       replace(LANDING_PUFF, grains=grains)))
+                       replace(LANDING_PUFF, specks=specks)))
 
     def thud(self, thud):
-        """Dust driven out along the floor. There is none on the lava."""
+        """Dust knocked off the floor. There is none on the lava."""
         if surface_under(self.air.pools, (thud.left + thud.right) // 2) is not None:
             return
-        rng = self.rng
-        puff = Puff(thud, rng)
-        # Off the side of the screen there is nothing to show.
-        if len(self.puffs) >= MOST_PUFFS or puff.right - puff.left < 3 or puff.bottom - puff.top < 3:
-            return
-        self.puffs.append(puff)
-        for chip in range(thud.kind.chips):
-            side = 1 if chip % 2 else -1
+        rng, kind = self.rng, thud.kind
+        sides = (thud.only,) * kind.specks if thud.only else (-1, 1) * kind.specks
+        for index, side in enumerate(sides):
+            if len(self.specks) >= MOST_SPECKS:
+                return
+            speed = rng.uniform(0.25, 1) * kind.fastest
+            life = rng.uniform(*kind.life)
             x, floor = (thud.right, thud.right_floor) if side > 0 else (thud.left, thud.left_floor)
-            if len(self.kicked) < MOST_KICKED:
-                self.kicked.append(Kicked(x, floor - rng.uniform(*KICKED_DEPTH), side * rng.uniform(*PUFF_CHIP_SPEED),
-                                          -rng.uniform(*PUFF_CHIP_RISE), rng.uniform(*PUFF_CHIP_LIFE), floor))
+            if thud.forward and index % 3:
+                across = rng.random()
+                self.specks.append(Speck(thud.left + (thud.right - thud.left) * across, floor + rng.uniform(0, 4),
+                                         (2 * across - 1) * speed * PUFF_FORWARD_FAN, speed * PUFF_FORWARD, life,
+                                         floor + rng.uniform(*PUFF_FORWARD_REACH), kind.inks))
+            else:
+                self.specks.append(Speck(x + side * rng.uniform(0, 3), floor - rng.uniform(0, 3), side * speed,
+                                         -rng.uniform(*kind.rise), life, floor, kind.inks))
 
-    def advance_puffs(self):
-        for puff in self.puffs:
-            puff.advance()
-        self.puffs = [puff for puff in self.puffs if len(puff.x)]
+    def advance_specks(self):
+        specks = []
+        for speck in self.specks:
+            speck.age += 1
+            speck.dx *= SPECK_DRAG
+            speck.dy = speck.dy * SPECK_DRAG + SPECK_SINK
+            speck.x += speck.dx
+            speck.y = min(speck.y + speck.dy, speck.floor)
+            if speck.age < speck.life:
+                specks.append(speck)
+        self.specks = specks
 
-    def puff_colour(self, puff):
-        """The dust of the rock, warm in the light."""
-        flame, pool = self.light_at((puff.left + puff.right) // 2, min(HEIGHT - 1, puff.top + (puff.bottom - puff.top) // 2))
-        light = max(flame, pool)
-        inks = self.air.inks
-        return numpy.array(mix(inks[DUST_PALE_INK], inks[DUST_WARM_INK if flame >= pool else DUST_HOT_INK],
-                               min(1.0, light / DUST_FOCUS_LIGHT)), dtype=numpy.float64)
-
-    def draw_puff(self, frame, puff):
-        box = puff.left, puff.top, puff.right, puff.bottom
-        pixels = numpy.array(frame.crop(box))
-        shown = pixels[..., :3].astype(numpy.int32)
-        amount = PUFF_MOST * (1 - numpy.exp(-puff.thickness() * PUFF_THICKNESS))
-        covered = numpy.frombuffer(self.air.covered, dtype=numpy.uint8).reshape(HEIGHT, WIDTH)
-        amount[covered[puff.top:puff.bottom, puff.left:puff.right] != 0] = 0
-        if puff.hidden is not None:
-            amount[puff.hidden] = 0
-        rows, columns = numpy.mgrid[puff.top:puff.bottom, puff.left:puff.right]
-        grain = (BAYER[rows % 4, columns % 4] - 0.5) * PUFF_DITHER * (amount > PUFF_LEAST)
-        wanted = shown + (self.puff_colour(puff) - shown) * amount[..., None] + grain[..., None]
-        pixels[..., :3] = self.air.colours.settle(shown, wanted.clip(0, 255))
-        frame.paste(Image.fromarray(pixels), box[:2])
-
-    def advance_kicked(self):
-        kicked = []
-        for grain in self.kicked:
-            grain.age += 1
-            grain.dx *= KICKED_DRAG
-            grain.dy = grain.dy * KICKED_DRAG + KICKED_SINK
-            grain.x += grain.dx
-            grain.y = min(grain.y + grain.dy, grain.floor)
-            if grain.age < grain.life:
-                kicked.append(grain)
-        self.kicked = kicked
-
-    def kicked_colour(self, grain):
-        """(red, green, blue, strength) of a kicked grain: rock dust, warm in the light."""
-        flame, pool = self.light_at(grain.x, grain.y)
-        light = max(flame, pool)
-        inks = self.air.inks
-        shown = mix(inks[DUST_PALE_INK], inks[DUST_WARM_INK if flame >= pool else DUST_HOT_INK],
-                    min(1.0, light / DUST_FOCUS_LIGHT))
-        return (*shown, KICKED_STRENGTH * smooth(min(1.0, grain.age / KICKED_FADE_IN, (grain.life - grain.age) / (grain.life / 2))))
+    def speck_ink(self, speck):
+        stage = min(len(speck.inks) - 1, int(speck.age * len(speck.inks) / speck.life))
+        if stage == 0 and max(self.light_at(int(speck.x), int(speck.y))) >= SPECK_WARM_LIGHT:
+            return DUST_WARM_INK
+        return speck.inks[stage]
 
     # Ash
 
@@ -1440,8 +1313,7 @@ class CavernAmbience:
         for fall in self.falls:
             self.advance_fall(fall, terrain)
         self.advance_dust(terrain)
-        self.advance_kicked()
-        self.advance_puffs()
+        self.advance_specks()
         self.advance_ash()
         self.advance_flecks()
 
@@ -1457,6 +1329,8 @@ class CavernAmbience:
         for fleck in self.flecks:
             yield (int(fleck.x), int(fleck.y),
                    fleck.inks[min(len(fleck.inks) - 1, fleck.age * len(fleck.inks) // fleck.life)])
+        for speck in self.specks:
+            yield int(speck.x), int(speck.y), self.speck_ink(speck)
 
     def caught(self, x, y, ink):
         """The front of a drop where it is now: water catches the fire it falls past."""
@@ -1557,13 +1431,9 @@ class CavernAmbience:
             self.shed_light(frame, glow, light_steps(glow.falloff, glow.dither, self.pool_strength()))
         for haze in air.hazes:
             self.shimmer(frame, haze)
-        for puff in self.puffs:
-            self.draw_puff(frame, puff)
         canvas = frame.load()
         for mote in self.motes:
             self.dust_spot(canvas, mote)
-        for grain in self.kicked:
-            self.blot(canvas, grain.x, grain.y, PUFF_CHIP_SOFTNESS, self.kicked_colour(grain), on_the_screen)
         for x, y, ink in self.crisp_pixels():
             if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                 canvas[x, y] = inks[ink]
