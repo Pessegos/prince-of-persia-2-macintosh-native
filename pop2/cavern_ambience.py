@@ -246,15 +246,15 @@ AIR_LIGHT_SPREAD = 6.0
 # a plate.
 POOL_GLOW_GAIN, POOL_GLOW_ADD = (1.14, 1.05, 1.0), (24.0, 7.0, 0.0)
 BAYER = numpy.array(((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5)), dtype=numpy.float32) / 16
-# Hot air bends what is seen through it. Pixels over the fire slide one pixel to the
-# side and back, in waves that rise: they are only moved, so the rule on the palette
-# holds without trying. Strength is how far the air would bend them, in pixels, and a
-# pixel moves once that passes a half, so just over a half keeps it to the crest of
-# each wave, close to the fire: at 1.1 and 0.9 the user found it far too much. Heights
-# and sides are in pixels, the waves in rows and rows a tick.
-HAZE_OVER_FLAME = dict(height=30, strength=0.66)
+# Hot air bends what is seen through it, in waves that rise. All the air over the fire
+# bends, by less than a pixel: each pixel leans part of the way towards its neighbour
+# and lands on the nearest colour of the palette. Whole pixels sliding aside were far
+# too much, and keeping them to the crest of each wave only made the effect smaller.
+# Strength is how far the air bends a pixel, in pixels. Heights and sides are in
+# pixels, the waves in rows and rows a tick.
+HAZE_OVER_FLAME = dict(height=30, strength=0.5)
 HAZE_FLAME_WIDTH = 11
-HAZE_OVER_POOL = dict(height=22, strength=0.6)
+HAZE_OVER_POOL = dict(height=22, strength=0.4)
 HAZE_EDGE = 7
 HAZE_WAVE = 9
 HAZE_RISE = 1.3
@@ -290,7 +290,9 @@ class Colours:
         # painted cracks: lifting them broke their thin lines into dots, and rock
         # must not turn into them.
         self.receives = (self.rgb[:, 0] < 240) & ~((self.rgb[:, 0] >= 100) & (self.rgb[:, 1] * 10 <= self.rgb[:, 0]))
-        self.cube = self.nearest_cube().tobytes()
+        cube = self.nearest_cube()
+        self.cube = cube.tobytes()
+        self.cube_colours = cube.reshape(-1, 3).astype(numpy.int32)
         self.firelight = self.light_table(AURA_GAIN, AURA_ADD)
         self.lavalight = self.light_table(POOL_GLOW_GAIN, POOL_GLOW_ADD)
 
@@ -319,6 +321,15 @@ class Colours:
             lit = self.rgb * (1 + (numpy.array(gain) - 1) * amount) + numpy.array(add) * amount
             table[level] = rock[self.closest(lit.clip(0, 255).astype(numpy.int32), rock)]
         return table
+
+    def settle(self, shown, wanted):
+        """[y, x, RGB] of the palette colours for what is wanted. A pixel keeps the
+        colour it shows unless the table has a nearer one, or a pixel that hardly
+        leaned could land further off than it started."""
+        wanted = wanted.astype(numpy.int32)
+        found = self.cube_colours[(wanted[..., 0] >> 3) << 10 | (wanted[..., 1] >> 3) << 5 | wanted[..., 2] >> 3]
+        nearer = ((found - wanted) ** 2).sum(axis=-1) < ((shown - wanted) ** 2).sum(axis=-1)
+        return numpy.where(nearer[..., None], found, shown)
 
     def nearest(self, red, green, blue):
         offset = ((red >> 3) << 10 | (green >> 3) << 5 | blue >> 3) * 3
@@ -1308,10 +1319,13 @@ class CavernAmbience:
         height, width = haze.bend.shape
         rows = numpy.arange(haze.top, haze.top + height)[:, None]
         waves = numpy.sin((rows + self.tick * HAZE_RISE) * math.tau / HAZE_WAVE + haze.phase)
-        moves = numpy.rint(haze.bend * waves).astype(numpy.int32)
+        lean = haze.bend * waves
         pixels = numpy.array(frame.crop(haze.box))
+        shown = pixels[..., :3].astype(numpy.int32)
         down, across = numpy.mgrid[:height, :width]
-        frame.paste(Image.fromarray(pixels[down, (across + moves).clip(0, width - 1)]), haze.box[:2])
+        beside = shown[down, (across + numpy.sign(lean).astype(numpy.int32)).clip(0, width - 1)]
+        pixels[..., :3] = self.air.colours.settle(shown, shown + (beside - shown) * numpy.abs(lean)[..., None])
+        frame.paste(Image.fromarray(pixels), haze.box[:2])
 
     def dust_spot(self, canvas, mote):
         resting = mote.rest is not None

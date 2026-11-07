@@ -1547,10 +1547,9 @@ class HazeTests(unittest.TestCase):
         return haze_over(self.TOPS if tops is None else tops, in_front, height, strength)
 
     def striped(self):
-        """A frame in which every column has its own colour, to see where pixels go."""
+        """Columns of the palette's colours, side by side."""
         frame = numpy.zeros((HEIGHT, WIDTH, 4), dtype=numpy.uint8)
-        frame[..., 0] = numpy.arange(WIDTH)[None, :] % 251
-        frame[..., 1] = numpy.arange(WIDTH)[None, :] // 251
+        frame[..., :3] = COLOURS.rgb[numpy.arange(WIDTH) % len(COLOURS.rgb)][None, :]
         frame[..., 3] = 255
         return Image.fromarray(frame)
 
@@ -1561,23 +1560,51 @@ class HazeTests(unittest.TestCase):
         scene.shimmer(frame, haze)
         return numpy.array(frame).astype(numpy.int32), numpy.array(self.striped()).astype(numpy.int32)
 
-    def test_a_pixel_moves_one_pixel_at_the_most(self):
-        for options in (HAZE_OVER_FLAME, HAZE_OVER_POOL):
-            for tick in range(40):
-                after, before = self.moved(self.haze(**options), tick)
-                self.assertLessEqual(numpy.abs(after[..., 0] - before[..., 0]).max(), 1)
+    def test_it_bends_by_less_than_a_pixel(self):
+        self.assertLess(HAZE_OVER_FLAME['strength'], 1)
+        self.assertLess(HAZE_OVER_POOL['strength'], 1)
 
-    def test_pixels_are_only_moved_so_no_new_colour_appears(self):
-        after, before = self.moved(self.haze(), 7)
-        self.assertLessEqual({tuple(pixel) for pixel in after.reshape(-1, 4)},
-                             {tuple(pixel) for pixel in before.reshape(-1, 4)})
+    def test_every_colour_is_of_the_palette(self):
+        after, _before = self.moved(self.haze(**HAZE_OVER_POOL), 7)
+        known = {tuple(int(value) for value in colour) + (255,) for colour in COLOURS.rgb}
+        self.assertLessEqual({tuple(int(value) for value in pixel) for pixel in after.reshape(-1, 4)}, known)
 
-    def test_it_is_light_only_some_of_the_air_moves(self):
-        after, before = self.moved(self.haze(**HAZE_OVER_POOL), 7)
-        rows = (after != before).any(axis=2)
-        share = rows.sum() / self.haze(**HAZE_OVER_POOL).bend.size
-        self.assertGreater(share, 0.01)
-        self.assertLess(share, 0.08)
+    def test_plain_rock_stays_as_it_is(self):
+        scene = still_ambience(room_air(hazes=[self.haze()]))
+        frame = wall_frame()
+        scene.shimmer(frame, self.haze())
+        self.assertEqual(colours_in(frame), {WALL})
+
+    def test_a_pixel_that_hardly_leans_never_lands_further_off(self):
+        shown = numpy.array([[[int(value) for value in colour] for colour in COLOURS.rgb]])
+        wanted = (shown + 1).clip(0, 255)
+        settled = COLOURS.settle(shown, wanted)
+        self.assertLessEqual(int(((settled - wanted) ** 2).sum(axis=2).max()), int(((shown - wanted) ** 2).sum(axis=2).max()))
+
+    def test_it_is_all_of_the_air_not_only_the_crests(self):
+        # Keeping whole pixels to the crest of each wave only made the effect smaller.
+        haze = self.haze(**HAZE_OVER_POOL)
+        changed = numpy.zeros(haze.bend.shape, dtype=bool)
+        left, top, right, bottom = haze.box
+        for tick in range(20):
+            after, before = self.moved(haze, tick)
+            changed |= (after != before).any(axis=2)[top:bottom, left:right]
+        reached = haze.bend > 0.1
+        self.assertGreater(changed[reached].mean(), 0.3)
+
+    def test_a_pixel_goes_only_part_of_the_way_to_its_neighbour(self):
+        frame = numpy.zeros((HEIGHT, WIDTH, 4), dtype=numpy.uint8)
+        frame[..., :3] = numpy.where((numpy.arange(WIDTH) % 2 == 0)[None, :, None], WALL[:3], ROCK[:3])
+        frame[..., 3] = 255
+        image = Image.fromarray(frame)
+        haze = self.haze(strength=0.25)
+        scene = still_ambience(room_air(hazes=[haze]))
+        scene.tick = 3
+        scene.shimmer(image, haze)
+        after = numpy.asarray(image).astype(int)[..., 0]
+        left, top, right, bottom = haze.box
+        swing = abs(ROCK[0] - WALL[0])
+        self.assertLess(numpy.abs(after - frame[..., 0].astype(int))[top:bottom, left:right].max(), swing)
 
     def test_it_thins_out_as_it_rises_and_ends(self):
         bend = self.haze().bend.max(axis=1)
@@ -1799,17 +1826,17 @@ class EveryRoomTests(unittest.TestCase):
             for haze in air.hazes:
                 left, top, right, bottom = haze.box
                 self.assertTrue(0 <= left < right <= WIDTH and 0 <= top < bottom <= HEIGHT, place)
-                self.assertLess(float(haze.bend.max()), 1.5, place)
+                self.assertLess(float(haze.bend.max()), 1, place)
 
     def test_hot_air_over_a_pool_shows_and_over_most_torches_too(self):
         def moves(haze):
-            return int((haze.bend >= 0.5).sum())
+            return int((haze.bend >= 0.1).sum())
 
         pools = [moves(haze) for air in self.rooms.values() for haze in air.hazes[:len(air.pools)]]
         torches = [moves(haze) for air in self.rooms.values() for haze in air.hazes[len(air.pools):]]
-        self.assertGreater(min(pools), 150)
+        self.assertGreater(min(pools), 500)
         # A flame just under a ceiling has only that ceiling over it, in front of the air.
-        self.assertGreater(sum(count > 50 for count in torches), 40)
+        self.assertGreater(sum(count > 100 for count in torches), 40)
 
     def test_every_drop_falls_where_it_can_be_seen(self):
         for place, air in self.rooms.items():
