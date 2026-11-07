@@ -97,7 +97,7 @@ class DustKind:
 DUST_SOFTNESS = 0.8
 DUST_SHARPNESS = 0.36
 FINE_DUST = DustKind(21, (0.13, 0.26), 270, DUST_SHARPNESS, 1.0, 104, 0.0, 0.1, 1.0)
-COARSE_DUST = DustKind(5, (0.11, 0.2), 405, DUST_SOFTNESS, 0.62, 67, 0.8, 0.06, 0.0)
+COARSE_DUST = DustKind(5, (0.11, 0.2), 240, DUST_SOFTNESS, 0.62, 67, 0.8, 0.06, 0.0)
 DUST_KINDS = (FINE_DUST, COARSE_DUST)
 MOST_DUST = sum(kind.count for kind in DUST_KINDS)
 # A room with no fire has less of it, and none that shines: with nothing to light
@@ -107,12 +107,15 @@ QUIET_DUST = (replace(FINE_DUST, count=FINE_DUST.count // 2, brightest=0.3), rep
 # power. The brightest last this long, and life falls fast as they brighten.
 DUST_SKEW = 2.5
 DUST_BRIGHT_LIFE = 27
-DUST_LIFE_CURVE = 0.6
+DUST_LIFE_CURVE = 0.42
 DUST_LIFE_SPREAD = (0.8, 1.2)
 DUST_LONGEST_LIFE = int(max(kind.life for kind in DUST_KINDS) * DUST_LIFE_SPREAD[1])
-# How much of its span a grain takes to come, and to go.
+# How much of its span a grain takes to come, and to go, and no more than this many
+# ticks: a long-lived grain half seen for ten seconds was what stayed too long.
 DUST_FADE_IN = 0.14
 DUST_FADE_OUT = 0.24
+DUST_LONGEST_FADE_IN = 20
+DUST_LONGEST_FADE_OUT = 30
 # A new grain needs this much clear air ahead, or it could only flash by.
 DUST_SHORTEST_LIFE = 140
 # Dust gathers in a few pockets of still air, this far apart at the least, and a
@@ -174,9 +177,13 @@ DUST_POOL_STRENGTH = 0.6
 STEP_STRIDE = 10
 STEP_SPEED = 4
 STEP_GRAINS = (2, 3)
-STEP_THROW = (0.3, 1.0)
-STEP_RISE = (0.15, 0.5)
+STEP_THROW = (0.25, 0.8)
+STEP_RISE = (0.12, 0.4)
 STEP_LIFE = (12, 26)
+# Smaller and fainter than the rest of the dust: a spot this tight would otherwise
+# only read as a brighter dot.
+STEP_SOFTNESS = 0.6
+STEP_STRENGTH = 0.5
 # A landing throws it out to both sides, more the faster he came down.
 LANDING_GRAINS = 8
 LANDING_FALL = 12
@@ -766,6 +773,8 @@ class Kicked:
     life: float
     floor: int
     age: int = 0
+    softness: float = DUST_SOFTNESS
+    strength: float = KICKED_STRENGTH
 
 
 @dataclass
@@ -1071,8 +1080,8 @@ class CavernAmbience:
         flame, pool = self.light_at(mote.x, mote.y)
         light = max(flame, pool)
         span = lifespan(kind, mote.brightness)
-        fade = smooth(min(1.0, mote.age / (span * DUST_FADE_IN), (mote.life - mote.age) / (span * DUST_FADE_OUT),
-                          mote.settling))
+        fade = smooth(min(1.0, mote.age / min(span * DUST_FADE_IN, DUST_LONGEST_FADE_IN),
+                          (mote.life - mote.age) / min(span * DUST_FADE_OUT, DUST_LONGEST_FADE_OUT), mote.settling))
         inks = self.air.inks
         # The floor is brighter than the air, and only a warm pale speck shows on it.
         if mote.rest is not None:
@@ -1106,17 +1115,18 @@ class CavernAmbience:
             if abs(stride) >= STEP_STRIDE and stride * moved > 0:
                 self.step_on(footing, moved)
 
-    def throw(self, footing, dx, rise, life):
+    def throw(self, footing, dx, rise, life, softness=DUST_SOFTNESS, strength=KICKED_STRENGTH):
         if len(self.kicked) < MOST_KICKED:
             rng = self.rng
             self.kicked.append(Kicked(footing.foot + rng.uniform(-3, 3), footing.floor - rng.uniform(*KICKED_DEPTH),
-                                      dx, -rng.uniform(*rise), rng.uniform(*life), footing.floor))
+                                      dx, -rng.uniform(*rise), rng.uniform(*life), footing.floor,
+                                      softness=softness, strength=strength))
 
     def step_on(self, footing, moved):
         rng = self.rng
         behind = -1 if moved > 0 else 1
         for _ in range(rng.randint(*STEP_GRAINS)):
-            self.throw(footing, behind * rng.uniform(*STEP_THROW), STEP_RISE, STEP_LIFE)
+            self.throw(footing, behind * rng.uniform(*STEP_THROW), STEP_RISE, STEP_LIFE, STEP_SOFTNESS, STEP_STRENGTH)
 
     def land_on(self, footing, speed):
         rng = self.rng
@@ -1144,7 +1154,7 @@ class CavernAmbience:
         inks = self.air.inks
         shown = mix(inks[DUST_PALE_INK], inks[DUST_WARM_INK if flame >= pool else DUST_HOT_INK],
                     min(1.0, light / DUST_FOCUS_LIGHT))
-        return (*shown, KICKED_STRENGTH * smooth(min(1.0, grain.age / KICKED_FADE_IN, (grain.life - grain.age) / (grain.life / 2))))
+        return (*shown, grain.strength * smooth(min(1.0, grain.age / KICKED_FADE_IN, (grain.life - grain.age) / (grain.life / 2))))
 
     # Ash
 
@@ -1361,7 +1371,7 @@ class CavernAmbience:
         for mote in self.motes:
             self.dust_spot(canvas, mote)
         for grain in self.kicked:
-            self.blot(canvas, grain.x, grain.y, DUST_SOFTNESS, self.kicked_colour(grain), on_the_screen)
+            self.blot(canvas, grain.x, grain.y, grain.softness, self.kicked_colour(grain), on_the_screen)
         for x, y, ink in self.crisp_pixels():
             if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                 canvas[x, y] = inks[ink]

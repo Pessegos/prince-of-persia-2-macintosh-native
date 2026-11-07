@@ -13,10 +13,12 @@ from PIL import Image
 
 from pop2.cavern_ambience import (
     AMBIENCE_LEVELS, ALL_INKS, ASH_INKS, Air, Ash, COARSE_DUST, CavernAmbience, Colours, DUST_BRIGHT_LIFE,
-    DUST_FADE_IN, DUST_FADE_OUT, DUST_HEADING, DUST_LIFE_SPREAD, DUST_PALE_INK, DUST_PATCH, DUST_POCKETS,
+    DUST_HEADING, DUST_LIFE_SPREAD, DUST_LONGEST_FADE_IN, DUST_LONGEST_FADE_OUT, DUST_PALE_INK, DUST_PATCH, DUST_POCKETS,
+    DUST_SKEW,
     DROP_INKS, DROP_LAVA_INK, DROP_SHINE_LIGHT, DROP_WARM_LIGHT, SWELL_INKS,
     DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
-    Footing, KICKED_DEPTH, Kicked, LANDING_FALL, LANDING_GRAINS, MOST_KICKED, MOST_LANDING_GRAINS, STEP_GRAINS,
+    Footing, KICKED_DEPTH, Kicked, LANDING_FALL, LANDING_GRAINS, LANDING_THROW, MOST_KICKED, MOST_LANDING_GRAINS,
+    STEP_GRAINS, STEP_SOFTNESS, STEP_STRENGTH, STEP_THROW,
     WAKE_REACH,
     HAZE_OVER_FLAME, HAZE_OVER_POOL, HAZE_RISE, HAZE_WAVE, QUIET_DUST, flame_of, haze_of, haze_over, room_torches,
     shows,
@@ -410,16 +412,33 @@ class DustTests(unittest.TestCase):
         scene = still_ambience(room_air(flames=[(300, 200)]))
         mote = Mote(310.0, 200.0, 0.0, 0.0, 0.0, 300.0, COARSE_DUST)
         strengths = []
-        for age in range(0, 301, 2):
+        for age in range(0, 301):
             mote.age = age
             strengths.append(scene.dust_colour(mote)[3])
         self.assertEqual(strengths[0], 0)
         self.assertAlmostEqual(strengths[-1], 0, places=6)
-        rising = strengths[:int(COARSE_DUST.life * DUST_FADE_IN) // 2 + 1]
-        falling = strengths[-(int(COARSE_DUST.life * DUST_FADE_OUT) // 2 + 1):]
+        rising = strengths[:DUST_LONGEST_FADE_IN + 1]
+        falling = strengths[-(DUST_LONGEST_FADE_OUT + 1):]
         self.assertEqual(rising, sorted(rising))
         self.assertEqual(falling, sorted(falling, reverse=True))
         self.assertLess(max(abs(after - before) for before, after in zip(strengths, strengths[1:])), 0.05)
+
+    def test_no_grain_stays_half_seen_for_long(self):
+        # The user was bothered by the middle of the transparency, which lasted: the
+        # coarse grains took four seconds to come and eight to go.
+        scene = still_ambience(room_air())
+        for kind, life in ((COARSE_DUST, COARSE_DUST.life * DUST_LIFE_SPREAD[1]),
+                           (FINE_DUST, FINE_DUST.life * DUST_LIFE_SPREAD[1])):
+            mote = Mote(100.0, 100.0, 0.0, 0.0, 0.0, life, kind)
+            half_seen = 0
+            for age in range(int(life)):
+                mote.age = age
+                half_seen += 0 < scene.dust_colour(mote)[3] < kind.strength
+            self.assertLessEqual(half_seen, DUST_LONGEST_FADE_IN + DUST_LONGEST_FADE_OUT)
+        self.assertLessEqual((DUST_LONGEST_FADE_IN + DUST_LONGEST_FADE_OUT) / 12, 4.2)
+
+    def test_a_coarse_grain_is_gone_in_about_twenty_seconds(self):
+        self.assertLessEqual(COARSE_DUST.life / 12, 20)
 
     def test_a_new_grain_has_air_for_its_whole_life(self):
         opened = bytearray(blank())
@@ -643,7 +662,11 @@ class DustTests(unittest.TestCase):
         self.assertLessEqual(DUST_BRIGHT_LIFE * DUST_LIFE_SPREAD[1] / 12, 3.7)
 
     def test_a_grain_half_as_bright_is_already_much_shorter_lived(self):
-        self.assertLess(lifespan(FINE_DUST, 0.5), FINE_DUST.life * 0.3)
+        self.assertLess(lifespan(FINE_DUST, 0.5), FINE_DUST.life * 0.2)
+
+    def test_the_typical_grain_lasts_under_eight_seconds(self):
+        typical = 0.5 ** DUST_SKEW
+        self.assertLess(lifespan(FINE_DUST, typical) / 12, 8)
 
     def test_most_fine_grains_are_dim(self):
         grains = self.grains(FINE_DUST)
@@ -1483,6 +1506,18 @@ class FeetTests(unittest.TestCase):
         self.assertGreater(len(colours_in(frame)), 1)
         known = {tuple(int(value) for value in colour) + (255,) for colour in COLOURS.rgb}
         self.assertLessEqual(colours_in(frame), known)
+
+    def test_a_step_raises_less_than_a_landing(self):
+        scene = self.scene()
+        self.run_through(scene)
+        steps = list(scene.kicked)
+        scene.kicked.clear()
+        scene.land_on(Footing(200, 200, 226, True, False), 36)
+        for grain in steps:
+            self.assertEqual((grain.softness, grain.strength), (STEP_SOFTNESS, STEP_STRENGTH))
+        self.assertLess(STEP_SOFTNESS, scene.kicked[0].softness)
+        self.assertLess(STEP_STRENGTH, scene.kicked[0].strength)
+        self.assertLess(STEP_THROW[1], LANDING_THROW[1])
 
     def test_it_stays_behind_the_foreground(self):
         cover = bytearray(blank())

@@ -222,7 +222,8 @@ What the user has reviewed and how each part ended up:
 - **The Prince's feet.** `Footing` is read from the game once a tick and never
   written back. FRAM's supporting foot stays put and then jumps to where the next
   foot lands (`floor_contact_x`), so that jump is a step: it throws a little dust up
-  and behind him from that spot. The foot-on-the-floor flag cannot do this, as it is
+  and behind him from that spot, in spots smaller and fainter than the rest of the
+  dust (`STEP_SOFTNESS`, `STEP_STRENGTH`). The foot-on-the-floor flag cannot do this, as it is
   set on almost every frame of a run. Walking carefully raises none. A landing throws
   dust out to both sides, more the faster he came down, and there is none on the
   lava. As he runs he drags the air along (`wake`), so grains he passes follow him
@@ -269,9 +270,9 @@ What the user has reviewed and how each part ended up:
   the emptiest place so it was evenly spread, and half of it was falling.
 - **Two kinds of dust** (`DustKind`). Fine grains, 21 of them, are one small opaque
   pixel. The brighter one is, the shorter it lasts (`lifespan`): most are dim, in the
-  colour of the rock. The dimmest last 22.5 seconds and a typical grain 10, and now and
+  colour of the rock. The dimmest last 22.5 seconds and a typical grain 7.5, and now and
   then a pale one shines for a little over 2 seconds and is gone. Coarse grains, 5, are soft and partly transparent, the
-  slowest, and the only ones that sink. With 3 of them, fainter, they were lost
+  slowest, and the only ones that sink, and last 20 seconds. With 3 of them, fainter, they were lost
   beside the fine ones. A grain warms as it enters the light, a coarse one comes into
   focus there (`on_the_pixels`), and as a grain tumbles a face of it catches the
   fire for a moment. A glint is as strong as the light on the grain, so there are
@@ -291,8 +292,10 @@ What the user has reviewed and how each part ended up:
   It does not land on the lava, or
   behind the foreground, and a floor that falls takes it along. Otherwise a grain
   has a lifespan:
-  it comes up over the first seventh of it and goes over the last quarter, so a
-  dim grain takes about 3 seconds to come and 5 to go. A new one starts unseen,
+  it comes up over the first seventh of it and goes over the last quarter, and
+  never takes more than 1.7 seconds to come or 2.5 to go. Half-transparent grains
+  that stayed that way were what the user found too long: coarse ones took four
+  seconds to come and eight to go. A new one starts unseen,
   around a pocket or near the fire, with air ahead for its whole life (`new_mote`),
   so old and new never show as a swap. Over the lava it is duller, so that it is
   not read as more ash.
