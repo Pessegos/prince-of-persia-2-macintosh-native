@@ -563,7 +563,9 @@ def draw_cavern_torches(frame, room_id, state, *, level_number=3):
     program, resources, palette, shapes = room_assets(level_number, room_id)
     for record in program.get('torches', {}).get(str(room_id), ()):
         tile = state.loose.tiles.get((record['room'], record['cell']))
-        if tile is not None and tile[0] != 19:
+        # MakeRubble (5:2dcc-2e08) turns a torch cell struck by a falling floor into
+        # kind 32 and keeps its foreground: the native room still draws the torch there.
+        if tile is not None and tile[0] not in (19, 32):
             continue
         value = state.foreground(record['room'], record['cell'], record['foreground'])
         index = 3581 + (value & 15)

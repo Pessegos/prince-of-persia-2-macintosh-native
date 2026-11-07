@@ -334,6 +334,27 @@ class LooseFloorTests(unittest.TestCase):
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
+class StruckTorchTests(unittest.TestCase):
+    """Room 14 of level 3: the loose floor above falls on the torch's cell (13, 27)."""
+
+    def drawn(self, tile):
+        from PIL import Image
+        from pop2.caverns import draw_cavern_torches
+
+        state = SimpleNamespace(loose=SimpleNamespace(tiles={} if tile is None else {(13, 27): tile}),
+                                foreground=lambda _room, _cell, value: value)
+        frame = Image.new('RGBA', (510, 365), (0, 0, 0, 255))
+        return draw_cavern_torches(frame, 13, state, level_number=3).tobytes()
+
+    def test_the_torch_still_burns_on_the_rubble(self):
+        # It vanished, niche and flame, as the floor landed on its cell.
+        self.assertEqual(rubble_tile(19, 0x105), (32, 0x105))
+        burning = self.drawn(None)
+        self.assertNotEqual(burning, self.drawn((0, 0)))
+        self.assertEqual(self.drawn((32, 5)), burning)
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class ImportedLooseFloorTests(unittest.TestCase):
     def setUp(self):
         from tests.test_terrain import RooftopSceneTests
