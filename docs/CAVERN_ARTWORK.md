@@ -390,3 +390,4 @@ artwork; no original golden or mask assertion is discarded.
 | 4 | 27 | 218 | `2ddf9c81e6b04da5485e6f1cb930f1ff44ee600d86b521cabe1a3d0066901a45` |
 | 4 | 28 | 213 | `badcf936da6514fbf38f0a63ccd30cb7d1eed4421c8c521b4f54c73412f5d172` |
 | 5 | 1 | 324 | `191e417cbd09ff1c7a037d5d7f44560bcc670c7120ff6bbe00bb14020d10a4a4` |
+| 5 | 2 | 176 | `111ebee78aae508212a53e93ee670505c751c36bd7fd4eab71d40b25e65d002b` |
