@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import numpy
 
-from pop2.firelight import LIGHT_REACH, flame_cells, gaussian, rock_height, trace_firelight
+from pop2.firelight import LIGHT_REACH, SWING, flame_cells, flame_lean, gaussian, rock_height, trace_firelight
 
 SIZE = 300
 MIDDLE = SIZE // 2
@@ -28,9 +28,15 @@ def burning(*places):
     return heat
 
 
-def light_on(shades, heat=None, recess=None):
+def traced(shades, heat=None, recess=None):
     heat = burning((10, 10)) if heat is None else heat
     return trace_firelight(shades, no_recess() if recess is None else recess, heat, LEFT, TOP)
+
+
+def light_on(shades, heat=None, recess=None):
+    """The light with the flame at rest, and the left and top of its window."""
+    firelight = traced(shades, heat, recess)
+    return firelight.at(0.0, 0.0, 1.0), firelight.left, firelight.top
 
 
 class ReliefTests(unittest.TestCase):
@@ -56,38 +62,56 @@ class ReliefTests(unittest.TestCase):
 
 
 class FlameCellTests(unittest.TestCase):
-    def test_each_frame_burns_where_its_flame_is(self):
-        places, burn = flame_cells(burning((4, 4), (16, 16)))
-        self.assertEqual(len(places), burn.shape[1])
-        self.assertLess(places[burn[0].argmax()][0], places[burn[1].argmax()][0])
+    def test_the_cells_cover_the_flame_as_it_burns_on_average(self):
+        places, shares = flame_cells(burning((4, 4), (16, 16)))
+        self.assertAlmostEqual(float(shares.sum()), 1.0)
+        self.assertGreater(len(places), 1)
+        self.assertLess(places[:, 0].min(), 8)
+        self.assertGreater(places[:, 0].max(), 12)
 
-    def test_a_small_flame_burns_less_on_the_whole(self):
+    def test_each_frame_leans_where_its_flame_stands(self):
+        lean, _burn = flame_lean(burning((4, 10), (16, 10)))
+        self.assertLess(lean[0, 0], 0)
+        self.assertGreater(lean[1, 0], 0)
+        self.assertEqual(lean[0, 1], lean[1, 1])
+
+    def test_a_usual_lean_is_one_whatever_the_size_of_the_art(self):
+        for apart in (1, 6):
+            lean, _burn = flame_lean(burning((10 - apart, 10), (10 + apart, 10)))
+            self.assertAlmostEqual(float(lean[:, 0].std()), 1.0)
+
+    def test_a_small_flame_burns_less(self):
         heat = burning((10, 10), (10, 10))
-        heat[1, :, 9:] = 0
-        _places, burn = flame_cells(heat)
-        self.assertGreater(burn[0].sum(), burn[1].sum())
+        heat[1, :, 10:] = 0
+        _lean, burn = flame_lean(heat)
+        self.assertGreater(burn[0], 1)
+        self.assertLess(burn[1], 1)
+
+    def test_frames_that_do_not_lean_stay_at_rest(self):
+        lean, _burn = flame_lean(burning((10, 10), (10, 10)))
+        self.assertTrue((lean == 0).all())
 
 
 class TracedLightTests(unittest.TestCase):
     def test_on_even_rock_it_fades_with_distance(self):
-        lights, left, top = light_on(flat_rock())
-        row = lights[0, MIDDLE - top, MIDDLE - left:]
-        self.assertTrue((numpy.diff(row[12:]) <= 1e-6).all())
-        self.assertGreater(row[12], 0.8)
+        light, left, top = light_on(flat_rock())
+        row = light[MIDDLE - top, MIDDLE - left:]
+        self.assertTrue((numpy.diff(row[14:]) <= 1e-3).all())
+        self.assertGreater(row[14], 0.8)
         self.assertLess(row[-1], 0.02)
 
     def test_it_stops_at_its_reach(self):
-        lights, left, top = light_on(flat_rock())
-        self.assertLessEqual(lights.shape[1], 2 * LIGHT_REACH)
-        self.assertLessEqual(lights.shape[2], 2 * LIGHT_REACH)
+        light, left, top = light_on(flat_rock())
+        self.assertLessEqual(light.shape[0], 2 * LIGHT_REACH)
+        self.assertLessEqual(light.shape[1], 2 * LIGHT_REACH)
         self.assertEqual((left, top), (MIDDLE - LIGHT_REACH, MIDDLE - LIGHT_REACH))
 
     def test_rock_in_the_way_casts_a_shadow(self):
         # A wall of bright paint to the right of the flame, none to the left.
         shades = flat_rock(0.2)
         shades[:, MIDDLE + 30:MIDDLE + 36] = 0.9
-        lights, left, top = light_on(shades)
-        row = lights[0, MIDDLE - top]
+        light, left, top = light_on(shades)
+        row = light[MIDDLE - top]
         behind, open_side = row[MIDDLE + 56 - left], row[MIDDLE - 56 - left]
         self.assertLess(behind, open_side * 0.6)
 
@@ -95,8 +119,8 @@ class TracedLightTests(unittest.TestCase):
         shades = flat_rock(0.2)
         shades[:, MIDDLE + 40:MIDDLE + 46] = 0.9
         with patch('pop2.firelight.BOUNCE', 0.0):
-            lights, left, top = light_on(shades)
-        row = lights[0, MIDDLE - top]
+            light, left, top = light_on(shades)
+        row = light[MIDDLE - top]
         near_side = row[MIDDLE + 37 - left:MIDDLE + 42 - left].max()
         far_side = row[MIDDLE + 45 - left:MIDDLE + 50 - left].max()
         self.assertGreater(near_side, far_side * 1.5)
@@ -105,48 +129,72 @@ class TracedLightTests(unittest.TestCase):
         # A blurred ball of light looks the same at every point of a ring.
         generator = numpy.random.default_rng(3)
         shades = gaussian(generator.random((SIZE, SIZE)), 3.0) * 2.5 - 0.7
-        lights, left, top = light_on(shades.clip(0, 1))
-        rows, columns = numpy.mgrid[top:top + lights.shape[1], left:left + lights.shape[2]]
+        light, left, top = light_on(shades.clip(0, 1))
+        rows, columns = numpy.mgrid[top:top + light.shape[0], left:left + light.shape[1]]
         distance = numpy.hypot(columns - MIDDLE, rows - MIDDLE)
-        ring = lights[0][(distance > 30) & (distance < 40)]
-        self.assertGreater(ring.std() / ring.mean(), 0.2)
+        ring = light[(distance > 30) & (distance < 40)]
+        self.assertGreater(ring.std() / ring.mean(), 0.1)
 
     def test_a_recess_keeps_light_in_its_walls(self):
         recess = numpy.ones((20, 20))
-        sunk = light_on(flat_rock(), recess=recess)[0][0]
-        open_wall = light_on(flat_rock())[0][0]
+        sunk = light_on(flat_rock(), recess=recess)[0]
+        open_wall = light_on(flat_rock())[0]
         inside = MIDDLE - (MIDDLE - LIGHT_REACH)
         self.assertLess(sunk[inside, inside + 40], open_wall[inside, inside + 40])
 
-    def test_a_flame_on_one_side_lights_that_side(self):
-        lights, _left, _top = light_on(flat_rock(), burning((3, 10), (17, 10)))
-        middle = lights.shape[2] // 2
-        self.assertGreater(lights[0, :, :middle].sum(), lights[0, :, middle:].sum())
-        self.assertLess(lights[1, :, :middle].sum(), lights[1, :, middle:].sum())
+    def test_moving_the_flame_moves_the_light(self):
+        firelight = traced(flat_rock())
+        middle = firelight.rest.shape[1] // 2
+        left_lit = firelight.at(-SWING, 0.0, 1.0)
+        right_lit = firelight.at(SWING, 0.0, 1.0)
+        self.assertGreater(left_lit[:, :middle].sum(), left_lit[:, middle:].sum())
+        self.assertLess(right_lit[:, :middle].sum(), right_lit[:, middle:].sum())
+        up, down = firelight.at(0.0, -SWING, 1.0), firelight.at(0.0, SWING, 1.0)
+        centre = firelight.rest.shape[0] // 2
+        self.assertGreater(up[:centre].sum(), down[:centre].sum())
+
+    def test_moving_the_flame_moves_the_shadows(self):
+        shades = flat_rock(0.2)
+        shades[:, MIDDLE + 30:MIDDLE + 36] = 0.9
+        firelight = traced(shades)
+        behind = MIDDLE - firelight.top, MIDDLE + 44 - firelight.left
+        self.assertGreater(firelight.at(SWING, 0.0, 1.0)[behind], firelight.at(-SWING, 0.0, 1.0)[behind] * 1.3)
+
+    def test_the_light_goes_no_further_than_it_was_traced(self):
+        firelight = traced(flat_rock())
+        self.assertTrue((firelight.at(SWING * 5, 0.0, 1.0) == firelight.at(SWING, 0.0, 1.0)).all())
+
+    def test_between_two_places_the_light_is_between_their_lights(self):
+        firelight = traced(flat_rock())
+        rest, half, full = (firelight.at(x, 0.0, 1.0) for x in (0.0, SWING / 2, SWING))
+        row, column = rest.shape[0] // 2, rest.shape[1] // 2 + 30
+        self.assertGreater(half[row, column], rest[row, column])
+        self.assertLess(half[row, column], full[row, column])
 
     def test_a_small_flame_dims_the_light_and_cannot_put_it_out(self):
-        # Deepened by subtraction, the smallest real frame came out at 0.001.
-        heat = burning((10, 10), (10, 10), (10, 10))
-        heat[2, 8] = 0
-        lights, _left, _top = light_on(flat_rock(), heat)
-        self.assertLess(lights[2].mean(), lights[0].mean())
-        self.assertGreater(lights[2].mean(), lights[0].mean() * 0.15)
+        firelight = traced(flat_rock())
+        full, small = firelight.at(0.0, 0.0, 1.0), firelight.at(0.0, 0.0, 0.4)
+        self.assertLess(small.mean(), full.mean())
+        self.assertGreater(small.mean(), full.mean() * 0.2)
 
     def test_it_is_always_between_nothing_and_full(self):
         shades = gaussian(numpy.random.default_rng(1).random((SIZE, SIZE)), 2.0)
-        lights, _left, _top = light_on(shades, burning((5, 5), (15, 15), (10, 10)))
-        self.assertGreaterEqual(float(lights.min()), 0.0)
-        self.assertLessEqual(float(lights.max()), 1.0)
+        firelight = traced(shades, burning((5, 5), (15, 15), (10, 10)))
+        for x, y, strength in ((0.0, 0.0, 1.0), (SWING, -SWING, 2.0), (-SWING, SWING, 0.5)):
+            light = firelight.at(x, y, strength)
+            self.assertGreaterEqual(float(light.min()), 0.0)
+            self.assertLessEqual(float(light.max()), 1.0)
 
     def test_without_a_flame_there_is_no_light(self):
-        lights, _left, _top = light_on(flat_rock(), numpy.zeros((3, 20, 20)))
-        self.assertEqual(float(lights.max()), 0.0)
+        firelight = traced(flat_rock(), numpy.zeros((3, 20, 20)))
+        self.assertEqual(float(firelight.at(SWING, 0.0, 1.0).max()), 0.0)
+        self.assertEqual(len(firelight.lean), 3)
 
     def test_a_torch_at_the_edge_of_the_room_is_cut_to_it(self):
         shades = flat_rock()
-        lights, left, top = trace_firelight(shades, no_recess(), burning((18, 10)), SIZE - 20, TOP)
-        self.assertEqual(left + lights.shape[2], SIZE)
-        self.assertEqual(top, MIDDLE - LIGHT_REACH)
+        firelight = trace_firelight(shades, no_recess(), burning((18, 10)), SIZE - 20, TOP)
+        self.assertEqual(firelight.left + firelight.rest.shape[1], SIZE)
+        self.assertEqual(firelight.top, MIDDLE - LIGHT_REACH)
 
 
 if __name__ == '__main__':

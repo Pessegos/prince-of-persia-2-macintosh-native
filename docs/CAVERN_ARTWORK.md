@@ -187,35 +187,42 @@ What the user has reviewed and how each part ended up:
   paint falls back, and the torch's recess is its sprite's outline sunk into
   that surface. `trace_firelight` cuts the flame into cells and runs rays from
   each cell over the relief. A surface takes light by how much it faces the
-  cell, how far away it is, and whether rock stands in between. The result is
-  one map per flame frame, traced once on entering the room (about 150 ms, only
-  with the ambience on) and read back on each tick, so the frame's size and
-  lean move the light and the shadows. So the rock lights up along its veins,
-  the lip above the recess catches the light from below, and hollows stay dark.
-  A light laid over everything "looked like a bomb about to go off".
-- **Keeping the light calm** took as long as tracing it. The nine frames are much
-  alike, so what sets each one apart is deepened, by ratio: deepened by
-  subtraction the smallest frame came out at no light at all. Then three things
-  stop that from reading as blinking pixels, which is what the user disliked
-  about the original. The light eases after the frame on screen, it can only
-  move so far in a tick (`LIGHT_RATE`), and a pixel keeps its step until the
-  light has really moved past it (`LIGHT_HOLD`): before that, a third of the
-  changing pixels flipped straight back. With all of it, about 560 pixels change
-  a tick around the torch against 390 for the original. About 230 of those are
-  light on the rock, each a small step; the rest are the flame and the lava.
+  cell, how far away it is, and whether rock stands in between. So the rock
+  lights up along its veins, the lip above the recess catches the light from
+  below, and hollows stay dark. The relief has to stay shallow against the
+  flame: deeper, and the rim of the recess shuts the light in, one steady oval
+  however the flame moves. A light laid over everything "looked like a bomb
+  about to go off".
+- **The candle.** The first traced light had one map for each of the nine frames,
+  and it read as a steady oval. The frames come in random order and their
+  middles are a pixel or two apart, so following them only made the light tremble
+  in place, and the rock by the flame sat at full light with nothing left to move.
+  Now the flame is traced five times, at rest and moved 14 pixels each way, and a
+  tick mixes those (`Firelight.at`), so the light can stand anywhere among them.
+  Each frame pushes on a damped spring (`Flicker.sway`), which turns the random
+  frames into a swing of about a second, as if a draught had caught the flame,
+  and the shadows swing with it. How hot the frame burns makes the quick flicker
+  on top. The trace takes about 180 ms on entering the room, only with the
+  ambience on, and a tick only mixes.
+- **Keeping it calm.** A pixel keeps its step of light until the light has really
+  moved past it (`LIGHT_HOLD`): before that, a third of the changing pixels
+  flipped straight back. With the swing only about 5% do. More pixels change than
+  in the original, but they are the light moving across the rock, not noise.
 - **Lava glow** is fainter than that warmth and hugs the pool (`glow_along`). It
   is the same table and dither, and breathes over several seconds.
 - **The wall behind the torch.** `CaveGetTorchFrame` (8:3b4e) picks one of nine
-  frames at random each tick, and their wall has two lightings painted on about
-  a hundred pixels, so the wall blinks between the two. While the ambience is on
-  that painted wall is gone: `light_torch` puts the unlit recess (SHAP 3590) under
-  the flame, and the light above falls on it. Only the flame of the frame the
-  game drew is kept, so the flame stays exactly the game's: a pass that also
-  chose the frames made it choppy. `flame_pixels` tells flame from wall by colour.
-  Its dark red rim counts only next to the flame, as the same red is painted on
-  the wall's cracks. `light_torch` only touches pixels that show the sprite, so
-  whatever is drawn over the torch stays, and a torch that is not there gets no
-  light either.
+  frames at random each tick. They paint a rich wall of veins and specks, but
+  about a hundred loose pixels of it differ from frame to frame, so those blink.
+  While the ambience is on `steady_wall` keeps each such pixel at the colour it
+  shows most often, and the light above falls on that. Replacing the whole wall
+  with the unlit recess (SHAP 3590) was tried and rejected: it came out plain, as
+  it was only the loose pixels that were wrong. The unlit recess is what the
+  relief is read from, as lit paint there would be taken for height. The flame
+  stays exactly the game's: a pass that also chose the frames made it choppy.
+  `flame_pixels` tells flame from wall by colour. Its dark red rim counts only
+  next to the flame, as the same red is painted on the wall's cracks.
+  `light_torch` only touches pixels that show the sprite, so whatever is drawn
+  over the torch stays, and a torch that is not there gets no light either.
 - **Dust** went through the most tries. Slow crisp grains hopped from pixel to
   pixel. Crisp grains fast enough to hide that looked in a hurry. Grains split
   among the four nearest pixels swelled and shrank on every pixel crossed: the
@@ -230,12 +237,17 @@ What the user has reviewed and how each part ended up:
   for a moment. A glint is as strong as the light on the grain, so there are none
   in the dark, and two rhythms keep any grain from flashing like a beacon. How lit
   a grain is comes from the traced light, spread out a little (`lit_air`), so the
-  air behind a ledge stays dark.
+  air behind a ledge stays dark. The dark spot started so faint that only someone
+  who knew where to look could find it, so it is paler and there are 46 grains.
 - **The air** moves the dust. One slow draught crosses the room and turns very
   slowly. Fire draws the air in beside it, sends it up through the flame and
   spreads it out above (`wind_at`). A grain has some weight, so it follows any
   change in the air slowly, and it sways a little. With rock ahead it slows and
-  settles over 3 seconds instead of vanishing. Otherwise a grain has a lifespan:
+  settles over 3 seconds instead of vanishing. A third of the grains are heavier
+  and sink. One that reaches a floor comes down on it (`land`), and lies there as
+  one pale speck for 7 to 14 seconds, fading. It does not land on the lava, or
+  behind the foreground, and a floor that falls takes it along. Otherwise a grain
+  has a lifespan:
   it comes up over 4 seconds and goes over 7. A new one starts unseen, in the
   emptiest of five places with air ahead for its whole life (`new_mote`), so the
   amount in the room stays the same and old and new never show as a swap. Over
