@@ -219,8 +219,14 @@ What the user has reviewed and how each part ended up:
   moved past it (`LIGHT_HOLD`): before that, a third of the changing pixels
   flipped straight back. About 8% do now. More pixels change than in the original,
   but they are the light moving across the rock, not noise.
-- **Lava glow** is fainter than that warmth and hugs the pool (`glow_along`). It
-  is the same table and dither, and breathes over several seconds.
+- **Lava light** is traced over the rock with the same engine as the torch
+  (`trace_lavalight`), a cell at a time along the pool, with the pool itself counted
+  as a hollow, however bright it is painted. It is fainter than the torch's and more
+  a warmth than a brightness: with more gain the pale floor by the pool became a
+  plate. Rock rising in front of the pool takes none of it, and the floor before the
+  pool does, or the light stops dead where the foreground starts. It uses a table of
+  its own and the same dither, and breathes over several seconds. Before this it
+  was an even oval around the pool, which the user approved as a start.
 - **Heat haze** bends what is seen through the hot air over the lava and over a
   flame (`Haze`, `shimmer`). Pixels slide one pixel aside and back in waves that
   rise, and they are only moved, so no new colour appears. It thins out as it rises

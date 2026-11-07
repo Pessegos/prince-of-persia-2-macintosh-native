@@ -16,13 +16,13 @@ from pop2.cavern_ambience import (
     DUST_FADE_IN, DUST_FADE_OUT, DUST_HEADING, DUST_LIFE_SPREAD, DUST_PALE_INK, DUST_PATCH, DUST_POCKETS,
     DROP_INKS, DROP_LAVA_INK, DROP_SHINE_LIGHT, DROP_WARM_LIGHT, SWELL_INKS,
     DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
-    HAZE_OVER_FLAME, HAZE_OVER_POOL, HAZE_RISE, HAZE_WAVE, Haze, QUIET_DUST, flame_of, haze_of, haze_over, room_torches,
+    HAZE_OVER_FLAME, HAZE_OVER_POOL, HAZE_RISE, HAZE_WAVE, QUIET_DUST, flame_of, haze_of, haze_over, room_torches,
     shows,
-    HEAT_REACH, HEIGHT, LIGHT_HOLD, LIGHT_LEVELS, LONGEST_REACH, MOST_ASH, MOST_DUST, Mote, POOL_GLOW_REACH, QUICK_DEPTH,
+    HEAT_REACH, HEIGHT, LIGHT_HOLD, LIGHT_LEVELS, LONGEST_REACH, MOST_ASH, MOST_DUST, Mote, QUICK_DEPTH,
     QUICK_FOLLOW, SHORTEST_REACH, SLOW_DEPTH, SLOW_FOLLOW, SPLASH_INKS, STEAM_INKS, SWELL_TICKS, WIDTH,
-    flame_pixels, glow_along, landing, lifespan, on_the_pixels, read_torch, soft_spot, stalactite_tips, steady_wall,
+    flame_pixels, landing, lifespan, on_the_pixels, pool_glow, read_torch, soft_spot, stalactite_tips, steady_wall,
 )
-from pop2.firelight import DIRECTIONS, LIGHT_REACH, gaussian
+from pop2.firelight import DIRECTIONS, LIGHT_REACH, gaussian, trace_lavalight
 from pop2.game_menu import GameMenu
 from pop2.paths import ASSET_DIR
 
@@ -48,11 +48,24 @@ def palette():
 COLOURS = Colours(palette())
 
 
+def liquid_of(pool, depth=6):
+    return {x: (y - depth, y + depth) for x, y in pool.items()}
+
+
+def plain_rock():
+    return numpy.full((HEIGHT, WIDTH), 0.5, dtype=numpy.float32)
+
+
+def nothing_in_front():
+    return numpy.zeros((HEIGHT, WIDTH), dtype=bool)
+
+
 def room_air(drips=(), flames=(), pools=(), opened=255, covered=None, pool_glows=False, torches=(), hazes=()):
     centres = tuple((sum(columns) / len(columns), sum(columns.values()) / len(columns)) for columns in pools)
     return Air(blank(opened), covered if covered is not None else blank(), tuple(drips), tuple(flames),
                tuple(pools), COLOURS, palette(), centres,
-               tuple(glow_along(columns, POOL_GLOW_REACH, COLOURS.lavalight) for columns in pools if pool_glows),
+               tuple(pool_glow(liquid_of(columns), plain_rock(), nothing_in_front(), COLOURS)
+                     for columns in pools if pool_glows),
                tuple(torches), tuple(hazes))
 
 
@@ -1228,11 +1241,11 @@ class LavaGlowTests(unittest.TestCase):
         pixels = numpy.asarray(frame)[..., :3].astype(int)
         changed = numpy.argwhere((pixels != ROCK[:3]).any(axis=2))
         self.assertTrue(len(changed))
-        self.assertGreaterEqual(changed[:, 1].min(), 300 - POOL_GLOW_REACH[0])
-        self.assertLess(changed[:, 1].max(), 340 + POOL_GLOW_REACH[0])
-        self.assertGreaterEqual(changed[:, 0].min(), 228 - POOL_GLOW_REACH[1])
-        self.assertLess(changed[:, 0].max(), 228 + POOL_GLOW_REACH[1])
-        self.assertGreater(pixels[220:228, 310:330, 0].mean(), pixels[205:210, 310:330, 0].mean())
+        self.assertGreaterEqual(changed[:, 1].min(), 300 - LIGHT_REACH)
+        self.assertLessEqual(changed[:, 1].max(), 340 + LIGHT_REACH)
+        self.assertGreaterEqual(changed[:, 0].min(), 228 - LIGHT_REACH)
+        self.assertLess(changed[:, 0].max(), 228 + LIGHT_REACH)
+        self.assertGreater(pixels[215:228, 310:330, 0].mean(), pixels[178:183, 310:330, 0].mean())
 
     def test_the_lava_itself_receives_nothing(self):
         frame = Image.new('RGBA', (WIDTH, HEIGHT), FIRE)
@@ -1246,6 +1259,75 @@ class LavaGlowTests(unittest.TestCase):
             strengths.append(scene.pool_strength())
         self.assertLess(max(strengths) - min(strengths), 0.2)
         self.assertLess(max(abs(after - before) for before, after in zip(strengths, strengths[1:])), 0.01)
+
+
+class LavaLightTests(unittest.TestCase):
+    LIQUID = {x: (222, 234) for x in range(300, 360)}
+
+    def light(self, shades=None, liquid=None):
+        left, top, light = trace_lavalight(plain_rock() if shades is None else shades, liquid or self.LIQUID)
+        room = numpy.zeros((HEIGHT, WIDTH), dtype=numpy.float32)
+        room[top:top + light.shape[0], left:left + light.shape[1]] = light
+        return room
+
+    def test_it_is_strongest_by_the_pool_and_runs_out(self):
+        room = self.light()
+        self.assertGreater(room[215, 330], 2 * room[190, 330])
+        self.assertEqual(room[228 - LIGHT_REACH - 1:, 300 - LIGHT_REACH - 1].max(), 0)
+        self.assertEqual(room[228 - LIGHT_REACH - 1, 330], 0)
+
+    def test_all_of_it_is_between_nothing_and_full(self):
+        room = self.light()
+        self.assertGreaterEqual(float(room.min()), 0)
+        self.assertLessEqual(float(room.max()), 1)
+        self.assertGreater(float(room.max()), 0.5)
+
+    def test_lava_is_a_hollow_however_bright_it_is_painted(self):
+        dark, bright = plain_rock(), plain_rock()
+        dark[222:235, 300:360] = 0
+        bright[222:235, 300:360] = 1
+        numpy.testing.assert_allclose(self.light(dark), self.light(bright), atol=1e-6)
+
+    def test_it_follows_the_veins_of_the_rock(self):
+        shades = plain_rock()
+        shades[180:215, ::7] = 0.9
+        shades[180:215, 1::7] = 0.9
+        # From one pixel to the next, as the slow change along a row is the same on both.
+        veined = numpy.abs(numpy.diff(self.light(shades)[200, 305:355])).mean()
+        plain = numpy.abs(numpy.diff(self.light()[200, 305:355])).mean()
+        self.assertGreater(float(veined), 3 * float(plain))
+
+    def test_a_ridge_shades_what_is_behind_it(self):
+        shades = plain_rock()
+        shades[205:209, :] = 1.0
+        ridged = self.light(shades)[185:200, 310:350].mean()
+        self.assertLess(float(ridged), float(self.light()[185:200, 310:350].mean()))
+
+    def test_a_pool_of_a_few_pixels_still_lights(self):
+        room = self.light(liquid={x: (222, 226) for x in range(300, 304)})
+        self.assertGreater(float(room.max()), 0.5)
+
+    def test_rock_rising_in_front_takes_no_light(self):
+        in_front = nothing_in_front()
+        in_front[150:228, 380:400] = True
+        glow = pool_glow(self.LIQUID, plain_rock(), in_front, COLOURS)
+        left, top = glow.box[:2]
+        self.assertTrue((glow.falloff[150 - top:228 - top, 380 - left:400 - left] == 0).all())
+        self.assertGreater(glow.falloff[210 - top:228 - top, 362 - left:380 - left].max(), 0.1)
+
+    def test_the_floor_before_a_pool_takes_light(self):
+        # The foreground starts there: the light used to stop dead along that line.
+        in_front = nothing_in_front()
+        in_front[235:, :] = True
+        glow = pool_glow(self.LIQUID, plain_rock(), in_front, COLOURS)
+        left, top = glow.box[:2]
+        self.assertGreater(glow.falloff[240 - top:245 - top, 320 - left:340 - left].min(), 0.1)
+
+    def test_it_warms_the_rock_more_than_it_brightens_it(self):
+        lit = COLOURS.lavalight[LIGHT_LEVELS]
+        for colour, step in zip(COLOURS.rgb, lit):
+            if colour[0] in (ROCK[0],):
+                self.assertLessEqual(int(step[0]) - int(colour[0]), 60)
 
 
 class HazeTests(unittest.TestCase):
@@ -1494,6 +1576,14 @@ class EveryRoomTests(unittest.TestCase):
         for place in ((3, 12), (3, 27), (4, 23)):
             self.assertEqual(self.rooms[place].pools, (), place)
 
+    def test_every_pool_lights_the_rock_around_it(self):
+        for place, air in self.rooms.items():
+            self.assertEqual(len(air.pool_glows), len(air.pools), place)
+            for glow in air.pool_glows:
+                self.assertGreater(float(glow.falloff.max()), 0.5, place)
+                left, top, right, bottom = glow.box
+                self.assertTrue(0 <= left < right <= WIDTH and 0 <= top < bottom <= HEIGHT, place)
+
     def test_every_fire_heats_the_air_over_it(self):
         for place, air in self.rooms.items():
             self.assertEqual(len(air.hazes), len(air.pools) + len(air.torches), place)
@@ -1738,8 +1828,8 @@ class ChosenRoomTests(unittest.TestCase):
         scene.draw(frame)
         change = numpy.asarray(frame).astype(int)[..., :3] - before[..., :3]
         box = self.air.pool_glows[0].box
-        self.assertGreaterEqual(box[0], min(pool) - POOL_GLOW_REACH[0])
-        self.assertLessEqual(box[2], max(pool) + POOL_GLOW_REACH[0])
+        self.assertGreaterEqual(box[0], min(pool) - LIGHT_REACH)
+        self.assertLessEqual(box[2], max(pool) + LIGHT_REACH + 1)
         self.assertEqual(change[:box[1]].max(initial=0), 0)
         self.assertEqual(change[:, :box[0]].max(initial=0), 0)
         inside = change[box[1]:box[3], box[0]:box[2]]

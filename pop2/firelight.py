@@ -64,6 +64,8 @@ RECESS_EDGE = 7.0
 # over, so that one tongue of flame does not throw a spoke of light.
 DIRECTIONS = 48
 OUTLINE_SOFTNESS = 2.0
+# Lava is lit a cell of this many pixels of its width at a time.
+POOL_CELL = 14
 
 
 def gaussian(values, sigma):
@@ -214,6 +216,28 @@ class Firelight:
     @property
     def steady(self):
         return self.at(numpy.ones(DIRECTIONS), 1.0)
+
+
+def trace_lavalight(shades, liquid):
+    """(left, top, light) on the rock around a pool, in one window of the room.
+
+    shades: the room's brightness, 0..1. liquid: {x: (top, bottom)} of the pool.
+    Lava is bright paint where the relief would read a hill, so it counts as the
+    hollow that it is, and the light rises from its surface, a cell at a time.
+    """
+    room_height, room_width = shades.shape
+    shades = shades.copy()
+    for x, (high, low) in liquid.items():
+        shades[max(0, high):low + 1, x] = 0
+    columns = sorted(liquid)[POOL_CELL // 2::POOL_CELL] or sorted(liquid)
+    places = numpy.array([(x, sum(liquid[x]) / 2) for x in columns], dtype=numpy.float64)
+    left, right = max(0, min(liquid) - LIGHT_REACH), min(room_width, max(liquid) + LIGHT_REACH + 1)
+    top = max(0, int(places[:, 1].min()) - LIGHT_REACH)
+    bottom = min(room_height, int(places[:, 1].max()) + LIGHT_REACH)
+    relief = Relief(rock_height(shades[top:bottom, left:right]).astype(numpy.float32))
+    cast = relief.flame(places - (left, top), numpy.full(len(places), 1 / len(places)))
+    rest = (cast + BOUNCE * gaussian(cast, BOUNCE_SPREAD)) / max(numpy.percentile(cast, PEAK_PERCENTILE), 1e-6)
+    return left, top, pressed(rest).clip(0, 1).astype(numpy.float32)
 
 
 def trace_firelight(shades, recess, heat, left, top):

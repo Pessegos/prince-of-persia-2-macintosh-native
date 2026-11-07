@@ -33,7 +33,7 @@ import random
 import numpy
 from PIL import Image, ImageFilter
 
-from pop2.firelight import DIRECTIONS, Firelight, gaussian, trace_firelight
+from pop2.firelight import DIRECTIONS, Firelight, gaussian, trace_firelight, trace_lavalight
 from pop2.opponent_generation import EMPTY_TILES, WALL_TILES
 from pop2.terrain import TILE_HEIGHT, TILE_WIDTH, floor_y
 
@@ -210,9 +210,10 @@ FLICKER_DEPTH = 2.5
 LIGHT_HOLD = 0.5
 # How far the light on the rock is spread to tell how lit the air is before it.
 AIR_LIGHT_SPREAD = 6.0
-# Fainter still: the lava seems to radiate, and it must not light the room.
-POOL_GLOW_REACH = (34, 30)
-POOL_GLOW_GAIN, POOL_GLOW_ADD = (1.08, 1.03, 1.0), (18.0, 5.0, 0.0)
+# Fainter still, and more a warmth than a brightness: the lava seems to radiate, and
+# it must not light the room. Any more gain and the pale floor by the pool turned to
+# a plate.
+POOL_GLOW_GAIN, POOL_GLOW_ADD = (1.14, 1.05, 1.0), (24.0, 7.0, 0.0)
 BAYER = numpy.array(((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5)), dtype=numpy.float32) / 16
 # Hot air bends what is seen through it. Pixels over the fire slide one pixel to the
 # side and back, in waves that rise: they are only moved, so the rule on the palette
@@ -321,18 +322,14 @@ class Glow:
         return self.left, self.top, self.left + self.falloff.shape[1], self.top + self.falloff.shape[0]
 
 
-def glow_along(columns, reach, table):
-    """A glow measured from a pool's surface, not from one point."""
-    reach_x, reach_y = reach
-    start, end = min(columns), max(columns)
-    surface = sum(columns.values()) // len(columns)
-    left, right = max(0, start - reach_x), min(WIDTH, end + reach_x)
-    top, bottom = max(0, surface - reach_y), min(HEIGHT, surface + reach_y)
-    rows, columns_at = numpy.mgrid[top:bottom, left:right]
-    beyond = numpy.maximum(0, numpy.maximum(start - columns_at, columns_at - end))
-    distance = numpy.hypot(beyond / reach_x, (rows - surface) / reach_y)
-    falloff = (1 - distance).clip(0, 1).astype(numpy.float32) ** 1.4
-    return Glow(left, top, falloff, BAYER[rows % 4, columns_at % 4], table)
+def pool_glow(liquid, shades, in_front, colours):
+    """The light of a pool, traced over the rock like a torch's. Rock rising in front
+    of it has its back to the fire. The floor before it does not."""
+    left, top, light = trace_lavalight(shades, liquid)
+    height, width = light.shape
+    rows, columns = numpy.mgrid[top:top + height, left:left + width]
+    rising = in_front[top:top + height, left:left + width] & (rows < max(low for _high, low in liquid.values()))
+    return Glow(left, top, light * ~rising, BAYER[rows % 4, columns % 4], colours.lavalight)
 
 
 @dataclass(frozen=True)
@@ -651,8 +648,9 @@ def analyze_room(program, room, art, terrain, palette, resources=None, shapes=No
     colours = colours_of(tuple(sorted(palette.items())))
     records = room_torches(program, room)
     centres = tuple(pool_centre(columns) for columns in pools)
-    pool_glows = tuple(glow_along(columns, POOL_GLOW_REACH, colours.lavalight) for columns in pools)
     in_front = numpy.array(art.foreground.getchannel('A')) > 0
+    shades = numpy.asarray(luminance, dtype=numpy.float32) / 255
+    pool_glows = tuple(pool_glow(columns, shades, in_front, colours) for columns in liquid)
     hazes = tuple(haze_over({x: high for x, (high, _low) in columns.items()}, in_front, **HAZE_OVER_POOL)
                   for columns in liquid)
     torches = ()
