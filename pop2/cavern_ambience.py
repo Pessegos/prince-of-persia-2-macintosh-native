@@ -94,8 +94,8 @@ class DustKind:
 
 DUST_SOFTNESS = 0.8
 DUST_SHARPNESS = 0.36
-FINE_DUST = DustKind(18, (0.13, 0.26), 300, DUST_SHARPNESS, 1.0, 104, 0.0, 0.1, 1.0)
-COARSE_DUST = DustKind(5, (0.11, 0.2), 450, DUST_SOFTNESS, 0.62, 67, 0.8, 0.06, 0.0)
+FINE_DUST = DustKind(21, (0.13, 0.26), 270, DUST_SHARPNESS, 1.0, 104, 0.0, 0.1, 1.0)
+COARSE_DUST = DustKind(5, (0.11, 0.2), 405, DUST_SOFTNESS, 0.62, 67, 0.8, 0.06, 0.0)
 DUST_KINDS = (FINE_DUST, COARSE_DUST)
 MOST_DUST = sum(kind.count for kind in DUST_KINDS)
 # A room with no fire has less of it, and none that shines: with nothing to light
@@ -104,7 +104,7 @@ QUIET_DUST = (replace(FINE_DUST, count=FINE_DUST.count // 2, brightest=0.3), rep
 # Most fine grains are dim: a grain's brightness is a random number raised to this
 # power. The brightest last this long, and life falls fast as they brighten.
 DUST_SKEW = 2.5
-DUST_BRIGHT_LIFE = 30
+DUST_BRIGHT_LIFE = 27
 DUST_LIFE_CURVE = 0.6
 DUST_LIFE_SPREAD = (0.8, 1.2)
 DUST_LONGEST_LIFE = int(max(kind.life for kind in DUST_KINDS) * DUST_LIFE_SPREAD[1])

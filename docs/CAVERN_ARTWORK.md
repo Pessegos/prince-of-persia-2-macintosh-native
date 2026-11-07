@@ -243,10 +243,10 @@ What the user has reviewed and how each part ended up:
   the torch, and a pass with 64 pale grains of mixed sizes "looked like snowing".
   That had three causes, all fixed: there was a lot of it, each new grain went to
   the emptiest place so it was evenly spread, and half of it was falling.
-- **Two kinds of dust** (`DustKind`). Fine grains, 18 of them, are one small opaque
+- **Two kinds of dust** (`DustKind`). Fine grains, 21 of them, are one small opaque
   pixel. The brighter one is, the shorter it lasts (`lifespan`): most are dim, in the
-  colour of the rock. The dimmest last 25 seconds and a typical grain 11, and now and
-  then a pale one shines for 2.5 seconds and is gone. Coarse grains, 5, are soft and partly transparent, the
+  colour of the rock. The dimmest last 22.5 seconds and a typical grain 10, and now and
+  then a pale one shines for a little over 2 seconds and is gone. Coarse grains, 5, are soft and partly transparent, the
   slowest, and the only ones that sink. With 3 of them, fainter, they were lost
   beside the fine ones. A grain warms as it enters the light, a coarse one comes into
   focus there (`on_the_pixels`), and as a grain tumbles a face of it catches the
@@ -262,13 +262,13 @@ What the user has reviewed and how each part ended up:
   spreads it out above (`wind_at`). A grain has some weight, so it follows any
   change in the air slowly, and it sways a little. With rock ahead it slows and
   settles over 3 seconds instead of vanishing. Most coarse grains sink, starting
-  not far above a floor. One that reaches it comes down on it (`land`), about six
+  not far above a floor. One that reaches it comes down on it (`land`), about five
   times in two minutes, and lies there as one pale speck for 7 to 14 seconds, fading.
   It does not land on the lava, or
   behind the foreground, and a floor that falls takes it along. Otherwise a grain
   has a lifespan:
   it comes up over the first seventh of it and goes over the last quarter, so a
-  dim grain takes about 3.5 seconds to come and 6 to go. A new one starts unseen,
+  dim grain takes about 3 seconds to come and 5 to go. A new one starts unseen,
   around a pocket or near the fire, with air ahead for its whole life (`new_mote`),
   so old and new never show as a swap. Over the lava it is duller, so that it is
   not read as more ash.

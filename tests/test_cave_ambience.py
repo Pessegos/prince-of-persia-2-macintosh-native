@@ -552,7 +552,7 @@ class DustTests(unittest.TestCase):
     def test_there_is_little_dust_and_most_of_it_is_fine(self):
         # Sixty grains, a lot of them coarse, looked like snow.
         self.assertLess(MOST_DUST, 35)
-        self.assertGreater(FINE_DUST.count, 3 * COARSE_DUST.count)
+        self.assertGreater(FINE_DUST.count, 4 * COARSE_DUST.count)
 
     def test_the_brighter_a_grain_the_shorter_it_lasts(self):
         lives = [lifespan(FINE_DUST, brightness / 10) for brightness in range(11)]
