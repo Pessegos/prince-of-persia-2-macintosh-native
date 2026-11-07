@@ -299,3 +299,4 @@ Comparisons stay local under `rendered/floor-join-selected-v3/`.
 | 4 | 13 | 312 | `e08b3742a5b27f099f9b01e4f253e7b2ff7f58a6cc93bb5ed35cf0007db0e97a` |
 | 4 | 14 | 46 | `1b624888aa2e8417c4305244956567b77668b8d3c59931e0b7451d7a7eda2b7b` |
 | 4 | 18 | 156 | `91ca82a8add9bbf792fae9d09f297a189c91849cdd4f4580edcc9faebfbaad65` |
+| 5 | 11 | 201 | `bb1b2208c8f31a0be54d692a8fdd1d9bdf2c4d4ee04a951145ec138b1fae55c6` |
