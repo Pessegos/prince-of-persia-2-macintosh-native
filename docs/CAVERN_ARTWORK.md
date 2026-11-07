@@ -221,23 +221,28 @@ What the user has reviewed and how each part ended up:
   but they are the light moving across the rock, not noise.
 - **The Prince's feet.** `Footing` is read from the game once a tick and never
   written back. FRAM's supporting foot stays put and then jumps to where the next
-  foot lands (`floor_contact_x`), so that jump is a step: it knocks up two specks of
-  the same dust as the doors, behind him, in darker colours so that they hardly show. The foot-on-the-floor flag cannot do this, as it is
-  set on almost every frame of a run. Walking carefully raises none. A landing knocks
-  a few out to both sides, more the faster he came down, and there is none on the
+  foot lands (`floor_contact_x`), so that jump is a step: it raises a tuft of the same
+  spray as the doors, behind him, thin and in darker colours so that it hardly shows. The foot-on-the-floor flag cannot do this, as it is
+  set on almost every frame of a run. Walking carefully raises none. A landing raises
+  a tuft to each side, more the faster he came down, and there is none on the
   lava. As he runs he drags the air along (`wake`), so grains he passes follow him
   and let go. Dust from the floor is drawn behind him like the rest of the ambience.
-- **Gates, doors and fallen tiles.** Whatever comes down knocks dust off the floor:
-  a few plain pixels of the palette (`Speck`), thrown out to both sides of its foot,
-  that darken through the colours of the rock and are gone in about a second. Two
-  tries at a realistic cloud came first, soft spots and then a thin dithered veil,
-  and both were wrong for a game of 1993: too smooth, and they read as something
-  else. A slam knocks up 18 specks, a gate that lowers itself 8, a tile 22. An exit
-  door faces the room, so two specks in three come out at its front, fanning out, and
-  the rest go to the sides. There is none on the lava. The game tells this in
-  `PressurePlates.shut` and `LooseFloors.landed`, which are not game state and are
-  left out of saves. The entry door that slams behind him at the start of a level does
-  the same.
+- **Gates, doors and fallen tiles.** Whatever comes down knocks dust off the floor.
+  It has the shape of a small cloud (`Cloud`), going out low to both sides of its foot
+  and rising as it slows, but it is drawn as an airbrush of 1993 would: a spray of
+  plain palette pixels with nothing blended. Each pixel has its own threshold
+  (`spray`), so it stays until the dust around it thins, and the cloud goes by breaking
+  up. The colours darken as it ages. This took four tries. Soft spots read as balls of
+  cotton wool, a smooth dithered veil was far too realistic for the game, loose pixels
+  alone were too little, and an ordered dither made a grid of dots. It keeps close to
+  what came down: at sixty pixels and more it was too long. Dust cannot pass through a
+  slab, which stands slanted, so the cloud starts lower on its near side than on its
+  far side. An exit door faces the room, so two grains in three come out at its front,
+  fanning out, and the rest go to the sides. Slams and tiles also fling a few loose
+  specks (`Speck`). There is none on the lava. The game tells this in
+  `PressurePlates.shut` and `LooseFloors.landed`, which are not game state and are left
+  out of saves. The entry door that slams behind him at the start of a level does the
+  same.
 - **Lava light** is traced over the rock with the same engine as the torch
   (`trace_lavalight`), a cell at a time along the pool, with the pool itself counted
   as a hollow, however bright it is painted. It is fainter than the torch's and more

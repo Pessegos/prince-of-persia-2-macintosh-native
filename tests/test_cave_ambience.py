@@ -22,7 +22,7 @@ from pop2.cavern_ambience import (
     DUST_SKEW,
     DROP_INKS, DROP_LAVA_INK, DROP_SHINE_LIGHT, DROP_WARM_LIGHT, SWELL_INKS,
     DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
-    Footing, LANDING_FALL, LANDING_PUFF, MOST_LANDING_SPECKS, MOST_SPECKS,
+    Footing, LANDING_FALL, LANDING_PUFF, MOST_CLOUDS, MOST_LANDING_GRAINS,
     PUFF_INKS, SHUT_PUFF, SLAM_PUFF, STEP_PUFF, Speck, TILE_PUFF,
     door_coming_down, tile_landing,
     WAKE_REACH,
@@ -1382,93 +1382,110 @@ class FeetTests(unittest.TestCase):
         scene = self.scene(pools=[pool])
         self.land(scene, foot=220)
         self.run_through(scene)
-        self.assertEqual(scene.specks, [])
+        self.assertEqual(scene.clouds, [])
 
-    def test_each_foot_that_lands_knocks_up_a_few_specks_where_it_lands(self):
+    def test_each_foot_that_lands_raises_a_tuft_where_it_lands(self):
         scene = self.scene()
         stepped = []
         for index, (x, foot) in enumerate(self.RUN):
-            before = len(scene.specks)
+            before = len(scene.clouds)
             scene.tread(Footing(x, foot, 226, True, False))
-            if len(scene.specks) > before:
+            if len(scene.clouds) > before:
                 stepped.append(index)
-                self.assertEqual(len(scene.specks) - before, STEP_PUFF.specks)
-                for speck in scene.specks[before:]:
-                    self.assertLessEqual(abs(speck.x - foot), 6)
+                cloud = scene.clouds[-1]
+                self.assertEqual(len(cloud.x), STEP_PUFF.grains)
+                self.assertLessEqual(float(numpy.abs(cloud.x - foot).max()), 6)
         self.assertEqual(stepped, [2, 4, 5, 8])
 
     def test_the_dust_goes_behind_him(self):
         scene = self.scene()
         self.run_through(scene)
-        self.assertTrue(all(speck.dx < 0 for speck in scene.specks))
+        self.assertTrue(all((cloud.dx < 0).all() for cloud in scene.clouds))
         scene = self.scene()
-        self.run_through(scene, [(1000 - x, 1000 - foot) for x, foot in self.RUN])
-        self.assertTrue(all(speck.dx > 0 for speck in scene.specks))
+        self.run_through(scene, [(500 - x, 500 - foot) for x, foot in self.RUN])
+        self.assertTrue(scene.clouds)
+        self.assertTrue(all((cloud.dx > 0).all() for cloud in scene.clouds))
 
     def test_a_landing_goes_out_to_both_sides(self):
         scene = self.scene()
         self.land(scene)
-        self.assertEqual(sum(speck.dx > 0 for speck in scene.specks), sum(speck.dx < 0 for speck in scene.specks))
-        self.assertEqual(len(scene.specks), 2 * (LANDING_PUFF.specks + 36 // LANDING_FALL))
+        cloud = scene.clouds[0]
+        self.assertEqual(len(cloud.x), 2 * (LANDING_PUFF.grains + 36 // LANDING_FALL))
+        self.assertEqual(int((cloud.dx > 0).sum()), int((cloud.dx < 0).sum()))
 
     def test_the_faster_he_lands_the_more_dust_up_to_a_limit(self):
         counts = []
         for speed in (0, 36, 120, 1000):
             scene = self.scene()
             self.land(scene, speed)
-            counts.append(len(scene.specks))
+            counts.append(len(scene.clouds[0].x))
         self.assertEqual(counts, sorted(counts))
         self.assertLess(counts[0], counts[1])
-        self.assertEqual(counts[-1], 2 * MOST_LANDING_SPECKS)
+        self.assertEqual(counts[-1], 2 * MOST_LANDING_GRAINS)
 
     def test_his_dust_hardly_shows(self):
-        # The user wanted it subtle: a step is a couple of pixels, in the rock's colours.
-        self.assertLessEqual(STEP_PUFF.specks, 2)
-        self.assertLess(LANDING_PUFF.specks * 2, SLAM_PUFF.specks * 2)
+        # His dust was the worst: the user wanted it the subtlest of all.
+        self.assertLess(STEP_PUFF.most, LANDING_PUFF.most)
+        self.assertLess(LANDING_PUFF.most, SLAM_PUFF.most)
+        self.assertEqual((STEP_PUFF.specks, LANDING_PUFF.specks), (0, 0))
         self.assertNotIn(PUFF_INKS[0], STEP_PUFF.inks)
         self.assertNotIn(PUFF_INKS[0], LANDING_PUFF.inks)
-        self.assertLessEqual(STEP_PUFF.life[1], 12)
+        self.assertLessEqual(STEP_PUFF.life[1], 14)
 
     def test_there_is_a_limit_to_the_dust_at_once(self):
         scene = self.scene()
-        for _ in range(MOST_SPECKS):
+        for _ in range(MOST_CLOUDS + 5):
             self.land(scene, 200)
-        self.assertEqual(len(scene.specks), MOST_SPECKS)
+        self.assertEqual(len(scene.clouds), MOST_CLOUDS)
+
+    def test_dust_off_the_side_of_the_screen_is_left_out(self):
+        scene = self.scene()
+        self.land(scene, foot=-200)
+        self.land(scene, foot=WIDTH + 200)
+        self.assertEqual(scene.clouds, [])
+
+    def test_dust_at_the_side_of_the_screen_is_cut_there(self):
+        scene = self.scene()
+        self.land(scene, foot=2)
+        frame = wall_frame()
+        scene.advance_clouds()
+        scene.draw(frame)
+        self.assertGreater(len(colours_in(frame)), 1)
 
     def test_walking_carefully_raises_none(self):
         scene = self.scene()
         self.run_through(scene, [(200 + tick * 2, 180 + tick * 12) for tick in range(8)])
-        self.assertEqual(scene.specks, [])
+        self.assertEqual(scene.clouds, [])
 
     def test_standing_up_raises_none(self):
         # His body shuffles back as the supporting foot changes over.
         scene = self.scene()
         self.run_through(scene, [(227, 197), (219, 217)])
-        self.assertEqual(scene.specks, [])
+        self.assertEqual(scene.clouds, [])
 
     def test_a_foot_in_the_air_raises_none(self):
         scene = self.scene()
         for x, foot in self.RUN:
             scene.tread(Footing(x, foot, 226, False, False))
-        self.assertEqual(scene.specks, [])
+        self.assertEqual(scene.clouds, [])
 
     def test_going_to_another_floor_is_no_step(self):
         scene = self.scene()
         scene.tread(Footing(200, 180, 226, True, False))
         scene.tread(Footing(210, 205, 346, True, False))
-        self.assertEqual(scene.specks, [])
+        self.assertEqual(scene.clouds, [])
 
     def test_the_first_tick_in_a_room_raises_none(self):
         scene = self.scene()
         scene.tread(Footing(300, 300, 226, True, False))
-        self.assertEqual(scene.specks, [])
+        self.assertEqual(scene.clouds, [])
 
     def test_a_tick_without_him_raises_none_and_forgets_him(self):
         scene = self.scene()
         scene.tread(Footing(200, 180, 226, True, False))
         scene.tread(None)
         scene.tread(Footing(240, 235, 226, True, False))
-        self.assertEqual(scene.specks, [])
+        self.assertEqual(scene.clouds, [])
         self.assertIsNone(scene.wake)
 
     def test_he_drags_the_air_along(self):
@@ -1513,50 +1530,128 @@ class DoorDustTests(unittest.TestCase):
     def scene(self, **options):
         return still_ambience(room_air(**options))
 
-    def test_a_slam_knocks_specks_to_both_sides_of_its_foot(self):
+    def sprayed(self, thud, ticks=6, **options):
+        """What the dust alone paints, and the scene."""
+        scene = self.scene(**options)
+        scene.thud(thud)
+        scene.specks.clear()
+        for _ in range(ticks):
+            scene.advance_clouds()
+        frame = wall_frame()
+        scene.draw_cloud(frame, scene.clouds[0])
+        return numpy.asarray(frame), scene
+
+    def painted(self, pixels):
+        return (pixels != WALL).any(axis=2)
+
+    def test_a_slam_drives_dust_to_both_sides_of_its_foot(self):
         door = door_coming_down(4, 22, True)
         scene = self.scene()
         scene.thud(door)
-        self.assertEqual(len(scene.specks), SLAM_PUFF.specks * 2)
-        for speck in scene.specks:
-            if speck.dx < 0:
-                self.assertLessEqual(speck.x, door.left)
-                self.assertEqual(speck.floor, door.left_floor)
-            else:
-                self.assertGreaterEqual(speck.x, door.right)
-                self.assertEqual(speck.floor, door.right_floor)
-            self.assertLess(speck.dy, 0)
+        cloud = scene.clouds[0]
+        self.assertEqual(len(cloud.x), SLAM_PUFF.grains * 2)
+        self.assertTrue(((cloud.x <= door.left) | (cloud.x >= door.right)).all())
+        self.assertLess(float(cloud.x.min()), door.left)
+        self.assertGreater(float(cloud.x.max()), door.right)
 
     def test_it_keeps_close_to_what_came_down(self):
+        # At sixty pixels and more the user found it too long.
         door = door_coming_down(4, 25, True)
         scene = self.scene()
         scene.thud(door)
-        seen = [speck for speck in scene.specks]
-        for _ in range(SLAM_PUFF.life[1]):
-            scene.advance_specks()
-        self.assertLess(max(max(door.left - speck.x, speck.x - door.right) for speck in seen), 24)
+        cloud = scene.clouds[0]
+        for _ in range(10):
+            scene.advance_clouds()
+        reach = numpy.maximum(door.left - cloud.x, cloud.x - door.right)
+        self.assertLess(float(reach.max()), 34)
+        self.assertLess(float(numpy.median(reach)), 18)
 
-    def test_it_is_quickly_gone(self):
-        scene = self.scene()
-        scene.thud(tile_landing(23))
-        for _ in range(TILE_PUFF.life[1]):
-            scene.advance_specks()
-        self.assertEqual(scene.specks, [])
-
-    def test_a_speck_is_one_plain_pixel_of_the_palette(self):
+    def test_it_is_a_spray_of_plain_pixels_with_nothing_blended(self):
         # A smooth cloud looked far too realistic for a game of 1993.
+        pixels, scene = self.sprayed(door_coming_down(17, 25, True))
+        inks = {scene.air.inks[ink] for ink in PUFF_INKS}
+        self.assertGreater(int(self.painted(pixels).sum()), 20)
+        self.assertLessEqual(colours_in(Image.fromarray(pixels)) - {WALL}, inks)
+
+    def test_rock_always_shows_through_it(self):
+        pixels, scene = self.sprayed(door_coming_down(17, 25, True))
+        cloud = scene.clouds[0]
+        box = self.painted(pixels)[cloud.top:cloud.bottom, cloud.left:cloud.right]
+        self.assertLess(float(box.mean()), SLAM_PUFF.most)
+
+    def test_the_spray_has_no_grid(self):
+        # An ordered dither made rows of dots, like a mesh laid over the floor.
+        _pixels, scene = self.sprayed(door_coming_down(17, 25, True))
+        spray = scene.clouds[0].spray
+        for step in (2, 4):
+            self.assertLess(abs(numpy.corrcoef(spray[:, :-step].ravel(), spray[:, step:].ravel())[0, 1]), 0.2)
+            self.assertLess(abs(numpy.corrcoef(spray[:-step].ravel(), spray[step:].ravel())[0, 1]), 0.2)
+
+    def test_it_breaks_up_and_goes(self):
         scene = self.scene()
         scene.thud(door_coming_down(4, 22, True))
-        scene.advance_specks()
+        counts = []
+        for _ in range(SLAM_PUFF.life[1]):
+            scene.advance_clouds()
+            if scene.clouds:
+                frame = wall_frame()
+                scene.draw_cloud(frame, scene.clouds[0])
+                counts.append(int(self.painted(numpy.asarray(frame)).sum()))
+        self.assertEqual(scene.clouds, [])
+        self.assertLess(counts[-1], max(counts) / 4)
+
+    def test_a_pixel_stays_until_it_goes(self):
+        # Dust that flickered at twelve frames a second would look like noise.
+        scene = self.scene()
+        scene.thud(door_coming_down(17, 25, True))
+        cloud = scene.clouds[0]
+        for _ in range(4):
+            scene.advance_clouds()
+        before = wall_frame()
+        scene.draw_cloud(before, cloud)
+        scene.advance_clouds()
+        after = wall_frame()
+        scene.draw_cloud(after, cloud)
+        one, other = self.painted(numpy.asarray(before)), self.painted(numpy.asarray(after))
+        self.assertGreater((one & other).sum() / max(1, one.sum()), 0.5)
+
+    def test_it_darkens_as_it_ages(self):
+        young, scene = self.sprayed(door_coming_down(4, 22, True), 2)
+        old, _scene = self.sprayed(door_coming_down(4, 22, True), SLAM_PUFF.life[0])
+        self.assertIn(scene.air.inks[PUFF_INKS[0]], colours_in(Image.fromarray(young)))
+        self.assertNotIn(scene.air.inks[PUFF_INKS[0]], colours_in(Image.fromarray(old)))
+
+    def test_it_is_warm_in_the_firelight(self):
+        door = door_coming_down(4, 22, True)
+        x, y = (door.left + door.right) // 2, door.right_floor
+        pixels, scene = self.sprayed(door, 2, flames=[(x, y)], torches=[burning_torch(x, y)])
+        self.assertIn(scene.air.inks[DUST_WARM_INK], colours_in(Image.fromarray(pixels)))
+
+    def test_it_does_not_show_through_the_slab(self):
+        pixels, scene = self.sprayed(door_coming_down(4, 22, True))
+        cloud = scene.clouds[0]
+        rows, columns = numpy.nonzero(cloud.hidden)
+        self.assertGreater(len(rows), 100)
+        self.assertFalse(self.painted(pixels)[rows + cloud.top, columns + cloud.left].any())
+        self.assertTrue(self.painted(pixels).any())
+
+    def test_it_stays_behind_the_foreground(self):
+        cover = bytearray(blank())
+        for y in range(HEIGHT):
+            cover[y * WIDTH:(y + 1) * WIDTH] = bytes([255]) * WIDTH
+        scene = self.scene(covered=bytes(cover))
+        scene.thud(door_coming_down(4, 22, True))
         frame = wall_frame()
         scene.draw(frame)
-        changed = (numpy.asarray(frame) != WALL).any(axis=2)
-        self.assertLessEqual(int(changed.sum()), SLAM_PUFF.specks * 2)
-        self.assertGreater(int(changed.sum()), 0)
-        inks = {scene.air.inks[ink] for ink in PUFF_INKS}
-        self.assertLessEqual(colours_in(frame) - {WALL}, inks)
+        self.assertEqual(colours_in(frame), {WALL})
 
-    def test_it_darkens_through_the_rock_and_goes(self):
+    def test_a_slam_flings_a_few_loose_specks(self):
+        scene = self.scene()
+        scene.thud(door_coming_down(4, 22, True))
+        self.assertEqual(len(scene.specks), SLAM_PUFF.specks * 2)
+        self.assertTrue(all(speck.dy < 0 for speck in scene.specks))
+
+    def test_a_speck_darkens_through_the_rock_and_goes(self):
         scene = self.scene()
         speck = Speck(100.0, 100.0, 0.0, 0.0, 8, 200, PUFF_INKS)
         seen = []
@@ -1566,8 +1661,11 @@ class DoorDustTests(unittest.TestCase):
         self.assertEqual(seen[0], PUFF_INKS[0])
         self.assertEqual(seen[-1], PUFF_INKS[-1])
         self.assertEqual(seen, sorted(seen))
+        scene.specks.append(speck)
+        scene.advance_specks()
+        self.assertEqual(scene.specks, [])
 
-    def test_it_is_warm_in_the_firelight_at_first(self):
+    def test_a_speck_is_warm_in_the_firelight_at_first(self):
         scene = self.scene(flames=[(300, 200)], torches=[burning_torch(300, 200)])
         lit = Speck(300.0, 200.0, 0.0, 0.0, 8, 226, PUFF_INKS)
         self.assertEqual(scene.speck_ink(lit), DUST_WARM_INK)
@@ -1581,29 +1679,22 @@ class DoorDustTests(unittest.TestCase):
             scene.advance_specks()
             self.assertLessEqual(scene.specks[0].y, 226)
 
-    def test_it_stays_behind_the_foreground(self):
-        cover = bytearray(blank())
-        for y in range(HEIGHT):
-            cover[y * WIDTH:(y + 1) * WIDTH] = bytes([255]) * WIDTH
-        scene = self.scene(covered=bytes(cover))
-        scene.thud(door_coming_down(4, 22, True))
-        frame = wall_frame()
-        scene.draw(frame)
-        self.assertEqual(colours_in(frame), {WALL})
-
     def test_a_gate_that_lowers_itself_raises_much_less(self):
-        self.assertLess(SHUT_PUFF.specks, SLAM_PUFF.specks / 2)
+        self.assertLess(SHUT_PUFF.grains, SLAM_PUFF.grains / 2)
         self.assertLess(SHUT_PUFF.fastest, SLAM_PUFF.fastest / 2)
+        self.assertEqual(SHUT_PUFF.specks, 0)
 
     def test_a_gate_stands_where_it_is_drawn(self):
         # Shapes 3562 and 3563 of room 23 of level 4, cell 22.
         door = door_coming_down(4, 22, True)
         self.assertEqual((door.left, door.right, door.left_floor, door.right_floor), (130, 194, 353, 339))
+        self.assertTrue(door.slab)
         self.assertFalse(door.forward)
 
     def test_an_exit_door_stands_back_from_the_walking_line(self):
         door = door_coming_down(17, 25, True)
         self.assertEqual((door.left, door.right, door.left_floor, door.right_floor), (282, 332, 338, 338))
+        self.assertFalse(door.slab)
         self.assertTrue(door.forward)
 
     def test_an_exit_door_blows_out_at_the_front_and_a_little_to_the_sides(self):
@@ -1611,14 +1702,20 @@ class DoorDustTests(unittest.TestCase):
         door = door_coming_down(17, 25, True)
         scene = self.scene()
         scene.thud(door)
-        front = [speck for speck in scene.specks if speck.dy > 0]
-        sides = [speck for speck in scene.specks if speck.dy < 0]
-        self.assertGreater(len(front), len(sides))
-        self.assertGreater(len(sides), 2)
-        self.assertTrue(all(door.left <= speck.x <= door.right for speck in front))
-        self.assertTrue(all(speck.floor > door.left_floor for speck in front))
-        self.assertTrue(any(speck.x < door.left for speck in sides))
-        self.assertTrue(any(speck.x > door.right for speck in sides))
+        cloud = scene.clouds[0]
+        front, sides = cloud.dy > 0, cloud.dy < 0
+        self.assertGreater(int(front.sum()), int(sides.sum()))
+        self.assertGreater(int(sides.sum()), 10)
+        self.assertTrue(((door.left <= cloud.x[front]) & (cloud.x[front] <= door.right)).all())
+        self.assertTrue((cloud.floor[front] > door.left_floor).all())
+        self.assertTrue((cloud.x[sides] < door.left).any())
+        self.assertTrue((cloud.x[sides] > door.right).any())
+
+    def test_a_gate_blows_only_to_its_sides(self):
+        door = door_coming_down(4, 22, True)
+        scene = self.scene()
+        scene.thud(door)
+        self.assertTrue((scene.clouds[0].dy < 0).all())
 
     def test_a_fallen_tile_stands_on_its_cell(self):
         tile = tile_landing(23)
@@ -1628,12 +1725,12 @@ class DoorDustTests(unittest.TestCase):
     def test_no_door_no_dust(self):
         scene = self.scene()
         scene.advance()
-        self.assertEqual(scene.specks, [])
+        self.assertEqual(scene.clouds, [])
 
     def test_there_is_none_on_the_lava(self):
-        scene = self.scene(pools=[{x: 340 for x in range(100, 240)}])
+        scene = self.scene(pools=[{x: 340 for x in range(100, 260)}])
         scene.thud(tile_landing(23))
-        self.assertEqual(scene.specks, [])
+        self.assertEqual(scene.clouds, [])
 
 
 class DoorQueueTests(unittest.TestCase):
@@ -2354,11 +2451,11 @@ class RealSceneTests(unittest.TestCase):
         ambience = scene.level_renderer.ambience
         self.assertIsNotNone(ambience.footing)
         self.assertEqual(ambience.footing.floor, 226)
-        self.assertEqual(ambience.specks, [])
+        self.assertEqual(ambience.clouds, [])
         press(harness, 'R', True)
         harness.tick(8)
         press(harness, 'R', False)
-        self.assertGreater(len(ambience.specks), 1)
+        self.assertGreater(len(ambience.clouds), 1)
 
     def test_a_landing_raises_dust_in_the_real_scene(self):
         harness = self.harness()
@@ -2367,7 +2464,7 @@ class RealSceneTests(unittest.TestCase):
         scene.cave_ambience_enabled = True
         scene.jump_to_room(16, row=0, x=3 * 51 + 30, facing=1)
         harness.tick(7)
-        self.assertGreaterEqual(len(scene.level_renderer.ambience.specks), 1)
+        self.assertGreaterEqual(len(scene.level_renderer.ambience.clouds), 1)
 
     def test_it_moves_once_per_game_tick(self):
         harness = self.harness()
