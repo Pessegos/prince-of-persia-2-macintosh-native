@@ -2,6 +2,8 @@
 import hashlib
 import unittest
 
+from tests.right_tip_expectations import PreviousArtworkMixin
+
 from pop2.cavern_retouch import retouched_sprite
 from pop2.caverns import cavern_assets, cavern_command_sprite, cavern_room
 from pop2.level_data import LevelDefinition
@@ -18,7 +20,7 @@ FRONT_COLUMNS = ((264, 243), (315, 363))
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(),
                      'Imported game resources required')
-class Room24ArtworkTests(unittest.TestCase):
+class Room24ArtworkTests(PreviousArtworkMixin, unittest.TestCase):
     def test_approved_frame_matches_and_native_opt_out_preserves_masks(self):
         definition = LevelDefinition.read(load_resource_file('Prince.rsrc'), 3)
         edited = LevelRenderer(definition, preload_room=False).room(23)

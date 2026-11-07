@@ -2,6 +2,8 @@
 import hashlib
 import unittest
 
+from tests.right_tip_expectations import PreviousArtworkMixin
+
 from PIL import Image, ImageChops
 
 from pop2.cavern_retouch import retouched_sprite
@@ -16,7 +18,7 @@ from tests import test_cavern_retouch as retouch_tests
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(),
                      'Imported game resources required')
-class FloorRightEdgeArtworkTests(unittest.TestCase):
+class FloorRightEdgeArtworkTests(PreviousArtworkMixin, unittest.TestCase):
     def test_room16_approved_tips_preserve_other_floor_and_native_opt_out(self):
         definition = LevelDefinition.read(load_resource_file('Prince.rsrc'), 3)
         edited = LevelRenderer(definition, preload_room=False).room(15)

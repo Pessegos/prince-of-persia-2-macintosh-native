@@ -335,3 +335,18 @@ Foreground pixels, column sources, source alpha, physical masks and earlier
 approved artwork are preserved. The comparisons stay local under
 `rendered/floor-right-edge-references-v1/`. This approval covers those two
 examples only; other visible right tips require their own local previews.
+
+## Remaining right floor tips: approved batch
+
+The user approved all remaining96 visible right-tip proposals on 2026-11-07.
+These room/placement-specific SHAP3526 crops use the reviewed room16 method
+and preserve adjacent tiles, earlier retouches, native alpha and physical
+masks. Local comparisons are under `rendered/floor-right-edge-remaining-v1/`.
+Older wall/left-join goldens isolate this new layer using the exact approved
+pixel masks, asserting the complete previous sprite hash after restoration.
+Separate unmasked production-frame and source goldens cover the combined
+artwork; no original golden or mask assertion is discarded.
+
+| Level | Room | Added visible pixels | Combined cached RGB SHA256 |
+| --- | --- | --- | --- |
+| 3 | 2 | 128 | `42b5d9e0b5da04adb31e3c03d5d4d46363f73aa6e52e37f2a49f312dadb581fe` |

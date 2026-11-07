@@ -1,5 +1,7 @@
 import hashlib
 import unittest
+
+from tests.right_tip_expectations import PreviousArtworkMixin
 from unittest.mock import patch
 
 from PIL import Image
@@ -43,14 +45,16 @@ class BundledCavernRetouchTests(unittest.TestCase):
             # This room number may also have its own level-five artwork;
             # source and placement guards must still reject the wrong patch.
             self.assertIs(retouched_sprite(room, command, source, level_number=5), source)
+            # Level three can approve this same room index independently.
+            self.assertIs(retouched_sprite(room, command, source, level_number=3), source)
             with patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Wrong scope')):
-                for level in (3, 6, 7, 8, 9):
+                for level in (6, 7, 8, 9):
                     self.assertIs(retouched_sprite(room, command, source, level_number=level), source)
                 self.assertIs(retouched_sprite(20, command, source, level_number=4), source)
 
     def test_bundled_variants_have_valid_scope_and_crop_sizes(self):
         assets = retouch_assets()
-        self.assertEqual(len(assets), 83)
+        self.assertEqual(len(assets), 85)
         self.assertEqual({key[0] for key in assets}, {0, 1, 4, 6, 7, 10, 11, 12, 14, 15, 20, 23, 25, 27, 29, 31})
         for key, (record, image) in assets.items():
             with self.subTest(key=key):
@@ -81,7 +85,7 @@ class BundledCavernRetouchTests(unittest.TestCase):
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
-class CavernRetouchTests(unittest.TestCase):
+class CavernRetouchTests(PreviousArtworkMixin, unittest.TestCase):
     def test_level_eight_room_five_removes_only_the_approved_corner_fragment(self):
         native = cavern_room(4, level_number=8)
         edited = cavern_room(4, level_number=8, retouched=True)
@@ -473,7 +477,7 @@ COLUMN_SHADOWS = {
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
-class ColumnShadowArtworkTests(unittest.TestCase):
+class ColumnShadowArtworkTests(PreviousArtworkMixin, unittest.TestCase):
     def test_runtime_reproduces_approved_frames_without_changing_physics_masks(self):
         prince = load_resource_file('Prince.rsrc')
         for (level, room), (_x, _bottom, expected) in COLUMN_SHADOWS.items():
