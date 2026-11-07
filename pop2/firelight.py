@@ -37,8 +37,8 @@ ROCK_VEINS = 16.0
 # recess shuts the light in: a bright plate with an edge, whatever the flame does.
 FLAME_LIFT = 32.0
 # Pixels: where the light is a quarter gone, and where it has run out.
-LIGHT_NEAR = 18.0
-LIGHT_REACH = 70
+LIGHT_NEAR = 13.0
+LIGHT_REACH = 54
 # Cells of the flame, in pixels.
 CELL_WIDTH, CELL_HEIGHT = 10, 14
 # Points tested along each ray, and the slope over which rock goes from letting

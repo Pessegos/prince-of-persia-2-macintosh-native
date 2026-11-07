@@ -65,40 +65,49 @@ SWELL_TICKS = 18
 GRAVITY = 1.15
 FASTEST_FALL = 15.0
 
-# Dust is three kinds of grain. It read as snow when there was a lot of one kind:
+# Dust is two kinds of grain. It read as snow when there was a lot of one kind:
 # pale, evenly spread, half of it falling. So it is sparse, it gathers in patches,
 # only the coarse grains ever sink, and its colour is the rock's, not white.
 #
-# Fine grains are nearly all of it: one small opaque pixel that lasts. Bright ones
-# are the same size and catch the eye for a moment, so they do not last. Coarse
-# ones are soft and rare, the slowest, and the ones heavy enough to come down.
+# Fine grains are small opaque pixels. The brighter one is, the shorter it lasts:
+# most are dim and stay a while, and now and then one shines for a few seconds and
+# is gone. Coarse grains are soft, the slowest, and heavy enough to come down.
 @dataclass(frozen=True)
 class DustKind:
     """Times are ticks, speeds pixels a tick."""
 
     count: int
     speed: tuple
-    life: tuple
-    fade_in: int
-    fade_out: int
+    # How long the dimmest grains of this kind last.
+    life: int
     # How wide its spot is in pixels, how much of what is under it it hides, and
     # its colour in the dark.
     softness: float
     strength: float
     ink: int
-    # The share of them that sink, and how soon they take up a change in the air.
+    # The share of them that sink, how soon they take up a change in the air, and
+    # how bright they can get on the way to DUST_PALE_INK.
     sinkers: float
     follows: float
+    brightest: float
 
 
-DUST_SOFTNESS = 0.72
+DUST_SOFTNESS = 0.8
 DUST_SHARPNESS = 0.36
-FINE_DUST = DustKind(22, (0.13, 0.26), (220, 480), 48, 84, DUST_SHARPNESS, 1.0, 83, 0.0, 0.1)
-BRIGHT_DUST = DustKind(4, (0.13, 0.26), (36, 84), 12, 30, DUST_SHARPNESS, 1.0, 67, 0.0, 0.1)
-COARSE_DUST = DustKind(3, (0.11, 0.2), (300, 600), 48, 84, DUST_SOFTNESS, 0.5, 67, 0.8, 0.06)
-DUST_KINDS = (FINE_DUST, BRIGHT_DUST, COARSE_DUST)
+FINE_DUST = DustKind(24, (0.13, 0.26), 360, DUST_SHARPNESS, 1.0, 104, 0.0, 0.1, 1.0)
+COARSE_DUST = DustKind(5, (0.11, 0.2), 540, DUST_SOFTNESS, 0.62, 67, 0.8, 0.06, 0.0)
+DUST_KINDS = (FINE_DUST, COARSE_DUST)
 MOST_DUST = sum(kind.count for kind in DUST_KINDS)
-DUST_LONGEST_LIFE = max(kind.life[1] for kind in DUST_KINDS)
+# Most fine grains are dim: a grain's brightness is a random number raised to this
+# power. The brightest last this long, and life falls fast as they brighten.
+DUST_SKEW = 2.5
+DUST_BRIGHT_LIFE = 36
+DUST_LIFE_CURVE = 0.6
+DUST_LIFE_SPREAD = (0.8, 1.2)
+DUST_LONGEST_LIFE = int(max(kind.life for kind in DUST_KINDS) * DUST_LIFE_SPREAD[1])
+# How much of its span a grain takes to come, and to go.
+DUST_FADE_IN = 0.14
+DUST_FADE_OUT = 0.24
 # A new grain needs this much clear air ahead, or it could only flash by.
 DUST_SHORTEST_LIFE = 140
 # Dust gathers in a few pockets of still air, this far apart at the least, and a
@@ -188,7 +197,7 @@ AURA_GAIN, AURA_ADD = (1.9, 1.45, 1.05), (26.0, 11.0, 1.0)
 # burns is followed too, deepened because the nine frames are much alike.
 QUICK_FOLLOW, QUICK_DEPTH = 0.3, 1.6
 SLOW_FOLLOW, SLOW_DEPTH = 0.12, 2.4
-SHORTEST_REACH, LONGEST_REACH = 0.6, 1.5
+SHORTEST_REACH, LONGEST_REACH = 0.6, 1.4
 FLICKER_FOLLOW = 0.35
 FLICKER_DEPTH = 2.5
 # How far past its step a pixel's light must go before the pixel changes, in
@@ -207,12 +216,14 @@ SWELL_INKS = (214, 216, 217)
 SPLASH_INKS = (218, 216, 215, 214)
 STEAM_INKS = (67, 219, 110)
 FLASH_INKS = (199, 192)
+DUST_PALE_INK = 67
 DUST_WARM_INK = 208
 DUST_SHINE_INK = 207
 DUST_HOT_INK = 210
 ASH_INKS = (192, 189, 186, 212, 211, 110)
 ALL_INKS = frozenset((*DROP_INKS, *SWELL_INKS, *SPLASH_INKS, *STEAM_INKS, *FLASH_INKS, *ASH_INKS,
-                      *(kind.ink for kind in DUST_KINDS), DUST_WARM_INK, DUST_SHINE_INK, DUST_HOT_INK))
+                      *(kind.ink for kind in DUST_KINDS), DUST_PALE_INK, DUST_WARM_INK, DUST_SHINE_INK,
+                      DUST_HOT_INK))
 
 
 class Colours:
@@ -580,6 +591,7 @@ class Mote:
     life: float
     kind: DustKind
     spin: float = 0.2
+    brightness: float = 0.0
     age: float = 0.0
     # Its speed now, which follows dx and dy and the air around it.
     moving_x: float = 0.0
@@ -647,6 +659,15 @@ class Flicker:
     @property
     def reach(self):
         return (1 + self.quick * QUICK_DEPTH + self.slow * SLOW_DEPTH).clip(SHORTEST_REACH, LONGEST_REACH)
+
+
+def lifespan(kind, brightness):
+    """How many ticks a grain of this brightness lasts: the brighter, the shorter."""
+    return kind.life * (DUST_BRIGHT_LIFE / kind.life) ** (brightness ** DUST_LIFE_CURVE)
+
+
+def mix(one, other, amount):
+    return tuple(one[channel] + (other[channel] - one[channel]) * amount for channel in range(3))
 
 
 def soft_spot(x, y, softness=DUST_SOFTNESS):
@@ -785,7 +806,8 @@ class CavernAmbience:
         rng = self.rng
         near = rng.random()
         sink = rng.uniform(*DUST_SINK) if rng.random() < kind.sinkers else 0.0
-        shortest = min(DUST_SHORTEST_LIFE, kind.life[0])
+        brightness = rng.random() ** DUST_SKEW * kind.brightest
+        life = lifespan(kind, brightness) * rng.uniform(*DUST_LIFE_SPREAD)
         for attempt in range(DUST_TRIES):
             x, y = self.place_for_dust(near)
             # A grain that sinks tries first for a place above a floor.
@@ -796,11 +818,10 @@ class CavernAmbience:
             speed = rng.uniform(*kind.speed) * (DUST_SINKER_DRIFT if sink else 1.0)
             dx, dy = math.cos(heading) * speed, math.sin(heading) * speed
             clear = self.clear_air(x, y, dx, dy)
-            if clear >= shortest:
+            if clear >= min(DUST_SHORTEST_LIFE, life):
                 # A grain that sinks is not going where it is heading.
-                life = rng.uniform(*kind.life)
                 return Mote(x, y, dx, dy, rng.uniform(0, math.tau), life if sink else min(clear, life), kind,
-                            rng.uniform(*DUST_SPIN), moving_x=dx, moving_y=dy, sink=sink)
+                            rng.uniform(*DUST_SPIN), brightness, moving_x=dx, moving_y=dy, sink=sink)
         return None
 
     def land(self, mote, terrain):
@@ -872,20 +893,20 @@ class CavernAmbience:
         kind = mote.kind
         flame, pool = self.light_at(mote.x, mote.y)
         light = max(flame, pool)
-        fade = smooth(min(1.0, mote.age / kind.fade_in, (mote.life - mote.age) / kind.fade_out, mote.settling))
+        span = lifespan(kind, mote.brightness)
+        fade = smooth(min(1.0, mote.age / (span * DUST_FADE_IN), (mote.life - mote.age) / (span * DUST_FADE_OUT),
+                          mote.settling))
+        inks = self.air.inks
+        # The floor is brighter than the air, and only a warm pale speck shows on it.
+        if mote.rest is not None:
+            return (*inks[DUST_SHINE_INK][:3], DUST_LYING * fade)
         # Two rhythms, so that no grain flashes like a beacon.
         turn = mote.phase + mote.age * mote.spin
         glint = max(0.0, math.sin(turn)) ** 12 * max(0.0, math.sin(turn * 0.37 + mote.phase))
-        inks = self.air.inks
-        dark, lit, shine = inks[kind.ink], inks[DUST_WARM_INK if flame >= pool else DUST_HOT_INK], inks[DUST_SHINE_INK]
-        # The floor is brighter than the air, and only a warm pale speck shows on it.
-        if mote.rest is not None:
-            return shine[0], shine[1], shine[2], DUST_LYING * fade
-        warmth = min(1.0, light / DUST_FOCUS_LIGHT)
-        flash = min(1.0, DUST_FLASH * glint * light)
-        red, green, blue = (dark[channel] + (lit[channel] - dark[channel]) * warmth for channel in range(3))
-        red, green, blue = red + (shine[0] - red) * flash, green + (shine[1] - green) * flash, blue + (shine[2] - blue) * flash
-        return red, green, blue, min(1.0, kind.strength + light * DUST_LIT + DUST_GLINT * glint * light) * fade
+        dark = mix(inks[kind.ink], inks[DUST_PALE_INK], mote.brightness)
+        lit = mix(dark, inks[DUST_WARM_INK if flame >= pool else DUST_HOT_INK], min(1.0, light / DUST_FOCUS_LIGHT))
+        shown = mix(lit, inks[DUST_SHINE_INK], min(1.0, DUST_FLASH * glint * light))
+        return (*shown, min(1.0, kind.strength + light * DUST_LIT + DUST_GLINT * glint * light) * fade)
 
     # Ash
 

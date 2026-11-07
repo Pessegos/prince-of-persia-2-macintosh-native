@@ -159,11 +159,11 @@ class TracedLightTests(unittest.TestCase):
     def test_rock_in_the_way_casts_a_shadow(self):
         # A wall of bright paint to the right of the flame, none to the left.
         shades = flat_rock(0.2)
-        shades[:, MIDDLE + 30:MIDDLE + 36] = 0.9
+        shades[:, MIDDLE + 18:MIDDLE + 24] = 0.9
         light, left, top = light_on(shades)
         row = light[MIDDLE - top]
         # The flame stands well off the rock, so the shadow is close behind the ridge.
-        behind, open_side = row[MIDDLE + 40 - left], row[MIDDLE - 40 - left]
+        behind, open_side = row[MIDDLE + 29 - left], row[MIDDLE - 29 - left]
         self.assertLess(behind, open_side * 0.6)
 
     def test_the_side_of_a_ridge_facing_the_flame_takes_more_light(self):

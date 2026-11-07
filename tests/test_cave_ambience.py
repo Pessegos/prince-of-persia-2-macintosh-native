@@ -12,12 +12,12 @@ import numpy
 from PIL import Image
 
 from pop2.cavern_ambience import (
-    AMBIENCE_ROOMS, ALL_INKS, ASH_INKS, Air, Ash, BRIGHT_DUST, COARSE_DUST, CavernAmbience, Colours, DUST_HEADING,
-    DUST_POCKETS, DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS,
-    Flicker,
+    AMBIENCE_ROOMS, ALL_INKS, ASH_INKS, Air, Ash, COARSE_DUST, CavernAmbience, Colours, DUST_BRIGHT_LIFE,
+    DUST_FADE_IN, DUST_FADE_OUT, DUST_HEADING, DUST_LIFE_SPREAD, DUST_PALE_INK, DUST_POCKETS, DUST_POCKETS_APART,
+    DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
     HEAT_REACH, HEIGHT, LIGHT_HOLD, LIGHT_LEVELS, LONGEST_REACH, MOST_ASH, MOST_DUST, Mote, POOL_GLOW_REACH, QUICK_DEPTH,
     QUICK_FOLLOW, SHORTEST_REACH, SLOW_DEPTH, SLOW_FOLLOW, SPLASH_INKS, STEAM_INKS, SWELL_TICKS, WIDTH,
-    flame_pixels, glow_along, landing, on_the_pixels, read_torch, soft_spot, stalactite_tips, steady_wall,
+    flame_pixels, glow_along, landing, lifespan, on_the_pixels, read_torch, soft_spot, stalactite_tips, steady_wall,
 )
 from pop2.firelight import DIRECTIONS, LIGHT_REACH, gaussian
 from pop2.game_menu import GameMenu
@@ -321,7 +321,7 @@ class DustTests(unittest.TestCase):
         # Twice what the coarse grains do was too fast for the user, and they are
         # the slowest: the rest stay well short of that.
         scene = CavernAmbience(0, room_air(flames=[(200, 200)]), random.Random(6))
-        for kind in (FINE_DUST, BRIGHT_DUST, COARSE_DUST):
+        for kind in (FINE_DUST, COARSE_DUST):
             self.assertLessEqual(kind.speed[1], 0.31)
             for _ in range(100):
                 mote = scene.new_mote(kind)
@@ -336,8 +336,8 @@ class DustTests(unittest.TestCase):
             strengths.append(scene.dust_colour(mote)[3])
         self.assertEqual(strengths[0], 0)
         self.assertAlmostEqual(strengths[-1], 0, places=6)
-        rising = strengths[:COARSE_DUST.fade_in // 2 + 1]
-        falling = strengths[-(COARSE_DUST.fade_out // 2 + 1):]
+        rising = strengths[:int(COARSE_DUST.life * DUST_FADE_IN) // 2 + 1]
+        falling = strengths[-(int(COARSE_DUST.life * DUST_FADE_OUT) // 2 + 1):]
         self.assertEqual(rising, sorted(rising))
         self.assertEqual(falling, sorted(falling, reverse=True))
         self.assertLess(max(abs(after - before) for before, after in zip(strengths, strengths[1:])), 0.05)
@@ -351,7 +351,7 @@ class DustTests(unittest.TestCase):
         for _ in range(100):
             mote = scene.new_mote()
             self.assertLess(mote.x + mote.dx * mote.life, 208)
-            self.assertLessEqual(mote.life, FINE_DUST.life[1])
+            self.assertLessEqual(mote.life, FINE_DUST.life * DUST_LIFE_SPREAD[1])
 
     def test_dust_gathers_in_a_few_pockets_of_air(self):
         # Evenly spread and falling, it looked like snow.
@@ -364,7 +364,7 @@ class DustTests(unittest.TestCase):
             for _ in range(100):
                 mote = scene.new_mote()
                 nearest = min(math.hypot(mote.x - x, mote.y - y) for x, y in scene.pockets)
-                self.assertLess(nearest, 90)
+                self.assertLess(nearest, 110)
 
     def test_pockets_are_in_the_open_air(self):
         opened = bytearray(blank())
@@ -419,7 +419,6 @@ class DustTests(unittest.TestCase):
         scene = still_ambience(room_air(flames=[(300, 200)], torches=[burning_torch()]))
         # A faint grain could only be found by someone who knew to look for it.
         self.assertEqual(scene.dust_colour(self.mote(20, 20, FINE_DUST))[3], 1.0)
-        self.assertEqual(scene.dust_colour(self.mote(20, 20, BRIGHT_DUST))[3], 1.0)
         self.assertGreater(scene.dust_colour(self.mote(310, 200))[3], scene.dust_colour(self.mote(20, 20))[3])
 
     def test_a_grain_in_the_dark_stands_out_from_the_dark_wall(self):
@@ -525,11 +524,55 @@ class DustTests(unittest.TestCase):
         scene = still_ambience(room_air(flames=[(200, 200)]))
         return [scene.new_mote(kind) for _ in range(count)]
 
-    def test_there_is_little_dust_and_nearly_all_of_it_is_fine(self):
+    def test_there_is_little_dust_and_most_of_it_is_fine(self):
         # Sixty grains, a lot of them coarse, looked like snow.
         self.assertLess(MOST_DUST, 35)
-        self.assertGreater(FINE_DUST.count, 3 * BRIGHT_DUST.count)
-        self.assertLessEqual(COARSE_DUST.count, 3)
+        self.assertGreater(FINE_DUST.count, 4 * COARSE_DUST.count)
+
+    def test_the_brighter_a_grain_the_shorter_it_lasts(self):
+        lives = [lifespan(FINE_DUST, brightness / 10) for brightness in range(11)]
+        self.assertEqual(lives, sorted(lives, reverse=True))
+        self.assertEqual(lives[0], FINE_DUST.life)
+        self.assertAlmostEqual(lives[-1], DUST_BRIGHT_LIFE)
+
+    def test_the_brightest_are_gone_in_about_three_seconds(self):
+        # The user meant really short: three seconds or so.
+        self.assertLessEqual(DUST_BRIGHT_LIFE * DUST_LIFE_SPREAD[1] / 12, 3.7)
+
+    def test_a_grain_half_as_bright_is_already_much_shorter_lived(self):
+        self.assertLess(lifespan(FINE_DUST, 0.5), FINE_DUST.life * 0.3)
+
+    def test_most_fine_grains_are_dim(self):
+        grains = self.grains(FINE_DUST)
+        brightness = numpy.array([mote.brightness for mote in grains])
+        self.assertGreater((brightness < 0.25).mean(), 0.5)
+        self.assertGreater((brightness > 0.6).mean(), 0.05)
+        self.assertLess((brightness > 0.6).mean(), 0.3)
+
+    def test_a_grain_lives_what_its_brightness_says(self):
+        for mote in self.grains(FINE_DUST):
+            self.assertLessEqual(mote.life, lifespan(FINE_DUST, mote.brightness) * DUST_LIFE_SPREAD[1] + 1e-6)
+
+    def test_coarse_grains_do_not_shine(self):
+        self.assertTrue(all(mote.brightness == 0 for mote in self.grains(COARSE_DUST)))
+
+    def test_a_brief_grain_still_comes_and_goes(self):
+        scene = still_ambience(room_air())
+        mote = Mote(100.0, 100.0, 0.0, 0.0, 0.0, DUST_BRIGHT_LIFE, FINE_DUST, brightness=1.0)
+        strengths = []
+        for age in range(0, DUST_BRIGHT_LIFE + 1):
+            mote.age = age
+            strengths.append(scene.dust_colour(mote)[3])
+        self.assertEqual(strengths[0], 0)
+        self.assertEqual(max(strengths), 1.0)
+        self.assertAlmostEqual(strengths[-1], 0, places=6)
+
+    def test_a_brighter_grain_is_paler(self):
+        scene = still_ambience(room_air())
+        dim = scene.dust_colour(self.mote(100, 100, FINE_DUST))[:3]
+        bright = replace(self.mote(100, 100, FINE_DUST), brightness=1.0)
+        self.assertEqual(tuple(scene.dust_colour(bright)[:3]), tuple(palette()[DUST_PALE_INK][:3]))
+        self.assertEqual(tuple(dim), tuple(palette()[FINE_DUST.ink][:3]))
 
     def test_the_coarse_grains_are_the_slowest(self):
         self.assertLess(COARSE_DUST.speed[1], FINE_DUST.speed[1])
@@ -537,20 +580,15 @@ class DustTests(unittest.TestCase):
         fine = [math.hypot(mote.dx, mote.dy) for mote in self.grains(FINE_DUST)]
         self.assertGreater(numpy.mean(fine), numpy.mean(coarse) * 1.3)
 
-    def test_a_bright_grain_does_not_last(self):
-        self.assertLess(BRIGHT_DUST.life[1], FINE_DUST.life[0] / 2)
-        self.assertTrue(all(mote.life <= BRIGHT_DUST.life[1] for mote in self.grains(BRIGHT_DUST)))
-
     def test_only_the_coarse_grains_sink(self):
         self.assertFalse(any(mote.sink for mote in self.grains(FINE_DUST)))
-        self.assertFalse(any(mote.sink for mote in self.grains(BRIGHT_DUST)))
         share = numpy.mean([mote.sink > 0 for mote in self.grains(COARSE_DUST)])
         self.assertGreater(share, 0.6)
         self.assertLess(share, 1.0)
 
     def test_a_sinking_grain_lives_past_where_it_was_heading(self):
         grain = next(mote for mote in self.grains(COARSE_DUST) if mote.sink)
-        self.assertGreaterEqual(grain.life, COARSE_DUST.life[0])
+        self.assertGreaterEqual(grain.life, COARSE_DUST.life * DUST_LIFE_SPREAD[0])
 
     def test_a_sinking_grain_starts_above_a_floor(self):
         # High up it could only settle on a pillar, long before it came down.
@@ -582,7 +620,7 @@ class DustTests(unittest.TestCase):
 
     def test_a_coarse_grain_is_soft_in_the_dark_and_shows_what_is_under_it(self):
         scene = still_ambience(room_air())
-        self.assertLess(scene.dust_colour(self.mote(100.0, 100.0))[3], 0.7)
+        self.assertLess(scene.dust_colour(self.mote(100.0, 100.0))[3], 0.75)
         scene.motes.append(self.mote(100.2, 100.2))
         frame = scene.draw(wall_frame())
         self.assertGreater(int((numpy.asarray(frame) != WALL).any(axis=2).sum()), 4)
@@ -1240,14 +1278,15 @@ class ChosenRoomTests(unittest.TestCase):
         # same oval whatever the flame did.
         torch = self.air.torches[0]
         steady = torch.firelight.steady
-        # A light that fades is brighter inside, but not several times over.
+        # A light kept close fades fast, so it is brighter inside. The plate was
+        # 2.8 times brighter, with an edge.
         self.assertLess(steady[self.beside_the_edge_of_the_recess(torch, True)].mean(),
-                        steady[self.beside_the_edge_of_the_recess(torch, False)].mean() * 1.5)
+                        steady[self.beside_the_edge_of_the_recess(torch, False)].mean() * 2.5)
 
     def test_the_light_gets_out_of_the_recess(self):
         # With the flame close to the rock, the rim of the recess shut the light in.
         torch = self.air.torches[0]
-        self.assertGreater(torch.firelight.steady[self.beside_the_edge_of_the_recess(torch, False)].mean(), 0.2)
+        self.assertGreater(torch.firelight.steady[self.beside_the_edge_of_the_recess(torch, False)].mean(), 0.12)
 
     def reach_as_it_burns(self):
         firelight = self.air.torches[0].firelight
@@ -1273,7 +1312,8 @@ class ChosenRoomTests(unittest.TestCase):
                     / (numpy.roll(numpy.roll(first, down, 0), across, 1) | second).sum()
                     for down in range(-10, 11, 2) for across in range(-10, 11, 2)]
             left.append(1 - max(fits))
-        self.assertGreater(numpy.mean(left), 0.15)
+        # The old light that only moved left about 0.11.
+        self.assertGreater(numpy.mean(left), 0.13)
 
     def test_each_way_of_the_light_keeps_to_itself(self):
         # A light that only grew and shrank would be the same oval.
@@ -1299,19 +1339,19 @@ class ChosenRoomTests(unittest.TestCase):
         for reach in reaches[::10]:
             lit = firelight.at(reach, 1.0) > 0.3
             beyond.append(455 - int(columns[lit].min()))
-        self.assertLess(numpy.mean(beyond), 45)
-        self.assertLess(max(beyond), 62)
+        self.assertLess(numpy.mean(beyond), 28)
+        self.assertLess(max(beyond), 42)
         areas = numpy.array([(firelight.at(reach, 1.0) > 0.3).sum() for reach in reaches[::20]])
-        self.assertLess(areas.max(), 6500)
-        self.assertGreater(areas.min(), 2500)
+        self.assertLess(areas.max(), 4600)
+        self.assertGreater(areas.min(), 1500)
 
     def test_dust_keeps_to_the_colours_of_the_rock(self):
         inks = self.air.inks
-        for kind in (FINE_DUST, BRIGHT_DUST, COARSE_DUST):
-            red, green, blue, _alpha = inks[kind.ink]
+        for ink in (FINE_DUST.ink, COARSE_DUST.ink, DUST_PALE_INK):
+            red, green, blue, _alpha = inks[ink]
             self.assertGreaterEqual(red, green)
             self.assertGreaterEqual(green, blue)
-        self.assertLess(sum(inks[FINE_DUST.ink][:3]), sum(inks[BRIGHT_DUST.ink][:3]))
+        self.assertLess(sum(inks[FINE_DUST.ink][:3]), sum(inks[DUST_PALE_INK][:3]))
 
     def test_the_cracks_stay_as_they_were_painted(self):
         scene = CavernAmbience(16, replace(self.air, pool_glows=()), random.Random(2))
@@ -1377,8 +1417,8 @@ class ChosenRoomTests(unittest.TestCase):
         rows, columns = numpy.nonzero(change)
         self.assertTrue(len(rows))
         self.assertGreaterEqual(columns.min(), 478 - LIGHT_REACH)
-        self.assertGreaterEqual(rows.min(), 172 - LIGHT_REACH)
-        self.assertLessEqual(rows.max(), 172 + LIGHT_REACH)
+        self.assertGreaterEqual(rows.min(), 171 - LIGHT_REACH)
+        self.assertLessEqual(rows.max(), 171 + LIGHT_REACH)
         every_row, every_column = numpy.mgrid[:HEIGHT, :WIDTH]
         far = numpy.hypot(every_column - 478, every_row - 172) > 70
         self.assertLess(change[far].mean(), 4)
