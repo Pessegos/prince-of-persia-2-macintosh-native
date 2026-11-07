@@ -186,6 +186,10 @@ FOOT_DOWN_UNMARKED = 12
 # That foot is the toe of his shoe. Dust comes from behind the heel: under the shoe it
 # was hidden by it.
 STEP_HEEL = 12
+# Running, he stops or turns back on frames 53 to 65. On 55 his planted foot slides on
+# the floor, and on 57 he is still skidding round into the turn: dust sprays a little
+# ahead of his toe, the way he is sliding, low along the floor.
+SKID_FRAMES = (55, 57)
 # Whatever comes down knocks up a puff of dust from the floor: a few round lobes that go
 # out low to both sides of its foot, hug the floor, swell as they slow and thin away. Each
 # lobe keeps its own outline and a lit top, and is painted in a few hard shades of warm
@@ -213,6 +217,7 @@ SHUT_PUFF = Puff(4, 1.4, (0.05, 0.25), (8, 16), (2.5, 4.5), 0.5)
 TILE_PUFF = Puff(9, 3.3, (0.12, 0.5), (12, 26), (3, 6), 0.72)
 STEP_PUFF = Puff(3, 0.7, (0.05, 0.18), (8, 14), (2.2, 4), 0.75, height=14, depth=(-2, 1))
 LANDING_PUFF = Puff(4, 1.1, (0.08, 0.25), (8, 16), (2.5, 4.5), 0.63, height=18, depth=(-2, 1))
+SKID_PUFF = Puff(5, 2.2, (0.04, 0.14), (9, 15), (2.5, 4), 0.8, height=12, depth=(-2, 1))
 LANDING_FALL = 18
 MOST_LANDING_LOBES = 6
 MOST_CLOUDS = 10
@@ -1308,6 +1313,8 @@ class CavernAmbience:
             return
         if last.falling and not footing.falling:
             self.land_on(footing, last.speed)
+        elif footing.action in SKID_FRAMES and footing.floor == last.floor and abs(moved) >= STEP_SPEED:
+            self.skid(footing, moved)
         elif (self.foot_down(footing) and footing.floor == last.floor and abs(moved) >= STEP_SPEED):
             stride = footing.foot - last.foot
             if abs(stride) >= STEP_STRIDE and stride * moved > 0:
@@ -1321,6 +1328,10 @@ class CavernAmbience:
         behind = -1 if moved > 0 else 1
         heel = footing.foot + behind * STEP_HEEL
         self.thud(Thud(heel - 1, heel + 1, footing.floor, footing.floor, STEP_PUFF, only=behind))
+
+    def skid(self, footing, moved):
+        ahead = 1 if moved > 0 else -1
+        self.thud(Thud(footing.foot - 1, footing.foot + 1, footing.floor, footing.floor, SKID_PUFF, only=ahead))
 
     def land_on(self, footing, speed):
         lobes = min(MOST_LANDING_LOBES, LANDING_PUFF.lobes + speed // LANDING_FALL)

@@ -530,7 +530,25 @@ class Caverns(Environment):
                  for (room, cell), slammed in caverns.plates.shut if room == scene.room_id]
         thuds.extend(tile_landing(cell) for room, cell in caverns.loose.landed if room == scene.room_id)
         caverns.loose.landed.clear()
+        thuds.extend(self.crush_slam())
         return thuds
+
+    def crush_slam(self):
+        """A gate coming down on the Prince stops on him, so it never says it shut: its
+        slam is the crush's, drawn at SLAM_AT_MS. Yields its dust once, the tick it lands."""
+        from pop2.cavern_ambience import GATE, door_coming_down
+        from pop2.gate_crush import SLAM_AT_MS
+
+        scene = self.scene
+        crush = scene.game.caverns.crush
+        # The environment is made afresh each time, so the scene keeps what was seen.
+        seen = getattr(scene, 'cave_crush_seen', None)
+        scene.cave_crush_seen = None if crush.key is None else (crush.key, crush.elapsed_ms)
+        if (crush.key is not None and seen is not None and seen[0] == crush.key and crush.room == scene.room_id
+                and seen[1] < SLAM_AT_MS <= crush.elapsed_ms):
+            room, cell = crush.key
+            if room == scene.room_id:
+                yield door_coming_down(GATE, cell, True)
 
     def frame_start(self):
         scene = self.scene

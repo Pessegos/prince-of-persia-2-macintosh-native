@@ -24,7 +24,7 @@ from pop2.cavern_ambience import (
     DROP_INKS, DROP_LAVA_INK, DROP_SHINE_LIGHT, DROP_WARM_LIGHT, SWELL_INKS,
     DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
     Footing, GATE, GATE_FOOT, LANDING_FALL, LANDING_PUFF, MOST_CLOUDS, MOST_LANDING_LOBES,
-    SHUT_PUFF, SLAM_PUFF, STEP_HEEL, STEP_PUFF, TILE_PUFF, Thud, gate_view,
+    SHUT_PUFF, SKID_PUFF, SLAM_PUFF, STEP_HEEL, STEP_PUFF, TILE_PUFF, Thud, gate_view,
     door_coming_down, tile_landing,
     WAKE_REACH,
     HAZE_OVER_FLAME, HAZE_OVER_POOL, HAZE_RISE, HAZE_WAVE, QUIET_DUST, flame_of, haze_of, haze_over, room_torches,
@@ -1411,6 +1411,34 @@ class FeetTests(unittest.TestCase):
         self.assertTrue((reach >= STEP_HEEL - 2).all())
         self.assertTrue((reach <= STEP_HEEL + 5).all())
 
+    # Running left, then turning back, as the real scene plays it: frames 53 to 57.
+    TURN = ((220, 226, 14), (200, 223, 7), (198, 197, 53), (197, 197, 54), (170, 167, 55), (164, 163, 56),
+            (139, 145, 57), (131, 138, 58))
+
+    def test_a_skid_sprays_dust_ahead_of_his_toe(self):
+        scene = self.scene()
+        skids = []
+        for step in self.TURN:
+            before = len(scene.clouds)
+            scene.tread(self.footing(*step))
+            if len(scene.clouds) > before:
+                skids.append(step[2])
+                cloud, toe = scene.clouds[-1], step[1]
+                self.assertEqual(len(cloud.x), SKID_PUFF.lobes)
+                # Ahead of it, the way he slides, and not behind his heel as a step.
+                self.assertTrue((cloud.x <= toe + 1).all())
+                self.assertTrue((cloud.dx < 0).all())
+        self.assertEqual(skids, [55, 57])
+
+    def test_a_slow_turn_raises_none(self):
+        scene = self.scene()
+        self.run_through(scene, ((200, 197, 54), (198, 196, 55), (196, 195, 56), (194, 193, 57)))
+        self.assertEqual(scene.clouds, [])
+
+    def test_a_skid_raises_less_than_a_slam_and_lies_low(self):
+        self.assertLess(SKID_PUFF.lobes * 2, SLAM_PUFF.lobes * 2)
+        self.assertLessEqual(SKID_PUFF.height, STEP_PUFF.height)
+
     def test_his_dust_is_level_with_his_shoes(self):
         # It lay up to six pixels below him, and looked as if it had come from elsewhere.
         scene = self.scene()
@@ -1563,6 +1591,56 @@ class FeetTests(unittest.TestCase):
 
         scene = SimpleNamespace(sequence_state=None, terrain_motion=None)
         self.assertIsNone(Caverns.prince_footing(SimpleNamespace(scene=scene)))
+
+
+class CrushDustTests(unittest.TestCase):
+    """A gate that comes down on the Prince stops on him and never says it shut."""
+
+    def setUp(self):
+        from pop2.gate_crush import GateCrush
+
+        self.crush = GateCrush()
+        self.scene = SimpleNamespace(room_id=22, level_map=None, game=SimpleNamespace(caverns=SimpleNamespace(
+            crush=self.crush, plates=SimpleNamespace(shut=[]), loose=SimpleNamespace(landed=[]))))
+
+    def thuds(self, elapsed=None):
+        from pop2.environments import Caverns
+
+        if elapsed is not None:
+            self.crush.key, self.crush.room, self.crush.elapsed_ms = (22, 1), 22, elapsed
+        return Caverns(self.scene).thuds()
+
+    def test_its_slam_raises_dust_once_as_it_lands(self):
+        from pop2.gate_crush import SLAM_AT_MS
+
+        # It raised none at all.
+        self.assertEqual(self.thuds(0), [])
+        self.assertEqual(self.thuds(SLAM_AT_MS - 1), [])
+        self.assertEqual(self.thuds(SLAM_AT_MS + 60), [door_coming_down(GATE, 1, True)])
+        self.assertEqual(self.thuds(SLAM_AT_MS + 160), [])
+
+    def test_a_crush_already_past_its_slam_raises_none(self):
+        from pop2.gate_crush import SLAM_AT_MS
+
+        self.assertEqual(self.thuds(SLAM_AT_MS + 60), [])
+        self.assertEqual(self.thuds(SLAM_AT_MS + 160), [])
+
+    def test_the_next_crush_raises_its_own(self):
+        from pop2.gate_crush import SLAM_AT_MS
+
+        self.thuds(0)
+        self.assertEqual(len(self.thuds(SLAM_AT_MS)), 1)
+        self.crush.reset()
+        self.assertEqual(self.thuds(), [])
+        self.thuds(0)
+        self.assertEqual(len(self.thuds(SLAM_AT_MS)), 1)
+
+    def test_none_in_another_room(self):
+        from pop2.gate_crush import SLAM_AT_MS
+
+        self.thuds(0)
+        self.scene.room_id = 23
+        self.assertEqual(self.thuds(SLAM_AT_MS), [])
 
 
 class DoorDustTests(unittest.TestCase):
