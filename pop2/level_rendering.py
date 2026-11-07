@@ -155,6 +155,7 @@ class LevelRenderer:
         """Drawn after remember_scenery: a room cut keeps the scenery of the
         previous room in places, and must not keep a mote or a drop with it."""
         if self.ambience is not None and self.ambience.room == room_id:
+            self.ambience.see_gates(self.rooms[room_id])
             return self.ambience.draw(frame)
         return frame
 

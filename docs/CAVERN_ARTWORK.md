@@ -254,14 +254,17 @@ What the user has reviewed and how each part ended up:
   are left out of saves. The entry door that slams behind him at the start of a level
   does the same.
 - **Gates stop the torch's light.** The light is traced on the room with its gates up,
-  whatever they are doing when the Prince comes in, and a gate that is down shuts it out
-  as it is drawn (`gate_shade`). Traced on a shut gate, the light stopped at its front
-  part, went on over the rest of it, and left a hole where the gate had been once it
-  rose. A slab stands across the room with its near end on the left, so its visible
-  face and all that lies beyond are on one side of that end. As it rises the light comes
-  in under it, a ray at a time, with a soft edge so that no hard line slides over the
-  rock, and it goes for good once the gate is at the top. The air behind a shut gate is
-  dark too. A torch reaches 54 pixels, so of the 15 rooms with a gate and a torch this
+  whatever they are doing when the Prince comes in. Traced on a shut gate, the light
+  stopped at its front part, went on over the rest of it, and left a hole where the gate
+  had been once it rose. A slab stands across the room with its near end on the left and
+  its far end at the back wall, and shows its right-hand face. So the wall it comes down
+  over is on the torch's side of it: the slab only hides that wall, which keeps all of
+  its light however the gate moves. A first try cast the slab's shadow ray by ray, and a
+  shadow came down that wall with the gate: the user saw that the wall is on the torch's
+  side. What takes none is the slab itself, seen with its
+  back to the flame, and the air in front of it (`GateView`). Those pixels are read by
+  comparing the room as it stands with the room with its gates up, each time it is
+  redrawn. A torch reaches 54 pixels, so of the 15 rooms with a gate and a torch this
   only shows in room 11 of level 4, where the torch stands nine pixels from the gate. A
   torch to the right of a gate lights its visible face, which is right.
 - **Lava light** is traced over the rock with the same engine as the torch

@@ -252,11 +252,6 @@ GATE_SLANT = 7
 GATE_EDGE = (3, -8)
 EXIT_DOOR_FOOT = (27, 77)
 EXIT_DOOR_BACK = 8
-# How far a gate rises, in pixels: two for each of its quarter-phases, as caverns.py
-# draws it. A gate stops the firelight, which comes back this many pixels below its
-# bottom edge as it goes up, so that no hard line slides over the rock.
-GATE_RISES = 92
-GATE_SHADE_EDGE = 6
 # The foot of a floor tile that fell, from the left of its column.
 TILE_FOOT = (4, 80)
 # The air he runs through is dragged along with him: how far around the middle of
@@ -454,6 +449,7 @@ class TorchArt:
     firelight: Firelight
     light: Glow
     lit_air: numpy.ndarray
+    gates: 'GateView | None' = None
 
     @property
     def box(self):
@@ -581,37 +577,34 @@ def torch_art(record, resources, palette, shapes, table, scenery, in_front):
 
 
 @dataclass(frozen=True)
-class Slab:
-    """A gate of the room. x is where the near end of its foot stands, and foot how far
-    down the screen that is when it is shut."""
+class GateView:
+    """A torch's window as it shows with the gates up, and [x] of its columns where a
+    gate can come down with its back to the flame."""
 
-    column: int
-    row: int
-    x: int
-    foot: int
+    opened: numpy.ndarray
+    columns: numpy.ndarray
 
-    def lift(self, terrain, room):
-        """How many pixels it has risen."""
-        return min(terrain.tile(room, self.column, self.row).foreground & 255, 184) // 4 * 2
-
-
-def room_slabs(terrain, room):
-    return tuple(Slab(column, row, column * TILE_WIDTH + GATE_FOOT[0], floor_y(row) + GATE_SLANT)
-                 for row in range(3) for column in range(10) if terrain.tile(room, column, row).kind == GATE)
+    def shade(self, shown):
+        """[y, x] of what the flame can light in the window as it shows now: all of it but
+        the gates themselves. Some of a slab's pixels are the colour of the rock behind it,
+        and they are slab all the same, so each column is taken from top to foot."""
+        gate = (shown != self.opened).any(axis=2) & self.columns
+        return ~(numpy.logical_or.accumulate(gate, axis=0) & numpy.logical_or.accumulate(gate[::-1], axis=0)[::-1])
 
 
-def gate_shade(firelight, slab, lift):
-    """[y, x] of what gets past a gate of a torch's light. A slab stands across the room,
-    so all of its visible face and what lies beyond it is on one side of its near end. A
-    ray gets through only under its bottom edge."""
-    height, width = firelight.rest.shape
-    rows, columns = numpy.mgrid[firelight.top:firelight.top + height, firelight.left:firelight.left + width]
-    flame_x, flame_y = firelight.middle
-    beyond = (columns - slab.x) * (flame_x - slab.x) <= 0
-    apart = numpy.where(columns == flame_x, 1.0, columns - flame_x)
-    crosses_at = flame_y + (rows - flame_y) * (slab.x - flame_x) / apart
-    under = ((crosses_at - (slab.foot - lift)) / GATE_SHADE_EDGE).clip(0, 1)
-    return numpy.where(beyond, under, 1.0).astype(numpy.float32)
+def gate_view(torch, scenery, terrain, room):
+    """None unless a gate in the torch's reach has its back to the flame. A slab stands
+    across the room, near end on the left and far end at the back wall, and shows its
+    right-hand face. So the wall it comes down over is on the flame's side of it, whatever
+    it does, and a flame right of its far end lights the face that we see."""
+    left, top, right, bottom = torch.light.box
+    columns = numpy.zeros(right - left, dtype=bool)
+    for row in range(3):
+        for column in range(10):
+            near, far = (column * TILE_WIDTH + foot for foot in GATE_FOOT)
+            if terrain.tile(room, column, row).kind == GATE and torch.firelight.middle[0] < far:
+                columns[max(near - left, 0):max(far - left, 0)] = True
+    return GateView(scenery[top:bottom, left:right], columns) if columns.any() else None
 
 
 @dataclass(frozen=True)
@@ -629,7 +622,6 @@ class Air:
     pool_glows: tuple = ()
     torches: tuple = ()
     hazes: tuple = ()
-    slabs: tuple = ()
 
     def is_open(self, x, y):
         return 0 <= x < WIDTH and 0 <= y < HEIGHT and bool(self.open[y * WIDTH + x])
@@ -785,9 +777,9 @@ def shows(torch, in_front):
 
 def analyze_room(program, room, art, terrain, palette, resources=None, shapes=None, raised=None):
     """raised: the room with its gates up. Torches are traced on that whatever the gates
-    are doing when the Prince comes in, and a gate that is down stops the light as it is
-    drawn: traced on a shut gate, the light stopped at its front, went on over the rest of
-    it and left a hole where it had been once it rose."""
+    are doing when the Prince comes in, and a gate that is down is left out as it is drawn:
+    traced on a shut gate, the light stopped at its front, went on over the rest of it and
+    left a hole where it had been once it rose."""
     scenery = Image.alpha_composite(art.background, art.foreground)
     luminance = scenery.convert('L')
     air = open_air(luminance, terrain, room)
@@ -813,11 +805,11 @@ def analyze_room(program, room, art, terrain, palette, resources=None, shapes=No
         arts = ((record, torch_art(record, resources, palette, shapes, colours.firelight, pixels, before_torches))
                 for record in records)
         seen = tuple((record, torch) for record, torch in arts if torch is not None and shows(torch, before_torches))
-        records, torches = tuple(record for record, _ in seen), tuple(torch for _, torch in seen)
+        records = tuple(record for record, _ in seen)
+        torches = tuple(replace(torch, gates=gate_view(torch, pixels, terrain, room)) for _, torch in seen)
     flames = tuple(flame_of(record) for record in records)
     hazes += tuple(haze_of(torch, before_torches) for torch in torches)
-    return Air(air, covered, drips, flames, pools, colours, inks, centres, pool_glows, torches, hazes,
-               room_slabs(terrain, room))
+    return Air(air, covered, drips, flames, pools, colours, inks, centres, pool_glows, torches, hazes)
 
 
 def pool_centre(columns):
@@ -1082,8 +1074,8 @@ class CavernAmbience:
     flickers: list = field(default_factory=list)
     clouds: list = field(default_factory=list)
     footing: Footing | None = None
-    # How far up each of the room's gates is.
-    lifts: tuple | None = None
+    # The room as it was last looked at for gates.
+    art: object = None
     # The air he is dragging along this tick: where his body is, and how far he moved.
     wake: tuple | None = None
     tick: int = 0
@@ -1110,19 +1102,18 @@ class CavernAmbience:
         still = numpy.zeros(DIRECTIONS)
         return Flicker(light_steps(torch.light.falloff, torch.light.dither, 1.0), still, still)
 
-    def watch_gates(self, terrain):
-        """A gate that is down stops the firelight. It moves two pixels at a time."""
-        if terrain is None or not self.air.slabs:
+    def see_gates(self, art):
+        """The room as it stands, which is redrawn whenever a gate moves. A slab only hides
+        the wall it comes down over, so the wall goes on taking the light behind it, and
+        all that a gate with its back to the flame leaves out is its own pixels."""
+        if art is self.art:
             return
-        lifts = tuple(slab.lift(terrain, self.room) for slab in self.air.slabs)
-        if lifts == self.lifts:
-            return
-        self.lifts = lifts
+        self.art = art
         for torch, flicker in zip(self.air.torches, self.flickers):
-            light = torch.firelight
-            shades = [gate_shade(light, slab, lift) for slab, lift in zip(self.air.slabs, lifts)
-                      if lift < GATE_RISES and light.left <= slab.x < light.left + light.rest.shape[1]]
-            flicker.shade = numpy.minimum.reduce(shades) if shades else None
+            if torch.gates is not None:
+                box = torch.light.box
+                shown = Image.alpha_composite(art.background.crop(box), art.foreground.crop(box))
+                flicker.shade = torch.gates.shade(numpy.array(shown.convert('RGB')))
 
     def pool_strength(self):
         return 0.92 + 0.06 * wave(self.tick, (0.6, 0.07, 0.0), (0.4, 0.043, 1.0))
@@ -1465,7 +1456,6 @@ class CavernAmbience:
     def advance(self, terrain=None, footing=None, thuds=()):
         """One game tick."""
         self.tick += 1
-        self.watch_gates(terrain)
         self.tread(footing)
         for thud in thuds:
             self.thud(thud)
@@ -1540,7 +1530,7 @@ class CavernAmbience:
             if flicker.shade is not None:
                 light = light * flicker.shade
             wanted = light * LIGHT_LEVELS + torch.light.dither
-            # Where a gate has shut the light out, none stays behind on the rock.
+            # A gate coming down leaves no light behind on its pixels.
             moved = (numpy.abs(wanted - 0.5 - flicker.steps) > 0.5 + LIGHT_HOLD) | (light == 0)
             flicker.steps = numpy.where(moved, light_steps(light, torch.light.dither, 1.0), flicker.steps)
         wall = drawn & ~torch.flame[game_frame]
