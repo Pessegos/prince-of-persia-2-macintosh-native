@@ -435,3 +435,116 @@ masks remain unchanged. Comparisons are local under
 `rendered/column-shadow-followup-v1/`. The audit covers static contexts of this
 column model; its former exclusion list is not proof that all cavern artwork
 has been corrected. Keep visual review of genuinely different contexts separate.
+
+## Short columns: approved upper and lower joins
+
+The user approved the short-column V2 review on 2026-11-07. Room5's small
+P3 column at X212/bottom362 needs the continuation on its upper half too.
+The new treatment follows the actual SHAP3531 contour through the dark
+outer source fringe and adjacent wall, retaining native texture and palette.
+It preserves the lit stone, alpha and all actor/floor/climb/gate masks.
+
+Five source-checked crops add690 visible changes to this room. The earlier
+long-column V4 remains intact; the combined cached RGB hash is now
+`4c21295ad0cc54ed2aecc91cf40433df13f4576ee3fab320c53544783cc798a5`.
+The approved comparisons remain local under `rendered/short-column-selected-v2/`.
+
+The same review approves level4 room6's P1 and P2 short columns, both at
+X365 with bottoms242 and362. Ten placement-specific crops add1242 visible
+changes. The upper column's overlying rock stays intact; only the visible
+dark contour and adjacent wall are treated. The combined cached RGB hash is
+`78c0838162512e9e1c29a17e6d160173e6c7c4545935e3908c20a340a3adaabb`.
+
+Level5 room22's P1 at X110/bottom242 completes this four-column selection.
+Five crops add691 visible changes, with cached RGB hash
+`85d1c7b09db45de43cd81f3af54943bddbff9413b088d25236a44bf6dad1609b`.
+All four preserve the native source alpha and the inner/lit stone body.
+The upper dark-fringe changes are limited to the outer three pixels of the
+actual contour, with native RGB at most66 and green at most33; this is a
+local reviewed exception to the earlier darker-fringe-only treatments.
+The first short-column proposal was not approved because it left the upper
+join untreated. V2 retains its lower treatment and extends through the upper
+join; none of the inventory's other similar contexts are approved targets.
+
+## Level3 room24: long-column shadow and lower wall join
+
+The user approved room24's two separate local comparisons on 2026-11-07.
+The upper/middle SHAP3533 at X264/bottom243 uses four source-checked crops
+to continue the wall lighting along its actual contour, changing553 visible
+pixels. Its lit stone and all alpha/actor/floor/climb/gate masks stay intact.
+The neighboring background SHAP3534 column is preserved completely.
+
+The upper adjustment alone has cached RGB hash
+`2fe216b59e1f62efb5a7376bcbb895d9d7ceebfe250a0d0cf2accf742f291d7f`.
+The separate and combined approved previews remain local under
+`rendered/level3-room24-review-v1/`.
+
+The second adjustment treats the wall join at X345/346, to the right of the
+lower column at X315/bottom363. Four more source-checked crops grade the
+lighting between SHAP3551 and3513 and continue the column's outer shadow,
+changing601 visible pixels. The central brown wall left of the columns was
+not the reported target and stays unchanged. Both neighboring background
+columns, all lit column bodies and all masks retain their native pixels.
+
+The combined1154-pixel correction has cached RGB hash
+`155016d0323e511fe037104e7edda38d6a9045cfcd70bc4ad3f7984dd206d567`.
+Only the eight approved manifest sources are bundled; intermediate proposals
+that recoloured background-column bases were excluded before visual review.
+
+## Level3 room11: diagonal floor join
+
+The user approved the marked-reference V3 on 2026-11-07. Two source-checked
+background crops (SHAP3551 at X51/bottom125 and SHAP3525 at X53/bottom125)
+change156 visible native pixels along the marked diagonal. The cached RGB
+hash is `f3b222a29bdbec22895500caffde12090d18f10d1101095ca1e41f7d25c05051`.
+
+V1's small lighting offsets left the cut visible. V2 spread reflected floor
+texture too far into the wall end, washing out relief while leaving dark
+pixels on the other side of the seam. Both were rejected. V3 starts from
+the current artwork and bridges nearby native colours on both sides of the
+actual contour: two native pixels towards the wall and three towards the
+floor, grading the ends and retaining the native palette. Wall detail beyond
+that narrow band, foreground columns, alpha, masks and earlier edits stay
+unchanged. This is a baked artwork improvement, without per-frame filtering.
+
+The approved comparison remains local under
+`rendered/floor-join-marked-reference-v3/`. Approval covers this room only;
+the remaining selected floor joins still require their own visual previews.
+
+## Remaining selected floor joins: approved V3
+
+The user approved these V3 floor joins on 2026-11-07, excluding level5
+room9/J21 because its button artwork needs a separate correction. They use
+the narrow two-sided transition approved for level3 room11. Earlier edits,
+foreground pixels, source alpha and physical masks remain unchanged.
+Comparisons stay local under `rendered/floor-join-selected-v3/`.
+
+| Level | Room | Added pixels | Cached RGB SHA256 |
+| --- | --- | --- | --- |
+| 3 | 12 | 169 | `9152e74b8fdb313e8d91c09d631c695bbe6e47b93c64c6695041a87df2ac6519` |
+| 3 | 15 | 155 | `1eac3788306c661ce31fee4fa3c51e458189f2d1f85d16465dad67312551d430` |
+| 3 | 21 | 156 | `7ed2ab1071684891b8a2fab70a1bbefeee8327f39e2509ea64886ce9b2403912` |
+| 3 | 26 | 156 | `64d955ab1a78694f3c1efee0b910f573f9dbdaef0695c167a7f42be941d4a67a` |
+| 3 | 32 | 155 | `d23f55b7b625e87f2698dd5e8bd3399479c5293371cb9591b7b1987603f94e2f` |
+| 4 | 13 | 312 | `e08b3742a5b27f099f9b01e4f253e7b2ff7f58a6cc93bb5ed35cf0007db0e97a` |
+| 4 | 14 | 46 | `1b624888aa2e8417c4305244956567b77668b8d3c59931e0b7451d7a7eda2b7b` |
+| 4 | 18 | 156 | `91ca82a8add9bbf792fae9d09f297a189c91849cdd4f4580edcc9faebfbaad65` |
+| 5 | 11 | 201 | `bb1b2208c8f31a0be54d692a8fdd1d9bdf2c4d4ee04a951145ec138b1fae55c6` |
+| 5 | 13 | 156 | `a97267870d5c5ca70e25822525085021a3200b9abdd9bd38ba53ebffd8214f4e` |
+| 5 | 19 | 91 | `72de66968e0cb63ddf9e982da4c589e7e4926b331fc8c67c8d1d5cfee0238107` |
+
+## Level5 room9/J21: preserve the pressure plate
+
+The user approved the corrected V4 on 2026-11-07. The earlier two-sided V3
+also changed101 pixels of SHAP3554, softening the button drawing, and was
+rejected for this location. V4 changes only64 visible pixels in the wall-side
+SHAP3551 at X102/bottom365, fading its narrow edge towards the existing floor.
+Both pressure-plate sources, SHAP3554 and3555, remain completely native.
+
+The cached RGB hash is
+`c38b6f0dc49853d652be724aa228f18c3bb603b959650be594a91443796f5ee9`.
+The approved comparison remains local under `rendered/floor-join-j21-button-v4/`.
+Tests preserve every button pixel with the plate released and pressed, along
+with all source alpha, foreground pixels and physical masks. Earlier approved
+artwork stays unchanged. This completes the user's selected floor-join batch;
+it does not certify that every cavern junction has been visually reviewed.

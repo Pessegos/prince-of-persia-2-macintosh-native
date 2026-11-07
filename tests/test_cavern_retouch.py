@@ -16,8 +16,8 @@ from pop2.terrain import LevelMap
 class BundledCavernRetouchTests(unittest.TestCase):
     def test_level_four_bundle_is_separate_and_only_targets_approved_rooms(self):
         assets = retouch_assets(4)
-        self.assertEqual(len(assets), 27)
-        self.assertEqual({key[0] for key in assets}, {4, 11, 13, 21, 22, 25, 27})
+        self.assertEqual(len(assets), 46)
+        self.assertEqual({key[0] for key in assets}, {4, 5, 11, 12, 13, 17, 21, 22, 25, 27})
         key, (record, image) = next(iter(assets.items()))
         self.assertEqual(image.size, (record['source_rect'][2] - record['source_rect'][0],
                                       record['source_rect'][3] - record['source_rect'][1]))
@@ -25,8 +25,9 @@ class BundledCavernRetouchTests(unittest.TestCase):
         source = Image.new('RGBA', record['size'], 'magenta')
         command = ['back', shape, x, bottom, mode, 0, [], 4]
         self.assertIs(retouched_sprite(room, command, source, level_number=4), source)
+        self.assertIs(retouched_sprite(room, command, source, level_number=3), source)
         with patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Wrong level')):
-            for level in (3, 5, 6, 7, 8, 9):
+            for level in (5, 6, 7, 8, 9):
                 self.assertIs(retouched_sprite(room, command, source, level_number=level), source)
 
     def test_new_wall_patches_reject_wrong_level_room_or_source(self):
@@ -49,8 +50,8 @@ class BundledCavernRetouchTests(unittest.TestCase):
 
     def test_bundled_variants_have_valid_scope_and_crop_sizes(self):
         assets = retouch_assets()
-        self.assertEqual(len(assets), 56)
-        self.assertEqual({key[0] for key in assets}, {0, 1, 4, 6, 7, 12, 27, 29})
+        self.assertEqual(len(assets), 81)
+        self.assertEqual({key[0] for key in assets}, {0, 1, 4, 6, 7, 10, 11, 12, 14, 20, 23, 25, 27, 29, 31})
         for key, (record, image) in assets.items():
             with self.subTest(key=key):
                 x1, y1, x2, y2 = record['source_rect']
@@ -63,7 +64,7 @@ class BundledCavernRetouchTests(unittest.TestCase):
     def test_unaffected_rooms_do_not_even_load_retouch_assets(self):
         source = Image.new('RGBA', (5, 5), 'red')
         with patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Unexpected load')):
-            for room in set(range(32)) - {0, 1, 4, 6, 7, 12, 27, 29}:
+            for room in set(range(32)) - {0, 1, 4, 6, 7, 10, 11, 12, 14, 20, 23, 25, 27, 29, 31}:
                 self.assertIs(retouched_sprite(room, [], source), source)
 
     def test_unmatched_sources_and_other_shape_libraries_are_untouched(self):
@@ -159,16 +160,18 @@ class CavernRetouchTests(unittest.TestCase):
 
     def test_level_four_other_rooms_keep_their_original_wall_art(self):
         with patch('pop2.caverns.retouched_door_sprite', side_effect=lambda level, room, command, source: source):
-            for room in set(range(32)) - {4, 11, 13, 21, 22, 25, 27}:
+            for room in set(range(32)) - {4, 5, 11, 12, 13, 17, 21, 22, 25, 27}:
                 with self.subTest(room=room):
                     original = cavern_room(room, level_number=4)
                     edited = cavern_room(room, level_number=4, retouched=True)
                     self.assertEqual(original.flattened().tobytes(), edited.flattened().tobytes())
 
     def test_level_four_final_batch_matches_approved_pixels_and_preserves_masks(self):
+        # These full-room goldens include static items; cached floor previews
+        # have separate exact-frame checks in test_floor_join_artwork.
         approved = {
             4: (382, '421ee7b40f740af3598ef7d1c3b8acf5ba6a5b4fd4394a2a684ed017f53d5290'),
-            13: (608, '6c545e48efa6fde6a208453d89c3bd5785bdb9fcf1bdee055d086521553c7933'),
+            13: (654, '2dcad3e10b1616a79a53a78af263a06ec3c188c0db598e7b989f211fc7c5b0ee'),
             25: (481, '9ef82c6d26f7540b12e655ed87dcebaf0ab4f3ba810f609ac75d0735ab096197'),
             27: (336, 'd60832d8900669a315a5868ea9d069755f5b330f4c12b5618e6567578c8e1d63'),
         }
@@ -299,7 +302,7 @@ class CavernRetouchTests(unittest.TestCase):
         self.assertEqual(closed.crop((185, 135, 281, 220)).tobytes(), native.crop((185, 135, 281, 220)).tobytes())
 
     def test_unapproved_rooms_remain_pixel_identical(self):
-        for room in set(range(32)) - {0, 1, 4, 6, 7, 12, 27, 29}:
+        for room in set(range(32)) - {0, 1, 4, 6, 7, 10, 11, 12, 14, 20, 23, 25, 27, 29, 31}:
             with self.subTest(room=room):
                 native, edited = cavern_room(room), cavern_room(room, retouched=True)
                 self.assertEqual(native.background.tobytes(), edited.background.tobytes())
@@ -435,17 +438,17 @@ class CavernRetouchTests(unittest.TestCase):
         game = LevelRenderer(level, preload_room=False)
         reference = LevelRenderer(level, preload_room=False, retouch_caverns=False)
         for room in range(32):
-            expected = cavern_room(room, animated=True, retouched=room in (0, 1, 4, 6, 7, 12, 27, 29))
+            expected = cavern_room(room, animated=True, retouched=room in (0, 1, 4, 6, 7, 10, 11, 12, 14, 20, 23, 25, 27, 29, 31))
             self.assertEqual(game.room(room).flattened().tobytes(), expected.flattened().tobytes())
             self.assertEqual(reference.room(room).flattened().tobytes(), cavern_room(room, animated=True).flattened().tobytes())
 
     def test_retained_pixels_do_not_propagate_retouch_into_adjacent_rooms(self):
         level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 3)
         terrain = LevelMap(level.data)
-        for source in (0, 1, 4, 6, 7, 12, 27, 29):
+        for source in (0, 1, 4, 6, 7, 10, 11, 12, 14, 20, 23, 25, 27, 29, 31):
             for direction in ('left', 'right', 'up', 'down'):
                 destination = terrain.neighbor(source, direction)
-                if destination is None or destination in (0, 1, 4, 6, 7, 12, 27, 29):
+                if destination is None or destination in (0, 1, 4, 6, 7, 10, 11, 12, 14, 20, 23, 25, 27, 29, 31):
                     continue
                 with self.subTest(source=source, destination=destination):
                     game = LevelRenderer(level, preload_room=False)
@@ -460,7 +463,7 @@ class CavernRetouchTests(unittest.TestCase):
 # Values are X, bottom and RGB hash of the approved previews, including earlier retouches.
 COLUMN_SHADOWS = {
     (3, 0): (111, 243, '470358256d02d9371eabfc773426c3b6949e14c62852acbf6b9eac022ad44f02'),
-    (3, 4): (60, 243, '1dce1829805dde96885605ac6cd555351d5969147d14626401a2979da95a12a5'),
+    (3, 4): (60, 243, '4c21295ad0cc54ed2aecc91cf40433df13f4576ee3fab320c53544783cc798a5'),
     (3, 6): (366, 363, '07151ff23ba5c20cf5fbf29a65b08c80c80041705ecf7657fa18e4fcb6294d5e'),
     (3, 7): (366, 243, '9043537b7de6fc860b4b72ec272dd8c44486179d4e224914df2fd90b676c8073'),
     (3, 12): (213, 243, 'd7dceac57950745d0880bdc06aea68f923d59006f722dda0a823b0d14e0f9298'),
