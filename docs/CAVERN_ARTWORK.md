@@ -243,10 +243,10 @@ What the user has reviewed and how each part ended up:
   the torch, and a pass with 64 pale grains of mixed sizes "looked like snowing".
   That had three causes, all fixed: there was a lot of it, each new grain went to
   the emptiest place so it was evenly spread, and half of it was falling.
-- **Two kinds of dust** (`DustKind`). Fine grains, 24 of them, are one small opaque
+- **Two kinds of dust** (`DustKind`). Fine grains, 21 of them, are one small opaque
   pixel. The brighter one is, the shorter it lasts (`lifespan`): most are dim, in the
-  colour of the rock. The dimmest last 30 seconds and a typical grain 13, and now and
-  then a pale one shines for 3 seconds and is gone. Coarse grains, 5, are soft and partly transparent, the
+  colour of the rock. The dimmest last 25 seconds and a typical grain 11, and now and
+  then a pale one shines for 2.5 seconds and is gone. Coarse grains, 5, are soft and partly transparent, the
   slowest, and the only ones that sink. With 3 of them, fainter, they were lost
   beside the fine ones. A grain warms as it enters the light, a coarse one comes into
   focus there (`on_the_pixels`), and as a grain tumbles a face of it catches the
@@ -268,7 +268,7 @@ What the user has reviewed and how each part ended up:
   behind the foreground, and a floor that falls takes it along. Otherwise a grain
   has a lifespan:
   it comes up over the first seventh of it and goes over the last quarter, so a
-  dim grain takes about 4 seconds to come and 7 to go. A new one starts unseen,
+  dim grain takes about 3.5 seconds to come and 6 to go. A new one starts unseen,
   around a pocket or near the fire, with air ahead for its whole life (`new_mote`),
   so old and new never show as a swap. Over the lava it is duller, so that it is
   not read as more ash.
