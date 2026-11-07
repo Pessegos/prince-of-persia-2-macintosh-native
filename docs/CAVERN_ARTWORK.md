@@ -235,3 +235,16 @@ local reviewed exception to the earlier darker-fringe-only treatments.
 The first short-column proposal was not approved because it left the upper
 join untreated. V2 retains its lower treatment and extends through the upper
 join; none of the inventory's other similar contexts are approved targets.
+
+## Level3 room24: long-column shadow
+
+The user approved room24's two separate local comparisons on 2026-11-07.
+The upper/middle SHAP3533 at X264/bottom243 uses four source-checked crops
+to continue the wall lighting along its actual contour, changing553 visible
+pixels. Its lit stone and all alpha/actor/floor/climb/gate masks stay intact.
+The neighboring background SHAP3534 column is preserved completely.
+
+The upper adjustment alone has cached RGB hash
+`2fe216b59e1f62efb5a7376bcbb895d9d7ceebfe250a0d0cf2accf742f291d7f`.
+The separate and combined approved previews remain local under
+`rendered/level3-room24-review-v1/`.
