@@ -189,7 +189,7 @@ LANDING_LIFE = (16, 36)
 KICKED_DEPTH = (1, 6)
 KICKED_DRAG = 0.9
 KICKED_SINK = 0.012
-KICKED_STRENGTH = 0.75
+KICKED_STRENGTH = 0.6
 KICKED_FADE_IN = 2
 MOST_KICKED = 30
 # The air he runs through is dragged along with him: how far around the middle of
@@ -249,11 +249,12 @@ BAYER = numpy.array(((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5
 # Hot air bends what is seen through it. Pixels over the fire slide one pixel to the
 # side and back, in waves that rise: they are only moved, so the rule on the palette
 # holds without trying. Strength is how far the air would bend them, in pixels, and a
-# pixel moves once that passes a half. Heights and sides are in pixels, the waves in
-# rows and rows a tick.
-HAZE_OVER_FLAME = dict(height=30, strength=1.1)
+# pixel moves once that passes a half, so just over a half keeps it to the crest of
+# each wave, close to the fire: at 1.1 and 0.9 the user found it far too much. Heights
+# and sides are in pixels, the waves in rows and rows a tick.
+HAZE_OVER_FLAME = dict(height=30, strength=0.66)
 HAZE_FLAME_WIDTH = 11
-HAZE_OVER_POOL = dict(height=22, strength=0.9)
+HAZE_OVER_POOL = dict(height=22, strength=0.6)
 HAZE_EDGE = 7
 HAZE_WAVE = 9
 HAZE_RISE = 1.3

@@ -238,8 +238,11 @@ What the user has reviewed and how each part ended up:
 - **Heat haze** bends what is seen through the hot air over the lava and over a
   flame (`Haze`, `shimmer`). Pixels slide one pixel aside and back in waves that
   rise, and they are only moved, so no new colour appears. It thins out as it rises
-  and to the sides. The ceiling and stalactites are foreground, in front of the air,
-  so 27 of the 75 torches sit under rock and show next to none of it.
+  and to the sides. The first strength moved about 450 pixels a tick over a pool, and
+  the user liked the idea but asked for it much subtler: it now moves about 80, only
+  on the crest of each wave, close to the fire. The ceiling and stalactites are
+  foreground, in front of the air, so 27 of the 75 torches sit under rock and show
+  none of it.
 - **The wall behind the torch.** `CaveGetTorchFrame` (8:3b4e) picks one of nine
   frames at random each tick. They paint a rich wall of veins and specks, but
   about a hundred loose pixels of it differ from frame to frame, so those blink.

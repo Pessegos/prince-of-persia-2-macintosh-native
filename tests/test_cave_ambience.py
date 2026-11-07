@@ -1463,7 +1463,8 @@ class FeetTests(unittest.TestCase):
             grain.age = age
             strengths.append(scene.kicked_colour(grain)[3])
         self.assertEqual(strengths[0], 0)
-        self.assertGreater(max(strengths), 0.6)
+        self.assertGreater(max(strengths), 0.5)
+        self.assertLess(max(strengths), 0.7)
         self.assertLess(strengths[-1], 0.1)
         self.assertEqual(strengths[8:], sorted(strengths[8:], reverse=True))
 
@@ -1575,8 +1576,8 @@ class HazeTests(unittest.TestCase):
         after, before = self.moved(self.haze(**HAZE_OVER_POOL), 7)
         rows = (after != before).any(axis=2)
         share = rows.sum() / self.haze(**HAZE_OVER_POOL).bend.size
-        self.assertGreater(share, 0.03)
-        self.assertLess(share, 0.3)
+        self.assertGreater(share, 0.01)
+        self.assertLess(share, 0.08)
 
     def test_it_thins_out_as_it_rises_and_ends(self):
         bend = self.haze().bend.max(axis=1)
@@ -1806,9 +1807,9 @@ class EveryRoomTests(unittest.TestCase):
 
         pools = [moves(haze) for air in self.rooms.values() for haze in air.hazes[:len(air.pools)]]
         torches = [moves(haze) for air in self.rooms.values() for haze in air.hazes[len(air.pools):]]
-        self.assertGreater(min(pools), 300)
+        self.assertGreater(min(pools), 150)
         # A flame just under a ceiling has only that ceiling over it, in front of the air.
-        self.assertGreater(sum(count > 100 for count in torches), 40)
+        self.assertGreater(sum(count > 50 for count in torches), 40)
 
     def test_every_drop_falls_where_it_can_be_seen(self):
         for place, air in self.rooms.items():
