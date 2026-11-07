@@ -13,6 +13,9 @@ from tests import test_cavern_retouch as retouch_tests
 
 # Native level/room, approved cached RGB, preserved foreground RGBA, source placements.
 APPROVED_FLOOR_JOINS = {
+    (3, 15): ('1eac3788306c661ce31fee4fa3c51e458189f2d1f85d16465dad67312551d430',
+               'e9c2e4e68b67d5d490a3992286c99d2c10f5829a093630968613dda51c865d8d',
+               ((3551, 255, 125, 16), (3525, 257, 125, 16))),
     (3, 12): ('9152e74b8fdb313e8d91c09d631c695bbe6e47b93c64c6695041a87df2ac6519',
                'fb1d565baa6b3095c869f72cea16dcf7f7cb0662ca59f156f013d6b284795a60',
                ((3550, 51, 245, 16), (3525, 53, 245, 16))),
