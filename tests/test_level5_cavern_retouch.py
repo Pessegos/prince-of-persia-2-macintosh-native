@@ -38,7 +38,7 @@ APPROVED = {
 class BundledLevelFiveArtworkTests(unittest.TestCase):
     def test_approved_scope_and_changed_source_guards(self):
         assets = retouch_assets(5)
-        self.assertEqual(len(assets), 70)
+        self.assertEqual(len(assets), 73)
         self.assertEqual({key[0] for key in assets}, (set(APPROVED) | right_tip_rooms(5)))
         for key, (record, image) in assets.items():
             room, shape, x, bottom, mode = key
