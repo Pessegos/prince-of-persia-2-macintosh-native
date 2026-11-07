@@ -517,7 +517,7 @@ class Caverns(Environment):
             return None
         record = scene.frames[state.action]
         return Footing(state.target_x, floor_contact_x(state.target_x, state.facing, record), floor_y(motion.row),
-                       bool(record.aux & 0x40), motion.falling, state.vertical_velocity)
+                       bool(record.aux & 0x40), motion.falling, state.vertical_velocity, state.action)
 
     def thuds(self):
         """What came down in this room this tick, for the dust. The tiles are taken, as

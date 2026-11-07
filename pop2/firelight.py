@@ -202,6 +202,8 @@ class Firelight:
     # For each frame of flame: [direction] of how far it burns, and how hot.
     outlines: numpy.ndarray
     burn: numpy.ndarray
+    # Where the light comes from.
+    middle: tuple = (0, 0)
 
     def at(self, reach, strength):
         """The light at a strength, and [direction] of how far it goes each way,
@@ -268,4 +270,4 @@ def trace_firelight(shades, recess, heat, left, top):
     direction = direction_of(columns - middle_x, rows - middle_y).astype(numpy.float32)
     taken = 1 - (1 - RECESS_LIGHT) * gaussian(outline[window], RECESS_EDGE)
     return Firelight(window_left, window_top, rest.astype(numpy.float32), direction, taken.astype(numpy.float32),
-                     outlines, flame_burn(heat))
+                     outlines, flame_burn(heat), (middle_x, middle_y))

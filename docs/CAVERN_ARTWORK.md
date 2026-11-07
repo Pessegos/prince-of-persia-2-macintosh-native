@@ -222,9 +222,14 @@ What the user has reviewed and how each part ended up:
 - **The Prince's feet.** `Footing` is read from the game once a tick and never
   written back. FRAM's supporting foot stays put and then jumps to where the next
   foot lands (`floor_contact_x`), so that jump is a step: it raises a tuft of the same
-  dust as the doors, a couple of small lobes behind him and close to the foot. The
-  foot-on-the-floor flag cannot do this, as it is set on almost every frame of a run.
-  Walking carefully raises none. A landing raises a few lobes to each side, more the
+  dust as the doors, a few small lobes just behind the heel and level with his shoes.
+  That foot is the game's and not what is drawn, and in each stride of the run it is
+  wrong twice. On frame 8 it has gone to a foot still in the air, which comes down 18
+  pixels further on, on frame 9, and frame 12 is not marked as on the ground although a
+  foot lands there. Left alone, one foot raised dust twice, once where no foot ever
+  stood, and the other none, which looked out of place and out of time. The
+  foot-on-the-floor flag cannot do this alone, as it is set on almost every frame of a
+  run. Walking carefully raises none. A landing raises a few lobes to each side, more the
   faster he came down, and there is none on the
   lava. As he runs he drags the air along (`wake`), so grains he passes follow him
   and let go. Dust from the floor is drawn behind him like the rest of the ambience.
@@ -248,6 +253,17 @@ What the user has reviewed and how each part ended up:
   this in `PressurePlates.shut` and `LooseFloors.landed`, which are not game state and
   are left out of saves. The entry door that slams behind him at the start of a level
   does the same.
+- **Gates stop the torch's light.** The light is traced on the room with its gates up,
+  whatever they are doing when the Prince comes in, and a gate that is down shuts it out
+  as it is drawn (`gate_shade`). Traced on a shut gate, the light stopped at its front
+  part, went on over the rest of it, and left a hole where the gate had been once it
+  rose. A slab stands across the room with its near end on the left, so its visible
+  face and all that lies beyond are on one side of that end. As it rises the light comes
+  in under it, a ray at a time, with a soft edge so that no hard line slides over the
+  rock, and it goes for good once the gate is at the top. The air behind a shut gate is
+  dark too. A torch reaches 54 pixels, so of the 15 rooms with a gate and a torch this
+  only shows in room 11 of level 4, where the torch stands nine pixels from the gate. A
+  torch to the right of a gate lights its visible face, which is right.
 - **Lava light** is traced over the rock with the same engine as the torch
   (`trace_lavalight`), a cell at a time along the pool, with the pool itself counted
   as a hollow, however bright it is painted. It is fainter than the torch's and more

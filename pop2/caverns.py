@@ -972,6 +972,12 @@ def cavern_pressure_signature(program, room_id, state):
     return tuple(phases)
 
 
+def cavern_gates_up(program, room_id, phases):
+    """A room's pressure phases with each of its gates at the top."""
+    records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room_id), ())
+    return tuple(184 // 4 if record['kind'] == 4 else phase for record, phase in zip(records, phases))
+
+
 # Row clip of a moving door's SHAP relative to its row's top: the export
 # shows the ruins gate (3542) clipped 19 pixels above it and their exit
 # (3547) 10 above, against the caverns' 31 and 1 below.

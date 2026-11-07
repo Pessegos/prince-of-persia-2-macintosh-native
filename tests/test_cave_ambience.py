@@ -23,8 +23,8 @@ from pop2.cavern_ambience import (
     DUST_SKEW,
     DROP_INKS, DROP_LAVA_INK, DROP_SHINE_LIGHT, DROP_WARM_LIGHT, SWELL_INKS,
     DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
-    Footing, LANDING_FALL, LANDING_PUFF, MOST_CLOUDS, MOST_LANDING_LOBES,
-    SHUT_PUFF, SLAM_PUFF, STEP_PUFF, TILE_PUFF, Thud,
+    Footing, GATE, GATE_RISES, LANDING_FALL, LANDING_PUFF, MOST_CLOUDS, MOST_LANDING_LOBES,
+    SHUT_PUFF, SLAM_PUFF, STEP_HEEL, STEP_PUFF, Slab, TILE_PUFF, Thud, gate_shade, room_slabs,
     door_coming_down, tile_landing,
     WAKE_REACH,
     HAZE_OVER_FLAME, HAZE_OVER_POOL, HAZE_RISE, HAZE_WAVE, QUIET_DUST, flame_of, haze_of, haze_over, room_torches,
@@ -71,13 +71,14 @@ def nothing_in_front():
     return numpy.zeros((HEIGHT, WIDTH), dtype=bool)
 
 
-def room_air(drips=(), flames=(), pools=(), opened=255, covered=None, pool_glows=False, torches=(), hazes=()):
+def room_air(drips=(), flames=(), pools=(), opened=255, covered=None, pool_glows=False, torches=(), hazes=(),
+             slabs=()):
     centres = tuple((sum(columns) / len(columns), sum(columns.values()) / len(columns)) for columns in pools)
     return Air(blank(opened), covered if covered is not None else blank(), tuple(drips), tuple(flames),
                tuple(pools), COLOURS, palette(), centres,
                tuple(pool_glow(liquid_of(columns), plain_rock(), nothing_in_front(), COLOURS)
                      for columns in pools if pool_glows),
-               tuple(torches), tuple(hazes))
+               tuple(torches), tuple(hazes), tuple(slabs))
 
 
 def still_ambience(air, **options):
@@ -1363,49 +1364,71 @@ class LavaLightTests(unittest.TestCase):
 
 
 class FeetTests(unittest.TestCase):
-    # A run as the real scene plays it: his body goes on smoothly, and the foot
-    # holding him up stays put and then jumps to where the next one lands.
-    RUN = ((200, 181), (210, 182), (217, 205), (230, 207), (240, 235), (254, 253), (261, 254), (279, 255), (295, 293))
+    # A run to the left as the real scene plays it: his body, the game's supporting foot,
+    # and the frame. Frames 6, 9 and 12 are where a foot really lands. On frame 8 the foot
+    # the game counts is still in the air, and frame 12 is not marked as on the ground.
+    RUN = ((313, 341, 5), (306, 318, 6), (293, 316, 7), (283, 288, 8), (269, 270, 9), (262, 269, 10), (244, 268, 11),
+           (228, 230, 12), (226, 228, 13), (220, 226, 14), (200, 223, 7), (190, 195, 8), (176, 177, 9))
 
     def scene(self, **options):
         return still_ambience(room_air(**options))
 
+    def footing(self, x, foot, action=0):
+        return Footing(x, foot, 226, action != 12, False, 0, action)
+
     def run_through(self, scene, steps=RUN):
-        for x, foot in steps:
-            scene.tread(Footing(x, foot, 226, True, False))
+        for step in steps:
+            scene.tread(self.footing(*step))
 
     def land(self, scene, speed=36, foot=200):
         scene.tread(Footing(200, foot, 226, True, True, speed))
         scene.tread(Footing(205, foot, 226, True, False))
 
     def test_there_is_no_dust_on_the_lava(self):
-        pool = {x: 228 for x in range(150, 310)}
+        pool = {x: 228 for x in range(150, 360)}
         scene = self.scene(pools=[pool])
         self.land(scene, foot=220)
         self.run_through(scene)
         self.assertEqual(scene.clouds, [])
 
-    def test_each_foot_that_lands_raises_a_tuft_where_it_lands(self):
+    def test_each_foot_raises_a_tuft_on_the_frame_it_lands(self):
+        # The game's foot alone raised dust from one foot twice, once on a spot no foot
+        # ever stood on, and from the other foot none: it looked out of place and time.
         scene = self.scene()
         stepped = []
-        for index, (x, foot) in enumerate(self.RUN):
+        for index, step in enumerate(self.RUN):
             before = len(scene.clouds)
-            scene.tread(Footing(x, foot, 226, True, False))
+            scene.tread(self.footing(*step))
             if len(scene.clouds) > before:
-                stepped.append(index)
-                cloud = scene.clouds[-1]
-                self.assertEqual(len(cloud.x), STEP_PUFF.lobes)
-                self.assertLessEqual(float(numpy.abs(cloud.x - foot).max()), 6)
-        self.assertEqual(stepped, [2, 4, 5, 8])
+                stepped.append(step[2])
+                self.assertEqual(len(scene.clouds[-1].x), STEP_PUFF.lobes)
+        self.assertEqual(stepped, [6, 9, 12, 9])
+
+    def test_it_comes_from_behind_his_heel(self):
+        # Under the shoe it was hidden by it.
+        scene = self.scene()
+        self.run_through(scene, self.RUN[3:5])
+        reach = scene.clouds[0].x - 270
+        self.assertTrue((reach >= STEP_HEEL - 2).all())
+        self.assertTrue((reach <= STEP_HEEL + 5).all())
+
+    def test_his_dust_is_level_with_his_shoes(self):
+        # It lay up to six pixels below him, and looked as if it had come from elsewhere.
+        scene = self.scene()
+        self.land(scene)
+        self.run_through(scene)
+        for cloud in scene.clouds:
+            self.assertTrue((numpy.abs(cloud.y - 226) <= 2).all())
 
     def test_the_dust_goes_behind_him(self):
         scene = self.scene()
         self.run_through(scene)
-        self.assertTrue(all((cloud.dx < 0).all() for cloud in scene.clouds))
-        scene = self.scene()
-        self.run_through(scene, [(500 - x, 500 - foot) for x, foot in self.RUN])
-        self.assertTrue(scene.clouds)
         self.assertTrue(all((cloud.dx > 0).all() for cloud in scene.clouds))
+        scene = self.scene()
+        self.run_through(scene, [(500 - x, 500 - foot, action) for x, foot, action in self.RUN])
+        self.assertTrue(scene.clouds)
+        self.assertTrue(all((cloud.dx < 0).all() for cloud in scene.clouds))
+        self.assertTrue(all(cloud.x.max() < 500 - 270 for cloud in scene.clouds[1:2]))
 
     def test_a_landing_goes_out_to_both_sides(self):
         scene = self.scene()
@@ -1482,7 +1505,7 @@ class FeetTests(unittest.TestCase):
 
     def test_a_foot_in_the_air_raises_none(self):
         scene = self.scene()
-        for x, foot in self.RUN:
+        for x, foot, _action in self.RUN:
             scene.tread(Footing(x, foot, 226, False, False))
         self.assertEqual(scene.clouds, [])
 
@@ -1581,6 +1604,12 @@ class DoorDustTests(unittest.TestCase):
         reach = numpy.maximum(door.left - cloud.x, cloud.x - door.right)
         self.assertLess(float(reach.max()), 34)
         self.assertLess(float(numpy.median(reach)), 18)
+
+    def test_it_goes_soon(self):
+        # Three seconds of it after every door was too long for the user.
+        self.assertLessEqual(SLAM_PUFF.life[1], 22)
+        self.assertLessEqual(SHUT_PUFF.life[1], 16)
+        self.assertLessEqual(TILE_PUFF.life[1], 26)
 
     def test_it_keeps_low_and_thin(self):
         # Eight pixels up and twenty tall was too high and too thick for the user.
@@ -1753,6 +1782,114 @@ class DoorDustTests(unittest.TestCase):
         scene = self.scene(pools=[{x: 340 for x in range(100, 260)}])
         scene.thud(tile_landing(23))
         self.assertEqual(scene.clouds, [])
+
+
+class GateLightTests(unittest.TestCase):
+    """A torch and a gate as they stand in room 11 of level 4, nine pixels apart."""
+
+    LEFT, TOP = 200, 150
+
+    def art(self):
+        frames = numpy.zeros((3, 60, 40, 4), dtype=numpy.uint8)
+        frames[...] = ROCK
+        frames[:, 20:40, 18:22] = FIRE
+        unlit = numpy.array(frames[0])
+        unlit[...] = ROCK
+        return read_torch(frames, unlit, self.LEFT, self.TOP, scenery(), COLOURS.firelight)
+
+    def setUp(self):
+        self.torch = self.art()
+        self.middle = self.torch.firelight.middle
+        self.slab = Slab(4, 1, int(self.middle[0]) + 9, int(self.middle[1]) + 66)
+        self.scene = still_ambience(room_air(flames=[self.middle], torches=[self.torch], slabs=[self.slab]))
+
+    def gate_at(self, position):
+        tile = SimpleNamespace(kind=GATE, foreground=0x200 | position)
+        return SimpleNamespace(tile=lambda _room, _column, _row: tile)
+
+    def painted(self):
+        frame = Image.new('RGBA', (WIDTH, HEIGHT), ROCK)
+        sprite = Image.fromarray(self.torch.frames[0])
+        frame.paste(sprite, (self.LEFT, self.TOP), sprite)
+        return frame
+
+    def lit(self, position):
+        """[y, x] of the pixels the light changed, with the gate at that position."""
+        self.scene.watch_gates(self.gate_at(position))
+        self.scene.tick += 1
+        frame = self.scene.draw(self.painted())
+        return (numpy.asarray(frame) != numpy.asarray(self.painted())).any(axis=2)
+
+    def test_the_gates_of_a_room_are_found(self):
+        slabs = room_slabs(tile_map({(5, 2): GATE, (1, 0): 3}), 0)
+        self.assertEqual(slabs, (Slab(5, 2, 5 * 51 + 28, 346 + 7),))
+
+    def test_a_gate_tells_how_far_up_it_is(self):
+        self.assertEqual(self.slab.lift(self.gate_at(0), 0), 0)
+        self.assertEqual(self.slab.lift(self.gate_at(40), 0), 20)
+        self.assertEqual(self.slab.lift(self.gate_at(184), 0), GATE_RISES)
+        self.assertEqual(self.slab.lift(self.gate_at(188), 0), GATE_RISES)
+
+    def test_a_shut_gate_stops_the_light(self):
+        # It went straight through, on to the far part of the slab.
+        lit = self.lit(0)
+        self.assertTrue(lit[:, :self.slab.x].any())
+        self.assertFalse(lit[:, self.slab.x:].any())
+
+    def test_it_stops_it_on_the_other_side_too(self):
+        light = self.torch.firelight
+        slab = Slab(0, 1, int(light.middle[0]) - 9, int(light.middle[1]) + 66)
+        shade = gate_shade(light, slab, 0)
+        column = slab.x - light.left
+        self.assertEqual(float(shade[:, :column + 1].max()), 0.0)
+        self.assertEqual(float(shade[:, column + 1:].min()), 1.0)
+
+    def test_the_light_comes_under_a_rising_gate(self):
+        shade = gate_shade(self.torch.firelight, self.slab, 60)
+        beyond = self.slab.x - self.torch.firelight.left
+        floor = int(self.middle[1]) + 40 - self.torch.firelight.top
+        wall = int(self.middle[1]) - 20 - self.torch.firelight.top
+        self.assertEqual(float(shade[floor, beyond + 5]), 1.0)
+        self.assertEqual(float(shade[wall, beyond + 5]), 0.0)
+
+    def test_its_shadow_has_no_hard_line_as_it_rises(self):
+        shade = gate_shade(self.torch.firelight, self.slab, 40)
+        column = shade[:, self.slab.x - self.torch.firelight.left + 8]
+        self.assertTrue(((column > 0.1) & (column < 0.9)).any())
+
+    def test_a_gate_all_the_way_up_stops_nothing(self):
+        open_gate = self.lit(184)
+        self.assertIsNone(self.scene.flickers[0].shade)
+        self.assertTrue(open_gate[:, self.slab.x:].any())
+
+    def test_the_light_comes_back_when_it_goes_up_and_leaves_when_it_comes_down(self):
+        shut = self.lit(0)
+        self.assertFalse(shut[:, self.slab.x:].any())
+        self.assertTrue(self.lit(184)[:, self.slab.x:].any())
+        self.assertFalse(self.lit(0)[:, self.slab.x:].any())
+
+    def test_a_gate_out_of_reach_costs_nothing(self):
+        slab = Slab(9, 1, WIDTH - 1, 300)
+        scene = still_ambience(room_air(flames=[self.middle], torches=[self.torch], slabs=[slab]))
+        scene.watch_gates(self.gate_at(0))
+        self.assertIsNone(scene.flickers[0].shade)
+
+    def test_a_still_gate_is_not_worked_out_again(self):
+        self.scene.watch_gates(self.gate_at(0))
+        shade = self.scene.flickers[0].shade
+        self.scene.watch_gates(self.gate_at(0))
+        self.assertIs(self.scene.flickers[0].shade, shade)
+
+    def test_the_air_behind_a_shut_gate_is_dark(self):
+        place = int(self.middle[0]) + 20, int(self.middle[1])
+        self.assertGreater(self.scene.light_at(*place)[0], 0.0)
+        self.scene.watch_gates(self.gate_at(0))
+        self.assertEqual(self.scene.light_at(*place)[0], 0.0)
+
+    def test_a_room_without_gates_is_left_alone(self):
+        scene = still_ambience(room_air(flames=[self.middle], torches=[self.torch]))
+        scene.watch_gates(self.gate_at(0))
+        self.assertIsNone(scene.flickers[0].shade)
 
 
 class DoorQueueTests(unittest.TestCase):
@@ -2477,7 +2614,53 @@ class RealSceneTests(unittest.TestCase):
         press(harness, 'R', True)
         harness.tick(8)
         press(harness, 'R', False)
-        self.assertGreater(len(ambience.clouds), 1)
+        self.assertGreater(len(ambience.clouds), 0)
+        # The frame decides which feet really land, so the game must pass it on.
+        self.assertEqual(ambience.footing.action, scene.sequence_state.action)
+        self.assertGreater(ambience.footing.action, 0)
+
+    def test_a_shut_gate_stops_the_torch_in_the_real_scene(self):
+        # Room 11 of level 4: the torch stands nine pixels from the gate on its right.
+        from tools.audit_temple_routes import Harness
+
+        def light(position, then=None):
+            random.seed(77)
+            harness = Harness(4, peaceful=True, draw=True)
+            try:
+                scene = harness.scene
+                scene.audio = None
+                scene.cave_ambience_enabled = True
+                scene.jump_to_room(10, row=2, x=420, facing=0)
+                value = scene.level_map.tile(10, 5, 2).foreground
+                scene.game.caverns.plates.foreground[(10, 25)] = (value & 0xff00) | position
+                harness.tick(4)
+                if then is not None:
+                    scene.game.caverns.plates.foreground[(10, 25)] = (value & 0xff00) | then
+                    harness.tick(4)
+                ambience = scene.level_renderer.ambience
+                self.assertEqual(len(ambience.flickers), 1)
+                beyond = 5 * 51 + 28 - ambience.air.torches[0].light.left
+                return ambience.flickers[0].steps[:, :beyond], ambience.flickers[0].steps[:, beyond:]
+            finally:
+                harness.close()
+
+        before, past = light(0)
+        self.assertGreater(int(before.max()), 0)
+        self.assertEqual(int(past.max()), 0)
+        before, past = light(184)
+        self.assertGreater(int(before.max()), 0)
+        self.assertGreater(int(past.max()), 0)
+        # A gate that goes up later leaves no hole in the light where it stood, and one
+        # that comes down later stops it as well, whatever the room was traced with.
+        self.assertGreater(int((light(0, 184)[1] > 0).sum()), 0.8 * int((light(184, 184)[1] > 0).sum()))
+        self.assertEqual(int(light(184, 0)[1].max()), 0)
+
+    def test_the_room_with_its_gates_up_is_the_room_as_it_stands_otherwise(self):
+        from pop2.caverns import cavern_gates_up
+
+        program = {'pressure_plates': {'rooms': {'3': [{'kind': 4}, {'kind': 6}, {'kind': 4}]}}}
+        self.assertEqual(cavern_gates_up(program, 3, (0, 1, 20)), (46, 1, 46))
+        self.assertEqual(cavern_gates_up(program, 4, ()), ())
 
     def test_a_landing_raises_dust_in_the_real_scene(self):
         harness = self.harness()
