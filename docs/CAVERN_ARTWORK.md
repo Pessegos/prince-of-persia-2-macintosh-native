@@ -222,27 +222,32 @@ What the user has reviewed and how each part ended up:
 - **The Prince's feet.** `Footing` is read from the game once a tick and never
   written back. FRAM's supporting foot stays put and then jumps to where the next
   foot lands (`floor_contact_x`), so that jump is a step: it raises a tuft of the same
-  spray as the doors, behind him, thin and in darker colours so that it hardly shows. The foot-on-the-floor flag cannot do this, as it is
-  set on almost every frame of a run. Walking carefully raises none. A landing raises
-  a tuft to each side, more the faster he came down, and there is none on the
+  dust as the doors, a couple of small lobes behind him and close to the foot. The
+  foot-on-the-floor flag cannot do this, as it is set on almost every frame of a run.
+  Walking carefully raises none. A landing raises a few lobes to each side, more the
+  faster he came down, and there is none on the
   lava. As he runs he drags the air along (`wake`), so grains he passes follow him
   and let go. Dust from the floor is drawn behind him like the rest of the ambience.
-- **Gates, doors and fallen tiles.** Whatever comes down knocks dust off the floor.
-  It has the shape of a small cloud (`Cloud`), going out low to both sides of its foot
-  and rising as it slows, but it is drawn as an airbrush of 1993 would: a spray of
-  plain palette pixels with nothing blended. Each pixel has its own threshold
-  (`spray`), so it stays until the dust around it thins, and the cloud goes by breaking
-  up. The colours darken as it ages. This took four tries. Soft spots read as balls of
-  cotton wool, a smooth dithered veil was far too realistic for the game, loose pixels
-  alone were too little, and an ordered dither made a grid of dots. It keeps close to
+- **Gates, doors and fallen tiles.** Whatever comes down knocks up a puff of dust
+  (`Cloud`): a few round lobes that go out low to both sides of its foot, rise a little,
+  swell as they slow and thin away. Each lobe keeps its own outline, as a pixel takes
+  the thickest lobe over it and not their sum, and its top is thicker than its foot, so
+  it has a lit top and a dull underside. It is painted over the rock in three hard
+  shades of warm rock (`CLOUD_SHADES`), each pixel landing on the palette, and each pixel
+  has its own grain, which crumbles the edges and lets the puff go by breaking up. The
+  rock shows through, and the dust is always a little paler than what is behind it
+  (`CLOUD_PALER`), or a lit floor swallows it. This took six tries, and is the middle
+  ground the user asked for. Soft spots read as balls of cotton wool, a smooth dithered
+  veil was far too realistic for the game, loose pixels alone were too little, an ordered
+  dither made a grid of dots, a spray of pale palette pixels was only grey dots, and
+  lobes added together, or solid, were a flat stain on the floor. It keeps close to
   what came down: at sixty pixels and more it was too long. Dust cannot pass through a
-  slab, which stands slanted, so the cloud starts lower on its near side than on its
-  far side. An exit door faces the room, so two grains in three come out at its front,
-  fanning out, and the rest go to the sides. Slams and tiles also fling a few loose
-  specks (`Speck`). There is none on the lava. The game tells this in
-  `PressurePlates.shut` and `LooseFloors.landed`, which are not game state and are left
-  out of saves. The entry door that slams behind him at the start of a level does the
-  same.
+  slab, which stands slanted, so the puff starts lower on its near side than on its
+  far side. An exit door faces the room, so two lobes in three come out at its front,
+  fanning out, and the rest go to the sides. There is none on the lava. The game tells
+  this in `PressurePlates.shut` and `LooseFloors.landed`, which are not game state and
+  are left out of saves. The entry door that slams behind him at the start of a level
+  does the same.
 - **Lava light** is traced over the rock with the same engine as the torch
   (`trace_lavalight`), a cell at a time along the pool, with the pool itself counted
   as a hollow, however bright it is painted. It is fainter than the torch's and more

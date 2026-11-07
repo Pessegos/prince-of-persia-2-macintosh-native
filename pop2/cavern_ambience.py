@@ -176,60 +176,56 @@ DUST_POOL_STRENGTH = 0.6
 # the last, with him going that way, is a new step: walking carefully raises none.
 STEP_STRIDE = 10
 STEP_SPEED = 4
-# Whatever comes down knocks dust off the floor, and it is drawn as a game of 1993 would
-# draw it. It has the shape of a small cloud, going out low to both sides of its foot and
-# rising as it slows, but what shows is a stipple of plain palette pixels: where there is
-# more dust more pixels are painted, and it goes by breaking up. A smooth cloud, faded
-# and blurred, was far too realistic, and loose pixels alone were too little. The rock's
-# colours darken as it ages. A slam and a falling tile also fling a few loose specks,
-# a gate lowering itself raises a little, and his feet the least of all: a landing a
-# tuft to each side, a step a tuft behind him, thin and dark so that they hardly show.
-# Grains are to each side, and most is the share of pixels painted where it is thickest.
+# Whatever comes down knocks up a puff of dust from the floor: a few round lobes that go
+# out low to both sides of its foot, rise a little, swell as they slow and thin away. Each
+# lobe keeps its own outline and a lit top, and is painted in a few hard shades of warm
+# rock with crumbled edges, as an artist would draw a puff. That is the middle ground:
+# smooth it was far too realistic, as plain pixels, a spray or loose specks, it was only
+# grey dots, and with the lobes melted together or solid it was a flat stain on the floor.
+# A slam and a falling tile raise the most, a gate lowering itself a little, and his feet
+# the least of all: a landing a few lobes to each side, a step a couple behind him. Lobes
+# are to each side, size their width in pixels as they start and end, and most the share
+# of what is behind it that the thickest shade hides.
 @dataclass(frozen=True)
 class Puff:
-    grains: int
+    lobes: int
     fastest: float
     rise: tuple
     life: tuple
-    inks: tuple
+    size: tuple
     most: float
-    specks: int = 0
     height: int = 26
 
 
-PUFF_INKS = (67, 78, 88, 104)
-QUIET_PUFF_INKS = (78, 88, 104)
-SLAM_PUFF = Puff(40, 3.4, (0.1, 0.8), (18, 42), PUFF_INKS, 0.6, specks=3)
-SHUT_PUFF = Puff(16, 1.6, (0.05, 0.4), (12, 30), PUFF_INKS, 0.45)
-TILE_PUFF = Puff(50, 3.8, (0.15, 1.0), (18, 44), PUFF_INKS, 0.65, specks=4)
-STEP_PUFF = Puff(8, 0.9, (0.05, 0.3), (6, 14), QUIET_PUFF_INKS, 0.3, height=12)
-LANDING_PUFF = Puff(14, 2.0, (0.08, 0.5), (10, 24), QUIET_PUFF_INKS, 0.4, height=16)
-LANDING_FALL = 6
-MOST_LANDING_GRAINS = 24
+SLAM_PUFF = Puff(8, 3.0, (0.2, 0.9), (18, 36), (3, 6), 0.7)
+SHUT_PUFF = Puff(4, 1.4, (0.1, 0.5), (14, 28), (2.5, 4.5), 0.55)
+TILE_PUFF = Puff(9, 3.3, (0.25, 1.0), (18, 38), (3, 6), 0.8)
+STEP_PUFF = Puff(2, 0.6, (0.1, 0.35), (8, 14), (1.8, 3), 0.75, height=14)
+LANDING_PUFF = Puff(4, 1.1, (0.15, 0.5), (10, 22), (2.5, 4.5), 0.7, height=18)
+LANDING_FALL = 18
+MOST_LANDING_LOBES = 6
 MOST_CLOUDS = 10
 CLOUD_SPEEDS = 1.3
 CLOUD_DRAG = 0.86
 CLOUD_LIFT = 0.02
-CLOUD_STIR = 0.2
+CLOUD_STIR = 0.1
 CLOUD_DEPTH = (-3, 6)
-CLOUD_THINNING = 1.3
-# It keeps some lumps: it is spread only a little, and a little more as it ages.
-CLOUD_BLUR = 2
-CLOUD_BLUR_EVERY = 6
-MOST_CLOUD_BLUR = 5
-CLOUD_THICKNESS = 3.0
-# Where the stipple is thinner than this share of its most it takes the next, darker colour.
-CLOUD_THIN = 0.6
-CLOUD_BELOW = 10
-MOST_SPECKS = 24
-SPECK_SPEED = (0.8, 2.6)
-SPECK_RISE = (0.2, 0.9)
-SPECK_LIFE = (8, 18)
-SPECK_DRAG = 0.85
-SPECK_SINK = 0.03
-# In the light the first colour of the dust is warm.
-SPECK_WARM_LIGHT = 0.2
-# An exit door faces the room: two grains in three come out at the front, all along its
+CLOUD_THINNING = 1.2
+# A lobe is flatter than it is wide, as it lies along the floor, and thicker at its top
+# than at its foot, which gives it a lit top and a dull underside in the shades below.
+CLOUD_FLATTER = 0.8
+CLOUD_TOP_LIGHT = 0.35
+# How thick the dust must be for each step, and how far each pixel's own grain moves
+# that, which crumbles the edges of the steps.
+CLOUD_STEPS = (0.25, 0.5, 0.8)
+CLOUD_CRUMBLE = 0.3
+CLOUD_BELOW = 12
+# The colour of each step, and how much of what is behind it that step hides at full
+# strength. In the light they warm. Dust is also always this much paler than what is
+# behind it: in the colours of the rock alone, a lit floor swallowed it.
+CLOUD_SHADES = ((86, 0.5), (76, 0.75), (74, 1.0))
+CLOUD_PALER = (44, 36, 26)
+# An exit door faces the room: two lobes in three come out at the front, all along its
 # foot and fanning out, and the rest to the sides. A share of the speed goes towards
 # the viewer, foreshortened as the floor is, and they come this far out over the floor.
 PUFF_FORWARD = 0.5
@@ -331,7 +327,7 @@ DUST_HOT_INK = 210
 ASH_INKS = (192, 189, 186, 212, 211, 110)
 ALL_INKS = frozenset((*DROP_INKS, *SWELL_INKS, *SPLASH_INKS, *STEAM_INKS, *FLASH_INKS, *ASH_INKS, DROP_LAVA_INK,
                       *(kind.ink for kind in DUST_KINDS), DUST_PALE_INK, DUST_WARM_INK, DUST_SHINE_INK,
-                      DUST_HOT_INK, *PUFF_INKS))
+                      DUST_HOT_INK, *(ink for ink, _ in CLOUD_SHADES)))
 
 
 class Colours:
@@ -844,17 +840,17 @@ def tile_landing(cell):
 
 
 class Cloud:
-    """A small cloud of dust: its grains, and the part of the screen it can reach."""
+    """A puff of dust: its lobes, and the part of the screen it can reach."""
 
     def __init__(self, thud, rng):
         kind = self.kind = thud.kind
         stir = self.stir = numpy.random.default_rng(rng.getrandbits(32))
-        count = kind.grains if thud.only else kind.grains * 2
+        count = kind.lobes if thud.only else kind.lobes * 2
         sides = numpy.full(count, float(thud.only)) if thud.only else numpy.where(numpy.arange(count) % 2 == 0, -1.0, 1.0)
         self.floor = numpy.where(sides < 0, thud.left_floor, thud.right_floor) + stir.uniform(*CLOUD_DEPTH, count)
         self.x = numpy.where(sides < 0, thud.left, thud.right) + sides * stir.uniform(0, 3, count)
         self.y = self.floor.copy()
-        speeds = stir.random(count) ** CLOUD_SPEEDS * kind.fastest
+        speeds = stir.uniform(0.15, 1, count) ** CLOUD_SPEEDS * kind.fastest
         self.dx = sides * speeds
         self.dy = -stir.uniform(*kind.rise, count)
         if thud.forward:
@@ -866,17 +862,14 @@ class Cloud:
             self.floor = numpy.where(front, self.y + stir.uniform(0.2, 1, count) * PUFF_FORWARD_REACH, self.floor)
         self.age = numpy.zeros(count)
         self.life = stir.uniform(*kind.life, count)
-        self.ticks = 0
-        reach = int(kind.fastest / (1 - CLOUD_DRAG)) + 8
+        reach = int(kind.fastest / (1 - CLOUD_DRAG) + 2 * kind.size[1]) + 4
         self.left = max(0, thud.left - reach)
         self.right = min(WIDTH, thud.right + reach)
         floor = max(thud.left_floor, thud.right_floor)
         self.top = max(0, min(thud.left_floor, thud.right_floor) - kind.height)
         self.bottom = min(HEIGHT, floor + CLOUD_BELOW + (PUFF_FORWARD_REACH if thud.forward else 0))
         self.hidden = self.behind(thud) if thud.slab else None
-        # Each pixel stays or goes at its own thickness, as an airbrush lays them down: an
-        # ordered dither made a grid of dots.
-        self.spray = stir.random((max(0, self.bottom - self.top), max(0, self.right - self.left)))
+        self.grain = stir.random((max(0, self.bottom - self.top), max(0, self.right - self.left))) - 0.5
 
     def behind(self, thud):
         """[y, x] of what stands behind the slab that came down."""
@@ -886,7 +879,6 @@ class Cloud:
         return (0 <= along) & (along < 1) & (rows < near + (far - near) * along)
 
     def advance(self):
-        self.ticks += 1
         count = len(self.x)
         self.age += 1
         self.dx *= CLOUD_DRAG
@@ -898,36 +890,18 @@ class Cloud:
             setattr(self, name, getattr(self, name)[alive])
 
     def thickness(self):
-        """[y, x] of how much dust there is at each pixel it can reach."""
-        height, width = self.bottom - self.top, self.right - self.left
-        x, y = self.x - self.left, self.y - self.top
-        column, row = numpy.floor(x).astype(numpy.int32), numpy.floor(y).astype(numpy.int32)
-        inside = (0 <= column) & (column < width - 1) & (0 <= row) & (row < height - 1)
-        column, row, x, y = column[inside], row[inside], (x - column)[inside], (y - row)[inside]
-        weight = ((1 - self.age / self.life) ** CLOUD_THINNING)[inside]
-        thick = numpy.zeros((height, width))
-        numpy.add.at(thick, (row, column), weight * (1 - x) * (1 - y))
-        numpy.add.at(thick, (row, column + 1), weight * x * (1 - y))
-        numpy.add.at(thick, (row + 1, column), weight * (1 - x) * y)
-        numpy.add.at(thick, (row + 1, column + 1), weight * x * y)
-        for _ in range(min(MOST_CLOUD_BLUR, CLOUD_BLUR + self.ticks // CLOUD_BLUR_EVERY)):
-            thick[:, 1:-1] = (thick[:, :-2] + 2 * thick[:, 1:-1] + thick[:, 2:]) / 4
-            thick[1:-1, :] = (thick[:-2, :] + 2 * thick[1:-1, :] + thick[2:, :]) / 4
-        return thick
-
-
-@dataclass
-class Speck:
-    """A loose pixel of dust knocked off the floor."""
-
-    x: float
-    y: float
-    dx: float
-    dy: float
-    life: float
-    floor: float
-    inks: tuple
-    age: int = 0
+        """[y, x] of the thickest lobe at each pixel it can reach. Lobes are not added up,
+        or they melt into one flat patch and lose their outlines."""
+        share = self.age / self.life
+        small, large = self.kind.size
+        size = (small + (large - small) * share ** 0.7)[:, None]
+        columns = numpy.arange(self.left, self.right)[None, :]
+        rows = numpy.arange(self.top, self.bottom)[None, :]
+        along = numpy.exp(-((columns - self.x[:, None]) / size) ** 2 / 2)
+        above = (rows - self.y[:, None]) / (size * CLOUD_FLATTER)
+        down = numpy.exp(-above ** 2 / 2) * (1 - CLOUD_TOP_LIGHT * above.clip(-1, 1))
+        fade = ((1 - share) ** CLOUD_THINNING)[:, None, None]
+        return (down[:, :, None] * along[:, None, :] * fade).max(axis=0)
 
 
 @dataclass
@@ -1043,7 +1017,6 @@ class CavernAmbience:
     flecks: list = field(default_factory=list)
     flickers: list = field(default_factory=list)
     clouds: list = field(default_factory=list)
-    specks: list = field(default_factory=list)
     footing: Footing | None = None
     # The air he is dragging along this tick: where his body is, and how far he moved.
     wake: tuple | None = None
@@ -1274,68 +1247,47 @@ class CavernAmbience:
                        only=-1 if moved > 0 else 1))
 
     def land_on(self, footing, speed):
-        grains = min(MOST_LANDING_GRAINS, LANDING_PUFF.grains + speed // LANDING_FALL)
+        lobes = min(MOST_LANDING_LOBES, LANDING_PUFF.lobes + speed // LANDING_FALL)
         self.thud(Thud(footing.foot - 3, footing.foot + 3, footing.floor, footing.floor,
-                       replace(LANDING_PUFF, grains=grains)))
+                       replace(LANDING_PUFF, lobes=lobes)))
 
     def thud(self, thud):
-        """Dust knocked off the floor. There is none on the lava."""
+        """A puff of dust from the floor. There is none on the lava."""
         if surface_under(self.air.pools, (thud.left + thud.right) // 2) is not None:
             return
-        rng, kind = self.rng, thud.kind
-        cloud = Cloud(thud, rng)
+        cloud = Cloud(thud, self.rng)
         # Off the side of the screen there is nothing to show.
-        if len(self.clouds) >= MOST_CLOUDS or cloud.right - cloud.left < 3 or cloud.bottom - cloud.top < 3:
-            return
-        self.clouds.append(cloud)
-        for side in (-1, 1) * kind.specks:
-            x, floor = (thud.right, thud.right_floor) if side > 0 else (thud.left, thud.left_floor)
-            if len(self.specks) < MOST_SPECKS:
-                self.specks.append(Speck(x + side * rng.uniform(0, 3), floor - rng.uniform(0, 3),
-                                         side * rng.uniform(*SPECK_SPEED), -rng.uniform(*SPECK_RISE),
-                                         rng.uniform(*SPECK_LIFE), floor, kind.inks))
+        if len(self.clouds) < MOST_CLOUDS and cloud.right - cloud.left >= 3 and cloud.bottom - cloud.top >= 3:
+            self.clouds.append(cloud)
 
     def advance_clouds(self):
         for cloud in self.clouds:
             cloud.advance()
         self.clouds = [cloud for cloud in self.clouds if len(cloud.x)]
 
+    def cloud_shades(self, cloud):
+        """[step, RGB] of the dust of the rock, warm in the light."""
+        flame, pool = self.light_at((cloud.left + cloud.right) // 2, (cloud.top + cloud.bottom) // 2)
+        light = min(1.0, max(flame, pool) / DUST_FOCUS_LIGHT)
+        inks = self.air.inks
+        warm = inks[DUST_WARM_INK if flame >= pool else DUST_HOT_INK]
+        return numpy.array([(0, 0, 0)] + [mix(inks[ink], warm, light) for ink, _ in CLOUD_SHADES], dtype=numpy.float64)
+
     def draw_cloud(self, frame, cloud):
-        """A stipple of plain palette pixels: nothing is blended with what is behind it."""
-        kind = cloud.kind
+        """A few hard shades over what is behind it, each pixel landing on the palette."""
         box = cloud.left, cloud.top, cloud.right, cloud.bottom
         pixels = numpy.array(frame.crop(box))
-        share = kind.most * (1 - numpy.exp(-cloud.thickness() * CLOUD_THICKNESS))
-        painted = share > cloud.spray
+        shown = pixels[..., :3].astype(numpy.int32)
+        steps = numpy.digitize(cloud.thickness() + cloud.grain * CLOUD_CRUMBLE, CLOUD_STEPS)
+        amount = cloud.kind.most * numpy.array((0, *(share for _, share in CLOUD_SHADES)))[steps]
         covered = numpy.frombuffer(self.air.covered, dtype=numpy.uint8).reshape(HEIGHT, WIDTH)
-        painted &= covered[cloud.top:cloud.bottom, cloud.left:cloud.right] == 0
+        amount[covered[cloud.top:cloud.bottom, cloud.left:cloud.right] != 0] = 0
         if cloud.hidden is not None:
-            painted &= ~cloud.hidden
-        inks = [self.air.inks[ink][:3] for ink in kind.inks]
-        if max(self.light_at((cloud.left + cloud.right) // 2, (cloud.top + cloud.bottom) // 2)) >= SPECK_WARM_LIGHT:
-            inks[0] = self.air.inks[DUST_WARM_INK][:3]
-        stage = min(len(inks) - 2, cloud.ticks * (len(inks) - 1) // kind.life[1])
-        ink = numpy.minimum(len(inks) - 1, stage + (share < kind.most * CLOUD_THIN))
-        pixels[painted, :3] = numpy.array(inks, dtype=numpy.uint8)[ink[painted]]
+            amount[cloud.hidden] = 0
+        paler = numpy.maximum(self.cloud_shades(cloud)[steps], shown + CLOUD_PALER)
+        wanted = (shown + (paler - shown) * amount[..., None]).clip(0, 255)
+        pixels[..., :3] = self.air.colours.settle(shown, wanted)
         frame.paste(Image.fromarray(pixels), box[:2])
-
-    def advance_specks(self):
-        specks = []
-        for speck in self.specks:
-            speck.age += 1
-            speck.dx *= SPECK_DRAG
-            speck.dy = speck.dy * SPECK_DRAG + SPECK_SINK
-            speck.x += speck.dx
-            speck.y = min(speck.y + speck.dy, speck.floor)
-            if speck.age < speck.life:
-                specks.append(speck)
-        self.specks = specks
-
-    def speck_ink(self, speck):
-        stage = min(len(speck.inks) - 1, int(speck.age * len(speck.inks) / speck.life))
-        if stage == 0 and max(self.light_at(int(speck.x), int(speck.y))) >= SPECK_WARM_LIGHT:
-            return DUST_WARM_INK
-        return speck.inks[stage]
 
     # Ash
 
@@ -1434,7 +1386,6 @@ class CavernAmbience:
         for fall in self.falls:
             self.advance_fall(fall, terrain)
         self.advance_dust(terrain)
-        self.advance_specks()
         self.advance_clouds()
         self.advance_ash()
         self.advance_flecks()
@@ -1451,8 +1402,6 @@ class CavernAmbience:
         for fleck in self.flecks:
             yield (int(fleck.x), int(fleck.y),
                    fleck.inks[min(len(fleck.inks) - 1, fleck.age * len(fleck.inks) // fleck.life)])
-        for speck in self.specks:
-            yield int(speck.x), int(speck.y), self.speck_ink(speck)
 
     def caught(self, x, y, ink):
         """The front of a drop where it is now: water catches the fire it falls past."""
