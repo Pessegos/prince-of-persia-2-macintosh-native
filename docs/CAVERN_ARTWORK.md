@@ -350,3 +350,4 @@ artwork; no original golden or mask assertion is discarded.
 | Level | Room | Added visible pixels | Combined cached RGB SHA256 |
 | --- | --- | --- | --- |
 | 3 | 2 | 128 | `42b5d9e0b5da04adb31e3c03d5d4d46363f73aa6e52e37f2a49f312dadb581fe` |
+| 3 | 3 | 208 | `7c73c6a5ee731d4c34ef791eec54899003c2a57d9ae48f6bbf1dc3b5e149a7bf` |
