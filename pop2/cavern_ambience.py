@@ -218,6 +218,10 @@ BAYER = numpy.array(((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5
 DROP_INKS = (218, 217, 216, 215)
 SWELL_INKS = (214, 216, 217)
 SPLASH_INKS = (218, 216, 215, 214)
+# What the front of a drop shows where the air is lit, and how lit it must be.
+DROP_WARM_LIGHT, DROP_SHINE_LIGHT = 0.1, 0.35
+DROP_LAVA_LIGHT = 0.2
+DROP_LAVA_INK = 189
 STEAM_INKS = (67, 219, 110)
 FLASH_INKS = (199, 192)
 DUST_PALE_INK = 67
@@ -225,7 +229,7 @@ DUST_WARM_INK = 208
 DUST_SHINE_INK = 207
 DUST_HOT_INK = 210
 ASH_INKS = (192, 189, 186, 212, 211, 110)
-ALL_INKS = frozenset((*DROP_INKS, *SWELL_INKS, *SPLASH_INKS, *STEAM_INKS, *FLASH_INKS, *ASH_INKS,
+ALL_INKS = frozenset((*DROP_INKS, *SWELL_INKS, *SPLASH_INKS, *STEAM_INKS, *FLASH_INKS, *ASH_INKS, DROP_LAVA_INK,
                       *(kind.ink for kind in DUST_KINDS), DUST_PALE_INK, DUST_WARM_INK, DUST_SHINE_INK,
                       DUST_HOT_INK))
 
@@ -1044,17 +1048,27 @@ class CavernAmbience:
             yield (int(fleck.x), int(fleck.y),
                    fleck.inks[min(len(fleck.inks) - 1, fleck.age * len(fleck.inks) // fleck.life)])
 
+    def caught(self, x, y, ink):
+        """The front of a drop where it is now: water catches the fire it falls past."""
+        flame, pool = self.light_at(x, y)
+        if flame >= DROP_WARM_LIGHT:
+            return DUST_SHINE_INK if flame >= DROP_SHINE_LIGHT else DUST_WARM_INK
+        return DROP_LAVA_INK if pool >= DROP_LAVA_LIGHT else ink
+
     def fall_pixels(self, fall):
         source = fall.source
         if fall.y is None:
             if fall.swell:
                 stage = fall.swell * len(SWELL_INKS) // SWELL_TICKS
-                yield source.x, source.top + 1, SWELL_INKS[stage]
-                if stage == len(SWELL_INKS) - 1:
+                if stage < len(SWELL_INKS) - 1:
+                    yield source.x, source.top + 1, SWELL_INKS[stage]
+                else:
+                    yield source.x, source.top + 1, self.caught(source.x, source.top + 1, SWELL_INKS[stage])
                     yield source.x, source.top + 2, SWELL_INKS[0]
             return
         length = min(len(DROP_INKS), 1 + int(fall.speed / 4))
-        for offset in range(length):
+        yield source.x, int(fall.y), self.caught(source.x, int(fall.y), DROP_INKS[0])
+        for offset in range(1, length):
             yield source.x, int(fall.y) - offset, DROP_INKS[offset]
 
     def shed_light(self, frame, glow, level):

@@ -177,7 +177,9 @@ What the user has reviewed and how each part ended up:
 
 - **Drops** hang from the stalactite tips (`stalactite_tips`, read from the
   art), keep each source's rhythm and end in a splash on the floor or a hiss in
-  the lava. Crisp and opaque.
+  the lava. Crisp and opaque. In the light the front of a drop shows the fire it
+  is falling past (`caught`): pale warm by a flame, orange close over the lava, and
+  blue again once it is out of the light. The rest of its tail stays water.
 - **Ash** is single crisp pixels. They rise from the lava's surface, and from
   the flame. A pass with sparks in bursts, with trails, was rejected: "a little
   more presence" meant a small step in the style that was there.

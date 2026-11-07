@@ -14,6 +14,7 @@ from PIL import Image
 from pop2.cavern_ambience import (
     AMBIENCE_LEVELS, ALL_INKS, ASH_INKS, Air, Ash, COARSE_DUST, CavernAmbience, Colours, DUST_BRIGHT_LIFE,
     DUST_FADE_IN, DUST_FADE_OUT, DUST_HEADING, DUST_LIFE_SPREAD, DUST_PALE_INK, DUST_PATCH, DUST_POCKETS,
+    DROP_INKS, DROP_LAVA_INK, DROP_SHINE_LIGHT, DROP_WARM_LIGHT, SWELL_INKS,
     DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
     QUIET_DUST, flame_of, room_torches, shows,
     HEAT_REACH, HEIGHT, LIGHT_HOLD, LIGHT_LEVELS, LONGEST_REACH, MOST_ASH, MOST_DUST, Mote, POOL_GLOW_REACH, QUICK_DEPTH,
@@ -189,6 +190,67 @@ class DropTests(unittest.TestCase):
             scene.advance()
             for fall, period in zip(scene.falls, periods):
                 self.assertLessEqual(fall.wait, period + 14)
+
+
+class DropInTheLightTests(unittest.TestCase):
+    def falling(self, **options):
+        scene = still_ambience(room_air([Drip(300, 20, 340, False)], **options))
+        fall = scene.falls[0]
+        fall.speed = 12.0
+        return scene, fall
+
+    def inks_at(self, scene, fall, y):
+        fall.y = float(y)
+        return [ink for _x, _y, ink in scene.fall_pixels(fall)]
+
+    def beside_a_torch(self):
+        return self.falling(flames=[(300, 200)], torches=[burning_torch(300, 200)])
+
+    def test_water_in_the_dark_is_only_water(self):
+        scene, fall = self.falling()
+        self.assertEqual(self.inks_at(scene, fall, 200), list(DROP_INKS))
+
+    def test_a_drop_shines_by_the_flame_and_only_its_front(self):
+        scene, fall = self.beside_a_torch()
+        self.assertEqual(self.inks_at(scene, fall, 200), [DUST_SHINE_INK, *DROP_INKS[1:]])
+
+    def test_the_shine_fades_with_the_light_on_the_way_down(self):
+        scene, fall = self.beside_a_torch()
+        seen = []
+        for y in range(200, 340):
+            front = self.inks_at(scene, fall, y)[0]
+            if not seen or seen[-1] != front:
+                seen.append(front)
+        self.assertEqual(seen, [DUST_SHINE_INK, DUST_WARM_INK, DROP_INKS[0]])
+
+    def test_each_shine_is_where_the_light_says(self):
+        scene, fall = self.beside_a_torch()
+        for y in range(200, 340, 3):
+            light = scene.light_at(300, y)[0]
+            expected = (DUST_SHINE_INK if light >= DROP_SHINE_LIGHT else DUST_WARM_INK if light >= DROP_WARM_LIGHT
+                        else DROP_INKS[0])
+            self.assertEqual(self.inks_at(scene, fall, y)[0], expected, y)
+
+    def test_a_drop_about_to_fall_catches_the_light_but_not_a_new_one(self):
+        scene = still_ambience(room_air([Drip(300, 195, 340, False)], flames=[(300, 200)],
+                                        torches=[burning_torch(300, 200)]))
+        fall = scene.falls[0]
+        fall.swell = 1
+        self.assertEqual([ink for _x, _y, ink in scene.fall_pixels(fall)], [SWELL_INKS[0]])
+        fall.swell = SWELL_TICKS - 1
+        self.assertEqual([ink for _x, _y, ink in scene.fall_pixels(fall)], [DUST_SHINE_INK, SWELL_INKS[0]])
+
+    def test_over_the_lava_the_front_of_a_drop_is_lit_from_below(self):
+        pool = {x: 300 for x in range(280, 320)}
+        scene, fall = self.falling(pools=[pool])
+        self.assertEqual(self.inks_at(scene, fall, 285), [DROP_LAVA_INK, *DROP_INKS[1:]])
+        self.assertEqual(self.inks_at(scene, fall, 100), list(DROP_INKS))
+
+    def test_catching_the_light_takes_no_random_numbers(self):
+        scene, fall = self.beside_a_torch()
+        before = scene.rng.getstate()
+        self.inks_at(scene, fall, 200)
+        self.assertEqual(scene.rng.getstate(), before)
 
 
 class DustTests(unittest.TestCase):
