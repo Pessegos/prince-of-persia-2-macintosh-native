@@ -206,7 +206,7 @@ masks remain unchanged. Comparisons are local under
 column model; its former exclusion list is not proof that all cavern artwork
 has been corrected. Keep visual review of genuinely different contexts separate.
 
-## Short columns: level3 room5
+## Short columns: approved upper and lower joins
 
 The user approved the short-column V2 review on 2026-11-07. Room5's small
 P3 column at X212/bottom362 needs the continuation on its upper half too.
@@ -224,3 +224,14 @@ X365 with bottoms242 and362. Ten placement-specific crops add1242 visible
 changes. The upper column's overlying rock stays intact; only the visible
 dark contour and adjacent wall are treated. The combined cached RGB hash is
 `78c0838162512e9e1c29a17e6d160173e6c7c4545935e3908c20a340a3adaabb`.
+
+Level5 room22's P1 at X110/bottom242 completes this four-column selection.
+Five crops add691 visible changes, with cached RGB hash
+`85d1c7b09db45de43cd81f3af54943bddbff9413b088d25236a44bf6dad1609b`.
+All four preserve the native source alpha and the inner/lit stone body.
+The upper dark-fringe changes are limited to the outer three pixels of the
+actual contour, with native RGB at most66 and green at most33; this is a
+local reviewed exception to the earlier darker-fringe-only treatments.
+The first short-column proposal was not approved because it left the upper
+join untreated. V2 retains its lower treatment and extends through the upper
+join; none of the inventory's other similar contexts are approved targets.

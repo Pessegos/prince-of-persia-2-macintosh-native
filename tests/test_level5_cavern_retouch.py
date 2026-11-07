@@ -22,6 +22,7 @@ APPROVED = {
     14: (643, '2e5bc07ca34916df66c27435e220421e87f77f0e2e4ccdd7859ab7fe42c0e756'),
     15: (1231, '5cadd904b80f1fc11fd21a8eb4fd3d44ccee4ff62b8f9ba2f831b9270e3c3413'),
     16: (1619, 'fbb686730f48d2a6e589fb13b4202a0fdcdeecddc1c3aaa751499c22ff44e471'),
+    21: (691, 'a611edf0f5eb158604b1993e052820b84b6a11168bccc72e183fef60dd5c5806'),
     22: (819, '9c365261fc87ba53116fa4331aef749430e8e0c147fd903d1fea83ad1687afc7'),
     24: (1071, '4ba338d53567d00d272402a59fec0fb9664aee9fd3a164cc0ac65341f23d74a6'),
 }
@@ -30,7 +31,7 @@ APPROVED = {
 class BundledLevelFiveArtworkTests(unittest.TestCase):
     def test_approved_scope_and_changed_source_guards(self):
         assets = retouch_assets(5)
-        self.assertEqual(len(assets), 50)
+        self.assertEqual(len(assets), 55)
         self.assertEqual({key[0] for key in assets}, set(APPROVED))
         for key, (record, image) in assets.items():
             room, shape, x, bottom, mode = key
@@ -139,9 +140,19 @@ class LevelFiveArtworkTests(unittest.TestCase):
                 self.assertEqual(source.tobytes(), original)
                 self.assertEqual(source.getchannel('A').tobytes(), result.getchannel('A').tobytes())
                 if shape in (3531, 3533):
-                    for old, new in zip(source.getdata(), result.getdata()):
-                        if old[3] and max(old[:3]) > 24:
-                            self.assertEqual(old, new)
+                    for py in range(source.height):
+                        edge = max((px for px in range(source.width)
+                                    if source.getpixel((px, py))[3]), default=-1)
+                        for px in range(source.width):
+                            old, new = source.getpixel((px, py)), result.getpixel((px, py))
+                            # Room22's reviewed upper fringe includes brown shadow texels.
+                            # Keep the original stricter rule for all earlier artwork.
+                            if room == 21 and shape == 3531:
+                                protected = px < edge-2 or max(old[:3]) > 66 or old[1] > 33
+                            else:
+                                protected = max(old[:3]) > 24
+                            if old[3] and protected:
+                                self.assertEqual(old, new)
                 other = list(command)
                 other[7] = 1
                 self.assertIs(retouched_sprite(room, other, source, level_number=5), source)

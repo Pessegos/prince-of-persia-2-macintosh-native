@@ -3669,6 +3669,131 @@
         95,
         1578
       ]
+    },
+    {
+      "level": 5,
+      "room": 21,
+      "shape": 3531,
+      "x": 110,
+      "bottom": 242,
+      "mode": 16,
+      "size": [
+        40,
+        117
+      ],
+      "source_sha256": "8b2ae57570294f3b37c372064d2548a231905cbc86c2d1df0b792833b91c2719",
+      "source_rect": [
+        23,
+        9,
+        37,
+        107
+      ],
+      "atlas_rect": [
+        0,
+        1664,
+        14,
+        1762
+      ]
+    },
+    {
+      "level": 5,
+      "room": 21,
+      "shape": 3513,
+      "x": 142,
+      "bottom": 220,
+      "mode": 0,
+      "size": [
+        51,
+        120
+      ],
+      "source_sha256": "b377430e4d628f84af3bf9d54df00ae0864fe3822e0d89dba4ed7468c6450106",
+      "source_rect": [
+        0,
+        35,
+        6,
+        115
+      ],
+      "atlas_rect": [
+        15,
+        1664,
+        21,
+        1744
+      ]
+    },
+    {
+      "level": 5,
+      "room": 21,
+      "shape": 3510,
+      "x": 91,
+      "bottom": 220,
+      "mode": 0,
+      "size": [
+        51,
+        120
+      ],
+      "source_sha256": "e13b1ffff7b7e53b12acbe7c3a206df2c58a77cee0d3800c00c7433f5d5f15fc",
+      "source_rect": [
+        45,
+        37,
+        51,
+        109
+      ],
+      "atlas_rect": [
+        22,
+        1664,
+        28,
+        1736
+      ]
+    },
+    {
+      "level": 5,
+      "room": 21,
+      "shape": 3526,
+      "x": 104,
+      "bottom": 245,
+      "mode": 16,
+      "size": [
+        89,
+        30
+      ],
+      "source_sha256": "9aa4bd9416efe75ee79ca5d0105130a3fecb30efb82f14e3920808398914d304",
+      "source_rect": [
+        38,
+        0,
+        48,
+        12
+      ],
+      "atlas_rect": [
+        29,
+        1664,
+        39,
+        1676
+      ]
+    },
+    {
+      "level": 5,
+      "room": 21,
+      "shape": 3532,
+      "x": 143,
+      "bottom": 227,
+      "mode": 16,
+      "size": [
+        39,
+        118
+      ],
+      "source_sha256": "240f8ddf284311dd983f21c8fa29f3711345c30624540ea5ee20fac8a3371e9e",
+      "source_rect": [
+        3,
+        110,
+        10,
+        116
+      ],
+      "atlas_rect": [
+        40,
+        1664,
+        47,
+        1670
+      ]
     }
   ],
   "doors": [
