@@ -221,11 +221,10 @@ What the user has reviewed and how each part ended up:
   but they are the light moving across the rock, not noise.
 - **The Prince's feet.** `Footing` is read from the game once a tick and never
   written back. FRAM's supporting foot stays put and then jumps to where the next
-  foot lands (`floor_contact_x`), so that jump is a step: it throws a little dust up
-  and behind him from that spot, in spots smaller and fainter than the rest of the
-  dust (`STEP_SOFTNESS`, `STEP_STRENGTH`). The foot-on-the-floor flag cannot do this, as it is
-  set on almost every frame of a run. Walking carefully raises none. A landing throws
-  dust out to both sides, more the faster he came down, and there is none on the
+  foot lands (`floor_contact_x`), so that jump is a step: it raises a wisp of the same
+  cloud as the doors (`Puff`), going behind him from that spot. The foot-on-the-floor flag cannot do this, as it is
+  set on almost every frame of a run. Walking carefully raises none. A landing drives
+  a cloud out to both sides, more the faster he came down, and there is none on the
   lava. As he runs he drags the air along (`wake`), so grains he passes follow him
   and let go. Dust from the floor is drawn behind him like the rest of the ambience.
 - **Gates, doors and fallen tiles.** When something heavy comes down the air under it
@@ -233,7 +232,7 @@ What the user has reviewed and how each part ended up:
   It is a thin cloud (`Puff`), not grains: spots of one strength piled up read as balls
   of cotton wool. Many faint particles go out and rise as they slow, and what shows is
   how thick they are together, spread a little more as they age, broken into palette
-  colours with the same dither as the light. The thickest part hides 45% of what is
+  colours with the same dither as the light. The thickest part hides 30% of what is
   behind it, in the pale colour of the rest of the dust, warm in the light. A slam
   drives a good cloud, a gate lowering itself a small one, a tile the most, and slams and
   tiles throw a few chips of rock. Dust cannot pass through a slab, which stands
