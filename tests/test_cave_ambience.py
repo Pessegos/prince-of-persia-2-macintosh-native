@@ -12,9 +12,10 @@ import numpy
 from PIL import Image
 
 from pop2.cavern_ambience import (
-    AMBIENCE_ROOMS, ALL_INKS, ASH_INKS, Air, Ash, COARSE_DUST, CavernAmbience, Colours, DUST_BRIGHT_LIFE,
+    AMBIENCE_LEVELS, ALL_INKS, ASH_INKS, Air, Ash, COARSE_DUST, CavernAmbience, Colours, DUST_BRIGHT_LIFE,
     DUST_FADE_IN, DUST_FADE_OUT, DUST_HEADING, DUST_LIFE_SPREAD, DUST_PALE_INK, DUST_PATCH, DUST_POCKETS,
     DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
+    QUIET_DUST, flame_of, room_torches, shows,
     HEAT_REACH, HEIGHT, LIGHT_HOLD, LIGHT_LEVELS, LONGEST_REACH, MOST_ASH, MOST_DUST, Mote, POOL_GLOW_REACH, QUICK_DEPTH,
     QUICK_FOLLOW, SHORTEST_REACH, SLOW_DEPTH, SLOW_FOLLOW, SPLASH_INKS, STEAM_INKS, SWELL_TICKS, WIDTH,
     flame_pixels, glow_along, landing, lifespan, on_the_pixels, read_torch, soft_spot, stalactite_tips, steady_wall,
@@ -527,6 +528,27 @@ class DustTests(unittest.TestCase):
         scene = still_ambience(room_air(flames=[(200, 200)]))
         return [scene.new_mote(kind) for _ in range(count)]
 
+    def test_a_room_without_fire_has_less_dust_and_none_of_it_shines(self):
+        # No dust at all made those rooms look dead, but with nothing to light it
+        # it must show less.
+        quiet = CavernAmbience(0, room_air(), random.Random(3))
+        lit = CavernAmbience(0, room_air(flames=[(255, 180)]), random.Random(3))
+        self.assertEqual(len(quiet.motes), sum(kind.count for kind in QUIET_DUST))
+        self.assertLess(len(quiet.motes), len(lit.motes) * 0.6)
+        self.assertLess(max(mote.brightness for mote in quiet.motes), 0.31)
+        self.assertGreater(max(mote.brightness for mote in lit.motes), 0.31)
+        faint = [mote.kind.strength for mote in quiet.motes if mote.kind.softness == COARSE_DUST.softness]
+        self.assertTrue(faint)
+        self.assertLess(max(faint), COARSE_DUST.strength)
+
+    def test_a_grain_gone_from_a_room_without_fire_comes_back_quiet(self):
+        scene = CavernAmbience(0, room_air(), random.Random(3))
+        kinds = {mote.kind for mote in scene.motes}
+        for _ in range(1200):
+            scene.advance()
+        self.assertTrue(scene.motes)
+        self.assertLessEqual({mote.kind for mote in scene.motes}, kinds)
+
     def test_there_is_little_dust_and_most_of_it_is_fine(self):
         # Sixty grains, a lot of them coarse, looked like snow.
         self.assertLess(MOST_DUST, 35)
@@ -830,6 +852,48 @@ class TorchTests(unittest.TestCase):
             scene.advance()
             scene.draw(self.painted(art))
         self.assertEqual(random.getstate(), before)
+
+
+class TorchInViewTests(unittest.TestCase):
+    def torch(self, in_front=None):
+        frames = burning_torch(300, 200).frames
+        return read_torch(frames, frames[0], 285, 180, scenery(), COLOURS.firelight, in_front)
+
+    def in_front(self, left=0, right=WIDTH):
+        mask = numpy.zeros((HEIGHT, WIDTH), dtype=bool)
+        mask[:, left:right] = True
+        return mask
+
+    def test_rock_in_front_of_a_torch_takes_no_light(self):
+        # Lit, the pillars and walls in front of a torch stood out as pale plates.
+        mask = self.in_front(320, 340)
+        open_room, walled = self.torch().firelight, self.torch(mask).firelight
+        front = mask[walled.top:walled.top + walled.rest.shape[0], walled.left:walled.left + walled.rest.shape[1]]
+        self.assertTrue(front.any())
+        reach = numpy.ones(DIRECTIONS)
+        self.assertGreater(open_room.at(reach, 1.0)[front].max(), 0.05)
+        self.assertEqual(walled.at(reach, 1.0)[front].max(), 0.0)
+        numpy.testing.assert_array_equal(open_room.at(reach, 1.0)[~front], walled.at(reach, 1.0)[~front])
+
+    def test_the_air_before_that_rock_is_still_lit(self):
+        mask = self.in_front(320, 340)
+        numpy.testing.assert_array_equal(self.torch().lit_air, self.torch(mask).lit_air)
+
+    def test_a_torch_shut_behind_a_pillar_does_not_show(self):
+        torch = self.torch()
+        self.assertTrue(shows(torch, self.in_front(0, 0)))
+        self.assertFalse(shows(torch, self.in_front(0, WIDTH)))
+        # Half of it in view still counts: most torches stand a little behind one.
+        half = torch.left + torch.frames.shape[2] // 2
+        self.assertTrue(shows(torch, self.in_front(half, WIDTH)))
+
+    def test_a_torch_listed_twice_is_one_torch(self):
+        record = {'command': ['back', 3583, 149, 329, 16, 2, [245, 149, 329, 195], 4, 2, 2]}
+        other = {'command': ['back', 3583, 149, 329, 16, 2, [245, 149, 329, 195], 4, 3, 2]}
+        third = {'command': ['back', 3586, 455, 329, 16, 2, [245, 455, 329, 501], 4, 8, 2]}
+        program = {'torches': {'0': [record, other, third]}}
+        self.assertEqual([flame_of(found) for found in room_torches(program, 0)], [(172, 287), (478, 287)])
+        self.assertEqual(room_torches(program, 1), ())
 
 
 class SteadyWallTests(unittest.TestCase):
@@ -1196,6 +1260,63 @@ class MenuTests(unittest.TestCase):
 
 
 @unittest.skipUnless(CAVERNS_INSTALLED, 'Imported cavern resources required')
+class EveryRoomTests(unittest.TestCase):
+    """What was read wrongly when the effect first ran in all 84 rooms."""
+
+    @classmethod
+    def setUpClass(cls):
+        from pop2.cavern_state import CavernState
+        from pop2.cavern_ambience import room_air as analyze
+        from pop2.level_data import LevelDefinition
+        from pop2.level_rendering import LevelRenderer
+        from pop2.render_opening import load_resource_file
+        from pop2.terrain import LevelMap
+
+        cls.rooms = {}
+        for number in sorted(AMBIENCE_LEVELS):
+            level = LevelDefinition.read(load_resource_file('Prince.rsrc'), number)
+            renderer = LevelRenderer(level, preload_room=False)
+            world = CavernState()
+            world.configure_entry(renderer.cavern_program.get('entry_exit'))
+            world.configure_torches(renderer.cavern_program.get('torches', {}))
+            world.configure_lava(renderer.cavern_program.get('lava'))
+            terrain = LevelMap(level.data)
+            for room in renderer.supported_rooms():
+                cls.rooms[number, room] = analyze(number, room, renderer.enter_room(room, world), terrain)
+
+    def test_all_the_rooms_are_read(self):
+        self.assertEqual(len(self.rooms), 84)
+
+    def test_no_torch_is_counted_twice(self):
+        for place, air in self.rooms.items():
+            self.assertEqual(len(set(air.flames)), len(air.flames), place)
+            self.assertEqual(len(air.flames), len(air.torches), place)
+
+    def test_a_torch_shut_behind_rock_is_no_fire(self):
+        self.assertEqual(self.rooms[4, 1].flames, ())
+        self.assertEqual(self.rooms[5, 5].flames, ((427, 167),))
+        self.assertNotIn((478, 167), self.rooms[5, 10].flames)
+
+    def test_a_torch_mostly_behind_a_pillar_still_lights_the_rock(self):
+        self.assertEqual(self.rooms[3, 2].flames, ((427, 287),))
+        self.assertGreater(self.rooms[3, 2].torches[0].firelight.steady.max(), 0.3)
+
+    def test_every_pool_is_on_the_screen(self):
+        for place, air in self.rooms.items():
+            for columns in air.pools:
+                self.assertGreater(min(columns.values()), 0, place)
+        for place in ((3, 12), (3, 27), (4, 23)):
+            self.assertEqual(self.rooms[place].pools, (), place)
+
+    def test_every_drop_falls_where_it_can_be_seen(self):
+        for place, air in self.rooms.items():
+            for drip in air.drips:
+                self.assertGreater(drip.bottom, drip.top + 40, (place, drip))
+                seen = sum(not air.is_covered(drip.x, y) for y in range(drip.top + 1, min(drip.bottom, HEIGHT)))
+                self.assertGreater(seen, (drip.bottom - drip.top) * 0.5, (place, drip))
+
+
+@unittest.skipUnless(CAVERNS_INSTALLED, 'Imported cavern resources required')
 class ChosenRoomTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -1216,11 +1337,18 @@ class ChosenRoomTests(unittest.TestCase):
         cls.art = cls.renderer.enter_room(16, cls.world)
         cls.air = analyze(4, 16, cls.art, cls.terrain)
 
-    def test_only_the_prototype_room_has_it(self):
-        self.assertEqual(AMBIENCE_ROOMS, {(4, 16)})
+    def test_every_room_of_a_cavern_level_has_it(self):
+        self.assertEqual(AMBIENCE_LEVELS, {3, 4, 5})
         renderer = self.renderer
         renderer.enter_room(15, self.world)
         renderer.advance_ambience(15, self.terrain)
+        self.assertEqual(renderer.ambience.room, 15)
+        renderer.ambience = None
+
+    def test_no_other_level_has_it(self):
+        renderer = self.renderer
+        with patch.object(renderer, 'level', SimpleNamespace(number=6)):
+            renderer.advance_ambience(15, self.terrain)
         self.assertIsNone(renderer.ambience)
         frame = Image.new('RGBA', (WIDTH, HEIGHT))
         self.assertIs(renderer.ambient_layer(frame, 15), frame)
@@ -1274,7 +1402,8 @@ class ChosenRoomTests(unittest.TestCase):
         rows, columns = numpy.nonzero(drawn)
         outline[rows + top, columns + left] = True
         near = gaussian(outline.astype(float), 6.0)
-        return (near > 0.6) if inward else ((near < 0.25) & (near > 0.03))
+        # Rock in front of the torch takes no light, so it says nothing of the light.
+        return ((near > 0.6) if inward else ((near < 0.25) & (near > 0.03))) & (firelight.taken > 0)
 
     def test_the_recess_is_no_bright_plate(self):
         # Lit like the rock it stood out as an oval the shape of the sprite, the

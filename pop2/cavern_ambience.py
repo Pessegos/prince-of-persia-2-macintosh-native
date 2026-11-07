@@ -24,7 +24,7 @@ a wider glow over everything and sparks with trails as far too much: the light
 must stay in the rock, not on top of it.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 import math
 import random
@@ -38,9 +38,9 @@ from pop2.terrain import TILE_HEIGHT, TILE_WIDTH, floor_y
 
 WIDTH, HEIGHT = 510, 365
 
-# One room for the approved prototype: level four, room 17 of the development
-# menu (the torch, the lava pool and the long stalactites are all in view).
-AMBIENCE_ROOMS = frozenset({(4, 16)})
+# The cavern levels. The look was settled on level four, room 17 of the development
+# menu, where the torch, the lava pool and the long stalactites are all in view.
+AMBIENCE_LEVELS = frozenset({3, 4, 5})
 
 # How far above a floor's walking line its surface starts in the art.
 FLOOR_STRIP = 14
@@ -98,6 +98,9 @@ FINE_DUST = DustKind(24, (0.13, 0.26), 360, DUST_SHARPNESS, 1.0, 104, 0.0, 0.1, 
 COARSE_DUST = DustKind(5, (0.11, 0.2), 540, DUST_SOFTNESS, 0.62, 67, 0.8, 0.06, 0.0)
 DUST_KINDS = (FINE_DUST, COARSE_DUST)
 MOST_DUST = sum(kind.count for kind in DUST_KINDS)
+# A room with no fire has less of it, and none that shines: with nothing to light
+# it, it is only just there.
+QUIET_DUST = (replace(FINE_DUST, count=12, brightest=0.3), replace(COARSE_DUST, count=3, strength=0.45))
 # Most fine grains are dim: a grain's brightness is a random number raised to this
 # power. The brightest last this long, and life falls fast as they brighten.
 DUST_SKEW = 2.5
@@ -182,8 +185,9 @@ FIRE_RED = 200
 # counts within this many pixels of the flame.
 FLAME_RIM_RED = 120
 FLAME_RIM = 3
-# Share of a torch that must be on screen for it to be there at all.
-TORCH_SEEN = 0.5
+# Share of a torch that must show for it to be there at all. Most stand a little
+# behind a pillar, and a few are shut behind one: those have no fire to speak of.
+TORCH_SEEN = 0.35
 
 # Light multiplies what the paint already is, so dark hollows stay dark and only
 # the rock lights up. A wide light laid over everything looked like a bomb about
@@ -378,9 +382,10 @@ def steady_wall(frames, flame, unlit):
     return wall
 
 
-def read_torch(frames, unlit, left, top, scenery, table):
+def read_torch(frames, unlit, left, top, scenery, table, in_front=None):
     """frames: [frame, y, x, RGBA] of one size, all with the same outline, and
-    unlit: the same recess with the torch out. scenery: the room's RGB pixels."""
+    unlit: the same recess with the torch out. scenery: the room's RGB pixels, and
+    in_front: [y, x] of what the room draws in front of the torch."""
     flame = flame_pixels(frames)
     outline = frames[0, ..., 3] > 0
     bottom, right = min(HEIGHT, top + outline.shape[0]), min(WIDTH, left + outline.shape[1])
@@ -389,16 +394,22 @@ def read_torch(frames, unlit, left, top, scenery, table):
     room[top:bottom, left:right][inside] = unlit[:bottom - top, :right - left, :3][inside]
     shades = (room @ numpy.array((0.30, 0.59, 0.11))) / 255
     firelight = trace_firelight(shades, outline.astype(numpy.float64), flame_heat(frames, flame), left, top)
+    # The recess takes less of the light. The air before it does not.
+    lit_air = gaussian(firelight.steady / firelight.taken, AIR_LIGHT_SPREAD).astype(numpy.float32)
+    if in_front is not None:
+        # Rock in front of a torch has its back to the flame. Lit, it stood out as a
+        # pale plate on the pillars and the walls.
+        height, width = firelight.rest.shape
+        behind = ~in_front[firelight.top:firelight.top + height, firelight.left:firelight.left + width]
+        firelight = replace(firelight, taken=firelight.taken * behind)
     at_rest = firelight.steady
     rows, columns = numpy.mgrid[firelight.top:firelight.top + at_rest.shape[0],
                                 firelight.left:firelight.left + at_rest.shape[1]]
     glow = Glow(firelight.left, firelight.top, at_rest, BAYER[rows % 4, columns % 4], table)
-    # The recess takes less of the light. The air before it does not.
-    lit_air = gaussian(at_rest / firelight.taken, AIR_LIGHT_SPREAD).astype(numpy.float32)
     return TorchArt(left, top, frames, steady_wall(frames, flame, unlit), flame, firelight, glow, lit_air)
 
 
-def torch_art(record, resources, palette, shapes, table, scenery):
+def torch_art(record, resources, palette, shapes, table, scenery, in_front):
     from pop2.caverns import clipped_sprite, decode_shap
 
     sprites = []
@@ -410,7 +421,7 @@ def torch_art(record, resources, palette, shapes, table, scenery):
             return None
         sprites.append(clipped)
     frames = numpy.stack([numpy.array(sprite.convert('RGBA')) for sprite, _position in sprites])
-    return read_torch(frames[:-1], frames[-1], *sprites[0][1], scenery, table)
+    return read_torch(frames[:-1], frames[-1], *sprites[0][1], scenery, table, in_front)
 
 
 @dataclass(frozen=True)
@@ -497,7 +508,7 @@ def surface_under(pools, x):
     return None
 
 
-def choose_drips(air, shades, terrain, room, pools):
+def choose_drips(air, covered, shades, terrain, room, pools):
     """Fixed sources: the longest stalactites first, kept apart."""
     sources = []
     for x, top, length in stalactite_tips(shades):
@@ -506,8 +517,9 @@ def choose_drips(air, shades, terrain, room, pools):
             continue
         pool = surface_under(pools, x)
         path = range(top + 1, (pool or ground) - FLOOR_STRIP)
-        # A drop that would have to pass through a ledge has no source here.
-        if sum(air[y * WIDTH + x] != 0 for y in path) < len(path) * 0.7:
+        # A drop that would have to pass through a ledge has no source here, and
+        # one falling behind the foreground would only take the place of one seen.
+        if sum(air[y * WIDTH + x] != 0 and not covered[y * WIDTH + x] for y in path) < len(path) * 0.7:
             continue
         bottom = pool or ground + LANDING_DEPTH[0] + x % (LANDING_DEPTH[1] - LANDING_DEPTH[0] + 1)
         sources.append((length, Drip(x, top, bottom, pool is not None)))
@@ -537,16 +549,28 @@ def lava_surfaces(program, room, palette):
             rows = [y for y in range(liquid.height) if pixels[x, y]]
             if rows:
                 columns[left + x] = top + (rows[0] + rows[-1]) // 2
-        pools.append(columns)
+        # A room can list a pool that lies off the top of its screen.
+        if min(columns.values()) >= 0:
+            pools.append(columns)
     return tuple(pools)
 
 
-def torch_flames(program, room):
-    flames = []
-    for record in program.get('torches', {}).get(str(room), ()):
-        top, left, bottom, right = record['command'][6]
-        flames.append(((left + right) // 2, (top + bottom) // 2))
-    return tuple(flames)
+def room_torches(program, room):
+    """The room's torches, each once: many are listed twice."""
+    return tuple({tuple(record['command'][6]): record for record in program.get('torches', {}).get(str(room), ())}.values())
+
+
+def flame_of(record):
+    top, left, bottom, right = record['command'][6]
+    return (left + right) // 2, (top + bottom) // 2
+
+
+def shows(torch, in_front):
+    """Whether enough of a torch shows past the foreground."""
+    outline = torch.frames[0, ..., 3] > 0
+    height, width = outline.shape
+    clear = ~in_front[torch.top:torch.top + height, torch.left:torch.left + width]
+    return (outline[:clear.shape[0], :clear.shape[1]] & clear).sum() >= TORCH_SEEN * outline.sum()
 
 
 def analyze_room(program, room, art, terrain, palette, resources=None, shapes=None):
@@ -556,17 +580,20 @@ def analyze_room(program, room, art, terrain, palette, resources=None, shapes=No
     covered = art.foreground.getchannel('A').point(lambda value: 255 if value else 0).tobytes()
     pools = lava_surfaces(program, room, palette)
     inks = {index: tuple(palette[index][:3]) + (255,) for index in ALL_INKS}
-    drips = choose_drips(air, luminance.tobytes(), terrain, room, pools)
+    drips = choose_drips(air, covered, luminance.tobytes(), terrain, room, pools)
     colours = colours_of(tuple(sorted(palette.items())))
-    flames = torch_flames(program, room)
+    records = room_torches(program, room)
     centres = tuple(pool_centre(columns) for columns in pools)
     pool_glows = tuple(glow_along(columns, POOL_GLOW_REACH, colours.lavalight) for columns in pools)
     torches = ()
     if resources is not None:
-        records = program.get('torches', {}).get(str(room), ())
         pixels = numpy.array(scenery.convert('RGB'))
-        torches = tuple(filter(None, (torch_art(record, resources, palette, shapes, colours.firelight, pixels)
-                                      for record in records)))
+        in_front = numpy.array(art.foreground.getchannel('A')) > 0
+        arts = ((record, torch_art(record, resources, palette, shapes, colours.firelight, pixels, in_front))
+                for record in records)
+        seen = tuple((record, torch) for record, torch in arts if torch is not None and shows(torch, in_front))
+        records, torches = tuple(record for record, _ in seen), tuple(torch for _, torch in seen)
+    flames = tuple(flame_of(record) for record in records)
     return Air(air, covered, drips, flames, pools, colours, inks, centres, pool_glows, torches)
 
 
@@ -721,14 +748,13 @@ class CavernAmbience:
             self.falls.append(Fall(source, period, self.rng.randrange(period)))
         self.flickers = [self.new_flicker(torch) for torch in self.air.torches]
         self.pockets = self.find_pockets()
-        if self.air.flames or self.air.pools:
-            for kind in DUST_KINDS:
-                for _ in range(kind.count):
-                    mote = self.new_mote(kind)
-                    if mote is not None:
-                        # The room was already dusty before the Prince came in.
-                        mote.age = self.rng.uniform(0, mote.life)
-                        self.motes.append(mote)
+        for kind in DUST_KINDS if self.air.flames or self.air.pools else QUIET_DUST:
+            for _ in range(kind.count):
+                mote = self.new_mote(kind)
+                if mote is not None:
+                    # The room was already dusty before the Prince came in.
+                    mote.age = self.rng.uniform(0, mote.life)
+                    self.motes.append(mote)
 
     # Light
 

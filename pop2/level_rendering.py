@@ -125,9 +125,9 @@ class LevelRenderer:
 
     def advance_ambience(self, room_id, terrain):
         """One game tick of the optional cave ambience; pixels only."""
-        from pop2.cavern_ambience import AMBIENCE_ROOMS, CavernAmbience, room_air
+        from pop2.cavern_ambience import AMBIENCE_LEVELS, CavernAmbience, room_air
 
-        if (self.level.number, room_id) not in AMBIENCE_ROOMS:
+        if self.level.number not in AMBIENCE_LEVELS:
             self.ambience = None
             return
         if self.ambience is None or self.ambience.room != room_id:

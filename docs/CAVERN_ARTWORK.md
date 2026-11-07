@@ -162,11 +162,10 @@ ash, water drops or cast light, and its torch does not behave like this.
 on, and `pop2/firelight.py` works out the light. It is off by default, and the
 choice is kept between sessions in `preferences.json` (`pop2/preferences.py`).
 
-The user approved how it looks on 2026-11-07, after eleven passes, in the one
-room it runs in: `AMBIENCE_ROOMS` = level 4 room 16 (Room 17 in the development
-menu). Adding a room means reviewing it in motion: the tips and the air are read
-from the art, and only this room has been looked at. A room without fire gets the
-drops and no dust, as dust is only seen by firelight.
+The user approved how it looks on 2026-11-07, after eleven passes, in level 4 room
+16 (Room 17 in the development menu). It now runs in all 84 rooms of levels 3 to 5
+(`AMBIENCE_LEVELS`), and that wider run is under the user's review. The tips and
+the air are read from the art, so a new room has to be seen in motion.
 
 Two rules keep it from looking like a modern filter. Every pixel it leaves on
 the frame is a colour of the room's own palette, and everything moves once per
@@ -246,8 +245,8 @@ What the user has reviewed and how each part ended up:
   the emptiest place so it was evenly spread, and half of it was falling.
 - **Two kinds of dust** (`DustKind`). Fine grains, 24 of them, are one small opaque
   pixel. The brighter one is, the shorter it lasts (`lifespan`): most are dim, in the
-  colour of the rock, and last about 30 seconds, and now and then a pale one shines
-  for 3 seconds and is gone. Coarse grains, 5, are soft and partly transparent, the
+  colour of the rock. The dimmest last 30 seconds and a typical grain 13, and now and
+  then a pale one shines for 3 seconds and is gone. Coarse grains, 5, are soft and partly transparent, the
   slowest, and the only ones that sink. With 3 of them, fainter, they were lost
   beside the fine ones. A grain warms as it enters the light, a coarse one comes into
   focus there (`on_the_pixels`), and as a grain tumbles a face of it catches the
@@ -291,6 +290,28 @@ in the next room's unpainted pixels, so a particle or lit pixel drawn before
 that snapshot could stay on screen for good. Being before the actors, it passes
 behind them and does not light them. The foreground's alpha hides particles
 behind pillars and rock.
+
+Running it in every room showed what one room could not:
+
+- **Rock in front of a torch.** Light fell on whatever the frame showed, so the
+  pillars and walls standing in front of a torch turned into pale plates, worst in
+  level 4 rooms 11 and 15 and level 5 room 6. That rock has its back to the flame, so
+  the foreground takes no light now, and the air before it stays lit for the dust.
+  In the approved room that took 240 of 4,464 lit pixels, all of them very faint.
+- **Torches behind pillars.** Most stand a little behind one. A torch counts when
+  35% of it shows (`TORCH_SEEN`), which brought back six that were half hidden and had
+  no light. Three are shut behind rock (level 4 room 2, level 5 rooms 6 and 11): they
+  are no fire at all, with no ash and no dust gathering around them.
+- **Torches listed twice.** The level data lists each torch twice in 40 rooms, for
+  ash and air worked out twice over. `room_torches` keeps one.
+- **Lava off the screen.** Three rooms list a pool above their top edge (level 3
+  rooms 13 and 28, level 4 room 24), and drops over it had a surface above their own
+  tip. `lava_surfaces` leaves such a pool out.
+- **Drops that cannot be seen.** 26 sources fell wholly behind the foreground and
+  held a place a visible one could use. `choose_drips` skips those.
+- **Rooms without fire.** They have `QUIET_DUST`: half the grains, none of them
+  bright and the coarse ones fainter, as nothing there lights it. They had no dust at
+  first, and the user found that a loss.
 
 Ideas the user liked and kept for after the torch and the dust, none built yet:
 the Prince's shadow on the rock, the Prince stirring the dust, the lava lighting
