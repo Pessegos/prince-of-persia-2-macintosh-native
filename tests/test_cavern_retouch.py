@@ -18,7 +18,7 @@ from pop2.terrain import LevelMap
 class BundledCavernRetouchTests(unittest.TestCase):
     def test_level_four_bundle_is_separate_and_only_targets_approved_rooms(self):
         assets = retouch_assets(4)
-        self.assertEqual(len(assets), 68)
+        self.assertEqual(len(assets), 69)
         self.assertEqual({key[0] for key in assets}, {0, 1, 2, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 16, 17, 21, 22, 24, 25, 27})
         key, (record, image) = next(iter(assets.items()))
         self.assertEqual(image.size, (record['source_rect'][2] - record['source_rect'][0],
