@@ -219,6 +219,14 @@ What the user has reviewed and how each part ended up:
   moved past it (`LIGHT_HOLD`): before that, a third of the changing pixels
   flipped straight back. About 8% do now. More pixels change than in the original,
   but they are the light moving across the rock, not noise.
+- **The Prince's feet.** `Footing` is read from the game once a tick and never
+  written back. FRAM's supporting foot stays put and then jumps to where the next
+  foot lands (`floor_contact_x`), so that jump is a step: it throws a little dust up
+  and behind him from that spot. The foot-on-the-floor flag cannot do this, as it is
+  set on almost every frame of a run. Walking carefully raises none. A landing throws
+  dust out to both sides, more the faster he came down, and there is none on the
+  lava. As he runs he drags the air along (`wake`), so grains he passes follow him
+  and let go. Dust from the floor is drawn behind him like the rest of the ambience.
 - **Lava light** is traced over the rock with the same engine as the torch
   (`trace_lavalight`), a cell at a time along the pool, with the pool itself counted
   as a hollow, however bright it is painted. It is fainter than the torch's and more
@@ -326,10 +334,10 @@ Running it in every room showed what one room could not:
   bright and the coarse ones fainter, as nothing there lights it. They had no dust at
   first, and the user found that a loss.
 
-Ideas the user liked and kept for after the torch and the dust, none built yet:
-the Prince's shadow on the rock, the Prince stirring the dust, the lava lighting
-the rock with the same engine, drops catching the light, heat haze over the lava
-and the flame, and sound tied to all of it.
+Extras built on 2026-11-07 for the user to try, not reviewed yet: drops catching
+the light, heat haze, the lava's traced light and the Prince's feet. Two ideas wait.
+The Prince's shadow on the rock would have to work on every level, not only the
+caverns, so it comes near the end. Sound tied to all of it needs more calm.
 
 ## Repeated column shadows: five-room review
 

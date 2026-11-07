@@ -20,7 +20,8 @@ grains of ash rise from the lava and the flame, and a little dust drifts through
 the open air. The flame stays exactly the game's. Its light does not: the frames'
 painted wall keeps still, and the light is traced over the relief of the rock by
 pop2.firelight and changes shape with the flame, like a candle's. Hot air bends what
-is seen through it, over the lava and over a flame. The user rejected
+is seen through it, over the lava and over a flame, and the Prince's feet raise a
+little dust and drag the air along. The user rejected
 a wider glow over everything and sparks with trails as far too much: the light
 must stay in the rock, not on top of it.
 """
@@ -167,6 +168,36 @@ DUST_FOCUS_LIGHT = 0.35
 DUST_POOL_REACH = (84, 62)
 # Dust over the lava is a dull glow, so that it is not read as more ash.
 DUST_POOL_STRENGTH = 0.6
+
+# The Prince raises dust where his feet come down. A foot that lands this far from
+# the last, with him going that way, is a new step: walking carefully raises none.
+STEP_STRIDE = 10
+STEP_SPEED = 4
+STEP_GRAINS = (2, 3)
+STEP_THROW = (0.3, 1.0)
+STEP_RISE = (0.15, 0.5)
+STEP_LIFE = (12, 26)
+# A landing throws it out to both sides, more the faster he came down.
+LANDING_GRAINS = 8
+LANDING_FALL = 12
+MOST_LANDING_GRAINS = 14
+LANDING_THROW = (0.8, 2.8)
+LANDING_RISE = (0.1, 0.6)
+LANDING_LIFE = (16, 36)
+# Grains thrown off the floor slow in the air, and start this far above his walking
+# line, in pixels. They are rock dust like the coarse grains, and no brighter.
+KICKED_DEPTH = (1, 6)
+KICKED_DRAG = 0.9
+KICKED_SINK = 0.012
+KICKED_STRENGTH = 0.75
+KICKED_FADE_IN = 2
+MOST_KICKED = 30
+# The air he runs through is dragged along with him: how far around the middle of
+# his body, in pixels, and what share of his speed it reaches.
+WAKE_REACH = (30, 40)
+WAKE_HEIGHT = 36
+WAKE_PUSH = 0.12
+WAKE_LIFT = 0.03
 
 ASH_LIFE = (34, 76)
 MOST_ASH = 5
@@ -699,6 +730,32 @@ class Mote:
     lying: float = 0.0
 
 
+@dataclass(frozen=True)
+class Footing:
+    """The Prince's feet this tick, read from the game and never written back. x is
+    his body, foot the one holding him up, and speed how fast he is falling."""
+
+    x: int
+    foot: int
+    floor: int
+    down: bool
+    falling: bool
+    speed: int = 0
+
+
+@dataclass
+class Kicked:
+    """A grain of dust thrown off the floor by his feet."""
+
+    x: float
+    y: float
+    dx: float
+    dy: float
+    life: float
+    floor: int
+    age: int = 0
+
+
 @dataclass
 class Ash:
     x: float
@@ -775,6 +832,10 @@ def soft_spot(x, y, softness=DUST_SOFTNESS):
             yield column, row, math.exp(-((column - x) ** 2 + (row - y) ** 2) / (2 * softness ** 2))
 
 
+def on_the_screen(x, y):
+    return 0 <= x < WIDTH and 0 <= y < HEIGHT
+
+
 def smooth(amount):
     amount = min(1.0, max(0.0, amount))
     return amount * amount * (3 - 2 * amount)
@@ -807,6 +868,10 @@ class CavernAmbience:
     ash: list = field(default_factory=list)
     flecks: list = field(default_factory=list)
     flickers: list = field(default_factory=list)
+    kicked: list = field(default_factory=list)
+    footing: Footing | None = None
+    # The air he is dragging along this tick: where his body is, and how far he moved.
+    wake: tuple | None = None
     tick: int = 0
 
     def __post_init__(self):
@@ -861,6 +926,12 @@ class CavernAmbience:
                 inwards = -HEAT_SPREAD if away_y < -HEAT_PLUME else HEAT_PULL
                 wind_x -= inwards * reach * away_x / max(distance, 1.0)
                 wind_y -= HEAT_RISE * reach * reach
+        if self.wake is not None:
+            body_x, body_y, moved = self.wake
+            reach = 1 - math.hypot((x - body_x) / WAKE_REACH[0], (y - body_y) / WAKE_REACH[1])
+            if reach > 0:
+                wind_x += WAKE_PUSH * moved * reach
+                wind_y -= WAKE_LIFT * abs(moved) * reach
         return wind_x, wind_y
 
     # Dust
@@ -1002,6 +1073,67 @@ class CavernAmbience:
         shown = mix(lit, inks[DUST_SHINE_INK], min(1.0, DUST_FLASH * glint * light))
         return (*shown, min(1.0, kind.strength + light * DUST_LIT + DUST_GLINT * glint * light) * fade)
 
+    # His feet
+
+    def tread(self, footing):
+        """Dust from where his feet come down, and the air he drags along."""
+        last, self.footing = self.footing, footing
+        self.wake = None
+        if last is None or footing is None:
+            return
+        moved = footing.x - last.x
+        if abs(moved) >= STEP_SPEED and not footing.falling:
+            self.wake = footing.x, footing.floor - WAKE_HEIGHT, moved
+        # There is no dust on the lava.
+        if surface_under(self.air.pools, footing.foot) is not None:
+            return
+        if last.falling and not footing.falling:
+            self.land_on(footing, last.speed)
+        elif footing.down and footing.floor == last.floor and abs(moved) >= STEP_SPEED:
+            stride = footing.foot - last.foot
+            if abs(stride) >= STEP_STRIDE and stride * moved > 0:
+                self.step_on(footing, moved)
+
+    def throw(self, footing, dx, rise, life):
+        if len(self.kicked) < MOST_KICKED:
+            rng = self.rng
+            self.kicked.append(Kicked(footing.foot + rng.uniform(-3, 3), footing.floor - rng.uniform(*KICKED_DEPTH),
+                                      dx, -rng.uniform(*rise), rng.uniform(*life), footing.floor))
+
+    def step_on(self, footing, moved):
+        rng = self.rng
+        behind = -1 if moved > 0 else 1
+        for _ in range(rng.randint(*STEP_GRAINS)):
+            self.throw(footing, behind * rng.uniform(*STEP_THROW), STEP_RISE, STEP_LIFE)
+
+    def land_on(self, footing, speed):
+        rng = self.rng
+        grains = min(MOST_LANDING_GRAINS, LANDING_GRAINS + speed // LANDING_FALL)
+        for grain in range(grains):
+            side = 1 if grain % 2 else -1
+            self.throw(footing, side * rng.uniform(*LANDING_THROW), LANDING_RISE, LANDING_LIFE)
+
+    def advance_kicked(self):
+        kicked = []
+        for grain in self.kicked:
+            grain.age += 1
+            grain.dx *= KICKED_DRAG
+            grain.dy = grain.dy * KICKED_DRAG + KICKED_SINK
+            grain.x += grain.dx
+            grain.y = min(grain.y + grain.dy, grain.floor)
+            if grain.age < grain.life:
+                kicked.append(grain)
+        self.kicked = kicked
+
+    def kicked_colour(self, grain):
+        """(red, green, blue, strength) of a kicked grain: rock dust, warm in the light."""
+        flame, pool = self.light_at(grain.x, grain.y)
+        light = max(flame, pool)
+        inks = self.air.inks
+        shown = mix(inks[DUST_PALE_INK], inks[DUST_WARM_INK if flame >= pool else DUST_HOT_INK],
+                    min(1.0, light / DUST_FOCUS_LIGHT))
+        return (*shown, KICKED_STRENGTH * smooth(min(1.0, grain.age / KICKED_FADE_IN, (grain.life - grain.age) / (grain.life / 2))))
+
     # Ash
 
     def new_ash(self, x, y, life):
@@ -1090,12 +1222,14 @@ class CavernAmbience:
                 flecks.append(fleck)
         self.flecks = flecks
 
-    def advance(self, terrain=None):
+    def advance(self, terrain=None, footing=None):
         """One game tick."""
         self.tick += 1
+        self.tread(footing)
         for fall in self.falls:
             self.advance_fall(fall, terrain)
         self.advance_dust(terrain)
+        self.advance_kicked()
         self.advance_ash()
         self.advance_flecks()
 
@@ -1179,17 +1313,21 @@ class CavernAmbience:
         frame.paste(Image.fromarray(pixels[down, (across + moves).clip(0, width - 1)]), haze.box[:2])
 
     def dust_spot(self, canvas, mote):
-        red, green, blue, strength = self.dust_colour(mote)
         resting = mote.rest is not None
         kind = mote.kind
         sharp = resting or kind.softness <= DUST_SHARPNESS
         focus = 1.0 if sharp else smooth(max(self.light_at(mote.x, mote.y)) / DUST_FOCUS_LIGHT)
         softness = kind.softness + (DUST_SHARPNESS - kind.softness) * focus
+        self.blot(canvas, on_the_pixels(mote.x, focus), on_the_pixels(mote.y, focus), softness, self.dust_colour(mote),
+                  on_the_screen if resting else self.air.is_open)
+
+    def blot(self, canvas, x, y, softness, colour, inside):
+        """A soft spot, each blend landing on the nearest colour of the palette."""
+        red, green, blue, strength = colour
         air, nearest = self.air, self.air.colours.nearest
-        for column, row, weight in soft_spot(on_the_pixels(mote.x, focus), on_the_pixels(mote.y, focus), softness):
+        for column, row, weight in soft_spot(x, y, softness):
             amount = weight * strength
-            inside = 0 <= column < WIDTH and 0 <= row < HEIGHT if resting else air.is_open(column, row)
-            if amount < 0.04 or not inside or air.is_covered(column, row):
+            if amount < 0.04 or not inside(column, row) or air.is_covered(column, row):
                 continue
             under = canvas[column, row]
             canvas[column, row] = nearest(int(under[0] + (red - under[0]) * amount),
@@ -1207,6 +1345,8 @@ class CavernAmbience:
         canvas = frame.load()
         for mote in self.motes:
             self.dust_spot(canvas, mote)
+        for grain in self.kicked:
+            self.blot(canvas, grain.x, grain.y, DUST_SOFTNESS, self.kicked_colour(grain), on_the_screen)
         for x, y, ink in self.crisp_pixels():
             if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                 canvas[x, y] = inks[ink]

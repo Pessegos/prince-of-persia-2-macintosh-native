@@ -16,6 +16,8 @@ from pop2.cavern_ambience import (
     DUST_FADE_IN, DUST_FADE_OUT, DUST_HEADING, DUST_LIFE_SPREAD, DUST_PALE_INK, DUST_PATCH, DUST_POCKETS,
     DROP_INKS, DROP_LAVA_INK, DROP_SHINE_LIGHT, DROP_WARM_LIGHT, SWELL_INKS,
     DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
+    Footing, KICKED_DEPTH, Kicked, LANDING_FALL, LANDING_GRAINS, MOST_KICKED, MOST_LANDING_GRAINS, STEP_GRAINS,
+    WAKE_REACH,
     HAZE_OVER_FLAME, HAZE_OVER_POOL, HAZE_RISE, HAZE_WAVE, QUIET_DUST, flame_of, haze_of, haze_over, room_torches,
     shows,
     HEAT_REACH, HEIGHT, LIGHT_HOLD, LIGHT_LEVELS, LONGEST_REACH, MOST_ASH, MOST_DUST, Mote, QUICK_DEPTH,
@@ -1330,6 +1332,212 @@ class LavaLightTests(unittest.TestCase):
                 self.assertLessEqual(int(step[0]) - int(colour[0]), 60)
 
 
+class FeetTests(unittest.TestCase):
+    # A run as the real scene plays it: his body goes on smoothly, and the foot
+    # holding him up stays put and then jumps to where the next one lands.
+    RUN = ((200, 181), (210, 182), (217, 205), (230, 207), (240, 235), (254, 253), (261, 254), (279, 255), (295, 293))
+
+    def scene(self, **options):
+        return still_ambience(room_air(**options))
+
+    def run_through(self, scene, steps=RUN):
+        for x, foot in steps:
+            scene.tread(Footing(x, foot, 226, True, False))
+
+    def land(self, scene, speed=36, foot=200):
+        scene.tread(Footing(200, foot, 226, True, True, speed))
+        scene.tread(Footing(205, foot, 226, True, False))
+
+    def test_each_foot_that_lands_raises_dust_where_it_lands(self):
+        scene = self.scene()
+        seen = []
+        for x, foot in self.RUN:
+            before = len(scene.kicked)
+            scene.tread(Footing(x, foot, 226, True, False))
+            seen.append([grain.x for grain in scene.kicked[before:]])
+        stepped = [index for index, grains in enumerate(seen) if grains]
+        self.assertEqual(stepped, [2, 4, 5, 8])
+        for index in stepped:
+            self.assertTrue(STEP_GRAINS[0] <= len(seen[index]) <= STEP_GRAINS[1])
+            for x in seen[index]:
+                self.assertLessEqual(abs(x - self.RUN[index][1]), 3)
+
+    def test_the_dust_goes_up_and_behind_him(self):
+        scene = self.scene()
+        self.run_through(scene)
+        self.assertTrue(all(grain.dx < 0 and grain.dy < 0 for grain in scene.kicked))
+        scene = self.scene()
+        self.run_through(scene, [(1000 - x, 1000 - foot) for x, foot in self.RUN])
+        self.assertTrue(all(grain.dx > 0 for grain in scene.kicked))
+
+    def test_it_starts_just_above_his_walking_line(self):
+        scene = self.scene()
+        self.run_through(scene)
+        for grain in scene.kicked:
+            self.assertTrue(KICKED_DEPTH[0] <= 226 - grain.y <= KICKED_DEPTH[1])
+
+    def test_walking_carefully_raises_none(self):
+        scene = self.scene()
+        self.run_through(scene, [(200 + tick * 2, 180 + tick * 12) for tick in range(8)])
+        self.assertEqual(scene.kicked, [])
+
+    def test_standing_up_raises_none(self):
+        # His body shuffles back as the supporting foot changes over.
+        scene = self.scene()
+        self.run_through(scene, [(227, 197), (219, 217)])
+        self.assertEqual(scene.kicked, [])
+
+    def test_a_foot_in_the_air_raises_none(self):
+        scene = self.scene()
+        for x, foot in self.RUN:
+            scene.tread(Footing(x, foot, 226, False, False))
+        self.assertEqual(scene.kicked, [])
+
+    def test_going_to_another_floor_is_no_step(self):
+        scene = self.scene()
+        scene.tread(Footing(200, 180, 226, True, False))
+        scene.tread(Footing(210, 205, 346, True, False))
+        self.assertEqual(scene.kicked, [])
+
+    def test_the_first_tick_in_a_room_raises_none(self):
+        scene = self.scene()
+        scene.tread(Footing(300, 300, 226, True, False))
+        self.assertEqual(scene.kicked, [])
+
+    def test_a_tick_without_him_raises_none_and_forgets_him(self):
+        scene = self.scene()
+        scene.tread(Footing(200, 180, 226, True, False))
+        scene.tread(None)
+        scene.tread(Footing(240, 235, 226, True, False))
+        self.assertEqual(scene.kicked, [])
+        self.assertIsNone(scene.wake)
+
+    def test_a_landing_throws_dust_out_to_both_sides(self):
+        scene = self.scene()
+        self.land(scene)
+        self.assertEqual(len(scene.kicked), LANDING_GRAINS + 36 // LANDING_FALL)
+        throws = [grain.dx for grain in scene.kicked]
+        self.assertGreaterEqual(sum(dx > 0 for dx in throws), 4)
+        self.assertGreaterEqual(sum(dx < 0 for dx in throws), 4)
+
+    def test_the_faster_he_lands_the_more_dust_up_to_a_limit(self):
+        counts = []
+        for speed in (0, 36, 120, 1000):
+            scene = self.scene()
+            self.land(scene, speed)
+            counts.append(len(scene.kicked))
+        self.assertEqual(counts, sorted(counts))
+        self.assertLess(counts[0], counts[1])
+        self.assertEqual(counts[-1], MOST_LANDING_GRAINS)
+
+    def test_there_is_no_dust_on_the_lava(self):
+        pool = {x: 228 for x in range(180, 260)}
+        scene = self.scene(pools=[pool])
+        self.land(scene, foot=220)
+        self.run_through(scene)
+        self.assertEqual([grain for grain in scene.kicked if 180 <= grain.x - 3 and grain.x + 3 < 260], [])
+
+    def test_there_is_a_limit_to_the_dust_at_once(self):
+        scene = self.scene()
+        for _ in range(10):
+            self.land(scene, 200)
+        self.assertEqual(len(scene.kicked), MOST_KICKED)
+
+    def test_a_grain_slows_down_and_goes_and_stays_above_the_floor(self):
+        scene = self.scene()
+        scene.kicked.append(Kicked(200.0, 225.5, 2.0, 0.8, 30, 226))
+        speeds = []
+        for _ in range(29):
+            scene.advance_kicked()
+            speeds.append(scene.kicked[0].dx)
+            self.assertLessEqual(scene.kicked[0].y, 226)
+        self.assertEqual(speeds, sorted(speeds, reverse=True))
+        scene.advance_kicked()
+        self.assertEqual(scene.kicked, [])
+
+    def test_it_comes_and_goes_softly(self):
+        scene = self.scene()
+        grain = Kicked(200.0, 220.0, 0.0, 0.0, 20, 226)
+        strengths = []
+        for age in range(20):
+            grain.age = age
+            strengths.append(scene.kicked_colour(grain)[3])
+        self.assertEqual(strengths[0], 0)
+        self.assertGreater(max(strengths), 0.6)
+        self.assertLess(strengths[-1], 0.1)
+        self.assertEqual(strengths[8:], sorted(strengths[8:], reverse=True))
+
+    def test_it_warms_in_the_firelight(self):
+        scene = self.scene(flames=[(300, 200)], torches=[burning_torch(300, 200)])
+        lit = scene.kicked_colour(Kicked(300.0, 200.0, 0.0, 0.0, 20, 226, age=8))
+        dark = scene.kicked_colour(Kicked(100.0, 200.0, 0.0, 0.0, 20, 226, age=8))
+        self.assertEqual(tuple(lit[:3]), scene.air.inks[DUST_WARM_INK][:3])
+        self.assertEqual(tuple(dark[:3]), scene.air.inks[DUST_PALE_INK][:3])
+
+    def test_what_it_leaves_is_of_the_palette(self):
+        scene = self.scene()
+        scene.kicked.append(Kicked(200.3, 220.6, 0.0, 0.0, 20, 226, age=8))
+        frame = wall_frame()
+        scene.draw(frame)
+        self.assertGreater(len(colours_in(frame)), 1)
+        known = {tuple(int(value) for value in colour) + (255,) for colour in COLOURS.rgb}
+        self.assertLessEqual(colours_in(frame), known)
+
+    def test_it_stays_behind_the_foreground(self):
+        cover = bytearray(blank())
+        for y in range(210, 230):
+            cover[y * WIDTH + 195:y * WIDTH + 205] = bytes([255]) * 10
+        scene = self.scene(covered=bytes(cover))
+        scene.kicked.append(Kicked(200.0, 220.0, 0.0, 0.0, 20, 226, age=8))
+        frame = wall_frame()
+        scene.draw(frame)
+        self.assertEqual(colours_in(frame), {WALL})
+
+    def test_the_dust_stays_on_the_floor_strip_where_the_air_is_closed(self):
+        scene = self.scene(opened=0)
+        scene.kicked.append(Kicked(200.0, 220.0, 0.0, 0.0, 20, 226, age=8))
+        frame = wall_frame()
+        scene.draw(frame)
+        self.assertGreater(len(colours_in(frame)), 1)
+
+    def test_he_drags_the_air_along(self):
+        scene = self.scene()
+        scene.tread(Footing(200, 180, 226, True, False))
+        scene.tread(Footing(214, 180, 226, True, False))
+        body_x, body_y, moved = scene.wake
+        self.assertEqual((body_x, moved), (214, 14))
+        near_x, near_y = scene.wind_at(214, body_y)
+        self.assertGreater(near_x, 1)
+        self.assertLess(near_y, 0)
+        self.assertEqual(scene.wind_at(214 + WAKE_REACH[0], body_y), (0.0, 0.0))
+
+    def test_a_grain_he_runs_past_is_carried_after_him_and_lets_go(self):
+        scene = self.scene()
+        scene.advance_dust()
+        mote = Mote(214.0, 190.0, 0.1, 0.0, 0.0, 300, FINE_DUST, moving_x=0.1)
+        scene.wake = 214, 190, 14
+        for _ in range(4):
+            scene.advance_mote(mote, 0.0)
+        carried = mote.moving_x
+        self.assertGreater(carried, 0.5)
+        scene.wake = None
+        for _ in range(40):
+            scene.advance_mote(mote, 0.0)
+        self.assertLess(mote.moving_x, 0.2)
+
+    def test_standing_still_drags_nothing(self):
+        scene = self.scene()
+        scene.tread(Footing(200, 180, 226, True, False))
+        scene.tread(Footing(201, 180, 226, True, False))
+        self.assertIsNone(scene.wake)
+
+    def test_a_scene_without_the_game_has_no_feet(self):
+        from pop2.environments import Caverns
+
+        scene = SimpleNamespace(sequence_state=None, terrain_motion=None)
+        self.assertIsNone(Caverns.prince_footing(SimpleNamespace(scene=scene)))
+
+
 class HazeTests(unittest.TestCase):
     TOPS = {x: 200 for x in range(100, 160)}
 
@@ -1941,6 +2149,32 @@ class RealSceneTests(unittest.TestCase):
         self.assertTrue(changed.any())
         # The HUD strip is not part of the room.
         self.assertFalse(changed[365:].any())
+
+    def test_his_feet_raise_dust_in_the_real_scene(self):
+        from tools.audit_temple_routes import press
+
+        harness = self.harness()
+        self.addCleanup(harness.close)
+        scene = harness.scene
+        scene.cave_ambience_enabled = True
+        harness.tick(4)
+        ambience = scene.level_renderer.ambience
+        self.assertIsNotNone(ambience.footing)
+        self.assertEqual(ambience.footing.floor, 226)
+        self.assertEqual(ambience.kicked, [])
+        press(harness, 'R', True)
+        harness.tick(8)
+        press(harness, 'R', False)
+        self.assertGreater(len(ambience.kicked), 2)
+
+    def test_a_landing_raises_dust_in_the_real_scene(self):
+        harness = self.harness()
+        self.addCleanup(harness.close)
+        scene = harness.scene
+        scene.cave_ambience_enabled = True
+        scene.jump_to_room(16, row=0, x=3 * 51 + 30, facing=1)
+        harness.tick(7)
+        self.assertGreaterEqual(len(scene.level_renderer.ambience.kicked), LANDING_GRAINS)
 
     def test_it_moves_once_per_game_tick(self):
         harness = self.harness()

@@ -504,7 +504,19 @@ class Caverns(Environment):
     def advance_ambience(self):
         scene = self.scene
         if getattr(scene, 'cave_ambience_enabled', False):
-            scene.level_renderer.advance_ambience(scene.room_id, scene.level_map)
+            scene.level_renderer.advance_ambience(scene.room_id, scene.level_map, self.prince_footing())
+
+    def prince_footing(self):
+        """Where the Prince's feet are, for the dust they raise. Only read."""
+        from pop2.cavern_ambience import Footing
+
+        scene = self.scene
+        state, motion = scene.sequence_state, scene.terrain_motion
+        if motion is None:
+            return None
+        record = scene.frames[state.action]
+        return Footing(state.target_x, floor_contact_x(state.target_x, state.facing, record), floor_y(motion.row),
+                       bool(record.aux & 0x40), motion.falling, state.vertical_velocity)
 
     def frame_start(self):
         scene = self.scene
