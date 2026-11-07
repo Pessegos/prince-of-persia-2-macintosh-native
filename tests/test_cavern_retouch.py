@@ -167,9 +167,11 @@ class CavernRetouchTests(unittest.TestCase):
                     self.assertEqual(original.flattened().tobytes(), edited.flattened().tobytes())
 
     def test_level_four_final_batch_matches_approved_pixels_and_preserves_masks(self):
+        # These full-room goldens include static items; cached floor previews
+        # have separate exact-frame checks in test_floor_join_artwork.
         approved = {
             4: (382, '421ee7b40f740af3598ef7d1c3b8acf5ba6a5b4fd4394a2a684ed017f53d5290'),
-            13: (654, '1b624888aa2e8417c4305244956567b77668b8d3c59931e0b7451d7a7eda2b7b'),
+            13: (654, '2dcad3e10b1616a79a53a78af263a06ec3c188c0db598e7b989f211fc7c5b0ee'),
             25: (481, '9ef82c6d26f7540b12e655ed87dcebaf0ab4f3ba810f609ac75d0735ab096197'),
             27: (336, 'd60832d8900669a315a5868ea9d069755f5b330f4c12b5618e6567578c8e1d63'),
         }

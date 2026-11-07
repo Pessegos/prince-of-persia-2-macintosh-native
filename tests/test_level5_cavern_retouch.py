@@ -14,10 +14,11 @@ from pop2.render_opening import load_resource_file
 
 
 # Port room indices; room7's approval is viewed with its stone gate fully open.
+# Static items are included here; cached floor previews have their own goldens.
 APPROVED = {
     18: (91, '72de66968e0cb63ddf9e982da4c589e7e4926b331fc8c67c8d1d5cfee0238107'),
-    12: (156, 'a97267870d5c5ca70e25822525085021a3200b9abdd9bd38ba53ebffd8214f4e'),
-    10: (201, 'bb1b2208c8f31a0be54d692a8fdd1d9bdf2c4d4ee04a951145ec138b1fae55c6'),
+    12: (156, 'd93440d2bd470d1ff646e771c5d5dfb0fdd6558d396cfd0f53c218637861cde5'),
+    10: (201, 'e78a012ab822411b095682f36ec6da60c38e30b84008bde11b5a75d188cc8136'),
     1: (591, '1f686b8ae78cb4885972c07d6d62baf4fb691568eb0aac6e745b6c25d08c324f'),
     5: (2747, '2ef93b2f6a12554f9f77acc4b07a523187769454c65eab587417dbebeb805eae'),
     6: (1196, 'd879511695be25224c60c436910ba09e3b6f44fa602f44dbd165966b3a13ad7f'),
