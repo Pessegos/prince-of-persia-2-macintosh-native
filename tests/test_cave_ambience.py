@@ -13,8 +13,8 @@ from PIL import Image
 
 from pop2.cavern_ambience import (
     AMBIENCE_ROOMS, ALL_INKS, ASH_INKS, Air, Ash, COARSE_DUST, CavernAmbience, Colours, DUST_BRIGHT_LIFE,
-    DUST_FADE_IN, DUST_FADE_OUT, DUST_HEADING, DUST_LIFE_SPREAD, DUST_PALE_INK, DUST_POCKETS, DUST_POCKETS_APART,
-    DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
+    DUST_FADE_IN, DUST_FADE_OUT, DUST_HEADING, DUST_LIFE_SPREAD, DUST_PALE_INK, DUST_PATCH, DUST_POCKETS,
+    DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
     HEAT_REACH, HEIGHT, LIGHT_HOLD, LIGHT_LEVELS, LONGEST_REACH, MOST_ASH, MOST_DUST, Mote, POOL_GLOW_REACH, QUICK_DEPTH,
     QUICK_FOLLOW, SHORTEST_REACH, SLOW_DEPTH, SLOW_FOLLOW, SPLASH_INKS, STEAM_INKS, SWELL_TICKS, WIDTH,
     flame_pixels, glow_along, landing, lifespan, on_the_pixels, read_torch, soft_spot, stalactite_tips, steady_wall,
@@ -360,11 +360,14 @@ class DustTests(unittest.TestCase):
         for index, (x, y) in enumerate(scene.pockets):
             for other_x, other_y in scene.pockets[index + 1:]:
                 self.assertGreater(math.hypot(x - other_x, y - other_y), DUST_POCKETS_APART)
+        apart = []
         with patch('pop2.cavern_ambience.DUST_BY_FLAME', 0.0), patch('pop2.cavern_ambience.DUST_BY_POOL', 0.0):
-            for _ in range(100):
+            for _ in range(200):
                 mote = scene.new_mote()
-                nearest = min(math.hypot(mote.x - x, mote.y - y) for x, y in scene.pockets)
-                self.assertLess(nearest, 110)
+                apart.append(min(math.hypot(mote.x - x, mote.y - y) for x, y in scene.pockets))
+        # Nearly anywhere in the room is within a hundred pixels of some pocket,
+        # so it is the typical distance that tells a patch from an even spread.
+        self.assertLess(numpy.median(apart), 2 * DUST_PATCH)
 
     def test_pockets_are_in_the_open_air(self):
         opened = bytearray(blank())
@@ -1339,11 +1342,17 @@ class ChosenRoomTests(unittest.TestCase):
         for reach in reaches[::10]:
             lit = firelight.at(reach, 1.0) > 0.3
             beyond.append(455 - int(columns[lit].min()))
-        self.assertLess(numpy.mean(beyond), 28)
-        self.assertLess(max(beyond), 42)
+        self.assertLess(numpy.mean(beyond), 10)
+        self.assertLess(max(beyond), 14)
         areas = numpy.array([(firelight.at(reach, 1.0) > 0.3).sum() for reach in reaches[::20]])
-        self.assertLess(areas.max(), 4600)
-        self.assertGreater(areas.min(), 1500)
+        self.assertLess(areas.max(), 3700)
+        self.assertGreater(areas.min(), 2300)
+
+    def test_the_coarse_grains_are_all_in_the_room(self):
+        # With three of them they were lost beside the fine ones.
+        for seed in range(5):
+            scene = CavernAmbience(16, self.air, random.Random(seed))
+            self.assertGreaterEqual(sum(mote.kind is COARSE_DUST for mote in scene.motes), 5)
 
     def test_dust_keeps_to_the_colours_of_the_rock(self):
         inks = self.air.inks

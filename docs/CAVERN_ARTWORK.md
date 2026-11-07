@@ -162,10 +162,11 @@ ash, water drops or cast light, and its torch does not behave like this.
 on, and `pop2/firelight.py` works out the light. It is off by default, and the
 choice is kept between sessions in `preferences.json` (`pop2/preferences.py`).
 
-It is a prototype under the user's review. It runs in one room,
-`AMBIENCE_ROOMS` = level 4 room 16 (Room 17 in the development menu). Adding a
-room means reviewing it in motion: the tips and the air are read from the art,
-and only this room has been looked at.
+The user approved how it looks on 2026-11-07, after eleven passes, in the one
+room it runs in: `AMBIENCE_ROOMS` = level 4 room 16 (Room 17 in the development
+menu). Adding a room means reviewing it in motion: the tips and the air are read
+from the art, and only this room has been looked at. A room without fire gets the
+drops and no dust, as dust is only seen by firelight.
 
 Two rules keep it from looking like a modern filter. Every pixel it leaves on
 the frame is a colour of the room's own palette, and everything moves once per
@@ -262,15 +263,16 @@ What the user has reviewed and how each part ended up:
   spreads it out above (`wind_at`). A grain has some weight, so it follows any
   change in the air slowly, and it sways a little. With rock ahead it slows and
   settles over 3 seconds instead of vanishing. Most coarse grains sink, starting
-  not far above a floor. One that reaches it comes down on it (`land`), about ten
+  not far above a floor. One that reaches it comes down on it (`land`), about six
   times in two minutes, and lies there as one pale speck for 7 to 14 seconds, fading.
   It does not land on the lava, or
   behind the foreground, and a floor that falls takes it along. Otherwise a grain
   has a lifespan:
-  it comes up over 4 seconds and goes over 7. A new one starts unseen, in the
-  emptiest of five places with air ahead for its whole life (`new_mote`), so the
-  amount in the room stays the same and old and new never show as a swap. Over
-  the lava it is duller, so that it is not read as more ash.
+  it comes up over the first seventh of it and goes over the last quarter, so a
+  dim grain takes about 4 seconds to come and 7 to go. A new one starts unseen,
+  around a pocket or near the fire, with air ahead for its whole life (`new_mote`),
+  so old and new never show as a swap. Over the lava it is duller, so that it is
+  not read as more ash.
 
 The firelight and the glow are tables of what each palette colour becomes at
 each of ten brightness levels (`Colours.light_table`), stepped through a 4x4
@@ -290,7 +292,7 @@ that snapshot could stay on screen for good. Being before the actors, it passes
 behind them and does not light them. The foreground's alpha hides particles
 behind pillars and rock.
 
-Ideas the user liked and kept for later, once the torch and the dust are right:
+Ideas the user liked and kept for after the torch and the dust, none built yet:
 the Prince's shadow on the rock, the Prince stirring the dust, the lava lighting
 the rock with the same engine, drops catching the light, heat haze over the lava
 and the flame, and sound tied to all of it.
