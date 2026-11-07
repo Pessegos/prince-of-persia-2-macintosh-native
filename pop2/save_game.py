@@ -61,7 +61,7 @@ CLASSES = {cls.__name__: cls for cls in (
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
         CavernState: {'entry_pending'},
-        LooseFloors: {'shake_events'}, SlideRocks: {'sounds'}, TrapDoors: {'drawn'}, PressurePlates: {'slams', 'slam_sounds', 'gate_sounds'}}
+        LooseFloors: {'shake_events'}, SlideRocks: {'sounds'}, TrapDoors: {'drawn'}, PressurePlates: {'slams', 'slam_sounds', 'shut', 'gate_sounds'}}
 GAME_FIELDS = ('room_id', 'checkpoint', 'death', 'complete', 'harbor', 'desert', 'caverns')
 CONTROL_FIELDS = (
     'run_active', 'run_stop_requested', 'run_direction', 'run_start_x',

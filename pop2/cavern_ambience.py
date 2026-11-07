@@ -191,6 +191,25 @@ MOST_LANDING_GRAINS = 14
 LANDING_THROW = (0.8, 2.8)
 LANDING_RISE = (0.1, 0.6)
 LANDING_LIFE = (16, 36)
+# A gate or door coming down squeezes the air out from under it, along the floor to
+# both sides: a slam a good puff, and one that lowers itself a small one. Thrown from
+# the sides of its foot, in pixels from the left of its column. A slab stands slanted,
+# its near corner on the left and this far below the walking line, its far corner as
+# far above it, and an exit door stands back from that line.
+SLAM_GRAINS = 20
+SLAM_THROW = (0.8, 3.0)
+SLAM_RISE = (0.15, 0.7)
+SLAM_LIFE = (20, 44)
+SLAM_SOFTNESS = 1.0
+SHUT_GRAINS = 6
+SHUT_THROW = (0.3, 1.1)
+SHUT_RISE = (0.08, 0.3)
+SHUT_LIFE = (14, 28)
+EXIT_DOOR = 17
+GATE_FOOT = (28, 92)
+GATE_SLANT = 7
+EXIT_DOOR_FOOT = (27, 77)
+EXIT_DOOR_BACK = 8
 # Grains thrown off the floor slow in the air, and start this far above his walking
 # line, in pixels. They are rock dust like the coarse grains, and no brighter.
 KICKED_DEPTH = (1, 6)
@@ -762,9 +781,31 @@ class Footing:
     speed: int = 0
 
 
+@dataclass(frozen=True)
+class DoorDown:
+    """A gate or door that came down this tick, read from the game and never written
+    back: the two sides of its foot, and the floor it stands on."""
+
+    left: int
+    right: int
+    left_floor: int
+    right_floor: int
+    slammed: bool
+
+
+def door_coming_down(kind, cell, slammed):
+    row, column = cell // 10, cell % 10
+    floor = floor_y(row)
+    if kind == EXIT_DOOR:
+        return DoorDown(column * TILE_WIDTH + EXIT_DOOR_FOOT[0], column * TILE_WIDTH + EXIT_DOOR_FOOT[1],
+                        floor - EXIT_DOOR_BACK, floor - EXIT_DOOR_BACK, slammed)
+    return DoorDown(column * TILE_WIDTH + GATE_FOOT[0], column * TILE_WIDTH + GATE_FOOT[1],
+                    floor + GATE_SLANT, floor - GATE_SLANT, slammed)
+
+
 @dataclass
 class Kicked:
-    """A grain of dust thrown off the floor by his feet."""
+    """A grain of dust thrown off the floor."""
 
     x: float
     y: float
@@ -1115,25 +1156,36 @@ class CavernAmbience:
             if abs(stride) >= STEP_STRIDE and stride * moved > 0:
                 self.step_on(footing, moved)
 
-    def throw(self, footing, dx, rise, life, softness=DUST_SOFTNESS, strength=KICKED_STRENGTH):
+    def throw(self, x, floor, dx, rise, life, softness=DUST_SOFTNESS, strength=KICKED_STRENGTH):
         if len(self.kicked) < MOST_KICKED:
             rng = self.rng
-            self.kicked.append(Kicked(footing.foot + rng.uniform(-3, 3), footing.floor - rng.uniform(*KICKED_DEPTH),
-                                      dx, -rng.uniform(*rise), rng.uniform(*life), footing.floor,
-                                      softness=softness, strength=strength))
+            self.kicked.append(Kicked(x, floor - rng.uniform(*KICKED_DEPTH), dx, -rng.uniform(*rise),
+                                      rng.uniform(*life), floor, softness=softness, strength=strength))
 
     def step_on(self, footing, moved):
         rng = self.rng
         behind = -1 if moved > 0 else 1
         for _ in range(rng.randint(*STEP_GRAINS)):
-            self.throw(footing, behind * rng.uniform(*STEP_THROW), STEP_RISE, STEP_LIFE, STEP_SOFTNESS, STEP_STRENGTH)
+            self.throw(footing.foot + rng.uniform(-3, 3), footing.floor, behind * rng.uniform(*STEP_THROW),
+                       STEP_RISE, STEP_LIFE, STEP_SOFTNESS, STEP_STRENGTH)
 
     def land_on(self, footing, speed):
         rng = self.rng
         grains = min(MOST_LANDING_GRAINS, LANDING_GRAINS + speed // LANDING_FALL)
         for grain in range(grains):
             side = 1 if grain % 2 else -1
-            self.throw(footing, side * rng.uniform(*LANDING_THROW), LANDING_RISE, LANDING_LIFE)
+            self.throw(footing.foot + rng.uniform(-3, 3), footing.floor, side * rng.uniform(*LANDING_THROW),
+                       LANDING_RISE, LANDING_LIFE)
+
+    def door_down(self, door):
+        rng = self.rng
+        grains, thrown, rise, life, softness = (
+            (SLAM_GRAINS, SLAM_THROW, SLAM_RISE, SLAM_LIFE, SLAM_SOFTNESS) if door.slammed else
+            (SHUT_GRAINS, SHUT_THROW, SHUT_RISE, SHUT_LIFE, DUST_SOFTNESS))
+        for grain in range(grains):
+            side = 1 if grain % 2 else -1
+            x, floor = (door.right, door.right_floor) if side > 0 else (door.left, door.left_floor)
+            self.throw(x + side * rng.uniform(0, 4), floor, side * rng.uniform(*thrown), rise, life, softness)
 
     def advance_kicked(self):
         kicked = []
@@ -1244,10 +1296,12 @@ class CavernAmbience:
                 flecks.append(fleck)
         self.flecks = flecks
 
-    def advance(self, terrain=None, footing=None):
+    def advance(self, terrain=None, footing=None, doors=()):
         """One game tick."""
         self.tick += 1
         self.tread(footing)
+        for door in doors:
+            self.door_down(door)
         for fall in self.falls:
             self.advance_fall(fall, terrain)
         self.advance_dust(terrain)

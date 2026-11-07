@@ -11,6 +11,10 @@ from unittest.mock import Mock, patch
 import numpy
 from PIL import Image
 
+from pop2.cavern_state import CavernState
+from pop2.pressure_plates import PressurePlates
+from pop2.save_game import OMIT
+from tests import test_pressure_plates
 from pop2.cavern_ambience import (
     AMBIENCE_LEVELS, ALL_INKS, ASH_INKS, Air, Ash, COARSE_DUST, CavernAmbience, Colours, DUST_BRIGHT_LIFE,
     DUST_HEADING, DUST_LIFE_SPREAD, DUST_LONGEST_FADE_IN, DUST_LONGEST_FADE_OUT, DUST_PALE_INK, DUST_PATCH, DUST_POCKETS,
@@ -18,7 +22,8 @@ from pop2.cavern_ambience import (
     DROP_INKS, DROP_LAVA_INK, DROP_SHINE_LIGHT, DROP_WARM_LIGHT, SWELL_INKS,
     DUST_POCKETS_APART, DUST_REST_DEPTH, DUST_SHINE_INK, DUST_WARM_INK, Drip, FINE_DUST, FLASH_INKS, Flicker,
     Footing, KICKED_DEPTH, Kicked, LANDING_FALL, LANDING_GRAINS, LANDING_THROW, MOST_KICKED, MOST_LANDING_GRAINS,
-    STEP_GRAINS, STEP_SOFTNESS, STEP_STRENGTH, STEP_THROW,
+    SHUT_GRAINS, SHUT_THROW, SLAM_GRAINS, SLAM_THROW, STEP_GRAINS, STEP_SOFTNESS, STEP_STRENGTH, STEP_THROW,
+    door_coming_down,
     WAKE_REACH,
     HAZE_OVER_FLAME, HAZE_OVER_POOL, HAZE_RISE, HAZE_WAVE, QUIET_DUST, flame_of, haze_of, haze_over, room_torches,
     shows,
@@ -1572,6 +1577,100 @@ class FeetTests(unittest.TestCase):
 
         scene = SimpleNamespace(sequence_state=None, terrain_motion=None)
         self.assertIsNone(Caverns.prince_footing(SimpleNamespace(scene=scene)))
+
+
+class DoorDustTests(unittest.TestCase):
+    def scene(self):
+        return still_ambience(room_air())
+
+    def test_a_slam_throws_a_good_puff_to_both_sides_of_its_foot(self):
+        scene = self.scene()
+        door = door_coming_down(4, 26, True)
+        scene.advance(doors=(door,))
+        self.assertEqual(len(scene.kicked), SLAM_GRAINS)
+        for grain in scene.kicked:
+            if grain.dx < 0:
+                self.assertLessEqual(grain.x, door.left)
+                self.assertEqual(grain.floor, door.left_floor)
+            else:
+                self.assertGreaterEqual(grain.x, door.right)
+                self.assertEqual(grain.floor, door.right_floor)
+            self.assertLess(grain.dy, 0)
+        self.assertEqual(sum(grain.dx < 0 for grain in scene.kicked), SLAM_GRAINS // 2)
+
+    def test_a_gate_that_lowers_itself_raises_less(self):
+        scene = self.scene()
+        scene.advance(doors=(door_coming_down(4, 26, False),))
+        self.assertEqual(len(scene.kicked), SHUT_GRAINS)
+        self.assertLess(SHUT_GRAINS, SLAM_GRAINS)
+        self.assertLess(SHUT_THROW[1], SLAM_THROW[1])
+
+    def test_a_gate_stands_where_it_is_drawn(self):
+        # Shapes 3562 and 3563 of room 23 of level 4, cell 22.
+        door = door_coming_down(4, 22, True)
+        self.assertEqual((door.left, door.right, door.left_floor, door.right_floor), (130, 194, 353, 339))
+
+    def test_an_exit_door_stands_back_from_the_walking_line(self):
+        door = door_coming_down(17, 25, True)
+        self.assertEqual((door.left, door.right, door.left_floor, door.right_floor), (282, 332, 338, 338))
+
+    def test_no_door_no_dust(self):
+        scene = self.scene()
+        scene.advance()
+        self.assertEqual(scene.kicked, [])
+
+    def test_two_doors_stay_within_the_limit(self):
+        scene = self.scene()
+        scene.advance(doors=(door_coming_down(4, 22, True), door_coming_down(4, 25, True)))
+        self.assertEqual(len(scene.kicked), MOST_KICKED)
+
+
+class DoorQueueTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture = test_pressure_plates.PressurePlateTests()
+        self.fixture.setUp()
+        self.plates = self.fixture.plates
+
+    def test_a_slam_is_told_as_a_slam(self):
+        self.fixture.set_tile(0, 15, 4, 10)
+        self.plates.active[0, 15] = 4
+        self.plates.advance(self.fixture.terrain)
+        self.assertEqual(self.plates.shut, [((0, 15), True)])
+
+    def test_a_gate_that_lowers_itself_is_told_too(self):
+        self.fixture.set_tile(0, 15, 4, 3)
+        self.plates.active[0, 15] = 1
+        self.plates.advance(self.fixture.terrain)
+        self.assertEqual(self.plates.shut, [((0, 15), False)])
+
+    def test_a_gate_on_its_way_or_going_up_is_not(self):
+        self.fixture.set_tile(0, 15, 4, 100)
+        self.fixture.set_tile(0, 16, 4, 100)
+        self.plates.active.update({(0, 15): 1, (0, 16): 2})
+        self.plates.advance(self.fixture.terrain)
+        self.assertEqual(self.plates.shut, [])
+
+    def test_it_lasts_one_update(self):
+        self.fixture.set_tile(0, 15, 4, 10)
+        self.plates.active[0, 15] = 4
+        self.plates.advance(self.fixture.terrain)
+        self.plates.advance(self.fixture.terrain)
+        self.assertEqual(self.plates.shut, [])
+
+    def test_it_is_not_saved(self):
+        self.assertIn('shut', OMIT[PressurePlates])
+
+    def test_the_entry_door_is_told_once_as_it_slams(self):
+        state = CavernState()
+        state.configure_entry(dict(room=0, cell=25, frames=[dict(phase=79, sounds=[]), dict(phase=47, sounds=[]),
+                                                            dict(phase=0, sounds=[20])]))
+        seen = []
+        for _ in range(5):
+            state.advance()
+            seen.append(list(state.plates.shut))
+        self.assertEqual(seen[0], [])
+        self.assertEqual(seen[1], [((0, 25), True)])
+        self.assertEqual(seen[-1], [((0, 25), True)])
 
 
 class HazeTests(unittest.TestCase):

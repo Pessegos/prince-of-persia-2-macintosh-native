@@ -228,6 +228,12 @@ What the user has reviewed and how each part ended up:
   dust out to both sides, more the faster he came down, and there is none on the
   lava. As he runs he drags the air along (`wake`), so grains he passes follow him
   and let go. Dust from the floor is drawn behind him like the rest of the ambience.
+- **Gates and doors.** When a gate comes down on the floor the air under it has to
+  go somewhere: dust is squeezed out along the floor to both sides of its foot. A
+  slam throws 20 grains, wider ones, and a gate that lowers itself 6, more softly. The slab
+  stands slanted, so the puff starts lower on its near side than on its far side. The game tells
+  this in `PressurePlates.shut`, which is not game state and is left out of saves. The
+  entry door that slams behind him at the start of a level does the same.
 - **Lava light** is traced over the rock with the same engine as the torch
   (`trace_lavalight`), a cell at a time along the pool, with the pool itself counted
   as a hollow, however bright it is painted. It is fainter than the torch's and more

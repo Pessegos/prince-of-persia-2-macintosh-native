@@ -145,4 +145,6 @@ class CavernState:
         # exits, it needs a source/direction for the port's split audio mixer.
         self.plates.gate_sounds.extend(GateSound(cue, False, (self.entry_room, self.entry_cell))
                                       for cue in sounds if cue in (17, 18, 20))
+        if 20 in sounds:
+            self.plates.shut.append(((self.entry_room, self.entry_cell), True))
         return sounds

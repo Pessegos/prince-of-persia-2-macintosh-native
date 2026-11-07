@@ -81,7 +81,7 @@ class RebirthSnapshot:
             restored.bridge.tension_level, restored.bridge.tension = current.bridge.tension_level, current.bridge.tension
             restored.potions.flip_timer = current.potions.flip_timer
             restored.potions.float_timer = 0
-            for queue in (restored.plates.triggered, restored.plates.slams, restored.plates.slam_sounds,
+            for queue in (restored.plates.triggered, restored.plates.slams, restored.plates.slam_sounds, restored.plates.shut,
                           restored.plates.songs, restored.plates.stopped_sounds, restored.plates.gate_sounds,
                           restored.potions.songs,
                           restored.bridge.songs, restored.loose.plate_events, restored.loose.shake_events):

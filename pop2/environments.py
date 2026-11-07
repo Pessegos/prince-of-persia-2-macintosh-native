@@ -504,7 +504,8 @@ class Caverns(Environment):
     def advance_ambience(self):
         scene = self.scene
         if getattr(scene, 'cave_ambience_enabled', False):
-            scene.level_renderer.advance_ambience(scene.room_id, scene.level_map, self.prince_footing())
+            scene.level_renderer.advance_ambience(scene.room_id, scene.level_map, self.prince_footing(),
+                                                  self.doors_shut())
 
     def prince_footing(self):
         """Where the Prince's feet are, for the dust they raise. Only read."""
@@ -517,6 +518,14 @@ class Caverns(Environment):
         record = scene.frames[state.action]
         return Footing(state.target_x, floor_contact_x(state.target_x, state.facing, record), floor_y(motion.row),
                        bool(record.aux & 0x40), motion.falling, state.vertical_velocity)
+
+    def doors_shut(self):
+        """The gates and doors that came down in this room this tick. Only read."""
+        from pop2.cavern_ambience import door_coming_down
+
+        scene = self.scene
+        return tuple(door_coming_down(scene.level_map.tile(room, cell % 10, cell // 10).kind, cell, slammed)
+                     for (room, cell), slammed in scene.game.caverns.plates.shut if room == scene.room_id)
 
     def frame_start(self):
         scene = self.scene
