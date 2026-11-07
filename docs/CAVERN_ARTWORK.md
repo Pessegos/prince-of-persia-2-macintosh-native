@@ -260,3 +260,23 @@ The combined1154-pixel correction has cached RGB hash
 `155016d0323e511fe037104e7edda38d6a9045cfcd70bc4ad3f7984dd206d567`.
 Only the eight approved manifest sources are bundled; intermediate proposals
 that recoloured background-column bases were excluded before visual review.
+
+## Level3 room11: diagonal floor join
+
+The user approved the marked-reference V3 on 2026-11-07. Two source-checked
+background crops (SHAP3551 at X51/bottom125 and SHAP3525 at X53/bottom125)
+change156 visible native pixels along the marked diagonal. The cached RGB
+hash is `f3b222a29bdbec22895500caffde12090d18f10d1101095ca1e41f7d25c05051`.
+
+V1's small lighting offsets left the cut visible. V2 spread reflected floor
+texture too far into the wall end, washing out relief while leaving dark
+pixels on the other side of the seam. Both were rejected. V3 starts from
+the current artwork and bridges nearby native colours on both sides of the
+actual contour: two native pixels towards the wall and three towards the
+floor, grading the ends and retaining the native palette. Wall detail beyond
+that narrow band, foreground columns, alpha, masks and earlier edits stay
+unchanged. This is a baked artwork improvement, without per-frame filtering.
+
+The approved comparison remains local under
+`rendered/floor-join-marked-reference-v3/`. Approval covers this room only;
+the remaining selected floor joins still require their own visual previews.
