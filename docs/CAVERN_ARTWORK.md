@@ -318,3 +318,20 @@ Tests preserve every button pixel with the plate released and pressed, along
 with all source alpha, foreground pixels and physical masks. Earlier approved
 artwork stays unchanged. This completes the user's selected floor-join batch;
 it does not certify that every cavern junction has been visually reviewed.
+
+## Level3 room16: right tips beneath the column and shooting trap
+
+The user approved the two right-tip reference proposals on 2026-11-07.
+Both use SHAP3526, at X53 and X308/bottom245. They are separate from the
+earlier left wall/floor joins. A narrow three-pixel band on the actual right
+contour grades nearby native texture towards the existing neighboring floor,
+retaining the native palette and pixel grid. The neighboring pieces remain
+untouched, including the pressure-plate drawings in both states.
+
+The two placement-specific crops change109 and111 visible pixels,220 in total.
+The approved cached RGB hash is
+`a5f823e2a653cfc956104a2483f8f1dc69fb94758ffee8135c12544e8cc25a38`.
+Foreground pixels, column sources, source alpha, physical masks and earlier
+approved artwork are preserved. The comparisons stay local under
+`rendered/floor-right-edge-references-v1/`. This approval covers those two
+examples only; other visible right tips require their own local previews.
