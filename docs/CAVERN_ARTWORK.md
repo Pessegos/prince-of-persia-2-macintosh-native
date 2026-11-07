@@ -170,6 +170,7 @@ is included. Other columns found during the inventory are not approved targets.
 | Level | Room | Column X / bottom | Added visible changes | Combined render RGB SHA256 |
 | --- | --- | --- | --- | --- |
 | 3 | 1 | 111 / 243 | 585 | `470358256d02d9371eabfc773426c3b6949e14c62852acbf6b9eac022ad44f02` |
+| 3 | 5 | 60 / 243 | 585 | `1dce1829805dde96885605ac6cd555351d5969147d14626401a2979da95a12a5` |
 
 The enlarged comparisons and approval manifest remain local under
 `rendered/column-shadow-five-v4/`. Each row's hash uses the static cached room
