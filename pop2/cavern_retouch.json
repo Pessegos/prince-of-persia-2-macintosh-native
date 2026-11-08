@@ -8470,6 +8470,31 @@
         81,
         4198
       ]
+    },
+    {
+      "level": 5,
+      "room": 8,
+      "shape": 3550,
+      "x": 306,
+      "bottom": 365,
+      "mode": 16,
+      "size": [
+        40,
+        146
+      ],
+      "source_sha256": "350e8a75269701fd5f1e26c11c38cae826136e2bedb1e98b2ddd169db2da4b65",
+      "source_rect": [
+        2,
+        116,
+        39,
+        140
+      ],
+      "atlas_rect": [
+        0,
+        4199,
+        37,
+        4223
+      ]
     }
   ],
   "doors": [
