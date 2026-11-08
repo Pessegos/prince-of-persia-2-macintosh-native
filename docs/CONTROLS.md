@@ -26,8 +26,10 @@ and Share buttons and a gold guide coin (drawn pixel by pixel after the
 user's sketch) quartered by the Xbox X. Sticks and D-pad sit exactly centred
 in their dishes. The PlayStation and Nintendo styles reuse that body with
 their own buttons for now. The keyboard is a full 1990s office keyboard
-(keypad, lock lights, a small solid Windows 98 flag with a long trail,
-printed in black on the Windows keys) in a thick-bordered case, keys a pixel
+(keypad, lock lights, and on the Windows keys the Windows 98 flag without
+its colours: a frame leaning right round four shaded panes, with squares
+flying off to the left that shrink and fade into the key) in a
+thick-bordered case, keys a pixel
 apart, light letter keys and darker mauve modifiers, legends at the top left
 of each key. Jump, Crouch, Sword and Time left take the Xbox colours of their
 default buttons (A, B, X, Y). Nothing is traced from another game.
@@ -36,9 +38,13 @@ The controller's labels come in groups, one per control or cluster (the
 shoulders, the face buttons, a stick with its movement and click): each
 bound button gets a row with its small icon and action, on one 18-pixel grid
 beside a bracket, and one line per group runs level from the bracket, then
-straight up or down to the control. The face buttons' line meets a diamond
-drawn round all four. Tests check that no line crosses another, the diamond
-or another button, and that every drawn button has a group.
+straight up or down, stopping two clear pixels short of the control. The
+face buttons' line meets a diamond drawn round all four. The icons are the
+pad's own parts made small: round face buttons with their letters exactly
+centred, a stick in its well, the cross in its dish, shoulder buttons with
+centred names. Tests check that no line crosses another, the diamond or
+another button, where each line stops, and that every drawn button has a
+group.
 
 **Change keys...** / **Change buttons...** opens a list with two slots per
 action. Enter (or A) waits for the next key or button, Delete (or X) clears a

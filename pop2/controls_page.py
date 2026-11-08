@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 
 from pop2.bitmap_labels import label_text
 from pop2.controls_art import (INK, PAD_HEIGHT, PAD_WIDTH, XBOX_COLORS, button_icon, draw_leds,
-                               keyboard_case, keycap, legend_ink, pad_art, windows_flag)
+                               key_top, keyboard_case, keycap, legend_ink, pad_art, windows_flag)
 from pop2.game_ui import DevelopmentMenu, centered_panel
 from pop2.input_bindings import ACTION_BY_NAME, LOCKED_KEYS, PAD_LOCKED, key_name, key_token, pad_name
 
@@ -168,7 +168,7 @@ def draw_keycap(image, rect, token, label, color=None):
     if label in ('^', 'v', '<', '>'):
         draw_arrow(draw, *centre, label, ink)
     elif label == 'WIN':
-        windows_flag(image, centre, ink)
+        windows_flag(image, centre, ink, key_top(color, dark))
     else:
         # Legends sit at the top left, as printed on those keyboards; one
         # too wide for that margin is centred instead.

@@ -10,7 +10,8 @@ import numpy as np
 from PIL import Image
 
 from pop2 import controls_art
-from pop2.controls_page import ACTION_COLORS, BRACKET_X, ControlsPage, keyboard_bounds, keyboard_keys
+from pop2.controls_page import (ACTION_COLORS, BRACKET_X, ControlsPage, draw_keycap, keyboard_bounds,
+                                keyboard_keys, line_pixels)
 from pop2.game_menu import GameMenu
 from pop2.gamepad import Hysteresis, PadReader, PadState, pad_style
 from pop2.input_bindings import (Bindings, CONTROLLER_DEFAULTS, KEYBOARD_DEFAULTS, PAD_BINDABLE, key_name,
@@ -651,18 +652,88 @@ class PadArtTests(unittest.TestCase):
                 self.assertTrue(((controls_art.lit_levels(mask, **shading) > 0) == mask).all())
 
     def test_sticks_and_dpad_sit_centred_in_their_dishes(self):
-        for draw, size, ramp in ((controls_art.stick, controls_art.STICK_WELL, controls_art.FRIEZE),
-                                 (controls_art.dpad, controls_art.DPAD_DISH, controls_art.TAPESTRY)):
+        # The pad's own, and the small ones of the legends drawn by the same code.
+        stick, dpad = controls_art.stick, controls_art.dpad
+        for draw, args, size, ramp, least in (
+                (stick, (), controls_art.STICK_WELL, controls_art.FRIEZE, 300),
+                (dpad, (), controls_art.DPAD_DISH, controls_art.TAPESTRY, 300),
+                (stick, controls_art.ICON_STICK, controls_art.ICON_STICK[0], controls_art.FRIEZE, 40),
+                (dpad, controls_art.ICON_DPAD, controls_art.ICON_DPAD[0], controls_art.TAPESTRY, 40)):
             image = Image.new('RGBA', (2 * size + 1, 2 * size + 1), (0, 0, 0, 0))
-            draw(image, (size, size))
+            draw(image, (size, size), *args)
             pixels = np.array(image)[:, :, :3]
             # The cap or cross: every pixel in its own colours, mirrored both ways.
             part = np.zeros(pixels.shape[:2], bool)
             for color in ramp:
                 part |= (pixels == color).all(axis=2)
-            with self.subTest(part=draw.__name__):
-                self.assertGreater(part.sum(), 300)
+            well = np.zeros(pixels.shape[:2], bool)
+            for color in controls_art.WELL:
+                well |= (pixels == color).all(axis=2)
+            with self.subTest(part=draw.__name__, size=size):
+                self.assertGreater(part.sum(), least)
                 self.assertTrue((part == part[::-1]).all() and (part == part[:, ::-1]).all())
+                self.assertGreater(well.sum(), least // 4)  # its dark dish shows round it
+
+    def test_legend_icons_are_round_and_their_letters_centred(self):
+        disc = controls_art.circle_mask(6, slack=1.0)
+        for token in ('a', 'b', 'x', 'y', 'leftshoulder', 'rightshoulder', 'lefttrigger', 'righttrigger'):
+            icon = np.array(controls_art.button_icon(token, 'xbox'))
+            shape = icon[:, :, 3] > 0
+            if token in 'abxy':
+                letter = (icon[:, :, :3] == controls_art.SHELL[5]).all(axis=2)
+            else:  # ink inside the outline, which is the same colour
+                letter = (icon[:, :, :3] == controls_art.INK).all(axis=2) & ~controls_art.edge(shape)
+            rows, columns = np.nonzero(shape)
+            letter_rows, letter_columns = np.nonzero(letter)
+            with self.subTest(token=token):
+                self.assertTrue(letter.any())
+                self.assertEqual(rows.min() + rows.max(), letter_rows.min() + letter_rows.max())
+                self.assertEqual(columns.min() + columns.max(), letter_columns.min() + letter_columns.max())
+                if token in 'abxy':  # a round button, not an octagon
+                    self.assertTrue((shape[:, 2:15] == disc).all())
+
+    def test_callout_lines_stop_short_of_their_controls(self):
+        gap = controls_art.LINE_GAP
+        for style in self.STYLES:
+            art = controls_art.pad_art(style)
+            height, width = art.controls.shape
+            for name, (side, _first, line, _buttons, path) in art.groups.items():
+                if name == 'face':  # it meets the frame round the face buttons
+                    continue
+                points = self.polyline(side, line, path)
+                (x0, y0), (x1, y1) = points[-2:]
+                dx, dy = (x1 > x0) - (x1 < x0), (y1 > y0) - (y1 < y0)
+                ahead = [bool(art.controls[y1 + dy * step, x1 + dx * step]) for step in range(1, gap + 2)]
+                with self.subTest(style=style, group=name):
+                    self.assertEqual(ahead, [False] * gap + [True])
+                    self.assertFalse(any(art.controls[y, x] for x, y in line_pixels(points)
+                                         if 0 <= x < width and 0 <= y < height))
+
+    def test_windows_flag_is_uncoloured_fits_its_key_and_fades_to_the_left(self):
+        left, top, right, bottom = next(rect for token, _label, rect in keyboard_keys(
+            ControlsPage.KEYBOARD_ORIGIN, ControlsPage.KEYBOARD_UNIT) if token == 'Win_L')
+        width, height = right - left + 1, bottom - top + 1
+        image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        draw_keycap(image, (0, 0, width - 1, height - 1), 'Win_L', 'WIN')
+        plain = np.array(controls_art.keycap(width, height, None, True))
+        drawn = np.array(image)
+        flag = (drawn != plain).any(axis=2)
+        rows, columns = np.nonzero(flag)
+        # A pixel of the key's top left clear all round (its top ends 4 rows above the bottom).
+        self.assertGreater(rows.min(), 1)
+        self.assertLess(rows.max(), height - 6)
+        self.assertGreater(columns.min(), 0)
+        self.assertLess(columns.max(), width - 2)
+        # Only shades between the key's top and its ink.
+        paper, ink = np.array(controls_art.KEY_DARK[4]), np.array(controls_art.legend_ink(None, True))
+        tones = {tuple(np.round(paper + (ink - paper) * n / 9).astype(int)) for n in range(1, 10)}
+        self.assertTrue(all(tuple(int(v) for v in drawn[y, x, :3]) in tones for y, x in zip(rows, columns)))
+        # The trail left of the flag only grows fainter outwards.
+        cells = controls_art.WINDOWS_FLAG
+        body = min(row.index('9') for row in cells)
+        darkest = [max((int(row[x]) for row in cells if row[x] != '.'), default=0) for x in range(body)]
+        seen = [value for value in reversed(darkest) if value]
+        self.assertTrue(seen and seen == sorted(seen, reverse=True) and seen[-1] < seen[0])
 
     def test_shell_top_is_one_unbroken_line(self):
         body = controls_art.body_mask()

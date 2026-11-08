@@ -293,6 +293,14 @@ FACE_LETTERS = {
     'X': ('##.##', '##.##', '.###.', '.###.', '##.##', '##.##'),
     'Y': ('##.##', '##.##', '.###.', '..#..', '..#..', '..#..'),
 }
+# The same letters a row shorter for the small buttons of the legends, so
+# they sit exactly in the middle of a 13-pixel button.
+ICON_LETTERS = {
+    'A': ('.###.', '##.##', '#####', '##.##', '##.##'),
+    'B': ('####.', '##.##', '####.', '##.##', '####.'),
+    'X': ('##.##', '.###.', '..#..', '.###.', '##.##'),
+    'Y': ('##.##', '##.##', '.###.', '..#..', '..#..'),
+}
 # Face buttons: dark domes with ivory letters, or the PlayStation symbols in
 # their colours.
 FACE_STYLES = {
@@ -305,8 +313,11 @@ NINTENDO_LETTERS = {'a': 'B', 'b': 'A', 'x': 'Y', 'y': 'X'}
 
 def face_button(image, centre, button, style, radius=FACE_RADIUS):
     ink = FACE_STYLES.get(style, FACE_STYLES['xbox'])[button]
-    letter = FACE_LETTERS[NINTENDO_LETTERS[button] if style == 'nintendo' else button.upper()]
-    stamp(image, circle_mask(radius), centre, WELL, rim=4, dome=.5)
+    name = NINTENDO_LETTERS[button] if style == 'nintendo' else button.upper()
+    small = radius < FACE_RADIUS
+    letter = (ICON_LETTERS if small else FACE_LETTERS)[name]
+    stamp(image, circle_mask(radius, slack=1.0 if small else 0.8), centre, WELL,
+          rim=2 if small else 4, dome=.5)
     draw = ImageDraw.Draw(image)
     cx, cy = centre
     if style == 'playstation':
@@ -418,26 +429,30 @@ def stick_cap(cap=STICK_CAP, dish=STICK_DISH):
     return levels
 
 
-def stick(image, centre):
+def stick(image, centre, well=STICK_WELL, cap=STICK_CAP, dish=STICK_DISH):
     cx, cy = centre
-    stamp(image, circle_mask(STICK_WELL), centre, WELL, rim=4, concave=True)
-    paint(image, stick_cap(), FRIEZE, (cx - STICK_CAP, cy - STICK_CAP))
+    small = well < STICK_WELL
+    stamp(image, circle_mask(well, slack=1.0 if small else 0.8), centre, WELL,
+          rim=2 if small else 4, concave=True)
+    paint(image, stick_cap(cap, dish), FRIEZE, (cx - cap, cy - cap))
 
 
 @lru_cache(maxsize=None)
-def dpad_cross(span=31, arm=13):
+def dpad_cross(span=31, arm=13, corner=3):
     """The cross: arms of odd width so it sits exactly on its centre."""
     low = (span - arm) // 2
-    cross = mask_from(lambda draw: (draw.rounded_rectangle((low, 0, low + arm - 1, span - 1), 3, fill=255),
-                                    draw.rounded_rectangle((0, low, span - 1, low + arm - 1), 3, fill=255)),
+    cross = mask_from(lambda draw: (draw.rounded_rectangle((low, 0, low + arm - 1, span - 1), corner, fill=255),
+                                    draw.rounded_rectangle((0, low, span - 1, low + arm - 1), corner, fill=255)),
                       (span, span))
     cross = cross & cross[::-1] & cross[:, ::-1]
     return cross & cross.T
 
 
-def dpad(image, centre):
-    stamp(image, circle_mask(DPAD_DISH), centre, WELL, rim=4, concave=True)
-    stamp(image, dpad_cross(), centre, TAPESTRY, rim=3, bias=.15)
+def dpad(image, centre, dish=DPAD_DISH, span=31, arm=13, corner=3):
+    small = dish < DPAD_DISH
+    stamp(image, circle_mask(dish, slack=1.0 if small else 0.8), centre, WELL,
+          rim=2 if small else 4, concave=True)
+    stamp(image, dpad_cross(span, arm, corner), centre, TAPESTRY, rim=2 if small else 3, bias=.15)
 
 
 @dataclass(frozen=True)
@@ -446,6 +461,7 @@ class PadArt:
     points: dict   # button -> centre on the image
     groups: dict   # name -> (side, first row, line row, buttons, line points), on the image
     frame: tuple   # the face buttons' diamond: its corners, on the image
+    controls: np.ndarray  # where a control is drawn (not the shell)
 
 
 def shifted(point):
@@ -463,37 +479,68 @@ def pad_art(style='xbox'):
     paint(image, lit_levels(body, rim=8, dome=0.1, span=30, slope=0.04,
                             thresholds=(0.05, 0.27, 0.5, 0.75, 0.92), smooth=3.0), SHELL)
     paint(image, lit_levels(bumpers, rim=3, smooth=1.0, bias=.06), BUMPER)
-    stick(image, points['leftstick'])
-    stick(image, points['rightstick'])
-    dpad(image, points['dpad'])
+    # The controls go on a layer of their own, so the callouts know where
+    # each one begins.
+    parts = Image.new('RGBA', image.size, (0, 0, 0, 0))
+    stick(parts, points['leftstick'])
+    stick(parts, points['rightstick'])
+    dpad(parts, points['dpad'])
     for name in ('y', 'x', 'b', 'a'):
-        face_button(image, points[name], name, style)
+        face_button(parts, points[name], name, style)
     if layout == 'playstation':
-        stamp(image, rounded(37, 25, 4), points['touchpad'], BUMPER, rim=3, bias=-.05)
-        stamp(image, circle_mask(5), points['guide'], WELL, rim=3, dome=.3)
-        small_button(image, points['misc1'], 'dot', (9, 5))
-        small_button(image, points['back'], 'dot', (7, 11))
-        small_button(image, points['start'], 'dot', (7, 11))
+        stamp(parts, rounded(37, 25, 4), points['touchpad'], BUMPER, rim=3, bias=-.05)
+        stamp(parts, circle_mask(5), points['guide'], WELL, rim=3, dome=.3)
+        small_button(parts, points['misc1'], 'dot', (9, 5))
+        small_button(parts, points['back'], 'dot', (7, 11))
+        small_button(parts, points['start'], 'dot', (7, 11))
     elif style == 'nintendo':
-        stamp(image, circle_mask(8), points['guide'], WELL, rim=3, dome=.3)
-        small_icon(ImageDraw.Draw(image), *points['guide'], 'home', SHELL[5])
-        small_button(image, points['back'], 'minus')
-        small_button(image, points['start'], 'plus')
-        small_button(image, points['misc1'], 'dot', (9, 9))
+        stamp(parts, circle_mask(8), points['guide'], WELL, rim=3, dome=.3)
+        small_icon(ImageDraw.Draw(parts), *points['guide'], 'home', SHELL[5])
+        small_button(parts, points['back'], 'minus')
+        small_button(parts, points['start'], 'plus')
+        small_button(parts, points['misc1'], 'dot', (9, 9))
     else:
-        guide_button(image, points['guide'])
-        ivory_button(image, points['back'], 'view')
-        ivory_button(image, points['start'], 'menu')
-        ivory_button(image, points['misc1'], 'share', (15, 11))
-    groups = {name: (side, first + ABOVE, line + ABOVE, buttons, tuple(shifted(point) for point in path))
-              for name, (side, first, line, buttons, path) in GROUPS[layout].items()}
+        guide_button(parts, points['guide'])
+        ivory_button(parts, points['back'], 'view')
+        ivory_button(parts, points['start'], 'menu')
+        ivory_button(parts, points['misc1'], 'share', (15, 11))
+    image.alpha_composite(parts)
+    controls = triggers | bumpers | (np.array(parts)[:, :, 3] > 0)
+    groups = {}
+    for name, (side, first, line, buttons, path) in GROUPS[layout].items():
+        path = [shifted(point) for point in path]
+        if name != 'face':  # that line meets the frame round the face buttons
+            previous = path[-2] if len(path) > 1 else (0 if side == 'left' else PAD_WIDTH - 1, path[0][1])
+            path[-1] = stop_short(previous, path[-1], controls)
+        groups[name] = (side, first + ABOVE, line + ABOVE, buttons, tuple(path))
     x, y, reach = FACE_FRAME
     frame = tuple(shifted(corner) for corner in ((x + reach, y), (x, y + reach), (x - reach, y),
                                                  (x, y - reach), (x + reach, y)))
-    return PadArt(image, points, groups, frame)
+    return PadArt(image, points, groups, frame, controls)
 
 
-SHORT_NAMES = {'leftstick': 'L', 'rightstick': 'R', 'move': 'L'}
+LINE_GAP = 2  # clear pixels between a callout line's end and its control
+
+
+def stop_short(previous, end, controls, gap=LINE_GAP, reach=8):
+    """Where a level or upright callout line running from `previous`
+    towards `end` stops: `gap` clear pixels before the first control pixel
+    on its way (looking up to `reach` pixels past `end`), so it points at
+    the control without running into it."""
+    (x, y), (x1, y1) = previous, end
+    dx, dy = (x1 > x) - (x1 < x), (y1 > y) - (y1 < y)
+    height, width = controls.shape
+    for _step in range(abs(x1 - x) + abs(y1 - y) + reach + 1):
+        if 0 <= x < width and 0 <= y < height and controls[y, x]:
+            return x - dx * (gap + 1), y - dy * (gap + 1)
+        x, y = x + dx, y + dy
+    return end
+
+
+# The legends' sticks and D-pad: the pad's own, small (well, cap, dish and
+# dish, span, arm, corner).
+ICON_STICK = (6, 4, 2)
+ICON_DPAD = (6, 11, 5, 0)
 # Small arrows either side of the stick for its movement.
 MOVE_ARROWS = (((1, 5), (0, 6), (1, 6), (1, 7)), ((15, 5), (15, 6), (16, 6), (15, 7)))
 
@@ -518,18 +565,16 @@ def button_icon(token, style):
     elif token in ('leftshoulder', 'rightshoulder', 'lefttrigger', 'righttrigger'):
         trigger = token.endswith('trigger')
         stamp(image, rounded(15, 13 if trigger else 9, 4), centre, BUMPER, rim=3)
-        mini_text(ImageDraw.Draw(image), 9, 4, pad_name(token, style), INK, 'center')
+        mini_text(ImageDraw.Draw(image), centre[0], centre[1] - 2, pad_name(token, style), INK, 'center')
     elif token in ('leftstick', 'rightstick', 'move'):
-        stamp(image, circle_mask(6), centre, FRIEZE, rim=3, dome=.4)
-        draw = ImageDraw.Draw(image)
-        mini_text(draw, 9, 4, SHORT_NAMES[token], FRIEZE[6], 'center')
+        # The pad's own stick, small: its dark well and blue cap.
+        stick(image, centre, *ICON_STICK)
         if token == 'move':
+            draw = ImageDraw.Draw(image)
             for arrow in MOVE_ARROWS:
                 draw.point(arrow, fill=SHELL[5])
     elif token == 'dpad':
-        cross = mask_from(lambda draw: (draw.rectangle((4, 0, 8, 12), fill=255),
-                                        draw.rectangle((0, 4, 12, 8), fill=255)), (13, 13))
-        stamp(image, cross, centre, TAPESTRY, rim=2, bias=.15)
+        dpad(image, centre, *ICON_DPAD)
     elif token == 'misc1':
         if style not in ('playstation', 'nintendo'):
             ivory_button(image, centre, 'share', (15, 11))
@@ -581,6 +626,11 @@ def legend_ink(color, dark=False):
     return tone(color, .22) if color else (40, 20, 26) if dark else INK
 
 
+def key_top(color, dark=False):
+    """The colour of a key's top, where its legend is printed."""
+    return color if color else KEY_DARK[4] if dark else KEY_LIGHT[4]
+
+
 @lru_cache(maxsize=None)
 def keyboard_case(width, height, keys):
     """The case, lit like the pad's shell, and the recess round its keys
@@ -615,19 +665,25 @@ def draw_leds(image, rect, lit=('NUM',)):
             draw.point((cx - 1, top + 10), fill=LED_GREEN[2])
 
 
-# The Windows 98 flag in black: four solid panes, the right pair a pixel
-# lower as the flag waves, and a long trail of pieces thinning out to the
-# left; printed in the key's ink like a legend.
-WINDOWS_FLAG = ('...#...#.#.###....',
-                '.....#.#.#.###.###',
-                '...............###',
-                '.#...#...#.###....',
-                '...#...#.#.###.###',
-                '...............###')
+# The Windows 98 flag without its colours, drawn after the colour one: a
+# frame leaning to the right round four panes in a shadow tone, and squares
+# flying off to the left that shrink and fade into the key. Digits are
+# ninths of the way from the key's top colour to its ink.
+WINDOWS_FLAG = ('........999999999',
+                '.3..77..944494449',
+                '....77.944494449.',
+                '.......999999999.',
+                '.3.77..944494449.',
+                '...77.944494449..',
+                '1.....999999999..')
 
 
-def windows_flag(image, centre, ink):
-    draw = ImageDraw.Draw(image)
+def windows_flag(image, centre, ink, paper):
     x0 = centre[0] - (len(WINDOWS_FLAG[0]) - 1) // 2
     y0 = centre[1] - (len(WINDOWS_FLAG) - 1) // 2
-    glyph(draw, x0, y0, WINDOWS_FLAG, ink)
+    pixels = image.load()
+    for y, row in enumerate(WINDOWS_FLAG):
+        for x, cell in enumerate(row):
+            if cell != '.':
+                share = int(cell) / 9
+                pixels[x0 + x, y0 + y] = (*(round(p + (i - p) * share) for p, i in zip(paper, ink)), 255)
