@@ -734,6 +734,16 @@ class PadArtTests(unittest.TestCase):
         darkest = [max((int(row[x]) for row in cells if row[x] != '.'), default=0) for x in range(body)]
         seen = [value for value in reversed(darkest) if value]
         self.assertTrue(seen and seen == sorted(seen, reverse=True) and seen[-1] < seen[0])
+        # Its particles are single pixels: none touches another or the frame.
+        drawn_cells = {(x, y) for y, row in enumerate(cells) for x, cell in enumerate(row) if cell != '.'}
+        for y, row in enumerate(cells):
+            for x, cell in enumerate(row):
+                if cell not in '.9':
+                    with self.subTest(particle=(x, y)):
+                        self.assertFalse({(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)} & drawn_cells)
+        # The panes are clear: inside its frame a row shows only the key.
+        for row in cells:
+            self.assertIn(row[row.index('9'):].rstrip('.'), ('9' * 9, '9...9...9'))
 
     def test_shell_top_is_one_unbroken_line(self):
         body = controls_art.body_mask()

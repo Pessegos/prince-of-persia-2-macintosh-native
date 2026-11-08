@@ -27,8 +27,8 @@ user's sketch) quartered by the Xbox X. Sticks and D-pad sit exactly centred
 in their dishes. The PlayStation and Nintendo styles reuse that body with
 their own buttons for now. The keyboard is a full 1990s office keyboard
 (keypad, lock lights, and on the Windows keys the Windows 98 flag without
-its colours: a frame leaning right round four shaded panes, with squares
-flying off to the left that shrink and fade into the key) in a
+its colours: a frame leaning right round four clear panes, with a trail
+of single pixels that thins out and fades into the key) in a
 thick-bordered case, keys a pixel
 apart, light letter keys and darker mauve modifiers, legends at the top left
 of each key. Jump, Crouch, Sword and Time left take the Xbox colours of their

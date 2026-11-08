@@ -666,16 +666,18 @@ def draw_leds(image, rect, lit=('NUM',)):
 
 
 # The Windows 98 flag without its colours, drawn after the colour one: a
-# frame leaning to the right round four panes in a shadow tone, and squares
-# flying off to the left that shrink and fade into the key. Digits are
+# frame leaning to the right round four clear panes, and a trail of single
+# pixels that thins out and fades into the key as it flies off to the left:
+# each one alone (on alternate pixels of the grid) and as faint as it is far
+# from its row of the frame, so the three bars break up first. Digits are
 # ninths of the way from the key's top colour to its ink.
-WINDOWS_FLAG = ('........999999999',
-                '.3..77..944494449',
-                '....77.944494449.',
-                '.......999999999.',
-                '.3.77..944494449.',
-                '...77.944494449..',
-                '1.....999999999..')
+WINDOWS_FLAG = ('...3.5.8.999999999',
+                '..2.4.7..9...9...9',
+                '.2.4.7..9...9...9.',
+                '..3.5.8.999999999.',
+                '.2.4.7..9...9...9.',
+                '2.4.7..9...9...9..',
+                '.3.5.8.999999999..')
 
 
 def windows_flag(image, centre, ink, paper):
