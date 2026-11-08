@@ -17,11 +17,18 @@ two tabs:
 
 Both drawings are original pixel art made by code (`pop2/controls_art.py`)
 at the native 510x384 size: each shape is lit from the upper left and
-reduced to a few hard shades, with a light shell, dark keys, sticks and
-pads, and coloured face buttons. Nothing is traced from another game. The
-callouts sit on one 18-pixel grid on both sides; each line leaves its
-label level and bends at most once. Tests check that no line crosses
-another or passes over another button, with every button bound.
+reduced to a few hard shades. The controller has the proportions and
+layout of an Xbox Series controller; the PlayStation and Nintendo styles
+reuse that body with their own buttons for now. Colours come from the
+game's palace: an ivory shell with mauve shadows and dark brown outlines,
+frieze-blue sticks and D-pad, gem face buttons and a gold medallion with
+an eight-pointed star where the guide button sits (no console logo). The
+keyboard matches: cream keys on a tan case. A second, dark finish with a
+gold inlay (`FINISH = 'ebony'`) is kept for comparison. Nothing is traced
+from another game. The callouts sit on one 18-pixel grid on both sides;
+each line leaves its label level and bends at most once. Tests check that
+no line crosses another or passes over another button, with every button
+bound.
 
 **Change keys...** / **Change buttons...** opens a list with two slots per
 action. Enter (or A) waits for the next key or button, Delete (or X) clears a

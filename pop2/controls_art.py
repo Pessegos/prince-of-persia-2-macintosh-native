@@ -3,9 +3,11 @@
 Port-only artwork, drawn by code at the game's native resolution: every
 shape is a mask lit from the upper left and reduced to a few hard shades,
 the way a 1993 artist would shade an object, with no blending or blur.
-Results are cached; nothing here depends on the game's resources.
+The colours come from the game's palace palette. Results are cached;
+nothing here depends on the game's resources.
 """
 
+import math
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -14,14 +16,6 @@ from PIL import Image, ImageDraw
 
 LIGHT = np.array((-0.55, -0.75, 0.62))
 LIGHT = LIGHT / np.linalg.norm(LIGHT)
-
-# Ramps run from the outline to the highlight.
-SHELL = ((22, 21, 24), (92, 89, 92), (126, 122, 123), (158, 154, 153), (186, 182, 179),
-         (210, 206, 201), (232, 228, 221))
-SHOULDER = ((18, 18, 20), (60, 59, 63), (82, 81, 86), (104, 103, 108), (128, 127, 132),
-            (152, 151, 156), (178, 177, 182))
-DARK = ((10, 10, 12), (26, 26, 29), (38, 38, 42), (52, 52, 57), (70, 70, 76), (96, 96, 103),
-        (134, 134, 142))
 
 
 DISTANCE_CAP = 40  # no shading looks further in than this
@@ -102,18 +96,36 @@ def tidy(levels, mask):
     return levels
 
 
+def edge(mask):
+    """The pixels of a mask that touch the outside (4-connected)."""
+    padded = np.pad(mask, 1, constant_values=False)
+    return mask & ~(padded[:-2, 1:-1] & padded[2:, 1:-1] & padded[1:-1, :-2] & padded[1:-1, 2:])
+
+
 def paint(image, levels, ramp, offset=(0, 0), outline=True):
     """Composite shaded levels onto an RGBA image; the rim takes ramp[0]."""
     mask = levels > 0
     if outline:
-        padded = np.pad(mask, 1, constant_values=False)
-        rim = mask & ~(padded[:-2, 1:-1] & padded[2:, 1:-1] & padded[1:-1, :-2] & padded[1:-1, 2:])
-        levels = np.where(rim, 0, levels)
+        levels = np.where(edge(mask), 0, levels)
     colors = np.array([(*color, 255) for color in ramp], np.uint8)
     pixels = colors[np.clip(levels, 0, len(ramp) - 1)]
     pixels[~mask] = 0
     layer = Image.fromarray(pixels, 'RGBA')
     image.alpha_composite(layer, offset)
+
+
+def inlay(image, mask, trim, offset=(0, 0)):
+    """Redraw a shape's outline in a metal trim: lit where it faces the light."""
+    rim = edge(mask)
+    gy, gx = np.gradient(blur(mask.astype(np.float32), 1.5))
+    facing = -(gx * LIGHT[0] + gy * LIGHT[1]) / np.maximum(np.hypot(gx, gy), 1e-6)  # outward normal
+    shade = np.digitize(facing, (-0.35, 0.35))  # 0 away from the light .. 2 towards it
+    pixels = np.array(image)
+    ys, xs = np.nonzero(rim)
+    colors = np.array(trim, np.uint8)[shade[ys, xs]]
+    pixels[ys + offset[1], xs + offset[0], :3] = colors
+    pixels[ys + offset[1], xs + offset[0], 3] = 255
+    image.paste(Image.fromarray(pixels, 'RGBA'))
 
 
 def mask_from(draw_shape, size):
@@ -128,112 +140,18 @@ def circle_mask(radius):
     return xx * xx + yy * yy <= radius * radius + radius * 0.8
 
 
-def bezier(points, steps=24):
-    (x0, y0), (x1, y1), (x2, y2), (x3, y3) = points
-    t = np.linspace(0, 1, steps)
-    a, b, c, d = (1 - t) ** 3, 3 * t * (1 - t) ** 2, 3 * t * t * (1 - t), t ** 3
-    return list(zip(a * x0 + b * x1 + c * x2 + d * x3, a * y0 + b * y1 + c * y2 + d * y3))
-
-
-def mirrored_outline(half, centre):
-    """A symmetric closed outline from its left half (top to bottom)."""
-    left = []
-    for segment in half:
-        left.extend(bezier(segment))
-    right = [(2 * centre - x, y) for x, y in reversed(left)]
-    return left + right
-
-
-# One pad body on a 240-pixel-wide grid (y grows downwards); the shoulders
-# stand ABOVE pixels above it. Coordinates in the tables below are on the
-# body's grid, before that offset.
-ABOVE = 12
-PAD_WIDTH, PAD_HEIGHT = 241, 172 + ABOVE
-BODY_HALF = (
-    ((120, 15), (92, 15), (58, 14), (36, 24)),
-    ((36, 24), (19, 31), (10, 46), (8, 64)),
-    ((8, 64), (5, 92), (12, 124), (24, 146)),
-    ((24, 146), (33, 163), (52, 171), (66, 160)),
-    ((66, 160), (76, 152), (84, 134), (96, 126)),
-    ((96, 126), (106, 120), (113, 119), (120, 119)),
-)
-SHOULDERS = {
-    # bumper and trigger strokes for the left side, mirrored for the right
-    'bumper': (((20, 33), (25, 18), (44, 9), (74, 12)), 10),
-    'trigger': (((36, 9), (42, 2), (56, 1), (64, 7)), 11),
-}
-STICK_WELL, STICK_CAP, FACE_RADIUS, DPAD_DISH = 18, 11, 7, 16
-FACE = {'y': (176, 40), 'x': (158, 58), 'b': (194, 58), 'a': (176, 76)}
-LAYOUTS = {
-    'xbox': {'leftstick': (62, 58), 'dpad': (94, 94), 'rightstick': (146, 94), **FACE,
-             'back': (104, 58), 'start': (136, 58), 'guide': (120, 34), 'misc1': (120, 72)},
-    'playstation': {'dpad': (62, 58), 'leftstick': (94, 96), 'rightstick': (146, 96), **FACE,
-                    'back': (86, 30), 'start': (154, 30), 'touchpad': (120, 34),
-                    'guide': (120, 76), 'misc1': (120, 90)},
-}
-# Callout rows, 18 pixels apart, shared by both columns of labels.
-ROWS = (-14, 4, 22, 40, 58, 76, 94, 112, 130)
-# button: (side, row, the points its line passes on the way to the button);
-# 'move' is the left stick's movement, 'leftstick' its click.
-# Lines run level from the labels, then bend at most once, so they never
-# cross one another or pass over another button.
-SHARED_ROUTES = {
-    'lefttrigger': ('left', 4, ((31, 4),)), 'righttrigger': ('right', 4, ((209, 4),)),
-    'leftshoulder': ('left', 22, ((17, 22),)), 'rightshoulder': ('right', 22, ((223, 22),)),
-    'y': ('right', 40, ((184, 40),)), 'b': ('right', 58, ((202, 58),)),
-    'x': ('right', 76, ((212, 76), (166, 61))), 'a': ('right', 94, ((194, 94), (182, 82))),
-}
-ROUTES = {
-    'xbox': {**SHARED_ROUTES,
-             'back': ('left', -14, ((104, -14), (104, 52))),
-             'start': ('right', -14, ((136, -14), (136, 52))),
-             'move': ('left', 58, ((43, 58),)), 'dpad': ('left', 94, ((77, 94),)),
-             'leftstick': ('left', 76, ((44, 76), (49, 71))),
-             'rightstick': ('right', 112, ((164, 112), (159, 107))),
-             'misc1': ('left', 130, ((120, 130), (120, 76)))},
-    'playstation': {**SHARED_ROUTES,
-                    'back': ('left', -14, ((86, -14), (86, 25))),
-                    'start': ('right', -14, ((154, -14), (154, 25))),
-                    'dpad': ('left', 58, ((45, 58),)), 'move': ('left', 94, ((75, 94),)),
-                    'leftstick': ('left', 112, ((78, 112), (81, 109))),
-                    'touchpad': ('left', 40, ((99, 40),)),
-                    'rightstick': ('right', 112, ((162, 112), (159, 109))),
-                    'misc1': ('left', 130, ((120, 130), (120, 94)))},
-}
-
-
-def layout_name(style):
-    return 'playstation' if style == 'playstation' else 'xbox'
-
-
-def body_mask():
-    outline = [(x, y + ABOVE) for x, y in mirrored_outline(BODY_HALF, 120)]
-    return mask_from(lambda draw: draw.polygon(outline, fill=255), (PAD_WIDTH, PAD_HEIGHT))
-
-
-def thick_curve(draw, points, width):
-    """A stroke with round ends along a smooth curve."""
-    path = bezier(points, 32)
-    draw.line(path, fill=255, width=width, joint='curve')
-    radius = width / 2 - 0.5
-    for x, y in (path[0], path[-1]):
-        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=255)
-
-
-def shoulder_masks(body):
-    """Bumpers hug the body's top corners; triggers rise behind them."""
-    size = (body.shape[1], body.shape[0])
-    masks = []
-    for part in ('trigger', 'bumper'):
-        points, width = SHOULDERS[part]
-
-        def stroke(draw, points=points, width=width):
-            for flip in (False, True):
-                curve = [((240 - x) if flip else x, y + ABOVE) for x, y in points]
-                thick_curve(draw, curve, width)
-        masks.append(mask_from(stroke, size))
-    triggers, bumpers = masks
-    return triggers & ~bumpers & ~body, bumpers & ~body
+def spline(points, steps=10):
+    """A smooth Catmull-Rom curve through the points, both ends included."""
+    points = [np.asarray(point, float) for point in points]
+    padded = [points[0], *points, points[-1]]
+    path = []
+    for p0, p1, p2, p3 in zip(padded, padded[1:], padded[2:], padded[3:]):
+        for step in range(steps):
+            t = step / steps
+            path.append(tuple(0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
+                                     + (3 * p1 - p0 - 3 * p2 + p3) * t ** 3)))
+    path.append(tuple(points[-1]))
+    return path
 
 
 def stamp(image, mask, centre, ramp, **shading):
@@ -258,13 +176,155 @@ def color_ramp(color):
         (.16, 4), (.42, 0), (.58, 0), (.76, 0), (.92, 0), (1.04, 8), (1.06, 46)))
 
 
-# Face buttons: dome colour (None = dark plastic) and symbol colour.
+# -- finishes -----------------------------------------------------------------
+# Ramps run from the outline to the highlight. The ivory finish uses the
+# palace's own stone: cream and ivory lit faces, mauve shadows and the dark
+# brown outline of the game's sprites; caps take the frieze blues.
+@dataclass(frozen=True)
+class Finish:
+    shell: tuple
+    shoulder: tuple   # bumpers and the PlayStation touchpad
+    trigger: tuple
+    well: tuple       # stick wells, the D-pad dish, small and dark buttons
+    cap: tuple        # stick caps and the D-pad cross
+    key: tuple        # keycaps that do nothing
+    case: tuple       # the keyboard's case
+    legend: tuple     # letters on plain keys
+    ink: tuple        # callout lines where they cross a light shell
+    trim: tuple = ()  # an inlaid outline: away from, across and towards the light
+
+
+BLUE_CAP = ((16, 36, 52), (24, 62, 88), (24, 79, 104), (33, 98, 140), (52, 124, 166), (73, 147, 181),
+            (120, 196, 206))
+FINISHES = {
+    'ivory': Finish(
+        shell=((74, 33, 16), (119, 90, 107), (154, 131, 138), (205, 183, 139), (231, 206, 173),
+               (247, 227, 176), (255, 255, 214)),
+        shoulder=((74, 33, 16), (98, 66, 82), (119, 90, 107), (154, 131, 138), (190, 168, 140),
+                  (214, 193, 144), (231, 206, 173)),
+        trigger=((58, 26, 14), (80, 52, 66), (98, 66, 82), (119, 90, 107), (138, 112, 122),
+                 (154, 131, 138), (180, 158, 160)),
+        well=((40, 18, 10), (58, 34, 36), (74, 46, 50), (90, 60, 66), (108, 78, 86), (130, 100, 108),
+              (160, 132, 138)),
+        cap=BLUE_CAP,
+        key=((74, 33, 16), (154, 131, 138), (190, 168, 140), (214, 193, 144), (231, 206, 173),
+             (247, 227, 176), (255, 255, 214)),
+        case=((74, 33, 16), (119, 90, 107), (154, 131, 138), (176, 154, 128), (190, 168, 140),
+              (205, 183, 139), (222, 202, 160)),
+        legend=(74, 33, 16), ink=(74, 33, 16)),
+    'ebony': Finish(
+        shell=((10, 6, 6), (28, 18, 18), (38, 26, 26), (50, 36, 34), (64, 48, 44), (82, 62, 56),
+               (110, 88, 78)),
+        shoulder=((8, 4, 4), (24, 14, 14), (34, 22, 22), (46, 32, 30), (60, 44, 40), (78, 60, 54),
+                  (104, 84, 74)),
+        trigger=((6, 2, 2), (18, 10, 10), (26, 16, 16), (36, 24, 22), (48, 34, 30), (62, 46, 42),
+                 (84, 66, 60)),
+        well=((6, 2, 2), (16, 10, 10), (24, 16, 16), (34, 24, 22), (46, 34, 32), (62, 48, 44),
+              (90, 72, 66)),
+        cap=BLUE_CAP,
+        key=((6, 2, 2), (24, 16, 16), (34, 24, 22), (46, 34, 32), (60, 46, 42), (80, 64, 58),
+             (110, 92, 84)),
+        case=((10, 6, 6), (28, 18, 18), (38, 26, 26), (50, 36, 34), (64, 48, 44), (82, 62, 56),
+              (110, 88, 78)),
+        legend=(231, 206, 173), ink=(204, 156, 64),
+        trim=((132, 92, 30), (204, 156, 64), (246, 212, 120))),
+}
+FINISH = 'ivory'
+GOLD = ((50, 28, 6), (120, 76, 18), (164, 110, 30), (204, 150, 48), (234, 188, 76), (250, 218, 116),
+        (255, 246, 186))
+
+
+def finish():
+    return FINISHES[FINISH]
+
+
+# -- the controller -----------------------------------------------------------
+# An Xbox Series-shaped pad on a 240-pixel grid (y grows downwards), its
+# proportions those of the real controller. The triggers rise up to ABOVE
+# pixels above the grid; tables below use the grid's own coordinates.
+ABOVE = 9
+PAD_WIDTH, PAD_HEIGHT = 241, 161 + ABOVE
+# The shell's left half, from the top centre round to the bottom centre.
+SHELL_HALF = ((120, 6), (100, 6), (86, 7), (72, 8), (60, 10), (50, 13), (42, 17), (36, 22), (31, 28),
+              (26, 36), (21, 46), (17, 56), (13, 67), (9, 80), (6, 93), (3, 106), (1, 118), (0, 129),
+              (1, 140), (4, 148), (9, 155), (16, 159), (23, 160), (30, 158), (36, 153), (43, 146),
+              (51, 138), (59, 131), (67, 125), (77, 121), (90, 120), (105, 120), (120, 120))
+# The left bumper wraps the shell's top corner; the trigger rises behind it.
+BUMPER = (((35, 20), (38, 14), (44, 9), (52, 5), (62, 2), (75, 1), (84, 3), (89, 7)),
+          ((89, 10), (80, 10), (68, 11), (56, 13), (46, 17), (40, 21), (36, 23)))
+TRIGGER = ((46, 12), (48, 4), (54, -2), (63, -6), (74, -6), (81, -3), (85, 2), (86, 8), (66, 10))
+STICK_WELL, STICK_CAP, FACE_RADIUS, DPAD_DISH = 17, 11, 8, 18
+FACE = {'y': (180, 29), 'x': (162, 47), 'b': (198, 47), 'a': (180, 65)}
+LAYOUTS = {
+    'xbox': {'leftstick': (60, 47), 'dpad': (89, 83), 'rightstick': (151, 83), **FACE,
+             'back': (104, 48), 'start': (136, 48), 'misc1': (120, 62), 'guide': (120, 23)},
+    'playstation': {'dpad': (60, 50), 'leftstick': (89, 83), 'rightstick': (151, 83), **FACE,
+                    'back': (94, 26), 'start': (146, 26), 'touchpad': (120, 30),
+                    'guide': (120, 64), 'misc1': (120, 78)},
+}
+# Callout rows, 18 pixels apart, shared by both columns of labels.
+ROWS = (-25, -7, 11, 29, 47, 65, 83, 101, 119, 137)
+# button: (side, row, the points its line passes on the way to the button);
+# 'move' is the left stick's movement, 'leftstick' its click.
+# Lines run level from the labels, then bend at most once, so they never
+# cross one another or pass over another button.
+SHARED_ROUTES = {
+    'lefttrigger': ('left', -7, ((44, -7), (52, 2))), 'righttrigger': ('right', -7, ((196, -7), (188, 2))),
+    'leftshoulder': ('left', 11, ((45, 11),)), 'rightshoulder': ('right', 11, ((195, 11),)),
+    'y': ('right', 29, ((188, 29),)), 'b': ('right', 47, ((206, 47),)),
+    'x': ('right', 65, ((216, 65), (170, 50))), 'a': ('right', 83, ((198, 83), (186, 71))),
+    'rightstick': ('right', 101, ((169, 101), (163, 95))),
+}
+ROUTES = {
+    'xbox': {**SHARED_ROUTES,
+             'back': ('left', -25, ((104, -25), (104, 43))),
+             'start': ('right', -25, ((136, -25), (136, 43))),
+             'move': ('left', 47, ((42, 47),)), 'leftstick': ('left', 65, ((41, 65), (47, 59))),
+             'dpad': ('left', 83, ((70, 83),)),
+             'misc1': ('left', 137, ((120, 137), (120, 66)))},
+    'playstation': {**SHARED_ROUTES,
+                    'touchpad': ('left', -25, ((110, -25), (110, 17))),
+                    'start': ('right', -25, ((146, -25), (146, 20))),
+                    'back': ('left', 29, ((90, 29),)), 'dpad': ('left', 47, ((41, 47),)),
+                    'move': ('left', 83, ((71, 83),)), 'leftstick': ('left', 101, ((71, 101), (77, 95))),
+                    'misc1': ('left', 137, ((120, 137), (120, 82)))},
+}
+
+
+def layout_name(style):
+    return 'playstation' if style == 'playstation' else 'xbox'
+
+
+def on_grid(path):
+    return [(x, y + ABOVE) for x, y in path]
+
+
+def polygon(path, mirrored=False):
+    if mirrored:
+        path = [(240 - x, y) for x, y in path]
+    return mask_from(lambda draw: draw.polygon(on_grid(path), fill=255), (PAD_WIDTH, PAD_HEIGHT))
+
+
+def body_mask():
+    half = spline(SHELL_HALF)
+    return polygon(half + [(240 - x, y) for x, y in reversed(half)])
+
+
+def shoulder_masks(body):
+    outer, inner = BUMPER
+    bumper = spline(outer) + spline(inner)
+    bumpers = polygon(bumper) | polygon(bumper, mirrored=True)
+    triggers = polygon(spline(TRIGGER)) | polygon(spline(TRIGGER), mirrored=True)
+    return triggers & ~bumpers & ~body, bumpers
+
+
+# Face buttons: dome colour (None = the finish's dark plastic) and symbol colour.
+GEMS = {'a': (52, 170, 88), 'b': (206, 41, 66), 'x': (48, 108, 196), 'y': (240, 194, 60)}
 FACE_STYLES = {
-    'xbox': {'a': ((96, 178, 74), (20, 34, 16)), 'b': ((210, 78, 70), (44, 14, 12)),
-             'x': ((74, 132, 214), (12, 24, 48)), 'y': ((226, 186, 62), (52, 38, 8))},
+    'xbox': {name: (color, tone(color, .22)) for name, color in GEMS.items()},
     'playstation': {'a': (None, (132, 166, 232)), 'b': (None, (232, 116, 116)),
                     'x': (None, (220, 146, 210)), 'y': (None, (98, 204, 176))},
-    'nintendo': {name: (None, (214, 214, 220)) for name in 'abxy'},
+    'nintendo': {name: (None, (231, 206, 173)) for name in 'abxy'},
 }
 NINTENDO_LETTERS = {'a': 'B', 'b': 'A', 'x': 'Y', 'y': 'X'}
 
@@ -273,7 +333,7 @@ def face_button(image, centre, button, style, radius=FACE_RADIUS):
     from pop2.controls_page import mini_text  # 3x5 letters shared with the keycaps
 
     dome, ink = FACE_STYLES.get(style, FACE_STYLES['xbox'])[button]
-    stamp(image, circle_mask(radius), centre, color_ramp(dome) if dome else DARK, rim=4, dome=.5)
+    stamp(image, circle_mask(radius), centre, color_ramp(dome) if dome else finish().well, rim=4, dome=.5)
     draw = ImageDraw.Draw(image)
     cx, cy = centre
     if style == 'playstation':
@@ -291,9 +351,10 @@ def face_button(image, centre, button, style, radius=FACE_RADIUS):
     mini_text(draw, cx + 1, cy - 2, letter, ink, 'center')
 
 
-def small_button(image, centre, icon, size=(13, 10)):
-    stamp(image, rounded(*size, radius=min(size) // 2), centre, DARK, rim=2, bias=.1)
-    small_icon(ImageDraw.Draw(image), centre[0], centre[1], icon, DARK[6])
+def small_button(image, centre, icon, size=(11, 9)):
+    well = finish().well
+    stamp(image, rounded(*size, radius=min(size) // 2), centre, well, rim=2, bias=.1)
+    small_icon(ImageDraw.Draw(image), centre[0], centre[1], icon, well[6])
 
 
 def small_icon(draw, x, y, icon, fill):
@@ -315,29 +376,32 @@ def small_icon(draw, x, y, icon, fill):
         draw.point((x, y), fill=fill)
 
 
-def arrow(draw, tip, direction, fill):
-    x, y = tip
-    points = {'^': ((x, y - 2), (x - 2, y), (x + 2, y)), 'v': ((x, y + 2), (x - 2, y), (x + 2, y)),
-              '<': ((x - 2, y), (x, y - 2), (x, y + 2)), '>': ((x + 2, y), (x, y - 2), (x, y + 2))}
-    draw.polygon(points[direction], fill=fill)
+def medallion(image, centre):
+    """The guide button as a gold medallion with an eight-pointed star."""
+    cx, cy = centre
+    stamp(image, circle_mask(9), centre, GOLD, rim=3, dome=.15)
+    star = []
+    for corner in range(16):
+        angle = -math.pi / 2 + corner * math.pi / 8
+        reach = 5.5 if corner % 2 == 0 else 2.8
+        star.append((cx + reach * math.cos(angle), cy + 1 + reach * math.sin(angle)))
+    ImageDraw.Draw(image).polygon(star, fill=GOLD[1])
 
 
 def stick(image, centre):
     cx, cy = centre
-    stamp(image, circle_mask(STICK_WELL), (cx, cy), DARK, rim=4, concave=True)
-    stamp(image, circle_mask(STICK_CAP), (cx, cy + 1), DARK, rim=6, dome=0.4)
-    stamp(image, circle_mask(7), (cx, cy + 1), DARK, rim=3, concave=True, bias=.12)
+    look = finish()
+    stamp(image, circle_mask(STICK_WELL), (cx, cy), look.well, rim=4, concave=True)
+    stamp(image, circle_mask(STICK_CAP), (cx, cy + 1), look.cap, rim=6, dome=0.4)
+    stamp(image, circle_mask(7), (cx, cy + 1), look.cap, rim=3, concave=True, bias=.12)
 
 
 def dpad(image, centre):
-    cx, cy = centre
-    stamp(image, circle_mask(DPAD_DISH), (cx, cy), DARK, rim=4, concave=True)
-    cross = mask_from(lambda draw: (draw.rectangle((9, 0, 17, 26), fill=255),
-                                    draw.rectangle((0, 9, 26, 17), fill=255)), (27, 27))
-    stamp(image, cross, (cx, cy), DARK, rim=3, bias=.15)
-    draw = ImageDraw.Draw(image)
-    for direction, (dx, dy) in (('^', (0, -9)), ('v', (0, 9)), ('<', (-9, 0)), ('>', (9, 0))):
-        arrow(draw, (cx + dx, cy + dy), direction, DARK[5])
+    look = finish()
+    stamp(image, circle_mask(DPAD_DISH), centre, look.well, rim=4, concave=True)
+    cross = mask_from(lambda draw: (draw.rounded_rectangle((10, 0, 18, 28), 2, fill=255),
+                                    draw.rounded_rectangle((0, 10, 28, 18), 2, fill=255)), (29, 29))
+    stamp(image, cross, centre, look.cap, rim=3, bias=.15)
 
 
 @dataclass(frozen=True)
@@ -354,33 +418,34 @@ def shifted(point):
 @lru_cache(maxsize=None)
 def pad_art(style='xbox'):
     layout = layout_name(style)
+    look = finish()
     points = {name: shifted(point) for name, point in LAYOUTS[layout].items()}
     image = Image.new('RGBA', (PAD_WIDTH, PAD_HEIGHT), (0, 0, 0, 0))
     body = body_mask()
     triggers, bumpers = shoulder_masks(body)
-    paint(image, lit_levels(triggers, rim=4, smooth=1.6, bias=.08), DARK)
-    paint(image, lit_levels(bumpers, rim=3, smooth=1.0, bias=.04), SHOULDER)
-    paint(image, lit_levels(body, rim=10, dome=0.2, span=36, slope=0.1,
-                            thresholds=(0.15, 0.38, 0.55, 0.7, 0.9), smooth=3.6), SHELL)
+    paint(image, lit_levels(triggers, rim=4, smooth=1.6, bias=.08), look.trigger)
+    paint(image, lit_levels(body, rim=8, dome=0.1, span=30, slope=0.04,
+                            thresholds=(0.05, 0.27, 0.5, 0.75, 0.92), smooth=3.0), look.shell)
+    paint(image, lit_levels(bumpers, rim=3, smooth=1.0, bias=.06), look.shoulder)
+    if look.trim:
+        inlay(image, triggers | bumpers | body, look.trim)
     stick(image, points['leftstick'])
     stick(image, points['rightstick'])
     dpad(image, points['dpad'])
     for name in ('y', 'x', 'b', 'a'):
         face_button(image, points[name], name, style)
     if layout == 'playstation':
-        tx, ty = points['touchpad']
-        stamp(image, rounded(41, 25, 4), (tx, ty), SHOULDER, rim=3, bias=-.05)
-        stamp(image, circle_mask(5), points['guide'], DARK, rim=3, dome=.3)
+        stamp(image, rounded(37, 25, 4), points['touchpad'], look.shoulder, rim=3, bias=-.05)
+        stamp(image, circle_mask(5), points['guide'], look.well, rim=3, dome=.3)
         small_button(image, points['misc1'], 'dot', (9, 5))
         small_button(image, points['back'], 'share', (7, 11))
         small_button(image, points['start'], 'menu', (7, 11))
     else:
-        stamp(image, circle_mask(9), points['guide'], SHOULDER, rim=4, dome=.4)
-        stamp(image, circle_mask(5), points['guide'], SHOULDER, rim=2, concave=True, bias=.1)
+        medallion(image, points['guide'])
         nintendo = style == 'nintendo'
         small_button(image, points['back'], 'minus' if nintendo else 'view')
         small_button(image, points['start'], 'plus' if nintendo else 'menu')
-        small_button(image, points['misc1'], 'dot' if nintendo else 'share', (10, 7))
+        small_button(image, points['misc1'], 'dot' if nintendo else 'share', (9, 7))
     routes = {button: (side, row + ABOVE, tuple(shifted(point) for point in path))
               for button, (side, row, path) in ROUTES[layout].items()}
     return PadArt(image, points, routes)
@@ -395,20 +460,21 @@ def button_icon(token, style):
     from pop2.controls_page import mini_text
     from pop2.input_bindings import pad_name
 
+    look = finish()
     image = Image.new('RGBA', (17, 13), (0, 0, 0, 0))
     centre = (8, 6)
     if token in ('a', 'b', 'x', 'y'):
         face_button(image, centre, token, style, radius=6)
     elif token in ('back', 'start'):
         icons = {'playstation': ('share', 'menu'), 'nintendo': ('minus', 'plus')}.get(style, ('view', 'menu'))
-        small_button(image, centre, icons[token == 'start'])
+        small_button(image, centre, icons[token == 'start'], (13, 10))
     elif token in ('leftshoulder', 'rightshoulder', 'lefttrigger', 'righttrigger'):
         trigger = token.endswith('trigger')
-        stamp(image, rounded(15, 13 if trigger else 9, 4), centre, SHOULDER, rim=3)
-        mini_text(ImageDraw.Draw(image), 9, 4, pad_name(token, style), (18, 18, 20), 'center')
+        stamp(image, rounded(15, 13 if trigger else 9, 4), centre, look.shoulder, rim=3)
+        mini_text(ImageDraw.Draw(image), 9, 4, pad_name(token, style), look.shoulder[0], 'center')
     elif token in ('leftstick', 'rightstick'):
-        stamp(image, circle_mask(6), centre, DARK, rim=3, dome=.4)
-        mini_text(ImageDraw.Draw(image), 9, 4, SHORT_NAMES[token], DARK[6], 'center')
+        stamp(image, circle_mask(6), centre, look.cap, rim=3, dome=.4)
+        mini_text(ImageDraw.Draw(image), 9, 4, SHORT_NAMES[token], look.cap[6], 'center')
     else:
         return None
     return image
@@ -418,7 +484,7 @@ def button_icon(token, style):
 @lru_cache(maxsize=None)
 def keycap(width, height, color=None):
     """One key seen from above and a little in front: cap, sides and skirt."""
-    ramp = color_ramp(color) if color else DARK
+    ramp = color_ramp(color) if color else finish().key
     image = Image.new('RGBA', (width, height), (*ramp[0], 255))
     draw = ImageDraw.Draw(image)
     right, bottom = width - 1, height - 1
@@ -435,13 +501,16 @@ def keycap(width, height, color=None):
 
 
 def legend_ink(color):
-    return tone(color, .22) if color else DARK[6]
+    return tone(color, .22) if color else finish().legend
 
 
 @lru_cache(maxsize=None)
 def keyboard_case(width, height):
+    look = finish()
     mask = rounded(width, height, 7)
     image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     paint(image, lit_levels(mask, rim=5, slope=0.08, thresholds=(0.15, 0.38, 0.55, 0.7, 0.9),
-                            smooth=2.0), SHELL)
+                            smooth=2.0), look.case)
+    if look.trim:
+        inlay(image, mask, look.trim)
     return image

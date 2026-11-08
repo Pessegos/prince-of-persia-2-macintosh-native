@@ -8,8 +8,8 @@ window's live Bindings, so a change works at once; the window keeps it.
 from PIL import Image, ImageDraw
 
 from pop2.bitmap_labels import label_text
-from pop2.controls_art import (PAD_HEIGHT, PAD_WIDTH, button_icon, keyboard_case, keycap, legend_ink,
-                               pad_art)
+from pop2.controls_art import (PAD_HEIGHT, PAD_WIDTH, button_icon, finish, keyboard_case, keycap,
+                               legend_ink, pad_art)
 from pop2.game_ui import DevelopmentMenu, centered_panel
 from pop2.input_bindings import ACTION_BY_NAME, LOCKED_KEYS, PAD_LOCKED, key_name, key_token, pad_name
 
@@ -150,7 +150,7 @@ def draw_keyboard(image, origin, unit, token_colors):
 # -- controller drawing -------------------------------------------------
 SHORT_LABELS = {'left': 'Move', 'right': 'Move', 'up': 'Jump', 'down': 'Crouch', 'grab': 'Grab',
                 'sword': 'Sword', 'time': 'Time left', 'pause': 'Pause', 'menu': 'Menu'}
-LINE_ON_DARK, LINE_ON_LIGHT = (132, 130, 128), (64, 62, 66)
+LINE = (132, 130, 128)  # over the panel; over a light shell the finish's ink
 
 
 def line_pixels(points):
@@ -167,14 +167,15 @@ def line_pixels(points):
 
 
 def draw_callout(image, points, art, origin):
-    """A one-pixel leader line, dark where it crosses the light shell."""
+    """A one-pixel leader line, dark where it crosses a light shell."""
     pad = art.image
+    ink = finish().ink
     for x, y in line_pixels(points):
         px, py = x - origin[0], y - origin[1]
         over = (0 <= px < pad.width and 0 <= py < pad.height) and pad.getpixel((px, py))
         light = over and over[3] and sum(over[:3]) > 330
         if 0 <= x < image.width and 0 <= y < image.height:
-            image.putpixel((x, y), (*(LINE_ON_LIGHT if light else LINE_ON_DARK), 255))
+            image.putpixel((x, y), (*(ink if light else LINE), 255))
 
 
 class ControlsPage:
@@ -188,7 +189,7 @@ class ControlsPage:
     KEYBOARD_ORIGIN = (43, 70)
     KEYBOARD_UNIT = 23
     LEGEND_X = (103, 291)
-    PAD_ORIGIN = (256 - PAD_WIDTH // 2, 68)
+    PAD_ORIGIN = (256 - PAD_WIDTH // 2, 86)
 
     def __init__(self, keyboard, controller, pads=(), controller_enabled=True,
                  controller_available=True, return_to_menu=True):
