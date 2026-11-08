@@ -21,13 +21,16 @@ reduced to a few hard shades, in colours taken from the game's palace. The
 controller has the proportions and layout of an Xbox Series controller: an
 ivory shell with mauve shadows and dark brown outlines, frieze-blue sticks
 with a rolled rim round a shallow dish, a crimson D-pad lit with the palace
-tapestries' orange, gem face buttons with bold letters, ivory View, Menu and
-Share buttons and a gold guide coin with the Xbox mark cut through it. The
-PlayStation and Nintendo styles reuse that body with their own buttons for
-now. The keyboard is a full 1990s office keyboard (keypad, lock lights, the
-Windows 98 flag on the Windows keys) in a thick-bordered case, keys a pixel
-apart, light letter keys and darker mauve modifiers, legends at the top
-left of each key. Jump, Crouch, Sword and
+tapestries' orange, gem face buttons with ivory letters inlaid in the
+stone, ivory View, Menu and Share buttons and a gold guide coin (drawn
+pixel by pixel after the user's sketch) quartered by the Xbox X. Sticks
+and D-pad sit exactly centred in their dishes. The PlayStation and
+Nintendo styles reuse that body with their own buttons for now. The
+keyboard is a full 1990s office keyboard (keypad, lock lights, a small
+tilted Windows flag printed on the Windows keys, arrows for Home, End,
+Page Up and Page Down) in a thick-bordered case, keys a pixel apart,
+light letter keys and darker mauve modifiers, legends at the top left of
+each key. Jump, Crouch, Sword and
 Time left take the colours of their default buttons (A, B, X, Y). Nothing
 is traced from another game. The callouts sit on one 18-pixel grid on both
 sides; each line leaves its label level and bends at most once. Tests

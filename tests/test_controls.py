@@ -583,24 +583,42 @@ class PadArtTests(unittest.TestCase):
             expected = np.sqrt(((outside - (y, x)) ** 2).sum(axis=1)).min()
             self.assertAlmostEqual(float(fast[y, x]), float(expected), places=4)
 
-    def test_guide_mark_splits_the_coin_into_four_faces(self):
-        radius = controls_art.GUIDE_RADIUS
-        faces = controls_art.circle_mask(radius) & ~controls_art.guide_mark(radius)
-        faces &= ~controls_art.edge(controls_art.circle_mask(radius))
-        self.assertTrue((faces == faces[:, ::-1]).all())  # mirrored left to right
-        seen, groups = np.zeros_like(faces), 0
-        for start in zip(*np.nonzero(faces)):
-            if seen[start]:
-                continue
-            groups += 1
-            stack = [start]
-            while stack:
-                y, x = stack.pop()
-                if not (0 <= y < faces.shape[0] and 0 <= x < faces.shape[1]) or seen[y, x] or not faces[y, x]:
-                    continue
-                seen[y, x] = True
-                stack += [(y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)]
-        self.assertEqual(groups, 4)
+    def test_guide_coin_is_a_whole_disc_with_its_outline_round_it(self):
+        coin = controls_art.GUIDE_COIN
+        disc = controls_art.circle_mask(controls_art.GUIDE_RADIUS)
+        drawn = np.array([[cell != ' ' for cell in row] for row in coin])
+        self.assertTrue((drawn == disc).all())
+        outline = np.array([[cell == '0' for cell in row] for row in coin])
+        self.assertTrue(outline[controls_art.edge(disc)].all())
+        self.assertTrue(all(cell == ' ' or int(cell) < len(controls_art.GOLD) for row in coin for cell in row))
+
+    def test_shading_never_bites_into_a_shape(self):
+        for mask, shading in ((controls_art.rounded(15, 11, 5), dict(rim=2, bias=.1)),
+                              (controls_art.circle_mask(6, slack=1.0), dict(rim=2, dome=.3)),
+                              (controls_art.dpad_cross(), dict(rim=3, bias=.15))):
+            with self.subTest(shape=mask.shape):
+                self.assertTrue(((controls_art.lit_levels(mask, **shading) > 0) == mask).all())
+
+    def test_sticks_and_dpad_sit_centred_in_their_dishes(self):
+        for draw, size, ramp in ((controls_art.stick, controls_art.STICK_WELL, controls_art.FRIEZE),
+                                 (controls_art.dpad, controls_art.DPAD_DISH, controls_art.TAPESTRY)):
+            image = Image.new('RGBA', (2 * size + 1, 2 * size + 1), (0, 0, 0, 0))
+            draw(image, (size, size))
+            pixels = np.array(image)[:, :, :3]
+            # The cap or cross: every pixel in its own colours, mirrored both ways.
+            part = np.zeros(pixels.shape[:2], bool)
+            for color in ramp:
+                part |= (pixels == color).all(axis=2)
+            with self.subTest(part=draw.__name__):
+                self.assertGreater(part.sum(), 300)
+                self.assertTrue((part == part[::-1]).all() and (part == part[:, ::-1]).all())
+
+    def test_shell_top_is_one_unbroken_line(self):
+        body = controls_art.body_mask()
+        top = np.nonzero(body.any(axis=1))[0][0]
+        columns = np.nonzero(body[top])[0]
+        self.assertEqual(len(columns), columns[-1] - columns[0] + 1)
+        self.assertEqual(top, controls_art.SHELL_HALF[0][1] + controls_art.ABOVE)
 
     def test_stick_dish_edge_is_a_whole_circle(self):
         levels = controls_art.stick_cap()

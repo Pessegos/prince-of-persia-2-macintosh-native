@@ -85,13 +85,20 @@ def lit_levels(mask, rim=6.0, dome=0.0, span=24.0, slope=0.0, concave=False, bia
 
 
 def tidy(levels, mask):
-    """Merge lone pixels into a neighbouring band, as an artist would."""
-    padded = np.pad(levels, 1, mode='edge')
+    """Merge lone pixels into a neighbouring band, as an artist would.
+
+    Only neighbours inside the shape count, so an edge pixel is never
+    merged into the outside (which would leave a bite out of the rim).
+    """
+    padded = np.pad(np.where(mask, levels, 0), 1)
     neighbours = np.stack((padded[:-2, 1:-1], padded[2:, 1:-1], padded[1:-1, :-2], padded[1:-1, 2:]))
-    alone = mask & (neighbours != levels).all(axis=0)
+    inside = neighbours > 0
+    count = inside.sum(axis=0)
+    alone = mask & (count > 0) & ~((neighbours == levels) & inside).any(axis=0)
     if alone.any():
-        replacement = np.sort(neighbours, axis=0)[1]
-        levels = np.where(alone, replacement, levels)
+        ordered = np.sort(np.where(inside, neighbours, 255), axis=0)
+        middle = np.take_along_axis(ordered, np.clip((count - 1) // 2, 0, 3)[None], axis=0)[0]
+        levels = np.where(alone, middle, levels)
     return levels
 
 
@@ -178,14 +185,13 @@ FRIEZE = ((16, 36, 52), (24, 62, 88), (24, 79, 104), (33, 98, 140), (52, 124, 16
           (120, 196, 206))  # stick caps
 TAPESTRY = ((52, 4, 34), (100, 0, 72), (132, 0, 90), (156, 16, 66), (206, 41, 82), (222, 74, 33),
             (253, 174, 97))  # the D-pad: crimson lit with the tapestries' orange and peach
-GOLD = ((50, 28, 6), (98, 60, 14), (164, 110, 30), (204, 150, 48), (234, 188, 76), (250, 218, 116),
-        (255, 246, 186))  # the guide button; [1] is the cut mark
+GOLD = ((50, 28, 6), (98, 60, 14), (132, 80, 20), (164, 110, 30), (204, 150, 48), (234, 188, 76),
+        (250, 218, 116), (255, 246, 186))  # the guide button
 BUTTON = ((74, 33, 16), (190, 168, 140), (214, 193, 144), (231, 206, 173), (247, 227, 176),
           (255, 255, 214), (255, 255, 236))  # the Xbox's small ivory buttons
 BED = ((74, 33, 16), (74, 46, 50), (90, 60, 66), (98, 70, 76), (108, 78, 86), (119, 90, 107),
        (138, 112, 122))  # the recess the keys sit in
 INK = (74, 33, 16)            # callout lines over the shell, legends on light keys
-LIGHT_INK = (255, 252, 230)   # letters and icons on dark or coloured buttons
 # Face button gems, in the Xbox colours; the Controls page colours the same
 # actions alike, so a default button and its label always match.
 GEMS = {'a': (52, 170, 88), 'b': (218, 50, 50), 'x': (48, 108, 196), 'y': (240, 194, 60)}
@@ -261,7 +267,9 @@ def polygon(path, mirrored=False):
 
 def body_mask():
     half = spline(SHELL_HALF)
-    return polygon(half + [(240 - x, y) for x, y in reversed(half)])
+    mask = polygon(half + [(240 - x, y) for x, y in reversed(half)])
+    mask[:SHELL_HALF[0][1] + ABOVE] = False  # the curve overshoots the flat top
+    return mask
 
 
 def shoulder_masks(body):
@@ -288,7 +296,7 @@ FACE_LETTERS = {
 }
 # Face buttons: gem colour (None = dark plastic) and symbol colour.
 FACE_STYLES = {
-    'xbox': {name: (color, LIGHT_INK) for name, color in GEMS.items()},
+    'xbox': {name: (color, None) for name, color in GEMS.items()},  # letters inlaid by gem()
     'playstation': {'a': (None, (132, 166, 232)), 'b': (None, (232, 116, 116)),
                     'x': (None, (220, 146, 210)), 'y': (None, (98, 204, 176))},
     'nintendo': {name: (None, SHELL[5]) for name in 'abxy'},
@@ -304,25 +312,56 @@ def sphere_light(radius):
     return xx, yy, xx * LIGHT[0] + yy * LIGHT[1] + up * LIGHT[2]
 
 
-def gem(image, centre, color, radius):
+IVORY = (255, 255, 214)  # the palace's lightest stone, for letters set in gems
+# How much of the gem's colour tints an inlaid letter, by the gem's shade.
+INLAY_TINT = {1: .3, 2: .22, 3: .12, 4: .05}
+GROOVE_DROP = 3  # how many shades darker than the stone the groove is
+
+
+def gem(image, centre, color, radius, letter=None):
     """A round cabochon: dark lower right, lit upper left, a glint and a
-    little light thrown back along the lower right rim."""
+    little light thrown back along the lower right rim.
+
+    A letter is inlaid in ivory that takes the stone's light, tinted
+    towards the gem where the stone is shaded, with a groove of the
+    stone's own darker shade along its lower right.
+    """
     ramp = color_ramp(color)
+    palette = (ramp[0], ramp[1], ramp[2], ramp[4], ramp[5], ramp[6])
     xx, yy, light = sphere_light(radius)
     levels = np.digitize(light, (0.15, 0.45, 0.75, 0.93)) + 1
     thrown = (xx * 0.6 + yy * 0.8 > 0.55) & (xx * xx + yy * yy > 0.55)
     levels = np.where(thrown & (levels <= 2), 3, levels)
-    levels[~circle_mask(radius)] = 0
-    paint(image, levels, (ramp[0], ramp[1], ramp[2], ramp[4], ramp[5], ramp[6]),
-          (centre[0] - radius, centre[1] - radius))
+    inside = circle_mask(radius)
+    levels[~inside] = 0
+    left, top = centre[0] - radius, centre[1] - radius
+    paint(image, levels, palette, (left, top))
+    if not letter:
+        return
+    stroke = np.zeros_like(inside)
+    x0, y0 = radius - len(letter[0]) // 2, radius - len(letter) // 2
+    for row, line in enumerate(letter):
+        for column, cell in enumerate(line):
+            stroke[y0 + row, x0 + column] = cell == '#'
+    groove = np.zeros_like(stroke)
+    groove[1:, 1:] = stroke[:-1, :-1]
+    groove &= ~stroke & inside & ~edge(inside)
+    pixels = image.load()
+    for y, x in zip(*np.nonzero(groove)):
+        pixels[left + int(x), top + int(y)] = (*palette[max(1, levels[y, x] - GROOVE_DROP)], 255)
+    for y, x in zip(*np.nonzero(stroke)):
+        mix = INLAY_TINT.get(int(levels[y, x]), 0)
+        pixels[left + int(x), top + int(y)] = (*(round(i * (1 - mix) + c * mix) for i, c in zip(IVORY, color)),
+                                               255)
 
 
 def face_button(image, centre, button, style, radius=FACE_RADIUS):
     color, ink = FACE_STYLES.get(style, FACE_STYLES['xbox'])[button]
+    letter = FACE_LETTERS[NINTENDO_LETTERS[button] if style == 'nintendo' else button.upper()]
     if color:
-        gem(image, centre, color, radius)
-    else:
-        stamp(image, circle_mask(radius), centre, WELL, rim=4, dome=.5)
+        gem(image, centre, color, radius, letter)
+        return
+    stamp(image, circle_mask(radius), centre, WELL, rim=4, dome=.5)
     draw = ImageDraw.Draw(image)
     cx, cy = centre
     if style == 'playstation':
@@ -336,74 +375,45 @@ def face_button(image, centre, button, style, radius=FACE_RADIUS):
         else:
             draw.line(((cx, cy - 3), (cx - 3, cy + 2), (cx + 3, cy + 2), (cx, cy - 3)), fill=ink)
         return
-    letter = FACE_LETTERS[NINTENDO_LETTERS[button] if style == 'nintendo' else button.upper()]
-    x, y = cx - len(letter[0]) // 2, cy - len(letter) // 2
-    if color:
-        glyph(draw, x + 1, y + 1, letter, tone(color, .3))  # cut into the stone
-    glyph(draw, x, y, letter, ink)
+    glyph(draw, cx - len(letter[0]) // 2, cy - len(letter) // 2, letter, ink)
 
 
-def bezier(start, control, end, steps=16):
-    (x0, y0), (x1, y1), (x2, y2) = start, control, end
-    return [((1 - t) ** 2 * x0 + 2 * (1 - t) * t * x1 + t * t * x2,
-             (1 - t) ** 2 * y0 + 2 * (1 - t) * t * y1 + t * t * y2) for t in np.linspace(0, 1, steps)]
+# The guide button, pixel by pixel after the user's own sketch: a gold
+# coin quartered by the Xbox X, its arms lit ridges with a dark groove on
+# their outer side, a bright crossing and a small cap at the top. Digits
+# index GOLD (0 is the outline).
+GUIDE_COIN = (
+    '        00000        ',
+    '     00067775000     ',
+    '    0036766665310    ',
+    '   011116666411110   ',
+    '  06666116641166650  ',
+    ' 0575577111117644430 ',
+    ' 0575557711177444430 ',
+    ' 0655555777774444330 ',
+    '065555517777714443320',
+    '045555117747711433320',
+    '045441177444771133220',
+    '044411774444477113220',
+    '044116744444337611220',
+    ' 0411644444333361120 ',
+    ' 0316644443333366120 ',
+    ' 0066443333333226600 ',
+    '  06333333332222260  ',
+    '   022333332222220   ',
+    '    0222333222220    ',
+    '     00022222000     ',
+    '        00000        ',
+)
 
 
-def on_rim(angle, reach=1.0):
-    return reach * np.cos(np.radians(angle)), reach * np.sin(np.radians(angle))
-
-
-def rim_arc(start, end, reach=1.3):
-    return [on_rim(angle, reach) for angle in np.linspace(start, end, 8)]
-
-
-# The Xbox mark, in radii from the centre (y grows downwards): an X whose
-# arms flare out to the rim, between four faces that each come to a point
-# at the crossing: a small notch at the top, a tall pointed arch below and a
-# crescent each side. Each edge is a curve from the point to the rim:
-# (point, control, rim angle in degrees).
-GUIDE_TOP = ((0, -0.34), (-0.2, -0.6), -112)
-GUIDE_BOTTOM = ((0, 0.02), (-0.44, 0.3), 116)
-GUIDE_SIDE = ((-0.3, -0.08), ((-0.5, -0.42), 213), ((-0.52, 0.34), 151))
-
-
-def guide_faces():
-    """The four faces as polygons, closed outside the rim."""
-    faces = []
-    for point, control, angle in (GUIDE_TOP, GUIDE_BOTTOM):
-        edge = bezier(point, control, on_rim(angle))
-        mirrored = 180 - angle if 180 - angle <= 180 else -180 - angle
-        faces.append([*edge, *rim_arc(angle, mirrored), *((-x, y) for x, y in reversed(edge))])
-    point, (upper, upper_angle), (lower, lower_angle) = GUIDE_SIDE
-    side = [*reversed(bezier(point, upper, on_rim(upper_angle))), *bezier(point, lower, on_rim(lower_angle)),
-            *rim_arc(lower_angle, upper_angle)]
-    return faces + [side, [(-x, y) for x, y in side]]
-
-
-@lru_cache(maxsize=None)
-def guide_mark(radius, scale=16):
-    """True where the X is cut into a coin of this radius."""
-    size = 2 * radius + 1
-    unit = (radius + 0.5) * scale
-    canvas = Image.new('L', (size * scale, size * scale), 0)
-    draw = ImageDraw.Draw(canvas)
-    for face in guide_faces():
-        draw.polygon([(unit + x * unit, unit + y * unit) for x, y in face], fill=255)
-    faces = np.array(canvas.resize((size, size), Image.Resampling.BOX)) > 128
-    faces &= ~edge(circle_mask(radius))
-    # A lone pixel of gold between an arm and the rim joins the arm.
-    padded = np.pad(faces, 1)
-    lone = faces & ~(padded[:-2, 1:-1] | padded[2:, 1:-1] | padded[1:-1, :-2] | padded[1:-1, 2:])
-    return circle_mask(radius) & ~edge(circle_mask(radius)) & ~(faces & ~lone)
-
-
-def guide_button(image, centre, radius=GUIDE_RADIUS):
-    """The guide button: a gold coin with the Xbox mark cut through it."""
-    _xx, _yy, light = sphere_light(radius)
-    levels = np.digitize(light, (0.2, 0.5, 0.78, 0.93)) + 2
-    levels[guide_mark(radius)] = 1
-    levels[~circle_mask(radius)] = 0
-    paint(image, levels, GOLD, (centre[0] - radius, centre[1] - radius))
+def guide_button(image, centre):
+    radius = len(GUIDE_COIN) // 2
+    pixels = image.load()
+    for y, row in enumerate(GUIDE_COIN):
+        for x, cell in enumerate(row):
+            if cell != ' ':
+                pixels[centre[0] - radius + x, centre[1] - radius + y] = (*GOLD[int(cell)], 255)
 
 
 def small_button(image, centre, icon, size=(11, 11), ramp=WELL, ink=SHELL[5]):
@@ -423,10 +433,10 @@ def ivory_button(image, centre, icon, size=(13, 13)):
 
 SMALL_ICONS = {
     # two windows, one behind the other
-    'view': ('####...', '#......', '#.#####', '#.#...#', '..#...#', '..#####'),
-    'menu': ('######', '......', '######', '......', '######'),
+    'view': ('####...', '#.#####', '#.#...#', '..#...#', '..#####'),
+    'menu': ('#######', '.......', '#######', '.......', '#######'),
     # an arrow rising out of a tray
-    'share': ('...#...', '..###..', '...#...', '#..#..#', '#.....#', '#######'),
+    'share': ('...#...', '..###..', '.#####.', '...#...', '#..#..#', '#.....#', '#######'),
     'home': ('..#..', '.###.', '#####', '.#.#.', '.###.'),
     'minus': ('.....', '.....', '#####', '.....', '.....'),
     'plus': ('..#..', '..#..', '#####', '..#..', '..#..'),
@@ -466,14 +476,23 @@ def stick_cap(cap=STICK_CAP, dish=STICK_DISH):
 def stick(image, centre):
     cx, cy = centre
     stamp(image, circle_mask(STICK_WELL), centre, WELL, rim=4, concave=True)
-    paint(image, stick_cap(), FRIEZE, (cx - STICK_CAP, cy + 1 - STICK_CAP))
+    paint(image, stick_cap(), FRIEZE, (cx - STICK_CAP, cy - STICK_CAP))
+
+
+@lru_cache(maxsize=None)
+def dpad_cross(span=31, arm=13):
+    """The cross: arms of odd width so it sits exactly on its centre."""
+    low = (span - arm) // 2
+    cross = mask_from(lambda draw: (draw.rounded_rectangle((low, 0, low + arm - 1, span - 1), 3, fill=255),
+                                    draw.rounded_rectangle((0, low, span - 1, low + arm - 1), 3, fill=255)),
+                      (span, span))
+    cross = cross & cross[::-1] & cross[:, ::-1]
+    return cross & cross.T
 
 
 def dpad(image, centre):
     stamp(image, circle_mask(DPAD_DISH), centre, WELL, rim=4, concave=True)
-    cross = mask_from(lambda draw: (draw.rounded_rectangle((9, 0, 20, 30), 3, fill=255),
-                                    draw.rounded_rectangle((0, 9, 30, 20), 3, fill=255)), (31, 31))
-    stamp(image, cross, centre, TAPESTRY, rim=3, bias=.15)
+    stamp(image, dpad_cross(), centre, TAPESTRY, rim=3, bias=.15)
 
 
 @dataclass(frozen=True)
@@ -629,26 +648,20 @@ def draw_leds(image, rect, lit=('NUM',)):
             draw.point((cx - 1, top + 10), fill=LED_GREEN[2])
 
 
-# The Windows 98 flag: four panes waving in a black frame, a trail of
-# pieces flying off to the left; small enough for the key.
-WINDOWS_FLAG = ('........kkkkkkkk',
-                '....k..krrrkgggk',
-                '..r..k.krrrkgggk',
-                '....k.krrrkgggk.',
-                'r..k..kkkkkkkkk.',
-                '..b..kkbbbkyyyk.',
-                'b...k.kbbbkyyyk.',
-                '..b..kbbbkyyyk..',
-                '....kkkkkkkkkk..')
-FLAG_COLORS = {'k': (20, 12, 14), 'r': (240, 96, 48), 'g': (100, 196, 80), 'b': (60, 136, 210),
-               'y': (250, 200, 30)}
+# The Windows flag of the 1990s, small and tilted as if waving, a trail of
+# pieces flying off to its left; printed in the key's ink like a legend.
+WINDOWS_FLAG = ('......####...',
+                '...#..#..####',
+                '.#....#..#..#',
+                '...#.####...#',
+                '.#...#..####.',
+                '...#.#..#..#.',
+                '....####...#.',
+                '........###..')
 
 
-def windows_flag(image, centre):
+def windows_flag(image, centre, ink):
     draw = ImageDraw.Draw(image)
-    x0 = centre[0] - (max(len(row) for row in WINDOWS_FLAG) - 1) // 2
+    x0 = centre[0] - (len(WINDOWS_FLAG[0]) - 1) // 2
     y0 = centre[1] - (len(WINDOWS_FLAG) - 1) // 2
-    for row, line in enumerate(WINDOWS_FLAG):
-        for column, cell in enumerate(line):
-            if cell in FLAG_COLORS:
-                draw.point((x0 + column, y0 + row), fill=FLAG_COLORS[cell])
+    glyph(draw, x0, y0, WINDOWS_FLAG, ink)

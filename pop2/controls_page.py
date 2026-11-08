@@ -8,8 +8,8 @@ window's live Bindings, so a change works at once; the window keeps it.
 from PIL import Image, ImageDraw
 
 from pop2.bitmap_labels import label_text
-from pop2.controls_art import (GEMS, INK, PAD_HEIGHT, PAD_WIDTH, button_icon, draw_leds, keyboard_case,
-                               keycap, legend_ink, pad_art, windows_flag)
+from pop2.controls_art import (GEMS, INK, PAD_HEIGHT, PAD_WIDTH, button_icon, draw_leds, glyph,
+                               keyboard_case, keycap, legend_ink, pad_art, windows_flag)
 from pop2.game_ui import DevelopmentMenu, centered_panel
 from pop2.input_bindings import ACTION_BY_NAME, LOCKED_KEYS, PAD_LOCKED, key_name, key_token, pad_name
 
@@ -55,13 +55,13 @@ def mini_width(text):
 
 def mini_text(draw, x, y, text, fill, align='left'):
     glyphs = [MINI[char] for char in text.upper() if char in MINI]
-    width = sum(len(glyph.split('|')[0]) + 1 for glyph in glyphs) - 1
+    width = sum(len(shape.split('|')[0]) + 1 for shape in glyphs) - 1
     if align == 'center':
         x -= width // 2
     elif align == 'right':
         x -= width
-    for glyph in glyphs:
-        rows = glyph.split('|')
+    for shape in glyphs:
+        rows = shape.split('|')
         for row, line in enumerate(rows):
             for column, cell in enumerate(line):
                 if cell == '#':
@@ -92,8 +92,8 @@ KEYBOARD_ROWS = (
 )
 # '|' starts a second line of legend.
 NAV_ROWS = ((('Print', 'PRT|SCR'), ('Scroll_Lock', 'SCR|LCK'), ('Pause', 'PAU|BRK')),
-            (('Insert', 'INS'), ('Home', 'HOME'), ('Prior', 'PG|UP')),
-            (('Delete', 'DEL'), ('End', 'END'), ('Next', 'PG|DN')), (),
+            (('Insert', 'INS'), ('Home', 'HOME'), ('Prior', 'PGUP')),
+            (('Delete', 'DEL'), ('End', 'END'), ('Next', 'PGDN')), (),
             ((None, ''), ('Up', '^'), (None, '')), (('Left', '<'), ('Down', 'v'), ('Right', '>')))
 # The numeric keypad: (token, label, column, row, width, height) in keys.
 KEYPAD = (('Num_Lock', 'NUM', 0, 1, 1, 1), ('KP_Divide', '/', 1, 1, 1, 1),
@@ -150,6 +150,16 @@ def led_rect(origin, unit):
             top + KEY_HEIGHT - 1)
 
 
+# Pictures instead of long legends on the cursor block: arrows to the top
+# left and bottom right corners, and two arrowheads for a page up or down.
+KEY_ICONS = {
+    'HOME': ('#####', '##...', '#.#..', '#..#.', '....#'),
+    'END': ('#....', '.#..#', '..#.#', '...##', '#####'),
+    'PGUP': ('..#..', '.###.', '#####', '..#..', '.###.', '#####'),
+    'PGDN': ('#####', '.###.', '..#..', '#####', '.###.', '..#..'),
+}
+
+
 def draw_arrow(draw, cx, cy, direction, fill):
     points = {'^': ((cx, cy - 2), (cx - 3, cy + 1), (cx + 3, cy + 1)),
               'v': ((cx, cy + 2), (cx - 3, cy - 1), (cx + 3, cy - 1)),
@@ -168,7 +178,9 @@ def draw_keycap(image, rect, token, label, color=None):
     if label in ('^', 'v', '<', '>'):
         draw_arrow(draw, *centre, label, ink)
     elif label == 'WIN':
-        windows_flag(image, centre)
+        windows_flag(image, centre, ink)
+    elif label in KEY_ICONS:
+        glyph(draw, left + 3, top + 2, KEY_ICONS[label], ink)
     else:
         # Legends sit at the top left, as printed on those keyboards; one
         # too wide for that margin is centred instead.
