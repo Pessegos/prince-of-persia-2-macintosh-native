@@ -9,6 +9,7 @@ from pop2.level_rendering import LevelRenderer
 from pop2.paths import ASSET_DIR
 from pop2.render_opening import load_resource_file
 from tests.right_tip_expectations import approved_rooms
+from tests.floor_join_expectations import PreviousFloorArtworkMixin, without_new_floor_joins
 from tests import test_cavern_retouch as retouch_tests
 
 
@@ -26,7 +27,7 @@ class RightTipFixtureTests(unittest.TestCase):
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(),
                      'Imported game resources required')
-class RightTipBatchArtworkTests(unittest.TestCase):
+class RightTipBatchArtworkTests(PreviousFloorArtworkMixin, unittest.TestCase):
     def test_full_approved_room_frames_and_foreground(self):
         prince = load_resource_file('Prince.rsrc')
         for key, item in approved_rooms().items():
@@ -54,7 +55,7 @@ class RightTipBatchArtworkTests(unittest.TestCase):
                     fields = [expected[n] for n in ('shape', 'x', 'bottom', 'mode')]
                     command = next(c for c in program['rooms'][str(room)] if c[1:5] == fields)
                     source = cavern_command_sprite(command, resources, palette, shapes)
-                    result = retouched_sprite(room, command, source, level_number=level)
+                    result = without_new_floor_joins(room, command, source, level_number=level)
                     self.assertEqual(hashlib.sha256(result.tobytes()).hexdigest(), expected['approved_sha256'])
                     self.assertEqual(result.getchannel('A').tobytes(), source.getchannel('A').tobytes())
                     changed = source.copy()

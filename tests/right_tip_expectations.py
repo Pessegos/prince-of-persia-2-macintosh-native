@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from pop2.cavern_retouch import retouched_sprite
+from tests.floor_join_expectations import without_new_floor_joins
 
 
 @lru_cache(maxsize=1)
@@ -32,7 +32,7 @@ def right_tip_rooms(level):
 
 
 def without_new_right_tips(room, command, source, *, level_number=3):
-    result = retouched_sprite(room, command, source, level_number=level_number)
+    result = without_new_floor_joins(room, command, source, level_number=level_number)
     if len(command) < 8 or command[7] != 4:
         return result
     item = approved_sources().get((level_number, room, *command[1:5]))

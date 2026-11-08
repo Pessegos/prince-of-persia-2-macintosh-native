@@ -402,3 +402,24 @@ artwork; no original golden or mask assertion is discarded.
 | 5 | 19 | 29 | `8f544d03d58a67e01522a846926c1c05a98742d96d7f629b7d0bccc218c06736` |
 | 5 | 22 | 389 | `33350f724b846ffd82ea16f67eec6f374dfece5fe22ad8e78f4b3469413cc7cd` |
 | 5 | 23 | 109 | `7185c7d6facf339702351f69a39117c9a8722e91cca6fe99e941547aebba104a` |
+
+## Additional diagonal floor joins: approved local batch
+
+The user approved the level3 room30 reference and39 additional diagonal-floor
+comparisons on2026-11-08 for local application, without GitHub publication.
+These placement- and source-hash-checked atlas crops preserve prior artwork,
+native alpha, foreground columns and physical masks. Normal floors use the
+reviewed narrow two-sided contour bridge; buttons and cut floor drawings
+remain intact, with the adjustment confined to the wall side.
+
+Earlier artwork goldens retain their original expected hashes by excluding
+only this batch's explicitly reviewed, previously-native pixel coordinates.
+The complete restored sprite must equal its previous RGBA hash. Independent
+unmasked production-frame/source goldens test the full combined artwork;
+button and cut-floor source variants retain their earlier full-image hashes.
+Local review artifacts remain under `rendered/floor-join-selected-39-v1/` and
+the separate `rendered/level3-room30-joins-v1/` reference.
+
+| Level | Room | Added visible pixels | Combined cached RGB SHA256 |
+| --- | --- | --- | --- |
+| 3 | 30 | 67 | `aa0f165cab0af65f2e1e89bd4206678f6b79b282454522101fcd06022a0a2efb` |

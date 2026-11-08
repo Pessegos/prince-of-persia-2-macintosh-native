@@ -50,7 +50,9 @@ class BundledCavernRetouchTests(unittest.TestCase):
             with patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Wrong scope')):
                 for level in (6, 7, 8, 9):
                     self.assertIs(retouched_sprite(room, command, source, level_number=level), source)
-                self.assertIs(retouched_sprite(20, command, source, level_number=4), source)
+                # Room21 now has reviewed floor artwork. Room4 remains outside
+                # the approved level-four scope and must not load the atlas.
+                self.assertIs(retouched_sprite(3, command, source, level_number=4), source)
 
     def test_bundled_variants_have_valid_scope_and_crop_sizes(self):
         assets = retouch_assets()
