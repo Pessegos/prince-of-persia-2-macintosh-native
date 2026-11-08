@@ -23,9 +23,10 @@ future generated opponents and the Prince are untouched. Key repeat, menus,
 cutscenes and Ctrl/Alt chords cannot trigger the command.
 
 God mode also enables `+` and `-` to add or remove one minute from the campaign
-clock after it has started. `Alt+Shift+T` adds one health point: it heals the
-Prince up to the current capacity, then increases the capacity by one when it is
-full, up to 12. These commands work during unpaused gameplay; the minute keys
+clock after it has started, up to 999 minutes. `Alt+Shift+T` adds one health
+point: it heals the Prince up to the current capacity, then increases the
+capacity by one when it is full, up to 12. These commands work during unpaused
+gameplay; the minute keys
 repeat while held. They are ignored before the level-four clock starts. `Alt+T`
 remains the sound toggle.
 

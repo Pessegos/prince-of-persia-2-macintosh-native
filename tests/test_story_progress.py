@@ -116,12 +116,14 @@ class StoryProgressTests(unittest.TestCase):
         self.assertTrue(story.adjust_minutes(-1))
         self.assertEqual((story.minutes, story.frames_remaining), (5, 237))
 
-    def test_cheat_minute_step_can_expire_and_is_bounded_by_native_signed_minutes(self):
+    def test_cheat_minute_step_can_expire_and_is_bounded_at_999_minutes(self):
         story = StoryProgress(minutes=1, tree_stage=0)
         self.assertTrue(story.adjust_minutes(-1))
         self.assertTrue(story.expired)
         self.assertFalse(story.adjust_minutes(-1))
-        story.minutes = MAX_STORY_MINUTES
+        story.minutes = MAX_STORY_MINUTES - 1
+        self.assertTrue(story.adjust_minutes(1))
+        self.assertEqual(story.minutes, MAX_STORY_MINUTES)
         self.assertFalse(story.adjust_minutes(1))
 
 
