@@ -87,7 +87,7 @@ def retouched_door_sprite(level, room, command, source):
 
 def retouched_sprite(room, command, source, *, level_number=3):
     approved = (room in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 21, 23, 24, 25, 26, 27, 29, 30, 31) if level_number == 3
-                else room in (0, 1, 2, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25, 26, 27) if level_number == 4
+                else room in (0, 1, 2, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 25, 26, 27) if level_number == 4
                 else level_number == 5 and room in (0, 1, 3, 5, 6, 8, 10, 12, 13, 14, 15, 16, 17, 18, 21, 22, 24))
     if not approved or len(command) < 8 or command[7] != 4:
         return source
