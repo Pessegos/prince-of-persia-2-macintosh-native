@@ -5,6 +5,8 @@ action's keys lit; the remap view lists two keys per action. It edits the
 window's live Bindings, so a change works at once; the window keeps it.
 """
 
+import sys
+
 from PIL import Image, ImageDraw
 
 from pop2.bitmap_labels import label_text
@@ -189,14 +191,32 @@ def keyboard_bounds(origin, unit):
             max(rect[2] for rect in rects) + right, max(rect[3] for rect in rects) + bottom)
 
 
-def draw_keyboard(image, origin, unit, token_colors):
+# The lock lights and the Windows virtual keys whose toggle they show.
+LOCK_KEYS = (('NUM', 0x90), ('CAPS', 0x14), ('SCRL', 0x91))
+
+
+def lock_lights():
+    """The lock lights the real keyboard shows now, or None where they
+    cannot be read (then the drawing keeps Num Lock alone lit)."""
+    if sys.platform != 'win32':
+        return None
+    try:
+        import ctypes
+
+        state = ctypes.windll.user32.GetKeyState
+        return frozenset(name for name, code in LOCK_KEYS if state(code) & 1)
+    except (AttributeError, OSError):
+        return None
+
+
+def draw_keyboard(image, origin, unit, token_colors, lit=('NUM',)):
     left, top, right, bottom = keyboard_bounds(origin, unit)
     keys = keyboard_keys(origin, unit)
     holes = tuple((x0 - left, y0 - top, x1 - left, y1 - top) for _token, _label, (x0, y0, x1, y1) in keys)
     image.alpha_composite(keyboard_case(right - left + 1, bottom - top + 1, holes), (left, top))
     for token, label, rect in keys:
         draw_keycap(image, rect, token, label, token_colors.get(token))
-    draw_leds(image, led_rect(origin, unit))
+    draw_leds(image, led_rect(origin, unit), lit)
 
 
 # -- controller drawing -------------------------------------------------
@@ -263,6 +283,15 @@ class ControlsPage:
         self.message = ''
         self.message_error = False
         self.input_device = 'keyboard'
+        self.locks = frozenset(('NUM',))
+
+    def refresh_locks(self, read=None):
+        """Follow the real keyboard's lock lights; True if they changed."""
+        locks = (read or lock_lights)()
+        if locks is None or locks == self.locks:
+            return False
+        self.locks = locks
+        return True
 
     # -- model ----------------------------------------------------------
     @property
@@ -541,7 +570,7 @@ class ControlsPage:
 
     def draw_keyboard_overview(self, image, draw, text):
         colors = self.keyboard_colors()
-        draw_keyboard(image, self.KEYBOARD_ORIGIN, self.KEYBOARD_UNIT, colors)
+        draw_keyboard(image, self.KEYBOARD_ORIGIN, self.KEYBOARD_UNIT, colors, self.locks)
         drawn = {token for token, _label, _rect in keyboard_keys(self.KEYBOARD_ORIGIN, self.KEYBOARD_UNIT)}
         for index, (label, actions) in enumerate(LEGEND):
             column, row = index % 2, index // 2

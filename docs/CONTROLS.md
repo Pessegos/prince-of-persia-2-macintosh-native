@@ -34,6 +34,10 @@ apart, light letter keys and darker mauve modifiers, legends at the top left
 of each key. Jump, Crouch, Sword and Time left take the Xbox colours of their
 default buttons (A, B, X, Y). Nothing is traced from another game.
 
+On Windows the drawn Num Lock, Caps Lock and Scroll Lock lights follow the real
+keyboard while the page is open (read every 150 ms, so a change made outside
+the game shows too); elsewhere Num Lock alone is drawn lit.
+
 The controller's labels come in groups, one per control or cluster (the
 shoulders, the face buttons, a stick with its movement and click): each
 bound button gets a row with its small icon and action, on one 18-pixel grid

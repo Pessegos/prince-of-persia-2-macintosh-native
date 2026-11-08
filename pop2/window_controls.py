@@ -944,7 +944,28 @@ class WindowControls(InputRouting):
             controller_available=self.gamepads_available(),
             return_to_menu=menu.return_to_menu)
         menu.controls_page.input_device = getattr(self, 'last_input_device', 'keyboard')
+        menu.controls_page.refresh_locks()
+        self.watch_lock_lights()
         self.render()
+
+    LOCK_POLL_MS = 150
+
+    def watch_lock_lights(self):
+        """While the Controls page is open, its keyboard's lock lights
+        follow the real ones, even when they change outside the game."""
+        after_id = getattr(self, 'lock_poll_after_id', None)
+        if after_id is not None:
+            try:
+                self.root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+        self.lock_poll_after_id = None
+        page = self.controls_page()
+        if page is None:
+            return
+        if page.refresh_locks() and page.device == 'keyboard' and page.view == 'overview':
+            self.render()
+        self.lock_poll_after_id = self.root.after(self.LOCK_POLL_MS, self.watch_lock_lights)
 
     def apply_controls_action(self, action):
         menu = self.game_menu

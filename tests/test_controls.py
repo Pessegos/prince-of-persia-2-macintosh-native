@@ -9,9 +9,9 @@ from unittest.mock import Mock, patch
 import numpy as np
 from PIL import Image
 
-from pop2 import controls_art
+from pop2 import controls_art, controls_page
 from pop2.controls_page import (ACTION_COLORS, BRACKET_X, ControlsPage, draw_keycap, keyboard_bounds,
-                                keyboard_keys, line_pixels)
+                                keyboard_keys, led_rect, line_pixels, lock_lights)
 from pop2.game_menu import GameMenu
 from pop2.gamepad import Hysteresis, PadReader, PadState, pad_style
 from pop2.input_bindings import (Bindings, CONTROLLER_DEFAULTS, KEYBOARD_DEFAULTS, PAD_BINDABLE, key_name,
@@ -477,6 +477,45 @@ class ControlsPageTests(unittest.TestCase):
         self.assertLessEqual(right, ControlsPage.PANEL[2] - 16)
         self.assertGreater(top, max(tab[3] for tab in ControlsPage.TABS) + 8)
         self.assertLess(bottom, ControlsPage.LEGEND_TOP - 8)
+
+    def test_lock_lights_follow_the_real_keyboard(self):
+        page = self.page()
+        self.assertEqual(page.locks, {'NUM'})  # until the real state is read
+        self.assertTrue(page.refresh_locks(lambda: frozenset({'CAPS', 'SCRL'})))
+        self.assertFalse(page.refresh_locks(lambda: frozenset({'CAPS', 'SCRL'})))
+        self.assertFalse(page.refresh_locks(lambda: None))  # unreadable: keep what is shown
+        image = page.draw(Image.new('RGBA', (512, 384), 'black'), FakeFont())
+        left, top, right, _bottom = led_rect(ControlsPage.KEYBOARD_ORIGIN, ControlsPage.KEYBOARD_UNIT)
+        step = (right - left) / len(controls_art.LEDS)
+        for index, name in enumerate(controls_art.LEDS):
+            cx = round(left + step * (index + .5))
+            with self.subTest(light=name):
+                self.assertEqual(image.getpixel((cx + 1, top + 11))[:3],
+                                 controls_art.LED_GREEN[1 if name in ('CAPS', 'SCRL') else 0])
+
+    def test_lock_lights_read_the_toggle_bit_on_windows_only(self):
+        states = {0x90: 0x8000, 0x14: 1, 0x91: 0x8001}  # Num held but off; Caps and Scroll on
+        windll = SimpleNamespace(user32=SimpleNamespace(GetKeyState=lambda code: states.get(code, 0)))
+        with patch.object(controls_page.sys, 'platform', 'win32'), patch('ctypes.windll', windll, create=True):
+            self.assertEqual(lock_lights(), {'CAPS', 'SCRL'})
+        with patch.object(controls_page.sys, 'platform', 'linux'):
+            self.assertIsNone(lock_lights())
+
+    def test_window_redraws_when_a_lock_light_changes(self):
+        host = RoutedHost()
+        host.render = Mock()
+        page = self.page()
+        host.game_menu = SimpleNamespace(page='controls', controls_page=page)
+        with patch('pop2.controls_page.lock_lights', return_value=frozenset({'NUM', 'CAPS'})):
+            host.watch_lock_lights()
+            host.render.assert_called_once()
+            host.watch_lock_lights()  # unchanged: no redraw, still watching
+            host.render.assert_called_once()
+        host.root.after.assert_called_with(host.LOCK_POLL_MS, host.watch_lock_lights)
+        host.game_menu = None
+        host.root.after.reset_mock()
+        host.watch_lock_lights()  # the page has closed: the watch ends
+        host.root.after.assert_not_called()
 
     def test_every_view_and_style_draws(self):
         font = FakeFont()
