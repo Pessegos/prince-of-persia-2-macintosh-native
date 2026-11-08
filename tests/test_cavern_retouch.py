@@ -18,8 +18,8 @@ from pop2.terrain import LevelMap
 class BundledCavernRetouchTests(unittest.TestCase):
     def test_level_four_bundle_is_separate_and_only_targets_approved_rooms(self):
         assets = retouch_assets(4)
-        self.assertEqual(len(assets), 89)
-        self.assertEqual({key[0] for key in assets}, {0, 1, 2, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 25, 26, 27})
+        self.assertEqual(len(assets), 93)
+        self.assertEqual({key[0] for key in assets}, {0, 1, 2, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27})
         key, (record, image) = next(iter(assets.items()))
         self.assertEqual(image.size, (record['source_rect'][2] - record['source_rect'][0],
                                       record['source_rect'][3] - record['source_rect'][1]))
@@ -166,7 +166,7 @@ class CavernRetouchTests(PreviousArtworkMixin, unittest.TestCase):
 
     def test_level_four_other_rooms_keep_their_original_wall_art(self):
         with patch('pop2.caverns.retouched_door_sprite', side_effect=lambda level, room, command, source: source):
-            for room in set(range(32)) - {0, 1, 2, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 25, 26, 27}:
+            for room in set(range(32)) - {0, 1, 2, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27}:
                 with self.subTest(room=room):
                     original = cavern_room(room, level_number=4)
                     edited = cavern_room(room, level_number=4, retouched=True)
