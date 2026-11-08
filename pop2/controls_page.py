@@ -354,7 +354,9 @@ def pad_icon(image, x, y, token, style):
 
 # Labels for the small centre buttons sit higher, so their lines pass
 # above the sticks rather than across them.
-CALLOUT_LIFT = {'back': -36, 'start': -36}
+# Xbox-style View/Menu sit level with the face buttons, so their callouts go
+# above them; the PlayStation's Create/Options already sit higher.
+CALLOUT_LIFT = {'xbox': {'back': -36, 'start': -36}, 'playstation': {}}
 # Callout rows, top to bottom, so lines rarely cross.
 PAD_CALLOUTS = {'left': ('lefttrigger', 'leftshoulder', 'move', 'back', 'leftstick', 'misc1',
                          'paddle1', 'paddle3'),
@@ -686,6 +688,7 @@ class ControlsPage:
         points = draw_pad(image, origin, style)
         ends = {'left': origin[0] - 16, 'right': origin[0] + PAD_SIZE[0] + 16}
         line = (118, 118, 122)
+        lift = CALLOUT_LIFT['playstation' if style == 'playstation' else 'xbox']
         for side, buttons in PAD_CALLOUTS.items():
             entries = []
             for button in buttons:
@@ -696,7 +699,7 @@ class ControlsPage:
                 else:
                     continue
                 wanted = (sum(points[target][1] for target in targets) / len(targets)
-                          + CALLOUT_LIFT.get(button, 0))
+                          + lift.get(button, 0))
                 entries.append((wanted, buttons.index(button), action, targets))
             # Each label as level with its button as the 17-pixel rows allow.
             entries.sort()
