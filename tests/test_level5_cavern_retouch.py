@@ -1,6 +1,8 @@
 """Approved L5 artwork goldens, physical silhouettes and moving-gate coverage."""
 import hashlib
 import unittest
+
+from tests.right_tip_expectations import PreviousArtworkMixin, right_tip_rooms
 from unittest.mock import patch
 
 from PIL import Image
@@ -36,8 +38,8 @@ APPROVED = {
 class BundledLevelFiveArtworkTests(unittest.TestCase):
     def test_approved_scope_and_changed_source_guards(self):
         assets = retouch_assets(5)
-        self.assertEqual(len(assets), 64)
-        self.assertEqual({key[0] for key in assets}, set(APPROVED))
+        self.assertEqual(len(assets), 84)
+        self.assertEqual({key[0] for key in assets}, (set(APPROVED) | right_tip_rooms(5)))
         for key, (record, image) in assets.items():
             room, shape, x, bottom, mode = key
             with self.subTest(key=key):
@@ -49,12 +51,12 @@ class BundledLevelFiveArtworkTests(unittest.TestCase):
                 command = ['back', shape, x, bottom, mode, 0, [], 4]
                 self.assertIs(retouched_sprite(room, command, source, level_number=5), source)
         with patch('pop2.cavern_retouch.retouch_assets', side_effect=AssertionError('Wrong scope')):
-            for room in set(range(32)) - set(APPROVED):
+            for room in set(range(32)) - (set(APPROVED) | right_tip_rooms(5)):
                 self.assertIs(retouched_sprite(room, [], source, level_number=5), source)
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported game resources required')
-class LevelFiveArtworkTests(unittest.TestCase):
+class LevelFiveArtworkTests(PreviousArtworkMixin, unittest.TestCase):
     def baseline(self, room, **kwargs):
         # Preserve the already approved door blends when isolating wall changes.
         with patch('pop2.caverns.retouched_sprite', side_effect=lambda room, command, source, **kw: source):

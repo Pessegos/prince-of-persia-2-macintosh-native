@@ -548,3 +548,87 @@ Tests preserve every button pixel with the plate released and pressed, along
 with all source alpha, foreground pixels and physical masks. Earlier approved
 artwork stays unchanged. This completes the user's selected floor-join batch;
 it does not certify that every cavern junction has been visually reviewed.
+
+## Level3 room16: right tips beneath the column and shooting trap
+
+The user approved the two right-tip reference proposals on 2026-11-07.
+Both use SHAP3526, at X53 and X308/bottom245. They are separate from the
+earlier left wall/floor joins. A narrow three-pixel band on the actual right
+contour grades nearby native texture towards the existing neighboring floor,
+retaining the native palette and pixel grid. The neighboring pieces remain
+untouched, including the pressure-plate drawings in both states.
+
+The two placement-specific crops change109 and111 visible pixels,220 in total.
+The approved cached RGB hash is
+`a5f823e2a653cfc956104a2483f8f1dc69fb94758ffee8135c12544e8cc25a38`.
+Foreground pixels, column sources, source alpha, physical masks and earlier
+approved artwork are preserved. The comparisons stay local under
+`rendered/floor-right-edge-references-v1/`. This approval covers those two
+examples only; other visible right tips require their own local previews.
+
+## Remaining right floor tips: approved batch
+
+The user approved all remaining96 visible right-tip proposals on 2026-11-07.
+These room/placement-specific SHAP3526 crops use the reviewed room16 method
+and preserve adjacent tiles, earlier retouches, native alpha and physical
+masks. Local comparisons are under `rendered/floor-right-edge-remaining-v1/`.
+Older wall/left-join goldens isolate this new layer using the exact approved
+pixel masks, asserting the complete previous sprite hash after restoration.
+Separate unmasked production-frame and source goldens cover the combined
+artwork; no original golden or mask assertion is discarded.
+
+| Level | Room | Added visible pixels | Combined cached RGB SHA256 |
+| --- | --- | --- | --- |
+| 3 | 2 | 128 | `42b5d9e0b5da04adb31e3c03d5d4d46363f73aa6e52e37f2a49f312dadb581fe` |
+| 3 | 3 | 208 | `7c73c6a5ee731d4c34ef791eec54899003c2a57d9ae48f6bbf1dc3b5e149a7bf` |
+| 3 | 4 | 220 | `e32ea54cf8d14f6adc3f7fea096aba6545760270b33b9cb3413a9ba2896a6acb` |
+| 3 | 5 | 322 | `1b6b395bb6f397d44e5af41698c37698620c9cf31cea1aebed8db427795ab25a` |
+| 3 | 6 | 108 | `104166ade6f8da682c7c3e366d5ba893dd1a8d5c3d4709f62ae39a129f7a0ab3` |
+| 3 | 7 | 109 | `96faa88ac29fc1d55cc21e0f76bc088f99b8e1c2674a56385bd7472923ca52ff` |
+| 3 | 8 | 168 | `ec6ca6490d876860047a25a0c01b9d6890dec30e1108533d262449f76faf34d8` |
+| 3 | 9 | 65 | `c1a8a3cd8301ea6f74465ebaf5c77ce5cbae69a1b1e805e003b8a730d108fa7e` |
+| 3 | 10 | 104 | `d6b101bb9a011a9f052e10cc4e8af62fe065793d0176af93fef0f009f489e9fb` |
+| 3 | 11 | 110 | `79bc6828584c6ae4015d8901a929ab888e50b07ae9b7cc5161660a17fac82649` |
+| 3 | 13 | 111 | `152dcada185e76138ceb1f808e9473966945ef6aeb1f0e3b9e6ea85a3b0d5844` |
+| 3 | 14 | 109 | `e48e60b11ca2f01fcf7c2d5c369ed41415a653082cb427f2fa46b4700d8ef231` |
+| 3 | 15 | 104 | `0e8af1a4f411a0837b5e735e3b68b81c088a27307dbcfb8be6b4a7d2fad3ef09` |
+| 3 | 16 | 157 | `5526d1a75d78cba20723a63268615c941f0db242668e357478aab3e318cf7bb3` |
+| 3 | 17 | 23 | `3dc2bcfb49ce67ff6967295a893dbd514247381744fc31f0138983688369ac20` |
+| 3 | 19 | 109 | `736e6104482c5ee80b6deaf1563c0db7a30108fca4e3c04b5ed07c841aaec897` |
+| 3 | 21 | 278 | `1a34f2f43244219c45e95444001cee7651c550109ff6ef847fc3a047fc1f2c71` |
+| 3 | 22 | 427 | `19dd1e475e8192d541fde2d1d5d5b955282df477d93fc03f0b1fd723d422723a` |
+| 3 | 25 | 91 | `674f430be840f72ab83b09f6487bae1b9ec585c1be794ae444d50417bc2540bd` |
+| 3 | 26 | 109 | `6e04f9bfed10d215b626f11d3aea3c12ce3240be927e115e502efaf8038dfcf7` |
+| 3 | 27 | 213 | `cc454eeb6151398ffa7a3dcabd742b0b554662261943b4f5e0516113bcdc857d` |
+| 3 | 28 | 368 | `ec1b9f968335ea732aed7c30410a27260fcf6f069ebc9d4417afe0feac149169` |
+| 3 | 30 | 109 | `0b9559d1cee7964b990599c5ad99af2576edfb21d56a03d5baae6526717697ea` |
+| 3 | 31 | 69 | `a50b85c8f31b437b0b6a0c4459448f813cb46b8f79c41c97e2c1a30acdb6d766` |
+| 4 | 1 | 155 | `7653744bceee45c1050c050a65c13a4f0fba6c66e9c6f9d72d25996d9e5c0b34` |
+| 4 | 2 | 109 | `0de2c6cb86412b4b3ec614196fb05d858f07616877be42fe0d2777fadced9259` |
+| 4 | 3 | 104 | `625759102b8c38d27999ce053979c8946ea768446c2efe63a8e24c2a80732cd8` |
+| 4 | 7 | 317 | `cb64abe4532f4e143f9166016b91407848375648ea8d01edad29e5ad8fb58747` |
+| 4 | 9 | 173 | `207f604acf2b2b33985b23889d690e6603e0560aca3d936050e37b0d2327b285` |
+| 4 | 10 | 42 | `a9ffd0824b7b578e5b073ae0ae3f2de543540fd565cf6a76ab5ce3b0930f9075` |
+| 4 | 12 | 111 | `d4a4c4778f2df40e15eeb24673d7f8e6bd141a2df016ca3d7ffdd76d38489efd` |
+| 4 | 13 | 46 | `4fd093b2f15ed129e0c1d3951575e5bd208c6b547c99a47fae71d63afcafd8aa` |
+| 4 | 15 | 234 | `93dcbef35c29d23ad737c8eaf49c5ac3317d673a3822a3c2f83d36206c30eefd` |
+| 4 | 16 | 221 | `7be15f169f5d0262dd3ffc7eea23697b946f9733336facccddb8604bc5087956` |
+| 4 | 17 | 176 | `a14a0e91705ed88ecb7f03ba13ffc020e3836f0659c3e2c685ff05aa2a34ac12` |
+| 4 | 18 | 65 | `5850b83c46878845b118eaddda06d64fa0c47217993c8c33375178f993693dd4` |
+| 4 | 25 | 85 | `f72820430652cace4f24467dd2db131717085fcd82c93422c47161334c336e9c` |
+| 4 | 26 | 193 | `e553f6d062a187e9223ee6bc06afa66ea77cb1954fb12bb39363c6ad2830ac4a` |
+| 4 | 27 | 218 | `2ddf9c81e6b04da5485e6f1cb930f1ff44ee600d86b521cabe1a3d0066901a45` |
+| 4 | 28 | 213 | `badcf936da6514fbf38f0a63ccd30cb7d1eed4421c8c521b4f54c73412f5d172` |
+| 5 | 1 | 324 | `191e417cbd09ff1c7a037d5d7f44560bcc670c7120ff6bbe00bb14020d10a4a4` |
+| 5 | 2 | 176 | `111ebee78aae508212a53e93ee670505c751c36bd7fd4eab71d40b25e65d002b` |
+| 5 | 4 | 218 | `00b7c782f585999d1a03bb5cad228b659d60a4d4ffd0c9a45590ce489be1aded` |
+| 5 | 6 | 109 | `576df474f422ad918c26db18655b3f7ff70f9099ab30b7ef93f4ec34f1f7bdc1` |
+| 5 | 7 | 326 | `40a77bce53a300c5b35a2c8572d4379932abbe8be68fb0c69f2121af86e59555` |
+| 5 | 9 | 343 | `54977d24c3fe7a8a8f79b0343aae4b19f46773a8b6455fc5043ad48d51e73ab7` |
+| 5 | 14 | 23 | `0f1b35c7e0e129ad6d89c9aa92c0f5f30be81c58c09515eb0f98992ef1034b67` |
+| 5 | 15 | 24 | `8ba3d36673477ab5720b65e9980d505251c9efd176683fdef6a1d5df4610f8d0` |
+| 5 | 16 | 105 | `21a38898ddec1ff513a18df8cd9025c032e095831691993d11fbb28f75ca0ac1` |
+| 5 | 18 | 46 | `fc4fdb0430c3c932dae6353ff6bc3e55d376bfa8932e4d6adcd15eb534eb5e62` |
+| 5 | 19 | 29 | `8f544d03d58a67e01522a846926c1c05a98742d96d7f629b7d0bccc218c06736` |
+| 5 | 22 | 389 | `33350f724b846ffd82ea16f67eec6f374dfece5fe22ad8e78f4b3469413cc7cd` |
+| 5 | 23 | 109 | `7185c7d6facf339702351f69a39117c9a8722e91cca6fe99e941547aebba104a` |

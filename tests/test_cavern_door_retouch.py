@@ -1,5 +1,7 @@
 import hashlib
 import unittest
+
+from tests.right_tip_expectations import PreviousArtworkMixin
 from unittest.mock import patch
 
 from PIL import Image, ImageChops
@@ -43,7 +45,7 @@ class BundledCavernDoorRetouchTests(unittest.TestCase):
 @unittest.skipUnless(all((ASSET_DIR / name).is_file() for name in
                          ('caverns_entry.json', 'caverns_level4.json', 'caverns_level5.json')),
                      'Imported cavern levels required')
-class CavernDoorRetouchTests(unittest.TestCase):
+class CavernDoorRetouchTests(PreviousArtworkMixin, unittest.TestCase):
     def wall_only(self, level, room, **kwargs):
         with patch('pop2.caverns.retouched_door_sprite', side_effect=lambda level, room, command, source: source):
             return cavern_room(room, retouched=True, level_number=level, **kwargs)

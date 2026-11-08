@@ -2,6 +2,8 @@
 import hashlib
 import unittest
 
+from tests.right_tip_expectations import PreviousArtworkMixin
+
 from PIL import Image, ImageChops
 
 from pop2.cavern_retouch import retouched_sprite
@@ -57,7 +59,7 @@ APPROVED_FLOOR_JOINS = {
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(),
                      'Imported game resources required')
-class FloorJoinArtworkTests(unittest.TestCase):
+class FloorJoinArtworkTests(PreviousArtworkMixin, unittest.TestCase):
     def test_room9_button_pixels_stay_native_released_and_pressed(self):
         program, resources, palette, shapes = room_assets(5, 8)
         records = program['pressure_plates']['rooms']['8']
