@@ -8,17 +8,17 @@ window's live Bindings, so a change works at once; the window keeps it.
 from PIL import Image, ImageDraw
 
 from pop2.bitmap_labels import label_text
-from pop2.controls_art import (GEMS, INK, PAD_HEIGHT, PAD_WIDTH, button_icon, draw_leds, glyph,
+from pop2.controls_art import (INK, PAD_HEIGHT, PAD_WIDTH, XBOX_COLORS, button_icon, draw_leds,
                                keyboard_case, keycap, legend_ink, pad_art, windows_flag)
 from pop2.game_ui import DevelopmentMenu, centered_panel
 from pop2.input_bindings import ACTION_BY_NAME, LOCKED_KEYS, PAD_LOCKED, key_name, key_token, pad_name
 
 GOLD, WHITE, MUTED, ERROR = '#f4d873', '#eeeeee', '#999999', '#ff9b9b'
-# Jump, Crouch, Sword and Time left take the colours of their default
+# Jump, Crouch, Sword and Time left take the Xbox colours of their default
 # buttons (A, B, X, Y); Move takes the friezes' turquoise.
 ACTION_COLORS = {
-    'left': (82, 181, 189), 'right': (82, 181, 189), 'up': GEMS['a'], 'down': GEMS['b'],
-    'grab': (232, 128, 52), 'sword': GEMS['x'], 'time': GEMS['y'], 'pause': (156, 118, 214),
+    'left': (82, 181, 189), 'right': (82, 181, 189), 'up': XBOX_COLORS['a'], 'down': XBOX_COLORS['b'],
+    'grab': (232, 128, 52), 'sword': XBOX_COLORS['x'], 'time': XBOX_COLORS['y'], 'pause': (156, 118, 214),
     'menu': (214, 128, 176),
 }
 LEGEND = (('Move', ('left', 'right')), ('Up / Jump', ('up',)), ('Down / Crouch', ('down',)),
@@ -92,8 +92,8 @@ KEYBOARD_ROWS = (
 )
 # '|' starts a second line of legend.
 NAV_ROWS = ((('Print', 'PRT|SCR'), ('Scroll_Lock', 'SCR|LCK'), ('Pause', 'PAU|BRK')),
-            (('Insert', 'INS'), ('Home', 'HOME'), ('Prior', 'PGUP')),
-            (('Delete', 'DEL'), ('End', 'END'), ('Next', 'PGDN')), (),
+            (('Insert', 'INS'), ('Home', 'HOME'), ('Prior', 'PG|UP')),
+            (('Delete', 'DEL'), ('End', 'END'), ('Next', 'PG|DN')), (),
             ((None, ''), ('Up', '^'), (None, '')), (('Left', '<'), ('Down', 'v'), ('Right', '>')))
 # The numeric keypad: (token, label, column, row, width, height) in keys.
 KEYPAD = (('Num_Lock', 'NUM', 0, 1, 1, 1), ('KP_Divide', '/', 1, 1, 1, 1),
@@ -150,16 +150,6 @@ def led_rect(origin, unit):
             top + KEY_HEIGHT - 1)
 
 
-# Pictures instead of long legends on the cursor block: arrows to the top
-# left and bottom right corners, and two arrowheads for a page up or down.
-KEY_ICONS = {
-    'HOME': ('#####', '##...', '#.#..', '#..#.', '....#'),
-    'END': ('#....', '.#..#', '..#.#', '...##', '#####'),
-    'PGUP': ('..#..', '.###.', '#####', '..#..', '.###.', '#####'),
-    'PGDN': ('#####', '.###.', '..#..', '#####', '.###.', '..#..'),
-}
-
-
 def draw_arrow(draw, cx, cy, direction, fill):
     points = {'^': ((cx, cy - 2), (cx - 3, cy + 1), (cx + 3, cy + 1)),
               'v': ((cx, cy + 2), (cx - 3, cy - 1), (cx + 3, cy - 1)),
@@ -179,8 +169,6 @@ def draw_keycap(image, rect, token, label, color=None):
         draw_arrow(draw, *centre, label, ink)
     elif label == 'WIN':
         windows_flag(image, centre, ink)
-    elif label in KEY_ICONS:
-        glyph(draw, left + 3, top + 2, KEY_ICONS[label], ink)
     else:
         # Legends sit at the top left, as printed on those keyboards; one
         # too wide for that margin is centred instead.

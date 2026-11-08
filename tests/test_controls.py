@@ -627,12 +627,12 @@ class PadArtTests(unittest.TestCase):
         self.assertTrue((levels[ring] == 1).all())
         self.assertFalse((levels[~ring] == 1).any())
 
-    def test_default_face_buttons_share_their_actions_colours(self):
+    def test_default_actions_take_their_xbox_buttons_colours(self):
         bindings = Bindings('controller')
         for button in 'abxy':
             action = next(action for action in bindings.actions if button in bindings.keys(action))
             with self.subTest(button=button, action=action):
-                self.assertEqual(ACTION_COLORS[action], controls_art.GEMS[button])
+                self.assertEqual(ACTION_COLORS[action], controls_art.XBOX_COLORS[button])
 
     def test_keyboard_draws_the_keypad_and_no_key_overlaps_another(self):
         keys = keyboard_keys(ControlsPage.KEYBOARD_ORIGIN, ControlsPage.KEYBOARD_UNIT)

@@ -163,12 +163,6 @@ def tone(color, factor, lift=0):
     return tuple(max(0, min(255, round(channel * factor + lift))) for channel in color)
 
 
-@lru_cache(maxsize=None)
-def color_ramp(color):
-    return tuple(tone(color, factor, lift) for factor, lift in (
-        (.16, 4), (.42, 0), (.58, 0), (.76, 0), (.92, 0), (1.04, 8), (1.06, 46)))
-
-
 # -- colours ------------------------------------------------------------------
 # Ramps run from the outline to the highlight, in the palace's own colours:
 # ivory and cream stone with mauve shadows and the dark brown outline of the
@@ -192,9 +186,9 @@ BUTTON = ((74, 33, 16), (190, 168, 140), (214, 193, 144), (231, 206, 173), (247,
 BED = ((74, 33, 16), (74, 46, 50), (90, 60, 66), (98, 70, 76), (108, 78, 86), (119, 90, 107),
        (138, 112, 122))  # the recess the keys sit in
 INK = (74, 33, 16)            # callout lines over the shell, legends on light keys
-# Face button gems, in the Xbox colours; the Controls page colours the same
-# actions alike, so a default button and its label always match.
-GEMS = {'a': (52, 170, 88), 'b': (218, 50, 50), 'x': (48, 108, 196), 'y': (240, 194, 60)}
+# The Xbox face buttons' own colours; the Controls page colours the actions
+# those buttons do by default alike (Jump green as A, and so on).
+XBOX_COLORS = {'a': (52, 170, 88), 'b': (218, 50, 50), 'x': (48, 108, 196), 'y': (240, 194, 60)}
 
 
 # -- the controller -----------------------------------------------------------
@@ -294,73 +288,19 @@ FACE_LETTERS = {
     'X': ('##.##', '##.##', '.###.', '.###.', '##.##', '##.##'),
     'Y': ('##.##', '##.##', '.###.', '..#..', '..#..', '..#..'),
 }
-# Face buttons: gem colour (None = dark plastic) and symbol colour.
+# Face buttons: dark domes with ivory letters, or the PlayStation symbols in
+# their colours.
 FACE_STYLES = {
-    'xbox': {name: (color, None) for name, color in GEMS.items()},  # letters inlaid by gem()
-    'playstation': {'a': (None, (132, 166, 232)), 'b': (None, (232, 116, 116)),
-                    'x': (None, (220, 146, 210)), 'y': (None, (98, 204, 176))},
-    'nintendo': {name: (None, SHELL[5]) for name in 'abxy'},
+    'xbox': {name: SHELL[5] for name in 'abxy'},
+    'playstation': {'a': (132, 166, 232), 'b': (232, 116, 116), 'x': (220, 146, 210), 'y': (98, 204, 176)},
+    'nintendo': {name: SHELL[5] for name in 'abxy'},
 }
 NINTENDO_LETTERS = {'a': 'B', 'b': 'A', 'x': 'Y', 'y': 'X'}
 
 
-def sphere_light(radius):
-    """x, y (in radii) and the light on a dome filling circle_mask(radius)."""
-    size = 2 * radius + 1
-    yy, xx = (np.mgrid[:size, :size] - radius) / (radius + 0.5)
-    up = np.sqrt(np.clip(1 - xx * xx - yy * yy, 0, 1))
-    return xx, yy, xx * LIGHT[0] + yy * LIGHT[1] + up * LIGHT[2]
-
-
-IVORY = (255, 255, 214)  # the palace's lightest stone, for letters set in gems
-# How much of the gem's colour tints an inlaid letter, by the gem's shade.
-INLAY_TINT = {1: .3, 2: .22, 3: .12, 4: .05}
-GROOVE_DROP = 3  # how many shades darker than the stone the groove is
-
-
-def gem(image, centre, color, radius, letter=None):
-    """A round cabochon: dark lower right, lit upper left, a glint and a
-    little light thrown back along the lower right rim.
-
-    A letter is inlaid in ivory that takes the stone's light, tinted
-    towards the gem where the stone is shaded, with a groove of the
-    stone's own darker shade along its lower right.
-    """
-    ramp = color_ramp(color)
-    palette = (ramp[0], ramp[1], ramp[2], ramp[4], ramp[5], ramp[6])
-    xx, yy, light = sphere_light(radius)
-    levels = np.digitize(light, (0.15, 0.45, 0.75, 0.93)) + 1
-    thrown = (xx * 0.6 + yy * 0.8 > 0.55) & (xx * xx + yy * yy > 0.55)
-    levels = np.where(thrown & (levels <= 2), 3, levels)
-    inside = circle_mask(radius)
-    levels[~inside] = 0
-    left, top = centre[0] - radius, centre[1] - radius
-    paint(image, levels, palette, (left, top))
-    if not letter:
-        return
-    stroke = np.zeros_like(inside)
-    x0, y0 = radius - len(letter[0]) // 2, radius - len(letter) // 2
-    for row, line in enumerate(letter):
-        for column, cell in enumerate(line):
-            stroke[y0 + row, x0 + column] = cell == '#'
-    groove = np.zeros_like(stroke)
-    groove[1:, 1:] = stroke[:-1, :-1]
-    groove &= ~stroke & inside & ~edge(inside)
-    pixels = image.load()
-    for y, x in zip(*np.nonzero(groove)):
-        pixels[left + int(x), top + int(y)] = (*palette[max(1, levels[y, x] - GROOVE_DROP)], 255)
-    for y, x in zip(*np.nonzero(stroke)):
-        mix = INLAY_TINT.get(int(levels[y, x]), 0)
-        pixels[left + int(x), top + int(y)] = (*(round(i * (1 - mix) + c * mix) for i, c in zip(IVORY, color)),
-                                               255)
-
-
 def face_button(image, centre, button, style, radius=FACE_RADIUS):
-    color, ink = FACE_STYLES.get(style, FACE_STYLES['xbox'])[button]
+    ink = FACE_STYLES.get(style, FACE_STYLES['xbox'])[button]
     letter = FACE_LETTERS[NINTENDO_LETTERS[button] if style == 'nintendo' else button.upper()]
-    if color:
-        gem(image, centre, color, radius, letter)
-        return
     stamp(image, circle_mask(radius), centre, WELL, rim=4, dome=.5)
     draw = ImageDraw.Draw(image)
     cx, cy = centre
@@ -648,16 +588,17 @@ def draw_leds(image, rect, lit=('NUM',)):
             draw.point((cx - 1, top + 10), fill=LED_GREEN[2])
 
 
-# The Windows flag of the 1990s, small and tilted as if waving, a trail of
-# pieces flying off to its left; printed in the key's ink like a legend.
-WINDOWS_FLAG = ('......####...',
-                '...#..#..####',
-                '.#....#..#..#',
-                '...#.####...#',
-                '.#...#..####.',
-                '...#.#..#..#.',
-                '....####...#.',
-                '........###..')
+# The Windows 98 flag without its colours: a black frame round four clear
+# panes, the right half a pixel lower as it waves, and a trail of pieces
+# flying off to the left; printed in the key's ink like a legend.
+WINDOWS_FLAG = ('....#####....',
+                '..#.#...#####',
+                '#...#...#...#',
+                '..#.#####...#',
+                '#...#...#####',
+                '..#.#...#...#',
+                '....#####...#',
+                '........#####')
 
 
 def windows_flag(image, centre, ink):
