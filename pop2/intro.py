@@ -48,6 +48,18 @@ def read_program(path):
                     or not isinstance(item.get("args"), list)
                     or len(item["args"]) != OPERATIONS[item["op"]]):
                 raise ValueError("Invalid intro scene instruction")
+    operations = data['operations']
+    if (any(item.get('pc') == 0x0758 and item['op'] == 'palette'
+            and item['args'] == [26028, 114, 0x40001] for item in operations)
+            and not any(item.get('pc') == 0x0642 for item in operations)):
+        # Older tree-9 imports omitted SetSHAPColors(CTBL26028) 15:0642.
+        # Its red/gold title colours must already be visible over the tree,
+        # independently of the tree palette that fades out at 15:0758.
+        for index, item in enumerate(operations):
+            if item.get('pc') == 0x062c and item['op'] == 'palette':
+                operations.insert(index + 1, {
+                    'op': 'palette', 'args': [26028, 64, 0], 'pc': 0x0642})
+                break
     if data.get('kind') == 'temple':
         # Imports before the horse-scene repair appended a synthetic wait
         # after ANI 25012. Native 16:14c4 ends on isRunning == 0; the cue

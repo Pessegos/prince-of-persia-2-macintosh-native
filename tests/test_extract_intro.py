@@ -24,6 +24,20 @@ def coordinator(entry):
 
 
 class IntroExtractionTests(unittest.TestCase):
+    def test_shape_colours_are_shown_at_their_original_indices(self):
+        # SetSHAPColors(look, id): pointer first, CTBL id at sp+4.
+        code = bytearray(0x4600)
+        body = bytes.fromhex(
+            '4e560000 3f3c65ac 2f2dadbe 4ead132a 5c4f 4e5e 4e75')
+        code[0x45c2:0x45c2 + len(body)] = body
+        forks = {b'program': {'CODE': {15: {'data': bytes(code)}}}, b'nis': {'SHAP': {}}}
+        with (
+            patch.object(extractor, 'parse_resource_fork', side_effect=forks.__getitem__),
+            patch.object(extractor, 'expand_a5_data', return_value=bytes(0x6000)),
+        ):
+            actual = extractor.recover_scenes(b'program', b'nis', entries=(0x45c2,))
+        self.assertEqual(actual, [{'op': 'palette', 'args': [26028, 64, 0], 'pc': 0x45ce}])
+
     def test_throne_inherits_full_picture_dissolve_from_the_common_nis_prologue(self):
         operations = [
             {'op': 'shape', 'args': [404200, 0, 0, 0], 'pc': 0x6d66},

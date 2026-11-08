@@ -1,9 +1,13 @@
 import json
+from pathlib import Path
 import struct
+import tempfile
 import unittest
 from unittest.mock import patch
 
-from pop2.intro import IntroAssets, IntroPlayer
+import numpy as np
+
+from pop2.intro import IntroAssets, IntroPlayer, read_program
 from pop2.paths import ASSET_DIR
 from tests.test_intro import instruction, script
 from tools import extract_intro as extractor
@@ -21,6 +25,20 @@ def two_frame_resources():
 
 
 class TreeExpansionTests(unittest.TestCase):
+    def test_old_gameover_import_gets_title_colours_once_at_the_native_call(self):
+        tree_palette = {'op': 'palette', 'args': [26003, 70, 0x40001], 'pc': 0x062c}
+        title_palette = {'op': 'palette', 'args': [26028, 64, 0], 'pc': 0x0642}
+        fade_tree = {'op': 'palette', 'args': [26028, 114, 0x40001], 'pc': 0x0758}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'scene.json'
+            for operations, expected in (
+                    ([tree_palette, fade_tree], [tree_palette, title_palette, fade_tree]),
+                    ([tree_palette, title_palette, fade_tree], [tree_palette, title_palette, fade_tree]),
+                    ([tree_palette], [tree_palette])):
+                with self.subTest(operations=operations):
+                    path.write_text(json.dumps({'schema': 1, 'audio': {}, 'operations': operations}))
+                    self.assertEqual(read_program(path)['operations'], expected)
+
     def test_callback_runs_after_drawing_frame_two_and_before_its_copy(self):
         # PlayTheAnimation 16:13d4-13f8 draws, calls back with frame+1, then
         # copies (16:140a). TreeFunc 15:04d0 acts only for frame 2.
@@ -57,6 +75,31 @@ def tree_program(variant):
 @unittest.skipUnless(all((ASSET_DIR / f'tree-{n}.json').is_file() for n in range(1, 10))
                      and (ASSET_DIR / 'NISTree.rsrc').is_file(), 'Imported tree scenes required')
 class OriginalTreeSceneTests(unittest.TestCase):
+    def test_gameover_title_keeps_native_colours_over_the_tree_and_black(self):
+        assets = IntroAssets(program_name='tree-9.json')
+        player = IntroPlayer(assets)
+        title = np.array(assets.shapes[26028])
+        mask = title != 0
+        expected = np.zeros((*title.shape, 3), dtype=np.uint8)
+        for index, color in assets.palettes[26028].items():
+            expected[title == index] = color
+        overlay = max(index for index, item in enumerate(player.operations)
+                      if item['op'] == 'shape' and item['args'][0] == 26028)
+        player.seek_operation(overlay)
+        over_tree = np.array(player.frame().convert('RGB'))
+        self.assertTrue(np.array_equal(over_tree[125:222, 117:400][mask], expected[mask]))
+        # Cue c starts fading only the tree's loaded table to black. The
+        # direct title colours stay visible throughout and after that fade.
+        fade = next(index for index, item in enumerate(player.operations)
+                    if item.get('pc') == 0x0758)
+        player.seek_operation(fade)
+        for seconds in (0.2, 0.3):
+            player.advance(seconds)
+            frame = np.array(player.frame().convert('RGB'))
+            self.assertTrue(np.array_equal(frame[125:222, 117:400][mask], expected[mask]))
+        self.assertTrue(over_tree[80, 80].any())
+        self.assertFalse(frame[80, 80].any())
+
     def ops(self, variant):
         return [(item['op'], item['args']) for item in tree_program(variant)['operations']]
 
