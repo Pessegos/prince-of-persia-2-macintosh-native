@@ -235,6 +235,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.audio = audio
         self.peaceful = peaceful
         self.god_mode = False
+        self.god_mode_added_hearts = 0
         self.terrain_enabled = with_guard
         self.resources = GameResources.load()
         self.game = GameSession.load(self.resources, level_number, terrain_enabled=with_guard)
@@ -516,6 +517,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.clear_keys(None)
         self.reset_level_controls()
         self.bind_level(game, renderer, initialize_world=False)
+        self.god_mode_added_hearts = 0
         self.terrain_enabled = True
         self.pause_resume_keys.update(self.window_keys_down)
         self.copy_verified = saved['copy_verified']
@@ -549,6 +551,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         renderer = LevelRenderer(game.level)
         self.time_message, self.time_message_frames = None, 0
         self.bind_level(game, renderer)
+        self.god_mode_added_hearts = 0
         self.copy_challenge = None
         self.demo = self.live_combat = None
         self.attract_stage = self.intro = None
@@ -2380,7 +2383,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         # uncollected item. Repair that snapshot, including immediate Alt+R.
         point = (snapshot.checkpoint if collected else
                  next(point for point in self.checkpoints if point.slot == 2))
-        self.checkpoint = RebirthSnapshot.capture(point, self.combat)
+        self.capture_rebirth_checkpoint(point)
 
     def advance_rebirth(self):
         motion = getattr(self, "terrain_motion", None)
@@ -2399,8 +2402,14 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                                   level_number=self.game.level.number,
                                   story_flag=self.game.sword_type)):
                 if self.checkpoint is None or self.checkpoint.checkpoint != checkpoint:
-                    self.checkpoint = RebirthSnapshot.capture(checkpoint, self.combat)
+                    self.capture_rebirth_checkpoint(checkpoint)
                 break
+
+    def capture_rebirth_checkpoint(self, checkpoint):
+        self.checkpoint = RebirthSnapshot.capture(checkpoint, self.combat)
+        # Health-cheat hearts are now part of the checkpoint's restored state.
+        self.god_mode_added_hearts = 0
+        return self.checkpoint
 
     def advance_audio(self):
         if getattr(self, "intro", None) is not None:
@@ -2468,16 +2477,20 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         snapshot = self.checkpoint
         if snapshot is None:
             max_life = self.combat.player.max_life if self.combat is not None else None
+            if max_life is not None:
+                max_life = max(1, max_life - self.god_mode_added_hearts)
             if self.game.caverns is not None:
                 initial = self.game.caverns.potions.starting_max_life
                 if initial is not None:
                     max_life = initial
+            self.god_mode_added_hearts = 0
             self.restart_opening(redraw=redraw)
             if max_life is not None:
                 self.combat.player.life = self.combat.player.max_life = max_life
                 if redraw:
                     self.render()
         else:
+            self.god_mode_added_hearts = 0
             if self.animation_after_id is not None:
                 self.root.after_cancel(self.animation_after_id)
                 self.animation_after_id = None
@@ -2669,6 +2682,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.status.set("Credits")
 
     def new_game(self):
+        self.god_mode_added_hearts = 0
         self.cutscene_campaign_active = True
         self.active_save_path = None
         self.copy_verified = False
@@ -2981,6 +2995,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         elif player.max_life < 12:
             player.max_life += 1
             player.life += 1
+            self.god_mode_added_hearts += 1
         else:
             return False
         self.render()
@@ -3227,7 +3242,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             # precedes the throne, including a pre-pickup warp to room11.
             checkpoint = next(point for point in self.checkpoints if point.slot == 2)
         if checkpoint is not None:
-            self.checkpoint = RebirthSnapshot.capture(checkpoint, self.combat)
+            self.capture_rebirth_checkpoint(checkpoint)
 
 
     def advance_animation_now(self):

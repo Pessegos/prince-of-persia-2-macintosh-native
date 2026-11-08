@@ -352,6 +352,31 @@ class RebirthSceneTests(unittest.TestCase):
         scene.restart_after_death()
         self.assertEqual(scene.combat.room_encounters[3][0][0].life, life)
 
+    def test_checkpoint_keeps_cheated_hearts_reached_before_it_and_drops_later_ones(self):
+        scene = self.scene
+        scene.set_god_mode(True)
+        player = scene.combat.player
+        player.life = player.max_life
+        starting_max_life = player.max_life
+        self.assertTrue(scene.god_mode_add_health())
+        snapshot = self.checkpoint()
+        player = scene.combat.player
+        self.assertEqual(snapshot.max_life, starting_max_life + 1)
+        self.assertEqual(scene.god_mode_added_hearts, 0)
+
+        player.life = player.max_life
+        self.assertTrue(scene.god_mode_add_health())
+        self.assertEqual(player.max_life, starting_max_life + 2)
+        restart = self.event("r", 0x20000)
+        self.assertEqual(scene.dev_key_press(restart), "break")
+        scene.dev_key_release(restart)
+
+        player = scene.combat.player
+        self.assertIs(scene.checkpoint, snapshot)
+        self.assertEqual((player.life, player.max_life),
+                         (starting_max_life + 1, starting_max_life + 1))
+        self.assertEqual(scene.god_mode_added_hearts, 0)
+
     def test_revisiting_same_checkpoint_does_not_overwrite_it(self):
         scene = self.scene
         snapshot = self.checkpoint()

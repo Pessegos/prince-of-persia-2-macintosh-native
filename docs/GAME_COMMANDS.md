@@ -45,7 +45,9 @@ or a level jump actually needs it. Menu presentation remains synchronous.
 With God mode enabled in F3 Developer Tools, `+` and `-` add or remove one
 minute from the campaign clock after it starts. `Alt+Shift+T` adds one health
 point, increasing the maximum capacity when the meter is full (up to 12).
-`Alt+T` continues to toggle sound.
+Hold `+` or `-` to repeat the minute adjustment. `Alt+R` removes cheated hearts
+when restarting at the level opening; a reached checkpoint keeps the capacity
+it recorded. `Alt+T` continues to toggle sound.
 
 Cave Ambience (Alt+A) has no original counterpart. It is a port-only item, off
 by default. Unlike Sound and Ambient Music, the choice is kept between sessions

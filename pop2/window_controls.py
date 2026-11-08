@@ -1219,8 +1219,8 @@ class WindowControls:
                     and not alt and not event.state & (0x4 | 0x40)
                     and self.gameplay_controls_available() and self.combat is not None
                     and self.combat.player.alive):
-                if not repeated:
-                    self.god_mode_adjust_minutes(minute_delta)
+                # Let Tk's ordinary held-key repeat adjust the clock rapidly.
+                self.god_mode_adjust_minutes(minute_delta)
                 return 'break'
             if (event.keysym.lower() == 'k' and getattr(self, 'god_mode', False)
                     and not self.paused and self.gameplay_controls_available()

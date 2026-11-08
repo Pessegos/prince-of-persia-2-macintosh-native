@@ -154,11 +154,12 @@ class ImportedCheatTests(unittest.TestCase):
         with patch.object(s, 'render') as render:
             s.dev_key_press(plus)
             s.dev_key_press(plus)
-            self.assertEqual((story.minutes, story.frames_remaining), (13, 301))
-            self.assertEqual(s.time_message, '13 Minutes Left')
-            self.assertEqual(render.call_count, 1)
+            self.assertEqual((story.minutes, story.frames_remaining), (14, 301))
+            self.assertEqual(s.time_message, '14 Minutes Left')
+            self.assertEqual(render.call_count, 2)
         s.dev_key_release(plus)
         minus = SimpleNamespace(keysym='KP_Subtract', char='', state=0)
+        s.dev_key_press(minus)
         s.dev_key_press(minus)
         self.assertEqual((story.minutes, story.frames_remaining), (12, 301))
         s.dev_key_release(minus)
@@ -211,6 +212,22 @@ class ImportedCheatTests(unittest.TestCase):
         s.dev_key_press(event)
         self.assertEqual((player.life, player.max_life), (1, 3))
         self.assertTrue(s.sound_enabled)
+
+    def test_health_cheat_added_hearts_reset_on_alt_r_before_a_checkpoint(self):
+        s = self.scene
+        player = s.combat.player
+        starting_max_life = player.max_life
+        s.set_god_mode(True)
+        player.life = player.max_life
+        self.assertTrue(s.god_mode_add_health())
+        self.assertEqual((player.life, player.max_life, s.god_mode_added_hearts),
+                         (starting_max_life + 1, starting_max_life + 1, 1))
+        restart = SimpleNamespace(keysym='r', char='r', state=0x20000)
+        self.assertEqual(s.dev_key_press(restart), 'break')
+        s.dev_key_release(restart)
+        player = s.combat.player
+        self.assertEqual((player.life, player.max_life, s.god_mode_added_hearts),
+                         (starting_max_life, starting_max_life, 0))
 
     def test_god_mode_survives_projectiles_and_disabling_restores_damage(self):
         from pop2.darts import Dart
