@@ -11,6 +11,9 @@ import os
 import shutil
 import tempfile
 
+# Tests must never read the player's real controller.
+os.environ.setdefault("POP2_NO_GAMEPAD", "1")
+
 if not os.environ.get("POP2_USER_DATA"):
     _user_data = tempfile.mkdtemp(prefix="pop2-test-user-data-")
     os.environ["POP2_USER_DATA"] = _user_data
