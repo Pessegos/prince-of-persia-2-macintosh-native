@@ -48,6 +48,11 @@ MINI = {
 }
 
 
+def mini_width(text):
+    widths = [len(MINI[char].split('|')[0]) for char in text.upper() if char in MINI]
+    return sum(widths) + len(widths) - 1
+
+
 def mini_text(draw, x, y, text, fill, align='left'):
     glyphs = [MINI[char] for char in text.upper() if char in MINI]
     width = sum(len(glyph.split('|')[0]) + 1 for glyph in glyphs) - 1
@@ -109,14 +114,19 @@ POSITION_ALIASES = {'ccedilla': 'semicolon', 'ntilde': 'semicolon', 'odiaeresis'
                     'masculine': 'grave'}
 
 
-def keyboard_keys(origin, unit, key_height=18, pitch=20):
+# Keys sit a pixel apart, as on the old office keyboards; the function keys
+# stand a little apart from the rest.
+KEY_HEIGHT, KEY_PITCH, FUNCTION_GAP = 16, 17, 5
+
+
+def keyboard_keys(origin, unit):
     """(token, label, rect) for every drawn key."""
     left, top = origin
 
     def rect(x, row, width=1, height=1):
-        y = top + row * pitch + (6 if row else 0)
-        return (left + round(x * unit) + 1, y,
-                left + round((x + width) * unit) - 2, y + (height - 1) * pitch + key_height - 1)
+        y = top + row * KEY_PITCH + (FUNCTION_GAP if row else 0)
+        return (left + round(x * unit), y,
+                left + round((x + width) * unit) - 2, y + (height - 1) * KEY_PITCH + KEY_HEIGHT - 1)
 
     keys = []
     for row, entries in enumerate(KEYBOARD_ROWS):
@@ -133,11 +143,11 @@ def keyboard_keys(origin, unit, key_height=18, pitch=20):
     return keys
 
 
-def led_rect(origin, unit, key_height=18):
+def led_rect(origin, unit):
     """Where the lock lights sit: above the keypad."""
     left, top = origin
-    return (left + round(KEYPAD_X * unit) + 1, top, left + round((KEYPAD_X + 4) * unit) - 2,
-            top + key_height - 1)
+    return (left + round(KEYPAD_X * unit), top, left + round((KEYPAD_X + 4) * unit) - 2,
+            top + KEY_HEIGHT - 1)
 
 
 def draw_arrow(draw, cx, cy, direction, fill):
@@ -154,24 +164,29 @@ def draw_keycap(image, rect, token, label, color=None):
     image.alpha_composite(keycap(right - left + 1, bottom - top + 1, color, dark), (left, top))
     draw = ImageDraw.Draw(image)
     ink = legend_ink(color, dark)
-    centre = ((left + right) // 2, (top + bottom - 5) // 2)
+    centre = ((left + right) // 2, (top + bottom - 4) // 2)
     if label in ('^', 'v', '<', '>'):
         draw_arrow(draw, *centre, label, ink)
     elif label == 'WIN':
         windows_flag(image, centre)
     else:
-        # Legends sit at the top left, as printed on those keyboards.
-        for line, text in enumerate(label.split('|') if label else ()):
-            mini_text(draw, left + 3, top + 2 + 6 * line, text, ink)
+        # Legends sit at the top left, as printed on those keyboards; one
+        # too wide for that margin is centred instead.
+        lines = label.split('|') if label else []
+        for line, text in enumerate(lines):
+            inset = 3 if mini_width(text) + 3 <= right - left - 1 else 1
+            mini_text(draw, left + inset, top + (1 if len(lines) > 1 else 2) + 6 * line, text, ink)
 
 
-KEYBOARD_MARGIN = 5
+# The case's border round the keys: left, top, right and a deeper bottom.
+KEYBOARD_MARGIN = (9, 9, 9, 12)
 
 
 def keyboard_bounds(origin, unit):
     rects = [rect for _token, _label, rect in keyboard_keys(origin, unit)]
-    return (min(rect[0] for rect in rects) - KEYBOARD_MARGIN, min(rect[1] for rect in rects) - KEYBOARD_MARGIN,
-            max(rect[2] for rect in rects) + KEYBOARD_MARGIN, max(rect[3] for rect in rects) + KEYBOARD_MARGIN)
+    left, top, right, bottom = KEYBOARD_MARGIN
+    return (min(rect[0] for rect in rects) - left, min(rect[1] for rect in rects) - top,
+            max(rect[2] for rect in rects) + right, max(rect[3] for rect in rects) + bottom)
 
 
 def draw_keyboard(image, origin, unit, token_colors):
@@ -223,9 +238,10 @@ class ControlsPage:
     ROW_TOP = 52
     ROW_HEIGHT = 22
     SLOT_X = ((232, 344), (352, 464))
-    KEYBOARD_ORIGIN = (31, 68)
-    KEYBOARD_UNIT = 20
+    KEYBOARD_ORIGIN = (54, 79)
+    KEYBOARD_UNIT = 18
     LEGEND_X = (103, 291)
+    LEGEND_TOP = 214
     PAD_ORIGIN = (256 - PAD_WIDTH // 2, 86)
 
     def __init__(self, keyboard, controller, pads=(), controller_enabled=True,
@@ -525,7 +541,7 @@ class ControlsPage:
         drawn = {token for token, _label, _rect in keyboard_keys(self.KEYBOARD_ORIGIN, self.KEYBOARD_UNIT)}
         for index, (label, actions) in enumerate(LEGEND):
             column, row = index % 2, index // 2
-            x, y = self.LEGEND_X[column], 214 + row * 18
+            x, y = self.LEGEND_X[column], self.LEGEND_TOP + row * 18
             color = ACTION_COLORS[actions[0]]
             image.alpha_composite(keycap(13, 12, color), (x, y))
             hidden = [key_name(token) for action in actions for token in self.keyboard.keys(action)

@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 from pop2 import controls_art
-from pop2.controls_page import ACTION_COLORS, ControlsPage, keyboard_keys
+from pop2.controls_page import ACTION_COLORS, ControlsPage, keyboard_bounds, keyboard_keys
 from pop2.game_menu import GameMenu
 from pop2.gamepad import Hysteresis, PadReader, PadState, pad_style
 from pop2.input_bindings import (Bindings, CONTROLLER_DEFAULTS, KEYBOARD_DEFAULTS, PAD_BINDABLE, key_name,
@@ -469,6 +469,13 @@ class ControlsPageTests(unittest.TestCase):
         self.assertLessEqual(max(rect[2] for _token, _label, rect in
                                  keyboard_keys(ControlsPage.KEYBOARD_ORIGIN, ControlsPage.KEYBOARD_UNIT)),
                              ControlsPage.PANEL[2] - 8)
+        # The case, borders and all, sits clear of the panel's sides, the
+        # tabs above it and the legend below it.
+        left, top, right, bottom = keyboard_bounds(ControlsPage.KEYBOARD_ORIGIN, ControlsPage.KEYBOARD_UNIT)
+        self.assertGreaterEqual(left, ControlsPage.PANEL[0] + 16)
+        self.assertLessEqual(right, ControlsPage.PANEL[2] - 16)
+        self.assertGreater(top, max(tab[3] for tab in ControlsPage.TABS) + 8)
+        self.assertLess(bottom, ControlsPage.LEGEND_TOP - 8)
 
     def test_every_view_and_style_draws(self):
         font = FakeFont()
@@ -489,7 +496,8 @@ class PadArtTests(unittest.TestCase):
     ROUND = {'leftstick': controls_art.STICK_WELL, 'rightstick': controls_art.STICK_WELL,
              'dpad': controls_art.DPAD_DISH, 'a': controls_art.FACE_RADIUS,
              'b': controls_art.FACE_RADIUS, 'x': controls_art.FACE_RADIUS,
-             'y': controls_art.FACE_RADIUS, 'back': 6, 'start': 6, 'guide': 9, 'misc1': 5}
+             'y': controls_art.FACE_RADIUS, 'back': 6, 'start': 6, 'guide': controls_art.GUIDE_RADIUS,
+             'misc1': 5}
 
     @staticmethod
     def polyline(side, row, path):
@@ -574,6 +582,32 @@ class PadArtTests(unittest.TestCase):
         for y, x in inside[::17]:
             expected = np.sqrt(((outside - (y, x)) ** 2).sum(axis=1)).min()
             self.assertAlmostEqual(float(fast[y, x]), float(expected), places=4)
+
+    def test_guide_mark_splits_the_coin_into_four_faces(self):
+        radius = controls_art.GUIDE_RADIUS
+        faces = controls_art.circle_mask(radius) & ~controls_art.guide_mark(radius)
+        faces &= ~controls_art.edge(controls_art.circle_mask(radius))
+        self.assertTrue((faces == faces[:, ::-1]).all())  # mirrored left to right
+        seen, groups = np.zeros_like(faces), 0
+        for start in zip(*np.nonzero(faces)):
+            if seen[start]:
+                continue
+            groups += 1
+            stack = [start]
+            while stack:
+                y, x = stack.pop()
+                if not (0 <= y < faces.shape[0] and 0 <= x < faces.shape[1]) or seen[y, x] or not faces[y, x]:
+                    continue
+                seen[y, x] = True
+                stack += [(y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)]
+        self.assertEqual(groups, 4)
+
+    def test_stick_dish_edge_is_a_whole_circle(self):
+        levels = controls_art.stick_cap()
+        pad = controls_art.STICK_CAP - controls_art.STICK_DISH
+        ring = np.pad(controls_art.edge(controls_art.circle_mask(controls_art.STICK_DISH)), pad)
+        self.assertTrue((levels[ring] == 1).all())
+        self.assertFalse((levels[~ring] == 1).any())
 
     def test_default_face_buttons_share_their_actions_colours(self):
         bindings = Bindings('controller')
