@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 
 FRAMES_PER_MINUTE = 719
+MAX_STORY_MINUTES = 0x7FFF
 # KeepTime 2:5308-530e and FrameAdv 2:6834 show a time message this long.
 MESSAGE_FRAMES = 24
 
@@ -58,6 +59,17 @@ class StoryProgress:
         # 2:5226-5242: below five minutes, and on every fifth minute.
         if self.minutes and (self.minutes < 5 or self.minutes % 5 == 0):
             self.message_pending = 'minutes'
+        return True
+
+    def adjust_minutes(self, delta):
+        """Apply one native cheat-mode minute step to an active campaign clock."""
+        if delta not in (-1, 1) or not self.clock_started or self.minutes <= 0:
+            return False
+        minutes = self.minutes + delta
+        if minutes > MAX_STORY_MINUTES:
+            return False
+        self.minutes = max(0, minutes)
+        self.message_pending = None
         return True
 
     def message_text(self):

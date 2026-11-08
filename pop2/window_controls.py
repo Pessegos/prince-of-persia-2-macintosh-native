@@ -1138,6 +1138,13 @@ class WindowControls:
                 self.open_game_menu()
                 self.play_menu_sound('click')
             return "break"
+        if (event.keysym.lower() == 't' and alt and event.state & 0x1
+                and not event.state & (0x4 | 0x40)):
+            if (not repeated and getattr(self, 'god_mode', False) and not self.paused
+                    and self.game_menu is None and self.dev_menu is None
+                    and self.gameplay_controls_available()):
+                self.god_mode_add_health()
+            return 'break'
         command = {"n": "confirm_new", "r": "restart", "t": "sound", "m": "music",
                    "a": "ambience", "s": "save", "o": "open", "l": "open", "h": "hall", "v": "about",
                    "c": "cutscenes"}.get(
@@ -1204,10 +1211,21 @@ class WindowControls:
                 if not repeated:
                     show_time()
                 return 'break'
+            minute_delta = (1 if event.keysym in ('plus', 'KP_Add')
+                            or getattr(event, 'char', '') == '+' else
+                            -1 if event.keysym in ('minus', 'KP_Subtract')
+                            or getattr(event, 'char', '') == '-' else None)
+            if (minute_delta is not None and getattr(self, 'god_mode', False)
+                    and not alt and not event.state & (0x4 | 0x40)
+                    and self.gameplay_controls_available() and self.combat is not None
+                    and self.combat.player.alive):
+                if not repeated:
+                    self.god_mode_adjust_minutes(minute_delta)
+                return 'break'
             if (event.keysym.lower() == 'k' and getattr(self, 'god_mode', False)
                     and not self.paused and self.gameplay_controls_available()
                     and self.combat is not None and self.combat.player.alive
-                    and not alt and not event.state & (0x4 | 0x40)):
+                    and not alt and not event.state & (0x1 | 0x4 | 0x40)):
                 if not repeated:
                     self.combat.kill_room_enemies(self.room_id)
                     self.render()

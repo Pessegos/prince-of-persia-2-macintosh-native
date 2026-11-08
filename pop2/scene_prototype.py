@@ -2963,11 +2963,40 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.time_message_frames = MESSAGE_FRAMES
         self.render()
 
+    def god_mode_adjust_minutes(self, delta):
+        story = self.game.story
+        if not story.adjust_minutes(delta):
+            return False
+        self.time_message = story.message_text()
+        self.time_message_frames = MESSAGE_FRAMES
+        self.render()
+        return True
+
+    def god_mode_add_health(self):
+        if self.combat is None or not self.combat.player.alive:
+            return False
+        player = self.combat.player
+        if player.life < player.max_life:
+            player.life += 1
+        elif player.max_life < 12:
+            player.max_life += 1
+            player.life += 1
+        else:
+            return False
+        self.render()
+        return True
+
     def advance_story_clock(self):
         # KeepTime 2:51f4 runs once per FrameAdv for a living Prince; at zero
         # FrameAdv calls TimeUp 2:7194 (PlayNIS 28 -> tree variant 9).
         story = self.game.story
-        if story.advance_frame(self.combat is not None and self.combat.player.alive) and story.expired:
+        player_alive = self.combat is not None and self.combat.player.alive
+        if story.expired and player_alive:
+            story.tree_stage = -1
+            self.time_message = None
+            self.start_tree(9)
+            return True
+        if story.advance_frame(player_alive) and story.expired:
             story.tree_stage = -1
             self.time_message = None
             self.start_tree(9)

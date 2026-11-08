@@ -42,6 +42,11 @@ or a level jump actually needs it. Menu presentation remains synchronous.
 | Version | Alt+V | Port information, not the original game's version |
 | Full Screen | Alt+Enter | Aspect-preserving nearest-neighbor scaling |
 
+With God mode enabled in F3 Developer Tools, `+` and `-` add or remove one
+minute from the campaign clock after it starts. `Alt+Shift+T` adds one health
+point, increasing the maximum capacity when the meter is full (up to 12).
+`Alt+T` continues to toggle sound.
+
 Cave Ambience (Alt+A) has no original counterpart. It is a port-only item, off
 by default. Unlike Sound and Ambient Music, the choice is kept between sessions
 in `preferences.json`, beside the saves. See `docs/CAVERN_ARTWORK.md`.

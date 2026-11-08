@@ -7,8 +7,9 @@ import unittest
 from unittest.mock import patch
 
 from pop2.game_session import GameResources, GameSession
-from pop2.save_game import (MAX_BYTES, SaveGameError, capture_snapshot as capture,
-                           read_snapshot as read_save, write_save)
+from pop2.save_game import (MAX_BYTES, SaveGameError, capture as capture_progress,
+                           capture_snapshot as capture, read_snapshot as read_save,
+                           restore_progress, write_save)
 import tests.test_terrain as terrain_tests
 
 
@@ -43,6 +44,14 @@ class SaveFormatTests(unittest.TestCase):
                 self.assertIs(restored.level_map.desert, restored.desert)
                 if number == 1:
                     self.assertIs(restored.opening.runtime, restored.runtime)
+
+    def test_cheat_extended_story_clock_roundtrips_in_progress_saves(self):
+        game = GameSession.load(self.resources, 4)
+        game.story.select_scene(4, 4)
+        self.assertTrue(game.story.adjust_minutes(1))
+        restored, _saved = restore_progress(capture_progress(game), self.resources)
+        self.assertEqual(restored.story.minutes, 76)
+        self.assertEqual(restored.story.tree_stage, 0)
 
     def test_restored_enemy_rng_repeats_the_same_combat_decisions(self):
         original = GameSession.load(self.resources, 3)

@@ -135,6 +135,83 @@ class ImportedCheatTests(unittest.TestCase):
             s.dev_key_release(event)
             kill.assert_not_called()
 
+    def test_k_is_unmodified_and_shift_k_cannot_run_the_room_kill(self):
+        s = self.scene
+        s.set_god_mode(True)
+        with patch.object(s.combat, 'kill_room_enemies') as kill:
+            event = SimpleNamespace(keysym='K', state=1)
+            s.dev_key_press(event)
+            s.dev_key_release(event)
+        kill.assert_not_called()
+
+    def test_plus_and_minus_adjust_only_the_active_story_clock_in_god_mode(self):
+        s = self.scene
+        story = s.game.story
+        story.select_scene(4, 4)
+        story.minutes, story.frames_remaining = 12, 301
+        s.set_god_mode(True)
+        plus = SimpleNamespace(keysym='plus', char='+', state=1)
+        with patch.object(s, 'render') as render:
+            s.dev_key_press(plus)
+            s.dev_key_press(plus)
+            self.assertEqual((story.minutes, story.frames_remaining), (13, 301))
+            self.assertEqual(s.time_message, '13 Minutes Left')
+            self.assertEqual(render.call_count, 1)
+        s.dev_key_release(plus)
+        minus = SimpleNamespace(keysym='KP_Subtract', char='', state=0)
+        s.dev_key_press(minus)
+        self.assertEqual((story.minutes, story.frames_remaining), (12, 301))
+        s.dev_key_release(minus)
+        story.tree_stage = -1
+        s.dev_key_press(plus)
+        self.assertEqual(story.minutes, 12)
+        story.tree_stage, story.minutes = 0, 1
+        minus = SimpleNamespace(keysym='minus', char='-', state=0)
+        s.dev_key_press(minus)
+        self.assertTrue(story.expired)
+        s.dev_key_release(minus)
+        s.combat.player.life = 0
+        with patch.object(s, 'start_tree') as start_tree:
+            self.assertFalse(s.advance_story_clock())
+            start_tree.assert_not_called()
+            s.combat.player.life = 1
+            self.assertTrue(s.advance_story_clock())
+        start_tree.assert_called_once_with(9)
+        self.assertEqual(story.tree_stage, -1)
+
+    def test_alt_shift_t_adds_health_without_changing_alt_t_sound(self):
+        s = self.scene
+        player = s.combat.player
+        s.set_god_mode(True)
+        player.life, player.max_life = 1, 3
+        health_key = SimpleNamespace(keysym='T', char='T', state=0x20001)
+        with patch.object(s, 'render') as render:
+            s.dev_key_press(health_key)
+            s.dev_key_press(health_key)
+            self.assertEqual((player.life, player.max_life), (2, 3))
+            self.assertTrue(s.sound_enabled)
+            self.assertEqual(render.call_count, 1)
+        s.dev_key_release(health_key)
+        player.life, player.max_life = 3, 3
+        s.dev_key_press(health_key)
+        self.assertEqual((player.life, player.max_life), (4, 4))
+        s.dev_key_release(health_key)
+        player.life, player.max_life = 12, 12
+        s.dev_key_press(health_key)
+        self.assertEqual((player.life, player.max_life), (12, 12))
+        s.dev_key_release(health_key)
+        self.assertEqual(s.dev_key_press(SimpleNamespace(keysym='t', char='t', state=0x20000)), 'break')
+        self.assertFalse(s.sound_enabled)
+
+    def test_health_cheat_needs_god_mode(self):
+        s = self.scene
+        player = s.combat.player
+        player.life, player.max_life = 1, 3
+        event = SimpleNamespace(keysym='T', char='T', state=0x20001)
+        s.dev_key_press(event)
+        self.assertEqual((player.life, player.max_life), (1, 3))
+        self.assertTrue(s.sound_enabled)
+
     def test_god_mode_survives_projectiles_and_disabling_restores_damage(self):
         from pop2.darts import Dart
 

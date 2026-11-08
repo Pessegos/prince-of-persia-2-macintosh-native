@@ -767,14 +767,14 @@ class GameMenuSceneTests(unittest.TestCase):
     def test_releasing_shift_during_a_shortcut_cannot_repeat_or_stick_the_command(self):
         scene = self.scene
         scene.dev_key_press(self.event("T", 0x20001))
-        self.assertFalse(scene.sound_enabled)
+        self.assertTrue(scene.sound_enabled)
         scene.dev_key_press(self.event("t", 0x20000))
-        self.assertFalse(scene.sound_enabled)
+        self.assertTrue(scene.sound_enabled)
         scene.dev_key_release(self.event("t"))
         self.assertNotIn("T", scene.window_keys_down)
         self.assertNotIn("T", scene.pause_resume_keys)
         self.press("t", 0x20000)
-        self.assertTrue(scene.sound_enabled)
+        self.assertFalse(scene.sound_enabled)
 
     def test_menu_preferences_survive_new_game_and_restart(self):
         scene = self.scene
