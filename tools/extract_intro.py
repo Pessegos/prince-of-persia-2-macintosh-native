@@ -363,9 +363,10 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                     # 17:6dd6: PaintRect(rect) in palette index `color`.
                     emit("fill", w(4) & 255, rectangle(l()))
                 elif target == 0x132a:
-                    # SetSHAPColors 17:0a52 prepares the offscreen colour
-                    # table; indexed drawing is unaffected by it.
-                    pass
+                    # SetSHAPColors 17:0a52 loads CTBL(id at sp+4) and
+                    # ShowColors immediately displays its original indices.
+                    # It does not replace either NIS fade-table handle.
+                    emit("palette", resolve("CTBL", w(4)), 64, 0)
                 elif target == 0x132:
                     # DrawRoomFromNIS 2:03d4(level, room): a game room as the
                     # scene's picture (not a scene operation the port plays).

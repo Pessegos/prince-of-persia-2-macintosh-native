@@ -48,6 +48,14 @@ controller input on or off. Esc and F1 keep their meaning. Chosen keys reach
 the game as the original keys, so no command behaves differently. Choices are
 kept in `preferences.json`. See [CONTROLS.md](CONTROLS.md).
 
+With God mode enabled in F3 Developer Tools, `+` and `-` add or remove one
+minute from the campaign clock after it starts. `Alt+Shift+T` adds one health
+point, increasing the maximum capacity when the meter is full (up to 12).
+The campaign clock is capped at 300 minutes (five hours).
+Hold `+` or `-` to repeat the minute adjustment. `Alt+R` removes cheated hearts
+when restarting at the level opening; a reached checkpoint keeps the capacity
+it recorded. `Alt+T` continues to toggle sound.
+
 Cave Ambience (Alt+A) has no original counterpart. It is a port-only item, off
 by default. Unlike Sound and Ambient Music, the choice is kept between sessions
 in `preferences.json`, beside the saves. See `docs/CAVERN_ARTWORK.md`.

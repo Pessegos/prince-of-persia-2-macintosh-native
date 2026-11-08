@@ -33,7 +33,7 @@ from pop2.potions import Potions
 from pop2.pressure_plates import PressurePlates
 from pop2.rebirth import Checkpoint, DeathState, RebirthSnapshot
 from pop2.ruins_ai import RuinsMind
-from pop2.story_progress import FRAMES_PER_MINUTE, StoryProgress
+from pop2.story_progress import FRAMES_PER_MINUTE, MAX_STORY_MINUTES, StoryProgress
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.skeleton import Skeleton, SkeletonRoomRecord
 from pop2.flame_sword import FlameSword
@@ -556,7 +556,7 @@ def capture(game, controls=None, copy_verified=False):
 def _story(value):
     if (not isinstance(value, dict) or set(value) != {'minutes', 'frames_remaining', 'tree_stage'}
             or any(type(item) is not int for item in value.values())
-            or not 0 <= value['minutes'] <= 75
+            or not 0 <= value['minutes'] <= MAX_STORY_MINUTES
             or not 1 <= value['frames_remaining'] <= FRAMES_PER_MINUTE
             or not -1 <= value['tree_stage'] <= 7):
         raise SaveGameError('Invalid saved story clock')

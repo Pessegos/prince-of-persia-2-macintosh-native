@@ -269,6 +269,13 @@ The scenery is shown without characters, with entrance doors closed. In level 5,
 </details>
 
 <details>
+<summary>Room 11</summary>
+
+<img src="cavern-artwork-comparisons/level4-room11.gif" alt="Level 4, room 11: Macintosh and Port artwork comparison" width="1020">
+
+</details>
+
+<details>
 <summary>Room 12</summary>
 
 <img src="cavern-artwork-comparisons/level4-room12.gif" alt="Level 4, room 12: Macintosh and Port artwork comparison" width="1020">
@@ -318,6 +325,27 @@ The scenery is shown without characters, with entrance doors closed. In level 5,
 </details>
 
 <details>
+<summary>Room 19</summary>
+
+<img src="cavern-artwork-comparisons/level4-room19.gif" alt="Level 4, room 19: Macintosh and Port artwork comparison" width="1020">
+
+</details>
+
+<details>
+<summary>Room 20</summary>
+
+<img src="cavern-artwork-comparisons/level4-room20.gif" alt="Level 4, room 20: Macintosh and Port artwork comparison" width="1020">
+
+</details>
+
+<details>
+<summary>Room 21</summary>
+
+<img src="cavern-artwork-comparisons/level4-room21.gif" alt="Level 4, room 21: Macintosh and Port artwork comparison" width="1020">
+
+</details>
+
+<details>
 <summary>Room 22</summary>
 
 <img src="cavern-artwork-comparisons/level4-room22.gif" alt="Level 4, room 22: Macintosh and Port artwork comparison" width="1020">
@@ -328,6 +356,13 @@ The scenery is shown without characters, with entrance doors closed. In level 5,
 <summary>Room 23</summary>
 
 <img src="cavern-artwork-comparisons/level4-room23.gif" alt="Level 4, room 23: Macintosh and Port artwork comparison" width="1020">
+
+</details>
+
+<details>
+<summary>Room 24</summary>
+
+<img src="cavern-artwork-comparisons/level4-room24.gif" alt="Level 4, room 24: Macintosh and Port artwork comparison" width="1020">
 
 </details>
 
@@ -359,6 +394,13 @@ The scenery is shown without characters, with entrance doors closed. In level 5,
 
 </details>
 
+<details>
+<summary>Room 29</summary>
+
+<img src="cavern-artwork-comparisons/level4-room29.gif" alt="Level 4, room 29: Macintosh and Port artwork comparison" width="1020">
+
+</details>
+
 ## Level 5
 
 <details>
@@ -383,6 +425,13 @@ The scenery is shown without characters, with entrance doors closed. In level 5,
 </details>
 
 <details>
+<summary>Room 5</summary>
+
+<img src="cavern-artwork-comparisons/level5-room5.gif" alt="Level 5, room 5: Macintosh and Port artwork comparison" width="1020">
+
+</details>
+
+<details>
 <summary>Room 6</summary>
 
 <img src="cavern-artwork-comparisons/level5-room6.gif" alt="Level 5, room 6: Macintosh and Port artwork comparison" width="1020">
@@ -393,6 +442,13 @@ The scenery is shown without characters, with entrance doors closed. In level 5,
 <summary>Room 7</summary>
 
 <img src="cavern-artwork-comparisons/level5-room7.gif" alt="Level 5, room 7: Macintosh and Port artwork comparison" width="1020">
+
+</details>
+
+<details>
+<summary>Room 8</summary>
+
+<img src="cavern-artwork-comparisons/level5-room8.gif" alt="Level 5, room 8: Macintosh and Port artwork comparison" width="1020">
 
 </details>
 
@@ -456,6 +512,20 @@ The scenery is shown without characters, with entrance doors closed. In level 5,
 <summary>Room 19</summary>
 
 <img src="cavern-artwork-comparisons/level5-room19.gif" alt="Level 5, room 19: Macintosh and Port artwork comparison" width="1020">
+
+</details>
+
+<details>
+<summary>Room 20</summary>
+
+<img src="cavern-artwork-comparisons/level5-room20.gif" alt="Level 5, room 20: Macintosh and Port artwork comparison" width="1020">
+
+</details>
+
+<details>
+<summary>Room 21</summary>
+
+<img src="cavern-artwork-comparisons/level5-room21.gif" alt="Level 5, room 21: Macintosh and Port artwork comparison" width="1020">
 
 </details>
 

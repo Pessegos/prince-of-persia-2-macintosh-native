@@ -1,6 +1,6 @@
 import unittest
 
-from pop2.story_progress import FRAMES_PER_MINUTE, StoryProgress
+from pop2.story_progress import FRAMES_PER_MINUTE, MAX_STORY_MINUTES, StoryProgress
 
 
 class StoryProgressTests(unittest.TestCase):
@@ -104,6 +104,27 @@ class StoryProgressTests(unittest.TestCase):
         self.assertEqual(story.message_text(), 'Time has expired!')
         story.message_pending = 'minutes'
         self.assertEqual(story, StoryProgress(minutes=0, tree_stage=0))
+
+    def test_cheat_minute_steps_need_an_active_clock_and_keep_subminute_progress(self):
+        story = StoryProgress()
+        self.assertFalse(story.adjust_minutes(1))
+        story.select_scene(4, 4)
+        story.minutes, story.frames_remaining = 5, 237
+        story.message_pending = 'seconds'
+        self.assertTrue(story.adjust_minutes(1))
+        self.assertEqual((story.minutes, story.frames_remaining, story.message_pending), (6, 237, None))
+        self.assertTrue(story.adjust_minutes(-1))
+        self.assertEqual((story.minutes, story.frames_remaining), (5, 237))
+
+    def test_cheat_minute_step_can_expire_and_is_bounded_at_300_minutes(self):
+        story = StoryProgress(minutes=1, tree_stage=0)
+        self.assertTrue(story.adjust_minutes(-1))
+        self.assertTrue(story.expired)
+        self.assertFalse(story.adjust_minutes(-1))
+        story.minutes = MAX_STORY_MINUTES - 1
+        self.assertTrue(story.adjust_minutes(1))
+        self.assertEqual(story.minutes, MAX_STORY_MINUTES)
+        self.assertFalse(story.adjust_minutes(1))
 
 
 if __name__ == '__main__':

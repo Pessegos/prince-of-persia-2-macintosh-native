@@ -5,7 +5,7 @@ import unittest
 
 from pop2.game_session import GameResources, GameSession
 from pop2.paths import ASSET_DIR
-from pop2.story_progress import FRAMES_PER_MINUTE, StoryProgress
+from pop2.story_progress import FRAMES_PER_MINUTE, MAX_STORY_MINUTES, StoryProgress
 
 TREES = all((ASSET_DIR / f'tree-{n}.json').is_file() for n in range(1, 10))
 
@@ -42,7 +42,7 @@ class StorySaveTests(unittest.TestCase):
         game = GameSession.load(resources, 4)
         game.story = StoryProgress(tree_stage=0)
         document = capture(game)
-        for story in ({'minutes': 76, 'frames_remaining': 1, 'tree_stage': 0},
+        for story in ({'minutes': MAX_STORY_MINUTES + 1, 'frames_remaining': 1, 'tree_stage': 0},
                       {'minutes': 5, 'frames_remaining': 0, 'tree_stage': 0},
                       {'minutes': 5, 'frames_remaining': 1, 'tree_stage': 8},
                       {'minutes': 5, 'frames_remaining': 1}):

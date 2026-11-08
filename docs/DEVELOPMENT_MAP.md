@@ -22,10 +22,23 @@ collapsed skeletons cannot reawaken until the level/world resets. Other rooms,
 future generated opponents and the Prince are untouched. Key repeat, menus,
 cutscenes and Ctrl/Alt chords cannot trigger the command.
 
+God mode also enables `+` and `-` to add or remove one minute from the campaign
+clock after it has started, up to 300 minutes. `Alt+Shift+T` adds one health
+point: it heals the Prince up to the current capacity, then increases the
+capacity by one when it is full, up to 12. These commands work during unpaused
+gameplay; the minute keys
+repeat while held. They are ignored before the level-four clock starts. `Alt+T`
+remains the sound toggle.
+
+An added heart is removed by `Alt+R` when restarting at the level opening.
+Reaching a checkpoint records the current capacity, so those hearts remain on
+retries from that checkpoint; hearts added after it are lost when retrying there.
+
 Both toggles last for the session, including restarts, loads and level changes;
 they are not written into saves or settings. God mode neither heals an injured
-Prince nor revives an already-dead one. F3 remains directly available for
-development; no startup 1+2+3 cheat-unlock gate is implemented here.
+Prince nor revives an already-dead one; `Alt+Shift+T` is the separate health
+cheat. F3 remains directly available for development; no startup 1+2+3
+cheat-unlock gate is implemented here.
 
 ## Source And State
 
