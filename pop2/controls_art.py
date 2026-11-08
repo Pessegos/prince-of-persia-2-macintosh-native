@@ -218,31 +218,36 @@ LAYOUTS = {
 }
 # Callout rows, 18 pixels apart, shared by both columns of labels.
 ROWS = (-25, -7, 11, 29, 47, 65, 83, 101, 119, 137)
-# button: (side, row, the points its line passes on the way to the button);
+# The labels come in groups, one per control or cluster, as on a game's
+# controls screen: a group lists its buttons, an icon and an action to a
+# row from its first row down, beside a bracket; one line runs from the
+# bracket, level at its line row, then straight up or down to the control.
+# name: (side, first row, line row, buttons, the points the line passes).
 # 'move' is the left stick's movement, 'leftstick' its click.
-# Lines run level from the labels, then bend at most once, so they never
-# cross one another or pass over another button.
-SHARED_ROUTES = {
-    'lefttrigger': ('left', -7, ((44, -7), (52, 2))), 'righttrigger': ('right', -7, ((196, -7), (188, 2))),
-    'leftshoulder': ('left', 11, ((45, 11),)), 'rightshoulder': ('right', 11, ((195, 11),)),
-    'y': ('right', 29, ((189, 29),)), 'b': ('right', 47, ((207, 47),)),
-    'x': ('right', 65, ((216, 65), (171, 50))), 'a': ('right', 83, ((198, 83), (187, 72))),
-    'rightstick': ('right', 101, ((169, 101), (163, 95))),
+SHARED_GROUPS = {
+    'leftshoulders': ('left', -7, -7, ('lefttrigger', 'leftshoulder'), ((52, -7), (52, 1))),
+    'rightshoulders': ('right', -7, -7, ('righttrigger', 'rightshoulder'), ((188, -7), (188, 1))),
+    'face': ('right', 29, 47, ('y', 'x', 'b', 'a'), ((212, 47),)),
+    'rightstick': ('right', 101, 101, ('rightstick',), ((163, 101), (163, 95))),
 }
-ROUTES = {
-    'xbox': {**SHARED_ROUTES,
-             'back': ('left', -25, ((104, -25), (104, 42))),
-             'start': ('right', -25, ((136, -25), (136, 42))),
-             'move': ('left', 47, ((42, 47),)), 'leftstick': ('left', 65, ((41, 65), (47, 59))),
-             'dpad': ('left', 83, ((70, 83),)),
-             'misc1': ('left', 137, ((120, 137), (120, 67)))},
-    'playstation': {**SHARED_ROUTES,
-                    'touchpad': ('left', -25, ((110, -25), (110, 17))),
-                    'start': ('right', -25, ((146, -25), (146, 20))),
-                    'back': ('left', 29, ((90, 29),)), 'dpad': ('left', 47, ((41, 47),)),
-                    'move': ('left', 83, ((71, 83),)), 'leftstick': ('left', 101, ((71, 101), (77, 95))),
-                    'misc1': ('left', 137, ((120, 137), (120, 82)))},
+GROUPS = {
+    'xbox': {**SHARED_GROUPS,
+             'back': ('left', -25, -25, ('back',), ((104, -25), (104, 42))),
+             'start': ('right', -25, -25, ('start',), ((136, -25), (136, 42))),
+             'leftstick': ('left', 47, 47, ('move', 'leftstick'), ((43, 47),)),
+             'dpad': ('left', 83, 83, ('dpad',), ((71, 83),)),
+             'misc1': ('left', 137, 137, ('misc1',), ((120, 137), (120, 67)))},
+    'playstation': {**SHARED_GROUPS,
+                    'touchpad': ('left', -25, -25, ('touchpad',), ((110, -25), (110, 17))),
+                    'start': ('right', -25, -25, ('start',), ((146, -25), (146, 20))),
+                    'back': ('left', 29, 29, ('back',), ((90, 29),)),
+                    'dpad': ('left', 47, 47, ('dpad',), ((42, 47),)),
+                    'leftstick': ('left', 83, 83, ('move', 'leftstick'), ((72, 83),)),
+                    'misc1': ('left', 137, 137, ('misc1',), ((120, 137), (120, 82)))},
 }
+# A diamond round the four face buttons, which the face group's line meets:
+# its centre and its reach (|dx| + |dy|).
+FACE_FRAME = (180, 47, 32)
 
 
 def layout_name(style):
@@ -439,7 +444,8 @@ def dpad(image, centre):
 class PadArt:
     image: Image.Image
     points: dict   # button -> centre on the image
-    routes: dict   # button -> (side, row y, line points), on the image
+    groups: dict   # name -> (side, first row, line row, buttons, line points), on the image
+    frame: tuple   # the face buttons' diamond: its corners, on the image
 
 
 def shifted(point):
@@ -479,17 +485,23 @@ def pad_art(style='xbox'):
         ivory_button(image, points['back'], 'view')
         ivory_button(image, points['start'], 'menu')
         ivory_button(image, points['misc1'], 'share', (15, 11))
-    routes = {button: (side, row + ABOVE, tuple(shifted(point) for point in path))
-              for button, (side, row, path) in ROUTES[layout].items()}
-    return PadArt(image, points, routes)
+    groups = {name: (side, first + ABOVE, line + ABOVE, buttons, tuple(shifted(point) for point in path))
+              for name, (side, first, line, buttons, path) in GROUPS[layout].items()}
+    x, y, reach = FACE_FRAME
+    frame = tuple(shifted(corner) for corner in ((x + reach, y), (x, y + reach), (x - reach, y),
+                                                 (x, y - reach), (x + reach, y)))
+    return PadArt(image, points, groups, frame)
 
 
-SHORT_NAMES = {'leftstick': 'L', 'rightstick': 'R'}
+SHORT_NAMES = {'leftstick': 'L', 'rightstick': 'R', 'move': 'L'}
+# Small arrows either side of the stick for its movement.
+MOVE_ARROWS = (((1, 5), (0, 6), (1, 6), (1, 7)), ((15, 5), (15, 6), (16, 6), (15, 7)))
 
 
 @lru_cache(maxsize=None)
 def button_icon(token, style):
-    """A small picture of one button for the remap list (None if there is none)."""
+    """A small picture of one button for the remap list and the callouts
+    (None if there is none)."""
     from pop2.controls_page import mini_text
     from pop2.input_bindings import pad_name
 
@@ -507,9 +519,24 @@ def button_icon(token, style):
         trigger = token.endswith('trigger')
         stamp(image, rounded(15, 13 if trigger else 9, 4), centre, BUMPER, rim=3)
         mini_text(ImageDraw.Draw(image), 9, 4, pad_name(token, style), INK, 'center')
-    elif token in ('leftstick', 'rightstick'):
+    elif token in ('leftstick', 'rightstick', 'move'):
         stamp(image, circle_mask(6), centre, FRIEZE, rim=3, dome=.4)
-        mini_text(ImageDraw.Draw(image), 9, 4, SHORT_NAMES[token], FRIEZE[6], 'center')
+        draw = ImageDraw.Draw(image)
+        mini_text(draw, 9, 4, SHORT_NAMES[token], FRIEZE[6], 'center')
+        if token == 'move':
+            for arrow in MOVE_ARROWS:
+                draw.point(arrow, fill=SHELL[5])
+    elif token == 'dpad':
+        cross = mask_from(lambda draw: (draw.rectangle((4, 0, 8, 12), fill=255),
+                                        draw.rectangle((0, 4, 12, 8), fill=255)), (13, 13))
+        stamp(image, cross, centre, TAPESTRY, rim=2, bias=.15)
+    elif token == 'misc1':
+        if style not in ('playstation', 'nintendo'):
+            ivory_button(image, centre, 'share', (15, 11))
+        else:
+            small_button(image, centre, 'dot', (9, 5) if style == 'playstation' else (9, 9))
+    elif token == 'touchpad':
+        stamp(image, rounded(15, 11, 3), centre, BUMPER, rim=2, bias=-.05)
     else:
         return None
     return image
@@ -588,17 +615,15 @@ def draw_leds(image, rect, lit=('NUM',)):
             draw.point((cx - 1, top + 10), fill=LED_GREEN[2])
 
 
-# The Windows 98 flag without its colours: a black frame round four clear
-# panes, the right half a pixel lower as it waves, and a trail of pieces
-# flying off to the left; printed in the key's ink like a legend.
-WINDOWS_FLAG = ('....#####....',
-                '..#.#...#####',
-                '#...#...#...#',
-                '..#.#####...#',
-                '#...#...#####',
-                '..#.#...#...#',
-                '....#####...#',
-                '........#####')
+# The Windows 98 flag in black: four solid panes, the right pair a pixel
+# lower as the flag waves, and a long trail of pieces thinning out to the
+# left; printed in the key's ink like a legend.
+WINDOWS_FLAG = ('...#...#.#.###....',
+                '.....#.#.#.###.###',
+                '...............###',
+                '.#...#...#.###....',
+                '...#...#.#.###.###',
+                '...............###')
 
 
 def windows_flag(image, centre, ink):

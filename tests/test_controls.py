@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 from pop2 import controls_art
-from pop2.controls_page import ACTION_COLORS, ControlsPage, keyboard_bounds, keyboard_keys
+from pop2.controls_page import ACTION_COLORS, BRACKET_X, ControlsPage, keyboard_bounds, keyboard_keys
 from pop2.game_menu import GameMenu
 from pop2.gamepad import Hysteresis, PadReader, PadState, pad_style
 from pop2.input_bindings import (Bindings, CONTROLLER_DEFAULTS, KEYBOARD_DEFAULTS, PAD_BINDABLE, key_name,
@@ -500,9 +500,8 @@ class PadArtTests(unittest.TestCase):
              'misc1': 5}
 
     @staticmethod
-    def polyline(side, row, path):
-        start = -8 if side == 'left' else controls_art.PAD_WIDTH + 8
-        return [(start, row), *path]
+    def polyline(side, line, path):
+        return [(BRACKET_X[side], line), *path]
 
     @staticmethod
     def crosses(p, q, r, s):
@@ -519,60 +518,112 @@ class PadArtTests(unittest.TestCase):
         return ((px - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2) ** .5
 
     def test_callout_lines_neither_cross_nor_touch_another_button(self):
+        cx, cy, reach = controls_art.FACE_FRAME
+        cy += controls_art.ABOVE
         for style in self.STYLES:
             art = controls_art.pad_art(style)
-            lines = {button: self.polyline(*route) for button, route in art.routes.items()}
-            for button, line in lines.items():
+            lines = {name: self.polyline(side, line, path)
+                     for name, (side, _first, line, _buttons, path) in art.groups.items()}
+            frame = list(zip(art.frame, art.frame[1:]))
+            for name, line in lines.items():
                 segments = list(zip(line, line[1:]))
+                buttons = art.groups[name][3]
                 for other, centre in art.points.items():
-                    if other in (button, 'move' if button == 'leftstick' else None,
-                                 'leftstick' if button == 'move' else None) or other not in self.ROUND:
+                    if other in buttons or other not in self.ROUND or (name == 'face' and other in 'abxy'):
                         continue
-                    with self.subTest(style=style, line=button, near=other):
+                    with self.subTest(style=style, line=name, near=other):
                         self.assertGreater(min(self.clearance(centre, *segment) for segment in segments),
                                            self.ROUND[other] + 1)
                 for other, other_line in lines.items():
-                    if other <= button:
+                    if other <= name:
                         continue
-                    with self.subTest(style=style, line=button, other=other):
+                    with self.subTest(style=style, line=name, other=other):
                         self.assertFalse(any(self.crosses(*first, *second)
                                              for first in segments
                                              for second in zip(other_line, other_line[1:])))
+                if name != 'face':
+                    # Only the face group's line reaches the face buttons' frame.
+                    with self.subTest(style=style, line=name, near='frame'):
+                        self.assertFalse(any(self.crosses(*first, *second) for first in segments
+                                             for second in frame))
+                        self.assertTrue(all(abs(x - cx) + abs(y - cy) > reach for x, y in line))
+
+    def test_callout_lines_run_level_then_straight_up_or_down(self):
+        for style in self.STYLES:
+            for name, (side, _first, line, _buttons, path) in controls_art.pad_art(style).groups.items():
+                points = self.polyline(side, line, path)
+                with self.subTest(style=style, group=name):
+                    self.assertEqual(points[1][1], line)  # leaves its bracket level
+                    self.assertLessEqual(len(points), 3)  # bends at most once
+                    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+                        self.assertTrue(x0 == x1 or y0 == y1)
+
+    def test_face_frame_keeps_clear_of_the_buttons_round_it(self):
+        cx, cy, reach = controls_art.FACE_FRAME
+        cy += controls_art.ABOVE
+        for style in self.STYLES:
+            for button, centre in controls_art.pad_art(style).points.items():
+                if button not in self.ROUND:
+                    continue
+                nearest = abs(centre[0] - cx) + abs(centre[1] - cy)
+                with self.subTest(style=style, button=button):
+                    if button in 'abxy':
+                        # inside, with room to spare all round
+                        self.assertLess(nearest + self.ROUND[button] * 2 ** .5, reach)
+                    else:
+                        self.assertGreater(nearest - self.ROUND[button] * 2 ** .5, reach)
 
     def test_labels_sit_on_one_grid_and_never_share_a_row(self):
         rows = {row + controls_art.ABOVE for row in controls_art.ROWS}
         for style in self.STYLES:
             used = {}
-            for button, (side, row, path) in controls_art.pad_art(style).routes.items():
-                with self.subTest(style=style, button=button):
-                    self.assertIn(row, rows)
-                    self.assertNotIn((side, row), used)
-                    # The line leaves its label level, along the row.
-                    self.assertEqual(path[0][1], row)
-                used[side, row] = button
+            for name, (side, first, line, buttons, _path) in controls_art.pad_art(style).groups.items():
+                block = [first + 18 * index for index in range(len(buttons))]
+                with self.subTest(style=style, group=name):
+                    self.assertTrue(set(block) <= rows)
+                    self.assertIn(line, block)
+                    for row in block:
+                        self.assertNotIn((side, row), used)
+                        used[side, row] = name
 
     def test_every_drawn_bindable_button_has_a_callout(self):
         for style in self.STYLES:
             art = controls_art.pad_art(style)
-            self.assertIn('move', art.routes)
+            members = {button for _side, _first, _line, buttons, _path in art.groups.values()
+                       for button in buttons}
+            self.assertIn('move', members)
             for button in PAD_BINDABLE:
                 if button in art.points or button.endswith(('shoulder', 'trigger')):
                     with self.subTest(style=style, button=button):
-                        self.assertIn(button, art.routes)
+                        self.assertIn(button, members)
 
     def test_moving_a_button_changes_only_its_own_callout(self):
+        def labels(page):
+            return {button: label for _name, _side, _line, _points, rows in page.callouts()
+                    for button, label, _action, _y in rows}
+
         page = ControlsPage(Bindings('keyboard'), Bindings('controller'),
                             pads=(PadState(1, 'Pad', 'xbox'),))
-        before = {entry[0]: entry[4] for entry in page.callouts()}
+        before = labels(page)
         self.assertEqual(before['move'], 'Move')
         self.assertNotIn('leftstick', before)
         self.assertEqual(before['dpad'], 'Move')
         self.assertEqual(before['righttrigger'], 'Grab')
         self.assertNotIn('leftshoulder', before)
+        self.assertNotIn('leftshoulders', {entry[0] for entry in page.callouts()})
         page.controller.assign('sword', 1, 'leftshoulder')
-        after = {entry[0]: entry[4] for entry in page.callouts()}
+        after = labels(page)
         self.assertEqual(after['leftshoulder'], 'Sword')
         self.assertEqual({k: v for k, v in after.items() if k != 'leftshoulder'}, before)
+
+    def test_a_group_lists_its_bound_buttons_from_its_first_row(self):
+        page = ControlsPage(Bindings('keyboard'), Bindings('controller'),
+                            pads=(PadState(1, 'Pad', 'xbox'),))
+        page.controller.slots['time'] = [None, None]  # Y left unbound
+        face = next(entry for entry in page.callouts() if entry[0] == 'face')
+        first = page.PAD_ORIGIN[1] + controls_art.GROUPS['xbox']['face'][1] + controls_art.ABOVE
+        self.assertEqual([(button, y) for button, _label, _action, y in face[4]],
+                         [('x', first), ('b', first + 18), ('a', first + 36)])
 
     def test_distance_field_matches_brute_force(self):
         mask = controls_art.body_mask()[::3, ::3]

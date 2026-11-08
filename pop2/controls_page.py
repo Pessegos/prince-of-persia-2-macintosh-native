@@ -203,6 +203,10 @@ def draw_keyboard(image, origin, unit, token_colors):
 SHORT_LABELS = {'left': 'Move', 'right': 'Move', 'up': 'Jump', 'down': 'Crouch', 'grab': 'Grab',
                 'sword': 'Sword', 'time': 'Time left', 'pause': 'Pause', 'menu': 'Menu'}
 LINE = (132, 130, 128)  # over the panel; over a light shell the finish's ink
+# Where each side's brackets stand, from the pad's left edge, and how wide
+# a label may be beside its icon.
+BRACKET_X = {'left': -6, 'right': PAD_WIDTH + 5}
+LABEL_WIDTH = 76
 
 
 def line_pixels(points):
@@ -551,36 +555,48 @@ class ControlsPage:
             text(value, x + 19, y + 2, ERROR if missing else WHITE, max_width=150)
 
     def callouts(self):
-        """(button, side, row, line points, label, action) for each drawn label."""
+        """(group, side, line row, line points, rows) for each drawn group;
+        rows are (button, label, action, y), one per bound button."""
         art = pad_art(self.style)
         x0, y0 = self.PAD_ORIGIN
         bound = {token: action for action in self.controller.actions
                  for token in self.controller.keys(action)}
         entries = []
-        for button, (side, row, path) in art.routes.items():
-            # The left stick and the D-pad always move.
-            action = 'left' if button in ('move', 'dpad') else bound.get(button)
-            if action is None:
+        for name, (side, first, line, buttons, path) in art.groups.items():
+            rows = []
+            for button in buttons:
+                # The left stick and the D-pad always move.
+                action = 'left' if button in ('move', 'dpad') else bound.get(button)
+                if action is not None:
+                    rows.append((button, SHORT_LABELS[action], action, y0 + first + 18 * len(rows)))
+            if not rows:
                 continue
-            label = SHORT_LABELS[action]
-            start = x0 - 8 if side == 'left' else x0 + PAD_WIDTH + 8
-            points = [(start, y0 + row)] + [(x0 + x, y0 + y) for x, y in path]
-            entries.append((button, side, y0 + row, points, label, action))
+            start = x0 + BRACKET_X[side]
+            points = [(start, y0 + line)] + [(x0 + x, y0 + y) for x, y in path]
+            entries.append((name, side, y0 + line, points, rows))
         return entries
 
     def draw_controller_overview(self, image, draw, text):
         art = pad_art(self.style)
         x0, y0 = self.PAD_ORIGIN
         image.alpha_composite(art.image, (x0, y0))
-        for _button, side, row, points, label, action in self.callouts():
+        callouts = self.callouts()
+        if any(name == 'face' for name, *_rest in callouts):
+            draw_callout(image, [(x0 + x, y0 + y) for x, y in art.frame], art, (x0, y0))
+        for _name, side, line_y, points, rows in callouts:
             draw_callout(image, points, art, (x0, y0))
-            color = ACTION_COLORS[action]
-            if side == 'left':
-                swatch, anchor, align = x0 - 14, x0 - 18, 'right'
-            else:
-                swatch, anchor, align = x0 + PAD_WIDTH + 10, x0 + PAD_WIDTH + 18, 'left'
-            draw.rectangle((swatch, row - 2, swatch + 4, row + 2), fill=color)
-            text(label, anchor, row - 5, WHITE, align, 88)
+            bracket = points[0][0]
+            ys = [y for *_entry, y in rows] + [line_y]
+            draw.line(((bracket, min(ys) - 6), (bracket, max(ys) + 6)), fill=LINE)
+            for button, label, _action, y in rows:
+                icon = button_icon(button, self.style)
+                left = bracket - 21 if side == 'left' else bracket + 4
+                if icon is not None:
+                    image.alpha_composite(icon, (left, y - 6))
+                if side == 'left':
+                    text(label, left - 3, y - 5, WHITE, 'right', LABEL_WIDTH)
+                else:
+                    text(label, left + 20, y - 5, WHITE, 'left', LABEL_WIDTH)
         status_y = y0 + PAD_HEIGHT + 6
         if not self.controller_available:
             text('Controller support is unavailable here', 256, status_y, MUTED, 'center', 420)
