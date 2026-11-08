@@ -1035,7 +1035,10 @@ A floor that lands on a torch cell turns kind 19 into 32 and writes only the kin
 word (5:2dcc-2e08), so the foreground and the torch's trigger stay. The exported
 native drawing of Room 14 of level three with that cell struck still contains the
 torch command (SHAP 3586), so the animated torch keeps burning on kind 32. The port
-had hidden it, niche and flame, once the floor landed (fixed 2026-11-07).
+had hidden it, niche and flame, once the floor landed (fixed 2026-11-07). ATM Torch
+(5:1446-1498) writes each new frame into the cell's foreground word without looking
+at its kind, so the flame also goes on flickering there; the port had drawn it still
+at the frame it had when the floor landed (fixed 2026-11-08).
 
 DrawMob (5:3128-32e0) also marks the next column's floor for repaint at the
 object's bottom row and, when different, its top row. ComputeMobRect uses
