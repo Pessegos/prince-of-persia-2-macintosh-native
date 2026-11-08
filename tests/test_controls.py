@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 from pop2 import controls_art
-from pop2.controls_page import ControlsPage, keyboard_keys
+from pop2.controls_page import ACTION_COLORS, ControlsPage, keyboard_keys
 from pop2.game_menu import GameMenu
 from pop2.gamepad import Hysteresis, PadReader, PadState, pad_style
 from pop2.input_bindings import (Bindings, CONTROLLER_DEFAULTS, KEYBOARD_DEFAULTS, PAD_BINDABLE, key_name,
@@ -574,6 +574,23 @@ class PadArtTests(unittest.TestCase):
         for y, x in inside[::17]:
             expected = np.sqrt(((outside - (y, x)) ** 2).sum(axis=1)).min()
             self.assertAlmostEqual(float(fast[y, x]), float(expected), places=4)
+
+    def test_default_face_buttons_share_their_actions_colours(self):
+        bindings = Bindings('controller')
+        for button in 'abxy':
+            action = next(action for action in bindings.actions if button in bindings.keys(action))
+            with self.subTest(button=button, action=action):
+                self.assertEqual(ACTION_COLORS[action], controls_art.GEMS[button])
+
+    def test_keyboard_draws_the_keypad_and_no_key_overlaps_another(self):
+        keys = keyboard_keys(ControlsPage.KEYBOARD_ORIGIN, ControlsPage.KEYBOARD_UNIT)
+        tokens = {token for token, _label, _rect in keys}
+        self.assertTrue({'KP_0', 'KP_5', 'KP_Enter', 'KP_Add', 'Pause'} <= tokens)
+        rects = [rect for _token, _label, rect in keys]
+        for index, (left, top, right, bottom) in enumerate(rects):
+            for other in rects[index + 1:]:
+                self.assertFalse(left <= other[2] and other[0] <= right and top <= other[3] and other[1] <= bottom,
+                                 ((left, top, right, bottom), other))
 
 
 class FakeFont:

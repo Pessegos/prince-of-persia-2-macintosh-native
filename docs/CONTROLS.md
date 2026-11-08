@@ -9,26 +9,28 @@ F1 > **Controls** (also Alt+K, from play or from any menu page). The page has
 two tabs:
 
 - **Keyboard**: a drawn keyboard with each action's keys lit in its colour,
-  and a legend. Keys that are not on the drawing (the numeric keypad, some
-  national keys) are named in the legend.
+  and a legend. Keys that are not on the drawing (some national keys) are
+  named in the legend.
 - **Controller**: a drawn controller in the connected pad's style (Xbox,
   PlayStation or Nintendo layout and symbols) with labelled callouts, the
   connected controller's name and a **Use controller** switch.
 
 Both drawings are original pixel art made by code (`pop2/controls_art.py`)
 at the native 510x384 size: each shape is lit from the upper left and
-reduced to a few hard shades. The controller has the proportions and
-layout of an Xbox Series controller; the PlayStation and Nintendo styles
-reuse that body with their own buttons for now. Colours come from the
-game's palace: an ivory shell with mauve shadows and dark brown outlines,
-frieze-blue sticks and D-pad, gem face buttons and a gold medallion with
-an eight-pointed star where the guide button sits (no console logo). The
-keyboard matches: cream keys on a tan case. A second, dark finish with a
-gold inlay (`FINISH = 'ebony'`) is kept for comparison. Nothing is traced
-from another game. The callouts sit on one 18-pixel grid on both sides;
-each line leaves its label level and bends at most once. Tests check that
-no line crosses another or passes over another button, with every button
-bound.
+reduced to a few hard shades, in colours taken from the game's palace. The
+controller has the proportions and layout of an Xbox Series controller: an
+ivory shell with mauve shadows and dark brown outlines, frieze-blue sticks,
+a crimson D-pad like the palace tapestries, gem face buttons and a guide
+button drawn as a lit ring round an X. The PlayStation and Nintendo styles
+reuse that body with their own buttons for now. The keyboard is a full
+1990s office keyboard (keypad, lock lights, the old four-colour Windows
+flag on the Windows keys) with light letter keys and darker mauve
+modifiers, legends at the top left of each key. Jump, Crouch, Sword and
+Time left take the colours of their default buttons (A, B, X, Y). Nothing
+is traced from another game. The callouts sit on one 18-pixel grid on both
+sides; each line leaves its label level and bends at most once. Tests
+check that no line crosses another or passes over another button, with
+every button bound.
 
 **Change keys...** / **Change buttons...** opens a list with two slots per
 action. Enter (or A) waits for the next key or button, Delete (or X) clears a

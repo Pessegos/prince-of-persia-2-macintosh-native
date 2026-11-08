@@ -8,16 +8,18 @@ window's live Bindings, so a change works at once; the window keeps it.
 from PIL import Image, ImageDraw
 
 from pop2.bitmap_labels import label_text
-from pop2.controls_art import (PAD_HEIGHT, PAD_WIDTH, button_icon, finish, keyboard_case, keycap,
-                               legend_ink, pad_art)
+from pop2.controls_art import (GEMS, INK, PAD_HEIGHT, PAD_WIDTH, button_icon, draw_leds, keyboard_case,
+                               keycap, legend_ink, pad_art, windows_flag)
 from pop2.game_ui import DevelopmentMenu, centered_panel
 from pop2.input_bindings import ACTION_BY_NAME, LOCKED_KEYS, PAD_LOCKED, key_name, key_token, pad_name
 
 GOLD, WHITE, MUTED, ERROR = '#f4d873', '#eeeeee', '#999999', '#ff9b9b'
+# Jump, Crouch, Sword and Time left take the colours of their default
+# buttons (A, B, X, Y); Move takes the friezes' turquoise.
 ACTION_COLORS = {
-    'left': (244, 216, 115), 'right': (244, 216, 115), 'up': (150, 204, 104),
-    'down': (104, 184, 214), 'grab': (226, 152, 86), 'sword': (222, 98, 92),
-    'time': (186, 150, 226), 'pause': (196, 196, 196), 'menu': (214, 128, 176),
+    'left': (82, 181, 189), 'right': (82, 181, 189), 'up': GEMS['a'], 'down': GEMS['b'],
+    'grab': (232, 128, 52), 'sword': GEMS['x'], 'time': GEMS['y'], 'pause': (156, 118, 214),
+    'menu': (214, 128, 176),
 }
 LEGEND = (('Move', ('left', 'right')), ('Up / Jump', ('up',)), ('Down / Crouch', ('down',)),
           ('Grab / Step', ('grab',)), ('Sword / Strike', ('sword',)), ('Time left', ('time',)),
@@ -29,10 +31,10 @@ MINI = {
     'D': '##.|#.#|#.#|#.#|##.', 'E': '###|#..|##.|#..|###', 'F': '###|#..|##.|#..|#..',
     'G': '.##|#..|#.#|#.#|.##', 'H': '#.#|#.#|###|#.#|#.#', 'I': '###|.#.|.#.|.#.|###',
     'J': '..#|..#|..#|#.#|.#.', 'K': '#.#|#.#|##.|#.#|#.#', 'L': '#..|#..|#..|#..|###',
-    'M': '#...#|##.##|#.#.#|#...#|#...#', 'N': '#..#|##.#|#.##|#..#|#..#',
+    'M': '#.#|###|###|#.#|#.#', 'N': '#..#|##.#|#.##|#..#|#..#',
     'O': '.#.|#.#|#.#|#.#|.#.', 'P': '##.|#.#|##.|#..|#..', 'Q': '.#.|#.#|#.#|##.|.##',
     'R': '##.|#.#|##.|#.#|#.#', 'S': '.##|#..|.#.|..#|##.', 'T': '###|.#.|.#.|.#.|.#.',
-    'U': '#.#|#.#|#.#|#.#|###', 'V': '#.#|#.#|#.#|#.#|.#.', 'W': '#...#|#...#|#.#.#|##.##|#...#',
+    'U': '#.#|#.#|#.#|#.#|###', 'V': '#.#|#.#|#.#|#.#|.#.', 'W': '#.#|#.#|#.#|###|#.#',
     'X': '#.#|#.#|.#.|#.#|#.#', 'Y': '#.#|#.#|.#.|.#.|.#.', 'Z': '###|..#|.#.|#..|###',
     '0': '###|#.#|#.#|#.#|###', '1': '.#.|##.|.#.|.#.|###', '2': '##.|..#|.#.|#..|###',
     '3': '##.|..#|.#.|..#|##.', '4': '#.#|#.#|###|..#|..#', '5': '###|#..|##.|..#|##.',
@@ -41,6 +43,7 @@ MINI = {
     '[': '##|#.|#.|#.|##', ']': '##|.#|.#|.#|##', '\\': '#..|#..|.#.|..#|..#',
     ';': '..|.#|..|.#|#.', "'": '#|#|.|.|.', ',': '..|..|..|.#|#.', '.': '.|.|.|.|#',
     '/': '..#|..#|.#.|#..|#..', '`': '#.|.#|..|..|..', '+': '...|.#.|###|.#.|...',
+    '*': '...|#.#|.#.|#.#|...',
     ' ': '..|..|..|..|..',
 }
 
@@ -82,32 +85,59 @@ KEYBOARD_ROWS = (
     [('Control', 'CTRL', 1.25), ('Win_L', 'WIN', 1.25), ('Alt_L', 'ALT', 1.25), ('space', '', 6.25),
      ('Alt_R', 'ALT', 1.25), ('Win_R', 'WIN', 1.25), ('App', 'MENU', 1.25), ('Control', 'CTRL', 1.25)],
 )
-NAV_ROWS = ((), (('Insert', 'INS'), ('Home', 'HOME'), ('Prior', 'PGUP')),
-            (('Delete', 'DEL'), ('End', 'END'), ('Next', 'PGDN')), (),
+# '|' starts a second line of legend.
+NAV_ROWS = ((('Print', 'PRT|SCR'), ('Scroll_Lock', 'SCR|LCK'), ('Pause', 'PAU|BRK')),
+            (('Insert', 'INS'), ('Home', 'HOME'), ('Prior', 'PG|UP')),
+            (('Delete', 'DEL'), ('End', 'END'), ('Next', 'PG|DN')), (),
             ((None, ''), ('Up', '^'), (None, '')), (('Left', '<'), ('Down', 'v'), ('Right', '>')))
+# The numeric keypad: (token, label, column, row, width, height) in keys.
+KEYPAD = (('Num_Lock', 'NUM', 0, 1, 1, 1), ('KP_Divide', '/', 1, 1, 1, 1),
+          ('KP_Multiply', '*', 2, 1, 1, 1), ('KP_Subtract', '-', 3, 1, 1, 1),
+          ('KP_7', '7', 0, 2, 1, 1), ('KP_8', '8', 1, 2, 1, 1), ('KP_9', '9', 2, 2, 1, 1),
+          ('KP_Add', '+', 3, 2, 1, 2), ('KP_4', '4', 0, 3, 1, 1), ('KP_5', '5', 1, 3, 1, 1),
+          ('KP_6', '6', 2, 3, 1, 1), ('KP_1', '1', 0, 4, 1, 1), ('KP_2', '2', 1, 4, 1, 1),
+          ('KP_3', '3', 2, 4, 1, 1), ('KP_Enter', 'ENT', 3, 4, 1, 2), ('KP_0', '0', 0, 5, 2, 1),
+          ('KP_Decimal', '.', 2, 5, 1, 1))
+NAV_X, KEYPAD_X = 15.25, 18.5  # where the two right-hand blocks start, in keys
+# Light keys, as on the office keyboards of the 1990s; the rest are darker.
+LIGHT_KEYS = frozenset([*'abcdefghijklmnopqrstuvwxyz0123456789', 'grave', 'minus', 'equal',
+                        'bracketleft', 'bracketright', 'backslash', 'semicolon', 'apostrophe',
+                        'comma', 'period', 'slash', 'space', 'KP_Decimal',
+                        *(f'F{n}' for n in range(1, 13)), *(f'KP_{n}' for n in range(10))])
 # Keys that sit where a US key is drawn on common European layouts.
 POSITION_ALIASES = {'ccedilla': 'semicolon', 'ntilde': 'semicolon', 'odiaeresis': 'semicolon',
-                    'masculine': 'grave', 'KP_Enter': 'Return'}
+                    'masculine': 'grave'}
 
 
-def keyboard_keys(origin, unit, key_height=19, pitch=22):
+def keyboard_keys(origin, unit, key_height=18, pitch=20):
     """(token, label, rect) for every drawn key."""
     left, top = origin
+
+    def rect(x, row, width=1, height=1):
+        y = top + row * pitch + (6 if row else 0)
+        return (left + round(x * unit) + 1, y,
+                left + round((x + width) * unit) - 2, y + (height - 1) * pitch + key_height - 1)
+
     keys = []
     for row, entries in enumerate(KEYBOARD_ROWS):
-        y = top + row * pitch + (4 if row else 0)
         units = 0.0
         for token, label, width in entries:
             if token is not None:
-                keys.append((token, label, (left + round(units * unit) + 1, y,
-                                            left + round((units + width) * unit) - 2, y + key_height)))
+                keys.append((token, label, rect(units, row, width)))
             units += width
         for column, (token, label) in enumerate(NAV_ROWS[row]):
             if token is not None:
-                x = 15.5 + column
-                keys.append((token, label, (left + round(x * unit) + 1, y,
-                                            left + round((x + 1) * unit) - 2, y + key_height)))
+                keys.append((token, label, rect(NAV_X + column, row)))
+    for token, label, column, row, width, height in KEYPAD:
+        keys.append((token, label, rect(KEYPAD_X + column, row, width, height)))
     return keys
+
+
+def led_rect(origin, unit, key_height=18):
+    """Where the lock lights sit: above the keypad."""
+    left, top = origin
+    return (left + round(KEYPAD_X * unit) + 1, top, left + round((KEYPAD_X + 4) * unit) - 2,
+            top + key_height - 1)
 
 
 def draw_arrow(draw, cx, cy, direction, fill):
@@ -118,20 +148,24 @@ def draw_arrow(draw, cx, cy, direction, fill):
     draw.polygon(points, fill=fill)
 
 
-def draw_keycap(image, rect, label, color=None):
+def draw_keycap(image, rect, token, label, color=None):
     left, top, right, bottom = rect
-    cap = keycap(right - left + 1, bottom - top + 1, color)
-    image.alpha_composite(cap, (left, top))
+    dark = token not in LIGHT_KEYS
+    image.alpha_composite(keycap(right - left + 1, bottom - top + 1, color, dark), (left, top))
     draw = ImageDraw.Draw(image)
-    ink = legend_ink(color)
-    cx, cy = (left + right) // 2, top + (bottom - top - 3) // 2
+    ink = legend_ink(color, dark)
+    centre = ((left + right) // 2, (top + bottom - 5) // 2)
     if label in ('^', 'v', '<', '>'):
-        draw_arrow(draw, cx, cy, label, ink)
-    elif label:
-        mini_text(draw, cx + 1, cy - 2, label, ink, 'center')
+        draw_arrow(draw, *centre, label, ink)
+    elif label == 'WIN':
+        windows_flag(image, centre)
+    else:
+        # Legends sit at the top left, as printed on those keyboards.
+        for line, text in enumerate(label.split('|') if label else ()):
+            mini_text(draw, left + 3, top + 2 + 6 * line, text, ink)
 
 
-KEYBOARD_MARGIN = 6
+KEYBOARD_MARGIN = 5
 
 
 def keyboard_bounds(origin, unit):
@@ -142,9 +176,12 @@ def keyboard_bounds(origin, unit):
 
 def draw_keyboard(image, origin, unit, token_colors):
     left, top, right, bottom = keyboard_bounds(origin, unit)
-    image.alpha_composite(keyboard_case(right - left + 1, bottom - top + 1), (left, top))
-    for token, label, rect in keyboard_keys(origin, unit):
-        draw_keycap(image, rect, label, token_colors.get(token))
+    keys = keyboard_keys(origin, unit)
+    holes = tuple((x0 - left, y0 - top, x1 - left, y1 - top) for _token, _label, (x0, y0, x1, y1) in keys)
+    image.alpha_composite(keyboard_case(right - left + 1, bottom - top + 1, holes), (left, top))
+    for token, label, rect in keys:
+        draw_keycap(image, rect, token, label, token_colors.get(token))
+    draw_leds(image, led_rect(origin, unit))
 
 
 # -- controller drawing -------------------------------------------------
@@ -169,7 +206,7 @@ def line_pixels(points):
 def draw_callout(image, points, art, origin):
     """A one-pixel leader line, dark where it crosses a light shell."""
     pad = art.image
-    ink = finish().ink
+    ink = INK
     for x, y in line_pixels(points):
         px, py = x - origin[0], y - origin[1]
         over = (0 <= px < pad.width and 0 <= py < pad.height) and pad.getpixel((px, py))
@@ -186,8 +223,8 @@ class ControlsPage:
     ROW_TOP = 52
     ROW_HEIGHT = 22
     SLOT_X = ((232, 344), (352, 464))
-    KEYBOARD_ORIGIN = (43, 70)
-    KEYBOARD_UNIT = 23
+    KEYBOARD_ORIGIN = (31, 68)
+    KEYBOARD_UNIT = 20
     LEGEND_X = (103, 291)
     PAD_ORIGIN = (256 - PAD_WIDTH // 2, 86)
 
@@ -488,7 +525,7 @@ class ControlsPage:
         drawn = {token for token, _label, _rect in keyboard_keys(self.KEYBOARD_ORIGIN, self.KEYBOARD_UNIT)}
         for index, (label, actions) in enumerate(LEGEND):
             column, row = index % 2, index // 2
-            x, y = self.LEGEND_X[column], 224 + row * 18
+            x, y = self.LEGEND_X[column], 214 + row * 18
             color = ACTION_COLORS[actions[0]]
             image.alpha_composite(keycap(13, 12, color), (x, y))
             hidden = [key_name(token) for action in actions for token in self.keyboard.keys(action)
