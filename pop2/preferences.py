@@ -1,6 +1,6 @@
 """Menu choices the player expects to find as they left them."""
 
-from dataclasses import asdict, dataclass, fields, replace
+from dataclasses import MISSING, asdict, dataclass, field, fields, replace
 import json
 from pathlib import Path
 
@@ -13,6 +13,10 @@ PREFERENCES_PATH = (USER_DATA_DIR if USER_DATA_DIR is not None else
 @dataclass(frozen=True)
 class Preferences:
     cave_ambience: bool = False
+    # Port-only Controls page; an empty table means the default keys/buttons.
+    keyboard_bindings: dict = field(default_factory=dict)
+    controller_bindings: dict = field(default_factory=dict)
+    controller_enabled: bool = True
 
 
 def load_preferences():
@@ -23,8 +27,11 @@ def load_preferences():
         return Preferences()
     if not isinstance(data, dict):
         return Preferences()
+    def default(item):
+        return item.default_factory() if item.default is MISSING else item.default
+
     kept = {item.name: data[item.name] for item in fields(Preferences)
-            if isinstance(data.get(item.name), type(item.default))}
+            if isinstance(data.get(item.name), type(default(item)))}
     return Preferences(**kept)
 
 
