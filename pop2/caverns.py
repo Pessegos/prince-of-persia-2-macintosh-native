@@ -563,7 +563,9 @@ def draw_cavern_torches(frame, room_id, state, *, level_number=3):
     program, resources, palette, shapes = room_assets(level_number, room_id)
     for record in program.get('torches', {}).get(str(room_id), ()):
         tile = state.loose.tiles.get((record['room'], record['cell']))
-        if tile is not None and tile[0] != 19:
+        # MakeRubble (5:2dcc-2e08) turns a torch cell struck by a falling floor into
+        # kind 32 and keeps its foreground: the native room still draws the torch there.
+        if tile is not None and tile[0] not in (19, 32):
             continue
         value = state.foreground(record['room'], record['cell'], record['foreground'])
         index = 3581 + (value & 15)
@@ -970,6 +972,12 @@ def cavern_pressure_signature(program, room_id, state):
                       min(value & 255, 79) if record['kind'] == 17 else
                       value & 7 if record['kind'] in (27, 33) else int(bool(value & 0x2000)))
     return tuple(phases)
+
+
+def cavern_gates_up(program, room_id, phases):
+    """A room's pressure phases with each of its gates at the top."""
+    records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room_id), ())
+    return tuple(184 // 4 if record['kind'] == 4 else phase for record, phase in zip(records, phases))
 
 
 # Row clip of a moving door's SHAP relative to its row's top: the export

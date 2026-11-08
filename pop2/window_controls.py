@@ -11,6 +11,7 @@ from pop2.app_window import create_root
 from pop2.game_menu import GameMenu
 from pop2.game_ui import (DevelopmentMenu, VISIBLE_SIZE, VISIBLE_VIEWPORT, fit_viewport,
                           viewport_point, fit_menu_viewport, menu_viewport_point)
+from pop2.preferences import remember
 from pop2.screenshots import ScreenshotSettings, save_screenshot
 
 
@@ -648,7 +649,7 @@ class WindowControls:
         self.render()
 
     def show_audio_notice(self, action, enabled):
-        label = "Sounds" if action == "sound" else "Ambient Music"
+        label = {"sound": "Sounds", "music": "Ambient Music", "ambience": "Cave Ambience"}[action]
         message = f"{label} {'On' if enabled else 'Off'}"
         text = self.ui_font.text(message, self.hud_text_color)
         alternate = self.ui_font.text(f"{label} {'Off' if enabled else 'On'}", self.hud_text_color)
@@ -698,6 +699,7 @@ class WindowControls:
                 self.game_menu.save_browser.save_available = self.game_menu.save_available
             self.game_menu.sound = self.sound_enabled
             self.game_menu.music = self.music_enabled
+            self.game_menu.cave_ambience = getattr(self, 'cave_ambience_enabled', False)
             self.game_menu.fullscreen = self.fullscreen
             self.game_menu.copy_protection = getattr(self, "copy_protection_enabled", True)
 
@@ -819,6 +821,10 @@ class WindowControls:
             if self.audio is not None:
                 getattr(self.audio, "set_" + name)(enabled)
             self.show_audio_notice(action, enabled)
+        elif action == "ambience":
+            self.cave_ambience_enabled = not getattr(self, 'cave_ambience_enabled', False)
+            remember(cave_ambience=self.cave_ambience_enabled)
+            self.show_audio_notice(action, self.cave_ambience_enabled)
         elif action == "fullscreen":
             self.toggle_fullscreen()
             self.render()
@@ -1133,7 +1139,7 @@ class WindowControls:
                 self.play_menu_sound('click')
             return "break"
         command = {"n": "confirm_new", "r": "restart", "t": "sound", "m": "music",
-                   "s": "save", "o": "open", "l": "open", "h": "hall", "v": "about",
+                   "a": "ambience", "s": "save", "o": "open", "l": "open", "h": "hall", "v": "about",
                    "c": "cutscenes"}.get(
                        event.keysym.lower()) if alt and not event.state & (0x4 | 0x40) else None
         if command is not None:

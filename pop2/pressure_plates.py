@@ -38,6 +38,9 @@ class PressurePlates:
     triggered: list = field(default_factory=list)
     slams: list = field(default_factory=list)
     slam_sounds: list = field(default_factory=list)
+    # (key, slammed) of the gates that came down on the floor in this update. Not game
+    # state: only the optional cave ambience reads it, for the dust.
+    shut: list = field(default_factory=list)
     songs: list = field(default_factory=list)
     stopped_sounds: list = field(default_factory=list)
     gate_sounds: list = field(default_factory=list)
@@ -235,6 +238,7 @@ class PressurePlates:
         self.triggered.clear()
         self.slams.clear()
         self.slam_sounds.clear()
+        self.shut.clear()
         self.gate_sounds.clear()
         cues = []
 
@@ -313,6 +317,7 @@ class PressurePlates:
                         # shut opponents out (the level-four "phew").
                         self.slams.append(key)
                     self.slam_sounds.append(key)
+                    self.shut.append((key, True))
                     gate_sound(gate_cues['slam'], False, key)
             elif position == 255:
                 phase = -1
@@ -322,6 +327,7 @@ class PressurePlates:
                 if phase in (0, 1):
                     if position <= 0:
                         position, phase = 56 if squashing else 0, -1
+                        self.shut.append((key, False))
                         gate_sound(gate_cues['stopped'], False, key)
                         if self.fingers_under_gate(key, state, motion, record):
                             cues.append(29)

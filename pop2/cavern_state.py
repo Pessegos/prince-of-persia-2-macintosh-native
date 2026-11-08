@@ -124,7 +124,9 @@ class CavernState:
                 # Rubble marks the trap but cannot pin its animation to
                 # the impact phase stored by MakeRubble.
                 foreground = (foreground & 0xff00) | self.scythes.foreground[room, cell]
-            if kind == 19 and (room, cell) in self.torches:
+            # ATM Torch (5:1446-1498) goes on writing the frame into the cell's
+            # foreground whatever its kind, so a torch on rubble (32) burns on.
+            if kind in (19, 32) and (room, cell) in self.torches:
                 foreground = (foreground & 0xfff0) | (self.torches[room, cell] & 15)
             return self.plates.foreground.get((room, cell), foreground)
         if (room, cell) == (self.entry_room, self.entry_cell) and self.entry_frames:
@@ -145,4 +147,6 @@ class CavernState:
         # exits, it needs a source/direction for the port's split audio mixer.
         self.plates.gate_sounds.extend(GateSound(cue, False, (self.entry_room, self.entry_cell))
                                       for cue in sounds if cue in (17, 18, 20))
+        if 20 in sounds:
+            self.plates.shut.append(((self.entry_room, self.entry_cell), True))
         return sounds

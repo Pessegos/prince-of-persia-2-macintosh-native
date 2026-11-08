@@ -51,6 +51,7 @@ from pop2.control_mapping import (
 from pop2.mac_input import DirectionalInput, plan_cautious_step, plan_step, read_keyboard, sample_modifier
 from pop2.opening_animation import GLASS_POSITIONS
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
+from pop2.preferences import load_preferences
 from pop2.rebirth import RebirthSnapshot
 from pop2.story_progress import MESSAGE_FRAMES, StoryProgress
 from pop2.game_session import GameResources, GameSession
@@ -318,6 +319,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.game_was_paused = False
         self.native_viewport = None
         self.copy_protection_enabled = True
+        self.cave_ambience_enabled = load_preferences().cave_ambience
         self.copy_verified = False
         self.copy_challenge = None
 
@@ -3508,6 +3510,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             frame = environment.scenery_layer(frame, motion)
         frame = Image.alpha_composite(frame, self.foreground)
         self.level_renderer.remember_scenery(frame)
+        if getattr(self, 'cave_ambience_enabled', False):
+            frame = self.level_renderer.ambient_layer(frame, self.room_id)
         hide_guards = getattr(self, "peaceful", False) and getattr(self, "demo", None) is None
         actors = []
         crush_poses = getattr(self, 'slab_crush_poses', {})

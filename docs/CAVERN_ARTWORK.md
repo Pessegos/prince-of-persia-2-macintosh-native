@@ -154,6 +154,236 @@ imported-resource writes are required; the command omission applies only
 to level8 room5. The comparison is kept locally at
 `rendered/ruins-second-batch/room5-review.png`.
 
+## Cave ambience
+
+An optional port effect, not a recovered behavior: the original has no dust,
+ash, water drops or cast light, and its torch does not behave like this.
+`pop2/cavern_ambience.py` draws them while the F1 item Cave ambience (Alt+A) is
+on, and `pop2/firelight.py` works out the light. It is off by default, and the
+choice is kept between sessions in `preferences.json` (`pop2/preferences.py`).
+
+The user approved how it looks on 2026-11-07, after eleven passes, in level 4 room
+16 (Room 17 in the development menu). It now runs in all 84 rooms of levels 3 to 5
+(`AMBIENCE_LEVELS`), and that wider run is under the user's review. The tips and
+the air are read from the art, so a new room has to be seen in motion.
+
+Two rules keep it from looking like a modern filter. Every pixel it leaves on
+the frame is a colour of the room's own palette, and everything moves once per
+game tick. The second rule was learned the hard way: a pass at 36 Hz made the
+drops and the dust glide, and they stood out against a game running at 12. If
+the whole game ever runs faster, the ambience can follow it.
+
+What the user has reviewed and how each part ended up:
+
+- **Drops** hang from the stalactite tips (`stalactite_tips`, read from the
+  art), keep each source's rhythm and end in a splash on the floor or a hiss in
+  the lava. Crisp and opaque. In the light the front of a drop shows the fire it
+  is falling past (`caught`): pale warm by a flame, orange close over the lava, and
+  blue again once it is out of the light. The rest of its tail stays water.
+- **Ash** is single crisp pixels. They rise from the lava's surface, and from
+  the flame. A pass with sparks in bursts, with trails, was rejected: "a little
+  more presence" meant a small step in the style that was there.
+- **Firelight** replaced a blurred ball of the flame's shape. The user asked for
+  light that behaves like ray tracing. The room is only a painting, so
+  `rock_height` reads its shape from the paint: lit paint stands forward and dark
+  paint falls back. `trace_firelight` cuts the flame into cells and runs rays from
+  each cell over the relief. A surface takes light by how much it faces the cell,
+  how far away it is, and whether rock stands in between. So the rock lights up
+  along its veins and hollows stay dark. A light laid over everything "looked like
+  a bomb about to go off".
+- **The oval** was the hardest part, and took three tries to see. The user kept
+  describing one steady oval around the torch. It was not the falloff of the light:
+  drawn alone, the light was a bright plate with a sharp edge, in the shape of the
+  torch's sprite, because the sunken recess and a flame close to the rock shut the
+  light in. Following the frames could only make that plate tremble, and tracing
+  the flame in five places and swinging it on a spring only made it "the same oval,
+  changing place". Now the flame stands further off the rock, so the light gets
+  out of the recess, and the recess takes half the light (`RECESS_LIGHT`) with a
+  soft edge, as it is painted as already lit.
+- **Keeping it in.** With the plate gone the light ran out over the back wall,
+  and the user found that it "does not make sense": a flame in a niche lights the
+  niche and a little of the rock around it. Two passes pulled it in. It now reaches
+  about 7 pixels past the recess, and the shape it takes moves that edge by a few
+  pixels more.
+- **The candle.** The light is traced once, in about 20 ms on entering the room,
+  and then changes shape instead of moving. Each frame of flame is measured all the
+  way round its middle (`flame_outlines`), and where it burns further than usual
+  the light reaches further that way (`Firelight.at`), so a tall flame draws the
+  light up and a squat one spreads it to the sides. Raising the light to a power
+  does that: the bright rock stays, the fringe goes out or comes in, and the veins
+  stay where they are, which sliding the light could not do. The frames come in
+  random order, so `Flicker` follows them at two speeds, quickly for the licks and
+  slowly for the breath. How hot the frame burns moves the whole light as well.
+  A tick only does that sum, in about a millisecond.
+- **Keeping it calm.** A pixel keeps its step of light until the light has really
+  moved past it (`LIGHT_HOLD`): before that, a third of the changing pixels
+  flipped straight back. About 8% do now. More pixels change than in the original,
+  but they are the light moving across the rock, not noise.
+- **The Prince's feet.** `Footing` is read from the game once a tick and never
+  written back. FRAM's supporting foot stays put and then jumps to where the next
+  foot lands (`floor_contact_x`), so that jump is a step: it raises a tuft of the same
+  dust as the doors, a few small lobes just behind the heel and level with his shoes.
+  That foot is the game's and not what is drawn, and in each stride of the run it is
+  wrong twice. On frame 8 it has gone to a foot still in the air, which comes down 18
+  pixels further on, on frame 9, and frame 12 is not marked as on the ground although a
+  foot lands there. Left alone, one foot raised dust twice, once where no foot ever
+  stood, and the other none, which looked out of place and out of time. The
+  foot-on-the-floor flag cannot do this alone, as it is set on almost every frame of a
+  run. Walking carefully raises none. A landing raises a few lobes to each side, more the
+  faster he came down, and there is none on the
+  lava. As he runs he drags the air along (`wake`), so grains he passes follow him
+  and let go. Dust from the floor is drawn behind him like the rest of the ambience.
+- **Gates, doors and fallen tiles.** Whatever comes down knocks up a puff of dust
+  (`Cloud`): a few flat round lobes that go out low to both sides of its foot, hug the
+  floor, swell as they slow and thin away. Each lobe keeps its own outline, as a pixel takes
+  the thickest lobe over it and not their sum, and its top is thicker than its foot, so
+  it has a lit top and a dull underside. It is painted over the rock in three hard
+  shades of warm rock (`CLOUD_SHADES`), each pixel landing on the palette, and each pixel
+  has its own grain, which crumbles the edges and lets the puff go by breaking up. The
+  rock shows through, and the dust is always a little paler than what is behind it
+  (`CLOUD_PALER`), or a lit floor swallows it. This took six tries, and is the middle
+  ground the user asked for. Soft spots read as balls of cotton wool, a smooth dithered
+  veil was far too realistic for the game, loose pixels alone were too little, an ordered
+  dither made a grid of dots, a spray of pale palette pixels was only grey dots, and
+  lobes added together, or solid, were a flat stain on the floor. It keeps close to
+  what came down: at sixty pixels and more it was too long. Dust cannot pass through a
+  slab, which stands slanted, so the puff starts lower on its near side than on its
+  far side. An exit door faces the room, so two lobes in three come out at its front,
+  fanning out, and the rest go to the sides. There is none on the lava. The game tells
+  this in `PressurePlates.shut` and `LooseFloors.landed`, which are not game state and
+  are left out of saves. The entry door that slams behind him at the start of a level
+  does the same.
+- **Gates stop the torch's light.** The light is traced on the room with its gates up,
+  whatever they are doing when the Prince comes in. Traced on a shut gate, the light
+  stopped at its front part, went on over the rest of it, and left a hole where the gate
+  had been once it rose. A slab stands across the room with its near end on the left and
+  its far end at the back wall, and shows its right-hand face. So the wall it comes down
+  over is on the torch's side of it: the slab only hides that wall, which keeps all of
+  its light however the gate moves. A first try cast the slab's shadow ray by ray, and a
+  shadow came down that wall with the gate: the user saw that the wall is on the torch's
+  side. What takes none is the slab itself, seen with its
+  back to the flame, and the air in front of it (`GateView`). Those pixels are read by
+  comparing the room as it stands with the room with its gates up, each time it is
+  redrawn. A torch reaches 54 pixels, so of the 15 rooms with a gate and a torch this
+  only shows in room 11 of level 4, where the torch stands nine pixels from the gate. A
+  torch to the right of a gate lights its visible face, which is right.
+- **Lava light** is traced over the rock with the same engine as the torch
+  (`trace_lavalight`), a cell at a time along the pool, with the pool itself counted
+  as a hollow, however bright it is painted. It is fainter than the torch's and more
+  a warmth than a brightness: with more gain the pale floor by the pool became a
+  plate. Rock rising in front of the pool takes none of it, and the floor before the
+  pool does, or the light stops dead where the foreground starts. It uses a table of
+  its own and the same dither, and breathes over several seconds. Before this it
+  was an even oval around the pool, which the user approved as a start.
+- **Heat haze** bends what is seen through the hot air over the lava and over a
+  flame (`Haze`, `shimmer`), in waves that rise. It thins out as it rises and to the
+  sides. All the air bends, by less than a pixel: each pixel leans part of the way
+  towards its neighbour and lands on the nearest palette colour (`Colours.settle`).
+  Whole pixels sliding aside were far too much. Keeping them to the crest of each
+  wave was no answer: the user wanted the effect itself subtler, not smaller. The
+  ceiling and stalactites are foreground, in front of the air, so 27 of the 75
+  torches sit under rock and show next to none of it.
+- **The wall behind the torch.** `CaveGetTorchFrame` (8:3b4e) picks one of nine
+  frames at random each tick. They paint a rich wall of veins and specks, but
+  about a hundred loose pixels of it differ from frame to frame, so those blink.
+  While the ambience is on `steady_wall` keeps each such pixel at the colour it
+  shows most often, and a lesser light falls on that. Replacing the whole wall
+  with the unlit recess (SHAP 3590) was tried and rejected: it came out plain, as
+  it was only the loose pixels that were wrong. The unlit recess is what the
+  relief is read from, as lit paint there would be taken for height. The flame
+  stays exactly the game's: a pass that also chose the frames made it choppy.
+  `flame_pixels` tells flame from wall by colour. Its dark red rim counts only
+  next to the flame, as the same red is painted on the wall's cracks. Those
+  cracks do not receive light, and rock does not turn into their red: lit, their
+  thin lines broke into dashes and dots.
+  `light_torch` only touches pixels that show the sprite, so whatever is drawn
+  over the torch stays, and a torch that is not there gets no light either.
+- **Dust** went through the most tries. Slow crisp grains hopped from pixel to
+  pixel. Crisp grains fast enough to hide that looked in a hurry. Grains split
+  among the four nearest pixels swelled and shrank on every pixel crossed: the
+  brightest pixel fell from all of the grain to a quarter and back, and it
+  looked like a worm going round a small square. `soft_spot` keeps one shape
+  wherever the grain falls between pixels. Then the dust was hard to see away from
+  the torch, and a pass with 64 pale grains of mixed sizes "looked like snowing".
+  That had three causes, all fixed: there was a lot of it, each new grain went to
+  the emptiest place so it was evenly spread, and half of it was falling.
+- **Two kinds of dust** (`DustKind`). Fine grains, 21 of them, are one small opaque
+  pixel. The brighter one is, the shorter it lasts (`lifespan`): most are dim, in the
+  colour of the rock. The dimmest last 22.5 seconds and a typical grain 7.5, and now and
+  then a pale one shines for a little over 2 seconds and is gone. Coarse grains, 5, are soft and partly transparent, the
+  slowest, and the only ones that sink, and last 20 seconds. With 3 of them, fainter, they were lost
+  beside the fine ones. A grain warms as it enters the light, a coarse one comes into
+  focus there (`on_the_pixels`), and as a grain tumbles a face of it catches the
+  fire for a moment. A glint is as strong as the light on the grain, so there are
+  none in the dark, and two rhythms keep any grain from flashing like a beacon. How
+  lit a grain is comes from the traced light, spread out a little (`lit_air`), so
+  the air behind a ledge stays dark.
+- **Where it gathers.** Each visit to the room picks four pockets of open air, far
+  apart (`find_pockets`), and grains start around those or near the fire. That
+  leaves patches of dust and clean air between them.
+- **The air** moves the dust. One slow draught crosses the room and turns very
+  slowly. Fire draws the air in beside it, sends it up through the flame and
+  spreads it out above (`wind_at`). A grain has some weight, so it follows any
+  change in the air slowly, and it sways a little. With rock ahead it slows and
+  settles over 3 seconds instead of vanishing. Most coarse grains sink, starting
+  not far above a floor. One that reaches it comes down on it (`land`), about five
+  times in two minutes, and lies there as one pale speck for 7 to 14 seconds, fading.
+  It does not land on the lava, or
+  behind the foreground, and a floor that falls takes it along. Otherwise a grain
+  has a lifespan:
+  it comes up over the first seventh of it and goes over the last quarter, and
+  never takes more than 1.7 seconds to come or 2.5 to go. Half-transparent grains
+  that stayed that way were what the user found too long: coarse ones took four
+  seconds to come and eight to go. A new one starts unseen,
+  around a pocket or near the fire, with air ahead for its whole life (`new_mote`),
+  so old and new never show as a swap. Over the lava it is duller, so that it is
+  not read as more ash.
+
+The firelight and the glow are tables of what each palette colour becomes at
+each of ten brightness levels (`Colours.light_table`), stepped through a 4x4
+ordered dither like the stipple in the art. Firelight multiplies what the paint
+already is, so hollows stay dark. Flame, lava and the painted cracks do not
+receive light, and lit rock never turns into one of their colours.
+
+Pixels only. Its generator is private, so turning it on changes no opponent,
+route or test. Its state is on the `LevelRenderer`, not in `CavernState`, so it
+never reaches a save. `RealSceneTests` plays the same keys with the toggle off
+and on and compares the game state and the random generators.
+
+It is drawn right after `remember_scenery` and not in `animated_layer`, where
+the first idea had put it. DoCleanCut (2:608c) keeps the previous room's scenery
+in the next room's unpainted pixels, so a particle or lit pixel drawn before
+that snapshot could stay on screen for good. Being before the actors, it passes
+behind them and does not light them. The foreground's alpha hides particles
+behind pillars and rock.
+
+Running it in every room showed what one room could not:
+
+- **Rock in front of a torch.** Light fell on whatever the frame showed, so the
+  pillars and walls standing in front of a torch turned into pale plates, worst in
+  level 4 rooms 11 and 15 and level 5 room 6. That rock has its back to the flame, so
+  the foreground takes no light now, and the air before it stays lit for the dust.
+  In the approved room that took 240 of 4,464 lit pixels, all of them very faint.
+- **Torches behind pillars.** Most stand a little behind one. A torch counts when
+  35% of it shows (`TORCH_SEEN`), which brought back six that were half hidden and had
+  no light. Three are shut behind rock (level 4 room 2, level 5 rooms 6 and 11): they
+  are no fire at all, with no ash and no dust gathering around them.
+- **Torches listed twice.** The level data lists each torch twice in 40 rooms, for
+  ash and air worked out twice over. `room_torches` keeps one.
+- **Lava off the screen.** Three rooms list a pool above their top edge (level 3
+  rooms 13 and 28, level 4 room 24), and drops over it had a surface above their own
+  tip. `lava_surfaces` leaves such a pool out.
+- **Drops that cannot be seen.** 26 sources fell wholly behind the foreground and
+  held a place a visible one could use. `choose_drips` skips those.
+- **Rooms without fire.** They have `QUIET_DUST`: half the grains, none of them
+  bright and the coarse ones fainter, as nothing there lights it. They had no dust at
+  first, and the user found that a loss.
+
+Extras built on 2026-11-07 for the user to try, not reviewed yet: drops catching
+the light, heat haze, the lava's traced light and the Prince's feet. Two ideas wait.
+The Prince's shadow on the rock would have to work on every level, not only the
+caverns, so it comes near the end. Sound tied to all of it needs more calm.
+
 ## Repeated column shadows: five-room review
 
 The user approved the V4 proposals on 2026-11-07. They retain the V2 wall

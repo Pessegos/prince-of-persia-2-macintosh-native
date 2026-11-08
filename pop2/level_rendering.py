@@ -22,6 +22,9 @@ class LevelRenderer:
         self.cavern_underlay = None
         self.cavern_scenery = None
         self.cavern_map = None
+        self.ambience = None
+        self.ambience_air = {}
+        self.cavern_keys = {}
         if preload_room:
             self.room(level.start_room)
 
@@ -41,7 +44,6 @@ class LevelRenderer:
         if self.level.kind in (2, 3, 4):
             from pop2.caverns import (
                 cavern_pressure_signature,
-                cavern_room,
                 cavern_scene_signature,
                 cavern_scythe_signature,
             )
@@ -68,13 +70,8 @@ class LevelRenderer:
                 for previous in tuple(self.cavern_frames):
                     if previous[0] == room_id and (previous[3] != pressure or previous[6] or wobble):
                         del self.cavern_frames[previous]
-                self.cavern_frames[key] = cavern_room(room_id, entry_frame=key[1], animated=True,
-                                                    loose_key=signature, pressure_key=pressure,
-                                                    retouched=self.retouch_caverns,
-                                                    level_number=self.level.number,
-                                                    bridge_fallen=fallen, scythe_patch=scythe,
-                                                    bridge_wobble=wobble, alternate_entry=alternate,
-                                                    redrawn=redrawn)
+                self.cavern_frames[key] = self.built_room(key)
+            self.cavern_keys[room_id] = key
             self.rooms[room_id] = self.cavern_frames[key]
             return self.rooms[room_id]
         if room_id not in self.rooms:
@@ -91,6 +88,25 @@ class LevelRenderer:
                 self.rooms[room_id] = build_opening_room(include_curtain=False, room_id=room_id,
                                                         level_resource_id=self.level.resource_id)
         return self.rooms[room_id]
+
+    def built_room(self, key):
+        from pop2.caverns import cavern_room
+
+        room_id, frame, signature, pressure, fallen, scythe, wobble, alternate, redrawn = key
+        return cavern_room(room_id, entry_frame=frame, animated=True, loose_key=signature, pressure_key=pressure,
+                           retouched=self.retouch_caverns, level_number=self.level.number,
+                           bridge_fallen=fallen, scythe_patch=scythe, bridge_wobble=wobble,
+                           alternate_entry=alternate, redrawn=redrawn)
+
+    def room_with_gates_up(self, room_id):
+        """The room as it stands now, but with every gate raised."""
+        from pop2.caverns import cavern_gates_up
+
+        key = self.cavern_keys.get(room_id)
+        if key is None:
+            return self.rooms[room_id]
+        pressure = cavern_gates_up(self.cavern_program, room_id, key[3])
+        return self.rooms[room_id] if pressure == key[3] else self.built_room((*key[:3], pressure, *key[4:]))
 
     def enter_room(self, room_id, caverns=None):
         if caverns is not None and self.cavern_display is not None and self.cavern_display[0] != room_id:
@@ -120,6 +136,28 @@ class LevelRenderer:
         if self.level.kind in (2, 3, 4):
             # Snapshot before actors/HUD; later drawing must not modify this image.
             self.cavern_scenery = frame.copy()
+
+    def advance_ambience(self, room_id, terrain, footing=None, thuds=()):
+        """One game tick of the optional cave ambience; pixels only."""
+        from pop2.cavern_ambience import AMBIENCE_LEVELS, CavernAmbience, room_air
+
+        if self.level.number not in AMBIENCE_LEVELS:
+            self.ambience = None
+            return
+        if self.ambience is None or self.ambience.room != room_id:
+            if room_id not in self.ambience_air:
+                self.ambience_air[room_id] = room_air(self.level.number, room_id, self.rooms[room_id], terrain,
+                                                      self.room_with_gates_up(room_id))
+            self.ambience = CavernAmbience(room_id, self.ambience_air[room_id])
+        self.ambience.advance(terrain, footing, thuds)
+
+    def ambient_layer(self, frame, room_id):
+        """Drawn after remember_scenery: a room cut keeps the scenery of the
+        previous room in places, and must not keep a mote or a drop with it."""
+        if self.ambience is not None and self.ambience.room == room_id:
+            self.ambience.see_gates(self.rooms[room_id])
+            return self.ambience.draw(frame)
+        return frame
 
     def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
         if self.level.kind in (2, 3, 4) and caverns is not None:
