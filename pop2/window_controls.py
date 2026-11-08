@@ -9,6 +9,7 @@ from PIL import Image, ImageChops, ImageTk
 
 from pop2.app_window import create_root
 from pop2.game_menu import GameMenu
+from pop2.input_routing import InputRouting
 from pop2.game_ui import (DevelopmentMenu, VISIBLE_SIZE, VISIBLE_VIEWPORT, fit_viewport,
                           viewport_point, fit_menu_viewport, menu_viewport_point)
 from pop2.preferences import remember
@@ -79,7 +80,7 @@ def is_resume_key(event, held_keys=()):
             or key.startswith("KP_") and key[3:].isdigit())
 
 
-class WindowControls:
+class WindowControls(InputRouting):
     """Window callbacks shared by the rooftop scene and animation preview."""
 
     def create_window(self, title, scale=2):
@@ -132,52 +133,11 @@ class WindowControls:
         )
         self.debug_status = False
 
-        self.root.bind(
-            "<KeyPress-Left>", lambda event: self.horizontal_key(event, -1, True)
-        )
-        self.root.bind(
-            "<KeyRelease-Left>", lambda event: self.horizontal_key(event, -1, False)
-        )
-        self.root.bind(
-            "<KeyPress-Right>", lambda event: self.horizontal_key(event, 1, True)
-        )
-        self.root.bind(
-            "<KeyRelease-Right>", lambda event: self.horizontal_key(event, 1, False)
-        )
-        self.root.bind("<KeyPress-Up>", self.up_key)
-        self.root.bind(
-            "<KeyRelease-Up>", lambda _event: self.set_key_state("up", False)
-        )
-        self.root.bind(
-            "<KeyPress-Down>", lambda _event: self.set_key_state("down", True)
-        )
-        self.root.bind(
-            "<KeyRelease-Down>", lambda _event: self.set_key_state("down", False)
-        )
-        self.root.bind(
-            "<KeyPress-Shift_L>", lambda _event: self.set_key_state("shift", True)
-        )
-        self.root.bind(
-            "<KeyRelease-Shift_L>", lambda _event: self.set_key_state("shift", False)
-        )
-        self.root.bind(
-            "<KeyPress-Shift_R>", lambda _event: self.set_key_state("shift", True)
-        )
-        self.root.bind(
-            "<KeyRelease-Shift_R>", lambda _event: self.set_key_state("shift", False)
-        )
-        self.root.bind(
-            "<KeyPress-Control_L>", lambda _event: self.set_key_state("ctrl", True)
-        )
-        self.root.bind(
-            "<KeyRelease-Control_L>", lambda _event: self.set_key_state("ctrl", False)
-        )
-        self.root.bind(
-            "<KeyPress-Control_R>", lambda _event: self.set_key_state("ctrl", True)
-        )
-        self.root.bind(
-            "<KeyRelease-Control_R>", lambda _event: self.set_key_state("ctrl", False)
-        )
+        for keysym in ("Left", "Right", "Up", "Down", "Shift_L", "Shift_R",
+                       "Control_L", "Control_R"):
+            for pressed, kind in ((True, "KeyPress"), (False, "KeyRelease")):
+                self.root.bind(f"<{kind}-{keysym}>", lambda event, key=keysym, down=pressed:
+                               self.run_key_binding(key, down, event))
         self.focus_pause_after_id = None
         self.root.bind("<FocusOut>", self.focus_out)
         self.root.bind("<Destroy>", self.cancel_focus_pause)
@@ -186,8 +146,8 @@ class WindowControls:
         if hasattr(self, 'destroy_cutscene_viewer'):
             self.root.bind("<Destroy>", self.destroy_cutscene_viewer, add="+")
         self.root.bind("<Destroy>", self.close_bitmap_presenter, add="+")
-        self.root.bind("<KeyPress-Escape>", self.escape_key)
-        self.root.bind("<KeyRelease-Escape>", self.escape_release)
+        self.root.bind("<KeyPress-Escape>", lambda event: self.run_key_binding("Escape", True, event))
+        self.root.bind("<KeyRelease-Escape>", lambda event: self.run_key_binding("Escape", False, event))
         self.root.bind("<Alt-Return>", self.toggle_fullscreen)
         self.root.bind("<F2>", self.toggle_screenshot_menu)
         self.root.bind("<F3>", self.open_dev_mode)
@@ -201,6 +161,7 @@ class WindowControls:
 
     def focus_out(self, event):
         self.clear_keys(event)
+        self.forget_routed_keys()
         self.copy_pointer_held = False
         challenge = getattr(self, "copy_challenge", None)
         if challenge is not None and challenge.focus is not None:
@@ -661,6 +622,106 @@ class WindowControls:
         self.audio_notice_after_id = self.root.after(2000, self.clear_audio_notice)
         self.render()
 
+    def show_hud_notice(self, message, seconds=2.5):
+        """A short status-strip message, like the sound on/off notice."""
+        font = self.ui_font
+        message = ''.join(char if (code := char.encode('mac_roman', 'replace')[0]) in font.glyphs
+                          and code != 0x2B else ' ' for char in message)
+        self.audio_notice_text = font.text(' '.join(message.split()), self.hud_text_color)
+        after_id = self.audio_notice_after_id
+        if after_id is not None:
+            self.root.after_cancel(after_id)
+        self.audio_notice_after_id = self.root.after(round(seconds * 1000), self.clear_audio_notice)
+        self.render()
+
+    # -- controllers ----------------------------------------------------
+    PAD_POLL_MS = 16
+
+    def start_gamepads(self):
+        from pop2.gamepad import PadReader, SdlGamepads, gamepads_disabled
+
+        if gamepads_disabled() or getattr(self, 'gamepads', None) is not None:
+            return
+        self.pad_reader = PadReader()
+        self.gamepads = SdlGamepads()
+        self.pad_poll_after_id = self.root.after(self.PAD_POLL_MS, self.poll_gamepads)
+        self.root.bind('<Destroy>', self.stop_gamepads_on_destroy, add='+')
+
+    def stop_gamepads(self):
+        after_id = getattr(self, 'pad_poll_after_id', None)
+        if after_id is not None:
+            try:
+                self.root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+        self.pad_poll_after_id = None
+        gamepads, self.gamepads = getattr(self, 'gamepads', None), None
+        if gamepads is not None:
+            gamepads.close()
+        self.release_all_pad_inputs()
+        self.update_gamepads(())
+
+    def stop_gamepads_on_destroy(self, event):
+        if event.widget is self.root and getattr(self, 'gamepads', None) is not None:
+            self.pad_poll_after_id = None
+            self.gamepads.close()
+            self.gamepads = None
+
+    def poll_gamepads(self):
+        self.pad_poll_after_id = None
+        gamepads = getattr(self, 'gamepads', None)
+        if gamepads is None:
+            return
+        try:
+            self.update_gamepads(gamepads.snapshot)
+        finally:
+            if getattr(self, 'gamepads', None) is not None:
+                self.pad_poll_after_id = self.root.after(self.PAD_POLL_MS, self.poll_gamepads)
+
+    def window_has_focus(self):
+        if window_is_foreground(self.root):
+            return True
+        try:
+            return self.root.focus_get() is not None
+        except (tk.TclError, KeyError):
+            return False
+
+    def update_gamepads(self, pads, now=None, foreground=None):
+        """One snapshot: connection notices, then button edges as keys."""
+        if not getattr(self, 'controller_enabled', True):
+            pads = ()
+        known = getattr(self, 'pad_known', {})
+        current = {pad.instance: pad for pad in pads}
+        added = [pad for instance, pad in current.items() if instance not in known]
+        removed = [pad for instance, pad in known.items() if instance not in current]
+        self.pad_known = current
+        if foreground is None:
+            foreground = bool(current) and self.window_has_focus()
+        reader = getattr(self, 'pad_reader', None)
+        if reader is None:
+            from pop2.gamepad import PadReader
+
+            reader = self.pad_reader = PadReader()
+        before = set(self.key_router.pad_sources())
+        self.process_pad_input(reader.inputs(pads), now, foreground)
+        if set(self.key_router.pad_sources()) - before:
+            self.pad_used = True
+        if not (added or removed):
+            return
+        page = self.controls_page()
+        if page is not None:
+            page.pads = tuple(current.values())
+        if removed and not current:
+            if (getattr(self, 'pad_used', False) and not self.paused
+                    and self.gameplay_controls_available()):
+                self.set_paused(True)
+            self.pad_used = False
+            self.show_hud_notice('Controller disconnected')
+        elif added:
+            self.show_hud_notice(f'{added[0].name} connected')
+        elif page is not None:
+            self.render()
+
     def clear_audio_notice(self):
         self.audio_notice_text = None
         self.audio_notice_after_id = None
@@ -707,7 +768,7 @@ class WindowControls:
         if self.game_menu is not None:
             if self.game_menu.page != "confirm":
                 if page == "menu":
-                    if self.game_menu.page in ("screenshots", "saves", 'cutscenes'):
+                    if self.game_menu.page in ("screenshots", "saves", 'cutscenes', 'controls'):
                         self.dispose_screenshot_gallery()
                         self.game_menu.show_page("menu")
                         self.pause_resume_keys.update(self.window_keys_down)
@@ -769,6 +830,9 @@ class WindowControls:
         menu = self.game_menu
         if action == 'cutscenes':
             self.open_cutscene_viewer()
+            return
+        if action in ('controls', 'controls_back', 'controls_saved', 'controller_toggle'):
+            self.apply_controls_action(action)
             return
         if action == 'cutscene_play':
             self.start_cutscene_replay()
@@ -856,6 +920,55 @@ class WindowControls:
                 self.redraw_save_menu()
             else:
                 self.render()
+
+    def gamepads_available(self):
+        gamepads = getattr(self, 'gamepads', None)
+        return gamepads is not None and gamepads.error is None
+
+    def open_controls_page(self):
+        from pop2.controls_page import ControlsPage
+
+        if self.game_menu is None:
+            self.open_game_menu('controls')
+        elif self.game_menu.page != 'controls':
+            self.dispose_screenshot_gallery()
+            self.game_menu.show_page('controls')
+            self.pause_resume_keys.update(self.window_keys_down)
+        menu = self.game_menu
+        if menu is None:
+            return
+        menu.controls_page = ControlsPage(
+            self.keyboard_bindings, self.controller_bindings,
+            pads=tuple(getattr(self, 'pad_known', {}).values()),
+            controller_enabled=getattr(self, 'controller_enabled', True),
+            controller_available=self.gamepads_available(),
+            return_to_menu=menu.return_to_menu)
+        menu.controls_page.input_device = getattr(self, 'last_input_device', 'keyboard')
+        self.render()
+
+    def apply_controls_action(self, action):
+        menu = self.game_menu
+        page = getattr(menu, 'controls_page', None)
+        if action == 'controls':
+            self.open_controls_page()
+            return
+        if page is None:
+            return
+        if action == 'controls_back':
+            if menu.back() == 'close':
+                self.close_game_menu()
+                return
+            menu.focus = next(index for index, item in enumerate(menu.items) if item.action == 'controls')
+            menu.controls_page = None
+        elif action == 'controls_saved':
+            remember(keyboard_bindings=self.keyboard_bindings.to_saved(),
+                     controller_bindings=self.controller_bindings.to_saved())
+        elif action == 'controller_toggle':
+            self.controller_enabled = page.controller_enabled
+            remember(controller_enabled=self.controller_enabled)
+            if not self.controller_enabled:
+                self.release_all_pad_inputs()
+        self.render()
 
     def redraw_save_menu(self):
         self.refresh_game_menu()
@@ -959,6 +1072,12 @@ class WindowControls:
             audio.play_ui(kind)
 
     def menu_sound_target(self, menu, point=None):
+        page = getattr(menu, 'controls_page', None) if menu.page == 'controls' else None
+        if page is not None:
+            index = page.focus if point is None else page.hit(*point)
+            if index is None:
+                return None
+            return id(menu), menu.page, page.view, page.device, page.listening, index
         viewer = getattr(menu, 'cutscene_viewer', None) if menu.page == 'cutscenes' else None
         if viewer is not None:
             index = viewer.focus if point is None else viewer.hit(*point)
@@ -1008,9 +1127,11 @@ class WindowControls:
         def state():
             browser = getattr(menu, 'save_browser', None)
             viewer = getattr(menu, 'cutscene_viewer', None) if menu.page == 'cutscenes' else None
+            page = getattr(menu, 'controls_page', None) if menu.page == 'controls' else None
             return tuple(getattr(menu, name, None) for name in fields) + (
                 (browser.selected, browser.focus, browser.mode, browser.confirmation) if browser else ()) + (
-                (viewer.index, viewer.focus) if viewer else ())
+                (viewer.index, viewer.focus) if viewer else ()) + (
+                (page.focus, page.view, page.device, page.listening) if page else ())
 
         before = state()
         if event.keysym in ('Return', 'KP_Enter', 'space') and self.menu_sound_target(menu) is not None:
@@ -1026,7 +1147,7 @@ class WindowControls:
             self.play_menu_sound('hover')
         return action
 
-    def dev_key_press(self, event):
+    def key_press_unrouted(self, event):
         alt = alt_pressed(event, self.window_keys_down)
         # Closing the host window must bypass intro, pause and menu filters.
         if event.keysym == "F4" and alt:
@@ -1140,7 +1261,7 @@ class WindowControls:
             return "break"
         command = {"n": "confirm_new", "r": "restart", "t": "sound", "m": "music",
                    "a": "ambience", "s": "save", "o": "open", "l": "open", "h": "hall", "v": "about",
-                   "c": "cutscenes"}.get(
+                   "c": "cutscenes", "k": "controls"}.get(
                        event.keysym.lower()) if alt and not event.state & (0x4 | 0x40) else None
         if command is not None:
             confirming_save = (self.game_menu is not None and self.game_menu.page == 'saves'
@@ -1167,6 +1288,8 @@ class WindowControls:
         if self.dev_menu is None:
             challenge = getattr(self, "copy_challenge", None)
             if challenge is not None:
+                if not repeated or event.keysym in ('Left', 'Right', 'Up', 'Down'):
+                    self.copy_challenge_key(challenge, event.keysym)
                 return "break"
             if self.paused and event.keysym not in ("Escape", "F2", "F3") and not fullscreen_key:
                 if is_resume_key(event, self.window_keys_down):
@@ -1222,7 +1345,7 @@ class WindowControls:
             self.pause_resume_keys.add(event.keysym)
         return "break"
 
-    def dev_key_release(self, event):
+    def key_release_unrouted(self, event):
         if event.keysym in EXTERNAL_CAPTURE_KEYS:
             return "break"
         self.window_keys_down.discard(event.keysym)
@@ -1246,6 +1369,25 @@ class WindowControls:
         if getattr(self, "intro", None) is not None or getattr(self, "demo", None) is not None:
             return "break"
         return None
+
+    def copy_challenge_key(self, challenge, key):
+        """Port extension: arrows/Enter (and a controller) pick a symbol too."""
+        if self.paused or not getattr(challenge, 'input_ready', True):
+            return
+        if key in ('Left', 'Right', 'Up', 'Down'):
+            if challenge.focus is None:
+                challenge.focus = 0
+            else:
+                column, row = challenge.focus % 5, challenge.focus // 5
+                column = (column + {'Left': -1, 'Right': 1}.get(key, 0)) % 5
+                row = (row + {'Up': -1, 'Down': 1}.get(key, 0)) % 2
+                challenge.focus = row * 5 + column
+            self.render()
+        elif key in ('Return', 'KP_Enter', 'space') and challenge.focus is not None:
+            challenge.choose(challenge.focus)
+            self.last_copy_at = time.perf_counter()
+            self.resolve_copy_challenge()
+            self.render()
 
     def dev_pointer(self, event):
         if hasattr(self, 'active_cutscene_gallery') and self.active_cutscene_gallery() is not None:

@@ -51,6 +51,7 @@ from pop2.control_mapping import (
 from pop2.mac_input import DirectionalInput, plan_cautious_step, plan_step, read_keyboard, sample_modifier
 from pop2.opening_animation import GLASS_POSITIONS
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
+from pop2.input_bindings import Bindings
 from pop2.preferences import load_preferences
 from pop2.rebirth import RebirthSnapshot
 from pop2.story_progress import MESSAGE_FRAMES, StoryProgress
@@ -319,7 +320,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.game_was_paused = False
         self.native_viewport = None
         self.copy_protection_enabled = True
-        self.cave_ambience_enabled = load_preferences().cave_ambience
+        preferences = load_preferences()
+        self.cave_ambience_enabled = preferences.cave_ambience
+        self.keyboard_bindings = Bindings.from_saved('keyboard', preferences.keyboard_bindings)
+        self.controller_bindings = Bindings.from_saved('controller', preferences.controller_bindings)
+        self.controller_enabled = preferences.controller_enabled
         self.copy_verified = False
         self.copy_challenge = None
 
@@ -331,6 +336,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.create_window("Prince of Persia 2 Macintosh Native (WIP)" if with_guard
                            else "Prince of Persia 2 Macintosh Native - Animation Preview (WIP)",
                            scale=SCALE)
+        self.start_gamepads()
         self.action = self.sequence_state.action
         self.player_x = self.sequence_state.target_x
         if with_intro:

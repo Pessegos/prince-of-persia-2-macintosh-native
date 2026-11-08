@@ -355,6 +355,14 @@ before/on pose 109 and preservation of other pending commands.
 
 ## Intentional Port Extensions
 
+Remappable keys and controller input (2026-11-08) sit in front of every rule
+in this document: a chosen key or button is translated into the original key
+(arrow, Shift, Ctrl, Space, Escape, F1) before the window handlers run, so
+the banks, latches and host pause/retry rules below see exactly what the
+keyboard would produce. Several sources for one key release it only together.
+See [CONTROLS.md](CONTROLS.md); `tests/test_controls.py` compares per-tick
+traces of arrows, chosen letters and a simulated controller.
+
 The voluntary sword turn (Shift + fresh Backward, SwordCtrl 6:22f2-2366)
 turns, retargets and toggles the automatic-turn flag a5-0x5010 (6:2344)
 like the original since 2026-10-30, at the user's request: one voluntary
