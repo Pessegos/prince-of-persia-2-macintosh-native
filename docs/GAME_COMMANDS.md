@@ -45,7 +45,7 @@ or a level jump actually needs it. Menu presentation remains synchronous.
 With God mode enabled in F3 Developer Tools, `+` and `-` add or remove one
 minute from the campaign clock after it starts. `Alt+Shift+T` adds one health
 point, increasing the maximum capacity when the meter is full (up to 12).
-The campaign clock is capped at 999 minutes.
+The campaign clock is capped at 300 minutes (five hours).
 Hold `+` or `-` to repeat the minute adjustment. `Alt+R` removes cheated hearts
 when restarting at the level opening; a reached checkpoint keeps the capacity
 it recorded. `Alt+T` continues to toggle sound.

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 
 FRAMES_PER_MINUTE = 719
-MAX_STORY_MINUTES = 999  # Three-digit ceiling for the holdable time cheat.
+MAX_STORY_MINUTES = 300  # Five-hour ceiling for the holdable time cheat.
 # KeepTime 2:5308-530e and FrameAdv 2:6834 show a time message this long.
 MESSAGE_FRAMES = 24
 
