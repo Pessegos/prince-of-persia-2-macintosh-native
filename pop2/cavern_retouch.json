@@ -7670,6 +7670,56 @@
         79,
         3913
       ]
+    },
+    {
+      "level": 4,
+      "room": 5,
+      "shape": 3552,
+      "x": 102,
+      "bottom": 125,
+      "mode": 16,
+      "size": [
+        40,
+        146
+      ],
+      "source_sha256": "a7202ac7a30f4209d1b50c4816c479fe59a5fb17d785da5d9348affc86111ae2",
+      "source_rect": [
+        2,
+        116,
+        40,
+        139
+      ],
+      "atlas_rect": [
+        0,
+        3914,
+        38,
+        3937
+      ]
+    },
+    {
+      "level": 4,
+      "room": 5,
+      "shape": 3525,
+      "x": 104,
+      "bottom": 125,
+      "mode": 16,
+      "size": [
+        89,
+        30
+      ],
+      "source_sha256": "edfd80276b3df3440c28feca0ec7b4fad4d728d1efc5bf3900bb7ba70aa0ed0f",
+      "source_rect": [
+        1,
+        0,
+        43,
+        25
+      ],
+      "atlas_rect": [
+        39,
+        3914,
+        81,
+        3939
+      ]
     }
   ],
   "doors": [
