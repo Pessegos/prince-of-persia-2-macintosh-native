@@ -9,10 +9,12 @@ from pop2.level_rendering import LevelRenderer
 from pop2.paths import ASSET_DIR
 from pop2.render_opening import load_resource_file
 from tests import test_cavern_retouch as retouch_tests
+from tests.right_tip_expectations import PreviousArtworkMixin
 
 
 # Zero-based room keys; placements are X, bottom, changed source pixels.
-# Frame hashes include all earlier approved artwork in each room.
+# Keep the reviewed shadow frame hashes; later floor layers have their own
+# unmasked production goldens and are isolated by PreviousArtworkMixin.
 APPROVED = {
     (3, 4): ([(212, 362, 197)],
              '4c21295ad0cc54ed2aecc91cf40433df13f4576ee3fab320c53544783cc798a5'),
@@ -25,7 +27,7 @@ APPROVED = {
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(),
                      'Imported game resources required')
-class ShortColumnShadowTests(unittest.TestCase):
+class ShortColumnShadowTests(PreviousArtworkMixin, unittest.TestCase):
     def test_approved_frames_and_native_opt_out_preserve_masks(self):
         prince = load_resource_file('Prince.rsrc')
         for (level, room), (_placements, expected) in APPROVED.items():
