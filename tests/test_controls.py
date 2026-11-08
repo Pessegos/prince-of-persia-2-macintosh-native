@@ -743,7 +743,9 @@ class PadArtTests(unittest.TestCase):
                         self.assertFalse({(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)} & drawn_cells)
         # The panes are clear: inside its frame a row shows only the key.
         for row in cells:
-            self.assertIn(row[row.index('9'):].rstrip('.'), ('9' * 9, '9...9...9'))
+            width = cells[0].count('9')
+            pane = '.' * ((width - 3) // 2)
+            self.assertIn(row[row.index('9'):].rstrip('.'), ('9' * width, '9' + pane + '9' + pane + '9'))
 
     def test_shell_top_is_one_unbroken_line(self):
         body = controls_art.body_mask()
