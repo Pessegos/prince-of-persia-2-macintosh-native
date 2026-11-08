@@ -433,3 +433,4 @@ the separate `rendered/level3-room30-joins-v1/` reference.
 | 3 | 19 | 447 | `0152f3bd6ba86dd6faef9db3824d0f2ac7ee7feeafe63a56a62ba5aa1517665c` |
 | 3 | 25 | 302 | `86f6bd5debc477fb4a64ed7b678284ebde3b8d917d5b9027ef6dbff38aeb0a23` |
 | 3 | 27 | 149 | `3de44f9f649536c2714a46f2a1e889b60ff7459fff95252b2aee0ab87ee1f82c` |
+| 3 | 28 | 149 | `07b6e4de306f7de394b4d870b43e344f6da4d3d72f270e11d0d8cffa54eb8206` |
