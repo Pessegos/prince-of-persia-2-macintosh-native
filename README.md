@@ -155,7 +155,7 @@ Cavern artwork has been touched up across levels 3–5 to soften harsh column sh
 Here are a few examples:
 
 <p align="center">
-  <img src="docs/github readme/cavern-artwork/cavern-artwork-preview.gif" alt="Macintosh and Port comparisons of column shadows, wall and floor joins, column bases, dart traps and doorway edges" width="1005">
+  <img src="docs/github readme/cavern-artwork/cavern-artwork-preview.gif" alt="Macintosh and Port comparisons of column shadows, wall and floor joins, floor edges around column bases and traps, and doorway edges" width="690">
 </p>
 
 <h3 align="center">
