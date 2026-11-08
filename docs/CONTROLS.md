@@ -15,6 +15,14 @@ two tabs:
   PlayStation or Nintendo layout and symbols) with labelled callouts, the
   connected controller's name and a **Use controller** switch.
 
+Both drawings are original pixel art made by code (`pop2/controls_art.py`)
+at the native 510x384 size: each shape is lit from the upper left and
+reduced to a few hard shades, with a light shell, dark keys, sticks and
+pads, and coloured face buttons. Nothing is traced from another game. The
+callouts sit on one 18-pixel grid on both sides; each line leaves its
+label level and bends at most once. Tests check that no line crosses
+another or passes over another button, with every button bound.
+
 **Change keys...** / **Change buttons...** opens a list with two slots per
 action. Enter (or A) waits for the next key or button, Delete (or X) clears a
 slot, Esc (or B) goes back, **Defaults** restores the original layout. A key

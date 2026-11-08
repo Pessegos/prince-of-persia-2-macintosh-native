@@ -8,6 +8,8 @@ window's live Bindings, so a change works at once; the window keeps it.
 from PIL import Image, ImageDraw
 
 from pop2.bitmap_labels import label_text
+from pop2.controls_art import (PAD_HEIGHT, PAD_WIDTH, button_icon, keyboard_case, keycap, legend_ink,
+                               pad_art)
 from pop2.game_ui import DevelopmentMenu, centered_panel
 from pop2.input_bindings import ACTION_BY_NAME, LOCKED_KEYS, PAD_LOCKED, key_name, key_token, pad_name
 
@@ -60,10 +62,6 @@ def mini_text(draw, x, y, text, fill, align='left'):
     return width
 
 
-def shade(color, factor):
-    return tuple(max(0, min(255, round(channel * factor))) for channel in color[:3])
-
-
 # -- keyboard drawing ---------------------------------------------------
 def _letters(text):
     return [(char, char.upper(), 1) for char in text]
@@ -90,10 +88,9 @@ NAV_ROWS = ((), (('Insert', 'INS'), ('Home', 'HOME'), ('Prior', 'PGUP')),
 # Keys that sit where a US key is drawn on common European layouts.
 POSITION_ALIASES = {'ccedilla': 'semicolon', 'ntilde': 'semicolon', 'odiaeresis': 'semicolon',
                     'masculine': 'grave', 'KP_Enter': 'Return'}
-KEYBOARD_UNITS = 18.5
 
 
-def keyboard_keys(origin, unit, key_height=19, pitch=21):
+def keyboard_keys(origin, unit, key_height=19, pitch=22):
     """(token, label, rect) for every drawn key."""
     left, top = origin
     keys = []
@@ -103,13 +100,13 @@ def keyboard_keys(origin, unit, key_height=19, pitch=21):
         for token, label, width in entries:
             if token is not None:
                 keys.append((token, label, (left + round(units * unit) + 1, y,
-                                            left + round((units + width) * unit) - 1, y + key_height)))
+                                            left + round((units + width) * unit) - 2, y + key_height)))
             units += width
         for column, (token, label) in enumerate(NAV_ROWS[row]):
             if token is not None:
                 x = 15.5 + column
                 keys.append((token, label, (left + round(x * unit) + 1, y,
-                                            left + round((x + 1) * unit) - 1, y + key_height)))
+                                            left + round((x + 1) * unit) - 2, y + key_height)))
     return keys
 
 
@@ -121,260 +118,77 @@ def draw_arrow(draw, cx, cy, direction, fill):
     draw.polygon(points, fill=fill)
 
 
-def draw_keycap(draw, rect, label, color=None):
+def draw_keycap(image, rect, label, color=None):
     left, top, right, bottom = rect
-    if color is None:
-        face, edge, light, ink = (40, 40, 40), (20, 20, 20), (72, 72, 72), (128, 128, 128)
-    else:
-        face, edge, light, ink = shade(color, .62), shade(color, .3), shade(color, .95), (18, 16, 12)
-    draw.rectangle(rect, fill=edge)
-    draw.rectangle((left, top, right, bottom - 2), fill=face)
-    draw.line(((left + 1, top), (right - 1, top)), fill=light)
-    draw.line(((left, top + 1), (left, bottom - 3)), fill=light)
-    cx, cy = (left + right) // 2, top + (bottom - top) // 2 - 1
+    cap = keycap(right - left + 1, bottom - top + 1, color)
+    image.alpha_composite(cap, (left, top))
+    draw = ImageDraw.Draw(image)
+    ink = legend_ink(color)
+    cx, cy = (left + right) // 2, top + (bottom - top - 3) // 2
     if label in ('^', 'v', '<', '>'):
-        draw_arrow(draw, cx, cy, label, ink if color is not None else (150, 150, 150))
+        draw_arrow(draw, cx, cy, label, ink)
     elif label:
         mini_text(draw, cx + 1, cy - 2, label, ink, 'center')
 
 
+KEYBOARD_MARGIN = 6
+
+
+def keyboard_bounds(origin, unit):
+    rects = [rect for _token, _label, rect in keyboard_keys(origin, unit)]
+    return (min(rect[0] for rect in rects) - KEYBOARD_MARGIN, min(rect[1] for rect in rects) - KEYBOARD_MARGIN,
+            max(rect[2] for rect in rects) + KEYBOARD_MARGIN, max(rect[3] for rect in rects) + KEYBOARD_MARGIN)
+
+
 def draw_keyboard(image, origin, unit, token_colors):
-    draw = ImageDraw.Draw(image)
+    left, top, right, bottom = keyboard_bounds(origin, unit)
+    image.alpha_composite(keyboard_case(right - left + 1, bottom - top + 1), (left, top))
     for token, label, rect in keyboard_keys(origin, unit):
-        draw_keycap(draw, rect, label, token_colors.get(token))
+        draw_keycap(image, rect, label, token_colors.get(token))
 
 
 # -- controller drawing -------------------------------------------------
-# Positions on a 196x124 design grid, scaled by PAD_SCALE when drawn.
-PAD_SCALE = 1.25
-PAD_SIZE = (round(196 * PAD_SCALE), round(124 * PAD_SCALE))
-LAYOUTS = {
-    # name: (left stick, dpad, right stick, face centre, back, start, guide)
-    'xbox': ((50, 44), (76, 80), (122, 80), (148, 44), (84, 42), (112, 42), (98, 26)),
-    'playstation': ((70, 82), (46, 46), (126, 82), (150, 46), (70, 28), (126, 28), (98, 70)),
-}
-FACE_OFFSETS = {'y': (0, -11), 'x': (-11, 0), 'b': (11, 0), 'a': (0, 11)}
-XBOX_FACE = {'a': (110, 196, 82), 'b': (224, 98, 90), 'x': (92, 152, 226), 'y': (234, 204, 86)}
-PLAYSTATION_FACE = {'a': (136, 174, 232), 'b': (232, 128, 128), 'x': (222, 160, 214),
-                    'y': (118, 214, 184)}
-NINTENDO_FACE = {name: (214, 214, 214) for name in 'abxy'}
 SHORT_LABELS = {'left': 'Move', 'right': 'Move', 'up': 'Jump', 'down': 'Crouch', 'grab': 'Grab',
                 'sword': 'Sword', 'time': 'Time left', 'pause': 'Pause', 'menu': 'Menu'}
-BODY, BODY_LIT, BODY_EDGE, BODY_SHADOW = (46, 46, 50), (60, 60, 65), (172, 172, 176), (32, 32, 35)
-WELL, RING, CAP = (26, 26, 28), (148, 148, 152), (70, 70, 75)
-TOP = 22  # room above the body for bumpers and triggers
-_BODY_CACHE = {}
+LINE_ON_DARK, LINE_ON_LIGHT = (132, 130, 128), (64, 62, 66)
 
 
-def face_colors(style):
-    return {'playstation': PLAYSTATION_FACE, 'nintendo': NINTENDO_FACE}.get(style, XBOX_FACE)
+def line_pixels(points):
+    """Every pixel of a polyline, in order (one per step, no doubles)."""
+    pixels = []
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        x0, y0, x1, y1 = round(x0), round(y0), round(x1), round(y1)
+        steps = max(abs(x1 - x0), abs(y1 - y0), 1)
+        for step in range(steps + 1):
+            pixel = (round(x0 + (x1 - x0) * step / steps), round(y0 + (y1 - y0) * step / steps))
+            if not pixels or pixels[-1] != pixel:
+                pixels.append(pixel)
+    return pixels
 
 
-def scaled(point):
-    return round(point[0] * PAD_SCALE), round(point[1] * PAD_SCALE)
-
-
-def pad_points(style):
-    """Where each button sits on the drawn pad, relative to its corner."""
-    layout = LAYOUTS['playstation' if style == 'playstation' else 'xbox']
-    left_stick, dpad, right_stick, face, back, start, guide = layout
-    points = {'leftstick': left_stick, 'dpad': dpad, 'rightstick': right_stick,
-              'back': back, 'start': start, 'guide': guide,
-              'leftshoulder': (43, 1), 'rightshoulder': (153, 1),
-              'lefttrigger': (38, -12), 'righttrigger': (158, -12)}
-    for button, (dx, dy) in FACE_OFFSETS.items():
-        points[button] = (face[0] + dx, face[1] + dy)
-    if style == 'playstation':
-        points['touchpad'] = (98, 34)
-    return {name: scaled(point) for name, point in points.items()}
-
-
-def outline(mask):
-    """The one-pixel rim of a mask, as a pixel artist would ink it."""
-    pixels = mask.load()
-    width, height = mask.size
-    edge = Image.new('1', mask.size, 0)
-    out = edge.load()
-    for y in range(height):
-        for x in range(width):
-            if pixels[x, y] and any(not (0 <= x + dx < width and 0 <= y + dy < height)
-                                    or not pixels[x + dx, y + dy]
-                                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
-                out[x, y] = 1
-    return edge
-
-
-def shape(draw_shape, size):
-    mask = Image.new('1', size, 0)
-    draw_shape(ImageDraw.Draw(mask))
-    return mask
-
-
-def pad_body(style):
-    key = 'playstation' if style == 'playstation' else 'xbox'
-    if key in _BODY_CACHE:
-        return _BODY_CACHE[key]
-    width, height = PAD_SIZE
-    size = (width, height + TOP)
-
-    def r(*values):
-        return [round(value * PAD_SCALE) + (TOP if index % 2 else 0)
-                for index, value in enumerate(values)]
-
-    def body_shape(draw):
-        draw.rounded_rectangle(r(14, 4, 182, 74), radius=round(26 * PAD_SCALE), fill=1)
-        draw.ellipse(r(6, 30, 74, 122), fill=1)
-        draw.ellipse(r(122, 30, 190, 122), fill=1)
-        if key == 'playstation':
-            draw.rectangle(r(72, 74, 124, 92), fill=0)
-
-    def bumper_shape(draw):
-        draw.rounded_rectangle(r(22, -4, 64, 8), radius=6, fill=1)
-        draw.rounded_rectangle(r(132, -4, 174, 8), radius=6, fill=1)
-
-    def trigger_shape(draw):
-        draw.rounded_rectangle(r(28, -17, 48, -6), radius=4, fill=1)
-        draw.rounded_rectangle(r(148, -17, 168, -6), radius=4, fill=1)
-
-    body, bumpers, triggers = (shape(fn, size) for fn in (body_shape, bumper_shape, trigger_shape))
-    image = Image.new('RGBA', size, (0, 0, 0, 0))
-    for mask, fill in ((triggers, (84, 84, 90)), (bumpers, (70, 70, 76))):
-        image.paste(fill + (255,), (0, 0), mask)
-        image.paste(BODY_EDGE + (255,), (0, 0), outline(mask))
-    image.paste(BODY + (255,), (0, 0), body)
-    # A bevel just inside the rim: lit where the edge faces up or left,
-    # shaded where it faces down, two hard pixels wide like a 1993 icon.
-    pixels = body.load()
-    lit, dark = (Image.new('1', size, 0) for _ in range(2))
-    lit_pixels, dark_pixels = lit.load(), dark.load()
-    for y in range(size[1]):
-        for x in range(size[0]):
-            if not pixels[x, y]:
-                continue
-
-            def outside(dx, dy):
-                return not (0 <= x + dx < size[0] and 0 <= y + dy < size[1]) or not pixels[x + dx, y + dy]
-            if any(outside(0, -step) or outside(-step, 0) for step in (2, 3)):
-                lit_pixels[x, y] = 1
-            elif any(outside(0, step) for step in (2, 3, 4)):
-                dark_pixels[x, y] = 1
-    image.paste(BODY_LIT + (255,), (0, 0), lit)
-    image.paste(BODY_SHADOW + (255,), (0, 0), dark)
-    image.paste(BODY_EDGE + (255,), (0, 0), outline(body))
-    _BODY_CACHE[key] = image
-    return image
-
-
-def draw_face_symbol(draw, cx, cy, button, style, ink):
-    if style == 'playstation':
-        if button == 'a':
-            draw.line(((cx - 2, cy - 2), (cx + 2, cy + 2)), fill=ink)
-            draw.line(((cx - 2, cy + 2), (cx + 2, cy - 2)), fill=ink)
-        elif button == 'b':
-            draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), outline=ink)
-        elif button == 'x':
-            draw.rectangle((cx - 2, cy - 2, cx + 2, cy + 2), outline=ink)
-        else:
-            draw.line(((cx, cy - 3), (cx - 3, cy + 2), (cx + 3, cy + 2), (cx, cy - 3)), fill=ink)
-        return
-    mini_text(draw, cx + 1, cy - 2, pad_name(button, style), ink, 'center')
-
-
-def draw_pad(image, origin, style):
-    """Draw the pad with its corner at origin; returns button centres."""
-    x0, y0 = origin
-    image.alpha_composite(pad_body(style), (x0, y0 - TOP))
-    draw = ImageDraw.Draw(image)
-    points = {name: (x0 + x, y0 + y) for name, (x, y) in pad_points(style).items()}
-    for name in ('lefttrigger', 'righttrigger', 'leftshoulder', 'rightshoulder'):
-        cx, cy = points[name]
-        mini_text(draw, cx + 1, cy - 2, pad_name(name, style), (18, 18, 20), 'center')
-    if style == 'playstation':
-        tx, ty = points['touchpad']
-        draw.rounded_rectangle((tx - 26, ty - 14, tx + 26, ty + 12), radius=3,
-                               fill=BODY_SHADOW, outline=(118, 118, 122))
-    for name in ('leftstick', 'rightstick'):
-        cx, cy = points[name]
-        draw.ellipse((cx - 15, cy - 15, cx + 15, cy + 15), fill=WELL, outline=RING)
-        draw.ellipse((cx - 9, cy - 9, cx + 9, cy + 9), fill=CAP, outline=(122, 122, 126))
-        draw.arc((cx - 6, cy - 6, cx + 6, cy + 6), 200, 290, fill=(112, 112, 118))
-    cx, cy = points['dpad']
-    arm, half = 13, 5
-    draw.rectangle((cx - half, cy - arm, cx + half, cy + arm), fill=WELL)
-    draw.rectangle((cx - arm, cy - half, cx + arm, cy + half), fill=WELL)
-    draw.line(((cx - half, cy - arm), (cx + half, cy - arm), (cx + half, cy - half),
-               (cx + arm, cy - half), (cx + arm, cy + half), (cx + half, cy + half),
-               (cx + half, cy + arm), (cx - half, cy + arm), (cx - half, cy + half),
-               (cx - arm, cy + half), (cx - arm, cy - half), (cx - half, cy - half),
-               (cx - half, cy - arm)), fill=RING)
-    for direction, (dx, dy) in (('^', (0, -8)), ('v', (0, 8)), ('<', (-8, 0)), ('>', (8, 0))):
-        draw_arrow(draw, cx + dx, cy + dy, direction, (100, 100, 104))
-    for name in ('back', 'start'):
-        cx, cy = points[name]
-        draw.rounded_rectangle((cx - 5, cy - 4, cx + 5, cy + 4), radius=3, fill=WELL, outline=RING)
-        if name == 'back':
-            draw.rectangle((cx - 2, cy - 2, cx + 1, cy + 1), outline=(150, 150, 154))
-        else:
-            for row in (-2, 0, 2):
-                draw.line(((cx - 2, cy + row), (cx + 2, cy + row)), fill=(150, 150, 154))
-    gx, gy = points['guide']
-    draw.ellipse((gx - 8, gy - 8, gx + 8, gy + 8), fill=WELL, outline=(118, 118, 122))
-    colors = face_colors(style)
-    for name in ('a', 'b', 'x', 'y'):
-        cx, cy = points[name]
-        color = colors[name]
-        draw.ellipse((cx - 7, cy - 7, cx + 7, cy + 7), fill=WELL, outline=shade(color, .75))
-        draw_face_symbol(draw, cx, cy, name, style, color)
-    return points
-
-
-BUTTON_RADIUS = {'leftstick': 15, 'rightstick': 15, 'dpad': 13, 'a': 7, 'b': 7, 'x': 7, 'y': 7,
-                 'back': 5, 'start': 5, 'guide': 8, 'touchpad': 14}
-
-
-def pad_icon(image, x, y, token, style):
-    """A small button glyph for the remap list; returns its width."""
-    draw = ImageDraw.Draw(image)
-    if token in ('a', 'b', 'x', 'y'):
-        color = face_colors(style)[token]
-        draw.ellipse((x, y, x + 12, y + 12), fill=WELL, outline=shade(color, .85))
-        draw_face_symbol(draw, x + 6, y + 6, token, style, color)
-        return 13
-    if token in ('back', 'start'):
-        cx, cy = x + 6, y + 6
-        draw.rounded_rectangle((x, y + 1, x + 12, y + 11), radius=3, fill=WELL, outline=RING)
-        if token == 'back':
-            draw.rectangle((cx - 2, cy - 2, cx + 1, cy + 1), outline=(190, 190, 194))
-        else:
-            for row in (-2, 0, 2):
-                draw.line(((cx - 2, cy + row), (cx + 2, cy + row)), fill=(190, 190, 194))
-        return 13
-    return 0
-
-
-# Labels for the small centre buttons sit higher, so their lines pass
-# above the sticks rather than across them.
-# Xbox-style View/Menu sit level with the face buttons, so their callouts go
-# above them; the PlayStation's Create/Options already sit higher.
-CALLOUT_LIFT = {'xbox': {'back': -36, 'start': -36}, 'playstation': {}}
-# Callout rows, top to bottom, so lines rarely cross.
-PAD_CALLOUTS = {'left': ('lefttrigger', 'leftshoulder', 'move', 'back', 'leftstick', 'misc1',
-                         'paddle1', 'paddle3'),
-                'right': ('righttrigger', 'rightshoulder', 'y', 'start', 'b', 'x', 'a',
-                          'rightstick', 'touchpad', 'paddle2', 'paddle4')}
+def draw_callout(image, points, art, origin):
+    """A one-pixel leader line, dark where it crosses the light shell."""
+    pad = art.image
+    for x, y in line_pixels(points):
+        px, py = x - origin[0], y - origin[1]
+        over = (0 <= px < pad.width and 0 <= py < pad.height) and pad.getpixel((px, py))
+        light = over and over[3] and sum(over[:3]) > 330
+        if 0 <= x < image.width and 0 <= y < image.height:
+            image.putpixel((x, y), (*(LINE_ON_LIGHT if light else LINE_ON_DARK), 255))
 
 
 class ControlsPage:
     PANEL = centered_panel(470, 350)
     TABS = ((150, 34, 252, 56), (260, 34, 362, 56))
     BUTTONS = ((100, 318, 250, 344), (262, 318, 412, 344))
-    TOGGLE = (196, 292, 316, 310)
+    TOGGLE = (196, 286, 316, 304)
     ROW_TOP = 52
     ROW_HEIGHT = 22
     SLOT_X = ((232, 344), (352, 464))
-    KEYBOARD_ORIGIN = (43, 66)
+    KEYBOARD_ORIGIN = (43, 70)
     KEYBOARD_UNIT = 23
-    PAD_ORIGIN = (256 - PAD_SIZE[0] // 2, 88)
+    LEGEND_X = (103, 291)
+    PAD_ORIGIN = (256 - PAD_WIDTH // 2, 68)
 
     def __init__(self, keyboard, controller, pads=(), controller_enabled=True,
                  controller_available=True, return_to_menu=True):
@@ -565,6 +379,10 @@ class ControlsPage:
         return 'controls_saved'
 
     # -- pointer --------------------------------------------------------
+    def row_top(self):
+        """The remap rows, centred where the nine keyboard rows sit."""
+        return self.ROW_TOP + (9 - len(self.bindings.actions)) * self.ROW_HEIGHT // 2
+
     def control_rect(self, control):
         if control in ('tab_keyboard', 'tab_controller'):
             return self.TABS[0 if control == 'tab_keyboard' else 1]
@@ -577,7 +395,7 @@ class ControlsPage:
         if control == 'back':
             return self.BUTTONS[1]
         _kind, action, slot = control
-        top = self.ROW_TOP + self.bindings.actions.index(action) * self.ROW_HEIGHT
+        top = self.row_top() + self.bindings.actions.index(action) * self.ROW_HEIGHT
         left, right = self.SLOT_X[slot]
         return left, top, right, top + self.ROW_HEIGHT - 3
 
@@ -653,7 +471,7 @@ class ControlsPage:
                 button(self.BUTTONS[0], 'Change buttons...', focused == 'change')
             button(self.BUTTONS[1], 'Back' if self.return_to_menu else 'Close', focused == 'back')
         else:
-            self.draw_remap(image, draw, text, button)
+            self.draw_remap(image, draw, text, button, lambda value: label_text(font, value, WHITE).width)
         return image
 
     def keyboard_colors(self):
@@ -669,62 +487,47 @@ class ControlsPage:
         drawn = {token for token, _label, _rect in keyboard_keys(self.KEYBOARD_ORIGIN, self.KEYBOARD_UNIT)}
         for index, (label, actions) in enumerate(LEGEND):
             column, row = index % 2, index // 2
-            x, y = 92 + column * 176, 212 + row * 18
+            x, y = self.LEGEND_X[column], 224 + row * 18
             color = ACTION_COLORS[actions[0]]
-            draw.rectangle((x, y + 1, x + 9, y + 10), fill=shade(color, .62), outline=shade(color, .95))
+            image.alpha_composite(keycap(13, 12, color), (x, y))
             hidden = [key_name(token) for action in actions for token in self.keyboard.keys(action)
                       if POSITION_ALIASES.get(token, token) not in drawn]
             missing = not any(self.keyboard.keys(action) for action in actions)
             value = label + (f' ({", ".join(hidden)})' if hidden else '') + (' (none)' if missing else '')
-            text(value, x + 15, y + 1, ERROR if missing else WHITE, max_width=150)
+            text(value, x + 19, y + 2, ERROR if missing else WHITE, max_width=150)
+
+    def callouts(self):
+        """(button, side, row, line points, label, action) for each drawn label."""
+        art = pad_art(self.style)
+        x0, y0 = self.PAD_ORIGIN
+        bound = {token: action for action in self.controller.actions
+                 for token in self.controller.keys(action)}
+        entries = []
+        for button, (side, row, path) in art.routes.items():
+            # The left stick and the D-pad always move.
+            action = 'left' if button in ('move', 'dpad') else bound.get(button)
+            if action is None:
+                continue
+            label = SHORT_LABELS[action]
+            start = x0 - 8 if side == 'left' else x0 + PAD_WIDTH + 8
+            points = [(start, y0 + row)] + [(x0 + x, y0 + y) for x, y in path]
+            entries.append((button, side, y0 + row, points, label, action))
+        return entries
 
     def draw_controller_overview(self, image, draw, text):
-        style = self.style
-        bound = {}
-        for action in self.controller.actions:
-            for token in self.controller.keys(action):
-                bound[token] = action
-        origin = self.PAD_ORIGIN
-        points = draw_pad(image, origin, style)
-        ends = {'left': origin[0] - 16, 'right': origin[0] + PAD_SIZE[0] + 16}
-        line = (118, 118, 122)
-        lift = CALLOUT_LIFT['playstation' if style == 'playstation' else 'xbox']
-        for side, buttons in PAD_CALLOUTS.items():
-            entries = []
-            for button in buttons:
-                if button == 'move':
-                    action, targets = 'left', ('leftstick', 'dpad')
-                elif button in bound and button in points:
-                    action, targets = bound[button], (button,)
-                else:
-                    continue
-                wanted = (sum(points[target][1] for target in targets) / len(targets)
-                          + lift.get(button, 0))
-                entries.append((wanted, buttons.index(button), action, targets))
-            # Each label as level with its button as the 17-pixel rows allow.
-            entries.sort()
-            rows, top, bottom = [], origin[1] - 18, origin[1] + PAD_SIZE[1] - 4
-            for wanted, *_rest in entries:
-                rows.append(max(round(wanted), rows[-1] + 17 if rows else top))
-            overflow = (rows[-1] - bottom) if rows else 0
-            if overflow > 0:
-                rows = [max(top + index * 17, y - overflow) for index, y in enumerate(rows)]
-            for y, (_wanted, _order, action, targets) in zip(rows, entries):
-                end = ends[side]
-                elbow = end + (10 if side == 'left' else -10)
-                for target in targets:
-                    tx, ty = points[target]
-                    dx, dy = elbow - tx, y - ty
-                    length = max(1.0, (dx * dx + dy * dy) ** .5)
-                    radius = BUTTON_RADIUS.get(target, 4) + 1
-                    stop = (round(tx + dx * radius / length), round(ty + dy * radius / length))
-                    draw.line(((end, y), (elbow, y), stop), fill=line)
-                color = ACTION_COLORS[action]
-                swatch = end - 6 if side == 'left' else end + 2
-                draw.rectangle((swatch, y - 2, swatch + 4, y + 2), fill=shade(color, .95))
-                text(SHORT_LABELS[action], end - 10 if side == 'left' else end + 10, y - 5, WHITE,
-                     'right' if side == 'left' else 'left', 92)
-        status_y = origin[1] + PAD_SIZE[1] + 8
+        art = pad_art(self.style)
+        x0, y0 = self.PAD_ORIGIN
+        image.alpha_composite(art.image, (x0, y0))
+        for _button, side, row, points, label, action in self.callouts():
+            draw_callout(image, points, art, (x0, y0))
+            color = ACTION_COLORS[action]
+            if side == 'left':
+                swatch, anchor, align = x0 - 14, x0 - 18, 'right'
+            else:
+                swatch, anchor, align = x0 + PAD_WIDTH + 10, x0 + PAD_WIDTH + 18, 'left'
+            draw.rectangle((swatch, row - 2, swatch + 4, row + 2), fill=color)
+            text(label, anchor, row - 5, WHITE, align, 88)
+        status_y = y0 + PAD_HEIGHT + 6
         if not self.controller_available:
             text('Controller support is unavailable here', 256, status_y, MUTED, 'center', 420)
         elif not self.controller_enabled:
@@ -742,21 +545,22 @@ class ControlsPage:
             confirm, clear, back = 'Enter', 'Delete', 'Esc'
         return f'{confirm}: change    {clear}: clear    {back}: back'
 
-    def draw_remap(self, image, draw, text, button):
+    def draw_remap(self, image, draw, text, button, measure):
         keyboard = self.device == 'keyboard'
         text('Keyboard keys' if keyboard else 'Controller buttons', 256, self.PANEL[1] + 12, GOLD, 'center')
         heading = 'Key' if keyboard else 'Button'
-        text('Action', 44, self.ROW_TOP - 15, MUTED)
+        row_top = self.row_top()
+        text('Action', 50, row_top - 15, MUTED)
         for index, (left, right) in enumerate(self.SLOT_X):
-            text(f'{heading} {index + 1}', (left + right) // 2, self.ROW_TOP - 15, MUTED, 'center')
+            text(f'{heading} {index + 1}', (left + right) // 2, row_top - 15, MUTED, 'center')
         bindings = self.bindings
         focused = self.focused
         for row, action in enumerate(bindings.actions):
-            top = self.ROW_TOP + row * self.ROW_HEIGHT
+            top = row_top + row * self.ROW_HEIGHT
             unbound = not bindings.keys(action) and action not in ('time',)
             color = ACTION_COLORS[action]
-            draw.rectangle((36, top + 5, 41, top + 10), fill=shade(color, .9))
-            text(ACTION_BY_NAME[action].label, 48, top + 4, ERROR if unbound else WHITE, max_width=176)
+            draw.rectangle((38, top + 7, 43, top + 12), fill=color)
+            text(ACTION_BY_NAME[action].label, 50, top + 5, ERROR if unbound else WHITE, max_width=176)
             for slot in range(2):
                 rect = self.control_rect(('slot', action, slot))
                 selected = focused == ('slot', action, slot)
@@ -776,13 +580,17 @@ class ControlsPage:
                          rect[2] - rect[0] - 8)
                 else:
                     name = self.name(token)
-                    icon_x = rect[0] + 8
-                    width = pad_icon(image, icon_x, rect[1] + 3, token, self.style)
-                    text(name, icon_x + width + 5, rect[1] + 5, MUTED if locked else WHITE,
-                         max_width=rect[2] - icon_x - width - 10)
+                    icon = button_icon(token, self.style)
+                    gap = 5 if icon is not None else 0
+                    width = (icon.width if icon is not None else 0) + gap + min(measure(name), 80)
+                    x = cx - width // 2
+                    if icon is not None:
+                        image.alpha_composite(icon, (x, rect[1] + 3))
+                        x += icon.width + gap
+                    text(name, x, rect[1] + 5, MUTED if locked else WHITE, max_width=80)
         button(self.BUTTONS[0], 'Defaults', focused == 'defaults')
         button(self.BUTTONS[1], 'Back', focused == 'back')
-        bottom = self.ROW_TOP + len(bindings.actions) * self.ROW_HEIGHT
+        bottom = row_top + len(bindings.actions) * self.ROW_HEIGHT
         if self.message:
             text(self.message, 256, bottom + 8, ERROR if self.message_error else GOLD, 'center', 420)
         text(self.hints(), 256, self.BUTTONS[0][1] - 18, MUTED, 'center', 420)

@@ -6,12 +6,14 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
+import numpy as np
 from PIL import Image
 
+from pop2 import controls_art
 from pop2.controls_page import ControlsPage, keyboard_keys
 from pop2.game_menu import GameMenu
 from pop2.gamepad import Hysteresis, PadReader, PadState, pad_style
-from pop2.input_bindings import (Bindings, CONTROLLER_DEFAULTS, KEYBOARD_DEFAULTS, key_name,
+from pop2.input_bindings import (Bindings, CONTROLLER_DEFAULTS, KEYBOARD_DEFAULTS, PAD_BINDABLE, key_name,
                                  key_token, pad_name)
 from pop2.input_routing import KeyRouter, key_source
 from pop2.preferences import load_preferences, remember
@@ -478,6 +480,100 @@ class ControlsPageTests(unittest.TestCase):
                     page.listening = ('up', 1) if view == 'remap' else None
                     image = page.draw(Image.new('RGBA', (512, 384), 'black'), font)
                     self.assertEqual(image.size, (512, 384))
+
+
+class PadArtTests(unittest.TestCase):
+    """The drawn controller: tidy callouts and an exact distance field."""
+
+    STYLES = ('xbox', 'playstation', 'nintendo')
+    ROUND = {'leftstick': controls_art.STICK_WELL, 'rightstick': controls_art.STICK_WELL,
+             'dpad': controls_art.DPAD_DISH, 'a': controls_art.FACE_RADIUS,
+             'b': controls_art.FACE_RADIUS, 'x': controls_art.FACE_RADIUS,
+             'y': controls_art.FACE_RADIUS, 'back': 6, 'start': 6, 'guide': 9, 'misc1': 5}
+
+    @staticmethod
+    def polyline(side, row, path):
+        start = -8 if side == 'left' else controls_art.PAD_WIDTH + 8
+        return [(start, row), *path]
+
+    @staticmethod
+    def crosses(p, q, r, s):
+        def turn(a, b, c):
+            value = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+            return (value > 0) - (value < 0)
+        return turn(p, q, r) * turn(p, q, s) < 0 and turn(r, s, p) * turn(r, s, q) < 0
+
+    @staticmethod
+    def clearance(point, a, b):
+        (px, py), (ax, ay), (bx, by) = point, a, b
+        dx, dy = bx - ax, by - ay
+        t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / max(1e-9, dx * dx + dy * dy)))
+        return ((px - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2) ** .5
+
+    def test_callout_lines_neither_cross_nor_touch_another_button(self):
+        for style in self.STYLES:
+            art = controls_art.pad_art(style)
+            lines = {button: self.polyline(*route) for button, route in art.routes.items()}
+            for button, line in lines.items():
+                segments = list(zip(line, line[1:]))
+                for other, centre in art.points.items():
+                    if other in (button, 'move' if button == 'leftstick' else None,
+                                 'leftstick' if button == 'move' else None) or other not in self.ROUND:
+                        continue
+                    with self.subTest(style=style, line=button, near=other):
+                        self.assertGreater(min(self.clearance(centre, *segment) for segment in segments),
+                                           self.ROUND[other] + 1)
+                for other, other_line in lines.items():
+                    if other <= button:
+                        continue
+                    with self.subTest(style=style, line=button, other=other):
+                        self.assertFalse(any(self.crosses(*first, *second)
+                                             for first in segments
+                                             for second in zip(other_line, other_line[1:])))
+
+    def test_labels_sit_on_one_grid_and_never_share_a_row(self):
+        rows = {row + controls_art.ABOVE for row in controls_art.ROWS}
+        for style in self.STYLES:
+            used = {}
+            for button, (side, row, path) in controls_art.pad_art(style).routes.items():
+                with self.subTest(style=style, button=button):
+                    self.assertIn(row, rows)
+                    self.assertNotIn((side, row), used)
+                    # The line leaves its label level, along the row.
+                    self.assertEqual(path[0][1], row)
+                used[side, row] = button
+
+    def test_every_drawn_bindable_button_has_a_callout(self):
+        for style in self.STYLES:
+            art = controls_art.pad_art(style)
+            self.assertIn('move', art.routes)
+            for button in PAD_BINDABLE:
+                if button in art.points or button.endswith(('shoulder', 'trigger')):
+                    with self.subTest(style=style, button=button):
+                        self.assertIn(button, art.routes)
+
+    def test_moving_a_button_changes_only_its_own_callout(self):
+        page = ControlsPage(Bindings('keyboard'), Bindings('controller'),
+                            pads=(PadState(1, 'Pad', 'xbox'),))
+        before = {entry[0]: entry[4] for entry in page.callouts()}
+        self.assertEqual(before['move'], 'Move')
+        self.assertNotIn('leftstick', before)
+        self.assertEqual(before['dpad'], 'Move')
+        self.assertEqual(before['righttrigger'], 'Grab')
+        self.assertNotIn('leftshoulder', before)
+        page.controller.assign('sword', 1, 'leftshoulder')
+        after = {entry[0]: entry[4] for entry in page.callouts()}
+        self.assertEqual(after['leftshoulder'], 'Sword')
+        self.assertEqual({k: v for k, v in after.items() if k != 'leftshoulder'}, before)
+
+    def test_distance_field_matches_brute_force(self):
+        mask = controls_art.body_mask()[::3, ::3]
+        fast = controls_art.distance_inside(mask)
+        inside = np.argwhere(mask)
+        outside = np.argwhere(np.pad(~mask, 1, constant_values=True)) - 1
+        for y, x in inside[::17]:
+            expected = np.sqrt(((outside - (y, x)) ** 2).sum(axis=1)).min()
+            self.assertAlmostEqual(float(fast[y, x]), float(expected), places=4)
 
 
 class FakeFont:
