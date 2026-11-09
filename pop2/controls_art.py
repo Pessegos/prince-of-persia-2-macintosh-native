@@ -219,9 +219,10 @@ SHAPES = {
          ((89, 10), (80, 10), (68, 11), (56, 13), (46, 17), (40, 21), (36, 23))),
         ((46, 12), (48, 4), (54, -2), (63, -6), (74, -6), (81, -3), (85, 2), (86, 8), (66, 10))),
     # Wings either side of a tall touchpad, long grips splaying outwards and
-    # a dark centre that runs down the inside of each grip.
+    # a dark centre that runs down the inside of each grip; the top bows up
+    # a little towards the middle.
     'playstation': Shape(
-        ((120, 5), (100, 5), (74, 5), (60, 6), (46, 8), (34, 10), (25, 14), (18, 21), (12, 32),
+        ((120, 3), (104, 3), (88, 4), (74, 5), (60, 6), (46, 8), (34, 10), (25, 14), (18, 21), (12, 32),
          (8, 44), (5, 58), (2, 72), (0, 88), (0, 104), (1, 120), (3, 134), (6, 145), (10, 152),
          (16, 157), (24, 160), (32, 159), (38, 154), (42, 143), (45, 131), (49, 121), (53, 113),
          (58, 108), (64, 105), (72, 104), (88, 104), (104, 104), (120, 104)),
@@ -235,8 +236,11 @@ SHELL_HALF = SHAPES['xbox'].shell
 # measured off a photograph of the real pad.
 PLATE_HALF = ((120, 44), (77, 44), (75, 50), (69, 61), (60, 73), (52, 85), (46, 97), (41, 108),
               (36, 119), (31, 131), (27, 143), (23, 154), (20, 172), (120, 172))
-# The touchpad's left half, from its top centre down to its bottom centre.
-TOUCHPAD_HALF = ((120, 5), (74, 5), (75, 20), (77, 35), (80, 45), (87, 51), (100, 52), (120, 52))
+# The touchpad's left half, from above its top centre down to its bottom
+# centre (the shell's own top edge trims it): nearly straight sides leaning
+# out a little, rounding off into a level bottom.
+TOUCHPAD_HALF = ((120, 0), (74, 0), (74, 5), (76, 20), (78, 35), (79, 46), (81, 52), (85, 55.5),
+                 (92, 57), (120, 57))
 STICK_WELL, STICK_CAP, STICK_DISH = 17, 14, 9
 FACE_RADIUS, DPAD_DISH, GUIDE_RADIUS = 8, 18, 10
 
@@ -329,9 +333,7 @@ def plate_mask(body):
 
 def touchpad_mask():
     half = spline(TOUCHPAD_HALF[1:-1], steps=6)
-    mask = symmetric([TOUCHPAD_HALF[0], *half, TOUCHPAD_HALF[-1]])
-    mask[:TOUCHPAD_HALF[0][1] + ABOVE] = False
-    return mask
+    return symmetric([TOUCHPAD_HALF[0], *half, TOUCHPAD_HALF[-1]]) & body_mask('playstation')
 
 
 def glyph(draw, x, y, rows, fill):
@@ -507,7 +509,6 @@ SMALL_ICONS = {
     # the DualSense's: three rays, three lines
     'create': ('#.#.#', '.#.#.'),
     'options': ('#####', '.....', '#####', '.....', '#####'),
-    'mic': ('###',),
     'minus': ('.....', '.....', '#####', '.....', '.....'),
     'plus': ('..#..', '..#..', '#####', '..#..', '..#..'),
     'dot': ('#',),
@@ -610,19 +611,21 @@ def shifted(point):
     return point[0], point[1] + ABOVE
 
 
-# The DualSense's grille, on the grid: five holes over four, mirrored about
-# the centre line, each a round 3x3 hole with soft corners.
-SPEAKER = ((112, 61), (116, 61), (120, 61), (124, 61), (128, 61),
-           (114, 65), (118, 65), (122, 65), (126, 65))
-SPEAKER_HOLE = {(0, 0): WELL[0], (-1, 0): WELL[0], (1, 0): WELL[0], (0, -1): WELL[0], (0, 1): WELL[0],
-                (-1, -1): PLATE[1], (1, -1): PLATE[1], (-1, 1): PLATE[1], (1, 1): PLATE[1]}
+# The DualSense's grille, on the grid, just below the touchpad: five holes
+# over four, each 2x2 with its lower right corner caught by the light. Like
+# the PS mark and the Mic button it is an even width, centred between
+# columns 120 and 121.
+SPEAKER = ((112, 60), (116, 60), (120, 60), (124, 60), (128, 60),
+           (114, 63), (118, 63), (122, 63), (126, 63))
+SPEAKER_HOLE = {(0, 0): WELL[0], (1, 0): WELL[0], (0, 1): WELL[0], (1, 1): PLATE[1]}
 
 
-def light_bar(image, pad, margins=(6, 4)):
+def light_bar(image, pad, margins=(8, 6), body=None):
     """The DualSense's blue light either side of the touchpad: a strip just
     outside its sides, brightest midway down, shining up out of a groove
     that carries on above it to the shell's top edge (that groove's left
-    wall in shadow, its right wall lit)."""
+    wall in shadow, its right wall lit). Given the body, nothing is drawn
+    on or beyond its outline."""
     def grow(mask):
         grown = mask.copy()
         grown[:, 1:] |= mask[:, :-1]
@@ -631,6 +634,9 @@ def light_bar(image, pad, margins=(6, 4)):
 
     near = grow(pad) & ~pad
     far = grow(grow(pad)) & ~pad & ~near
+    if body is not None:
+        inside = body & ~edge(body)
+        near, far = near & inside, far & inside
     pixels = image.load()
     rows = np.nonzero(pad.any(axis=1))[0]
     top, bottom = rows[0] + margins[0], rows[-1] - margins[1]
@@ -652,6 +658,14 @@ def speaker(image):
         x, y = shifted((x, y))
         for (dx, dy), shade in SPEAKER_HOLE.items():
             pixels[x + dx, y + dy] = (*shade, 255)
+
+
+def mic_button(image, centre, ramp=PLATE):
+    """The DualSense's Mic button: a slim pill as dark as the centre it
+    sits in, caught by the light along its top. Twelve pixels wide, its
+    middle falls between `centre`'s column and the next."""
+    mask = capsule(4, 12).T
+    paint(image, lit_levels(mask, rim=2, bias=.1, smooth=0), ramp, (centre[0] - 5, centre[1] - 2))
 
 
 @lru_cache(maxsize=None)
@@ -679,12 +693,12 @@ def pad_art(style='xbox'):
         pad = touchpad_mask()
         paint(parts, lit_levels(pad, rim=4, slope=0.12, bias=.04, smooth=1.5,
                                 thresholds=(0.05, 0.27, 0.5, 0.75, 0.92)), SHELL)
-        light_bar(image, pad)
+        light_bar(image, pad, body=body)
         dpad_keys(parts, points['dpad'])
         ps_button(parts, points['guide'])
         ivory_button(parts, points['back'], 'create', shape=capsule(9, 15))
         ivory_button(parts, points['start'], 'options', shape=capsule(9, 15))
-        ivory_button(parts, points['misc1'], 'mic', (11, 5))
+        mic_button(parts, points['misc1'])
     elif style == 'nintendo':
         dpad(parts, points['dpad'])
         stamp(parts, circle_mask(8), points['guide'], WELL, rim=3, dome=.3)
@@ -776,7 +790,7 @@ def button_icon(token, style):
             dpad(image, centre, *ICON_DPAD)
     elif token == 'misc1':
         if style == 'playstation':
-            ivory_button(image, centre, 'mic', (11, 5))
+            mic_button(image, centre)
         elif style == 'nintendo':
             small_button(image, centre, 'dot', (9, 9))
         else:

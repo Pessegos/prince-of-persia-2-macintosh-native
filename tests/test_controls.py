@@ -825,20 +825,36 @@ class PadArtTests(unittest.TestCase):
         self.assertEqual(self.pieces(keys), 4)
         self.assertFalse(keys[22, 22])  # the centre between them is clear
 
-    def test_dualsense_centre_parts_stand_on_its_centre_line(self):
-        # The grille, the PS mark's stem and the Mic button share column 120.
+    def test_dualsense_centre_parts_share_one_centre(self):
+        # The grille, the PS mark and the Mic button are even widths centred
+        # between columns 120 and 121, one above the other.
         holes = {(x + dx, y + dy) for x, y in controls_art.SPEAKER for dx, dy in controls_art.SPEAKER_HOLE}
-        self.assertEqual(holes, {(240 - x, y) for x, y in holes})
-        for row in controls_art.PS_LOGO[3:7]:  # the stem, outlined both sides, beside the P's bowl
-            self.assertEqual(row[controls_art.PS_LOGO_STEM - 2], '0')
-            self.assertEqual(row[controls_art.PS_LOGO_STEM + 2], '0')
+        self.assertEqual({x for x, _y in holes}, {241 - x for x, _y in holes})
+        for y in {y for _x, y in holes}:
+            row = [x for x, hole_y in holes if hole_y == y]
+            self.assertEqual(min(row) + max(row), 241)
         art = controls_art.pad_art('playstation')
-        x, y = art.points['guide']
-        self.assertEqual(x, 120)
-        pixels = np.array(art.image)
-        mic = pixels[art.points['misc1'][1], :, 3] > 0
-        columns = np.nonzero(mic[100:141])[0] + 100
-        self.assertEqual(columns.min() + columns.max(), 240)
+        between = slice(100, 141)  # between the stick wells
+        for name, height in (('guide', len(controls_art.PS_LOGO)), ('misc1', 4)):
+            y = art.points[name][1]
+            drawn = art.controls[y - height // 2:y + height // 2, between]
+            columns = np.nonzero(drawn.any(axis=0))[0] + between.start
+            with self.subTest(name=name):
+                self.assertEqual(columns.min() + columns.max(), 241)
+        # the grille sits just below the touchpad, a clear row or two between
+        pad_bottom = np.nonzero(controls_art.touchpad_mask()[:, 120])[0].max()
+        self.assertIn(min(y for _x, y in holes) + controls_art.ABOVE - pad_bottom, (2, 3))
+
+    def test_dualsense_top_bows_up_towards_the_middle(self):
+        # Highest at the centre, then a pixel lower at a time towards the
+        # wings, never rising again; the touchpad's top is the shell's own.
+        body = controls_art.body_mask('playstation')
+        pad = controls_art.touchpad_mask()
+        tops = [int(np.argmax(body[:, x])) for x in range(61, 121)]
+        self.assertEqual(tops, sorted(tops, reverse=True))
+        self.assertEqual(tops[0] - tops[-1], 2)
+        for x in range(76, 121):
+            self.assertEqual(np.argmax(pad[:, x]), np.argmax(body[:, x]))
 
     def test_create_and_options_ends_round_off_a_step_at_a_time(self):
         # No corner pixel pokes out: from each end the pill widens by one
