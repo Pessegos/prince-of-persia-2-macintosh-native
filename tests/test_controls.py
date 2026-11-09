@@ -810,9 +810,11 @@ class PadArtTests(unittest.TestCase):
             return found
 
         plate = colours(controls_art.PLATE[1:])
+        logo = colours(controls_art.COIN)  # the PS button sits there
         (lx, ly), (rx, _ry) = art.points['leftstick'], art.points['rightstick']
-        between = plate[ly - 4:ly + 5, lx + controls_art.STICK_WELL + 2:rx - controls_art.STICK_WELL - 2]
-        self.assertGreater(between.mean(), .5)
+        rows, columns = slice(ly - 4, ly + 5), slice(lx + controls_art.STICK_WELL + 2, rx - controls_art.STICK_WELL - 2)
+        self.assertGreater(plate[rows, columns][~logo[rows, columns]].mean(), .9)
+        self.assertTrue(logo[art.points['guide'][1], columns].any())
         pad = controls_art.touchpad_mask()
         self.assertTrue(art.controls[pad].all())
         blue = colours(controls_art.FRIEZE)
@@ -822,6 +824,17 @@ class PadArtTests(unittest.TestCase):
         keys = colours(controls_art.TAPESTRY)[cy - 22:cy + 23, cx - 22:cx + 23]
         self.assertEqual(self.pieces(keys), 4)
         self.assertFalse(keys[22, 22])  # the centre between them is clear
+
+    def test_create_and_options_ends_round_off_a_step_at_a_time(self):
+        # No corner pixel pokes out: from each end the pill widens by one
+        # pixel a side per row until it is full width.
+        for height in (13, 15):
+            mask = controls_art.capsule(9, height)
+            insets = [int(np.argmax(row)) for row in mask]
+            with self.subTest(height=height):
+                self.assertEqual(insets[:3], [2, 1, 0])
+                self.assertEqual(insets, insets[::-1])
+                self.assertTrue((mask == mask[:, ::-1]).all())
 
     @staticmethod
     def pieces(mask):

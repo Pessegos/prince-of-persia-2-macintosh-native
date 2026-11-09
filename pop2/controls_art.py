@@ -221,7 +221,7 @@ SHAPES = {
     # Wings either side of a tall touchpad, long grips splaying outwards and
     # a dark centre that runs down the inside of each grip.
     'playstation': Shape(
-        ((120, 4), (100, 4), (74, 5), (60, 6), (46, 8), (34, 10), (25, 14), (18, 21), (12, 32),
+        ((120, 5), (100, 5), (74, 5), (60, 6), (46, 8), (34, 10), (25, 14), (18, 21), (12, 32),
          (8, 44), (5, 58), (2, 72), (0, 88), (0, 104), (1, 120), (3, 134), (6, 145), (10, 152),
          (16, 157), (24, 160), (32, 159), (38, 154), (42, 144), (46, 132), (51, 121), (58, 114),
          (68, 109), (84, 107), (100, 107), (120, 107)),
@@ -235,7 +235,7 @@ SHELL_HALF = SHAPES['xbox'].shell
 PLATE_HALF = ((120, 44), (77, 44), (75, 50), (70, 60), (62, 72), (54, 84), (46, 100), (38, 118),
               (30, 138), (22, 158), (20, 172), (120, 172))
 # The touchpad's left half, from its top centre down to its bottom centre.
-TOUCHPAD_HALF = ((120, 3), (74, 3), (75, 20), (77, 35), (80, 45), (87, 51), (100, 52), (120, 52))
+TOUCHPAD_HALF = ((120, 5), (74, 5), (75, 20), (77, 35), (80, 45), (87, 51), (100, 52), (120, 52))
 STICK_WELL, STICK_CAP, STICK_DISH = 17, 14, 9
 FACE_RADIUS, DPAD_DISH, GUIDE_RADIUS = 8, 18, 10
 
@@ -431,53 +431,76 @@ def guide_button(image, centre):
                 pixels[centre[0] - radius + x, centre[1] - radius + y] = (*COIN[int(cell)], 255)
 
 
-# The PS button, shaped as the mark itself like the real one: a P standing
-# on an S that lies flat, in the guide coin's tan, lit along its upper and
-# left edges and casting a dark edge on the centre to its lower right.
+# The PS button, shaped as the mark itself like the real one, pixel by
+# pixel after the user's reference: a P standing on an S that lies flat,
+# in the guide coin's tan. Digits: 0 the outline, 1 shadow, 2 the face,
+# 3 the lit edges.
 PS_LOGO = (
-    '......####.......',
-    '......######.....',
-    '......###.###....',
-    '......###..##....',
-    '......###.###....',
-    '......######.....',
-    '......#####......',
-    '......###...####.',
-    '..#######.####...',
-    '.###..###.##.....',
-    '####..###........',
-    '.######.##.......',
+    '..........0000...............',
+    '..........033300.............',
+    '..........032233000..........',
+    '..........0322223330.........',
+    '..........03221022330........',
+    '..........032210033330.......',
+    '..........0322100332220......',
+    '..........0322100332220......',
+    '..........0322100332210......',
+    '..........0322100332110......',
+    '..........032210333110.......',
+    '........0003221011110........',
+    '......003303221000000000.....',
+    '...00333210322100033333300...',
+    '.00333311103221033311113330..',
+    '0033211000032210111000032330.',
+    '0322200033032210000001332110.',
+    '0222233333032210003333311100.',
+    '.00011111103221033331110000..',
+    '...000000003221031111000.....',
+    '..........00111010000........',
+    '..........000000000..........',
 )
+PS_LOGO_TONES = {'0': COIN[0], '1': COIN[3], '2': COIN[5], '3': COIN[7]}
 
 
 def ps_button(image, centre):
-    inside = {(x, y) for y, row in enumerate(PS_LOGO) for x, cell in enumerate(row) if cell == '#'}
     pixels = image.load()
     x0, y0 = centre[0] - len(PS_LOGO[0]) // 2, centre[1] - len(PS_LOGO) // 2
-    for x, y in inside:
-        for dx, dy in ((1, 0), (0, 1), (1, 1)):
-            if (x + dx, y + dy) not in inside:
-                pixels[x0 + x + dx, y0 + y + dy] = (*PLATE[0], 255)
-    for x, y in inside:
-        up, left = (x, y - 1) not in inside, (x - 1, y) not in inside
-        down, right = (x, y + 1) not in inside, (x + 1, y) not in inside
-        level = 7 if up or (left and not down) else 3 if down or right else 5
-        pixels[x0 + x, y0 + y] = (*COIN[level], 255)
+    for y, row in enumerate(PS_LOGO):
+        for x, cell in enumerate(row):
+            if cell != '.':
+                pixels[x0 + x, y0 + y] = (*PS_LOGO_TONES[cell], 255)
 
 
-def small_button(image, centre, icon, size=(11, 11), ramp=WELL, ink=SHELL[5]):
+@lru_cache(maxsize=None)
+def capsule(width, height):
+    """A slim upright pill whose ends round off evenly, a step at a time,
+    with no single pixels poking out at the corners."""
+    radius = width / 2
+    mask = np.ones((height, width), bool)
+    for row in range(height // 2):
+        inset = int(round(radius - np.sqrt(max(0.0, radius * radius - (radius - row - .5) ** 2))))
+        if inset <= 0:
+            break
+        for y in (row, height - 1 - row):
+            mask[y, :inset] = mask[y, width - inset:] = False
+    return mask
+
+
+def small_button(image, centre, icon, size=(11, 11), ramp=WELL, ink=SHELL[5], shape=None):
     """View, Menu, Share and the like: round, or a pill when not square."""
     width, height = size
-    if width == height:
+    if shape is not None:
+        stamp(image, shape, centre, ramp, rim=2, bias=.1)
+    elif width == height:
         stamp(image, circle_mask(width // 2, slack=1.0), centre, ramp, rim=2, dome=.3)
     else:
         stamp(image, rounded(width, height, radius=min(size) // 2), centre, ramp, rim=2, bias=.1)
     small_icon(ImageDraw.Draw(image), centre[0], centre[1], icon, ink)
 
 
-def ivory_button(image, centre, icon, size=(13, 13)):
-    """The Xbox's own small buttons: ivory like the shell, icons in ink."""
-    small_button(image, centre, icon, size, BUTTON, INK)
+def ivory_button(image, centre, icon, size=(13, 13), shape=None):
+    """The small ivory buttons: ivory like the shell, icons in ink."""
+    small_button(image, centre, icon, size, BUTTON, INK, shape)
 
 
 SMALL_ICONS = {
@@ -599,7 +622,9 @@ SPEAKER = ((112, 61), (116, 61), (120, 61), (124, 61), (128, 61),
 
 def light_bar(image, pad, margins=(6, 4)):
     """The DualSense's blue light either side of the touchpad: a strip just
-    outside its sides, brightest midway down."""
+    outside its sides, brightest midway down, shining up out of a groove
+    that carries on above it to the shell's top edge (that groove's left
+    wall in shadow, its right wall lit)."""
     def grow(mask):
         grown = mask.copy()
         grown[:, 1:] |= mask[:, :-1]
@@ -611,12 +636,16 @@ def light_bar(image, pad, margins=(6, 4)):
     pixels = image.load()
     rows = np.nonzero(pad.any(axis=1))[0]
     top, bottom = rows[0] + margins[0], rows[-1] - margins[1]
+    middle_x = np.nonzero(pad.any(axis=0))[0].mean()
     for strip, shades in ((far, (3, 2, 2)), (near, (6, 5, 4))):
         for y, x in np.argwhere(strip):
             if top <= y <= bottom:
                 middle = abs(y - (top + bottom) / 2) / ((bottom - top) / 2)
                 shade = shades[0 if middle < .4 else 1 if middle < .8 else 2]
                 pixels[int(x), int(y)] = (*FRIEZE[shade], 255)
+            elif rows[0] < y < top:
+                left_wall = (strip is far) == (x < middle_x)
+                pixels[int(x), int(y)] = (*SHELL[1 if left_wall else 2], 255)
 
 
 def speaker(image):
@@ -655,8 +684,8 @@ def pad_art(style='xbox'):
         light_bar(image, pad)
         dpad_keys(parts, points['dpad'])
         ps_button(parts, points['guide'])
-        ivory_button(parts, points['back'], 'create', (9, 15))
-        ivory_button(parts, points['start'], 'options', (9, 15))
+        ivory_button(parts, points['back'], 'create', shape=capsule(9, 15))
+        ivory_button(parts, points['start'], 'options', shape=capsule(9, 15))
         ivory_button(parts, points['misc1'], 'mic', (11, 5))
     elif style == 'nintendo':
         dpad(parts, points['dpad'])
@@ -726,7 +755,7 @@ def button_icon(token, style):
         face_button(image, centre, token, style, radius=6)
     elif token in ('back', 'start'):
         if style == 'playstation':
-            ivory_button(image, centre, ('create', 'options')[token == 'start'], (9, 13))
+            ivory_button(image, centre, ('create', 'options')[token == 'start'], shape=capsule(9, 13))
         elif style == 'nintendo':
             small_button(image, centre, ('minus', 'plus')[token == 'start'])
         else:
