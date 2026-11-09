@@ -305,35 +305,51 @@ def polygon(path, mirrored=False):
     return mask_from(lambda draw: draw.polygon(on_grid(path), fill=255), (PAD_WIDTH, PAD_HEIGHT))
 
 
-def symmetric(half):
-    """A mask from a left half outline and its mirror image."""
-    return polygon(half + [(240 - x, y) for x, y in reversed(half)])
+def symmetric(half, exact=False):
+    """A mask from a left half outline and its mirror image. The rasteriser
+    rounds a right-hand edge differently from a left-hand one, so the right
+    side steps out of time with the left wherever the outline is not on
+    whole pixels; `exact` copies the left half onto the right instead."""
+    mask = polygon(half + [(240 - x, y) for x, y in reversed(half)])
+    if exact:
+        mask[:, 121:] = mask[:, 119::-1]
+    return mask
+
+
+def mirror_pair(path, exact=False):
+    """A left-hand part and its right-hand twin (`exact`: pixel for pixel)."""
+    left = polygon(path)
+    return left | (left[:, ::-1] if exact else polygon(path, mirrored=True))
+
+
+# The DualSense is drawn as an exact mirror image, left half onto right; the
+# Xbox (and the Nintendo style on its body) keeps its approved pixels.
+EXACT_MIRROR = {'xbox': False, 'playstation': True}
 
 
 def body_mask(layout='xbox'):
     shell = SHAPES[layout].shell
-    mask = symmetric(spline(shell))
+    mask = symmetric(spline(shell), EXACT_MIRROR[layout])
     mask[:shell[0][1] + ABOVE] = False  # the curve overshoots the flat top
     return mask
 
 
 def shoulder_masks(body, layout='xbox'):
-    shape = SHAPES[layout]
+    shape, exact = SHAPES[layout], EXACT_MIRROR[layout]
     outer, inner = shape.bumper
-    bumper = spline(outer) + spline(inner)
-    bumpers = polygon(bumper) | polygon(bumper, mirrored=True)
-    triggers = polygon(spline(shape.trigger)) | polygon(spline(shape.trigger), mirrored=True)
+    bumpers = mirror_pair(spline(outer) + spline(inner), exact)
+    triggers = mirror_pair(spline(shape.trigger), exact)
     return triggers & ~bumpers & ~body, bumpers
 
 
 def plate_mask(body):
     half = spline(PLATE_HALF[1:-2], steps=6)
-    return symmetric([PLATE_HALF[0], *half, *PLATE_HALF[-2:]]) & body
+    return symmetric([PLATE_HALF[0], *half, *PLATE_HALF[-2:]], exact=True) & body
 
 
 def touchpad_mask():
     half = spline(TOUCHPAD_HALF[1:-1], steps=6)
-    return symmetric([TOUCHPAD_HALF[0], *half, TOUCHPAD_HALF[-1]]) & body_mask('playstation')
+    return symmetric([TOUCHPAD_HALF[0], *half, TOUCHPAD_HALF[-1]], exact=True) & body_mask('playstation')
 
 
 def glyph(draw, x, y, rows, fill):

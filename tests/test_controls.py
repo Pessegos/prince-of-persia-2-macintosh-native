@@ -845,6 +845,17 @@ class PadArtTests(unittest.TestCase):
         pad_bottom = np.nonzero(controls_art.touchpad_mask()[:, 120])[0].max()
         self.assertIn(min(y for _x, y in holes) + controls_art.ABOVE - pad_bottom, (2, 3))
 
+    def test_dualsense_outlines_are_exact_mirror_images(self):
+        # Its right side steps exactly as its left does: the dark centre's
+        # edge down each grip, the touchpad's sides, the shell and shoulders.
+        body = controls_art.body_mask('playstation')
+        triggers, bumpers = controls_art.shoulder_masks(body, 'playstation')
+        masks = {'body': body, 'plate': controls_art.plate_mask(body), 'touchpad': controls_art.touchpad_mask(),
+                 'triggers': triggers, 'bumpers': bumpers}
+        for name, mask in masks.items():
+            with self.subTest(name=name):
+                self.assertTrue((mask == mask[:, ::-1]).all())
+
     def test_dualsense_top_bows_up_towards_the_middle(self):
         # Highest at the centre, then a pixel lower at a time towards the
         # wings, never rising again; the touchpad's top is the shell's own.
