@@ -770,7 +770,7 @@ class PadArtTests(unittest.TestCase):
         self.assertTrue(all(tuple(int(v) for v in drawn[y, x, :3]) in tones for y, x in zip(rows, columns)))
         # The trail left of the flag only grows fainter outwards.
         cells = controls_art.WINDOWS_FLAG
-        body = min(row.index('9') for row in cells)
+        body = min(row.index('9') for row in cells if '9' in row)
         darkest = [max((int(row[x]) for row in cells if row[x] != '.'), default=0) for x in range(body)]
         seen = [value for value in reversed(darkest) if value]
         self.assertTrue(seen and seen == sorted(seen, reverse=True) and seen[-1] < seen[0])
@@ -781,11 +781,28 @@ class PadArtTests(unittest.TestCase):
                 if cell not in '.9':
                     with self.subTest(particle=(x, y)):
                         self.assertFalse({(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)} & drawn_cells)
-        # The panes are clear: inside its frame a row shows only the key.
-        for row in cells:
-            width = cells[0].count('9')
-            pane = '.' * ((width - 3) // 2)
-            self.assertIn(row[row.index('9'):].rstrip('.'), ('9' * width, '9' + pane + '9' + pane + '9'))
+        # Four solid panes of one size, a pixel apart, the right pair a row lower.
+        ink = {(x, y) for y, row in enumerate(cells) for x, cell in enumerate(row) if cell == '9'}
+        panes = []
+        while ink:
+            stack, pane = [ink.pop()], set()
+            while stack:
+                x, y = stack.pop()
+                pane.add((x, y))
+                for near in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if near in ink:
+                        ink.remove(near)
+                        stack.append(near)
+            xs, ys = [x for x, _ in pane], [y for _, y in pane]
+            box = (min(xs), min(ys), max(xs), max(ys))
+            self.assertEqual(len(pane), (box[2] - box[0] + 1) * (box[3] - box[1] + 1))
+            panes.append(box)
+        self.assertEqual(len(panes), 4)
+        self.assertEqual(len({(r - l, b - t) for l, t, r, b in panes}), 1)
+        (a, b), (c, d) = sorted(sorted(panes)[:2], key=lambda p: p[1]), sorted(sorted(panes)[2:], key=lambda p: p[1])
+        self.assertEqual(c[0], a[2] + 2)
+        self.assertEqual(b[1], a[3] + 2)
+        self.assertEqual((c[1], d[1]), (a[1] + 1, b[1] + 1))
 
     def test_shell_top_is_one_unbroken_line(self):
         for layout, shape in controls_art.SHAPES.items():

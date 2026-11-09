@@ -35,8 +35,9 @@ itself, in the guide coin's tan, and a Mic button as dark as the centre.
 Grille, PS mark and Mic button share one centre line. The
 Nintendo style still reuses the Xbox body with its own buttons. The keyboard is a full 1990s office keyboard
 (keypad, lock lights, and on the Windows keys the Windows 98 flag without
-its colours: a frame leaning right round four clear panes, with a trail
-of single pixels that thins out and fades into the key) in a
+its colours: four solid panes, the right pair a row lower so it waves, with
+a trail of single pixels flying out of each row of panes, rising to the left
+and fading into the key) in a
 thick-bordered case, keys a pixel
 apart, light letter keys and darker mauve modifiers, legends at the top left
 of each key. Jump, Crouch, Sword and Time left take the Xbox colours of their
