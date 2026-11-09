@@ -28,9 +28,10 @@ in their dishes. A PlayStation pad is drawn as a DualSense in the same
 materials: its own outline with long grips, a dark mauve centre running
 round the sticks and down the inside of each grip, a tall ivory touchpad
 with the frieze-blue light bar at its sides, a speaker grille, four
-separate crimson arrow keys, dark face buttons with the cross, circle,
-square and triangle in their own colours, ivory Create, Options and Mic
-buttons and a tan PS coin with the P-on-S mark raised like the Xbox X. The
+separate crimson arrow keys, the Xbox's dark face buttons with an ivory
+cross, circle, square and triangle, slim ivory Create and Options buttons,
+an ivory Mic button and a PS button shaped as the P-on-S mark itself, in
+the guide coin's tan. The
 Nintendo style still reuses the Xbox body with its own buttons. The keyboard is a full 1990s office keyboard
 (keypad, lock lights, and on the Windows keys the Windows 98 flag without
 its colours: a frame leaning right round four clear panes, with a trail

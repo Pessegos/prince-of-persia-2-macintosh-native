@@ -369,13 +369,9 @@ PS_ICON_SYMBOLS = {
     'x': ('#####', '#...#', '#...#', '#...#', '#####'),
     'y': ('..#..', '.#.#.', '.#.#.', '#...#', '#####'),
 }
-# Face buttons: dark domes with ivory letters, or the PlayStation symbols in
-# their own colours.
-FACE_STYLES = {
-    'xbox': {name: SHELL[5] for name in 'abxy'},
-    'playstation': {'a': (132, 166, 232), 'b': (232, 116, 116), 'x': (220, 146, 210), 'y': (98, 204, 176)},
-    'nintendo': {name: SHELL[5] for name in 'abxy'},
-}
+# Face buttons: dark domes with ivory letters or PlayStation symbols, the
+# same on every pad (the user's pick).
+FACE_INK = SHELL[5]
 NINTENDO_LETTERS = {'a': 'B', 'b': 'A', 'x': 'Y', 'y': 'X'}
 
 
@@ -388,11 +384,9 @@ def face_mark(button, style, small=False):
 
 
 def face_button(image, centre, button, style, radius=FACE_RADIUS):
-    ink = FACE_STYLES.get(style, FACE_STYLES['xbox'])[button]
+    ink = FACE_INK
     small = radius < FACE_RADIUS
     mark = face_mark(button, style, small)
-    if small and style == 'playstation':
-        ink = tone(ink, 1.0, 36)  # a thin symbol on a small dome needs more light
     stamp(image, circle_mask(radius, slack=1.0 if small else 0.8), centre, WELL,
           rim=2 if small else 4, dome=.5)
     cx, cy = centre
@@ -437,35 +431,38 @@ def guide_button(image, centre):
                 pixels[centre[0] - radius + x, centre[1] - radius + y] = (*COIN[int(cell)], 255)
 
 
-# The PS button: the same tan coin with the PlayStation mark raised on it,
-# a P standing on an S that lies flat; like the Xbox X, lit ridges with a
-# dark groove on their lower right.
-PS_MARK = (
-    '.....##......',
-    '.....####....',
-    '.....##.##...',
-    '.....##.##...',
-    '.....##.##...',
-    '.....####....',
-    '.....##...###',
-    '.###.##.###..',
-    '##...##.#....',
-    '.####.##.....',
+# The PS button, shaped as the mark itself like the real one: a P standing
+# on an S that lies flat, in the guide coin's tan, lit along its upper and
+# left edges and casting a dark edge on the centre to its lower right.
+PS_LOGO = (
+    '......####.......',
+    '......######.....',
+    '......###.###....',
+    '......###..##....',
+    '......###.###....',
+    '......######.....',
+    '......#####......',
+    '......###...####.',
+    '..#######.####...',
+    '.###..###.##.....',
+    '####..###........',
+    '.######.##.......',
 )
 
 
-def ps_button(image, centre, radius=GUIDE_RADIUS):
-    stamp(image, circle_mask(radius), centre, COIN, rim=3, dome=.35,
-          thresholds=(0.05, 0.22, 0.4, 0.58, 0.74, 0.88))
+def ps_button(image, centre):
+    inside = {(x, y) for y, row in enumerate(PS_LOGO) for x, cell in enumerate(row) if cell == '#'}
     pixels = image.load()
-    x0, y0 = centre[0] - len(PS_MARK[0]) // 2, centre[1] - len(PS_MARK) // 2
-    ridge = {(x, y) for y, row in enumerate(PS_MARK) for x, cell in enumerate(row) if cell == '#'}
-    for x, y in ridge:
+    x0, y0 = centre[0] - len(PS_LOGO[0]) // 2, centre[1] - len(PS_LOGO) // 2
+    for x, y in inside:
         for dx, dy in ((1, 0), (0, 1), (1, 1)):
-            if (x + dx, y + dy) not in ridge:
-                pixels[x0 + x + dx, y0 + y + dy] = (*COIN[1], 255)
-    for x, y in ridge:
-        pixels[x0 + x, y0 + y] = (*COIN[7], 255)
+            if (x + dx, y + dy) not in inside:
+                pixels[x0 + x + dx, y0 + y + dy] = (*PLATE[0], 255)
+    for x, y in inside:
+        up, left = (x, y - 1) not in inside, (x - 1, y) not in inside
+        down, right = (x, y + 1) not in inside, (x + 1, y) not in inside
+        level = 7 if up or (left and not down) else 3 if down or right else 5
+        pixels[x0 + x, y0 + y] = (*COIN[level], 255)
 
 
 def small_button(image, centre, icon, size=(11, 11), ramp=WELL, ink=SHELL[5]):
@@ -491,7 +488,7 @@ SMALL_ICONS = {
     'share': ('...#...', '..###..', '.#####.', '...#...', '#..#..#', '#.....#', '#######'),
     'home': ('..#..', '.###.', '#####', '.#.#.', '.###.'),
     # the DualSense's: three rays, three lines
-    'create': ('#..#..#', '.#.#.#.'),
+    'create': ('#.#.#', '.#.#.'),
     'options': ('#####', '.....', '#####', '.....', '#####'),
     'mic': ('###',),
     'minus': ('.....', '.....', '#####', '.....', '.....'),
@@ -658,8 +655,8 @@ def pad_art(style='xbox'):
         light_bar(image, pad)
         dpad_keys(parts, points['dpad'])
         ps_button(parts, points['guide'])
-        ivory_button(parts, points['back'], 'create', (11, 15))
-        ivory_button(parts, points['start'], 'options', (11, 15))
+        ivory_button(parts, points['back'], 'create', (9, 15))
+        ivory_button(parts, points['start'], 'options', (9, 15))
         ivory_button(parts, points['misc1'], 'mic', (11, 5))
     elif style == 'nintendo':
         dpad(parts, points['dpad'])
@@ -729,7 +726,7 @@ def button_icon(token, style):
         face_button(image, centre, token, style, radius=6)
     elif token in ('back', 'start'):
         if style == 'playstation':
-            ivory_button(image, centre, ('create', 'options')[token == 'start'], (11, 13))
+            ivory_button(image, centre, ('create', 'options')[token == 'start'], (9, 13))
         elif style == 'nintendo':
             small_button(image, centre, ('minus', 'plus')[token == 'start'])
         else:
