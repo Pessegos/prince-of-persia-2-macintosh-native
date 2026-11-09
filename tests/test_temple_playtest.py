@@ -116,6 +116,36 @@ class TemplePlaytestTests(unittest.TestCase):
         self.assertIn(guard.state.source_sequence_id, (188, 189))
         self.assertTrue(guard.terrain_motion.dead)
 
+    def test_a_nonfatal_hit_knocks_the_guard_onto_the_wall_spikes(self):
+        harness = self.harness(peaceful=False)
+        scene = harness.scene
+        scene.jump_to_room(12, row=1, x=290, facing=1)
+        guard = scene.combat.active_guards()[0]
+        scene.sword_drawn = scene.combat.player.sword_drawn = True
+        guard.state.target_x = guard.state.current_x = 360
+        guard.state.facing = 0
+        guard.sword_drawn = True
+        select_sequence(guard, 90)
+        guard.runtime.next_frame()
+        # Supply one successful strike, then retain the real AI, hit recovery,
+        # floor checks, falling and trap lifecycle (the user's follow-up clip).
+        scene.combat._hurt('guard', guard, scene.combat.player)
+        self.assertEqual(guard.state.source_sequence_id, 183)
+        self.assertTrue(guard.alive, 'the sword hit itself must be nonfatal')
+        fell = False
+        for _ in range(15):
+            harness.tick()
+            if guard.terrain_motion.falling and guard.alive:
+                fell = True
+                self.assertFalse(guard.sword_drawn, 'StartFall must put the sword away')
+            if not guard.alive:
+                break
+        self.assertTrue(fell)
+        self.assertFalse(guard.alive, 'the struck guard landed beside the spikes')
+        self.assertEqual(scene.level_map.tile(12, 6, 2).foreground & 255, 240)
+        self.assertIn(guard.state.source_sequence_id, (188, 189))
+        self.assertTrue(guard.terrain_motion.dead)
+
     def test_running_prince_still_dies_on_these_wall_spikes_without_god_mode(self):
         harness = self.harness()
         scene = harness.scene

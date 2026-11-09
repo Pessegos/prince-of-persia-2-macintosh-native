@@ -567,9 +567,10 @@ class LevelMap:
             push = to_back
         return push * direction
 
-    def align_fall(self, room, row, state, record, sword_length=0):
+    def align_fall(self, room, row, state, record):
         # CODE:4 4b16 runs after advancing the floor row, before the fall pose.
         # The source keeps the old supporting column until LoadFrame (4:2a72).
+        # StartFall 4:4ca8-4cb2 clears armed first, so GetSwordLength is zero.
         direction = 1 if state.facing else -1
         contact = floor_contact_x(state.target_x, state.facing, record)
         column = character_column(contact)
@@ -578,14 +579,14 @@ class LevelMap:
         behind_above = self.tile(room, column - direction, row - 1).kind
         if (self.tile(room, column + direction, row).kind in WALL_TILES
                 or current_above not in EMPTY_TILES or ahead_above not in EMPTY_TILES):
-            distance = floor_edge_distance(contact, state.facing) + sword_length
+            distance = floor_edge_distance(contact, state.facing)
             if distance <= 17:
                 dx = (distance - 20) * direction
                 state.target_x += dx
                 contact += dx
         if (self.tile(room, column - direction, row).kind in WALL_TILES
                 or current_above not in EMPTY_TILES or behind_above not in EMPTY_TILES):
-            distance = floor_edge_distance(contact, state.facing) + sword_length
+            distance = floor_edge_distance(contact, state.facing)
             if distance >= 34:
                 state.target_x += (distance - 31) * direction
         if current_above not in EMPTY_TILES or ahead_above not in EMPTY_TILES:
@@ -1184,7 +1185,7 @@ class RooftopPhysics:
         state.current_y = absolute_y - floor_y(motion.row)
         return True
 
-    def start_fall(self, motion, runtime, sword_drawn=False, sword_length=0):
+    def start_fall(self, motion, runtime, sword_drawn=False):
         state = runtime.state
         contact = (floor_contact_x(state.target_x, state.facing, self.frames[state.action])
                    if self.frames is not None else state.target_x)
@@ -1210,7 +1211,7 @@ class RooftopPhysics:
         motion.row += 1
         state.current_y -= TILE_HEIGHT
         if self.frames is not None:
-            self.map.align_fall(motion.room, motion.row, state, self.frames[state.action], sword_length)
+            self.map.align_fall(motion.room, motion.row, state, self.frames[state.action])
         if state.level_kind == 1:
             # StartFall 4:4d94-4db2: desert falls select SEQS:27, method 8.
             motion.sinking = True
@@ -1255,7 +1256,7 @@ class RooftopPhysics:
         caverns = getattr(self.map, 'caverns', None)
         return caverns is not None and caverns.potions.floating
 
-    def check_floor(self, motion, runtime, frame_flags, frame_record, sword_drawn=False, sword_length=0):
+    def check_floor(self, motion, runtime, frame_flags, frame_record, sword_drawn=False):
         # CheckFloor 4:35ba tests FRAM bit 0x40, including late climb poses.
         if not frame_flags & 0x40:
             return False
@@ -1271,7 +1272,7 @@ class RooftopPhysics:
         if frame_record is not None and tile.kind in WALL_TILES:
             tile = self.map.align_wall(motion.room, motion.row, state, frame_record)
         if tile.kind in EMPTY_TILES or (tile.kind == 30 and (tile.foreground & 15) < 2):
-            self.start_fall(motion, runtime, sword_drawn, sword_length)
+            self.start_fall(motion, runtime, sword_drawn)
             return True
         return False
 
@@ -1355,22 +1356,12 @@ class RooftopPhysics:
         if motion.dead:
             return ()
 
-        def fall_sword_length():
-            # AlignFalling 4:4b54/4ba8 adds GetSwordLength 4:5e6e.
-            # Current collision bounds already contain that AFRM extension.
-            # Restore this input for temple falls without changing other sets.
-            if not sword_drawn or state.level_kind != 2 or collision_bounds_for_state is None:
-                return 0
-            body = bounds_for_state() if bounds_for_state is not None else bounds
-            collision = collision_bounds_for_state()
-            return max(0, collision[2] - collision[0] - (body[2] - body[0]))
-
         if protected:
             # Hanging poses have no floor flag. Late climb poses do, and a
             # disappearing slab must interrupt them before their idle link.
             if frame_record is not None:
                 frame_flags = frame_record.aux
-            if self.check_floor(motion, runtime, frame_flags, frame_record, sword_drawn, fall_sword_length()):
+            if self.check_floor(motion, runtime, frame_flags, frame_record, sword_drawn):
                 return (TerrainEvent("fall"),)
             gate = self.check_gate(motion, runtime, bounds, old_bounds, frame_record, alive, sword_drawn,
                                    invulnerable=invulnerable)
@@ -1634,7 +1625,7 @@ class RooftopPhysics:
         if frame_record is not None:
             frame_flags = frame_record.aux
         if not motion.falling:
-            if self.check_floor(motion, runtime, frame_flags, frame_record, sword_drawn, fall_sword_length()):
+            if self.check_floor(motion, runtime, frame_flags, frame_record, sword_drawn):
                 events.append(TerrainEvent("fall"))
             return tuple(events)
 

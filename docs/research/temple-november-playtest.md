@@ -149,14 +149,13 @@ inputs explain the differences:
   the guard. The port played the landing sound but omitted this signal.
   Temple landings now set `callback_flag`; the existing close-behind draw and
   selected-sheathing veto in the guard controller are preserved.
-- AlignFalling **4:4b54/4ba8** adds GetSwordLength **4:5e6e** to both edge-distance
-  tests. The port omitted the AFRM sword extension and displaced the armed
-  guard too far out. Temple floor checks now pass that extension, measured
-  from the existing body/collision bounds, into fall alignment. The unchanged
-  spike approach/contact rules then impale him, selecting guard SEQS 188/189
-  and foreground 240. No trap range or falling velocity was widened.
+- **Superseded diagnosis; see the follow-up below.** The initial patch passed
+  the AFRM sword extension into AlignFalling **4:4b54/4ba8**, based on its calls
+  to GetSwordLength **4:5e6e**. That made the supplied recoil hit the spikes
+  without widening trap ranges or changing falling velocity, but overlooked
+  the caller's earlier clearing of armed. The follow-up removes this adjustment.
 
-Both integrations are restricted to environment 2. Evidence is static original
+Both initial integrations were restricted to environment 2. Evidence is static original
 CODE reading, the supplied recordings and real FRAM/AFRM scene regressions;
 no new native CPU probe or full-frame equivalence is claimed. The tests reject
 both previous behaviors. The guard recoil is supplied (SEQS 104), with only
@@ -172,3 +171,36 @@ tests.test_enemy_ai tests.test_guard_deaths`: **143 run, OK, 1 skipped** (12.570
 The optional original-profile comparison requires `POP2_RESEARCH_DIR`, which
 was unset. Dependencies, Ruff F/E9, recovery catalogue and whitespace checks
 pass. No global/import suite or user's game/emulator window was operated.
+
+## Follow-up: a sword hit still sent the guard past the spikes (2026-11-09)
+
+The user's post-update recording exposed a gap in the supplied-recoil test:
+it covered SEQS 104 with subsequent AI suppressed, while a nonfatal sword hit
+uses SEQS 183. Supplying that hit at room 13's right edge, then running normal
+AI and physics, reproduced the surviving guard beside the spikes.
+
+StartFall **4:4ca8-4cb2** clears armed **a5-0x503c** before AlignFalling
+**4:4d90**. GetSwordLength **4:5e74-5e7a** consequently returns zero here.
+The previous sword-extent adjustment omitted that ordering and compensated
+for the symptom in one recoil case; it has been removed. The actual missing
+input was the guard's armed flag: the Prince's scene already clears it on a
+fall event, but the guard's terrain-event consumer did not. Temple guards now
+clear it too, before environmental spike checks. CheckSpikes **5:3c42** then
+uses its existing unarmed approach threshold, and CheckSpikeHit impales the
+guard normally. Landing retains its existing rearming behavior. Other
+environments' guard event handling is unchanged.
+
+The new regression supplies one nonfatal `_hurt` endpoint (not the player's
+full input/strike collision), requires SEQS 183 and an unarmed live fall, and
+continues with normal AI through death SEQS 188/189 and spike foreground 240.
+It fails on the prior update. The earlier recoil, standing-jump turn, normal
+running-Prince death, slab/grip and related terrain/trap regressions pass.
+Evidence is the supplied recording, static original CODE ordering and the
+real hidden scene; no new native CPU probe or full-frame equivalence claim.
+
+Focused verification: `tests.test_temple_playtest tests.test_wall_spikes
+tests.test_guard_deaths tests.test_terrain`: **197 OK, no skips** (38.631s),
+with `POP2_SHARED_DESKTOP=1`. Dependencies, Ruff F/E9, recovery catalogue and
+whitespace checks pass. No global/import suite or user's game/emulator was
+operated. Next bounded check is any further playtest report with its actual
+combat transition; this fix does not claim complete temple parity.
