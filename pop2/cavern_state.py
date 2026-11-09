@@ -72,17 +72,23 @@ class CavernState:
             for record in records:
                 key = record['room'], record['cell']
                 if key not in self.torches:
-                    # TriggerTorch 5:2050-2072: Rnd(8), preserving upper bits.
-                    self.torches[key] = (record['foreground'] & 0xfff0) | random.randint(0, 8)
+                    # TriggerTorch 5:2050-2072: Rnd(8) in the caverns,
+                    # Rnd(5) in the temple. Keep the port's upper flags.
+                    last = record.get('frame_count', 9) - 1
+                    self.torches[key] = (record['foreground'] & 0xfff0) | random.randint(0, last)
 
     def advance_torches(self, records):
-        for key in {(record['room'], record['cell']) for record in records}:
-            value = self.torches[key]
+        for key, record in {(r['room'], r['cell']): r for r in records}.items():
+            # Older temple checkpoints predate live candles. Their restored
+            # phase bank is empty; initialize a visible candle on first use.
+            value = self.torches.get(key, record.get('foreground', 0))
             previous = value & 15
-            phase = random.randint(0, 8)
-            # CaveGetTorchFrame 8:3b4e: adjacent phase if Rnd repeats.
+            count = record.get('frame_count', 9)
+            phase = random.randint(0, count - 1)
+            # CaveGetTorchFrame 8:3b4e / TempGetTorchFrame 10:12b6:
+            # adjacent phase if Rnd repeats, wrapping at nine / six.
             if phase == previous:
-                phase = (phase + 1) % 9
+                phase = (phase + 1) % count
             self.torches[key] = (value & 0xfff0) | phase
 
     def configure_level_entry(self, program, game):
