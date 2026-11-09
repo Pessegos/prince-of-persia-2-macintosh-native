@@ -223,17 +223,18 @@ SHAPES = {
     'playstation': Shape(
         ((120, 5), (100, 5), (74, 5), (60, 6), (46, 8), (34, 10), (25, 14), (18, 21), (12, 32),
          (8, 44), (5, 58), (2, 72), (0, 88), (0, 104), (1, 120), (3, 134), (6, 145), (10, 152),
-         (16, 157), (24, 160), (32, 159), (38, 154), (42, 144), (46, 132), (51, 121), (58, 114),
-         (68, 109), (84, 107), (100, 107), (120, 107)),
+         (16, 157), (24, 160), (32, 159), (38, 154), (42, 143), (45, 131), (49, 121), (53, 113),
+         (58, 108), (64, 105), (72, 104), (88, 104), (104, 104), (120, 104)),
         (((24, 17), (27, 11), (34, 6), (43, 3), (52, 3), (58, 5), (61, 8)),
          ((61, 10), (52, 9), (43, 10), (34, 12), (28, 16), (25, 19))),
         ((31, 11), (33, 3), (38, -3), (46, -6), (54, -5), (58, 0), (59, 6), (48, 9))),
 }
 SHELL_HALF = SHAPES['xbox'].shell
 # The DualSense's dark centre, beyond the shell's own edge (the shell trims
-# it): its outer edge from under the touchpad down the inside of the grip.
-PLATE_HALF = ((120, 44), (77, 44), (75, 50), (70, 60), (62, 72), (54, 84), (46, 100), (38, 118),
-              (30, 138), (22, 158), (20, 172), (120, 172))
+# it): its outer edge from under the touchpad down the inside of the grip,
+# measured off a photograph of the real pad.
+PLATE_HALF = ((120, 44), (77, 44), (75, 50), (69, 61), (60, 73), (52, 85), (46, 97), (41, 108),
+              (36, 119), (31, 131), (27, 143), (23, 154), (20, 172), (120, 172))
 # The touchpad's left half, from its top centre down to its bottom centre.
 TOUCHPAD_HALF = ((120, 5), (74, 5), (75, 20), (77, 35), (80, 45), (87, 51), (100, 52), (120, 52))
 STICK_WELL, STICK_CAP, STICK_DISH = 17, 14, 9
@@ -247,9 +248,9 @@ def face_cluster(x, y, spread=18):
 LAYOUTS = {
     'xbox': {'leftstick': (60, 47), 'dpad': (89, 83), 'rightstick': (151, 83), **face_cluster(180, 47),
              'back': (104, 48), 'start': (136, 48), 'misc1': (120, 62), 'guide': (120, 25)},
-    'playstation': {'dpad': (41, 47), 'leftstick': (80, 84), 'rightstick': (160, 84),
+    'playstation': {'dpad': (41, 47), 'leftstick': (80, 80), 'rightstick': (160, 80),
                     **face_cluster(199, 47), 'back': (64, 19), 'start': (176, 19),
-                    'touchpad': (120, 28), 'guide': (120, 80), 'misc1': (120, 96)},
+                    'touchpad': (120, 28), 'guide': (120, 79), 'misc1': (120, 93)},
 }
 # A diamond round the four face buttons, which the face group's line meets:
 # its centre and its reach (|dx| + |dy|).
@@ -276,12 +277,12 @@ GROUPS = {
         'leftshoulders': ('left', -7, -7, ('lefttrigger', 'leftshoulder'), ((37, -7), (37, 1))),
         'rightshoulders': ('right', -7, -7, ('righttrigger', 'rightshoulder'), ((203, -7), (203, 1))),
         'face': ('right', 29, 47, ('y', 'x', 'b', 'a'), ((231, 47),)),
-        'rightstick': ('right', 101, 101, ('rightstick',), ((172, 101), (172, 95))),
+        'rightstick': ('right', 101, 101, ('rightstick',), ((172, 101), (172, 92))),
         'back': ('left', -25, -25, ('back',), ((64, -25), (64, 19))),
         'start': ('right', -25, -25, ('start',), ((176, -25), (176, 19))),
         'dpad': ('left', 47, 47, ('dpad',), ((30, 47),)),
         'leftstick': ('left', 83, 83, ('move', 'leftstick'), ((70, 83),)),
-        'misc1': ('left', 137, 137, ('misc1',), ((120, 137), (120, 96))),
+        'misc1': ('left', 137, 137, ('misc1',), ((120, 137), (120, 93))),
         'touchpad': ('right', 119, 119, ('touchpad',), ((140, 119), (140, 48)))},
 }
 
@@ -452,11 +453,12 @@ PS_LOGO = (
     '.......00000......',
 )
 PS_LOGO_TONES = {'0': COIN[0], '1': COIN[3], '2': COIN[5], '3': COIN[7]}
+PS_LOGO_STEM = 8  # the P's stem's middle column: it stands on the pad's centre line
 
 
 def ps_button(image, centre):
     pixels = image.load()
-    x0, y0 = centre[0] - len(PS_LOGO[0]) // 2, centre[1] - len(PS_LOGO) // 2
+    x0, y0 = centre[0] - PS_LOGO_STEM, centre[1] - len(PS_LOGO) // 2
     for y, row in enumerate(PS_LOGO):
         for x, cell in enumerate(row):
             if cell != '.':
@@ -608,8 +610,12 @@ def shifted(point):
     return point[0], point[1] + ABOVE
 
 
+# The DualSense's grille, on the grid: five holes over four, mirrored about
+# the centre line, each a round 3x3 hole with soft corners.
 SPEAKER = ((112, 61), (116, 61), (120, 61), (124, 61), (128, 61),
-           (114, 64), (118, 64), (122, 64), (126, 64))  # the DualSense's grille, on the grid
+           (114, 65), (118, 65), (122, 65), (126, 65))
+SPEAKER_HOLE = {(0, 0): WELL[0], (-1, 0): WELL[0], (1, 0): WELL[0], (0, -1): WELL[0], (0, 1): WELL[0],
+                (-1, -1): PLATE[1], (1, -1): PLATE[1], (-1, 1): PLATE[1], (1, 1): PLATE[1]}
 
 
 def light_bar(image, pad, margins=(6, 4)):
@@ -644,7 +650,7 @@ def speaker(image):
     pixels = image.load()
     for x, y in SPEAKER:
         x, y = shifted((x, y))
-        for dx, dy, shade in ((0, 0, WELL[0]), (1, 0, WELL[0]), (0, 1, WELL[0]), (1, 1, PLATE[1])):
+        for (dx, dy), shade in SPEAKER_HOLE.items():
             pixels[x + dx, y + dy] = (*shade, 255)
 
 

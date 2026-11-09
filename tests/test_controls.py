@@ -825,6 +825,21 @@ class PadArtTests(unittest.TestCase):
         self.assertEqual(self.pieces(keys), 4)
         self.assertFalse(keys[22, 22])  # the centre between them is clear
 
+    def test_dualsense_centre_parts_stand_on_its_centre_line(self):
+        # The grille, the PS mark's stem and the Mic button share column 120.
+        holes = {(x + dx, y + dy) for x, y in controls_art.SPEAKER for dx, dy in controls_art.SPEAKER_HOLE}
+        self.assertEqual(holes, {(240 - x, y) for x, y in holes})
+        for row in controls_art.PS_LOGO[3:7]:  # the stem, outlined both sides, beside the P's bowl
+            self.assertEqual(row[controls_art.PS_LOGO_STEM - 2], '0')
+            self.assertEqual(row[controls_art.PS_LOGO_STEM + 2], '0')
+        art = controls_art.pad_art('playstation')
+        x, y = art.points['guide']
+        self.assertEqual(x, 120)
+        pixels = np.array(art.image)
+        mic = pixels[art.points['misc1'][1], :, 3] > 0
+        columns = np.nonzero(mic[100:141])[0] + 100
+        self.assertEqual(columns.min() + columns.max(), 240)
+
     def test_create_and_options_ends_round_off_a_step_at_a_time(self):
         # No corner pixel pokes out: from each end the pill widens by one
         # pixel a side per row until it is full width.
