@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from PIL import Image, ImageDraw
 
 from pop2.game_ui import DevelopmentMenu, VISIBLE_SIZE, centered_panel
+from pop2 import menu_theme
+from pop2.menu_theme import c
 
 
 @dataclass(frozen=True)
@@ -234,9 +236,9 @@ class GameMenu:
             return self.screenshot_gallery.draw(viewport, font)
         if self.page == 'saves':
             return self.save_browser.draw(viewport, font)
-        image = Image.alpha_composite(viewport, Image.new("RGBA", viewport.size, (0, 0, 0, 100)))
+        image = Image.alpha_composite(viewport, Image.new("RGBA", viewport.size, (0, 0, 0, menu_theme.current().dim)))
         draw = ImageDraw.Draw(image)
-        gold, white, muted = "#f4d873", "#eeeeee", "#999999"
+        gold, white, muted = c("#f4d873"), c("#eeeeee"), c("#999999")
 
         def text(value, x, y, color=white, align="left", max_width=None):
             glyphs = font.text(value, color)
@@ -250,22 +252,22 @@ class GameMenu:
             image.paste(glyphs, (x, y - (ink[1] if ink else 0)), glyphs)
 
         def button(rect, label, selected):
-            draw.rectangle(rect, fill="#303030" if selected else "#222222",
-                           outline=gold if selected else "#626262")
+            draw.rectangle(rect, fill=c("#303030") if selected else c("#222222"),
+                           outline=gold if selected else c("#626262"))
             text(label, (rect[0] + rect[2]) // 2, rect[1] + 10, align="center",
                  max_width=rect[2] - rect[0] - 12)
 
         panel = self.SCREENSHOT_PANEL if self.page == "screenshots" else self.PANEL if self.page == "menu" else (
             self.ABOUT_DIALOG if self.page == "about" else self.DIALOG)
-        draw.rectangle(panel,
-                       fill="#181818", outline="#858585")
+        menu_theme.panel(image, panel)
+        draw = ImageDraw.Draw(image)
         panel_top = panel[1]
         if self.page == "screenshots":
             text("Screenshots", 256, panel_top + 18, gold, "center")
             text("PNG size", 100, panel_top + 52)
             left, top, right, bottom = self.CAPTURE_CONTROLS[0]
-            draw.rectangle((left, top, right, bottom), fill="#303030" if self.focus == 0 else "#222222",
-                           outline=gold if self.focus == 0 else "#626262")
+            draw.rectangle((left, top, right, bottom), fill=c("#303030") if self.focus == 0 else c("#222222"),
+                           outline=gold if self.focus == 0 else c("#626262"))
             text(self.CAPTURE_SIZES[self.screenshot_scale - 1], left + 10, top + 9, max_width=right - left - 34)
             draw.polygon(((right - 15, top + 12), (right - 7, top + 12),
                           (right - 11, top + 16)), fill=white)
@@ -284,15 +286,15 @@ class GameMenu:
             button(self.CAPTURE_CONTROLS[3], "Back" if self.return_to_menu else "Close", self.focus == 3)
             if self.error or self.screenshot_status:
                 text(self.error or self.screenshot_status, 100, panel_top + 202,
-                     "#ff9b9b" if self.error else gold, max_width=312)
+                     c("#ff9b9b") if self.error else gold, max_width=312)
             if self.dropdown:
                 left, _top, right, bottom = self.CAPTURE_CONTROLS[0]
                 draw.rectangle((left, bottom, right, bottom + 4 * self.ROW_HEIGHT),
-                               fill="#222222", outline=gold)
+                               fill=c("#222222"), outline=gold)
                 for index, label in enumerate(self.CAPTURE_SIZES):
                     y = bottom + index * self.ROW_HEIGHT
                     if index == self.option_index:
-                        draw.rectangle((left + 1, y + 1, right - 1, y + self.ROW_HEIGHT - 1), fill="#454545")
+                        draw.rectangle((left + 1, y + 1, right - 1, y + self.ROW_HEIGHT - 1), fill=c("#454545"))
                     text(label, left + 8, y + 6,
                          gold if index == self.screenshot_scale - 1 else white, max_width=right - left - 16)
         elif self.page == "confirm":
@@ -312,12 +314,12 @@ class GameMenu:
             for i, item in enumerate(self.items):
                 rect = self.row_rect(i)
                 selected = i == self.focus
-                draw.rectangle(rect, fill="#303030" if selected else "#222222",
-                               outline=gold if selected else "#404040")
+                draw.rectangle(rect, fill=c("#303030") if selected else c("#222222"),
+                               outline=gold if selected else c("#404040"))
                 color = white if item.enabled else muted
                 x, y = rect[0] + 10, rect[1] + 5
                 if item.checked is not None:
-                    draw.rectangle((x, y, x + 10, y + 10), fill="#121212", outline=muted)
+                    draw.rectangle((x, y, x + 10, y + 10), fill=c("#121212"), outline=muted)
                     if item.checked:
                         draw.line(((x + 2, y + 5), (x + 4, y + 8), (x + 8, y + 2)),
                                   fill=gold, width=2)

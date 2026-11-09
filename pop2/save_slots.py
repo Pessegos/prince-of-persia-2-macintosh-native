@@ -9,6 +9,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from pop2.save_game import SAVE_DIRECTORY, decode_preview, read_document, save_name
+from pop2.menu_theme import c
 
 
 @lru_cache(maxsize=1)
@@ -363,7 +364,7 @@ class SaveBrowser:
         image = (cached.copy() if cached is not None else list_base.copy() if list_base is not None else
                  Image.alpha_composite(viewport, Image.new('RGBA', viewport.size, (0, 0, 0, 150))))
         draw = ImageDraw.Draw(image)
-        gold, white, muted, cyan = '#f4d873', '#eeeeee', '#999999', '#77c9dc'
+        gold, white, muted, cyan = c('#f4d873'), c('#eeeeee'), c('#999999'), c('#77c9dc')
         sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
         origin = (0, 0)
 
@@ -411,13 +412,13 @@ class SaveBrowser:
 
         def button(rect, label, index, enabled=True, active=False):
             highlighted = self.focus == index or self.editing and self.hovered == index
-            rectangle(rect, fill='#303030' if highlighted else '#222222',
-                      outline=gold if highlighted else cyan if active else '#626262')
+            rectangle(rect, fill=c('#303030') if highlighted else c('#222222'),
+                      outline=gold if highlighted else cyan if active else c('#626262'))
             text(label, rect[0] + 10, rect[1] + 7, white if enabled else muted, rect[2] - rect[0] - 20)
 
         def draw_list():
             nonlocal image, draw, origin
-            rectangle(self.LIST, fill='#181818')
+            rectangle(self.LIST, fill=c('#181818'))
             # Allocate only the clipped list, not another full-window layer.
             background = image
             clip = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))
@@ -430,8 +431,8 @@ class SaveBrowser:
                     continue
                 selected = self.selected == row
                 current = slot.path == self.active_path
-                rectangle(rect, fill='#253033' if selected else '#222222',
-                          outline=gold if self.focus == 100 + row else cyan if selected else '#404040')
+                rectangle(rect, fill=c('#253033') if selected else c('#222222'),
+                          outline=gold if self.focus == 100 + row else cyan if selected else c('#404040'))
                 text(slot.name, rect[0] + 8, rect[1] + 7, cyan if selected else white, 100, True, True)
                 text(f'Level {slot.level}' if slot.level else '---', rect[2] - 8, rect[1] + 7,
                      muted, 59, True, align='right')
@@ -449,21 +450,21 @@ class SaveBrowser:
                 height = self.LIST[3] - self.LIST[1]
                 thumb = max(16, height * height / (len(self.items) * self.ROW_HEIGHT))
                 top = self.LIST[1] + (height - thumb) * self.scroll / self.max_scroll
-                rectangle((225, self.LIST[1], 227, self.LIST[3]), fill='#303030')
-                rectangle((225, top, 227, top + thumb), fill='#858585')
+                rectangle((225, self.LIST[1], 227, self.LIST[3]), fill=c('#303030'))
+                rectangle((225, top, 227, top + thumb), fill=c('#858585'))
 
         if list_base is not None:
             draw_list()
             return image
 
         if cached is None:
-            rectangle(self.PANEL, fill='#181818', outline='#858585')
+            rectangle(self.PANEL, fill=c('#181818'), outline=c('#858585'))
             text('Saved Games', 40, 29, gold)
             text(f'{len(self.slots)} {"save" if len(self.slots) == 1 else "saves"}', 472, 32,
                  muted, 82, True, align='right')
             for index, (rect, label) in enumerate(zip(self.TABS, ('Save', 'Load'))):
                 button(rect, label, index, active=self.mode == label.lower())
-            line(((40, 88), (472, 88)), '#404040')
+            line(((40, 88), (472, 88)), c('#404040'))
             draw_list()
             slot = self.detail
             source_key = ('source', slot.path, slot.modified, id(slot.document), id(slot.preview), id(self.preview_provider))
@@ -476,7 +477,7 @@ class SaveBrowser:
                 remember(self.preview_cache, source_key, preview, 8)
             preview = self.preview_cache[source_key]
             left, top, right, bottom = self.PREVIEW
-            rectangle(self.PREVIEW, fill='#0c0c0c', outline='#626262')
+            rectangle(self.PREVIEW, fill=c('#0c0c0c'), outline=c('#626262'))
             if preview is not None:
                 pos = point(left + 1, top + 1)
                 edge = point(right - 1, bottom - 1)
@@ -493,7 +494,7 @@ class SaveBrowser:
             name_x, name_width = (262, 210) if can_rename else (238, 234)
             name_color = cyan if highlighted else gold
             if highlighted:
-                rectangle(self.RENAME, fill='#202a2d')
+                rectangle(self.RENAME, fill=c('#202a2d'))
             if can_rename:
                 feather = rename_quill()
                 # Fit the detailed source directly to the output pixels, not a
@@ -519,7 +520,7 @@ class SaveBrowser:
                     width = min(name_width, glyphs(value, name_color).width * 0.7)
                     line(((name_x, y + 10), (name_x + width, y + 10)), cyan)
             if can_rename and self.hovered == 25 and not modal:
-                rectangle((362, 251, 472, 268), fill='#303030')
+                rectangle((362, 251, 472, 268), fill=c('#303030'))
                 text('Rename save', 370, 256, white, 94, True)
             resume = {'Level start': 'Resumes at level start',
                       'Checkpoint': 'Resumes at checkpoint'}.get(slot.resume, slot.resume)
@@ -532,7 +533,7 @@ class SaveBrowser:
                            else self.save_available if index == 29 else True)
                 button(rect, label, index, enabled, active=index == 29 and enabled)
             text(self.error or self.status or slot.date, name_x, 313,
-                 '#ff9b9b' if self.error else muted,
+                 c('#ff9b9b') if self.error else muted,
                  name_width - 70 if slot.capacity is not None else name_width, True)
             if not modal:
                 remember(self.list_base_cache, list_key, image.copy(), 3)
@@ -541,12 +542,12 @@ class SaveBrowser:
                 image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 140)))
                 remember(self.modal_cache, key, image.copy(), 3)
             draw = ImageDraw.Draw(image)
-            rectangle((80, 121, 432, 270), fill='#181818', outline='#858585')
+            rectangle((80, 121, 432, 270), fill=c('#181818'), outline=c('#858585'))
             title = ('New save' if self.editing == 'create' else 'Rename save') if self.editing else {
                 'save': 'Replace this save?', 'load': 'Load this game?', 'delete': 'Delete this save?'}[self.confirmation]
             text(title, 100, 142, gold, 312)
             if self.editing:
-                rectangle(self.NAME_FIELD, fill='#0c0c0c', outline=cyan if self.focus == 32 else '#626262')
+                rectangle(self.NAME_FIELD, fill=c('#0c0c0c'), outline=cyan if self.focus == 32 else c('#626262'))
                 glyph = glyphs(self.draft, white)
                 ink = glyph.getbbox()
                 if ink:
@@ -557,14 +558,14 @@ class SaveBrowser:
                 if start != end:
                     a = max(106, 106 + glyphs(self.draft[:start], white).width - offset)
                     b = min(406, 106 + glyphs(self.draft[:end], white).width - offset)
-                    rectangle((a, 172, b, 192), fill='#385462')
+                    rectangle((a, 172, b, 192), fill=c('#385462'))
                 glyph = glyph.crop((offset, 0, min(glyph.width, offset + 300), glyph.height))
                 if glyph.width:
                     glyph = glyph.resize((max(1, round(glyph.width * sx)), max(1, round(glyph.height * sy))), Image.Resampling.NEAREST)
                     image.paste(glyph, point(106, 174), glyph)
                 if self.focus == 32:
                     line(((106 + cursor - offset, 172), (106 + cursor - offset, 192)), cyan)
-                text(self.error, 100, 205, '#ff9b9b', 312, True)
+                text(self.error, 100, 205, c('#ff9b9b'), 312, True)
             else:
                 text(self.entry.name, 100, 171, white, 312, ellipsize=True)
                 text('Current progress will be lost.' if self.confirmation == 'load' else

@@ -14,6 +14,7 @@ import sys
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
 from pop2.bitmap_labels import label_text
+from pop2.menu_theme import c
 from pop2.save_slots import remember
 from pop2.screenshots import ScreenshotSettings
 
@@ -695,12 +696,12 @@ class ScreenshotGallery:
         draw = ImageDraw.Draw(image)
         sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
         origin = (0, 0)
-        gold, white, muted, cyan = '#f4d873', '#eeeeee', '#999999', '#77c9dc'
+        gold, white, muted, cyan = c('#f4d873'), c('#eeeeee'), c('#999999'), c('#77c9dc')
 
         def point(x, y):
             return round((x - int(visible)) * sx) - origin[0], round(y * sy) - origin[1]
 
-        def box(rect, fill='#222222', outline='#626262'):
+        def box(rect, fill=c('#222222'), outline=c('#626262')):
             draw.rectangle((*point(*rect[:2]), *point(*rect[2:])), fill=fill, outline=outline,
                            width=max(1, round(min(sx, sy))))
 
@@ -740,8 +741,8 @@ class ScreenshotGallery:
 
         def button(rect, label, index, enabled=True, active=False, scale=0.7, centered=False):
             highlighted = self.focus == index or self.choosing and self.hovered == index
-            box(rect, '#303030' if highlighted else '#222222',
-                gold if highlighted else cyan if active else '#626262')
+            box(rect, c('#303030') if highlighted else c('#222222'),
+                gold if highlighted else cyan if active else c('#626262'))
             x, y = rect[0] + 8, rect[1] + 7
             if centered:
                 raw = glyph(label)
@@ -750,16 +751,16 @@ class ScreenshotGallery:
                 y = (rect[1] + rect[3] - ((ink[3] - ink[1]) if ink else raw.height) * scale) / 2
             text(label, x, y, rect[2] - rect[0] - 16, white if enabled else muted, scale)
 
-        def picture(entry, rect, thumb=False, outline='#626262'):
+        def picture(entry, rect, thumb=False, outline=c('#626262')):
             key = self.image_key(entry, thumb)
             result = self.reads.request(key, lambda: read_capture(entry,
                 (510, 384) if thumb else (2040, 1536)), 0 if thumb else -5)
             if result is None:
-                box(rect, '#222222', outline)
+                box(rect, c('#222222'), outline)
                 text('...', (rect[0] + rect[2]) / 2 - 6, (rect[1] + rect[3]) / 2, 30, muted)
                 return None
             if result.error:
-                box(rect, '#222222', outline)
+                box(rect, c('#222222'), outline)
                 text('Unavailable', rect[0] + 8, (rect[1] + rect[3]) / 2, rect[2] - rect[0] - 16, muted)
                 return None
             left, top = point(rect[0] + 1, rect[1] + 1)
@@ -780,17 +781,17 @@ class ScreenshotGallery:
 
         def draw_list():
             nonlocal image, draw, origin
-            box(self.LIST, '#181818', None)
+            box(self.LIST, c('#181818'), None)
             base, base_draw = image, draw
             clip = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))
             origin = clip[:2]
-            image = Image.new('RGBA', (clip[2] - clip[0], clip[3] - clip[1]), '#181818')
+            image = Image.new('RGBA', (clip[2] - clip[0], clip[3] - clip[1]), c('#181818'))
             draw = ImageDraw.Draw(image)
             for index in self.visible_indices:
                 entry = self.entries[index]
                 rect = self.row_rect(index)
                 height = 50
-                outline = gold if self.focus == 100 + index and not modal else cyan if self.selected == index else '#626262'
+                outline = gold if self.focus == 100 + index and not modal else cyan if self.selected == index else c('#626262')
                 picture(entry, (rect[0], rect[1], rect[2], rect[1] + height), True, outline)
                 text(entry.date.replace('  ', ' '), rect[0] + 2, rect[1] + height + 5,
                      rect[2] - rect[0] - 4, cyan if self.selected == index else muted,
@@ -801,14 +802,14 @@ class ScreenshotGallery:
                 height = self.LIST[3] - self.LIST[1]
                 thumb = max(16, height * height / (math.ceil(len(self.entries) / self.COLUMNS) * self.row_height))
                 top = self.LIST[1] + (height - thumb) * self.scroll / self.max_scroll
-                box((185, self.LIST[1], 187, self.LIST[3]), '#303030', None)
-                box((185, top, 187, top + thumb), '#858585', None)
+                box((185, self.LIST[1], 187, self.LIST[3]), c('#303030'), None)
+                box((185, top, 187, top + thumb), c('#858585'), None)
 
         def draw_delete(clear=True):
             highlighted = self.hovered == 13 or self.focus == 13 and self.keyboard_navigation
             if clear:
-                box(self.DELETE, '#422622' if self.deleting or self.dragging and self.hovered == 13 else
-                    '#2b1d1b' if highlighted else '#181818', None)
+                box(self.DELETE, c('#422622') if self.deleting or self.dragging and self.hovered == 13 else
+                    c('#2b1d1b') if highlighted else c('#181818'), None)
             icon = self.reads.request(('icon', 'lava'), lava_delete_frames, -5)
             if icon is not None and not icon.error:
                 icon_key = sx, sy
@@ -846,7 +847,7 @@ class ScreenshotGallery:
             fit_key = 'held', self.drag_target if self.dragging else self.burn_target, size
             if fit_key not in self.image_cache:
                 sprite = (ImageOps.contain(raw, size, Image.Resampling.NEAREST).convert('RGBA') if raw is not None
-                          else Image.new('RGBA', size, '#999999'))
+                          else Image.new('RGBA', size, c('#999999')))
                 remember(self.image_cache, fit_key, sprite, 48)
             sprite = self.image_cache[fit_key]
             left, top = point(x, y)
@@ -872,7 +873,7 @@ class ScreenshotGallery:
             return image
 
         if cached is None:
-            box(self.PANEL, '#181818', '#858585')
+            box(self.PANEL, c('#181818'), c('#858585'))
             text('Screenshots', 36, 26, 250, gold, 1)
             text(f'{len(self.entries)} PNG', 374, 29, 70, muted, right=True)
             button(self.REFRESH, 'Refresh', 15)
@@ -880,10 +881,10 @@ class ScreenshotGallery:
             for i, rect in enumerate(self.SCALES):
                 button(rect, f'{i + 1}x', i, active=self.scale == i + 1)
             text(f'{510 * self.scale} x {384 * self.scale}', 238, 54, 114, muted, 0.6)
-            box(self.INCLUDE_UI, '#222222', gold if self.focus == 4 else '#626262')
-            box((366, 54, 374, 62), cyan if self.include_ui else '#181818')
+            box(self.INCLUDE_UI, c('#222222'), gold if self.focus == 4 else c('#626262'))
+            box((366, 54, 374, 62), cyan if self.include_ui else c('#181818'))
             if self.include_ui:
-                draw.line([point(367, 58), point(369, 60), point(373, 55)], fill='#181818', width=max(1, round(sx)))
+                draw.line([point(367, 58), point(369, 60), point(373, 55)], fill=c('#181818'), width=max(1, round(sx)))
             text('With menus', 380, 54, 88)
             text(str(self.folder).replace('\\', '/'), 36, 75, 438, muted, 0.45, tail=True)
             draw_list()
@@ -894,7 +895,7 @@ class ScreenshotGallery:
                     text(f'{dimensions[0]} x {dimensions[1]}', 202, 290, 145, muted, 0.55)
                 text(f'{self.entry.size / 1024:.0f} KB', 424, 290, 70, muted, 0.55, right=True)
             else:
-                box(self.PREVIEW, '#0c0c0c')
+                box(self.PREVIEW, c('#0c0c0c'))
                 text('Reading folder...' if self.applied_scan != self.scan_key else 'No screenshots yet',
                      220, 174, 240, muted)
             draw_delete()
@@ -902,10 +903,10 @@ class ScreenshotGallery:
                 button(rect, label, 10 + i, active=i == 2, scale=0.6)
             button(self.OPEN_FOLDER, 'Open folder', 18, scale=0.6)
             if self.error or self.status:
-                box((202, 286, 426, 298), '#181818', None)
-                text(self.error or self.status, 202, 289, 222, '#ff9b9b' if self.error else gold, 0.5)
+                box((202, 286, 426, 298), c('#181818'), None)
+                text(self.error or self.status, 202, 289, 222, c('#ff9b9b') if self.error else gold, 0.5)
             if not modal and self.hovered == 13:
-                box((350, 256, 474, 271), '#303030', '#858585')
+                box((350, 256, 474, 271), c('#303030'), c('#858585'))
                 text('Delete screenshot', 356, 260, 112, white, 0.6)
             if modal:
                 image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 150)))
@@ -914,9 +915,9 @@ class ScreenshotGallery:
             else:
                 remember(self.surface_cache, surface_key, image.copy(), 2)
         if self.choosing:
-            box((48, 44, 464, 338), '#181818', '#858585')
+            box((48, 44, 464, 338), c('#181818'), c('#858585'))
             text('Screenshot folder', 64, 62, 384, gold, 1)
-            box(self.PATH, '#0c0c0c', cyan if self.focus == 40 else '#626262')
+            box(self.PATH, c('#0c0c0c'), cyan if self.focus == 40 else c('#626262'))
             display_path = self.draft.replace('\\', '/')
             raw = glyph(display_path)
             offset = max(0, glyph(display_path[:self.caret]).width * 0.7 - 364)
@@ -925,7 +926,7 @@ class ScreenshotGallery:
                 a = max(70, 70 + glyph(display_path[:start]).width * 0.7 - offset)
                 b = min(442, 70 + glyph(display_path[:end]).width * 0.7 - offset)
                 if b > a:
-                    box((a, 95, b, 109), '#385462', None)
+                    box((a, 95, b, 109), c('#385462'), None)
             raw = raw.resize((max(1, round(raw.width * 0.7 * sx)), max(1, round(raw.height * 0.7 * sy))),
                              Image.Resampling.NEAREST)
             raw = raw.crop((round(offset * sx), 0, min(raw.width, round((offset + 372) * sx)), raw.height))
@@ -935,13 +936,13 @@ class ScreenshotGallery:
                 draw.line([point(x, 94), point(x, 109)], fill=cyan, width=max(1, round(sx)))
             for i, (rect, label) in enumerate(zip(self.FOLDER_TOOLS, ('Default', 'Home', 'Up', 'Drives'))):
                 button(rect, label, 41 + i)
-            box(self.FOLDER_LIST, '#0c0c0c')
+            box(self.FOLDER_LIST, c('#0c0c0c'))
             for i in range(self.folder_offset, min(len(self.folders), self.folder_offset + 6)):
                 y = 156 + (i - self.folder_offset) * 20
                 if self.focus == 1000 + i or self.hovered == 1000 + i:
-                    box((65, y + 1, 447, y + 19), '#253033', None)
-                box((72, y + 7, 80, y + 14), '#999999', None)
-                box((72, y + 5, 76, y + 7), '#999999', None)
+                    box((65, y + 1, 447, y + 19), c('#253033'), None)
+                box((72, y + 7, 80, y + 14), c('#999999'), None)
+                box((72, y + 5, 76, y + 7), c('#999999'), None)
                 text(self.folders[i].name or str(self.folders[i]).replace('\\', '/'), 86, y + 6, 354)
             if not self.folders:
                 text('Unavailable' if self.folder_error else ('Reading folders...' if self.applied_folder != self.folder_key
@@ -949,14 +950,14 @@ class ScreenshotGallery:
             if len(self.folders) > 6:
                 height = max(6, 122 * 6 / len(self.folders))
                 top = 157 + (122 - height) * self.folder_offset / (len(self.folders) - 6)
-                box((444, 157, 447, 279), '#303030', None)
-                box((444, top, 447, top + height), '#858585', None)
-            text(self.folder_error, 64, 283, 384, '#ff9b9b', 0.6)
+                box((444, 157, 447, 279), c('#303030'), None)
+                box((444, top, 447, top + height), c('#858585'), None)
+            text(self.folder_error, 64, 283, 384, c('#ff9b9b'), 0.6)
             for i, (rect, label) in enumerate(zip(self.FOLDER_BUTTONS,
                     ('Cancel', 'Working...' if self.commit_key is not None else 'Use folder'))):
                 button(rect, label, 45 + i, active=i == 1)
         elif self.deleting:
-            box((80, 121, 432, 270), '#181818', '#858585')
+            box((80, 121, 432, 270), c('#181818'), c('#858585'))
             text('Delete this screenshot?', 100, 142, 312, gold, 1)
             target = self.delete_target or self.entry
             text(target.path.name.replace('_', ' ') if target is not None else 'Unavailable', 100, 174, 312)

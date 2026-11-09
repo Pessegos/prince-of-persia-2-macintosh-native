@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from PIL import Image, ImageDraw, ImageEnhance
 
 from pop2.playback_navigation import PlaybackGroup
+from pop2 import menu_theme
+from pop2.menu_theme import c
 
 
 # GetFullScreenRect (CODE 17:1ada) is 510x384. The host's 512-wide
@@ -551,9 +553,9 @@ class DevelopmentMenu:
         return self.activate()
 
     def draw(self, viewport, font):
-        image = Image.alpha_composite(viewport, Image.new("RGBA", viewport.size, (0, 0, 0, 100)))
+        image = Image.alpha_composite(viewport, Image.new("RGBA", viewport.size, (0, 0, 0, menu_theme.current().dim)))
         draw = ImageDraw.Draw(image)
-        gold, white, muted = "#f4d873", "#eeeeee", "#b9b9b9"
+        gold, white, muted = c("#f4d873"), c("#eeeeee"), c("#b9b9b9")
         offset = self.layout_offset
 
         def text(value, x, y, color=white, centered=False, max_width=None):
@@ -572,7 +574,8 @@ class DevelopmentMenu:
             self.draw_map(image, draw, font, text)
             self.draw_popup(draw, text)
             return image
-        draw.rectangle(self.panel_rect, fill="#181818", outline="#858585")
+        menu_theme.panel(image, self.panel_rect)
+        draw = ImageDraw.Draw(image)
         text('Playback' if self.page == 'playback' else 'Developer Tools',
              264 if self.page == 'playback' else 256, 86 + offset, gold, centered=True)
         if self.page == 'tools' and (self.map_available or not self.level_available):
@@ -588,15 +591,15 @@ class DevelopmentMenu:
             text("Part", 120, 188 + offset)
         for i in self.controls:
             rect = self.control_rect(i)
-            draw.rectangle(rect, fill="#303030" if i == self.focus else "#222222",
-                           outline=gold if i == self.focus else "#626262")
+            draw.rectangle(rect, fill=c("#303030") if i == self.focus else c("#222222"),
+                           outline=gold if i == self.focus else c("#626262"))
         if self.page == 'playback':
             left, top, right, bottom = self.control_rect(7)
             cx, cy = (left + right) // 2, (top + bottom) // 2
             draw.line(((cx + 7, cy), (cx - 6, cy), (cx, cy - 6)), fill=white, width=2)
             draw.line(((cx - 6, cy), (cx, cy + 6)), fill=white, width=2)
             top = self.control_rect(8)[1]
-            draw.rectangle((130, top + 7, 141, top + 18), fill='#121212', outline=muted)
+            draw.rectangle((130, top + 7, 141, top + 18), fill=c('#121212'), outline=muted)
             if self.debug_status:
                 draw.line(((132, top + 12), (135, top + 15), (139, top + 9)), fill=gold, width=2)
             text('Debug status bar', 151, top + 7, muted, max_width=231)
@@ -614,7 +617,7 @@ class DevelopmentMenu:
                  centered=True, max_width=118)
         if available and self.page == 'tools':
             checkbox_y = self.control_rect(1)[1] + (8 if self.level_options else 9)
-            draw.rectangle((130, checkbox_y, 141, checkbox_y + 11), fill="#121212", outline=muted)
+            draw.rectangle((130, checkbox_y, 141, checkbox_y + 11), fill=c("#121212"), outline=muted)
             if self.peaceful:
                 draw.line(((132, checkbox_y + 5), (135, checkbox_y + 8),
                            (139, checkbox_y + 2)), fill=gold, width=2)
@@ -640,16 +643,16 @@ class DevelopmentMenu:
             error_y = (318 if compact else 277) + offset
             line_limit = 2 if compact else 3
             for i, line in enumerate(lines[:line_limit]):
-                text(line, 120, error_y + i * 14, "#ff9b9b", max_width=272)
+                text(line, 120, error_y + i * 14, c("#ff9b9b"), max_width=272)
         self.draw_popup(draw, text)
         return image
 
     def draw_game_tools(self, draw, text):
-        gold = '#f4d873'
+        gold = c('#f4d873')
         for control in self.controls:
             draw.rectangle(self.control_rect(control),
-                           fill='#303030' if self.focus == control else '#222222',
-                           outline=gold if self.focus == control else '#626262')
+                           fill=c('#303030') if self.focus == control else c('#222222'),
+                           outline=gold if self.focus == control else c('#626262'))
         for control, label in ((4, 'Open map'), (8, 'Cutscene Viewer' if self.cutscene_viewer else 'Playback')):
             if control not in self.controls:
                 continue
@@ -663,7 +666,7 @@ class DevelopmentMenu:
                 continue
             left, top, right, _bottom = self.control_rect(control)
             draw.rectangle((left + 10, top + 9, left + 21, top + 20),
-                           fill='#121212', outline='#b9b9b9')
+                           fill=c('#121212'), outline=c('#b9b9b9'))
             if checked:
                 draw.line(((left + 12, top + 14), (left + 15, top + 17), (left + 19, top + 11)),
                           fill=gold, width=2)
@@ -671,16 +674,16 @@ class DevelopmentMenu:
         text('Resume', 256, self.control_rect(3)[1] + 10, centered=True)
 
     def draw_map(self, image, draw, font, text):
-        gold, white = '#f4d873', '#eeeeee'
-        draw.rectangle((1, 0, 510, 383), fill='#101010')
-        draw.line((12, 47, 500, 47), fill='#383838')
-        draw.line((12, 340, 500, 340), fill='#383838')
+        gold, white = c('#f4d873'), c('#eeeeee')
+        draw.rectangle((1, 0, 510, 383), fill=c('#101010'))
+        draw.line((12, 47, 500, 47), fill=c('#383838'))
+        draw.line((12, 340, 500, 340), fill=c('#383838'))
         for control in (7, 5, 0, 6, 1, 2, 3):
             if control not in self.controls and control != 1:
                 continue
             rect = self.control_rect(control)
-            draw.rectangle(rect, fill='#303030' if self.focus == control else '#222222',
-                           outline=gold if self.focus == control else '#626262')
+            draw.rectangle(rect, fill=c('#303030') if self.focus == control else c('#222222'),
+                           outline=gold if self.focus == control else c('#626262'))
         left, top, right, _bottom = self.control_rect(0)
         text(self.field_options(0)[self.level_index], 250, top + 7,
              centered=True, max_width=right - left - 34)
@@ -702,16 +705,16 @@ class DevelopmentMenu:
                            (cx - direction * 3, cy + 5)), fill=white, width=2)
         destination = self.return_screen
         label = (f'Return to {destination}' if destination is not None else 'Return to last room')
-        text(label, 154, 355, white if destination is not None else '#777777',
+        text(label, 154, 355, white if destination is not None else c('#777777'),
              centered=True, max_width=256)
         text('Go', 348, 355, centered=True, max_width=64)
         text('Resume', 444, 355, centered=True, max_width=88)
         if self.error:
-            text(self.error, 12, 332, '#ff9b9b', max_width=488)
+            text(self.error, 12, 332, c('#ff9b9b'), max_width=488)
         tooltip = self.map_tooltip(font)
         if tooltip is not None:
             label, rect = tooltip
-            draw.rectangle(rect, fill='#181818', outline=gold)
+            draw.rectangle(rect, fill=c('#181818'), outline=gold)
             text(label, rect[0] + 6, rect[1] + 4, gold)
 
     def map_tooltip(self, font):
@@ -729,22 +732,22 @@ class DevelopmentMenu:
         return label, (x1, y1, x1 + width, y1 + 18)
 
     def draw_gallery(self, image, draw, font, text):
-        gold, white = '#f4d873', '#eeeeee'
-        draw.rectangle((1, 0, 510, 383), fill='#101010')
-        draw.line((12, 47, 500, 47), fill='#383838')
-        draw.line((12, 340, 500, 340), fill='#383838')
+        gold, white = c('#f4d873'), c('#eeeeee')
+        draw.rectangle((1, 0, 510, 383), fill=c('#101010'))
+        draw.line((12, 47, 500, 47), fill=c('#383838'))
+        draw.line((12, 340, 500, 340), fill=c('#383838'))
         for control in self.controls:
             if control == 4:
                 continue
             rect = self.control_rect(control)
-            draw.rectangle(rect, fill='#303030' if self.focus == control else '#222222',
-                           outline=gold if self.focus == control else '#626262')
+            draw.rectangle(rect, fill=c('#303030') if self.focus == control else c('#222222'),
+                           outline=gold if self.focus == control else c('#626262'))
         left, top, right, _bottom = self.control_rect(0)
         text(self.groups[self.group_index].label, 250, top + 7,
              centered=True, max_width=right - left - 34)
         if self.gallery_count > 1:
             text(f'{self.gallery_page + 1}/{self.gallery_count}', 401, top + 8,
-                 '#b9b9b9', centered=True, max_width=30)
+                 c('#b9b9b9'), centered=True, max_width=30)
         draw.polygon(((right - 15, top + 10), (right - 7, top + 10),
                       (right - 11, top + 14)), fill=white)
         left, top, _right, _bottom = self.control_rect(4)
@@ -765,7 +768,7 @@ class DevelopmentMenu:
                     draw.line((cx + direction * 7, cy - 5, cx + direction * 7, cy + 5),
                               fill=white, width=2)
         left, top, _right, _bottom = self.control_rect(8)
-        draw.rectangle((left + 7, top + 6, left + 18, top + 17), fill='#121212', outline='#b9b9b9')
+        draw.rectangle((left + 7, top + 6, left + 18, top + 17), fill=c('#121212'), outline=c('#b9b9b9'))
         if self.debug_status:
             draw.line(((left + 9, top + 11), (left + 12, top + 14), (left + 16, top + 8)),
                       fill=gold, width=2)
@@ -775,7 +778,7 @@ class DevelopmentMenu:
         tooltip = self.map_tooltip(font)
         if tooltip is not None:
             label, rect = tooltip
-            draw.rectangle(rect, fill='#181818', outline=gold)
+            draw.rectangle(rect, fill=c('#181818'), outline=gold)
             text(label, rect[0] + 6, rect[1] + 4, gold)
 
     def gallery_layer(self, font, size=None):
@@ -795,8 +798,8 @@ class DevelopmentMenu:
             selected = (index == self.section_index and self.focus == 4
                         and self.preview_keyboard_selection)
             current = index == self.current_section
-            color = ('#f4d873' if hovered else '#63c8e5' if current else
-                     '#eeeeee' if selected else '#b9b9b9')
+            color = ('#f4d873' if hovered else c('#63c8e5') if current else
+                     c('#eeeeee') if selected else c('#b9b9b9'))
             if hovered:
                 image.paste(ImageEnhance.Brightness(image.crop(rect)).enhance(1.2), rect[:2])
             if hovered or current or selected:
@@ -817,7 +820,7 @@ class DevelopmentMenu:
         draw = ImageDraw.Draw(image)
         scale, (ox, oy) = preview.transform(size)
         sx = sy = scale
-        gold = '#f4d873'
+        gold = c('#f4d873')
 
         def room_rect(label):
             x1, y1, x2, y2 = preview.rooms[label]
@@ -830,9 +833,9 @@ class DevelopmentMenu:
         markers += [(label, 'End', (255, 157, 122))
                     for label in sorted(preview.exits) if label in preview.rooms]
         if self.screen in preview.rooms and self.focus == 4 and self.preview_keyboard_selection:
-            draw.rectangle(room_rect(self.screen), outline='#eeeeee', width=max(1, round(min(sx, sy))))
+            draw.rectangle(room_rect(self.screen), outline=c('#eeeeee'), width=max(1, round(min(sx, sy))))
         if self.current_level == self.level_number and self.current_screen in preview.rooms:
-            draw.rectangle(room_rect(self.current_screen), outline='#63c8e5',
+            draw.rectangle(room_rect(self.current_screen), outline=c('#63c8e5'),
                            width=max(1, round(min(sx, sy))))
         tooltip = None
         if self.hovered_screen in preview.rooms:
@@ -888,7 +891,7 @@ class DevelopmentMenu:
         if tooltip is not None:
             tx, ty, width, glyphs = tooltip
             draw.rectangle((tx, ty, tx + width, ty + round(18 * sy)),
-                           fill='#181818', outline=gold, width=max(1, round(min(sx, sy))))
+                           fill=c('#181818'), outline=gold, width=max(1, round(min(sx, sy))))
             image.paste(glyphs, (tx + round(6 * sx), ty + round(4 * sy)), glyphs)
         return image
 
@@ -919,25 +922,25 @@ class DevelopmentMenu:
         return frame
 
     def draw_popup(self, draw, text):
-        gold, white, muted = '#f4d873', '#eeeeee', '#b9b9b9'
+        gold, white, muted = c('#f4d873'), c('#eeeeee'), c('#b9b9b9')
         if self.dropdown:
             left, _top, right, bottom = self.control_rect(self.dropdown_control)
             count = self.popup_count
             draw.rectangle((left, bottom, right, bottom + count * self.OPTION_HEIGHT),
-                           fill="#222222", outline=gold)
+                           fill=c("#222222"), outline=gold)
             for i in range(self.popup_start, self.popup_start + count):
                 label = self.options[i]
                 y = bottom + (i - self.popup_start) * self.OPTION_HEIGHT
                 if i == self.option_index:
                     draw.rectangle((left + 1, y + 1, right - 1, y + self.OPTION_HEIGHT - 1),
-                                   fill="#454545")
+                                   fill=c("#454545"))
                 text(label, left + 10, y + 4, gold if i == self.selected_index else white,
                      max_width=right - left - 20)
             if len(self.options) > count:
                 track = count * self.OPTION_HEIGHT - 4
                 thumb = max(8, track * count // len(self.options))
                 top = bottom + 2 + (track - thumb) * self.popup_start // (len(self.options) - count)
-                draw.rectangle((right - 5, bottom + 2, right - 3, bottom + track + 1), fill="#454545")
+                draw.rectangle((right - 5, bottom + 2, right - 3, bottom + track + 1), fill=c("#454545"))
                 draw.rectangle((right - 5, top, right - 3, top + thumb - 1), fill=muted)
 
 

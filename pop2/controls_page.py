@@ -10,6 +10,8 @@ import sys
 from PIL import Image, ImageDraw
 
 from pop2.bitmap_labels import label_text
+from pop2 import menu_theme
+from pop2.menu_theme import c
 from pop2.controls_art import (INK, PAD_HEIGHT, PAD_WIDTH, XBOX_COLORS, button_icon, draw_leds,
                                key_top, keyboard_case, keycap, legend_ink, pad_art, windows_flag)
 from pop2.game_ui import DevelopmentMenu, centered_panel
@@ -509,10 +511,10 @@ class ControlsPage:
 
     # -- drawing --------------------------------------------------------
     def draw(self, viewport, font):
-        image = Image.alpha_composite(viewport, Image.new('RGBA', viewport.size, (0, 0, 0, 100)))
+        image = Image.alpha_composite(viewport, Image.new('RGBA', viewport.size, (0, 0, 0, menu_theme.current().dim)))
         draw = ImageDraw.Draw(image)
 
-        def text(value, x, y, color=WHITE, align='left', max_width=None):
+        def text(value, x, y, color=c(WHITE), align='left', max_width=None):
             glyphs = label_text(font, value, color)
             if max_width is not None and glyphs.width > max_width:
                 glyphs = glyphs.resize((max_width, glyphs.height), Image.Resampling.NEAREST)
@@ -523,24 +525,25 @@ class ControlsPage:
                 x -= glyphs.width
             image.paste(glyphs, (x, y - (ink[1] if ink else 0)), glyphs)
 
-        def button(rect, label, selected, color=WHITE):
-            draw.rectangle(rect, fill='#303030' if selected else '#222222',
-                           outline=GOLD if selected else '#626262')
+        def button(rect, label, selected, color=c(WHITE)):
+            draw.rectangle(rect, fill=c('#303030') if selected else c('#222222'),
+                           outline=c(GOLD) if selected else c('#626262'))
             text(label, (rect[0] + rect[2]) // 2, rect[1] + (rect[3] - rect[1]) // 2 - 4,
                  color, 'center', rect[2] - rect[0] - 12)
 
-        draw.rectangle(self.PANEL, fill='#181818', outline='#858585')
+        menu_theme.panel(image, self.PANEL, clear_sides=True)  # labels reach the panel's sides
+        draw = ImageDraw.Draw(image)
         focused = self.focused
         if self.view == 'overview':
-            text('Controls', 256, self.PANEL[1] + 12, GOLD, 'center')
+            text('Controls', 256, self.PANEL[1] + 12, c(GOLD), 'center')
             for rect, device, label in zip(self.TABS, ('keyboard', 'controller'),
                                            ('Keyboard', 'Controller')):
                 chosen = device == self.device
-                draw.rectangle(rect, fill='#303030' if chosen else '#1c1c1c',
-                               outline=GOLD if focused == 'tab_' + device else
-                               '#8a8a8a' if chosen else '#4a4a4a')
+                draw.rectangle(rect, fill=c('#303030') if chosen else c('#1c1c1c'),
+                               outline=c(GOLD) if focused == 'tab_' + device else
+                               c('#8a8a8a') if chosen else c('#4a4a4a'))
                 text(label, (rect[0] + rect[2]) // 2, rect[1] + 7,
-                     GOLD if chosen else MUTED, 'center')
+                     c(GOLD) if chosen else c(MUTED), 'center')
             if self.device == 'keyboard':
                 self.draw_keyboard_overview(image, draw, text)
                 button(self.BUTTONS[0], 'Change keys...', focused == 'change')
@@ -548,17 +551,17 @@ class ControlsPage:
                 self.draw_controller_overview(image, draw, text)
                 left, top, right, bottom = self.TOGGLE
                 selected = focused == 'toggle'
-                draw.rectangle(self.TOGGLE, fill='#303030' if selected else '#181818',
-                               outline=GOLD if selected else '#181818')
-                draw.rectangle((left + 6, top + 4, left + 16, top + 14), fill='#121212', outline=MUTED)
+                draw.rectangle(self.TOGGLE, fill=c('#303030') if selected else c('#181818'),
+                               outline=c(GOLD) if selected else c('#181818'))
+                draw.rectangle((left + 6, top + 4, left + 16, top + 14), fill=c('#121212'), outline=c(MUTED))
                 if self.controller_enabled:
                     draw.line(((left + 8, top + 9), (left + 10, top + 12), (left + 14, top + 6)),
-                              fill=GOLD, width=2)
+                              fill=c(GOLD), width=2)
                 text('Use controller', left + 24, top + 5)
                 button(self.BUTTONS[0], 'Change buttons...', focused == 'change')
             button(self.BUTTONS[1], 'Back' if self.return_to_menu else 'Close', focused == 'back')
         else:
-            self.draw_remap(image, draw, text, button, lambda value: label_text(font, value, WHITE).width)
+            self.draw_remap(image, draw, text, button, lambda value: label_text(font, value, c(WHITE)).width)
         return image
 
     def keyboard_colors(self):
@@ -581,7 +584,7 @@ class ControlsPage:
                       if POSITION_ALIASES.get(token, token) not in drawn]
             missing = not any(self.keyboard.keys(action) for action in actions)
             value = label + (f' ({", ".join(hidden)})' if hidden else '') + (' (none)' if missing else '')
-            text(value, x + 19, y + 2, ERROR if missing else WHITE, max_width=150)
+            text(value, x + 19, y + 2, c(ERROR) if missing else c(WHITE), max_width=150)
 
     def callouts(self):
         """(group, side, line row, line points, rows) for each drawn group;
@@ -623,19 +626,19 @@ class ControlsPage:
                 if icon is not None:
                     image.alpha_composite(icon, (left, y - 6))
                 if side == 'left':
-                    text(label, left - 3, y - 5, WHITE, 'right', LABEL_WIDTH)
+                    text(label, left - 3, y - 5, c(WHITE), 'right', LABEL_WIDTH)
                 else:
-                    text(label, left + 20, y - 5, WHITE, 'left', LABEL_WIDTH)
+                    text(label, left + 20, y - 5, c(WHITE), 'left', LABEL_WIDTH)
         status_y = y0 + PAD_HEIGHT + 6
         if not self.controller_available:
-            text('Controller support is unavailable here', 256, status_y, MUTED, 'center', 420)
+            text('Controller support is unavailable here', 256, status_y, c(MUTED), 'center', 420)
         elif not self.controller_enabled:
-            text('Controller input is switched off', 256, status_y, MUTED, 'center', 420)
+            text('Controller input is switched off', 256, status_y, c(MUTED), 'center', 420)
         elif self.pads:
             names = ', '.join(pad.name for pad in self.pads)
-            text(names, 256, status_y, GOLD, 'center', 420)
+            text(names, 256, status_y, c(GOLD), 'center', 420)
         else:
-            text('No controller connected', 256, status_y, MUTED, 'center', 420)
+            text('No controller connected', 256, status_y, c(MUTED), 'center', 420)
 
     def hints(self):
         if self.input_device == 'pad':
@@ -646,12 +649,12 @@ class ControlsPage:
 
     def draw_remap(self, image, draw, text, button, measure):
         keyboard = self.device == 'keyboard'
-        text('Keyboard keys' if keyboard else 'Controller buttons', 256, self.PANEL[1] + 12, GOLD, 'center')
+        text('Keyboard keys' if keyboard else 'Controller buttons', 256, self.PANEL[1] + 12, c(GOLD), 'center')
         heading = 'Key' if keyboard else 'Button'
         row_top = self.row_top()
-        text('Action', 50, row_top - 15, MUTED)
+        text('Action', 50, row_top - 15, c(MUTED))
         for index, (left, right) in enumerate(self.SLOT_X):
-            text(f'{heading} {index + 1}', (left + right) // 2, row_top - 15, MUTED, 'center')
+            text(f'{heading} {index + 1}', (left + right) // 2, row_top - 15, c(MUTED), 'center')
         bindings = self.bindings
         focused = self.focused
         for row, action in enumerate(bindings.actions):
@@ -659,23 +662,23 @@ class ControlsPage:
             unbound = not bindings.keys(action) and action not in ('time',)
             color = ACTION_COLORS[action]
             draw.rectangle((38, top + 7, 43, top + 12), fill=color)
-            text(ACTION_BY_NAME[action].label, 50, top + 5, ERROR if unbound else WHITE, max_width=176)
+            text(ACTION_BY_NAME[action].label, 50, top + 5, c(ERROR) if unbound else c(WHITE), max_width=176)
             for slot in range(2):
                 rect = self.control_rect(('slot', action, slot))
                 selected = focused == ('slot', action, slot)
                 listening = self.listening == (action, slot)
                 locked = bindings.slot_locked(action, slot)
-                draw.rectangle(rect, fill='#3a3320' if listening else '#303030' if selected else '#222222',
-                               outline=GOLD if selected or listening else '#404040')
+                draw.rectangle(rect, fill=c('#3a3320') if listening else c('#303030') if selected else c('#222222'),
+                               outline=c(GOLD) if selected or listening else c('#404040'))
                 token = bindings.slots[action][slot]
                 cx = (rect[0] + rect[2]) // 2
                 if listening:
-                    text('Press a key...' if keyboard else 'Press a button...', cx, rect[1] + 5, GOLD,
+                    text('Press a key...' if keyboard else 'Press a button...', cx, rect[1] + 5, c(GOLD),
                          'center', rect[2] - rect[0] - 8)
                 elif token is None:
-                    text('-', cx, rect[1] + 9, '#5a5a5a', 'center')
+                    text('-', cx, rect[1] + 9, c('#5a5a5a'), 'center')
                 elif keyboard:
-                    text(self.name(token), cx, rect[1] + 5, MUTED if locked else WHITE, 'center',
+                    text(self.name(token), cx, rect[1] + 5, c(MUTED) if locked else c(WHITE), 'center',
                          rect[2] - rect[0] - 8)
                 else:
                     name = self.name(token)
@@ -686,10 +689,10 @@ class ControlsPage:
                     if icon is not None:
                         image.alpha_composite(icon, (x, rect[1] + 3))
                         x += icon.width + gap
-                    text(name, x, rect[1] + 5, MUTED if locked else WHITE, max_width=80)
+                    text(name, x, rect[1] + 5, c(MUTED) if locked else c(WHITE), max_width=80)
         button(self.BUTTONS[0], 'Defaults', focused == 'defaults')
         button(self.BUTTONS[1], 'Back', focused == 'back')
         bottom = row_top + len(bindings.actions) * self.ROW_HEIGHT
         if self.message:
-            text(self.message, 256, bottom + 8, ERROR if self.message_error else GOLD, 'center', 420)
-        text(self.hints(), 256, self.BUTTONS[0][1] - 18, MUTED, 'center', 420)
+            text(self.message, 256, bottom + 8, c(ERROR) if self.message_error else c(GOLD), 'center', 420)
+        text(self.hints(), 256, self.BUTTONS[0][1] - 18, c(MUTED), 'center', 420)

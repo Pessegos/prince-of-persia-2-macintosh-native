@@ -13,6 +13,9 @@ import tempfile
 
 # Tests must never read the player's real controller.
 os.environ.setdefault("POP2_NO_GAMEPAD", "1")
+# Layout tests check the neutral menu look whatever level their scene loads;
+# tests/test_menu_theme.py covers the level themes.
+os.environ.setdefault("POP2_MENU_THEME", "neutral")
 
 if not os.environ.get("POP2_USER_DATA"):
     _user_data = tempfile.mkdtemp(prefix="pop2-test-user-data-")

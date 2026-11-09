@@ -48,6 +48,7 @@ from pop2.control_mapping import (
     facing_for_direction,
     jump_sequence_for_input,
 )
+from pop2 import menu_theme
 from pop2.mac_input import DirectionalInput, plan_cautious_step, plan_step, read_keyboard, sample_modifier
 from pop2.opening_animation import GLASS_POSITIONS
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
@@ -3542,6 +3543,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 viewport.paste(intro_frame.crop((0, ROOM_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)),
                                (0, ROOM_HEIGHT))
             self.screenshot_viewport = viewport.copy()
+            if self.dev_menu is not None or self.game_menu is not None:
+                menu_theme.use(menu_theme.NEUTRAL)  # cutscenes keep the neutral menu
             if self.dev_menu is not None:
                 viewport = self.dev_menu.draw(viewport, self.ui_font)
             elif self.game_menu is not None:
@@ -3715,6 +3718,9 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if getattr(self, "copy_challenge", None) is not None:
             viewport = self.copy_challenge.draw(viewport, self.ui_font)
             self.screenshot_viewport = viewport.copy()
+        if self.dev_menu is not None or self.game_menu is not None:
+            # The port's menus take the colours and frame of the level being played.
+            menu_theme.use(menu_theme.theme_for(self.game))
         if self.dev_menu is not None:
             viewport = self.dev_menu.draw(viewport, self.ui_font)
         if self.game_menu is not None:
