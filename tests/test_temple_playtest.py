@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+from pop2.combat import select_sequence
 from pop2.coordinates import column_left
 from pop2.loose_floors import FallingFloor, floor_hits_body, floor_hits_record
 from pop2.opponent_records import CORPSE_POSES, GuardRoomRecord, corpse_sequence
@@ -80,6 +81,82 @@ class TemplePlaytestTests(unittest.TestCase):
         harness = Harness(number, draw=True, **options)
         self.addCleanup(harness.close)
         return harness
+
+    def test_standing_jump_from_14_turns_the_guard_when_the_prince_lands_behind(self):
+        harness = self.harness(peaceful=False)
+        scene = harness.scene
+        scene.jump_to_room(13, row=2, x=330, facing=0)
+        scene.physics.select(scene.sequence_runtime, 3)
+        scene.action = scene.sequence_state.action
+        harness.tick(45)
+        self.assertEqual((scene.room_id, scene.terrain_motion.row), (12, 1))
+        guard = scene.combat.active_guards()[0]
+        self.assertEqual(guard.state.facing, 0, 'the landing behind him must make him turn left')
+        self.assertTrue(guard.sword_drawn)
+
+    def test_recoiling_guard_falls_into_the_wall_spikes(self):
+        harness = self.harness(peaceful=False)
+        scene = harness.scene
+        scene.jump_to_room(12, row=1, x=270, facing=1)
+        guard = scene.combat.active_guards()[0]
+        guard.state.target_x = guard.state.current_x = 340
+        guard.state.facing = 0
+        guard.sword_drawn = True
+        select_sequence(guard, 104)
+        guard.runtime.next_frame()
+        # Supply the combat recoil only; real FRAM/AFRM, floor alignment,
+        # falling and wall-spike activation/contact run normally.
+        with patch.object(scene.combat, 'choose_guard_action', return_value=None):
+            for _ in range(12):
+                harness.tick()
+                if not guard.alive:
+                    break
+        self.assertFalse(guard.alive, 'the guard landed beyond the spikes')
+        self.assertEqual(scene.level_map.tile(12, 6, 2).foreground & 255, 240)
+        self.assertIn(guard.state.source_sequence_id, (188, 189))
+        self.assertTrue(guard.terrain_motion.dead)
+
+    def test_a_nonfatal_hit_knocks_the_guard_onto_the_wall_spikes(self):
+        harness = self.harness(peaceful=False)
+        scene = harness.scene
+        scene.jump_to_room(12, row=1, x=290, facing=1)
+        guard = scene.combat.active_guards()[0]
+        scene.sword_drawn = scene.combat.player.sword_drawn = True
+        guard.state.target_x = guard.state.current_x = 360
+        guard.state.facing = 0
+        guard.sword_drawn = True
+        select_sequence(guard, 90)
+        guard.runtime.next_frame()
+        # Supply one successful strike, then retain the real AI, hit recovery,
+        # floor checks, falling and trap lifecycle (the user's follow-up clip).
+        scene.combat._hurt('guard', guard, scene.combat.player)
+        self.assertEqual(guard.state.source_sequence_id, 183)
+        self.assertTrue(guard.alive, 'the sword hit itself must be nonfatal')
+        fell = False
+        for _ in range(15):
+            harness.tick()
+            if guard.terrain_motion.falling and guard.alive:
+                fell = True
+                self.assertFalse(guard.sword_drawn, 'StartFall must put the sword away')
+            if not guard.alive:
+                break
+        self.assertTrue(fell)
+        self.assertFalse(guard.alive, 'the struck guard landed beside the spikes')
+        self.assertEqual(scene.level_map.tile(12, 6, 2).foreground & 255, 240)
+        self.assertIn(guard.state.source_sequence_id, (188, 189))
+        self.assertTrue(guard.terrain_motion.dead)
+
+    def test_running_prince_still_dies_on_these_wall_spikes_without_god_mode(self):
+        harness = self.harness()
+        scene = harness.scene
+        scene.jump_to_room(12, row=1, x=200, facing=1)
+        press(harness, 'R', True)
+        for _ in range(45):
+            harness.tick()
+            if not scene.combat.player.alive:
+                break
+        self.assertFalse(scene.combat.player.alive)
+        self.assertEqual(scene.level_map.tile(12, 6, 2).foreground & 255, 240)
 
     def catch_room14_floor(self, harness, x=270):
         # Last falling frame of the jump, before the vertical cut 14 -> 13.

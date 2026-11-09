@@ -1597,7 +1597,11 @@ class CombatEncounter:
         guard.room, guard.row = motion.room, motion.row
         guard.targetable = not motion.falling and not motion.dead
         for event in events:
-            if event.kind == "death":
+            if event.kind == "fall" and guard.state.level_kind == 2:
+                # StartFall 4:4ca8-4cb2 clears armed before spike checks.
+                # The Prince already consumes this event in the scene.
+                guard.sword_drawn = False
+            elif event.kind == "death":
                 guard.life = 0
                 if guard.skeleton is not None and not motion.falling:
                     guard.skeleton.collapse(guard, landing=True, encounter=self)

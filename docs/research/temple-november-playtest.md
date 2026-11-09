@@ -137,3 +137,70 @@ tests.test_ledge_controls tests.test_loose_floors`: **73 OK, no skips** (14.385s
 with `POP2_SHARED_DESKTOP=1`. Dependencies, Ruff F/E9, recovery catalogue and
 whitespace checks pass. No global/import suite, emulator or user's game window
 was operated. The recordings and extracted comparison frames remain local.
+
+## Guard landing reaction and wall-spike fall (2026-11-09)
+
+The next paired videos show a standing jump from room 14 landing behind the
+room-13 birdhead, then the guard being pushed off the right edge. Two missing
+inputs explain the differences:
+
+- HitFloor **6:048a-0492** sets movement/noise word **a5-0x4f9e** for an audible
+  Prince landing. AutoCtrl **4:053a** uses it to turn toward a landing behind
+  the guard. The port played the landing sound but omitted this signal.
+  Temple landings now set `callback_flag`; the existing close-behind draw and
+  selected-sheathing veto in the guard controller are preserved.
+- **Superseded diagnosis; see the follow-up below.** The initial patch passed
+  the AFRM sword extension into AlignFalling **4:4b54/4ba8**, based on its calls
+  to GetSwordLength **4:5e6e**. That made the supplied recoil hit the spikes
+  without widening trap ranges or changing falling velocity, but overlooked
+  the caller's earlier clearing of armed. The follow-up removes this adjustment.
+
+Both initial integrations were restricted to environment 2. Evidence is static original
+CODE reading, the supplied recordings and real FRAM/AFRM scene regressions;
+no new native CPU probe or full-frame equivalence is claimed. The tests reject
+both previous behaviors. The guard recoil is supplied (SEQS 104), with only
+his next AI decision suppressed while the actual fall and spikes run.
+
+The user also reported the Prince landing beside the spikes, then confirmed
+that he died on retry. A normal running-Prince regression passes with God Mode
+off; no change to his invulnerability policy was needed. The fixed turn and
+impalement were inspected in the local `rendered/temple-guard-turn-spikes/fixed.png`.
+
+Focused check: `tests.test_temple_playtest tests.test_wall_spikes
+tests.test_enemy_ai tests.test_guard_deaths`: **143 run, OK, 1 skipped** (12.570s).
+The optional original-profile comparison requires `POP2_RESEARCH_DIR`, which
+was unset. Dependencies, Ruff F/E9, recovery catalogue and whitespace checks
+pass. No global/import suite or user's game/emulator window was operated.
+
+## Follow-up: a sword hit still sent the guard past the spikes (2026-11-09)
+
+The user's post-update recording exposed a gap in the supplied-recoil test:
+it covered SEQS 104 with subsequent AI suppressed, while a nonfatal sword hit
+uses SEQS 183. Supplying that hit at room 13's right edge, then running normal
+AI and physics, reproduced the surviving guard beside the spikes.
+
+StartFall **4:4ca8-4cb2** clears armed **a5-0x503c** before AlignFalling
+**4:4d90**. GetSwordLength **4:5e74-5e7a** consequently returns zero here.
+The previous sword-extent adjustment omitted that ordering and compensated
+for the symptom in one recoil case; it has been removed. The actual missing
+input was the guard's armed flag: the Prince's scene already clears it on a
+fall event, but the guard's terrain-event consumer did not. Temple guards now
+clear it too, before environmental spike checks. CheckSpikes **5:3c42** then
+uses its existing unarmed approach threshold, and CheckSpikeHit impales the
+guard normally. Landing retains its existing rearming behavior. Other
+environments' guard event handling is unchanged.
+
+The new regression supplies one nonfatal `_hurt` endpoint (not the player's
+full input/strike collision), requires SEQS 183 and an unarmed live fall, and
+continues with normal AI through death SEQS 188/189 and spike foreground 240.
+It fails on the prior update. The earlier recoil, standing-jump turn, normal
+running-Prince death, slab/grip and related terrain/trap regressions pass.
+Evidence is the supplied recording, static original CODE ordering and the
+real hidden scene; no new native CPU probe or full-frame equivalence claim.
+
+Focused verification: `tests.test_temple_playtest tests.test_wall_spikes
+tests.test_guard_deaths tests.test_terrain`: **197 OK, no skips** (38.631s),
+with `POP2_SHARED_DESKTOP=1`. Dependencies, Ruff F/E9, recovery catalogue and
+whitespace checks pass. No global/import suite or user's game/emulator was
+operated. Next bounded check is any further playtest report with its actual
+combat transition; this fix does not claim complete temple parity.

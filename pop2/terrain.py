@@ -570,6 +570,7 @@ class LevelMap:
     def align_fall(self, room, row, state, record):
         # CODE:4 4b16 runs after advancing the floor row, before the fall pose.
         # The source keeps the old supporting column until LoadFrame (4:2a72).
+        # StartFall 4:4ca8-4cb2 clears armed first, so GetSwordLength is zero.
         direction = 1 if state.facing else -1
         contact = floor_contact_x(state.target_x, state.facing, record)
         column = character_column(contact)
@@ -1354,6 +1355,7 @@ class RooftopPhysics:
         state = runtime.state
         if motion.dead:
             return ()
+
         if protected:
             # Hanging poses have no floor flag. Late climb poses do, and a
             # disappearing slab must interrupt them before their idle link.
@@ -1724,6 +1726,10 @@ class RooftopPhysics:
                 # HitFloor 6:039c/03fe/0436 distinguishes safe, hurt and fatal impacts.
                 state.sound_events.append(7 if fatal else 13 if velocity >= 50
                                           else 61 if state.actor_type == 4 else 296)
+                if state.actor_type == 0 and state.level_kind == 2:
+                    # HitFloor 6:048a-0492: an audible Prince landing sets
+                    # the same movement/noise flag AutoCtrl 4:053a reads.
+                    state.callback_flag = 1
                 events.append(TerrainEvent("death" if motion.dead else "land",
                                            int(not invulnerable and not fatal and 50 <= velocity < 63)))
                 break
