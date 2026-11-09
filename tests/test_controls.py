@@ -1,5 +1,6 @@
 """Remappable keys, controllers and the Controls page (port-only feature)."""
 
+import itertools
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -855,6 +856,44 @@ class PadArtTests(unittest.TestCase):
         for name, mask in masks.items():
             with self.subTest(name=name):
                 self.assertTrue((mask == mask[:, ::-1]).all())
+
+    def test_dualsense_dark_centre_edge_steps_evenly(self):
+        # Down each grip the ivory meets the dark centre in clean pixel
+        # runs: one column at a time, never more than three rows to a step
+        # below the touchpad, and only even steps of two or three rows
+        # (alternating at most) once it has turned down the grip.
+        columns = controls_art.plate_edge()
+        runs = [len(list(group)) for _column, group in itertools.groupby(columns)]
+        self.assertEqual(set(np.diff(columns)), {0, -1})
+        self.assertTrue(all(1 <= run <= 3 for run in runs[1:-1]))
+        grip = runs[runs.index(3, 4):-1]  # from the first three-row step
+        self.assertTrue(set(grip) <= {2, 3})
+        self.assertEqual(grip[-11:], [3] * 10 + [2])  # then it turns into the grip's end
+        body = controls_art.body_mask('playstation')
+        plate = controls_art.plate_mask(body)
+        for y, x in enumerate(columns, controls_art.PLATE_TOP + controls_art.ABOVE):
+            if body[y, x - 1]:
+                with self.subTest(row=y):
+                    self.assertEqual(int(np.argmax(plate[y])), x)
+
+    def test_shadowed_right_rim_has_no_pale_pixels(self):
+        # Where the right-hand outline steps outwards, the pixel inside it
+        # keeps the shadow's shade rather than catching the light.
+        for style in ('playstation', 'xbox'):
+            body = controls_art.body_mask(controls_art.layout_name(style))
+            rim = controls_art.edge(body)
+            inner = body & ~rim
+            art = controls_art.pad_art(style)
+            pixels = np.array(art.image)[:, :, :3]
+            levels = np.full(body.shape, -1)
+            for level, color in enumerate(controls_art.SHELL):
+                levels[(pixels == color).all(axis=2)] = level
+            levels[art.controls] = -1  # the shell only, not the shoulders or buttons on it
+            for y, x in np.argwhere(inner[:, 1:-1] & rim[:, 2:] & inner[:, :-2]):
+                x += 1
+                if x > 120 and levels[y, x] > 0 and levels[y, x - 1] > 0:
+                    with self.subTest(style=style, x=x, y=y):
+                        self.assertLessEqual(levels[y, x], levels[y, x - 1])
 
     def test_dualsense_top_bows_up_towards_the_middle(self):
         # Highest at the centre, then a pixel lower at a time towards the

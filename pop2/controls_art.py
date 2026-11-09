@@ -233,9 +233,13 @@ SHAPES = {
 SHELL_HALF = SHAPES['xbox'].shell
 # The DualSense's dark centre, beyond the shell's own edge (the shell trims
 # it): its outer edge from under the touchpad down the inside of the grip,
-# measured off a photograph of the real pad.
-PLATE_HALF = ((120, 44), (77, 44), (75, 50), (69, 61), (60, 73), (52, 85), (46, 97), (41, 108),
-              (36, 119), (31, 131), (27, 143), (23, 154), (20, 172), (120, 172))
+# measured off a photograph of the real pad and laid down as pixel runs, as
+# a pixel artist draws a curve. From column 76 at row 44 each run (of rows)
+# is one column further out: straight down beside the touchpad, steepest
+# round the stick, then settling into even steps of two and three rows down
+# the grip; the last column carries on to the shell's bottom.
+PLATE_TOP, PLATE_EDGE_START = 44, 76
+PLATE_EDGE_RUNS = (7, 2, 2, 2, *(1, 1, 1, 2) * 3, *(1, 2) * 3, *(2,) * 15, *(3, 2) * 3, *(3,) * 10, 2)
 # The touchpad's left half, from above its top centre down to its bottom
 # centre (the shell's own top edge trims it): nearly straight sides leaning
 # out a little, rounding off into a level bottom.
@@ -342,9 +346,33 @@ def shoulder_masks(body, layout='xbox'):
     return triggers & ~bumpers & ~body, bumpers
 
 
+def plate_edge():
+    """The dark centre's left edge, a column for each grid row from PLATE_TOP
+    down to the pad's bottom."""
+    columns = [PLATE_EDGE_START - step for step, rows in enumerate(PLATE_EDGE_RUNS) for _row in range(rows)]
+    last = PLATE_EDGE_START - len(PLATE_EDGE_RUNS)
+    return columns + [last] * (PAD_HEIGHT - ABOVE - PLATE_TOP - len(columns))
+
+
 def plate_mask(body):
-    half = spline(PLATE_HALF[1:-2], steps=6)
-    return symmetric([PLATE_HALF[0], *half, *PLATE_HALF[-2:]], exact=True) & body
+    mask = np.zeros_like(body)
+    for y, x in enumerate(plate_edge(), PLATE_TOP + ABOVE):
+        mask[y, x:241 - x] = True
+    return mask & body
+
+
+def shade_right_rim(levels, mask):
+    """Where a right-hand outline steps outwards, the pixel just inside it
+    faces up into the light and comes out pale; on that shadowed side it
+    takes its left neighbour's shade instead."""
+    rim = edge(mask)
+    inner = mask & ~rim
+    levels = levels.copy()
+    for y, x in np.argwhere(inner[:, 1:-1] & rim[:, 2:] & inner[:, :-2]):
+        x += 1
+        if x > mask.shape[1] // 2:
+            levels[y, x] = min(levels[y, x], levels[y, x - 1])
+    return levels
 
 
 def touchpad_mask():
@@ -692,8 +720,9 @@ def pad_art(style='xbox'):
     body = body_mask(layout)
     triggers, bumpers = shoulder_masks(body, layout)
     paint(image, lit_levels(triggers, rim=4, smooth=1.6, bias=.08), TRIGGER)
-    paint(image, lit_levels(body, rim=8, dome=0.1, span=30, slope=0.04,
-                            thresholds=(0.05, 0.27, 0.5, 0.75, 0.92), smooth=3.0), SHELL)
+    shell = lit_levels(body, rim=8, dome=0.1, span=30, slope=0.04,
+                       thresholds=(0.05, 0.27, 0.5, 0.75, 0.92), smooth=3.0)
+    paint(image, shade_right_rim(shell, body), SHELL)
     if layout == 'playstation':
         paint(image, lit_levels(plate_mask(body), rim=5, dome=0.1, span=20, slope=0.1, smooth=2.0), PLATE)
         speaker(image)
