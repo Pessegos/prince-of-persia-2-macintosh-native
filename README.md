@@ -26,6 +26,7 @@ I'm trying to stay as close to the original as possible, while still making some
   - [Cutscene Pausing](#cutscene-pausing)
   - [Overlapping Sound Effects](#overlapping-sound-effects)
   - [Lava Overhaul](#lava-overhaul)
+  - [Cave Ambience](#cave-ambience)
   - [Cavern Artwork](#cavern-artwork)
   - [Stone Gates](#stone-gates)
   - [Gate Sounds](#gate-sounds)
@@ -39,9 +40,9 @@ I'm trying to stay as close to the original as possible, while still making some
 
 ## Gameplay Status
 
-Levels 1–9 are playable from start to finish, including the horse cutscene leading into Level 10.
+Levels 1-9 are playable from start to finish, including the horse cutscene leading into Level 10.
 
-Levels 10–13 are now in the game too. They can already be explored, with some of their mechanics working, but there's still quite a bit left to do before they're fully playable.
+Levels 10-13 are now in the game too. They can already be explored, with some of their mechanics working, but there's still quite a bit left to do before they're fully playable.
 
 <br/>
 
@@ -176,9 +177,27 @@ The animation also required some careful masking to prevent overlapping, and I f
 
 <br/>
 
+## Cave Ambience
+
+I wanted the caverns to feel a little more alive, so I added optional visual ambience throughout levels 3-5. Torches and lava cast a subtle, shifting glow with a little heat haze, while water drips from stalactites and ash and dust float through the air.
+
+The Prince also kicks up dust when running or landing, along with gates, doors and falling floors. I tried to keep everything subtle and close to the game's original palette.
+
+The effects are off by default, but can be enabled through the F1 menu or with Alt+A. The setting is saved between sessions.
+
+<p align="center">
+  <img src="docs/github readme/cave-ambience-preview.gif" alt="Cave ambience off for two seconds, then on for four seconds, as droplets land on the cavern floor and in lava" width="700">
+</p>
+
+<p align="center">
+  <img src="docs/github readme/cave-ambience-action.gif" alt="Cave ambience off and on as the Level 4 entrance closes and the Prince runs a short distance to the left" width="700">
+</p>
+
+<br/>
+
 ## Cavern Artwork
 
-Cavern artwork has been touched up across levels 3–5 to soften harsh column shadows and blend abrupt joins between walls and floors. This also includes the floor edges around column bases and dart traps, and the rectangular outlines around cavern doorways.
+Cavern artwork has been touched up across levels 3-5 to soften harsh column shadows and blend abrupt joins between walls and floors. This also includes the floor edges around column bases and dart traps, and the rectangular outlines around cavern doorways.
 
 Here are a few examples:
 
