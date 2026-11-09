@@ -24,8 +24,14 @@ with a rolled rim round a shallow dish, a crimson D-pad lit with the palace
 tapestries' orange, dark face buttons with ivory letters, ivory View, Menu
 and Share buttons and a tan guide coin (drawn pixel by pixel after the
 user's sketch) quartered by the Xbox X. Sticks and D-pad sit exactly centred
-in their dishes. The PlayStation and Nintendo styles reuse that body with
-their own buttons for now. The keyboard is a full 1990s office keyboard
+in their dishes. A PlayStation pad is drawn as a DualSense in the same
+materials: its own outline with long grips, a dark mauve centre running
+round the sticks and down the inside of each grip, a tall ivory touchpad
+with the frieze-blue light bar at its sides, a speaker grille, four
+separate crimson arrow keys, dark face buttons with the cross, circle,
+square and triangle in their own colours, ivory Create, Options and Mic
+buttons and a tan PS coin with the P-on-S mark raised like the Xbox X. The
+Nintendo style still reuses the Xbox body with its own buttons. The keyboard is a full 1990s office keyboard
 (keypad, lock lights, and on the Windows keys the Windows 98 flag without
 its colours: a frame leaning right round four clear panes, with a trail
 of single pixels that thins out and fades into the key) in a

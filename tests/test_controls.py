@@ -558,9 +558,9 @@ class PadArtTests(unittest.TestCase):
         return ((px - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2) ** .5
 
     def test_callout_lines_neither_cross_nor_touch_another_button(self):
-        cx, cy, reach = controls_art.FACE_FRAME
-        cy += controls_art.ABOVE
         for style in self.STYLES:
+            cx, cy, reach = controls_art.FACE_FRAMES[controls_art.layout_name(style)]
+            cy += controls_art.ABOVE
             art = controls_art.pad_art(style)
             lines = {name: self.polyline(side, line, path)
                      for name, (side, _first, line, _buttons, path) in art.groups.items()}
@@ -599,9 +599,9 @@ class PadArtTests(unittest.TestCase):
                         self.assertTrue(x0 == x1 or y0 == y1)
 
     def test_face_frame_keeps_clear_of_the_buttons_round_it(self):
-        cx, cy, reach = controls_art.FACE_FRAME
-        cy += controls_art.ABOVE
         for style in self.STYLES:
+            cx, cy, reach = controls_art.FACE_FRAMES[controls_art.layout_name(style)]
+            cy += controls_art.ABOVE
             for button, centre in controls_art.pad_art(style).points.items():
                 if button not in self.ROUND:
                     continue
@@ -787,11 +787,77 @@ class PadArtTests(unittest.TestCase):
             self.assertIn(row[row.index('9'):].rstrip('.'), ('9' * width, '9' + pane + '9' + pane + '9'))
 
     def test_shell_top_is_one_unbroken_line(self):
-        body = controls_art.body_mask()
-        top = np.nonzero(body.any(axis=1))[0][0]
-        columns = np.nonzero(body[top])[0]
-        self.assertEqual(len(columns), columns[-1] - columns[0] + 1)
-        self.assertEqual(top, controls_art.SHELL_HALF[0][1] + controls_art.ABOVE)
+        for layout, shape in controls_art.SHAPES.items():
+            body = controls_art.body_mask(layout)
+            top = np.nonzero(body.any(axis=1))[0][0]
+            columns = np.nonzero(body[top])[0]
+            with self.subTest(layout=layout):
+                self.assertEqual(len(columns), columns[-1] - columns[0] + 1)
+                self.assertEqual(top, shape.shell[0][1] + controls_art.ABOVE)
+
+    def test_playstation_pads_draw_a_dualsense(self):
+        # Not the Xbox shell with a touchpad stuck on: its own outline, a
+        # dark centre round the sticks, a touchpad lit blue at its sides and
+        # a D-pad of four separate keys.
+        self.assertFalse((controls_art.body_mask('playstation') == controls_art.body_mask('xbox')).all())
+        art = controls_art.pad_art('playstation')
+        pixels = np.array(art.image)[:, :, :3]
+
+        def colours(ramp):
+            found = np.zeros(pixels.shape[:2], bool)
+            for color in ramp:
+                found |= (pixels == color).all(axis=2)
+            return found
+
+        plate = colours(controls_art.PLATE[1:])
+        (lx, ly), (rx, _ry) = art.points['leftstick'], art.points['rightstick']
+        between = plate[ly - 4:ly + 5, lx + controls_art.STICK_WELL + 2:rx - controls_art.STICK_WELL - 2]
+        self.assertGreater(between.mean(), .5)
+        pad = controls_art.touchpad_mask()
+        self.assertTrue(art.controls[pad].all())
+        blue = colours(controls_art.FRIEZE)
+        sides = blue[pad.any(axis=1)]
+        self.assertTrue(sides.any() and not blue[pad].any())
+        cx, cy = art.points['dpad']
+        keys = colours(controls_art.TAPESTRY)[cy - 22:cy + 23, cx - 22:cx + 23]
+        self.assertEqual(self.pieces(keys), 4)
+        self.assertFalse(keys[22, 22])  # the centre between them is clear
+
+    @staticmethod
+    def pieces(mask):
+        """4-connected pieces of a mask."""
+        seen = np.zeros_like(mask)
+        count = 0
+        for y, x in np.argwhere(mask):
+            if seen[y, x]:
+                continue
+            count += 1
+            stack = [(y, x)]
+            while stack:
+                y, x = stack.pop()
+                if 0 <= y < mask.shape[0] and 0 <= x < mask.shape[1] and mask[y, x] and not seen[y, x]:
+                    seen[y, x] = True
+                    stack += [(y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)]
+        return count
+
+    def test_playstation_symbols_sit_centred_on_their_buttons(self):
+        for radius, image_size in ((controls_art.FACE_RADIUS, 21), (6, 13)):
+            for button in 'abxy':
+                image = Image.new('RGBA', (image_size, image_size), (0, 0, 0, 0))
+                centre = (image_size // 2, image_size // 2)
+                controls_art.face_button(image, centre, button, 'playstation', radius)
+                pixels = np.array(image)
+                shape = pixels[:, :, 3] > 0
+                dome = np.zeros(shape.shape, bool)
+                for color in controls_art.WELL:
+                    dome |= (pixels[:, :, :3] == color).all(axis=2)
+                ink = shape & ~dome
+                rows, columns = np.nonzero(shape)
+                ink_rows, ink_columns = np.nonzero(ink)
+                with self.subTest(button=button, radius=radius):
+                    self.assertTrue(ink.any())
+                    self.assertEqual(rows.min() + rows.max(), ink_rows.min() + ink_rows.max())
+                    self.assertEqual(columns.min() + columns.max(), ink_columns.min() + ink_columns.max())
 
     def test_stick_dish_edge_is_a_whole_circle(self):
         levels = controls_art.stick_cap()
