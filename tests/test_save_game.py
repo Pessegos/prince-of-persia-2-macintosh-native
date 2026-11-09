@@ -833,6 +833,32 @@ class SaveSceneTests(unittest.TestCase):
         self.assertEqual(browser.entry.name, 'Caverns / second try')
         self.assertEqual(browser.entry.path.parent, self.path.parent)
 
+    def test_backspace_edits_new_and_existing_save_names_through_keyboard_events(self):
+        scene = self.scene
+        scene.apply_game_action('save')
+        browser = scene.game_menu.save_browser
+        browser.edit_name('create')
+        browser.draft = 'Journey'
+        browser.caret = browser.anchor = len(browser.draft)
+        event = SimpleNamespace(keysym='BackSpace', state=0, char='\b')
+        self.assertEqual(scene.dev_key_press(event), 'break')
+        scene.dev_key_release(event)
+        self.assertEqual(browser.draft, 'Journe')
+
+        browser.key('Escape')
+        scene.save_game_to(self.path, 'Journey')
+        scene.apply_game_action('save')
+        browser = scene.game_menu.save_browser
+        browser.edit_name('rename')
+        self.assertEqual(scene.dev_key_press(event), 'break')
+        scene.dev_key_release(event)
+        self.assertEqual(browser.draft, '')  # Rename starts with the whole name selected.
+        browser.draft = 'Journey'
+        browser.caret = browser.anchor = len(browser.draft)
+        self.assertEqual(scene.dev_key_press(event), 'break')
+        scene.dev_key_release(event)
+        self.assertEqual(browser.draft, 'Journe')
+
     def test_editor_handles_empty_long_and_non_macintosh_characters_without_new_widgets(self):
         scene = self.scene
         scene.apply_game_action('save')

@@ -249,6 +249,8 @@ class SaveBrowser:
             if not backwards:
                 self.anchor = self.caret
         elif key in ('BackSpace', 'Delete') or char:
+            if key in ('BackSpace', 'Delete'):
+                char = ''  # Tk supplies control characters for these keys on Windows.
             if start == end and not char:
                 start, end = (max(0, start - 1), end) if key == 'BackSpace' else (start, min(len(self.draft), end + 1))
             char = ''.join(c for c in char if c.isprintable())[:48 - len(self.draft) + end - start]
