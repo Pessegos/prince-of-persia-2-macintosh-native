@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -22,62 +21,41 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(len(CHAPTER_KEYS), len(CHAPTERS))
         self.assertEqual(len({chapter.program for chapter in CHAPTERS}), 7)
 
-    def test_collection_persists_and_preserves_other_instance_unlocks(self):
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / 'collection.json'
-            first, second = CutsceneCollection.load(path), CutsceneCollection.load(path)
-            self.assertEqual(first.seen, set(OPENING_KEYS))
-            first.unlock('voyage', 'unknown')
-            second.unlock('discovery', 'carpet')
-            self.assertEqual(CutsceneCollection.load(path).seen, OPENING_KEYS | {'voyage', 'discovery', 'carpet'})
-            self.assertEqual(json.loads(path.read_text())['version'], 1)
+    def test_collections_keep_independent_chronological_progress(self):
+        first, second = CutsceneCollection(), CutsceneCollection()
+        first.unlock('voyage', 'unknown')
+        second.unlock('discovery', 'carpet')
+        self.assertEqual(first.seen, OPENING_KEYS | {'voyage'})
+        self.assertEqual(second.seen, set(OPENING_KEYS))
+        second.unlock('voyage', 'discovery', 'carpet')
+        self.assertEqual(second.seen, OPENING_KEYS | {'voyage', 'discovery', 'carpet'})
+        self.assertEqual(first.seen, OPENING_KEYS | {'voyage'})
 
-    def test_isolated_horse_record_is_locked_again_without_rewriting_the_profile(self):
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / 'collection.json'
-            original = json.dumps({'version': 1, 'seen': sorted(OPENING_KEYS | {'horse'})})
-            path.write_text(original)
-            collection = CutsceneCollection.load(path)
-            self.assertEqual(collection.seen, OPENING_KEYS)
-            self.assertEqual(path.read_text(), original)
-            collection.unlock('horse')
-            self.assertNotIn('horse', collection.seen)
-            collection.unlock('voyage', 'discovery', 'carpet', 'vision')
-            collection.unlock('horse')
-            self.assertIn('horse', collection.seen)
-            self.assertEqual(CutsceneCollection.load(path).seen, OPENING_KEYS | {
-                'voyage', 'discovery', 'carpet', 'vision', 'horse'})
-            keys = [chapter.key for chapter in CHAPTERS]
-            self.assertLess(keys.index('vision'), keys.index('horse'))
-            self.assertLess(keys.index('horse'), keys.index('tower'))
-
-    def test_bad_profile_and_write_error_do_not_interrupt_the_game(self):
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / 'collection.json'
-            for data in ('[]', '{bad', '{"version":1,"seen":[4]}',
-                         '{"version":8,"seen":["tower"]}'):
-                path.write_text(data)
-                self.assertEqual(CutsceneCollection.load(path).seen, set(OPENING_KEYS))
-            collection = CutsceneCollection(path)
-            with patch('pop2.cutscenes.tempfile.NamedTemporaryFile', side_effect=OSError):
-                collection.unlock('voyage')
-            self.assertIn('voyage', collection.seen)
-            self.assertTrue(collection.error)
+    def test_isolated_horse_record_is_locked_again(self):
+        collection = CutsceneCollection.from_saved(OPENING_KEYS | {'horse'})
+        self.assertEqual(collection.seen, OPENING_KEYS)
+        collection.unlock('horse')
+        self.assertNotIn('horse', collection.seen)
+        collection.unlock('voyage', 'discovery', 'carpet', 'vision', 'horse')
+        self.assertEqual(collection.seen, OPENING_KEYS | {
+            'voyage', 'discovery', 'carpet', 'vision', 'horse'})
+        keys = [chapter.key for chapter in CHAPTERS]
+        self.assertLess(keys.index('vision'), keys.index('horse'))
+        self.assertLess(keys.index('horse'), keys.index('tower'))
 
     def test_legacy_saves_admit_only_preceding_mandatory_chapters(self):
-        with TemporaryDirectory() as directory:
-            collection = CutsceneCollection(Path(directory) / 'collection.json')
-            game = SimpleNamespace(level=SimpleNamespace(number=8),
-                                   caverns=SimpleNamespace(throne_seen=False, throne_done=False))
-            collection.admit_saved_progress(game)
-            self.assertEqual(collection.seen, OPENING_KEYS | {'voyage', 'discovery', 'carpet'})
-            game.caverns.throne_seen = True
-            collection.admit_saved_progress(game)
-            self.assertIn('vision', collection.seen)
-            game.level.number = 13
-            collection.admit_saved_progress(game)
-            self.assertIn('horse', collection.seen)
-            self.assertNotIn('tower', collection.seen)
+        collection = CutsceneCollection()
+        game = SimpleNamespace(level=SimpleNamespace(number=8),
+                               caverns=SimpleNamespace(throne_seen=False, throne_done=False))
+        collection.admit_saved_progress(game)
+        self.assertEqual(collection.seen, OPENING_KEYS | {'voyage', 'discovery', 'carpet'})
+        game.caverns.throne_seen = True
+        collection.admit_saved_progress(game)
+        self.assertIn('vision', collection.seen)
+        game.level.number = 13
+        collection.admit_saved_progress(game)
+        self.assertIn('horse', collection.seen)
+        self.assertNotIn('tower', collection.seen)
 
 
 class CaptionFont:
@@ -102,7 +80,7 @@ class GalleryTests(unittest.TestCase):
         self.addCleanup(available.stop)
 
     def gallery(self):
-        return CutsceneGallery(CutsceneCollection(Path('unused-test-profile.json'), seen={'opening'}),
+        return CutsceneGallery(CutsceneCollection(seen={'opening'}),
                                Mock(return_value=Image.new('RGB', (510, 384), '#773311')))
 
     def test_horizontal_navigation_and_explicit_activation(self):
@@ -171,8 +149,7 @@ class GalleryTests(unittest.TestCase):
         gallery = self.gallery()
         seen = gallery.collection.seen.copy()
         gallery.developer = True
-        with patch('pop2.cutscene_gallery.chapter_available', return_value=True), \
-                patch.object(gallery.collection, 'save', side_effect=AssertionError('Developer view saved progress')):
+        with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
             font = CaptionFont()
             gallery.draw(Image.new('RGBA', (1024, 768)), font)
             self.assertIn('Cutscene Viewer - Dev Tools', font.values)
@@ -415,7 +392,7 @@ class ViewerSceneTests(unittest.TestCase):
         RooftopSceneTests.setUp(self)
         self.directory = TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.scene.cutscene_collection = CutsceneCollection(Path(self.directory.name) / 'cutscenes.json')
+        self.scene.cutscene_collection = CutsceneCollection()
 
     def snapshot(self):
         from pop2.save_game import capture_snapshot
@@ -470,8 +447,7 @@ class ViewerSceneTests(unittest.TestCase):
     def test_developer_replay_leaves_profile_world_and_normal_shortcut_locks_unchanged(self):
         scene = self.scene
         collection = scene.cutscene_collection
-        collection.save()
-        original_file, seen = collection.path.read_bytes(), collection.seen.copy()
+        seen = collection.seen.copy()
         before = self.snapshot()
         scene.open_dev_mode()
         scene.dev_menu.focus = 8
@@ -485,7 +461,6 @@ class ViewerSceneTests(unittest.TestCase):
         scene.advance_cutscene_replay()
         self.assertIsNone(scene.cutscene_replay)
         self.assertEqual(collection.seen, seen)
-        self.assertEqual(collection.path.read_bytes(), original_file)
         self.assertTrue(scene.cutscene_campaign_active)
         scene.close_game_menu()
         event = SimpleNamespace(keysym='c', state=0x20000)
@@ -498,14 +473,6 @@ class ViewerSceneTests(unittest.TestCase):
         self.assertIsNone(scene.cutscene_replay)
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(collection.seen, seen)
-        self.assertEqual(collection.path.read_bytes(), original_file)
-
-    def test_developer_open_does_not_write_a_collection_with_a_save_error(self):
-        scene = self.scene
-        scene.cutscene_collection.error = 'Could not remember unlocked chapters.'
-        with patch.object(scene.cutscene_collection, 'save') as save:
-            scene.open_cutscene_viewer(developer=True)
-        save.assert_not_called()
 
     def test_alt_c_opens_the_same_viewer_and_is_listed_in_f1(self):
         scene = self.scene
@@ -1076,6 +1043,26 @@ class ViewerSceneTests(unittest.TestCase):
         scene.load_game_from(path)
         self.assertEqual(scene.cutscene_collection.seen, OPENING_KEYS | {'voyage', 'discovery', 'carpet'})
 
+    def test_each_save_restores_its_own_cutscenes_and_new_game_starts_fresh(self):
+        from pop2.save_game import read_document
+
+        scene = self.scene
+        early = Path(self.directory.name) / 'early.pop2save'
+        advanced = Path(self.directory.name) / 'advanced.pop2save'
+        scene.mark_cutscene_seen('voyage')
+        scene.save_game_to(early)
+        scene.mark_cutscene_seen('discovery')
+        scene.save_game_to(advanced)
+        self.assertEqual(read_document(early)['cutscenes'], sorted(OPENING_KEYS | {'voyage'}))
+        self.assertEqual(read_document(advanced)['cutscenes'],
+                         sorted(OPENING_KEYS | {'voyage', 'discovery'}))
+        scene.new_game()
+        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
+        scene.load_game_from(advanced)
+        self.assertEqual(scene.cutscene_collection.seen, OPENING_KEYS | {'voyage', 'discovery'})
+        scene.load_game_from(early)
+        self.assertEqual(scene.cutscene_collection.seen, OPENING_KEYS | {'voyage'})
+
     def test_viewer_over_a_copy_challenge_pauses_on_focus_loss_and_resets_its_clock_on_return(self):
         scene = self.scene
         from pop2.copy_protection import CopyProtection
@@ -1102,10 +1089,11 @@ class ViewerSceneTests(unittest.TestCase):
         self.assertNotIn('horse', scene.cutscene_collection.seen)
         scene.new_game()
         self.assertTrue(scene.cutscene_campaign_active)
+        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
         scene.start_temple_ride(lambda: None)
-        self.assertIn('horse', scene.cutscene_collection.seen)
+        self.assertNotIn('horse', scene.cutscene_collection.seen)
 
-    def test_natural_story_starts_unlock_each_chapter_and_new_game_keeps_the_collection(self):
+    def test_natural_story_starts_unlock_each_chapter_and_new_game_resets_the_collection(self):
         scene = self.scene
         for start, expected in ((scene.start_ending, 'voyage'), (scene.start_discovery, 'discovery'),
                                 (scene.start_carpet, 'carpet'), (lambda: scene.start_vision(lambda: None), 'vision'),
@@ -1114,8 +1102,7 @@ class ViewerSceneTests(unittest.TestCase):
             start()
             self.assertIn(expected, scene.cutscene_collection.seen)
         scene.new_game()
-        self.assertEqual(scene.cutscene_collection.seen, CHAPTER_KEYS)
-        self.assertEqual(CutsceneCollection.load(scene.cutscene_collection.path).seen, CHAPTER_KEYS)
+        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
 
 
 if __name__ == '__main__':

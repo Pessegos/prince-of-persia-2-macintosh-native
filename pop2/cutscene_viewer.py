@@ -136,7 +136,7 @@ class ChapterPreviews(PlaybackPreviews):
 
 class CutsceneControls:
     def init_cutscene_viewer(self):
-        self.cutscene_collection = CutsceneCollection.load()
+        self.cutscene_collection = CutsceneCollection()
         self.cutscene_campaign_active = True
         self.cutscene_replay = None
         self.cutscene_after_id = None
@@ -147,7 +147,7 @@ class CutsceneControls:
             return
         collection = getattr(self, 'cutscene_collection', None)
         if collection is None:
-            collection = self.cutscene_collection = CutsceneCollection.load()
+            collection = self.cutscene_collection = CutsceneCollection()
         collection.unlock(key)
 
     def mark_story_scene_seen(self, program_name):
@@ -164,8 +164,6 @@ class CutsceneControls:
         self.cancel_cutscene_gallery_tick()
         self.game_menu.show_page('cutscenes')
         self.game_menu.return_to_menu = True
-        if not developer and self.cutscene_collection.error:
-            self.cutscene_collection.save()
         gallery = self.game_menu.cutscene_viewer = CutsceneGallery(
             self.cutscene_collection, self.cutscene_preview, developer=developer)
         self.pause_resume_keys.update(self.window_keys_down)

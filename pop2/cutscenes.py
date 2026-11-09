@@ -1,11 +1,9 @@
-"""Player-facing story chapters and a collection independent of campaign saves."""
+"""Player-facing story chapters and progress stored with campaign saves."""
 
 from dataclasses import dataclass, field
-import json
 from pathlib import Path
-import tempfile
 
-from pop2.paths import ASSET_DIR, USER_DATA_DIR
+from pop2.paths import ASSET_DIR
 
 
 @dataclass(frozen=True)
@@ -33,8 +31,6 @@ CHAPTERS = (
 )
 OPENING_KEYS = frozenset(('opening', 'opening_titles', 'opening_story'))
 CHAPTER_KEYS = frozenset(chapter.key for chapter in CHAPTERS)
-COLLECTION_PATH = (USER_DATA_DIR if USER_DATA_DIR is not None else
-                   Path.home() / 'Saved Games' / 'PoP2 Macintosh Native') / 'cutscenes.json'
 
 
 def ordered_seen(keys):
@@ -51,56 +47,15 @@ def ordered_seen(keys):
 
 @dataclass
 class CutsceneCollection:
-    path: Path = COLLECTION_PATH
     seen: set = field(default_factory=lambda: set(OPENING_KEYS))
     error: str = ''
 
     @classmethod
-    def load(cls, path=COLLECTION_PATH):
-        collection = cls(Path(path))
-        try:
-            if collection.path.stat().st_size > 16384:
-                return collection
-            data = json.loads(collection.path.read_text(encoding='utf-8'))
-            if (isinstance(data, dict) and data.get('version') == 1
-                    and isinstance(data.get('seen'), list)
-                    and all(isinstance(key, str) for key in data['seen'])):
-                collection.seen = ordered_seen(CHAPTER_KEYS.intersection(data['seen']))
-        except (OSError, ValueError):
-            pass
-        return collection
+    def from_saved(cls, keys):
+        return cls(ordered_seen(keys))
 
     def unlock(self, *keys):
-        # A second game instance may have recorded preceding chapters since
-        # this one opened. Only merge valid, ordered progress from disk.
-        self.seen = ordered_seen(self.seen | self.load(self.path).seen)
-        admitted = ordered_seen(self.seen | CHAPTER_KEYS.intersection(keys))
-        if admitted == self.seen:
-            return
-        self.seen = admitted
-        self.save()
-
-    def save(self):
-        temporary = None
-        try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            # Preserve chapters another instance may have recorded meanwhile.
-            self.seen = ordered_seen(self.seen | self.load(self.path).seen)
-            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=self.path.parent,
-                                             prefix='.cutscenes-', suffix='.tmp', delete=False) as stream:
-                temporary = Path(stream.name)
-                json.dump({'version': 1, 'seen': sorted(self.seen)}, stream)
-                stream.write('\n')
-            temporary.replace(self.path)
-            self.error = ''
-        except OSError:
-            self.error = 'Could not remember unlocked chapters.'
-        finally:
-            if temporary is not None:
-                try:
-                    temporary.unlink(missing_ok=True)
-                except OSError:
-                    pass
+        self.seen = ordered_seen(self.seen | CHAPTER_KEYS.intersection(keys))
 
     def admit_saved_progress(self, game):
         """Earlier mandatory scenes in an older save have already been reached.

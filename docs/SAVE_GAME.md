@@ -29,6 +29,11 @@ level restart and level changes preserve it; New Game or deleting that file clea
 it. The association is session-only and does not imply that a save was loaded
 when starting the application. Missing files never mark an unrelated save current.
 
+Each save also records the Cutscene Viewer's unlocked chapters. New Game resets
+the viewer to the opening; loading a save restores its own chapters. An older
+save without this field infers earlier mandatory scenes from its validated level.
+Newly viewed chapters remain in memory until the next Save.
+
 Importing save support and testing progress-only slots does not load original
 combat/AI resources. Fighter decoding and legacy RNG handling import those
 dependencies only when needed. A subprocess regression test runs the complete

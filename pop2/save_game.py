@@ -602,8 +602,18 @@ def restore_progress(document, resources):
     try:
         if set(document) - {'format', 'version', 'level', 'level_sha256', 'created_at',
                             'resume', 'copy_verified', 'preview', 'name', 'preview_at_resume', 'preview_version',
-                            'story', 'sword_type', 'ruins_entry'}:
+                            'story', 'sword_type', 'ruins_entry', 'cutscenes'}:
             raise SaveGameError('Unknown saved progress fields')
+        from pop2.cutscenes import CHAPTER_KEYS, OPENING_KEYS
+
+        has_cutscenes = 'cutscenes' in document
+        cutscenes = document.get('cutscenes')
+        if has_cutscenes and (not isinstance(cutscenes, list)
+                              or len(cutscenes) > len(CHAPTER_KEYS)
+                              or any(not isinstance(key, str) or key not in CHAPTER_KEYS
+                                     for key in cutscenes)
+                              or len(set(cutscenes)) != len(cutscenes)):
+            raise SaveGameError('Invalid saved cutscenes')
         if 'name' in document:
             save_name(document['name'])
         if 'preview_at_resume' in document and type(document['preview_at_resume']) is not bool:
@@ -653,7 +663,9 @@ def restore_progress(document, resources):
         game.combat.player.life = game.combat.player.max_life = resume['max_life']
         if 'story' in document:
             game.story = _story(document['story'])
-        return game, {'copy_verified': document['copy_verified']}
+        return game, {'copy_verified': document['copy_verified'],
+                      'cutscenes': cutscenes if has_cutscenes else list(OPENING_KEYS),
+                      'cutscenes_legacy': not has_cutscenes}
     except (ValueError, TypeError, KeyError, IndexError, AttributeError, OverflowError, RecursionError) as error:
         raise SaveGameError(f'Invalid or incompatible save: {error}') from error
     finally:

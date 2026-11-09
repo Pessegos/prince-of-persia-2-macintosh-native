@@ -411,6 +411,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         document['preview'] = encode_preview(self.resume_preview(document))
         document['preview_at_resume'] = True
         document['preview_version'] = 2
+        document['cutscenes'] = sorted(self.cutscene_collection.seen)
         write_save(path, document)
         self.active_save_path = Path(path).absolute()
         self.status.set(f'Game saved: {path}')
@@ -533,8 +534,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.pause_started_at = self.next_animation_at if self.paused else None
         self.active_save_path = Path(path).absolute()
         self.cutscene_campaign_active = True
-        self.mark_cutscene_seen('opening')
-        self.cutscene_collection.admit_saved_progress(game)
+        from pop2.cutscenes import CutsceneCollection
+
+        self.cutscene_collection = CutsceneCollection.from_saved(saved['cutscenes'])
+        if saved['cutscenes_legacy']:
+            self.cutscene_collection.admit_saved_progress(game)
         self.status.set(f'Game loaded: {path}')
         self.render()
         if not self.in_animation_tick:
@@ -2696,9 +2700,12 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.status.set("Credits")
 
     def new_game(self):
+        from pop2.cutscenes import CutsceneCollection
+
         self.god_mode_added_hearts = 0
         self.cutscene_campaign_active = True
         self.active_save_path = None
+        self.cutscene_collection = CutsceneCollection()
         self.copy_verified = False
         self.copy_challenge = None
         if self.game.level.number != 1:

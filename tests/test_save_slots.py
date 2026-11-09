@@ -100,6 +100,25 @@ class ProgressSaveTests(unittest.TestCase):
                     read_save(self.path, self.resources)
                 self.assertEqual(random.getstate(), before)
 
+    def test_cutscene_field_roundtrips_and_rejects_invalid_values(self):
+        game = self.load(self.resources, 1)
+        original = capture(game)
+        self.assertNotIn('cutscenes', original)
+        write_save(self.path, original)
+        _restored, metadata = read_save(self.path, self.resources)
+        self.assertTrue(metadata['cutscenes_legacy'])
+
+        chapters = ['opening', 'opening_titles', 'opening_story', 'voyage']
+        write_save(self.path, dict(original, cutscenes=chapters))
+        _restored, metadata = read_save(self.path, self.resources)
+        self.assertFalse(metadata['cutscenes_legacy'])
+        self.assertEqual(metadata['cutscenes'], chapters)
+        for invalid in (None, 'voyage', [1], ['unknown'], ['voyage', 'voyage'], ['opening'] * 20):
+            with self.subTest(invalid=invalid):
+                write_save(self.path, dict(original, cutscenes=invalid))
+                with self.assertRaises(SaveGameError):
+                    read_save(self.path, self.resources)
+
     def test_thumbnail_has_bounded_dimensions_and_does_not_contain_hud(self):
         frame = Image.new('RGBA', (512, 384), 'red')
         frame.paste('blue', (1, 365, 511, 384))

@@ -37,27 +37,28 @@ through `start_story_scene` also consult that catalog when unlocking.
 
 ## Collection and existing saves
 
-All three opening chapters are available immediately, preserving the previous
-whole-opening availability and existing version-1 collection files. Other
+All three opening chapters are available immediately. Other
 chapters unlock when the normal campaign actually starts their scene and the
 preceding mandatory story chapters have been reached. Finishing or watching
 every frame is not required. Collection reads retain a chronological prefix;
-an isolated legacy/debug flag such as the horse without the earlier chapters
-is ignored, without rewriting the file on load. Valid recorded progress stays
-available across new games.
+an isolated debug flag such as the horse without the earlier chapters is
+ignored. New Game starts with the three opening chapters again.
 
 A successful F3 room/level warp or retained developer seek suspends collection
 updates for that debug session, including scenes triggered afterward. Starting
 a new game or loading a validated campaign save restores normal admission.
 Gallery browsing and replays never unlock chapters.
 
-`cutscenes.json` is a small atomic JSON collection alongside the default
-Saved Games data, or in `POP2_USER_DATA` when that override is set. It survives
-new games and installs into a different folder. Unknown chapter keys are
-ignored; an invalid profile falls back to the opening, and a write failure
-leaves the in-memory collection usable with an explanatory viewer message.
+The current collection lives in memory and is saved as a short `cutscenes` list
+inside each `.pop2save` when Save succeeds. Loading another save replaces the
+collection with that save's list; progress gained since the last Save remains
+in memory until the next Save. Scene starts and gallery browsing do no disk I/O.
+The old global `cutscenes.json` is left untouched but is no longer read, since
+its chapters cannot reliably be attributed to any one save. The existing
+atomic save writer protects the updated file.
 
-Campaign save version 2 is unchanged. Loading a validated older save admits
+Campaign save version 2 adds an optional, validated `cutscenes` field. Loading
+a validated older save without it admits
 earlier mandatory chapters according to the catalog's completed-level
 thresholds. A level 8 save can also admit the vision from its existing throne
 flags. A level 13 save does not imply the subsequent tower flight was seen.
