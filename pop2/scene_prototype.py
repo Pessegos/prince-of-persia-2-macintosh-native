@@ -77,7 +77,7 @@ from pop2.render_opening import (
     kid_palette_for_level,
     load_resource_file,
 )
-from pop2.opponent_generation import character_column
+from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.coordinates import column_left
 from pop2.terrain import TerrainMotion, falling_catch_scheduled, floor_y, floor_contact_x
 from pop2.crevices import (
@@ -1588,6 +1588,14 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             # Ordinary wall support enters SEQS:25 once. Mode 6 bypasses
             # that test so its settling poses can finish at stationary 91.
             self.start_sequence(25)
+        elif self.game.level.kind == 2:
+            # GenCtrl 6:196a-1990: after the input/wall branches, space
+            # above the supporting foot releases the grip. In particular,
+            # the loose floor may have disappeared since Catch admitted it.
+            column = character_column(floor_contact_x(
+                state.target_x, state.facing, self.frames[state.action]))
+            if self.level_map.tile(self.room_id, column, self.terrain_motion.row - 1).kind in EMPTY_TILES:
+                self.release_native_ledge()
 
     def release_native_ledge(self):
         """The release helper 6:1a84: GenCtrl on a release request, or a

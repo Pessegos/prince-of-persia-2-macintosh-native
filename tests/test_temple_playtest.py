@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from pop2.coordinates import column_left
-from pop2.loose_floors import FallingFloor, floor_hits_record
+from pop2.loose_floors import FallingFloor, floor_hits_body, floor_hits_record
 from pop2.opponent_records import CORPSE_POSES, GuardRoomRecord, corpse_sequence
 from pop2.paths import ASSET_DIR
 from pop2.wall_spikes import WallSpikes
@@ -55,6 +55,15 @@ class CorpseSequenceTests(unittest.TestCase):
 
 
 class RecordContactTests(unittest.TestCase):
+    def test_temple_body_contact_does_not_depend_on_the_advancing_foot(self):
+        block = FallingFloor(12, 5, 1, 186, 48)
+        motion = SimpleNamespace(room=12, row=1)
+        self.assertTrue(floor_hits_body(block, motion, (300, 169, 325, 226)))
+        self.assertFalse(floor_hits_body(block, motion, (342, 169, 365, 226)))
+        self.assertFalse(floor_hits_body(block, motion, (300, 169, 325, 226), alive=False))
+        self.assertFalse(floor_hits_body(block, SimpleNamespace(room=13, row=1), (300, 169, 325, 226)))
+        self.assertFalse(floor_hits_body(block, SimpleNamespace(room=12, row=0), (300, 49, 325, 106)))
+
     def test_contact_needs_the_column_and_a_crossing_of_the_head(self):
         floor = 226  # floor_y(1)
         hit = FallingFloor(12, 5, 1, floor - 56, 8)
@@ -71,6 +80,55 @@ class TemplePlaytestTests(unittest.TestCase):
         harness = Harness(number, draw=True, **options)
         self.addCleanup(harness.close)
         return harness
+
+    def catch_room14_floor(self, harness, x=270):
+        # Last falling frame of the jump, before the vertical cut 14 -> 13.
+        # The real Catch/AnimChar aligns the grip to floor 14:25 at X 281.
+        scene = harness.scene
+        scene.jump_to_room(13, row=2, x=x, facing=1)
+        scene.physics.select(scene.sequence_runtime, 21)
+        scene.sequence_state.current_y = 100
+        scene.sequence_state.vertical_velocity = 8
+        scene.terrain_motion.falling = True
+        scene.action = scene.sequence_state.action
+        press(harness, 'shift', True)
+        harness.tick()
+        self.assertEqual(scene.room_id, 12)
+        self.assertTrue(scene.native_ledge)
+        return scene
+
+    def test_the_falling_grabbed_floor_drops_the_prince_and_kills_the_guard(self):
+        harness = self.harness(peaceful=False)
+        scene = self.catch_room14_floor(harness)
+        guard = scene.combat.active_guards()[0]
+        self.assertTrue(guard.alive)
+        collapsed = released = None
+        for tick in range(40):
+            harness.tick()
+            if collapsed is None and scene.level_map.tile(13, 5, 2).kind == 0:
+                collapsed = tick
+            if released is None and not scene.native_ledge:
+                released = tick
+        self.assertIsNotNone(collapsed)
+        self.assertIsNotNone(released, 'the Prince still hangs after his support has fallen')
+        self.assertLessEqual(released, collapsed + 1)
+        self.assertTrue(scene.shift_held, 'letting go must not require releasing Shift')
+        self.assertFalse(scene.ledge_hanging)
+        self.assertEqual(scene.terrain_motion.row, 1)
+        self.assertTrue(scene.combat.player.alive)
+        # Deliberate port behavior requested by the user: keep the debris
+        # lethal here even though his Macintosh recording leaves the guard alive.
+        self.assertFalse(guard.alive)
+        self.assertIn(guard.state.action, CORPSE_POSES)
+
+    def test_an_intact_temple_ledge_keeps_its_grip(self):
+        harness = self.harness(peaceful=False)
+        # The same geometry with a permanent floor must keep hanging.
+        harness.scene.game.caverns.loose.tiles[13, 25] = 1, 0
+        scene = self.catch_room14_floor(harness)
+        harness.tick(24)
+        self.assertEqual(scene.level_map.tile(13, 5, 2).kind, 1)
+        self.assertTrue(scene.native_ledge)
 
     def run_onto_door(self, harness, *, shift):
         # Trap door 12:27, entered at a run from the west along row 2.

@@ -281,6 +281,20 @@ def floor_hits_actor(block, motion, state, record, alive=True):
     return False
 
 
+def floor_hits_body(block, motion, bounds, alive=True):
+    """Host body contact for the approved temple guard/debris exception.
+
+    The native supporting-foot test can miss a guard visibly under the slab
+    while his advance animation changes that foot. Sweep the falling edge
+    against the body instead, retaining room, row and living-actor admission.
+    """
+    if not alive or block.room != motion.room or block.row != motion.row:
+        return False
+    left, top, right, bottom = bounds
+    return (block.x <= right and block.x + block.size[0] > left
+            and block.y > top and block.y - block.velocity <= bottom)
+
+
 def crush_sequence(state, fatal):
     """Crushed6:28f0: excluded poses/modes, then the type-specific reaction."""
     if (5 <= state.action < 15 or state.action == 109
