@@ -933,13 +933,11 @@ def draw_leds(image, rect, lit=('NUM',)):
 # each one alone (on alternate pixels of the grid) and as faint as it is far
 # from its row of the frame, so the three bars break up first. Digits are
 # ninths of the way from the key's top colour to its ink.
-WINDOWS_FLAG = ('...4.8.9999999',
-                '..2.6..9..9..9',
-                '.2.6..9..9..9.',
-                '..4.8.9999999.',
-                '.2.6..9..9..9.',
-                '2.6..9..9..9..',
-                '.4.8.9999999..')
+WINDOWS_FLAG = ('..3.7.9999999',
+                '.3.7.9..9..9.',
+                '1.5..9999999.',
+                '.3.7.9..9..9.',
+                '3.7.9999999..')
 
 
 def windows_flag(image, centre, ink, paper):
