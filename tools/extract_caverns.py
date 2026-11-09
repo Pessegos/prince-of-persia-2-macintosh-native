@@ -7,7 +7,7 @@ from itertools import product
 from functools import lru_cache, partial
 from math import prod
 
-from pop2.caverns import SCENERY_LEVELS, entry_room, scenery_name
+from pop2.caverns import SCENERY_LEVELS, TEMPLE_TORCH_SHAPES, entry_room, scenery_name
 from pop2.slot_drawing import clip_climbing, draw_order_key
 from pop2.crevices import CREVICE_TILE, hide_crevices
 from pop2.trapdoors import TRAPDOOR_TILE
@@ -354,10 +354,15 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                                  draw_column, draw_row])
                 command_kinds.append(fields[9])
                 command_slots.append(current_slot[0])
-                if environment == 3 and library == 4 and 3581 <= shape <= 3589:
+                if (library == 4 and (environment == 3 and 3581 <= shape <= 3589
+                                     or environment == 2 and shape in TEMPLE_TORCH_SHAPES)):
                     tile = terrain.tile(room_id, fields[7], fields[8])
-                    torches.append({'room': tile.room, 'cell': tile.row * 10 + tile.column,
-                                    'foreground': tile.foreground, 'command': commands[-1]})
+                    record = {'room': tile.room, 'cell': tile.row * 10 + tile.column,
+                              'foreground': tile.foreground, 'command': commands[-1]}
+                    if environment == 2:
+                        record.update(first_shape=TEMPLE_TORCH_SHAPES.start,
+                                      frame_count=len(TEMPLE_TORCH_SHAPES))
+                    torches.append(record)
                 table = 'front' if fields[5] in (1, 2) else 'back'
                 previous_items[table] = bytes(cpu.mem_read(info, 38))
                 if table == 'back':

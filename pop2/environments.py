@@ -27,7 +27,7 @@ from pop2.control_mapping import IDLE_SEQUENCE
 from pop2.coordinates import native_x, scene_x
 from pop2.crevices import CREVICE_TILE
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
-from pop2.loose_floors import crush_sequence, floor_hits_actor
+from pop2.loose_floors import crush_sequence, floor_hits_actor, floor_hits_body
 from pop2.opponent_generation import character_column
 from pop2.render_opening import TILE_HEIGHT, TILE_WIDTH
 from pop2.terrain import floor_contact_x, floor_y
@@ -588,7 +588,17 @@ class Caverns(Environment):
                           scene.guard_art.frames[guard_frame_index(state.action)])
                 damage = 1 if state.actor_type == 0 else 100
                 sequence = crush_sequence(state, actor.life <= damage)
-                if (motion is None or not floor_hits_actor(block, motion, state, record, actor.alive)
+                body_hit = False
+                if (scene.game.level.kind == 2 and state.actor_type == 2
+                        and actor is not scene.combat.player and motion is not None):
+                    # User-approved temple exception: a slab visibly hitting
+                    # a guard kills him even during the native mode-5 advance
+                    # exemption or a supporting-foot change (room14 -> 13).
+                    body_hit = floor_hits_body(block, motion,
+                        scene.guard_art.bounds(state, floor_y(motion.row)), actor.alive)
+                    if body_hit:
+                        sequence = 22
+                if (motion is None or not (body_hit or floor_hits_actor(block, motion, state, record, actor.alive))
                         or actor is scene.combat.player and getattr(scene, 'god_mode', False)
                         or sequence is None):
                     continue

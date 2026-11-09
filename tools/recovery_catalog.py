@@ -13,6 +13,9 @@ CATALOG = PROJECT_DIR / "docs" / "RECOVERY_CATALOG.csv"
 
 # These reviews cover specific ordinary branches, never an entire routine.
 REVIEWS = {
+    (5, "TriggerTorch"): ("partial", "pop2/cavern_state.py;tools/probe_temple_candles.py", "temple Rnd(5) initialization: 24 checks with supplied visibility/cache/AddTrob; full activation and native visibility excluded"),
+    (10, "DrawTempTorch"): ("partial", "pop2/caverns.py;tools/extract_caverns.py", "six original candle frames and source-cell metadata across 128 native room draws; live scenery overlap preserved; shared SHAP decoder and drawing services supplied"),
+    (10, "TempGetTorchFrame"): ("partial", "pop2/cavern_state.py;tools/probe_temple_candles.py", "all 36 previous/random pairs match native with only Rnd supplied; no repeated phase; full FrameAdv excluded"),
     (4, "AdjustRoom"): ("partial", "tools/probe_temple_gate_distance.py", "temple gate distance calls: displayed room precedence, supplied left/right slot adjustment and signed wrapping; InitRoom slot construction excluded"),
     (4, "GetBarrDistFromFace"): ("partial", "tools/probe_temple_gate_distance.py", "environment2 ordinary gate type1 with actual admission/classification/AdjustRoom;79104 face/back calls total, no endpoint stubs; body and room slots supplied; other barriers/general distance selector excluded"),
     (4, "GetBarrDistFromBack"): ("partial", "tools/probe_temple_gate_distance.py", "environment2 ordinary gate type1; back distance computes even when face admission returns-1; whole A5 side effects checked; sprite bounds/InitRoom/full collision excluded"),

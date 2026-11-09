@@ -302,7 +302,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 5,Modular Set 2,TriggerFlask,0x1ce8,jump_table,partial,pop2/potions.py;pop2/game_session.py,"initial phase Rnd(26)+1, original 28-update visible flask cycle; native Trob bank replaced",2,2
 5,Modular Set 2,TriggerGate,0x1d50,decoded,partial,pop2/pressure_plates.py,level-three reverse-plate dispatch; special level/story and closing-on-actor branches missing,1,3
 5,Modular Set 2,TriggerObject,0x1ec8,decoded,partial,pop2/pressure_plates.py;pop2/darts.py;pop2/environments.py,closed exits and fresh-plate idle-shooter admission; level8 non-entrance exits require sword type1 (300 native admission checks); other environment branches partial,1,6
-5,Modular Set 2,TriggerTorch,0x1ffa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,3
+5,Modular Set 2,TriggerTorch,0x1ffa,jump_table,partial,pop2/cavern_state.py;tools/probe_temple_candles.py,temple Rnd(5) initialization: 24 checks with supplied visibility/cache/AddTrob; full activation and native visibility excluded,1,3
 5,Modular Set 2,AddTrob,0x20a0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,19,1
 5,Modular Set 2,Get1stWallColInDir,0x2198,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,2
 5,Modular Set 2,GetSlideRockX,0x21f6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,4,1
@@ -533,8 +533,8 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 10,Temple,DrawTempDownPlate,0x0c76,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,3
 10,Temple,DrawTempUpPlate,0x0da8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,3
 10,Temple,DrawTempPosts,0x0ed8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,5
-10,Temple,DrawTempTorch,0x10ea,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,10
-10,Temple,TempGetTorchFrame,0x12b6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
+10,Temple,DrawTempTorch,0x10ea,jump_table,partial,pop2/caverns.py;tools/extract_caverns.py,six original candle frames and source-cell metadata across 128 native room draws; live scenery overlap preserved; shared SHAP decoder and drawing services supplied,1,10
+10,Temple,TempGetTorchFrame,0x12b6,jump_table,partial,pop2/cavern_state.py;tools/probe_temple_candles.py,all 36 previous/random pairs match native with only Rnd supplied; no repeated phase; full FrameAdv excluded,0,1
 10,Temple,TempVisibleTorch,0x12fa,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,3
 10,Temple,ATMSlideRock,0x1456,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,11
 10,Temple,ComputeSlideRockRect,0x1682,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,3,1

@@ -12,7 +12,7 @@ from pop2.paths import ASSET_DIR
 from pop2.cavern_retouch import retouched_door_sprite, retouched_room_commands, retouched_sprite
 from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.render_opening import OpeningRoom, decode_ctbl, decode_shap, load_resource_file
-from pop2.terrain import character_row, floor_contact_x
+from pop2.terrain import LevelMap, character_row, floor_contact_x
 
 
 def drawn_actor_columns(bounds, facing):
@@ -58,6 +58,7 @@ class CavernRoom(OpeningRoom):
     retained_mask: Image.Image | None = None
     gate_occlusion: dict | None = None
     custom_occlusion: Image.Image | None = None
+    torch_occlusion: dict | None = None
 
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
         mask = super().actor_mask(row, bottom, state, bounds, record)
@@ -190,6 +191,8 @@ def cavern_clip_top(terrain, room, row, state, bounds):
 SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7, 8, 9), 2: (10, 11, 12, 13)}
 RUINS_LEVELS = SCENERY_LEVELS[4]
 TEMPLE_LEVELS = SCENERY_LEVELS[2]
+# DrawCaveTorch 8:2ae8 and DrawTempTorch 10:1196-11cc, library 4.
+TEMPLE_TORCH_SHAPES = range(3596, 3602)
 # CUST room enter hooks loading a CTBL over the room palette (S03_508A):
 # level five's carpet room (CheckCarpetImg 8:0d30, CTBL 3501 at 64), level
 # six's start room (CUST kind 22, 7:37a6, CTBL 3502 at 64) and level eight's
@@ -277,7 +280,38 @@ def _cavern_assets(level_number):
     if program.get('level') != level_number:
         raise ValueError('Cavern scenery belongs to a different level')
     resources = load_resource_file(scenery_resource(level_number))
+    if level_number in TEMPLE_LEVELS and not any(program.get('torches', {}).values()):
+        # Existing temple imports already contain all candle commands. Recover
+        # their animation records in memory; no asset reimport is needed.
+        from pop2.level_data import LevelDefinition
+
+        terrain = LevelMap(LevelDefinition.read(load_resource_file('Prince.rsrc'), level_number).data)
+        program['torches'] = {room: temple_torch_records(commands, terrain, int(room), resources)
+                              for room, commands in program['rooms'].items()}
     return program, resources, decode_ctbl(resources['CTBL'][3500]['data']), {}
+
+
+def temple_torch_records(commands, terrain, room_id, resources):
+    """DrawTempTorch's admitted flame clips, keyed by their source cell.
+
+    10:11ac copies the PIEC offset at 0x186. A flame may extend into the
+    next drawing slot, whose column is therefore not its logical source.
+    """
+    offset_x = struct.unpack_from('>h', resources['PIEC'][3500]['data'], 0x186)[0]
+    records = []
+    for command in commands:
+        if command[7] != 4 or command[1] not in TEMPLE_TORCH_SHAPES:
+            continue
+        column, remainder = divmod(command[2] - offset_x, 51)
+        if remainder:
+            continue
+        tile = terrain.tile(room_id, column, command[5])
+        if tile.kind == 19:
+            records.append({'room': tile.room, 'cell': tile.row * 10 + tile.column,
+                            'foreground': tile.foreground, 'command': command,
+                            'first_shape': TEMPLE_TORCH_SHAPES.start,
+                            'frame_count': len(TEMPLE_TORCH_SHAPES)})
+    return records
 
 
 def room_indices(level_number, room_id):
@@ -559,7 +593,7 @@ def merge_positioned_mask(existing, source, position):
     return ImageChops.lighter(combined, added), (left, top)
 
 
-def draw_cavern_torches(frame, room_id, state, *, level_number=3):
+def draw_cavern_torches(frame, room_id, state, *, level_number=3, occlusion=None):
     program, resources, palette, shapes = room_assets(level_number, room_id)
     for record in program.get('torches', {}).get(str(room_id), ()):
         tile = state.loose.tiles.get((record['room'], record['cell']))
@@ -568,12 +602,20 @@ def draw_cavern_torches(frame, room_id, state, *, level_number=3):
         if tile is not None and tile[0] not in (19, 32):
             continue
         value = state.foreground(record['room'], record['cell'], record['foreground'])
-        index = 3581 + (value & 15)
+        index = record.get('first_shape', 3581) + (value & 15)
         if index not in shapes:
             shapes[index] = decode_shap(resources['SHAP'][index]['data'], palette)
         clipped = clipped_sprite(shapes[index], record['command'])
         if clipped is not None:
             sprite, position = clipped
+            if occlusion is not None:
+                visible = occlusion.get(tuple(record['command'][2:4]))
+                if visible is None:
+                    continue
+                x, y = position
+                sprite = sprite.copy()
+                sprite.putalpha(ImageChops.multiply(sprite.getchannel('A'), visible.crop(
+                    (x, y, x + sprite.width, y + sprite.height))))
             frame.paste(sprite, position, sprite)
     return frame
 
@@ -1296,6 +1338,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     gate_masks = {}
     custom_records = custom_foreground_records(resources, room_id)
     custom_mask = Image.new('L', background.size) if custom_records else None
+    torch_occlusion = {} if animated and level_number in TEMPLE_LEVELS else None
     # A crevice reveal's redraw paints over the displayed screen: its back
     # pieces also cover the earlier front pieces (slot_variant `redrawn`).
     redraw_start = variant.get('redraw_start', len(commands)) if variant is not None else len(commands)
@@ -1315,6 +1358,18 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         sprite, position = clipped
         destination = background if layer == 'back' else foreground
         destination.paste(sprite, position, sprite)
+        if layer == 'back' and torch_occlusion is not None:
+            # The temple's 47x42 candle frames include opaque wall and
+            # holder pixels. Later back pieces may cover them too. Keep
+            # the native drawing order when replacing a candle live.
+            alpha = sprite.getchannel('A')
+            for visible in torch_occlusion.values():
+                visible.paste(0, position, alpha)
+            if library == 4 and index in TEMPLE_TORCH_SHAPES:
+                key = tuple(command[2:4])
+                if key not in torch_occlusion:
+                    torch_occlusion[key] = Image.new('L', background.size)
+                torch_occlusion[key].paste(alpha, position)
         if layer == 'back' and position_index >= redraw_start:
             covered = Image.new('L', background.size)
             covered.paste(sprite.getchannel('A'), position)
@@ -1413,4 +1468,4 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         background.getchannel('A'), foreground.getchannel('A')))
     background = Image.alpha_composite(Image.new('RGBA', background.size, 'black'), background)
     return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
-                      redraw, floors, retained, gate_masks, custom_mask)
+                      redraw, floors, retained, gate_masks, custom_mask, torch_occlusion)

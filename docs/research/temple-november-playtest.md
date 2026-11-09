@@ -106,3 +106,34 @@ loop goes on; that matters only for two adjacent lethal spikes.
 
 No temple spike cell has a rock cell in its row except level 12's room 10 (spike
 at 9, rock at 0), so few rooms will show this in play.
+
+## Falling grip, room 14 to 13 (2026-11-09)
+
+The user's paired videos show loose 14:25 falling while the Prince hangs in
+room 13. The Macintosh lets him fall; the port kept its protected ledge
+controller after the supporting tile disappeared. GenCtrl 6:196a-1990 checks
+the cell above the actual supporting foot and calls release 6:1a84 for space,
+after the input and wall branches. `update_native_ledge` now includes that
+check in the temple. Climb input retains its native priority. Evidence here
+is the supplied video and static CODE reading, not a new native CPU probe.
+
+The user explicitly requested a lethal slab impact on the guard, although the
+Macintosh video leaves him alive. Releasing the Prince earlier makes the guard
+advance: mode 5 exempts him from Crushed 6:28f0, and the advance's supporting
+foot can move to column 6 while his body remains under the slab in column 5.
+Live ordinary temple guards now additionally use swept slab/body contact and
+fatal SEQS 22. This is an **approved port exception**, scoped to environment 2,
+actor type 2; it preserves the ordinary death/persistence path. The Prince,
+special actors and other environments retain their existing contact rules.
+
+The regression starts at the last falling frame before the 14-to-13 camera
+cut, then runs the real Catch, held Shift, loose-floor lifecycle, active guard
+and landing. It rejects the prior hanging-in-air behavior and requires the
+guard's death. A permanent-floor control retains its grip; body-contact controls
+exclude dead actors, other rooms/rows and a body outside the slab's width.
+
+Verification: `python -m unittest -q tests.test_temple_playtest
+tests.test_ledge_controls tests.test_loose_floors`: **73 OK, no skips** (14.385s),
+with `POP2_SHARED_DESKTOP=1`. Dependencies, Ruff F/E9, recovery catalogue and
+whitespace checks pass. No global/import suite, emulator or user's game window
+was operated. The recordings and extracted comparison frames remain local.

@@ -179,7 +179,9 @@ class LevelRenderer:
                                              level_number=self.level.number)
                 return draw_cavern_spikes(frame, room_id, caverns, self.cavern_map, front=True,
                                            level_number=self.level.number)
-            frame = draw_cavern_torches(frame, room_id, caverns, level_number=self.level.number)
+            occlusion = self.room(room_id, caverns).torch_occlusion if self.level.kind == 2 else None
+            frame = draw_cavern_torches(frame, room_id, caverns, level_number=self.level.number,
+                                       occlusion=occlusion)
             frame = draw_cavern_lava(frame, room_id, caverns, level_number=self.level.number)
             frame = draw_cavern_darts(frame, room_id, caverns, level_number=self.level.number)
             frame = draw_cavern_spikes(frame, room_id, caverns, self.cavern_map,
