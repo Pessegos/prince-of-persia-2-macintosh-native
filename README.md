@@ -217,8 +217,8 @@ I smoothed out the gate opening sound for every type. It now plays continuously 
     <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/59302ec2-5b36-4cfc-97b2-ac47dafdd015"></video></td>
   </tr>
   <tr>
-    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/defd1068-93d3-4b8e-abbf-ceac87edae8c"></video></td>
-    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/9538508f-22b0-43e5-9f8c-16faa653b446"></video></td>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/b9b49599-d2ff-4411-9f2a-811f425bf877"></video></td>
+    <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/7bdcae83-9034-4c46-8428-6ba3882bb9c0"></video></td>
   </tr>
 </table>
 
