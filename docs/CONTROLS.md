@@ -22,7 +22,7 @@ controller has the proportions and layout of an Xbox Series controller: an
 ivory shell with mauve shadows and dark brown outlines, frieze-blue sticks
 with a rolled rim round a shallow dish, a crimson D-pad lit with the palace
 tapestries' orange, dark face buttons with ivory letters, ivory View, Menu
-and Share buttons and a gold guide coin (drawn pixel by pixel after the
+and Share buttons and a tan guide coin (drawn pixel by pixel after the
 user's sketch) quartered by the Xbox X. Sticks and D-pad sit exactly centred
 in their dishes. The PlayStation and Nintendo styles reuse that body with
 their own buttons for now. The keyboard is a full 1990s office keyboard

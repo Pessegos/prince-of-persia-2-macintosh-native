@@ -681,7 +681,7 @@ class PadArtTests(unittest.TestCase):
         self.assertTrue((drawn == disc).all())
         outline = np.array([[cell == '0' for cell in row] for row in coin])
         self.assertTrue(outline[controls_art.edge(disc)].all())
-        self.assertTrue(all(cell == ' ' or int(cell) < len(controls_art.GOLD) for row in coin for cell in row))
+        self.assertTrue(all(cell == ' ' or int(cell) < len(controls_art.COIN) for row in coin for cell in row))
 
     def test_shading_never_bites_into_a_shape(self):
         for mask, shading in ((controls_art.rounded(15, 11, 5), dict(rim=2, bias=.1)),

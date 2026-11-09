@@ -179,8 +179,8 @@ FRIEZE = ((16, 36, 52), (24, 62, 88), (24, 79, 104), (33, 98, 140), (52, 124, 16
           (120, 196, 206))  # stick caps
 TAPESTRY = ((52, 4, 34), (100, 0, 72), (132, 0, 90), (156, 16, 66), (206, 41, 82), (222, 74, 33),
             (253, 174, 97))  # the D-pad: crimson lit with the tapestries' orange and peach
-GOLD = ((50, 28, 6), (98, 60, 14), (132, 80, 20), (164, 110, 30), (204, 150, 48), (234, 188, 76),
-        (250, 218, 116), (255, 246, 186))  # the guide button
+COIN = ((50, 20, 9), (111, 69, 42), (159, 113, 72), (186, 142, 94), (206, 167, 114), (220, 184, 129),
+        (239, 207, 147), (251, 233, 184))  # the guide button: warm tan, in the shell's family (user's pick)
 BUTTON = ((74, 33, 16), (190, 168, 140), (214, 193, 144), (231, 206, 173), (247, 227, 176),
           (255, 255, 214), (255, 255, 236))  # the Xbox's small ivory buttons
 BED = ((74, 33, 16), (74, 46, 50), (90, 60, 66), (98, 70, 76), (108, 78, 86), (119, 90, 107),
@@ -211,7 +211,7 @@ FACE_RADIUS, DPAD_DISH, GUIDE_RADIUS = 8, 18, 10
 FACE = {'y': (180, 29), 'x': (162, 47), 'b': (198, 47), 'a': (180, 65)}
 LAYOUTS = {
     'xbox': {'leftstick': (60, 47), 'dpad': (89, 83), 'rightstick': (151, 83), **FACE,
-             'back': (104, 48), 'start': (136, 48), 'misc1': (120, 62), 'guide': (120, 23)},
+             'back': (104, 48), 'start': (136, 48), 'misc1': (120, 62), 'guide': (120, 25)},
     'playstation': {'dpad': (60, 50), 'leftstick': (89, 83), 'rightstick': (151, 83), **FACE,
                     'back': (94, 26), 'start': (146, 26), 'touchpad': (120, 30),
                     'guide': (120, 64), 'misc1': (120, 78)},
@@ -334,10 +334,10 @@ def face_button(image, centre, button, style, radius=FACE_RADIUS):
     glyph(draw, cx - len(letter[0]) // 2, cy - len(letter) // 2, letter, ink)
 
 
-# The guide button, pixel by pixel after the user's own sketch: a gold
+# The guide button, pixel by pixel after the user's own sketch: a tan
 # coin quartered by the Xbox X, its arms lit ridges with a dark groove on
 # their outer side, a bright crossing and a small cap at the top. Digits
-# index GOLD (0 is the outline).
+# index COIN (0 is the outline).
 GUIDE_COIN = (
     '        00000        ',
     '     00067775000     ',
@@ -369,7 +369,7 @@ def guide_button(image, centre):
     for y, row in enumerate(GUIDE_COIN):
         for x, cell in enumerate(row):
             if cell != ' ':
-                pixels[centre[0] - radius + x, centre[1] - radius + y] = (*GOLD[int(cell)], 255)
+                pixels[centre[0] - radius + x, centre[1] - radius + y] = (*COIN[int(cell)], 255)
 
 
 def small_button(image, centre, icon, size=(11, 11), ramp=WELL, ink=SHELL[5]):
