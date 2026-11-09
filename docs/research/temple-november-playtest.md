@@ -137,3 +137,38 @@ tests.test_ledge_controls tests.test_loose_floors`: **73 OK, no skips** (14.385s
 with `POP2_SHARED_DESKTOP=1`. Dependencies, Ruff F/E9, recovery catalogue and
 whitespace checks pass. No global/import suite, emulator or user's game window
 was operated. The recordings and extracted comparison frames remain local.
+
+## Guard landing reaction and wall-spike fall (2026-11-09)
+
+The next paired videos show a standing jump from room 14 landing behind the
+room-13 birdhead, then the guard being pushed off the right edge. Two missing
+inputs explain the differences:
+
+- HitFloor **6:048a-0492** sets movement/noise word **a5-0x4f9e** for an audible
+  Prince landing. AutoCtrl **4:053a** uses it to turn toward a landing behind
+  the guard. The port played the landing sound but omitted this signal.
+  Temple landings now set `callback_flag`; the existing close-behind draw and
+  selected-sheathing veto in the guard controller are preserved.
+- AlignFalling **4:4b54/4ba8** adds GetSwordLength **4:5e6e** to both edge-distance
+  tests. The port omitted the AFRM sword extension and displaced the armed
+  guard too far out. Temple floor checks now pass that extension, measured
+  from the existing body/collision bounds, into fall alignment. The unchanged
+  spike approach/contact rules then impale him, selecting guard SEQS 188/189
+  and foreground 240. No trap range or falling velocity was widened.
+
+Both integrations are restricted to environment 2. Evidence is static original
+CODE reading, the supplied recordings and real FRAM/AFRM scene regressions;
+no new native CPU probe or full-frame equivalence is claimed. The tests reject
+both previous behaviors. The guard recoil is supplied (SEQS 104), with only
+his next AI decision suppressed while the actual fall and spikes run.
+
+The user also reported the Prince landing beside the spikes, then confirmed
+that he died on retry. A normal running-Prince regression passes with God Mode
+off; no change to his invulnerability policy was needed. The fixed turn and
+impalement were inspected in the local `rendered/temple-guard-turn-spikes/fixed.png`.
+
+Focused check: `tests.test_temple_playtest tests.test_wall_spikes
+tests.test_enemy_ai tests.test_guard_deaths`: **143 run, OK, 1 skipped** (12.570s).
+The optional original-profile comparison requires `POP2_RESEARCH_DIR`, which
+was unset. Dependencies, Ruff F/E9, recovery catalogue and whitespace checks
+pass. No global/import suite or user's game/emulator window was operated.
