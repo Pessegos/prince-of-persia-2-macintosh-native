@@ -20,6 +20,7 @@ I'm trying to stay as close to the original as possible, while still making some
 - [Features & Improvements](#features--improvements)
   - [Game Menu (F1)](#game-menu-f1)
   - [Save & Load](#save--load)
+  - [Controls & Controllers](#controls--controllers)
   - [Screenshot Gallery (F2)](#screenshot-gallery-f2)
   - [Developer Tools (F3)](#developer-tools-f3)
   - [Cutscene Pausing](#cutscene-pausing)
@@ -61,7 +62,7 @@ The idea isn't to turn it into a full settings menu, but simply to keep things c
 
 ### Windows Port (F1)
 
-<img src="docs/github readme/game-menu-v2.png" alt="Windows port F1 game menu" width="700">
+<img src="docs/github readme/game-menu-v3.png" alt="Windows port F1 game menu" width="700">
 
 <br/>
 
@@ -72,6 +73,33 @@ The F1 menu includes a Save & Load system with named saves, previews, and option
 Saving follows the original game's checkpoint system. Loading a save takes you back to the beginning of the level or the last activated checkpoint, and the preview shows exactly where you'll resume.
 
 <img src="docs/github readme/save-load-preview-v8.gif" alt="Save & Load menu" width="700">
+
+<br/>
+
+## Controls & Controllers
+
+It now supports customizable keybindings and controllers through the F1 menu (or Alt+K).
+
+Each action can have up to two keys assigned, and controllers can be used both in-game and throughout the menus. I've tested it with an Xbox controller, but PlayStation controllers should work too, although I haven't tested them myself.
+
+I tried to make the controller designs fit the game's pixel art style, taking inspiration from the palace in Level 1, with different designs depending on which controller is connected. For the keyboard, I went with a classic 90s look.<br/>I'm pretty happy with how they turned out!
+
+### Keyboard
+
+<img src="docs/github readme/controls-keyboard.png" alt="Controls page - Keyboard" width="700">
+
+### Controller
+
+<img src="docs/github readme/controls-xbox.png" alt="Controls page - Xbox controller" width="700">
+<img src="docs/github readme/controls-dualsense.png" alt="Controls page - PlayStation controller" width="700">
+
+
+### Changing Keys and Buttons
+
+<p>
+  <img src="docs/github readme/controls-remap-keys.png" alt="Changing keyboard keys" width="350">
+  <img src="docs/github readme/controls-remap-buttons.png" alt="Changing controller buttons" width="350">
+</p>
 
 <br/>
 
@@ -239,22 +267,25 @@ The original Macintosh disk image is still required for the first launch.
 
 ## Controls
 
-| Key               | Action                                           |
-| ----------------- | ------------------------------------------------ |
-| Left / Right      | Run, turn or move in sword mode                  |
-| Up                | Jump, climb or block with the sword              |
-| Down              | Crouch, descend or sheath the sword              |
-| Shift + Direction | Careful step or manual turn with the sword drawn |
-| Shift             | Hold onto ledges                                 |
-| Ctrl              | Draw the sword or attack                         |
-| Esc               | Pause the game                                   |
-| Space             | Skip supported cutscenes                         |
-| Alt + Enter       | Toggle fullscreen                                |
-| F1                | Game Menu                                        |
-| F2                | Screenshot Gallery                               |
-| F3                | Developer Tools                                  |
-| F8                | Take a clean screenshot                          |
-| Shift + F8        | Take a screenshot including menus and overlays   |
+| Key               | Controller        | Action                                           |
+| ----------------- | ----------------- | ------------------------------------------------ |
+| Left / Right      | D-pad, left stick | Run, turn or move in sword mode                  |
+| Up                | A, up             | Jump, climb or block with the sword              |
+| Down              | B, down           | Crouch, descend or sheath the sword              |
+| Shift + Direction | RB/RT + direction | Careful step or manual turn with the sword drawn |
+| Shift             | RB, RT            | Hold onto ledges                                 |
+| Ctrl              | X                 | Draw the sword or attack                         |
+| Space             | Y                 | Show the time left / skip supported cutscenes    |
+| Esc               | View              | Pause the game                                   |
+| F1                | Menu              | Game Menu                                        |
+| Alt + K           |                   | Controls                                         |
+| Alt + Enter       |                   | Toggle fullscreen                                |
+| F2                |                   | Screenshot Gallery                               |
+| F3                |                   | Developer Tools                                  |
+| F8                |                   | Take a clean screenshot                          |
+| Shift + F8        |                   | Take a screenshot including menus and overlays   |
+
+These are the defaults. Keys and controller buttons can be changed in F1 > Controls. PlayStation and Nintendo controllers use the same positions (for example, A is Cross on PlayStation).
 
 The F1 menu also includes the rest of the shortcuts for starting or restarting a game, saving and loading, audio controls, the Hall of Fame, version info, and fullscreen.
 
