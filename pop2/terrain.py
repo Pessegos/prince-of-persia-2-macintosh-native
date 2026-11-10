@@ -1000,6 +1000,11 @@ class LevelMap:
                 scythe = (tile.kind == 12 and 3 <= tile.foreground & 0x1f <= 15
                           and bottom - top + 1 > 48
                           and (state is None or state.actor_type not in (1, 7, 8, 11)))
+                if scythe and state is not None and state.actor_type == 2 and state.level_kind == 2:
+                    # FrameAdv 2:65f6 uses EnemyCollide for temple guards,
+                    # which never admits a scythe. Keep wall/gate safeguards,
+                    # but do not turn wounds/turns into bumps out of the trap.
+                    scythe = False
                 if (tile.kind not in WALL_TILES and not desert_exit and not stone_gate
                         and not ruins_gate and not throne_gate and not scythe):
                     continue

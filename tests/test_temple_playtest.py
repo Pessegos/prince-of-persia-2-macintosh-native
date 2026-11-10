@@ -158,6 +158,78 @@ class TemplePlaytestTests(unittest.TestCase):
         self.assertFalse(scene.combat.player.alive)
         self.assertEqual(scene.level_map.tile(12, 6, 2).foreground & 255, 240)
 
+    def room2_scythe_guard(self, *, god=False):
+        harness = self.harness(peaceful=False, god=god)
+        scene = harness.scene
+        scene.jump_to_room(1, row=2, x=330, facing=1)
+        press(harness, 'ctrl', True)
+        harness.tick()
+        press(harness, 'ctrl', False)
+        harness.tick(24)
+        # Use room 2's actual generated birdhead, not an imported room-27 NPC.
+        guard = scene.combat.active_guards()[0]
+        self.assertEqual((guard.room, guard.row, guard.life), (1, 2, 3))
+        guard.sword_drawn = True
+        select_sequence(guard, 90)
+        guard.runtime.next_frame()
+        scythes = scene.game.caverns.scythes
+        # Supply a raised blade; its subsequent timing, contact and AI are real.
+        scythes.foreground[1, 27] = scythes.foreground[1, 28] = 5
+        scythes.active.add((1, 28))
+        return harness, scene, guard
+
+    def test_room2_scythe_does_not_push_a_wounded_guard_out_of_its_blade(self):
+        harness, scene, guard = self.room2_scythe_guard()
+        scene.sequence_state.target_x = scene.sequence_state.current_x = 300
+        scene.sequence_state.facing = 1
+        guard.state.target_x = guard.state.current_x = 390
+        guard.state.facing = 0
+        # Supply one nonfatal strike, then keep normal AI and all collisions.
+        scene.combat._hurt('guard', guard, scene.combat.player)
+        self.assertTrue(guard.alive)
+        harness.tick()
+        self.assertEqual(guard.state.source_sequence_id, 183,
+                         'the raised scythe replaced the wound with a wall bump')
+        for _ in range(15):
+            harness.tick()
+            if not guard.alive:
+                break
+        self.assertFalse(guard.alive, 'the wall correction saved him from the blade')
+        self.assertEqual(guard.state.source_sequence_id, 190)
+        self.assertTrue(scene.level_map.tile(1, 7, 2).foreground & 0x40)
+
+    def test_room2_scythe_does_not_cancel_the_guards_turn_after_a_side_exchange(self):
+        # Keep the exposed Prince alive to observe NPC control through retraction.
+        harness, scene, guard = self.room2_scythe_guard(god=True)
+        scene.sequence_state.target_x = scene.sequence_state.current_x = 450
+        scene.sequence_state.facing = 0
+        guard.state.target_x = guard.state.current_x = 420
+        guard.state.facing = 0
+        harness.tick()
+        self.assertEqual(guard.state.source_sequence_id, 60,
+                         'the raised scythe cancelled the normal automatic turn')
+        harness.tick(3)
+        self.assertEqual(guard.state.facing, 1)
+        for _ in range(12):
+            harness.tick()
+            if not guard.alive:
+                break
+        self.assertFalse(guard.alive)
+        self.assertEqual(guard.state.source_sequence_id, 190)
+        self.assertTrue(scene.level_map.tile(1, 7, 2).foreground & 0x40)
+
+    def test_room2_wall_still_stops_a_wounded_guard_beside_the_scythe(self):
+        harness, scene, guard = self.room2_scythe_guard()
+        scene.sequence_state.target_x = scene.sequence_state.current_x = 380
+        scene.sequence_state.facing = 1
+        guard.state.target_x = guard.state.current_x = 470
+        guard.state.facing = 0
+        scene.combat._hurt('guard', guard, scene.combat.player)
+        harness.tick()
+        self.assertEqual(guard.state.source_sequence_id, 65)
+        self.assertLess(guard.state.target_x, 470)
+        self.assertTrue(guard.alive)
+
     def catch_room14_floor(self, harness, x=270):
         # Last falling frame of the jump, before the vertical cut 14 -> 13.
         # The real Catch/AnimChar aligns the grip to floor 14:25 at X 281.

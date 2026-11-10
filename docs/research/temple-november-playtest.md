@@ -204,3 +204,48 @@ with `POP2_SHARED_DESKTOP=1`. Dependencies, Ruff F/E9, recovery catalogue and
 whitespace checks pass. No global/import suite or user's game/emulator was
 operated. Next bounded check is any further playtest report with its actual
 combat transition; this fix does not claim complete temple parity.
+
+## Room 2: scythe collision cancelled guard wounds and turns (2026-11-10)
+
+The user reported that level 10's room-2 guard repeatedly stepped away from
+the scythe or cancelled a side exchange, unlike the Macintosh. The room has
+no initial guard: its real generator produces the birdhead used here. The
+blade/handle are cells 27/28 on the bottom row.
+
+The port's swept wall safeguard for NPC states outside EnemyCollide's
+admission also treated an extended scythe as a wall. A nonfatal wound
+(SEQS 183, animation state 5) became bump 65 and displaced the guard away
+from the blade. An automatic turn (60, also state 5) became bump 64 instead,
+followed by repeated corrections near the right wall.
+
+Native FrameAdv **2:65f6-65fa** calls EnemyCollide and CheckGateForOpp for the
+guard; the Kid's CheckBarr/Collide path is separate. For type 2, EnemyCollide
+**4:62e2-62f4** rejects state 5; its admitted path only accepts walls/blocking
+gates. The scythe barrier is in CheckCollide **4:5654-5674/5c76**, with its
+extended interval at **5:5fa0**. Evidence is static original CODE and real
+scene regressions, not a new CPU probe or complete FrameAdv equivalence.
+
+`wall_correction` now omits only the scythe barrier for ordinary type-2 temple
+guards. The existing wall/gate safeguard stays; a control confirms that a
+wounded guard still bumps against room 2's right wall. The Prince's scythe
+barrier and other environments are unchanged. No AI profile, alert scan,
+impassable-cell rule or blade reach/timing changed: native IsImpassable
+**3:4dfe-4e08** also rejects tiles 12/13 for some voluntary movements.
+
+Both failure regressions reject the previous code. They use the actual room-2
+generator and normal subsequent AI, supply nearby combat positions and an
+already-raised phase-5 blade, then run its lifecycle through the cut/death
+190. The wound case supplies one successful `_hurt` endpoint, not full
+input/contact. The exchange case lets normal NPC control select turn 60,
+requires its facing change, and keeps only the exposed Prince invulnerable
+to observe the guard. No guard decision is suppressed. These bounded checks
+do not replay the entire user's fight or certify all native lure behavior.
+
+Focused check: `tests.test_temple_playtest tests.test_scythes
+tests.test_enemy_ai tests.test_terrain`: **226 run, OK, 1 skipped** (39.680s),
+with `POP2_SHARED_DESKTOP=1`. The optional original-profile comparison needs
+`POP2_RESEARCH_DIR`, which was unset. The existing real-key temple Prince
+blade-death regression also passes. Dependencies, Ruff F/E9, recovery
+catalogue and whitespace checks pass. No full/import suite or user game,
+emulator, focus, settings, save or resource operation. Next bounded check is
+further room-2 playtesting with the actual input/attack transition.
