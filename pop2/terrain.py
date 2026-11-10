@@ -1423,14 +1423,13 @@ class RooftopPhysics:
                 return (TerrainEvent("death"),)
             return ()
         if motion.falling:
-            # Falling 6:00ae-00f2 / AddKidScream 5:4b5a: one long-fall cue;
-            # the Prince is silent over water, ordinary guards use cue 30.
-            if state.vertical_velocity >= 59 and not motion.scream_played:
+            # AddKidScream 5:4b5a: retain the Prince's existing onset and
+            # harbor exclusions. Ordinary guard admission follows Move below.
+            if (state.actor_type != 2 and state.vertical_velocity >= 59
+                    and not motion.scream_played):
                 motion.scream_played = True
                 if state.actor_type == 0 and (state.level_kind != 5 or motion.room not in (14, 15, 18)):
                     state.sound_events.append(8)
-                elif state.actor_type == 2 and state.vertical_velocity <= 63:
-                    state.sound_events.append(30)
             before_x, before_y = state.target_x, state.current_y
             # Move, CODE:4 0x341a/0x3464: add gravity once per simulation frame.
             floating = self.floating()
@@ -1446,6 +1445,13 @@ class RooftopPhysics:
                             else state.horizontal_velocity)
                     state.target_x += step * (1 if state.facing else -1)
             state.current_y += state.vertical_velocity
+            # NPC FrameAdv 2:65da/65de runs Move before CheckFloor 2:65fe
+            # -> Falling 6:00ae-00f2. Test the updated velocity: using the
+            # previous one delays room 9's scream until the impact cancels it.
+            if (state.actor_type == 2 and 59 <= state.vertical_velocity <= 63
+                    and not motion.scream_played):
+                motion.scream_played = True
+                state.sound_events.append(30)
             if bounds_for_state is not None:
                 bounds = bounds_for_state()
             else:

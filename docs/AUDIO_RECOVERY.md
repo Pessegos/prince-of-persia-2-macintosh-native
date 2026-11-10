@@ -269,6 +269,9 @@ combat transitions, scene-level effects and protected foreground songs.
 Ordinary guard audio was connected after the 2026-11-10 temple playtest.
 Type-2 long-fall cue 30 stops at real impacts before queued effects drain,
 including an impact-frame scream request with overlapping audio enabled.
+Its onset uses the post-Move velocity, as in NPC FrameAdv 2:65da-65fe;
+the room-9 fall now starts the scream in flight instead of requesting it
+one frame late at the impact. The scene regression requires both endpoints.
 The native pending-death-count subset now requests KillBird (189) for the
 temple's birdheads too, subject to the ordinary combat/reinforcement gates.
 The earlier assumption that this song first mattered in the palace confused

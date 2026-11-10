@@ -57,10 +57,14 @@ class GuardAudioTests(unittest.TestCase):
         guard.state.facing = 0
         # Supply the successful nonfatal strike; AI, fall, plate and audio run.
         scene.combat._hurt('guard', guard, scene.combat.player)
+        screamed_in_flight = False
         for _ in range(20):
             self.tick(harness, backend)
+            screamed_in_flight |= (guard.terrain_motion.falling
+                                  and scene.audio.sound_playing(30))
             if not guard.alive:
                 break
+        self.assertTrue(screamed_in_flight, 'the guard never screamed before impact')
         self.assertFalse(guard.alive)
         self.assertEqual((guard.room, guard.row), (8, 2))
         self.assertFalse(guard.terrain_motion.falling)
@@ -103,20 +107,24 @@ class GuardAudioTests(unittest.TestCase):
                 self.assertEqual(not guard.alive, fatal)
                 self.assertFalse(scene.audio.sound_playing(30))
 
-    def test_inflight_guard_scream_keeps_playing_until_a_real_impact(self):
-        harness, backend = self.harness()
-        scene = harness.scene
-        guard = scene.combat.active_guards()[0]
-        guard.row = 2
-        guard.terrain_motion = TerrainMotion(8, 2, falling=True)
-        select_sequence(guard, 82)
-        for _ in range(5):
-            guard.runtime.next_frame()
-        guard.state.target_x = guard.state.current_x = 260
-        guard.state.current_y, guard.state.vertical_velocity = -200, 59
-        self.tick(harness, backend)
-        self.assertTrue(guard.terrain_motion.falling)
-        self.assertTrue(scene.audio.sound_playing(30))
+    def test_guard_scream_uses_post_move_velocity_and_requires_time_before_impact(self):
+        for y, velocity, in_flight, screaming in ((-200, 54, True, True),
+                                                  (-1, 54, False, False),
+                                                  (-200, 20, True, False)):
+            with self.subTest(y=y, velocity=velocity):
+                harness, backend = self.harness()
+                scene = harness.scene
+                guard = scene.combat.active_guards()[0]
+                guard.row = 2
+                guard.terrain_motion = TerrainMotion(8, 2, falling=True)
+                select_sequence(guard, 82)
+                for _ in range(5):
+                    guard.runtime.next_frame()
+                guard.state.target_x = guard.state.current_x = 260
+                guard.state.current_y, guard.state.vertical_velocity = y, velocity
+                self.tick(harness, backend)
+                self.assertEqual(guard.terrain_motion.falling, in_flight)
+                self.assertEqual(scene.audio.sound_playing(30), screaming)
 
     def test_sword_victory_music_is_wired_for_all_four_temple_levels(self):
         # Each real room has one ordinary birdhead and no reinforcement point.

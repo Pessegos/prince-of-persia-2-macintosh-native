@@ -374,3 +374,33 @@ the previously rejected scythe corpse and pending-count continuation.
 Dependencies, Ruff F/E9, catalogue and whitespace checks pass. No full/import
 suite, live game/emulator, focus, shared settings/saves or resource writes.
 Next bounded task is playtesting the room-9 landing and later temple kills.
+
+## Follow-up: guard scream onset (2026-11-10)
+
+The user's v2 recording exposed a gap in the preceding regression: it checked
+the impact stop but never required the scream to start before impact. The
+room-9 scene now requires both, and that strengthened test fails on 1e051e0.
+
+NPC FrameAdv **2:65da/65de** runs gravity and movement **4:341a/3464**
+before CheckFloor **2:65fe -> 5:1202**. Fresh original CODE bytes resolve
+its mode-4 table entry to **5:124e -> Falling 6:00a6** (this table/body
+is unmapped in the disassembly listing). Falling tests velocity >=59, with
+type-2 cue 30 restricted to <=63 (**6:00b4-00f2**). The port tested the
+previous velocity before gravity: the actual room-9 fall reached 60 while
+still airborne, but requested cue 30 only on the next frame, when the impact
+correctly cancelled it. Type-2 audio admission now uses the updated velocity,
+so this fall plays cue 30 for the final airborne frame and stops it on impact.
+
+This change concerns cue scheduling. It retains the existing trajectory,
+velocity cap, Prince onset and impact stops. It does not newly implement
+native Falling's subsequent velocity-64 marker or claim complete FrameAdv
+parity. No music or save changes. Checks use the actual hidden scene and
+AudioEngine with timed playback, not hardware output. Additional controls
+cover a fall reaching the threshold on impact (no late scream), a short fall
+(no scream) and already-playing surviving/fatal impacts.
+
+Verification: guard-audio **10 OK**, terrain/scene-audio/cliff checks
+**148 OK**, no skips; dependencies, Ruff F/E9, catalogue and whitespace
+checks pass. No full/import suite, CPU probe, live game/emulator, focus,
+shared settings/saves or original-resource writes. Next bounded check is
+playtesting the same room-9 fall after restart.
