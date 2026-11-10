@@ -13,6 +13,8 @@ CATALOG = PROJECT_DIR / "docs" / "RECOVERY_CATALOG.csv"
 
 # These reviews cover specific ordinary branches, never an entire routine.
 REVIEWS = {
+    (9, "FinlCheckGenOpp"): ("partial", "pop2/final_jaffars.py;tools/probe_final_jaffar_generation.py", "room-3 two-copy admission and position: 216 original CODE9 cases with Rnd and record constructor supplied; full constructor/path/combat excluded"),
+    (9, "FinlGenerateOpp"): ("reference-only", "docs/research/final-level-preparation.md", "9:02a6 filters background/foreground item drawing from DrawBFItem; Jaffar record constructor is 9:03c8, moving scenery remains open"),
     (5, "TriggerTorch"): ("partial", "pop2/cavern_state.py;tools/probe_temple_candles.py", "temple Rnd(5) initialization: 24 checks with supplied visibility/cache/AddTrob; full activation and native visibility excluded"),
     (10, "DrawTempTorch"): ("partial", "pop2/caverns.py;tools/extract_caverns.py", "six original candle frames and source-cell metadata across 128 native room draws; live scenery overlap preserved; shared SHAP decoder and drawing services supplied"),
     (10, "TempGetTorchFrame"): ("partial", "pop2/cavern_state.py;tools/probe_temple_candles.py", "all 36 previous/random pairs match native with only Rnd supplied; no repeated phase; full FrameAdv excluded"),

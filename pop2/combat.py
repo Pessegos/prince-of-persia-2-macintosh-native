@@ -19,6 +19,7 @@ from pop2.flame_sword import (
     GLIDE_SEQUENCE as FLAME_GLIDE, PARRY_CUE as FLAME_PARRY_CUE,
     PARRY_WINDOW as FLAME_PARRY_WINDOW, STRIKE_RANGE,
 )
+from pop2.final_jaffars import next_jaffar_spawn
 from pop2.opponent_selection import nearest_opponent
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.control_mapping import IDLE_SEQUENCE
@@ -190,6 +191,8 @@ class Fighter:
     ruins: object | None = None
     # Level twelve's flaming sword (actor type 10).
     flame_sword: object | None = None
+    # CODE 9 room-3 copy: its record cell can encode path rows 4, 6 or 8.
+    final_jaffar: bool = False
 
     @property
     def state(self):
@@ -413,7 +416,7 @@ class CombatEncounter:
         room_records = []
         if previous_room != room:
             for actor in previous_active:
-                if actor.state.actor_type in (2, 4, 10):
+                if actor.state.actor_type in (2, 4, 10) and not actor.final_jaffar:
                     view = self._project_fighter(actor, previous_room)
                     if view is not None:
                         room_records.append((actor, view))
@@ -430,6 +433,7 @@ class CombatEncounter:
             for guard in previous_active:
                 view = self._project_fighter(guard, previous_room)
                 if (view is None or guard.room == room or guard.state.actor_type not in (2, 4)
+                        or guard.final_jaffar
                         or removed_on_room_save(guard)
                         or len(self.guards) >= 5):
                     continue
@@ -643,6 +647,7 @@ class CombatEncounter:
 
     def visible_guards(self):
         return [view for guard in self.active_guards()
+                if not guard.final_jaffar or 0 <= guard.row < 3
                 if (view := self._project_fighter(guard, self.player.room)) is not None]
 
     def health_opponent(self):
@@ -1191,6 +1196,8 @@ class CombatEncounter:
     def update_guard_alerts(self):
         self.wake_skeletons()
         for guard in self.active_guards():
+            if guard.final_jaffar:
+                continue
             with self._local_opponents(guard):
                 self._update_guard_alert(guard)
 
@@ -1491,6 +1498,9 @@ class CombatEncounter:
         return terrain.tile(guard.room, column, guard.row)
 
     def generate_opponents(self):
+        if self.level_kind == 6 and self.player.room == 2:
+            self._generate_final_jaffar()
+            return
         # Count living NPCs in the generator's corridor, including offscreen
         # reinforcements that have not entered their owner room or seen Kid yet.
         blockers = list(self.guards)
@@ -1518,9 +1528,36 @@ class CombatEncounter:
             blockers.append(guard)
         self.refresh_target()
 
+    def _generate_final_jaffar(self):
+        # FinlWatchOpps 9:0874 supplies the room-3 record count. 9:03c8
+        # increments that count before writing the new record.
+        first = self.guards[0] if self.guards else None
+        spawn = next_jaffar_spawn(
+            len(self.guards), first.state.source_sequence_id if first else 0,
+            first.row if first else 0, self.player.row, self.rng)
+        if spawn is None:
+            return
+        x = scene_x(207 + 51 * spawn.column)
+        state = SequenceState(238, current_x=x, target_x=x, facing=0,
+                              actor_type=2, level_kind=6)
+        actor = Fighter(SequenceRuntime(self.sequences, state), spawn.life,
+                        spawn.life, self.player.room, spawn.row, skill=5,
+                        selected_sequence=238, palette_variant=3,
+                        final_jaffar=True, native_alive=True)
+        actor.runtime.next_frame()
+        actor.guard_record = GuardRoomRecord(238, 0, spawn.life, False,
+                                             spawn.cell, pending=False)
+        actor.bank_room, actor.bank_slot = self.player.room, len(self.guards)
+        self.guards.append(actor)
+        self.refresh_target()
+
     def advance_guard(self):
         terrain = getattr(self, "terrain", None)
         for guard in self.active_guards():
+            if guard.final_jaffar:
+                # Its later movement belongs to the CODE 9 path controller.
+                guard.runtime.next_frame()
+                continue
             old_x = guard.state.target_x
             art = getattr(self, "guard_art", None)
             old_bounds = (art.collision_bounds(guard.state, floor_y(guard.row), guard.sword_drawn)

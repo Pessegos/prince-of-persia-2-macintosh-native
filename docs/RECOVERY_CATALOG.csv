@@ -501,8 +501,8 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,CaveMoveSquishingGate,0x3a58,jump_table,partial,pop2/pressure_plates.py;pop2/scene_prototype.py,"nearby Prince SEQS 118 poses 264-266, narrower linear-cell contact and mode-3 final slam to 48 with cues 20/18; 576 original plus 480 additional native gate updates; other actor modes omitted",0,5
 8,Caverns,CaveGetTorchFrame,0x3b4e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
 9,Final Battle,FinlCheckDeadOpp,0x00e2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,8
-9,Final Battle,FinlCheckGenOpp,0x0202,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,3
-9,Final Battle,FinlGenerateOpp,0x02a6,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,15
+9,Final Battle,FinlCheckGenOpp,0x0202,decoded,partial,pop2/final_jaffars.py;tools/probe_final_jaffar_generation.py,room-3 two-copy admission and position: 216 original CODE9 cases with Rnd and record constructor supplied; full constructor/path/combat excluded,1,3
+9,Final Battle,FinlGenerateOpp,0x02a6,jump_table,reference-only,docs/research/final-level-preparation.md,"9:02a6 filters background/foreground item drawing from DrawBFItem; Jaffar record constructor is 9:03c8, moving scenery remains open",1,15
 9,Final Battle,FinlWatchOpps,0x0654,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,23
 9,Final Battle,AllOtherJaffarsShimmerAway,0x090e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,3
 9,Final Battle,JaffarSetToNextPos,0x09ca,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,19

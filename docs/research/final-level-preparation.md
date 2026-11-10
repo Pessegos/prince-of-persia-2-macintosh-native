@@ -43,6 +43,7 @@ FinlWatchOpps calls five CODE 2 routines, palette and song routines and
 1. Export rooms and connect NIS 3 to the native entry. Done for static
    scenery and placement; the mode-13 palette still needs visual comparison.
 2. Read FinlCheckGenOpp and FinlGenerateOpp and spawn Jaffar's copies.
+   The initial room-3 records are integrated below; the path is still open.
 3. Recover the path (9:09ca-14b6), which is the largest part, then the
    final victory and ending.
 
@@ -80,3 +81,56 @@ plates or events reach them.
   flame's full presentation, victory, credits/ending and a native full-frame
   comparison remain open. The native drawing harness supplies only the
   specified rectangle fill endpoint; it is not an independent pixel check.
+
+## Jaffar generation block (2026-11-10)
+
+The preserved `LEVL` 2013 is environment 6, opponent set 0, with an empty
+opponent bank at native room 3 (`+0x2326`). `FinlWatchOpps` 9:0654 calls
+9:0874, which checks the current native room is 3 and the environment is 6,
+then supplies that bank's count to `FinlCheckGenOpp` 9:0202. The room-3 count
+at `+0x2326` is increased by the record constructor 9:03c8. Source inputs
+at a5-0x51e0 and a5-0x51fa are the **first active opponent's** selected
+sequence and row (+0x28 and +0x0e from a5-0x5208); a5-0x50c4 is the
+Prince's row. They must not be read as Prince sequence/facing.
+
+- At count 0, column 1 is chosen if the Prince is on row 2; otherwise column
+  2. At count 1, selected `SEQS 238` blocks another birth. Otherwise column
+  2 is chosen when the first opponent is on row 1, column 1 otherwise. A
+  match between that column and the Prince's row blocks birth. Next,
+  `Rnd(20) == 0` admits it: `Rnd` is inclusive, so this is **1/21**.
+  Count 2 stops further births.
+- The constructor 9:03c8 increments the room-3 count and calls
+  `GetOppInfoIdx(3, old_count)` 6:3642. `FirstInRow` 4:322a plus the selected
+  column writes cell 21/22, 41/42, 61/62 or 81/82; `Rnd(1)` independently
+  adds 4 to the base row (2 for column 2, 4 for column 1). Those larger
+  values are positions for Jaffar's later vertical path, not regular cells
+  to clamp to 0..29. The original X table at a5-0x4b88 gives native X 258
+  or 309; the constructor faces left, sets skill 5 and life 3 or 4 from a
+  second independent `Rnd(1)`, then starts `SEQS 238`. When the first
+  palette-bank slot is empty, 9:042a-043e and 6:40f6 assign variant 3;
+  Guard.rsrc CTBL 752 gives Jaffar's red and white outfit. Its frame 233
+  resolves to SHAP 782. The port stores these as marked
+  type-2 room-3 opponents, keeps their path cell in the room record, starts
+  that sequence and persists them through room visits and saves.
+- Despite its preserved name, `FinlGenerateOpp` 9:02a6 is called from
+  `DrawBFItem` 3:2cc8-2d16. It scans 38-byte background/foreground item
+  records and chooses which entries to draw (including `0x1025..0x1028`,
+  `0x1051..0x1058` and `0x6310`). It does **not** allocate the Jaffar
+  opponent records. Its moving scenery remains a separate block.
+
+`python -m tools.probe_final_jaffar_generation` executed 216 combinations
+of count, first-opponent sequence/row, Prince row and supplied random results
+against the original CODE 9:0202, with no differences. The probe supplies
+only `Rnd` 17:6e06 and 9:03c8 as a record-constructor endpoint; it verifies
+the call arguments but excludes the native constructor's writes, resource
+loading, sound and drawing. The original LEVL and Guard SHAP/FRAM/CTBL are
+checked separately by `tests.test_final_jaffars`. Port tests also reject an
+immediate second birth during `SEQS 238`, a third birth, loss on room exit
+and loss on save. They do not establish full frame cadence or pixel parity.
+
+The path controller beginning at 9:09ca, later copy movement between rooms,
+combat, finishing logic, moving scenery and ending remain open. The next
+bounded task is to recover Jaffar's position transitions and the mapping of
+these extended record cells to visible tower rooms. Until then, copies can
+appear in room 3's visible row 2; path rows 4/6/8 are retained but are not
+drawn or run through ordinary guard AI.
