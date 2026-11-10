@@ -185,12 +185,12 @@ def cavern_clip_top(terrain, room, row, state, bounds):
 
 
 # Levels whose scenery is the original renderer's export, by LEVL environment:
-# caverns (3) and ruins (4, levels six and seven).
-# Native scenery by LEVL environment: caverns (3), ruins (4) and the
-# temple (2, levels 10-13; exported, not yet playable).
-SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7, 8, 9), 2: (10, 11, 12, 13)}
+# Native scenery by LEVL environment: caverns (3), ruins (4), temple (2)
+# and the final tower (6). The final battle's moving scenery is still open.
+SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7, 8, 9), 2: (10, 11, 12, 13), 6: (14,)}
 RUINS_LEVELS = SCENERY_LEVELS[4]
 TEMPLE_LEVELS = SCENERY_LEVELS[2]
+FINAL_LEVELS = SCENERY_LEVELS[6]
 # DrawCaveTorch 8:2ae8 and DrawTempTorch 10:1196-11cc, library 4.
 TEMPLE_TORCH_SHAPES = range(3596, 3602)
 # CUST room enter hooks loading a CTBL over the room palette (S03_508A):
@@ -203,7 +203,8 @@ ROOM_PALETTES = {(5, 2): 3501, (6, 26): 3502, (8, 8): 3501}
 def scenery_name(level_number):
     if level_number == 3:
         return 'caverns_entry.json'
-    kind = 'ruins' if level_number in RUINS_LEVELS else 'temple' if level_number in TEMPLE_LEVELS else 'caverns'
+    kind = ('final' if level_number in FINAL_LEVELS else 'ruins' if level_number in RUINS_LEVELS
+            else 'temple' if level_number in TEMPLE_LEVELS else 'caverns')
     return f"{kind}_level{level_number}.json"
 
 
@@ -224,6 +225,8 @@ def scenery_available(level_number):
 
 
 def scenery_resource(level_number):
+    if level_number in FINAL_LEVELS:
+        return 'Final.rsrc'
     if level_number in TEMPLE_LEVELS:
         return 'Temple.rsrc'
     return 'Ruins.rsrc' if level_number in RUINS_LEVELS else 'Caverns.rsrc'
@@ -249,7 +252,8 @@ def custom_foreground_records(resources, room_id):
 
 
 def cavern_assets(level_number=3):
-    if type(level_number) is not int or level_number not in (3, 4, 5, *RUINS_LEVELS, *TEMPLE_LEVELS):
+    if type(level_number) is not int or level_number not in (3, 4, 5, *RUINS_LEVELS, *TEMPLE_LEVELS,
+                                                             *FINAL_LEVELS):
         raise ValueError(f'Unsupported cavern scenery level {level_number}')
     return _cavern_assets(level_number)
 
@@ -1333,6 +1337,10 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                   for key in record['commands']}
     background = Image.new('RGBA', (510, 365))
     foreground = Image.new('RGBA', background.size)
+    for top, left, bottom, right, colour in program.get('fills', {}).get(str(room_id), ()):
+        # Final room 1: 9:1a4c fills the complete drawing rect through
+        # PoPFillRect before its CUST shapes are composited.
+        background.paste(palette[colour], (left, top, right, bottom))
     masks = {row: Image.new('L', background.size) for row in range(-1, 5)}
     cell_masks = {} if program.get('version') >= 6 else None
     gate_masks = {}

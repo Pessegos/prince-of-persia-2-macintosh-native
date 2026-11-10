@@ -24,8 +24,9 @@ SECT_RECT_7 = (0x1f2e, 0x1f8c, 0x2760, 0x2b1a)
 UNION_RECT_7 = (0x1f48, 0x1fa2)
 # Entries of each environment's piece-drawing table (a5-0x4aea + 4 * env):
 # the caverns' table covers kinds 0-44, the ruins' kinds 0-23 and the
-# temple's (levels 10-13, Temple.rsrc) kinds 0-43.
-DRAW_KINDS = {2: 44, 3: 45, 4: 24}
+# temple's (levels 10-13, Temple.rsrc) kinds 0-43, and the final
+# environment's kinds 0-42 (only eight entries are nonzero).
+DRAW_KINDS = {2: 44, 3: 45, 4: 24, 6: 43}
 # EmptyRect(r): Boolean, the empty test (bottom <= top or right <= left).
 EMPTY_RECT = 0x96000
 EMPTY_RECT_CODE = bytes.fromhex('225f205f3010b06800046c0e30280002b06800066c0442174ed11ebc00014ed1')
@@ -58,6 +59,9 @@ def recovery_inputs(program, caverns, prince):
     # The temple drawers (environment 2) reach EncloseRect 17:6c34, whose
     # EqualRect trap (A8A6) is at 17:6c58.
     primitives.add((17, 0x6c58))
+    # Native room 1 calls a special whole-screen colour fill from the
+    # final-level CUST painter; export it as a drawing command below.
+    primitives.add((9, 0x1a4c))
     # Every OffsetRect trap (A8A8): bridge and custom-room pieces use it at
     # 8:07fe, 8:085a and 3:120a, besides 5:021c.
     for segment in (3, 5, 7, 8):
@@ -255,6 +259,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         cpu.mem_write(a5 - offset, struct.pack('>4h', 0, 0, 365, 510))
     terrain = LevelMap(level)
     commands = []
+    fills = []
     command_kinds = []
     # The (row, column, pass) drawer call that admitted each command.
     command_slots = []
@@ -284,6 +289,17 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         segment = (address - 0x100000) // 0x10000
         offset = address - bases.get(segment, address)
         result = None
+        if segment == 9 and offset == 0x1a4c:
+            # 9:1a4c-1a8e: PoPFillRect(index 64, a5-0x4fec). The surrounding
+            # SaveCurrentWorld/RestoreOriginalWorld only route QuickDraw's
+            # destination. This is the room-1 background behind CUST art.
+            fill = [*struct.unpack('>4h', cpu.mem_read(a5 - 0x4fec, 8)), 64]
+            if fill not in fills:
+                fills.append(fill)
+            cpu.reg_write(UC_M68K_REG_D0, 0)
+            cpu.reg_write(UC_M68K_REG_PC, long(sp))
+            cpu.reg_write(UC_M68K_REG_A7, sp + 4)
+            return
         if opcode == b'\xa8\xa6':  # EqualRect(r1, r2): Boolean
             second, first = long(sp), long(sp + 4)
             equal = cpu.mem_read(first, 8) == cpu.mem_read(second, 8)
@@ -560,6 +576,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                      key=lambda item: draw_order_key(item[0][0], item[1]))
     return {'version': 1, 'level': struct.unpack_from('>H', level, 0x218a)[0], 'room': room_id,
             'commands': [command for command, _kind, _slot in ordered], 'torches': torches,
+            'fills': fills,
             'slots': [[slot, kind] for _command, kind, slot in ordered]}
 
 
@@ -632,6 +649,8 @@ def _prepare_caverns(program, caverns, prince, progress, recover, *, level_numbe
     result = {'version': 17 if definition.kind == 4 else 16, 'level': level_number,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
+    if definition.kind == 6:
+        result['fills'] = {room: scene['fills'] for room, scene in scenes.items() if scene['fills']}
     result['climb_redraw'], result['floor_redraw'] = {}, {}
     for room in range(32):
         progress(f'Cavern climbing layers: room {room + 1}/32')

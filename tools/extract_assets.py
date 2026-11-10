@@ -16,7 +16,7 @@ from tools.extract_intro import (
 )
 from tools.extract_attract import extract_attract, extract_credits_music
 from tools.extract_caverns import extract_cavern_levels, scenery_name
-from pop2.caverns import TEMPLE_LEVELS, scenery_resource
+from pop2.caverns import FINAL_LEVELS, TEMPLE_LEVELS, scenery_resource
 from pop2.mac_resources import get_resource_fork, parse_resource_fork
 from pop2.paths import ASSET_DIR
 
@@ -59,7 +59,7 @@ REQUIRED_RESOURCES = {
     # The flight to the tower after level thirteen (NIS 3), whose last shot
     # draws level fourteen's environment (Final.rsrc).
     "TowerNIS.rsrc": {"SHAP", "CTBL", "ANI ", "SCRP"},
-    "Final.rsrc": {"SHAP", "CTBL"},
+    "Final.rsrc": {"PIEC", "SHAP", "CTBL", "CUST"},
 }
 
 
@@ -90,7 +90,7 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         # resource forks: they run beside the music and scenes. The scenery
         # is drawn by worker processes, the demo by a single simulation.
         demo = background.submit(extract_attract, program, dict(resources), staging, lambda _text: None)
-        numbers = (3, 4, 5, 6, 7, 8, 9, *TEMPLE_LEVELS)
+        numbers = (3, 4, 5, 6, 7, 8, 9, *TEMPLE_LEVELS, *FINAL_LEVELS)
         # A temple CUST image can come from Kid.rsrc (level 13's room 4).
         sceneries = {number: (resources[scenery_resource(number)], resources["Kid.rsrc"])
                      if number in TEMPLE_LEVELS else resources[scenery_resource(number)]

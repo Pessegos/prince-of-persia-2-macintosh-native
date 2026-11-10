@@ -158,6 +158,14 @@ class LevelDefinitionTests(unittest.TestCase):
         other = LevelDefinition.decode(7, level_bytes(7, 4, 32, 24))
         self.assertEqual((other.entry_sequence, other.start_x), (5, 226))
 
+    def test_level_fourteen_arrives_at_the_native_tower_position(self):
+        # SetKidDefaults 2:5e10-5e32, with LEVL 2013's native room 1.
+        level = LevelDefinition.decode(14, level_bytes(14, 6, 1, 14))
+        self.assertEqual((level.entry_sequence, level.start_room, level.start_row,
+                          level.start_x, level.facing), (2, 0, 1, 291, 1))
+        other = LevelDefinition.decode(14, level_bytes(14, 6, 2, 14))
+        self.assertEqual((other.entry_sequence, other.start_x), (5, 226))
+
 
 
 class GameSessionTests(unittest.TestCase):
@@ -327,12 +335,14 @@ class OriginalLevelSessionTests(unittest.TestCase):
                              build_opening_room(include_curtain=False, room_id=room).flattened().tobytes())
             self.assertIs(renderer.room(room), renderer.room(room))
 
-    def test_missing_later_level_scenery_is_reported_before_opening_a_window(self):
+    def test_final_level_scenery_opens_from_its_original_resources(self):
         from pop2.level_rendering import LevelRenderer
 
-        # Level 14 (environment 6) has no scenery renderer.
-        with self.assertRaisesRegex(ValueError, "scenery is not implemented"):
-            LevelRenderer(self.resources.level(14))
+        if not (ASSET_DIR / 'final_level14.json').is_file():
+            self.skipTest('Imported final scenery required')
+        renderer = LevelRenderer(self.resources.level(14))
+        self.assertEqual(len(renderer.supported_rooms()), 11)
+        self.assertIsNotNone(renderer.room(0).background.getbbox())
 
     def test_initial_visited_and_generated_guards_inherit_the_player_environment(self):
         data = bytearray(self.resources.level(1).data)
@@ -362,15 +372,15 @@ class LevelHostTests(unittest.TestCase):
 
         RooftopSceneTests.setUp(self)
 
-    def test_unsupported_scenery_does_not_replace_or_reset_live_gameplay(self):
+    def test_unavailable_level_does_not_replace_or_reset_live_gameplay(self):
         scene = self.scene
         game, renderer = scene.game, scene.level_renderer
         state = vars(scene.sequence_state).copy()
         scene.combat.player.life = 2
         viewport = scene.native_viewport.tobytes()
         with patch.object(scene, "render") as render, \
-                self.assertRaisesRegex(ValueError, "entry controller is not implemented"):
-            scene.load_level(14)
+                self.assertRaisesRegex(ValueError, "Missing LEVL"):
+            scene.load_level(15)
         render.assert_not_called()
         self.assertIs(scene.game, game)
         self.assertIs(scene.level_renderer, renderer)

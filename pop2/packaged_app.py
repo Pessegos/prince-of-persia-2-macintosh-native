@@ -40,7 +40,10 @@ def smoke_test():
             root.mainloop()
             if scene.native_viewport.getbbox() is None:
                 raise RuntimeError('Initial scene is blank')
-            for number in range(1, 14):
+            from pop2.caverns import scenery_available
+
+            last = 15 if scenery_available(14) else 14
+            for number in range(1, last):
                 scene.load_level(number)
                 scene.render()
                 if scene.native_viewport.getbbox() is None:

@@ -72,7 +72,7 @@ def smoke(archive, image=None, defender=False, reference=None):
             run('PoP2Mac.exe', '--smoke-import', Path(image).resolve(), timeout=900)
             run('PoP2Mac.exe', '--check')
             prepared = json.loads(run('PoP2Mac.exe', '--smoke-test').strip().splitlines()[-1])
-            if prepared['levels'] != list(range(1, 14)):
+            if prepared['levels'] != list(range(1, 15)):
                 raise RuntimeError('Imported build did not render every currently supported level')
             if reference:
                 for name in ('caverns_entry.json', 'caverns_level4.json', 'caverns_level5.json',
