@@ -112,6 +112,46 @@ class PressurePlateTests(unittest.TestCase):
                 self.assertEqual(trace[79], (237, ()))
                 self.assertEqual(trace[80][0], 236)
 
+    def test_dead_presser_opens_a_gate_for_good_from_closed_or_open_wait(self):
+        record = SimpleNamespace(offset_x=0, aux=0x40)
+        for position in (0, 237):
+            with self.subTest(position=position):
+                self.setUp()
+                self.set_tile(0, 14, 5, 1)
+                self.plates.foreground[0, 15] = 0x300 | position
+                if position:
+                    self.plates.active[0, 15] = 0
+                state = SequenceState(22, action=185, target_x=250, facing=1,
+                                      actor_type=2, animation_state=5)
+                self.plates.press(self.terrain, TerrainMotion(0, 1), state, record,
+                                  alive=False, native_alive=False, displayed_room=0)
+                self.assertEqual(self.plates.active[0, 15], 3)
+                self.assertEqual(self.plates.timer(self.terrain, 1), 31)
+                for _ in range(200):
+                    self.plates.advance(self.terrain)
+                self.assertEqual(self.terrain.tile(0, 5, 1).foreground & 255, 255)
+                self.assertNotIn((0, 15), self.plates.active)
+
+    def test_gate_pressure_uses_native_alive_instead_of_zero_hp(self):
+        self.set_tile(0, 14, 5, 1)
+        state = SequenceState(85, action=185, target_x=250, facing=1,
+                              actor_type=2, animation_state=5)
+        self.plates.press(self.terrain, TerrainMotion(0, 1), state,
+                          SimpleNamespace(offset_x=0, aux=0x40), alive=False,
+                          native_alive=True, displayed_room=0)
+        self.assertEqual(self.plates.active[0, 15], 2)
+        self.assertEqual(self.plates.timer(self.terrain, 1), 5)
+
+    def test_living_offscreen_presser_opens_permanently_without_latching_the_plate(self):
+        self.set_tile(0, 14, 5, 1)
+        state = SequenceState(227, action=171, target_x=250, facing=1,
+                              actor_type=2, animation_state=1)
+        self.plates.press(self.terrain, TerrainMotion(0, 1), state,
+                          SimpleNamespace(offset_x=0, aux=0x40),
+                          native_alive=True, displayed_room=1)
+        self.assertEqual(self.plates.active[0, 15], 3)
+        self.assertEqual(self.plates.timer(self.terrain, 1), 5)
+
     def test_holding_keeps_the_gate_open_without_repeated_plate_clicks(self):
         self.push()
         for tick in range(200):

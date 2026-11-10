@@ -176,5 +176,7 @@ wait restarts without a new "opened" request. The port used to restart the
 gate's opening phase on every press, so a held or re-pressed plate asked
 for 18/273 every frame and the sound repeated; the regression is
 `tests.test_pressure_plates` "pressing an open gate's plate". A dead or
-off-screen presser instead opens the gate for good (255, 5:1de8); that
-branch is not modelled yet.
+off-screen presser instead opens the gate for good (255 and phase 3,
+5:1de8). This branch is implemented since the 2026-11-10 temple report:
+pressure carries native ALIVE and the displayed room through to TriggerGate.
+The permanent plate timer alone previously left the gate on a temporary cycle.
