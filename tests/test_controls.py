@@ -1008,7 +1008,11 @@ class GameMenuRowTests(unittest.TestCase):
         menu = GameMenu()
         actions = [item.action for item in menu.items]
         self.assertEqual(actions.index('controls'), actions.index('cutscenes') + 1)
-        self.assertLessEqual(menu.row_rect(len(menu.items) - 1)[3], menu.PANEL[3])
+        self.assertLessEqual(menu.row_rect(menu.visible_indices()[-1])[3], menu.PANEL[3])
+        menu.key('Up')  # Wrap to Quit and scroll the final row into view.
+        self.assertEqual(menu.focus, len(menu.items) - 1)
+        self.assertEqual(menu.visible_indices()[-1], menu.focus)
+        self.assertLessEqual(menu.row_rect(menu.focus)[3], menu.PANEL[3])
         self.assertGreaterEqual(menu.PANEL[1], 0)
 
     def test_menu_delegates_to_the_controls_page(self):
