@@ -40,6 +40,7 @@ are one-based, port rooms zero-based.
 | 6:1e1c | advance SEQS 108 instead of 86 | `apply_guard_intent` |
 | 6:2592/25d4 | instead of sheathing (SEQS 77) it glides (SEQS 90) | Prince-dead branch |
 | AnimChar 4:2ca2 (opcode -2) | its turn first moves AddCharX(25) | `SequenceRuntime` |
+| Turn admission 6:2690-26a6 | type 10 cannot select SEQS 60 in floor/rise poses 213..217; it may turn once ready | `choose_guard_action` (2026-11-10 follow-up) |
 | CheckAlert 2:704c-7068 | gaps, obstacles and closed gates neither limit nor block its alert; walls do | `alert_path_mode(floating=True)` |
 | CheckStab 6:5722 | the Prince killed by it gets death method 12 | `_hurt` |
 | CheckFloor 4:35ca | it never falls | no terrain physics |
@@ -69,6 +70,45 @@ motion, so the plate, loose-floor, spike and crush hooks skip it.
 
 - Native probe of the wake/parry/bob paths; 4:02e0's impassable-cell branch
   (0372), Opponent1 3:09d8, IsCharInKidRoom 6:46a8 (same row only), the
-  remaining CheckAlert 70f2 engagement, DoStrike 6:2690 cue 60 gate.
+  remaining CheckAlert 70f2 engagement. The turn gate at 6:2690 is now
+  implemented (the older note called SEQS 60 a cue).
 - What the encounter leads to (TriggerJinnee 4:1d64 and the shadow
   functions 4:24b2-2630 are separate).
+
+## Room-7 playtest follow-up (2026-11-10)
+
+The user's broad bug report prompted a hidden-scene check of level 12,
+native room 7. Three concrete defects were reproduced and corrected:
+
+- Crossing behind the sword during SEQS 106 interrupted its rise with a
+  combat turn. With pose 214 and the Prince moved from X290 to X430, the
+  next port frame switched to SEQS 60. SwordCtrl **6:22e6 -> 2638**, then
+  **6:2690-26a6**, rejects the turn for type 10 in poses 213..217. The
+  original listing names this routine DoStrike, but this path selects
+  SEQS 60; it is a turn request, not sound cue 60. The port now keeps the
+  rise and permits the pending side change once pose 171 is reached.
+- On the final parry, the sword retained its hover offset all the way to
+  rest pose 213. For example Y+7 remained Y+7 after twenty frames. The
+  native caller **TestStrike 6:5a74/5a7c -> 4:1c36** takes both surviving
+  and final life-loss paths through **4:1c4c-1c56**: AddSound(10), then
+  SetCharFloor **4:31fa**, which writes row*120+106. The port only did so
+  for surviving parries. Both paths now align to the floor (relative Y0).
+- The same final-parry branch omitted sound 10. It now queues the cue as
+  on surviving parries, alongside the existing parry/deactivation music.
+
+The wake sequence's brief return to the floor is in the original SEQS 106
+data; it is not an AI restart. No change to the authored animation, the
+native 25-pixel turn offset, combat ranges, six parries, 480-frame rest
+timer or room collision approximation is claimed by these fixes.
+
+The strengthened final-parry test and new turn tests reject the previous
+code. Tests include all five blocked poses, a ready-pose turn control and
+the actual scene's complete rise after supplying a crossed Prince position.
+This is not a physical-input jump replay or full encounter parity.
+Verification: flame-sword **18 OK**; combat/enemy-AI/guard-audio **161 run,
+OK, 1 skipped** (optional original profile, POP2_RESEARCH_DIR unset).
+Dependencies, Ruff F/E9, catalogue and whitespace checks pass. Original CODE
+was read offline; no new native CPU probe, full/import suite, hardware
+capture, live game/emulator, shared settings/saves or resource write.
+The user's precise visual/combat symptom was requested separately; these
+fixes do not close the remaining native-rule gaps listed above.

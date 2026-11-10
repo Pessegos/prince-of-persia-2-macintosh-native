@@ -139,17 +139,32 @@ class FlameSwordCombatTests(unittest.TestCase):
         # 4:1c9e: SEQS 107, SetSkelTimer(480), song 238, ALIVE 0.
         c = self.encounter()
         c.guard.life = 1
+        c.guard.state.current_y = 7  # The hovering sword can bob above/below its floor.
         c.guard.state.action = 154
         c.player.state.action = 150
         c.resolve_contacts()
         flame = c.guard.flame_sword
         self.assertEqual((c.guard.life, c.guard.state.sequence_id), (0, 107))
         self.assertEqual((flame.timer, flame.native_alive, flame.song_pending), (480, False, True))
+        # 4:1c4c-1c56 still plays cue 10 and sets the floor on the final parry.
+        self.assertIn(10, c.guard.state.sound_events)
+        self.assertEqual(c.guard.state.current_y, 0)
         # AutoCtrl 4:16e8-1704 counts the timer down while it rests.
         for _ in range(20):
             c.advance_guard()
         self.assertEqual(flame.timer, 460)
         self.assertEqual(c.guard.state.action, 213)
+        self.assertEqual(c.guard.state.current_y, 0)
+
+    def test_turn_waits_until_the_sword_has_finished_rising(self):
+        # 6:2690-26a6 rejects type-10 turns in poses 213..217.
+        for pose in (*range(213, 218), 171):
+            with self.subTest(pose=pose):
+                c = self.encounter(player_x=280, sword_x=200)
+                c.guard.state.facing = 0  # The Prince has crossed behind it.
+                c.guard.state.action = pose
+                c.choose_guard_action()
+                self.assertEqual(c.guard.selected_sequence, 60 if pose == 171 else 227)
 
     def test_the_prince_never_strikes_it(self):
         # TestStrike 6:590a skips a type-10 defender entirely.
@@ -251,6 +266,21 @@ class LevelTwelveFlameSwordTests(unittest.TestCase):
         sword.state.target_x = sword.state.current_x = 30
         self.tick(5)
         self.assertEqual(sword.state.sequence_id, 105)
+
+    def test_crossing_behind_a_rising_sword_does_not_cut_its_animation_short(self):
+        sword = self.enter(290)
+        self.tick(2)
+        self.assertEqual((sword.state.sequence_id, sword.state.action), (106, 214))
+        # Supply the crossing position; run real alert, AI and animation afterwards.
+        self.scene.sequence_state.current_x = self.scene.sequence_state.target_x = 430
+        for _ in range(20):
+            if sword.state.action not in range(213, 218):
+                break
+            self.tick()
+            self.assertEqual(sword.state.source_sequence_id, 106)
+        self.assertEqual(sword.state.action, 171)
+        self.tick()
+        self.assertEqual(sword.selected_sequence, 60)
 
     def test_the_drawn_sword_uses_its_own_artwork(self):
         # SetupSword 3:0b1c: image set 3, AFRM piece 14 for pose 213.

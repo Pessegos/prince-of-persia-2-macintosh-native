@@ -172,17 +172,19 @@ class FlameSword:
 
     def parried(self, actor):
         """FlameSwordDecLifePts 4:1c36: one life per parried strike. The last
-        drops it (SEQS 107) for 480 frames with song 238; otherwise SEQS 103,
-        cue 10 and SetCharFloor 4:31fa."""
+        drops it (SEQS 107) for 480 frames with song 238; otherwise SEQS 103.
+        Both paths use cue 10 and SetCharFloor 4:31fa."""
         from pop2.combat import select_sequence
 
         actor.life = max(0, actor.life - 1)
         if actor.alive:
             select_sequence(actor, PUSHED_SEQUENCE)
-            actor.state.sound_events.append(PUSHED_CUE)
-            actor.state.current_y = actor.state.vertical_velocity = 0
         else:
             self.fall(actor)
+        # 4:1c4c-1c56 is common to surviving and final parries: cue 10 and
+        # SetCharFloor. Otherwise the last hover offset persists in SEQS 105.
+        actor.state.sound_events.append(PUSHED_CUE)
+        actor.state.current_y = actor.state.vertical_velocity = 0
         actor.runtime.next_frame()
         actor.state.current_x = actor.state.target_x
 

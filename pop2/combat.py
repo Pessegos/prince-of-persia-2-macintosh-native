@@ -1129,7 +1129,9 @@ class CombatEncounter:
                 and not (self._bridge_fight_room(guard) and self._bridge_engage(guard))):
             # SwordCtrl 6:2206/22e6/26a8 permits ordinary-NPC turns in
             # modes 0/1, not just pose 171. SEQS:60 performs the facing flip.
-            if state.animation_state < 2:
+            # 6:2690-26a6: type 10 cannot turn during its floor/rise poses.
+            if (state.animation_state < 2
+                    and not (state.actor_type == 10 and 213 <= state.action <= 217)):
                 select_sequence(guard, 60)
             return
         self.apply_guard_intent(self.decide_guard_intent(guard), guard)
