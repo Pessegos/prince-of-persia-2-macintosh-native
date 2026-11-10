@@ -1647,6 +1647,14 @@ class WindowControls(InputRouting):
 
     def dev_scroll(self, event):
         menu = getattr(self, 'game_menu', None)
+        if menu is not None and menu.page == 'menu':
+            point = self.dev_pointer(event)
+            if point is not None and DevelopmentMenu.contains(menu.PANEL, *point):
+                delta = getattr(event, 'delta', 0)
+                steps = -delta / 120 if delta else -1 if getattr(event, 'num', None) == 4 else 1
+                if menu.wheel(steps):
+                    self.render()
+            return 'break'
         if menu is not None and menu.page == 'cutscenes':
             if getattr(self, 'cutscene_replay', None) is None:
                 delta = getattr(event, 'delta', 0)

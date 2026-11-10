@@ -34,6 +34,7 @@ class GameMenu:
     error: str = ""
     dropdown: bool = False
     option_index: int = 0
+    menu_scroll: int = 0
     save_available: bool = True
     save_browser: object = None
     screenshot_gallery: object = None
@@ -48,7 +49,7 @@ class GameMenu:
     ABOUT_BUTTON = (190, ABOUT_DIALOG[1] + 120, 322, ABOUT_DIALOG[1] + 150)
     ROW_TOP = PANEL[1] + 36
     ROW_HEIGHT = 22
-    MENU_ROW_HEIGHT = 20
+    VISIBLE_ROWS = 14
     SCREENSHOT_PANEL = centered_panel(352, 230)
     CAPTURE_CONTROLS = ((212, SCREENSHOT_PANEL[1] + 44, 412, SCREENSHOT_PANEL[1] + 72),
                         (100, SCREENSHOT_PANEL[1] + 88, 412, SCREENSHOT_PANEL[1] + 116),
@@ -81,6 +82,7 @@ class GameMenu:
         self.return_to_menu = self.page == "menu"
         self.page = page
         self.focus = 0
+        self.menu_scroll = 0
         self.dropdown = False
         self.error = self.screenshot_status = ""
 
@@ -89,6 +91,7 @@ class GameMenu:
             return "close"
         self.page = "menu"
         self.focus = 0
+        self.menu_scroll = 0
         self.dropdown = False
         return "changed"
 
@@ -157,6 +160,7 @@ class GameMenu:
             if key in ("Up", "Down", "Tab"):
                 delta = -1 if key == "Up" or key == "Tab" and backwards else 1
                 self.focus = (self.focus + delta) % len(self.items)
+                self.scroll_to_focus()
         elif self.page == "confirm":
             if key in ("Left", "Right"):
                 self.focus = 0 if key == "Left" else 1
@@ -165,8 +169,26 @@ class GameMenu:
         return "changed"
 
     def row_rect(self, index):
-        top = self.ROW_TOP + index * self.MENU_ROW_HEIGHT
-        return (80, top, 432, top + self.MENU_ROW_HEIGHT - 2)
+        top = self.ROW_TOP + (index - self.menu_scroll) * self.ROW_HEIGHT
+        return (80, top, 432, top + self.ROW_HEIGHT - 2)
+
+    def visible_indices(self):
+        return range(self.menu_scroll, min(len(self.items), self.menu_scroll + self.VISIBLE_ROWS))
+
+    def scroll_to_focus(self):
+        if self.focus < self.menu_scroll:
+            self.menu_scroll = self.focus
+        elif self.focus >= self.menu_scroll + self.VISIBLE_ROWS:
+            self.menu_scroll = self.focus - self.VISIBLE_ROWS + 1
+
+    def wheel(self, steps):
+        limit = max(0, len(self.items) - self.VISIBLE_ROWS)
+        position = max(0, min(limit, self.menu_scroll + (1 if steps > 0 else -1)))
+        if position == self.menu_scroll or not steps:
+            return False
+        self.menu_scroll = position
+        self.focus = max(position, min(self.focus, position + self.VISIBLE_ROWS - 1))
+        return True
 
     def hit(self, x, y):
         if self.page == 'controls' and self.controls_page is not None:
@@ -185,9 +207,10 @@ class GameMenu:
                 return None
             return next((i for i, rect in enumerate(self.CAPTURE_CONTROLS)
                          if DevelopmentMenu.contains(rect, x, y)), None)
-        rects = ([self.row_rect(i) for i in range(len(self.items))]
-                 if self.page == "menu" else self.BUTTONS if self.page == "confirm"
-                 else (self.ABOUT_BUTTON,))
+        if self.page == "menu":
+            return next((i for i in self.visible_indices()
+                         if DevelopmentMenu.contains(self.row_rect(i), x, y)), None)
+        rects = self.BUTTONS if self.page == "confirm" else (self.ABOUT_BUTTON,)
         return next((i for i, rect in enumerate(rects)
                      if DevelopmentMenu.contains(rect, x, y)), None)
 
@@ -216,6 +239,14 @@ class GameMenu:
             return self.screenshot_gallery.click(x, y)
         if self.page == 'saves':
             return self.save_browser.click(x, y)
+        if self.page == 'menu' and 434 <= x < 446:
+            if self.menu_scroll and self.ROW_TOP <= y < self.ROW_TOP + self.ROW_HEIGHT:
+                self.wheel(-1)
+            elif (self.menu_scroll + self.VISIBLE_ROWS < len(self.items)
+                  and self.ROW_TOP + (self.VISIBLE_ROWS - 1) * self.ROW_HEIGHT <= y
+                  < self.ROW_TOP + self.VISIBLE_ROWS * self.ROW_HEIGHT):
+                self.wheel(1)
+            return "changed"
         index = self.hit(x, y)
         if self.page == "screenshots" and self.dropdown:
             if index is not None:
@@ -313,7 +344,8 @@ class GameMenu:
             text("by Pessegos", 420, panel_top + 162, muted, "right")
         else:
             text("Game Menu", 256, panel_top + 14, gold, "center")
-            for i, item in enumerate(self.items):
+            for i in self.visible_indices():
+                item = self.items[i]
                 rect = self.row_rect(i)
                 selected = i == self.focus
                 draw.rectangle(rect, fill=c("#303030") if selected else c("#222222"),
@@ -329,6 +361,13 @@ class GameMenu:
                 text(item.label, x, y, color, max_width=204)
                 # The game's NFNT replaces '+' with a trademark glyph.
                 text(item.shortcut.replace("+", "-"), rect[2] - 10, y, color, "right", 100)
+            if self.menu_scroll:
+                draw.polygon(((437, self.ROW_TOP + 8), (443, self.ROW_TOP + 8),
+                              (440, self.ROW_TOP + 4)), fill=gold)
+            if self.menu_scroll + self.VISIBLE_ROWS < len(self.items):
+                bottom = self.ROW_TOP + (self.VISIBLE_ROWS - 1) * self.ROW_HEIGHT
+                draw.polygon(((437, bottom + 6), (443, bottom + 6),
+                              (440, bottom + 10)), fill=gold)
             if not self.items[self.focus].enabled:
                 text("Save unavailable right now" if self.items[self.focus].action == 'save'
                      else "Not implemented yet", 256, panel[3] + 5, muted, "center")

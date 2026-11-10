@@ -49,9 +49,23 @@ class GameMenuModelTests(unittest.TestCase):
     def test_quit_is_available_by_keyboard_and_mouse(self):
         menu = GameMenu()
         menu.key("Up")
+        self.assertEqual(menu.menu_scroll, 1)
         self.assertEqual(menu.key("Return"), "quit")
         left, top, _, _ = menu.row_rect(len(menu.items) - 1)
         self.assertEqual(menu.click(left + 8, top + 8), "quit")
+
+    def test_original_row_spacing_is_kept_with_one_row_of_scroll(self):
+        menu = GameMenu()
+        self.assertEqual(menu.ROW_HEIGHT, 22)
+        self.assertEqual(list(menu.visible_indices()), list(range(14)))
+        self.assertIsNone(menu.hit(90, menu.ROW_TOP + 14 * menu.ROW_HEIGHT + 8))
+        self.assertEqual(menu.click(440, menu.row_rect(13)[1] + 8), "changed")
+        self.assertEqual(menu.menu_scroll, 1)
+        self.assertEqual(list(menu.visible_indices()), list(range(1, 15)))
+        self.assertEqual(menu.hit(90, menu.row_rect(14)[1] + 8), 14)
+        self.assertFalse(menu.wheel(1))
+        self.assertTrue(menu.wheel(-1))
+        self.assertEqual(menu.menu_scroll, 0)
 
     def test_confirmation_defaults_to_cancel_and_returns_to_its_parent(self):
         menu = GameMenu(focus=1)
@@ -91,10 +105,12 @@ class GameMenuModelTests(unittest.TestCase):
 
     def test_all_command_rows_fit_inside_the_panel(self):
         menu = GameMenu()
-        for index in range(len(menu.items)):
-            left, top, right, bottom = menu.row_rect(index)
-            self.assertTrue(menu.PANEL[0] < left < right < menu.PANEL[2])
-            self.assertTrue(menu.PANEL[1] < top < bottom < menu.PANEL[3])
+        for position in (0, 1):
+            menu.menu_scroll = position
+            for index in menu.visible_indices():
+                left, top, right, bottom = menu.row_rect(index)
+                self.assertTrue(menu.PANEL[0] < left < right < menu.PANEL[2])
+                self.assertTrue(menu.PANEL[1] < top < bottom < menu.PANEL[3])
 
     def test_all_game_menu_pages_are_centered_above_the_health_strip(self):
         menu = GameMenu()
@@ -117,13 +133,14 @@ class GameMenuModelTests(unittest.TestCase):
         self.assertFalse(menu.dropdown)
 
     def test_centered_game_and_capture_hits_survive_window_and_fullscreen_scaling(self):
-        for page in ("menu", "screenshots"):
-            menu = GameMenu(page=page)
+        for page, scroll in (("menu", 0), ("menu", 1), ("screenshots", 0)):
+            menu = GameMenu(page=page, menu_scroll=scroll)
             rects = (menu.CAPTURE_CONTROLS if page == "screenshots" else
-                     [menu.row_rect(i) for i in range(len(menu.items))])
+                     [menu.row_rect(i) for i in menu.visible_indices()])
             for dimensions in ((512, 384), (800, 900), (1920, 1080), (3440, 1440)):
                 size, origin = fit_viewport(*dimensions)
-                for index, (left, top, right, bottom) in enumerate(rects):
+                for slot, (left, top, right, bottom) in enumerate(rects):
+                    index = slot if page == "screenshots" else slot + scroll
                     with self.subTest(page=page, dimensions=dimensions, control=index):
                         x, y = (left + right) / 2, (top + bottom) / 2
                         point = viewport_point(origin[0] + (x - 1) * size[0] / 510,
@@ -770,6 +787,18 @@ class GameMenuSceneTests(unittest.TestCase):
             self.press("q", 0x20000)
             destroy.assert_called_once_with()
 
+    def test_f1_mouse_wheel_reveals_quit_without_resizing_rows(self):
+        scene = self.scene
+        self.press("F1")
+        menu = scene.game_menu
+        self.assertEqual(menu.menu_scroll, 0)
+        with patch.object(scene, "dev_pointer", return_value=(440, menu.row_rect(13)[1] + 8)):
+            self.assertEqual(scene.dev_scroll(SimpleNamespace(delta=-120)), "break")
+        self.assertEqual(menu.menu_scroll, 1)
+        self.assertEqual(menu.hit(90, menu.row_rect(14)[1] + 8), 14)
+        self.press("Up")
+        self.assertEqual(menu.menu_scroll, 0)
+
     def test_cave_ambience_starts_off_and_its_shortcut_works_when_paused(self):
         self.keep_preferences_here()
         scene = self.scene
@@ -921,6 +950,8 @@ class GameMenuSceneTests(unittest.TestCase):
         self.press("F1")
         for key in ("Left", "Up", "Control_L", "Shift_L"):
             scene.dev_key_press(self.event(key))
+        scene.game_menu.focus = 0
+        scene.game_menu.scroll_to_focus()
         size, origin = fit_viewport(3440, 1440)
         row_y = scene.game_menu.row_rect(0)[1] + 8
         with patch.object(scene.canvas, "winfo_width", return_value=3440), \
@@ -947,7 +978,7 @@ class GameMenuSceneTests(unittest.TestCase):
             rendered = menu.draw(viewport, self.scene.ui_font)
             self.assertEqual(rendered.size, viewport.size)
             self.assertEqual(viewport.getpixel((256, 192)), (80, 80, 80, 255))
-            for rect in ([menu.row_rect(i) for i in range(len(menu.items))]
+            for rect in ([menu.row_rect(i) for i in menu.visible_indices()]
                          if page == "menu" else menu.BUTTONS):
                 self.assertTrue(0 <= rect[0] < rect[2] <= 512)
                 self.assertTrue(0 <= rect[1] < rect[3] <= 384)
@@ -979,7 +1010,7 @@ class GameMenuSceneTests(unittest.TestCase):
                     rects = (menu.CAPTURE_CONTROLS if menu.page == "screenshots" else
                              menu.BUTTONS if menu.page == "confirm" else
                              (menu.ABOUT_BUTTON,) if menu.page == "about" else
-                             [menu.row_rect(i) for i in range(len(menu.items))])
+                             [menu.row_rect(i) for i in menu.visible_indices()])
                 for index, rect in enumerate(rects):
                     self.assertEqual(menu.hit((rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2),
                                      menu.controls[index] if isinstance(menu, DevelopmentMenu) else index)
