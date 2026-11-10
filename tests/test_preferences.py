@@ -29,6 +29,18 @@ class PreferencesTests(unittest.TestCase):
         root.winfo_screenheight.return_value = 1080
         self.assertEqual(centered_window_geometry(root, 1020, 768), '1020x768+450+156')
 
+    @unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported resources required')
+    def test_windowed_startup_places_the_window_at_the_center(self):
+        from tkinter import Tk
+        from tests.test_terrain import RooftopSceneTests
+
+        remember(fullscreen=False)
+        with patch.object(Tk, 'geometry', autospec=True) as geometry:
+            RooftopSceneTests.setUp(self)
+        expected = centered_window_geometry(self.scene.root, 1020, 768)
+        geometry.assert_any_call(self.scene.root, expected)
+        self.assertFalse(self.scene.fullscreen)
+
     def test_the_first_session_has_the_defaults(self):
         self.assertEqual(load_preferences(), Preferences())
         self.assertFalse(load_preferences().cave_ambience)

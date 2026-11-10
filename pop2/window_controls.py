@@ -52,7 +52,7 @@ def alt_pressed(event, held_keys=()):
 
 
 def centered_window_geometry(root, width, height):
-    """The first windowed position after a fullscreen startup."""
+    """The first windowed position, whether shown now or after fullscreen."""
     x = max(0, (root.winfo_screenwidth() - width) // 2)
     y = max(0, (root.winfo_screenheight() - height) // 2)
     return f"{width}x{height}+{x}+{y}"

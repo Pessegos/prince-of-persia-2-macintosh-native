@@ -339,11 +339,12 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.create_window("Prince of Persia 2 Macintosh Native (WIP)" if with_guard
                            else "Prince of Persia 2 Macintosh Native - Animation Preview (WIP)",
                            scale=SCALE)
+        windowed_geometry = centered_window_geometry(
+            self.root, VISIBLE_SIZE[0] * SCALE, VISIBLE_SIZE[1] * SCALE)
         if preferences.fullscreen:
-            self.toggle_fullscreen(
-                windowed_geometry=centered_window_geometry(
-                    self.root, VISIBLE_SIZE[0] * SCALE, VISIBLE_SIZE[1] * SCALE),
-                windowed_state="normal")
+            self.toggle_fullscreen(windowed_geometry=windowed_geometry, windowed_state="normal")
+        else:
+            self.root.geometry(windowed_geometry)
         self.start_gamepads()
         self.action = self.sequence_state.action
         self.player_x = self.sequence_state.target_x
