@@ -113,6 +113,45 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.assertEqual((scene.combat.player.life, scene.combat.player.max_life), (5, 5))
         self.assertIsNotNone(scene.native_viewport.getbbox())
 
+    def test_level_thirteen_flight_finishes_in_fourteen(self):
+        if not all((ASSET_DIR / name).is_file() for name in
+                   ('tower.json', 'TowerNIS.rsrc', 'Final.rsrc', 'final_level14.json')):
+            self.skipTest('Imported tower scene and final scenery required')
+        from pop2.environments import Temple
+
+        scene = self.scene
+        scene.load_level(13)
+        scene.sequence_state.sequence_mode = 13
+        Temple(scene).finish_exit()
+        self.assertEqual(scene.status.get(), 'The flight to the tower')
+        for _ in range(400):
+            self.tick()
+            if scene.game.level.number == 14:
+                break
+        self.assertEqual((scene.game.level.number, scene.room_id,
+                          scene.sequence_state.sequence_mode), (14, 0, 13))
+        self.assertFalse(scene.level_complete)
+
+    def test_final_level_developer_warp_enters_a_floor_on_sparse_rooms(self):
+        if not all((ASSET_DIR / name).is_file() for name in ('Final.rsrc', 'final_level14.json')):
+            self.skipTest('Imported final scenery required')
+        scene = self.scene
+        scene.load_level(13)
+        scene.open_dev_mode()
+        menu = scene.dev_menu
+        menu.focus = 0
+        menu.select(next(index for index, option in enumerate(menu.level_options)
+                         if option[0] == 14))
+        scene.apply_dev_action('go')
+        self.assertEqual((scene.game.level.number, scene.room_id), (14, 0))
+        self.assertIsNone(scene.dev_menu)
+        for label in ('Room 2', 'Room 6', 'Room 8', 'Room 10'):
+            with self.subTest(label=label):
+                scene.jump_to_screen(label)
+                self.assertEqual(scene.level_map.tile(scene.room_id,
+                                 (scene.player_x - 30) // 51, scene.terrain_motion.row).kind, 1)
+                self.tick(3)
+
     def test_level_thirteen_flame_room_animates(self):
         scene = self.scene
         scene.load_level(13)
@@ -480,7 +519,8 @@ class TowerExitTests(unittest.TestCase):
         self.assertEqual((levels, calls), ([14], []))
         with patch('pop2.caverns.scenery_available', return_value=False):
             flights[0]()
-        self.assertEqual((calls, scene.level_complete), (['Level 13 complete'], True))
+        self.assertEqual((calls, scene.level_complete),
+                         (['Level 14 files missing; reimport game files'], True))
 
 
 @unittest.skipUnless(all((ASSET_DIR / name).is_file() for name in

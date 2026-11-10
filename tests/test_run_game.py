@@ -49,6 +49,10 @@ class InstallationTests(unittest.TestCase):
                 'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}},
                 'scythes': {'schema': 1, 'scythes': [], 'rooms': {}},
                 'alternate_entry': {'room': 3, 'cell': 25, 'frames': [{'commands': []}]}}))
+        (assets / 'final_level14.json').write_text(json.dumps({
+            'version': 16, 'level': 14,
+            'rooms': {str(room): [] for room in range(32)},
+            'pressure_plates': {'schema': 1, 'rooms': {str(room): [] for room in range(32)}}}))
 
     def test_complete_installation_has_no_errors(self):
         self.assertEqual(run_game.installation_errors(self.project), [])
@@ -125,6 +129,16 @@ class InstallationTests(unittest.TestCase):
         (self.project / "assets" / "Kid.rsrc").unlink()
         errors = run_game.installation_errors(self.project)
         self.assertIn("Kid.rsrc", "\n".join(errors))
+
+    def test_older_import_requests_final_tower_files(self):
+        assets = self.project / 'assets'
+        for name in ('TowerNIS.rsrc', 'Final.rsrc', 'tower.json', 'final_level14.json'):
+            with self.subTest(name=name):
+                (assets / name).unlink()
+                self.assertIn(name, run_game.missing_assets(self.project))
+                (assets / name).touch()
+        (assets / 'final_level14.json').write_text('{}')
+        self.assertIn('final_level14.json (needs reimport)', run_game.missing_assets(self.project))
 
     def test_missing_prepared_audio_and_corrupt_manifest_request_reimport(self):
         manifest = self.project / "assets" / "audio" / "manifest.json"

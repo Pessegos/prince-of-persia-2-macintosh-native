@@ -3272,6 +3272,14 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             preferred = 0 if (self.game.level.number, room) == (9, 7) else None
             row, column = room_entry(self.level_map, room, preferred_row=preferred)
             x = column * TILE_WIDTH + 30
+        elif self.game.level.kind == 6:
+            from pop2.development_entry import room_entry
+
+            if not any(self.level_map.tile(room, column, floor).kind == 1
+                       for floor in range(3) for column in range(10)):
+                raise ValueError("This screen has no standing entry")
+            row, column = room_entry(self.level_map, room)
+            x = column * TILE_WIDTH + 30
         else:
             rows = [row for row in range(3)
                     if self.level_map.tile(room, 9, row).kind == 1]

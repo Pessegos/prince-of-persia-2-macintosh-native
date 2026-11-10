@@ -25,6 +25,8 @@ REQUIRED_ASSETS = (
     "TNIS1.rsrc",
     "TNIS2.rsrc",
     "TNIS3.rsrc",
+    "TowerNIS.rsrc",
+    "Final.rsrc",
     "caverns_entry.json",
     "caverns_level4.json",
     "caverns_level5.json",
@@ -34,6 +36,8 @@ REQUIRED_ASSETS = (
     "ending.json",
     "discovery.json",
     "carpet.json",
+    "tower.json",
+    "final_level14.json",
     *(f"tree-{variant}.json" for variant in range(1, 10)),
     "NISTree.rsrc",
     "attract.json",
@@ -157,6 +161,16 @@ def missing_assets(project=PROJECT):
                 raise ValueError('Scythe scenery needs reimport')
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append(f'{name} (needs the temple blades)')
+    final_path = project / 'assets' / 'final_level14.json'
+    if final_path.is_file():
+        try:
+            final = json.loads(final_path.read_text(encoding='ascii'))
+            if (final.get('version') != 16 or final.get('level') != 14
+                    or set(final['rooms']) != {str(room) for room in range(32)}
+                    or final['pressure_plates'].get('schema') != 1):
+                raise ValueError('Final tower scenery needs reimport')
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            missing.append('final_level14.json (needs reimport)')
     attract_path = project / "assets" / "attract.json"
     if attract_path.is_file():
         from pop2.attract import read_attract

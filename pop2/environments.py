@@ -1745,10 +1745,11 @@ class Temple(Caverns):
                 if scenery_available(14):
                     scene.enter_next_level(14)
                 else:
-                    # Older imports can still finish the flight safely;
-                    # reimporting adds the final-level scenery export.
+                    # A running installation may lose the final files after
+                    # startup; name the missing handoff instead of claiming
+                    # that the campaign ends at level thirteen.
                     scene.level_complete = True
-                    scene.status.set(f'Level {number} complete')
+                    scene.status.set('Level 14 files missing; reimport game files')
             scene.game.exit = None
             scene.level_complete = False
             if not scene.start_tower_flight(finish):

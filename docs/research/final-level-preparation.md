@@ -134,3 +134,32 @@ bounded task is to recover Jaffar's position transitions and the mapping of
 these extended record cells to visible tower rooms. Until then, copies can
 appear in room 3's visible row 2; path rows 4/6/8 are retained but are not
 drawn or run through ordinary guard AI.
+
+## Level-14 handoff and developer warp follow-up (2026-11-10)
+
+The level-13 completion fallback was reachable when an older installation had
+not imported `tower.json`, `TowerNIS.rsrc`, `Final.rsrc` and
+`final_level14.json`. The launcher's required-file check now requests reimport
+before play, and checks the final scenery header, room set and pressure-plate
+schema. If files disappear during play, the exit names the missing level-14
+files instead of reporting level 13 as the end. No Macintosh behavior is
+inferred from this installation guard.
+
+The level-14 F3 menu listed all linked rooms, but its generic room-entry branch
+required solid tile 1 in the rightmost column. Rooms 2, 6, 8 and 10 have usable
+floor elsewhere. Final-level warps now use the existing room-entry search and
+reject room 9, which has no standing tile in its LEVL room data. A hidden Tk
+regression runs NIS 3 from level 13 to level 14 and another chooses level 14
+through the developer menu, then enters these sparse rooms and advances frames.
+The source worktree's imported assets pass the installation check. This does
+not establish which build or import the player used for the reported freeze;
+the external Mini vMac launcher seen running during investigation is not this
+port.
+
+Focused shared-desktop verification: `python -m unittest -q tests.test_run_game
+tests.test_temple_arrival tests.test_development_menu tests.test_final_jaffars
+tests.test_opponent_generation` passed 151 tests. Dependency, Ruff, recovery
+catalogue and `git diff --check` checks passed. Full discovery was interrupted
+without a result after memory rose to about 15 GB in the shared desktop; the
+focused result does not imply full-suite success. The next bounded gameplay
+task remains the Jaffar position path and subsequent battle controller.
