@@ -95,9 +95,22 @@ class LevelTenArrivalTests(unittest.TestCase):
     def test_the_level_menu_lists_the_temple_levels(self):
         scene = self.scene
         numbers = [option[0] for option in scene.development_levels()]
-        self.assertEqual(numbers[-4:], [10, 11, 12, 13])
+        self.assertEqual(numbers[-5:], [10, 11, 12, 13, 14])
         scene.load_level(12)
         self.assertEqual((scene.game.level.number, scene.room_id), (12, 18))
+        self.assertIsNotNone(scene.native_viewport.getbbox())
+
+    def test_level_thirteen_handoff_preserves_the_flame_in_fourteen(self):
+        if not all((ASSET_DIR / name).is_file() for name in ('Final.rsrc', 'final_level14.json')):
+            self.skipTest('Imported final scenery required')
+        scene = self.scene
+        scene.load_level(13)
+        scene.sequence_state.sequence_mode = 13
+        scene.combat.player.max_life = 5
+        scene.enter_next_level(14)
+        self.assertEqual((scene.game.level.number, scene.room_id, scene.player_x), (14, 0, 291))
+        self.assertEqual(scene.sequence_state.sequence_mode, 13)
+        self.assertEqual((scene.combat.player.life, scene.combat.player.max_life), (5, 5))
         self.assertIsNotNone(scene.native_viewport.getbbox())
 
     def test_level_thirteen_flame_room_animates(self):
@@ -448,23 +461,60 @@ class TowerFlightTests(unittest.TestCase):
 
 
 class TowerExitTests(unittest.TestCase):
-    def test_leaving_level_thirteen_plays_the_flight_then_completes(self):
-        # CheckPlayNIS(13, 14): NIS 3, then the level-14 restart (not ported).
+    def test_leaving_level_thirteen_plays_the_flight_then_enters_fourteen(self):
+        # CheckPlayNIS(13, 14): NIS 3, then the level-14 restart.
         from types import SimpleNamespace
+        from unittest.mock import patch
         from pop2.environments import Temple
 
-        calls, flights = [], []
+        calls, flights, levels = [], [], []
         scene = SimpleNamespace(game=SimpleNamespace(level=SimpleNamespace(number=13), exit=object()),
                                 status=SimpleNamespace(set=calls.append), level_complete=None,
-                                start_tower_flight=lambda finish: flights.append(finish) or True)
+                                start_tower_flight=lambda finish: flights.append(finish) or True,
+                                enter_next_level=levels.append)
         Temple(scene).finish_exit()
         self.assertEqual((calls, scene.level_complete), ([], False))
         self.assertIsNone(scene.game.exit)
-        flights[0]()
+        with patch('pop2.caverns.scenery_available', return_value=True):
+            flights[0]()
+        self.assertEqual((levels, calls), ([14], []))
+        with patch('pop2.caverns.scenery_available', return_value=False):
+            flights[0]()
         self.assertEqual((calls, scene.level_complete), (['Level 13 complete'], True))
-        scene.start_tower_flight = lambda finish: False
-        Temple(scene).finish_exit()
-        self.assertEqual(calls[-1], 'Level 13 complete')
+
+
+@unittest.skipUnless(all((ASSET_DIR / name).is_file() for name in
+                         ('Final.rsrc', 'final_level14.json')), 'Imported final scenery required')
+class FinalLevelFoundationTests(unittest.TestCase):
+    def test_original_rooms_and_entry_render(self):
+        from pop2.game_session import GameResources, GameSession
+        from pop2.level_rendering import LevelRenderer
+
+        game = GameSession.load(GameResources.load(), 14)
+        renderer = LevelRenderer(game.level)
+        self.assertEqual((game.level.kind, game.room_id, game.runtime.state.source_sequence_id,
+                          game.runtime.state.target_x), (6, 0, 2, 291))
+        self.assertEqual(len(renderer.supported_rooms()), 11)
+        room = renderer.enter_room(game.room_id, game.caverns)
+        self.assertEqual(room.background.getpixel((0, 0)), (8, 107, 239, 255))
+        self.assertIsNotNone(room.foreground.getbbox())
+
+    def test_final_entry_round_trips_through_a_save(self):
+        from pathlib import Path
+        import tempfile
+        from pop2.game_session import GameResources, GameSession
+        from pop2.save_game import capture_snapshot, read_snapshot, write_save
+
+        resources = GameResources.load()
+        original = GameSession.load(resources, 14)
+        original.runtime.state.sequence_mode = 13
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'final.pop2save'
+            write_save(path, capture_snapshot(original))
+            restored, _saved = read_snapshot(path, resources)
+        self.assertEqual((restored.level.number, restored.room_id,
+                          restored.runtime.state.sequence_mode,
+                          restored.runtime.state.target_x), (14, 0, 13, 291))
 
 
 if __name__ == '__main__':

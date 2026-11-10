@@ -185,7 +185,9 @@ Each stage integrates separately with the usual reservation.
 - Level 12's raw-1 opponent is the flaming sword (actor type 10,
   FlameSword.rsrc): first port in `pop2/flame_sword.py`, rules and gaps in
   `flame-sword.md` (a reimport is needed for FlameSword.rsrc).
-- The end of level 13 (CheckPlayNIS(13, 14): NIS 3) and level 14.
+- Updated 2026-11-10: NIS 3 now enters level 14's exported static rooms;
+  the CODE 9 final battle, animated scenery and ending remain open
+  ([scope](final-level-preparation.md)).
 - Closed 2026-11-05: CheckBarr's sliding-rock faces and the cross-room
   following of running opponents ([note](temple-rock-collision.md)).
 - Level 13's altar (`temple-altar.md`): the flame's flare (0x80 sequence)

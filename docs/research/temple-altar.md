@@ -170,8 +170,10 @@ flame, the door reaches 79, and the same birdhead then draws and kneels.
 
 ## Open
 
-- What ends level 13 after the merge (CheckPlayNIS(13, 14): NIS 3), and the
-  mode-13 Kid in level 14 (2001 at palette base 48, environment 6).
+- Updated 2026-11-10: CheckPlayNIS(13, 14) now plays NIS 3 and enters the
+  exported static final rooms with mode 13 preserved. The mode-13 palette
+  presentation in level 14 (2001 at base 48), CODE 9 combat and ending
+  remain open ([scope](final-level-preparation.md)).
 - A birdhead that draws with the Prince within 27 pixels behind it, next to
   the chasm, can turn into it: SEQS 60 flips the supporting foot across the
   anchor, and CheckFloor drops it. SwordCtrl 6:26a8 selects SEQS 60 with no floor

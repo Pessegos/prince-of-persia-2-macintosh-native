@@ -2959,7 +2959,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
 
     def enter_next_level(self, number, keep_music=False):
         max_life = self.combat.player.max_life if self.combat is not None else None
+        imbued = (self.game.level.number == 13 and number == 14
+                  and self.sequence_state.sequence_mode == 13)
         self.load_level(number, keep_music=keep_music)
+        if imbued:
+            # SEQS -18 clears only the selected ID at the native handoff;
+            # the flame's mode 13 survives level 13 -> 14.
+            self.sequence_state.sequence_mode = 13
         if max_life is not None:
             self.combat.player.life = self.combat.player.max_life = max_life
             self.render()
@@ -3189,7 +3195,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         options = []
         from pop2.caverns import scenery_available
 
-        for number in range(1, 14):
+        for number in range(1, 15):
             if number >= 6 and not scenery_available(number):
                 continue
             renderer = (self.level_renderer if self.game.level.number == number else
@@ -3466,11 +3472,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         layer.putalpha(ImageChops.multiply(layer.getchannel("A"), ImageChops.invert(mask)))
         level = getattr(getattr(self, 'game', None), 'level', None)
         level_kind = getattr(state, 'level_kind', getattr(level, 'kind', None))
-        if level_kind in (3, 4) and state is not None and bounds is not None and row is not None:
+        if level_kind in (3, 4, 6) and state is not None and bounds is not None and row is not None:
             clip_top = cavern_clip_top(self.level_map, self.room_id, row, state, bounds)
             if clip_top > 0:
                 layer.paste((0, 0, 0, 0), (0, 0, layer.width, clip_top))
-        if level_kind in (2, 3, 4) and state is not None and bounds is not None and row is not None:
+        if level_kind in (2, 3, 4, 6) and state is not None and bounds is not None and row is not None:
             exit_clip = cavern_exit_clip(self.level_map, self.room_id, row, state, record)
             if exit_clip is not None:
                 top, right = exit_clip
@@ -3485,7 +3491,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             # SetupSand 18:057a draws the surface at bottom 243.
             layer.paste((0, 0, 0, 0), (0, 243, layer.width, layer.height))
         frame = Image.alpha_composite(frame, layer)
-        if level_kind in (2, 3, 4) and room is not None and state is not None and bounds is not None:
+        if level_kind in (2, 3, 4, 6) and room is not None and state is not None and bounds is not None:
             frame = room.draw_actor_foreground(frame, state, bounds)
             if (state.actor_type in (0, 2, 4) and record is not None
                     and actor_draw_order(state, record, bounds, row)[0] == 0):

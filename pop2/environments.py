@@ -1737,12 +1737,18 @@ class Temple(Caverns):
             # CheckPlayNIS 2:0180 (a tree scene at most), then RestartGame.
             self.finish_via_story(number + 1)
         else:
-            # CheckPlayNIS(13, 14) shows NIS 3, the flight to the tower;
-            # level fourteen is not ported, so the game stops after it.
+            # CheckPlayNIS(13, 14) shows NIS 3, the flight to the tower.
             def finish():
                 scene.game.exit = None
-                scene.level_complete = True
-                scene.status.set(f'Level {number} complete')
+                from pop2.caverns import scenery_available
+
+                if scenery_available(14):
+                    scene.enter_next_level(14)
+                else:
+                    # Older imports can still finish the flight safely;
+                    # reimporting adds the final-level scenery export.
+                    scene.level_complete = True
+                    scene.status.set(f'Level {number} complete')
             scene.game.exit = None
             scene.level_complete = False
             if not scene.start_tower_flight(finish):
@@ -1753,11 +1759,14 @@ def environment_for(scene):
     """The environment of the scene's current level.
 
     Chosen by the level's environment state, which the game creates for
-    kinds 3 and 4 (caverns), level two (desert) and kind 5 (the harbor).
+    kinds 2, 3, 4 and 6 (exported scenery), level two (desert) and kind 5
+    (the harbor).
     """
     game = scene.game
     if getattr(game, 'caverns', None) is not None:
-        return {4: Ruins, 2: Temple}.get(game.level.kind, Caverns)(scene)
+        # Final's scenery shares the exported room format, but its CODE 9
+        # mechanics do not use the cavern/ruins environment controller.
+        return {4: Ruins, 2: Temple, 6: Environment}.get(game.level.kind, Caverns)(scene)
     if getattr(game, 'desert', None) is not None:
         return Desert(scene)
     if getattr(game, 'harbor', None) is not None:

@@ -48,7 +48,7 @@ from pop2.wall_spikes import WallSpikes
 FORMAT = 'pop2-macintosh-native-save'
 VERSION = 2
 # Levels 10-13 (the temple) are reached after the ride from level nine.
-SAVED_LEVELS = tuple(range(1, 14))
+SAVED_LEVELS = tuple(range(1, 15))
 MAX_BYTES = 2 * 1024 * 1024
 SAVE_DIRECTORY = (USER_DATA_DIR / 'saves' if USER_DATA_DIR is not None
                   else Path.home() / 'Saved Games' / 'PoP2 Macintosh Native')
