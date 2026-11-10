@@ -19,10 +19,11 @@ from tests.desktop import exclusive_desktop
 
 
 class GameMenuModelTests(unittest.TestCase):
-    def test_shortcuts_exclude_quit_and_alt_f_but_keep_alt_enter(self):
+    def test_shortcuts_include_quit_and_alt_enter_but_exclude_removed_commands(self):
         items = GameMenu().items
         shortcuts = {item.shortcut for item in items}
-        self.assertNotIn("Alt+Q", shortcuts)
+        self.assertIn("Alt+Q", shortcuts)
+        self.assertEqual(items[-1].action, "quit")
         self.assertNotIn("Alt+F", shortcuts)
         self.assertNotIn("Alt+E", shortcuts)
         self.assertIn("Alt+Enter", shortcuts)
@@ -44,6 +45,13 @@ class GameMenuModelTests(unittest.TestCase):
         self.assertEqual(menu.page, "menu")
         menu.key("Tab", backwards=True)
         self.assertEqual(menu.key("space"), "resume")
+
+    def test_quit_is_available_by_keyboard_and_mouse(self):
+        menu = GameMenu()
+        menu.key("Up")
+        self.assertEqual(menu.key("Return"), "quit")
+        left, top, _, _ = menu.row_rect(len(menu.items) - 1)
+        self.assertEqual(menu.click(left + 8, top + 8), "quit")
 
     def test_confirmation_defaults_to_cancel_and_returns_to_its_parent(self):
         menu = GameMenu(focus=1)
@@ -738,6 +746,30 @@ class GameMenuSceneTests(unittest.TestCase):
         self.assertFalse(scene.cave_ambience_enabled)
         self.assertFalse(load_preferences().cave_ambience)
 
+    def test_copy_protection_and_fullscreen_are_remembered(self):
+        self.keep_preferences_here()
+        scene = self.scene
+        scene.apply_game_action("copy_protection")
+        self.assertFalse(scene.copy_protection_enabled)
+        self.assertFalse(load_preferences().copy_protection)
+        with patch.object(scene.root, "attributes"), patch.object(scene.root, "state"):
+            scene.toggle_fullscreen()
+            self.assertTrue(load_preferences().fullscreen)
+            scene.toggle_fullscreen()
+        self.assertFalse(load_preferences().fullscreen)
+        self.assertFalse(load_preferences().copy_protection)
+
+    def test_quit_menu_and_shortcut_close_the_window(self):
+        scene = self.scene
+        with patch.object(scene.root, "destroy") as destroy:
+            self.press("F1")
+            scene.game_menu.focus = len(scene.game_menu.items) - 1
+            self.press("Return")
+            destroy.assert_called_once_with()
+            destroy.reset_mock()
+            self.press("q", 0x20000)
+            destroy.assert_called_once_with()
+
     def test_cave_ambience_starts_off_and_its_shortcut_works_when_paused(self):
         self.keep_preferences_here()
         scene = self.scene
@@ -855,7 +887,7 @@ class GameMenuSceneTests(unittest.TestCase):
     def test_excluded_shortcuts_and_altgr_do_not_trigger_commands(self):
         scene = self.scene
         with patch.object(scene, "restart_opening") as restart:
-            for key, state in (("q", 0x20000), ("f", 0x20000), ("n", 0x20004)):
+            for key, state in (("f", 0x20000), ("n", 0x20004)):
                 self.press(key, state)
                 self.assertIsNone(scene.game_menu)
             restart.assert_not_called()

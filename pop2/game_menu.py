@@ -48,6 +48,7 @@ class GameMenu:
     ABOUT_BUTTON = (190, ABOUT_DIALOG[1] + 120, 322, ABOUT_DIALOG[1] + 150)
     ROW_TOP = PANEL[1] + 36
     ROW_HEIGHT = 22
+    MENU_ROW_HEIGHT = 20
     SCREENSHOT_PANEL = centered_panel(352, 230)
     CAPTURE_CONTROLS = ((212, SCREENSHOT_PANEL[1] + 44, 412, SCREENSHOT_PANEL[1] + 72),
                         (100, SCREENSHOT_PANEL[1] + 88, 412, SCREENSHOT_PANEL[1] + 116),
@@ -73,6 +74,7 @@ class GameMenu:
             MenuItem("about", "About", "Alt+V"),
             MenuItem("fullscreen", "Fullscreen", "Alt+Enter", checked=self.fullscreen),
             MenuItem("copy_protection", "Copy protection", "", checked=self.copy_protection),
+            MenuItem("quit", "Quit to Desktop", "Alt+Q"),
         )
 
     def show_page(self, page):
@@ -163,8 +165,8 @@ class GameMenu:
         return "changed"
 
     def row_rect(self, index):
-        top = self.ROW_TOP + index * self.ROW_HEIGHT
-        return (80, top, 432, top + self.ROW_HEIGHT - 2)
+        top = self.ROW_TOP + index * self.MENU_ROW_HEIGHT
+        return (80, top, 432, top + self.MENU_ROW_HEIGHT - 2)
 
     def hit(self, x, y):
         if self.page == 'controls' and self.controls_page is not None:

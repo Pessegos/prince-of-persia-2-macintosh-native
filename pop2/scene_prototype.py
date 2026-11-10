@@ -85,7 +85,7 @@ from pop2.crevices import (
     CREVICE_TILE,
     LIE_DOWN_SEQUENCE,
 )
-from pop2.game_ui import MacintoshFont
+from pop2.game_ui import MacintoshFont, VISIBLE_SIZE
 from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS
 from pop2.running_controls import RUN_INPUT_SEQUENCES
 from pop2.airborne_controls import AIRBORNE_TAKEOFF_SEQUENCES
@@ -321,8 +321,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.active_save_path = None
         self.game_was_paused = False
         self.native_viewport = None
-        self.copy_protection_enabled = True
         preferences = load_preferences()
+        self.copy_protection_enabled = preferences.copy_protection
         self.cave_ambience_enabled = preferences.cave_ambience
         self.keyboard_bindings = Bindings.from_saved('keyboard', preferences.keyboard_bindings)
         self.controller_bindings = Bindings.from_saved('controller', preferences.controller_bindings)
@@ -338,6 +338,9 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.create_window("Prince of Persia 2 Macintosh Native (WIP)" if with_guard
                            else "Prince of Persia 2 Macintosh Native - Animation Preview (WIP)",
                            scale=SCALE)
+        if preferences.fullscreen:
+            self.root.geometry(f"{VISIBLE_SIZE[0] * SCALE}x{VISIBLE_SIZE[1] * SCALE}")
+            self.toggle_fullscreen()
         self.start_gamepads()
         self.action = self.sequence_state.action
         self.player_x = self.sequence_state.target_x

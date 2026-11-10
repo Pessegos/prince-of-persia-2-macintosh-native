@@ -27,10 +27,11 @@ class PreferencesTests(unittest.TestCase):
         self.assertFalse(load_preferences().cave_ambience)
 
     def test_a_choice_is_there_in_the_next_session(self):
-        remember(cave_ambience=True)
-        self.assertTrue(load_preferences().cave_ambience)
-        remember(cave_ambience=False)
-        self.assertFalse(load_preferences().cave_ambience)
+        remember(cave_ambience=True, copy_protection=False, fullscreen=True)
+        self.assertEqual(load_preferences(), Preferences(cave_ambience=True,
+                                                        copy_protection=False, fullscreen=True))
+        remember(cave_ambience=False, fullscreen=False)
+        self.assertEqual(load_preferences(), Preferences(copy_protection=False))
 
     def test_no_partial_file_is_left_behind(self):
         remember(cave_ambience=True)
@@ -45,6 +46,10 @@ class PreferencesTests(unittest.TestCase):
         self.write('{"cave_ambience": true, "from_the_future": 3}')
         self.assertEqual(load_preferences(), Preferences(cave_ambience=True))
 
+    def test_old_preferences_keep_new_settings_at_their_defaults(self):
+        self.write('{"cave_ambience": true, "copy_protection": "off", "fullscreen": 1}')
+        self.assertEqual(load_preferences(), Preferences(cave_ambience=True))
+
     def test_a_disk_that_refuses_does_not_stop_the_game(self):
         with patch.object(Path, 'write_text', side_effect=OSError('read only')):
             remember(cave_ambience=True)
@@ -55,9 +60,11 @@ class PreferencesTests(unittest.TestCase):
         from tests.test_terrain import RooftopSceneTests
 
         for choice in (True, False):
-            remember(cave_ambience=choice)
+            remember(cave_ambience=choice, copy_protection=not choice, fullscreen=choice)
             RooftopSceneTests.setUp(self)
             self.assertIs(self.scene.cave_ambience_enabled, choice)
+            self.assertIs(self.scene.copy_protection_enabled, not choice)
+            self.assertIs(self.scene.fullscreen, choice)
             self.doCleanups()
             self.setUp()
 

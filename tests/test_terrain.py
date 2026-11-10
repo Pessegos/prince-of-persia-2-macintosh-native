@@ -2,6 +2,8 @@ import random
 import struct
 import tkinter as tk
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from PIL import Image, ImageChops, ImageOps, ImageTk
@@ -976,6 +978,17 @@ class TerrainTests(unittest.TestCase):
 
 class RooftopSceneTests(unittest.TestCase):
     def setUp(self):
+        # Scene toggles now persist, so each hidden fixture needs its own
+        # preferences unless a test explicitly supplied a path for a restart.
+        from pop2 import preferences
+        from pop2.paths import USER_DATA_DIR
+
+        if USER_DATA_DIR is not None and preferences.PREFERENCES_PATH == USER_DATA_DIR / 'preferences.json':
+            directory = TemporaryDirectory()
+            self.addCleanup(directory.cleanup)
+            patcher = patch('pop2.preferences.PREFERENCES_PATH', Path(directory.name) / 'preferences.json')
+            patcher.start()
+            self.addCleanup(patcher.stop)
         original_tk = tk.Tk
 
         def hidden_root():

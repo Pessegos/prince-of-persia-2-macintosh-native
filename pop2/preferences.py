@@ -13,6 +13,8 @@ PREFERENCES_PATH = (USER_DATA_DIR if USER_DATA_DIR is not None else
 @dataclass(frozen=True)
 class Preferences:
     cave_ambience: bool = False
+    copy_protection: bool = True
+    fullscreen: bool = False
     # Port-only Controls page; an empty table means the default keys/buttons.
     keyboard_bindings: dict = field(default_factory=dict)
     controller_bindings: dict = field(default_factory=dict)

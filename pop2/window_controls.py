@@ -306,6 +306,7 @@ class WindowControls(InputRouting):
             self.root.state(self.windowed_state)
             self.update_status_visibility()
         self.root.after_idle(self.present_viewport)
+        remember(fullscreen=self.fullscreen)
         return "break"
 
     def open_dev_mode(self, _event=None):
@@ -858,6 +859,8 @@ class WindowControls(InputRouting):
                 menu.error = "Could not remember screenshot settings."
         if action in ("close", "resume"):
             self.close_game_menu(resume=action == "resume")
+        elif action == "quit":
+            self.root.destroy()
         elif action in ("confirm_new", "about"):
             self.open_game_menu("confirm" if action == "confirm_new" else action)
         elif action == "screenshot_folder":
@@ -894,6 +897,7 @@ class WindowControls(InputRouting):
             self.render()
         elif action == "copy_protection":
             self.copy_protection_enabled = not getattr(self, "copy_protection_enabled", True)
+            remember(copy_protection=self.copy_protection_enabled)
             if not self.copy_protection_enabled:
                 self.copy_challenge = None
                 self.copy_pointer_held = False
@@ -1289,7 +1293,7 @@ class WindowControls(InputRouting):
             return 'break'
         command = {"n": "confirm_new", "r": "restart", "t": "sound", "m": "music",
                    "a": "ambience", "s": "save", "o": "open", "l": "open", "h": "hall", "v": "about",
-                   "c": "cutscenes", "k": "controls"}.get(
+                   "c": "cutscenes", "k": "controls", "q": "quit"}.get(
                        event.keysym.lower()) if alt and not event.state & (0x4 | 0x40) else None
         if command is not None:
             confirming_save = (self.game_menu is not None and self.game_menu.page == 'saves'
