@@ -66,6 +66,12 @@ native `GetCharCol` conversion rather than simple sprite X / 51.
   opposite bounds caused a jump into room 5 to cut back into room 4 on the
   following pose. CODE:6 `0x4a26`-`0x4a62` also excludes poses 110-119,
   135-162, 166-168 and animation state 7 from horizontal cutting.
+  Since the 2026-11-10 temple report, the port additionally admits the
+  Prince's completed SEQS 57 retreat at ready pose 158/mode 1: host key
+  repeat could otherwise restart it before native-eligible idle 170 and
+  starve the camera until a wall interrupted the loop. This is an explicit
+  port input accommodation, retaining the original facing/sword bounds;
+  other protected poses, wound states and NPCs keep their existing rules.
   Downward coordinate transfer uses a 365-pixel clip and three tile rows.
   Full native vertical viewport-cut timing is not implemented yet.
   Falling exits now include CODE:6 `0x4dac`'s neighbor entry-tile check (pose

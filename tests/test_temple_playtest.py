@@ -4,11 +4,12 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from pop2.combat import select_sequence
+from pop2.combat import guard_frame_index, select_sequence
 from pop2.coordinates import column_left
 from pop2.loose_floors import FallingFloor, floor_hits_body, floor_hits_record
 from pop2.opponent_records import CORPSE_POSES, GuardRoomRecord, corpse_sequence
 from pop2.paths import ASSET_DIR
+from pop2.terrain import TerrainMotion, floor_contact_x
 from pop2.wall_spikes import WallSpikes
 from tools.audit_temple_routes import Harness, press
 
@@ -229,6 +230,62 @@ class TemplePlaytestTests(unittest.TestCase):
         self.assertEqual(guard.state.source_sequence_id, 65)
         self.assertLess(guard.state.target_x, 470)
         self.assertTrue(guard.alive)
+
+    def test_room24_corpse_keeps_its_linked_gate_open_after_leaving_for_room29(self):
+        harness = self.harness(peaceful=False)
+        scene = harness.scene
+        scene.jump_to_room(28, row=2, x=300, facing=0)
+        harness.tick(25)
+        guard = scene.combat.active_guards()[0]
+        scene.jump_to_room(23, row=2, x=300, facing=0, reset_guards=False)
+        # Supply the chase/death endpoint using this room-29 generated NPC.
+        for actors, _points in scene.combat.room_encounters.values():
+            if guard in actors:
+                actors.remove(guard)
+        scene.combat.room_encounters[23][0].append(guard)
+        guard.room, guard.row = 23, 2
+        guard.terrain_motion = TerrainMotion(23, 2)
+        scene.combat._select_opponent_bank(23)
+        guard.life, guard.native_alive = 0, False
+        guard.death_registered, guard.sword_drawn, guard.targetable = True, False, False
+        select_sequence(guard, 22)
+        guard.runtime.next_frame()
+        guard.state.facing = 0
+        record = scene.guard_art.frames[guard_frame_index(guard.state.action)]
+        guard.state.target_x = 244 - floor_contact_x(0, 0, record)
+        guard.state.current_x = guard.state.target_x
+        scene.peaceful = True  # The remaining generator is irrelevant to this wait.
+        harness.tick(60)
+        plates = scene.game.caverns.plates
+        self.assertEqual(plates.timer(scene.level_map, 54), 31)
+        # Original link 54: room 24:24 -> room 32:9, to the left of room 29.
+        self.assertEqual(plates.link(scene.level_map, 54)[:2], (32, 9))
+        scene.jump_to_room(28, row=2, x=300, facing=1, reset_guards=False)
+        self.assertNotIn(guard, scene.combat.active_guards())
+        harness.tick(160)
+        self.assertEqual(scene.level_map.tile(31, 9, 0).foreground & 255, 255,
+                         'the gate closed after the corpse left the active bank')
+        self.assertNotIn((31, 9), plates.active)
+
+    def test_repeated_combat_retreat_cuts_to_room24_before_reaching_its_wall(self):
+        harness = self.harness()
+        scene = harness.scene
+        scene.jump_to_room(28, row=2, x=450, facing=0)
+        press(harness, 'ctrl', True)
+        harness.tick()
+        press(harness, 'ctrl', False)
+        harness.tick(12)
+        for _ in range(40):
+            # Host key repeat can start another retreat at ready pose 158.
+            press(harness, 'R', False)
+            press(harness, 'R', True)
+            harness.tick()
+            if scene.room_id != 28:
+                break
+        self.assertEqual(scene.room_id, 23, 'the camera stayed behind during repeated retreats')
+        self.assertLess(scene.sequence_state.target_x, 80,
+                        'the camera waited until the far wall in the next room')
+        self.assertEqual(scene.sequence_state.source_sequence_id, 57)
 
     def catch_room14_floor(self, harness, x=270):
         # Last falling frame of the jump, before the vertical cut 14 -> 13.

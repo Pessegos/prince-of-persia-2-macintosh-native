@@ -1095,7 +1095,13 @@ class RooftopPhysics:
                 return False
         # CODE:6 4a26-4a62 excludes these poses before testing either side.
         action = state.action
-        if (110 <= action <= 119 or 135 <= action < 163
+        # Host repeat can restart SEQS 57 at its final ready pose 158 before
+        # reaching native cut-eligible idle 170. Let this completed Prince
+        # retreat cut too, so repeated Backward cannot starve the camera.
+        # This is a port input accommodation; the native bounds stay below.
+        completed_retreat = (action == 158 and state.source_sequence_id == 57
+                             and state.animation_state == 1 and state.actor_type == 0)
+        if (110 <= action <= 119 or (135 <= action < 163 and not completed_retreat)
                 or 166 <= action < 169 or state.animation_state == 7):
             return False
         # CutChar, CODE:6 0x4a72/0x4aee/0x4b6c/0x4bc6, scene X = native X - 207.

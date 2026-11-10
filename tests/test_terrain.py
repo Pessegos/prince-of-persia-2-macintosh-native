@@ -515,6 +515,19 @@ class TerrainTests(unittest.TestCase):
                     motion, runtime.state, bounds), allowed)
                 self.assertEqual(motion.room, 1 if allowed else 3)
 
+    def test_completed_prince_retreat_can_cut_without_skipping_sword_clearance(self):
+        for sequence, action, mode, actor, left, allowed in (
+                (57, 158, 1, 0, 509, False), (57, 158, 1, 0, 510, True),
+                (57, 157, 1, 0, 560, False), (75, 158, 1, 0, 560, False),
+                (57, 158, 5, 0, 560, False), (57, 158, 1, 2, 560, False)):
+            with self.subTest(sequence=sequence, action=action, mode=mode, actor=actor, left=left):
+                state = SequenceState(sequence, action=action, animation_state=mode,
+                                      actor_type=actor, target_x=560, facing=0)
+                motion = TerrainMotion(1, 1)
+                self.assertEqual(RooftopPhysics(self.map).cut_horizontal(
+                    motion, state, (left, 160, 600, 226)), allowed)
+                self.assertEqual(motion.room, 3 if allowed else 1)
+
     def test_horizontal_cut_respects_source_pose_and_state_exclusions(self):
         physics = RooftopPhysics(self.map)
         for action in (*range(110, 120), *range(135, 163), *range(166, 169)):

@@ -249,3 +249,66 @@ blade-death regression also passes. Dependencies, Ruff F/E9, recovery
 catalogue and whitespace checks pass. No full/import suite or user game,
 emulator, focus, settings, save or resource operation. Next bounded check is
 further room-2 playtesting with the actual input/attack transition.
+
+## Corpse-held gate after leaving room 24 (2026-11-10)
+
+The supplied recording reports a corpse holding room 24's plate while the
+gate on the route left of room 29 closes, then reopens on returning to 24.
+In level 10 the exact source is cell **24:24**, link **54**, targeting
+**32:9** (one-based native rooms, zero-based cells).
+
+The permanent source timer (31) was already implemented, but TriggerGate
+still chose temporary phase 2 and open-wait 237. Once the corpse left the
+active actor bank, nothing refreshed that wait. Native CheckPress
+**5:1388-13aa** tests ALIVE and exempts skeletons from the permanent timer;
+TriggerGate **5:1dcc-1dfa/1e1a-1e36** independently selects permanent phase 3
+when native ALIVE is nonnegative or the presser's room differs from the
+nonzero displayed-room word. An already open gate also needs its active
+phase replaced, not only foreground 255.
+
+Pressure now carries both native ALIVE and displayed-room context through
+the link traversal. Dead ordinary pressers latch the source timer and gate;
+a living off-screen presser latches only the gate. A zero-HP actor whose
+native ALIVE remains true still takes the living branch. Existing impact,
+reversible-plate, sound and capacity policies are retained. No save fields
+were added. A previously saved temporary gate may need one further visit
+to its corpse-held plate to receive the corrected trigger.
+
+The real-level regression supplies a room-29 generated guard's carried/dead
+endpoint on the actual room-24 plate. It then runs pressure, gate animation
+and actor-bank departure for 160 ticks away: timer 31, foreground 255 and
+no active gate remain. The old press entry path reproduces closure to 0.
+Separate controls cover closed/open gates, native ALIVE versus HP, and a
+living off-screen presser. This is static CODE plus scene evidence, not a
+new native CPU probe or a replay of the entire chase/death.
+
+## Continuous combat retreat delayed the camera (2026-11-10)
+
+The second clip shows the Prince retreating from room 29 into 24 while the
+old room stays visible. With a fresh Backward event every tick, the port can
+restart SEQS 57 at its final ready pose 158 indefinitely. Native CutChar
+**6:4a26-4a62** excludes that pose, so the port never reaches eligible idle
+170 until key repeat stops or a wall interrupts the retreat. The previous
+code reproduces the empty old screen and continues far into room 24.
+
+The port now admits only the Prince's completed retreat at pose 158,
+selected SEQS 57, animation state 1. **This is an intentional port input
+accommodation**, not a recovered native pose exception. It makes the cut
+available one frame before the otherwise eligible idle 170, while retaining
+the native facing-dependent body/sword thresholds and coordinate rebase.
+Incomplete retreat poses, attacks, wounds and NPCs retain their exclusions.
+This does not claim exact Macintosh keyboard-repeat or whole-frame parity.
+
+A real-key regression draws the sword, repeats Backward continuously and
+requires the 29-to-24 cut within the entry area, rather than at the far wall.
+It fails the previous code. Boundary controls require left >= 510 for the
+left-facing rightward exit and reject unfinished, wounded, attack and NPC
+cases. The paired videos and native CODE were inspected offline.
+
+Combined focused verification: `tests.test_pressure_plates
+tests.test_temple_playtest tests.test_terrain tests.test_gate_audio
+tests.test_guard_rooms tests.test_throne_gates`: **248 OK, no skips**
+(49.265s), with `POP2_SHARED_DESKTOP=1`. Dependencies, Ruff F/E9, catalogue
+and whitespace checks pass. No full/import suite, live game/emulator,
+physical input/focus, shared settings/saves or original-resource operation.
+Next bounded check is live playtesting these two recorded transitions.
