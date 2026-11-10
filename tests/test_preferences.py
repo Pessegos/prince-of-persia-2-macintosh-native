@@ -65,6 +65,12 @@ class PreferencesTests(unittest.TestCase):
             self.assertIs(self.scene.cave_ambience_enabled, choice)
             self.assertIs(self.scene.copy_protection_enabled, not choice)
             self.assertIs(self.scene.fullscreen, choice)
+            if choice:
+                self.assertEqual(self.scene.windowed_geometry, '1020x768')
+                self.assertEqual(self.scene.windowed_state, 'normal')
+                with patch.object(self.scene.root, 'geometry') as geometry:
+                    self.scene.toggle_fullscreen()
+                geometry.assert_called_once_with('1020x768')
             self.doCleanups()
             self.setUp()
 

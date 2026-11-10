@@ -289,10 +289,10 @@ class WindowControls(InputRouting):
             self.schedule_next_animation()
         self.render()
 
-    def toggle_fullscreen(self, _event=None):
+    def toggle_fullscreen(self, _event=None, *, windowed_geometry=None, windowed_state=None):
         if not self.fullscreen:
-            self.windowed_geometry = self.root.geometry()
-            self.windowed_state = self.root.state()
+            self.windowed_geometry = windowed_geometry or self.root.geometry()
+            self.windowed_state = windowed_state or self.root.state()
             self.status_label.pack_forget()
             self.root.attributes("-fullscreen", True)
             self.fullscreen = True
