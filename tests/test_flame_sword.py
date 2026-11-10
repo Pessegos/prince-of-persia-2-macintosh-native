@@ -258,6 +258,34 @@ class LevelTwelveFlameSwordTests(unittest.TestCase):
         self.tick(30)
         self.assertLess(self.scene.combat.player.life, 3)
 
+    def test_arriving_in_landing_recovery_does_not_leave_the_awakened_sword_waiting(self):
+        from pop2.combat import select_sequence
+
+        sword = self.enter(290)
+        scene = self.scene
+        # A real landing recovery prevents waking initially. Resting NPC
+        # control registers ALIVE=0 before the Prince becomes ready to fight.
+        select_sequence(scene.combat.player, 20)
+        scene.sequence_runtime.next_frame()
+        self.tick()
+        self.assertFalse(sword.native_alive)
+        self.assertFalse(sword.flame_sword.native_alive)
+        self.tick(30)
+        self.assertTrue(sword.flame_sword.native_alive)
+        self.assertTrue(sword.native_alive)
+        self.assertEqual(sword.alert_mode, 3)
+        self.tick(40)
+        self.assertLess(scene.combat.player.life, 3)
+
+    def test_awake_control_repairs_a_stale_inactive_flag_from_an_older_save(self):
+        sword = self.enter(290)
+        self.tick()
+        self.assertTrue(sword.flame_sword.native_alive)
+        sword.native_alive = False  # The inconsistent state older saves can carry.
+        self.tick(2)
+        self.assertTrue(sword.native_alive)
+        self.assertEqual(sword.alert_mode, 3)
+
     def test_it_rests_while_the_prince_is_six_columns_away(self):
         scene = self.scene
         scene.enter_next_level(12)

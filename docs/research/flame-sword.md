@@ -110,5 +110,38 @@ OK, 1 skipped** (optional original profile, POP2_RESEARCH_DIR unset).
 Dependencies, Ruff F/E9, catalogue and whitespace checks pass. Original CODE
 was read offline; no new native CPU probe, full/import suite, hardware
 capture, live game/emulator, shared settings/saves or resource write.
-The user's precise visual/combat symptom was requested separately; these
-fixes do not close the remaining native-rule gaps listed above.
+These fixes do not close the remaining native-rule gaps listed above.
+
+## Clarified report: rises but does not fight (2026-11-10)
+
+The user clarified that the sword rises (possibly late), then does nothing.
+That exact standstill reproduces when the Prince arrives in landing recovery,
+rather than as an idle actor already within wake range. The resting sword
+gets an NPC control update before it can wake. Generic death registration
+correctly clears `Fighter.native_alive`, but the old wake path only restored
+HP and `FlameSword.native_alive`. Nearest-opponent selection still saw the
+inactive Fighter flag. CheckAlert then downgraded the only sword to waiting
+alert 2 instead of engaged alert 3. It finished rising and held indefinitely.
+
+Native wake **4:15f6-160c** calls InitOpp, writes ALIVE=-1, arms the actor
+and selects alert 3. There is one native ALIVE word; the port's two stored
+representations must agree. `FlameSword` now updates Fighter's flag at wake,
+initialization/re-entry and deactivation. Awake control also repairs stale
+inactive flags carried by older saves, without a save-format change.
+This does not substitute HP for native ALIVE in ordinary guard selection.
+
+The perceived delay is distinct: **4:14d4-14ec** explicitly rejects the
+Prince's animation modes 3, 4 and 5 before waking, including landing
+recovery. Those native gates and the authored SEQS 106 timing are retained.
+
+Both new regressions fail on ccb48fd. The actual room-7 scene supplies the
+Prince's SEQS 20 landing start, then runs recovery, wake, alerts, AI and
+contact: the sword must become native-ALIVE/engaged and hurt the Prince.
+A supplied inconsistent awake record checks repair within two frames; this
+is not an old-file-format or hardware-input replay. The earlier idle-entry
+test passed without exercising any resting NPC update and missed this bug.
+Verification: flame-sword **20 OK** (3.369s); opponent-selection/alerts/
+guard-room/audio **48 OK** (6.957s), no skips. Required dependency, Ruff,
+catalogue and whitespace checks pass. No full/import suite, new native CPU
+probe, live game/emulator, physical input, shared settings/saves or resource
+write. Broader barrier/unarmed/encounter-result recovery remains open.

@@ -95,6 +95,7 @@ class FlameSword:
         else:
             self.native_alive = True
             actor.targetable = True
+        actor.native_alive = self.native_alive
 
     def store_room(self, actor, *, restart_living):
         # UpdateOppInfo 6:30b0 clears the cursor of a living in-bounds record.
@@ -149,6 +150,9 @@ class FlameSword:
         actor.runtime.next_frame()
         actor.life = actor.max_life
         self.native_alive = True
+        # Selection/alerts read Fighter's ALIVE too. Resting NPC control may
+        # have cleared it while the Prince was approaching or landing.
+        actor.native_alive = True
         actor.targetable = True
         actor.death_registered = False
         actor.sword_drawn = True
@@ -162,10 +166,13 @@ class FlameSword:
     def control(self, actor):
         """AutoCtrl 4:165c-1704: a resting sword only counts its timer down."""
         if self.native_alive and actor.alive:
+            # Also repair inconsistent awake records in pre-fix saves.
+            actor.native_alive = True
             return False
         # PlayerCtrl 4:3d64-3d6c registers zero HP first, including a record
         # restored mid-fall whose pose left ALIVE set (6:2e52).
         self.native_alive = False
+        actor.native_alive = False
         if self.timer > 0:
             self.timer -= 1
         return True
@@ -195,6 +202,7 @@ class FlameSword:
         select_sequence(actor, FALL_SEQUENCE)
         self.timer = FALL_TIMER
         self.native_alive = False
+        actor.native_alive = False
         self.song_pending = True
         actor.life = 0
         actor.targetable = False
