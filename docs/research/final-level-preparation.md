@@ -163,3 +163,28 @@ catalogue and `git diff --check` checks passed. Full discovery was interrupted
 without a result after memory rose to about 15 GB in the shared desktop; the
 focused result does not imply full-suite success. The next bounded gameplay
 task remains the Jaffar position path and subsequent battle controller.
+
+## F3 level-selection freeze follow-up (2026-11-10)
+
+The reported freeze occurs on selecting level 14 in the developer map, before
+pressing Go. A clean `build_development_map(LEVL 2013)` raised
+`IndexError: FRAM action 148 is out of range`: the preview read raw room-11
+`SEQS 197` (action 297), and room-6 `SEQS 2` (action 15), from zero-cursor
+opponent records and tried to draw them with Guard FRAM 750. The live room-entry
+path restores those records through `GuardRoomRecord.restore`, selecting
+`SEQS 77` (action 166) for a living zero-cursor guard. The preview now applies
+that same restoration for environment 6 before drawing its static actors.
+This fixes a port preview path; it does not recover new CODE 9 battle behavior.
+
+A regression checks all six original static records in rooms 6, 10 and 11,
+their restored pose, the 11-room map, and the actual level-13 to level-14
+dropdown click followed by menu redraw. The old preview path fails before
+completing that redraw. The separate background map warmup can now build the
+same level, so both cached and uncached menu selection work.
+
+Focused shared-desktop run: `python -m unittest -q tests.test_development_map
+tests.test_development_menu tests.test_temple_arrival tests.test_final_jaffars
+tests.test_run_game` passed 160 tests. A cold temporary cache warmup wrote
+`level-14.zip` and read back all 11 rooms. Dependencies, Ruff, recovery
+catalogue and diff checks passed. Full discovery was not repeated after the
+previous memory-limited run; physical desktop tests remained excluded.

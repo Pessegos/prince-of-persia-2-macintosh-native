@@ -63,6 +63,7 @@ def map_enemies(level, positions):
     from pop2.animation_data import sequence_words
     from pop2.combat import Fighter, GuardSpawn
     from pop2.combat_art import GuardArtwork, sword_palette_for_level
+    from pop2.opponent_records import GuardRoomRecord
     from pop2.render_opening import load_resource_file
     from pop2.sequence_runtime import SequenceRuntime, SequenceState
     from pop2.skeleton import Skeleton
@@ -82,13 +83,20 @@ def map_enemies(level, positions):
     actors = {}
     for room, entries in spawns.items():
         actors[room] = []
-        for spawn in entries:
+        for slot, spawn in enumerate(entries):
             state = SequenceState(spawn.sequence_id, target_x=spawn.x, current_x=spawn.x,
                                   facing=spawn.facing, actor_type=spawn.actor_type,
                                   level_kind=level.kind)
             actor = Fighter(SequenceRuntime(sequences, state), spawn.life, spawn.life,
                             room, spawn.row, palette_variant=spawn.palette_variant)
             actor.runtime.next_frame()
+            if level.kind == 6 and spawn.guard_words:
+                # The final tower's LEVL records are saved opponent records.
+                # InitOpps restores their zero cursors as SEQS 77 before any
+                # actor is drawn; raw SEQS 2/197 are not drawable guard poses.
+                words = spawn.guard_words
+                GuardRoomRecord(words[4], words[5], words[9], bool(words[8]),
+                                words[0], words[14]).restore(actor, slot)
             if spawn.skeleton_words:
                 Skeleton.from_spawn(spawn).initialize(actor)
             actors[room].append(actor)

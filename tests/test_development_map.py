@@ -254,6 +254,47 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         from pop2.game_session import GameResources
         cls.resources = GameResources.load()
 
+    def test_final_map_restores_saved_opponents_before_drawing(self):
+        if not all((ASSET_DIR / name).is_file() for name in ('Final.rsrc', 'final_level14.json')):
+            self.skipTest('Imported final scenery required')
+        from pop2.development_map import map_enemies
+        from pop2.terrain import LevelMap
+
+        level = self.resources.level(14)
+        positions = room_positions(LevelMap(level.data))
+        _art, actors = map_enemies(level, positions)
+        self.assertEqual({room + 1: len(items) for room, items in actors.items() if items},
+                         {6: 4, 10: 1, 11: 1})
+        self.assertEqual({(actor.state.sequence_id, actor.state.action)
+                          for items in actors.values() for actor in items}, {(77, 166)})
+        atlas = build_development_map(level)
+        self.assertEqual(len(atlas.rooms), 11)
+        self.assertEqual(atlas.enemy_rooms, {'Room 6', 'Room 10', 'Room 11'})
+
+    def test_clicking_final_level_draws_its_developer_map(self):
+        if not all((ASSET_DIR / name).is_file() for name in ('Final.rsrc', 'final_level14.json')):
+            self.skipTest('Imported final scenery required')
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(13)
+        scene.open_dev_mode()
+        menu = scene.dev_menu
+        menu.open_map()
+        scene.render()
+        level = next(index for index, option in enumerate(menu.level_options)
+                     if option[0] == 14)
+        left, top, _right, bottom = menu.control_rect(0)
+        scene.apply_dev_action(menu.click(left + 10, top + 10))
+        self.assertTrue(menu.dropdown)
+        scene.apply_dev_action(menu.click(left + 10,
+                                          bottom + (level - menu.popup_start) * menu.OPTION_HEIGHT + 5))
+        self.assertEqual(menu.level_number, 14)
+        self.assertTrue(menu.map_enabled)
+        self.assertEqual(len(menu.map_preview.rooms), 11)
+        self.assertEqual(scene.game.level.number, 13)
+
     def test_warmed_maps_open_from_the_cache_without_rebuilding(self):
         from pop2.development_map import cached_development_map, warm_development_maps
         from pop2.preview_cache import preview_fingerprint
