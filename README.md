@@ -181,17 +181,17 @@ The animation also required some careful masking to prevent overlapping, and I f
 
 I wanted the caverns to feel a little more alive, so I added optional visual ambience throughout levels 3-5. Torches and lava cast a subtle, shifting glow with a little heat haze, while water drips from stalactites and ash and dust float through the air.
 
-The Prince also kicks up dust when running or landing, along with gates, doors and falling floors. I tried to keep everything subtle and close to the game's original palette.
-
-The effects are off by default, but can be enabled through the F1 menu or with Alt+A. The setting is saved between sessions.
-
 <p align="center">
   <img src="docs/github readme/cave-ambience-preview.gif" alt="Cave ambience off for two seconds, then on for four seconds, as droplets land on the cavern floor and in lava" width="700">
 </p>
 
+The Prince also kicks up dust when running or landing, along with gates, doors and falling floors. I tried to keep everything subtle and close to the game's original palette.
+
 <p align="center">
   <img src="docs/github readme/cave-ambience-action.gif" alt="Cave ambience off and on as the Level 4 entrance closes and the Prince runs a short distance to the left" width="700">
 </p>
+
+The effects are off by default, but can be enabled through the F1 menu or with Alt+A. The setting is saved between sessions.
 
 <br/>
 
