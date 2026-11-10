@@ -51,6 +51,13 @@ def alt_pressed(event, held_keys=()):
     return bool(event.state & mask or {"Alt_L", "Alt_R"}.intersection(held_keys))
 
 
+def centered_window_geometry(root, width, height):
+    """The first windowed position after a fullscreen startup."""
+    x = max(0, (root.winfo_screenwidth() - width) // 2)
+    y = max(0, (root.winfo_screenheight() - height) // 2)
+    return f"{width}x{height}+{x}+{y}"
+
+
 def is_resume_key(event, held_keys=()):
     command_keys = RESUME_COMMAND_KEYS
     if (alt_pressed(event, held_keys) or event.state & (0x4 | 0x40)

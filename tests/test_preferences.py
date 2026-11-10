@@ -3,10 +3,11 @@
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from pop2.paths import ASSET_DIR
 from pop2.preferences import Preferences, load_preferences, remember
+from pop2.window_controls import centered_window_geometry
 
 
 class PreferencesTests(unittest.TestCase):
@@ -21,6 +22,12 @@ class PreferencesTests(unittest.TestCase):
     def write(self, text):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(text, encoding='utf-8')
+
+    def test_first_windowed_position_is_centered(self):
+        root = Mock()
+        root.winfo_screenwidth.return_value = 1920
+        root.winfo_screenheight.return_value = 1080
+        self.assertEqual(centered_window_geometry(root, 1020, 768), '1020x768+450+156')
 
     def test_the_first_session_has_the_defaults(self):
         self.assertEqual(load_preferences(), Preferences())
@@ -66,11 +73,20 @@ class PreferencesTests(unittest.TestCase):
             self.assertIs(self.scene.copy_protection_enabled, not choice)
             self.assertIs(self.scene.fullscreen, choice)
             if choice:
-                self.assertEqual(self.scene.windowed_geometry, '1020x768')
+                expected = centered_window_geometry(self.scene.root, 1020, 768)
+                self.assertEqual(self.scene.windowed_geometry, expected)
                 self.assertEqual(self.scene.windowed_state, 'normal')
                 with patch.object(self.scene.root, 'geometry') as geometry:
                     self.scene.toggle_fullscreen()
-                geometry.assert_called_once_with('1020x768')
+                geometry.assert_called_once_with(expected)
+                moved = '1020x768+700+120'
+                with patch.object(self.scene.root, 'geometry', return_value=moved) as geometry, \
+                        patch.object(self.scene.root, 'state', return_value='normal'), \
+                        patch.object(self.scene.root, 'attributes'):
+                    self.scene.toggle_fullscreen()
+                    self.assertEqual(self.scene.windowed_geometry, moved)
+                    self.scene.toggle_fullscreen()
+                self.assertEqual(geometry.call_args_list[-1].args, (moved,))
             self.doCleanups()
             self.setUp()
 

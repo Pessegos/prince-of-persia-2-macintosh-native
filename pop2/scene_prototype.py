@@ -86,7 +86,8 @@ from pop2.crevices import (
     LIE_DOWN_SEQUENCE,
 )
 from pop2.game_ui import MacintoshFont, VISIBLE_SIZE
-from pop2.window_controls import WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS
+from pop2.window_controls import (WindowControls, PAUSE_GAMEPLAY_KEYS, RESUME_COMMAND_KEYS,
+                                  centered_window_geometry)
 from pop2.running_controls import RUN_INPUT_SEQUENCES
 from pop2.airborne_controls import AIRBORNE_TAKEOFF_SEQUENCES
 from pop2.low_controls import LowControls, LOW_INPUT_SEQUENCES
@@ -340,7 +341,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                            scale=SCALE)
         if preferences.fullscreen:
             self.toggle_fullscreen(
-                windowed_geometry=f"{VISIBLE_SIZE[0] * SCALE}x{VISIBLE_SIZE[1] * SCALE}",
+                windowed_geometry=centered_window_geometry(
+                    self.root, VISIBLE_SIZE[0] * SCALE, VISIBLE_SIZE[1] * SCALE),
                 windowed_state="normal")
         self.start_gamepads()
         self.action = self.sequence_state.action
