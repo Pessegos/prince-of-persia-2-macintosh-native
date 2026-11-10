@@ -79,6 +79,8 @@ class GuardRoomRecord:
                 actor.runtime.next_frame()
         actor.native_alive = not dead
         actor.death_registered = dead
+        # Imported room records clear the pending-cue word (6:2e20).
+        actor.death_song_frames, actor.death_song_pending = -1, False
         actor.targetable = actor.life > 0
         state.animation_state = 1
         state.horizontal_velocity = state.vertical_velocity = 0

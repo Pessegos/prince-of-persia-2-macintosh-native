@@ -266,6 +266,15 @@ the new prepared cavern MIDI cues. Tests cover all these files, actual
 PCM waveforms/headroom, level-dependent pools, inclusive selection,
 combat transitions, scene-level effects and protected foreground songs.
 
+Ordinary guard audio was connected after the 2026-11-10 temple playtest.
+Type-2 long-fall cue 30 stops at real impacts before queued effects drain,
+including an impact-frame scream request with overlapping audio enabled.
+The native pending-death-count subset now requests KillBird (189) for the
+temple's birdheads too, subject to the ordinary combat/reinforcement gates.
+The earlier assumption that this song first mattered in the palace confused
+opponent set 7 with the runtime actor type 2. The existing skeleton/head/
+flaming-sword handlers remain separate. [Evidence and limitations](research/death-counter-kill-song.md#ordinary-guard-implementation-2026-11-10).
+
 ## Next: Intro
 
 The Macintosh intro is not a ready-made movie file. CODE:15 coordinates

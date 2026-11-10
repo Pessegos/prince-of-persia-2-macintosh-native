@@ -1,6 +1,7 @@
 # NPC Death Counter And Kill-Song Dispatch
 
-Research note, 2026-10-21, `claude/ai-research`. No runtime code changed.
+Research note, 2026-10-21, `claude/ai-research`. Originally research only.
+Ordinary-guard runtime dispatch was added on 2026-11-10; see the update below.
 It answers the open item in `death-target-lifecycle.md`: who sets `+0x18`,
 and what `5:4bb8` does. Labels: **[D]** direct reading; **[I]** inference.
 
@@ -49,7 +50,9 @@ once.
 
 ## Relevance to the port
 
-Level environments and opponent types (LEVL `0x2186`/`0x21a4`):
+Level environments and opponent families. LEVL `0x21a4` selects an opponent
+set, not necessarily the runtime actor type; the temple row was corrected
+against the original headers on 2026-11-10.
 
 | LEVL | Levels | Environment | Opponents |
 | --- | --- | --- | --- |
@@ -57,21 +60,20 @@ Level environments and opponent types (LEVL `0x2186`/`0x21a4`):
 | 2001 | 2 | 1 | none |
 | 2002-2004 | 3-5 | 3 | skeletons |
 | 2005-2008 | 6-9 | 4 | type 7 |
-| 2009-2012 | 10-13 | 2 | type 9 |
+| 2009-2012 | 10-13 | 2 | set 7; ordinary birdheads are actor type 2 |
 | 2013 | 14 | 6 | guards |
 
 - **Level 1:** a guard kill never plays a song (environment 5). The port
   plays none, which is correct.
 - **Levels 3-5:** the skeleton song 63 is already implemented
   (`skeleton.victory_pending`). It covers the level-four work.
-- **Guard song 189:** first matters in level 14. Types 7/8 (song 137) and
-  10 (238) belong to later levels.
-- **Port model:** the port has no `+0x18`. Its death registration matches the
-  native ALIVE transition (`death-target-lifecycle.md`), and the ALIVE ≥ 6
-  target clear was shown not to change the effective target. A death that
-  never sets `+0x18` (no CheckStab) would stop at ALIVE 0. Then neither the
-  song nor the target clear fires; GenCtrl's dead branch still reselects.
-  This was not executed.
+- **Guard song 189:** applies to the temple's ordinary birdheads too, as well
+  as palace guards. The earlier claim that it first mattered in level 14
+  confused the opponent set with the actor type.
+- **Port model:** initially lacked the ordinary pending-cue/count path. The
+  2026-11-10 implementation below adds its audio subset while keeping HP,
+  registered death and the existing boolean native ALIVE distinct. The
+  earlier ALIVE >= 6 target-clear audit remains separate.
 
 ## OppToFight `6:2392-2492`, which gates the songs [D]
 
@@ -95,4 +97,38 @@ generator info `+0x1c` to be 1 or 3.
 
 The first two last only a few frames around a death, and the port's tests
 state them explicitly (`test_combat_music_excludes_native_player_and_opponent_states`).
-No change is proposed.
+The default ambient query retains those existing policies. Ordinary kill-song
+dispatch now separately requests native ALIVE, as described below.
+
+## Ordinary-guard implementation (2026-11-10)
+
+The level-12 room-9 playtest exposed both a lingering fall scream and the
+missing ordinary KillBird song. Fresh original bytes confirm that the type-2
+jump-table entry reaches **5:4c2c**, whose `MOVE.W #189,D5` selects KillBird.
+Original LEVL 2009-2012 all have environment 2 and opponent set 7.
+
+`Fighter.death_song_frames` tracks registration at zero and six subsequent
+NPC control updates; the next call consumes `death_song_pending`. The flag
+is armed for ordinary living control (the supported GenCtrl idle cue),
+explicit sword hits and generated actors. This is an ordinary-audio subset,
+not a recovery of every writer/clearer of the shared native `+0x18` word.
+Cold room-record imports clear the flag/count, so old corpses do not replay.
+
+At dispatch the current native-ALIVE bank and native active-generator
+row/column/remaining conditions suppress the song. The flag is consumed on
+suppression too. Existing ambient HP policy remains the default; the kill
+song specifically asks for native ALIVE and uses the selected projected bank.
+Rooftop environment 5 stays silent. Heads, skeletons and the flaming sword
+retain their separate existing handlers. No target selection or HP behavior
+was replaced by the new counter.
+
+The two defaulted fields are optional in older version-2 saves; new saves
+retain a pending count and validate -1..6. Static source and real-scene/timed
+audio regressions cover the reported fall, four temple levels, trap death
+endpoints, one-shot timing, suppression, imports and save continuation.
+No new native CPU probe or complete scheduler/pending-word parity is claimed.
+The trap endpoint check also exposed the save validator's old pose-254 cap:
+ordinary scythe SEQS 190 ends on pose 256. Ordinary type-2 saves now admit
+that real terminal frame (including existing corpse variant 255); the other
+actor bounds stay unchanged. Its save roundtrip keeps the music consumed.
+See [playtest details](temple-november-playtest.md#guard-fall-scream-and-victory-music-2026-11-10).

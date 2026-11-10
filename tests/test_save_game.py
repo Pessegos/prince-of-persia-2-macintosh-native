@@ -145,6 +145,8 @@ class SaveFormatTests(unittest.TestCase):
                     item['fields'].pop('guard_record', None)
                     item['fields'].pop('native_alive', None)
                     item['fields'].pop('sword_lost', None)
+                    item['fields'].pop('death_song_frames', None)
+                    item['fields'].pop('death_song_pending', None)
                 for child in item.values():
                     remove_fields(child)
             elif isinstance(item, list):
@@ -157,6 +159,55 @@ class SaveFormatTests(unittest.TestCase):
         self.assertIsNone(loaded.combat.guards[0].guard_record)
         self.assertIsNone(loaded.combat.guards[0].native_alive)
         self.assertFalse(loaded.combat.player.sword_lost)
+        self.assertEqual(loaded.combat.guards[0].death_song_frames, -1)
+        self.assertFalse(loaded.combat.guards[0].death_song_pending)
+
+    def test_pending_guard_kill_song_count_survives_a_save(self):
+        from pop2.combat import select_sequence
+
+        original = GameSession.load(self.resources, 12)
+        original.place(8, 0, 100, 1)
+        guard = original.combat.guards[0]
+        guard.life, guard.native_alive, guard.death_registered = 0, False, True
+        select_sequence(guard, 22)
+        guard.runtime.next_frame()
+        guard.death_song_frames, guard.death_song_pending = 3, True
+        write_save(self.path, capture(original))
+        loaded, _saved = read_save(self.path, self.resources)
+        restored = loaded.combat.guards[0]
+        self.assertEqual((restored.death_song_frames, restored.death_song_pending), (3, True))
+        for _ in range(3):
+            loaded.combat.choose_guard_action(restored)
+        self.assertFalse(loaded.combat.songs)
+        loaded.combat.choose_guard_action(restored)
+        self.assertEqual(loaded.combat.songs, [189])
+
+    def test_scythe_corpse_can_be_saved_after_its_victory_request_is_consumed(self):
+        from pop2.combat import select_sequence
+        from pop2.terrain import TerrainMotion
+
+        original = GameSession.load(self.resources, 12)
+        original.place(8, 0, 100, 1)
+        guard = original.combat.guards[0]
+        guard.life, guard.native_alive, guard.death_registered = 0, False, True
+        guard.terrain_motion = TerrainMotion(8, 0, dead=True)
+        select_sequence(guard, 190)
+        for _ in range(10):
+            guard.runtime.next_frame()
+        self.assertEqual(guard.state.action, 256)
+        guard.death_song_frames, guard.death_song_pending = 6, False
+        write_save(self.path, capture(original))
+        loaded, _saved = read_save(self.path, self.resources)
+        self.assertEqual(loaded.combat.guards[0].state.action, 256)
+        loaded.combat.choose_guard_action(loaded.combat.guards[0])
+        self.assertFalse(loaded.combat.songs)
+
+    def test_invalid_guard_kill_song_counter_is_rejected(self):
+        original = GameSession.load(self.resources, 1)
+        original.combat.guards[0].death_song_frames = 7
+        write_save(self.path, capture(original))
+        with self.assertRaises(SaveGameError):
+            read_save(self.path, self.resources)
 
     def test_a_lost_sword_survives_a_save(self):
         original = GameSession.load(self.resources, 1)

@@ -312,3 +312,65 @@ tests.test_guard_rooms tests.test_throne_gates`: **248 OK, no skips**
 and whitespace checks pass. No full/import suite, live game/emulator,
 physical input/focus, shared settings/saves or original-resource operation.
 Next bounded check is live playtesting these two recorded transitions.
+
+## Guard fall scream and victory music (2026-11-10)
+
+The paired Macintosh/port recordings show level 12 room 9's birdhead falling
+from the upper platform to the bottom floor. In the port the long-fall cue
+30 can be queued on the very frame that also produces impact 7; overlapping
+effects then let the entire 1.67-second scream play over the corpse. The
+Prince already stopped cue 8 at impact, but ordinary guards had no matching
+stop. Falling **6:00d4-00f2** selects cue 30 for type 2; native impact uses
+the single-effect arbitration path (**5:4d84**) which mixing does not replace.
+
+Actual guard terrain impacts now request a cue-30 stop before frame audio
+is drained, including a breaking-floor impact that continues downward.
+Terminated guard falls (including trap deaths) also clear a pending scream
+before drain. A cue queued on the impact frame is suppressed as well as an
+already playing voice. In-flight falls keep their scream. The imported PCM,
+Prince cue 8 and void-fall policy are unchanged.
+
+Victory was a broader omission: ordinary type-2 KillBird dispatch was absent,
+including all four temple levels. Existing skeleton/head/flaming-sword paths
+were separate. Fresh original bytes at **5:4bde/4c2c** select song **189**;
+the actual temple headers use opponent set 7 and their ordinary birdheads
+are actor type 2, correcting the old research note's set/type confusion.
+PlayerCtrl **4:3d24-3d70** registers death, counts six pending NPC updates,
+then dispatches. The common tail **5:4c9e-4cd4** consumes the request even
+when another native-ALIVE opponent or an active same-row generator
+(**6:3d28/3daa**) suppresses it, and forbids rooftop environment 5.
+
+The port adds a separate ordinary pending-audio flag/count, not a replacement
+for HP, registered death or boolean native ALIVE. Living ordinary control,
+sword hits and generation arm the supported cue subset. Full recovery of
+every shared pending-word writer is excluded. Cold room-record imports
+clear it. Two optional/defaulted fields preserve old saves and allow a new
+save mid-count to continue exactly once. No resource reimport is needed.
+The trap check additionally exposed a pre-existing save validation limit:
+scythe SEQS 190 reaches real corpse pose 256, above the old type-2 maximum
+254. That bound now includes 255/256, with a regression saving the consumed
+victory state and preserving it on read; other actor bounds are unchanged.
+
+Both initial scene regressions fail the old code. The reported-room fixture
+supplies one nonfatal strike near the edge, then runs actual AI, FRAM fall,
+landing and audio. Additional checks cover already-playing fatal/surviving
+landings, in-flight preservation, sword-death endpoints in levels 10-13,
+impact/debris and both spike/scythe death endpoints, the exact registration
+delay, native ALIVE versus zero HP, reinforcement and column exclusions,
+rooftop silence, corpse re-entry and old/new saves. Trap endpoints supply
+the registered death state; they are not full input replays for each trap.
+Audio uses the real AudioEngine with a timed backend, not a physical-device
+capture. Original clips/bytes/headers were inspected offline; no new CPU
+probe, full original fight or complete FrameAdv equivalence is claimed.
+
+Focused check: `tests.test_audio tests.test_audio_integration.SceneAudioTests
+tests.test_guard_audio tests.test_guard_deaths tests.test_enemy_ai
+tests.test_guard_rooms tests.test_save_game.SaveFormatTests
+tests.test_temple_playtest`: **268 run, OK, 1 skipped** (30.770s). The optional
+original-profile comparison needs `POP2_RESEARCH_DIR`, which was unset.
+Four final targeted native-ALIVE/save/flaming-sword/head-song checks pass.
+The final SaveFormatTests group is **29 OK, no skips** (0.633s), including
+the previously rejected scythe corpse and pending-count continuation.
+Dependencies, Ruff F/E9, catalogue and whitespace checks pass. No full/import
+suite, live game/emulator, focus, shared settings/saves or resource writes.
+Next bounded task is playtesting the room-9 landing and later temple kills.

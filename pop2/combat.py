@@ -176,6 +176,9 @@ class Fighter:
     pursuing: bool = False
     alternate_row: int | None = None
     death_registered: bool = False
+    # Ordinary NPC PlayerCtrl's native ALIVE count, separate from HP/bool ALIVE.
+    death_song_frames: int = -1
+    death_song_pending: bool = False
     skeleton: object | None = None
     bank_room: int | None = None
     bank_slot: int = 0
@@ -322,6 +325,8 @@ class CombatEncounter:
         else:
             self._reset_initial_guard()
         self.world_frame = 0
+        self.songs = []
+        self.sound_stops = set()
         # a5-0x5010: the automatic sword turn starts enabled (2:5e5c); each
         # voluntary turn toggles it (SwordCtrl 6:2344-2350).
         self.automatic_turn = True
@@ -672,7 +677,7 @@ class CombatEncounter:
         actors = [actor for actor in self.visible_ruins() if actor.alive]
         return nearest_opponent(self.player, actors) if actors else None
 
-    def opponent_to_fight(self):
+    def opponent_to_fight(self, *, native_alive=False):
         # OppToFight 6:2392-2492, used by PlayAmbient/TimeForNewAmbient.
         # Alert 1 (separated by a gap) qualifies too; sword reach is irrelevant.
         player = self.player
@@ -681,8 +686,10 @@ class CombatEncounter:
                 or player.state.animation_state in (3, 4)
                 or player.state.action in (185, 242, 243, 266, 271)):
             return False
-        if any(guard.alive and guard.alert_mode > 0
-               and guard.state.actor_type != 11 for guard in self.active_guards()):
+        bank = (self.guards if native_alive and getattr(self, '_local_opponent_bank', False)
+                else self.active_guards())
+        if any((_native_alive(guard) if native_alive else guard.alive) and guard.alert_mode > 0
+               and guard.state.actor_type != 11 for guard in bank):
             return True
         # Ruins heads count by their -0x5024 state (3 angry, 1 fleeing);
         # serpents (type 11) never do.
@@ -1021,6 +1028,29 @@ class CombatEncounter:
         state.current_x = state.target_x
         return True
 
+    def _advance_guard_death_song(self, guard):
+        if guard.state.actor_type != 2:
+            return
+        # PlayerCtrl 4:3d24-3d70: register at zero, then count six NPC calls
+        # while +0x18 is pending. Keep native_alive's bool meaning separate.
+        if guard.death_song_frames < 0:
+            guard.death_song_frames = 0
+        elif guard.death_song_frames < 6:
+            if guard.death_song_pending:
+                guard.death_song_frames += 1
+        elif guard.death_song_pending:
+            guard.death_song_pending = False
+            # AddOppSong 5:4c2c/4c9e-4cd4 and GetOppGenPtOnRow 6:3d28:
+            # consume the flag even when combat/reinforcements suppress it.
+            column = self._supporting_column(self.player)
+            points = self.room_encounters.get(guard.room, ([], []))[1]
+            reinforcements = any(point.remaining != 0
+                                 and guard.row in (point.row, point.alternate_row)
+                                 and abs(point.column - column) > 2 for point in points)
+            if (self.level_kind != 5 and not self.opponent_to_fight(native_alive=True)
+                    and not reinforcements):
+                self.songs.append(189)
+
     def choose_guard_action(self, guard=None):
         guard, player = guard or self.guard, self.player
         state = guard.state
@@ -1029,6 +1059,7 @@ class CombatEncounter:
             # including a reload whose visible pose initially sets ALIVE=-1.
             guard.death_registered = True
             guard.native_alive = False
+            self._advance_guard_death_song(guard)
             if guard.skeleton is not None:
                 guard.skeleton.native_alive = False
                 if guard.skeleton.phase in ('active', 'rising'):
@@ -1039,6 +1070,10 @@ class CombatEncounter:
             return
         if not guard.alive:
             return
+        if state.actor_type == 2:
+            # Ordinary living GenCtrl arms the pending-cue word (6:0982-098a).
+            guard.death_song_pending = True
+            guard.death_song_frames = -1
         if self.rooftop_escape:
             # Port cinematic improvement: once the Prince catches the ship,
             # dock guards stand down through the climb and the exit music.
@@ -1471,7 +1506,7 @@ class CombatEncounter:
                             point.room, point.row, sword_drawn=armed, skill=point.skill,
                             alert_mode=3 if armed else 0, entry_x=point.x,
                             selected_sequence=state.sequence_id, generation_flags=point.flags,
-                            alternate_row=point.alternate_row)
+                            alternate_row=point.alternate_row, death_song_pending=True)
             guard.runtime.next_frame()
             guard.guard_record = GuardRoomRecord(
                 state.sequence_id, 0, point.life, armed, point.row * 10, pending=False)
@@ -1595,6 +1630,14 @@ class CombatEncounter:
             old_bounds=old_bounds, collision_bounds_for_state=collision_bounds,
             native_alive=_native_alive(guard))
         guard.room, guard.row = motion.room, motion.row
+        if (guard.state.actor_type == 2 and motion.scream_played
+                and any(event.kind in ('land', 'lava', 'damage')
+                        or event.kind == 'death' and event.impact for event in events)):
+            # Native impact FX replace cue 30. Preserve that stop with mixing,
+            # including a slab impact which leaves the body falling onward.
+            self.sound_stops.add(30)
+            if not motion.falling:
+                motion.scream_played = False
         guard.targetable = not motion.falling and not motion.dead
         for event in events:
             if event.kind == "fall" and guard.state.level_kind == 2:
@@ -1688,6 +1731,9 @@ class CombatEncounter:
         fatal_sequence = not protected and target.state.sequence_id in FATAL_STAB_SEQUENCES
         if not protected:
             target.life = 0 if fatal_sequence else max(0, target.life - 1)
+        if target.state.actor_type == 2:
+            # CheckStab 6:556c-556e arms the pending cue on a sword hit.
+            target.death_song_pending = True
         if target.state.actor_type == 0 and not fatal_sequence:
             # CODE:6 0x53f8-0x5406 arms the Prince without replaying SEQS:55,
             # writing 1 over a lost sword's -1 as well.

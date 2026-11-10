@@ -2442,6 +2442,14 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             return
         audio = getattr(self, "audio", None)
         environment = environment_for(self)
+        if self.combat is not None:
+            if audio is not None:
+                for cue in self.combat.sound_stops:
+                    audio.stop_sound(cue)
+                for cue in self.combat.songs:
+                    audio.add_song(cue)
+            self.combat.sound_stops.clear()
+            self.combat.songs.clear()
         environment.queue_songs(audio)
         if audio is None:
             return
@@ -2454,6 +2462,14 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if self.combat is not None:
             for guards, _generators in self.combat.room_encounters.values():
                 for guard in guards:
+                    motion = guard.terrain_motion
+                    if (guard.state.actor_type == 2 and motion is not None
+                            and motion.scream_played and not motion.falling):
+                        # Native impact replaces the scream on its single FX
+                        # channel. Stop cue 30 explicitly with overlapping FX,
+                        # including one queued on this very impact frame.
+                        audio.stop_sound(30)
+                        motion.scream_played = False
                     if guard.state.action == 167:
                         guard.state.sound_events.append(10)
                     elif guard.state.action == 154 and contact_allowed(guard, self.combat.player):

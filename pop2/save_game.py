@@ -187,7 +187,7 @@ def _unpack(value, resources, lava_tables, depth=0):
                 record['sequence_mode'] = legacy
     if cls.__name__ == 'Fighter':
         optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive', 'sword_lost',
-                         'ruins', 'flame_sword'))
+                         'ruins', 'flame_sword', 'death_song_frames', 'death_song_pending'))
     if cls is RebirthSnapshot:
         optional.add('ruins_rooms')
     if cls is Skeleton:
@@ -221,7 +221,7 @@ def _fighter_valid(actor, resources):
     state = actor.state
     if (type(actor.room) is not int or not 0 <= actor.room < 32 or not -2 <= actor.row <= 8
             or actor.bank_room is not None and not 0 <= actor.bank_room < 32
-            or not 0 <= actor.bank_slot < 5
+              or not 0 <= actor.bank_slot < 5 or not -1 <= actor.death_song_frames <= 6
             or not 0 <= actor.life <= actor.max_life <= 120 or not 0 <= actor.skill < 12
             or actor.skeleton is not None and not isinstance(actor.skeleton, Skeleton)
             or actor.flame_sword is not None and (not isinstance(actor.flame_sword, FlameSword)
@@ -232,7 +232,8 @@ def _fighter_valid(actor, resources):
             or state.source_sequence_id not in resources.sequences and state.source_sequence_id != 0
             or not 0 <= state.cursor <= len(resources.sequences[state.sequence_id])
             or not 0 <= state.action <= (len(resources.frames) - 1 if state.actor_type == 0 else
-                                         229 if state.actor_type == 4 else 254)
+                                           229 if state.actor_type == 4 else
+                                           256 if state.actor_type == 2 else 254)
             or state.actor_type != 0 and not (149 <= state.action or 102 <= state.action <= 106)
             or abs(state.target_x) > 10000 or abs(state.current_y) > 10000):
         raise SaveGameError('Saved actor is out of range')
