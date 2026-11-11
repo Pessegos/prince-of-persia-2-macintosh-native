@@ -258,6 +258,19 @@ shared views 3/9 and 8/10 are distinct logical rooms despite their repeated
 backdrops. Room 10's one static record does not by itself establish when
 Jaffar is revealed or how the room-6 riddle is solved.
 
+An initial actor-art audit narrows that remaining problem. The port restores
+the four room-6 records as actor type 2 with `SEQS 77`/pose 166 and draws the
+`Guard.rsrc` frame, yielding blue robes. Decoding the preserved `Kid.rsrc`
+`FRAM` 25001 pose 166 with environment-6 `CTBL` 25006 yields the red shirt,
+white trousers and blue turban seen on the standing copies in the Macintosh
+screenshot. This identifies candidate source artwork, but is not yet a safe
+live-renderer substitution: original `LoadFrame` 4:2a8e's actor-type-2
+jump-table entry goes to 4:2b0e, which maps pose 166 to opponent frame index
+17 (`pose - 149`). The pointer at a5-0x3472 and any final-level override of
+the image bank must be traced through room entry and draw setup. A direct use
+of Kid frame 166 would match a still image without establishing the
+Macintosh's animation and frame selection.
+
 Focused shared-desktop checks: 185 tests passed across temple arrival,
 developer map/menu, level ending, music transition and installation. Dependency,
 Ruff, recovery catalogue and diff checks passed. Full discovery was not repeated
