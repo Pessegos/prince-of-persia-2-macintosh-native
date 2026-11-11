@@ -2,6 +2,14 @@
 
 Status: 2026-11-11. The level-13 completion path through NIS 3, all 11 static rooms, entry
 placement and saving are integrated. The final battle and ending are not.
+
+The player's complete Macintosh run is now indexed in
+[the video reference](final-level-video-reference.md). It confirms the copy
+sequence, separate blue form/body, projectile victory, bedroom aftermath,
+final epilogue and Hall of Fame. The final epilogue is NIS 11 (15:3c76);
+the existing `ending.json` is the level-1 voyage and must not be reused for it.
+The bounded final completion caller now has 12 original CPU checks with
+PlayNIS and HallOfFameDialog supplied; the UI/epilogue/restart loop remain open.
 Names in the inventory below come from preserved symbols.
 
 ## The level
