@@ -38,7 +38,14 @@ def opponent_artwork(level, sword_shapes, sword_base, sword_palette, artwork=Non
             flame = FlameSwordArtwork(load_resource_file(FLAME_SWORD_FILE))
         except (FileNotFoundError, KeyError):
             flame = None
-    return OpponentArtwork(default, flame)
+    clones = None
+    if level.kind == 6:
+        kid = load_resource_file('Kid.rsrc')
+        clones = FinalCloneArtwork(
+            kid, parse_frame_records(kid['FRAM'][25001]['data']),
+            int.from_bytes(kid['SHPL'][25001]['data'][:2], 'big'),
+            decode_ctbl(kid['CTBL'][25008]['data']))
+    return OpponentArtwork(default, flame, clones)
 
 
 def guard_artwork_file(level):
@@ -94,6 +101,11 @@ class GuardArtwork:
         self.sword_palette = sword_palette
         self.cache = {}
         self.sword_cache = {}
+
+    def record(self, state):
+        from pop2.combat import actor_frame_index
+
+        return self.frames[actor_frame_index(state)]
 
     def body(self, state, palette_variant=1):
         from pop2.combat import actor_frame_index
@@ -171,13 +183,14 @@ class GuardArtwork:
 
 
 class FinalCloneArtwork:
-    """Prince-shaped room-6 figures shown in the Macintosh final tower."""
+    """Jaffar's false Princes: actor 6 uses Kid frames and CTBL 25008."""
 
     def __init__(self, kid, frames, first_shape_id, palette):
         self.shapes = kid['SHAP']
         self.frames = frames
         self.first_shape_id = first_shape_id
         self.palette = palette
+        self.attachments = parse_aframe_records(kid['AFRM'][25001]['data'])
         self.cache = {}
 
     def record(self, state):
@@ -210,6 +223,11 @@ class FinalCloneArtwork:
         if state.facing:
             body = ImageOps.mirror(body)
         image.paste(body, (left, top), body)
+
+    def collision_bounds(self, state, floor_y, sword_drawn):
+        record = self.record(state)
+        return character_collision_bounds(state, self.bounds(state, floor_y),
+                                          self.attachments[record.afrm_index], sword_drawn)
 
 
 class FlameSwordArtwork(GuardArtwork):
@@ -270,8 +288,9 @@ class OpponentArtwork:
     records follow the set loaded for the Prince's room; each actor is drawn
     with its own file (the port does not reproduce mismatched side rooms)."""
 
-    def __init__(self, default, flame=None):
+    def __init__(self, default, flame=None, clones=None):
         self.default, self.flame = default, flame
+        self.clones = clones
         self.current = default
 
     def select_room(self, actors):
@@ -279,7 +298,15 @@ class OpponentArtwork:
                         and any(actor.state.actor_type == 10 for actor in actors) else self.default)
 
     def _art(self, state):
+        if state.actor_type == 6 and self.clones is not None:
+            return self.clones
         return self.flame if state.actor_type == 10 and self.flame is not None else self.default
+
+    def record(self, state):
+        from pop2.combat import actor_frame_index
+
+        art = self._art(state)
+        return art.record(state) if art is self.clones else art.frames[actor_frame_index(state)]
 
     @property
     def frames(self):
@@ -294,7 +321,8 @@ class OpponentArtwork:
         return self.current.attachments
 
     def body(self, state, palette_variant=1):
-        return self._art(state).body(state, palette_variant)
+        art = self._art(state)
+        return art.body(state) if art is self.clones else art.body(state, palette_variant)
 
     def draw(self, image, state, floor_y, palette_variant=1, piece=None):
         art = self._art(state)
@@ -302,6 +330,8 @@ class OpponentArtwork:
             return  # FlameSword.rsrc is not imported.
         if art is self.flame:
             art.draw(image, state, floor_y, palette_variant, piece)
+        elif art is self.clones:
+            art.draw(image, state, floor_y)
         else:
             art.draw(image, state, floor_y, palette_variant)
 
@@ -376,7 +406,7 @@ class HitArtwork:
         if state.animation_state != 10 and not tumble_hit and not state.hit_flash:
             return
         is_player = state.actor_type == 0
-        record = (self.player_frames[state.action] if is_player
+        record = (self.player_frames[state.action] if state.actor_type in (0, 6)
                   else self.guard_frames[actor_frame_index(state)])
         # 0x0ca4/0x0cb6 offset from the body's facing-relative draw anchor.
         dx, dy = (14, -30) if is_player else (11, -21)

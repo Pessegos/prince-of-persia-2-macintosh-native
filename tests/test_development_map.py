@@ -266,7 +266,8 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         self.assertEqual({room + 1: len(items) for room, items in actors.items() if items},
                          {6: 4, 10: 1, 11: 1})
         self.assertEqual({(actor.state.sequence_id, actor.state.action)
-                          for items in actors.values() for actor in items}, {(77, 166)})
+                          for items in actors.values() for actor in items},
+                         {(2, 15), (77, 166), (197, 297)})
         atlas = build_development_map(level)
         self.assertEqual(len(atlas.rooms), 10)
         self.assertEqual(atlas.enemy_rooms, {'Room 6', 'Room 10'})

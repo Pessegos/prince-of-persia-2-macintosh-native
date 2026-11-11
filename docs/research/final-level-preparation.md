@@ -254,13 +254,13 @@ The player's proposed room-6 clone riddle and a Jaffar who appears only in
 room 8/10 after that riddle remain hypotheses. CODE 9's path/state machine,
 opponent visuals, transitions, full fight, animations and ending are open.
 The preserved LEVL opponent banks give a useful boundary: native room 6 has
-four actor-type-2 records, native room 8 has none, room 10 has one, and room
-11 has one. In the player's room-6 screenshot the four opponents look like
-copies of the Prince (five figures including the player). The port still
-decodes those records with `Guard.rsrc`, producing blue-robed guards; this is
-a confirmed visual mismatch. Resource selection, palettes and animation for
-these actors need a separate CODE 3/CODE 9 trace before changing the live
-combat renderer. Different LEVL tile and opponent records show that the
+four raw-kind-3 records (actor type 6), native room 8 has none, room 10 has one
+raw-kind-0 guard (actor type 2), and room 11 has one raw-kind-3 scripted actor.
+The room-6 figures are Jaffar's false Princes, as the player clarified; they
+use the Kid frame bank with CTBL 25008, distinct from the real Prince's
+environment palette 25006. Their bank and initial sequence are now recovered
+below; their riddle and controller remain open. Different LEVL tile and
+opponent records show that the
 shared views 3/9 and 8/10 are distinct logical rooms despite their repeated
 backdrops. Room 10's one static record does not by itself establish when
 Jaffar is revealed or how the room-6 riddle is solved.
@@ -276,18 +276,12 @@ are a drawing reuse, not duplicate collision/transition states. A map overview
 may group them visually, but teleport and simulation must still address each
 room separately.
 
-An initial actor-art audit narrows that remaining problem. The port restores
-the four room-6 records as actor type 2 with `SEQS 77`/pose 166 and draws the
-`Guard.rsrc` frame, yielding blue robes. Decoding the preserved `Kid.rsrc`
-`FRAM` 25001 pose 166 with environment-6 `CTBL` 25006 yields the red shirt,
-white trousers and blue turban seen on the standing copies in the Macintosh
-screenshot. This identifies candidate source artwork, but is not yet a safe
-live-renderer substitution: original `LoadFrame` 4:2a8e's actor-type-2
-jump-table entry goes to 4:2b0e, which maps pose 166 to opponent frame index
-17 (`pose - 149`). The pointer at a5-0x3472 and any final-level override of
-the image bank must be traced through room entry and draw setup. A direct use
-of Kid frame 166 would match a still image without establishing the
-Macintosh's animation and frame selection.
+The first actor-art audit treated all set-0 records as type 2 and therefore
+followed the wrong `LoadFrame` jump-table entry. A first presentation patch
+substituted Kid pose 166 with the real Prince's red palette. The subsequent
+native trace below corrects both assumptions: raw kind 3 is preserved before
+the actor-table lookup, and actor 6 uses Kid pose 15 with the false-Prince
+palette at initial room entry.
 
 ## Jaffar spell resource recovery (2026-11-11)
 
@@ -344,27 +338,59 @@ not counted as a pass.
 
 ## Room-6 copy appearance (2026-11-11)
 
-The player's Macintosh room-6 capture places four Prince-shaped figures at
+The player's Macintosh room-6 capture places four false-Prince figures at
 the four saved opponent positions in native LEVL 2013: cells 25, 3, 7 and 14
-with native X 509, 407, 611 and 458. The preserved `Kid.rsrc` FRAM 25001
-pose 166, decoded with final environment CTBL 25006, gives the captured red
-shirt, white trousers and blue turban. The prior port drew `Guard.rsrc` frame
-17 at these four positions, producing blue robes. The room-6 `Final.rsrc`
-background itself contains no figures at those positions.
+with native X 509, 407, 611 and 458. All four have raw kind 3 at record +0x18.
+`InitOpps` 6:2bca-2bfe preserves raw kinds 1/3/9/10 instead of replacing them
+with the level's set 0; the original DATA table at a5-0x5280 maps index 3 to
+actor type 6. At zero cursor, 6:2d64-2d88 selects `SEQS 2` for this type,
+except that the room-11 record keeps `SEQS 197`. Their first Kid poses are
+15 and 297 respectively. The room-10 raw-kind-0 actor follows the ordinary
+type-2 branch and starts `SEQS 77`/pose 166.
 
-The port now marks only those four initial room-6 actors as visual copies and
-draws their current action through the Kid frames in both gameplay and the F3
-map. The room-3 generated Jaffars and room-10 opponent still use their own
-guard artwork. A hidden gameplay render and the F3 frame show the four red
-figures; focused tests reject the former blue-guard result.
+`LoadFrame` 4:2a8e's actor-6 jump entry goes to 4:2ad6, loading FRAM and AFRM
+through the Kid handles at a5-0x3472 and -0x3476. Pose indices are direct;
+the type-2 `pose - 149` remap does not apply. `InitOpps` calls 6:3972;
+its actor-6 branch 6:3986-39a0 loads `Kid CTBL 25008` at palette 32,
+giving the false Princes their magenta shirts and purple turbans. Room setup
+9:1da2-1daa selects the same table. The real Prince remains on CTBL 25006.
 
-This is a screenshot-backed presentation inference, not a recovered native
-frame-bank rule. `LoadFrame` 4:2a8e maps actor type 2 pose 166 to opponent
-frame 17, and the original code path that makes these room-6 records appear
-Prince-shaped is still unresolved. Combat collision, AI, later animation and
-the clone riddle remain unchanged and require native tracing. `FinlGenerateOpp`
-9:02a6 is a background-item draw filter, as already recorded above, rather
-than the actor allocator for these four records.
+`tools.probe_final_clone_frames` executes the original selector, zero-cursor
+sequence branch, frame/attachment copy and palette calls for all six static
+records in rooms 6/10/11. All six agree. It supplies CheckLoadedOppSet,
+room-11 sound, palette and Rnd endpoints, plus resident resource handles and pose
+inputs. It compares raw FRAM/AFRM bytes, without the port's frame decoder.
+Resource loading, AnimChar, full room entry, AI and combat are excluded.
+
+The port preserves actor type 6 through room-record restore and snapshots,
+and uses the Kid frames and false-Prince palette in gameplay and F3. Existing
+snapshots without the newly added visual marker remain loadable. A snapshot
+from the earlier visual-only patch migrates its marked type-2 copy to type 6.
+These scripted copies currently advance their animation without ordinary
+guard AI or terrain control; the CODE 9 riddle/path controller, later actions,
+combat and room-11 death presentation remain to be integrated. The original
+room-10 guard is not treated as one of the room-6 copies. The native actor-6
+palette service also randomizes room-6 facing with `Rnd(1) - 1` at
+6:39a2-39c8. The port currently retains the record's facing; recover the
+controller and its random-state cadence before adding this draw.
+
+The next bounded controller trace is now identified: `AutoCtrl`
+6:4eb6-4f02 dispatches actor 6 through 6:4efe to 9:08e8, which selects
+9:1526 in the final room 6 and 9:16fe elsewhere. The fatal-hit branch at
+6:56a6-56ae calls `AllOtherJaffarsShimmerAway` 9:090e for an actor-6 target;
+that routine selects SEQS 240 for other idle type-6 figures. Recover its
+saved-Prince pose/distance gates, bank removal and animation timing before
+connecting the riddle. This does not yet establish a room-10 reveal trigger.
+
+Validation: six native selector/frame-bank cases and 249 focused port tests
+passed. Full discovery ran all 4,101 discovered cases in separate module
+processes to avoid the earlier Tk memory accumulation: 4,090 passed, 10 skipped,
+and one failed. The failure is the existing
+`test_cave_ambience.MenuTests.test_every_row_stays_inside_the_panel`
+(row bottom 371 exceeds panel bottom 357), reproduced unchanged on published
+main 7c5e98c. Exclusive-desktop tests remained skipped in shared mode.
+Dependency, Ruff, recovery catalogue and diff checks passed. The reviewed
+hidden gameplay image shows a red player and four purple false Princes.
 
 ## Room-2 audio freeze repair (2026-11-11)
 

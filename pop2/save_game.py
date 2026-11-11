@@ -188,7 +188,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     if cls.__name__ == 'Fighter':
         optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive', 'sword_lost',
                          'ruins', 'flame_sword', 'death_song_frames', 'death_song_pending',
-                         'final_jaffar'))
+                         'final_jaffar', 'final_clone'))
     if cls is RebirthSnapshot:
         optional.add('ruins_rooms')
     if cls is Skeleton:
@@ -211,7 +211,13 @@ def _unpack(value, resources, lava_tables, depth=0):
             raise SaveGameError(f'Invalid {cls.__name__}.{name}')
     if cls in (Lava, LavaPool):
         arguments['tables'] = lava_tables
-    return cls(**arguments)
+    decoded = cls(**arguments)
+    if (cls.__name__ == 'Fighter' and decoded.final_clone
+            and decoded.state.level_kind == 6 and decoded.state.actor_type == 2):
+        # The first visual-copy release marked these actors while retaining
+        # the old ordinary-guard type in snapshots.
+        decoded.state.actor_type = 6
+    return decoded
 
 
 def _fighter_valid(actor, resources):
@@ -227,15 +233,16 @@ def _fighter_valid(actor, resources):
             or actor.skeleton is not None and not isinstance(actor.skeleton, Skeleton)
             or actor.flame_sword is not None and (not isinstance(actor.flame_sword, FlameSword)
                                                   or state.actor_type != 10)
-            or state.facing not in (0, 1) or state.actor_type not in (0, 2, 4, 10)
+            or state.facing not in (0, 1) or state.actor_type not in (0, 2, 4, 6, 10)
+            or state.actor_type == 6 and (state.level_kind != 6 or not actor.final_clone)
             or state.actor_type == 10 and actor.flame_sword is None
             or state.sequence_id not in resources.sequences
             or state.source_sequence_id not in resources.sequences and state.source_sequence_id != 0
             or not 0 <= state.cursor <= len(resources.sequences[state.sequence_id])
-            or not 0 <= state.action <= (len(resources.frames) - 1 if state.actor_type == 0 else
+            or not 0 <= state.action <= (len(resources.frames) - 1 if state.actor_type in (0, 6) else
                                            229 if state.actor_type == 4 else
                                            256 if state.actor_type == 2 else 254)
-            or state.actor_type != 0 and not (149 <= state.action or 102 <= state.action <= 106)
+            or state.actor_type not in (0, 6) and not (149 <= state.action or 102 <= state.action <= 106)
             or abs(state.target_x) > 10000 or abs(state.current_y) > 10000):
         raise SaveGameError('Saved actor is out of range')
     record = actor.skeleton.room_record if actor.skeleton is not None else None
@@ -247,7 +254,7 @@ def _fighter_valid(actor, resources):
         raise SaveGameError('Saved skeleton room record is out of range')
     record = actor.guard_record
     if record is not None and (
-            actor.state.actor_type != 2 or record.sequence not in resources.sequences
+            actor.state.actor_type not in (2, 6) or record.sequence not in resources.sequences
             or not 0 <= record.cursor < len(resources.sequences[record.sequence])
             or not 0 <= record.life <= actor.max_life
             or record.cell is not None and not -19 <= record.cell < 90
@@ -408,7 +415,7 @@ def read_snapshot(path, resources):
                 raise SaveGameError('Invalid room actors')
             for actor in actors:
                 _fighter_valid(actor, resources)
-                if actor.room != room or actor.state.actor_type not in (2, 4, 10):
+                if actor.room != room or actor.state.actor_type not in (2, 4, 6, 10):
                     raise SaveGameError('Invalid enemy room')
             if any(not isinstance(point, OpponentGenerationPoint) for point in points):
                 raise SaveGameError('Invalid generation point')
@@ -650,7 +657,7 @@ def restore_progress(document, resources):
                     raise SaveGameError('Invalid checkpoint room')
                 for actor in entry[0]:
                     _fighter_valid(actor, resources)
-                    if actor.room != room or actor.state.actor_type not in (2, 4, 10):
+                    if actor.room != room or actor.state.actor_type not in (2, 4, 6, 10):
                         raise SaveGameError('Invalid checkpoint opponent')
                 if any(not isinstance(point, OpponentGenerationPoint) for point in entry[1]):
                     raise SaveGameError('Invalid checkpoint generation point')

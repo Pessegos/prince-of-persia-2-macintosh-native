@@ -89,13 +89,13 @@ def map_enemies(level, positions):
                        sword_palette_for_level(prince, level.kind))
     if level.kind == 6:
         from pop2.animation_data import parse_frame_records
-        from pop2.render_opening import kid_palette_for_level
+        from pop2.render_opening import decode_ctbl
 
         kid = load_resource_file('Kid.rsrc')
         art.final_clones = FinalCloneArtwork(
             kid, parse_frame_records(kid['FRAM'][25001]['data']),
             int.from_bytes(kid['SHPL'][25001]['data'][:2], 'big'),
-            kid_palette_for_level(kid, level.kind))
+            decode_ctbl(kid['CTBL'][25008]['data']))
     actors = {}
     for room, entries in spawns.items():
         actors[room] = []
@@ -105,12 +105,12 @@ def map_enemies(level, positions):
                                   level_kind=level.kind)
             actor = Fighter(SequenceRuntime(sequences, state), spawn.life, spawn.life,
                             room, spawn.row, palette_variant=spawn.palette_variant)
-            actor.final_clone = level.kind == 6 and room == 5 and slot < 4
+            actor.final_clone = spawn.actor_type == 6
             actor.runtime.next_frame()
             if level.kind == 6 and spawn.guard_words:
                 # The final tower's LEVL records are saved opponent records.
-                # InitOpps restores their zero cursors as SEQS 77 before any
-                # actor is drawn; raw SEQS 2/197 are not drawable guard poses.
+                # InitOpps restores zero cursors by actor type: ordinary
+                # guard SEQS 77, scripted copies SEQS 2/197 with Kid frames.
                 words = spawn.guard_words
                 GuardRoomRecord(words[4], words[5], words[9], bool(words[8]),
                                 words[0], words[14]).restore(actor, slot)

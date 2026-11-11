@@ -12,10 +12,10 @@ from pop2.animation_data import (
     shape_id_for_action,
 )
 from pop2.combat import (
-    PLAYER_COMBAT_TURN_SEQUENCE, actor_frame_index, contact_allowed,
+    PLAYER_COMBAT_TURN_SEQUENCE, contact_allowed,
 )
 from pop2.combat_art import (
-    FinalCloneArtwork, HealthArtwork, HitArtwork, _CurrentFrames, actor_draw_order, opponent_artwork,
+    HealthArtwork, HitArtwork, _CurrentFrames, actor_draw_order, opponent_artwork,
     slab_crush_draw_state, sword_palette_for_level,
 )
 from pop2.control_mapping import (
@@ -394,8 +394,6 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.game, self.level_renderer = game, renderer
         self.palette, self.sword_palette = palette, sword_palette
         self.guard_art, self.health_art, self.hit_art = guard_art, health_art, hit_art
-        self.final_clone_art = (FinalCloneArtwork(self.kid, self.frames, self.first_shape_id, palette)
-                                if game.level.kind == 6 else None)
         self.checkpoints = game.level.checkpoints
         self.level_map, self.physics = game.level_map, game.physics
         self.room_cache = renderer.rooms
@@ -3627,9 +3625,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 layer = Image.new("RGBA", frame.size)
                 ground = floor_y(guard.row) + environment.draw_sag(guard)
                 state = slab_crush_draw_state(guard, crush_poses)
-                clone_art = self.final_clone_art if guard.final_clone else None
-                record = (clone_art.record(state) if clone_art is not None
-                          else self.guard_art.frames[actor_frame_index(state)])
+                record = self.guard_art.record(state)
                 neck = getattr(getattr(guard, 'ruins', None), 'neck', None)
                 if neck is not None:
                     # AlignHeadOnKidNeck 7:0006 gives the drawing point itself.
@@ -3637,12 +3633,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                     state = replace(state, target_x=neck[0] - shift,
                                     current_y=neck[1] - ground - record.offset_y)
                 piece = getattr(getattr(guard, 'flame_sword', None), 'piece', None)
-                if clone_art is not None:
-                    clone_art.draw(layer, state, ground)
-                    bounds = clone_art.bounds(state, ground)
-                else:
-                    self.guard_art.draw(layer, state, ground, guard.palette_variant, piece=piece)
-                    bounds = self.guard_art.bounds(state, ground, piece=piece)
+                self.guard_art.draw(layer, state, ground, guard.palette_variant, piece=piece)
+                bounds = self.guard_art.bounds(state, ground, piece=piece)
                 actors.append((state, record, bounds, guard.row, layer))
         actors.extend(environment.extra_actors(frame.size))
         player_layer = Image.new("RGBA", frame.size)
@@ -3701,7 +3693,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 state = slab_crush_draw_state(guard, crush_poses)
                 self.hit_art.draw(layer, state, ground)
                 bounds = self.guard_art.bounds(state, ground)
-                record = self.guard_art.frames[actor_frame_index(state)]
+                record = self.guard_art.record(state)
                 frame = self.composite_actor(frame, layer, guard.row, bounds[3],
                                              state, bounds, record)
             layer = Image.new("RGBA", frame.size)

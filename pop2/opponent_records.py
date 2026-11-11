@@ -1,4 +1,4 @@
-"""Ordinary type-2 room records, separate from live animation state."""
+"""Saved type-2/type-6 room records, separate from live animation state."""
 
 from dataclasses import dataclass
 
@@ -57,10 +57,17 @@ class GuardRoomRecord:
             actor.row = abs(self.cell) // 10 * (-1 if self.cell < 0 else 1) - int(self.cell < 0)
         initial_y = self.height - floor_y(actor.row) if self.sequence == 100 else 0
         fresh = SequenceState(self.sequence, current_x=state.target_x, target_x=state.target_x,
-                              current_y=initial_y, facing=state.facing, actor_type=2,
+                              current_y=initial_y, facing=state.facing, actor_type=state.actor_type,
                               level_kind=state.level_kind, callback_counter=state.callback_counter)
         state.__dict__.update(fresh.__dict__)
-        sequence = self.sequence if self.cursor or self.sequence == 22 else 77
+        if self.cursor:
+            sequence = self.sequence
+        elif state.actor_type == 6:
+            # InitOpps 6:2d64-2d88: copies start in SEQS 2; the room-11
+            # scripted actor retains SEQS 197.
+            sequence = 197 if self.sequence == 197 else 2
+        else:
+            sequence = self.sequence if self.sequence == 22 else 77
         state.select(sequence)
         state.cursor = self.cursor
         actor.selected_sequence = sequence

@@ -124,6 +124,7 @@ class GuardSpawn:
     def all_from_level(cls, level, room):
         # CODE:6 GetGen/SetOppMaxLifePts: one-based room, 38-byte generator.
         opponent_type = struct.unpack_from(">h", level, 0x21A4)[0]
+        level_kind = struct.unpack_from('>h', level, 0x2186)[0]
         if opponent_type == -1:
             return []
         offset = 0x20E6 + native_room(room) * 0xC0
@@ -141,6 +142,10 @@ class GuardSpawn:
             if not 0 <= skill < len(ADVANCE_CHANCE):
                 raise ValueError(f"Unsupported guard skill {skill}")
             actor_type = 4 if opponent_type == 2 else 2
+            if level_kind == 6 and fields[12] == 3:
+                # InitOpps 6:2bca-2c0e preserves raw kind 3 for set 0;
+                # original a5-0x5280[3] maps it to the Kid-like actor 6.
+                actor_type = 6
             if opponent_type == 7:
                 # 6:2bca: the temple's raw kinds 1/3/9/10 become actors
                 # 10/6/12/0; only level 12's flaming sword (raw 1) is ported.
@@ -193,7 +198,7 @@ class Fighter:
     flame_sword: object | None = None
     # CODE 9 room-3 copy: its record cell can encode path rows 4, 6 or 8.
     final_jaffar: bool = False
-    # The four saved room-6 figures in the final tower use Prince artwork.
+    # Final tower raw-kind-3 actors: Jaffar disguised as the Prince (type 6).
     final_clone: bool = False
 
     @property
@@ -389,7 +394,7 @@ class CombatEncounter:
                                   palette_variant=spawn.palette_variant,
                                   generation_flags=spawn.generation_flags,
                                   alternate_row=spawn.alternate_row)
-                fighter.final_clone = self.level_kind == 6 and room == 5 and slot < 4
+                fighter.final_clone = spawn.actor_type == 6
                 fighter.runtime.next_frame()
                 if spawn.skeleton_words:
                     from pop2.skeleton import Skeleton
@@ -519,7 +524,8 @@ class CombatEncounter:
         art = getattr(self, 'guard_art', None)
         x = guard.state.target_x
         if art is not None:
-            record = art.frames[guard_frame_index(guard.state.action)]
+            record = (art.record(guard.state) if guard.state.actor_type == 6
+                      else art.frames[guard_frame_index(guard.state.action)])
             x = floor_contact_x(x, guard.state.facing, record)
         position = cut_opponent_position(terrain, guard.room, guard.row, character_column(x),
                                          guard.state.target_x, floor_y(guard.row) + guard.state.current_y)
@@ -1557,8 +1563,8 @@ class CombatEncounter:
     def advance_guard(self):
         terrain = getattr(self, "terrain", None)
         for guard in self.active_guards():
-            if guard.final_jaffar:
-                # Its later movement belongs to the CODE 9 path controller.
+            if guard.final_jaffar or guard.state.actor_type == 6:
+                # These scripted actors need CODE 9's path/copy controller.
                 guard.runtime.next_frame()
                 continue
             old_x = guard.state.target_x
@@ -1733,7 +1739,8 @@ class CombatEncounter:
         if view is None:
             return False
         state = view.state
-        record = art.frames[guard_frame_index(state.action)]
+        record = (art.record(state) if state.actor_type == 6
+                  else art.frames[guard_frame_index(state.action)])
         if state.level_kind == 5 and terrain.forced_opponent_tumble(
                 room, target.row, state, record):
             return True
@@ -1798,7 +1805,8 @@ class CombatEncounter:
         terrain = getattr(self, "terrain", None)
         record = None
         if name == "guard" and getattr(self, "guard_art", None) is not None:
-            record = self.guard_art.frames[guard_frame_index(target.state.action)]
+            record = (self.guard_art.record(target.state) if target.state.actor_type == 6
+                      else self.guard_art.frames[guard_frame_index(target.state.action)])
         elif name == "player" and getattr(self, "player_frames", None) is not None:
             record = self.player_frames[target.state.action]
         column = (character_column(floor_contact_x(target.state.target_x, target.state.facing, record))
@@ -1854,7 +1862,8 @@ class CombatEncounter:
         if sequence == 85 and getattr(self, "terrain", None) is not None:
             record = None
             if name == "guard" and getattr(self, "guard_art", None) is not None:
-                record = self.guard_art.frames[guard_frame_index(target.state.action)]
+                record = (self.guard_art.record(target.state) if target.state.actor_type == 6
+                          else self.guard_art.frames[guard_frame_index(target.state.action)])
             elif name == "player" and getattr(self, "player_frames", None) is not None:
                 record = self.player_frames[target.state.action]
             if record is not None:
