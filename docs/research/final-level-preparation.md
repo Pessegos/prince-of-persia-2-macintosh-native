@@ -342,6 +342,30 @@ Tk-heavy run. Exclusive-desktop tests were not run while the user's desktop
 remained in use. The focused tests are passes; the interrupted discovery is
 not counted as a pass.
 
+## Room-6 copy appearance (2026-11-11)
+
+The player's Macintosh room-6 capture places four Prince-shaped figures at
+the four saved opponent positions in native LEVL 2013: cells 25, 3, 7 and 14
+with native X 509, 407, 611 and 458. The preserved `Kid.rsrc` FRAM 25001
+pose 166, decoded with final environment CTBL 25006, gives the captured red
+shirt, white trousers and blue turban. The prior port drew `Guard.rsrc` frame
+17 at these four positions, producing blue robes. The room-6 `Final.rsrc`
+background itself contains no figures at those positions.
+
+The port now marks only those four initial room-6 actors as visual copies and
+draws their current action through the Kid frames in both gameplay and the F3
+map. The room-3 generated Jaffars and room-10 opponent still use their own
+guard artwork. A hidden gameplay render and the F3 frame show the four red
+figures; focused tests reject the former blue-guard result.
+
+This is a screenshot-backed presentation inference, not a recovered native
+frame-bank rule. `LoadFrame` 4:2a8e maps actor type 2 pose 166 to opponent
+frame 17, and the original code path that makes these room-6 records appear
+Prince-shaped is still unresolved. Combat collision, AI, later animation and
+the clone riddle remain unchanged and require native tracing. `FinlGenerateOpp`
+9:02a6 is a background-item draw filter, as already recorded above, rather
+than the actor allocator for these four records.
+
 Focused shared-desktop checks: 185 tests passed across temple arrival,
 developer map/menu, level ending, music transition and installation. Dependency,
 Ruff, recovery catalogue and diff checks passed. Full discovery was not repeated

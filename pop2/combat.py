@@ -193,6 +193,8 @@ class Fighter:
     flame_sword: object | None = None
     # CODE 9 room-3 copy: its record cell can encode path rows 4, 6 or 8.
     final_jaffar: bool = False
+    # The four saved room-6 figures in the final tower use Prince artwork.
+    final_clone: bool = False
 
     @property
     def state(self):
@@ -387,6 +389,7 @@ class CombatEncounter:
                                   palette_variant=spawn.palette_variant,
                                   generation_flags=spawn.generation_flags,
                                   alternate_row=spawn.alternate_row)
+                fighter.final_clone = self.level_kind == 6 and room == 5 and slot < 4
                 fighter.runtime.next_frame()
                 if spawn.skeleton_words:
                     from pop2.skeleton import Skeleton

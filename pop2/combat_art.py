@@ -170,6 +170,48 @@ class GuardArtwork:
                                           self.attachments[record.afrm_index], sword_drawn)
 
 
+class FinalCloneArtwork:
+    """Prince-shaped room-6 figures shown in the Macintosh final tower."""
+
+    def __init__(self, kid, frames, first_shape_id, palette):
+        self.shapes = kid['SHAP']
+        self.frames = frames
+        self.first_shape_id = first_shape_id
+        self.palette = palette
+        self.cache = {}
+
+    def record(self, state):
+        return self.frames[state.action]
+
+    def body(self, state):
+        shape_id = shape_id_for_action(self.frames, self.first_shape_id, state.action)
+        if shape_id is None:
+            return None
+        if shape_id not in self.cache:
+            self.cache[shape_id] = decode_shap(self.shapes[shape_id]['data'], self.palette)
+        return self.cache[shape_id]
+
+    def bounds(self, state, floor_y):
+        body = self.body(state)
+        if body is None:
+            return (state.target_x, floor_y, state.target_x, floor_y)
+        record = self.record(state)
+        anchor = body.width - record.offset_x if state.facing else record.offset_x
+        left = state.target_x - anchor
+        bottom = floor_y + state.current_y + record.offset_y
+        return (left, character_sprite_top(bottom, body.height),
+                left + body.width - 1, bottom)
+
+    def draw(self, image, state, floor_y):
+        body = self.body(state)
+        if body is None:
+            return
+        left, top, _, _ = self.bounds(state, floor_y)
+        if state.facing:
+            body = ImageOps.mirror(body)
+        image.paste(body, (left, top), body)
+
+
 class FlameSwordArtwork(GuardArtwork):
     """FlameSword.rsrc: no body, only the AFRM piece in its own SHAP bank
     (SetupSword 3:0b16-0b2a, image set 3) at AddFCharX of the piece's X."""

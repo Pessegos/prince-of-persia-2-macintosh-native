@@ -69,7 +69,7 @@ def _linked_positions(terrain, origin, hidden=()):
 def map_enemies(level, positions):
     from pop2.animation_data import sequence_words
     from pop2.combat import Fighter, GuardSpawn
-    from pop2.combat_art import GuardArtwork, sword_palette_for_level
+    from pop2.combat_art import FinalCloneArtwork, GuardArtwork, sword_palette_for_level
     from pop2.opponent_records import GuardRoomRecord
     from pop2.render_opening import load_resource_file
     from pop2.sequence_runtime import SequenceRuntime, SequenceState
@@ -87,6 +87,15 @@ def map_enemies(level, positions):
     art = GuardArtwork(load_resource_file('Skeleton.rsrc' if level.kind == 3 else 'Guard.rsrc'),
                        prince['SHAP'], int.from_bytes(prince['SHPL'][1000]['data'][:2], 'big'),
                        sword_palette_for_level(prince, level.kind))
+    if level.kind == 6:
+        from pop2.animation_data import parse_frame_records
+        from pop2.render_opening import kid_palette_for_level
+
+        kid = load_resource_file('Kid.rsrc')
+        art.final_clones = FinalCloneArtwork(
+            kid, parse_frame_records(kid['FRAM'][25001]['data']),
+            int.from_bytes(kid['SHPL'][25001]['data'][:2], 'big'),
+            kid_palette_for_level(kid, level.kind))
     actors = {}
     for room, entries in spawns.items():
         actors[room] = []
@@ -96,6 +105,7 @@ def map_enemies(level, positions):
                                   level_kind=level.kind)
             actor = Fighter(SequenceRuntime(sequences, state), spawn.life, spawn.life,
                             room, spawn.row, palette_variant=spawn.palette_variant)
+            actor.final_clone = level.kind == 6 and room == 5 and slot < 4
             actor.runtime.next_frame()
             if level.kind == 6 and spawn.guard_words:
                 # The final tower's LEVL records are saved opponent records.
@@ -181,9 +191,16 @@ def clean_room_frames(renderer, terrain, positions, enemies=None):
             artwork, actors = enemies
             for actor in actors.get(room, ()):
                 layer = Image.new('RGBA', frame.size)
-                artwork.draw(layer, actor.state, floor_y(actor.row), actor.palette_variant)
-                bounds = artwork.bounds(actor.state, floor_y(actor.row))
-                record = artwork.frames[actor_frame_index(actor.state)]
+                clone_art = (getattr(artwork, 'final_clones', None)
+                             if getattr(actor, 'final_clone', False) else None)
+                if clone_art is not None:
+                    clone_art.draw(layer, actor.state, floor_y(actor.row))
+                    bounds = clone_art.bounds(actor.state, floor_y(actor.row))
+                    record = clone_art.record(actor.state)
+                else:
+                    artwork.draw(layer, actor.state, floor_y(actor.row), actor.palette_variant)
+                    bounds = artwork.bounds(actor.state, floor_y(actor.row))
+                    record = artwork.frames[actor_frame_index(actor.state)]
                 # Use the current room's actor-aware masks, including the
                 # corrected cavern redraw ordering, not a flattened PNG mask.
                 mask = art.actor_mask(actor.row, bounds[3], actor.state, bounds, record)
