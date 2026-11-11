@@ -474,10 +474,14 @@ completion event, song duration and NIS callback; no original CPU trace of
 the full exit or hardware audio timing is claimed. `Temple.finish_exit` had
 already been tested directly, but the preceding dispatch was missing.
 
-The F3 layout places room 1 right of room 11 and below room 2 as a requested
-presentation choice. LEVL 2013 links remain untouched. User-labelled
-Macintosh screenshots show shared room 3/9 and 8/10 views; the room-9 export
-has no own CUST commands and room 10 has only a front SHAP 3001. Original
-redraw retention, palette changes, the room-11 cutscene variants and Jaffar
-encounter conditions remain to be recovered. See
+The corrected F3 layout places rooms 1, 2 and 4 vertically and excludes room
+11, which remains a resource/script destination. LEVL 2013 links remain
+untouched. User-labelled Macintosh screenshots show shared room 3/9 and 8/10
+views; the room-9 export has no own CUST commands and room 10 has only a front
+SHAP 3001. CODE 9 palette calls at 9:1a90, 1d84 and 00c6 plus the original
+screenshots support room-specific CTBLs 3501/3502/3503. The renderer now uses
+those palettes and retains the shared backdrops. CODE 9:0760 calls NIS 5 in
+native room 2; GenCtrl 6:079c calls 9:0062 to place the character in room 11
+under a separate state gate. Full redraw sequencing, both cutscene variants
+and Jaffar encounter conditions remain to be recovered. See
 [final-level preparation](research/final-level-preparation.md).

@@ -223,7 +223,8 @@ class LevelRenderer:
         if self.level.kind == 1:
             return {"1": 1, "2 (Stones)": 0, "Right shore": 2}
         if self.level.kind in (2, 3, 4, 6):
-            return {f"Room {room + 1}": room for room in self.supported_rooms()}
+            return {f"Room {room + 1}": room for room in self.supported_rooms()
+                    if not (self.level.number == 14 and room == 10)}
         terrain, _shapes, _pieces = rooftop_scene_data(self.level.resource_id)
         available = set(self.supported_rooms())
         route = []

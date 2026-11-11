@@ -198,6 +198,12 @@ TEMPLE_TORCH_SHAPES = range(3596, 3602)
 # six's start room (CUST kind 22, 7:37a6, CTBL 3502 at 64) and level eight's
 # throne room (kind 34, 7:3864, Ruins CTBL 3501 at 48).
 ROOM_PALETTES = {(5, 2): 3501, (6, 26): 3502, (8, 8): 3501}
+# Final.rsrc names these CTBLs Chess/Spider, Crystal/Escher and Princess.
+# CODE 9 loads them at 9:1a90, 1d84 and 00c6 respectively. The Macintosh
+# room screenshots identify the retained rooms 9/10 with their source scenes.
+ROOM_PALETTES.update({(14, room): 3501 for room in (2, 3, 4, 8)})
+ROOM_PALETTES.update({(14, room): 3502 for room in (5, 6, 7, 9)})
+ROOM_PALETTES[14, 10] = 3503
 
 
 def scenery_name(level_number):
@@ -263,6 +269,7 @@ def room_assets(level_number, room_id):
 
     Room 3 of level five is a CUST kind-0 room; its enter hook CheckCarpetImg
     (8:0d30, table a5-0x4c2e) loads CTBL 3501 over entries 64-183.
+    The final tower switches among its four original CTBLs by scene.
     """
     program, resources, palette, shapes = cavern_assets(level_number)
     if (level_number, room_id) not in ROOM_PALETTES:
@@ -1288,6 +1295,12 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     if (program.get('version') in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17)
             and program.get('level') == level_number):
         commands = program['rooms'][str(room_id)]
+        if level_number == 14 and room_id in (8, 9):
+            # Native rooms 9 and 10 have no CUST background of their own.
+            # The Macintosh screenshots show the retained views of rooms 3
+            # and 8, respectively; room 10 adds its own foreground item.
+            source_room = 2 if room_id == 8 else 7
+            commands = [*program['rooms'][str(source_room)], *commands]
     elif (program.get('version'), program.get('level'), program.get('room')) == (1, level_number, room_id):
         commands = program['commands']
     else:

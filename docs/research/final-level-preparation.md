@@ -201,24 +201,62 @@ environment 2, so the temple exit waits for that song before calling
 the real `-16` event, sees song 187 and the flight, and reaches native room 1
 of level 14 with mode 13. Audio hardware timing remains unprobed.
 
-The F3 map now displays room 1 immediately right of room 11 and room 2
-directly above room 1, following the player's layout request. The layout
-is a presentation exception: original LEVL 2013 still links native room 1
-down to 2, 1 up to 3 and 11 down to 4. The map keeps all 11 room labels
-selectable for inspection; the live links and level entry are unchanged.
+The initial F3 map placed room 1 right of room 11 and room 2 above room 1.
+The player corrected that reading: room 1 is above room 2, which is above
+room 4; room 11 is a cutscene setting and is omitted from the F3 room picker.
+This is a presentation exception. Original LEVL 2013 still links native room
+1 down to 2, 1 up to 3 and 11 down to 4; live links and entry are unchanged.
 
 The player supplied labelled Macintosh screenshots for rooms 3/9, 4, 5, 6,
-7 and 8/10. The shared views in the first and last pairs are observations,
-not proof of their puzzle triggers. The original export has no own CUST draw
-commands for room 9 and only a foreground SHAP 3001 for room 10; inherited
-scenery or redraw state is a bounded next drawing investigation. The screenshots
-also show clear palette and layering differences from the current F3 preview
-in the mental rooms. Room 11 as the entry/death cutscene and the state-dependent
-Jaffar encounter are player observations to verify against CODE 9 and the NIS
-scripts before changing battle behavior. `FinlWatchOpps` 9:0764-0784 tests
-the a5-0x50bc state word for 2 and calls PlayNIS(5), but that word's meaning,
-the branch's full input state,
-the death variant, and the room-8/10 encounter conditions are not yet probed.
+7 and 8/10. These show the two shared views and the scenery's intended colours;
+they do not establish the puzzle or opponent triggers. The original export has
+no own CUST draw commands for room 9 and only a foreground SHAP 3001 for room
+10. Their F3/live static scenery now uses the room-3 and room-8 backdrops,
+respectively, with room 10's extra item. This is a screenshot-backed retained
+view, not a native frame trace of the redraw sequence.
+
+## Visual correction and cutscene routing (2026-11-11)
+
+The port had applied Final CTBL 3500 to every room. In the preserved CODE 9,
+9:1a90-1a9c loads CTBL 3501 at palette entry 64; 9:1d84-1d92 loads CTBL
+3502 there; 9:00c6-00d2 loads CTBL 3503. The player's original screenshots
+and a four-table render grid of the imported Macintosh shapes independently
+identify 3501 for the tree/chess rooms 3-5 and 9, and 3502 for crystals/palace
+rooms 6-8 and 10. The room-11 cutscene backdrop uses 3503. Room 1-2 retain
+3500. A static renderer regression checks pixels from the tree, chess,
+crystals and palace, plus the retained backdrops for 9 and 10. This fixes the
+large colour mismatch; moving scenery, actors and cutscene animation still
+need native-frame comparison.
+
+The initial spell route has a concrete code gate: `FinlWatchOpps` 9:0654
+calls 9:0760, whose 9:0764-0784 branch tests the current room word
+a5-0x50bc for native room 2, a timer at a5-0x3566 no greater than 486,
+and the Prince mode a5-0x50c2 different from 4, then calls PlayNIS(5)
+through 9:071a.
+The script's contents and precise first-entry timing are not yet traced.
+`GenCtrl` 6:0780-07a0 has a separate environment-6 branch that calls
+9:0062; that routine puts the character in native room 11, at column 6,
+row 2 and SEQS 71. The branch depends on the original actor state, and the
+following death presentation needs a native execution trace. Thus room 11
+remains an original resource and script destination, but is not a walkable
+choice in the F3 overview. The player's account of an initial and a death
+variant is consistent with these separate gates; their complete sequence
+and the Jaffar laughter are still to be verified.
+
+The player's proposed room-6 clone riddle and a Jaffar who appears only in
+room 8/10 after that riddle remain hypotheses. CODE 9's path/state machine,
+opponent visuals, transitions, full fight, animations and ending are open.
+The preserved LEVL opponent banks give a useful boundary: native room 6 has
+four actor-type-2 records, native room 8 has none, room 10 has one, and room
+11 has one. In the player's room-6 screenshot the four opponents look like
+copies of the Prince (five figures including the player). The port still
+decodes those records with `Guard.rsrc`, producing blue-robed guards; this is
+a confirmed visual mismatch. Resource selection, palettes and animation for
+these actors need a separate CODE 3/CODE 9 trace before changing the live
+combat renderer. Different LEVL tile and opponent records show that the
+shared views 3/9 and 8/10 are distinct logical rooms despite their repeated
+backdrops. Room 10's one static record does not by itself establish when
+Jaffar is revealed or how the room-6 riddle is solved.
 
 Focused shared-desktop checks: 185 tests passed across temple arrival,
 developer map/menu, level ending, music transition and installation. Dependency,
