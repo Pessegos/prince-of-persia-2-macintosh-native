@@ -13,6 +13,8 @@ CATALOG = PROJECT_DIR / "docs" / "RECOVERY_CATALOG.csv"
 
 # These reviews cover specific ordinary branches, never an entire routine.
 REVIEWS = {
+    (15, "TransPrincessRoom"): ("partial", "tools/extract_intro.py;tests/test_final_spell.py", "NIS 5 room-2 spell coordinator: Happy resource and 766 expanded operations with supplied CODE16 drawing/sound and Resource Manager endpoints; gameplay gate and native pixel/audio parity excluded"),
+    (15, "TransFuncJaffarMagic"): ("partial", "tools/extract_intro.py;tests/test_final_spell.py", "79-frame NIS 5 animation callback recovered with supplied animation/resource/sound endpoints; isolated fade pointer restored from coordinator CTBL; live trigger and native frame capture excluded"),
     (9, "FinlCheckGenOpp"): ("partial", "pop2/final_jaffars.py;tools/probe_final_jaffar_generation.py", "room-3 two-copy admission and position: 216 original CODE9 cases with Rnd and record constructor supplied; full constructor/path/combat excluded"),
     (9, "FinlGenerateOpp"): ("reference-only", "docs/research/final-level-preparation.md", "9:02a6 filters background/foreground item drawing from DrawBFItem; Jaffar record constructor is 9:03c8, moving scenery remains open"),
     (5, "TriggerTorch"): ("partial", "pop2/cavern_state.py;tools/probe_temple_candles.py", "temple Rnd(5) initialization: 24 checks with supplied visibility/cache/AddTrob; full activation and native visibility excluded"),

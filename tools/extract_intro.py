@@ -904,6 +904,53 @@ def extract_tower(image, program, nis, files, directory, progress=lambda _text: 
     (directory / 'tower.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')
 
 
+def recover_final_spell(program, nis, happy):
+    """NIS 5 (15:0880), called from CODE 9:071a on final room 2.
+
+    Happy.rsrc is the resource file's original name; the scene callback is
+    TransFuncJaffarMagic (15:09fa). Its name alone does not identify the scene.
+    """
+    offset = 1000000
+    opened = {0x26b0: (offset, parse_resource_fork(happy))}
+    resources = {kind: dict(items) for kind, items in parse_resource_fork(nis).items()}
+    for kind, items in opened[0x26b0][1].items():
+        resources.setdefault(kind, {}).update({offset + key: value for key, value in items.items()})
+    operations = recover_scenes(program, nis, entries=(0x0880,), files=opened,
+                                callbacks={0xf12: 'jaffar_magic'})
+    palette = next(item['args'][0] for item in operations if item['op'] == 'palette')
+    animation = next(item for item in operations if item['op'] == 'animation')
+    base, index = animation['args'][:2]
+    header = resources['ANI '][base + index]['data']
+    layers, script_id = struct.unpack_from('>2h', header, 8)
+    script = ScriptAnimation(resources['SCRP'][offset + script_id]['data'], layers)
+    frames = 0
+    while not script.done:
+        script.step()
+        frames += 1
+    callbacks = {}
+    for frame in range(frames + 1):
+        items = recover_scenes(program, nis, entries=(0x09fa,), arguments=(frame,), files=opened)
+        for item in items:
+            # 15:08a0 stores the selected CTBL at a5-0x2454; isolated frame
+            # probes otherwise see the harness's empty palette pointer.
+            if item['op'] == 'fade' and item['args'][0] == 0:
+                item['args'][0] = palette
+        if items:
+            callbacks[frame] = items
+    return expand_animations(operations, resources, {'jaffar_magic': callbacks})
+
+
+def extract_final_spell(image, program, nis, happy, directory, progress=lambda _text: None):
+    """Write the Jaffar spell scene without changing the gameplay trigger."""
+    directory = Path(directory)
+    operations = recover_final_spell(program, nis, happy)
+    audio = extract_scene_audio(image, operations, directory, progress, banked=True)
+    result = {'schema': 1, 'kind': 'final_spell',
+              'resource_files': {'Happy.rsrc': 1000000},
+              'operations': operations, 'audio': audio}
+    (directory / 'final_spell.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')
+
+
 TREE_VARIANTS = range(1, 10)
 
 

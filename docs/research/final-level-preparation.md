@@ -230,10 +230,17 @@ need native-frame comparison.
 
 The initial spell route has a concrete code gate: `FinlWatchOpps` 9:0654
 calls 9:0760, whose 9:0764-0784 branch tests the current room word
-a5-0x50bc for native room 2, a timer at a5-0x3566 no greater than 486,
-and the Prince mode a5-0x50c2 different from 4, then calls PlayNIS(5)
-through 9:071a.
-The script's contents and precise first-entry timing are not yet traced.
+a5-0x50bc in the saved Prince record for native room 2, a right-side drawing bound at a5-0x3566 no
+greater than 486 (computed at 4:5d5a-5d6a),
+and the saved Prince animation state a5-0x50c2 different from 4, then calls PlayNIS(5)
+through 9:071a. The rest of 9:071a-075e resets the Prince through 9:05d2;
+9:05fc-0622 chooses native room 4, row 1 and column 5. The CODE 15
+dispatcher 15:07c8 maps NIS 5 to 15:0880, which opens `Happy.rsrc` from the
+original A5 file record at -0x26b0. Despite that file name, its ANI callback
+is `TransFuncJaffarMagic` 15:09fa. NIS 4 opens `Title.rsrc` and NIS 6 opens
+`ThroneNIS.rsrc`; neither is this room-2 spell. The exact sprite/clip rectangle
+that satisfies this spatial gate and a native end-to-end transition still need
+tracing.
 `GenCtrl` 6:0780-07a0 has a separate environment-6 branch that calls
 9:0062; that routine puts the character in native room 11, at column 6,
 row 2 and SEQS 71. The branch depends on the original actor state, and the
@@ -258,6 +265,17 @@ shared views 3/9 and 8/10 are distinct logical rooms despite their repeated
 backdrops. Room 10's one static record does not by itself establish when
 Jaffar is revealed or how the room-6 riddle is solved.
 
+The duplicated views should retain their separate room IDs. In original LEVL
+2013, native room 3 links right to 9, up to 4 and down to 1; room 9 links left
+to 3 and up to 5. Room 3 has standing tiles in its bottom row, while room 9's
+three rows contain only a kind-20 column at the left edge and empty cells
+elsewhere. Room 8 links left to 7 and up to 10; room 10 links down to 8. Room
+8 has bottom-row platforms; room 10's two lower tile rows are empty and it
+has one static opponent record where room 8 has none. Their shared backdrops
+are a drawing reuse, not duplicate collision/transition states. A map overview
+may group them visually, but teleport and simulation must still address each
+room separately.
+
 An initial actor-art audit narrows that remaining problem. The port restores
 the four room-6 records as actor type 2 with `SEQS 77`/pose 166 and draws the
 `Guard.rsrc` frame, yielding blue robes. Decoding the preserved `Kid.rsrc`
@@ -270,6 +288,26 @@ jump-table entry goes to 4:2b0e, which maps pose 166 to opponent frame index
 the image bank must be traced through room entry and draw setup. A direct use
 of Kid frame 166 would match a still image without establishing the
 Macintosh's animation and frame selection.
+
+## Jaffar spell resource recovery (2026-11-11)
+
+`tools.extract_intro.recover_final_spell` executes the preserved CODE 15
+coordinator 15:0880 with the `Happy.rsrc` file-open endpoint supplied, then
+executes `TransFuncJaffarMagic` 15:09fa for the 79 original SCRP animation
+frames. It expands the ANI/SCRP sequence to 766 portable draw, timing, fade,
+brightness and sound operations. The native coordinator selects CTBL 31001
+at palette entry 70 and stores it for the callback fade; the isolated callback
+probe's uninitialized palette pointer is replaced by that selected CTBL.
+`extract_assets` now imports `Happy.rsrc` and writes `final_spell.json` and
+its audio during the user's normal resource import. The original-resource
+regression checks the expanded operation count, palette fade, sound IDs
+31030/31031, and that `IntroAssets` decodes every referenced SHAP. This is
+scene preparation; the gameplay trigger is not yet connected. The probe
+supplies CODE 16 animation playback, Resource Manager open/close, shape
+decoding and sound endpoints; it does not prove Macintosh pixel or
+audio-device parity. Next: connect the room-2 gate and CODE 9 post-scene
+state, then compare captured original and port scene frames. The room-11
+death variant, copy puzzle, complete fight and ending remain separate work.
 
 Focused shared-desktop checks: 185 tests passed across temple arrival,
 developer map/menu, level ending, music transition and installation. Dependency,

@@ -480,8 +480,12 @@ untouched. User-labelled Macintosh screenshots show shared room 3/9 and 8/10
 views; the room-9 export has no own CUST commands and room 10 has only a front
 SHAP 3001. CODE 9 palette calls at 9:1a90, 1d84 and 00c6 plus the original
 screenshots support room-specific CTBLs 3501/3502/3503. The renderer now uses
-those palettes and retains the shared backdrops. CODE 9:0760 calls NIS 5 in
-native room 2; GenCtrl 6:079c calls 9:0062 to place the character in room 11
-under a separate state gate. Full redraw sequencing, both cutscene variants
-and Jaffar encounter conditions remain to be recovered. See
+those palettes and retains the shared backdrops. Original LEVL keeps 3/9 and
+8/10 as separate collision and link records, so their IDs remain distinct.
+CODE 9:0760 calls NIS 5 in native room 2, followed by the room-4 reset in
+9:071a-075e. CODE 15:0880 opens `Happy.rsrc` for NIS 5, whose callback is
+`TransFuncJaffarMagic` 15:09fa; 766 operations are now recovered for import,
+without a gameplay trigger. GenCtrl 6:079c calls 9:0062 to place the
+character in room 11 under a separate state gate. Full redraw sequencing,
+both cutscene triggers and Jaffar encounter conditions remain to be recovered. See
 [final-level preparation](research/final-level-preparation.md).

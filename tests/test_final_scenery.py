@@ -35,3 +35,21 @@ class FinalSceneryTests(unittest.TestCase):
         self.assertIsNone(ImageChops.difference(tree.background, tree_return.background).getbbox())
         self.assertIsNone(ImageChops.difference(palace.background, palace_return.background).getbbox())
         self.assertIsNotNone(palace_return.foreground.getbbox())
+
+    def test_shared_views_keep_distinct_native_room_links_and_terrain(self):
+        from pop2.game_session import GameResources
+        from pop2.terrain import LevelMap
+
+        level = LevelMap(GameResources.load().level(14).data)
+        # 3/9 and 8/10 are two camera views, but each number has its own
+        # LEVL links and collision grid. Native numbers are one-based here.
+        self.assertEqual(level.neighbor(2, 'right'), 8)
+        self.assertEqual(level.neighbor(8, 'left'), 2)
+        self.assertEqual(level.neighbor(7, 'up'), 9)
+        self.assertEqual(level.neighbor(9, 'down'), 7)
+        self.assertEqual([level.tile(8, column, 2).kind for column in range(10)],
+                         [20, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        self.assertEqual([level.tile(9, column, 2).kind for column in range(10)],
+                         [0] * 10)
+        self.assertTrue(any(level.tile(2, column, 2).kind == 1 for column in range(10)))
+        self.assertTrue(any(level.tile(7, column, 2).kind == 1 for column in range(10)))
