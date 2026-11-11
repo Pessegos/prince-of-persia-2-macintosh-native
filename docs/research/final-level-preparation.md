@@ -301,13 +301,46 @@ probe's uninitialized palette pointer is replaced by that selected CTBL.
 `extract_assets` now imports `Happy.rsrc` and writes `final_spell.json` and
 its audio during the user's normal resource import. The original-resource
 regression checks the expanded operation count, palette fade, sound IDs
-31030/31031, and that `IntroAssets` decodes every referenced SHAP. This is
-scene preparation; the gameplay trigger is not yet connected. The probe
+31030/31031, and that `IntroAssets` decodes every referenced SHAP. The probe
 supplies CODE 16 animation playback, Resource Manager open/close, shape
 decoding and sound endpoints; it does not prove Macintosh pixel or
-audio-device parity. Next: connect the room-2 gate and CODE 9 post-scene
-state, then compare captured original and port scene frames. The room-11
+audio-device parity. The separate `pop2.hfs` check generated the scene JSON
+and three sound files in a temporary folder. This checks import against the
+preserved disk without writing its source resources.
+
+## Room-2 spell gameplay gate (2026-11-11)
+
+`tools.probe_final_spell_gate` executed 27 combinations of saved Prince room,
+right sprite bound and saved animation state against original CODE 9:0760,
+agreeing at the inclusive 486 threshold. It supplies only the saved-to-current
+Prince record copy 4:4b02 and the full PlayNIS/reset continuation 9:071a; those endpoints are
+excluded from the admission claim. `Final.frame_start` now snapshots the
+pre-control Prince room/bound/animation for the next environment phase, so a
+room-1-to-2 crossing first enters room 2 and plays the NIS on the following
+frame. The port uses its decoded Prince sprite right edge for the native
+`GetCharEdges` 4:5cbc bound; that equivalence is a geometry inference, not a
+native frame comparison. The exit places the Prince in port room index 3
+(native room 4), row 1, initial X 277 (native 484), and selects SEQS 55;
+its first animation frame advances to X 283/action 207. A hidden scene test
+plays the complete imported scene and checks room, sequence, mode and retained
+life. The launcher now requires `Happy.rsrc` and `final_spell.json`, so an old
+installation asks for a resource reimport before level-14 play.
+
+The native reset services called by 9:071a-075e have not been executed as an
+end-to-end CPU trace. The port keeps existing life/capacity and sequence mode
+through the scene and uses its room placement helper to reset controls. These
+state choices need comparison with a Macintosh capture. Next: compare
+original and port scene frames and trace the final actor sprite bank. The room-11
 death variant, copy puzzle, complete fight and ending remain separate work.
+
+The original CODE 9 gate probe passed 27/27 cases. The hidden scene and import
+tests passed 142/142; frame-phase, save, combat and generation tests passed
+175/175. Dependency, Ruff, catalogue and diff checks passed. Shared-desktop
+full discovery was attempted but stopped without a test verdict after memory
+rose above 10 GB and free RAM fell near 2 GB, matching the earlier runaway
+Tk-heavy run. Exclusive-desktop tests were not run while the user's desktop
+remained in use. The focused tests are passes; the interrupted discovery is
+not counted as a pass.
 
 Focused shared-desktop checks: 185 tests passed across temple arrival,
 developer map/menu, level ending, music transition and installation. Dependency,

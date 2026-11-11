@@ -503,7 +503,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 9,Final Battle,FinlCheckDeadOpp,0x00e2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,8
 9,Final Battle,FinlCheckGenOpp,0x0202,decoded,partial,pop2/final_jaffars.py;tools/probe_final_jaffar_generation.py,room-3 two-copy admission and position: 216 original CODE9 cases with Rnd and record constructor supplied; full constructor/path/combat excluded,1,3
 9,Final Battle,FinlGenerateOpp,0x02a6,jump_table,reference-only,docs/research/final-level-preparation.md,"9:02a6 filters background/foreground item drawing from DrawBFItem; Jaffar record constructor is 9:03c8, moving scenery remains open",1,15
-9,Final Battle,FinlWatchOpps,0x0654,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,23
+9,Final Battle,FinlWatchOpps,0x0654,jump_table,partial,pop2/environments.py;tools/probe_final_spell_gate.py,room-2 NIS5 admission: 27 original CODE9 cases with saved-character copy and scene/reset supplied; host sprite-edge proxy and post-scene state need native frame comparison; other final opponents excluded,0,23
 9,Final Battle,AllOtherJaffarsShimmerAway,0x090e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,3
 9,Final Battle,JaffarSetToNextPos,0x09ca,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,19
 9,Final Battle,JaffarSetToPrevPos,0x0cec,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,0
@@ -587,7 +587,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 15,NISs,TreeFunc,0x04d0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,6
 15,NISs,TreeCheck,0x0568,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,32
 15,NISs,Transition,0x07c8,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,5
-15,NISs,TransPrincessRoom,0x0880,prologue,partial,tools/extract_intro.py;tests/test_final_spell.py,NIS 5 room-2 spell coordinator: Happy resource and 766 expanded operations with supplied CODE16 drawing/sound and Resource Manager endpoints; gameplay gate and native pixel/audio parity excluded,0,17
+15,NISs,TransPrincessRoom,0x0880,prologue,partial,tools/extract_intro.py;tests/test_final_spell.py;tests/test_final_spell_flow.py,"NIS 5 room-2 spell coordinator: Happy resource and 766 expanded operations with supplied CODE16 drawing/sound and Resource Manager endpoints; hidden port transition tested, native pixel/audio parity excluded",0,17
 15,NISs,TransFuncSetCTABframe1,0x09c0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
 15,NISs,TransFuncJaffarMagic,0x09fa,jump_table,partial,tools/extract_intro.py;tests/test_final_spell.py,79-frame NIS 5 animation callback recovered with supplied animation/resource/sound endpoints; isolated fade pointer restored from coordinator CTBL; live trigger and native frame capture excluded,0,7
 15,NISs,ClearNIS,0x0b32,prologue,indexed-only,,No semantic review recorded in this prototype catalog,49,3

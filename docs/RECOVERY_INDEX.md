@@ -484,8 +484,12 @@ those palettes and retains the shared backdrops. Original LEVL keeps 3/9 and
 8/10 as separate collision and link records, so their IDs remain distinct.
 CODE 9:0760 calls NIS 5 in native room 2, followed by the room-4 reset in
 9:071a-075e. CODE 15:0880 opens `Happy.rsrc` for NIS 5, whose callback is
-`TransFuncJaffarMagic` 15:09fa; 766 operations are now recovered for import,
-without a gameplay trigger. GenCtrl 6:079c calls 9:0062 to place the
+`TransFuncJaffarMagic` 15:09fa; 766 operations are now recovered for import.
+CODE 9:0760's room/bound/animation gate agreed with 27 original-code probes,
+with the saved-character copy and NIS/reset supplied. The port now plays the
+spell from room 2 and enters room 4 at native X 484 with SEQS 55; its
+pre-control sprite edge is an inferred stand-in for GetCharEdges 4:5cbc.
+GenCtrl 6:079c calls 9:0062 to place the
 character in room 11 under a separate state gate. Full redraw sequencing,
-both cutscene triggers and Jaffar encounter conditions remain to be recovered. See
+the death variant and Jaffar encounter conditions remain to be recovered. See
 [final-level preparation](research/final-level-preparation.md).

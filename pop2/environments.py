@@ -72,6 +72,7 @@ class Environment:
     def frame_hook(self):
         """The 'environment' frame phase."""
 
+
     def harbor_phase(self):
         """The 'harbor' frame phase: level one's ship and water."""
 
@@ -145,6 +146,40 @@ class Environment:
     def display_life(self, life):
         """The life the meter shows."""
         return life
+
+
+class Final(Environment):
+    """The level-14 room-2 spell and its entry into the mental rooms."""
+
+    def frame_start(self):
+        scene = self.scene
+        # FinlWatchOpps reads the saved Prince record (a5-0x50d2), which
+        # trails the current actor through the native frame. Keep that
+        # pre-control snapshot when a room crossing happens in this tick.
+        scene.final_saved_prince = (scene.room_id, scene.player_bounds()[2],
+                                    scene.sequence_state.animation_state)
+
+    def frame_hook(self):
+        scene = self.scene
+        room, right_edge, animation = getattr(scene, 'final_saved_prince', (-1, 0, 4))
+        if (room != 1 or right_edge > 486 or animation == 4
+                or not scene.combat.player.alive):
+            return
+        scene.start_story_scene('final_spell.json', self.finish_spell, "Jaffar's spell")
+
+    def finish_spell(self):
+        scene = self.scene
+        # CODE 9:071a-075e calls PlayNIS(5), then 9:05d2 selects SEQS 55
+        # in native room 4, row 1, column 5, native X 484 (port X 277).
+        life, capacity = scene.combat.player.life, scene.combat.player.max_life
+        mode = scene.sequence_state.sequence_mode
+        scene.jump_to_room(3, row=1, x=scene_x(484), facing=0,
+                           reset_guards=False, redraw=False)
+        scene.combat.player.life, scene.combat.player.max_life = life, capacity
+        scene.sequence_state.sequence_mode = mode
+        scene.start_sequence(55)
+        frame = scene.sequence_runtime.next_frame()
+        scene.action, scene.player_x = frame.action, frame.target_x
 
 
 class Rooftops(Environment):
@@ -1768,9 +1803,9 @@ def environment_for(scene):
     """
     game = scene.game
     if getattr(game, 'caverns', None) is not None:
-        # Final's scenery shares the exported room format, but its CODE 9
-        # mechanics do not use the cavern/ruins environment controller.
-        return {4: Ruins, 2: Temple, 6: Environment}.get(game.level.kind, Caverns)(scene)
+        # Final's scenery shares the exported room format; CODE 9 owns its
+        # gameplay hooks rather than the cavern/ruins controller.
+        return {4: Ruins, 2: Temple, 6: Final}.get(game.level.kind, Caverns)(scene)
     if getattr(game, 'desert', None) is not None:
         return Desert(scene)
     if getattr(game, 'harbor', None) is not None:
