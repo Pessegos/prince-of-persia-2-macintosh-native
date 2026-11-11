@@ -32,7 +32,14 @@ def room_positions(terrain):
         x, y = positions[anchor]
         positions[terrain.start_room] = x + dx, y + dy
         return positions
-    return _linked_positions(terrain, terrain.start_room, HIDDEN_ROOMS.get(number, ()))
+    positions = _linked_positions(terrain, terrain.start_room, HIDDEN_ROOMS.get(number, ()))
+    if number == 14:
+        # The F3 overview presents the tower descent beside the room-11
+        # cutscene backdrop. These display positions do not rewrite LEVL's
+        # room links or the live descent and final-fight controls.
+        x, y = positions[10]
+        positions[0], positions[1] = (x + 1, y), (x + 1, y - 1)
+    return positions
 
 
 def _linked_positions(terrain, origin, hidden=()):

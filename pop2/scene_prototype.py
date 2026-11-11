@@ -2259,7 +2259,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if self.game.consume_completion():
             if self.game.level.number == 6:
                 self.game.ruins_entry = environment_for(self).exit_entry()
-            if self.game.level.number in (1, 3, 4, 5, 6, 7, 8):
+            if self.game.level.number in (1, 3, 4, 5, 6, 7, 8, 13):
                 import json
                 from pop2.level_transition import LevelExit
                 from pop2.paths import ASSET_DIR

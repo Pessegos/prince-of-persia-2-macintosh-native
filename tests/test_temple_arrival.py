@@ -132,6 +132,30 @@ class LevelTenArrivalTests(unittest.TestCase):
                           scene.sequence_state.sequence_mode), (14, 0, 13))
         self.assertFalse(scene.level_complete)
 
+    def test_level_thirteen_completion_dispatches_the_temple_song_and_flight(self):
+        if not all((ASSET_DIR / name).is_file() for name in
+                   ('tower.json', 'TowerNIS.rsrc', 'Final.rsrc', 'final_level14.json')):
+            self.skipTest('Imported tower scene and final scenery required')
+        scene = self.scene
+        scene.load_level(13)
+        scene.sequence_state.sequence_mode = 13
+        scene.sequence_state.sequence_events.append((-16, ()))
+        scene.advance_level_events()
+        self.assertTrue(scene.level_complete)
+        self.assertEqual(scene.game.exit.song, 187)
+        for _ in range(500):
+            self.tick()
+            if scene.intro is not None:
+                break
+        self.assertIsNotNone(scene.intro)
+        self.assertEqual(scene.status.get(), 'The flight to the tower')
+        for _ in range(400):
+            self.tick()
+            if scene.game.level.number == 14:
+                break
+        self.assertEqual((scene.game.level.number, scene.room_id,
+                          scene.sequence_state.sequence_mode), (14, 0, 13))
+
     def test_final_level_developer_warp_enters_a_floor_on_sparse_rooms(self):
         if not all((ASSET_DIR / name).is_file() for name in ('Final.rsrc', 'final_level14.json')):
             self.skipTest('Imported final scenery required')

@@ -463,3 +463,21 @@ pending, conflicting Up/Down, braking before wall alignment and Ctrl draw
 admission. Host initial chord/held-repeat/vertical-climb tolerances stay
 explicit; the sequence-4 airborne reset/return policy remains a boundary,
 not proof of whole saved-bank continuity or FrameAdv parity.
+
+## Final tower handoff and F3 presentation (2026-11-11)
+
+`GetEndSong` 5:4e0c-4e3e returns cue 187 for environment 2. The level-13
+completion `SEQS -16` now enters the ordinary song gate before
+`CheckPlayNIS(13, 14)` starts NIS 3 and the level-14 entry. This is a static
+original-code reading plus a hidden-scene integration trace through the real
+completion event, song duration and NIS callback; no original CPU trace of
+the full exit or hardware audio timing is claimed. `Temple.finish_exit` had
+already been tested directly, but the preceding dispatch was missing.
+
+The F3 layout places room 1 right of room 11 and below room 2 as a requested
+presentation choice. LEVL 2013 links remain untouched. User-labelled
+Macintosh screenshots show shared room 3/9 and 8/10 views; the room-9 export
+has no own CUST commands and room 10 has only a front SHAP 3001. Original
+redraw retention, palette changes, the room-11 cutscene variants and Jaffar
+encounter conditions remain to be recovered. See
+[final-level preparation](research/final-level-preparation.md).

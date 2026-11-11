@@ -1253,6 +1253,9 @@ class Temple(Caverns):
     """Levels 10-13 (environment 2): the temple's mechanisms, level 13's
     altar and the flight to the tower (docs/research/temple-*.md)."""
 
+    # GetEndSong 5:4e0c-4e3e selects LvTemple for environment 2.
+    end_song = 187
+
     def frame_start(self):
         super().frame_start()
         scene = self.scene

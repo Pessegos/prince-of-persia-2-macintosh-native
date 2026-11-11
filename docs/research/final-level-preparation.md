@@ -1,6 +1,6 @@
 # Level 14: Inventory
 
-Status: 2026-11-10. The passage through NIS 3, all 11 static rooms, entry
+Status: 2026-11-11. The level-13 completion path through NIS 3, all 11 static rooms, entry
 placement and saving are integrated. The final battle and ending are not.
 Names in the inventory below come from preserved symbols.
 
@@ -188,3 +188,39 @@ tests.test_run_game` passed 160 tests. A cold temporary cache warmup wrote
 `level-14.zip` and read back all 11 rooms. Dependencies, Ruff, recovery
 catalogue and diff checks passed. Full discovery was not repeated after the
 previous memory-limited run; physical desktop tests remained excluded.
+
+## Level-13 completion and final-map layout (2026-11-11)
+
+The previously tested NIS 3 handoff began by calling `Temple.finish_exit`
+directly. Actual level-13 completion emits `SEQS -16`, but
+`ScenePrototype.advance_level_events` did not create a `LevelExit` for 13;
+`level_complete` then stopped scheduling with no NIS 3 callback. The dispatch
+now includes 13. `GetEndSong` 5:4e0c-4e3e selects song 187 (`LvTemple`) for
+environment 2, so the temple exit waits for that song before calling
+`Temple.finish_exit` and playing NIS 3. A hidden-scene regression starts at
+the real `-16` event, sees song 187 and the flight, and reaches native room 1
+of level 14 with mode 13. Audio hardware timing remains unprobed.
+
+The F3 map now displays room 1 immediately right of room 11 and room 2
+directly above room 1, following the player's layout request. The layout
+is a presentation exception: original LEVL 2013 still links native room 1
+down to 2, 1 up to 3 and 11 down to 4. The map keeps all 11 room labels
+selectable for inspection; the live links and level entry are unchanged.
+
+The player supplied labelled Macintosh screenshots for rooms 3/9, 4, 5, 6,
+7 and 8/10. The shared views in the first and last pairs are observations,
+not proof of their puzzle triggers. The original export has no own CUST draw
+commands for room 9 and only a foreground SHAP 3001 for room 10; inherited
+scenery or redraw state is a bounded next drawing investigation. The screenshots
+also show clear palette and layering differences from the current F3 preview
+in the mental rooms. Room 11 as the entry/death cutscene and the state-dependent
+Jaffar encounter are player observations to verify against CODE 9 and the NIS
+scripts before changing battle behavior. `FinlWatchOpps` 9:0764-0784 tests
+the a5-0x50bc state word for 2 and calls PlayNIS(5), but that word's meaning,
+the branch's full input state,
+the death variant, and the room-8/10 encounter conditions are not yet probed.
+
+Focused shared-desktop checks: 185 tests passed across temple arrival,
+developer map/menu, level ending, music transition and installation. Dependency,
+Ruff, recovery catalogue and diff checks passed. Full discovery was not repeated
+because the prior shared-desktop run grew to about 15 GB without finishing.

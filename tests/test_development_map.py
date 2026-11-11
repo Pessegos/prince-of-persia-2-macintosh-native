@@ -271,6 +271,22 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         self.assertEqual(len(atlas.rooms), 11)
         self.assertEqual(atlas.enemy_rooms, {'Room 6', 'Room 10', 'Room 11'})
 
+    def test_final_overview_places_tower_descent_beside_cutscene_room(self):
+        if not all((ASSET_DIR / name).is_file() for name in ('Final.rsrc', 'final_level14.json')):
+            self.skipTest('Imported final scenery required')
+        from pop2.terrain import LevelMap
+
+        level = self.resources.level(14)
+        terrain = LevelMap(level.data)
+        positions = room_positions(terrain)
+        self.assertEqual(positions[0], (positions[10][0] + 1, positions[10][1]))
+        self.assertEqual(positions[1], (positions[0][0], positions[0][1] - 1))
+        self.assertEqual(len(set(positions.values())), 11)
+        self.assertEqual((terrain.neighbor(0, 'down'), terrain.neighbor(1, 'up')),
+                         (1, 0))  # The overview does not modify native links.
+        atlas = build_development_map(level)
+        self.assertEqual(set(atlas.rooms), {f'Room {number}' for number in range(1, 12)})
+
     def test_clicking_final_level_draws_its_developer_map(self):
         if not all((ASSET_DIR / name).is_file() for name in ('Final.rsrc', 'final_level14.json')):
             self.skipTest('Imported final scenery required')
