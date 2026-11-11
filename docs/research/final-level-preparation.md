@@ -366,6 +366,26 @@ the clone riddle remain unchanged and require native tracing. `FinlGenerateOpp`
 9:02a6 is a background-item draw filter, as already recorded above, rather
 than the actor allocator for these four records.
 
+## Room-2 audio freeze repair (2026-11-11)
+
+The player's room-1 descent and room-2 teleport both reproduced an exception
+in the real animation loop when audio was enabled: `AudioEngine.play_intro`
+could not find cue `scene-0-31030`. The local installation had the scene JSON
+and WAVs but lacked all three final-spell registrations in `audio/manifest.json`.
+The Tk callback raised before it could schedule another animation tick, leaving
+the game stopped. The earlier silent hidden-scene test did not exercise this.
+
+The local audio registrations and files were rebuilt from the preserved disk
+in a temporary directory, then only those three entries were merged into each
+worktree's ignored manifest. `run_game.missing_assets` now checks the audio
+of the final spell, tower, throne and temple programs along with other story
+scenes, so an incomplete installation requests reimport before gameplay.
+An installation regression rejects the precise missing-manifest case. A hidden
+full animation-loop test with the real AudioEngine and supplied playback checks
+both the downward room crossing and teleport, completes NIS 5 and reaches native
+room 4. A separate real mixer check with SDL's dummy audio device also completed.
+No live player window, shared save/settings or original resource was changed.
+
 Focused shared-desktop checks: 185 tests passed across temple arrival,
 developer map/menu, level ending, music transition and installation. Dependency,
 Ruff, recovery catalogue and diff checks passed. Full discovery was not repeated

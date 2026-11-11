@@ -66,6 +66,41 @@ class FinalSpellFlowTests(unittest.TestCase):
         controller.frame_hook()
         self.assertIsNone(scene.intro)
 
+    def test_room_two_full_animation_loop_with_audio_reaches_room_four(self):
+        from unittest.mock import Mock, call
+        from pop2.audio import AudioEngine
+
+        scene = self.scene
+        playback = Mock()
+        playback.busy.return_value = False
+        playback.playing_effects.return_value = ()
+        scene.audio = AudioEngine(playback=playback)
+        scene.schedule_next_animation = lambda: None
+        for route in ('teleport', 'descent'):
+            with self.subTest(route=route):
+                if route == 'teleport':
+                    scene.jump_to_room(1, row=1, x=250, redraw=False)
+                else:
+                    scene.jump_to_room(0, row=2, x=250, redraw=False)
+                    scene.start_sequence(23)
+                    scene.sequence_state.current_y = 100
+                    scene.terrain_motion.falling = True
+                for _ in range(30):
+                    if scene.intro is not None:
+                        break
+                    scene.advance_animation()
+                self.assertIsNotNone(scene.intro)
+                self.assertEqual(scene.room_id, 1)
+                for _ in range(240):
+                    if scene.intro is None:
+                        break
+                    scene.last_intro_at -= .25
+                    scene.advance_animation()
+                self.assertIsNone(scene.intro)
+                self.assertEqual(scene.room_id, 3)
+                self.assertFalse(scene.in_animation_tick)
+        self.assertIn(call('music', 'scene-0-31030'), playback.play.call_args_list)
+
 
 if __name__ == '__main__':
     unittest.main()

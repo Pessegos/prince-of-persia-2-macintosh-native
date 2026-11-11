@@ -34,6 +34,8 @@ class InstallationTests(unittest.TestCase):
         (assets / "ending.json").write_bytes((assets / "intro.json").read_bytes())
         (assets / 'discovery.json').write_bytes((assets / 'intro.json').read_bytes())
         (assets / 'carpet.json').write_bytes((assets / 'intro.json').read_bytes())
+        (assets / 'tower.json').write_bytes((assets / 'intro.json').read_bytes())
+        (assets / 'final_spell.json').write_bytes((assets / 'intro.json').read_bytes())
         for variant in range(1, 10):
             (assets / f'tree-{variant}.json').write_bytes((assets / 'intro.json').read_bytes())
         (assets / 'caverns_entry.json').write_text(json.dumps({
@@ -56,6 +58,14 @@ class InstallationTests(unittest.TestCase):
 
     def test_complete_installation_has_no_errors(self):
         self.assertEqual(run_game.installation_errors(self.project), [])
+
+    def test_final_spell_with_missing_audio_manifest_entry_requires_reimport(self):
+        assets = self.project / 'assets'
+        scene = json.loads((assets / 'final_spell.json').read_text())
+        scene['audio'] = {'scene-0-31030': {'duration': 14.547, 'markers': {}, 'kind': 0}}
+        (assets / 'final_spell.json').write_text(json.dumps(scene))
+        (assets / 'audio' / 'scene-0-31030.wav').touch()
+        self.assertIn('final_spell.json (needs reimport)', run_game.missing_assets(self.project))
 
     def test_level_four_scenery_cannot_reuse_the_level_three_export(self):
         assets = self.project / 'assets'
