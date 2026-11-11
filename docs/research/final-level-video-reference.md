@@ -3,6 +3,11 @@
 Reviewed 2026-11-11 against main `708e490`. This is observation and a bounded
 native-code correlation, not a claim that the final level is implemented.
 
+Before extending the mechanics below, fix the subsequently reported early
+room-2 trigger and post-NIS room-4 freeze. The
+[Claude handoff](final-level-claude-handoff.md) records those blockers and the
+new manual/strategy context.
+
 ## Capture and limits
 
 The player supplied a 209.016-second Macintosh recording, 1422 x 1070 at

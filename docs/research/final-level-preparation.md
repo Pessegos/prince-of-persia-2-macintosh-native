@@ -3,6 +3,12 @@
 Status: 2026-11-11. The level-13 completion path through NIS 3, all 11 static rooms, entry
 placement and saving are integrated. The final battle and ending are not.
 
+Latest playtest blockers: NIS 5 fires on the room-2 outside landing before
+window entry, and gameplay freezes after the room-4 sword draw. These new
+reports remain open despite the earlier audio-manifest repair. Prioritize
+[the Claude handoff](final-level-claude-handoff.md), which also records the
+manual's shadow/fireball rules and the optional room-3 potion recovery route.
+
 The player's complete Macintosh run is now indexed in
 [the video reference](final-level-video-reference.md). It confirms the copy
 sequence, separate blue form/body, projectile victory, bedroom aftermath,
