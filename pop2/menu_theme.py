@@ -16,7 +16,7 @@ import os
 import random
 from dataclasses import dataclass, field
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 # Role -> the neutral colour that pages write.
 NEUTRAL_ROLES = {
@@ -38,7 +38,7 @@ class MenuTheme:
     name: str
     roles: dict = field(default_factory=dict)
     dim: int = 100            # black veil over the room behind the F1 menu, 0-255
-    # 'rock', 'bands', 'sand', 'studs', 'pillars', 'columns' or None for a plain outline
+    # 'rock', 'bands', 'sand', 'studs', 'columns' or None for a plain outline
     frame: str | None = None
     grow: tuple = (0, 0, 0)   # how far the frame reaches beyond a panel: sides, top, bottom
     # 'bands': the moulding's rows from the outside inwards; a row of several
@@ -49,6 +49,8 @@ class MenuTheme:
     # never shows a hole that is not really there.
     grain: tuple = ()
     shades: tuple = ()
+    # A sign left faintly on the page, given as the colour it leans towards.
+    mark: str | None = None
 
     @property
     def frame_width(self):
@@ -135,7 +137,7 @@ RUINS = MenuTheme('ruins', {
     'active': '#9fd0c8', 'active_map': '#9fd0c8', 'active_fill': '#1f2a55',
     'active_field': '#1a1f4c', 'text_selection': '#534b7e',
     'danger': '#522118', 'danger_soft': '#3a1830',
-}, dim=120, frame='pillars', grow=(2, 5, 7))
+}, dim=120, frame='studs', grow=(2, 5, 7), mark='#736b96')
 
 # Levels 10-13: the temple's carved red stone and candle flame.
 TEMPLE = MenuTheme('temple', {
@@ -375,8 +377,7 @@ def _rock_frame(theme, size, fill):
 
 
 # --- Shared helpers for the drawn frames.
-_THICKNESS = {'rock': (9, 9, 9), 'sand': (11, 11, 11), 'studs': (9, 9, 9), 'pillars': (13, 10, 10),
-              'columns': (13, 12, 12)}
+_THICKNESS = {'rock': (9, 9, 9), 'sand': (11, 11, 11), 'studs': (9, 9, 9), 'columns': (13, 12, 12)}
 
 
 def _stepped(length, rng, values, runs=(5, 14)):
@@ -484,109 +485,177 @@ def _sand_frame(theme, size, fill):
     return picture
 
 
-# --- The ruins: a worn band of dressed stone with the wall's row of small square
-# studs, and the serpent sign cut into each corner block.
-_SERPENT = (
-    '....####.#',
-    '...#....#.',
-    '...#......',
-    '....#.....',
-    '.....#....',
-    '......#...',
-    '.####..#..',
-    '#....#..#.',
-    '#.#..#..#.',
-    '#..##...#.',
-    '.#.....#..',
-    '..#####...',
+# --- The ruins: the palace wall's band of square sockets, in straight dressed
+# stone that has started to fall apart: pieces broken out, cracks, a rail gone
+# between two sockets. A carved ring marks each corner, as on the wall's arches.
+_BREAK = (1, 1, 1, 2, 2, 2, 3, 3, 2, 3, 4, 4, 4, 5, 5, 4, 5, 6, 6, 7, 6, 7, 7, 6, 4, 3, 1)
+_RING = (
+    '.........',
+    '..dddd...',
+    '.d...ll..',
+    '.d.dd.l..',
+    '.d.d..l..',
+    '.d...ll..',
+    '..llll...',
+    '.........',
+    '.........',
 )
-_CORNER = 15
 
 
 def _studs_frame(theme, size, fill):
     width, height = size
     thickness = _THICKNESS['studs'][0]
-    lit, face, body, dark, deep = (_rgb(colour) + (255,) for colour in (
-        '#9a93b5', '#736b96', '#5c5485', '#332a67', '#251c5d'))
+    lit, face, dark, deep, sunk = (_rgb(colour) + (255,) for colour in (
+        '#9a93b5', '#736b96', '#332a67', '#251c5d', '#413871'))
     marble = [_rgb('#5c5485')] * 5 + [_rgb('#534b7e')] * 3 + [_rgb('#4e467b')]
     stain = {_rgb('#5c5485'): _rgb('#4a4178'), _rgb('#534b7e'): _rgb('#413871'), _rgb('#4e467b'): _rgb('#3c336e')}
     rng = random.Random(0x5D)
     wear = random.Random(width * 1000 + height)
     longest = max(width, height)
-    # Where damp has darkened the stone, and where the edges have crumbled.
-    stained = {side: _stepped(longest, wear, (0, 0, 0, 1), (10, 34)) for side in range(4)}
-    outer = {side: _worn(longest, wear, ()) for side in range(4)}
-    inner = {side: _stepped(longest, wear, (0, 0, 0, 0, 1), (3, 9)) for side in range(4)}
-    picture = Image.new('RGBA', size, fill + (255,))
-    pixels = picture.load()
+    stained = [_stepped(longest, wear, (0, 0, 0, 1), (10, 34)) for _side in range(4)]
     opaque_fill = fill + (255,)
+    picture = Image.new('RGBA', size, opaque_fill)
+    pixels = picture.load()
+
+    def place(side, along, depth):
+        return ((along, depth), (along, height - 1 - depth), (depth, along), (width - 1 - depth, along))[side]
+
+    # Where a piece has broken out of the outer edge: top, bottom and left.
+    gone = [[0] * longest for _side in range(4)]
+    broken = width > 2 * thickness + 4 * len(_BREAK) and height > 2 * thickness + 4 * len(_BREAK)
+    if broken:
+        for side, at, turned in ((0, width * 2 // 3, False), (1, width // 5, True), (2, height // 2, False)):
+            for index, depth in enumerate(reversed(_BREAK) if turned else _BREAK):
+                gone[side][at + index] = depth
 
     for y in range(height):
         run, colour = 0, marble[0]
         for x in range(width):
             dx, dy = min(x, width - 1 - x), min(y, height - 1 - y)
-            corner = dx < _CORNER and dy < _CORNER
             depth = min(dx, dy)
-            if depth >= thickness and not corner:
+            if depth >= thickness:
                 continue
             if run == 0:
                 run, colour = rng.choice(_ROCK_RUNS) + 1, rng.choice(marble)
             run -= 1
-            upper = (dy <= dx and y < height // 2) or (dx < dy and x < width // 2)
-            if corner:
-                # A square block: lit above and on the left, dark below and on the right.
-                cx = x if x < _CORNER else x - (width - _CORNER)
-                cy = y if y < _CORNER else y - (height - _CORNER)
-                if cy == 0 or cx == 0:
-                    pixels[x, y] = lit
-                elif cy == _CORNER - 1 or cx == _CORNER - 1:
-                    pixels[x, y] = deep
-                else:
-                    pixels[x, y] = face
-                continue
             if dy <= dx:
                 side, along = (0 if y < height // 2 else 1), x
             else:
                 side, along = (2 if x < width // 2 else 3), y
-            if depth < outer[side][along]:
+            upper = side in (0, 2)
+            missing = gone[side][along]
+            if depth < missing:
                 pixels[x, y] = (0, 0, 0, 0)
-            elif depth == outer[side][along]:
+            elif missing and depth == missing:
+                pixels[x, y] = deep        # the broken face
+            elif depth == 0:
                 pixels[x, y] = lit if upper else dark
-            elif depth >= thickness - inner[side][along]:
-                pixels[x, y] = opaque_fill
-            elif depth == thickness - 1 - inner[side][along]:
+            elif depth == thickness - 1:
                 pixels[x, y] = deep if upper else face
             else:
                 pixels[x, y] = (stain[colour] if stained[side][along] else colour) + (255,)
 
-    def stud(left, top):
-        fate = wear.random()
-        for j in range(3):
-            for i in range(3):
-                if fate < 0.16:      # fallen out: an empty socket
-                    shade = deep if i + j < 2 else dark if i + j == 2 else body
-                elif i + j < 2:
-                    shade = lit
-                elif i + j == 2:
-                    shade = face
+    # The sockets: sunk squares, dark under their upper and left rims.
+    def socket(side, along, wide):
+        for i in range(wide):
+            for j in range(5):
+                x, y = place(side, along + i, 2 + j)
+                if pixels[x, y][3] == 0 or pixels[x, y] == deep:
+                    continue
+                dx, dy = (i, j) if side < 2 else (j, i)
+                if side == 1:
+                    dy = 4 - dy
+                if side == 3:
+                    dx = 4 - dx
+                last_x, last_y = (wide - 1, 4) if side < 2 else (4, wide - 1)
+                if dy == 0 or dx == 0:
+                    pixels[x, y] = deep
+                elif dy == last_y or dx == last_x:
+                    pixels[x, y] = face
                 else:
-                    shade = dark
-                if 0.16 <= fate < 0.30 and i + j > 2:
-                    continue         # chipped: only its lit half is left
-                pixels[left + i, top + j] = shade
+                    pixels[x, y] = sunk
 
-    for length, place in ((width, lambda at: ((at, 3), (at, height - 6))),
-                          (height, lambda at: ((3, at), (width - 6, at)))):
-        room = length - 2 * _CORNER - 2
-        count = (room + 3) // 6
-        start = _CORNER + 1 + (room - (count * 6 - 3)) // 2
-        for index in range(count):
-            for left, top in place(start + index * 6):
-                stud(left, top)
-    for left, mirror in ((0, False), (width - _CORNER, True)):
-        for top in (0, height - _CORNER):
-            _stamp(pixels, left + 3 - mirror, top + 2, _SERPENT, {'#': deep}, mirror)
+    for side in range(4):
+        length = width if side < 2 else height
+        room = length - 2 * thickness - 2
+        count = (room + 3) // 8
+        start = thickness + 1 + (room - (count * 8 - 3)) // 2
+        index = 0
+        while index < count:
+            # Now and then the rail between two sockets has fallen away.
+            joined = index + 1 < count and wear.random() < 0.09
+            socket(side, start + index * 8, 13 if joined else 5)
+            index += 2 if joined else 1
+    for left in (0, width - thickness):
+        for top in (0, height - thickness):
+            _stamp(pixels, left, top, _RING, {'d': deep, 'l': lit})
+
+    # Cracks run on from the deepest point of each break.
+    if broken:
+        for side, at, turned in ((0, width * 2 // 3, False), (1, width // 5, True), (2, height // 2, False)):
+            profile = list(reversed(_BREAK)) if turned else list(_BREAK)
+            along = at + profile.index(max(profile))
+            for depth in range(max(profile) + 1, thickness - 1):
+                pixels[place(side, along, depth)] = deep
+                along += wear.choice((-1, 0, 1, 1))
     return picture
+
+
+# The invaders' serpent sign, large, as it is left on the palace walls.
+def _serpent_mask(height):
+    scale = height / 29.0
+    points = []
+    for step in range(24):                       # the hooked neck
+        angle = math.radians(-20 - step * 10)
+        points.append((14 + 5 * math.cos(angle), 6.5 + 5 * math.sin(angle)))
+    for step in range(57):                       # the coil
+        angle = math.radians(-40 + step * 10)
+        radius = 8 - step * 0.1
+        points.append((10 + radius * math.cos(angle), 19.5 + radius * math.sin(angle)))
+    image = Image.new('L', (round(22 * scale), height), 0)
+    draw = ImageDraw.Draw(image)
+    stroke = max(2, round(1.7 * scale))
+    for x, y in points:
+        box = (x * scale - stroke / 2, y * scale - stroke / 2, x * scale + stroke / 2, y * scale + stroke / 2)
+        draw.ellipse(box, fill=255)
+    draw.line([(x * scale, y * scale) for x, y in points], fill=255, width=stroke)
+    head = points[0]
+    draw.ellipse(((head[0] - 1.3) * scale, (head[1] - 1.5) * scale, (head[0] + 1.7) * scale, (head[1] + 1.1) * scale),
+                 fill=255)
+    return image
+
+
+_marks = {}
+
+
+def watermark(image, rect):
+    """Leave the theme's sign on a finished page, faintly, behind its text.
+
+    Only the page's own background colours change, each to a slightly lighter
+    shade, so text, outlines and pictures stay as they are.
+    """
+    theme = _current
+    if theme.mark is None:
+        return
+    height = (rect[3] - rect[1]) * 3 // 5
+    if height < 60:
+        return
+    if height not in _marks:
+        _marks[height] = _serpent_mask(height)
+    mask = _marks[height]
+    left = (rect[0] + rect[2] + 1 - mask.width) // 2
+    top = (rect[1] + rect[3] + 1 - mask.height) // 2 + 6
+    box = (left, top, left + mask.width, top + mask.height)
+    bands = image.crop(box).convert('RGB').split()
+    toward = _rgb(theme.mark)
+    for colour in {_rgb(theme.colour(role)) for role in ('panel', 'row', 'row_dark', 'selected', 'hover')}:
+        same = mask
+        for band, value in zip(bands, colour):
+            table = [0] * 256
+            table[value] = 255
+            same = ImageChops.darker(same, band.point(table))
+        tint = tuple(round(a + (b - a) * 0.16) for a, b in zip(colour, toward))
+        image.paste(tint + (255,), box, same)
 
 
 # --- The temple: carved red stone. Two columns with leaf capitals carry a lintel
@@ -709,150 +778,5 @@ def _columns_frame(theme, size, fill):
     return picture
 
 
-# --- The ruins, second idea: a fine palace doorway falling apart. Two tall pale
-# pillars with dark carved panels stand between slabs with a carved line; the
-# edges are straight, and the ruin shows as broken-out pieces and cracks. The
-# invaders' serpent sign is left on the panel like a watermark.
-_BREAK = (1, 1, 1, 2, 2, 2, 3, 3, 2, 3, 4, 4, 4, 5, 5, 4, 5, 6, 6, 7, 6, 7, 7, 8, 7, 8, 6, 4, 3, 1)
-
-
-def _serpent_mark():
-    """The serpent sign, large: a hooked neck over a coil, as a 24x27 mask."""
-    image = Image.new('L', (24, 27), 0)
-    draw = ImageDraw.Draw(image)
-    points = [(19, 3), (16, 1), (12, 1), (9, 3), (9, 6), (12, 8), (15, 10), (18, 13)]
-    for step in range(33):
-        angle = math.radians(-20 + step * 17.5)
-        radius = 7.5 - step * 0.17
-        points.append((10 + radius * math.cos(angle), 17 + radius * math.sin(angle)))
-    draw.line(points, fill=255, width=2)
-    draw.rectangle((19, 2, 21, 4), fill=255)   # the head
-    draw.point((22, 1), fill=255)              # and its tongue
-    return image
-
-
-def _pillars_frame(theme, size, fill):
-    width, height = size
-    side, top, bottom = _THICKNESS['pillars']
-
-    def shades(*pairs):
-        return [_rgb(colour) + (255,) for colour, count in pairs for _ in range(count)]
-
-    stone = shades(('#715771', 10), ('#5f4566', 5), ('#64577a', 2), ('#404d5b', 1), ('#6c5647', 1))
-    plain = shades(('#715771', 8), ('#6f5264', 2), ('#5f4566', 1))
-    pale = shades(('#ad8d8d', 5), ('#a07f7f', 3), ('#987b66', 2), ('#876e6e', 1))
-    edge, rim, light, gold, dusk, night, pit, teal, mid = (_rgb(colour) + (255,) for colour in (
-        '#5f4566', '#876e6e', '#a07f7f', '#ead99a', '#463333', '#3b3030', '#261f1f', '#404d5b', '#795e79'))
-    shadow = _rgb(theme.colour('well_dark')) + (255,)
-    opaque_fill = fill + (255,)
-    rng = random.Random(0x5D)
-    wear = random.Random(width * 1000 + height)
-    picture = Image.new('RGBA', size, opaque_fill)
-    pixels = picture.load()
-    under = height - bottom
-
-    # The sign on the panel, either side of where a page's title goes.
-    mark = _serpent_mark()
-    tint = Image.new('RGBA', mark.size, _rgb(theme.colour('row')) + (255,))
-    if width > 2 * side + 150 and height > top + bottom + 60:
-        picture.paste(tint, (side + 18, top + 3), mark)
-        picture.paste(tint, (width - side - 18 - mark.width, top + 3), mark)
-
-    # The slabs: straight, with a carved line. A piece has broken out of each.
-    gaps = {0: side + (width - 2 * side) * 2 // 3, under: side + (width - 2 * side) // 5}
-    for start, outer_first in ((0, True), (under, False)):
-        thick = top if outer_first else bottom
-        gone = [0] * width
-        broken = width > 2 * side + 3 * len(_BREAK)     # small dialogs keep whole slabs
-        for index, depth in enumerate(_BREAK if broken else ()):
-            gone[gaps[start] + index] = depth
-        for row in range(thick):
-            run, colour = 0, stone[0]
-            depth = row if outer_first else thick - 1 - row     # from the outer edge
-            for x in range(width):
-                if run == 0:
-                    run, colour = rng.choice(_ROCK_RUNS) + 1, rng.choice(stone)
-                run -= 1
-                if depth < gone[x]:
-                    pixels[x, start + row] = (0, 0, 0, 0)
-                elif gone[x] and depth == gone[x]:
-                    pixels[x, start + row] = light if outer_first else night   # the broken face
-                elif row == 0:
-                    pixels[x, start + row] = light
-                elif row == thick - 1:
-                    pixels[x, start + row] = dusk
-                elif row == 3:
-                    pixels[x, start + row] = edge      # the carved line and the light under it
-                elif row == 4:
-                    pixels[x, start + row] = rim
-                else:
-                    pixels[x, start + row] = colour
-        # A crack runs on from the deepest point of the break.
-        if not broken:
-            continue
-        x = gaps[start] + _BREAK.index(max(_BREAK))
-        rows = range(max(_BREAK) + 1, thick - 1) if outer_first else range(thick - 2 - max(_BREAK), 0, -1)
-        for row in rows:
-            pixels[x, start + row] = night
-            x += wear.choice((-1, 0, 1, 1))
-    for x in range(side, width - side):
-        pixels[x, top] = shadow
-
-    veins = _stepped(height, wear, (0, 0, 0, 1), (3, 9))
-    flare, foot = 5, 9
-    for left in (0, width - side):
-        outside = 0 if left == 0 else side - 1
-        for y in range(top, under):
-            below, above = y - top, under - 1 - y
-            for at in range(side):      # both pillars face the same way: light from the right
-                if below < flare:
-                    # The capital widens up to the slab.
-                    inset = 0 if below < 2 else 1
-                    if at < inset or at > side - 1 - inset:
-                        colour = (0, 0, 0, 0) if (at < inset) == (outside == 0) else opaque_fill
-                    else:
-                        colour = dusk if below < 2 else mid if below == flare - 1 else edge
-                elif above < foot:
-                    step = foot - 1 - above
-                    sunny = at >= 9
-                    colour = (
-                        edge, gold if sunny else mid, light if sunny else edge, gold if sunny else rim,
-                        rng.choice(pale) if sunny else rng.choice(plain),
-                        rng.choice(pale) if sunny else rng.choice(plain), edge,
-                        rim if sunny else night, rim if sunny else night,
-                    )[step]
-                elif at == 0:
-                    colour = edge
-                elif at == side - 1:
-                    colour = rim
-                elif at >= 9:
-                    colour = rng.choice(pale)
-                elif at == 8:
-                    colour = mid
-                elif at < 3 or below < flare + 2 or above < foot + 2:
-                    colour = rng.choice(plain)
-                elif at == 3 or below == flare + 2:
-                    colour = pit
-                else:
-                    # The carved panel: dark lines that swing from side to side.
-                    swing = (y // 2) % 8
-                    swing = swing if swing < 4 else 8 - swing
-                    colour = (pit, night, teal if veins[y] else dusk, night)[(at - 4 + swing) % 4]
-                pixels[left + at, y] = colour
-    # The right pillar has lost a piece of its lit face, and a crack runs up from it.
-    if under - top < 120:
-        return picture
-    y = top + (under - top) * 3 // 5
-    for index, depth in enumerate((1, 1, 2, 3, 3, 4, 4, 3, 4, 4, 3, 2, 2, 1)):
-        for at in range(side - depth, side):
-            pixels[width - side + at, y + index] = (0, 0, 0, 0)
-        pixels[width - depth - 1, y + index] = night
-    x = width - 5
-    for row in range(1, 16):
-        pixels[x, y - row] = night
-        x -= wear.choice((0, 0, 1)) if x > width - side + 9 else 0
-    return picture
-
-
 _PAINTERS = {'rock': _rock_frame, 'bands': _band_frame, 'sand': _sand_frame,
-             'studs': _studs_frame, 'pillars': _pillars_frame, 'columns': _columns_frame}
+             'studs': _studs_frame, 'columns': _columns_frame}

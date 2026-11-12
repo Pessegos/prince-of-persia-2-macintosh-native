@@ -372,4 +372,5 @@ class GameMenu:
             if not self.items[self.focus].enabled:
                 text("Save unavailable right now" if self.items[self.focus].action == 'save'
                      else "Not implemented yet", 256, panel[3] + 5, muted, "center")
+        menu_theme.watermark(image, panel)
         return image
