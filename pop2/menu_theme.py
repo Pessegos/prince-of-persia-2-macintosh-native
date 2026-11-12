@@ -11,6 +11,7 @@ the level art but contain none of the game's own pictures, so they need no
 imported resources.
 """
 
+import math
 import os
 import random
 from dataclasses import dataclass, field
@@ -708,9 +709,28 @@ def _columns_frame(theme, size, fill):
     return picture
 
 
-# --- The ruins, second idea: the tall pale pillars with their dark carved panels,
-# under and over a slab of the same weathered stone. The serpent sign is cut
-# into the block at the head of each pillar.
+# --- The ruins, second idea: a fine palace doorway falling apart. Two tall pale
+# pillars with dark carved panels stand between slabs with a carved line; the
+# edges are straight, and the ruin shows as broken-out pieces and cracks. The
+# invaders' serpent sign is left on the panel like a watermark.
+_BREAK = (1, 1, 1, 2, 2, 2, 3, 3, 2, 3, 4, 4, 4, 5, 5, 4, 5, 6, 6, 7, 6, 7, 7, 8, 7, 8, 6, 4, 3, 1)
+
+
+def _serpent_mark():
+    """The serpent sign, large: a hooked neck over a coil, as a 24x27 mask."""
+    image = Image.new('L', (24, 27), 0)
+    draw = ImageDraw.Draw(image)
+    points = [(19, 3), (16, 1), (12, 1), (9, 3), (9, 6), (12, 8), (15, 10), (18, 13)]
+    for step in range(33):
+        angle = math.radians(-20 + step * 17.5)
+        radius = 7.5 - step * 0.17
+        points.append((10 + radius * math.cos(angle), 17 + radius * math.sin(angle)))
+    draw.line(points, fill=255, width=2)
+    draw.rectangle((19, 2, 21, 4), fill=255)   # the head
+    draw.point((22, 1), fill=255)              # and its tongue
+    return image
+
+
 def _pillars_frame(theme, size, fill):
     width, height = size
     side, top, bottom = _THICKNESS['pillars']
@@ -731,59 +751,67 @@ def _pillars_frame(theme, size, fill):
     pixels = picture.load()
     under = height - bottom
 
-    # The slabs: crumbled along their outer edge, lit above and dark below.
+    # The sign on the panel, either side of where a page's title goes.
+    mark = _serpent_mark()
+    tint = Image.new('RGBA', mark.size, _rgb(theme.colour('row')) + (255,))
+    if width > 2 * side + 150 and height > top + bottom + 60:
+        picture.paste(tint, (side + 18, top + 3), mark)
+        picture.paste(tint, (width - side - 18 - mark.width, top + 3), mark)
+
+    # The slabs: straight, with a carved line. A piece has broken out of each.
+    gaps = {0: side + (width - 2 * side) * 2 // 3, under: side + (width - 2 * side) // 5}
     for start, outer_first in ((0, True), (under, False)):
-        worn = _worn(width, wear, ())
         thick = top if outer_first else bottom
+        gone = [0] * width
+        broken = width > 2 * side + 3 * len(_BREAK)     # small dialogs keep whole slabs
+        for index, depth in enumerate(_BREAK if broken else ()):
+            gone[gaps[start] + index] = depth
         for row in range(thick):
             run, colour = 0, stone[0]
+            depth = row if outer_first else thick - 1 - row     # from the outer edge
             for x in range(width):
                 if run == 0:
                     run, colour = rng.choice(_ROCK_RUNS) + 1, rng.choice(stone)
                 run -= 1
-                depth = row if outer_first else thick - 1 - row
-                if depth < worn[x]:
+                if depth < gone[x]:
                     pixels[x, start + row] = (0, 0, 0, 0)
-                elif (depth == worn[x]) if outer_first else (row == 0):
+                elif gone[x] and depth == gone[x]:
+                    pixels[x, start + row] = light if outer_first else night   # the broken face
+                elif row == 0:
                     pixels[x, start + row] = light
-                elif (row == thick - 1) if outer_first else (depth == worn[x]):
+                elif row == thick - 1:
                     pixels[x, start + row] = dusk
+                elif row == 3:
+                    pixels[x, start + row] = edge      # the carved line and the light under it
+                elif row == 4:
+                    pixels[x, start + row] = rim
                 else:
                     pixels[x, start + row] = colour
+        # A crack runs on from the deepest point of the break.
+        if not broken:
+            continue
+        x = gaps[start] + _BREAK.index(max(_BREAK))
+        rows = range(max(_BREAK) + 1, thick - 1) if outer_first else range(thick - 2 - max(_BREAK), 0, -1)
+        for row in rows:
+            pixels[x, start + row] = night
+            x += wear.choice((-1, 0, 1, 1))
     for x in range(side, width - side):
         pixels[x, top] = shadow
 
     veins = _stepped(height, wear, (0, 0, 0, 1), (3, 9))
-    head, flare, foot = 15, 5, 9
-    for left, mirror in ((0, False), (width - side, True)):
+    flare, foot = 5, 9
+    for left in (0, width - side):
+        outside = 0 if left == 0 else side - 1
         for y in range(top, under):
             below, above = y - top, under - 1 - y
-            for across in range(side):
-                at = side - 1 - across if mirror else across   # 0 is the outer edge
-                x = left + across
-                if below < head:
-                    # The block that carries the serpent.
-                    if below == head - 1:
-                        colour = dusk
-                    elif at == 0:
-                        colour = edge
-                    elif at == side - 1:
-                        colour = rim
+            for at in range(side):      # both pillars face the same way: light from the right
+                if below < flare:
+                    # The capital widens up to the slab.
+                    inset = 0 if below < 2 else 1
+                    if at < inset or at > side - 1 - inset:
+                        colour = (0, 0, 0, 0) if (at < inset) == (outside == 0) else opaque_fill
                     else:
-                        colour = rng.choice(plain)
-                elif below < head + flare:
-                    step = below - head
-                    inset = step // 2
-                    if at < inset:
-                        colour = (0, 0, 0, 0)
-                    elif at > side - 1 - inset:
-                        colour = opaque_fill
-                    elif step < 2:
-                        colour = dusk
-                    elif step < 4:
-                        colour = edge
-                    else:
-                        colour = rim if at % 2 else edge
+                        colour = dusk if below < 2 else mid if below == flare - 1 else edge
                 elif above < foot:
                     step = foot - 1 - above
                     sunny = at >= 9
@@ -791,7 +819,7 @@ def _pillars_frame(theme, size, fill):
                         edge, gold if sunny else mid, light if sunny else edge, gold if sunny else rim,
                         rng.choice(pale) if sunny else rng.choice(plain),
                         rng.choice(pale) if sunny else rng.choice(plain), edge,
-                        rim if sunny else (teal if at % 3 else night), rim if sunny else (night if at % 2 else teal),
+                        rim if sunny else night, rim if sunny else night,
                     )[step]
                 elif at == 0:
                     colour = edge
@@ -801,17 +829,28 @@ def _pillars_frame(theme, size, fill):
                     colour = rng.choice(pale)
                 elif at == 8:
                     colour = mid
-                elif at < 3 or below < head + flare + 2 or above < foot + 2:
+                elif at < 3 or below < flare + 2 or above < foot + 2:
                     colour = rng.choice(plain)
-                elif at == 3 or below == head + flare + 2:
+                elif at == 3 or below == flare + 2:
                     colour = pit
                 else:
                     # The carved panel: dark lines that swing from side to side.
                     swing = (y // 2) % 8
                     swing = swing if swing < 4 else 8 - swing
                     colour = (pit, night, teal if veins[y] else dusk, night)[(at - 4 + swing) % 4]
-                pixels[x, y] = colour
-        _stamp(pixels, left + (2 if mirror else 1), top + 1, _SERPENT, {'#': pit}, mirror)
+                pixels[left + at, y] = colour
+    # The right pillar has lost a piece of its lit face, and a crack runs up from it.
+    if under - top < 120:
+        return picture
+    y = top + (under - top) * 3 // 5
+    for index, depth in enumerate((1, 1, 2, 3, 3, 4, 4, 3, 4, 4, 3, 2, 2, 1)):
+        for at in range(side - depth, side):
+            pixels[width - side + at, y + index] = (0, 0, 0, 0)
+        pixels[width - depth - 1, y + index] = night
+    x = width - 5
+    for row in range(1, 16):
+        pixels[x, y - row] = night
+        x -= wear.choice((0, 0, 1)) if x > width - side + 9 else 0
     return picture
 
 
