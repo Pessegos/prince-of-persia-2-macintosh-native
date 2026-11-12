@@ -14,6 +14,7 @@ import sys
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
 from pop2.bitmap_labels import label_text
+from pop2 import menu_theme
 from pop2.menu_theme import c
 from pop2.save_slots import remember
 from pop2.screenshots import ScreenshotSettings
@@ -683,11 +684,13 @@ class ScreenshotGallery:
         if self.entry:
             wanted.add(self.image_key(self.entry))
         self.reads.wanted = frozenset(wanted)
-        surface_key = (viewport.size, visible, id(font), background_key or id(viewport), self.surface_state)
+        surface_key = (viewport.size, visible, id(font), background_key or id(viewport), self.surface_state,
+                       menu_theme.current().name)
         surface = self.surface_cache.get(surface_key) if not modal else None
         key = (viewport.size, visible, id(font), background_key or id(viewport), id(self.entries),
                self.selected, self.scroll, self.scale, self.include_ui, self.error, self.status,
-               self.art_revision, self.choosing, self.deleting, self.icon_frame)
+               self.art_revision, self.choosing, self.deleting, self.icon_frame,
+               menu_theme.current().name)
         cached = self.modal_cache.get(key) if modal else None
         if not modal:
             self.modal_cache.clear()
@@ -873,7 +876,8 @@ class ScreenshotGallery:
             return image
 
         if cached is None:
-            box(self.PANEL, c('#181818'), c('#858585'))
+            if not menu_theme.panel_scaled(image, self.PANEL, point):
+                box(self.PANEL, c('#181818'), c('#858585'))
             text('Screenshots', 36, 26, 250, gold, 1)
             text(f'{len(self.entries)} PNG', 374, 29, 70, muted, right=True)
             button(self.REFRESH, 'Refresh', 15)

@@ -7,7 +7,7 @@ from PIL import Image
 
 from pop2 import menu_theme
 from pop2.game_menu import GameMenu
-from pop2.menu_theme import CAVERNS, NEUTRAL, NEUTRAL_ROLES, PALACE, c
+from pop2.menu_theme import CAVERNS, DESERT, NEUTRAL, NEUTRAL_ROLES, PALACE, RUINS, TEMPLE, THEMES, c
 
 
 class FakeFont:
@@ -59,11 +59,13 @@ class MenuThemeTest(unittest.TestCase):
         self.assertIs(menu_theme.theme_for(None), NEUTRAL)
         self.assertIs(menu_theme.theme_for(game()), NEUTRAL)
         self.assertIs(menu_theme.theme_for(game(5, harbor=object())), PALACE)
-        self.assertIs(menu_theme.theme_for(game(1, desert=object())), NEUTRAL)
+        self.assertIs(menu_theme.theme_for(game(1, desert=object())), DESERT)
         self.assertIs(menu_theme.theme_for(game(3, caverns=object())), CAVERNS)
-        # Ruins and temple are not drawn yet and must not borrow the cavern rock.
-        self.assertIs(menu_theme.theme_for(game(4, caverns=object())), NEUTRAL)
-        self.assertIs(menu_theme.theme_for(game(2, caverns=object())), NEUTRAL)
+        self.assertIs(menu_theme.theme_for(game(4, caverns=object())), RUINS)
+        self.assertIs(menu_theme.theme_for(game(2, caverns=object())), TEMPLE)
+        # The last level (kind 6) shares the cavern state but is not a cavern:
+        # the first version gave it the cavern rock.
+        self.assertIs(menu_theme.theme_for(game(6, caverns=object())), NEUTRAL)
         # One theme can be forced everywhere; "neutral" turns the level themes off.
         os.environ['POP2_MENU_THEME'] = 'neutral'
         self.assertIs(menu_theme.theme_for(game(3, caverns=object())), NEUTRAL)
@@ -110,6 +112,61 @@ class MenuThemeTest(unittest.TestCase):
         for point in ((middle_x, 11), (11, middle_y), (size[0] - 12, middle_y)):
             self.assertEqual(pixels[point], (0xfd, 0xae, 0x61, 255))  # the inner orange trim
         self.assertEqual(pixels[middle_x, middle_y], (0x00, 0x18, 0x31, 255))
+
+    def test_every_theme_keeps_text_readable_and_frames_free_of_black(self):
+        def light(colour):
+            red, green, blue = (int(colour[i:i + 2], 16) for i in (1, 3, 5))
+            return 0.299 * red + 0.587 * green + 0.114 * blue
+
+        for theme in THEMES.values():
+            with self.subTest(theme=theme.name):
+                for back in ('panel', 'row', 'selected'):
+                    self.assertGreater(light(theme.colour('text')) - light(theme.colour(back)), 110)
+                    self.assertGreater(light(theme.colour('accent')) - light(theme.colour(back)), 90)
+                self.assertGreater(light(theme.colour('muted')) - light(theme.colour('row')), 40)
+                if theme.frame == 'rock':
+                    self.assertEqual(theme.frame_width, 9)
+                    for colour in [shade for shade, _count in theme.grain] + list(theme.shades):
+                        self.assertGreater(light(colour), 15)
+                    picture = menu_theme._frame_picture(theme.name, (120, 90)).load()
+                    self.assertEqual(picture[0, 0][3], 0)
+                    self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
+                elif theme.frame == 'bands':
+                    self.assertEqual(theme.frame_width, len(theme.bands))
+                    picture = menu_theme._frame_picture(theme.name, (120, 90)).load()
+                    self.assertEqual(picture[60, 1], menu_theme._rgb(theme.bands[1][0]) + (255,))
+                    self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
+                else:
+                    self.assertEqual(theme.frame_width, 0)
+
+    def test_menu_frame_stays_clear_of_the_scroll_arrows(self):
+        # The arrows are drawn at x 437-443, inside the panel's right edge.
+        for theme in (PALACE, DESERT, CAVERNS, RUINS, TEMPLE):
+            outer = menu_theme.frame_rect(GameMenu.PANEL, theme, True)
+            self.assertGreaterEqual(outer[2] - theme.frame_width, GameMenu.PANEL[2])
+            self.assertLessEqual(outer[0] + theme.frame_width, GameMenu.PANEL[0])
+
+    def test_window_resolution_pages_get_the_frame_enlarged_without_smoothing(self):
+        def point(x, y):
+            return x * 3, y * 3
+
+        image = Image.new('RGBA', (1536, 1152), (9, 9, 9, 255))
+        self.assertFalse(menu_theme.panel_scaled(image, (28, 16, 484, 368), point))  # neutral: page draws it
+        self.assertEqual(image.getpixel((300, 300)), (9, 9, 9, 255))
+        menu_theme.use(TEMPLE)
+        self.assertTrue(menu_theme.panel_scaled(image, (28, 16, 484, 368), point))
+        # These pages cover the health strip, so the frame may reach below row 364.
+        outer = (28 - 12, 16 - 6, 484 + 12, 368 + 7)
+        lit = (0xa1, 0x25, 0x1e, 255)
+        for dx in range(3):
+            for dy in range(3):  # one game pixel is one 3x3 block
+                self.assertEqual(image.getpixel(((outer[0] + 40) * 3 + dx, (outer[1] + 1) * 3 + dy)), lit)
+                self.assertEqual(image.getpixel(((outer[0] + 40) * 3 + dx, (outer[3] - 1) * 3 + dy)), lit)
+        self.assertEqual(image.getpixel((outer[0] * 3 - 1, 600)), (9, 9, 9, 255))
+        self.assertEqual(image.getpixel((768, 576)), (0x18, 0x00, 0x00, 255))
+        colours = {colour for _count, colour in image.getcolors(1 << 20)}
+        allowed = {menu_theme._rgb(colour) + (255,) for band in TEMPLE.bands for colour in band}
+        self.assertLessEqual(colours, allowed | {(9, 9, 9, 255), (0x18, 0x00, 0x00, 255)})
 
     def test_game_menu_takes_the_theme(self):
         viewport = Image.new('RGBA', (512, 384), (200, 200, 200, 255))

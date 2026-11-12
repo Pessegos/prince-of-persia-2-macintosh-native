@@ -9,6 +9,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from pop2.save_game import SAVE_DIRECTORY, decode_preview, read_document, save_name
+from pop2 import menu_theme
 from pop2.menu_theme import c
 
 
@@ -355,7 +356,7 @@ class SaveBrowser:
         key = (viewport.size, visible, id(font), background_key if background_key is not None else id(viewport),
                self.mode, self.selected, id(self.slots), id(self.current), self.scroll,
                self.error, self.status, self.save_available, self.editing, self.active_path,
-               self.hovered == 25)
+               self.hovered == 25, menu_theme.current().name)
         cached = self.modal_cache.get(key) if modal else None
         list_key = key[:8] + key[9:] + (self.focus,)
         list_base = self.list_base_cache.get(list_key) if not modal else None
@@ -458,7 +459,8 @@ class SaveBrowser:
             return image
 
         if cached is None:
-            rectangle(self.PANEL, fill=c('#181818'), outline=c('#858585'))
+            if not menu_theme.panel_scaled(image, self.PANEL, point):
+                rectangle(self.PANEL, fill=c('#181818'), outline=c('#858585'))
             text('Saved Games', 40, 29, gold)
             text(f'{len(self.slots)} {"save" if len(self.slots) == 1 else "saves"}', 472, 32,
                  muted, 82, True, align='right')

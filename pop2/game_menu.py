@@ -292,7 +292,8 @@ class GameMenu:
 
         panel = self.SCREENSHOT_PANEL if self.page == "screenshots" else self.PANEL if self.page == "menu" else (
             self.ABOUT_DIALOG if self.page == "about" else self.DIALOG)
-        menu_theme.panel(image, panel)
+        # The menu's scroll arrows sit at the panel's right edge: keep the frame clear of them.
+        menu_theme.panel(image, panel, clear_sides=self.page == "menu")
         draw = ImageDraw.Draw(image)
         panel_top = panel[1]
         if self.page == "screenshots":

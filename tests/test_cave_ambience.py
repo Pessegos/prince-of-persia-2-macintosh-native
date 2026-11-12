@@ -2302,8 +2302,17 @@ class MenuTests(unittest.TestCase):
         self.assertIs(GameMenu(cave_ambience=True).items[actions.index('ambience')].checked, True)
 
     def test_every_row_stays_inside_the_panel(self):
+        # The menu scrolls once it has more rows than fit: check the rows shown
+        # at the top and after scrolling to the last command.
         menu = GameMenu()
-        self.assertLessEqual(menu.row_rect(len(menu.items) - 1)[3], menu.PANEL[3])
+        for focus in (0, len(menu.items) - 1):
+            menu.focus = focus
+            menu.scroll_to_focus()
+            self.assertIn(focus, menu.visible_indices())
+            for index in menu.visible_indices():
+                rect = menu.row_rect(index)
+                self.assertGreaterEqual(rect[1], menu.ROW_TOP)
+                self.assertLessEqual(rect[3], menu.PANEL[3])
 
 
 @unittest.skipUnless(CAVERNS_INSTALLED, 'Imported cavern resources required')
