@@ -109,6 +109,19 @@ class HfsExtractionTests(unittest.TestCase):
             ):
                 get_resource_fork(hfs_image(), name, kind)
 
+    def test_hybrid_cd_reads_hfs_without_converting_the_iso(self):
+        # Synthetic ISO/HFS disc, with the HFS volume at the same sector
+        # offset as the CD Collection image checked during import research.
+        image = hfs_image(wrapper=93 * 512)
+        image[16 * 2048:16 * 2048 + 7] = b"\x01CD001\x01"
+        self.assertEqual(get_resource_fork(image, "Prince.rsrc"), b"abc")
+
+    def test_iso_without_macintosh_volume_is_rejected(self):
+        image = bytearray(20 * 2048)
+        image[16 * 2048:16 * 2048 + 7] = b"\x01CD001\x01"
+        with self.assertRaisesRegex(ValueError, "HFS volume header not found"):
+            get_resource_fork(image, "Prince.rsrc")
+
     def test_cyclic_catalog_is_rejected(self):
         image = hfs_image()
         struct.pack_into(">I", image, 2560, 1)

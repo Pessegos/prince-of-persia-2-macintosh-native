@@ -264,6 +264,10 @@ Extract the ZIP to a folder and run `PoP2Mac.exe`. No Python installation is req
 
 On the first launch, you'll be asked to select your original Macintosh Prince of Persia 2 disk image. If you don't have one, [PoPOT's Macintosh release page](https://www.popot.org/get_the_games.php?game=2_Mac) lists an English version: [download `pop2.hfs` (17 MB)](https://www.popot.org/get_the_games/software/pop2.hfs).
 
+**Have the original Prince of Persia CD Collection?** You can also import the Macintosh game files directly from an ISO image of the hybrid PC/Mac CD. Thanks to Crinkem for testing their original CD and sharing a [step-by-step guide](https://github.com/Pessegos/prince-of-persia-2-macintosh-native/issues/9). After creating the ISO (step 4), select it in `PoP2Mac.exe`; the HFSExplorer conversion is unnecessary for this disc image.
+
+The file picker lists `.hfs`, `.hfv`, `.dsk`, `.img`, `.iso` and `.dmg` images. These must contain the original Macintosh HFS volume; compressed DMG images and DOS-only CDs are not supported.
+
 The game will then extract and prepare the necessary files. This currently takes a minute and may take longer as more content is added. I plan to optimize this process eventually to make the initial setup faster.
 
 The original game files are not included or downloaded automatically. PoPOT is an independent archive, and the availability of the disk image there does not grant redistribution rights.

@@ -36,7 +36,7 @@ class GameSetup:
         )
         ttk.Label(
             panel,
-            text="Macintosh Prince of Persia 2 disk image (.hfs, .hfv, .dsk or .img)",
+            text="Macintosh Prince of Persia 2 disk image (.hfs, .hfv, .dsk, .img, .iso or .dmg)",
             wraplength=400,
         ).pack(anchor="w", pady=(12, 18))
         self.status = tk.StringVar()
@@ -67,7 +67,7 @@ class GameSetup:
             parent=self.root,
             title="Select the Macintosh Prince of Persia 2 disk image",
             filetypes=(
-                ("Macintosh disk images", "*.hfs *.hfv *.dsk *.img"),
+                ("Macintosh disk images", "*.hfs *.hfv *.dsk *.img *.iso *.dmg"),
                 ("All files", "*.*"),
             ),
         )
