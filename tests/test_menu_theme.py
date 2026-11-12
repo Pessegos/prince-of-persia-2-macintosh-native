@@ -136,6 +136,14 @@ class MenuThemeTest(unittest.TestCase):
                     picture = menu_theme._frame_picture(theme.name, (120, 90)).load()
                     self.assertEqual(picture[60, 1], menu_theme._rgb(theme.bands[1][0]) + (255,))
                     self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
+                elif theme.frame is not None:
+                    # Drawn frames: sand and surf, studded stone, columns.
+                    self.assertIn(theme.frame_width, (9, 11))
+                    picture = menu_theme._frame_picture(theme.name, (120, 90)).load()
+                    self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
+                    for point in ((60, 0), (60, 89), (1, 45), (118, 45)):
+                        self.assertEqual(picture[point][3], 255)
+                        self.assertGreater(sum(picture[point][:3]), 45)
                 else:
                     self.assertEqual(theme.frame_width, 0)
 
@@ -153,20 +161,20 @@ class MenuThemeTest(unittest.TestCase):
         image = Image.new('RGBA', (1536, 1152), (9, 9, 9, 255))
         self.assertFalse(menu_theme.panel_scaled(image, (28, 16, 484, 368), point))  # neutral: page draws it
         self.assertEqual(image.getpixel((300, 300)), (9, 9, 9, 255))
-        menu_theme.use(TEMPLE)
+        menu_theme.use(PALACE)
         self.assertTrue(menu_theme.panel_scaled(image, (28, 16, 484, 368), point))
         # These pages cover the health strip, so the frame may reach below row 364.
         outer = (28 - 12, 16 - 6, 484 + 12, 368 + 7)
-        lit = (0xa1, 0x25, 0x1e, 255)
+        lit = (0xff, 0xff, 0xd6, 255)
         for dx in range(3):
             for dy in range(3):  # one game pixel is one 3x3 block
                 self.assertEqual(image.getpixel(((outer[0] + 40) * 3 + dx, (outer[1] + 1) * 3 + dy)), lit)
                 self.assertEqual(image.getpixel(((outer[0] + 40) * 3 + dx, (outer[3] - 1) * 3 + dy)), lit)
         self.assertEqual(image.getpixel((outer[0] * 3 - 1, 600)), (9, 9, 9, 255))
-        self.assertEqual(image.getpixel((768, 576)), (0x18, 0x00, 0x00, 255))
+        self.assertEqual(image.getpixel((768, 576)), (0x00, 0x18, 0x31, 255))
         colours = {colour for _count, colour in image.getcolors(1 << 20)}
-        allowed = {menu_theme._rgb(colour) + (255,) for band in TEMPLE.bands for colour in band}
-        self.assertLessEqual(colours, allowed | {(9, 9, 9, 255), (0x18, 0x00, 0x00, 255)})
+        allowed = {menu_theme._rgb(colour) + (255,) for band in PALACE.bands for colour in band}
+        self.assertLessEqual(colours, allowed | {(9, 9, 9, 255), (0x00, 0x18, 0x31, 255)})
 
     def test_game_menu_takes_the_theme(self):
         viewport = Image.new('RGBA', (512, 384), (200, 200, 200, 255))

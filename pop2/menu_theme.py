@@ -37,7 +37,8 @@ class MenuTheme:
     name: str
     roles: dict = field(default_factory=dict)
     dim: int = 100            # black veil over the room behind the F1 menu, 0-255
-    frame: str | None = None  # 'rock', 'bands' or None for a plain outline
+    # 'rock', 'bands', 'shore', 'studs', 'columns' or None for a plain outline
+    frame: str | None = None
     grow: tuple = (0, 0, 0)   # how far the frame reaches beyond a panel: sides, top, bottom
     # 'bands': the moulding's rows from the outside inwards; a row of several
     # colours is speckled with them.
@@ -51,7 +52,11 @@ class MenuTheme:
     @property
     def frame_width(self):
         """How far the frame reaches inwards from its outer edge."""
-        return {'rock': _ROCK_THICKNESS, 'bands': len(self.bands)}.get(self.frame, 0)
+        if self.frame == 'bands':
+            return len(self.bands)
+        if self.frame == 'shore':
+            return _SHORE_THICKNESS
+        return 0 if self.frame is None else _ROCK_THICKNESS
 
     def __post_init__(self):
         unknown = set(self.roles) - set(NEUTRAL_ROLES)
@@ -98,9 +103,7 @@ DESERT = MenuTheme('desert', {
     'active': '#fedea5', 'active_map': '#fedea5', 'active_fill': '#3a4a3a',
     'active_field': '#063c47', 'text_selection': '#01929c',
     'danger': '#5a2010', 'danger_soft': '#3a2018',
-}, dim=115, frame='rock', grow=(2, 5, 7), grain=(
-    ('#ecbc86', 30), ('#f2cd8d', 30), ('#d8ab71', 15), ('#e9b471', 10), ('#d4b68b', 8), ('#d5a056', 7),
-), shades=('#fedea5', '#b78742', '#af9361', '#91622b'))
+}, dim=115, frame='shore', grow=(2, 5, 7))
 
 # Levels 3-5: cavern rock, bone-coloured text and torch flame.
 CAVERNS = MenuTheme('caverns', {
@@ -133,10 +136,7 @@ RUINS = MenuTheme('ruins', {
     'active': '#9fd0c8', 'active_map': '#9fd0c8', 'active_fill': '#1f2a55',
     'active_field': '#1a1f4c', 'text_selection': '#534b7e',
     'danger': '#522118', 'danger_soft': '#3a1830',
-}, dim=120, frame='rock', grow=(2, 5, 7), grain=(
-    ('#5c5485', 25), ('#534b7e', 22), ('#736b96', 15), ('#4e467b', 12), ('#4a4178', 10),
-    ('#7c749c', 8), ('#413871', 8),
-), shades=('#9a93b5', '#3c336e', '#332a67', '#2a2161', '#251c5d'))
+}, dim=120, frame='studs', grow=(2, 5, 7))
 
 # Levels 10-13: the temple's carved red stone and candle flame.
 TEMPLE = MenuTheme('temple', {
@@ -150,11 +150,7 @@ TEMPLE = MenuTheme('temple', {
     'active': '#b9b4cc', 'active_map': '#b9b4cc', 'active_fill': '#3a2a30',
     'active_field': '#33202a', 'text_selection': '#6c2107',
     'danger': '#6b1808', 'danger_soft': '#450a0a',
-}, dim=100, frame='bands', grow=(1, 6, 7), bands=(
-    # A red moulding lit on its outer edge, then a line of candle gold.
-    ('#100000',), ('#a1251e',), ('#781313',), ('#6b1808', '#631810'), ('#631810', '#5a1810'),
-    ('#520808',), ('#450a0a',), ('#310000',), ('#100000',), ('#d9a441',), ('#6c2107',), ('#100000',),
-))
+}, dim=100, frame='columns', grow=(2, 5, 7))
 
 THEMES = {theme.name: theme for theme in (NEUTRAL, PALACE, DESERT, CAVERNS, RUINS, TEMPLE)}
 
@@ -267,7 +263,7 @@ def _frame_picture(name, size):
     if key not in _frames:
         theme = THEMES[name]
         fill = _rgb(theme.colour('panel'))
-        _frames[key] = (_rock_frame if theme.frame == 'rock' else _band_frame)(theme, size, fill)
+        _frames[key] = _PAINTERS[theme.frame](theme, size, fill)
     return _frames[key]
 
 
@@ -377,3 +373,179 @@ def _rock_frame(theme, size, fill):
                 colour = min(every_shade, key=lambda s: sum((a - b) ** 2 for a, b in zip(s, lit)))
             pixels[x, y] = colour + (255,)
     return picture
+
+
+# --- The desert: a rim of damp sand around shallows that deepen into the panel.
+_SHORE_THICKNESS = 11
+
+
+def _lapping(length, rng):
+    """How far the water reaches into the sand: a row of shallow lobes."""
+    line = []
+    while len(line) < length:
+        lobe = rng.randint(14, 26)
+        for index in range(lobe):
+            middle = min(index, lobe - 1 - index)
+            line.append(0 if middle < 2 else 1 if middle < 5 else 2)
+    return line[:length]
+
+
+def _shore_frame(theme, size, fill):
+    width, height = size
+    radius = 14
+    rng = random.Random(width * 1000 + height)
+    longest = max(width, height)
+    sides = {side: (_lapping(longest, rng), _stepped(longest, rng, (0, 0, 0, 1), (9, 20)))
+             for side in ('top', 'bottom', 'left', 'right')}
+    rim, sand, ripple, foam = _rgb('#d8ab71'), _rgb('#f2cd8d'), _rgb('#ecbc86'), _rgb('#fff3d6')
+    water = _rgb('#01b2bb'), _rgb('#01929c'), _rgb('#017d8c'), _rgb('#015e72')
+    picture = Image.new('RGBA', size, (0, 0, 0, 0))
+    pixels = picture.load()
+    for y in range(height):
+        for x in range(width):
+            dx, dy = min(x, width - 1 - x), min(y, height - 1 - y)
+            if dx < radius and dy < radius:
+                depth = radius - ((radius - dx - 0.5) ** 2 + (radius - dy - 0.5) ** 2) ** 0.5
+            else:
+                depth = min(dx, dy)
+            if depth < 0:
+                continue
+            if dy <= dx:
+                lap, streak = sides['top' if y < height // 2 else 'bottom']
+                along = x
+            else:
+                lap, streak = sides['left' if x < width // 2 else 'right']
+                along = y
+            beach = 6 - lap[along]
+            if depth < 1:
+                colour = rim
+            elif depth < beach:
+                colour = ripple if streak[along] and 2 <= depth < 3 else sand
+            elif depth < beach + 1:
+                colour = foam
+            elif depth < beach + 2:
+                colour = water[0]
+            elif depth < 9:
+                colour = water[1]
+            elif depth < 10:
+                colour = water[2]
+            elif depth < 11:
+                colour = water[3]
+            else:
+                colour = fill
+            pixels[x, y] = colour + (255,)
+    return picture
+
+
+def _stepped(length, rng, values, runs=(5, 14)):
+    line = []
+    while len(line) < length:
+        line += [rng.choice(values)] * rng.randint(*runs)
+    return line[:length]
+
+
+# --- The ruins: a band of dressed stone with the wall's row of small square studs.
+def _studs_frame(theme, size, fill):
+    width, height = size
+    thickness = _ROCK_THICKNESS
+    lit, face, body, dark, deep = (_rgb(colour) for colour in (
+        '#9a93b5', '#736b96', '#5c5485', '#332a67', '#251c5d'))
+    marble = [_rgb('#5c5485')] * 5 + [_rgb('#534b7e')] * 3 + [_rgb('#4e467b')]
+    rng = random.Random(0x5D)
+    picture = Image.new('RGBA', size, fill + (255,))
+    pixels = picture.load()
+    for y in range(height):
+        run, colour = 0, body
+        for x in range(width):
+            dx, dy = min(x, width - 1 - x), min(y, height - 1 - y)
+            depth = min(dx, dy)
+            if depth >= thickness:
+                continue
+            if run == 0:
+                run, colour = rng.choice(_ROCK_RUNS) + 1, rng.choice(marble)
+            run -= 1
+            upper = (y < thickness and dy <= dx) or (x < thickness and dx < dy)
+            if depth == 0:
+                pixels[x, y] = (lit if upper else dark) + (255,)
+            elif depth == thickness - 1:
+                pixels[x, y] = (deep if upper else face) + (255,)
+            else:
+                pixels[x, y] = colour + (255,)
+
+    def stud(left, top, side):
+        for j in range(side):
+            for i in range(side):
+                if i + j < side - 1:
+                    shade = lit
+                elif i + j == side - 1:
+                    shade = face
+                else:
+                    shade = dark
+                if side > 3 and 0 < i < side - 1 and 0 < j < side - 1:
+                    shade = face
+                pixels[left + i, top + j] = shade + (255,)
+
+    for left in (2, width - 7):
+        for top in (2, height - 7):
+            stud(left, top, 5)
+    for length, place in ((width, lambda at: ((at, 3), (at, height - 6))),
+                          (height, lambda at: ((3, at), (width - 6, at)))):
+        room = length - 2 * thickness - 2
+        count = (room + 3) // 6
+        start = thickness + 1 + (room - (count * 6 - 3)) // 2
+        for index in range(count):
+            for left, top in place(start + index * 6):
+                stud(left, top, 3)
+    return picture
+
+
+# --- The temple: two red columns carrying a carved lintel, standing on the grey floor.
+def _columns_frame(theme, size, fill):
+    width, height = size
+    thickness = _ROCK_THICKNESS
+    shaft = [_rgb(colour) for colour in (
+        '#210000', '#420808', '#631810', '#a1251e', '#731100', '#631810', '#520808', '#390800', '#210000')]
+    ring = [_rgb(colour) for colour in (
+        '#310000', '#631810', '#a1251e', '#c8402a', '#a1251e', '#7b2108', '#631810', '#520808', '#310000')]
+    lintel = ['#7b2910', '#731100', '#731100', '#390800', None, None, None, '#520808', '#210000']
+    floor = ['#4a4a4a', '#423139', '#392939', '#312129', '#312121', '#312121', '#291821', '#291821', '#211016']
+    shadow = _rgb(theme.colour('well_dark'))
+    picture = Image.new('RGBA', size, fill + (255,))
+    pixels = picture.load()
+    for y in range(height):
+        for x in range(width):
+            if y < thickness:
+                colour = lintel[y]
+                if colour is None:
+                    colour = '#631810' if x % 6 < 4 else '#310000'
+                colour = _rgb(colour)
+            elif y >= height - thickness:
+                colour = _rgb(floor[y - (height - thickness)])
+            elif x < thickness or x >= width - thickness:
+                across = x if x < thickness else x - (width - thickness)
+                below, above = y - thickness, height - thickness - 1 - y
+                if below < 5 or above < 8:
+                    # The capital and the plinth are as wide as the lintel.
+                    if below in (0, 4) or above == 7:
+                        colour = shaft[0]
+                    elif below == 1 or above == 6:
+                        colour = _rgb('#c8402a') if 0 < across < 8 else ring[1]
+                    else:
+                        colour = ring[across]
+                elif across in (0, 8):
+                    # The shaft is slimmer: the room shows outside it, the panel inside.
+                    if across == (0 if x < thickness else 8):
+                        pixels[x, y] = (0, 0, 0, 0)
+                    continue
+                else:
+                    colour = shaft[across]
+            elif y == thickness or x == thickness:
+                colour = shadow
+            else:
+                continue
+            pixels[x, y] = colour + (255,)
+    return picture
+
+
+_PAINTERS = {'rock': _rock_frame, 'bands': _band_frame, 'shore': _shore_frame,
+             'studs': _studs_frame, 'columns': _columns_frame}
