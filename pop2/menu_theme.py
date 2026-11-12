@@ -37,7 +37,7 @@ class MenuTheme:
     name: str
     roles: dict = field(default_factory=dict)
     dim: int = 100            # black veil over the room behind the F1 menu, 0-255
-    # 'rock', 'bands', 'sand', 'studs', 'columns' or None for a plain outline
+    # 'rock', 'bands', 'sand', 'studs', 'pillars', 'columns' or None for a plain outline
     frame: str | None = None
     grow: tuple = (0, 0, 0)   # how far the frame reaches beyond a panel: sides, top, bottom
     # 'bands': the moulding's rows from the outside inwards; a row of several
@@ -134,7 +134,7 @@ RUINS = MenuTheme('ruins', {
     'active': '#9fd0c8', 'active_map': '#9fd0c8', 'active_fill': '#1f2a55',
     'active_field': '#1a1f4c', 'text_selection': '#534b7e',
     'danger': '#522118', 'danger_soft': '#3a1830',
-}, dim=120, frame='studs', grow=(2, 5, 7))
+}, dim=120, frame='pillars', grow=(2, 5, 7))
 
 # Levels 10-13: the temple's carved red stone and candle flame.
 TEMPLE = MenuTheme('temple', {
@@ -374,7 +374,8 @@ def _rock_frame(theme, size, fill):
 
 
 # --- Shared helpers for the drawn frames.
-_THICKNESS = {'rock': (9, 9, 9), 'sand': (11, 11, 11), 'studs': (9, 9, 9), 'columns': (13, 12, 9)}
+_THICKNESS = {'rock': (9, 9, 9), 'sand': (11, 11, 11), 'studs': (9, 9, 9), 'pillars': (13, 10, 10),
+              'columns': (13, 12, 12)}
 
 
 def _stepped(length, rng, values, runs=(5, 14)):
@@ -438,18 +439,46 @@ def _sand_frame(theme, size, fill):
     def place(side, along, depth):
         return ((along, depth), (along, height - 1 - depth), (depth, along), (width - 1 - depth, along))[side]
 
-    # Little dunes: a curved shadow with the light on its crest.
+    # What the wind leaves on sand, no two alike: dunes, hollows, streaks, pebbles.
+    pebble = _rgb('#b78742') + (255,)
     for side in range(4):
-        along = radius + 4
-        end = (width if side < 2 else height) - radius - 4
-        while along < end - 8:
-            length, depth = rng.randint(5, 8), rng.randint(3, 5)
-            for index in range(length):
-                tip = index in (0, length - 1)
-                pixels[place(side, along + index, depth + (1 if tip else 0))] = shade
-                if not tip:
-                    pixels[place(side, along + index, depth - 1)] = crest
-            along += length + rng.randint(7, 22)
+        along = radius + 3
+        end = (width if side < 2 else height) - radius - 3
+        while along < end - 14:
+            kind = rng.choice(('dune', 'dune', 'hollow', 'streak', 'streak', 'streak', 'pebble', 'pair'))
+            depth = rng.randint(3, 6)
+            length = 2
+            if kind in ('dune', 'hollow'):
+                length = rng.randint(4, 11)
+                tips = rng.randint(1, max(1, length // 3))
+                for index in range(length):
+                    tip = index < tips or index >= length - rng.randint(1, tips)
+                    row = depth + ((1 if kind == 'dune' else -1) if tip else 0)
+                    pixels[place(side, along + index, row)] = shade
+                    if not tip and rng.random() < 0.8:
+                        pixels[place(side, along + index, row + (-1 if kind == 'dune' else 1))] = (
+                            crest if kind == 'dune' else ripple)
+            elif kind == 'streak':
+                length = rng.randint(5, 15)
+                row = depth
+                for index in range(length):
+                    if rng.random() < 0.22:
+                        row = min(6, max(3, row + rng.choice((-1, 1))))
+                    pixels[place(side, along + index, row)] = shade if rng.random() < 0.8 else ripple
+                    if index < length // 2 and rng.random() < 0.6:
+                        pixels[place(side, along + index, row - 1)] = crest
+            elif kind == 'pebble':
+                pixels[place(side, along, depth)] = pebble
+                pixels[place(side, along + 1, depth)] = pebble if rng.random() < 0.6 else shade
+                pixels[place(side, along, depth - 1)] = crest
+            else:
+                length = rng.randint(5, 8)
+                for index in range(length):
+                    if index < length - 2:
+                        pixels[place(side, along + index, depth - 1)] = shade
+                    if index > 1:
+                        pixels[place(side, along + index, depth + 1)] = shade
+            along += length + rng.randint(4, 18)
     _stamp(pixels, 17, height - 9, _STARFISH, {'s': _rgb('#d26a14') + (255,), 't': _rgb('#8e4106') + (255,)})
     return picture
 
@@ -594,7 +623,16 @@ _PLINTH = (
     'hoooooooooood',
     'ddddddddddddd',
 )
-_BASE_STUD = ('........', '..hho...', '..hod...', '..odd...', '........')
+_CORNER_ROSETTE = (
+    'd...........d',
+    'd.h..hhh..h.d',
+    'd...hoooo...d',
+    'd...ooooo...d',
+    'd...ooood...d',
+    'd.h..ddd..h.d',
+    'd...........d',
+)
+_BEAD = ('hh', 'od', 'dd')
 
 
 def _columns_frame(theme, size, fill):
@@ -606,30 +644,37 @@ def _columns_frame(theme, size, fill):
         '#210000', '#390800', '#520808', '#631810', '#7b2108', '#a1251e', '#8a2414', '#731100', '#631810',
         '#520808', '#210000')]
     shadow = _rgb(theme.colour('well_dark')) + (255,)
-    line = {name: _rgb(colour) + (255,) for name, colour in (
-        ('lit', '#7b2910'), ('face', '#731100'), ('low', '#631810'), ('dark', '#210000'))}
+    lit, face, low, dark = (_rgb(colour) + (255,) for colour in ('#7b2910', '#731100', '#631810', '#210000'))
     opaque_fill = fill + (255,)
     picture = Image.new('RGBA', size, opaque_fill)
     pixels = picture.load()
-    shift = width // 2 - 10
-    low = height - bottom
-    for x in range(width):
-        # The lintel: a lit edge, the frieze, then a fillet in shadow.
-        pixels[x, 0], pixels[x, 1] = line['lit'], line['face']
-        for row, letters in enumerate(_FRIEZE):
-            pixels[x, 2 + row] = colours[letters[(x - shift) % 24]]
-        pixels[x, 9], pixels[x, 10], pixels[x, 11] = line['dark'], line['low'], line['dark']
-        # The base: a lit edge, a row of studs, then the ground line.
-        pixels[x, low], pixels[x, low + 1], pixels[x, low + 2] = line['lit'], line['face'], line['dark']
-        for row, letters in enumerate(_BASE_STUD):
-            pixels[x, low + 3 + row] = colours[letters[(x - shift + 1) % 8]]
-        pixels[x, low + 8] = line['dark']
-        if side <= x < width - side:
-            pixels[x, top] = shadow
+    under = height - bottom
+
+    # The same carved band above and below; its fillet is on the panel's side.
+    for start, edge_rows, frieze_top in ((0, ((0, lit), (1, face), (9, dark), (10, low), (11, dark)), 2),
+                                         (under, ((0, dark), (1, low), (2, dark), (10, face), (11, dark)), 3)):
+        for x in range(width):
+            for row, colour in edge_rows:
+                pixels[x, start + row] = colour
+            for row in range(7):
+                pixels[x, start + frieze_top + row] = colours['.']
+        # Whole motifs only, spread evenly between the two corner blocks.
+        room = width - 2 * side
+        count = max(1, round(room / 24))
+        for index in range(count):
+            left = side + round((index + 0.5) * room / count - 8.5)
+            _stamp(pixels, left, start + frieze_top, [row[2:19] for row in _FRIEZE], colours)
+            if index:
+                _stamp(pixels, side + round(index * room / count) - 1, start + frieze_top + 2, _BEAD, colours)
+        for left in (0, width - side):
+            _stamp(pixels, left, start + frieze_top, _CORNER_ROSETTE, colours)
+    for x in range(side, width - side):
+        pixels[x, top] = shadow
+
     for left in (0, width - side):
         outside = 0 if left == 0 else side - 1
-        for y in range(top, low):
-            below, above = y - top, low - 1 - y
+        for y in range(top, under):
+            below, above = y - top, under - 1 - y
             if below < len(_CAPITAL):
                 letters = _CAPITAL[below]
             elif above < len(_PLINTH):
@@ -657,11 +702,118 @@ def _columns_frame(theme, size, fill):
                     pixels[x, y] = (0, 0, 0, 0) if across == outside else opaque_fill
                 else:
                     pixels[x, y] = colours[letters[across]]
-    for y in range(top + 1, low):
+    for y in range(top + 1, under):
         if pixels[side, y] == opaque_fill:
             pixels[side, y] = shadow
     return picture
 
 
+# --- The ruins, second idea: the tall pale pillars with their dark carved panels,
+# under and over a slab of the same weathered stone. The serpent sign is cut
+# into the block at the head of each pillar.
+def _pillars_frame(theme, size, fill):
+    width, height = size
+    side, top, bottom = _THICKNESS['pillars']
+
+    def shades(*pairs):
+        return [_rgb(colour) + (255,) for colour, count in pairs for _ in range(count)]
+
+    stone = shades(('#715771', 10), ('#5f4566', 5), ('#64577a', 2), ('#404d5b', 1), ('#6c5647', 1))
+    plain = shades(('#715771', 8), ('#6f5264', 2), ('#5f4566', 1))
+    pale = shades(('#ad8d8d', 5), ('#a07f7f', 3), ('#987b66', 2), ('#876e6e', 1))
+    edge, rim, light, gold, dusk, night, pit, teal, mid = (_rgb(colour) + (255,) for colour in (
+        '#5f4566', '#876e6e', '#a07f7f', '#ead99a', '#463333', '#3b3030', '#261f1f', '#404d5b', '#795e79'))
+    shadow = _rgb(theme.colour('well_dark')) + (255,)
+    opaque_fill = fill + (255,)
+    rng = random.Random(0x5D)
+    wear = random.Random(width * 1000 + height)
+    picture = Image.new('RGBA', size, opaque_fill)
+    pixels = picture.load()
+    under = height - bottom
+
+    # The slabs: crumbled along their outer edge, lit above and dark below.
+    for start, outer_first in ((0, True), (under, False)):
+        worn = _worn(width, wear, ())
+        thick = top if outer_first else bottom
+        for row in range(thick):
+            run, colour = 0, stone[0]
+            for x in range(width):
+                if run == 0:
+                    run, colour = rng.choice(_ROCK_RUNS) + 1, rng.choice(stone)
+                run -= 1
+                depth = row if outer_first else thick - 1 - row
+                if depth < worn[x]:
+                    pixels[x, start + row] = (0, 0, 0, 0)
+                elif (depth == worn[x]) if outer_first else (row == 0):
+                    pixels[x, start + row] = light
+                elif (row == thick - 1) if outer_first else (depth == worn[x]):
+                    pixels[x, start + row] = dusk
+                else:
+                    pixels[x, start + row] = colour
+    for x in range(side, width - side):
+        pixels[x, top] = shadow
+
+    veins = _stepped(height, wear, (0, 0, 0, 1), (3, 9))
+    head, flare, foot = 15, 5, 9
+    for left, mirror in ((0, False), (width - side, True)):
+        for y in range(top, under):
+            below, above = y - top, under - 1 - y
+            for across in range(side):
+                at = side - 1 - across if mirror else across   # 0 is the outer edge
+                x = left + across
+                if below < head:
+                    # The block that carries the serpent.
+                    if below == head - 1:
+                        colour = dusk
+                    elif at == 0:
+                        colour = edge
+                    elif at == side - 1:
+                        colour = rim
+                    else:
+                        colour = rng.choice(plain)
+                elif below < head + flare:
+                    step = below - head
+                    inset = step // 2
+                    if at < inset:
+                        colour = (0, 0, 0, 0)
+                    elif at > side - 1 - inset:
+                        colour = opaque_fill
+                    elif step < 2:
+                        colour = dusk
+                    elif step < 4:
+                        colour = edge
+                    else:
+                        colour = rim if at % 2 else edge
+                elif above < foot:
+                    step = foot - 1 - above
+                    sunny = at >= 9
+                    colour = (
+                        edge, gold if sunny else mid, light if sunny else edge, gold if sunny else rim,
+                        rng.choice(pale) if sunny else rng.choice(plain),
+                        rng.choice(pale) if sunny else rng.choice(plain), edge,
+                        rim if sunny else (teal if at % 3 else night), rim if sunny else (night if at % 2 else teal),
+                    )[step]
+                elif at == 0:
+                    colour = edge
+                elif at == side - 1:
+                    colour = rim
+                elif at >= 9:
+                    colour = rng.choice(pale)
+                elif at == 8:
+                    colour = mid
+                elif at < 3 or below < head + flare + 2 or above < foot + 2:
+                    colour = rng.choice(plain)
+                elif at == 3 or below == head + flare + 2:
+                    colour = pit
+                else:
+                    # The carved panel: dark lines that swing from side to side.
+                    swing = (y // 2) % 8
+                    swing = swing if swing < 4 else 8 - swing
+                    colour = (pit, night, teal if veins[y] else dusk, night)[(at - 4 + swing) % 4]
+                pixels[x, y] = colour
+        _stamp(pixels, left + (2 if mirror else 1), top + 1, _SERPENT, {'#': pit}, mirror)
+    return picture
+
+
 _PAINTERS = {'rock': _rock_frame, 'bands': _band_frame, 'sand': _sand_frame,
-             'studs': _studs_frame, 'columns': _columns_frame}
+             'studs': _studs_frame, 'pillars': _pillars_frame, 'columns': _columns_frame}

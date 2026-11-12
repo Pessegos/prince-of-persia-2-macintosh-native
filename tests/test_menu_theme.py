@@ -141,7 +141,7 @@ class MenuThemeTest(unittest.TestCase):
                     self.assertIn(theme.frame_width, (9, 11, 13))
                     picture = menu_theme._frame_picture(theme.name, (120, 90)).load()
                     self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
-                    for point in ((60, 0), (60, 89), (1, 45), (118, 45)):
+                    for point in ((60, 3), (60, 86), (3, 45), (116, 45)):  # inside any worn edge
                         self.assertEqual(picture[point][3], 255)
                         self.assertGreater(sum(picture[point][:3]), 30)  # dark, never black
                 else:
