@@ -5,6 +5,8 @@ PoP2Mac.exe. Keep the entire _internal folder beside it.
 You do not need to install Python or the dependencies separately.
 
 On first launch, select your original Macintosh Prince of Persia 2 disk image.
+An ISO made from the hybrid PC/Mac Prince of Persia CD Collection also works;
+select it directly, without converting it in HFSExplorer.
 Original game resources, music and disk images are not included in this ZIP.
 Import may take a minute or longer depending on the PC. Wait for it to finish,
 or use Cancel to stop it safely. Later launches use the prepared local files.
