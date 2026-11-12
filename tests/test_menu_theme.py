@@ -138,7 +138,7 @@ class MenuThemeTest(unittest.TestCase):
                     self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
                 elif theme.frame is not None:
                     # Drawn frames: sand and surf, studded stone, columns.
-                    self.assertIn(theme.frame_width, (9, 11))
+                    self.assertIn(theme.frame_width, (9, 11, 13))
                     picture = menu_theme._frame_picture(theme.name, (120, 90)).load()
                     self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
                     for point in ((60, 0), (60, 89), (1, 45), (118, 45)):
