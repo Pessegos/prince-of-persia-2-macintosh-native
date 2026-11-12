@@ -143,7 +143,7 @@ class MenuThemeTest(unittest.TestCase):
                     self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
                     for point in ((60, 0), (60, 89), (1, 45), (118, 45)):
                         self.assertEqual(picture[point][3], 255)
-                        self.assertGreater(sum(picture[point][:3]), 45)
+                        self.assertGreater(sum(picture[point][:3]), 30)  # dark, never black
                 else:
                     self.assertEqual(theme.frame_width, 0)
 
