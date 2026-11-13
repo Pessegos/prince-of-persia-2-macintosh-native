@@ -385,6 +385,18 @@ def draw_slide_rocks(frame, room_id, rocks, terrain, *, level_number=10):
     return frame
 
 
+def trapdoor_drawing_commands(index, x, bottom):
+    """DrawObjTrapDoor 10:26ea, with AddMid's inclusive-Y conversion applied.
+
+    The flat pose has a masked top and a copied front lip, like a floor.
+    Its moving-object X already includes ATMTrapDoor's animation offset.
+    """
+    if index == 3528:
+        return (['back', 3528, x + 1, bottom, 16],
+                ['back', 3529, x, bottom, 0])
+    return (['back', index, x, bottom, 16],)
+
+
 def draw_trapdoors(frame, room_id, objects, terrain, *, level_number=10):
     """ATMTrapDoor 10:225c's opening door: the animation piece at its
     offset, within ComputeMobRect's rectangle (height + 1 up, at least to
@@ -406,11 +418,15 @@ def draw_trapdoors(frame, room_id, objects, terrain, *, level_number=10):
         sprite = cavern_command_sprite(['back', index, x, y, 16], resources, palette, shapes)
         right = x + max(sprite.width + 1, origin + 77 - x)
         clip = (max(x, 0), max(y - sprite.height, 0), min(right, frame.width), min(y + 1, frame.height))
-        if clip[0] < clip[2] and clip[1] < clip[3]:
-            top = y - sprite.height
-            piece = sprite.crop((clip[0] - x, clip[1] - top, min(clip[2] - x, sprite.width),
-                                 min(clip[3] - top, sprite.height)))
-            frame.paste(piece, clip[:2], piece)
+        for command in trapdoor_drawing_commands(index, x, y):
+            sprite = cavern_command_sprite(command, resources, palette, shapes)
+            px, bottom = command[2:4]
+            top = bottom - sprite.height
+            left, above = max(px, clip[0]), max(top, clip[1])
+            end_x, end_y = min(px + sprite.width, clip[2]), min(bottom, clip[3])
+            if left < end_x and above < end_y:
+                piece = sprite.crop((left - px, above - top, end_x - px, end_y - top))
+                frame.paste(piece, (left, above), piece)
     return frame
 
 

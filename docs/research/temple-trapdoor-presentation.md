@@ -140,3 +140,61 @@ trap-door reference modules and cavern drawing/retouch modules); dependency,
 Ruff F/E9, recovery-catalogue and diff checks passed. Full discovery was not
 repeated for this drawing-only change. The separate wall-sticking/room-cut
 report remains open and is not resolved by this animation fix.
+
+## Room-1 flat-panel mask and missing front lip (2026-11-13)
+
+The user's subsequent paired level12 room1 recordings show the rotating
+tile's edge cutting into the floor. The moving-panel implementation drew
+one masked SHAP for every animation record. That is incomplete for the flat
+record (Temple piece28), used at low phases10 and15.
+
+DrawObjTrapDoor10:26ea-2790 selects the animation piece from the original
+phase map. For pieces51..54 it calls AddMid once, masked (transfer mode16).
+For piece28, 10:272c-2766 instead emits **two** pieces:28 at the moving
+object's X+1, then29 at the object's X with transfer mode0 (opaque copy).
+Both raw calls use objectY-1; AddMid3:0302-030c stores the exclusive bottom
+as rawY+1. The moving-object X already includes ATMTrapDoor's table offset;
+the extra one-pixel offset of piece28 is a separate drawing adjustment.
+
+The port now uses those two native drawing commands for the flat record.
+The missing51x5 front lip previously exposed the red wall through the open
+slot during that pose; the original copy operation fills it with the floor
+edge. The actual Temple piece29 contains no transparent pixels, so the
+missing piece/offset is the cause here, rather than a new SHAP-alpha decoder
+bug. Its original mode0 is preserved. Other rotation pieces remain masked.
+The existing moving-object clip is applied to both pieces. Drawing order,
+physics, activation, phase advancement, cell restoration and upper/lower
+room projection are unchanged; no room-specific exception is introduced.
+
+```powershell
+.venv\Scripts\python.exe -m tools.probe_trapdoor_drawing --source ..\PoP2-Mac-Code-Recovery --output rendered\trapdoor-drawing.json
+.venv\Scripts\python.exe -m unittest -q tests.test_trapdoor_drawing tests.test_neighbor_scenery tests.test_temple_arrival
+```
+
+The probe executes original10:26ea-2790 for all ten actual tile26 locations
+of levels10-13, low phases1..16 and upper bits0/64:320 comparisons,360
+ordered drawing commands,40 flat poses, zero mismatches. The original phase
+and frame records come from DATA, not the port constants. Level/environment
+headers and the Temple SHPL3500 base3501 are checked. Level bytes remain
+unchanged. Executable, Prince and Temple resource SHA256 values are recorded
+in the local output.
+
+AddMid is a recorded endpoint; the inclusive-bottom conversion is checked
+by static reading of3:0302-030c, not by executing AddMid or QuickDraw. Phase
+and projected X/Y are supplied fixtures. This verifies piece selection,
+positions, modes and order, not full native dirty-cell ordering, actor
+occlusion, pixel equivalence, resource-manager behavior or FrameAdv.
+
+The real hidden-scene regression jumps in room1 away from the trap, observes
+its flat pose and checks the front-edge pixel through the complete scene
+renderer. It then verifies that the tile closes. Substituting the old drawing
+fails with red wall RGB123,41,16 instead of lip RGB66,57,82; the old single
+command also fails the native comparison at low phase10. An asset-free test
+checks the body's extra X offset and opaque front call. Existing linked-room
+tests retain all16 phases and all six upper-panel positions. Intentional
+negative-control failures are not successful tests of the old implementation.
+
+The focused temple and scenery suites pass219 tests (111+108, no skips).
+Dependency, Ruff F/E9, recovery-catalogue and diff checks also pass. Full
+gameplay discovery is not repeated for this drawing-only change. No live game/emulator, original
+resource writes or user save/settings changes are involved.
