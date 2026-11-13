@@ -398,14 +398,20 @@ class LevelTenArrivalTests(unittest.TestCase):
         scene.audio, playing = audio, 197
         caverns.trapdoors.trigger(terrain, terrain.tile(7, 5, 2), 1)
         environment.frame_start()
+        environment.level_events()
         audio.add_sound.assert_not_called()
         playing = None
         environment.frame_start()
+        environment.level_events()
         audio.add_sound.assert_called_once_with(198)
         playing = 198
-        while caverns.trapdoors.bank and caverns.trapdoors.bank[0][3] != -1:
+        for _ in range(20):
+            if caverns.trapdoors.bank[0][3] == -1:
+                break
             scene.sequence_state.sound_events.clear()
             environment.frame_start()
+            environment.level_events()
+        self.assertEqual(caverns.trapdoors.bank[0][3], -1)
         audio.add_sound.assert_called_once_with(198)
         audio.stop_sound.assert_called_once_with(198)
         self.assertEqual(scene.sequence_state.sound_events, [27])

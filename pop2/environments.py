@@ -1298,8 +1298,8 @@ class Temple(Caverns):
         caverns = scene.game.caverns
         if caverns is None:
             return
-        # MakeRubble 5:29e8 advances the trap doors (10:24fa), then ATMLoose
-        # presents them (10:225c), which closes the finished ones.
+        # MakeRubble 5:29e8 advances existing doors before the actors move.
+        # ATMLoose presents them after the actors can trigger new ones.
         if (scene.game.level.number, scene.room_id) == (13, 3):
             from pop2.caverns import advance_flame
 
@@ -1308,10 +1308,6 @@ class Temple(Caverns):
         if (caverns.trapdoors.advance() and audio is not None
                 and not audio.sound_playing(OPEN_CUE) and not audio.sound_playing(LOOP_CUE)):
             audio.add_sound(LOOP_CUE)
-        cues, caverns.trapdoors.drawn = caverns.trapdoors.present(scene.level_map)
-        if cues and audio is not None:
-            audio.stop_sound(LOOP_CUE)
-        scene.sequence_state.sound_events.extend(cues)
         if not caverns.rocks.bank:
             return
         state, motion = scene.sequence_state, scene.terrain_motion
@@ -1346,6 +1342,25 @@ class Temple(Caverns):
         self.jinnee()
         self.altar()
         self.palette_flash(self.scene.sequence_state)
+
+    def level_events(self):
+        changed = super().level_events()
+        if changed:
+            return changed
+        # DrawRoom3 3:324e calls ATMLoose after FrameAdv's actor/row-shake
+        # triggers (2:63e6/6402, 6642). Taking this snapshot at frame_start
+        # erases a newly opened tile without showing its first moving pose.
+        scene = self.scene
+        cues, scene.game.caverns.trapdoors.drawn = scene.game.caverns.trapdoors.present(scene.level_map)
+        if cues:
+            if getattr(scene, 'audio', None) is not None:
+                scene.audio.stop_sound(LOOP_CUE)
+            scene.sequence_state.sound_events.extend(cues)
+            # Presentation restores finished cells. Rebuild their scenery
+            # in this frame too, including panels in linked rooms.
+            room = scene.level_renderer.enter_room(scene.room_id, scene.game.caverns)
+            scene.background, scene.foreground = room.background, room.foreground
+        return False
 
     def altar(self):
         """10:27ba -> 2a62: the Kid at level 13's sacred flame."""
@@ -1765,7 +1780,8 @@ class Temple(Caverns):
         frame = draw_temple_flame(frame, scene.room_id, scene.game.caverns.flame,
                                   level_number=scene.game.level.number)
         frame = draw_trapdoors(frame, scene.room_id, scene.game.caverns.trapdoors.drawn,
-                               scene.level_map, level_number=scene.game.level.number)
+                               scene.level_map, level_number=scene.game.level.number,
+                               art=scene.level_renderer.room(scene.room_id, scene.game.caverns))
         return draw_slide_rocks(frame, scene.room_id, scene.game.caverns.rocks, scene.level_map,
                                 level_number=scene.game.level.number)
 

@@ -397,10 +397,24 @@ def trapdoor_drawing_commands(index, x, bottom):
     return (['back', index, x, bottom, 16],)
 
 
-def draw_trapdoors(frame, room_id, objects, terrain, *, level_number=10):
+def trapdoor_floor_redraw_cells(clip):
+    """ATMTrapDoor 10:24a2's extra MarkFloor rect, then 5:19f8's cells."""
+    left, top, right, bottom = clip
+    left += 25
+    if left >= right or top >= bottom:
+        return ()
+    first, last = (max(0, min(9, value // 51)) for value in (left, right))
+    above, below = (max(-1, min(2, (value - 5) // 120)) for value in (top, bottom))
+    return tuple((column, row) for row in range(above, below + 1)
+                 for column in range(first, last + 1))
+
+
+def draw_trapdoors(frame, room_id, objects, terrain, *, level_number=10, art=None):
     """ATMTrapDoor 10:225c's opening door: the animation piece at its
     offset, within ComputeMobRect's rectangle (height + 1 up, at least to
-    the cell's X + 77 across)."""
+    the cell's X + 77 across). With room art, replay the marked floor buffers
+    over the panels: back-plane floor tops also occlude the rotating piece.
+    """
     # ATMTrapDoor 10:2274-22da projects neighbouring MOBs into this view.
     # In particular, a bottom-row panel above can swing below the top edge.
     offsets = {room_id: 0}
@@ -414,10 +428,12 @@ def draw_trapdoors(frame, room_id, objects, terrain, *, level_number=10):
         return frame
     _program, resources, palette, shapes = room_assets(level_number, room_id)
     frame = frame.copy()
+    floor_cells = set()
     for index, x, y, origin in objects:
         sprite = cavern_command_sprite(['back', index, x, y, 16], resources, palette, shapes)
         right = x + max(sprite.width + 1, origin + 77 - x)
-        clip = (max(x, 0), max(y - sprite.height, 0), min(right, frame.width), min(y + 1, frame.height))
+        clip = (max(x, 0), max(y - sprite.height - 1, 0), min(right, frame.width), min(y + 1, frame.height))
+        floor_cells.update(trapdoor_floor_redraw_cells(clip))
         for command in trapdoor_drawing_commands(index, x, y):
             sprite = cavern_command_sprite(command, resources, palette, shapes)
             px, bottom = command[2:4]
@@ -427,6 +443,10 @@ def draw_trapdoors(frame, room_id, objects, terrain, *, level_number=10):
             if left < end_x and above < end_y:
                 piece = sprite.crop((left - px, above - top, end_x - px, end_y - top))
                 frame.paste(piece, (left, above), piece)
+    if art is not None:
+        records = [record for cell in sorted(floor_cells, key=lambda cell: (-cell[1], cell[0]))
+                   for record in (art.floor_redraw or {}).get(cell, ())]
+        art.draw_floor_records(frame, records, None)
     return frame
 
 
