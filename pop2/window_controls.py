@@ -413,8 +413,8 @@ class WindowControls(InputRouting):
             try:
                 if self.dev_menu.level_number != self.game.level.number:
                     self.load_level(self.dev_menu.level_number)
+                # Scenes played after a warp still count: the player saw them.
                 self.jump_to_screen(destination)
-                self.cutscene_campaign_active = False
             except ValueError as exc:
                 self.dev_menu.error = str(exc)
                 self.render()

@@ -74,16 +74,21 @@ through `start_story_scene` also consult that catalog when unlocking.
 ## Collection and existing saves
 
 All three opening chapters are available immediately. Other
-chapters unlock when the normal campaign actually starts their scene and the
-preceding mandatory story chapters have been reached. Finishing or watching
-every frame is not required. Collection reads retain a chronological prefix;
-an isolated debug flag such as the horse without the earlier chapters is
-ignored. New Game starts with the three opening chapters again.
+chapters unlock when the game actually starts their scene. Finishing or
+watching every frame is not required. Every chapter is a mandatory scene, so a
+scene seen in play also unlocks the chapters before it: in a normal campaign
+they are already there, and the collection stays one story in order. Collection
+reads retain a chronological prefix; an isolated saved key such as the horse
+without the earlier chapters is ignored. New Game starts with the three
+opening chapters again.
 
-A successful F3 room/level warp or retained developer seek suspends collection
-updates for that debug session, including scenes triggered afterward. Starting
-a new game or loading a validated campaign save restores normal admission.
-Gallery browsing and replays never unlock chapters.
+An F3 room/level warp unlocks nothing by itself, but a scene played after it
+counts (the user asked for progress to work with the Dev Tools too): warping
+to level 9 and riding to the temple unlocks the horse and every chapter before
+it, and the viewer reveals them. A save made afterwards keeps them. A retained
+developer playback seek still suspends collection updates until a new game or
+a validated campaign save is loaded. Gallery browsing and replays never unlock
+chapters.
 
 The current collection lives in memory and is saved as a short `cutscenes` list
 inside each `.pop2save` when Save succeeds. Loading another save replaces the
@@ -98,7 +103,7 @@ a validated older save without it admits
 earlier mandatory chapters according to the catalog's completed-level
 thresholds. A level 8 save can also admit the vision from its existing throne
 flags. A level 13 save does not imply the subsequent tower flight was seen.
-An arbitrary developer warp is not used as evidence of campaign progress.
+A developer warp alone is not used as evidence of campaign progress.
 
 ## Presentation and opening boundaries
 

@@ -151,7 +151,7 @@ class CutsceneControls:
         if collection is None:
             collection = self.cutscene_collection = CutsceneCollection()
         before = set(collection.seen)
-        collection.unlock(key)
+        collection.unlock_through(key)
         if not hasattr(self, 'cutscene_fresh'):
             self.cutscene_fresh = set()
         fresh = collection.seen - before

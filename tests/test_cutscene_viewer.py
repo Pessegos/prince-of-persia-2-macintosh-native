@@ -1346,20 +1346,29 @@ class ViewerSceneTests(unittest.TestCase):
             scene.close_game_menu(resume=True)
         self.assertEqual(scene.last_copy_at, 1000.0)
 
-    def test_actual_f3_warp_then_horse_trigger_does_not_unlock_campaign_chapters(self):
+    def test_scene_played_after_an_f3_warp_counts_with_the_story_before_it(self):
+        # The user asked for progress to work with the Dev Tools too: a scene
+        # actually played after a warp was seen. Earlier chapters come with it,
+        # so the collection never has gaps; the warp itself unlocks nothing.
         scene = self.scene
-        scene.cutscene_collection.unlock('voyage', 'discovery', 'carpet', 'vision')
         scene.load_level(9)
         scene.open_dev_mode()
         scene.apply_dev_action('go')
-        self.assertFalse(scene.cutscene_campaign_active)
-        scene.start_temple_ride(lambda: None)
-        self.assertNotIn('horse', scene.cutscene_collection.seen)
-        scene.new_game()
         self.assertTrue(scene.cutscene_campaign_active)
         self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
         scene.start_temple_ride(lambda: None)
-        self.assertNotIn('horse', scene.cutscene_collection.seen)
+        earlier = {'voyage', 'discovery', 'carpet', 'vision', 'horse'}
+        self.assertEqual(scene.cutscene_collection.seen, OPENING_KEYS | earlier)
+        self.assertTrue(earlier <= scene.cutscene_fresh)                  # all of them are revealed
+        self.assertNotIn('tower', scene.cutscene_collection.seen)
+        scene.new_game()
+        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
+
+    def test_developer_playback_seek_still_unlocks_nothing(self):
+        scene = self.scene
+        scene.cutscene_campaign_active = False                                # as a playback seek leaves it
+        scene.start_temple_ride(lambda: None)
+        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
 
     def test_natural_story_starts_unlock_each_chapter_and_new_game_resets_the_collection(self):
         scene = self.scene
