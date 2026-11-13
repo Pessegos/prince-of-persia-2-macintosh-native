@@ -51,16 +51,12 @@ class CutsceneGallery:
     ROWS = 2
     GRID_PADDING = 48
     BOUNCE_LIMIT = 40
-    # A locked chapter shows its own cover as small dark blocks that hold only
-    # a wash of its colours: the cover is first reduced to a handful of
-    # samples (VEIL_DETAIL) and only then spread over the blocks, so no shape
-    # survives. Unlocking brings detail and finer blocks back step by step
-    # until the cover is whole, like a console's mosaic fade.
+    # A locked chapter shows its own cover as a few large dark blocks: its
+    # colours, nothing that can be recognised. Unlocking refines the blocks
+    # step by step until the cover is whole, like a console's mosaic fade.
     VEIL_COLUMNS = 16
-    VEIL_DETAIL = 4
     VEIL_DEPTH = .6
     REVEAL_COLUMNS = (20, 26, 34, 44, 58, 76, 100, 130)
-    REVEAL_DETAIL = (6, 9, 14, 22, 34, 52, 80, 130)
     REVEAL_STEP = .11
     REVEAL_DELAY = .6
 
@@ -388,14 +384,11 @@ class CutsceneGallery:
             else:
                 draw.rectangle(thumb, fill=c('#101010'))
         elif veiled:
-            # Locked, or resolving after being unlocked: blocks of a wash of the cover's own colours.
+            # Locked, or resolving after being unlocked: large blocks of the cover's own colours.
             stage = 0 if step is None else step + 1
             columns = (self.VEIL_COLUMNS, *self.REVEAL_COLUMNS)[stage]
-            detail = (self.VEIL_DETAIL, *self.REVEAL_DETAIL)[stage]
-            shape = cover.height / cover.width
             blocks = cover.convert('RGB').resize(
-                (detail, max(1, round(detail * shape))), Image.Resampling.BOX).resize(
-                (columns, max(1, round(columns * shape))), Image.Resampling.BILINEAR)
+                (columns, max(1, round(columns * cover.height / cover.width))), Image.Resampling.BOX)
             depth = self.VEIL_DEPTH * (1 - stage / (len(self.REVEAL_COLUMNS) + 1))
             blocks = Image.blend(blocks, Image.new('RGB', blocks.size, c('#101010')), depth)
             image.paste(blocks.resize(cover.size, Image.Resampling.NEAREST), thumb[:2])

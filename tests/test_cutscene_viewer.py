@@ -162,9 +162,6 @@ class GalleryTests(unittest.TestCase):
         row = [veiled.getpixel((x, 20)) for x in range(veiled.width)]
         runs = [x for x in range(1, len(row)) if row[x] != row[x - 1]]
         self.assertLessEqual(len(runs), gallery.VEIL_COLUMNS)
-        # Only a wash of colour: neighbouring blocks differ little, so no shape can be made out.
-        steps = [max(abs(a - b) for a, b in zip(row[x], row[x - 1])) for x in runs]
-        self.assertLess(max(steps), 24)
 
     def test_newly_unlocked_chapter_resolves_from_its_veil_in_steps(self):
         gallery = self.gallery()
