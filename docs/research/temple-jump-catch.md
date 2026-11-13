@@ -88,7 +88,8 @@ held-gate assertions; none was removed or relaxed. Search output remains in
 ## Validation and handoff
 
 Final full discovery, with each of242 modules in a separate process, ran4110
-cases in shared-desktop mode; ten exclusive-desktop cases were skipped. One
+cases in shared-desktop mode; nine exclusive-desktop cases were skipped,
+plus one enemy-profile original-resource check requiring POP2_RESEARCH_DIR. One
 real-time SDL sustain test failed under parallel CPU load; repeating its entire
 76-test audio module alone passed. All other modules passed. An earlier
 monolithic4108-case run caught the camera-timing regressions and obsolete gate
