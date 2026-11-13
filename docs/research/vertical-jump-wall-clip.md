@@ -14,13 +14,21 @@ The wall-response pose50 is now inside the rear wall; align_wall moves the
 foot farther to531. The next horizontal cut enters room11, where another
 wall alignment displaces him again.
 
-The port's existing swept collision safeguard now also checks the proposed
-forced translation of the PREVIOUS body against solid walls on either side.
+For the unarmed Prince's vertical jumps (selected SEQS14/28), the port's
+existing swept collision safeguard now also checks the proposed forced
+translation of the PREVIOUS body against solid walls on either side.
 If a wider pose cannot fit between the gate and rear wall, it still plays the
 ordinary SEQS47 bump, with its displacement limited by that wall. Checking
 only solid walls here avoids treating the same overlapping gate as a second
 opposing constraint. Gates, rocks and scythes retain their ordinary initial
 collision admission. No position clamp for a named room is introduced.
+
+The initial broad implementation also checked other collision responses.
+Full discovery exposed unwanted changes to short steps, a crawl hold and a
+running skeleton's bump selection. The final guard is limited to unarmed
+player vertical jumps; the existing response calculations for those other
+families are restored. Their three failing regressions pass without changing
+any test expectations.
 
 This is a deliberate host collision safeguard (A), not a recovered native
 rule or a claim that the complete original Collide/Catch scheduler was run.

@@ -1524,7 +1524,8 @@ class RooftopPhysics:
                                               collision_bounds, wall_old_bounds, collision_facing,
                                               physical_row=motion.row, state=state))
         if corrected != state.target_x:
-            if wall_old_bounds is not None:
+            if (wall_old_bounds is not None and state.actor_type in (0, None)
+                    and not sword_drawn and state.source_sequence_id in (14, 28)):
                 # A wider pose can meet a gate in front while a wall touches
                 # the preceding body behind. Do not push that body through
                 # the rear wall to make the wider pose fit; still play Collide's
