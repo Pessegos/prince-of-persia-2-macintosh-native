@@ -983,12 +983,15 @@ class SaveSceneTests(unittest.TestCase):
                     patch.object(scene.canvas, 'winfo_height', return_value=height):
                 scene.redraw_save_menu()
                 photo = scene.image_ref
-                for point in ((300, 302), (-1, -1), (60, 60)):
-                    self.assertTrue(browser.hover(258, 280))
+                # The name stands under the preview, or beside it on the wide page.
+                left, top, _right, bottom = browser.RENAME
+                self.assertEqual(browser.RENAME == (238, 270, 472, 296), width != 3440)
+                for point in ((left + 62, bottom + 6), (-1, -1), (60, 60)):
+                    self.assertTrue(browser.hover(left + 20, top + 10))
                     scene.redraw_save_menu()
                     hovered = ImageTk.getimage(photo).convert('RGB')
                     self.assertIsNone(ImageChops.difference(hovered, scene.save_menu_frame[1]).getbbox())
-                    self.assertFalse(browser.hover(350, 280))
+                    self.assertFalse(browser.hover(left + 112, top + 10))
                     self.assertTrue(browser.hover(*point))
                     scene.redraw_save_menu()
                     actual = ImageTk.getimage(photo).convert('RGB')
