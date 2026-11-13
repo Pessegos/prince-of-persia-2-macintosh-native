@@ -143,7 +143,35 @@ class GalleryTests(unittest.TestCase):
         gallery.preview.assert_called_once_with(0)
         self.assertNotIn(CHAPTERS[1].title, font.values)
         self.assertNotIn(CHAPTERS[2].title, font.values)
+        self.assertIn('Chapter 2', font.values)
         self.assertEqual(gallery.index, 0)
+
+    def test_locked_chapters_show_a_closed_gate_in_the_theme_s_shades(self):
+        from PIL import ImageColor
+
+        from pop2 import menu_theme
+        from pop2.cutscene_gallery import locked_cover
+
+        covers = {}
+        for name, theme in menu_theme.THEMES.items():
+            with self.subTest(theme=name):
+                cover = covers[name] = locked_cover(146, 82, name)
+                self.assertEqual(cover.size, (146, 82))
+                colours = {colour[:3]: count for count, colour in cover.getcolors()}
+                self.assertLessEqual(len(colours), 14)                    # a few hard shades, nothing blended
+                shade = {role: ImageColor.getrgb(theme.colour(role)) for role in
+                         ('row', 'well_dark', 'muted', 'muted_light', 'row_edge')}
+                for role, colour in shade.items():
+                    self.assertIn(colour, colours, role)
+                self.assertGreater(colours[shade['row']], 146 * 82 // 3)  # mostly wall
+                # Bars cross the dark opening from top to bottom, evenly spaced.
+                row = [cover.getpixel((x, 50))[:3] for x in range(146)]
+                bars = [x for x in range(146) if row[x] == shade['muted_light']]
+                self.assertGreaterEqual(len(bars), 5)
+                self.assertEqual(len({b - a for a, b in zip(bars, bars[1:])}), 1)
+                self.assertEqual([cover.getpixel((x, 30))[:3] == shade['muted_light'] for x in bars], [True] * len(bars))
+                self.assertEqual(cover.getpixel((2, 79))[:3], ImageColor.getrgb(theme.colour('row_dark')))  # floor
+        self.assertEqual(len({cover.tobytes() for cover in covers.values()}), len(covers))
 
     def test_developer_access_is_read_only_and_caches_do_not_leak_to_normal_mode(self):
         gallery = self.gallery()

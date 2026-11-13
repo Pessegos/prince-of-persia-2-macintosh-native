@@ -93,9 +93,9 @@ is. The saves page uses the extra width instead (`SaveBrowser.wide_layout`):
 from about 16:9 its panel is wider, the preview is larger and has a save
 picture's own shape, and the save's name and details stand beside the preview
 instead of under it. The buttons keep their sizes; the page's two actions
-move to its right edge. A window wider than 16:9 shows that same page, centred:
-there is nothing more to put on it, and stretching it only made the list and
-the buttons oversized. Narrower windows, 16:10 among them, keep the classic
+move to its right edge. A window wider than 16:9 gives the list a little more
+room, so that long names fit, and then shows the page centred: stretching it
+further only made the list and the buttons oversized. Narrower windows, 16:10 among them, keep the classic
 page. The page is then drawn over the whole window, with the
 game's picture centred behind it, and one unit is as wide as it is tall. Its
 rectangles (`PANEL`, `LIST`, `PREVIEW`, ...) are properties that follow the

@@ -22,8 +22,11 @@ Clicking a card selects it on release; a double click on that same card starts
 it. A drag, scrolling, leaving the canvas or losing focus clears the pending
 click, so browsing cannot accidentally start a film. Arrow keys and Tab also
 navigate the cards; Enter remains available without an on-screen key legend.
-Escape returns to the F1 menu. Locked chapters show a generic numbered card;
-neither their image nor their story title is drawn.
+Escape returns to the F1 menu. Locked chapters show a numbered card with a
+closed gate in a wall (`locked_cover`, drawn by code in the menu theme's
+shades, with a faint light behind the bars); neither their image nor their
+story title is drawn. The page takes the level's menu theme
+(docs/MENU_THEMES.md).
 
 The catalog in `pop2/cutscenes.py` includes Prologue, Title and The Palace
 Escape from the opening, voyage after level 1,
