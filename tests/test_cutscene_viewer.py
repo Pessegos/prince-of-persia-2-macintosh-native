@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 from pop2.cutscenes import CHAPTERS, CHAPTER_KEYS, OPENING_KEYS, CutsceneCollection
 from pop2 import menu_theme
@@ -103,21 +103,25 @@ class GalleryTests(unittest.TestCase):
         self.assertEqual(gallery.key('Return'), 'cutscene_play')
         self.assertEqual(gallery.key('Escape'), 'cutscene_back')
 
-    def test_double_click_plays_only_the_same_unlocked_card_and_not_a_drag(self):
+    def test_one_click_plays_an_unlocked_card_but_not_a_locked_one_or_a_drag(self):
+        # The user asked for one click instead of the earlier double click.
         gallery = self.gallery()
         rect = gallery.card_rect(0)
         point = (rect[0] + 20, rect[1] + 20)
-        self.assertEqual(gallery.double_click(*point), 'changed')
+        gallery.index = 3
+        self.assertEqual(gallery.click(*point), 'cutscene_play')
+        self.assertEqual(gallery.index, 0)
+        gallery.begin_drag(*point)                                    # press and release in place
+        self.assertEqual(gallery.end_drag(*point), 'cutscene_play')
         self.assertEqual(gallery.double_click(*point), 'cutscene_play')
         locked = gallery.card_rect(1)
         locked_point = locked[0] + 20, locked[1] + 20
-        gallery.click(*locked_point)
+        self.assertEqual(gallery.click(*locked_point), 'changed')     # selected, with its message
+        self.assertEqual(gallery.index, 1)
         self.assertEqual(gallery.double_click(*locked_point), 'changed')
-        gallery.click(*point)
         gallery.begin_drag(*point)
-        gallery.end_drag(point[0] - 20, point[1])
-        rect = gallery.card_rect(0)
-        self.assertEqual(gallery.double_click(rect[0] + 20, rect[1] + 20), 'changed')
+        self.assertEqual(gallery.end_drag(point[0] - 20, point[1]), 'changed')   # a drag only scrolls
+        self.assertEqual(gallery.index, 1)
 
     def test_gallery_has_no_play_back_buttons_or_keyboard_hint(self):
         gallery, font = self.gallery(), CaptionFont()
@@ -129,7 +133,7 @@ class GalleryTests(unittest.TestCase):
         self.assertIsNone(gallery.hit(50, 35))
         self.assertIsNone(gallery.hit(gallery.PANEL[2] - 40, 35))
 
-    def test_a_double_click_on_a_different_card_only_selects_it(self):
+    def test_a_click_on_a_different_locked_card_only_selects_it(self):
         gallery = self.gallery()
         first, second = gallery.card_rect(0), gallery.card_rect(2)
         gallery.click(first[0] + 20, first[1] + 20)
@@ -211,6 +215,18 @@ class GalleryTests(unittest.TestCase):
             self.assertGreaterEqual(len(glow) * gallery.REVEAL_STEP, 1.2)     # seconds: not a flash
             edge = [frame.getpixel((6, 40)) for frame in glow]                # inside a thick border only
             self.assertEqual(edge[:gallery.GLINT_HOLD], [bright] * gallery.GLINT_HOLD)
+            # Meanwhile a band of light crosses the cover itself, left to right, then is gone.
+            plain = Image.frombytes('RGB', size, seen[-1]).crop((10, 10, size[0] - 10, 150))
+            lit = []
+            for frame in glow:
+                difference = ImageChops.difference(frame.crop((10, 10, size[0] - 10, 150)), plain).getbbox()
+                lit.append(None if difference is None else (difference[0] + difference[2]) / 2)
+            sweep = lit[:gallery.GLINT_SWEEP]
+            self.assertTrue(all(x is not None for x in sweep[1:-1]))
+            centres = [x for x in sweep if x is not None]
+            self.assertEqual(centres, sorted(centres))
+            self.assertGreater(centres[-1] - centres[0], plain.width / 2)
+            self.assertEqual(lit[gallery.GLINT_SWEEP:], [None] * (len(glow) - gallery.GLINT_SWEEP))
             cooling = [frame.getpixel((1, 40)) for frame in glow]
             self.assertEqual((cooling[0], cooling[-1]), (bright, accent))
             self.assertGreaterEqual(len(set(cooling)), gallery.GLINT_COOL)    # through several shades
@@ -747,11 +763,10 @@ class ViewerSceneTests(unittest.TestCase):
             x, y = (rect[0] + 20 - 1) * 2, (rect[1] + 20) * 2 + 216
             event = SimpleNamespace(x=x - strip.region[0], y=y - strip.region[1], num=1)
             strip.forward(scene.dev_click)(event)
-            strip.forward(scene.dev_release)(event)
-            self.assertEqual(gallery.last_clicked, 0)
-            self.assertIsNone(scene.cutscene_replay)
+            self.assertIsNone(scene.cutscene_replay)                  # the press alone starts nothing
             self.assertIs(scene._cutscene_gallery_strip, strip)
-            strip.forward(scene.dev_double_click)(event)
+            strip.forward(scene.dev_release)(event)                   # one click plays the card
+            self.assertEqual(gallery.last_clicked, 0)
             self.assertIsNotNone(scene.cutscene_replay)
             self.assertIsNone(scene._cutscene_gallery_strip)
             self.assertFalse(strip.canvas.winfo_exists())
@@ -846,9 +861,8 @@ class ViewerSceneTests(unittest.TestCase):
             event = SimpleNamespace(x=(x - 1) * scale, y=y * scale, num=1)
             self.assertEqual(gallery.hit(*scene.dev_pointer(event)), 100)
             scene.dev_click(event)
-            scene.dev_release(event)
             self.assertIsNone(scene.cutscene_replay)
-            scene.dev_double_click(event)
+            scene.dev_release(event)
             self.assertIsNotNone(scene.cutscene_replay)
             size, position = fit_viewport(2560, 1080)
             self.assertEqual(ImageTk.getimage(scene.image_ref).size, size)
@@ -975,8 +989,9 @@ class ViewerSceneTests(unittest.TestCase):
         scene.dev_pointer_leave(SimpleNamespace())
         self.assertIsNone(gallery.drag)
 
-    def test_double_click_binding_starts_the_film_without_immediately_pausing_it(self):
+    def test_one_click_starts_the_film_and_a_habitual_double_click_does_not_pause_it(self):
         scene = self.scene
+        scene.audio = Mock()
         gallery = self.open_viewer()
         self.assertIn('dev_double_click', scene.canvas.bind('<Double-Button-1>'))
         before = self.snapshot()
@@ -984,12 +999,20 @@ class ViewerSceneTests(unittest.TestCase):
         point = rect[0] + 20, rect[1] + 20
         with patch.object(scene, 'dev_pointer', return_value=point):
             scene.dev_click(SimpleNamespace(num=1))
-            scene.dev_release(SimpleNamespace(num=1))
             self.assertIsNone(scene.cutscene_replay)
+            scene.dev_release(SimpleNamespace(num=1))
+            replay = scene.cutscene_replay
+            self.assertIsNotNone(replay)
+            scene.audio.play_ui.assert_called_with('click')
+            # The second press and release of a double click arrive while the film is already playing.
             scene.dev_double_click(SimpleNamespace(num=1))
             scene.dev_release(SimpleNamespace(num=1))
-        self.assertIsNotNone(scene.cutscene_replay)
-        self.assertFalse(scene.cutscene_replay.paused)
+            self.assertIs(scene.cutscene_replay, replay)
+            self.assertFalse(replay.paused)
+            # Later, a click pauses it as before.
+            replay.started_at -= 1
+            scene.dev_click(SimpleNamespace(num=1))
+            self.assertTrue(replay.paused)
         self.assertEqual(self.snapshot(), before)
 
     def test_every_chapter_finishes_in_the_gallery_without_touching_the_live_world(self):
@@ -1077,6 +1100,7 @@ class ViewerSceneTests(unittest.TestCase):
         scene.dev_key_press(event)
         self.assertFalse(original.paused)
         scene.dev_key_release(event)
+        original.started_at -= 1                                      # past the double-click grace
         with patch.object(scene, 'dev_pointer', return_value=(400, 375)):
             scene.dev_click(SimpleNamespace(num=1))
         self.assertIs(scene.cutscene_replay, original)

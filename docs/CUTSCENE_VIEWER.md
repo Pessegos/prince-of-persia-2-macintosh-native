@@ -18,9 +18,11 @@ move both rows horizontally without snapping to cards or pages; dragging moves
 them directly. Chapters fill each column top-to-bottom before continuing to
 the right, keeping the two-row strip dense when later chapters come into view. Left/Right and Up/Down follow the grid and
 reveal the selection when necessary; Home/End select the first/last chapter.
-Clicking a card selects it on release; a double click on that same card starts
-it. A drag, scrolling, leaving the canvas or losing focus clears the pending
-click, so browsing cannot accidentally start a film. Arrow keys and Tab also
+One click on an unlocked card selects it and starts it, on release; a locked
+card is only selected. A drag, scrolling, leaving the canvas or losing focus
+clears the pending click, so browsing cannot accidentally start a film. For
+half a second after a film starts a further click is ignored, so that a double
+click made out of habit does not pause it at once. Arrow keys and Tab also
 navigate the cards; Enter remains available without an on-screen key legend.
 Escape returns to the F1 menu. Locked chapters show a numbered card whose
 picture is the chapter's own cover reduced to sixteen columns of darkened
@@ -32,7 +34,9 @@ halfway. As it starts to resolve the
 menu's `reveal` sound plays (docs/AUDIO_RECOVERY.md), and when the cover is
 whole the card's border glows for about a second and a half: thick and bright
 at first, cooling through a few shades to the accent colour, then thinning
-back to the ordinary selected border.
+back to the ordinary selected border. During the first second a hard-edged
+band of light, with a thin one behind it, crosses the cover from left to
+right, leaning like a reflection on glass.
 Chapters admitted from a loaded save, and the developer viewer, do not animate.
 The unlocks are kept in each saved game, and developer level or room jumps
 never unlock a chapter, so a chapter already seen in the loaded game is not
@@ -218,6 +222,6 @@ input/lifecycle behavior. `tests.test_display_refresh` checks monitor/device
 selection, current-mode frequency, Windows ABI sizes and failure fallbacks.
 Scheduler tests include the paint-idle phase, timer cancellation and a simulated
 120-to-240 Hz monitor change. Synthetic scene callbacks cover
-the first click, double-click binding and trailing release without pausing or
-changing the underlying game. Physical desktop double-click timing is not part
+the click that starts a film, a habitual double click's second press and
+trailing release without pausing or changing the underlying game. Physical desktop double-click timing is not part
 of the shared-desktop suite.

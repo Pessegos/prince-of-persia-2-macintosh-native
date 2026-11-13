@@ -1456,7 +1456,10 @@ class WindowControls(InputRouting):
 
     def dev_click(self, event):
         if getattr(self, 'cutscene_replay', None) is not None:
-            if getattr(event, 'num', 1) == 1:
+            # One click on a card starts its film. The second press of a
+            # double click made out of habit must not pause it at once.
+            fresh = time.perf_counter() - self.cutscene_replay.started_at < 0.5
+            if getattr(event, 'num', 1) == 1 and not fresh:
                 point = self.dev_pointer(event)
                 if point is not None:
                     self.pause_cutscene_replay(not self.cutscene_replay.paused)
@@ -1514,7 +1517,10 @@ class WindowControls(InputRouting):
         viewer = self.active_cutscene_gallery() if hasattr(self, 'active_cutscene_gallery') else None
         if viewer is not None and viewer.drag is not None and getattr(event, 'num', 1) == 1:
             point = self.dev_pointer(event)
-            self.apply_game_action(viewer.end_drag(*(point if point is not None else (-1, -1))))
+            action = viewer.end_drag(*(point if point is not None else (-1, -1)))
+            if action == 'cutscene_play':
+                self.play_menu_sound('click')
+            self.apply_game_action(action)
             self.canvas.configure(cursor='')
             return 'break'
         gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)

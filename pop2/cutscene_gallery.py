@@ -67,6 +67,7 @@ class CutsceneGallery:
     REVEAL_GLINT = 14
     GLINT_HOLD = 4      # steps at full brightness
     GLINT_COOL = 5      # steps from bright to the accent colour
+    GLINT_SWEEP = 8     # steps a band of light takes to cross the cover
 
     def layout(self, size, *, visible=False):
         """Uniform UI scale; extra width changes layout rather than stretching it."""
@@ -264,12 +265,7 @@ class CutsceneGallery:
         return 'cutscene_play' if self.unlocked else 'changed'
 
     def double_click(self, x, y):
-        target = self.hit(x, y)
-        if (target is not None and target >= 100 and self.drag is None
-                and self.last_clicked == target - 100):
-            self.index = target - 100
-            self.last_clicked = None
-            return self.activate()
+        # One click already plays a card; a second press is only another click.
         return self.click(x, y)
 
     def key(self, key, backwards=False, char='', control=False):
@@ -317,11 +313,12 @@ class CutsceneGallery:
             self.last_clicked = None
             return 'changed'
         if target >= 100:
+            # One click selects the card and plays it; a locked one is only selected.
             self.index = target - 100
             self.last_clicked = self.index
             self.focus = 0
             self.error = ''
-            return 'changed'
+            return self.activate()
         if target in (3, 4):
             self.wheel(-1 if target == 3 else 1)
             return 'changed'
@@ -428,6 +425,18 @@ class CutsceneGallery:
             bright, accent = (tuple(int(c(colour)[i:i + 2], 16) for i in (1, 3, 5)) for colour in ('#eeeeee', '#f4d873'))
             shade = tuple(round(a + (b - a) * cool) for a, b in zip(bright, accent))
             width = 4 if glint < self.GLINT_HOLD + self.GLINT_COOL - 2 else 3
+            if glint < self.GLINT_SWEEP and cover is not None:
+                # A band of light crosses the cover from left to right, leaning like a
+                # reflection on glass, with a thin second one behind it. Hard-edged.
+                wide, tall = cover.size
+                lean = tall * .6
+                head = -wide * .25 + (wide * 1.5 + lean) * (glint + .5) / self.GLINT_SWEEP
+                shine = Image.new('L', cover.size, 0)
+                pen = ImageDraw.Draw(shine)
+                for offset, breadth in ((0, wide * .16), (wide * .23, wide * .04)):
+                    right, left = head - offset, head - offset - breadth
+                    pen.polygon(((left, 0), (right, 0), (right - lean, tall), (left - lean, tall)), fill=90)
+                image.paste(Image.new('RGBA', cover.size, bright + (255,)), thumb[:2], shine)
             draw.rectangle((0, 0, size[0] - 1, size[1] - 1), width=stroke * width, outline=shade)
         self.card_cache[key] = image
         return image

@@ -39,8 +39,9 @@ class MenuPcmTests(unittest.TestCase):
         self.assertTrue(0.0075 < PEAK['hover'] <= 0.03)
         self.assertTrue(PEAK['hover'] < PEAK['click'] <= 0.06)
         self.assertTrue(PEAK['click'] < PEAK['reveal'] <= 0.12)           # heard rarely, so it may ring
-        self.assertTrue(0.02 < DURATION['hover'] <= 0.1)
-        self.assertTrue(DURATION['hover'] < DURATION['click'] <= 0.15)
+        self.assertTrue(0.02 < DURATION['hover'] <= 0.06)                 # nearer a click than a note
+        self.assertTrue(DURATION['hover'] < DURATION['click'] <= 0.08)
+        self.assertTrue(PEAK['hover'] <= 0.015 and PEAK['click'] <= 0.03) # the second round was still too much
         self.assertEqual(len(HOVER_NOTES), 1)                             # one note, never a tune
 
     def test_each_sound_is_a_plucked_note_that_dies_away_without_hiss_or_thump(self):
@@ -59,9 +60,9 @@ class MenuPcmTests(unittest.TestCase):
                     loud = np.sqrt((samples[:3 * tenth] ** 2).mean())
                     tail = np.sqrt((samples[-tenth:] ** 2).mean())
                     self.assertLess(tail, loud / 20)
-                    # Dull, not bright: the note itself carries the sound, not its overtones.
+                    # Soft, not bright or hissy: the note itself carries the sound.
                     centroid = (energy * frequencies).sum() / energy.sum()
-                    self.assertLess(centroid, 1000)
+                    self.assertLess(centroid, 1400)
 
     def test_hover_note_is_in_tune_at_every_rate(self):
         import numpy as np

@@ -76,6 +76,7 @@ class CutsceneReplay:
     audio: object
     last_at: float
     paused: bool = False
+    started_at: float = 0.0
 
 
 def chapter_player(chapter, assets, audio=None):
@@ -414,7 +415,8 @@ class CutsceneControls:
             self.render()
             return
         self.cancel_cutscene_gallery_tick()
-        self.cutscene_replay = CutsceneReplay(chapter, player, audio, time.perf_counter())
+        now = time.perf_counter()
+        self.cutscene_replay = CutsceneReplay(chapter, player, audio, now, started_at=now)
         self.pause_resume_keys.update(self.window_keys_down)
         self.render()
         self.schedule_cutscene_replay()
