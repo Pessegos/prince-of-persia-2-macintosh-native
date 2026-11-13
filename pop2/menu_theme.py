@@ -11,7 +11,6 @@ the level art but contain none of the game's own pictures, so they need no
 imported resources.
 """
 
-import math
 import os
 import random
 from dataclasses import dataclass, field
@@ -665,40 +664,41 @@ def _studs_frame(theme, size, fill):
     return picture
 
 
-# The invaders' serpent sign, large, as it is left on the palace walls: the
-# neck curls over and tucks the head back inside, above a coil that thins to
-# its tail.
+# The invaders' serpent sign, large, drawn after the one daubed on the palace
+# walls: an uneven brush line, not a neat curve. The head curls back inside the
+# upper loop; the neck runs down into a wide, flattened coil that thins to its
+# tail. Each point is the middle of the line and half its thickness there.
+_SERPENT = (
+    (31.0, 13.0, 0.8), (33.0, 11.5, 1.6), (34.0, 9.0, 2.2), (34.5, 6.5, 3.2), (33.0, 4.0, 2.6),
+    (30.0, 2.3, 2.0), (25.0, 1.8, 2.0), (20.5, 3.0, 2.3), (18.5, 6.0, 2.8), (19.5, 10.0, 2.8),
+    (21.5, 14.0, 2.5), (24.0, 17.5, 2.3), (28.5, 20.5, 2.2), (33.0, 23.5, 2.3), (36.0, 27.5, 2.6),
+    (36.5, 32.5, 2.2), (34.0, 37.5, 2.4), (29.0, 42.0, 2.3), (22.0, 44.8, 2.0), (14.0, 45.0, 2.2),
+    (7.5, 42.0, 2.6), (3.5, 37.0, 2.8), (3.0, 31.0, 2.8), (5.5, 26.0, 2.6), (11.0, 23.0, 2.2),
+    (18.0, 22.8, 2.0), (23.0, 25.0, 2.3), (25.5, 29.5, 2.2), (25.5, 34.0, 2.0), (22.5, 37.3, 1.9),
+    (17.0, 38.0, 1.8), (13.0, 36.0, 1.9), (12.0, 33.0, 1.8), (14.0, 30.8, 1.5), (17.5, 30.5, 1.1),
+    (19.5, 31.5, 0.6),
+)
+
+
 def _serpent_mask(height):
-    scale = height / 30.0
-    image = Image.new('L', (round(22 * scale), height), 0)
+    scale = height / 48.0
+    image = Image.new('L', (round(40 * scale), height), 0)
     draw = ImageDraw.Draw(image)
-    body = []
-    for step in range(37):                       # the head end, curling inwards
-        angle = 60 - step * 2.5
-        radius = 2.8 + (5 - 2.8) * step / 36
-        body.append((14 + radius * math.cos(math.radians(angle)), 8 + radius * math.sin(math.radians(angle))))
-    for step in range(1, 75):                    # over the top and down the left
-        angle = math.radians(-30 - step * 2.5)
-        body.append((14 + 5 * math.cos(angle), 8 + 5 * math.sin(angle)))
-    coil = [(10 + (8 - step * 0.026) * math.cos(math.radians(-40 + step * 2.5)),
-             21 + (8 - step * 0.026) * math.sin(math.radians(-40 + step * 2.5))) for step in range(233)]
-    (x0, y0), (x1, y1) = body[-1], coil[0]
-    body += [(x0 + (x1 - x0) * step / 40, y0 + (y1 - y0) * step / 40) for step in range(1, 40)]   # the neck
-    body += coil
-    for index, (x, y) in enumerate(body):
-        left = len(body) - 1 - index
-        half = 1.05 * scale * (min(1.0, 0.25 + left / 110.0))     # thinner towards the tail
-        draw.ellipse((x * scale - half, y * scale - half, x * scale + half, y * scale + half), fill=255)
-    # The head: a short wedge, a little wider than the neck, pointing back inwards.
-    x, y = body[0]
-    ahead = (-math.sin(math.radians(60)), math.cos(math.radians(60)))
-    across = (-ahead[1], ahead[0])
-
-    def at(forward, sideways):
-        return ((x + ahead[0] * forward + across[0] * sideways) * scale,
-                (y + ahead[1] * forward + across[1] * sideways) * scale)
-
-    draw.polygon((at(-1.0, 1.05), at(0.4, 1.55), at(2.6, 0), at(0.4, -1.55), at(-1.0, -1.05)), fill=255)
+    rng = random.Random(0x5E)
+    points = (_SERPENT[0],) + _SERPENT + (_SERPENT[-1],)
+    wobble = 1.0
+    for index in range(1, len(points) - 2):
+        before, start, end, after = points[index - 1:index + 3]
+        for step in range(16):
+            t = step / 16.0
+            # A curve through the points (Catmull-Rom), so the line has no corners.
+            x, y, half = (0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t
+                                 + (3 * b - a - 3 * c + d) * t ** 3)
+                          for a, b, c, d in zip(before, start, end, after))
+            if step % 4 == 0:
+                wobble = rng.uniform(0.88, 1.12)       # the brush pressed unevenly
+            half = max(0.5, half * wobble) * scale
+            draw.ellipse((x * scale - half, y * scale - half, x * scale + half, y * scale + half), fill=255)
     return image
 
 
@@ -733,7 +733,7 @@ def watermark(image, rect, point=None):
         mask = _marks[key]
     bands = image.crop(box).convert('RGB').split()
     toward = _rgb(theme.mark)
-    for colour in {_rgb(theme.colour(role)) for role in ('panel', 'row', 'row_dark', 'selected', 'hover', 'well', 'well_dark')}:
+    for colour in {_rgb(theme.colour(role)) for role in ('panel', 'row', 'row_dark', 'selected', 'hover')}:
         same = mask
         for band, value in zip(bands, colour):
             table = [0] * 256
