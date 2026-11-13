@@ -42,8 +42,8 @@ LEVEL_12_GATES = ['leapR11', 'leapcatchL20', 'leapL5', 'runR5', 'runL5', 'hopcat
                   'runL8', 'hopcatchR', 'climb', 'hopcatchR', 'climb', 'climb', 'leapcatchR11',
                   'climb', 'climb', 'climb', 'climb', 'hopcatchR', 'leapcatchL11', 'tapL',
                   'hopcatchR', 'runL5', 'leapcatchR5', 'leapR11', 'jump', 'tapL', 'climb',
-                  'hopR', 'runR11', 'hopcatchL', 'leapcatchL20', 'tapL', 'leapcatchL20',
-                  'climb', 'leapcatchR5']
+                  'hopR', 'runR11', 'hopcatchL', 'leapcatchL20', 'tapL', 'runL8',
+                  'leapcatchL11', 'hopcatchL', 'leapcatchR5']
 
 def blades_exported(number):
     path = ASSET_DIR / f'temple_level{number}.json'

@@ -18,9 +18,15 @@ preceding position. Downward Cut **6:48f2-4902** subtracts360 and recomputes
 GetRow. The port instead cut after Move, then advanced the new room's floor
 inside Falling in that same tick. That admitted the following frame's grip.
 
-The shared falling-player downward cut now precedes velocity movement.
-At the reproduced boundary, Y439 moves to445 in the old room; the next tick
-cuts to85 before moving to97. In the supplied standing jump, the Prince now
+The shared falling-player downward cut now follows Falling, so GetRow's
+result belongs to the following tick, as it does in the original. The host
+retains its existing camera timing: Y439 moves to445, then cuts to85 in the
+same tick. This is a deliberate host scheduling tolerance, not full native
+FrameAdv order. An initial implementation moved the camera check before
+Move too; it changed the first visible harbor landing pose and the head's
+activation timing in an approved ruins route. Keeping the existing camera
+event tick preserves those behaviors while correcting the floor state.
+In the supplied standing jump, the Prince now
 misses the grip and dies in room10. A real-key running jump from X100 over
 the intact middle tile still reaches room10's upper platform alive.
 
@@ -33,7 +39,7 @@ controls pass with the corrected scheduling. No collapse expectation weakened.
 
 Falling **6:011e-0120** rejects Y-floor >=3, then **6:0122-012e** admits
 Y-floor >=-48. The resulting interval is **[-48,3)**. The previous port
-included3, granting a final extra grip attempt. The resource-free regression
+included3 in Falling modes4/9, granting a final extra grip attempt. The resource-free regression
 now distinguishes accepted2 from rejected3. Mode3 calls raw Catch directly;
 its existing host admission at3 is retained and tested separately. Full mode3
 height admission remains outside this caller correction.
@@ -70,3 +76,11 @@ for any further control investigation.
 Tests isolate user data; source videos and extracted frames remain ignored.
 Neither fix is temple-only. Horizontal/upward cut ordering and complete native
 FrameAdv equivalence are outside this change.
+
+The older level12 gate replay depended on the erroneous final-height grip.
+A fresh search from its unchanged first47 macros found the replacement tail
+`runL8, leapcatchL11, hopcatchL`, followed by a searched safe final macro
+`leapcatchR5` (the search's initial `tapL` candidate died after opening them).
+Fresh replay retains all three original
+held-gate assertions; none was removed or relaxed. Search output remains in
+`rendered/route-search-result.json`.

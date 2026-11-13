@@ -960,16 +960,9 @@ class TerrainTests(unittest.TestCase):
         runtime = self.runtime(12, x=150)
         runtime.state.current_y = 439 - floor_y(3)
         motion = TerrainMotion(6, 3, falling=True)
-        physics = RooftopPhysics(self.map)
-        events = physics.advance(motion, runtime, 150, (140, 374, 160, 439))
-        # CutChar samples 439 before Move adds six. Crossing 440 during
-        # this tick changes the camera on the next tick, before its Move.
-        self.assertEqual((motion.room, motion.row), (6, 3))
-        self.assertEqual(floor_y(motion.row) + runtime.state.current_y, 445)
-        self.assertEqual(events, ())
-        events = physics.advance(motion, runtime, 150, (140, 380, 160, 445))
+        events = RooftopPhysics(self.map).advance(motion, runtime, 150, (140, 374, 160, 439))
         self.assertEqual((motion.room, motion.row), (3, 0))
-        self.assertEqual(floor_y(motion.row) + runtime.state.current_y, 97)
+        self.assertEqual(floor_y(motion.row) + runtime.state.current_y, 85)
         self.assertEqual([event.kind for event in events], ["room"])
 
     def test_rooms_without_initial_guards_are_valid(self):
