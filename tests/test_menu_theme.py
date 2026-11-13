@@ -280,6 +280,29 @@ class MenuThemeTest(unittest.TestCase):
         self.assertGreater(count(full), 500)
         self.assertEqual(count(again), count(full))
 
+    def test_save_dialog_takes_the_frame_and_carries_no_sign(self):
+        from pathlib import Path
+
+        from pop2.save_slots import SaveBrowser, SaveSlot
+        font = FakeFont()
+        frame = Image.new('RGBA', (1024, 768), (40, 30, 60, 255))
+        slots = tuple(SaveSlot(Path(f'none-{i}'), f'Save {i}', True, level=i + 1, date='-') for i in range(5))
+
+        def dialog(theme):
+            menu_theme.use(theme)
+            browser = SaveBrowser(slots, 'load', selected=1)
+            browser.confirmation, browser.focus = 'delete', 30
+            return browser.draw(frame, font, background_key=1)
+
+        above = (500, 2 * 121 - 4)                            # just outside the dialog's top edge
+        self.assertNotEqual(dialog(PALACE).getpixel(above), dialog(NEUTRAL).getpixel(above))
+        palace = {menu_theme._rgb(colour) + (255,) for band in PALACE.bands for colour in band}
+        self.assertIn(dialog(PALACE).getpixel(above), palace)
+        # The serpent crossed this empty strip between the text and the buttons.
+        strip = dialog(RUINS).crop((200, 418, 824, 438))
+        self.assertEqual(strip.getcolors(), [(strip.width * strip.height,
+                                              menu_theme._rgb(RUINS.colour('panel')) + (255,))])
+
 
 if __name__ == '__main__':
     unittest.main()

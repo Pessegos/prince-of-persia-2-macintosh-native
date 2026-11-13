@@ -75,8 +75,9 @@ Saves and screenshots are drawn at the window's resolution. They call
 the game's resolution and enlarges it without smoothing; it returns False for
 a theme without a frame and the page then draws its own rectangle. These pages
 cover the health strip, so their frame may reach below it. Their smaller
-dialogs (rename, delete, choose folder) keep a plain edge, and the Cutscene
-Viewer has its own look and is not themed.
+dialogs (rename, delete, choose folder) are framed the same way, and carry no
+sign: the page's sign is drawn before the page is darkened under the dialog.
+The Cutscene Viewer has its own look and is not themed.
 
 ## The sign on the page
 

@@ -542,11 +542,13 @@ class SaveBrowser:
                 remember(self.list_base_cache, list_key, image.copy(), 3)
         if self.confirmation or self.editing:
             if cached is None:
+                menu_theme.watermark(image, self.PANEL, point)   # on the page, under the dialog
                 image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 140)))
                 remember(self.modal_cache, key, image.copy(), 3)
             draw = ImageDraw.Draw(image)
-            rectangle((80, 121, 432, 270), fill=c('#181818'), outline=c('#858585'))
-            title = ('New save' if self.editing == 'create' else 'Rename save') if self.editing else {
+            if not menu_theme.panel_scaled(image, (80, 121, 432, 270), point):
+                rectangle((80, 121, 432, 270), fill=c('#181818'), outline=c('#858585'))
+            title =('New save' if self.editing == 'create' else 'Rename save') if self.editing else {
                 'save': 'Replace this save?', 'load': 'Load this game?', 'delete': 'Delete this save?'}[self.confirmation]
             text(title, 100, 142, gold, 312)
             if self.editing:
@@ -577,5 +579,6 @@ class SaveBrowser:
                     ('Save' if self.editing == 'create' else 'Rename') if self.editing else
                     {'save': 'Replace', 'load': 'Load', 'delete': 'Delete'}[self.confirmation]))):
                 button(rect, label, 30 + index, index == 0 or not self.editing or bool(self.draft.strip()))
+            return image
         menu_theme.watermark(image, self.PANEL, point)
         return image

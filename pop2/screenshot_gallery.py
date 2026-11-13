@@ -932,7 +932,8 @@ class ScreenshotGallery:
             else:
                 remember(self.surface_cache, surface_key, image.copy(), 2)
         if self.choosing:
-            box((48, 44, 464, 338), c('#181818'), c('#858585'))
+            if not menu_theme.panel_scaled(image, (48, 44, 464, 338), point):
+                box((48, 44, 464, 338), c('#181818'), c('#858585'))
             text('Screenshot folder', 64, 62, 384, gold, 1)
             box(self.PATH, c('#0c0c0c'), cyan if self.focus == 40 else c('#626262'))
             display_path = self.draft.replace('\\', '/')
@@ -974,7 +975,8 @@ class ScreenshotGallery:
                     ('Cancel', 'Working...' if self.commit_key is not None else 'Use folder'))):
                 button(rect, label, 45 + i, active=i == 1)
         elif self.deleting:
-            box((80, 121, 432, 270), c('#181818'), c('#858585'))
+            if not menu_theme.panel_scaled(image, (80, 121, 432, 270), point):
+                box((80, 121, 432, 270), c('#181818'), c('#858585'))
             text('Delete this screenshot?', 100, 142, 312, gold, 1)
             target = self.delete_target or self.entry
             text(target.path.name.replace('_', ' ') if target is not None else 'Unavailable', 100, 174, 312)
