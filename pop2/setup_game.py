@@ -36,8 +36,7 @@ class GameSetup:
         )
         ttk.Label(
             panel,
-            text=("Select a disk image of Prince of Persia 2 for Macintosh.\n\n"
-                  "An ISO made from the Prince of Persia CD Collection works too."),
+            text="Select a disk image of Prince of Persia 2 for Macintosh.",
             wraplength=400,
         ).pack(anchor="w", pady=(12, 10))
         ttk.Label(
@@ -71,7 +70,7 @@ class GameSetup:
     def choose(self):
         image_path = filedialog.askopenfilename(
             parent=self.root,
-            title="Select a Macintosh game image or CD Collection ISO",
+            title="Select your Macintosh Prince of Persia 2 game image",
             filetypes=(
                 ("Game images", "*.iso *.hfs *.hfv *.dsk *.img *.dmg"),
                 ("All files", "*.*"),
