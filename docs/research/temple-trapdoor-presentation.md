@@ -198,3 +198,104 @@ The focused temple and scenery suites pass219 tests (111+108, no skips).
 Dependency, Ruff F/E9, recovery-catalogue and diff checks also pass. Full
 gameplay discovery is not repeated for this drawing-only change. No live game/emulator, original
 resource writes or user save/settings changes are involved.
+
+## Full-frame transition and floor-buffer occlusion follow-up (2026-11-13)
+
+The user's `Port trap v2` recording reopens the rendering report. The previous
+flat-pose correction is valid but **was insufficient**: its drawing-command
+probe excluded the full scene transition and floor-buffer repaint. Comparing
+the supplied Macintosh and v2 recordings at every captured frame exposes two
+additional defects, reproduced in the hidden level12 room1 scene.
+
+At 60fps, the Macintosh recording first changes the panel at capture112
+(1.867s): piece51 is already visible. The port first changes it at capture90
+(1.500s), showing an empty hole. Each subsequent state lasts five capture
+frames in these recordings; absolute clip times differ because the jumps
+start at different times. Aligning by panel activation gives:
+
+| Low phase | Macintosh | Port before this follow-up |
+| --- | --- | --- |
+| 11 | piece51 | empty hole |
+| 12 | piece52 | piece52 |
+| 13 | piece53 | piece53 |
+| 14 | piece54 | piece54 |
+| 15 | flat top28 + front29 | flat top28 + front29 |
+| 16 | piece51 | piece51 |
+| 17 | restored floor | restored floor |
+
+The port took the `trapdoors.drawn` snapshot in `Temple.frame_start`, before
+the actor/row-shake triggers in `Caverns.level_events`. The same frame
+therefore removed the static tile but kept an empty moving-object list.
+The next frame advanced phase11 to12, omitting the first pose entirely.
+Native MakeRubble executes at2:622c, before the actors; CheckTrapDoor executes
+at2:63e6/6642, and the queued shake is consumed at2:6402 (ShakeEm5:28c8 calls
+TriggerTrapDoor). DrawRoom3 at3:324e subsequently calls ATMLoose5:307c.
+This is static caller/order evidence, not execution of complete FrameAdv.
+The display chain2:616a ->2:674c ->2:67a2 ->3:324e is still inside the
+outer FrameAdv2:60fc loop, after its world update2:6224. The older frame-order
+note's assertion that drawing waited for FrameAdv to return was incorrect
+and has been corrected.
+
+The port keeps advancement at frame start and presents the bank after the
+level-events triggers. Phase1 from standing on the panel and phase11 from
+a distant shake are now both shown in the opening frame. Closing refreshes
+the restored cell's scenery in the same frame. The audio lifecycle test now
+runs update **and** presentation, with a bounded loop; advancing alone no
+longer incorrectly stands in for presentation/restoration.
+
+The remaining triangular overlap was a missing floor-buffer repaint, not
+a SHAP transparency error. ATMTrapDoor10:2498-24c8 computes the moving-object
+rectangle, adds25 to its **left**, intersects it with the viewport, and marks
+floor cells through MarkBufsForRect5:19f8 and MarkFloor5:1846. The +25 is not
+a sprite shift or a sprite clipping edge. DrawFloorBuf3:371c redraws those
+floors, including top pieces that belong to the room's back plane; its
+row-specific top limit is row*120+100 (3:372e-3742). A final front-plane
+composite alone cannot reproduce that repaint. The port now replays the
+existing native-exported `CavernRoom.floor_redraw` commands after the moving
+panels, in the original bottom-to-top row/left-to-right column order.
+ComputeMobRect's height+1 envelope is retained. Other scenery families and
+the global front/back layer order are unchanged.
+
+```powershell
+.venv\Scripts\python.exe -m tools.probe_trapdoor_floor_repaint --source ..\PoP2-Mac-Code-Recovery --output rendered\trapdoor-floor-repaint.json
+.venv\Scripts\python.exe -m unittest -q tests.test_trapdoor_drawing tests.test_temple_arrival tests.test_temple_playtest
+```
+
+The new probe executes MarkBufsForRect5:19f8-1b46, GetCell4:29d8-2a62,
+its row-offset lookup4:322a-3262 and division19:4bb0-4c4c. All ten actual
+trap locations, all16 phases and supplied Y projections0/-364/+364 give
+480 comparisons and744 ordered marked cells, zero mismatches. Original
+DATA phase/offset records, Temple SHAP headers and LEVL/SHPL headers are
+checked; level bytes remain unchanged and original-file SHA256 values are
+recorded. Upper-edge native cells encode column c as -(c+1), not row*10+c.
+
+The projected/clipped rectangle and +25 adjustment are supplied fixtures;
+this does not execute ATMTrapDoor's visible-neighbor rectangle paths.
+EmptyRect is supplied with Pascal cleanup; MarkFloor is a recorded endpoint.
+The probe checks cell geometry/order, not dirty-buffer flags, native floor
+pixels, the resource decoder, QuickDraw, actor ordering or complete FrameAdv.
+
+The real room1 regression now checks all six visible phases, first-pose
+pixels, three neighboring-floor pixels per pose and closure. Separate
+controls reject the old early snapshot (empty opening frame) and omission
+of floor repaint with corrected timing (panel pixels over the floor).
+Those intentional failures are evidence against the old behavior, not
+passing old-code tests. Another real-scene regression covers phase1 under
+the Prince's feet. Supplied row-above shake events through the actual
+level-events pass retain visible first poses in all six upper-room views:
+L10 rooms4/9/19, L12 rooms3/17, L13 room7. The local side-by-side raster
+comparison follows the entire recorded six-pose/closure sequence; video
+compression/scaling, palette/candle differences and the Prince's different
+position prevent a claim of pixel-for-pixel native equivalence.
+
+Validation: all246 discovered modules ran in isolated subprocesses, using
+shared-desktop mode:4,139 cases,10 explicit skips, zero failures (343.8s).
+Timing/audio/performance modules ran serially after the others. The skips
+are nine exclusive-desktop cases and one unavailable native-enemy profile.
+The final eight drawing regressions also pass separately; the earlier
+65-case temple group passed before the additional underfoot/upper-view
+coverage. Dependency, Ruff F/E9, recovery-catalogue and diff checks pass.
+One earlier focused run was interrupted after exposing an unbounded test
+loop that advanced without presentation; it is not counted as a pass.
+No live game/emulator, physical input, user save/settings changes or original
+resource writes were used.

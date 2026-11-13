@@ -55,8 +55,13 @@ The Prince's update `2:62e6`:
 | m | `2:640c-6446` | level four's relief countdown (sound 110) [D] |
 | n | `2:644e-6482` | save the edges and the Prince record (SaveKid) [D] |
 
-Drawing happens after FrameAdv returns, in the main loop, not inside these
-steps.
+Drawing follows the world update2:6224, after the steps above. Correction
+(2026-11-13): it is still inside the outer FrameAdv2:60fc loop, which calls
+the display path2:674c at2:616a; its ordinary branch calls DrawRoom3 at2:67a2
+and ATMLoose via3:324e. The previous claim that drawing waited for FrameAdv
+to return was incorrect. In particular, a trap triggered by an actor or
+row shake is presented before the next MakeRubble advancement; see the
+[trap-door transition follow-up](temple-trapdoor-presentation.md#full-frame-transition-and-floor-buffer-occlusion-follow-up-2026-11-13).
 
 ## Port: current tick (`ScenePrototype.advance_animation`)
 
