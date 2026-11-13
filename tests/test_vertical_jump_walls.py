@@ -4,9 +4,10 @@ import struct
 from types import SimpleNamespace
 
 from pop2.paths import ASSET_DIR
+from pop2.opponent_generation import WALL_TILES, character_column
 from pop2.sequence_runtime import SequenceState
-from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion
-from tools.audit_temple_routes import Harness, press
+from pop2.terrain import LevelMap, RooftopPhysics, TerrainMotion, floor_contact_x
+from tools.audit_temple_routes import Harness, press, release_all
 
 
 INSTALLED = all((ASSET_DIR / name).is_file() for name in
@@ -32,13 +33,21 @@ class OpposedBarrierTests(unittest.TestCase):
                 state = SequenceState(14, action=68, animation_state=1, actor_type=0,
                                       level_kind=2, target_x=x, current_x=x, facing=facing)
                 record = SimpleNamespace(offset_x=0, aux=0x40)
-                # Supply the response pose only; real collision, floor and
-                # camera rules decide whether that response stays in place.
-                runtime = SimpleNamespace(state=state,
-                                          next_frame=lambda: setattr(state, 'action', 50))
+                # Supply SEQS47's first pose and its 16-pixel backward move;
+                # real collision, floor and camera rules must contain both.
+                def response():
+                    state.action = 50
+                    state.target_x += 16 if not facing else -16
+                    state.current_x = state.target_x
+
+                runtime = SimpleNamespace(state=state, next_frame=response)
                 physics = RooftopPhysics(LevelMap(level), {68: record, 50: record})
                 motion = TerrainMotion(0, 0)
-                bounds = lambda: old if state.action == 50 else expanded
+                def bounds():
+                    if state.action != 50:
+                        return expanded
+                    shift = state.target_x - x
+                    return old[0] + shift, old[1], old[2] + shift, old[3]
                 events = physics.advance(motion, runtime, x, expanded, old_bounds=old,
                                          frame_record=record, bounds_for_state=bounds)
                 self.assertEqual(state.target_x, x)
@@ -49,6 +58,74 @@ class OpposedBarrierTests(unittest.TestCase):
 
 @unittest.skipUnless(INSTALLED, 'Imported temple resources required')
 class VerticalJumpWallTests(unittest.TestCase):
+    def assert_outside_wall(self, scene):
+        state, motion = scene.sequence_state, scene.terrain_motion
+        contact = floor_contact_x(state.target_x, state.facing, scene.frames[state.action])
+        tile = scene.level_map.tile(motion.room, character_column(contact), motion.row)
+        self.assertNotIn(tile.kind, WALL_TILES, (state.target_x, state.action, tile))
+
+    def replay_step_turn_jump_and_left(self, harness):
+        scene = harness.scene
+        room, row = scene.room_id, scene.terrain_motion.row
+        press(harness, 'shift', True)
+        press(harness, 'R', True)
+        harness.tick(3)
+        release_all(harness)
+        harness.tick(12)
+        press(harness, 'L', True)
+        harness.tick()
+        press(harness, 'L', False)
+        harness.tick(10)
+        before_jump = scene.sequence_state.target_x
+        press(harness, 'up', True)
+        for tick in range(23):
+            if tick == 3:
+                press(harness, 'up', False)
+            harness.tick()
+            self.assertEqual(scene.room_id, room)
+            self.assertEqual(scene.terrain_motion.row, row)
+            self.assert_outside_wall(scene)
+        after_jump = scene.sequence_state.target_x
+        press(harness, 'L', True)
+        for _ in range(4):
+            harness.tick()
+            self.assertEqual(scene.room_id, room)
+            self.assertEqual(scene.terrain_motion.row, row)
+            self.assert_outside_wall(scene)
+        self.assertLess(scene.sequence_state.target_x, after_jump)
+        self.assertTrue(scene.combat.player.alive)
+        return before_jump
+
+    def test_actual_room3_climb_step_turn_jump_then_left_cannot_teleport(self):
+        harness = Harness(12, peaceful=True)
+        try:
+            scene = harness.scene
+            # Supplied supported start below the closed upper gate. The
+            # entire ascent, short step, turn, jump and movement use keys.
+            scene.jump_to_room(2, row=1, x=434, facing=1, redraw=False)
+            press(harness, 'up', True)
+            press(harness, 'shift', True)
+            harness.tick(30)
+            release_all(harness)
+            harness.tick(5)
+            self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.player_x), (2, 0, 444))
+            self.assertFalse(scene.native_ledge)
+            self.assertFalse(scene.ledge_climbing)
+            self.assertEqual(self.replay_step_turn_jump_and_left(harness), 453)
+        finally:
+            harness.close()
+
+    def test_step_turn_jump_and_follow_up_movement_at_all_six_pinches(self):
+        for level, room, row, wall_x in PINCHES:
+            with self.subTest(level=level, room=room, row=row):
+                harness = Harness(level, peaceful=True)
+                try:
+                    harness.scene.jump_to_room(room - 1, row=row, x=wall_x - 26,
+                                               facing=1, redraw=False)
+                    self.replay_step_turn_jump_and_left(harness)
+                finally:
+                    harness.close()
+
     def test_closed_gate_cannot_push_the_jump_through_the_rear_wall(self):
         for level, room, row, x in PINCHES:
             with self.subTest(level=level, room=room, row=row):

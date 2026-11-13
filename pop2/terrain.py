@@ -1524,8 +1524,9 @@ class RooftopPhysics:
                                               collision_bounds, wall_old_bounds, collision_facing,
                                               physical_row=motion.row, state=state))
         if corrected != state.target_x:
-            if (wall_old_bounds is not None and state.actor_type in (0, None)
-                    and not sword_drawn and state.source_sequence_id in (14, 28)):
+            vertical_jump_response = (wall_old_bounds is not None and state.actor_type in (0, None)
+                                      and not sword_drawn and state.source_sequence_id in (14, 28))
+            if vertical_jump_response:
                 # A wider pose can meet a gate in front while a wall touches
                 # the preceding body behind. Do not push that body through
                 # the rear wall to make the wider pose fit; still play Collide's
@@ -1622,6 +1623,26 @@ class RooftopPhysics:
                             state.current_x = state.target_x = corrected
                             bounds = (bounds[0] + shift, bounds[1],
                                       bounds[2] + shift, bounds[3])
+                if vertical_jump_response:
+                    # SEQS47's first pose moves another 16 pixels backwards.
+                    # Constrain the complete response, not just Collide's
+                    # first displacement, before CheckFloor can align its
+                    # supporting foot through the opposing wall.
+                    shift = state.target_x - old_x
+                    translated = (wall_old_bounds[0] + shift, wall_old_bounds[1],
+                                  wall_old_bounds[2] + shift, wall_old_bounds[3])
+                    corrected = self.map.tile_correction(
+                        motion.room, shift, state.target_x, translated, wall_old_bounds,
+                        None, motion.row, state, solid_only=True)
+                    if corrected != state.target_x:
+                        shift = corrected - state.target_x
+                        state.current_x = state.target_x = corrected
+                        if bounds_for_state is not None:
+                            bounds = bounds_for_state()
+                        else:
+                            bounds = (bounds[0] + shift, bounds[1], bounds[2] + shift, bounds[3])
+                        collision_bounds = (collision_bounds_for_state() if collision_bounds_for_state is not None
+                                            else bounds)
             events.append(TerrainEvent("wall"))
         elif (state.animation_state == 4 and state.actor_type in (0, None) and alive
                 and self.floating()):
