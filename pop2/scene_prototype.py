@@ -3153,7 +3153,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         return self.level_renderer.supported_rooms()
 
     def jump_to_room(self, room_id, row=1, x=None, facing=None, reset_guards=True,
-                     preserve_checkpoint=False, *, redraw=True):
+                     preserve_checkpoint=False, *, redraw=True, keep_music=False):
         if self.level_map is None or not 0 <= room_id < 32 or not 0 <= row < 3:
             raise ValueError("Invalid level, room or floor")
         self.level_renderer.room(room_id, self.game.caverns)
@@ -3177,7 +3177,10 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.background, self.foreground = room.background, room.foreground
         self.player_x, self.action = x, 15
         if getattr(self, "audio", None) is not None:
-            self.audio.reset()
+            if keep_music:
+                self.audio.reset(keep_music=True)
+            else:
+                self.audio.reset()
             self.advance_audio()
         self.status.set(f"Level {self.game.level.number} / Screen {self.screen_label(room_id)}")
         if redraw:

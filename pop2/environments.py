@@ -1177,8 +1177,9 @@ class Ruins(Caverns):
         scene.game.caverns.start_entry()
         held = (list(scene.held_directions), scene.up_held, scene.down_held,
                 scene.shift_held, scene.ctrl_held)
+        # This is a continuous room cut, so retain the cliff's music cursor.
         scene.jump_to_room(2, 2, 4 * TILE_WIDTH + 22, 1, reset_guards=False,
-                          preserve_checkpoint=True, redraw=False)
+                          preserve_checkpoint=True, redraw=False, keep_music=True)
         scene.start_sequence(5)
         # The keys stay held through the cut. 7:379a-379e then calls
         # ClearControls and zeroes the modifier: a key still held is a fresh

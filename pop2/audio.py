@@ -618,6 +618,8 @@ class AudioEngine:
             self.playback.stop("music")
             self.current_music = None
             self.music_fade_in_pending = False
+            self.current_music_ambient = False
+            self.current_music_group = None
         self.current_effect = None
         self.pending_effect = self.pending_song = None
         self.current_mechanism = self.pending_mechanism = None
@@ -625,8 +627,8 @@ class AudioEngine:
         self.gate_events = None
         self.pending_effects.clear()
         self.stopped_effects.clear()
-        self.current_music_ambient = self.pending_song_ambient = False
-        self.current_music_group = self.pending_music_group = None
+        self.pending_song_ambient = False
+        self.pending_music_group = None
 
     def close(self):
         self.reset()

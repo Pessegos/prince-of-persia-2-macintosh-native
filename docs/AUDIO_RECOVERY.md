@@ -45,6 +45,17 @@ every step or generate diagnostic recordings. Pause/F3 pauses both channels.
 Restart/developer warps stop current and pending playback. Import is staged
 before replacing installed resources; progress reaches Tk through a queue.
 
+Level six's cliff-to-ruins entry now retains the playing music and its
+ambient/combat classification. `Ruins.leave_cliff` previously reused the
+developer warp's unconditional audio reset, cutting the song before requesting
+another. Only this room cut opts into music retention; restart and developer
+warps keep their reset policy. `tests.test_ruins_music` walks left from the
+cliff through the actual cut with a deterministic playback clock: the song,
+remaining duration and clock survive the entry, combat can replace ambience,
+finished songs permit the next cue, and foreground songs retain protection.
+The previous runtime failed the continuity and foreground regressions.
+This is a port transition fix, with no new native audio/cadence parity claim.
+
 ## Host Menu Feedback
 
 F1, F2 and F3 use quiet, host-authored hover and click ticks, not recovered
