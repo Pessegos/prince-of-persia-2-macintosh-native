@@ -42,6 +42,7 @@ class MenuPcmTests(unittest.TestCase):
         self.assertTrue(0.02 < DURATION['hover'] <= 0.06)                 # nearer a click than a note
         self.assertTrue(DURATION['hover'] < DURATION['click'] <= 0.08)
         self.assertTrue(PEAK['hover'] <= 0.015 and PEAK['click'] <= 0.03) # the second round was still too much
+        self.assertTrue(PEAK['hover'] <= 0.01 and PEAK['click'] <= 0.022) # and the third a little loud
         self.assertEqual(len(HOVER_NOTES), 1)                             # one note, never a tune
 
     def test_each_sound_is_a_plucked_note_that_dies_away_without_hiss_or_thump(self):

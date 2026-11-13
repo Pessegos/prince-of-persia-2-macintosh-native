@@ -56,8 +56,8 @@ at the speed that puts them on pitch at any mixer rate (within a few cents).
 
 | Sound | When | What | Length | Peak |
 | --- | --- | --- | --- | --- |
-| `hover` | a new control is reached | one high damped note (A) with the fingertip's tap, nearer a click than a tone; always the same | 0.05 s | 1.2% |
-| `click` | a control is activated | the same touch a fifth lower (D), a little firmer | 0.07 s | 2.6% |
+| `hover` | a new control is reached | one high damped note (A) with the fingertip's tap, nearer a click than a tone; always the same | 0.05 s | 0.95% |
+| `click` | a control is activated | the same touch a fifth lower (D), a little firmer | 0.07 s | 2.1% |
 | `reveal` | a chapter starts to resolve in the Cutscene Viewer | a quick run up the scale the game's music leans on (D, E flat, F sharp, G, A) to the octave, struck again twice like a short tremolo | 1.30 s | 9% |
 
 Two earlier versions were rejected by the user and bound these values from
@@ -66,7 +66,8 @@ both sides. The first menu sounds were 12 and 18 ms ticks of filtered noise at
 rang for a quarter of a second and more at 10 and 18 percent, and played a
 different note of the scale on each hover: tiresome within a minute. A second,
 damped version at 1.8 and 4 percent was the right direction but was asked to
-be quieter, a little higher and more like a click. Keep the menu sounds very
+be quieter, a little higher and more like a click. That third version, at 1.2
+and 2.6 percent, was liked but asked a little lower again. Keep the menu sounds very
 short, soft and single-noted.
 No additional assets, downloads or third-party libraries are required, and
 the gameplay RNG is untouched (the noise comes from numpy's own generator).

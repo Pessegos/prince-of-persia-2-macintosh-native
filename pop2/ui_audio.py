@@ -32,7 +32,7 @@ KINDS = ('hover', 'click', 'reveal')
 # Loudest sample of each sound, as a fraction of full scale. The first menu
 # ticks (0.0025 and 0.0075) were too quiet to hear; a first plucked version
 # (0.10 and 0.18, ringing for a quarter of a second and more) was far too much.
-PEAK = {'hover': 0.012, 'click': 0.026, 'reveal': 0.09}
+PEAK = {'hover': 0.0095, 'click': 0.021, 'reveal': 0.09}
 DURATION = {'hover': 0.05, 'click': 0.07, 'reveal': 1.30}
 
 
