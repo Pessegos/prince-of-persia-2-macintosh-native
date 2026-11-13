@@ -156,7 +156,7 @@ class GalleryTests(unittest.TestCase):
         shown, veiled = open_card.crop(thumb), locked_card.crop(thumb)
         self.assertGreater(max(max(colour) for _n, colour in shown.getcolors(1 << 16)), 0xe0)   # bright stripes
         colours = veiled.getcolors(1 << 16)
-        self.assertLessEqual(len(colours), gallery.VEIL_COLUMNS * 6)           # one colour for each block
+        self.assertLessEqual(len(colours), gallery.VEIL_COLUMNS * 10)          # one colour for each block
         self.assertTrue(all(max(colour) < 0x90 for _n, colour in colours))    # darkened; no stripe survives
         # Each block is a flat rectangle many pixels wide.
         row = [veiled.getpixel((x, 20)) for x in range(veiled.width)]

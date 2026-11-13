@@ -23,7 +23,7 @@ it. A drag, scrolling, leaving the canvas or losing focus clears the pending
 click, so browsing cannot accidentally start a film. Arrow keys and Tab also
 navigate the cards; Enter remains available without an on-screen key legend.
 Escape returns to the F1 menu. Locked chapters show a numbered card whose
-picture is the chapter's own cover reduced to nine columns of large, darkened
+picture is the chapter's own cover reduced to sixteen columns of darkened
 blocks: its colours, nothing that can be recognised. Their story title is not
 drawn. A chapter unlocked by playing it since the viewer was last open is
 selected when the viewer opens and, after a short wait, resolves out of those

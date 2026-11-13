@@ -54,9 +54,9 @@ class CutsceneGallery:
     # A locked chapter shows its own cover as a few large dark blocks: its
     # colours, nothing that can be recognised. Unlocking refines the blocks
     # step by step until the cover is whole, like a console's mosaic fade.
-    VEIL_COLUMNS = 9
+    VEIL_COLUMNS = 16
     VEIL_DEPTH = .6
-    REVEAL_COLUMNS = (12, 16, 22, 30, 42, 58, 80, 110)
+    REVEAL_COLUMNS = (20, 26, 34, 44, 58, 76, 100, 130)
     REVEAL_STEP = .11
     REVEAL_DELAY = .6
 
