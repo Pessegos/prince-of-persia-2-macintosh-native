@@ -835,9 +835,12 @@ class LevelMap:
 
     def catch_ledge(self, room, row, state, record, harbor=None):
         # Falling 6:011e-0132 / Catch 4:37ca: velocity <60 and feet within
-        # [-48,+3] of the lower floor. Catch 4:3882-3894 extends the
+        # [-48,+3) of the lower floor in Falling modes 4/9 (6:011e-0120).
+        # Mode3 calls Catch directly; retain its existing upper boundary.
+        # Catch 4:3882-3894 extends the
         # 17-pixel look-behind by seven after the toward-ledge release (99).
-        if state.vertical_velocity >= 60 or not -48 <= state.current_y <= 3:
+        if (state.vertical_velocity >= 60 or not -48 <= state.current_y <= 3
+                or state.current_y == 3 and state.animation_state in (4, 9)):
             return False
         direction = 1 if state.facing else -1
         trial_x = state.target_x - 17 * direction
@@ -1422,6 +1425,12 @@ class RooftopPhysics:
                 state.sound_events.append(7)
                 return (TerrainEvent("death"),)
             return ()
+        # FrameAdv 2:6294 -> CutAllOpponents 6:4394 cuts the player using
+        # the preceding position, before AnimChar/Move/Falling (2:6372-63a2).
+        # Cutting after Move advances the new room's floor a tick too early.
+        if (cut_enabled and motion.falling and state.actor_type in (0, None)
+                and self.cut_down(motion, state, bounds)):
+            events.append(TerrainEvent("room"))
         if motion.falling:
             # AddKidScream 5:4b5a: retain the Prince's existing onset and
             # harbor exclusions. Ordinary guard admission follows Move below.
@@ -1633,7 +1642,7 @@ class RooftopPhysics:
             # CutChar6:4922-492a reads ShapeBounds' cached edges, which
             # already include GetCharEdges4:5e6e's sword-facing extension.
             events.append(TerrainEvent("room"))
-        if (cut_enabled and state.actor_type in (0, None)
+        if (cut_enabled and not motion.falling and state.actor_type in (0, None)
                 and self.cut_down(motion, state, bounds)):
             events.append(TerrainEvent("room"))
 

@@ -256,7 +256,7 @@ ordinary native branches:
   `(distance - 21)` alignment selects `SEQS:24`, then 9/210.
 - Catch, CODE:4 `0x37ca`-`0x3928`: a nonzero modifier (Shift or Ctrl held,
   4:37cc), vertical velocity <60 and relative
-  Y in [-48, 3] permit the original 17-pixel look-behind tile check. A real
+  Y in [-48, 3) permit the original 17-pixel look-behind tile check. A real
   ledge selects 15 and aligns using its first caught pose 80; an empty pair
   of cells can never hold the Prince. The original grip delay is 12 ticks.
   After the toward-ledge release selected as `SEQS:99`, `4:3882-3894`
