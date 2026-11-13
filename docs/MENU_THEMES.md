@@ -79,6 +79,20 @@ dialogs (rename, delete, choose folder) are framed the same way, and carry no
 sign: the page's sign is drawn before the page is darkened under the dialog.
 The Cutscene Viewer has its own look and is not themed.
 
+## Wide windows
+
+The game's picture is 4:3, and in a wider window the menus are as narrow as it
+is. The saves page uses the extra width instead (`SaveBrowser.wide_layout`):
+from about 16:9 its panel is wider, the preview is larger and has a save
+picture's own shape, and the save's name and details stand beside the preview
+instead of under it. Wider windows still give the list more room, up to a
+limit; beyond it the panel is centred. Narrower windows, 16:10 among them,
+keep the classic page. The page is then drawn over the whole window, with the
+game's picture centred behind it, and one unit is as wide as it is tall. Its
+rectangles (`PANEL`, `LIST`, `PREVIEW`, ...) are properties that follow the
+layout of the last picture drawn, and the pointer is mapped to the same units.
+A picture saved with Shift+F8 "with menus" still shows the classic page.
+
 ## The sign on the page
 
 A theme may leave a sign on its pages like a watermark (`mark`, the colour the

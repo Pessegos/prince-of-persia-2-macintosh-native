@@ -101,21 +101,96 @@ class SaveBrowser:
     modal_cache: dict = field(default_factory=dict, repr=False, compare=False)
     list_base_cache: dict = field(default_factory=dict, repr=False, compare=False)
     icon_cache: dict = field(default_factory=dict, repr=False, compare=False)
+    # The wide layout, set by draw from the picture it is given: how many
+    # units wider than the classic page the panel is, and where it starts.
+    spread: int = field(default=0, compare=False)
+    shift: float = field(default=0.0, compare=False)
 
-    PANEL = (28, 16, 484, 368)
     TABS = ((40, 53, 144, 79), (150, 53, 254, 79))
-    PREVIEW = (238, 99, 472, 267)
-    FOOTER = ((40, 328, 108, 356), (116, 328, 196, 356),
-              (204, 328, 324, 356), (332, 328, 472, 356))
-    LIST = (40, 99, 228, 321)
     ROW_HEIGHT = 42
-    RENAME = (238, 270, 472, 296)
-    NAME_FIELD = (100, 166, 412, 199)
-    CONFIRM = ((100, 222, 246, 252), (258, 222, 412, 252))
+    WIDE_FROM = 136      # narrower windows keep the classic page, centred
+    WIDE_PREVIEW = 172   # up to here the extra width enlarges the preview
+    WIDE_LIMIT = 262     # beyond it the list grows; the panel stops here
 
     def __post_init__(self):
         if self.mode == 'save' and not self.slots and self.focus == 100:
             self.focus = 29
+
+    @classmethod
+    def wide_layout(cls, width, height, basis=510):
+        """(spread, shift) for a picture of this size; (0, 0) for the classic page.
+
+        The page is 384 units tall. A window wide enough gets a wider panel:
+        a larger preview with the save's details beside it, then a wider
+        list. Anything wider still centres that panel.
+        """
+        extra = width * 384 / max(1, height) - basis
+        if extra < cls.WIDE_FROM:
+            return 0, 0.0
+        spread = int(min(extra, cls.WIDE_LIMIT))
+        return spread, (extra - spread) / 2
+
+    def pixel_rect(self, rect, size):
+        """A rectangle of the page in the pixels of a visible picture of this size, as draw places it."""
+        sy = size[1] / 384
+        sx = sy if self.spread else size[0] / 510
+        return (round((rect[0] - 1 + self.shift) * sx), round(rect[1] * sy),
+                round((rect[2] - 1 + self.shift) * sx), round(rect[3] * sy))
+
+    @property
+    def list_growth(self):
+        return max(0, self.spread - self.WIDE_PREVIEW)
+
+    @property
+    def right(self):
+        return 472 + self.spread
+
+    @property
+    def PANEL(self):
+        return 28, 16, 484 + self.spread, 368
+
+    @property
+    def LIST(self):
+        return 40, 99, 228 + self.list_growth, 321
+
+    @property
+    def PREVIEW(self):
+        left = 238 + self.list_growth
+        if not self.spread:
+            return left, 99, 472, 267
+        width = 276 - max(0, self.WIDE_PREVIEW - self.spread)
+        return left, 99, left + width, 99 + round((width - 2) * 365 / 510) + 2   # a save picture's own shape
+
+    @property
+    def DETAILS(self):
+        """Where the save's name and details start: (x, y)."""
+        return (self.PREVIEW[2] + 10, 99) if self.spread else (238, 270)
+
+    @property
+    def RENAME(self):
+        x, y = self.DETAILS
+        return x, y, self.right, y + 26
+
+    @property
+    def FOOTER(self):
+        half = self.spread // 2
+        return ((40, 328, 108, 356), (116, 328, 196, 356),
+                (204, 328, 324 + half, 356), (332 + half, 328, self.right, 356))
+
+    @property
+    def DIALOG(self):
+        half = self.spread // 2
+        return 80 + half, 121, 432 + half, 270
+
+    @property
+    def NAME_FIELD(self):
+        half = self.spread // 2
+        return 100 + half, 166, 412 + half, 199
+
+    @property
+    def CONFIRM(self):
+        half = self.spread // 2
+        return (100 + half, 222, 246 + half, 252), (258 + half, 222, 412 + half, 252)
 
     @property
     def items(self):
@@ -123,7 +198,7 @@ class SaveBrowser:
 
     @property
     def footer_rects(self):
-        return self.FOOTER if self.mode == 'save' else (*self.FOOTER[:2], (204, 328, 472, 356))
+        return self.FOOTER if self.mode == 'save' else (*self.FOOTER[:2], (204, 328, self.right, 356))
 
     @property
     def entry(self):
@@ -187,7 +262,7 @@ class SaveBrowser:
 
     def row_rect(self, row):
         top = self.LIST[1] + row * self.ROW_HEIGHT - self.scroll
-        return 40, top, 222, top + self.ROW_HEIGHT - 3
+        return 40, top, 222 + self.list_growth, top + self.ROW_HEIGHT - 3
 
     def hit(self, x, y):
         if self.confirmation or self.editing:
@@ -197,7 +272,7 @@ class SaveBrowser:
                          if self.contains(rect, x, y)), None)
         controls = dict(enumerate(self.TABS))
         if self.contains(self.LIST, x, y):
-            if x >= 223 and self.max_scroll:
+            if x >= 223 + self.list_growth and self.max_scroll:
                 return 24
             return next((100 + row for row in range(len(self.items))
                          if self.contains(self.row_rect(row), x, y)), None)
@@ -353,6 +428,11 @@ class SaveBrowser:
 
     def draw(self, viewport, font, *, visible=False, background_key=None):
         modal = self.confirmation or self.editing
+        self.spread, self.shift = self.wide_layout(*viewport.size, 510 if visible else 512)
+        grown, right, half = self.list_growth, self.right, self.spread // 2
+        # How far the wide page's frame may reach, in the page's own units.
+        wide = (math.ceil(int(visible) - self.shift), 0,
+                math.floor(int(visible) + 509 + self.spread + self.shift), 383) if self.spread else None
         key = (viewport.size, visible, id(font), background_key if background_key is not None else id(viewport),
                self.mode, self.selected, id(self.slots), id(self.current), self.scroll,
                self.error, self.status, self.save_available, self.editing, self.active_path,
@@ -367,10 +447,12 @@ class SaveBrowser:
         draw = ImageDraw.Draw(image)
         gold, white, muted, cyan = c('#f4d873'), c('#eeeeee'), c('#999999'), c('#77c9dc')
         sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
+        if self.spread:
+            sx = sy   # the wide page is not stretched: it has more units across
         origin = (0, 0)
 
         def point(x, y):
-            return round((x - int(visible)) * sx) - origin[0], round(y * sy) - origin[1]
+            return round((x - int(visible) + self.shift) * sx) - origin[0], round(y * sy) - origin[1]
 
         def rectangle(rect, **colors):
             draw.rectangle((*point(*rect[:2]), *point(*rect[2:])),
@@ -434,25 +516,25 @@ class SaveBrowser:
                 current = slot.path == self.active_path
                 rectangle(rect, fill=c('#253033') if selected else c('#222222'),
                           outline=gold if self.focus == 100 + row else cyan if selected else c('#404040'))
-                text(slot.name, rect[0] + 8, rect[1] + 7, cyan if selected else white, 100, True, True)
+                text(slot.name, rect[0] + 8, rect[1] + 7, cyan if selected else white, 100 + grown, True, True)
                 text(f'Level {slot.level}' if slot.level else '---', rect[2] - 8, rect[1] + 7,
                      muted, 59, True, align='right')
                 if current:
                     line(((rect[0] + 2, rect[1] + 3), (rect[0] + 2, rect[3] - 3)), cyan)
                     text('Current', rect[0] + 8, rect[1] + 25, cyan, 42, True)
                 text(slot.error or slot.date, rect[2] - 8, rect[1] + 25,
-                     muted, 120 if current else 164, True, align='right')
+                     muted, (120 if current else 164) + grown, True, align='right')
             background.alpha_composite(image, origin)
             image, origin = background, (0, 0)
             draw = ImageDraw.Draw(image)
             if not self.items:
-                text('No saved games', 50, 181, muted, 168, True)
+                text('No saved games', 50, 181, muted, 168 + grown, True)
             if self.max_scroll:
                 height = self.LIST[3] - self.LIST[1]
                 thumb = max(16, height * height / (len(self.items) * self.ROW_HEIGHT))
                 top = self.LIST[1] + (height - thumb) * self.scroll / self.max_scroll
-                rectangle((225, self.LIST[1], 227, self.LIST[3]), fill=c('#303030'))
-                rectangle((225, top, 227, top + thumb), fill=c('#858585'))
+                rectangle((225 + grown, self.LIST[1], 227 + grown, self.LIST[3]), fill=c('#303030'))
+                rectangle((225 + grown, top, 227 + grown, top + thumb), fill=c('#858585'))
 
         if list_base is not None:
             draw_list()
@@ -460,14 +542,14 @@ class SaveBrowser:
             return image
 
         if cached is None:
-            if not menu_theme.panel_scaled(image, self.PANEL, point):
+            if not menu_theme.panel_scaled(image, self.PANEL, point, wide):
                 rectangle(self.PANEL, fill=c('#181818'), outline=c('#858585'))
             text('Saved Games', 40, 29, gold)
-            text(f'{len(self.slots)} {"save" if len(self.slots) == 1 else "saves"}', 472, 32,
+            text(f'{len(self.slots)} {"save" if len(self.slots) == 1 else "saves"}', right, 32,
                  muted, 82, True, align='right')
             for index, (rect, label) in enumerate(zip(self.TABS, ('Save', 'Load'))):
                 button(rect, label, index, active=self.mode == label.lower())
-            line(((40, 88), (472, 88)), c('#404040'))
+            line(((40, 88), (right, 88)), c('#404040'))
             draw_list()
             slot = self.detail
             source_key = ('source', slot.path, slot.modified, id(slot.document), id(slot.preview), id(self.preview_provider))
@@ -494,7 +576,9 @@ class SaveBrowser:
                      muted, right - left - 50)
             can_rename = self.entry.exists and not self.entry.error
             highlighted = can_rename and self.focus == 25 and not modal
-            name_x, name_width = (262, 210) if can_rename else (238, 234)
+            column, top = self.DETAILS
+            right = self.right   # the preview's edges were unpacked into these names above
+            name_x, name_width = (column + 24, right - column - 24) if can_rename else (column, right - column)
             name_color = cyan if highlighted else gold
             if highlighted:
                 rectangle(self.RENAME, fill=c('#202a2d'))
@@ -506,7 +590,7 @@ class SaveBrowser:
                 size = max(1, round(feather.width * scale * sx)), max(1, round(feather.height * scale * sy))
                 if size not in self.icon_cache:
                     remember(self.icon_cache, size, feather.resize(size, Image.Resampling.NEAREST), 8)
-                image.paste(self.icon_cache[size], point(239, 271), self.icon_cache[size])
+                image.paste(self.icon_cache[size], point(column + 1, top + 1), self.icon_cache[size])
             name_lines = [slot.name]
             if glyphs(slot.name, gold).width * 0.7 > name_width:
                 positions = range(1, len(slot.name))
@@ -517,27 +601,38 @@ class SaveBrowser:
                     glyphs(slot.name[i:].lstrip(), gold).width))
                 name_lines = [slot.name[:split].rstrip(), slot.name[split:].lstrip()]
             for index, value in enumerate(name_lines):
-                y = 276 + index * 11
+                y = top + 6 + index * 11
                 text(value, name_x, y, name_color, name_width, True)
                 if highlighted:
                     width = min(name_width, glyphs(value, name_color).width * 0.7)
                     line(((name_x, y + 10), (name_x + width, y + 10)), cyan)
             if can_rename and self.hovered == 25 and not modal:
-                rectangle((362, 251, 472, 268), fill=c('#303030'))
-                text('Rename save', 370, 256, white, 94, True)
+                tip = top + 30 if self.spread else top - 19   # the wide page has the preview above
+                rectangle((right - 110, tip, right, tip + 17), fill=c('#303030'))
+                text('Rename save', right - 102, tip + 5, white, 94, True)
             resume = {'Level start': 'Resumes at level start',
                       'Checkpoint': 'Resumes at checkpoint'}.get(slot.resume, slot.resume)
-            text(resume, name_x, 299, muted, name_width, True)
-            if slot.capacity is not None:
-                text(f'Life {slot.capacity}', 472, 313, muted, 64, True, align='right')
+            message = self.error or self.status
+            message_color = c('#ff9b9b') if self.error else muted
+            if self.spread:
+                # Beside the preview: one detail on each line; messages go under the preview.
+                text(slot.resume, column, top + 36, muted, right - column, True)
+                text(slot.date, column, top + 50, muted, right - column, True)
+                if slot.capacity is not None:
+                    text(f'Life {slot.capacity}', column, top + 64, muted, right - column, True)
+                text(message, self.PREVIEW[0], self.PREVIEW[3] + 5, message_color,
+                     right - self.PREVIEW[0], True)
+            else:
+                text(resume, name_x, 299, muted, name_width, True)
+                if slot.capacity is not None:
+                    text(f'Life {slot.capacity}', 472, 313, muted, 64, True, align='right')
+                text(message or slot.date, name_x, 313, message_color,
+                     name_width - 70 if slot.capacity is not None else name_width, True)
             for index, (rect, label) in zip((28, 26, 27, 29), zip(self.footer_rects,
                     ('Back', 'Delete', 'Overwrite' if self.mode == 'save' else 'Load game', 'New save'))):
                 enabled = (self.entry.exists if index == 26 else self.primary_enabled if index == 27
                            else self.save_available if index == 29 else True)
                 button(rect, label, index, enabled, active=index == 29 and enabled)
-            text(self.error or self.status or slot.date, name_x, 313,
-                 c('#ff9b9b') if self.error else muted,
-                 name_width - 70 if slot.capacity is not None else name_width, True)
             if not modal:
                 remember(self.list_base_cache, list_key, image.copy(), 3)
         if self.confirmation or self.editing:
@@ -546,11 +641,12 @@ class SaveBrowser:
                 image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 140)))
                 remember(self.modal_cache, key, image.copy(), 3)
             draw = ImageDraw.Draw(image)
-            if not menu_theme.panel_scaled(image, (80, 121, 432, 270), point):
-                rectangle((80, 121, 432, 270), fill=c('#181818'), outline=c('#858585'))
+            if not menu_theme.panel_scaled(image, self.DIALOG, point, wide):
+                rectangle(self.DIALOG, fill=c('#181818'), outline=c('#858585'))
+            edge = 100 + half
             title =('New save' if self.editing == 'create' else 'Rename save') if self.editing else {
                 'save': 'Replace this save?', 'load': 'Load this game?', 'delete': 'Delete this save?'}[self.confirmation]
-            text(title, 100, 142, gold, 312)
+            text(title, edge, 142, gold, 312)
             if self.editing:
                 rectangle(self.NAME_FIELD, fill=c('#0c0c0c'), outline=cyan if self.focus == 32 else c('#626262'))
                 glyph = glyphs(self.draft, white)
@@ -561,20 +657,20 @@ class SaveBrowser:
                 offset = max(0, cursor - 292)
                 start, end = sorted((self.anchor, self.caret))
                 if start != end:
-                    a = max(106, 106 + glyphs(self.draft[:start], white).width - offset)
-                    b = min(406, 106 + glyphs(self.draft[:end], white).width - offset)
+                    a = max(edge + 6, edge + 6 + glyphs(self.draft[:start], white).width - offset)
+                    b = min(edge + 306, edge + 6 + glyphs(self.draft[:end], white).width - offset)
                     rectangle((a, 172, b, 192), fill=c('#385462'))
                 glyph = glyph.crop((offset, 0, min(glyph.width, offset + 300), glyph.height))
                 if glyph.width:
                     glyph = glyph.resize((max(1, round(glyph.width * sx)), max(1, round(glyph.height * sy))), Image.Resampling.NEAREST)
-                    image.paste(glyph, point(106, 174), glyph)
+                    image.paste(glyph, point(edge + 6, 174), glyph)
                 if self.focus == 32:
-                    line(((106 + cursor - offset, 172), (106 + cursor - offset, 192)), cyan)
-                text(self.error, 100, 205, c('#ff9b9b'), 312, True)
+                    line(((edge + 6 + cursor - offset, 172), (edge + 6 + cursor - offset, 192)), cyan)
+                text(self.error, edge, 205, c('#ff9b9b'), 312, True)
             else:
-                text(self.entry.name, 100, 171, white, 312, ellipsize=True)
+                text(self.entry.name, edge, 171, white, 312, ellipsize=True)
                 text('Current progress will be lost.' if self.confirmation == 'load' else
-                     'This cannot be undone.', 100, 195, muted, 312, True)
+                     'This cannot be undone.', edge, 195, muted, 312, True)
             for index, (rect, label) in enumerate(zip(self.CONFIRM, ('Cancel',
                     ('Save' if self.editing == 'create' else 'Rename') if self.editing else
                     {'save': 'Replace', 'load': 'Load', 'delete': 'Delete'}[self.confirmation]))):

@@ -508,6 +508,64 @@ class SaveBrowserTests(unittest.TestCase):
                                  (133, 133, 133, 255))
                 browser.confirmation = None
 
+    def test_wide_windows_get_a_wider_page_with_a_larger_preview(self):
+        layout = SaveBrowser.wide_layout
+        self.assertEqual(layout(1434, 1080), (0, 0.0))               # 4:3 keeps the classic page
+        self.assertEqual(layout(1920, 1200), (0, 0.0))               # 16:10 is not wide enough
+        self.assertEqual(layout(1024, 768, 512), (0, 0.0))
+        spread, shift = layout(1920, 1080)
+        self.assertEqual(spread, 172)
+        self.assertLess(shift, 1)
+        spread, shift = layout(2560, 1080)                           # the panel stops growing and is centred
+        self.assertEqual(spread, SaveBrowser.WIDE_LIMIT)
+        self.assertAlmostEqual(2 * shift + 510 + spread, 2560 * 384 / 1080)
+
+        classic = SaveBrowser(self.slots)
+        self.assertEqual((classic.PANEL, classic.LIST, classic.PREVIEW, classic.RENAME),
+                         ((28, 16, 484, 368), (40, 99, 228, 321), (238, 99, 472, 267), (238, 270, 472, 296)))
+        self.assertEqual(classic.FOOTER, ((40, 328, 108, 356), (116, 328, 196, 356),
+                                          (204, 328, 324, 356), (332, 328, 472, 356)))
+        self.assertEqual((classic.NAME_FIELD, classic.CONFIRM),
+                         ((100, 166, 412, 199), ((100, 222, 246, 252), (258, 222, 412, 252))))
+
+        font = SimpleNamespace(glyphs=dict.fromkeys(range(128)),
+                               text=lambda value, color: Image.new('RGBA', (len(value) * 7, 11), color))
+        preview = Image.frombytes('RGB', (510, 365), random.Random(31).randbytes(510 * 365 * 3))
+        slots = tuple(SaveSlot(self.folder / str(i), f'Journey {i}', True, level=1, preview=preview)
+                      for i in range(3))
+        for size in ((1920, 1080), (2560, 1080)):
+            with self.subTest(size=size):
+                browser = SaveBrowser(slots)
+                frame = browser.draw(Image.new('RGBA', size, '#0d1117'), font, visible=True)
+                left, top, right, bottom = browser.PREVIEW
+                self.assertGreater(right - left, 270)                # larger than the classic 234
+                self.assertLessEqual(bottom, browser.LIST[3])
+                self.assertAlmostEqual((right - left - 2) / (bottom - top - 2), 510 / 365, delta=0.01)
+                self.assertGreater(browser.DETAILS[0], right)        # the details stand beside it
+                self.assertEqual(browser.right - browser.DETAILS[0], 120)
+                rect = browser.pixel_rect((left + 1, top + 1, right - 1, bottom - 1), size)
+                expected = preview.resize((rect[2] - rect[0], rect[3] - rect[1]), Image.Resampling.NEAREST)
+                self.assertEqual(frame.crop(rect).convert('RGB').tobytes(), expected.tobytes())
+                # Not stretched: one unit is as wide as it is tall.
+                panel = browser.pixel_rect(browser.PANEL, size)
+                self.assertAlmostEqual(panel[2] - panel[0], (456 + browser.spread) * size[1] / 384, delta=1)
+                self.assertEqual(frame.getpixel(panel[:2]), (133, 133, 133, 255))
+                self.assertGreaterEqual(panel[0], 0)
+                self.assertLess(panel[2], size[0])
+                # Controls answer where they are drawn.
+                footer = browser.footer_rects
+                self.assertEqual(footer[-1][2], browser.right)
+                self.assertEqual(browser.hit(footer[-1][2] - 2, 340), 27)
+                self.assertEqual(browser.hit(browser.row_rect(1)[2] - 2, browser.row_rect(1)[1] + 2), 101)
+                self.assertEqual(browser.hit(browser.DETAILS[0] + 5, browser.DETAILS[1] + 5), 25)
+                browser.confirmation, browser.focus = 'delete', 30
+                confirmed = browser.draw(Image.new('RGBA', size, '#0d1117'), font, visible=True)
+                dialog = browser.pixel_rect(browser.DIALOG, size)
+                self.assertEqual(confirmed.getpixel(dialog[:2]), (133, 133, 133, 255))
+                self.assertAlmostEqual(dialog[0] + dialog[2], panel[0] + panel[2], delta=1)   # centred on the panel
+                cancel = browser.CONFIRM[0]
+                self.assertEqual(browser.hit(cancel[0] + 2, cancel[1] + 2), 30)
+
 
 if __name__ == '__main__':
     unittest.main()

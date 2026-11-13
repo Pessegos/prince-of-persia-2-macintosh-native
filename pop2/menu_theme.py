@@ -232,18 +232,19 @@ def panel(image, rect, clear_sides=False):
     image.paste(picture, outer[:2], picture)
 
 
-def panel_scaled(image, rect, point):
+def panel_scaled(image, rect, point, limit=None):
     """Draw a framed panel on a page drawn at the window's resolution.
 
     ``point`` maps the page's 512x384 coordinates to the image's pixels. The
     frame is drawn at the game's resolution and enlarged without smoothing,
     like the rest of the page. Returns False for a theme without a frame, and
-    the page then draws its own plain rectangle.
+    the page then draws its own plain rectangle. A page laid out wider than
+    the game's picture gives its own ``limit``, the area its frame may cover.
     """
     theme = _current
     if theme.frame is None:
         return False
-    outer = frame_rect(rect, theme, True, _SCREEN)
+    outer = frame_rect(rect, theme, True, limit or _SCREEN)
     size = (outer[2] - outer[0] + 1, outer[3] - outer[1] + 1)
     left, top = point(outer[0], outer[1])
     right, bottom = point(outer[2] + 1, outer[3] + 1)

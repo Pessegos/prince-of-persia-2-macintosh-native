@@ -1443,6 +1443,13 @@ class WindowControls(InputRouting):
         if hasattr(self, 'active_cutscene_gallery') and self.active_cutscene_gallery() is not None:
             return menu_viewport_point(
                 event.x, event.y, self.canvas.winfo_width(), self.canvas.winfo_height())
+        menu = getattr(self, 'game_menu', None)
+        if getattr(menu, 'page', None) == 'saves' and menu.save_browser is not None:
+            spread, shift = menu.save_browser.wide_layout(self.canvas.winfo_width(), self.canvas.winfo_height())
+            if spread:   # the wide page uses the whole window; its panel starts `shift` units in
+                point = menu_viewport_point(
+                    event.x, event.y, self.canvas.winfo_width(), self.canvas.winfo_height())
+                return None if point is None else (point[0] - shift, point[1])
         return viewport_point(
             event.x, event.y, self.canvas.winfo_width(), self.canvas.winfo_height()
         )
@@ -1832,16 +1839,24 @@ class WindowControls(InputRouting):
             return
         self.screenshot_gallery_frame = self.screenshot_gallery_source = None
         if getattr(game_menu, 'page', None) == 'saves':
+            fitted, origin = size, position
+            if game_menu.save_browser.wide_layout(width, height)[0]:
+                # The wide page fills the window; the game's picture stays centred behind it.
+                size, position = fit_menu_viewport(width, height)
             source_cache = getattr(self, 'save_menu_source', None)
             if source_cache is None or source_cache[0] is not self.screenshot_viewport or source_cache[1] != size:
-                source = self.screenshot_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+                source = self.screenshot_viewport.crop(VISIBLE_VIEWPORT).resize(fitted, Image.Resampling.NEAREST)
+                if size != fitted:
+                    picture, source = source, Image.new('RGBA', size, '#080808')
+                    source.paste(picture, (origin[0] - position[0], origin[1] - position[1]))
                 self.save_menu_source = (self.screenshot_viewport, size, source)
             else:
                 source = source_cache[2]
             browser = game_menu.save_browser
             frame = self.draw_screenshot_notice(
                 browser.draw(source, self.ui_font, visible=True,
-                                            background_key=id(self.screenshot_viewport)), visible=True).convert('RGB')
+                                            background_key=id(self.screenshot_viewport)),
+                visible=True, uniform=size != fitted).convert('RGB')
             state = (id(self.screenshot_viewport), id(self.ui_font), browser.mode, browser.selected,
                      id(browser.slots), id(browser.current), browser.error, browser.status,
                      browser.save_available, browser.editing, browser.confirmation,
@@ -1852,9 +1867,9 @@ class WindowControls(InputRouting):
                     and previous[2] is self.image_ref):
                 rect = (0, 0, *frame.size)
                 if previous[3] == state:
-                    native = (80, 121, 433, 271) if browser.editing or browser.confirmation else browser.LIST
-                    rect = (round((native[0] - 1) * size[0] / 510), round(native[1] * size[1] / 384),
-                            round((native[2] - 1) * size[0] / 510), round(native[3] * size[1] / 384))
+                    dialog = browser.DIALOG
+                    rect = browser.pixel_rect((*dialog[:2], dialog[2] + 1, dialog[3] + 1)
+                                              if browser.editing or browser.confirmation else browser.LIST, size)
                 damage = ImageChops.difference(previous[1].crop(rect), frame.crop(rect)).getbbox()
                 if damage is not None:
                     damage = (damage[0] + rect[0], damage[1] + rect[1],

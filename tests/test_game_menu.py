@@ -552,18 +552,40 @@ class GameMenuSceneTests(unittest.TestCase):
                 scene.present_viewport()
                 frame = scene.save_menu_frame[1].convert('RGBA')
                 size, _origin = fit_viewport(width, height)
-                self.assertEqual(frame.size, size)
-                sx, sy = size[0] / 510, size[1] / 384
+                # Windows wide enough get the wide page, which fills them
+                # (docs/MENU_THEMES.md, "Wide windows"); the others keep the fitted 4:3 page.
+                wide = width * 384 / height - 510 >= browser.WIDE_FROM
+                self.assertEqual(bool(browser.spread), wide)
+                self.assertEqual(frame.size, (width, height) if wide else size)
                 left, top, right, bottom = browser.PREVIEW
-                rect = (round(left * sx), round((top + 1) * sy),
-                        round((right - 2) * sx), round((bottom - 1) * sy))
+                rect = browser.pixel_rect((left + 1, top + 1, right - 1, bottom - 1), frame.size)
+                if not wide:
+                    sx, sy = size[0] / 510, size[1] / 384
+                    self.assertEqual(rect, (round(left * sx), round((top + 1) * sy),
+                                            round((right - 2) * sx), round((bottom - 1) * sy)))
                 expected = preview.resize((rect[2] - rect[0], rect[3] - rect[1]), Image.Resampling.NEAREST)
                 self.assertEqual(frame.crop(rect).convert('RGB').tobytes(), expected.tobytes())
-                old = scene.native_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
-                self.assertNotEqual(frame.crop(rect).tobytes(), old.crop(rect).tobytes())
-                panel = browser.PANEL
-                self.assertEqual(frame.getpixel((round((panel[0] - 1) * sx), round(panel[1] * sy))),
+                if not wide:
+                    old = scene.native_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
+                    self.assertNotEqual(frame.crop(rect).tobytes(), old.crop(rect).tobytes())
+                self.assertEqual(frame.getpixel(browser.pixel_rect(browser.PANEL, frame.size)[:2]),
                                  (133, 133, 133, 255))
+
+    def test_wide_save_page_answers_the_pointer_where_it_is_drawn(self):
+        scene = self.scene
+        with patch('pop2.save_slots.list_slots', return_value=()):
+            scene.apply_game_action('save')
+        browser = scene.game_menu.save_browser
+        for width, height in ((1920, 1080), (2560, 1080), (1434, 1080), (1920, 1200)):
+            with self.subTest(window=(width, height)),                     patch.object(scene.canvas, 'winfo_width', return_value=width),                     patch.object(scene.canvas, 'winfo_height', return_value=height):
+                scene.present_viewport()
+                frame = scene.save_menu_frame[1]
+                origin = ((width - frame.width) // 2, (height - frame.height) // 2)
+                for index, rect in zip((28, 26, 27, 29), browser.footer_rects):
+                    left, top, right, bottom = browser.pixel_rect(rect, frame.size)
+                    for x, y in ((left + 3, top + 3), (right - 3, bottom - 3)):
+                        point = scene.dev_pointer(SimpleNamespace(x=origin[0] + x, y=origin[1] + y))
+                        self.assertEqual(browser.hit(*point), index)
 
     def test_save_dialog_and_scroll_update_pixels_without_redrawing_gameplay(self):
         scene = self.scene
