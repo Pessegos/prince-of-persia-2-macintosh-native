@@ -84,3 +84,23 @@ A fresh search from its unchanged first47 macros found the replacement tail
 Fresh replay retains all three original
 held-gate assertions; none was removed or relaxed. Search output remains in
 `rendered/route-search-result.json`.
+
+## Validation and handoff
+
+Final full discovery, with each of242 modules in a separate process, ran4110
+cases in shared-desktop mode; ten exclusive-desktop cases were skipped. One
+real-time SDL sustain test failed under parallel CPU load; repeating its entire
+76-test audio module alone passed. All other modules passed. An earlier
+monolithic4108-case run caught the camera-timing regressions and obsolete gate
+replay described above; it is not reported as passing. The final isolated
+run includes the revised route and direct-mode3 control.
+
+Required dependency, Ruff F/E9, recovery catalogue and whitespace checks pass.
+Both original-code probes pass (28 window cases;542 alignment and3 raw Catch
+fixtures). No source resources, videos, saves or user settings were modified.
+No live playtest, exclusive-desktop suite or executable rebuild was performed.
+
+Further room3 input investigation must match the takeoff position, not compare
+only time since each recording started. The recorded seven-pixel difference
+is already present before any falling-catch decision. Full keyboard/takeoff
+scheduling equivalence remains unverified.
