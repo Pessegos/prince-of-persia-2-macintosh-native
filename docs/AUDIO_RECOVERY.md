@@ -49,20 +49,23 @@ before replacing installed resources; progress reaches Tk through a queue.
 
 The port's menus have sounds of their own, not recovered Macintosh cues.
 `pop2/ui_audio.py` synthesises them as a small plucked instrument, like a
-santur or an oud, in the scale the game's music leans on (D, E flat, F sharp,
-G, A). Each string is a Karplus-Strong loop: a short burst of noise goes round
-a delay line one period long and is softened on every turn, so a note starts
-bright and dies away dull. The notes are read back at the speed that puts them
-on pitch at any mixer rate (within a few cents).
+santur or an oud. Each string is a Karplus-Strong loop: the string's shape as
+a finger leaves it goes round a delay line one period long and is softened on
+every turn, so a note starts clear and dies away dull. The notes are read back
+at the speed that puts them on pitch at any mixer rate (within a few cents).
 
 | Sound | When | What | Length | Peak |
 | --- | --- | --- | --- | --- |
-| `hover` | a new control is reached | one soft note; eight are prepared and played in turn, up the scale and back | 0.26 s | 10% |
-| `click` | a control is activated | the low D and its fifth strummed, with a light tap | 0.42 s | 18% |
-| `reveal` | a chapter starts to resolve in the Cutscene Viewer | a rising run ending an octave up | 1.10 s | 20% |
+| `hover` | a new control is reached | one damped note (D), more a soft touch than a tone; always the same | 0.09 s | 1.8% |
+| `click` | a control is activated | the same touch an octave lower, a little firmer | 0.14 s | 4% |
+| `reveal` | a chapter starts to resolve in the Cutscene Viewer | a rising run (D, F sharp, A, D) that rings | 1.10 s | 9% |
 
-These replace the first menu sounds, 12 and 18 ms ticks of filtered noise at
-0.25 and 0.75 percent peak, which the user found far too quiet and poor.
+Two earlier versions were rejected by the user and bound these values from
+both sides. The first menu sounds were 12 and 18 ms ticks of filtered noise at
+0.25 and 0.75 percent peak: far too quiet, and poor. The first plucked version
+rang for a quarter of a second and more at 10 and 18 percent, and played a
+different note of the scale on each hover: tiresome within a minute. Keep the
+menu sounds short, dull and single-noted.
 No additional assets, downloads or third-party libraries are required, and
 the gameplay RNG is untouched (the noise comes from numpy's own generator).
 

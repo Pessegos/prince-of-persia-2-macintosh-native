@@ -61,9 +61,12 @@ class CutsceneGallery:
     REVEAL_COLUMNS = (20, 26, 34, 44, 58, 76, 100, 130)
     REVEAL_STEP = .11
     REVEAL_DELAY = .6
-    # Once the cover is whole its border glints for a few steps: bright and
-    # thick, then the accent, then the ordinary selected border.
-    REVEAL_GLINT = 3
+    # Once the cover is whole its border glows for a second and a half: thick
+    # and bright at first, cooling through a few shades to the accent colour,
+    # then thinning back to the ordinary selected border.
+    REVEAL_GLINT = 14
+    GLINT_HOLD = 4      # steps at full brightness
+    GLINT_COOL = 5      # steps from bright to the accent colour
 
     def layout(self, size, *, visible=False):
         """Uniform UI scale; extra width changes layout rather than stretching it."""
@@ -272,6 +275,11 @@ class CutsceneGallery:
     def key(self, key, backwards=False, char='', control=False):
         if key == 'Escape':
             return 'cutscene_back'
+        if self.developer and key.lower() == 'r':
+            # Dev Tools only: show the selected chapter being revealed again.
+            # It changes nothing in the collection.
+            self.reveal = {self.index: -self.REVEAL_DELAY}
+            return 'changed'
         if key in ('Left', 'Right', 'Up', 'Down'):
             column, row = self.cell(self.index)
             column += (key == 'Right') - (key == 'Left')
@@ -415,9 +423,12 @@ class CutsceneGallery:
                      c('#f4d873') if selected else c('#eeeeee') if named else c('#999999'), .72, sx, sy)
         glint = None if step is None else step - len(self.REVEAL_COLUMNS)   # 0, 1, ... once the cover is whole
         if glint is not None and 0 <= glint < self.REVEAL_GLINT - 1:
-            # Over the picture's edge, so that the thick first step is not covered by it.
-            draw.rectangle((0, 0, size[0] - 1, size[1] - 1), width=stroke * (4 - glint),
-                           outline=(c('#eeeeee'), c('#f4d873'))[min(glint, 1)])
+            # Over the picture's edge, so that the thick border is not covered by it.
+            cool = max(0, min(1, (glint - self.GLINT_HOLD + 1) / self.GLINT_COOL))
+            bright, accent = (tuple(int(c(colour)[i:i + 2], 16) for i in (1, 3, 5)) for colour in ('#eeeeee', '#f4d873'))
+            shade = tuple(round(a + (b - a) * cool) for a, b in zip(bright, accent))
+            width = 4 if glint < self.GLINT_HOLD + self.GLINT_COOL - 2 else 3
+            draw.rectangle((0, 0, size[0] - 1, size[1] - 1), width=stroke * width, outline=shade)
         self.card_cache[key] = image
         return image
 

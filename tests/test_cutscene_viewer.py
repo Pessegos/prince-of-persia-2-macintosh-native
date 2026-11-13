@@ -199,20 +199,39 @@ class GalleryTests(unittest.TestCase):
                 gallery.advance(gallery.REVEAL_STEP)
             self.assertEqual([state[0][1] for state in states[1:]], list(range(gallery.reveal_steps)))
             self.assertFalse(gallery.reveal_cue)                              # once for each chapter
-            # Every step looks different, the border's glint included; the last is the settled card.
-            self.assertEqual(len(set(seen[:-1])), len(seen) - 1)
+            # Every step of the resolve looks different; the last frame is the settled card.
             whole = len(gallery.REVEAL_COLUMNS) + 1
-            bright = tuple(int(menu_theme.c('#eeeeee')[i:i + 2], 16) for i in (1, 3, 5))
-            first_glint = Image.frombytes('RGB', gallery.card_image(1, font, 2, 2).size, seen[whole])
-            self.assertEqual(first_glint.getpixel((6, 40)), bright)           # thick: it reaches over the picture
+            self.assertEqual(len(set(seen[:whole])), whole)
+            # Then the border glows slowly: held bright, cooling to the accent, thinning away.
+            size = gallery.card_image(1, font, 2, 2).size
+            bright, accent = (tuple(int(menu_theme.c(colour)[i:i + 2], 16) for i in (1, 3, 5))
+                              for colour in ('#eeeeee', '#f4d873'))
+            glow = [Image.frombytes('RGB', size, frame) for frame in seen[whole:-1]]
+            self.assertEqual(len(glow), gallery.REVEAL_GLINT - 1)
+            self.assertGreaterEqual(len(glow) * gallery.REVEAL_STEP, 1.2)     # seconds: not a flash
+            edge = [frame.getpixel((6, 40)) for frame in glow]                # inside a thick border only
+            self.assertEqual(edge[:gallery.GLINT_HOLD], [bright] * gallery.GLINT_HOLD)
+            cooling = [frame.getpixel((1, 40)) for frame in glow]
+            self.assertEqual((cooling[0], cooling[-1]), (bright, accent))
+            self.assertGreaterEqual(len(set(cooling)), gallery.GLINT_COOL)    # through several shades
+            self.assertNotEqual(glow[-1].getpixel((6, 40)), accent)           # thinner by the end
             self.assertIn(CHAPTERS[1].title, font.values)                     # the title arrives on the way
             settled = card()
             self.assertEqual(settled, seen[-1])
             self.assertNotIn(settled, seen[:-1])
             self.assertFalse(gallery.advance(.05))
             self.assertEqual(gallery.reveal_state, ())
-            gallery.developer = True                                          # developer access never animates
+            gallery.developer = True                                          # developer access never animates...
             gallery.begin_reveal([])
+            self.assertEqual(gallery.reveal, {})
+            seen_before = set(gallery.collection.seen)
+            gallery.index = 4                                                 # ...but R replays the selected reveal
+            self.assertEqual(gallery.key('r'), 'changed')
+            self.assertEqual(gallery.reveal_state, ((4, -1),))
+            self.assertEqual(gallery.collection.seen, seen_before)
+            gallery.developer = False
+            gallery.reveal = {}
+            gallery.key('r')
             self.assertEqual(gallery.reveal, {})
 
     def test_developer_access_is_read_only_and_caches_do_not_leak_to_normal_mode(self):

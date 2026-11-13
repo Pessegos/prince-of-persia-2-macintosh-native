@@ -1,15 +1,15 @@
-"""The port's menu sounds: a plucked string, independent of the game's sound resources.
+"""The port's menu sounds: a muted plucked string, independent of the game's sound resources.
 
 The menus are an addition of the port, so they have no original sound. These
-are synthesised here as a small plucked instrument, like a santur or an oud,
-in the scale the game's music leans on (D, E flat, F sharp, G, A):
+are synthesised here as a small plucked instrument, like a santur or an oud:
 
-- ``hover``: one soft note. There are several, and the menu plays them in
-  turn, up the scale and back down, so moving through a menu runs along the
-  strings instead of repeating one tick.
-- ``click``: a firmer strum of the low D and its fifth, with a light tap.
+- ``hover``: one short, dull, quiet note (D), the string damped at once, so
+  it is more a soft touch than a tone. Always the same note: a run of
+  different notes was tried and became tiresome within a minute.
+- ``click``: the same touch an octave lower and a little firmer.
 - ``reveal``: a rising run that ends an octave up, for a chapter that has
-  just been unlocked in the Cutscene Viewer.
+  just been unlocked in the Cutscene Viewer. It is heard rarely, so it may
+  ring; it is still quiet.
 
 Each string is a Karplus-Strong loop: a short burst of noise goes round a
 delay line as long as one period of the note, and is softened a little on
@@ -20,21 +20,29 @@ import struct
 
 import numpy
 
-# D5, E flat 5, F sharp 5, G5, A5, then back down: the order hover notes are played in.
+# D5, E flat 5, F sharp 5, G5, A5: the scale the game's music leans on.
 _SCALE = (587.33, 622.25, 739.99, 783.99, 880.00)
-HOVER_NOTES = (0, 1, 2, 3, 4, 3, 2, 1)
+# The notes hovering plays, in turn. One: the menu repeats a single quiet touch.
+HOVER_NOTES = (0,)
 KINDS = ('hover', 'click', 'reveal')
-# Loudest sample of each sound, as a fraction of full scale.
-PEAK = {'hover': 0.10, 'click': 0.18, 'reveal': 0.20}
-DURATION = {'hover': 0.26, 'click': 0.42, 'reveal': 1.10}
+# Loudest sample of each sound, as a fraction of full scale. The first menu
+# ticks (0.0025 and 0.0075) were too quiet to hear; a first plucked version
+# (0.10 and 0.18, ringing for a quarter of a second and more) was far too much.
+PEAK = {'hover': 0.018, 'click': 0.04, 'reveal': 0.09}
+DURATION = {'hover': 0.09, 'click': 0.14, 'reveal': 1.10}
 
 
 def _string(frequency, seconds, rate, seed, damping=0.996, pick=0.5):
     """One plucked note. ``pick`` near 0 is a soft, dull pluck; near 1 a hard, bright one."""
     period = max(2, round(rate / frequency))
     count = max(period + 1, round(seconds * rate))
-    burst = numpy.random.RandomState(seed).uniform(-1, 1, period)
-    # Soften the burst: a finger is not a point.
+    # The string pulled aside into a triangle a fifth of the way along, as a
+    # finger leaves it: a clear note whose overtones fall away quickly. A
+    # little noise gives each note the roughness of a real pluck.
+    position = numpy.arange(period) / period
+    burst = numpy.minimum(position / 0.2, (1 - position) / 0.8)
+    burst += numpy.random.RandomState(seed).uniform(-1, 1, period) * 0.25 * pick
+    # Soften the shape: a finger is not a point.
     for _ in range(max(1, round((1 - pick) * 6))):
         burst = (burst + numpy.roll(burst, 1)) / 2
     burst -= burst.mean()
@@ -76,17 +84,18 @@ def menu_samples(kind, rate, variant=0):
     seconds = DURATION[kind]
     if kind == 'hover':
         note = HOVER_NOTES[variant % len(HOVER_NOTES)]
-        out = _mix(rate, seconds, [(0, _string(_SCALE[note], seconds, rate, 0x504F50 + note, pick=0.35), 1)])
+        # Damped hard and picked softly: the note is gone almost as it starts.
+        out = _mix(rate, seconds, [
+            (0, _string(_SCALE[note], seconds, rate, 0x504F50 + note, damping=0.975, pick=0.1), 1)])
     elif kind == 'click':
         out = _mix(rate, seconds, [
-            (0, _tap(0.012, rate, 0x504F60), 0.5),
-            (0, _string(_SCALE[0] / 2, seconds, rate, 0x504F61, pick=0.6), 1),
-            (0.012, _string(_SCALE[4] / 2, seconds, rate, 0x504F62, pick=0.6), 0.7),
+            (0, _tap(0.008, rate, 0x504F60), 0.25),
+            (0, _string(_SCALE[0] / 2, seconds, rate, 0x504F61, damping=0.97, pick=0.2), 1),
         ])
     else:
         run = (_SCALE[0], _SCALE[2], _SCALE[4], _SCALE[0] * 2)
         out = _mix(rate, seconds, [
-            (index * 0.085, _string(frequency, seconds, rate, 0x504F70 + index, damping=0.9975, pick=0.55),
+            (index * 0.085, _string(frequency, seconds, rate, 0x504F70 + index, damping=0.997, pick=0.3),
              0.8 if index < 3 else 1)
             for index, frequency in enumerate(run)])
     # Die away to silence at the end, and start from silence without a click.

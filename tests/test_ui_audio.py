@@ -32,14 +32,16 @@ class MenuPcmTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             menu_pcm('unknown', 48000, 2)
 
-    def test_sounds_are_clearly_audible_where_the_old_ticks_were_not(self):
-        # The ticks these replace peaked at 0.0025 and 0.0075 of full scale and
-        # lasted under 20 ms; the user found them far too quiet.
-        self.assertGreaterEqual(PEAK['hover'], 0.08)
-        self.assertGreater(PEAK['click'], PEAK['hover'])
-        self.assertGreaterEqual(PEAK['reveal'], PEAK['click'])
-        self.assertTrue(all(peak <= 0.25 for peak in PEAK.values()))      # still under the game's own sounds
-        self.assertGreater(DURATION['hover'], 0.15)
+    def test_sounds_sit_between_the_inaudible_ticks_and_the_tiresome_plucks(self):
+        # The first ticks peaked at 0.0025 and 0.0075 of full scale for under
+        # 20 ms: the user found them far too quiet. Ringing notes at 0.10 and
+        # 0.18, a different one on each hover, were "obnoxious" within a minute.
+        self.assertTrue(0.0075 < PEAK['hover'] <= 0.03)
+        self.assertTrue(PEAK['hover'] < PEAK['click'] <= 0.06)
+        self.assertTrue(PEAK['click'] < PEAK['reveal'] <= 0.12)           # heard rarely, so it may ring
+        self.assertTrue(0.02 < DURATION['hover'] <= 0.1)
+        self.assertTrue(DURATION['hover'] < DURATION['click'] <= 0.15)
+        self.assertEqual(len(HOVER_NOTES), 1)                             # one note, never a tune
 
     def test_each_sound_is_a_plucked_note_that_dies_away_without_hiss_or_thump(self):
         import numpy as np
@@ -57,13 +59,15 @@ class MenuPcmTests(unittest.TestCase):
                     loud = np.sqrt((samples[:3 * tenth] ** 2).mean())
                     tail = np.sqrt((samples[-tenth:] ** 2).mean())
                     self.assertLess(tail, loud / 20)
+                    # Dull, not bright: the note itself carries the sound, not its overtones.
+                    centroid = (energy * frequencies).sum() / energy.sum()
+                    self.assertLess(centroid, 1000)
 
-    def test_hover_notes_run_up_the_scale_and_back_in_tune(self):
+    def test_hover_note_is_in_tune_at_every_rate(self):
         import numpy as np
 
         from pop2.ui_audio import _SCALE
 
-        self.assertEqual(HOVER_NOTES, (0, 1, 2, 3, 4, 3, 2, 1))
         self.assertEqual(menu_pcm('hover', 44100, 1, len(HOVER_NOTES)), menu_pcm('hover', 44100, 1, 0))
         for rate in (16000, 44100, 48000):
             for variant, note in enumerate(HOVER_NOTES):
@@ -75,7 +79,7 @@ class MenuPcmTests(unittest.TestCase):
                     near = (frequencies > _SCALE[note] * 0.9) & (frequencies < _SCALE[note] * 1.1)
                     pitch = frequencies[near][spectrum[near].argmax()]
                     self.assertLess(abs(1200 * np.log2(pitch / _SCALE[note])), 4)      # cents
-                    self.assertGreater(spectrum[near].max(), spectrum.max() / 8)       # the note itself is there
+                    self.assertEqual(spectrum[near].max(), spectrum.max())             # the note itself is loudest
 
 
 class MenuAudioEngineTests(unittest.TestCase):

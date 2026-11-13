@@ -30,9 +30,14 @@ selected when the viewer opens and, after a short wait, resolves out of those
 blocks in eight steps, like a console's mosaic fade; its title appears
 halfway. As it starts to resolve the
 menu's `reveal` sound plays (docs/AUDIO_RECOVERY.md), and when the cover is
-whole the card's border glints: thick and bright, then thick in the accent
-colour, then the ordinary selected border.
+whole the card's border glows for about a second and a half: thick and bright
+at first, cooling through a few shades to the accent colour, then thinning
+back to the ordinary selected border.
 Chapters admitted from a loaded save, and the developer viewer, do not animate.
+The unlocks are kept in each saved game, and developer level or room jumps
+never unlock a chapter, so a chapter already seen in the loaded game is not
+revealed again by replaying its level. In the developer viewer, R shows the
+selected chapter's reveal again, sound included, without changing anything.
 The page takes the level's menu theme (docs/MENU_THEMES.md).
 
 The catalog in `pop2/cutscenes.py` includes Prologue, Title and The Palace
