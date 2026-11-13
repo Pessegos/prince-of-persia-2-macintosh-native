@@ -385,16 +385,24 @@ def draw_slide_rocks(frame, room_id, rocks, terrain, *, level_number=10):
     return frame
 
 
-def draw_trapdoors(frame, room_id, objects, *, level_number=10):
+def draw_trapdoors(frame, room_id, objects, terrain, *, level_number=10):
     """ATMTrapDoor 10:225c's opening door: the animation piece at its
     offset, within ComputeMobRect's rectangle (height + 1 up, at least to
     the cell's X + 77 across)."""
-    objects = [item for item in objects if item[0] == room_id]
+    # ATMTrapDoor 10:2274-22da projects neighbouring MOBs into this view.
+    # In particular, a bottom-row panel above can swing below the top edge.
+    offsets = {room_id: 0}
+    for direction, offset in (('up', -364), ('down', 364)):
+        neighbor = terrain.neighbor(room_id, direction)
+        if neighbor is not None:
+            offsets.setdefault(neighbor, offset)
+    objects = [(index, x, y + offsets[room], origin)
+               for room, index, x, y, origin in objects if room in offsets]
     if not objects:
         return frame
     _program, resources, palette, shapes = room_assets(level_number, room_id)
     frame = frame.copy()
-    for _room, index, x, y, origin in objects:
+    for index, x, y, origin in objects:
         sprite = cavern_command_sprite(['back', index, x, y, 16], resources, palette, shapes)
         right = x + max(sprite.width + 1, origin + 77 - x)
         clip = (max(x, 0), max(y - sprite.height, 0), min(right, frame.width), min(y + 1, frame.height))

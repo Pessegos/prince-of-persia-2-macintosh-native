@@ -339,6 +339,49 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.assertEqual(cavern_scene_signature(program, 7, caverns), closed_key)
         self.assertEqual(scene.level_renderer.room(7, caverns).background.tobytes(), closed)
 
+    def test_room_three_draws_the_upper_rooms_opening_panel(self):
+        from pop2.caverns import draw_trapdoors
+
+        scene = self.scene
+        scene.enter_next_level(12)
+        scene.jump_to_room(2, row=0, x=110, facing=1)
+        caverns, terrain = scene.game.caverns, scene.level_map
+        upper = terrain.neighbor(2, 'up')
+        self.assertEqual(upper, 20)  # Native room 21, bottom-row door at column 3.
+        self.assertEqual(terrain.tile(upper, 3, 2).kind, 26)
+        caverns.trapdoors.trigger(terrain, terrain.tile(upper, 3, 2), 2)
+        self.tick()
+        self.assertTrue(caverns.trapdoors.drawn)
+        # Exercise the scene's scenery path, not only the drawing helper.
+        animated = scene.native_viewport.copy()
+        objects = caverns.trapdoors.drawn
+        caverns.trapdoors.drawn = []
+        scene.render()
+        background = scene.native_viewport.copy()
+        caverns.trapdoors.drawn = objects
+        from PIL import ImageChops
+
+        changed = ImageChops.difference(animated.convert('RGB'), background.convert('RGB')).getbbox()
+        self.assertIsNotNone(changed)
+        self.assertLess(changed[1], 20)
+        self.assertLessEqual(changed[3], 20)
+        # The same panel viewed below must be precisely its upper-room
+        # raster translated by 364, including partially clipped phases.
+        from PIL import Image
+
+        for phase in range(1, 17):
+            with self.subTest(phase=phase):
+                record = caverns.trapdoors.bank[0]
+                caverns.trapdoors.bank[0] = (*record[:7], phase)
+                _, objects = caverns.trapdoors.present(terrain)
+                above = draw_trapdoors(Image.new('RGBA', (510, 400)), upper, objects,
+                                       terrain, level_number=12)
+                below = draw_trapdoors(Image.new('RGBA', (510, 36)), 2, objects, terrain,
+                                       level_number=12)
+                self.assertEqual(below.tobytes(), above.crop((0, 364, 510, 400)).tobytes())
+                if phase == 3:
+                    self.assertIsNotNone(below.getbbox())
+
     def test_an_opening_trap_door_loops_cue_198_until_it_closes(self):
         # 10:24fa: with a door in the bank and neither 197 nor 198 playing,
         # AddSound(198); 10:2328 stops 198 and requests 27 on closing.
