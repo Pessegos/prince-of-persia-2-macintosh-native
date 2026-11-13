@@ -168,20 +168,23 @@ class GalleryTests(unittest.TestCase):
         runs = [x for x in range(1, len(row)) if row[x] != row[x - 1]]
         self.assertLessEqual(len(runs), gallery.VEIL_COLUMNS)
 
-    def test_newly_unlocked_chapter_resolves_from_its_veil_in_steps(self):
+    def striped_gallery(self):
         gallery = self.gallery()
-        font = CaptionFont()
         cover = Image.new('RGB', (510, 384), '#204080')
         for x in range(0, 510, 6):
             ImageDraw.Draw(cover).line((x, 0, x, 384), fill='#ffe040', width=2)
         gallery.preview = Mock(return_value=cover)
         gallery.collection.seen.add(CHAPTERS[1].key)
+        return gallery
+
+    def test_newly_unlocked_chapter_dissolves_smoothly_out_of_its_veil(self):
+        gallery, font = self.striped_gallery(), CaptionFont()
         gallery.begin_reveal([1, 2])                                          # 2 is still locked: ignored
         self.assertEqual((set(gallery.reveal), gallery.index), ({1}, 1))
-        self.assertEqual(gallery.reveal_state, ((1, -1),))
+        self.assertEqual((gallery.reveal_stage(1), gallery.reveal_glow(1)), (0, None))
         with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
             def card():
-                return gallery.card_image(1, font, 2, 2).convert('RGB').tobytes()
+                return gallery.card_image(1, font, 2, 2).convert('RGB')
 
             def locked():
                 gallery.collection.seen.discard(CHAPTERS[1].key)
@@ -189,66 +192,131 @@ class GalleryTests(unittest.TestCase):
                 gallery.collection.seen.add(CHAPTERS[1].key)
                 return picture
 
-            waiting = card()
-            self.assertEqual(waiting, locked())                               # it starts exactly as it was
+            self.assertEqual(card().tobytes(), locked().tobytes())            # it starts exactly as it was
             self.assertNotIn(CHAPTERS[1].title, font.values)
             self.assertFalse(gallery.reveal_cue)
-            self.assertTrue(gallery.advance(gallery.REVEAL_DELAY + .01))      # keeps the page animating
+            self.assertTrue(gallery.advance(gallery.REVEAL_DELAY))            # keeps the page animating
             self.assertTrue(gallery.reveal_cue)                               # the scene plays the sound now
             gallery.reveal_cue = False
-            seen, states = [waiting], [gallery.reveal_state]
-            while gallery.reveal:
-                seen.append(card())
-                states.append(gallery.reveal_state)
-                gallery.advance(gallery.REVEAL_STEP)
-            self.assertEqual([state[0][1] for state in states[1:]], list(range(gallery.reveal_steps)))
+            # At a display's pace every frame differs a little from the last: no steps, no jumps.
+            frames, stages = [card()], [gallery.reveal_stage(1)]
+            while gallery.reveal_glow(1) is None:
+                gallery.advance(1 / 60)
+                frames.append(card())
+                stages.append(gallery.reveal_stage(1))
             self.assertFalse(gallery.reveal_cue)                              # once for each chapter
-            # Every step of the resolve looks different; the last frame is the settled card.
-            whole = len(gallery.REVEAL_COLUMNS) + 1
-            self.assertEqual(len(set(seen[:whole])), whole)
-            # Then the border glows slowly: held bright, cooling to the accent, thinning away.
-            size = gallery.card_image(1, font, 2, 2).size
+            self.assertEqual(stages, sorted(stages))
+            self.assertEqual(stages[-1], gallery.reveal_stages)
+            self.assertGreater(len(frames), 50)
+            thumb = (4, 4, frames[0].width - 4, 150)
+            changes = []
+            for before, after in zip(frames, frames[1:]):
+                difference = ImageChops.difference(before.crop(thumb), after.crop(thumb)).convert('L')
+                changes.append(sum(count * value for value, count in enumerate(difference.histogram()))
+                               / (difference.width * difference.height))
+            self.assertTrue(all(change > 0 for change in changes[:-1]))
+            whole_change = ImageChops.difference(frames[0].crop(thumb), frames[-1].crop(thumb)).convert('L')
+            total = (sum(count * value for value, count in enumerate(whole_change.histogram()))
+                     / (whole_change.width * whole_change.height))
+            self.assertLess(max(changes), total / 8)                          # no frame carries a big jump
+            self.assertIn(CHAPTERS[1].title, font.values)                     # the title arrives on the way
+            # A card in the middle of its reveal is never kept.
+            self.assertFalse(any(key[0] == 1 and key[3] for key in gallery.card_cache if key[4]))
+
+    def test_revealed_cover_glows_at_its_ordinary_thickness_while_light_crosses_it(self):
+        gallery, font = self.striped_gallery(), CaptionFont()
+        gallery.begin_reveal([1])
+        with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
+            gallery.advance(gallery.REVEAL_DELAY + gallery.reveal_stages * gallery.REVEAL_STEP + .001)
+            self.assertAlmostEqual(gallery.reveal_glow(1), .001, places=6)
             bright, accent = (tuple(int(menu_theme.c(colour)[i:i + 2], 16) for i in (1, 3, 5))
                               for colour in ('#eeeeee', '#f4d873'))
-            glow = [Image.frombytes('RGB', size, frame) for frame in seen[whole:-1]]
-            self.assertEqual(len(glow), gallery.REVEAL_GLINT - 1)
-            self.assertGreaterEqual(len(glow) * gallery.REVEAL_STEP, 1.2)     # seconds: not a flash
-            edge = [frame.getpixel((6, 40)) for frame in glow]                # inside a thick border only
-            self.assertEqual(edge[:gallery.GLINT_HOLD], [bright] * gallery.GLINT_HOLD)
-            # Meanwhile a band of light crosses the cover itself, left to right, then is gone.
-            plain = Image.frombytes('RGB', size, seen[-1]).crop((10, 10, size[0] - 10, 150))
-            lit = []
+            glow, moments = [], []
+            while gallery.reveal:
+                moments.append(gallery.reveal_glow(1))
+                glow.append(gallery.card_image(1, font, 2, 2).convert('RGB'))
+                gallery.advance(1 / 30)
+            settled = gallery.card_image(1, font, 2, 2).convert('RGB')
+            self.assertGreaterEqual(moments[-1], 1.2)                         # seconds: not a flash
+            # The border keeps the selected card's two pixels (at this scale four) throughout:
+            # the user disliked it growing fat and shrinking back.
+            height = settled.height
             for frame in glow:
-                difference = ImageChops.difference(frame.crop((10, 10, size[0] - 10, 150)), plain).getbbox()
-                lit.append(None if difference is None else (difference[0] + difference[2]) / 2)
-            sweep = lit[:gallery.GLINT_SWEEP]
-            self.assertTrue(all(x is not None for x in sweep[1:-1]))
-            centres = [x for x in sweep if x is not None]
+                self.assertEqual(frame.getpixel((3, 40)), frame.getpixel((0, 40)))
+                self.assertNotEqual(frame.getpixel((5, 40)), frame.getpixel((0, 40)))
+            edge = [frame.getpixel((1, 40)) for frame in glow]
+            self.assertEqual(edge[0], bright)
+            self.assertEqual(settled.getpixel((1, 40)), accent)
+            self.assertGreaterEqual(len(set(edge)), 12)                       # cooling through many shades
+            self.assertEqual(edge[-1], accent)
+            # The border lies over the title's band, at the bottom as on every side.
+            for frame in (*glow[:1], settled):
+                self.assertEqual(frame.getpixel((frame.width // 2, height - 3)), frame.getpixel((1, 40)))
+                self.assertEqual(frame.getpixel((frame.width - 3, height - 12)), frame.getpixel((1, 40)))
+            # Meanwhile a band of light crosses the cover itself, left to right, then is gone.
+            crop = (10, 10, settled.width - 10, 150)
+            plain = settled.crop(crop)
+            centres = []
+            for moment, frame in zip(moments, glow):
+                box = ImageChops.difference(frame.crop(crop), plain).getbbox()
+                if moment >= gallery.GLOW_SWEEP:
+                    self.assertIsNone(box)
+                elif box is not None:
+                    centres.append((box[0] + box[2]) / 2)
+            self.assertGreater(len(centres), 20)
             self.assertEqual(centres, sorted(centres))
             self.assertGreater(centres[-1] - centres[0], plain.width / 2)
-            self.assertEqual(lit[gallery.GLINT_SWEEP:], [None] * (len(glow) - gallery.GLINT_SWEEP))
-            cooling = [frame.getpixel((1, 40)) for frame in glow]
-            self.assertEqual((cooling[0], cooling[-1]), (bright, accent))
-            self.assertGreaterEqual(len(set(cooling)), gallery.GLINT_COOL)    # through several shades
-            self.assertNotEqual(glow[-1].getpixel((6, 40)), accent)           # thinner by the end
-            self.assertIn(CHAPTERS[1].title, font.values)                     # the title arrives on the way
-            settled = card()
-            self.assertEqual(settled, seen[-1])
-            self.assertNotIn(settled, seen[:-1])
-            self.assertFalse(gallery.advance(.05))
-            self.assertEqual(gallery.reveal_state, ())
-            gallery.developer = True                                          # developer access never animates...
-            gallery.begin_reveal([])
+            self.assertLess(max(b - a for a, b in zip(centres, centres[1:])), plain.width / 8)   # it glides
+
+    def test_reveal_redraws_only_its_card_in_the_cached_grid(self):
+        gallery, font = self.striped_gallery(), CaptionFont()
+        source = Image.new('RGBA', (1024, 768))
+        with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
+            gallery.draw(source, font)
+            gallery.begin_reveal([1])
+            gallery.draw(source, font)
+            grid = gallery.grid_cache[1]
+            key = gallery.grid_cache[0]
+            self.assertEqual(gallery.take_reveal_patches(), ())               # nothing has moved yet
+            gallery.advance(gallery.REVEAL_DELAY + .3)
+            before = grid.copy()
+            with patch.object(gallery, 'card_image', wraps=gallery.card_image) as card_image:
+                gallery.refresh_reveal(font, 2, 2)
+            self.assertEqual([call.args[0] for call in card_image.call_args_list], [1])   # one card, not the shelf
+            self.assertIs(gallery.grid_cache[1], grid)                        # the same picture, changed in place
+            self.assertEqual(gallery.grid_cache[0], key)
+            (x, y, card), = gallery.take_reveal_patches()
+            changed = ImageChops.difference(before, grid).getbbox()
+            self.assertTrue(x <= changed[0] and y <= changed[1]
+                            and changed[2] <= x + card.width and changed[3] <= y + card.height)
+            self.assertEqual(grid.crop((x, y, x + card.width, y + card.height)).tobytes(), card.tobytes())
+            self.assertEqual(gallery.take_reveal_patches(), ())
+            gallery.refresh_reveal(font, 2, 2)                                # no progress, nothing redrawn
+            self.assertEqual(gallery.take_reveal_patches(), ())
+            # A full draw shows the same thing, and the settled card when the reveal ends.
+            self.assertIs(gallery.draw(source, font) and gallery.grid_cache[1], grid)
+            gallery.advance(gallery.reveal_seconds)
             self.assertEqual(gallery.reveal, {})
-            seen_before = set(gallery.collection.seen)
-            gallery.index = 4                                                 # ...but R replays the selected reveal
-            self.assertEqual(gallery.key('r'), 'changed')
-            self.assertEqual(gallery.reveal_state, ((4, -1),))
-            self.assertEqual(gallery.collection.seen, seen_before)
-            gallery.developer = False
-            gallery.reveal = {}
-            gallery.key('r')
-            self.assertEqual(gallery.reveal, {})
+            gallery.draw(source, font)
+            settled = gallery.card_image(1, font, 2, 2).convert('RGB')
+            (x, y, card), = gallery.take_reveal_patches()
+            self.assertEqual(card.tobytes(), settled.tobytes())
+            self.assertEqual(gallery.reveal_drawn, {})
+
+    def test_developer_viewer_never_animates_but_r_replays_the_selected_reveal(self):
+        gallery = self.gallery()
+        gallery.developer = True
+        gallery.begin_reveal([])
+        self.assertEqual(gallery.reveal, {})
+        seen_before = set(gallery.collection.seen)
+        gallery.index = 4
+        self.assertEqual(gallery.key('r'), 'changed')
+        self.assertEqual(gallery.reveal, {4: -gallery.REVEAL_DELAY})
+        self.assertEqual(gallery.collection.seen, seen_before)
+        gallery.developer = False
+        gallery.reveal = {}
+        gallery.key('r')
+        self.assertEqual(gallery.reveal, {})
 
     def test_developer_access_is_read_only_and_caches_do_not_leak_to_normal_mode(self):
         gallery = self.gallery()
@@ -566,10 +634,25 @@ class ViewerSceneTests(unittest.TestCase):
         with patch.object(scene.root, 'after', side_effect=lambda _delay, callback: pending.append(callback) or 'id'),                 patch.object(scene.root, 'after_idle', side_effect=lambda callback: pending.append(callback) or 'id'),                 patch.object(scene.root, 'after_cancel'),                 patch('pop2.cutscene_viewer.time.perf_counter', side_effect=(n * .05 for n in range(10000))):
             scene.cancel_cutscene_gallery_tick()
             scene.schedule_cutscene_gallery()
-            for _ in range(400):
-                if not pending or not gallery.reveal:
-                    break
-                pending.pop(0)()
+            checked = rebuilt = 0
+            with patch.object(scene, 'cutscene_gallery_frame', wraps=scene.cutscene_gallery_frame) as frame:
+                for _ in range(400):
+                    if not pending or not gallery.reveal:
+                        break
+                    pending.pop(0)()
+                    stage = gallery.reveal_stage(index)
+                    if stage is not None and 2 < stage < gallery.reveal_stages and not checked:
+                        # What the window shows is the half-resolved card, brought there
+                        # without rebuilding the page.
+                        rebuilt = frame.call_count
+                        shown = self.displayed_gallery()
+                        checked = 1
+                rebuilds = frame.call_count
+            self.assertEqual((checked, rebuilt, rebuilds), (1, 0, 0))
+            size = shown.size
+            model = scene.cutscene_gallery_frame(size)
+            self.assertEqual(self.displayed_gallery().tobytes(), model.tobytes())      # settled, glow over
+            self.assertNotEqual(shown.tobytes(), model.tobytes())
         self.assertEqual(gallery.reveal, {})
         scene.audio.play_ui.assert_called_once_with('reveal')
         scene.close_game_menu()

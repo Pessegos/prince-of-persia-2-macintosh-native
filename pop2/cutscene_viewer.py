@@ -291,9 +291,11 @@ class CutsceneControls:
         def appearance():
             return (id(self.screenshot_viewport), id(self.ui_font), gallery.index, gallery.focus,
                     gallery.error, gallery.collection.error, frozenset(gallery.collection.seen),
-                    gallery.developer, gallery.chapters, getattr(self, 'screenshot_toast', None),
-                    gallery.reveal_state)
+                    gallery.developer, gallery.chapters, getattr(self, 'screenshot_toast', None))
 
+        # A reveal changes one card on every frame: bring the cached grid up to
+        # date here, and below copy just those cards into the retained photo.
+        gallery.refresh_reveal(self.ui_font, size[1] / 384, size[1] / 384)
         look = appearance()
         fast = (previous is not None and previous[0] is gallery and previous[1].size == size
                 and previous[2] is self.image_ref and previous[5] == look
@@ -309,9 +311,15 @@ class CutsceneControls:
         moving = (round(gallery.display_scroll * sx), gallery.scroll_target > 0,
                   gallery.scroll_target < gallery.max_scroll, gallery.grid_cache[0], gallery.display_scroll)
         grid_photo = getattr(self, '_cutscene_gallery_grid_photo', None)
+        patches = gallery.take_reveal_patches()
         if grid_photo is None or grid_photo[0] is not gallery.grid_cache[1]:
             grid_photo = self._cutscene_gallery_grid_photo = (
                 gallery.grid_cache[1], ImageTk.PhotoImage(gallery.grid_cache[1]))
+        else:
+            for x, y, card in patches:
+                card_photo = ImageTk.PhotoImage(card)
+                grid_photo[1].tk.call(str(grid_photo[1]), 'copy', str(card_photo), '-to', x, y,
+                                      '-compositingrule', 'set')
         if (previous is not None and previous[0] is gallery and previous[1].size == size
                 and previous[2] is self.image_ref):
             def upload(region, pixels):

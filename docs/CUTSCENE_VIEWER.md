@@ -29,14 +29,21 @@ picture is the chapter's own cover reduced to sixteen columns of darkened
 blocks: its colours, nothing that can be recognised. Their story title is not
 drawn. A chapter unlocked by playing it since the viewer was last open is
 selected when the viewer opens and, after a short wait, resolves out of those
-blocks in eight steps, like a console's mosaic fade; its title appears
-halfway. As it starts to resolve the
-menu's `reveal` sound plays (docs/AUDIO_RECOVERY.md), and when the cover is
-whole the card's border glows for about a second and a half: thick and bright
-at first, cooling through a few shades to the accent colour, then thinning
-back to the ordinary selected border. During the first second a hard-edged
-band of light, with a thin one behind it, crosses the cover from left to
-right, leaning like a reflection on glass.
+blocks through eight finer stages, like a console's mosaic fade, each stage
+dissolving into the next so that the picture never jumps (about a second); its
+title appears halfway. As it starts to resolve the menu's `reveal` sound plays
+(docs/AUDIO_RECOVERY.md). When the cover is whole the card's border glows for
+a second and a half, bright and then cooling to the accent colour, at its
+ordinary thickness, and during the first second a hard-edged band of light,
+with a thin one behind it, glides across the cover from left to right, leaning
+like a reflection on glass.
+
+The reveal is drawn at the display's rate, and only its card is redrawn:
+`CutsceneGallery.refresh_reveal` paints that card into the cached grid in
+place, and the presenter copies the same card into the retained Tk photo. The
+page and the shelf are not rebuilt (about 5 ms a frame at 1920x1080 on the
+development machine, with the window hidden). Every card's border is drawn
+last, over its picture and its title band.
 Chapters admitted from a loaded save, and the developer viewer, do not animate.
 The unlocks are kept in each saved game, and developer level or room jumps
 never unlock a chapter, so a chapter already seen in the loaded game is not
