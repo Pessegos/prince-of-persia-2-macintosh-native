@@ -198,10 +198,11 @@ class GalleryTests(unittest.TestCase):
             self.assertTrue(gallery.advance(gallery.REVEAL_DELAY))            # keeps the page animating
             self.assertTrue(gallery.reveal_cue)                               # the scene plays the sound now
             gallery.reveal_cue = False
-            # Drawn at a display's pace, the card still moves in whole frames, twenty a second,
+            # Drawn at a display's pace, the card still moves in whole frames, fifteen a second,
             # one stage of blocks a frame, nothing blended: an old game's animation. Eight
-            # stages at nine a second looked choppy, a dissolve at 60 a second too smooth.
-            self.assertEqual((gallery.REVEAL_RATE, gallery.reveal_stages), (20, 17))
+            # stages at nine a second looked choppy; a dissolve at 60 a second, and then
+            # twenty whole frames a second, too smooth.
+            self.assertEqual((gallery.REVEAL_RATE, gallery.reveal_stages), (15, 17))
             frames, stages = [card()], [gallery.reveal_stage(1)]
             while gallery.reveal_glow(1) is None:
                 gallery.advance(1 / 60)
@@ -215,7 +216,7 @@ class GalleryTests(unittest.TestCase):
             self.assertEqual(len(distinct), gallery.reveal_stages + 1)        # one picture for each stage
             self.assertEqual(len(set(distinct)), len(distinct))
             held = len(frames) / len(distinct)
-            self.assertTrue(2.5 < held < 3.5)                                 # each held for three 60 Hz frames
+            self.assertTrue(3.5 < held < 4.5)                                 # each held for four 60 Hz frames
             # Blocks only, never a blend of two stages: a stage's picture is exactly its own veil.
             thumb = (4, 4, frames[0].width - 4, 150)
             cover = gallery.image_cache[1, (frames[0].width - 8, round((gallery.CARD_WIDTH - 4) * 9 / 16 * 2))]
@@ -248,9 +249,18 @@ class GalleryTests(unittest.TestCase):
                 self.assertEqual(frame.getpixel((3, 40)), frame.getpixel((0, 40)))
                 self.assertNotEqual(frame.getpixel((5, 40)), frame.getpixel((0, 40)))
             edge = [frame.getpixel((1, 40)) for frame in glow]
-            self.assertEqual(edge[0], bright)
             self.assertEqual(settled.getpixel((1, 40)), accent)
-            self.assertGreaterEqual(len(set(edge)), 12)                       # cooling through many shades
+            # It fades in as it fades out: the user disliked the border turning white at once.
+            peak = edge.index(bright)
+            rising = [colour for n, colour in enumerate(edge[:peak]) if n == 0 or colour != edge[n - 1]]
+            self.assertGreaterEqual(len(rising), 3)
+            self.assertNotIn(edge[0], (bright, accent))                       # already on its way up
+            blue = [colour[2] for colour in rising] + [bright[2]]             # accent has little blue, bright much
+            self.assertEqual(blue, sorted(blue))
+            self.assertGreater(moments[peak], .15)
+            falling = edge[peak:]
+            self.assertGreaterEqual(len(set(falling)), 8)                     # cooling through many shades
+            self.assertEqual([colour[2] for colour in falling], sorted((colour[2] for colour in falling), reverse=True))
             self.assertEqual(edge[-1], accent)
             # The border lies over the title's band, at the bottom as on every side.
             for frame in (*glow[:1], settled):
@@ -270,7 +280,7 @@ class GalleryTests(unittest.TestCase):
             self.assertEqual(centres, sorted(centres))
             self.assertGreater(centres[-1] - centres[0], plain.width / 2)
             moves = [b - a for a, b in zip(centres, centres[1:]) if b != a]
-            self.assertGreaterEqual(len(moves), 12)                           # in a dozen and more steps...
+            self.assertGreaterEqual(len(moves), 9)                            # in many steps...
             self.assertLess(max(moves), plain.width / 6)                      # ...none of them a leap
 
     def test_reveal_redraws_only_its_card_in_the_cached_grid(self):
@@ -667,6 +677,32 @@ class ViewerSceneTests(unittest.TestCase):
         # A chapter admitted from a loaded save, or seen in the developer viewer, does not animate.
         scene.cutscene_collection.unlock(*CHAPTER_KEYS)
         self.assertEqual(self.open_viewer().reveal, {})
+
+    def test_a_game_s_introduction_reveals_the_three_opening_chapters_once_with_one_sound(self):
+        scene = self.scene
+        self.assertEqual(self.open_viewer().reveal, {})                 # open from the start: nothing to reveal yet
+        scene.close_game_menu()
+        scene.mark_cutscene_seen('opening')                            # the introduction has played
+        self.assertEqual(scene.cutscene_fresh, set(OPENING_KEYS))
+        gallery = self.open_viewer()
+        opening = [index for index, chapter in enumerate(CHAPTERS) if chapter.key in OPENING_KEYS]
+        self.assertEqual((sorted(gallery.reveal), gallery.index), (opening, opening[0]))
+        waits = [gallery.reveal[index] for index in opening]
+        self.assertEqual(waits, sorted(waits, reverse=True))           # one after another
+        cues = 0
+        for _ in range(400):
+            gallery.advance(1 / 30)
+            cues += gallery.reveal_cue
+            gallery.reveal_cue = False
+        self.assertEqual((gallery.reveal, cues), ({}, 1))              # three chapters, one sound
+        scene.close_game_menu()
+        scene.mark_cutscene_seen('opening')                            # the introduction again, same game
+        self.assertEqual(scene.cutscene_fresh, set())
+        self.assertEqual(self.open_viewer().reveal, {})
+        scene.close_game_menu()
+        scene.cutscene_collection = CutsceneCollection()               # a new game reveals them again
+        scene.mark_cutscene_seen('opening')
+        self.assertEqual(sorted(self.open_viewer().reveal), opening)
 
     def test_developer_replay_leaves_profile_world_and_normal_shortcut_locks_unchanged(self):
         scene = self.scene

@@ -49,6 +49,8 @@ def ordered_seen(keys):
 class CutsceneCollection:
     seen: set = field(default_factory=lambda: set(OPENING_KEYS))
     error: str = ''
+    # Chapters the viewer has already shown being revealed in this game. Not saved.
+    revealed: set = field(default_factory=set, compare=False)
 
     @classmethod
     def from_saved(cls, keys):

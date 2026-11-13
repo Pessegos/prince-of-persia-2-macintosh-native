@@ -62,19 +62,21 @@ class CutsceneGallery:
     # fade. The whole reveal moves in whole frames, REVEAL_RATE a second, one
     # stage a frame, with nothing blended between them: an old game's
     # animation. Eight stages at nine a second looked choppy; dissolving them
-    # at the display's rate looked too smooth for this game.
+    # at the display's rate, and then twenty whole frames a second, looked too
+    # smooth for this game.
     VEIL_COLUMNS = 16
     VEIL_DEPTH = .6
     REVEAL_COLUMNS = (18, 20, 23, 26, 30, 34, 39, 44, 51, 58, 66, 76, 87, 100, 115, 130)
-    REVEAL_RATE = 20
+    REVEAL_RATE = 15
     REVEAL_STEP = 1 / REVEAL_RATE   # seconds from one stage to the next
     REVEAL_DELAY = .6
     # Once the cover is whole its border glows: bright, then cooling to the
     # accent colour, at its ordinary thickness. Meanwhile a band of light
     # crosses the cover. Times in seconds.
-    REVEAL_GLOW = 1.5
-    GLOW_HOLD = .35
-    GLOW_COOL = .75
+    REVEAL_GLOW = 1.6
+    GLOW_IN = .3        # from the card's own border up to bright
+    GLOW_HOLD = .2
+    GLOW_COOL = .75     # and back down to the accent colour
     GLOW_SWEEP = .9
 
     def layout(self, size, *, visible=False):
@@ -220,11 +222,13 @@ class CutsceneGallery:
         self.scroll = self.scroll_target
 
     def advance(self, seconds):
+        # Several chapters revealed together share one sound: the first to start asks for it.
+        started = any(elapsed >= 0 for elapsed in self.reveal.values())
         for index in tuple(self.reveal):
             waiting = self.reveal[index] < 0
             self.reveal[index] += seconds
-            if waiting and self.reveal[index] >= 0:
-                self.reveal_cue = True
+            if waiting and self.reveal[index] >= 0 and not started:
+                self.reveal_cue = started = True
             if self.reveal[index] >= self.reveal_seconds:
                 del self.reveal[index]
         return self.advance_scroll(seconds) or bool(self.reveal)
@@ -438,11 +442,16 @@ class CutsceneGallery:
         if glow is not None:
             bright, accent, rest = (tuple(int(c(colour)[i:i + 2], 16) for i in (1, 3, 5))
                                     for colour in ('#eeeeee', '#f4d873', outline))
-            cool = max(0, min(1, (glow - self.GLOW_HOLD) / self.GLOW_COOL))
-            fade = max(0, min(1, (glow - self.GLOW_HOLD - self.GLOW_COOL)
-                              / max(.01, self.REVEAL_GLOW - self.GLOW_HOLD - self.GLOW_COOL)))
-            shade = tuple(round(a + (b - a) * cool) for a, b in zip(bright, accent))
-            outline = tuple(round(a + (b - a) * fade) for a, b in zip(shade, rest))   # back to the card's own border
+            lit = self.GLOW_IN + self.GLOW_HOLD
+            if glow < self.GLOW_IN:
+                # It brightens as it dims: a fade in, not a sudden white border.
+                rise = (glow * self.REVEAL_RATE + 1) / (self.GLOW_IN * self.REVEAL_RATE + 1)
+                outline = tuple(round(a + (b - a) * rise) for a, b in zip(rest, bright))
+            else:
+                cool = max(0, min(1, (glow - lit) / self.GLOW_COOL))
+                fade = max(0, min(1, (glow - lit - self.GLOW_COOL) / max(.01, self.REVEAL_GLOW - lit - self.GLOW_COOL)))
+                shade = tuple(round(a + (b - a) * cool) for a, b in zip(bright, accent))
+                outline = tuple(round(a + (b - a) * fade) for a, b in zip(shade, rest))   # back to the card's own border
             if glow < self.GLOW_SWEEP and cover is not None:
                 # A band of light crosses the cover from left to right, leaning like a
                 # reflection on glass, with a thin second one behind it. Hard-edged.

@@ -32,16 +32,22 @@ selected when the viewer opens and, after a short wait, resolves out of those
 blocks through sixteen finer stages, like a console's mosaic fade (under a
 second); its title appears halfway. As it starts to resolve the menu's
 `reveal` sound plays (docs/AUDIO_RECOVERY.md). When the cover is whole the
-card's border glows for a second and a half, bright and then cooling to the
-accent colour, at its ordinary thickness, and during the first second a
+card's border glows for a second and a half, at its ordinary thickness: it
+fades up to bright, then cools to the accent colour. During the first second a
 hard-edged band of light, with a thin one behind it, crosses the cover from
 left to right, leaning like a reflection on glass.
 
-The whole reveal moves in whole frames, twenty a second, one stage of blocks a
-frame, and nothing is blended between frames, as an old game animates. Two
-other paces were tried and rejected by the user: eight stages at nine frames a
-second looked choppy, and stages dissolving into each other at the display's
-rate looked too smooth to belong to this game.
+The whole reveal moves in whole frames, fifteen a second, one stage of blocks a
+frame, and nothing is blended between frames, as an old game animates. Other
+paces were tried and rejected by the user: eight stages at nine frames a
+second looked choppy; stages dissolving into each other at the display's
+rate, and then twenty whole frames a second, looked too smooth to belong to
+this game.
+
+The opening's three chapters are open from the start. Once a game's
+introduction has played they are revealed in the same way, one after another,
+the first time the viewer is opened in that game. Chapters revealed together
+share one sound.
 
 Only the revealing card is redrawn, and only when it reaches its next frame:
 `CutsceneGallery.refresh_reveal` paints that card into the cached grid in

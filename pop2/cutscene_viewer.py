@@ -8,7 +8,7 @@ from tkinter import TclError
 
 from PIL import Image
 
-from pop2.cutscenes import CHAPTERS, CutsceneCollection, chapter_available, chapter_range
+from pop2.cutscenes import CHAPTERS, OPENING_KEYS, CutsceneCollection, chapter_available, chapter_range
 from pop2.playback_preview import PlaybackPreviews
 
 
@@ -154,7 +154,12 @@ class CutsceneControls:
         collection.unlock(key)
         if not hasattr(self, 'cutscene_fresh'):
             self.cutscene_fresh = set()
-        self.cutscene_fresh |= collection.seen - before
+        fresh = collection.seen - before
+        if key == 'opening':
+            # The opening's three chapters are open from the start, but a game's
+            # introduction has just shown them: the viewer reveals them once too.
+            fresh |= OPENING_KEYS
+        self.cutscene_fresh |= fresh - collection.revealed
 
     def mark_story_scene_seen(self, program_name):
         chapter = next((chapter for chapter in CHAPTERS if chapter.program == program_name), None)
@@ -185,6 +190,7 @@ class CutsceneControls:
         fresh = getattr(self, 'cutscene_fresh', set())
         if not developer and fresh:
             gallery.begin_reveal(index for index, chapter in enumerate(CHAPTERS) if chapter.key in fresh)
+            self.cutscene_collection.revealed |= fresh
             fresh.clear()
         self.render()
         if gallery.reveal:
