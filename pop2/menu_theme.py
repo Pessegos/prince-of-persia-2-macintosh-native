@@ -737,7 +737,7 @@ def watermark(image, rect, point=None, avoid=()):
     shade, so text, outlines and pictures stay as they are. ``point`` is given
     by pages drawn at the window's resolution: the sign is then drawn at the
     game's resolution and enlarged without smoothing. ``avoid`` lists the
-    rectangles where pictures go: a slot still waiting for its picture has a
+    rectangles where pictures go, in the image's own pixels: a slot still waiting for its picture has a
     background colour, and the sign must not show there and then vanish.
     """
     theme = _current
@@ -764,8 +764,6 @@ def watermark(image, rect, point=None, avoid=()):
     packed = (pixels[..., 0].astype(numpy.uint32) << 16) | (pixels[..., 1].astype(numpy.uint32) << 8) | pixels[..., 2]
     inside = numpy.asarray(mask) > 0
     for left, top, right, bottom in avoid:
-        if point is not None:
-            (left, top), (right, bottom) = point(left, top), point(right, bottom)
         inside[max(0, top - box[1]):max(0, bottom + 1 - box[1]), max(0, left - box[0]):max(0, right + 1 - box[0])] = False
     toward = _rgb(theme.mark)
     changed = numpy.zeros(inside.shape, dtype=bool)

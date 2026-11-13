@@ -754,11 +754,17 @@ class ScreenshotGallery:
                 y = (rect[1] + rect[3] - ((ink[3] - ink[1]) if ink else raw.height) * scale) / 2
             text(label, x, y, rect[2] - rect[0] - 16, white if enabled else muted, scale)
 
+        shown = []   # where pictures are, in pixels: the theme's sign keeps out of them
+
+        def keep_clear(left, top, right, bottom):
+            shown.append((left + origin[0], top + origin[1], right + origin[0], bottom + origin[1]))
+
         def picture(entry, rect, thumb=False, outline=c('#626262')):
             key = self.image_key(entry, thumb)
             result = self.reads.request(key, lambda: read_capture(entry,
                 (510, 384) if thumb else (2040, 1536)), 0 if thumb else -5)
             if result is None:
+                keep_clear(*point(*rect[:2]), *point(*rect[2:]))   # a slot still waiting for its picture
                 box(rect, c('#222222'), outline)
                 text('...', (rect[0] + rect[2]) / 2 - 6, (rect[1] + rect[3]) / 2, 30, muted)
                 return None
@@ -776,13 +782,12 @@ class ScreenshotGallery:
             fitted = self.image_cache[fit_key]
             pos = left + (size[0] - fitted.width) // 2, top + (size[1] - fitted.height) // 2
             image.paste(fitted, pos)
+            keep_clear(*pos, pos[0] + fitted.width - 1, pos[1] + fitted.height - 1)
             border = max(1, round(min(sx, sy)))
             draw.rectangle((pos[0] - border, pos[1] - border,
                             pos[0] + fitted.width + border - 1, pos[1] + fitted.height + border - 1),
                            outline=outline, width=border)
             return result.value[1]
-
-        shown = [self.PREVIEW]   # where pictures go: the theme's sign keeps out of them
 
         def draw_list():
             nonlocal image, draw, origin
@@ -792,16 +797,19 @@ class ScreenshotGallery:
             origin = clip[:2]
             image = Image.new('RGBA', (clip[2] - clip[0], clip[3] - clip[1]), c('#181818'))
             draw = ImageDraw.Draw(image)
+            first = len(shown)
             for index in self.visible_indices:
                 entry = self.entries[index]
                 rect = self.row_rect(index)
                 height = 50
                 outline = gold if self.focus == 100 + index and not modal else cyan if self.selected == index else c('#626262')
                 picture(entry, (rect[0], rect[1], rect[2], rect[1] + height), True, outline)
-                shown.append((rect[0], max(rect[1], self.LIST[1]), rect[2], min(rect[1] + height, self.LIST[3])))
                 text(entry.date.replace('  ', ' '), rect[0] + 2, rect[1] + height + 5,
                      rect[2] - rect[0] - 4, cyan if self.selected == index else muted,
                      0.4)
+            # Thumbnails scrolled partly out of the list are cut off at its edge.
+            shown[first:] = [(max(left, clip[0]), max(top, clip[1]), min(right, clip[2] - 1), min(bottom, clip[3] - 1))
+                             for left, top, right, bottom in shown[first:]]
             base.paste(image, clip[:2])
             image, draw, origin = base, base_draw, (0, 0)
             if self.max_scroll:
