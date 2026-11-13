@@ -76,6 +76,25 @@ class DevelopmentMapModelTests(unittest.TestCase):
                                map_provider=lambda _number: atlas, focus=4, map_open=opened,
                                return_screens={3: 'Room 1'})
 
+    def test_map_rooms_stand_on_the_theme_ground(self):
+        from pop2 import menu_theme
+        self.addCleanup(menu_theme.use, menu_theme.NEUTRAL)
+        font = SimpleNamespace(text=lambda value, color=None: Image.new('RGBA', (6 * len(value), 10)))
+        atlas = preview()
+        atlas.image.paste((200, 10, 10), (0, 0, 100, 40))     # rooms 1 and 2
+        menu = self.menu()
+        menu.map_provider = lambda _number: atlas
+        size = (488, 284)
+        scale, (ox, oy) = atlas.transform(size)
+        inside = round(25 * scale + ox), round(20 * scale + oy)
+        outside = round(25 * scale + ox), round(60 * scale + oy)   # the gap beside room 3
+        for theme, ground in ((menu_theme.NEUTRAL, (16, 16, 16, 255)),
+                              (menu_theme.RUINS, menu_theme._rgb(menu_theme.RUINS.colour('backdrop')) + (255,))):
+            menu_theme.use(theme)
+            layer = menu.map_layer(font, size)
+            self.assertEqual(layer.getpixel(outside), ground)
+            self.assertEqual(layer.getpixel(inside), (200, 10, 10, 255))
+
     def test_map_hits_are_half_open_and_do_not_select_gaps(self):
         atlas = preview()
         for point, expected in (((0, 0), 'Room 1'), ((49.9, 39.9), 'Room 1'),

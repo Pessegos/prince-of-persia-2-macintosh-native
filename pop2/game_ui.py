@@ -580,6 +580,7 @@ class DevelopmentMenu:
              264 if self.page == 'playback' else 256, 86 + offset, gold, centered=True)
         if self.page == 'tools' and (self.map_available or not self.level_available):
             self.draw_game_tools(draw, text)
+            menu_theme.watermark(image, self.panel_rect)
             return image
         available = self.page != 'playback' or bool(self.sections)
         if self.page == 'tools':
@@ -827,6 +828,17 @@ class DevelopmentMenu:
             x1, y1, x2, y2 = preview.rooms[label]
             return (round(x1 * sx + ox), round(y1 * sy + oy),
                     round(x2 * sx + ox) - 1, round(y2 * sy + oy) - 1)
+
+        ground = c('#101010')
+        if ground != '#101010':
+            # The map picture is built (and kept on disk) on neutral grey. Under a
+            # theme, stand its rooms on the theme's own ground instead.
+            themed = Image.new('RGBA', image.size, ground)
+            for label in preview.rooms:
+                x1, y1, x2, y2 = room_rect(label)
+                themed.paste(image.crop((x1, y1, x2 + 1, y2 + 1)), (x1, y1))
+            image = themed
+            draw = ImageDraw.Draw(image)
 
         start_labels = preview.starts | {preview.start}
         markers = [(label, 'Start', (127, 223, 170))

@@ -137,7 +137,7 @@ class MenuThemeTest(unittest.TestCase):
                     self.assertEqual(picture[60, 1], menu_theme._rgb(theme.bands[1][0]) + (255,))
                     self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
                 elif theme.frame is not None:
-                    # Drawn frames: sand and surf, studded stone, columns.
+                    # Drawn frames: sand, the ruins' band of sockets, the temple's columns.
                     self.assertIn(theme.frame_width, (9, 11, 13))
                     picture = menu_theme._frame_picture(theme.name, (120, 90)).load()
                     self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
@@ -192,6 +192,51 @@ class MenuThemeTest(unittest.TestCase):
         self.assertEqual(caverns.getpixel((other[0] + 3, other[1] + 3)), (0x29, 0x10, 0x08, 255))
         menu_theme.use(NEUTRAL)
         self.assertEqual(list(GameMenu().draw(viewport.copy(), font).getdata()), list(neutral.getdata()))
+
+    def test_desert_frame_is_sand_with_no_water_and_rounded_corners(self):
+        size = (387, 364)
+        picture = menu_theme._frame_picture('desert', size)
+        pixels = picture.load()
+        for corner in ((0, 0), (size[0] - 1, 0), (0, size[1] - 1), (size[0] - 1, size[1] - 1)):
+            self.assertEqual(pixels[corner][3], 0)
+        panel = menu_theme._rgb(DESERT.colour('panel')) + (255,)
+        self.assertEqual(pixels[size[0] // 2, size[1] // 2], panel)
+        band = {colour for _count, colour in picture.crop((40, 0, 340, 11)).getcolors()}
+        # The first draft had a surf line: no colour of the band is bluer than it is red.
+        self.assertTrue(all(blue < red for red, _green, blue, _alpha in band))
+        # The details differ from one another: the top band is not the same strip repeated.
+        strips = {picture.crop((left, 2, left + 30, 9)).tobytes() for left in range(40, 340, 30)}
+        self.assertEqual(len(strips), 10)
+
+    def test_ruins_frame_has_square_sockets_and_keeps_most_of_its_band(self):
+        size = (387, 364)
+        pixels = menu_theme._frame_picture('ruins', size).load()
+        sunk = menu_theme._rgb('#413871') + (255,)
+        for y in (4, size[1] - 5):
+            run = longest = 0
+            for x in range(size[0]):
+                run = run + 1 if pixels[x, y] == sunk else 0
+                longest = max(longest, run)
+            self.assertLess(longest, 9)         # a draft joined two sockets into a rectangle 11 wide
+        # Pieces are broken out of the edge, but never more than five of its nine rows.
+        missing = [sum(pixels[x, y][3] == 0 for y in range(9)) for x in range(12, size[0] - 12)]
+        self.assertGreater(max(missing), 1)
+        self.assertLessEqual(max(missing), 5)
+        self.assertGreater(missing.count(0), len(missing) // 2)
+
+    def test_temple_frieze_is_never_cut_and_is_the_same_above_and_below(self):
+        for size in ((387, 364), (330, 190), (480, 366), (316, 262)):
+            with self.subTest(size=size):
+                picture = menu_theme._frame_picture('temple', size)
+                width, height = size
+                top = picture.crop((0, 2, width, 9))
+                self.assertEqual(top.tobytes(), picture.crop((0, height - 9, width, height - 2)).tobytes())
+                # Both ends carry the whole corner block, whatever the width.
+                self.assertEqual(top.crop((0, 0, 13, 7)).tobytes(), top.crop((width - 13, 0, width, 7)).tobytes())
+                ground = menu_theme._rgb('#520808') + (255,)
+                pixels = top.load()
+                for x in (14, width - 15):      # bare ground beside each corner block: no motif runs into it
+                    self.assertTrue(all(pixels[x, y] == ground for y in range(7)))
 
     def test_ruins_sign_darkens_only_the_page_backgrounds(self):
         menu_theme.use(RUINS)
