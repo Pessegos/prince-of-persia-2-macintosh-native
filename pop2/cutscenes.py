@@ -49,6 +49,8 @@ def ordered_seen(keys):
 class CutsceneCollection:
     seen: set = field(default_factory=lambda: set(OPENING_KEYS))
     error: str = ''
+    # Chapters the viewer has already shown being revealed in this game. Not saved.
+    revealed: set = field(default_factory=set, compare=False)
 
     @classmethod
     def from_saved(cls, keys):
@@ -56,6 +58,17 @@ class CutsceneCollection:
 
     def unlock(self, *keys):
         self.seen = ordered_seen(self.seen | CHAPTER_KEYS.intersection(keys))
+
+    def unlock_through(self, key):
+        """A scene seen in play also opens the story before it.
+
+        Every chapter is a mandatory scene, so in a normal campaign the earlier
+        ones are already there. After a developer warp they are not, and the
+        collection still stays one story told in order, with no gaps.
+        """
+        keys = [chapter.key for chapter in CHAPTERS]
+        if key in keys:
+            self.unlock(*keys[:keys.index(key) + 1])
 
     def admit_saved_progress(self, game):
         """Earlier mandatory scenes in an older save have already been reached.

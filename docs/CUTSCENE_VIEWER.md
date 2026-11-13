@@ -18,12 +18,48 @@ move both rows horizontally without snapping to cards or pages; dragging moves
 them directly. Chapters fill each column top-to-bottom before continuing to
 the right, keeping the two-row strip dense when later chapters come into view. Left/Right and Up/Down follow the grid and
 reveal the selection when necessary; Home/End select the first/last chapter.
-Clicking a card selects it on release; a double click on that same card starts
-it. A drag, scrolling, leaving the canvas or losing focus clears the pending
-click, so browsing cannot accidentally start a film. Arrow keys and Tab also
+One click on an unlocked card selects it and starts it, on release; a locked
+card is only selected. A drag, scrolling, leaving the canvas or losing focus
+clears the pending click, so browsing cannot accidentally start a film. For
+half a second after a film starts a further click is ignored, so that a double
+click made out of habit does not pause it at once. Arrow keys and Tab also
 navigate the cards; Enter remains available without an on-screen key legend.
-Escape returns to the F1 menu. Locked chapters show a generic numbered card;
-neither their image nor their story title is drawn.
+Escape returns to the F1 menu. Locked chapters show a numbered card whose
+picture is the chapter's own cover reduced to sixteen columns of darkened
+blocks: its colours, nothing that can be recognised. Their story title is not
+drawn. A chapter unlocked by playing it since the viewer was last open is
+selected when the viewer opens and, after a short wait, resolves out of those
+blocks through sixteen finer stages, like a console's mosaic fade (under a
+second); its title appears halfway. As it starts to resolve the menu's
+`reveal` sound plays (docs/AUDIO_RECOVERY.md). When the cover is whole the
+card's border glows for a second and a half, at its ordinary thickness: it
+fades up to bright, then cools to the accent colour. During the first second a
+hard-edged band of light, with a thin one behind it, crosses the cover from
+left to right, leaning like a reflection on glass.
+
+The whole reveal moves in whole frames, fifteen a second, one stage of blocks a
+frame, and nothing is blended between frames, as an old game animates. Other
+paces were tried and rejected by the user: eight stages at nine frames a
+second looked choppy; stages dissolving into each other at the display's
+rate, and then twenty whole frames a second, looked too smooth to belong to
+this game.
+
+The opening's three chapters are open from the start. Once a game's
+introduction has played they are revealed in the same way, one after another,
+the first time the viewer is opened in that game. Chapters revealed together
+share one sound.
+
+Only the revealing card is redrawn, and only when it reaches its next frame:
+`CutsceneGallery.refresh_reveal` paints that card into the cached grid in
+place, and the presenter copies the same card into the retained Tk photo. The
+page and the shelf are not rebuilt. Every card's border is drawn last, over
+its picture and its title band.
+Chapters admitted from a loaded save, and the developer viewer, do not animate.
+The unlocks are kept in each saved game, and developer level or room jumps
+never unlock a chapter, so a chapter already seen in the loaded game is not
+revealed again by replaying its level. In the developer viewer, R shows the
+selected chapter's reveal again, sound included, without changing anything.
+The page takes the level's menu theme (docs/MENU_THEMES.md).
 
 The catalog in `pop2/cutscenes.py` includes Prologue, Title and The Palace
 Escape from the opening, voyage after level 1,
@@ -38,16 +74,21 @@ through `start_story_scene` also consult that catalog when unlocking.
 ## Collection and existing saves
 
 All three opening chapters are available immediately. Other
-chapters unlock when the normal campaign actually starts their scene and the
-preceding mandatory story chapters have been reached. Finishing or watching
-every frame is not required. Collection reads retain a chronological prefix;
-an isolated debug flag such as the horse without the earlier chapters is
-ignored. New Game starts with the three opening chapters again.
+chapters unlock when the game actually starts their scene. Finishing or
+watching every frame is not required. Every chapter is a mandatory scene, so a
+scene seen in play also unlocks the chapters before it: in a normal campaign
+they are already there, and the collection stays one story in order. Collection
+reads retain a chronological prefix; an isolated saved key such as the horse
+without the earlier chapters is ignored. New Game starts with the three
+opening chapters again.
 
-A successful F3 room/level warp or retained developer seek suspends collection
-updates for that debug session, including scenes triggered afterward. Starting
-a new game or loading a validated campaign save restores normal admission.
-Gallery browsing and replays never unlock chapters.
+An F3 room/level warp unlocks nothing by itself, but a scene played after it
+counts (the user asked for progress to work with the Dev Tools too): warping
+to level 9 and riding to the temple unlocks the horse and every chapter before
+it, and the viewer reveals them. A save made afterwards keeps them. A retained
+developer playback seek still suspends collection updates until a new game or
+a validated campaign save is loaded. Gallery browsing and replays never unlock
+chapters.
 
 The current collection lives in memory and is saved as a short `cutscenes` list
 inside each `.pop2save` when Save succeeds. Loading another save replaces the
@@ -62,7 +103,7 @@ a validated older save without it admits
 earlier mandatory chapters according to the catalog's completed-level
 thresholds. A level 8 save can also admit the vision from its existing throne
 flags. A level 13 save does not imply the subsequent tower flight was seen.
-An arbitrary developer warp is not used as evidence of campaign progress.
+A developer warp alone is not used as evidence of campaign progress.
 
 ## Presentation and opening boundaries
 
@@ -203,6 +244,6 @@ input/lifecycle behavior. `tests.test_display_refresh` checks monitor/device
 selection, current-mode frequency, Windows ABI sizes and failure fallbacks.
 Scheduler tests include the paint-idle phase, timer cancellation and a simulated
 120-to-240 Hz monitor change. Synthetic scene callbacks cover
-the first click, double-click binding and trailing release without pausing or
-changing the underlying game. Physical desktop double-click timing is not part
+the click that starts a film, a habitual double click's second press and
+trailing release without pausing or changing the underlying game. Physical desktop double-click timing is not part
 of the shared-desktop suite.

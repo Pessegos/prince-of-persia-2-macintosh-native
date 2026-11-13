@@ -1,7 +1,7 @@
 # Menu Themes
 
-The port's menus (F1, its dialogs, Controls, saves, screenshots and the
-developer tools) are an addition of the port, not original behaviour. They
+The port's menus (F1, its dialogs, Controls, saves, screenshots, the Cutscene
+Viewer and the developer tools) are an addition of the port, not original behaviour. They
 take their colours, and on some pages their frame, from the level being
 played. The code is in `pop2/menu_theme.py`.
 
@@ -77,7 +77,30 @@ a theme without a frame and the page then draws its own rectangle. These pages
 cover the health strip, so their frame may reach below it. Their smaller
 dialogs (rename, delete, choose folder) are framed the same way, and carry no
 sign: the page's sign is drawn before the page is darkened under the dialog.
-The Cutscene Viewer has its own look and is not themed.
+The Cutscene Viewer fills the window and is themed in the same way: its
+neutral colours have roles of their own (`card`, `card_selected`,
+`card_hover`, `viewer_edge`, `track`, `track_thumb`, `off`), and a theme that
+does not name them uses its row, selection and edge colours instead
+(`_ROLE_FALLBACK`). Under a framed theme its panel starts further from the
+window's edges and ends lower, so that the frame stands outside it and the
+side arrows stay clear. Its covers are the chapters' own pictures and are not
+recoloured.
+
+## Wide windows
+
+The game's picture is 4:3, and in a wider window the menus are as narrow as it
+is. The saves page uses the extra width instead (`SaveBrowser.wide_layout`):
+from about 16:9 its panel is wider, the preview is larger and has a save
+picture's own shape, and the save's name and details stand beside the preview
+instead of under it. The buttons keep their sizes; the page's two actions
+move to its right edge. A window wider than 16:9 gives the list a little more
+room, so that long names fit, and then shows the page centred: stretching it
+further only made the list and the buttons oversized. Narrower windows, 16:10 among them, keep the classic
+page. The page is then drawn over the whole window, with the
+game's picture centred behind it, and one unit is as wide as it is tall. Its
+rectangles (`PANEL`, `LIST`, `PREVIEW`, ...) are properties that follow the
+layout of the last picture drawn, and the pointer is mapped to the same units.
+A picture saved with Shift+F8 "with menus" still shows the classic page.
 
 ## The sign on the page
 
@@ -102,7 +125,8 @@ nothing. Three things a page must take care of:
 - Pages drawn at the window's resolution pass `point`; the sign is drawn at
   the game's resolution and enlarged without smoothing.
 
-The level map and the playback page carry no sign.
+The level map, the playback page and the Cutscene Viewer carry no sign: the
+viewer's shelf of covers moves over the page and would cover it.
 
 ## The level map
 

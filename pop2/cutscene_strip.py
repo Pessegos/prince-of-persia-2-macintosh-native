@@ -3,16 +3,18 @@
 import tkinter as tk
 from types import SimpleNamespace
 
+from pop2.menu_theme import c
+
 
 class CutsceneStrip:
     def __init__(self, scene):
         self.scene = scene
-        self.canvas = tk.Canvas(scene.canvas, bg='#181818', borderwidth=0,
+        self.canvas = tk.Canvas(scene.canvas, bg=c('#181818'), borderwidth=0,
                                 highlightthickness=0, takefocus=0)
         self.canvas.bindtags(('DevelopmentInput', *self.canvas.bindtags()))
         self.item = self.canvas.create_image(0, 0, anchor='nw', tags='content')
         self.borders = tuple(self.canvas.create_rectangle(0, 0, 0, 0, width=0,
-                            fill='#c6b58c', state='hidden', tags='content') for _ in range(4))
+                            fill=c('#c6b58c'), state='hidden', tags='content') for _ in range(4))
         self.border = None
         self.region = None
         self.photo = None

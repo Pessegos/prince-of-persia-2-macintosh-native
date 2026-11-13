@@ -409,9 +409,12 @@ class ImportedGalleryTests(unittest.TestCase):
                 point = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
                 with patch.object(s, 'dev_pointer', return_value=point):
                     s.dev_click(SimpleNamespace(num=1))
-                    s.dev_release(SimpleNamespace(num=1))
                     self.assertIsNone(s.cutscene_replay)
+                    s.dev_release(SimpleNamespace(num=1))      # one deliberate click plays the card
+                    replay = s.cutscene_replay
                     s.dev_double_click(SimpleNamespace(num=1))
+                    self.assertIs(s.cutscene_replay, replay)
+                    self.assertFalse(replay.paused)
             seek.assert_not_called()
             self.assertIsNone(s.dev_menu)
             self.assertIsNotNone(s.cutscene_replay)

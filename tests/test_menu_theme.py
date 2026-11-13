@@ -303,6 +303,41 @@ class MenuThemeTest(unittest.TestCase):
         self.assertEqual(strip.getcolors(), [(strip.width * strip.height,
                                               menu_theme._rgb(RUINS.colour('panel')) + (255,))])
 
+    def test_cutscene_viewer_takes_the_theme_and_leaves_room_for_its_frame(self):
+        from pop2.cutscene_gallery import CutsceneGallery
+        from pop2.cutscenes import CutsceneCollection
+
+        font = FakeFont()
+        font.height = 10
+        source = Image.new('RGBA', (1920, 1080), (40, 30, 60, 255))
+        with mock.patch('pop2.cutscene_gallery.chapter_available', return_value=True):
+            gallery = CutsceneGallery(CutsceneCollection(seen={'opening'}),
+                                      lambda index: Image.new('RGB', (510, 384), '#773311'))
+            neutral = gallery.draw(source, font, visible=True)
+            self.assertEqual((gallery.PANEL[0], gallery.PANEL[3], gallery.PREVIOUS[0]), (8, 363, 8))
+            plain = {colour for _count, colour in neutral.getcolors(1 << 20)}
+            self.assertIn((0x8c, 0x79, 0x54), plain)                      # its own outline
+            for theme in (PALACE, DESERT, CAVERNS, RUINS, TEMPLE):
+                with self.subTest(theme=theme.name):
+                    menu_theme.use(theme)
+                    page = gallery.draw(source, font, visible=True)        # same gallery: nothing stale is reused
+                    colours = {colour for _count, colour in page.getcolors(1 << 20)}
+                    for role in ('panel', 'card', 'card_selected', 'accent', 'track'):
+                        self.assertIn(menu_theme._rgb(theme.colour(role)), colours, role)
+                    for grey in ('#181818', '#252525', '#493c25', '#8c7954', '#282828', '#999076'):
+                        self.assertNotIn(menu_theme._rgb(grey), colours, grey)
+                    # The frame stands outside the panel, and the arrows outside the frame.
+                    self.assertGreater(gallery.PANEL[0], theme.frame_width)
+                    self.assertEqual(gallery.PREVIOUS[0], gallery.PANEL[0])
+                    self.assertEqual(gallery.PANEL[3], 368)
+                    scale = 1080 / 384
+                    inside = round((gallery.PANEL[0] + 2) * scale), round(200 * scale)
+                    self.assertEqual(page.getpixel(inside), menu_theme._rgb(theme.colour('panel')))
+                    outside = round((gallery.PANEL[0] - 4) * scale), round(200 * scale)
+                    self.assertNotEqual(page.getpixel(outside), menu_theme._rgb(theme.colour('panel')))
+            menu_theme.use(NEUTRAL)
+            self.assertEqual(gallery.draw(source, font, visible=True).tobytes(), neutral.tobytes())
+
 
 if __name__ == '__main__':
     unittest.main()

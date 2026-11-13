@@ -11,7 +11,7 @@ from pop2.paths import ASSET_DIR
 from pop2.audio_duck import PcmGateDuck
 from pop2.audio_release import PcmRelease, seamless_loop
 from pop2.audio_loop import PcmSustain, gate_loop_bounds
-from pop2.ui_audio import menu_pcm
+from pop2.ui_audio import HOVER_NOTES, menu_pcm
 from pop2.mechanism_audio import GateVoice
 from pop2.music_transition import fade_pcm, horse_music_ending, TEMPLE_FADE_IN
 
@@ -60,8 +60,13 @@ class MixerPlayback:
             self.channels['closing'] = mixer.Channel(6)
             self.closing_voice = GateVoice(mixer.Channel(7), 6, 7)
         rate, _bits, channels = mixer.get_init()
-        self.ui_channels = {kind: mixer.Channel(index) for index, kind in enumerate(('hover', 'click'), 3)}
-        self.ui_sounds = {kind: mixer.Sound(buffer=menu_pcm(kind, rate, channels)) for kind in self.ui_channels}
+        # Hover notes have a channel of their own; the reveal run shares the click's.
+        self.ui_channels = {'hover': mixer.Channel(3), 'click': mixer.Channel(4), 'reveal': mixer.Channel(4)}
+        self.ui_sounds = {kind: mixer.Sound(buffer=menu_pcm(kind, rate, channels)) for kind in ('click', 'reveal')}
+        # One note for each step of the run that hovering plays, in turn.
+        self.ui_hover_notes = tuple(mixer.Sound(buffer=menu_pcm('hover', rate, channels, variant))
+                                    for variant in range(len(HOVER_NOTES)))
+        self.ui_hover_step = 0
         self.sounds = {cue: mixer.Sound(str(Path(directory) / item["file"]))
                        for cue, item in cues.items() if item.get("file")}
         horse_theme = scene_sound_key(25006, 0)
@@ -200,10 +205,13 @@ class MixerPlayback:
             channel.stop()
 
     def play_ui(self, kind):
-        if kind == 'hover' and any(channel.get_busy() for channel in self.ui_channels.values()):
-            return
-        if not self.ui_channels[kind].get_busy():
-            self.ui_channels[kind].play(self.ui_sounds[kind])
+        # A new note replaces the one still ringing on its channel, as a string plucked again does.
+        if kind == 'hover':
+            sound = self.ui_hover_notes[self.ui_hover_step % len(self.ui_hover_notes)]
+            self.ui_hover_step += 1
+        else:
+            sound = self.ui_sounds[kind]
+        self.ui_channels[kind].play(sound)
 
     def stop_ui(self):
         for channel in self.ui_channels.values():

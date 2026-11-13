@@ -4,9 +4,10 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 from pop2.cutscenes import CHAPTERS, CHAPTER_KEYS, OPENING_KEYS, CutsceneCollection
+from pop2 import menu_theme
 from pop2.cutscene_gallery import CutsceneGallery
 from pop2.cutscene_viewer import ReplayAudio
 from pop2.game_menu import GameMenu
@@ -102,21 +103,25 @@ class GalleryTests(unittest.TestCase):
         self.assertEqual(gallery.key('Return'), 'cutscene_play')
         self.assertEqual(gallery.key('Escape'), 'cutscene_back')
 
-    def test_double_click_plays_only_the_same_unlocked_card_and_not_a_drag(self):
+    def test_one_click_plays_an_unlocked_card_but_not_a_locked_one_or_a_drag(self):
+        # The user asked for one click instead of the earlier double click.
         gallery = self.gallery()
         rect = gallery.card_rect(0)
         point = (rect[0] + 20, rect[1] + 20)
-        self.assertEqual(gallery.double_click(*point), 'changed')
+        gallery.index = 3
+        self.assertEqual(gallery.click(*point), 'cutscene_play')
+        self.assertEqual(gallery.index, 0)
+        gallery.begin_drag(*point)                                    # press and release in place
+        self.assertEqual(gallery.end_drag(*point), 'cutscene_play')
         self.assertEqual(gallery.double_click(*point), 'cutscene_play')
         locked = gallery.card_rect(1)
         locked_point = locked[0] + 20, locked[1] + 20
-        gallery.click(*locked_point)
+        self.assertEqual(gallery.click(*locked_point), 'changed')     # selected, with its message
+        self.assertEqual(gallery.index, 1)
         self.assertEqual(gallery.double_click(*locked_point), 'changed')
-        gallery.click(*point)
         gallery.begin_drag(*point)
-        gallery.end_drag(point[0] - 20, point[1])
-        rect = gallery.card_rect(0)
-        self.assertEqual(gallery.double_click(rect[0] + 20, rect[1] + 20), 'changed')
+        self.assertEqual(gallery.end_drag(point[0] - 20, point[1]), 'changed')   # a drag only scrolls
+        self.assertEqual(gallery.index, 1)
 
     def test_gallery_has_no_play_back_buttons_or_keyboard_hint(self):
         gallery, font = self.gallery(), CaptionFont()
@@ -128,22 +133,205 @@ class GalleryTests(unittest.TestCase):
         self.assertIsNone(gallery.hit(50, 35))
         self.assertIsNone(gallery.hit(gallery.PANEL[2] - 40, 35))
 
-    def test_a_double_click_on_a_different_card_only_selects_it(self):
+    def test_a_click_on_a_different_locked_card_only_selects_it(self):
         gallery = self.gallery()
         first, second = gallery.card_rect(0), gallery.card_rect(2)
         gallery.click(first[0] + 20, first[1] + 20)
         self.assertEqual(gallery.double_click(second[0] + 20, second[1] + 20), 'changed')
         self.assertEqual(gallery.index, 2)
 
-    def test_locked_chapters_leak_neither_previews_nor_story_titles(self):
+    def test_locked_chapters_show_only_large_dark_blocks_of_their_cover_and_no_title(self):
         gallery = self.gallery()
         font = CaptionFont()
+        # A cover with fine detail: thin stripes that only an unveiled card can show.
+        cover = Image.new('RGB', (510, 384), '#204080')
+        for x in range(0, 510, 6):
+            ImageDraw.Draw(cover).line((x, 0, x, 384), fill='#ffe040', width=2)
+        gallery.preview = Mock(return_value=cover)
         with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
-            gallery.draw(Image.new('RGBA', (512, 384)), font)
-        gallery.preview.assert_called_once_with(0)
+            gallery.draw(Image.new('RGBA', (1024, 768)), font)
+            open_card = gallery.card_image(0, font, 2, 2).convert('RGB')
+            locked_card = gallery.card_image(1, font, 2, 2).convert('RGB')
         self.assertNotIn(CHAPTERS[1].title, font.values)
         self.assertNotIn(CHAPTERS[2].title, font.values)
+        self.assertIn('Chapter 2', font.values)
         self.assertEqual(gallery.index, 0)
+        width = round(gallery.CARD_WIDTH * 2)
+        thumb = (4, 4, width - 4, round((2 + (gallery.CARD_WIDTH - 4) * 9 / 16) * 2))
+        shown, veiled = open_card.crop(thumb), locked_card.crop(thumb)
+        self.assertGreater(max(max(colour) for _n, colour in shown.getcolors(1 << 16)), 0xe0)   # bright stripes
+        colours = veiled.getcolors(1 << 16)
+        self.assertLessEqual(len(colours), gallery.VEIL_COLUMNS * 10)          # one colour for each block
+        self.assertTrue(all(max(colour) < 0x90 for _n, colour in colours))    # darkened; no stripe survives
+        # Each block is a flat rectangle many pixels wide.
+        row = [veiled.getpixel((x, 20)) for x in range(veiled.width)]
+        runs = [x for x in range(1, len(row)) if row[x] != row[x - 1]]
+        self.assertLessEqual(len(runs), gallery.VEIL_COLUMNS)
+
+    def striped_gallery(self):
+        gallery = self.gallery()
+        cover = Image.new('RGB', (510, 384), '#204080')
+        for x in range(0, 510, 6):
+            ImageDraw.Draw(cover).line((x, 0, x, 384), fill='#ffe040', width=2)
+        gallery.preview = Mock(return_value=cover)
+        gallery.collection.seen.add(CHAPTERS[1].key)
+        return gallery
+
+    def test_newly_unlocked_chapter_resolves_out_of_its_veil_in_whole_frames(self):
+        gallery, font = self.striped_gallery(), CaptionFont()
+        gallery.begin_reveal([1, 2])                                          # 2 is still locked: ignored
+        self.assertEqual((set(gallery.reveal), gallery.index), ({1}, 1))
+        self.assertEqual((gallery.reveal_stage(1), gallery.reveal_glow(1)), (0, None))
+        with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
+            def card():
+                return gallery.card_image(1, font, 2, 2).convert('RGB')
+
+            def locked():
+                gallery.collection.seen.discard(CHAPTERS[1].key)
+                picture = card()
+                gallery.collection.seen.add(CHAPTERS[1].key)
+                return picture
+
+            self.assertEqual(card().tobytes(), locked().tobytes())            # it starts exactly as it was
+            self.assertNotIn(CHAPTERS[1].title, font.values)
+            self.assertFalse(gallery.reveal_cue)
+            self.assertTrue(gallery.advance(gallery.REVEAL_DELAY))            # keeps the page animating
+            self.assertTrue(gallery.reveal_cue)                               # the scene plays the sound now
+            gallery.reveal_cue = False
+            # Drawn at a display's pace, the card still moves in whole frames, fifteen a second,
+            # one stage of blocks a frame, nothing blended: an old game's animation. Eight
+            # stages at nine a second looked choppy; a dissolve at 60 a second, and then
+            # twenty whole frames a second, too smooth.
+            self.assertEqual((gallery.REVEAL_RATE, gallery.reveal_stages), (15, 17))
+            frames, stages = [card()], [gallery.reveal_stage(1)]
+            while gallery.reveal_glow(1) is None:
+                gallery.advance(1 / 60)
+                frames.append(card())
+                stages.append(gallery.reveal_stage(1))
+            self.assertFalse(gallery.reveal_cue)                              # once for each chapter
+            self.assertEqual(sorted(set(stages)), list(range(gallery.reveal_stages + 1)))
+            self.assertEqual(stages, sorted(stages))
+            pictures = [frame.tobytes() for frame in frames]
+            distinct = [pictures[0]] + [after for before, after in zip(pictures, pictures[1:]) if after != before]
+            self.assertEqual(len(distinct), gallery.reveal_stages + 1)        # one picture for each stage
+            self.assertEqual(len(set(distinct)), len(distinct))
+            held = len(frames) / len(distinct)
+            self.assertTrue(3.5 < held < 4.5)                                 # each held for four 60 Hz frames
+            # Blocks only, never a blend of two stages: a stage's picture is exactly its own veil.
+            thumb = (4, 4, frames[0].width - 4, 150)
+            cover = gallery.image_cache[1, (frames[0].width - 8, round((gallery.CARD_WIDTH - 4) * 9 / 16 * 2))]
+            middle = stages.index(8)
+            self.assertEqual(frames[middle].crop(thumb).tobytes(),
+                             gallery.veil(1, cover, 8).crop((0, 0, thumb[2] - 4, 146)).tobytes())
+            self.assertIn(CHAPTERS[1].title, font.values)                     # the title arrives on the way
+            # A card in the middle of its reveal is never kept.
+            self.assertFalse(any(key[0] == 1 and key[3] for key in gallery.card_cache if key[4]))
+
+    def test_revealed_cover_glows_at_its_ordinary_thickness_while_light_crosses_it(self):
+        gallery, font = self.striped_gallery(), CaptionFont()
+        gallery.begin_reveal([1])
+        with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
+            gallery.advance(gallery.REVEAL_DELAY + gallery.reveal_stages * gallery.REVEAL_STEP + .001)
+            self.assertEqual(gallery.reveal_glow(1), 0)
+            bright, accent = (tuple(int(menu_theme.c(colour)[i:i + 2], 16) for i in (1, 3, 5))
+                              for colour in ('#eeeeee', '#f4d873'))
+            glow, moments = [], []
+            while gallery.reveal:
+                moments.append(gallery.reveal_glow(1))
+                glow.append(gallery.card_image(1, font, 2, 2).convert('RGB'))
+                gallery.advance(1 / 30)
+            settled = gallery.card_image(1, font, 2, 2).convert('RGB')
+            self.assertGreaterEqual(moments[-1], 1.2)                         # seconds: not a flash
+            # The border keeps the selected card's two pixels (at this scale four) throughout:
+            # the user disliked it growing fat and shrinking back.
+            height = settled.height
+            for frame in glow:
+                self.assertEqual(frame.getpixel((3, 40)), frame.getpixel((0, 40)))
+                self.assertNotEqual(frame.getpixel((5, 40)), frame.getpixel((0, 40)))
+            edge = [frame.getpixel((1, 40)) for frame in glow]
+            self.assertEqual(settled.getpixel((1, 40)), accent)
+            # It fades in as it fades out: the user disliked the border turning white at once.
+            peak = edge.index(bright)
+            rising = [colour for n, colour in enumerate(edge[:peak]) if n == 0 or colour != edge[n - 1]]
+            self.assertGreaterEqual(len(rising), 3)
+            self.assertNotIn(edge[0], (bright, accent))                       # already on its way up
+            blue = [colour[2] for colour in rising] + [bright[2]]             # accent has little blue, bright much
+            self.assertEqual(blue, sorted(blue))
+            self.assertGreater(moments[peak], .15)
+            falling = edge[peak:]
+            self.assertGreaterEqual(len(set(falling)), 8)                     # cooling through many shades
+            self.assertEqual([colour[2] for colour in falling], sorted((colour[2] for colour in falling), reverse=True))
+            self.assertEqual(edge[-1], accent)
+            # The border lies over the title's band, at the bottom as on every side.
+            for frame in (*glow[:1], settled):
+                self.assertEqual(frame.getpixel((frame.width // 2, height - 3)), frame.getpixel((1, 40)))
+                self.assertEqual(frame.getpixel((frame.width - 3, height - 12)), frame.getpixel((1, 40)))
+            # Meanwhile a band of light crosses the cover itself, left to right, then is gone.
+            crop = (10, 10, settled.width - 10, 150)
+            plain = settled.crop(crop)
+            centres = []
+            for moment, frame in zip(moments, glow):
+                box = ImageChops.difference(frame.crop(crop), plain).getbbox()
+                if moment >= gallery.GLOW_SWEEP:
+                    self.assertIsNone(box)
+                elif box is not None:
+                    centres.append((box[0] + box[2]) / 2)
+            self.assertGreater(len(centres), 20)
+            self.assertEqual(centres, sorted(centres))
+            self.assertGreater(centres[-1] - centres[0], plain.width / 2)
+            moves = [b - a for a, b in zip(centres, centres[1:]) if b != a]
+            self.assertGreaterEqual(len(moves), 9)                            # in many steps...
+            self.assertLess(max(moves), plain.width / 6)                      # ...none of them a leap
+
+    def test_reveal_redraws_only_its_card_in_the_cached_grid(self):
+        gallery, font = self.striped_gallery(), CaptionFont()
+        source = Image.new('RGBA', (1024, 768))
+        with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
+            gallery.draw(source, font)
+            gallery.begin_reveal([1])
+            gallery.draw(source, font)
+            grid = gallery.grid_cache[1]
+            key = gallery.grid_cache[0]
+            self.assertEqual(gallery.take_reveal_patches(), ())               # nothing has moved yet
+            gallery.advance(gallery.REVEAL_DELAY + .3)
+            before = grid.copy()
+            with patch.object(gallery, 'card_image', wraps=gallery.card_image) as card_image:
+                gallery.refresh_reveal(font, 2, 2)
+            self.assertEqual([call.args[0] for call in card_image.call_args_list], [1])   # one card, not the shelf
+            self.assertIs(gallery.grid_cache[1], grid)                        # the same picture, changed in place
+            self.assertEqual(gallery.grid_cache[0], key)
+            (x, y, card), = gallery.take_reveal_patches()
+            changed = ImageChops.difference(before, grid).getbbox()
+            self.assertTrue(x <= changed[0] and y <= changed[1]
+                            and changed[2] <= x + card.width and changed[3] <= y + card.height)
+            self.assertEqual(grid.crop((x, y, x + card.width, y + card.height)).tobytes(), card.tobytes())
+            self.assertEqual(gallery.take_reveal_patches(), ())
+            gallery.refresh_reveal(font, 2, 2)                                # no progress, nothing redrawn
+            self.assertEqual(gallery.take_reveal_patches(), ())
+            # A full draw shows the same thing, and the settled card when the reveal ends.
+            self.assertIs(gallery.draw(source, font) and gallery.grid_cache[1], grid)
+            gallery.advance(gallery.reveal_seconds)
+            self.assertEqual(gallery.reveal, {})
+            gallery.draw(source, font)
+            settled = gallery.card_image(1, font, 2, 2).convert('RGB')
+            (x, y, card), = gallery.take_reveal_patches()
+            self.assertEqual(card.tobytes(), settled.tobytes())
+            self.assertEqual(gallery.reveal_drawn, {})
+
+    def test_developer_viewer_never_animates_but_r_replays_the_selected_reveal(self):
+        gallery = self.gallery()
+        gallery.developer = True
+        gallery.begin_reveal([])
+        self.assertEqual(gallery.reveal, {})
+        seen_before = set(gallery.collection.seen)
+        gallery.index = 4
+        self.assertEqual(gallery.key('r'), 'changed')
+        self.assertEqual(gallery.reveal, {4: -gallery.REVEAL_DELAY})
+        self.assertEqual(gallery.collection.seen, seen_before)
+        gallery.developer = False
+        gallery.reveal = {}
+        gallery.key('r')
+        self.assertEqual(gallery.reveal, {})
 
     def test_developer_access_is_read_only_and_caches_do_not_leak_to_normal_mode(self):
         gallery = self.gallery()
@@ -444,6 +632,78 @@ class ViewerSceneTests(unittest.TestCase):
         self.assertEqual(developer.chapters, CHAPTERS)
         self.assertTrue(all(developer.chapter_unlocked(i) for i in range(len(CHAPTERS))))
 
+    def test_chapter_unlocked_by_playing_resolves_with_a_sound_the_next_time_the_viewer_opens(self):
+        scene = self.scene
+        scene.audio = Mock()
+        key = next(chapter.key for chapter in CHAPTERS if chapter.key not in OPENING_KEYS)
+        index = next(i for i, chapter in enumerate(CHAPTERS) if chapter.key == key)
+        scene.mark_cutscene_seen(key)
+        self.assertEqual(scene.cutscene_fresh, {key})
+        gallery = self.open_viewer()
+        self.assertEqual((set(gallery.reveal), gallery.index), ({index}, index))
+        self.assertEqual(scene.cutscene_fresh, set())
+        self.assertIsNotNone(scene.cutscene_gallery_after_id)          # the page is animating
+        scene.audio.play_ui.assert_not_called()
+        # Drive the tick as the scheduler would.
+        pending = []
+        with patch.object(scene.root, 'after', side_effect=lambda _delay, callback: pending.append(callback) or 'id'),                 patch.object(scene.root, 'after_idle', side_effect=lambda callback: pending.append(callback) or 'id'),                 patch.object(scene.root, 'after_cancel'),                 patch('pop2.cutscene_viewer.time.perf_counter', side_effect=(n * .05 for n in range(10000))):
+            scene.cancel_cutscene_gallery_tick()
+            scene.schedule_cutscene_gallery()
+            checked = rebuilt = 0
+            with patch.object(scene, 'cutscene_gallery_frame', wraps=scene.cutscene_gallery_frame) as frame:
+                for _ in range(400):
+                    if not pending or not gallery.reveal:
+                        break
+                    pending.pop(0)()
+                    stage = gallery.reveal_stage(index)
+                    if stage is not None and 2 < stage < gallery.reveal_stages and not checked:
+                        # What the window shows is the half-resolved card, brought there
+                        # without rebuilding the page.
+                        rebuilt = frame.call_count
+                        shown = self.displayed_gallery()
+                        checked = 1
+                rebuilds = frame.call_count
+            self.assertEqual((checked, rebuilt, rebuilds), (1, 0, 0))
+            size = shown.size
+            model = scene.cutscene_gallery_frame(size)
+            self.assertEqual(self.displayed_gallery().tobytes(), model.tobytes())      # settled, glow over
+            self.assertNotEqual(shown.tobytes(), model.tobytes())
+        self.assertEqual(gallery.reveal, {})
+        scene.audio.play_ui.assert_called_once_with('reveal')
+        scene.close_game_menu()
+        again = self.open_viewer()                                      # only the first visit animates
+        self.assertEqual(again.reveal, {})
+        scene.close_game_menu()
+        # A chapter admitted from a loaded save, or seen in the developer viewer, does not animate.
+        scene.cutscene_collection.unlock(*CHAPTER_KEYS)
+        self.assertEqual(self.open_viewer().reveal, {})
+
+    def test_a_game_s_introduction_reveals_the_three_opening_chapters_once_with_one_sound(self):
+        scene = self.scene
+        self.assertEqual(self.open_viewer().reveal, {})                 # open from the start: nothing to reveal yet
+        scene.close_game_menu()
+        scene.mark_cutscene_seen('opening')                            # the introduction has played
+        self.assertEqual(scene.cutscene_fresh, set(OPENING_KEYS))
+        gallery = self.open_viewer()
+        opening = [index for index, chapter in enumerate(CHAPTERS) if chapter.key in OPENING_KEYS]
+        self.assertEqual((sorted(gallery.reveal), gallery.index), (opening, opening[0]))
+        waits = [gallery.reveal[index] for index in opening]
+        self.assertEqual(waits, sorted(waits, reverse=True))           # one after another
+        cues = 0
+        for _ in range(400):
+            gallery.advance(1 / 30)
+            cues += gallery.reveal_cue
+            gallery.reveal_cue = False
+        self.assertEqual((gallery.reveal, cues), ({}, 1))              # three chapters, one sound
+        scene.close_game_menu()
+        scene.mark_cutscene_seen('opening')                            # the introduction again, same game
+        self.assertEqual(scene.cutscene_fresh, set())
+        self.assertEqual(self.open_viewer().reveal, {})
+        scene.close_game_menu()
+        scene.cutscene_collection = CutsceneCollection()               # a new game reveals them again
+        scene.mark_cutscene_seen('opening')
+        self.assertEqual(sorted(self.open_viewer().reveal), opening)
+
     def test_developer_replay_leaves_profile_world_and_normal_shortcut_locks_unchanged(self):
         scene = self.scene
         collection = scene.cutscene_collection
@@ -627,11 +887,10 @@ class ViewerSceneTests(unittest.TestCase):
             x, y = (rect[0] + 20 - 1) * 2, (rect[1] + 20) * 2 + 216
             event = SimpleNamespace(x=x - strip.region[0], y=y - strip.region[1], num=1)
             strip.forward(scene.dev_click)(event)
-            strip.forward(scene.dev_release)(event)
-            self.assertEqual(gallery.last_clicked, 0)
-            self.assertIsNone(scene.cutscene_replay)
+            self.assertIsNone(scene.cutscene_replay)                  # the press alone starts nothing
             self.assertIs(scene._cutscene_gallery_strip, strip)
-            strip.forward(scene.dev_double_click)(event)
+            strip.forward(scene.dev_release)(event)                   # one click plays the card
+            self.assertEqual(gallery.last_clicked, 0)
             self.assertIsNotNone(scene.cutscene_replay)
             self.assertIsNone(scene._cutscene_gallery_strip)
             self.assertFalse(strip.canvas.winfo_exists())
@@ -726,9 +985,8 @@ class ViewerSceneTests(unittest.TestCase):
             event = SimpleNamespace(x=(x - 1) * scale, y=y * scale, num=1)
             self.assertEqual(gallery.hit(*scene.dev_pointer(event)), 100)
             scene.dev_click(event)
-            scene.dev_release(event)
             self.assertIsNone(scene.cutscene_replay)
-            scene.dev_double_click(event)
+            scene.dev_release(event)
             self.assertIsNotNone(scene.cutscene_replay)
             size, position = fit_viewport(2560, 1080)
             self.assertEqual(ImageTk.getimage(scene.image_ref).size, size)
@@ -855,8 +1113,9 @@ class ViewerSceneTests(unittest.TestCase):
         scene.dev_pointer_leave(SimpleNamespace())
         self.assertIsNone(gallery.drag)
 
-    def test_double_click_binding_starts_the_film_without_immediately_pausing_it(self):
+    def test_one_click_starts_the_film_and_a_habitual_double_click_does_not_pause_it(self):
         scene = self.scene
+        scene.audio = Mock()
         gallery = self.open_viewer()
         self.assertIn('dev_double_click', scene.canvas.bind('<Double-Button-1>'))
         before = self.snapshot()
@@ -864,12 +1123,20 @@ class ViewerSceneTests(unittest.TestCase):
         point = rect[0] + 20, rect[1] + 20
         with patch.object(scene, 'dev_pointer', return_value=point):
             scene.dev_click(SimpleNamespace(num=1))
-            scene.dev_release(SimpleNamespace(num=1))
             self.assertIsNone(scene.cutscene_replay)
+            scene.dev_release(SimpleNamespace(num=1))
+            replay = scene.cutscene_replay
+            self.assertIsNotNone(replay)
+            scene.audio.play_ui.assert_called_with('click')
+            # The second press and release of a double click arrive while the film is already playing.
             scene.dev_double_click(SimpleNamespace(num=1))
             scene.dev_release(SimpleNamespace(num=1))
-        self.assertIsNotNone(scene.cutscene_replay)
-        self.assertFalse(scene.cutscene_replay.paused)
+            self.assertIs(scene.cutscene_replay, replay)
+            self.assertFalse(replay.paused)
+            # Later, a click pauses it as before.
+            replay.started_at -= 1
+            scene.dev_click(SimpleNamespace(num=1))
+            self.assertTrue(replay.paused)
         self.assertEqual(self.snapshot(), before)
 
     def test_every_chapter_finishes_in_the_gallery_without_touching_the_live_world(self):
@@ -957,6 +1224,7 @@ class ViewerSceneTests(unittest.TestCase):
         scene.dev_key_press(event)
         self.assertFalse(original.paused)
         scene.dev_key_release(event)
+        original.started_at -= 1                                      # past the double-click grace
         with patch.object(scene, 'dev_pointer', return_value=(400, 375)):
             scene.dev_click(SimpleNamespace(num=1))
         self.assertIs(scene.cutscene_replay, original)
@@ -1078,20 +1346,29 @@ class ViewerSceneTests(unittest.TestCase):
             scene.close_game_menu(resume=True)
         self.assertEqual(scene.last_copy_at, 1000.0)
 
-    def test_actual_f3_warp_then_horse_trigger_does_not_unlock_campaign_chapters(self):
+    def test_scene_played_after_an_f3_warp_counts_with_the_story_before_it(self):
+        # The user asked for progress to work with the Dev Tools too: a scene
+        # actually played after a warp was seen. Earlier chapters come with it,
+        # so the collection never has gaps; the warp itself unlocks nothing.
         scene = self.scene
-        scene.cutscene_collection.unlock('voyage', 'discovery', 'carpet', 'vision')
         scene.load_level(9)
         scene.open_dev_mode()
         scene.apply_dev_action('go')
-        self.assertFalse(scene.cutscene_campaign_active)
-        scene.start_temple_ride(lambda: None)
-        self.assertNotIn('horse', scene.cutscene_collection.seen)
-        scene.new_game()
         self.assertTrue(scene.cutscene_campaign_active)
         self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
         scene.start_temple_ride(lambda: None)
-        self.assertNotIn('horse', scene.cutscene_collection.seen)
+        earlier = {'voyage', 'discovery', 'carpet', 'vision', 'horse'}
+        self.assertEqual(scene.cutscene_collection.seen, OPENING_KEYS | earlier)
+        self.assertTrue(earlier <= scene.cutscene_fresh)                  # all of them are revealed
+        self.assertNotIn('tower', scene.cutscene_collection.seen)
+        scene.new_game()
+        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
+
+    def test_developer_playback_seek_still_unlocks_nothing(self):
+        scene = self.scene
+        scene.cutscene_campaign_active = False                                # as a playback seek leaves it
+        scene.start_temple_ride(lambda: None)
+        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
 
     def test_natural_story_starts_unlock_each_chapter_and_new_game_resets_the_collection(self):
         scene = self.scene

@@ -1,10 +1,13 @@
 """A device-resolution story shelf with continuous horizontal scrolling."""
 
+import math
 from dataclasses import dataclass, field
 
 from PIL import Image, ImageDraw, ImageOps
 
+from pop2 import menu_theme
 from pop2.cutscenes import CHAPTERS, chapter_available
+from pop2.menu_theme import c
 from pop2.menu_animation import spring_step
 
 
@@ -31,7 +34,15 @@ class CutsceneGallery:
     background_cache: tuple | None = field(default=None, repr=False)
     grid_cache: tuple | None = field(default=None, repr=False)
     card_cache: dict = field(default_factory=dict, repr=False)
-    layout_size: float | None = field(default=None, repr=False)
+    layout_size: tuple | None = field(default=None, repr=False)
+    # Chapters unlocked since the viewer was last open, as index -> seconds
+    # into their reveal (negative while it waits to start).
+    reveal: dict = field(default_factory=dict, repr=False)
+    # Set when a reveal begins to resolve; the scene plays its sound and clears it.
+    reveal_cue: bool = field(default=False, repr=False)
+    # What the cached grid shows of each reveal, and the cards redrawn since a presenter last asked.
+    reveal_drawn: dict = field(default_factory=dict, repr=False)
+    reveal_patches: dict = field(default_factory=dict, repr=False)
 
     PANEL = (8, 10, 504, 363)
     STRIP = (20, 61, 492, 334)
@@ -45,18 +56,45 @@ class CutsceneGallery:
     ROWS = 2
     GRID_PADDING = 48
     BOUNCE_LIMIT = 40
+    # A locked chapter shows its own cover as a few large dark blocks: its
+    # colours, nothing that can be recognised. Unlocking refines the blocks
+    # through these stages until the cover is whole, like a console's mosaic
+    # fade. The whole reveal moves in whole frames, REVEAL_RATE a second, one
+    # stage a frame, with nothing blended between them: an old game's
+    # animation. Eight stages at nine a second looked choppy; dissolving them
+    # at the display's rate, and then twenty whole frames a second, looked too
+    # smooth for this game.
+    VEIL_COLUMNS = 16
+    VEIL_DEPTH = .6
+    REVEAL_COLUMNS = (18, 20, 23, 26, 30, 34, 39, 44, 51, 58, 66, 76, 87, 100, 115, 130)
+    REVEAL_RATE = 15
+    REVEAL_STEP = 1 / REVEAL_RATE   # seconds from one stage to the next
+    REVEAL_DELAY = .6
+    # Once the cover is whole its border glows: bright, then cooling to the
+    # accent colour, at its ordinary thickness. Meanwhile a band of light
+    # crosses the cover. Times in seconds.
+    REVEAL_GLOW = 1.6
+    GLOW_IN = .3        # from the card's own border up to bright
+    GLOW_HOLD = .2
+    GLOW_COOL = .75     # and back down to the accent colour
+    GLOW_SWEEP = .9
 
     def layout(self, size, *, visible=False):
         """Uniform UI scale; extra width changes layout rather than stretching it."""
         logical_width = size[0] * 384 / size[1] + (2 if visible else 0)
-        if self.layout_size == logical_width:
+        theme = menu_theme.current()
+        if self.layout_size == (logical_width, theme.name):
             return
         scroll, target = self.scroll / self.PITCH, self.scroll_target / self.PITCH
-        self.layout_size = logical_width
-        self.PANEL = (8, 10, logical_width - 8, 363)
-        self.STRIP = (20, 61, logical_width - 20, 334)
-        self.TRACK = (24, 342, logical_width - 24, 348)
-        self.NEXT = (logical_width - 20, 175, logical_width - 8, 211)
+        self.layout_size = logical_width, theme.name
+        # A theme's frame stands outside the panel: leave it room at the sides
+        # and below, where the plain page only has a thin outline.
+        edge = max(8, theme.frame_width + 2) if theme.frame else 8
+        self.PANEL = (edge, 10, logical_width - edge, 368 if theme.frame else 363)
+        self.STRIP = (edge + 12, 61, logical_width - edge - 12, 334)
+        self.TRACK = (edge + 16, 342, logical_width - edge - 16, 348)
+        self.PREVIOUS = (edge, 175, edge + 12, 211)
+        self.NEXT = (logical_width - edge - 12, 175, logical_width - edge, 211)
         available = self.STRIP[2] - self.STRIP[0] - 2
         row_height = (self.STRIP[3] - self.STRIP[1] - 12) / self.ROWS
         maximum_width = (row_height - 22) * 16 / 9 + 4
@@ -145,7 +183,57 @@ class CutsceneGallery:
     def display_scroll(self):
         return self.scroll + self.bounce
 
+    @property
+    def reveal_stages(self):
+        """Dissolves from the locked veil to the whole cover."""
+        return len(self.REVEAL_COLUMNS) + 1
+
+    @property
+    def reveal_seconds(self):
+        return self.reveal_stages * self.REVEAL_STEP + self.REVEAL_GLOW
+
+    def reveal_frame(self, index):
+        """None for a settled card, -1 while its reveal waits, then the whole frame it has reached."""
+        elapsed = self.reveal.get(index)
+        if elapsed is None:
+            return None
+        return -1 if elapsed < 0 else int(elapsed * self.REVEAL_RATE + 1e-6)
+
+    def reveal_stage(self, index):
+        """None for a settled card; else how far its cover has resolved, 0 (veiled) to reveal_stages (whole)."""
+        frame = self.reveal_frame(index)
+        return None if frame is None else max(0, min(self.reveal_stages, frame))
+
+    def reveal_glow(self, index):
+        """Seconds since the cover became whole, in whole frames; None before that and for a settled card."""
+        frame = self.reveal_frame(index)
+        if frame is None or frame < self.reveal_stages:
+            return None
+        return (frame - self.reveal_stages) / self.REVEAL_RATE
+
+    def begin_reveal(self, indices):
+        """Show these newly unlocked chapters resolving out of their veil, the first one selected."""
+        indices = sorted(index for index in indices if self.chapter_unlocked(index))
+        if not indices:
+            return
+        self.reveal = {index: -self.REVEAL_DELAY - order * .35 for order, index in enumerate(indices)}
+        self.index = indices[0]
+        self.move(0)
+        self.scroll = self.scroll_target
+
     def advance(self, seconds):
+        # Several chapters revealed together share one sound: the first to start asks for it.
+        started = any(elapsed >= 0 for elapsed in self.reveal.values())
+        for index in tuple(self.reveal):
+            waiting = self.reveal[index] < 0
+            self.reveal[index] += seconds
+            if waiting and self.reveal[index] >= 0 and not started:
+                self.reveal_cue = started = True
+            if self.reveal[index] >= self.reveal_seconds:
+                del self.reveal[index]
+        return self.advance_scroll(seconds) or bool(self.reveal)
+
+    def advance_scroll(self, seconds):
         if self.drag is not None:
             return False
         # A single position and velocity carry the shelf through the edge.
@@ -202,17 +290,17 @@ class CutsceneGallery:
         return 'cutscene_play' if self.unlocked else 'changed'
 
     def double_click(self, x, y):
-        target = self.hit(x, y)
-        if (target is not None and target >= 100 and self.drag is None
-                and self.last_clicked == target - 100):
-            self.index = target - 100
-            self.last_clicked = None
-            return self.activate()
+        # One click already plays a card; a second press is only another click.
         return self.click(x, y)
 
     def key(self, key, backwards=False, char='', control=False):
         if key == 'Escape':
             return 'cutscene_back'
+        if self.developer and key.lower() == 'r':
+            # Dev Tools only: show the selected chapter being revealed again.
+            # It changes nothing in the collection.
+            self.reveal = {self.index: -self.REVEAL_DELAY}
+            return 'changed'
         if key in ('Left', 'Right', 'Up', 'Down'):
             column, row = self.cell(self.index)
             column += (key == 'Right') - (key == 'Left')
@@ -250,11 +338,12 @@ class CutsceneGallery:
             self.last_clicked = None
             return 'changed'
         if target >= 100:
+            # One click selects the card and plays it; a locked one is only selected.
             self.index = target - 100
             self.last_clicked = self.index
             self.focus = 0
             self.error = ''
-            return 'changed'
+            return self.activate()
         if target in (3, 4):
             self.wheel(-1 if target == 3 else 1)
             return 'changed'
@@ -306,18 +395,19 @@ class CutsceneGallery:
         selected = self.index == index
         unlocked = self.chapter_unlocked(index)
         size = round(self.CARD_WIDTH * sx), round(self.CARD_HEIGHT * sy)
-        key = index, id(font), size, selected, unlocked
-        if key in self.card_cache:
+        # A card in the middle of its reveal changes on every frame and is not kept.
+        elapsed = self.reveal.get(index) if unlocked else None
+        key = index, id(font), size, selected, unlocked, menu_theme.current().name
+        if elapsed is None and key in self.card_cache:
             return self.card_cache[key]
-        image = Image.new('RGBA', size, '#252525')
+        image = Image.new('RGBA', size, c('#252525'))
         draw = ImageDraw.Draw(image)
         stroke = max(1, round(min(sx, sy)))
-        outline = '#f4d873' if selected else '#626262'
-        draw.rectangle((0, 0, size[0] - 1, size[1] - 1), outline=outline, width=stroke * (2 if selected else 1))
         thumb_bottom = 2 + (self.CARD_WIDTH - 4) * 9 / 16
         thumb_rect = (2, 2, self.CARD_WIDTH - 2, thumb_bottom)
         thumb = tuple(round(value * (sx if i % 2 == 0 else sy)) for i, value in enumerate(thumb_rect))
-        if unlocked and chapter_available(chapter):
+        cover = None
+        if chapter_available(chapter):
             try:
                 thumb_size = thumb[2] - thumb[0], thumb[3] - thumb[1]
                 image_key = index, thumb_size
@@ -325,23 +415,105 @@ class CutsceneGallery:
                     frame = self.preview(index)
                     self.image_cache[image_key] = ImageOps.fit(frame.convert('RGBA'), thumb_size,
                         method=Image.Resampling.LANCZOS if thumb_size[0] < frame.width else Image.Resampling.NEAREST)
-                image.alpha_composite(self.image_cache[image_key], thumb[:2])
+                cover = self.image_cache[image_key]
             except (OSError, ValueError, KeyError, RuntimeError):
-                self.caption(image, font, 'Unavailable', thumb_rect, '#999999', .7, sx, sy)
+                cover = None
+        stage = self.reveal_stage(index) if unlocked else None
+        veiled = not unlocked or (stage is not None and stage < self.reveal_stages)
+        if cover is None:
+            if unlocked:
+                self.caption(image, font, 'Unavailable', thumb_rect, c('#999999'), .7, sx, sy)
+            else:
+                draw.rectangle(thumb, fill=c('#101010'))
+        elif veiled:
+            # Locked, or resolving after being unlocked: blocks of the cover's own colours.
+            image.paste(self.veil(index, cover, stage or 0), thumb[:2])
         else:
-            draw.rectangle(thumb, fill='#101010')
-            cx, cy = size[0] / 2, (2 + thumb_bottom) / 2 * sy
-            draw.arc((cx - 7 * sx, cy - 15 * sy, cx + 7 * sx, cy + 4 * sy), 180, 360,
-                     fill='#999999', width=stroke)
-            draw.rectangle((cx - 11 * sx, cy - 2 * sy, cx + 11 * sx, cy + 14 * sy),
-                           fill='#101010', outline='#999999', width=stroke)
-        band = '#493c25' if selected else '#252525'
+            image.alpha_composite(cover, thumb[:2])
+        band = c('#493c25') if selected else c('#252525')
         draw.rectangle((stroke, round((thumb_bottom + 1) * sy), size[0] - stroke - 1, size[1] - stroke - 1), fill=band)
-        label = chapter.title if unlocked else f'Chapter {index + 1} - Locked'
+        # The title arrives halfway through a reveal; a locked chapter never shows it.
+        named = unlocked and (stage is None or stage >= self.reveal_stages / 2)
+        label = chapter.title if named else f'Chapter {index + 1}'
         self.caption(image, font, label, (2, thumb_bottom + 1, self.CARD_WIDTH - 2, self.CARD_HEIGHT - 1),
-                     '#f4d873' if selected else '#eeeeee', .72, sx, sy)
-        self.card_cache[key] = image
+                     c('#f4d873') if selected else c('#eeeeee') if named else c('#999999'), .72, sx, sy)
+        outline = c('#f4d873') if selected else c('#626262')
+        glow = self.reveal_glow(index) if unlocked else None
+        if glow is not None:
+            bright, accent, rest = (tuple(int(c(colour)[i:i + 2], 16) for i in (1, 3, 5))
+                                    for colour in ('#eeeeee', '#f4d873', outline))
+            lit = self.GLOW_IN + self.GLOW_HOLD
+            if glow < self.GLOW_IN:
+                # It brightens as it dims: a fade in, not a sudden white border.
+                rise = (glow * self.REVEAL_RATE + 1) / (self.GLOW_IN * self.REVEAL_RATE + 1)
+                outline = tuple(round(a + (b - a) * rise) for a, b in zip(rest, bright))
+            else:
+                cool = max(0, min(1, (glow - lit) / self.GLOW_COOL))
+                fade = max(0, min(1, (glow - lit - self.GLOW_COOL) / max(.01, self.REVEAL_GLOW - lit - self.GLOW_COOL)))
+                shade = tuple(round(a + (b - a) * cool) for a, b in zip(bright, accent))
+                outline = tuple(round(a + (b - a) * fade) for a, b in zip(shade, rest))   # back to the card's own border
+            if glow < self.GLOW_SWEEP and cover is not None:
+                # A band of light crosses the cover from left to right, leaning like a
+                # reflection on glass, with a thin second one behind it. Hard-edged.
+                wide, tall = cover.size
+                lean = tall * .6
+                head = -wide * .25 + (wide * 1.5 + lean) * glow / self.GLOW_SWEEP
+                shine = Image.new('L', cover.size, 0)
+                pen = ImageDraw.Draw(shine)
+                for offset, breadth in ((0, wide * .16), (wide * .23, wide * .04)):
+                    right, left = head - offset, head - offset - breadth
+                    pen.polygon(((left, 0), (right, 0), (right - lean, tall), (left - lean, tall)), fill=90)
+                image.paste(Image.new('RGBA', cover.size, bright + (255,)), thumb[:2], shine)
+        # Last, so that neither the picture nor the title's band lies over the border.
+        draw.rectangle((0, 0, size[0] - 1, size[1] - 1), outline=outline, width=stroke * (2 if selected else 1))
+        if elapsed is None:
+            self.card_cache[key] = image
         return image
+
+    def veil(self, index, cover, stage):
+        """The cover at one stage of its veil: 0 as a locked chapter shows it, reveal_stages whole."""
+        key = index, cover.size, 'veil', stage, menu_theme.current().name
+        if key not in self.image_cache:
+            if stage >= self.reveal_stages:
+                picture = cover.convert('RGB')
+            else:
+                columns = (self.VEIL_COLUMNS, *self.REVEAL_COLUMNS)[stage]
+                blocks = cover.convert('RGB').resize(
+                    (columns, max(1, round(columns * cover.height / cover.width))), Image.Resampling.BOX)
+                depth = self.VEIL_DEPTH * (1 - stage / self.reveal_stages)
+                blocks = Image.blend(blocks, Image.new('RGB', blocks.size, c('#101010')), depth)
+                picture = blocks.resize(cover.size, Image.Resampling.NEAREST)
+            self.image_cache[key] = picture
+        return self.image_cache[key]
+
+    def refresh_reveal(self, font, sx, sy):
+        """Redraw the cards whose reveal has moved on, straight into the cached grid.
+
+        Only those cards are drawn, not the shelf, and only when a reveal has
+        reached its next frame. Each redrawn card is also kept in ``reveal_patches``, as
+        (x, y, picture) in the grid's pixels, for a presenter that holds a
+        copy of the grid (the retained Tk photo) to bring up to date.
+        """
+        if self.grid_cache is None:
+            return
+        grid = self.grid_cache[1]
+        for index in set(self.reveal) | set(self.reveal_drawn):
+            elapsed = self.reveal_frame(index)
+            if index in self.reveal_drawn and self.reveal_drawn[index] == elapsed:
+                continue
+            rect = self.card_rect(index, offset=0)
+            position = (round((rect[0] - self.STRIP[0] + self.GRID_PADDING) * sx), round((rect[1] - self.STRIP[1]) * sy))
+            card = self.card_image(index, font, sx, sy).convert('RGB')
+            grid.paste(card, position)
+            self.reveal_patches[index] = (*position, card)
+            if elapsed is None:
+                del self.reveal_drawn[index]
+            else:
+                self.reveal_drawn[index] = elapsed
+
+    def take_reveal_patches(self):
+        patches, self.reveal_patches = tuple(self.reveal_patches.values()), {}
+        return patches
 
     def hover_border(self, scale):
         """Grid-relative pixels, shared by captures and the retained Tk overlay."""
@@ -371,39 +543,47 @@ class CutsceneGallery:
         # The moving region and static frame are composed once per UI state.
         # Animation only crops/pastes the cached grid and updates its scrollbar;
         # there is no font drawing, asset IO or thumbnail resampling per frame.
+        theme = menu_theme.current()
         key = (viewport.size, visible, background_key or id(viewport), id(font), self.unlocked, self.developer,
-               self.focus, self.hovered if self.hovered in (1, 2) else None, self.error, self.collection.error)
+               self.focus, self.hovered if self.hovered in (1, 2) else None, self.error, self.collection.error,
+               theme.name)
         if self.background_cache is None or self.background_cache[0] != key:
-            base = Image.alpha_composite(viewport.convert('RGBA'), Image.new('RGBA', viewport.size, (0, 0, 0, 145)))
+            base = Image.alpha_composite(viewport.convert('RGBA'), Image.new(
+                'RGBA', viewport.size, (0, 0, 0, max(145, theme.dim) if theme.frame else 145)))
             draw = ImageDraw.Draw(base)
-            draw.rectangle(bounds(self.PANEL), fill='#181818', outline='#8c7954', width=stroke)
+            limit = (ox, 0, math.floor(viewport.width / sx) + ox - 1, 383)
+            if not menu_theme.panel_scaled(base, tuple(round(value) for value in self.PANEL), point, limit):
+                draw.rectangle(bounds(self.PANEL), fill=c('#181818'), outline=c('#8c7954'), width=stroke)
             title = 'Cutscene Viewer - Dev Tools' if self.developer else 'Cutscene Viewer'
             self.caption(base, font, title,
-                         (20 - ox, 19, self.PANEL[2] - 12 - ox, 51), '#f4d873', 1, sx, sy)
+                         (self.STRIP[0] - ox, 19, self.STRIP[2] - ox, 51), c('#f4d873'), 1, sx, sy)
             message = self.error or self.collection.error or (
                 'Continue the story to unlock this chapter.' if not self.unlocked else '')
             self.caption(base, font, message, (self.TRACK[0] - ox, 350, self.TRACK[2] - ox, 362),
-                         '#ff9b9b' if self.error else '#999999', .45, sx, sy)
+                         c('#ff9b9b') if self.error else c('#999999'), .45, sx, sy)
             self.background_cache = key, base.convert('RGB')
         image = self.background_cache[1].copy()
         region = bounds(self.STRIP)
         width, height = region[2] - region[0], region[3] - region[1]
         grid_key = (viewport.size, visible, id(font), self.index,
-                    tuple(sorted(self.collection.seen)), self.chapters, self.developer)
+                    tuple(sorted(self.collection.seen)), self.chapters, self.developer, theme.name)
         if self.grid_cache is None or self.grid_cache[0] != grid_key:
-            grid = Image.new('RGBA', (width + round((self.max_scroll + 2 * self.GRID_PADDING) * sx), height), '#181818')
+            grid = Image.new('RGBA', (width + round((self.max_scroll + 2 * self.GRID_PADDING) * sx), height), c('#181818'))
             for index in range(len(self.chapters)):
                 rect = self.card_rect(index, offset=0)
                 card = self.card_image(index, font, sx, sy)
                 grid.alpha_composite(card, (round((rect[0] - self.STRIP[0] + self.GRID_PADDING) * sx),
                                              round((rect[1] - self.STRIP[1]) * sy)))
             self.grid_cache = grid_key, grid.convert('RGB')
+            self.reveal_drawn, self.reveal_patches = {index: self.reveal_frame(index) for index in self.reveal}, {}
+        else:
+            self.refresh_reveal(font, sx, sy)
         left = round(self.display_scroll * sx) + round(self.GRID_PADDING * sx)
         strip = self.grid_cache[1].crop((left, 0, left + width, height))
         if border := self.hover_border(sx):
             draw = ImageDraw.Draw(strip)
             for x1, y1, x2, y2 in border:
-                draw.rectangle((x1 - left, y1, x2 - left - 1, y2 - 1), fill='#c6b58c')
+                draw.rectangle((x1 - left, y1, x2 - left - 1, y2 - 1), fill=c('#c6b58c'))
         image.paste(strip, region[:2])
         self.draw_scroll_controls(image, sx, sy, ox=ox)
         if len(self.text_cache) > 600:
@@ -428,10 +608,10 @@ class CutsceneGallery:
                                          (self.NEXT, 1, self.scroll_target < self.max_scroll)):
             x, y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
             draw.line((point(x - direction * 2, y - 5), point(x + direction * 2, y),
-                       point(x - direction * 2, y + 5)), fill='#f4d873' if enabled else '#505050', width=stroke)
-        draw.rectangle(bounds(self.TRACK), fill='#282828')
+                       point(x - direction * 2, y + 5)), fill=c('#f4d873') if enabled else c('#505050'), width=stroke)
+        draw.rectangle(bounds(self.TRACK), fill=c('#282828'))
         track_width = self.TRACK[2] - self.TRACK[0]
         fraction = self.STRIP[2] - self.STRIP[0]
         thumb_width = track_width * fraction / (fraction + self.max_scroll)
         start = self.TRACK[0] + (track_width - thumb_width) * (self.scroll / self.max_scroll if self.max_scroll else 0)
-        draw.rectangle(bounds((start, self.TRACK[1] + 1, start + thumb_width, self.TRACK[3] - 1)), fill='#999076')
+        draw.rectangle(bounds((start, self.TRACK[1] + 1, start + thumb_width, self.TRACK[3] - 1)), fill=c('#999076'))

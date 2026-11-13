@@ -8,7 +8,7 @@ from tkinter import TclError
 
 from PIL import Image
 
-from pop2.cutscenes import CHAPTERS, CutsceneCollection, chapter_available, chapter_range
+from pop2.cutscenes import CHAPTERS, OPENING_KEYS, CutsceneCollection, chapter_available, chapter_range
 from pop2.playback_preview import PlaybackPreviews
 
 
@@ -76,6 +76,7 @@ class CutsceneReplay:
     audio: object
     last_at: float
     paused: bool = False
+    started_at: float = 0.0
 
 
 def chapter_player(chapter, assets, audio=None):
@@ -137,6 +138,7 @@ class ChapterPreviews(PlaybackPreviews):
 class CutsceneControls:
     def init_cutscene_viewer(self):
         self.cutscene_collection = CutsceneCollection()
+        self.cutscene_fresh = set()   # chapters unlocked by playing them since the viewer was last open
         self.cutscene_campaign_active = True
         self.cutscene_replay = None
         self.cutscene_after_id = None
@@ -148,7 +150,16 @@ class CutsceneControls:
         collection = getattr(self, 'cutscene_collection', None)
         if collection is None:
             collection = self.cutscene_collection = CutsceneCollection()
-        collection.unlock(key)
+        before = set(collection.seen)
+        collection.unlock_through(key)
+        if not hasattr(self, 'cutscene_fresh'):
+            self.cutscene_fresh = set()
+        fresh = collection.seen - before
+        if key == 'opening':
+            # The opening's three chapters are open from the start, but a game's
+            # introduction has just shown them: the viewer reveals them once too.
+            fresh |= OPENING_KEYS
+        self.cutscene_fresh |= fresh - collection.revealed
 
     def mark_story_scene_seen(self, program_name):
         chapter = next((chapter for chapter in CHAPTERS if chapter.program == program_name), None)
@@ -167,15 +178,23 @@ class CutsceneControls:
         gallery = self.game_menu.cutscene_viewer = CutsceneGallery(
             self.cutscene_collection, self.cutscene_preview, developer=developer)
         self.pause_resume_keys.update(self.window_keys_down)
-        # Warm unlocked source thumbnails before scrolling begins: loading a
-        # newly exposed story program must not stall the moving shelf.
+        # Warm the source thumbnails before scrolling begins: loading a newly
+        # exposed story program must not stall the moving shelf. Locked
+        # chapters need theirs too, for the veiled blocks they show.
         for index, chapter in enumerate(CHAPTERS):
-            if gallery.chapter_unlocked(index) and chapter_available(chapter):
+            if chapter_available(chapter):
                 try:
                     self.cutscene_preview(index)
                 except (OSError, ValueError, KeyError, RuntimeError):
                     pass  # The card and replay action provide the import error.
+        fresh = getattr(self, 'cutscene_fresh', set())
+        if not developer and fresh:
+            gallery.begin_reveal(index for index, chapter in enumerate(CHAPTERS) if chapter.key in fresh)
+            self.cutscene_collection.revealed |= fresh
+            fresh.clear()
         self.render()
+        if gallery.reveal:
+            self.schedule_cutscene_gallery()
 
     def active_cutscene_gallery(self):
         menu = getattr(self, 'game_menu', None)
@@ -218,6 +237,9 @@ class CutsceneControls:
                 monitor_check = now + 1
             moving = gallery.advance(now - previous)
             previous = now
+            if gallery.reveal_cue:
+                gallery.reveal_cue = False
+                self.play_menu_sound('reveal')
             self.present_viewport()
             if moving:
                 def painted():
@@ -277,6 +299,9 @@ class CutsceneControls:
                     gallery.error, gallery.collection.error, frozenset(gallery.collection.seen),
                     gallery.developer, gallery.chapters, getattr(self, 'screenshot_toast', None))
 
+        # A reveal changes one card on every frame: bring the cached grid up to
+        # date here, and below copy just those cards into the retained photo.
+        gallery.refresh_reveal(self.ui_font, size[1] / 384, size[1] / 384)
         look = appearance()
         fast = (previous is not None and previous[0] is gallery and previous[1].size == size
                 and previous[2] is self.image_ref and previous[5] == look
@@ -292,9 +317,15 @@ class CutsceneControls:
         moving = (round(gallery.display_scroll * sx), gallery.scroll_target > 0,
                   gallery.scroll_target < gallery.max_scroll, gallery.grid_cache[0], gallery.display_scroll)
         grid_photo = getattr(self, '_cutscene_gallery_grid_photo', None)
+        patches = gallery.take_reveal_patches()
         if grid_photo is None or grid_photo[0] is not gallery.grid_cache[1]:
             grid_photo = self._cutscene_gallery_grid_photo = (
                 gallery.grid_cache[1], ImageTk.PhotoImage(gallery.grid_cache[1]))
+        else:
+            for x, y, card in patches:
+                card_photo = ImageTk.PhotoImage(card)
+                grid_photo[1].tk.call(str(grid_photo[1]), 'copy', str(card_photo), '-to', x, y,
+                                      '-compositingrule', 'set')
         if (previous is not None and previous[0] is gallery and previous[1].size == size
                 and previous[2] is self.image_ref):
             def upload(region, pixels):
@@ -398,7 +429,8 @@ class CutsceneControls:
             self.render()
             return
         self.cancel_cutscene_gallery_tick()
-        self.cutscene_replay = CutsceneReplay(chapter, player, audio, time.perf_counter())
+        now = time.perf_counter()
+        self.cutscene_replay = CutsceneReplay(chapter, player, audio, now, started_at=now)
         self.pause_resume_keys.update(self.window_keys_down)
         self.render()
         self.schedule_cutscene_replay()
