@@ -576,4 +576,5 @@ class SaveBrowser:
                     ('Save' if self.editing == 'create' else 'Rename') if self.editing else
                     {'save': 'Replace', 'load': 'Load', 'delete': 'Delete'}[self.confirmation]))):
                 button(rect, label, 30 + index, index == 0 or not self.editing or bool(self.draft.strip()))
+        menu_theme.watermark(image, self.PANEL, point)
         return image

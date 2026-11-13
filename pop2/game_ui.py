@@ -644,6 +644,7 @@ class DevelopmentMenu:
             line_limit = 2 if compact else 3
             for i, line in enumerate(lines[:line_limit]):
                 text(line, 120, error_y + i * 14, c("#ff9b9b"), max_width=272)
+        menu_theme.watermark(image, self.panel_rect)
         self.draw_popup(draw, text)
         return image
 

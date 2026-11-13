@@ -968,5 +968,6 @@ class ScreenshotGallery:
             text('This cannot be undone.', 100, 197, 312, muted)
             for i, (rect, label) in enumerate(zip(self.CONFIRM_BUTTONS, ('Cancel', 'Delete'))):
                 button(rect, label, 60 + i, scale=1, centered=True)
+        menu_theme.watermark(image, self.PANEL, point)
         draw_held_image()
         return image

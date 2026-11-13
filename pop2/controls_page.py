@@ -562,6 +562,7 @@ class ControlsPage:
             button(self.BUTTONS[1], 'Back' if self.return_to_menu else 'Close', focused == 'back')
         else:
             self.draw_remap(image, draw, text, button, lambda value: label_text(font, value, c(WHITE)).width)
+        menu_theme.watermark(image, self.PANEL)
         return image
 
     def keyboard_colors(self):

@@ -137,7 +137,7 @@ RUINS = MenuTheme('ruins', {
     'active': '#9fd0c8', 'active_map': '#9fd0c8', 'active_fill': '#1f2a55',
     'active_field': '#1a1f4c', 'text_selection': '#534b7e',
     'danger': '#522118', 'danger_soft': '#3a1830',
-}, dim=120, frame='studs', grow=(2, 5, 7), mark='#736b96')
+}, dim=120, frame='studs', grow=(2, 5, 7), mark='#04011c')
 
 # Levels 10-13: the temple's carved red stone and candle flame.
 TEMPLE = MenuTheme('temple', {
@@ -486,9 +486,9 @@ def _sand_frame(theme, size, fill):
 
 
 # --- The ruins: the palace wall's band of square sockets, in straight dressed
-# stone that has started to fall apart: pieces broken out, cracks, a rail gone
-# between two sockets. A carved ring marks each corner, as on the wall's arches.
-_BREAK = (1, 1, 1, 2, 2, 2, 3, 3, 2, 3, 4, 4, 4, 5, 5, 4, 5, 6, 6, 7, 6, 7, 7, 6, 4, 3, 1)
+# stone that has started to fall apart. Every damaged place is different: a
+# piece broken out, a flake off the surface, a nick, a crack. A carved ring
+# marks each corner, as on the wall's arches.
 _RING = (
     '.........',
     '..dddd...',
@@ -500,6 +500,21 @@ _RING = (
     '.........',
     '.........',
 )
+# Where the stone is damaged: side (top, bottom, left, right), how far along,
+# what kind. Small panels get only the nicks.
+_DAMAGE = ((0, 0.64, 'break'), (0, 0.22, 'crack'), (3, 0.30, 'flake'), (3, 0.78, 'nick'),
+           (1, 0.20, 'nick'), (1, 0.72, 'crack'), (2, 0.56, 'break'), (2, 0.16, 'flake'))
+
+
+def _broken_edge(rng, length, deepest):
+    """How deep a broken-out piece reaches at each step: ragged and lopsided."""
+    peak = rng.randint(length // 4, length * 3 // 4)
+    edge = []
+    for index in range(length):
+        share = index / peak if index < peak else (length - 1 - index) / max(1, length - 1 - peak)
+        depth = 1 + round((deepest - 1) * share) + rng.choice((-1, 0, 0, 0, 1))
+        edge.append(min(deepest, max(1, depth)))
+    return edge
 
 
 def _studs_frame(theme, size, fill):
@@ -520,13 +535,26 @@ def _studs_frame(theme, size, fill):
     def place(side, along, depth):
         return ((along, depth), (along, height - 1 - depth), (depth, along), (width - 1 - depth, along))[side]
 
-    # Where a piece has broken out of the outer edge: top, bottom and left.
     gone = [[0] * longest for _side in range(4)]
-    broken = width > 2 * thickness + 4 * len(_BREAK) and height > 2 * thickness + 4 * len(_BREAK)
-    if broken:
-        for side, at, turned in ((0, width * 2 // 3, False), (1, width // 5, True), (2, height // 2, False)):
-            for index, depth in enumerate(reversed(_BREAK) if turned else _BREAK):
-                gone[side][at + index] = depth
+    cracks = []
+    for side, share, kind in _DAMAGE:
+        length = width if side < 2 else height
+        if length < 150 and kind != 'nick':
+            continue
+        at = thickness + 8 + round((length - 2 * thickness - 50) * share) + wear.randint(-4, 4)
+        if kind == 'break':
+            edge = _broken_edge(wear, wear.randint(12, 20), wear.randint(4, 5))
+            cracks.append((side, at + edge.index(max(edge)), max(edge) + 1, thickness - 1))
+        elif kind == 'flake':
+            edge = [wear.choice((1, 1, 2)) for _step in range(wear.randint(18, 30))]
+            edge[0] = edge[-1] = 1
+        elif kind == 'nick':
+            edge = _broken_edge(wear, wear.randint(4, 7), wear.randint(2, 3))
+        else:
+            edge = []
+            cracks.append((side, at, 1, wear.randint(5, 7)))
+        for index, depth in enumerate(edge):
+            gone[side][at + index] = depth
 
     for y in range(height):
         run, colour = 0, marble[0]
@@ -556,83 +584,78 @@ def _studs_frame(theme, size, fill):
                 pixels[x, y] = (stain[colour] if stained[side][along] else colour) + (255,)
 
     # The sockets: sunk squares, dark under their upper and left rims.
-    def socket(side, along, wide):
-        for i in range(wide):
-            for j in range(5):
-                x, y = place(side, along + i, 2 + j)
-                if pixels[x, y][3] == 0 or pixels[x, y] == deep:
-                    continue
-                dx, dy = (i, j) if side < 2 else (j, i)
-                if side == 1:
-                    dy = 4 - dy
-                if side == 3:
-                    dx = 4 - dx
-                last_x, last_y = (wide - 1, 4) if side < 2 else (4, wide - 1)
-                if dy == 0 or dx == 0:
-                    pixels[x, y] = deep
-                elif dy == last_y or dx == last_x:
-                    pixels[x, y] = face
-                else:
-                    pixels[x, y] = sunk
-
     for side in range(4):
         length = width if side < 2 else height
         room = length - 2 * thickness - 2
         count = (room + 3) // 8
         start = thickness + 1 + (room - (count * 8 - 3)) // 2
-        index = 0
-        while index < count:
-            # Now and then the rail between two sockets has fallen away.
-            joined = index + 1 < count and wear.random() < 0.09
-            socket(side, start + index * 8, 13 if joined else 5)
-            index += 2 if joined else 1
+        for index in range(count):
+            for i in range(5):
+                for j in range(5):
+                    x, y = place(side, start + index * 8 + i, 2 + j)
+                    if pixels[x, y][3] == 0 or pixels[x, y] == deep:
+                        continue
+                    dx, dy = (i, j) if side < 2 else (j, i)
+                    if side == 1:
+                        dy = 4 - dy
+                    if side == 3:
+                        dx = 4 - dx
+                    pixels[x, y] = deep if dy == 0 or dx == 0 else face if dy == 4 or dx == 4 else sunk
     for left in (0, width - thickness):
         for top in (0, height - thickness):
             _stamp(pixels, left, top, _RING, {'d': deep, 'l': lit})
-
-    # Cracks run on from the deepest point of each break.
-    if broken:
-        for side, at, turned in ((0, width * 2 // 3, False), (1, width // 5, True), (2, height // 2, False)):
-            profile = list(reversed(_BREAK)) if turned else list(_BREAK)
-            along = at + profile.index(max(profile))
-            for depth in range(max(profile) + 1, thickness - 1):
-                pixels[place(side, along, depth)] = deep
-                along += wear.choice((-1, 0, 1, 1))
+    for side, along, first, last in cracks:
+        for depth in range(first, last):
+            pixels[place(side, along, depth)] = deep
+            along += wear.choice((-1, 0, 0, 1, 1))
     return picture
 
 
-# The invaders' serpent sign, large, as it is left on the palace walls.
+# The invaders' serpent sign, large, as it is left on the palace walls: a
+# pointed head on a hooked neck, over a coil that thins to its tail.
 def _serpent_mask(height):
-    scale = height / 29.0
-    points = []
-    for step in range(24):                       # the hooked neck
-        angle = math.radians(-20 - step * 10)
-        points.append((14 + 5 * math.cos(angle), 6.5 + 5 * math.sin(angle)))
-    for step in range(57):                       # the coil
-        angle = math.radians(-40 + step * 10)
-        radius = 8 - step * 0.1
-        points.append((10 + radius * math.cos(angle), 19.5 + radius * math.sin(angle)))
-    image = Image.new('L', (round(22 * scale), height), 0)
+    scale = height / 30.0
+    image = Image.new('L', (round(25 * scale), height), 0)
     draw = ImageDraw.Draw(image)
-    stroke = max(2, round(1.7 * scale))
-    for x, y in points:
-        box = (x * scale - stroke / 2, y * scale - stroke / 2, x * scale + stroke / 2, y * scale + stroke / 2)
-        draw.ellipse(box, fill=255)
-    draw.line([(x * scale, y * scale) for x, y in points], fill=255, width=stroke)
-    head = points[0]
-    draw.ellipse(((head[0] - 1.3) * scale, (head[1] - 1.5) * scale, (head[0] + 1.7) * scale, (head[1] + 1.1) * scale),
-                 fill=255)
+    ahead, across = (0.94, -0.34), (0.34, 0.94)  # where the head points
+    start = (14 + 5 * math.cos(math.radians(-80)), 8.5 + 5 * math.sin(math.radians(-80)))
+    body = [(start[0] + ahead[0] * (3 - step * 0.2), start[1] + ahead[1] * (3 - step * 0.2)) for step in range(15)]
+    for step in range(69):                       # the hooked neck
+        angle = math.radians(-80 - step * 2.5)
+        body.append((14 + 5 * math.cos(angle), 8.5 + 5 * math.sin(angle)))
+    for step in range(233):                      # the coil
+        angle = math.radians(-40 + step * 2.5)
+        radius = 8 - step * 0.026
+        body.append((10 + radius * math.cos(angle), 21.5 + radius * math.sin(angle)))
+    for index, (x, y) in enumerate(body):
+        left = len(body) - 1 - index
+        half = 0.85 * scale * (min(1.0, 0.25 + left / 110.0))     # thinner towards the tail
+        draw.ellipse((x * scale - half, y * scale - half, x * scale + half, y * scale + half), fill=255)
+    # The head: a flat wedge pointing up and outwards, with a forked tongue.
+    x, y = body[0]
+
+    def at(forward, sideways):
+        return ((x + ahead[0] * forward + across[0] * sideways) * scale,
+                (y + ahead[1] * forward + across[1] * sideways) * scale)
+
+    draw.polygon((at(-0.8, 0.85), at(0.9, 1.7), at(4.4, 0), at(0.9, -1.7), at(-0.8, -0.85)), fill=255)
+    thin = max(1, round(0.3 * scale))
+    draw.line((at(4.2, 0), at(5.4, 0)), fill=255, width=thin)
+    draw.line((at(5.4, 0), at(6.3, 0.6)), fill=255, width=thin)
+    draw.line((at(5.4, 0), at(6.3, -0.6)), fill=255, width=thin)
     return image
 
 
 _marks = {}
 
 
-def watermark(image, rect):
+def watermark(image, rect, point=None):
     """Leave the theme's sign on a finished page, faintly, behind its text.
 
-    Only the page's own background colours change, each to a slightly lighter
-    shade, so text, outlines and pictures stay as they are.
+    Only the page's own background colours change, each to a slightly darker
+    shade, so text, outlines and pictures stay as they are. ``point`` is given
+    by pages drawn at the window's resolution: the sign is then drawn at the
+    game's resolution and enlarged without smoothing.
     """
     theme = _current
     if theme.mark is None:
@@ -646,15 +669,21 @@ def watermark(image, rect):
     left = (rect[0] + rect[2] + 1 - mask.width) // 2
     top = (rect[1] + rect[3] + 1 - mask.height) // 2 + 6
     box = (left, top, left + mask.width, top + mask.height)
+    if point is not None:
+        box = (*point(box[0], box[1]), *point(box[2], box[3]))
+        key = height, box[2] - box[0], box[3] - box[1]
+        if key not in _marks:
+            _marks[key] = mask.resize(key[1:], Image.Resampling.NEAREST)
+        mask = _marks[key]
     bands = image.crop(box).convert('RGB').split()
     toward = _rgb(theme.mark)
-    for colour in {_rgb(theme.colour(role)) for role in ('panel', 'row', 'row_dark', 'selected', 'hover')}:
+    for colour in {_rgb(theme.colour(role)) for role in ('panel', 'row', 'row_dark', 'selected', 'hover', 'well', 'well_dark')}:
         same = mask
         for band, value in zip(bands, colour):
             table = [0] * 256
             table[value] = 255
             same = ImageChops.darker(same, band.point(table))
-        tint = tuple(round(a + (b - a) * 0.16) for a, b in zip(colour, toward))
+        tint = tuple(round(a + (b - a) * 0.4) for a, b in zip(colour, toward))
         image.paste(tint + (255,), box, same)
 
 
