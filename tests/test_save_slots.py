@@ -555,6 +555,8 @@ class SaveBrowserTests(unittest.TestCase):
                 # Controls answer where they are drawn.
                 footer = browser.footer_rects
                 self.assertEqual(footer[-1][2], browser.right)
+                self.assertEqual(footer[-1][2] - footer[-1][0], 140)   # not stretched across the page
+                self.assertEqual(browser.PANEL[2] - browser.PANEL[0], 456 + 172)   # 21:9 centres the 16:9 page
                 self.assertEqual(browser.hit(footer[-1][2] - 2, 340), 27)
                 self.assertEqual(browser.hit(browser.row_rect(1)[2] - 2, browser.row_rect(1)[1] + 2), 101)
                 self.assertEqual(browser.hit(browser.DETAILS[0] + 5, browser.DETAILS[1] + 5), 25)

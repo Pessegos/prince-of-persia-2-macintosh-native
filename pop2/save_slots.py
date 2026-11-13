@@ -109,8 +109,7 @@ class SaveBrowser:
     TABS = ((40, 53, 144, 79), (150, 53, 254, 79))
     ROW_HEIGHT = 42
     WIDE_FROM = 136      # narrower windows keep the classic page, centred
-    WIDE_PREVIEW = 172   # up to here the extra width enlarges the preview
-    WIDE_LIMIT = 262     # beyond it the list grows; the panel stops here
+    WIDE_LIMIT = 172     # a 16:9 window; wider ones centre that same page
 
     def __post_init__(self):
         if self.mode == 'save' and not self.slots and self.focus == 100:
@@ -121,8 +120,8 @@ class SaveBrowser:
         """(spread, shift) for a picture of this size; (0, 0) for the classic page.
 
         The page is 384 units tall. A window wide enough gets a wider panel:
-        a larger preview with the save's details beside it, then a wider
-        list. Anything wider still centres that panel.
+        a larger preview with the save's details beside it. Anything wider
+        than 16:9 centres that same panel instead of stretching it.
         """
         extra = width * 384 / max(1, height) - basis
         if extra < cls.WIDE_FROM:
@@ -138,10 +137,6 @@ class SaveBrowser:
                 round((rect[2] - 1 + self.shift) * sx), round(rect[3] * sy))
 
     @property
-    def list_growth(self):
-        return max(0, self.spread - self.WIDE_PREVIEW)
-
-    @property
     def right(self):
         return 472 + self.spread
 
@@ -151,15 +146,14 @@ class SaveBrowser:
 
     @property
     def LIST(self):
-        return 40, 99, 228 + self.list_growth, 321
+        return 40, 99, 228, 321
 
     @property
     def PREVIEW(self):
-        left = 238 + self.list_growth
         if not self.spread:
-            return left, 99, 472, 267
-        width = 276 - max(0, self.WIDE_PREVIEW - self.spread)
-        return left, 99, left + width, 99 + round((width - 2) * 365 / 510) + 2   # a save picture's own shape
+            return 238, 99, 472, 267
+        width = 276 - (self.WIDE_LIMIT - self.spread)
+        return 238, 99, 238 + width, 99 + round((width - 2) * 365 / 510) + 2   # a save picture's own shape
 
     @property
     def DETAILS(self):
@@ -173,9 +167,9 @@ class SaveBrowser:
 
     @property
     def FOOTER(self):
-        half = self.spread // 2
+        # The wide page keeps the buttons' sizes and moves the two actions to its right edge.
         return ((40, 328, 108, 356), (116, 328, 196, 356),
-                (204, 328, 324 + half, 356), (332 + half, 328, self.right, 356))
+                (204 + self.spread, 328, 324 + self.spread, 356), (332 + self.spread, 328, self.right, 356))
 
     @property
     def DIALOG(self):
@@ -198,7 +192,8 @@ class SaveBrowser:
 
     @property
     def footer_rects(self):
-        return self.FOOTER if self.mode == 'save' else (*self.FOOTER[:2], (204, 328, self.right, 356))
+        return self.FOOTER if self.mode == 'save' else (
+            *self.FOOTER[:2], ((332 if self.spread else 204) + self.spread, 328, self.right, 356))
 
     @property
     def entry(self):
@@ -262,7 +257,7 @@ class SaveBrowser:
 
     def row_rect(self, row):
         top = self.LIST[1] + row * self.ROW_HEIGHT - self.scroll
-        return 40, top, 222 + self.list_growth, top + self.ROW_HEIGHT - 3
+        return 40, top, 222, top + self.ROW_HEIGHT - 3
 
     def hit(self, x, y):
         if self.confirmation or self.editing:
@@ -272,7 +267,7 @@ class SaveBrowser:
                          if self.contains(rect, x, y)), None)
         controls = dict(enumerate(self.TABS))
         if self.contains(self.LIST, x, y):
-            if x >= 223 + self.list_growth and self.max_scroll:
+            if x >= 223 and self.max_scroll:
                 return 24
             return next((100 + row for row in range(len(self.items))
                          if self.contains(self.row_rect(row), x, y)), None)
@@ -429,7 +424,7 @@ class SaveBrowser:
     def draw(self, viewport, font, *, visible=False, background_key=None):
         modal = self.confirmation or self.editing
         self.spread, self.shift = self.wide_layout(*viewport.size, 510 if visible else 512)
-        grown, right, half = self.list_growth, self.right, self.spread // 2
+        right, half = self.right, self.spread // 2
         # How far the wide page's frame may reach, in the page's own units.
         wide = (math.ceil(int(visible) - self.shift), 0,
                 math.floor(int(visible) + 509 + self.spread + self.shift), 383) if self.spread else None
@@ -516,25 +511,25 @@ class SaveBrowser:
                 current = slot.path == self.active_path
                 rectangle(rect, fill=c('#253033') if selected else c('#222222'),
                           outline=gold if self.focus == 100 + row else cyan if selected else c('#404040'))
-                text(slot.name, rect[0] + 8, rect[1] + 7, cyan if selected else white, 100 + grown, True, True)
+                text(slot.name, rect[0] + 8, rect[1] + 7, cyan if selected else white, 100, True, True)
                 text(f'Level {slot.level}' if slot.level else '---', rect[2] - 8, rect[1] + 7,
                      muted, 59, True, align='right')
                 if current:
                     line(((rect[0] + 2, rect[1] + 3), (rect[0] + 2, rect[3] - 3)), cyan)
                     text('Current', rect[0] + 8, rect[1] + 25, cyan, 42, True)
                 text(slot.error or slot.date, rect[2] - 8, rect[1] + 25,
-                     muted, (120 if current else 164) + grown, True, align='right')
+                     muted, 120 if current else 164, True, align='right')
             background.alpha_composite(image, origin)
             image, origin = background, (0, 0)
             draw = ImageDraw.Draw(image)
             if not self.items:
-                text('No saved games', 50, 181, muted, 168 + grown, True)
+                text('No saved games', 50, 181, muted, 168, True)
             if self.max_scroll:
                 height = self.LIST[3] - self.LIST[1]
                 thumb = max(16, height * height / (len(self.items) * self.ROW_HEIGHT))
                 top = self.LIST[1] + (height - thumb) * self.scroll / self.max_scroll
-                rectangle((225 + grown, self.LIST[1], 227 + grown, self.LIST[3]), fill=c('#303030'))
-                rectangle((225 + grown, top, 227 + grown, top + thumb), fill=c('#858585'))
+                rectangle((225, self.LIST[1], 227, self.LIST[3]), fill=c('#303030'))
+                rectangle((225, top, 227, top + thumb), fill=c('#858585'))
 
         if list_base is not None:
             draw_list()
