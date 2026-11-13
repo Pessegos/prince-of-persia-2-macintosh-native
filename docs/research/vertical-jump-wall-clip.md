@@ -9,6 +9,11 @@ sequence reproduced a stuck body followed by a room cut. See the complete
 input replay at the end; its regressions supersede the initial jump-only
 coverage claim.
 
+The subsequent paired Macintosh video also showed that retaining a bump
+cancelled the real jump. The latest [gate-admission correction](vertical-jump-gate-admission.md)
+preserves the complete jump and subsequent movement; the historical bump
+expectations below are superseded by that original-backed regression.
+
 ## Reproduction and correction
 
 A hidden real scene reproduces it from room3/row0, sceneX470, facing left,
