@@ -122,6 +122,30 @@ allowed, RAWINPUT and Windows.Gaming.Input off (so Xbox pads use XInput),
 positional Nintendo buttons. SDL normalises Xbox, PlayStation, Switch Pro and
 many other pads to one layout named by position.
 
+The displayed name normally comes from SDL. A generic **XInput Controller**
+does not establish the manufacturer: `pop2/controller_identity.py` only
+replaces it with an Xbox model name when a read-only Windows
+`XInputGetCapabilitiesEx` query returns a recognised Microsoft hardware
+vendor/product pair for that controller's exact `XInput#0`..`XInput#3` path.
+Specific SDL names are preserved. Other vendors, unknown IDs, unavailable
+queries and ambiguous paths keep the reported name. Driver software IDs
+`02a1`/`02ff`, receiver IDs and the commonly emulated Xbox 360 ID `028e`
+deliberately stay generic. Names are resolved afresh on each connection;
+the Xbox button drawing alone never supplies the device's name.
+
+This avoids SDL 2.28's XInput VID/PID guesses, which can substitute a
+Microsoft Bluetooth identity or associate the wrong device when several
+pads are connected. Sources: [SDL 2.28.4 XInput backend](https://github.com/libsdl-org/SDL/blob/release-2.28.4/src/joystick/windows/SDL_xinputjoystick.c),
+[current SDL per-slot query](https://github.com/libsdl-org/SDL/blob/main/src/joystick/windows/SDL_xinputjoystick.c),
+[extension ABI](https://github.com/libsdl-org/SDL/blob/main/src/core/windows/SDL_xinput.h),
+[SDL product IDs](https://github.com/libsdl-org/SDL/blob/main/src/joystick/usb_ids.h)
+and [original Xbox One IDs in Linux](https://github.com/torvalds/linux/blob/master/drivers/input/joystick/xpad.c).
+Device-reported identity is not hardware authentication: a driver or device
+that impersonates an exact supported Microsoft model cannot be distinguished
+by this query. Ordinary third-party XInput compatibility is not a reason to
+rename a pad Xbox. A genuine Xbox can still remain generic when Windows
+exposes only a software identity.
+
 The Tk thread reads the newest snapshot every 16 ms and turns edges into the
 same original keys:
 
@@ -158,3 +182,11 @@ Not yet verified on hardware: any real controller. Xbox-compatible pads use
 XInput through SDL; PlayStation and Nintendo pads rely on SDL's HIDAPI
 drivers and its mapping database. Their names and symbols come from SDL's
 reported type and need checking by someone who owns one.
+
+Controller-name regression tests in `tests/test_controller_identity.py`
+cover mixed vendors in different XInput slots, unknown/software/emulated
+IDs, preservation of specific names, query failure, Windows ABI bindings
+and replacement of an Xbox by a third-party pad in the same slot, with
+button input retained. The local Windows extension loaded successfully;
+all four slots reported disconnected during the check, so an actual Xbox
+friendly name has not yet been verified on hardware.

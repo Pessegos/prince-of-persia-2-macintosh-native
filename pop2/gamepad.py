@@ -16,6 +16,7 @@ import sys
 import threading
 
 from pop2.input_bindings import PAD_BUTTONS
+from pop2.controller_identity import XInputNames
 
 SDL_INIT_GAMECONTROLLER = 0x2000
 SDL_IGNORE = 0
@@ -144,6 +145,9 @@ def prepare(sdl):
                  'SDL_GameControllerName', 'SDL_GameControllerGetType'):
         getattr(sdl, name).argtypes = (ctypes.c_void_p,)
     sdl.SDL_GameControllerName.restype = ctypes.c_char_p
+    if hasattr(sdl, 'SDL_GameControllerPath'):
+        sdl.SDL_GameControllerPath.argtypes = (ctypes.c_void_p,)
+        sdl.SDL_GameControllerPath.restype = ctypes.c_char_p
     sdl.SDL_GameControllerGetButton.argtypes = (ctypes.c_void_p, ctypes.c_int)
     sdl.SDL_GameControllerGetButton.restype = ctypes.c_uint8
     sdl.SDL_GameControllerGetAxis.argtypes = (ctypes.c_void_p, ctypes.c_int)
@@ -186,6 +190,8 @@ class SdlGamepads:
             return
         self.ready = True
         open_pads = {}
+        names = XInputNames()
+        controller_path = getattr(sdl, 'SDL_GameControllerPath', lambda handle: None)
         try:
             while not self._stop.wait(self.INTERVAL):
                 sdl.SDL_GameControllerUpdate()
@@ -197,6 +203,7 @@ class SdlGamepads:
                     if handle:
                         raw = sdl.SDL_GameControllerName(handle) or b'Controller'
                         name = raw.decode('utf-8', 'replace')
+                        name = names.name(name, controller_path(handle))
                         open_pads[instance] = (handle, name, pad_style(
                             sdl.SDL_GameControllerGetType(handle), name))
                 states = []
