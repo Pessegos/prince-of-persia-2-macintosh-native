@@ -4,6 +4,11 @@ The supplied12.437-second port recording shows level12 room3: climb the
 upper-right platform, move against its right wall, face left and jump up.
 The Prince crosses into room11. No live game/emulator was operated.
 
+The initial fix below was incomplete: a later recording and explicit key
+sequence reproduced a stuck body followed by a room cut. See the complete
+input replay at the end; its regressions supersede the initial jump-only
+coverage claim.
+
 ## Reproduction and correction
 
 A hidden real scene reproduces it from room3/row0, sceneX470, facing left,
@@ -100,3 +105,78 @@ No executable was rebuilt, and no physical game/emulator or original native
 code probe was run. Further work, if needed, should supply a specific action
 outside unarmed SEQS14/28 rather than broadening the correction to every
 animation family without independent regression evidence.
+
+## Complete climb, step, turn, jump and movement replay
+
+The user's third clip (10.86 seconds) gives the missing sequence: begin below
+the right-hand upper ledge beside the gate, climb, take a short right step
+with Shift, turn left, jump vertically, then walk left. This reproduces on
+the current port; no stale executable or alternate workspace is assumed.
+
+A hidden scene supplies only the supported lower start, native room3/row1,
+X434 facing right. Both gates retain their original closed foreground0.
+Up+Shift for30 ticks and5 released ticks runs the actual ascent16->10 and
+settles at X444, row0, clearing the ledge flags. Shift+Right3 ticks, release12,
+Left1 and release10 settles at X453 facing left. Up3 and release20 reproduces
+the faulty jump. The following Left input cuts to room11 immediately.
+
+The first safeguard did run. At vertical pose73, the front gate proposes
+X488; the preceding body's solid-wall sweep limits it to455. But selecting
+the ordinary bump47 immediately executes its first pose50, whose backward
+displacement adds another16, leaving X471. On the subsequent left input,
+another collision/bump moves to499, CheckFloor's align_wall carries the foot
+to531 and the room cut follows. Checking only the first displacement missed
+the response sequence's own movement.
+
+The safeguard now also caps the **complete response** against the same
+previous body and solid walls, after sequence selection and the response
+pose's secondary collision. Bounds are refreshed before CheckGate/CheckFloor
+and room-cut logic consume them. In this replay the bump ends at455; Left
+then moves normally to451,447,438,428 while remaining on room3's top ledge.
+Walking farther left can still leave the real ledge and fall normally.
+The restriction remains unarmed Prince SEQS14/28; short steps, crawling and
+NPC collision families are not included. This is a host safeguard (A), with
+no new native CPU or full collision-buffer equivalence claim.
+
+`tests.test_vertical_jump_walls` now includes the complete lower-start replay
+and the step/turn/jump/follow-up at all six known pinches. It checks that the
+supporting foot stays outside solid cells, remains on the original room/row
+and actually moves left after recovery. The mirrored synthetic case now
+executes the16-pixel response displacement too. Replacing only advance with
+the pre-change method yields seven failures across the two new scene tests;
+the updated implementation passes. Those negative-control failures are
+intentional evidence, not successful tests of the old code.
+
+The original 488-position/6,344-pose audit was also rerun: seven candidates,
+with the six temple pinches contained. Its supplied placements and exclusions
+remain unchanged; it is not a full campaign/input-state search. Actual full
+climb input is replayed in room3, while the other five sites supply a supported
+upper-platform start before the step and turn.
+
+A before/after offscreen render of that complete replay confirms room11 after
+Left with the old method and room3 with the new one. At the pressed position,
+the front column still covers much of the idle sprite. The fix restores
+immediate movement out of that position; native pixel/occlusion parity at
+the column has not been established and is not claimed here.
+
+A lower-start sweep X428..440 gave eight completed ascents (X433..440), all
+settling at444 and passing the complete step/turn/jump/Left replay. The other
+five supplied starts did not ascend and are not counted as successful route
+checks. Ten consecutive vertical jumps at the pre-jump position followed by
+Left also remain in room3. These are bounded port experiments, not exhaustive
+timing, gate-phase, saved-campaign or opponent scheduling coverage.
+
+Final checks: full discovery run as246 isolated modules exercised4,132 cases,
+with10 explicit skips (nine exclusive-desktop cases and one original enemy-AI
+reference without its research configuration). All functional modules passed.
+The frame-cost check initially failed during parallel load at level6
+(median44.9ms, budget41.7ms); its unchanged assertion passed alone afterwards
+(level6 median11.5ms). The raw parallel run is not described as entirely green.
+Audio and other performance modules ran serially after the worker pool.
+An earlier single-process discovery and a duplicate focused run were stopped
+before completion; neither is counted as a completed pass. The five final
+wall tests, including the strengthened mirrored displacement, passed too.
+
+Dependency, Ruff F/E9, recovery-catalogue and whitespace checks passed. No
+original resources, user saves/settings, executable build or live desktop
+input was involved.
