@@ -967,7 +967,8 @@ class LevelMap:
             return rock
         return wall if side == 0 and wall < new_x else min(wall, rock)
 
-    def tile_correction(self, room, delta, new_x, bounds, old_bounds, facing, physical_row, state):
+    def tile_correction(self, room, delta, new_x, bounds, old_bounds, facing, physical_row, state,
+                        *, solid_only=False):
         left, top, right, bottom = bounds
         old_left, _, old_right, _ = old_bounds
         if not delta and (old_left, old_right) == (left, right):
@@ -983,6 +984,8 @@ class LevelMap:
             # the sweep, notably the throne grille during armed retreat.
             for col in range(-2, 12):
                 tile = self.tile(room, col, row)
+                if solid_only and tile.kind not in WALL_TILES:
+                    continue
                 # CheckCollide 4:5688 asks 4:5b0e: the exit passes at phase 19.
                 desert_exit = (tile.kind == 4 and self.desert is not None
                                and self.gate_collides(tile, bounds, state))
@@ -1521,6 +1524,18 @@ class RooftopPhysics:
                                               collision_bounds, wall_old_bounds, collision_facing,
                                               physical_row=motion.row, state=state))
         if corrected != state.target_x:
+            if (wall_old_bounds is not None and state.actor_type in (0, None)
+                    and not sword_drawn and state.source_sequence_id in (14, 28)):
+                # A wider pose can meet a gate in front while a wall touches
+                # the preceding body behind. Do not push that body through
+                # the rear wall to make the wider pose fit; still play Collide's
+                # response even when the safe displacement is zero.
+                shift = corrected - old_x
+                translated = (wall_old_bounds[0] + shift, wall_old_bounds[1],
+                              wall_old_bounds[2] + shift, wall_old_bounds[3])
+                corrected = self.map.tile_correction(
+                    motion.room, shift, corrected, translated, wall_old_bounds,
+                    None, motion.row, state, solid_only=True)
             delta = corrected - state.target_x
             state.current_x = state.target_x = corrected
             bounds = (bounds[0] + delta, bounds[1], bounds[2] + delta, bounds[3])

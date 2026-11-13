@@ -1764,7 +1764,7 @@ class Temple(Caverns):
         frame = draw_temple_flame(frame, scene.room_id, scene.game.caverns.flame,
                                   level_number=scene.game.level.number)
         frame = draw_trapdoors(frame, scene.room_id, scene.game.caverns.trapdoors.drawn,
-                               level_number=scene.game.level.number)
+                               scene.level_map, level_number=scene.game.level.number)
         return draw_slide_rocks(frame, scene.room_id, scene.game.caverns.rocks, scene.level_map,
                                 level_number=scene.game.level.number)
 

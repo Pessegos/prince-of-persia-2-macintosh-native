@@ -1,6 +1,7 @@
 # Trap-Door Presentation And Restoration
 
-Research/reference only. No runtime or actual pixel renderer changes.
+The original probe below is research/reference only. The November 13 port
+renderer follow-up is recorded at the end.
 
 ```powershell
 python -m tools.probe_temple_trapdoor_presentation --source PATH_TO_RECOVERY --output rendered/temple-native-trapdoor-presentation.json
@@ -100,3 +101,42 @@ save/restart or playable campaign integration is certified.
 The subsequent [connected lifecycle probe](temple-trapdoor-lifecycle.md) joins
 constructor, advance-bank and presentation-bank passes in explicit sequences,
 observing deletion/compaction across calls without claiming complete FrameAdv.
+
+## Upper-room animation missing in level 12 room 3 (2026-11-13)
+
+The user's paired Macintosh/port recordings show the bottom-row panel in
+native room 21 swinging into the top of room 3 after the Prince jumps. The
+port removes the static closed panel but omits the moving panel entirely.
+`draw_trapdoors` filtered its objects to the current room, even though
+`TrapDoors.present` retained the upper-room animation object.
+
+The drawing helper now receives the current terrain links and projects panels
+from above by Y-364 and below by Y+364, then clips their sprites to the frame.
+The original object coordinates, phase bank, activation, restored floor and
+collision are unchanged. This applies to vertical links throughout the temple,
+without a room-specific exception. Horizontal/diagonal neighbouring panels
+remain outside this change.
+
+Static evidence: ATMTrapDoor 10:2274-22da projects adjacent-room objects before
+its screen-cell query; 10:2294-22a0 subtracts 364 for A5-4fbc. Room setup
+3:1b1c-1b36 identifies A5-4fbc as the LEVL +4 (upper) link and A5-4fba as
++6 (lower). **The historical probe's `above`/`below` labels are reversed**:
+its globals and matching arithmetic are supplied consistently, so its old
+comparisons do not independently validate the semantic direction names.
+The follow-up uses the actual room links and the recorded Macintosh picture.
+No new native CPU or QuickDraw pixel-equivalence claim is made.
+
+`tests.test_trapdoor_drawing` covers clipped sprites from the current, upper
+and lower rooms, absent links and unrelated rooms without imported assets.
+The real hidden scene regression in `tests.test_temple_arrival` triggers the
+room-21 panel while viewing room 3 and checks visible top-edge pixels through
+the environment's scenery path. All 16 animation phases also match the same
+upper-room sprite raster translated by 364 pixels; the old current-room-only
+filter fails this regression. Existing trap-door lifecycle and scenery tests
+remain intact. No physical input or live game window is used.
+
+Validation: 208 selected tests passed (arrival, playtest, candles, four
+trap-door reference modules and cavern drawing/retouch modules); dependency,
+Ruff F/E9, recovery-catalogue and diff checks passed. Full discovery was not
+repeated for this drawing-only change. The separate wall-sticking/room-cut
+report remains open and is not resolved by this animation fix.
