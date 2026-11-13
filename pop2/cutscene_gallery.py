@@ -1,10 +1,13 @@
 """A device-resolution story shelf with continuous horizontal scrolling."""
 
+import math
 from dataclasses import dataclass, field
 
 from PIL import Image, ImageDraw, ImageOps
 
+from pop2 import menu_theme
 from pop2.cutscenes import CHAPTERS, chapter_available
+from pop2.menu_theme import c
 from pop2.menu_animation import spring_step
 
 
@@ -31,7 +34,7 @@ class CutsceneGallery:
     background_cache: tuple | None = field(default=None, repr=False)
     grid_cache: tuple | None = field(default=None, repr=False)
     card_cache: dict = field(default_factory=dict, repr=False)
-    layout_size: float | None = field(default=None, repr=False)
+    layout_size: tuple | None = field(default=None, repr=False)
 
     PANEL = (8, 10, 504, 363)
     STRIP = (20, 61, 492, 334)
@@ -49,14 +52,19 @@ class CutsceneGallery:
     def layout(self, size, *, visible=False):
         """Uniform UI scale; extra width changes layout rather than stretching it."""
         logical_width = size[0] * 384 / size[1] + (2 if visible else 0)
-        if self.layout_size == logical_width:
+        theme = menu_theme.current()
+        if self.layout_size == (logical_width, theme.name):
             return
         scroll, target = self.scroll / self.PITCH, self.scroll_target / self.PITCH
-        self.layout_size = logical_width
-        self.PANEL = (8, 10, logical_width - 8, 363)
-        self.STRIP = (20, 61, logical_width - 20, 334)
-        self.TRACK = (24, 342, logical_width - 24, 348)
-        self.NEXT = (logical_width - 20, 175, logical_width - 8, 211)
+        self.layout_size = logical_width, theme.name
+        # A theme's frame stands outside the panel: leave it room at the sides
+        # and below, where the plain page only has a thin outline.
+        edge = max(8, theme.frame_width + 2) if theme.frame else 8
+        self.PANEL = (edge, 10, logical_width - edge, 368 if theme.frame else 363)
+        self.STRIP = (edge + 12, 61, logical_width - edge - 12, 334)
+        self.TRACK = (edge + 16, 342, logical_width - edge - 16, 348)
+        self.PREVIOUS = (edge, 175, edge + 12, 211)
+        self.NEXT = (logical_width - edge - 12, 175, logical_width - edge, 211)
         available = self.STRIP[2] - self.STRIP[0] - 2
         row_height = (self.STRIP[3] - self.STRIP[1] - 12) / self.ROWS
         maximum_width = (row_height - 22) * 16 / 9 + 4
@@ -306,13 +314,13 @@ class CutsceneGallery:
         selected = self.index == index
         unlocked = self.chapter_unlocked(index)
         size = round(self.CARD_WIDTH * sx), round(self.CARD_HEIGHT * sy)
-        key = index, id(font), size, selected, unlocked
+        key = index, id(font), size, selected, unlocked, menu_theme.current().name
         if key in self.card_cache:
             return self.card_cache[key]
-        image = Image.new('RGBA', size, '#252525')
+        image = Image.new('RGBA', size, c('#252525'))
         draw = ImageDraw.Draw(image)
         stroke = max(1, round(min(sx, sy)))
-        outline = '#f4d873' if selected else '#626262'
+        outline = c('#f4d873') if selected else c('#626262')
         draw.rectangle((0, 0, size[0] - 1, size[1] - 1), outline=outline, width=stroke * (2 if selected else 1))
         thumb_bottom = 2 + (self.CARD_WIDTH - 4) * 9 / 16
         thumb_rect = (2, 2, self.CARD_WIDTH - 2, thumb_bottom)
@@ -327,19 +335,19 @@ class CutsceneGallery:
                         method=Image.Resampling.LANCZOS if thumb_size[0] < frame.width else Image.Resampling.NEAREST)
                 image.alpha_composite(self.image_cache[image_key], thumb[:2])
             except (OSError, ValueError, KeyError, RuntimeError):
-                self.caption(image, font, 'Unavailable', thumb_rect, '#999999', .7, sx, sy)
+                self.caption(image, font, 'Unavailable', thumb_rect, c('#999999'), .7, sx, sy)
         else:
-            draw.rectangle(thumb, fill='#101010')
+            draw.rectangle(thumb, fill=c('#101010'))
             cx, cy = size[0] / 2, (2 + thumb_bottom) / 2 * sy
             draw.arc((cx - 7 * sx, cy - 15 * sy, cx + 7 * sx, cy + 4 * sy), 180, 360,
-                     fill='#999999', width=stroke)
+                     fill=c('#999999'), width=stroke)
             draw.rectangle((cx - 11 * sx, cy - 2 * sy, cx + 11 * sx, cy + 14 * sy),
-                           fill='#101010', outline='#999999', width=stroke)
-        band = '#493c25' if selected else '#252525'
+                           fill=c('#101010'), outline=c('#999999'), width=stroke)
+        band = c('#493c25') if selected else c('#252525')
         draw.rectangle((stroke, round((thumb_bottom + 1) * sy), size[0] - stroke - 1, size[1] - stroke - 1), fill=band)
         label = chapter.title if unlocked else f'Chapter {index + 1} - Locked'
         self.caption(image, font, label, (2, thumb_bottom + 1, self.CARD_WIDTH - 2, self.CARD_HEIGHT - 1),
-                     '#f4d873' if selected else '#eeeeee', .72, sx, sy)
+                     c('#f4d873') if selected else c('#eeeeee'), .72, sx, sy)
         self.card_cache[key] = image
         return image
 
@@ -371,27 +379,32 @@ class CutsceneGallery:
         # The moving region and static frame are composed once per UI state.
         # Animation only crops/pastes the cached grid and updates its scrollbar;
         # there is no font drawing, asset IO or thumbnail resampling per frame.
+        theme = menu_theme.current()
         key = (viewport.size, visible, background_key or id(viewport), id(font), self.unlocked, self.developer,
-               self.focus, self.hovered if self.hovered in (1, 2) else None, self.error, self.collection.error)
+               self.focus, self.hovered if self.hovered in (1, 2) else None, self.error, self.collection.error,
+               theme.name)
         if self.background_cache is None or self.background_cache[0] != key:
-            base = Image.alpha_composite(viewport.convert('RGBA'), Image.new('RGBA', viewport.size, (0, 0, 0, 145)))
+            base = Image.alpha_composite(viewport.convert('RGBA'), Image.new(
+                'RGBA', viewport.size, (0, 0, 0, max(145, theme.dim) if theme.frame else 145)))
             draw = ImageDraw.Draw(base)
-            draw.rectangle(bounds(self.PANEL), fill='#181818', outline='#8c7954', width=stroke)
+            limit = (ox, 0, math.floor(viewport.width / sx) + ox - 1, 383)
+            if not menu_theme.panel_scaled(base, tuple(round(value) for value in self.PANEL), point, limit):
+                draw.rectangle(bounds(self.PANEL), fill=c('#181818'), outline=c('#8c7954'), width=stroke)
             title = 'Cutscene Viewer - Dev Tools' if self.developer else 'Cutscene Viewer'
             self.caption(base, font, title,
-                         (20 - ox, 19, self.PANEL[2] - 12 - ox, 51), '#f4d873', 1, sx, sy)
+                         (self.STRIP[0] - ox, 19, self.STRIP[2] - ox, 51), c('#f4d873'), 1, sx, sy)
             message = self.error or self.collection.error or (
                 'Continue the story to unlock this chapter.' if not self.unlocked else '')
             self.caption(base, font, message, (self.TRACK[0] - ox, 350, self.TRACK[2] - ox, 362),
-                         '#ff9b9b' if self.error else '#999999', .45, sx, sy)
+                         c('#ff9b9b') if self.error else c('#999999'), .45, sx, sy)
             self.background_cache = key, base.convert('RGB')
         image = self.background_cache[1].copy()
         region = bounds(self.STRIP)
         width, height = region[2] - region[0], region[3] - region[1]
         grid_key = (viewport.size, visible, id(font), self.index,
-                    tuple(sorted(self.collection.seen)), self.chapters, self.developer)
+                    tuple(sorted(self.collection.seen)), self.chapters, self.developer, theme.name)
         if self.grid_cache is None or self.grid_cache[0] != grid_key:
-            grid = Image.new('RGBA', (width + round((self.max_scroll + 2 * self.GRID_PADDING) * sx), height), '#181818')
+            grid = Image.new('RGBA', (width + round((self.max_scroll + 2 * self.GRID_PADDING) * sx), height), c('#181818'))
             for index in range(len(self.chapters)):
                 rect = self.card_rect(index, offset=0)
                 card = self.card_image(index, font, sx, sy)
@@ -403,7 +416,7 @@ class CutsceneGallery:
         if border := self.hover_border(sx):
             draw = ImageDraw.Draw(strip)
             for x1, y1, x2, y2 in border:
-                draw.rectangle((x1 - left, y1, x2 - left - 1, y2 - 1), fill='#c6b58c')
+                draw.rectangle((x1 - left, y1, x2 - left - 1, y2 - 1), fill=c('#c6b58c'))
         image.paste(strip, region[:2])
         self.draw_scroll_controls(image, sx, sy, ox=ox)
         if len(self.text_cache) > 600:
@@ -428,10 +441,10 @@ class CutsceneGallery:
                                          (self.NEXT, 1, self.scroll_target < self.max_scroll)):
             x, y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
             draw.line((point(x - direction * 2, y - 5), point(x + direction * 2, y),
-                       point(x - direction * 2, y + 5)), fill='#f4d873' if enabled else '#505050', width=stroke)
-        draw.rectangle(bounds(self.TRACK), fill='#282828')
+                       point(x - direction * 2, y + 5)), fill=c('#f4d873') if enabled else c('#505050'), width=stroke)
+        draw.rectangle(bounds(self.TRACK), fill=c('#282828'))
         track_width = self.TRACK[2] - self.TRACK[0]
         fraction = self.STRIP[2] - self.STRIP[0]
         thumb_width = track_width * fraction / (fraction + self.max_scroll)
         start = self.TRACK[0] + (track_width - thumb_width) * (self.scroll / self.max_scroll if self.max_scroll else 0)
-        draw.rectangle(bounds((start, self.TRACK[1] + 1, start + thumb_width, self.TRACK[3] - 1)), fill='#999076')
+        draw.rectangle(bounds((start, self.TRACK[1] + 1, start + thumb_width, self.TRACK[3] - 1)), fill=c('#999076'))

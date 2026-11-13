@@ -31,6 +31,14 @@ NEUTRAL_ROLES = {
     'active': '#77c9dc', 'active_map': '#63c8e5', 'active_fill': '#253033',
     'active_field': '#202a2d', 'text_selection': '#385462',
     'error': '#ff9b9b', 'danger': '#422622', 'danger_soft': '#2b1d1b',
+    # The Cutscene Viewer's own neutral colours.
+    'card': '#252525', 'card_selected': '#493c25', 'card_hover': '#c6b58c', 'viewer_edge': '#8c7954',
+    'track': '#282828', 'track_thumb': '#999076', 'off': '#505050',
+}
+# A theme that does not name one of these roles uses its colour for another.
+_ROLE_FALLBACK = {
+    'card': 'row', 'card_selected': 'selected', 'card_hover': 'row_edge_lit', 'viewer_edge': 'panel_edge',
+    'track': 'row_dark', 'track_thumb': 'row_edge_lit', 'off': 'faint',
 }
 
 
@@ -65,7 +73,8 @@ class MenuTheme:
         if unknown:
             raise ValueError(f'unknown menu colour roles: {sorted(unknown)}')
         object.__setattr__(self, 'colours', {
-            neutral: self.roles.get(role, neutral) for role, neutral in NEUTRAL_ROLES.items()})
+            neutral: self.roles.get(role, self.roles.get(_ROLE_FALLBACK.get(role), neutral))
+            for role, neutral in NEUTRAL_ROLES.items()})
 
     def colour(self, role):
         return self.colours[NEUTRAL_ROLES[role]]

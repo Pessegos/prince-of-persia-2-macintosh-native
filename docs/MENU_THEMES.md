@@ -1,7 +1,7 @@
 # Menu Themes
 
-The port's menus (F1, its dialogs, Controls, saves, screenshots and the
-developer tools) are an addition of the port, not original behaviour. They
+The port's menus (F1, its dialogs, Controls, saves, screenshots, the Cutscene
+Viewer and the developer tools) are an addition of the port, not original behaviour. They
 take their colours, and on some pages their frame, from the level being
 played. The code is in `pop2/menu_theme.py`.
 
@@ -77,7 +77,14 @@ a theme without a frame and the page then draws its own rectangle. These pages
 cover the health strip, so their frame may reach below it. Their smaller
 dialogs (rename, delete, choose folder) are framed the same way, and carry no
 sign: the page's sign is drawn before the page is darkened under the dialog.
-The Cutscene Viewer has its own look and is not themed.
+The Cutscene Viewer fills the window and is themed in the same way: its
+neutral colours have roles of their own (`card`, `card_selected`,
+`card_hover`, `viewer_edge`, `track`, `track_thumb`, `off`), and a theme that
+does not name them uses its row, selection and edge colours instead
+(`_ROLE_FALLBACK`). Under a framed theme its panel starts further from the
+window's edges and ends lower, so that the frame stands outside it and the
+side arrows stay clear. Its covers are the chapters' own pictures and are not
+recoloured.
 
 ## Wide windows
 
@@ -118,7 +125,8 @@ nothing. Three things a page must take care of:
 - Pages drawn at the window's resolution pass `point`; the sign is drawn at
   the game's resolution and enlarged without smoothing.
 
-The level map and the playback page carry no sign.
+The level map, the playback page and the Cutscene Viewer carry no sign: the
+viewer's shelf of covers moves over the page and would cover it.
 
 ## The level map
 
