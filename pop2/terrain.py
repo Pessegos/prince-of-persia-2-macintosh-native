@@ -1033,7 +1033,13 @@ class LevelMap:
                 # CheckBarr 4:4f8a-4fb4 only raises a gate side collision
                 # when that edge's mask changes. Already underneath it,
                 # leave crouching/crushing to CheckGateForKid instead.
-                if stone_gate:
+                vertical_gate = (ruins_gate and state is not None and state.actor_type in (0, None)
+                                 and state.source_sequence_id in (14, 28))
+                # CheckBarr 4:4f8a-4fb4 compares side-overlap bits with the
+                # previous sample. Widening beneath an already-overlapped
+                # gate is not a fresh contact during the unarmed jump.
+                # Other families retain the port's overlap recovery below.
+                if stone_gate or vertical_gate:
                     if facing != 0 and old_right + 1 <= wall_left < right + 1:
                         corrected = min(corrected, new_x + wall_left - right - 1)
                     elif facing != 1 and left < wall_right <= old_left:

@@ -20,15 +20,17 @@ PINCHES = ((10, 9, 0, 368), (10, 9, 2, 368), (12, 3, 0, 470),
 
 class OpposedBarrierTests(unittest.TestCase):
     def test_pose_expansion_plays_a_bump_without_crossing_the_opposite_wall(self):
-        for facing, wall, x, old, expanded in (
-                (0, 4, 215, (211, 28, 228, 106), (198, 28, 231, 106)),
-                (1, 2, 188, (174, 28, 191, 106), (171, 28, 224, 106))):
+        for facing, gate, wall, x, old, expanded in (
+                (0, 2, 4, 215, (211, 28, 228, 106), (160, 28, 231, 106)),
+                (1, 4, 2, 188, (174, 28, 191, 106), (171, 28, 274, 106))):
             with self.subTest(facing=facing):
                 level = bytearray(0x49ca)
                 struct.pack_into('>H', level, 0x2186, 2)
                 for col in range(10):
                     struct.pack_into('>H', level, col * 2, 1)
-                struct.pack_into('>H', level, 3 * 2, 4)
+                # A genuine new front-edge crossing, with an opposing wall.
+                # Already overlapping the gate must not select a bump.
+                struct.pack_into('>H', level, gate * 2, 4)
                 struct.pack_into('>H', level, wall * 2, 20)
                 state = SequenceState(14, action=68, animation_state=1, actor_type=0,
                                       level_kind=2, target_x=x, current_x=x, facing=facing)
@@ -55,6 +57,26 @@ class OpposedBarrierTests(unittest.TestCase):
                 self.assertIn('wall', [event.kind for event in events])
                 self.assertFalse(motion.falling)
 
+    def test_jump_widening_inside_a_gate_does_not_create_a_new_contact(self):
+        cases = (
+                (0, 215, (211, 28, 228, 106), (198, 28, 231, 106)),
+                (1, 188, (174, 28, 216, 106), (171, 28, 224, 106)))
+        for sequence, (facing, x, old, expanded) in (
+                (sequence, case) for sequence in (14, 28) for case in cases):
+            with self.subTest(sequence=sequence, facing=facing):
+                level = bytearray(0x49ca)
+                struct.pack_into('>H', level, 0x2186, 2)
+                struct.pack_into('>H', level, 3 * 2, 4)
+                terrain = LevelMap(level)
+                state = SequenceState(sequence, action=73, animation_state=1, actor_type=0,
+                                      level_kind=2, target_x=x, current_x=x, facing=facing)
+                self.assertEqual(terrain.wall_correction(0, x, x, expanded, old, facing,
+                                                        physical_row=0, state=state), x)
+                # The ordinary overlap-recovery safeguard is unchanged.
+                state.sequence_id = 1
+                self.assertNotEqual(terrain.wall_correction(0, x, x, expanded, old, facing,
+                                                           physical_row=0, state=state), x)
+
 
 @unittest.skipUnless(INSTALLED, 'Imported temple resources required')
 class VerticalJumpWallTests(unittest.TestCase):
@@ -77,14 +99,20 @@ class VerticalJumpWallTests(unittest.TestCase):
         press(harness, 'L', False)
         harness.tick(10)
         before_jump = scene.sequence_state.target_x
+        poses, tops = [], []
         press(harness, 'up', True)
         for tick in range(23):
             if tick == 3:
                 press(harness, 'up', False)
             harness.tick()
+            poses.append(scene.action)
+            tops.append(scene.player_bounds()[1])
             self.assertEqual(scene.room_id, room)
             self.assertEqual(scene.terrain_motion.row, row)
             self.assert_outside_wall(scene)
+        self.assertEqual(poses[:12], list(range(68, 80)), 'the whole vertical jump must play')
+        self.assertNotIn(50, poses, 'the jump must not become a wall bump')
+        self.assertEqual(min(tops), row * 120 - 18)
         after_jump = scene.sequence_state.target_x
         press(harness, 'L', True)
         for _ in range(4):
@@ -126,7 +154,7 @@ class VerticalJumpWallTests(unittest.TestCase):
                 finally:
                     harness.close()
 
-    def test_closed_gate_cannot_push_the_jump_through_the_rear_wall(self):
+    def test_closed_gate_preserves_the_jump_without_pushing_through_the_rear_wall(self):
         for level, room, row, x in PINCHES:
             with self.subTest(level=level, room=room, row=row):
                 harness = Harness(level, peaceful=True)
@@ -134,16 +162,22 @@ class VerticalJumpWallTests(unittest.TestCase):
                     scene = harness.scene
                     scene.jump_to_room(room - 1, row=row, x=x, facing=0, redraw=False)
                     press(harness, 'up', True)
-                    poses = []
+                    poses, positions = [], []
                     for tick in range(30):
                         if tick == 8:
                             press(harness, 'up', False)
                         harness.tick()
                         poses.append(scene.action)
+                        positions.append(scene.sequence_state.target_x)
                         self.assertEqual(scene.room_id, room - 1)
                         self.assertEqual(scene.terrain_motion.row, row)
-                        self.assertLessEqual(abs(scene.sequence_state.target_x - x), 12)
-                    self.assertIn(50, poses, 'the rejected jump must still play its wall response')
+                    self.assertEqual(poses[:12], list(range(68, 80)))
+                    self.assertNotIn(50, poses)
+                    # SEQS14 itself backs off13 at pose78, followed by the
+                    # landing's three-pixel adjustment. Neither is a clip.
+                    self.assertEqual(positions[:10], [x] * 10)
+                    self.assertEqual(positions[10:12], [x - 13] * 2)
+                    self.assertEqual(positions[-1], x - 16)
                     self.assertTrue(scene.combat.player.alive)
                     self.assertFalse(scene.terrain_motion.falling)
                     self.assertEqual(scene.action, 15)
