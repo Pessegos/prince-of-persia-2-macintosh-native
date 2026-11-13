@@ -59,11 +59,15 @@ class CutsceneGallery:
     # A locked chapter shows its own cover as a few large dark blocks: its
     # colours, nothing that can be recognised. Unlocking refines the blocks
     # through these stages until the cover is whole, like a console's mosaic
-    # fade; each stage dissolves into the next, so the picture never jumps.
+    # fade. The whole reveal moves in whole frames, REVEAL_RATE a second, one
+    # stage a frame, with nothing blended between them: an old game's
+    # animation. Eight stages at nine a second looked choppy; dissolving them
+    # at the display's rate looked too smooth for this game.
     VEIL_COLUMNS = 16
     VEIL_DEPTH = .6
-    REVEAL_COLUMNS = (20, 26, 34, 44, 58, 76, 100, 130)
-    REVEAL_STEP = .11       # seconds from one stage to the next
+    REVEAL_COLUMNS = (18, 20, 23, 26, 30, 34, 39, 44, 51, 58, 66, 76, 87, 100, 115, 130)
+    REVEAL_RATE = 20
+    REVEAL_STEP = 1 / REVEAL_RATE   # seconds from one stage to the next
     REVEAL_DELAY = .6
     # Once the cover is whole its border glows: bright, then cooling to the
     # accent colour, at its ordinary thickness. Meanwhile a band of light
@@ -186,19 +190,24 @@ class CutsceneGallery:
     def reveal_seconds(self):
         return self.reveal_stages * self.REVEAL_STEP + self.REVEAL_GLOW
 
-    def reveal_stage(self, index):
-        """None for a settled card; else how far its cover has resolved, 0 (veiled) to reveal_stages (whole)."""
+    def reveal_frame(self, index):
+        """None for a settled card, -1 while its reveal waits, then the whole frame it has reached."""
         elapsed = self.reveal.get(index)
         if elapsed is None:
             return None
-        return max(0.0, min(float(self.reveal_stages), elapsed / self.REVEAL_STEP))
+        return -1 if elapsed < 0 else int(elapsed * self.REVEAL_RATE + 1e-6)
+
+    def reveal_stage(self, index):
+        """None for a settled card; else how far its cover has resolved, 0 (veiled) to reveal_stages (whole)."""
+        frame = self.reveal_frame(index)
+        return None if frame is None else max(0, min(self.reveal_stages, frame))
 
     def reveal_glow(self, index):
-        """Seconds since the cover became whole, or None before that and for a settled card."""
-        elapsed = self.reveal.get(index)
-        if elapsed is None or elapsed < self.reveal_stages * self.REVEAL_STEP:
+        """Seconds since the cover became whole, in whole frames; None before that and for a settled card."""
+        frame = self.reveal_frame(index)
+        if frame is None or frame < self.reveal_stages:
             return None
-        return elapsed - self.reveal_stages * self.REVEAL_STEP
+        return (frame - self.reveal_stages) / self.REVEAL_RATE
 
     def begin_reveal(self, indices):
         """Show these newly unlocked chapters resolving out of their veil, the first one selected."""
@@ -413,13 +422,8 @@ class CutsceneGallery:
             else:
                 draw.rectangle(thumb, fill=c('#101010'))
         elif veiled:
-            # Locked, or resolving after being unlocked: blocks of the cover's own colours,
-            # one stage dissolving into the next.
-            whole, part = divmod(stage or 0.0, 1)
-            picture = self.veil(index, cover, int(whole))
-            if part:
-                picture = Image.blend(picture, self.veil(index, cover, int(whole) + 1), part)
-            image.paste(picture, thumb[:2])
+            # Locked, or resolving after being unlocked: blocks of the cover's own colours.
+            image.paste(self.veil(index, cover, stage or 0), thumb[:2])
         else:
             image.alpha_composite(cover, thumb[:2])
         band = c('#493c25') if selected else c('#252525')
@@ -476,8 +480,8 @@ class CutsceneGallery:
     def refresh_reveal(self, font, sx, sy):
         """Redraw the cards whose reveal has moved on, straight into the cached grid.
 
-        Only those cards are drawn, not the shelf: a reveal changes one card on
-        every frame. Each redrawn card is also kept in ``reveal_patches``, as
+        Only those cards are drawn, not the shelf, and only when a reveal has
+        reached its next frame. Each redrawn card is also kept in ``reveal_patches``, as
         (x, y, picture) in the grid's pixels, for a presenter that holds a
         copy of the grid (the retained Tk photo) to bring up to date.
         """
@@ -485,7 +489,7 @@ class CutsceneGallery:
             return
         grid = self.grid_cache[1]
         for index in set(self.reveal) | set(self.reveal_drawn):
-            elapsed = self.reveal.get(index)
+            elapsed = self.reveal_frame(index)
             if index in self.reveal_drawn and self.reveal_drawn[index] == elapsed:
                 continue
             rect = self.card_rect(index, offset=0)
@@ -562,7 +566,7 @@ class CutsceneGallery:
                 grid.alpha_composite(card, (round((rect[0] - self.STRIP[0] + self.GRID_PADDING) * sx),
                                              round((rect[1] - self.STRIP[1]) * sy)))
             self.grid_cache = grid_key, grid.convert('RGB')
-            self.reveal_drawn, self.reveal_patches = dict(self.reveal), {}
+            self.reveal_drawn, self.reveal_patches = {index: self.reveal_frame(index) for index in self.reveal}, {}
         else:
             self.refresh_reveal(font, sx, sy)
         left = round(self.display_scroll * sx) + round(self.GRID_PADDING * sx)

@@ -177,7 +177,7 @@ class GalleryTests(unittest.TestCase):
         gallery.collection.seen.add(CHAPTERS[1].key)
         return gallery
 
-    def test_newly_unlocked_chapter_dissolves_smoothly_out_of_its_veil(self):
+    def test_newly_unlocked_chapter_resolves_out_of_its_veil_in_whole_frames(self):
         gallery, font = self.striped_gallery(), CaptionFont()
         gallery.begin_reveal([1, 2])                                          # 2 is still locked: ignored
         self.assertEqual((set(gallery.reveal), gallery.index), ({1}, 1))
@@ -198,27 +198,30 @@ class GalleryTests(unittest.TestCase):
             self.assertTrue(gallery.advance(gallery.REVEAL_DELAY))            # keeps the page animating
             self.assertTrue(gallery.reveal_cue)                               # the scene plays the sound now
             gallery.reveal_cue = False
-            # At a display's pace every frame differs a little from the last: no steps, no jumps.
+            # Drawn at a display's pace, the card still moves in whole frames, twenty a second,
+            # one stage of blocks a frame, nothing blended: an old game's animation. Eight
+            # stages at nine a second looked choppy, a dissolve at 60 a second too smooth.
+            self.assertEqual((gallery.REVEAL_RATE, gallery.reveal_stages), (20, 17))
             frames, stages = [card()], [gallery.reveal_stage(1)]
             while gallery.reveal_glow(1) is None:
                 gallery.advance(1 / 60)
                 frames.append(card())
                 stages.append(gallery.reveal_stage(1))
             self.assertFalse(gallery.reveal_cue)                              # once for each chapter
+            self.assertEqual(sorted(set(stages)), list(range(gallery.reveal_stages + 1)))
             self.assertEqual(stages, sorted(stages))
-            self.assertEqual(stages[-1], gallery.reveal_stages)
-            self.assertGreater(len(frames), 50)
+            pictures = [frame.tobytes() for frame in frames]
+            distinct = [pictures[0]] + [after for before, after in zip(pictures, pictures[1:]) if after != before]
+            self.assertEqual(len(distinct), gallery.reveal_stages + 1)        # one picture for each stage
+            self.assertEqual(len(set(distinct)), len(distinct))
+            held = len(frames) / len(distinct)
+            self.assertTrue(2.5 < held < 3.5)                                 # each held for three 60 Hz frames
+            # Blocks only, never a blend of two stages: a stage's picture is exactly its own veil.
             thumb = (4, 4, frames[0].width - 4, 150)
-            changes = []
-            for before, after in zip(frames, frames[1:]):
-                difference = ImageChops.difference(before.crop(thumb), after.crop(thumb)).convert('L')
-                changes.append(sum(count * value for value, count in enumerate(difference.histogram()))
-                               / (difference.width * difference.height))
-            self.assertTrue(all(change > 0 for change in changes[:-1]))
-            whole_change = ImageChops.difference(frames[0].crop(thumb), frames[-1].crop(thumb)).convert('L')
-            total = (sum(count * value for value, count in enumerate(whole_change.histogram()))
-                     / (whole_change.width * whole_change.height))
-            self.assertLess(max(changes), total / 8)                          # no frame carries a big jump
+            cover = gallery.image_cache[1, (frames[0].width - 8, round((gallery.CARD_WIDTH - 4) * 9 / 16 * 2))]
+            middle = stages.index(8)
+            self.assertEqual(frames[middle].crop(thumb).tobytes(),
+                             gallery.veil(1, cover, 8).crop((0, 0, thumb[2] - 4, 146)).tobytes())
             self.assertIn(CHAPTERS[1].title, font.values)                     # the title arrives on the way
             # A card in the middle of its reveal is never kept.
             self.assertFalse(any(key[0] == 1 and key[3] for key in gallery.card_cache if key[4]))
@@ -228,7 +231,7 @@ class GalleryTests(unittest.TestCase):
         gallery.begin_reveal([1])
         with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
             gallery.advance(gallery.REVEAL_DELAY + gallery.reveal_stages * gallery.REVEAL_STEP + .001)
-            self.assertAlmostEqual(gallery.reveal_glow(1), .001, places=6)
+            self.assertEqual(gallery.reveal_glow(1), 0)
             bright, accent = (tuple(int(menu_theme.c(colour)[i:i + 2], 16) for i in (1, 3, 5))
                               for colour in ('#eeeeee', '#f4d873'))
             glow, moments = [], []
@@ -266,7 +269,9 @@ class GalleryTests(unittest.TestCase):
             self.assertGreater(len(centres), 20)
             self.assertEqual(centres, sorted(centres))
             self.assertGreater(centres[-1] - centres[0], plain.width / 2)
-            self.assertLess(max(b - a for a, b in zip(centres, centres[1:])), plain.width / 8)   # it glides
+            moves = [b - a for a, b in zip(centres, centres[1:]) if b != a]
+            self.assertGreaterEqual(len(moves), 12)                           # in a dozen and more steps...
+            self.assertLess(max(moves), plain.width / 6)                      # ...none of them a leap
 
     def test_reveal_redraws_only_its_card_in_the_cached_grid(self):
         gallery, font = self.striped_gallery(), CaptionFont()
