@@ -193,6 +193,48 @@ class MenuThemeTest(unittest.TestCase):
         menu_theme.use(NEUTRAL)
         self.assertEqual(list(GameMenu().draw(viewport.copy(), font).getdata()), list(neutral.getdata()))
 
+    def test_ruins_sign_darkens_only_the_page_backgrounds(self):
+        menu_theme.use(RUINS)
+        panel, row, text = (menu_theme._rgb(RUINS.colour(role)) + (255,) for role in ('panel', 'row', 'text'))
+        image = Image.new('RGBA', (512, 384), panel)
+        image.paste(row, (80, 150, 440, 170))
+        image.paste(text, (200, 155, 300, 165))
+        menu_theme.watermark(image, (64, 7, 448, 357))
+        colours = {colour for _count, colour in image.getcolors()}
+        self.assertEqual(len(colours), 5)                     # two backgrounds, each also darkened, and the text
+        self.assertIn(text, colours)
+        for colour in colours - {panel, row, text}:
+            self.assertLess(sum(colour[:3]), sum(row[:3]))    # darker, as the sign is on the walls
+        once = image.tobytes()
+        menu_theme.watermark(image, (64, 7, 448, 357))
+        self.assertEqual(image.tobytes(), once)               # drawing it again changes nothing
+        menu_theme.use(CAVERNS)
+        plain = Image.new('RGBA', (512, 384), panel)
+        menu_theme.watermark(plain, (64, 7, 448, 357))
+        self.assertEqual(len(plain.getcolors()), 1)           # only the ruins carry a sign
+
+    def test_save_page_keeps_the_sign_when_only_its_list_is_redrawn(self):
+        from pathlib import Path
+
+        from pop2.save_slots import SaveBrowser, SaveSlot
+        menu_theme.use(RUINS)
+        font = FakeFont()
+        frame = Image.new('RGBA', (1024, 768), (40, 30, 60, 255))
+        slots = tuple(SaveSlot(Path(f'none-{i}'), f'Save {i}', True, level=i + 1, date='-') for i in range(5))
+        browser = SaveBrowser(slots, 'load', selected=1)
+        browser.focus = 100
+        full = browser.draw(frame, font, background_key=1)
+        browser.focus = 101                                   # a key press: the cached page, list repainted
+        again = browser.draw(frame, font, background_key=1)
+        row = menu_theme._rgb(RUINS.colour('row')) + (255,)
+        signed = tuple(round(a + (b - a) * 0.4) for a, b in zip(row[:3], menu_theme._rgb(RUINS.mark))) + (255,)
+
+        def count(image):
+            return sum(n for n, colour in image.crop((80, 198, 445, 615)).getcolors(1 << 16) if colour == signed)
+
+        self.assertGreater(count(full), 500)
+        self.assertEqual(count(again), count(full))
+
 
 if __name__ == '__main__':
     unittest.main()

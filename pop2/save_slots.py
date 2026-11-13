@@ -456,6 +456,7 @@ class SaveBrowser:
 
         if list_base is not None:
             draw_list()
+            menu_theme.watermark(image, self.PANEL, point)   # the list was repainted over it
             return image
 
         if cached is None:

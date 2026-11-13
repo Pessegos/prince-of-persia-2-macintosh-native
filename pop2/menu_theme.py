@@ -11,11 +11,13 @@ the level art but contain none of the game's own pictures, so they need no
 imported resources.
 """
 
+import functools
 import os
 import random
 from dataclasses import dataclass, field
 
-from PIL import Image, ImageChops, ImageDraw
+import numpy
+from PIL import Image, ImageDraw
 
 # Role -> the neutral colour that pages write.
 NEUTRAL_ROLES = {
@@ -258,6 +260,22 @@ def panel_scaled(image, rect, point):
 _frames = {}
 
 
+def _edge_columns(width, height, y, margin):
+    """The columns of row ``y`` that lie within ``margin`` of the picture's edge.
+
+    The painters only visit these: a frame is a thin band, and visiting every
+    pixel of the panel inside it made a menu hesitate the first time it opened.
+    """
+    if y < margin or y >= height - margin or width <= 2 * margin:
+        return range(width)
+    return (*range(margin), *range(width - margin, width))
+
+
+def _fill_inside(picture, margin, colour):
+    if picture.width > 2 * margin and picture.height > 2 * margin:
+        picture.paste(colour, (margin, margin, picture.width - margin, picture.height - margin))
+
+
 def _frame_picture(name, size):
     key = name, size
     if key not in _frames:
@@ -279,7 +297,7 @@ def _band_frame(theme, size, fill):
     rng = random.Random(0xC0)
     bands = [[_rgb(colour) + (255,) for colour in band] for band in theme.bands]
     for y in range(height):
-        for x in range(width):
+        for x in _edge_columns(width, height, y, len(bands)):
             vertical, horizontal = min(y, height - 1 - y), min(x, width - 1 - x)
             depth = min(vertical, horizontal)
             if depth < len(bands):
@@ -330,6 +348,7 @@ def _rock_frame(theme, size, fill):
                 and thickness + top_in[x] <= y <= height - 1 - thickness - bottom_in[x]
                 and thickness + left_in[y] <= x <= width - 1 - thickness - right_in[y])
 
+    @functools.lru_cache(maxsize=None)     # each pixel is asked about by its four neighbours
     def rock(x, y):
         return solid(x, y) and not hole(x, y)
 
@@ -345,11 +364,17 @@ def _rock_frame(theme, size, fill):
             row += [grain_rng.choices(shades, weights)[0]] * grain_rng.choice(_ROCK_RUNS)
         grain.append(row[:period])
 
+    @functools.lru_cache(maxsize=None)     # few grain colours, four ways of lighting them
+    def nearest(colour, shade):
+        lit = tuple(channel * shade for channel in colour)
+        return min(every_shade, key=lambda s: sum((a - b) ** 2 for a, b in zip(s, lit)))
+
     picture = Image.new('RGBA', size, (0, 0, 0, 0))
-    pixels = picture.load()
     opaque_fill = fill + (255,)
+    _fill_inside(picture, thickness + 4, opaque_fill)
+    pixels = picture.load()
     for y in range(height):
-        for x in range(width):
+        for x in _edge_columns(width, height, y, thickness + 4):
             if hole(x, y):
                 # The rock stands proud of the panel: a hard shadow below and beside it.
                 pixels[x, y] = (0, 0, 0, 255) if rock(x, y - 1) or rock(x - 1, y) else opaque_fill
@@ -369,8 +394,7 @@ def _rock_frame(theme, size, fill):
                 shade = 0.6
             colour = grain[depth][(x if vertical <= horizontal else y) % period]
             if shade != 1.0:
-                lit = tuple(channel * shade for channel in colour)
-                colour = min(every_shade, key=lambda s: sum((a - b) ** 2 for a, b in zip(s, lit)))
+                colour = nearest(colour, shade)
             pixels[x, y] = colour + (255,)
     return picture
 
@@ -408,9 +432,10 @@ def _sand_frame(theme, size, fill):
         '#d5a056', '#fedea5', '#f2cd8d', '#ecbc86', '#d8ab71', '#b78742', '#91622b'))
     grains = [sand] * 40 + [ripple] * 7 + [crest] * 4 + [shade] * 2
     picture = Image.new('RGBA', size, (0, 0, 0, 0))
+    _fill_inside(picture, radius, fill + (255,))
     pixels = picture.load()
     for y in range(height):
-        for x in range(width):
+        for x in _edge_columns(width, height, y, radius):
             dx, dy = min(x, width - 1 - x), min(y, height - 1 - y)
             if dx < radius and dy < radius:
                 depth = radius - ((radius - dx - 0.5) ** 2 + (radius - dy - 0.5) ** 2) ** 0.5
@@ -581,7 +606,7 @@ def _studs_frame(theme, size, fill):
 
     for y in range(height):
         run, colour = 0, marble[0]
-        for x in range(width):
+        for x in _edge_columns(width, height, y, thickness):
             dx, dy = min(x, width - 1 - x), min(y, height - 1 - y)
             depth = min(dx, dy)
             if depth >= thickness:
@@ -731,16 +756,18 @@ def watermark(image, rect, point=None):
         if key not in _marks:
             _marks[key] = mask.resize(key[1:], Image.Resampling.NEAREST)
         mask = _marks[key]
-    bands = image.crop(box).convert('RGB').split()
+    # One pass over the pixels under the sign: these pages are redrawn on every key.
+    region = image.crop(box)
+    pixels = numpy.array(region.convert('RGB'))
+    packed = (pixels[..., 0].astype(numpy.uint32) << 16) | (pixels[..., 1].astype(numpy.uint32) << 8) | pixels[..., 2]
+    inside = numpy.asarray(mask) > 0
     toward = _rgb(theme.mark)
+    changed = numpy.zeros(inside.shape, dtype=bool)
     for colour in {_rgb(theme.colour(role)) for role in ('panel', 'row', 'row_dark', 'selected', 'hover')}:
-        same = mask
-        for band, value in zip(bands, colour):
-            table = [0] * 256
-            table[value] = 255
-            same = ImageChops.darker(same, band.point(table))
-        tint = tuple(round(a + (b - a) * 0.4) for a, b in zip(colour, toward))
-        image.paste(tint + (255,), box, same)
+        same = inside & (packed == (colour[0] << 16 | colour[1] << 8 | colour[2]))
+        pixels[same] = tuple(round(a + (b - a) * 0.4) for a, b in zip(colour, toward))
+        changed |= same
+    image.paste(Image.fromarray(pixels), box, Image.fromarray(changed))
 
 
 # --- The temple: carved red stone. Two columns with leaf capitals carry a lintel
