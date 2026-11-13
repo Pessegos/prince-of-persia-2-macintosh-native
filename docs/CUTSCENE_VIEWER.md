@@ -27,7 +27,11 @@ picture is the chapter's own cover reduced to sixteen columns of darkened
 blocks: its colours, nothing that can be recognised. Their story title is not
 drawn. A chapter unlocked by playing it since the viewer was last open is
 selected when the viewer opens and, after a short wait, resolves out of those
-blocks in eight steps, like a console's mosaic fade; its title appears halfway.
+blocks in eight steps, like a console's mosaic fade; its title appears
+halfway. As it starts to resolve the
+menu's `reveal` sound plays (docs/AUDIO_RECOVERY.md), and when the cover is
+whole the card's border glints: thick and bright, then thick in the accent
+colour, then the ordinary selected border.
 Chapters admitted from a loaded save, and the developer viewer, do not animate.
 The page takes the level's menu theme (docs/MENU_THEMES.md).
 

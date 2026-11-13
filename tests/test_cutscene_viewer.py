@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 from PIL import Image, ImageDraw, ImageFont
 
 from pop2.cutscenes import CHAPTERS, CHAPTER_KEYS, OPENING_KEYS, CutsceneCollection
+from pop2 import menu_theme
 from pop2.cutscene_gallery import CutsceneGallery
 from pop2.cutscene_viewer import ReplayAudio
 from pop2.game_menu import GameMenu
@@ -176,8 +177,7 @@ class GalleryTests(unittest.TestCase):
         self.assertEqual(gallery.reveal_state, ((1, -1),))
         with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
             def card():
-                picture = gallery.card_image(1, font, 2, 2).convert('RGB')
-                return picture.crop((4, 4, picture.width - 4, 100)).tobytes()
+                return gallery.card_image(1, font, 2, 2).convert('RGB').tobytes()
 
             def locked():
                 gallery.collection.seen.discard(CHAPTERS[1].key)
@@ -188,17 +188,27 @@ class GalleryTests(unittest.TestCase):
             waiting = card()
             self.assertEqual(waiting, locked())                               # it starts exactly as it was
             self.assertNotIn(CHAPTERS[1].title, font.values)
+            self.assertFalse(gallery.reveal_cue)
             self.assertTrue(gallery.advance(gallery.REVEAL_DELAY + .01))      # keeps the page animating
+            self.assertTrue(gallery.reveal_cue)                               # the scene plays the sound now
+            gallery.reveal_cue = False
             seen, states = [waiting], [gallery.reveal_state]
             while gallery.reveal:
                 seen.append(card())
                 states.append(gallery.reveal_state)
                 gallery.advance(gallery.REVEAL_STEP)
-            self.assertEqual([state[0][1] for state in states[1:]], list(range(len(gallery.REVEAL_COLUMNS))))
-            self.assertEqual(len(set(seen)), len(seen))                       # every step looks different
+            self.assertEqual([state[0][1] for state in states[1:]], list(range(gallery.reveal_steps)))
+            self.assertFalse(gallery.reveal_cue)                              # once for each chapter
+            # Every step looks different, the border's glint included; the last is the settled card.
+            self.assertEqual(len(set(seen[:-1])), len(seen) - 1)
+            whole = len(gallery.REVEAL_COLUMNS) + 1
+            bright = tuple(int(menu_theme.c('#eeeeee')[i:i + 2], 16) for i in (1, 3, 5))
+            first_glint = Image.frombytes('RGB', gallery.card_image(1, font, 2, 2).size, seen[whole])
+            self.assertEqual(first_glint.getpixel((6, 40)), bright)           # thick: it reaches over the picture
             self.assertIn(CHAPTERS[1].title, font.values)                     # the title arrives on the way
             settled = card()
-            self.assertNotIn(settled, seen)
+            self.assertEqual(settled, seen[-1])
+            self.assertNotIn(settled, seen[:-1])
             self.assertFalse(gallery.advance(.05))
             self.assertEqual(gallery.reveal_state, ())
             gallery.developer = True                                          # developer access never animates
@@ -503,6 +513,37 @@ class ViewerSceneTests(unittest.TestCase):
         self.assertTrue(developer.developer)
         self.assertEqual(developer.chapters, CHAPTERS)
         self.assertTrue(all(developer.chapter_unlocked(i) for i in range(len(CHAPTERS))))
+
+    def test_chapter_unlocked_by_playing_resolves_with_a_sound_the_next_time_the_viewer_opens(self):
+        scene = self.scene
+        scene.audio = Mock()
+        key = next(chapter.key for chapter in CHAPTERS if chapter.key not in OPENING_KEYS)
+        index = next(i for i, chapter in enumerate(CHAPTERS) if chapter.key == key)
+        scene.mark_cutscene_seen(key)
+        self.assertEqual(scene.cutscene_fresh, {key})
+        gallery = self.open_viewer()
+        self.assertEqual((set(gallery.reveal), gallery.index), ({index}, index))
+        self.assertEqual(scene.cutscene_fresh, set())
+        self.assertIsNotNone(scene.cutscene_gallery_after_id)          # the page is animating
+        scene.audio.play_ui.assert_not_called()
+        # Drive the tick as the scheduler would.
+        pending = []
+        with patch.object(scene.root, 'after', side_effect=lambda _delay, callback: pending.append(callback) or 'id'),                 patch.object(scene.root, 'after_idle', side_effect=lambda callback: pending.append(callback) or 'id'),                 patch.object(scene.root, 'after_cancel'),                 patch('pop2.cutscene_viewer.time.perf_counter', side_effect=(n * .05 for n in range(10000))):
+            scene.cancel_cutscene_gallery_tick()
+            scene.schedule_cutscene_gallery()
+            for _ in range(400):
+                if not pending or not gallery.reveal:
+                    break
+                pending.pop(0)()
+        self.assertEqual(gallery.reveal, {})
+        scene.audio.play_ui.assert_called_once_with('reveal')
+        scene.close_game_menu()
+        again = self.open_viewer()                                      # only the first visit animates
+        self.assertEqual(again.reveal, {})
+        scene.close_game_menu()
+        # A chapter admitted from a loaded save, or seen in the developer viewer, does not animate.
+        scene.cutscene_collection.unlock(*CHAPTER_KEYS)
+        self.assertEqual(self.open_viewer().reveal, {})
 
     def test_developer_replay_leaves_profile_world_and_normal_shortcut_locks_unchanged(self):
         scene = self.scene

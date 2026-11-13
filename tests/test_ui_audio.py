@@ -9,42 +9,73 @@ from unittest.mock import Mock, call, patch
 
 from pop2.audio import AudioEngine, MixerPlayback
 from pop2.game_menu import GameMenu
-from pop2.ui_audio import menu_pcm
+from pop2.ui_audio import DURATION, HOVER_NOTES, KINDS, PEAK, menu_pcm, menu_samples
 from pop2.window_controls import WindowControls
 
 
 class MenuPcmTests(unittest.TestCase):
-    def test_ticks_are_short_quiet_faded_deterministic_and_stereo_aligned(self):
+    def test_sounds_have_their_length_and_level_and_are_deterministic_and_stereo_aligned(self):
         before = random.getstate()
         for rate in (16000, 44100, 48000):
-            for kind, duration, peak in (('hover', 0.012, 0.0025), ('click', 0.018, 0.0075)):
+            for kind in KINDS:
                 with self.subTest(rate=rate, kind=kind):
                     pcm = menu_pcm(kind, rate, 2)
-                    self.assertEqual(len(pcm), round(duration * rate) * 4)
+                    self.assertEqual(len(pcm), round(DURATION[kind] * rate) * 4)
                     self.assertEqual(pcm, menu_pcm(kind, rate, 2))
                     samples = struct.unpack('<' + 'h' * (len(pcm) // 2), pcm)
                     self.assertEqual(samples[::2], samples[1::2])
                     self.assertEqual((samples[0], samples[-1]), (0, 0))
-                    self.assertEqual(max(abs(sample) for sample in samples), round(peak * 32767))
+                    self.assertEqual(max(abs(sample) for sample in samples), round(PEAK[kind] * 32767))
                     mono = menu_pcm(kind, rate, 1)
                     self.assertEqual(struct.unpack('<' + 'h' * (len(mono) // 2), mono), samples[::2])
         self.assertEqual(random.getstate(), before)
         with self.assertRaises(ValueError):
             menu_pcm('unknown', 48000, 2)
 
-    def test_thin_clicks_keep_a_soft_top_end_without_bass_thump(self):
+    def test_sounds_are_clearly_audible_where_the_old_ticks_were_not(self):
+        # The ticks these replace peaked at 0.0025 and 0.0075 of full scale and
+        # lasted under 20 ms; the user found them far too quiet.
+        self.assertGreaterEqual(PEAK['hover'], 0.08)
+        self.assertGreater(PEAK['click'], PEAK['hover'])
+        self.assertGreaterEqual(PEAK['reveal'], PEAK['click'])
+        self.assertTrue(all(peak <= 0.25 for peak in PEAK.values()))      # still under the game's own sounds
+        self.assertGreater(DURATION['hover'], 0.15)
+
+    def test_each_sound_is_a_plucked_note_that_dies_away_without_hiss_or_thump(self):
         import numpy as np
 
         for rate in (16000, 44100, 48000):
-            for kind in ('hover', 'click'):
+            for kind in KINDS:
                 with self.subTest(rate=rate, kind=kind):
                     samples = np.frombuffer(menu_pcm(kind, rate, 1), dtype='<i2').astype(float)
                     energy = abs(np.fft.rfft(samples)) ** 2
                     frequencies = np.fft.rfftfreq(len(samples), 1 / rate)
-                    self.assertLess(energy[frequencies >= 7000].sum() / energy.sum(), 0.04)
+                    self.assertLess(energy[frequencies >= 7000].sum() / energy.sum(), 0.06)
                     self.assertLess(energy[frequencies < 200].sum() / energy.sum(), 0.025)
-                    centroid = (energy * frequencies).sum() / energy.sum()
-                    self.assertTrue(1000 < centroid < 3000)
+                    # Loud at the pluck, nearly silent at the end: no cut-off tail.
+                    tenth = len(samples) // 10
+                    loud = np.sqrt((samples[:3 * tenth] ** 2).mean())
+                    tail = np.sqrt((samples[-tenth:] ** 2).mean())
+                    self.assertLess(tail, loud / 20)
+
+    def test_hover_notes_run_up_the_scale_and_back_in_tune(self):
+        import numpy as np
+
+        from pop2.ui_audio import _SCALE
+
+        self.assertEqual(HOVER_NOTES, (0, 1, 2, 3, 4, 3, 2, 1))
+        self.assertEqual(menu_pcm('hover', 44100, 1, len(HOVER_NOTES)), menu_pcm('hover', 44100, 1, 0))
+        for rate in (16000, 44100, 48000):
+            for variant, note in enumerate(HOVER_NOTES):
+                with self.subTest(rate=rate, variant=variant):
+                    samples = menu_samples('hover', rate, variant)
+                    size = 1 << 18
+                    spectrum = abs(np.fft.rfft(samples * np.hanning(len(samples)), size))
+                    frequencies = np.fft.rfftfreq(size, 1 / rate)
+                    near = (frequencies > _SCALE[note] * 0.9) & (frequencies < _SCALE[note] * 1.1)
+                    pitch = frequencies[near][spectrum[near].argmax()]
+                    self.assertLess(abs(1200 * np.log2(pitch / _SCALE[note])), 4)      # cents
+                    self.assertGreater(spectrum[near].max(), spectrum.max() / 8)       # the note itself is there
 
 
 class MenuAudioEngineTests(unittest.TestCase):
@@ -207,12 +238,19 @@ class MenuSdlTests(unittest.TestCase):
                 playback.pause(True)
                 playback.play_ui('click')
                 self.assertTrue(playback.ui_channels['click'].get_busy())
-                time.sleep(0.10)
+                time.sleep(DURATION['click'] + 0.15)
                 self.assertFalse(playback.ui_channels['click'].get_busy())
                 self.assertTrue(playback.busy('effect'))
                 self.assertTrue(playback.busy('music'))
                 self.assertIs(playback.channels['effect'].get_sound(), playback.sounds[1])
-                playback.play_ui('hover')
+                # Hovering plays the notes in turn, each replacing the one still ringing.
+                notes = []
+                for _ in range(len(HOVER_NOTES) + 1):
+                    playback.play_ui('hover')
+                    notes.append(playback.ui_channels['hover'].get_sound())
+                self.assertEqual(notes, [*playback.ui_hover_notes, playback.ui_hover_notes[0]])
+                playback.play_ui('reveal')
+                self.assertIs(playback.ui_channels['click'].get_sound(), playback.ui_sounds['reveal'])
                 playback.stop_ui()
                 self.assertFalse(any(channel.get_busy() for channel in playback.ui_channels.values()))
                 self.assertTrue(playback.busy('effect'))

@@ -230,6 +230,9 @@ class CutsceneControls:
                 monitor_check = now + 1
             moving = gallery.advance(now - previous)
             previous = now
+            if gallery.reveal_cue:
+                gallery.reveal_cue = False
+                self.play_menu_sound('reveal')
             self.present_viewport()
             if moving:
                 def painted():

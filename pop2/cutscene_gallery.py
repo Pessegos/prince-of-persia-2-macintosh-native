@@ -38,6 +38,8 @@ class CutsceneGallery:
     # Chapters unlocked since the viewer was last open, as index -> seconds
     # into their reveal (negative while it waits to start).
     reveal: dict = field(default_factory=dict, repr=False)
+    # Set when a reveal begins to resolve; the scene plays its sound and clears it.
+    reveal_cue: bool = field(default=False, repr=False)
 
     PANEL = (8, 10, 504, 363)
     STRIP = (20, 61, 492, 334)
@@ -59,6 +61,9 @@ class CutsceneGallery:
     REVEAL_COLUMNS = (20, 26, 34, 44, 58, 76, 100, 130)
     REVEAL_STEP = .11
     REVEAL_DELAY = .6
+    # Once the cover is whole its border glints for a few steps: bright and
+    # thick, then the accent, then the ordinary selected border.
+    REVEAL_GLINT = 3
 
     def layout(self, size, *, visible=False):
         """Uniform UI scale; extra width changes layout rather than stretching it."""
@@ -169,7 +174,11 @@ class CutsceneGallery:
         elapsed = self.reveal.get(index)
         if elapsed is None:
             return None
-        return -1 if elapsed < 0 else min(len(self.REVEAL_COLUMNS) - 1, int(elapsed / self.REVEAL_STEP))
+        return -1 if elapsed < 0 else min(self.reveal_steps - 1, int(elapsed / self.REVEAL_STEP))
+
+    @property
+    def reveal_steps(self):
+        return len(self.REVEAL_COLUMNS) + self.REVEAL_GLINT
 
     @property
     def reveal_state(self):
@@ -187,8 +196,11 @@ class CutsceneGallery:
 
     def advance(self, seconds):
         for index in tuple(self.reveal):
+            waiting = self.reveal[index] < 0
             self.reveal[index] += seconds
-            if self.reveal[index] >= len(self.REVEAL_COLUMNS) * self.REVEAL_STEP:
+            if waiting and self.reveal[index] >= 0:
+                self.reveal_cue = True
+            if self.reveal[index] >= self.reveal_steps * self.REVEAL_STEP:
                 del self.reveal[index]
         return self.advance_scroll(seconds) or bool(self.reveal)
 
@@ -377,7 +389,7 @@ class CutsceneGallery:
                 cover = self.image_cache[image_key]
             except (OSError, ValueError, KeyError, RuntimeError):
                 cover = None
-        veiled = not unlocked or step is not None
+        veiled = not unlocked or (step is not None and step < len(self.REVEAL_COLUMNS))
         if cover is None:
             if unlocked:
                 self.caption(image, font, 'Unavailable', thumb_rect, c('#999999'), .7, sx, sy)
@@ -401,6 +413,11 @@ class CutsceneGallery:
         label = chapter.title if named else f'Chapter {index + 1}'
         self.caption(image, font, label, (2, thumb_bottom + 1, self.CARD_WIDTH - 2, self.CARD_HEIGHT - 1),
                      c('#f4d873') if selected else c('#eeeeee') if named else c('#999999'), .72, sx, sy)
+        glint = None if step is None else step - len(self.REVEAL_COLUMNS)   # 0, 1, ... once the cover is whole
+        if glint is not None and 0 <= glint < self.REVEAL_GLINT - 1:
+            # Over the picture's edge, so that the thick first step is not covered by it.
+            draw.rectangle((0, 0, size[0] - 1, size[1] - 1), width=stroke * (4 - glint),
+                           outline=(c('#eeeeee'), c('#f4d873'))[min(glint, 1)])
         self.card_cache[key] = image
         return image
 

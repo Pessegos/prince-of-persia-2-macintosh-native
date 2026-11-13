@@ -47,26 +47,39 @@ before replacing installed resources; progress reaches Tk through a queue.
 
 ## Host Menu Feedback
 
-F1, F2 and F3 use quiet, host-authored hover and click ticks, not recovered
-Macintosh cues. `pop2/ui_audio.py` prepares deterministic filtered-noise PCM
-with smooth zero-ended envelopes: 12 ms at 0.25 percent peak for hover and
-18 ms at 0.75 percent peak for activation. Two low-pass stages at 1600/2200 Hz
-round off the high end, while a 500 Hz high-pass makes the ticks thin and
-clicky rather than bassy. Peaks are another 12/10.5 dB below the softened revision.
-No additional assets, downloads or
-third-party libraries are required, and the gameplay RNG is untouched.
+The port's menus have sounds of their own, not recovered Macintosh cues.
+`pop2/ui_audio.py` synthesises them as a small plucked instrument, like a
+santur or an oud, in the scale the game's music leans on (D, E flat, F sharp,
+G, A). Each string is a Karplus-Strong loop: a short burst of noise goes round
+a delay line one period long and is softened on every turn, so a note starts
+bright and dies away dull. The notes are read back at the speed that puts them
+on pitch at any mixer rate (within a few cents).
+
+| Sound | When | What | Length | Peak |
+| --- | --- | --- | --- | --- |
+| `hover` | a new control is reached | one soft note; eight are prepared and played in turn, up the scale and back | 0.26 s | 10% |
+| `click` | a control is activated | the low D and its fifth strummed, with a light tap | 0.42 s | 18% |
+| `reveal` | a chapter starts to resolve in the Cutscene Viewer | a rising run ending an octave up | 1.10 s | 20% |
+
+These replace the first menu sounds, 12 and 18 ms ticks of filtered noise at
+0.25 and 0.75 percent peak, which the user found far too quiet and poor.
+No additional assets, downloads or third-party libraries are required, and
+the gameplay RNG is untouched (the noise comes from numpy's own generator).
 
 Two separate SDL channels leave the game effect, music and gate-release
-channels alone. UI ticks remain audible during menu pause and finish naturally
-across scene changes; they never enter the original priority queue or affect
-death/retry timing. Sound off immediately stops the UI channels and suppresses
-new ticks. Hover is limited to a new enabled control, dropdown option, map room
-or gallery image/caption, with a 180 ms rate limit and a fresh cooldown after
-each click. Rapid hover requests are dropped, never queued. Empty space, disabled rows,
-repeated pointer motion within one target and held activation keys are silent.
-Keyboard selection, activation, page controls and wheel navigation also give
-feedback. `tests/test_ui_audio.py` checks PCM, hit targets, muting, rate limits
-and real SDL isolation while gameplay audio is paused.
+channels alone: one for hover notes, one shared by the click and the reveal
+run. A new sound replaces the one still ringing on its channel, as a string
+plucked again does. UI sounds remain audible during menu pause and finish
+naturally across scene changes; they never enter the original priority queue
+or affect death/retry timing. Sound off immediately stops the UI channels and
+suppresses new sounds. Hover is limited to a new enabled control, dropdown
+option, map room or gallery image/caption, with a 180 ms rate limit and a
+fresh cooldown after each click. Rapid hover requests are dropped, never
+queued. Empty space, disabled rows, repeated pointer motion within one target
+and held activation keys are silent. Keyboard selection, activation, page
+controls and wheel navigation also give feedback. `tests/test_ui_audio.py`
+checks PCM, pitch, hit targets, muting, rate limits and real SDL isolation
+while gameplay audio is paused.
 
 ## Mixed Gameplay Effects
 
