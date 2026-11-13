@@ -782,6 +782,8 @@ class ScreenshotGallery:
                            outline=outline, width=border)
             return result.value[1]
 
+        shown = [self.PREVIEW]   # where pictures go: the theme's sign keeps out of them
+
         def draw_list():
             nonlocal image, draw, origin
             box(self.LIST, c('#181818'), None)
@@ -796,6 +798,7 @@ class ScreenshotGallery:
                 height = 50
                 outline = gold if self.focus == 100 + index and not modal else cyan if self.selected == index else c('#626262')
                 picture(entry, (rect[0], rect[1], rect[2], rect[1] + height), True, outline)
+                shown.append((rect[0], max(rect[1], self.LIST[1]), rect[2], min(rect[1] + height, self.LIST[3])))
                 text(entry.date.replace('  ', ' '), rect[0] + 2, rect[1] + height + 5,
                      rect[2] - rect[0] - 4, cyan if self.selected == index else muted,
                      0.4)
@@ -871,6 +874,7 @@ class ScreenshotGallery:
 
         if surface is not None:
             draw_list()
+            menu_theme.watermark(image, self.PANEL, point, shown)   # the list was repainted over it
             draw_delete()
             draw_held_image()
             return image
@@ -878,8 +882,6 @@ class ScreenshotGallery:
         if cached is None:
             if not menu_theme.panel_scaled(image, self.PANEL, point):
                 box(self.PANEL, c('#181818'), c('#858585'))
-            # Under everything else: thumbnails arrive later and must not uncover it.
-            menu_theme.watermark(image, self.PANEL, point)
             text('Screenshots', 36, 26, 250, gold, 1)
             text(f'{len(self.entries)} PNG', 374, 29, 70, muted, right=True)
             button(self.REFRESH, 'Refresh', 15)
@@ -914,6 +916,7 @@ class ScreenshotGallery:
             if not modal and self.hovered == 13:
                 box((350, 256, 474, 271), c('#303030'), c('#858585'))
                 text('Delete screenshot', 356, 260, 112, white, 0.6)
+            menu_theme.watermark(image, self.PANEL, point, shown)
             if modal:
                 image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 150)))
                 draw = ImageDraw.Draw(image)

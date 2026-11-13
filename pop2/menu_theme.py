@@ -730,13 +730,15 @@ def _serpent_mask(height):
 _marks = {}
 
 
-def watermark(image, rect, point=None):
+def watermark(image, rect, point=None, avoid=()):
     """Leave the theme's sign on a finished page, faintly, behind its text.
 
     Only the page's own background colours change, each to a slightly darker
     shade, so text, outlines and pictures stay as they are. ``point`` is given
     by pages drawn at the window's resolution: the sign is then drawn at the
-    game's resolution and enlarged without smoothing.
+    game's resolution and enlarged without smoothing. ``avoid`` lists the
+    rectangles where pictures go: a slot still waiting for its picture has a
+    background colour, and the sign must not show there and then vanish.
     """
     theme = _current
     if theme.mark is None:
@@ -761,6 +763,10 @@ def watermark(image, rect, point=None):
     pixels = numpy.array(region.convert('RGB'))
     packed = (pixels[..., 0].astype(numpy.uint32) << 16) | (pixels[..., 1].astype(numpy.uint32) << 8) | pixels[..., 2]
     inside = numpy.asarray(mask) > 0
+    for left, top, right, bottom in avoid:
+        if point is not None:
+            (left, top), (right, bottom) = point(left, top), point(right, bottom)
+        inside[max(0, top - box[1]):max(0, bottom + 1 - box[1]), max(0, left - box[0]):max(0, right + 1 - box[0])] = False
     toward = _rgb(theme.mark)
     changed = numpy.zeros(inside.shape, dtype=bool)
     for colour in {_rgb(theme.colour(role)) for role in ('panel', 'row', 'row_dark', 'selected', 'hover')}:
