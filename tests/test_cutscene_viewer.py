@@ -135,43 +135,75 @@ class GalleryTests(unittest.TestCase):
         self.assertEqual(gallery.double_click(second[0] + 20, second[1] + 20), 'changed')
         self.assertEqual(gallery.index, 2)
 
-    def test_locked_chapters_leak_neither_previews_nor_story_titles(self):
+    def test_locked_chapters_show_only_large_dark_blocks_of_their_cover_and_no_title(self):
         gallery = self.gallery()
         font = CaptionFont()
+        # A cover with fine detail: thin stripes that only an unveiled card can show.
+        cover = Image.new('RGB', (510, 384), '#204080')
+        for x in range(0, 510, 6):
+            ImageDraw.Draw(cover).line((x, 0, x, 384), fill='#ffe040', width=2)
+        gallery.preview = Mock(return_value=cover)
         with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
-            gallery.draw(Image.new('RGBA', (512, 384)), font)
-        gallery.preview.assert_called_once_with(0)
+            gallery.draw(Image.new('RGBA', (1024, 768)), font)
+            open_card = gallery.card_image(0, font, 2, 2).convert('RGB')
+            locked_card = gallery.card_image(1, font, 2, 2).convert('RGB')
         self.assertNotIn(CHAPTERS[1].title, font.values)
         self.assertNotIn(CHAPTERS[2].title, font.values)
         self.assertIn('Chapter 2', font.values)
         self.assertEqual(gallery.index, 0)
+        width = round(gallery.CARD_WIDTH * 2)
+        thumb = (4, 4, width - 4, round((2 + (gallery.CARD_WIDTH - 4) * 9 / 16) * 2))
+        shown, veiled = open_card.crop(thumb), locked_card.crop(thumb)
+        self.assertGreater(max(max(colour) for _n, colour in shown.getcolors(1 << 16)), 0xe0)   # bright stripes
+        colours = veiled.getcolors(1 << 16)
+        self.assertLessEqual(len(colours), gallery.VEIL_COLUMNS * 6)           # one colour for each block
+        self.assertTrue(all(max(colour) < 0x90 for _n, colour in colours))    # darkened; no stripe survives
+        # Each block is a flat rectangle many pixels wide.
+        row = [veiled.getpixel((x, 20)) for x in range(veiled.width)]
+        runs = [x for x in range(1, len(row)) if row[x] != row[x - 1]]
+        self.assertLessEqual(len(runs), gallery.VEIL_COLUMNS)
 
-    def test_locked_chapters_show_a_closed_gate_in_the_theme_s_shades(self):
-        from PIL import ImageColor
+    def test_newly_unlocked_chapter_resolves_from_its_veil_in_steps(self):
+        gallery = self.gallery()
+        font = CaptionFont()
+        cover = Image.new('RGB', (510, 384), '#204080')
+        for x in range(0, 510, 6):
+            ImageDraw.Draw(cover).line((x, 0, x, 384), fill='#ffe040', width=2)
+        gallery.preview = Mock(return_value=cover)
+        gallery.collection.seen.add(CHAPTERS[1].key)
+        gallery.begin_reveal([1, 2])                                          # 2 is still locked: ignored
+        self.assertEqual((set(gallery.reveal), gallery.index), ({1}, 1))
+        self.assertEqual(gallery.reveal_state, ((1, -1),))
+        with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
+            def card():
+                picture = gallery.card_image(1, font, 2, 2).convert('RGB')
+                return picture.crop((4, 4, picture.width - 4, 100)).tobytes()
 
-        from pop2 import menu_theme
-        from pop2.cutscene_gallery import locked_cover
+            def locked():
+                gallery.collection.seen.discard(CHAPTERS[1].key)
+                picture = card()
+                gallery.collection.seen.add(CHAPTERS[1].key)
+                return picture
 
-        covers = {}
-        for name, theme in menu_theme.THEMES.items():
-            with self.subTest(theme=name):
-                cover = covers[name] = locked_cover(146, 82, name)
-                self.assertEqual(cover.size, (146, 82))
-                colours = {colour[:3]: count for count, colour in cover.getcolors()}
-                self.assertLessEqual(len(colours), 14)                    # a few hard shades, nothing blended
-                shade = {role: ImageColor.getrgb(theme.colour(role)) for role in
-                         ('row', 'well_dark', 'muted', 'muted_light', 'row_edge')}
-                for role, colour in shade.items():
-                    self.assertIn(colour, colours, role)
-                self.assertGreater(colours[shade['row']], 146 * 82 // 3)  # mostly wall
-                # Bars cross the dark opening from top to bottom, evenly spaced.
-                row = [cover.getpixel((x, 50))[:3] for x in range(146)]
-                bars = [x for x in range(146) if row[x] == shade['muted_light']]
-                self.assertGreaterEqual(len(bars), 5)
-                self.assertEqual(len({b - a for a, b in zip(bars, bars[1:])}), 1)
-                self.assertEqual([cover.getpixel((x, 30))[:3] == shade['muted_light'] for x in bars], [True] * len(bars))
-                self.assertEqual(cover.getpixel((2, 79))[:3], ImageColor.getrgb(theme.colour('row_dark')))  # floor
-        self.assertEqual(len({cover.tobytes() for cover in covers.values()}), len(covers))
+            waiting = card()
+            self.assertEqual(waiting, locked())                               # it starts exactly as it was
+            self.assertNotIn(CHAPTERS[1].title, font.values)
+            self.assertTrue(gallery.advance(gallery.REVEAL_DELAY + .01))      # keeps the page animating
+            seen, states = [waiting], [gallery.reveal_state]
+            while gallery.reveal:
+                seen.append(card())
+                states.append(gallery.reveal_state)
+                gallery.advance(gallery.REVEAL_STEP)
+            self.assertEqual([state[0][1] for state in states[1:]], list(range(len(gallery.REVEAL_COLUMNS))))
+            self.assertEqual(len(set(seen)), len(seen))                       # every step looks different
+            self.assertIn(CHAPTERS[1].title, font.values)                     # the title arrives on the way
+            settled = card()
+            self.assertNotIn(settled, seen)
+            self.assertFalse(gallery.advance(.05))
+            self.assertEqual(gallery.reveal_state, ())
+            gallery.developer = True                                          # developer access never animates
+            gallery.begin_reveal([])
+            self.assertEqual(gallery.reveal, {})
 
     def test_developer_access_is_read_only_and_caches_do_not_leak_to_normal_mode(self):
         gallery = self.gallery()

@@ -22,11 +22,14 @@ Clicking a card selects it on release; a double click on that same card starts
 it. A drag, scrolling, leaving the canvas or losing focus clears the pending
 click, so browsing cannot accidentally start a film. Arrow keys and Tab also
 navigate the cards; Enter remains available without an on-screen key legend.
-Escape returns to the F1 menu. Locked chapters show a numbered card with a
-closed gate in a wall (`locked_cover`, drawn by code in the menu theme's
-shades, with a faint light behind the bars); neither their image nor their
-story title is drawn. The page takes the level's menu theme
-(docs/MENU_THEMES.md).
+Escape returns to the F1 menu. Locked chapters show a numbered card whose
+picture is the chapter's own cover reduced to nine columns of large, darkened
+blocks: its colours, nothing that can be recognised. Their story title is not
+drawn. A chapter unlocked by playing it since the viewer was last open is
+selected when the viewer opens and, after a short wait, resolves out of those
+blocks in eight steps, like a console's mosaic fade; its title appears halfway.
+Chapters admitted from a loaded save, and the developer viewer, do not animate.
+The page takes the level's menu theme (docs/MENU_THEMES.md).
 
 The catalog in `pop2/cutscenes.py` includes Prologue, Title and The Palace
 Escape from the opening, voyage after level 1,

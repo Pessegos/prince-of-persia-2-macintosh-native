@@ -1,79 +1,14 @@
 """A device-resolution story shelf with continuous horizontal scrolling."""
 
-import functools
 import math
 from dataclasses import dataclass, field
 
-from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageOps
 
 from pop2 import menu_theme
 from pop2.cutscenes import CHAPTERS, chapter_available
 from pop2.menu_theme import c
 from pop2.menu_animation import spring_step
-
-
-@functools.lru_cache(maxsize=48)
-def locked_cover(width, height, theme_name):
-    """The picture of a chapter not yet reached: a closed gate in a wall.
-
-    Drawn at the game's resolution in the theme's own hard shades and enlarged
-    without smoothing by the card. It shows nothing of the chapter itself.
-    """
-    theme = menu_theme.THEMES[theme_name]
-
-    def shade(role):
-        return ImageColor.getrgb(theme.colour(role))
-
-    def mix(a, b, amount):
-        return tuple(round(x + (y - x) * amount) for x, y in zip(a, b))
-
-    wall, joint, stone, lit = shade('row'), shade('row_edge_dark'), shade('row_edge'), shade('row_edge_lit')
-    dark, bar, bar_lit, glow = shade('well_dark'), shade('muted'), shade('muted_light'), shade('accent')
-    image = Image.new('RGB', (width, height), wall)
-    draw = ImageDraw.Draw(image)
-    floor = height - max(5, height // 9)
-    course = max(7, height // 9)
-    for row, y in enumerate(range(floor - 1, -1, -course)):       # stone courses, joints staggered
-        draw.line((0, y, width, y), fill=joint)
-        for x in range((course if row % 2 else 0) + 3, width, 2 * course + 3):
-            draw.line((x, y - course + 1, x, y - 1), fill=joint)
-    draw.rectangle((0, floor, width, height), fill=shade('row_dark'))
-    draw.line((0, floor, width, floor), fill=stone)
-
-    top = max(3, height // 9)
-    span = round((floor - top) * 0.80) | 1                        # the opening's width
-    left = (width - span) // 2
-
-    def opening(grow):
-        mask = Image.new('L', (width, height), 0)
-        pen = ImageDraw.Draw(mask)
-        pen.ellipse((left - grow, top - grow, left + span + grow, top + span + grow), fill=255)
-        pen.rectangle((left - grow, top + span // 2, left + span + grow, floor - 1), fill=255)
-        return mask
-
-    image.paste(joint, mask=opening(5))                           # the arch's stones: shadow, face, lit rim
-    image.paste(stone, mask=opening(4))
-    image.paste(lit, mask=ImageChops.subtract(opening(4), opening(3)))
-    image.paste(joint, mask=opening(1))
-    inside = opening(0)
-    image.paste(dark, mask=inside)
-
-    hollow = Image.new('RGB', (width, height), dark)              # what is behind the gate
-    pen = ImageDraw.Draw(hollow)
-    middle, low = left + span // 2, floor - (floor - top) * 0.36
-    for reach, amount in ((0.34, 0.10), (0.24, 0.18), (0.13, 0.28)):
-        pen.ellipse((middle - span * reach, low - (floor - top) * reach * 0.9,
-                     middle + span * reach, low + (floor - top) * reach * 0.9), fill=mix(dark, glow, amount))
-    step = max(5, span // 7)
-    start = middle - (span // 2 // step) * step
-    for y in range(floor - step - 1, top, -2 * step):             # the gate's bands, then its bars over them
-        pen.line((left, y, left + span, y), fill=bar_lit)
-        pen.line((left, y + 1, left + span, y + 1), fill=bar)
-    for x in range(start, left + span + 1, step):
-        pen.line((x, top, x, floor - 1), fill=bar_lit)
-        pen.line((x + 1, top, x + 1, floor - 1), fill=bar)
-    image.paste(hollow, mask=inside)
-    return image.convert('RGBA')
 
 
 @dataclass
@@ -100,6 +35,9 @@ class CutsceneGallery:
     grid_cache: tuple | None = field(default=None, repr=False)
     card_cache: dict = field(default_factory=dict, repr=False)
     layout_size: tuple | None = field(default=None, repr=False)
+    # Chapters unlocked since the viewer was last open, as index -> seconds
+    # into their reveal (negative while it waits to start).
+    reveal: dict = field(default_factory=dict, repr=False)
 
     PANEL = (8, 10, 504, 363)
     STRIP = (20, 61, 492, 334)
@@ -113,6 +51,14 @@ class CutsceneGallery:
     ROWS = 2
     GRID_PADDING = 48
     BOUNCE_LIMIT = 40
+    # A locked chapter shows its own cover as a few large dark blocks: its
+    # colours, nothing that can be recognised. Unlocking refines the blocks
+    # step by step until the cover is whole, like a console's mosaic fade.
+    VEIL_COLUMNS = 9
+    VEIL_DEPTH = .6
+    REVEAL_COLUMNS = (12, 16, 22, 30, 42, 58, 80, 110)
+    REVEAL_STEP = .11
+    REVEAL_DELAY = .6
 
     def layout(self, size, *, visible=False):
         """Uniform UI scale; extra width changes layout rather than stretching it."""
@@ -218,7 +164,35 @@ class CutsceneGallery:
     def display_scroll(self):
         return self.scroll + self.bounce
 
+    def reveal_step(self, index):
+        """None for a settled card, -1 while a reveal waits, then the step it has reached."""
+        elapsed = self.reveal.get(index)
+        if elapsed is None:
+            return None
+        return -1 if elapsed < 0 else min(len(self.REVEAL_COLUMNS) - 1, int(elapsed / self.REVEAL_STEP))
+
+    @property
+    def reveal_state(self):
+        return tuple(sorted((index, self.reveal_step(index)) for index in self.reveal))
+
+    def begin_reveal(self, indices):
+        """Show these newly unlocked chapters resolving out of their veil, the first one selected."""
+        indices = sorted(index for index in indices if self.chapter_unlocked(index))
+        if not indices:
+            return
+        self.reveal = {index: -self.REVEAL_DELAY - order * self.REVEAL_STEP * 3 for order, index in enumerate(indices)}
+        self.index = indices[0]
+        self.move(0)
+        self.scroll = self.scroll_target
+
     def advance(self, seconds):
+        for index in tuple(self.reveal):
+            self.reveal[index] += seconds
+            if self.reveal[index] >= len(self.REVEAL_COLUMNS) * self.REVEAL_STEP:
+                del self.reveal[index]
+        return self.advance_scroll(seconds) or bool(self.reveal)
+
+    def advance_scroll(self, seconds):
         if self.drag is not None:
             return False
         # A single position and velocity carry the shelf through the edge.
@@ -379,7 +353,8 @@ class CutsceneGallery:
         selected = self.index == index
         unlocked = self.chapter_unlocked(index)
         size = round(self.CARD_WIDTH * sx), round(self.CARD_HEIGHT * sy)
-        key = index, id(font), size, selected, unlocked, menu_theme.current().name
+        step = self.reveal_step(index) if unlocked else None
+        key = index, id(font), size, selected, unlocked, menu_theme.current().name, step
         if key in self.card_cache:
             return self.card_cache[key]
         image = Image.new('RGBA', size, c('#252525'))
@@ -390,7 +365,8 @@ class CutsceneGallery:
         thumb_bottom = 2 + (self.CARD_WIDTH - 4) * 9 / 16
         thumb_rect = (2, 2, self.CARD_WIDTH - 2, thumb_bottom)
         thumb = tuple(round(value * (sx if i % 2 == 0 else sy)) for i, value in enumerate(thumb_rect))
-        if unlocked and chapter_available(chapter):
+        cover = None
+        if chapter_available(chapter):
             try:
                 thumb_size = thumb[2] - thumb[0], thumb[3] - thumb[1]
                 image_key = index, thumb_size
@@ -398,19 +374,33 @@ class CutsceneGallery:
                     frame = self.preview(index)
                     self.image_cache[image_key] = ImageOps.fit(frame.convert('RGBA'), thumb_size,
                         method=Image.Resampling.LANCZOS if thumb_size[0] < frame.width else Image.Resampling.NEAREST)
-                image.alpha_composite(self.image_cache[image_key], thumb[:2])
+                cover = self.image_cache[image_key]
             except (OSError, ValueError, KeyError, RuntimeError):
+                cover = None
+        veiled = not unlocked or step is not None
+        if cover is None:
+            if unlocked:
                 self.caption(image, font, 'Unavailable', thumb_rect, c('#999999'), .7, sx, sy)
+            else:
+                draw.rectangle(thumb, fill=c('#101010'))
+        elif veiled:
+            # Locked, or resolving after being unlocked: large blocks of the cover's own colours.
+            stage = 0 if step is None else step + 1
+            columns = (self.VEIL_COLUMNS, *self.REVEAL_COLUMNS)[stage]
+            blocks = cover.convert('RGB').resize(
+                (columns, max(1, round(columns * cover.height / cover.width))), Image.Resampling.BOX)
+            depth = self.VEIL_DEPTH * (1 - stage / (len(self.REVEAL_COLUMNS) + 1))
+            blocks = Image.blend(blocks, Image.new('RGB', blocks.size, c('#101010')), depth)
+            image.paste(blocks.resize(cover.size, Image.Resampling.NEAREST), thumb[:2])
         else:
-            # A chapter not yet reached: a closed gate, and nothing of the chapter itself.
-            cover = locked_cover(round(self.CARD_WIDTH - 4), round((self.CARD_WIDTH - 4) * 9 / 16),
-                                 menu_theme.current().name)
-            image.paste(cover.resize((thumb[2] - thumb[0], thumb[3] - thumb[1]), Image.Resampling.NEAREST), thumb[:2])
+            image.alpha_composite(cover, thumb[:2])
         band = c('#493c25') if selected else c('#252525')
         draw.rectangle((stroke, round((thumb_bottom + 1) * sy), size[0] - stroke - 1, size[1] - stroke - 1), fill=band)
-        label = chapter.title if unlocked else f'Chapter {index + 1}'
+        # The title arrives halfway through a reveal; a locked chapter never shows it.
+        named = unlocked and (step is None or step >= len(self.REVEAL_COLUMNS) // 2)
+        label = chapter.title if named else f'Chapter {index + 1}'
         self.caption(image, font, label, (2, thumb_bottom + 1, self.CARD_WIDTH - 2, self.CARD_HEIGHT - 1),
-                     c('#f4d873') if selected else c('#eeeeee') if unlocked else c('#999999'), .72, sx, sy)
+                     c('#f4d873') if selected else c('#eeeeee') if named else c('#999999'), .72, sx, sy)
         self.card_cache[key] = image
         return image
 
@@ -465,7 +455,8 @@ class CutsceneGallery:
         region = bounds(self.STRIP)
         width, height = region[2] - region[0], region[3] - region[1]
         grid_key = (viewport.size, visible, id(font), self.index,
-                    tuple(sorted(self.collection.seen)), self.chapters, self.developer, theme.name)
+                    tuple(sorted(self.collection.seen)), self.chapters, self.developer, theme.name,
+                    self.reveal_state)
         if self.grid_cache is None or self.grid_cache[0] != grid_key:
             grid = Image.new('RGBA', (width + round((self.max_scroll + 2 * self.GRID_PADDING) * sx), height), c('#181818'))
             for index in range(len(self.chapters)):

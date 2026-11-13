@@ -137,6 +137,7 @@ class ChapterPreviews(PlaybackPreviews):
 class CutsceneControls:
     def init_cutscene_viewer(self):
         self.cutscene_collection = CutsceneCollection()
+        self.cutscene_fresh = set()   # chapters unlocked by playing them since the viewer was last open
         self.cutscene_campaign_active = True
         self.cutscene_replay = None
         self.cutscene_after_id = None
@@ -148,7 +149,11 @@ class CutsceneControls:
         collection = getattr(self, 'cutscene_collection', None)
         if collection is None:
             collection = self.cutscene_collection = CutsceneCollection()
+        before = set(collection.seen)
         collection.unlock(key)
+        if not hasattr(self, 'cutscene_fresh'):
+            self.cutscene_fresh = set()
+        self.cutscene_fresh |= collection.seen - before
 
     def mark_story_scene_seen(self, program_name):
         chapter = next((chapter for chapter in CHAPTERS if chapter.program == program_name), None)
@@ -167,15 +172,22 @@ class CutsceneControls:
         gallery = self.game_menu.cutscene_viewer = CutsceneGallery(
             self.cutscene_collection, self.cutscene_preview, developer=developer)
         self.pause_resume_keys.update(self.window_keys_down)
-        # Warm unlocked source thumbnails before scrolling begins: loading a
-        # newly exposed story program must not stall the moving shelf.
+        # Warm the source thumbnails before scrolling begins: loading a newly
+        # exposed story program must not stall the moving shelf. Locked
+        # chapters need theirs too, for the veiled blocks they show.
         for index, chapter in enumerate(CHAPTERS):
-            if gallery.chapter_unlocked(index) and chapter_available(chapter):
+            if chapter_available(chapter):
                 try:
                     self.cutscene_preview(index)
                 except (OSError, ValueError, KeyError, RuntimeError):
                     pass  # The card and replay action provide the import error.
+        fresh = getattr(self, 'cutscene_fresh', set())
+        if not developer and fresh:
+            gallery.begin_reveal(index for index, chapter in enumerate(CHAPTERS) if chapter.key in fresh)
+            fresh.clear()
         self.render()
+        if gallery.reveal:
+            self.schedule_cutscene_gallery()
 
     def active_cutscene_gallery(self):
         menu = getattr(self, 'game_menu', None)
@@ -275,7 +287,8 @@ class CutsceneControls:
         def appearance():
             return (id(self.screenshot_viewport), id(self.ui_font), gallery.index, gallery.focus,
                     gallery.error, gallery.collection.error, frozenset(gallery.collection.seen),
-                    gallery.developer, gallery.chapters, getattr(self, 'screenshot_toast', None))
+                    gallery.developer, gallery.chapters, getattr(self, 'screenshot_toast', None),
+                    gallery.reveal_state)
 
         look = appearance()
         fast = (previous is not None and previous[0] is gallery and previous[1].size == size
