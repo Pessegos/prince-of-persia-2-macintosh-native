@@ -500,10 +500,10 @@ _RING = (
     '.........',
     '.........',
 )
-# Where the stone is damaged: side (top, bottom, left, right), how far along,
-# what kind. Small panels get only the nicks.
-_DAMAGE = ((0, 0.64, 'break'), (0, 0.22, 'crack'), (3, 0.30, 'flake'), (3, 0.78, 'nick'),
-           (1, 0.20, 'nick'), (1, 0.72, 'crack'), (2, 0.56, 'break'), (2, 0.16, 'flake'))
+# The kinds of damage, and how often each turns up along a side. Small panels
+# get only the lighter kinds.
+_DAMAGE = ('break', 'flake', 'nick', 'crack', 'split', 'inside', 'socket', 'socket', 'nick', 'crack')
+_LIGHT_DAMAGE = ('nick', 'crack', 'inside', 'socket')
 
 
 def _broken_edge(rng, length, deepest):
@@ -535,26 +535,50 @@ def _studs_frame(theme, size, fill):
     def place(side, along, depth):
         return ((along, depth), (along, height - 1 - depth), (depth, along), (width - 1 - depth, along))[side]
 
-    gone = [[0] * longest for _side in range(4)]
-    cracks = []
-    for side, share, kind in _DAMAGE:
+    # Walk along each side and damage it here and there, never twice the same way running.
+    gone = [[0] * longest for _side in range(4)]      # broken out of the outer edge
+    eaten = [[0] * longest for _side in range(4)]     # broken out of the inner edge
+    cracks, crumbled = [], []
+    for side in range(4):
         length = width if side < 2 else height
-        if length < 150 and kind != 'nick':
-            continue
-        at = thickness + 8 + round((length - 2 * thickness - 50) * share) + wear.randint(-4, 4)
-        if kind == 'break':
-            edge = _broken_edge(wear, wear.randint(12, 20), wear.randint(4, 5))
-            cracks.append((side, at + edge.index(max(edge)), max(edge) + 1, thickness - 1))
-        elif kind == 'flake':
-            edge = [wear.choice((1, 1, 2)) for _step in range(wear.randint(18, 30))]
-            edge[0] = edge[-1] = 1
-        elif kind == 'nick':
-            edge = _broken_edge(wear, wear.randint(4, 7), wear.randint(2, 3))
-        else:
-            edge = []
-            cracks.append((side, at, 1, wear.randint(5, 7)))
-        for index, depth in enumerate(edge):
-            gone[side][at + index] = depth
+        kinds = _DAMAGE if length >= 150 else _LIGHT_DAMAGE
+        along = thickness + wear.randint(6, 22)
+        last = None
+        while along < length - thickness - 30:
+            kind = wear.choice([kind for kind in kinds if kind != last])
+            last = kind
+            span = 0
+            if kind == 'break':
+                edge = _broken_edge(wear, wear.randint(10, 19), wear.randint(3, 5))
+                if wear.random() < 0.6:
+                    cracks.append((side, along + edge.index(max(edge)), max(edge) + 1, thickness - 1))
+            elif kind == 'flake':
+                edge = [wear.choice((1, 1, 2)) for _step in range(wear.randint(12, 30))]
+                edge[0] = edge[-1] = 1
+            elif kind == 'nick':
+                edge = _broken_edge(wear, wear.randint(3, 7), wear.randint(1, 3))
+            else:
+                edge = []
+            if kind == 'inside':
+                bite = _broken_edge(wear, wear.randint(4, 11), wear.randint(1, 3))
+                for index, depth in enumerate(bite):
+                    eaten[side][along + index] = depth
+                span = len(bite)
+            elif kind == 'crack':
+                cracks.append((side, along, 1, wear.randint(4, 7)))
+            elif kind == 'split':
+                # A crack right through the band, with a second one branching off it.
+                cracks.append((side, along, 0, thickness))
+                cracks.append((side, along + 1, wear.randint(3, 5), thickness - 1))
+            elif kind == 'socket':
+                crumbled.append((side, along))
+            for index, depth in enumerate(edge):
+                gone[side][along + index] = depth
+            along += max(span, len(edge)) + wear.randint(14, 46)
+
+    # One corner has come away altogether.
+    lost = wear.randrange(4) if min(width, height) >= 150 else None
+    ragged = [wear.choice((6, 7, 7, 8, 9)) for _step in range(2 * thickness + 8)]
 
     for y in range(height):
         run, colour = 0, marble[0]
@@ -571,11 +595,15 @@ def _studs_frame(theme, size, fill):
             else:
                 side, along = (2 if x < width // 2 else 3), y
             upper = side in (0, 2)
-            missing = gone[side][along]
+            missing, bitten = gone[side][along], eaten[side][along]
             if depth < missing:
                 pixels[x, y] = (0, 0, 0, 0)
             elif missing and depth == missing:
                 pixels[x, y] = deep        # the broken face
+            elif depth >= thickness - bitten:
+                continue                   # the panel shows where the inner edge is gone
+            elif bitten and depth == thickness - 1 - bitten:
+                pixels[x, y] = dark
             elif depth == 0:
                 pixels[x, y] = lit if upper else dark
             elif depth == thickness - 1:
@@ -584,6 +612,7 @@ def _studs_frame(theme, size, fill):
                 pixels[x, y] = (stain[colour] if stained[side][along] else colour) + (255,)
 
     # The sockets: sunk squares, dark under their upper and left rims.
+    solid = set(marble) | set(stain.values())
     for side in range(4):
         length = width if side < 2 else height
         room = length - 2 * thickness - 2
@@ -593,56 +622,83 @@ def _studs_frame(theme, size, fill):
             for i in range(5):
                 for j in range(5):
                     x, y = place(side, start + index * 8 + i, 2 + j)
-                    if pixels[x, y][3] == 0 or pixels[x, y] == deep:
-                        continue
+                    if pixels[x, y][:3] not in solid:
+                        continue           # broken away here
                     dx, dy = (i, j) if side < 2 else (j, i)
                     if side == 1:
                         dy = 4 - dy
                     if side == 3:
                         dx = 4 - dx
                     pixels[x, y] = deep if dy == 0 or dx == 0 else face if dy == 4 or dx == 4 else sunk
-    for left in (0, width - thickness):
-        for top in (0, height - thickness):
-            _stamp(pixels, left, top, _RING, {'d': deep, 'l': lit})
+        # A socket whose rim has crumbled: the hollow has spread unevenly around it.
+        for crumbled_side, along in crumbled:
+            if crumbled_side != side:
+                continue
+            first = start + max(0, min(count - 1, (along - start) // 8)) * 8
+            for _grain in range(wear.randint(5, 9)):
+                i, j = wear.choice(((-1, wear.randint(0, 4)), (5, wear.randint(0, 4)),
+                                    (wear.randint(0, 4), -1), (wear.randint(0, 4), 5),
+                                    (wear.randint(1, 3), 4), (4, wear.randint(1, 3))))
+                x, y = place(side, first + i, 2 + j)
+                if pixels[x, y][3]:
+                    pixels[x, y] = sunk if wear.random() < 0.6 else deep
+    for corner, (left, top) in enumerate(((0, 0), (width - thickness, 0), (0, height - thickness),
+                                          (width - thickness, height - thickness))):
+        _stamp(pixels, left, top, _RING, {'d': deep, 'l': lit})
+        if corner != lost:
+            continue
+        for j in range(thickness + 3):
+            for i in range(thickness + 3):
+                x = i if corner in (0, 2) else width - 1 - i
+                y = j if corner in (0, 1) else height - 1 - j
+                reach = ragged[i - j + thickness + 3]
+                if i + j < reach:
+                    pixels[x, y] = (0, 0, 0, 0)
+                elif i + j == reach and pixels[x, y][3] and min(i, j) < thickness:
+                    pixels[x, y] = deep
     for side, along, first, last in cracks:
         for depth in range(first, last):
-            pixels[place(side, along, depth)] = deep
+            x, y = place(side, along, depth)
+            if pixels[x, y][3]:
+                pixels[x, y] = deep
             along += wear.choice((-1, 0, 0, 1, 1))
     return picture
 
 
-# The invaders' serpent sign, large, as it is left on the palace walls: a
-# pointed head on a hooked neck, over a coil that thins to its tail.
+# The invaders' serpent sign, large, as it is left on the palace walls: the
+# neck curls over and tucks the head back inside, above a coil that thins to
+# its tail.
 def _serpent_mask(height):
     scale = height / 30.0
-    image = Image.new('L', (round(25 * scale), height), 0)
+    image = Image.new('L', (round(22 * scale), height), 0)
     draw = ImageDraw.Draw(image)
-    ahead, across = (0.94, -0.34), (0.34, 0.94)  # where the head points
-    start = (14 + 5 * math.cos(math.radians(-80)), 8.5 + 5 * math.sin(math.radians(-80)))
-    body = [(start[0] + ahead[0] * (3 - step * 0.2), start[1] + ahead[1] * (3 - step * 0.2)) for step in range(15)]
-    for step in range(69):                       # the hooked neck
-        angle = math.radians(-80 - step * 2.5)
-        body.append((14 + 5 * math.cos(angle), 8.5 + 5 * math.sin(angle)))
-    for step in range(233):                      # the coil
-        angle = math.radians(-40 + step * 2.5)
-        radius = 8 - step * 0.026
-        body.append((10 + radius * math.cos(angle), 21.5 + radius * math.sin(angle)))
+    body = []
+    for step in range(37):                       # the head end, curling inwards
+        angle = 60 - step * 2.5
+        radius = 2.8 + (5 - 2.8) * step / 36
+        body.append((14 + radius * math.cos(math.radians(angle)), 8 + radius * math.sin(math.radians(angle))))
+    for step in range(1, 75):                    # over the top and down the left
+        angle = math.radians(-30 - step * 2.5)
+        body.append((14 + 5 * math.cos(angle), 8 + 5 * math.sin(angle)))
+    coil = [(10 + (8 - step * 0.026) * math.cos(math.radians(-40 + step * 2.5)),
+             21 + (8 - step * 0.026) * math.sin(math.radians(-40 + step * 2.5))) for step in range(233)]
+    (x0, y0), (x1, y1) = body[-1], coil[0]
+    body += [(x0 + (x1 - x0) * step / 40, y0 + (y1 - y0) * step / 40) for step in range(1, 40)]   # the neck
+    body += coil
     for index, (x, y) in enumerate(body):
         left = len(body) - 1 - index
-        half = 0.85 * scale * (min(1.0, 0.25 + left / 110.0))     # thinner towards the tail
+        half = 1.05 * scale * (min(1.0, 0.25 + left / 110.0))     # thinner towards the tail
         draw.ellipse((x * scale - half, y * scale - half, x * scale + half, y * scale + half), fill=255)
-    # The head: a flat wedge pointing up and outwards, with a forked tongue.
+    # The head: a short wedge, a little wider than the neck, pointing back inwards.
     x, y = body[0]
+    ahead = (-math.sin(math.radians(60)), math.cos(math.radians(60)))
+    across = (-ahead[1], ahead[0])
 
     def at(forward, sideways):
         return ((x + ahead[0] * forward + across[0] * sideways) * scale,
                 (y + ahead[1] * forward + across[1] * sideways) * scale)
 
-    draw.polygon((at(-0.8, 0.85), at(0.9, 1.7), at(4.4, 0), at(0.9, -1.7), at(-0.8, -0.85)), fill=255)
-    thin = max(1, round(0.3 * scale))
-    draw.line((at(4.2, 0), at(5.4, 0)), fill=255, width=thin)
-    draw.line((at(5.4, 0), at(6.3, 0.6)), fill=255, width=thin)
-    draw.line((at(5.4, 0), at(6.3, -0.6)), fill=255, width=thin)
+    draw.polygon((at(-1.0, 1.05), at(0.4, 1.55), at(2.6, 0), at(0.4, -1.55), at(-1.0, -1.05)), fill=255)
     return image
 
 
