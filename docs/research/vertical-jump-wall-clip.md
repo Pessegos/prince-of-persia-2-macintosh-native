@@ -80,3 +80,23 @@ climbing to it and the preceding wall/turn keys are not replayed.
 
 The audit creates a temporary user-data directory before importing game paths.
 Videos, reviewed contact sheets and JSON reports stay ignored locally.
+
+Final verification: full discovery by243 isolated modules ran4,119 cases,
+with nine desktop exclusions and one original enemy-profile reference check
+unconfigured (10 skips). Its initial broad safeguard exposed the three
+regressions above; that run is not reported as green. After limiting the
+safeguard, all169 cases in the affected level4, ruins reports, game UI and
+vertical-wall/temple replay/playtest modules passed. The other full-discovery
+modules had passed, including terrain, ceiling, combat, gate and saved-state
+coverage. No expectations for the three unrelated regressions were changed.
+
+Dependency, Ruff F/E9, recovery catalogue and whitespace checks pass. The final
+port audit again reports488 standing/6,344 pose fixtures and seven candidate
+replays, with the six temple pinches contained. The initial focused command
+also named a nonexistent test_temple_collision module; its import error is
+not counted as a test pass. Full discovery covers the actual collision tests.
+
+No executable was rebuilt, and no physical game/emulator or original native
+code probe was run. Further work, if needed, should supply a specific action
+outside unarmed SEQS14/28 rather than broadening the correction to every
+animation family without independent regression evidence.
