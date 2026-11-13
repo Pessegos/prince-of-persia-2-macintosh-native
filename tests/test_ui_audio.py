@@ -36,7 +36,9 @@ class MenuPcmTests(unittest.TestCase):
         # The first ticks peaked at 0.0025 and 0.0075 of full scale for under
         # 20 ms: the user found them far too quiet. Ringing notes at 0.10 and
         # 0.18, a different one on each hover, were "obnoxious" within a minute.
-        self.assertTrue(0.0075 < PEAK['hover'] <= 0.03)
+        # The user then chose three and two times those first peaks, at the new lengths.
+        self.assertTrue(0.0075 <= PEAK['hover'] <= 0.03)
+        self.assertEqual((PEAK['hover'], PEAK['click']), (3 * 0.0025, 2 * 0.0075))
         self.assertTrue(PEAK['hover'] < PEAK['click'] <= 0.06)
         self.assertTrue(PEAK['click'] < PEAK['reveal'] <= 0.12)           # heard rarely, so it may ring
         self.assertTrue(0.02 < DURATION['hover'] <= 0.06)                 # nearer a click than a note
