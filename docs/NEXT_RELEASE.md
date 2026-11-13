@@ -16,8 +16,8 @@ packaging it.
   be selected directly. The existing reader already handled the verified
   CD Collection image; no decoder change was needed. Compressed DMG and
   DOS-only images remain unsupported.
-- Credit Crinkem's [CD guide in issue 9](https://github.com/Pessegos/prince-of-persia-2-macintosh-native/issues/9),
-  now linked in the README. The verified ISO can be selected after step 4,
+- Credit Crinkem's [CD guide in issue 9](https://github.com/Pessegos/prince-of-persia-2-macintosh-native/issues/9)
+  in the release notes. The verified ISO can be selected after step 4,
   without the HFSExplorer conversion. Evidence and mastering limits are in
   [CD image import verification](CD_IMAGE_IMPORT.md).
 
