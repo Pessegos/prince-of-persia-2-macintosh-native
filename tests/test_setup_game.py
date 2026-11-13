@@ -67,6 +67,25 @@ class GameSetupTests(unittest.TestCase):
             self.setup.import_button.state.assert_called_with(["!disabled"])
             self.setup.root.destroy.assert_not_called()
 
+    def test_cd_iso_and_exported_dmg_can_be_selected_and_imported_directly(self):
+        for image in ("CD Collection.iso", "CD Collection.dmg"):
+            self.setup.completed = False
+            self.setup.root.destroy.reset_mock()
+            with (
+                self.subTest(image=image),
+                patch.object(setup_game.filedialog, "askopenfilename", return_value=image) as picker,
+                patch.object(setup_game, "import_game") as importer,
+                patch.object(setup_game, "Thread") as thread,
+            ):
+                thread.return_value.start.side_effect = lambda: self.setup.import_files(image)
+                self.setup.choose()
+                self.setup.poll_import()
+                patterns = picker.call_args.kwargs['filetypes'][0][1].split()
+                self.assertIn('*' + Path(image).suffix, patterns)
+                importer.assert_called_once_with(image, self.setup.project, ANY, task=self.setup.task)
+                self.assertTrue(self.setup.completed)
+                self.setup.root.destroy.assert_called_once()
+
     def test_enter_on_cancel_closes_without_opening_a_file_picker(self):
         self.setup.root.focus_get.return_value = self.setup.cancel_button
         with patch.object(self.setup, "choose") as choose:

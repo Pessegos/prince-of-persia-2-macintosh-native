@@ -107,6 +107,9 @@ Normal Python exceptions still go to the application/import logs.
 
 ## GitHub builds and releases
 
+Keep the [queued notes for the next release](NEXT_RELEASE.md) with the current
+game update when preparing its release notes.
+
 The **Windows portable build** workflow runs manually from Actions, or for a
 `v*` tag. It builds and checks a ZIP without original game files, then uploads
 the ZIP, checksum and smoke report as an Actions artifact. It does not run for

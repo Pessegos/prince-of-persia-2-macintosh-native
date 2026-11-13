@@ -71,11 +71,18 @@ class CatchReleaseRuleTests(unittest.TestCase):
     def test_release_extension_does_not_bypass_speed_or_height_limits(self):
         self.ledge(0, 1, 0)
         for y, velocity, expected in ((-49, 33, False), (-48, 59, True),
-                                      (3, 59, True), (4, 33, False), (-30, 60, False)):
+                                      (2, 59, True), (3, 59, False), (4, 33, False), (-30, 60, False)):
             with self.subTest(y=y, velocity=velocity):
                 state = self.state(0, 99, x=180)
                 state.current_y, state.vertical_velocity = y, velocity
                 self.assertEqual(self.terrain.catch_ledge(0, 1, state, self.record), expected)
+
+    def test_mode_three_direct_catch_retains_its_height_three_admission(self):
+        self.ledge(0, 1, 0)
+        state = self.state(0, 99, x=180)
+        state.animation_state = 3
+        state.current_y = 3
+        self.assertTrue(self.terrain.catch_ledge(0, 1, state, self.record))
 
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')

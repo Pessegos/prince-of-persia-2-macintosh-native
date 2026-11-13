@@ -83,6 +83,43 @@ class TemplePlaytestTests(unittest.TestCase):
         self.addCleanup(harness.close)
         return harness
 
+    def test_room2_standing_jump_cannot_catch_room10_after_the_down_cut(self):
+        harness = self.harness(12)
+        scene = harness.scene
+        scene.jump_to_room(1, row=1, x=220, facing=1)
+        press(harness, 'R', True)
+        press(harness, 'up', True)
+        self.assertEqual(scene.sequence_state.source_sequence_id, 3)
+        harness.tick(4)
+        press(harness, 'shift', True)
+        grips = []
+        for _ in range(30):
+            harness.tick()
+            if scene.native_ledge:
+                grips.append((scene.room_id, scene.terrain_motion.row))
+            if not scene.combat.player.alive:
+                break
+        self.assertEqual(grips, [])
+        self.assertEqual(scene.room_id, 9)
+        self.assertFalse(scene.combat.player.alive)
+
+    def test_room2_running_jump_with_the_middle_tile_reaches_room10(self):
+        harness = self.harness(12)
+        scene = harness.scene
+        scene.jump_to_room(1, row=1, x=100, facing=1)
+        press(harness, 'R', True)
+        harness.tick(5)
+        press(harness, 'up', True)
+        harness.tick(3)
+        self.assertEqual(scene.sequence_state.source_sequence_id, 4)
+        press(harness, 'R', False)
+        press(harness, 'up', False)
+        press(harness, 'shift', True)
+        harness.tick(35)
+        self.assertEqual((scene.room_id, scene.terrain_motion.row), (9, 0))
+        self.assertTrue(scene.combat.player.alive)
+        self.assertFalse(scene.terrain_motion.falling)
+
     def test_standing_jump_from_14_turns_the_guard_when_the_prince_lands_behind(self):
         harness = self.harness(peaceful=False)
         scene = harness.scene
@@ -293,7 +330,11 @@ class TemplePlaytestTests(unittest.TestCase):
         scene = harness.scene
         scene.jump_to_room(13, row=2, x=x, facing=1)
         scene.physics.select(scene.sequence_runtime, 21)
-        scene.sequence_state.current_y = 100
+        # At this absolute Y (446) Falling has already advanced past floor
+        # 346. Supplying row 2 here bypassed that earlier floor crossing and
+        # depended on the port cutting before Falling to manufacture a grip.
+        scene.terrain_motion.row = 3
+        scene.sequence_state.current_y = -20
         scene.sequence_state.vertical_velocity = 8
         scene.terrain_motion.falling = True
         scene.action = scene.sequence_state.action

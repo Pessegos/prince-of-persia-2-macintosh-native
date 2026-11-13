@@ -835,9 +835,12 @@ class LevelMap:
 
     def catch_ledge(self, room, row, state, record, harbor=None):
         # Falling 6:011e-0132 / Catch 4:37ca: velocity <60 and feet within
-        # [-48,+3] of the lower floor. Catch 4:3882-3894 extends the
+        # [-48,+3) of the lower floor in Falling modes 4/9 (6:011e-0120).
+        # Mode3 calls Catch directly; retain its existing upper boundary.
+        # Catch 4:3882-3894 extends the
         # 17-pixel look-behind by seven after the toward-ledge release (99).
-        if state.vertical_velocity >= 60 or not -48 <= state.current_y <= 3:
+        if (state.vertical_velocity >= 60 or not -48 <= state.current_y <= 3
+                or state.current_y == 3 and state.animation_state in (4, 9)):
             return False
         direction = 1 if state.facing else -1
         trial_x = state.target_x - 17 * direction
@@ -1633,9 +1636,18 @@ class RooftopPhysics:
             # CutChar6:4922-492a reads ShapeBounds' cached edges, which
             # already include GetCharEdges4:5e6e's sword-facing extension.
             events.append(TerrainEvent("room"))
-        if (cut_enabled and state.actor_type in (0, None)
+        defer_down_cut = motion.falling and state.actor_type in (0, None)
+        if (cut_enabled and not defer_down_cut and state.actor_type in (0, None)
                 and self.cut_down(motion, state, bounds)):
             events.append(TerrainEvent("room"))
+
+        def finish():
+            # Native Cut precedes the NEXT Move (2:6294/637e). Preserve the
+            # host's existing camera timing, but finish Falling in the old
+            # room before Cut recomputes GetRow for the following tick.
+            if cut_enabled and defer_down_cut and self.cut_down(motion, state, bounds):
+                events.append(TerrainEvent("room"))
+            return tuple(events)
 
         if self.frames is not None:
             frame_record = self.frames[state.action]
@@ -1649,7 +1661,7 @@ class RooftopPhysics:
         # FrameAdv 2:6372-63a6 runs AnimChar/Move before Falling/Catch.
         # Catch must see this frame's displacement before the floor row advances.
         if catch_ledge is not None and catch_ledge():
-            return tuple(events)
+            return finish()
 
         # Below a chasm the Prince is in room 0 (CutChar 6:4d64): its cells
         # are not the linked room's, so nothing aligns or lands him.
@@ -1683,10 +1695,10 @@ class RooftopPhysics:
             if impact:
                 state.sound_events.append(7)
             events.append(TerrainEvent("death", impact=impact))
-            return tuple(events)
+            return finish()
 
         if state.animation_state not in (4, 9) or below_chasm:
-            return tuple(events)
+            return finish()
         while absolute_y > floor_y(motion.row):
             contact_x = (floor_contact_x(state.target_x, state.facing, frame_record)
                          if frame_record is not None else state.target_x)
@@ -1771,4 +1783,4 @@ class RooftopPhysics:
                 else:
                     break
         state.current_x = state.target_x
-        return tuple(events)
+        return finish()

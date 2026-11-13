@@ -31,14 +31,19 @@ class GameSetup:
 
         panel = ttk.Frame(self.root, padding=24)
         panel.pack(fill="both", expand=True)
-        ttk.Label(panel, text="Original game files required", font=("Segoe UI", 12, "bold")).pack(
+        ttk.Label(panel, text="Choose your original game image", font=("Segoe UI", 12, "bold")).pack(
             anchor="w"
         )
         ttk.Label(
             panel,
-            text="Macintosh Prince of Persia 2 disk image (.hfs, .hfv, .dsk or .img)",
+            text="Select a disk image of Prince of Persia 2 for Macintosh.",
             wraplength=400,
-        ).pack(anchor="w", pady=(12, 18))
+        ).pack(anchor="w", pady=(12, 10))
+        ttk.Label(
+            panel,
+            text="Supported images: .iso, .hfs, .hfv, .dsk, .img and uncompressed .dmg",
+            wraplength=400,
+        ).pack(anchor="w", pady=(0, 18))
         self.status = tk.StringVar()
         self.status_label = ttk.Label(panel, textvariable=self.status, wraplength=400)
         self.status_label.pack(anchor="w", fill="x", pady=(0, 18))
@@ -50,7 +55,7 @@ class GameSetup:
         buttons.pack(fill="x")
         self.cancel_button = ttk.Button(buttons, text="Cancel", command=self.close)
         self.cancel_button.pack(side="right")
-        self.import_button = ttk.Button(buttons, text="Choose disk image...", command=self.choose)
+        self.import_button = ttk.Button(buttons, text="Choose game image...", command=self.choose)
         self.import_button.pack(side="left")
         self.import_button.focus_set()
         self.root.bind("<Escape>", lambda _event: self.close())
@@ -65,9 +70,9 @@ class GameSetup:
     def choose(self):
         image_path = filedialog.askopenfilename(
             parent=self.root,
-            title="Select the Macintosh Prince of Persia 2 disk image",
+            title="Select your Macintosh Prince of Persia 2 game image",
             filetypes=(
-                ("Macintosh disk images", "*.hfs *.hfv *.dsk *.img"),
+                ("Game images", "*.iso *.hfs *.hfv *.dsk *.img *.dmg"),
                 ("All files", "*.*"),
             ),
         )
