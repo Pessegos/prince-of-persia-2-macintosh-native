@@ -152,7 +152,7 @@ TEMPLE = MenuTheme('temple', {
     'active': '#b9b4cc', 'active_map': '#b9b4cc', 'active_fill': '#3a2a30',
     'active_field': '#33202a', 'text_selection': '#6c2107',
     'danger': '#6b1808', 'danger_soft': '#450a0a',
-}, dim=100, frame='columns', grow=(2, 5, 7))
+}, dim=140, frame='columns', grow=(2, 5, 7))
 
 THEMES = {theme.name: theme for theme in (NEUTRAL, PALACE, DESERT, CAVERNS, RUINS, TEMPLE)}
 
