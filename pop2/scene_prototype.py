@@ -3357,15 +3357,18 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 interval_ms=self.current_animation_interval_ms(),
             )
         self.animation_after_id = self.root.after(delay_ms, self.advance_animation)
-        self.schedule_spare_work()
+        if getattr(self, "intro", None) is None and getattr(self, "demo", None) is None:
+            self.schedule_spare_work()
 
     def schedule_spare_work(self):
         """The time left before the next frame readies what is coming, a step at a
         time: with the cave ambience on, a room next door; then the next level, so
         that walking into either does not stall its first frames."""
-        if getattr(self, 'spare_work_after_id', None) is not None:
+        # Test stand-ins for Tk may have no idle queue: then there is no spare time.
+        after_idle = getattr(self.root, 'after_idle', None)
+        if getattr(self, 'spare_work_after_id', None) is not None or after_idle is None:
             return
-        self.spare_work_after_id = self.root.after_idle(self.use_spare_time)
+        self.spare_work_after_id = after_idle(self.use_spare_time)
 
     def use_spare_time(self):
         self.spare_work_after_id = None
