@@ -306,7 +306,7 @@ class ScreenshotGallery:
     BURN_SECONDS = 1.0   # a dropped picture's fall into the lava and its burning
     BURN_LANDING = 0.35  # the share of it spent falling to the lava
     BURN_SINK = 0.6      # how much of its height sinks under the lava while it burns
-    BURN_ENTRY = 13      # the line, from the lava button's top, where the picture enters the lava
+    BURN_ENTRY = 10      # the line, from the lava button's top, where the picture enters the lava
     WIDE_COLUMNS = 4   # thumbnails across on the wide page
     WIDE_DROP = 28     # how much taller the wide page is
 
