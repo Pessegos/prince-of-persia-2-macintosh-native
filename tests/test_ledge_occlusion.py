@@ -70,20 +70,20 @@ class LedgeSurfaceTests(unittest.TestCase):
                             self.assertEqual(frame.getpixel(pixel), (255, 0, 0, 255), pixel)
                         self.assertEqual(frame.getpixel((80, 115)), (0, 255, 0, 255))
 
-    def test_roof_side_uses_the_full_contour_below_the_support_line(self):
+    def test_roof_near_edge_clips_the_slab_but_keeps_the_shaded_side_behind_him(self):
         size = (510, 365)
         ledge = RoofLedge(0, 51, 95, self.slab().getchannel('A'))
         room = OpeningRoom(Image.new('RGBA', size), Image.new('RGBA', size),
                            {}, (ledge,), (), 0)
         # Pose136 normally sends the intersecting ledge entirely behind him.
-        # X80 is also beyond the old narrow 19-pixel ledge strip.
+        # The shaded side beyond its 19-pixel near strip remains behind him.
         for facing in (0, 1):
             for sequence in (10, 68):
                 with self.subTest(facing=facing, sequence=sequence):
                     mask = room.actor_mask(1, state=prince(136, sequence, facing),
                                            bounds=(55, 90, 95, 145))
-                    self.assertEqual(mask.getpixel((80, 110)), 255)
-                    for pixel in ((80, 106), (55, 110), (75, 115), (80, 130)):
+                    self.assertEqual(mask.getpixel((68, 115)), 255)
+                    for pixel in ((68, 106), (55, 110), (75, 115), (80, 130), (80, 115)):
                         self.assertEqual(mask.getpixel(pixel), 0, pixel)
 
     def test_harbor_planks_keep_their_alpha_beyond_the_native_half_width(self):
@@ -95,6 +95,16 @@ class LedgeSurfaceTests(unittest.TestCase):
         self.assertEqual(mask.getpixel((80, 110)), 255)
         self.assertEqual(mask.getpixel((80, 106)), 0)
         self.assertEqual(mask.getpixel((75, 115)), 0)
+
+    def test_custom_bridge_plank_without_a_full_floor_keeps_its_native_repaint(self):
+        size = (510, 365)
+        plank = Image.new('RGBA', (20, 8), 'gray')
+        room = CavernRoom(Image.new('RGBA', size), Image.new('RGBA', size), {}, (), (), 9, 3,
+                          floor_redraw={}, climb_redraw={(140, 1, 0): [(plank, (51, 112))]})
+        frame = Image.new('RGBA', size, 'red')
+        room.draw_actor_foreground(frame, prince(), (55, 90, 95, 145))
+        self.assertEqual(frame.getpixel((60, 115)), (128, 128, 128, 255))
+        self.assertEqual(frame.getpixel((60, 110)), (255, 0, 0, 255))
 
 
 @unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported game artwork required')

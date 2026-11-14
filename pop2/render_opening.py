@@ -290,14 +290,18 @@ class OpeningRoom:
                                           rect[2] - piece.x, rect[3] - piece.y))
                 add_alpha(mask, alpha, rect[0], rect[1])
         for ledge in self.ledges:
+            width = roof_ledge_width(self.room_id, ledge.row, row, bottom)
             if ledge.row >= roof_row and not ledge.behind_actor(state, bounds):
-                width = roof_ledge_width(self.room_id, ledge.row, row, bottom)
                 ledge.add_to(mask, width)
             if surface is not None and ledge.row == surface[0]:
                 left, top, right, bottom_edge = surface[1]
-                alpha = ledge.alpha.crop((left - ledge.x, top - ledge.y,
-                                          right - ledge.x, bottom_edge - ledge.y))
-                add_alpha(mask, alpha, left, top)
+                # The rest of a rooftop ledge is its shaded side, behind a
+                # Prince outside the building. Promote only its near strip.
+                right = min(right, ledge.x + width)
+                if left < right:
+                    alpha = ledge.alpha.crop((left - ledge.x, top - ledge.y,
+                                              right - ledge.x, bottom_edge - ledge.y))
+                    add_alpha(mask, alpha, left, top)
         return mask
 
 

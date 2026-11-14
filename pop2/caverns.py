@@ -100,7 +100,10 @@ class CavernRoom(OpeningRoom):
             records = [record for column, cell_row in native_buffer_cells(bounds)
                        if cell_row == row
                        for record in self.floor_redraw.get((column, row), ())]
-            return self.draw_floor_records(frame, records, clip)
+            if records:
+                return self.draw_floor_records(frame, records, clip)
+            # Custom bridge planks have only a half repaint in the export.
+            # Keep it when there is no complete slab to promote.
         # QuickFloor 2:69b6-69e2 marks DrawHalf only for right-facing
         # poses 135-144, using the drawn left column and top row.
         clip = None

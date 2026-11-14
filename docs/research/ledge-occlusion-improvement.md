@@ -19,8 +19,11 @@ the physical row change at pose 141. The policy applies in both facings.
 their existing full floor records within it instead of selecting the original
 pose-dependent half repaint. This includes caverns, ruins, temple and final
 palace artwork and uses the current loose-floor/plate/bridge room variant.
-Rooftop masks add the full intersecting ledge/plank alpha in the same region;
-existing facade/parapet, pillar and decoration masks remain in force.
+Rooftop masks add the intersecting near-edge/plank alpha in the same region;
+the projected shaded side stays behind the Prince outside the building.
+Existing facade/parapet, pillar and decoration masks remain in force.
+Custom bridge planks have only a partial repaint in the export; where there
+is no full floor record, their existing native repaint is preserved.
 
 The original ComputeHalfRect tables, ClipChar clipping and normal floor
 redraw selection are retained for other sequences and actors. No sprite,
@@ -33,8 +36,9 @@ receive no new mask.
 
 `tests.test_ledge_occlusion` checks the support line across the row change,
 both facings and both sequences, exact alpha corners/holes/undersides,
-foreground pillars, full rooftop ledges and harbor planks, and exclusions
-for other actors/poses/sequences.
+foreground pillars, rooftop near edges/shaded sides and harbor planks, and exclusions
+for other actors/poses/sequences. A separate regression retains a custom
+bridge plank's original repaint when no full floor record exists.
 
 The actual level-6 room-8 input replay descends, holds and climbs back up.
 Poses 138/140/141/143/144 in both sequences replace the intruding pixel at
@@ -54,3 +58,25 @@ Local review frames and an enlarged before/after animation are generated under
 The level-6 targets guided the visual check; this does not claim a pixel-for-pixel
 comparison against the user's Photoshop files or exhaustive inspection of every
 ledge in every room. No live game window or physical input is used.
+
+Validation commands (worktree Python):
+
+```powershell
+$env:POP2_SHARED_DESKTOP = '1'
+.venv\Scripts\python.exe -m unittest -q tests.test_ledge_occlusion tests.test_bridge tests.test_caverns tests.test_render_opening tests.test_game_ui
+.venv\Scripts\python.exe run_game.py --check-dependencies
+.venv\Scripts\python.exe -m ruff check --select F,E9 .
+.venv\Scripts\python.exe -m tools.recovery_catalog --check
+git diff --check
+```
+
+The final focused run passed 232 tests, without skips. All 248 discovery
+modules were also run in isolated interpreters (4,165 cases, ten skips):
+the junction body-pixel regression exposed an overbroad shaded-side mask;
+the production mask was narrowed and the unchanged test passed in the final
+focused run. The other 247 modules passed. Audio and frame-cost modules ran
+serially. The eight new tests include the subsequent bridge preservation
+regression (added after that discovery-module run). Ordinary single-process
+discovery was stopped for growing retained caches, not counted as a result.
+The ten exclusions were nine exclusive-desktop tests and the unavailable local
+native-enemy profile. No exclusive desktop run or native-equivalence claim.
