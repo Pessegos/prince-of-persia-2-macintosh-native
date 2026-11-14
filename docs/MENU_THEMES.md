@@ -97,9 +97,10 @@ the shared wide layout (`SaveBrowser.WIDE_PAD`): in 16:9 its panel then has
 exactly the screenshots page's sides, and the preview's foot is level with
 the list's fifth row and the last detail line ends there too. The
 buttons keep their sizes; the page's two actions move to its right edge. On
-every page Load game stands alone at the right edge, as wide as New save. A window wider than 16:9 gives the list a little more
-room, so that long names fit, and then shows the page centred: stretching it
-further only made the list and the buttons oversized. Narrower windows, 16:10 among them, keep the classic
+every page Load game stands alone at the right edge, as wide as New save. A window wider than 16:9 shows the 16:9 page centred,
+with the screenshots page's sides: stretching it further only made the list
+and the buttons oversized, and a list that grew for long names made the two
+pages different widths. Narrower windows, 16:10 among them, keep the classic
 page. The page is then drawn over the whole window, with the
 game's picture centred behind it, and one unit is as wide as it is tall. Its
 rectangles (`PANEL`, `LIST`, `PREVIEW`, ...) are properties that follow the

@@ -138,7 +138,9 @@ class SaveBrowser:
     WIDE_PAD = 8
     WIDE_PREVIEW = menu_theme.WIDE_SPREAD + 2 * WIDE_PAD   # a 16:9 window: up to here the extra width enlarges the preview
     DETAIL_GAP = 49      # wide page: the details never climb above name (22) + Rename tip (4 + 17) + 6
-    WIDE_LIMIT = 222     # wider windows give the list a little more room for long names, then stop (before the pad)
+    # Wider windows centre the 16:9 page, as the screenshots page does, so the two
+    # pages keep the same sides (the list used to grow 50 units more in 21:9).
+    WIDE_LIMIT = menu_theme.WIDE_SPREAD
 
     def __post_init__(self):
         if self.mode == 'save' and not self.slots and self.focus == 100:
@@ -149,10 +151,9 @@ class SaveBrowser:
         """(spread, shift) for a picture of this size; (0, 0) for the classic page.
 
         The page is 384 units tall. A window wide enough gets a wider panel:
-        a larger preview with the save's details beside it. Wider than 16:9,
-        the list grows a little so that long names fit; beyond that the panel
-        is centred instead of being stretched. The saves page then reaches
-        WIDE_PAD units further out on each side.
+        a larger preview with the save's details beside it. Wider than 16:9
+        the panel is centred instead of being stretched. The saves page
+        reaches WIDE_PAD units further out on each side.
         """
         spread, shift = menu_theme.wide_layout(width, height, basis, cls.WIDE_LIMIT)
         if not spread:
