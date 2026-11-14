@@ -258,7 +258,7 @@ def draw_callout(image, points, art, origin):
 
 class ControlsPage:
     PANEL = centered_panel(470, 350)
-    TABS = ((150, 34, 252, 56), (260, 34, 362, 56))
+    TABS = ((150, 36, 252, 58), (260, 36, 362, 58))
     BUTTONS = ((100, 318, 250, 344), (262, 318, 412, 344))
     # Its label is centred under the status line; the check box stands to the left of it.
     TOGGLE = (169, 286, 325, 304)
