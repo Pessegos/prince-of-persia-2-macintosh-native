@@ -196,6 +196,49 @@ class GameMenuSceneTests(unittest.TestCase):
         self.scene.dev_key_release(self.event(key, state))
         return result
 
+    def test_f1_prepares_the_pages_it_leads_to_and_stops_when_left(self):
+        # The first opening of screenshots, saves and the viewer used to do all its reading then.
+        from pop2 import screenshot_gallery
+
+        scene = self.scene
+        for cache in (screenshot_gallery.SHARED_READS, screenshot_gallery.LAST_SCANS):
+            cache.clear()
+            self.addCleanup(cache.clear)
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            for name in ('one.png', 'two.png'):
+                Image.new('RGB', (510, 384), '#ab3456').save(folder / name)
+            scene.screenshot_settings = ScreenshotSettings(folder, 1)
+            with patch.object(scene.canvas, 'winfo_width', return_value=1920),                     patch.object(scene.canvas, 'winfo_height', return_value=1080):
+                self.press('F1')
+                deadline = time.monotonic() + 20
+                while scene.menu_warmup_after_id is not None and time.monotonic() < deadline:
+                    scene.root.update()
+                    time.sleep(0.002)
+                self.assertIsNone(scene.menu_warmup_after_id)
+                thumbs = {key[1].name for key in screenshot_gallery.SHARED_READS if key[0] == 'thumb'}
+                self.assertEqual(thumbs, {'one.png', 'two.png'})
+                self.assertEqual(len(screenshot_gallery.LAST_SCANS[folder]), 2)
+                self.assertEqual({key[0] for key in scene.menu_warm_keys}, {'screenshots', 'saves', 'cutscenes'})
+                with patch('pop2.screenshot_gallery.read_capture', side_effect=AssertionError('read on opening')):
+                    self.press('F2')
+                    gallery = scene.game_menu.screenshot_gallery
+                    self.assertEqual(len(gallery.entries), 2)
+                    self.assertTrue(all(key in gallery.reads.cache for key in gallery.reads.wanted))
+                scene.close_game_menu()
+                # Leaving F1 at once stops it before it has done anything.
+                self.press('F1')
+                self.assertIsNotNone(scene.menu_warmup_after_id)
+                steps = scene.menu_warmup_steps
+                self.press('F2')
+                deadline = time.monotonic() + 5
+                while scene.menu_warmup_after_id is not None and time.monotonic() < deadline:
+                    scene.root.update()
+                    time.sleep(0.002)
+                self.assertIsNone(scene.menu_warmup_after_id)
+                self.assertIsNone(steps.gi_frame)   # closed, not finished later
+                scene.close_game_menu()
+
     def test_saves_and_cutscenes_opened_directly_draw_only_their_own_page(self):
         # Opening them straight from the game used to draw the F1 menu first, then the page.
         scene = self.scene
