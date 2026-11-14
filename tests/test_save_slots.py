@@ -462,11 +462,15 @@ class SaveBrowserTests(unittest.TestCase):
             browser.list_base_cache.clear()
             browser.draw(source, font)
         sy = size[1] / 384
-        # Every row from the name's foot down through the first detail line stays clear.
+        # The tip sits under the two-line name; the details start below it.
         preview_left = round((browser.PREVIEW[0] + shift) * sy)
-        tips = [rect for rect in drawn if rect[0] > preview_left
-                and any(rect[1] < (y + row) * sy < rect[3] for row in range(38, 58, 2))]
-        self.assertEqual(tips, [])
+        tip_bottom = (y + 30 + 11 + 17) * sy
+        details_top = (y + 11 + browser.DETAIL_GAP) * sy
+        self.assertLess(tip_bottom, details_top)
+        overlapping = [rect for rect in drawn if rect[0] > preview_left
+                       and any(rect[1] < (y + 11 + browser.DETAIL_GAP + row) * sy < rect[3] for row in range(0, 10, 2))]
+        self.assertEqual(overlapping, [])
+        self.assertTrue(any(abs(rect[1] - (y + 41) * sy) <= 1 for rect in drawn))
 
     def test_clear_actions_current_marker_and_complete_wrapped_name(self):
         words = []

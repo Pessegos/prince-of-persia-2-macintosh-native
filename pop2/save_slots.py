@@ -111,6 +111,7 @@ class SaveBrowser:
     ROW_HEIGHT = 42
     WIDE_FROM = menu_theme.WIDE_FROM       # narrower windows keep the classic page, centred
     WIDE_PREVIEW = menu_theme.WIDE_SPREAD  # a 16:9 window: up to here the extra width enlarges the preview
+    DETAIL_GAP = 53      # wide page: name block (26) + Rename tip (4 + 17) + 6 before the details
     WIDE_LIMIT = 222     # wider windows give the list a little more room for long names, then stop
 
     def __post_init__(self):
@@ -610,21 +611,22 @@ class SaveBrowser:
                     width = min(name_width, glyphs(value, name_color).width * 0.7)
                     line(((name_x, y + 10), (name_x + width, y + 10)), cyan)
             if can_rename and self.hovered == 25 and not modal:
-                # Like the classic page's tip over the preview's foot, the wide page's tip lies on the
-                # preview beside the name: above is the page's rule, below are the save's details.
-                tip_right, tip = (self.PREVIEW[2] - 4, top + 4 + extra // 2) if self.spread else (right, top - 19)
-                rectangle((tip_right - 110, tip, tip_right, tip + 17), fill=c('#303030'))
-                text('Rename save', tip_right - 102, tip + 5, white, 94, True)
+                # Wide page: under the name, in the room kept above the details (DETAIL_GAP).
+                tip = top + 30 + extra if self.spread else top - 19
+                rectangle((right - 110, tip, right, tip + 17), fill=c('#303030'))
+                text('Rename save', right - 102, tip + 5, white, 94, True)
             resume = {'Level start': 'Resumes at level start',
                       'Checkpoint': 'Resumes at checkpoint'}.get(slot.resume, slot.resume)
             message = self.error or self.status
             message_color = c('#ff9b9b') if self.error else muted
             if self.spread:
                 # Beside the preview: one detail on each line; messages go under the preview.
-                text(slot.resume, column, top + 36 + extra, muted, right - column, True)
-                text(slot.date, column, top + 50 + extra, muted, right - column, True)
+                # The details always sit below the Rename tip's place, so hovering moves nothing.
+                below = top + extra + self.DETAIL_GAP
+                text(slot.resume, column, below, muted, right - column, True)
+                text(slot.date, column, below + 14, muted, right - column, True)
                 if slot.capacity is not None:
-                    text(f'Life {slot.capacity}', column, top + 64 + extra, muted, right - column, True)
+                    text(f'Life {slot.capacity}', column, below + 28, muted, right - column, True)
                 text(message, self.PREVIEW[0], self.PREVIEW[3] + 5, message_color,
                      right - self.PREVIEW[0], True)
             else:
