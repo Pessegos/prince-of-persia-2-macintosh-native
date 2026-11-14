@@ -557,14 +557,15 @@ class DevelopmentMenu:
         draw = ImageDraw.Draw(image)
         gold, white, muted = c("#f4d873"), c("#eeeeee"), c("#b9b9b9")
         offset = self.layout_offset
+        # y is where the capitals start, so that every label stands on the same
+        # baseline: "l" and "f" are a pixel taller than the capitals.
+        capitals = font.text('H').getbbox()[1]
 
         def text(value, x, y, color=white, centered=False, max_width=None):
             glyphs = font.text(value, color)
             if max_width is not None and glyphs.width > max_width:
                 glyphs = glyphs.resize((max_width, glyphs.height), Image.Resampling.NEAREST)
-            ink = glyphs.getbbox()
-            top = y - (ink[1] if ink else 0)
-            image.paste(glyphs, (int(x - glyphs.width // 2) if centered else x, top), glyphs)
+            image.paste(glyphs, (int(x - glyphs.width // 2) if centered else x, y - capitals), glyphs)
 
         if self.gallery_enabled:
             self.draw_gallery(image, draw, font, text)
@@ -577,19 +578,19 @@ class DevelopmentMenu:
         menu_theme.panel(image, self.panel_rect)
         draw = ImageDraw.Draw(image)
         text('Playback' if self.page == 'playback' else 'Developer Tools',
-             264 if self.page == 'playback' else 256, 86 + offset, gold, centered=True)
+             264 if self.page == 'playback' else 256, 87 + offset, gold, centered=True)
         if self.page == 'tools' and (self.map_available or not self.level_available):
             self.draw_game_tools(draw, text)
             menu_theme.watermark(image, self.panel_rect)
             return image
         available = self.page != 'playback' or bool(self.sections)
         if self.page == 'tools':
-            text("Level" if self.level_options else "Screen", 120, 146 + offset)
+            text("Level" if self.level_options else "Screen", 120, 147 + offset)
             if self.level_options:
-                text("Screen", 120, 187 + offset)
+                text("Screen", 120, 188 + offset)
         elif available:
-            text("Sequence", 120, 146 + offset)
-            text("Part", 120, 188 + offset)
+            text("Sequence", 120, 147 + offset)
+            text("Part", 120, 189 + offset)
         for i in self.controls:
             rect = self.control_rect(i)
             draw.rectangle(rect, fill=c("#303030") if i == self.focus else c("#222222"),
@@ -603,18 +604,18 @@ class DevelopmentMenu:
             draw.rectangle((130, top + 7, 141, top + 18), fill=c('#121212'), outline=muted)
             if self.debug_status:
                 draw.line(((132, top + 12), (135, top + 15), (139, top + 9)), fill=gold, width=2)
-            text('Debug status bar', 151, top + 7, muted, max_width=231)
+            text('Debug status bar', 151, top + 8, muted, max_width=231)
         if available:
             selectors = ((0, 4) if self.page == 'playback' or self.level_options
                          else (0,))
             for control in selectors:
                 left, top, right, _bottom = self.control_rect(control)
                 text(self.field_options(control)[self.field_selected_index(control)],
-                     left + 10, top + 8, max_width=right - left - 34)
+                     left + 10, top + 9, max_width=right - left - 34)
                 draw.polygon(((right - 15, top + 12), (right - 7, top + 12),
                               (right - 11, top + 16)), fill=white)
             text("Go to part" if self.page == 'playback' else "Go to screen", 186,
-                 self.control_rect(2)[1] + 10,
+                 self.control_rect(2)[1] + 11,
                  centered=True, max_width=118)
         if available and self.page == 'tools':
             checkbox_y = self.control_rect(1)[1] + (8 if self.level_options else 9)
@@ -623,13 +624,13 @@ class DevelopmentMenu:
                 draw.line(((132, checkbox_y + 5), (135, checkbox_y + 8),
                            (139, checkbox_y + 2)), fill=gold, width=2)
             text("Peaceful (no guards)",
-                 151, checkbox_y + (1 if self.level_options else 0), max_width=231)
+                 151, checkbox_y + 1, max_width=231)
         elif available:
-            text("Next part", 256, 230 + offset, centered=True)
+            text("Next part", 256, 231 + offset, centered=True)
         else:
             text("No playback data",
-                 256, 190 + offset, muted, centered=True, max_width=272)
-        text("Resume", 328, self.control_rect(3)[1] + 10, centered=True)
+                 256, 191 + offset, muted, centered=True, max_width=272)
+        text("Resume", 328, self.control_rect(3)[1] + 11, centered=True)
         if self.error:
             words, line, lines = self.error.split(), "", []
             for word in words:
@@ -641,7 +642,7 @@ class DevelopmentMenu:
                     line = candidate
             lines.append(line)
             compact = self.page == 'tools' and self.level_options
-            error_y = (318 if compact else 277) + offset
+            error_y = (319 if compact else 278) + offset
             line_limit = 2 if compact else 3
             for i, line in enumerate(lines[:line_limit]):
                 text(line, 120, error_y + i * 14, c("#ff9b9b"), max_width=272)
@@ -660,7 +661,7 @@ class DevelopmentMenu:
                 continue
             left, top, right, bottom = self.control_rect(control)
             cy = (top + bottom) // 2
-            text(label, 246, cy - 6, centered=True, max_width=220)
+            text(label, 246, cy - 5, centered=True, max_width=220)
             draw.line(((right - 23, cy - 5), (right - 18, cy),
                        (right - 23, cy + 5)), fill=gold, width=2)
         for control, label, checked in ((1, 'Peaceful', self.peaceful), (11, 'God mode', self.god_mode)):
@@ -672,7 +673,7 @@ class DevelopmentMenu:
             if checked:
                 draw.line(((left + 12, top + 14), (left + 15, top + 17), (left + 19, top + 11)),
                           fill=gold, width=2)
-            text(label, left + 31, top + 9, max_width=right - left - 39)
+            text(label, left + 31, top + 10, max_width=right - left - 39)
         text('Resume', 256, self.control_rect(3)[1] + 10, centered=True)
 
     def draw_map(self, image, draw, font, text):
@@ -687,7 +688,7 @@ class DevelopmentMenu:
             draw.rectangle(rect, fill=c('#303030') if self.focus == control else c('#222222'),
                            outline=gold if self.focus == control else c('#626262'))
         left, top, right, _bottom = self.control_rect(0)
-        text(self.field_options(0)[self.level_index], 250, top + 7,
+        text(self.field_options(0)[self.level_index], 250, top + 8,
              centered=True, max_width=right - left - 34)
         draw.polygon(((right - 15, top + 10), (right - 7, top + 10),
                       (right - 11, top + 14)), fill=white)
@@ -712,7 +713,10 @@ class DevelopmentMenu:
         text('Go', 348, 355, centered=True, max_width=64)
         text('Resume', 444, 355, centered=True, max_width=88)
         if self.error:
-            text(self.error, 12, 332, c('#ff9b9b'), max_width=488)
+            # Just above the line, on the ground: drawn across it, the line struck it through.
+            # The tail of an "f" ends a pixel above the line.
+            draw.rectangle((12, 325, 500, 339), fill=c('#101010'))
+            text(self.error, 12, 326, c('#ff9b9b'), max_width=488)
         tooltip = self.map_tooltip(font)
         if tooltip is not None:
             label, rect = tooltip
@@ -745,7 +749,7 @@ class DevelopmentMenu:
             draw.rectangle(rect, fill=c('#303030') if self.focus == control else c('#222222'),
                            outline=gold if self.focus == control else c('#626262'))
         left, top, right, _bottom = self.control_rect(0)
-        text(self.groups[self.group_index].label, 250, top + 7,
+        text(self.groups[self.group_index].label, 250, top + 8,
              centered=True, max_width=right - left - 34)
         if self.gallery_count > 1:
             text(f'{self.gallery_page + 1}/{self.gallery_count}', 401, top + 8,
@@ -947,7 +951,7 @@ class DevelopmentMenu:
                 if i == self.option_index:
                     draw.rectangle((left + 1, y + 1, right - 1, y + self.OPTION_HEIGHT - 1),
                                    fill=c("#454545"))
-                text(label, left + 10, y + 4, gold if i == self.selected_index else white,
+                text(label, left + 10, y + 5, gold if i == self.selected_index else white,
                      max_width=right - left - 20)
             if len(self.options) > count:
                 track = count * self.OPTION_HEIGHT - 4

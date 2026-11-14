@@ -712,3 +712,50 @@ class MenuSceneTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BaselineTests(unittest.TestCase):
+    """Every label of the developer tools stands on the same baseline. The game's
+    "l" and "f" are a pixel taller than its capitals: placed by their ink, labels
+    with them sat a pixel lower than the rest."""
+
+    class Font:
+        TALL = set('fl')
+
+        def __init__(self):
+            self.made = {}
+
+        def text(self, value, color=(255, 255, 255, 255)):
+            from PIL import ImageDraw
+
+            glyphs = Image.new('RGBA', (6 * len(value) + 2, 16))
+            # Capitals on rows 1..10, as in the game's font.
+            ImageDraw.Draw(glyphs).rectangle((1, 0 if set(value) & self.TALL else 1, glyphs.width - 2, 10),
+                                             fill=color)
+            self.made[id(glyphs)] = value, glyphs
+            return glyphs
+
+    def capitals(self, menu):
+        """{label: row its capitals start on}."""
+        font, placed = self.Font(), {}
+        paste = Image.Image.paste
+
+        def record(image, piece, box=None, mask=None):
+            if id(piece) in font.made:
+                placed[font.made[id(piece)][0]] = box[1] + 1
+            return paste(image, piece, box, mask)
+
+        with patch.object(Image.Image, 'paste', record):
+            menu.draw(Image.new('RGBA', (512, 384), (0, 0, 0, 255)), font)
+        return placed
+
+    def test_labels_side_by_side_share_a_baseline_and_sit_in_the_middle(self):
+        menu = DevelopmentMenu(SCREENS, 0, False, level_options=((4, 'Level 4', SCREENS),),
+                               map_provider=lambda _level: None, cutscene_viewer=True)
+        placed = self.capitals(menu)
+        self.assertEqual(placed['Peaceful'], placed['God mode'])
+        for control, label in ((4, 'Open map'), (8, 'Cutscene Viewer'), (1, 'Peaceful'), (11, 'God mode'),
+                               (3, 'Resume')):
+            _left, top, _right, bottom = menu.control_rect(control)
+            above, below = placed[label] - (top + 1), (bottom - 1) - (placed[label] + 9)
+            self.assertLessEqual(abs(above - below), 1, (label, above, below))
