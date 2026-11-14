@@ -108,8 +108,8 @@ class SaveBrowser:
 
     TABS = ((40, 53, 144, 79), (150, 53, 254, 79))
     ROW_HEIGHT = 42
-    WIDE_FROM = 136      # narrower windows keep the classic page, centred
-    WIDE_PREVIEW = 172   # a 16:9 window: up to here the extra width enlarges the preview
+    WIDE_FROM = menu_theme.WIDE_FROM       # narrower windows keep the classic page, centred
+    WIDE_PREVIEW = menu_theme.WIDE_SPREAD  # a 16:9 window: up to here the extra width enlarges the preview
     WIDE_LIMIT = 222     # wider windows give the list a little more room for long names, then stop
 
     def __post_init__(self):
@@ -125,11 +125,7 @@ class SaveBrowser:
         the list grows a little so that long names fit; beyond that the panel
         is centred instead of being stretched.
         """
-        extra = width * 384 / max(1, height) - basis
-        if extra < cls.WIDE_FROM:
-            return 0, 0.0
-        spread = int(min(extra, cls.WIDE_LIMIT))
-        return spread, (extra - spread) / 2
+        return menu_theme.wide_layout(width, height, basis, cls.WIDE_LIMIT)
 
     def pixel_rect(self, rect, size):
         """A rectangle of the page in the pixels of a visible picture of this size, as draw places it."""

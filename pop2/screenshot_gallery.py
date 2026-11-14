@@ -118,6 +118,17 @@ def lava_delete_frames():
     return tuple(frame.crop(bounds) for frame in frames)
 
 
+def wrap(value, width, measure):
+    """Break ``value`` at spaces into lines no wider than ``width``; a long word keeps its own line."""
+    lines = []
+    for word in value.split():
+        if lines and measure(f'{lines[-1]} {word}') <= width:
+            lines[-1] = f'{lines[-1]} {word}'
+        else:
+            lines.append(word)
+    return lines
+
+
 def open_capture_folder(folder):
     if not folder.is_dir():
         raise NotADirectoryError(str(folder))
@@ -209,7 +220,45 @@ class ScreenshotGallery:
     COLUMNS = 2
     ROW_HEIGHT = 64
 
+    @staticmethod
+    def wide_layout(width, height, basis=510):
+        """(spread, shift) for a picture of this size; (0, 0) keeps the classic page."""
+        return menu_theme.wide_layout(width, height, basis)
+
+    def lay_out(self, spread=0, shift=0.0):
+        """Place the page's pieces for a page ``spread`` units wider than the classic one.
+
+        The wide page gives the picture more room, with its name and details
+        beside it, and moves the right-hand controls to its right edge. The
+        dialogs stay centred on it. A wider window centres the page ``shift``
+        units in.
+        """
+        self.spread, self.shift = spread, shift
+        cls, right = type(self), 474 + spread
+        self.right = right
+        self.PANEL = cls.PANEL[:2] + (cls.PANEL[2] + spread, cls.PANEL[3])
+        if spread:
+            # The picture keeps a capture's own shape and reaches the list's foot.
+            width = 281 - max(0, menu_theme.WIDE_SPREAD - spread)
+            self.PREVIEW = (202, 84, 202 + width, 84 + round((width - 2) * 384 / 510) + 2)
+            self.DELETE = (right - 42, self.PREVIEW[3] - 24, right, self.PREVIEW[3])
+        else:
+            self.PREVIEW, self.DELETE = cls.PREVIEW, cls.DELETE
+        self.INCLUDE_UI = (right - 116, 48, right, 70)
+        self.REFRESH = (right - 88, 24, right, 44)
+        self.FOOTER = (*cls.FOOTER[:2], (362 + spread, 300, right, 322))
+        self.OPEN_FOLDER = (242 + spread, 300, 354 + spread, 322)
+        self.dialog_shift = spread // 2
+
+    def pixel_rect(self, rect, size):
+        """A rectangle of the page in the pixels of a visible picture of this size, as draw places it."""
+        sy = size[1] / 384
+        sx = sy if self.spread else size[0] / 510
+        return (round((rect[0] - 1 + self.shift) * sx), round(rect[1] * sy),
+                round((rect[2] - 1 + self.shift) * sx), round(rect[3] * sy))
+
     def __init__(self, folder, scale=3, include_ui=False):
+        self.lay_out()
         self.folder, self.scale, self.include_ui = Path(folder), scale, include_ui
         self.entries, self.selected, self.focus = (), 0, 12
         self.error = self.status = ''
@@ -500,6 +549,8 @@ class ScreenshotGallery:
         return left, top, left + 70, top + self.row_height - 3
 
     def hit(self, x, y):
+        if self.deleting or self.choosing:
+            x -= self.dialog_shift   # the dialogs are laid out on the classic page, then centred
         if self.deleting:
             return next((60 + i for i, rect in enumerate(self.CONFIRM_BUTTONS) if self.contains(rect, x, y)), None)
         if self.choosing:
@@ -678,6 +729,13 @@ class ScreenshotGallery:
 
     def draw(self, viewport, font, *, visible=False, background_key=None):
         modal = self.choosing or self.deleting
+        layout = self.wide_layout(*viewport.size, 510 if visible else 512)
+        if layout != (self.spread, self.shift):
+            self.lay_out(*layout)
+        right = self.right
+        # How far the wide page's frame may reach, in the page's own units.
+        wide = (math.ceil(int(visible) - self.shift), 0,
+                math.floor(int(visible) + 509 + self.spread + self.shift), 383) if self.spread else None
         wanted = {self.image_key(self.entries[i], True) for i in self.visible_indices}
         if self.drag_target is not None:
             wanted.add(self.image_key(self.drag_target, True))
@@ -698,11 +756,15 @@ class ScreenshotGallery:
             viewport, Image.new('RGBA', viewport.size, (0, 0, 0, 150)))
         draw = ImageDraw.Draw(image)
         sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
+        if self.spread:
+            sx = sy   # the wide page is not stretched: it has more units across
         origin = (0, 0)
+        dialog = 0    # the dialogs' own offset: they are centred on the wide page
         gold, white, muted, cyan = c('#f4d873'), c('#eeeeee'), c('#999999'), c('#77c9dc')
 
         def point(x, y):
-            return round((x - int(visible)) * sx) - origin[0], round(y * sy) - origin[1]
+            return (round((x - int(visible) + self.shift + dialog) * sx) - origin[0],
+                    round(y * sy) - origin[1])
 
         def box(rect, fill=c('#222222'), outline=c('#626262')):
             draw.rectangle((*point(*rect[:2]), *point(*rect[2:])), fill=fill, outline=outline,
@@ -833,10 +895,10 @@ class ScreenshotGallery:
                         Image.Resampling.NEAREST) for frame in icon.value), 3)
                 frames = self.icon_cache[icon_key]
                 sprite = frames[self.icon_frame % len(frames)]
-                x, y = point(453, 286)
+                x, y = point(self.DELETE[0] + 21, self.DELETE[1] + 12)
                 image.paste(sprite, (x - sprite.width // 2, y - sprite.height // 2), sprite)
             else:
-                text('Del', 440, 282, 30, white, 0.6)
+                text('Del', self.DELETE[0] + 8, self.DELETE[1] + 8, 30, white, 0.6)
 
         def draw_held_image():
             if modal or not self.overlay_active:
@@ -847,7 +909,7 @@ class ScreenshotGallery:
                 raw = result.value[0] if result is not None and not result.error else None
                 width, height = 56, 42
                 x, y = self.drag_point
-                x, y = max(30, min(480, x)), max(24, min(358, y - 12))
+                x, y = max(30, min(self.PANEL[2] - 12, x)), max(24, min(358, y - 12))
                 progress = 0
             else:
                 raw = self.burn_image
@@ -856,7 +918,8 @@ class ScreenshotGallery:
                 dissolve = max(0, (progress - 0.65) / 0.35)
                 scale = (1 - 0.45 * fall) * (1 - dissolve)
                 width, height = max(1, round(56 * scale)), max(1, round(42 * scale))
-                x, y = 453 + math.sin(progress * math.pi * 2) * 2, 250 + 36 * fall * fall + 3 * dissolve
+                x = self.DELETE[0] + 21 + math.sin(progress * math.pi * 2) * 2
+                y = self.DELETE[1] - 24 + 36 * fall * fall + 3 * dissolve
             size = max(1, round(width * sx)), max(1, round(height * sy))
             fit_key = 'held', self.drag_target if self.dragging else self.burn_target, size
             if fit_key not in self.image_cache:
@@ -870,7 +933,8 @@ class ScreenshotGallery:
                 sprite = sprite.copy()
                 sprite.putalpha(round(255 * (1 - progress) / 0.35))
             if not self.dragging:
-                sprite = sprite.crop((0, 0, sprite.width, max(0, min(sprite.height, point(0, 287)[1] - top))))
+                surface = point(0, self.DELETE[1] + 13)[1]   # the lava's surface
+                sprite = sprite.crop((0, 0, sprite.width, max(0, min(sprite.height, surface - top))))
             if sprite.height:
                 image.paste(sprite, (left, top), sprite)
                 if self.dragging:
@@ -888,42 +952,62 @@ class ScreenshotGallery:
             return image
 
         if cached is None:
-            if not menu_theme.panel_scaled(image, self.PANEL, point):
+            if not menu_theme.panel_scaled(image, self.PANEL, point, wide):
                 box(self.PANEL, c('#181818'), c('#858585'))
             text('Screenshots', 36, 26, 250, gold, 1)
-            text(f'{len(self.entries)} PNG', 374, 29, 70, muted, right=True)
+            text(f'{len(self.entries)} PNG', self.REFRESH[0] - 12, 29, 70, muted, right=True)
             button(self.REFRESH, 'Refresh', 15)
             text('Size', 36, 54, 44, muted)
             for i, rect in enumerate(self.SCALES):
                 button(rect, f'{i + 1}x', i, active=self.scale == i + 1)
             text(f'{510 * self.scale} x {384 * self.scale}', 238, 54, 114, muted, 0.6)
+            check = self.INCLUDE_UI[0] + 8
             box(self.INCLUDE_UI, c('#222222'), gold if self.focus == 4 else c('#626262'))
-            box((366, 54, 374, 62), cyan if self.include_ui else c('#181818'))
+            box((check, 54, check + 8, 62), cyan if self.include_ui else c('#181818'))
             if self.include_ui:
-                draw.line([point(367, 58), point(369, 60), point(373, 55)], fill=c('#181818'), width=max(1, round(sx)))
-            text('With menus', 380, 54, 88)
-            text(str(self.folder).replace('\\', '/'), 36, 75, 438, muted, 0.45, tail=True)
+                draw.line([point(check + 1, 58), point(check + 3, 60), point(check + 7, 55)],
+                          fill=c('#181818'), width=max(1, round(sx)))
+            text('With menus', check + 14, 54, 88)
+            text(str(self.folder).replace('\\', '/'), 36, 75, right - 36, muted, 0.45, tail=True)
             draw_list()
+            message = self.error or self.status
+            message_color = c('#ff9b9b') if self.error else gold
             if self.entry:
                 dimensions = picture(self.entry, self.PREVIEW)
-                text(self.entry.path.name.replace('_', ' '), 202, 277, 222, gold, 0.55)
-                if dimensions:
-                    text(f'{dimensions[0]} x {dimensions[1]}', 202, 290, 145, muted, 0.55)
-                text(f'{self.entry.size / 1024:.0f} KB', 424, 290, 70, muted, 0.55, right=True)
+                name = self.entry.path.name.replace('_', ' ')
+                kilobytes = f'{self.entry.size / 1024:.0f} KB'
+                if self.spread:
+                    # Beside the picture: one detail on each line, then any message.
+                    column = self.PREVIEW[2] + 10
+                    text(name, column, 87, right - column, gold, 0.55)
+                    if dimensions:
+                        text(f'{dimensions[0]} x {dimensions[1]}', column, 102, right - column, muted, 0.55)
+                    text(kilobytes, column, 115, right - column, muted, 0.55)
+                else:
+                    text(name, 202, 277, 222, gold, 0.55)
+                    if dimensions:
+                        text(f'{dimensions[0]} x {dimensions[1]}', 202, 290, 145, muted, 0.55)
+                    text(kilobytes, 424, 290, 70, muted, 0.55, right=True)
             else:
                 box(self.PREVIEW, c('#0c0c0c'))
                 text('Reading folder...' if self.applied_scan != self.scan_key else 'No screenshots yet',
-                     220, 174, 240, muted)
+                     (self.PREVIEW[0] + self.PREVIEW[2]) / 2 - 118, (self.PREVIEW[1] + self.PREVIEW[3]) / 2 - 4,
+                     240, muted)
             draw_delete()
             for i, (rect, label) in enumerate(zip(self.FOOTER, ('Close', 'Change folder', 'Capture PNG'))):
                 button(rect, label, 10 + i, active=i == 2, scale=0.6)
             button(self.OPEN_FOLDER, 'Open folder', 18, scale=0.6)
-            if self.error or self.status:
+            if message and self.spread:
+                column = self.PREVIEW[2] + 10
+                for row, value in enumerate(wrap(message, right - column, lambda value: glyph(value).width * 0.5)):
+                    text(value, column, 134 + row * 10, right - column, message_color, 0.5)
+            elif message:
                 box((202, 286, 426, 298), c('#181818'), None)
-                text(self.error or self.status, 202, 289, 222, c('#ff9b9b') if self.error else gold, 0.5)
+                text(message, 202, 289, 222, message_color, 0.5)
             if not modal and self.hovered == 13:
-                box((350, 256, 474, 271), c('#303030'), c('#858585'))
-                text('Delete screenshot', 356, 260, 112, white, 0.6)
+                edge = self.DELETE[2]
+                box((edge - 124, self.DELETE[1] - 18, edge, self.DELETE[1] - 3), c('#303030'), c('#858585'))
+                text('Delete screenshot', edge - 118, self.DELETE[1] - 14, 112, white, 0.6)
             menu_theme.watermark(image, self.PANEL, point, shown)
             if modal:
                 image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 150)))
@@ -931,8 +1015,11 @@ class ScreenshotGallery:
                 remember(self.modal_cache, key, image.copy(), 3)
             else:
                 remember(self.surface_cache, surface_key, image.copy(), 2)
+        dialog = self.dialog_shift if modal else 0
+        if wide is not None:
+            wide = (wide[0] - dialog, 0, wide[2] - dialog, 383)
         if self.choosing:
-            if not menu_theme.panel_scaled(image, (48, 44, 464, 338), point):
+            if not menu_theme.panel_scaled(image, (48, 44, 464, 338), point, wide):
                 box((48, 44, 464, 338), c('#181818'), c('#858585'))
             text('Screenshot folder', 64, 62, 384, gold, 1)
             box(self.PATH, c('#0c0c0c'), cyan if self.focus == 40 else c('#626262'))
@@ -975,7 +1062,7 @@ class ScreenshotGallery:
                     ('Cancel', 'Working...' if self.commit_key is not None else 'Use folder'))):
                 button(rect, label, 45 + i, active=i == 1)
         elif self.deleting:
-            if not menu_theme.panel_scaled(image, (80, 121, 432, 270), point):
+            if not menu_theme.panel_scaled(image, (80, 121, 432, 270), point, wide):
                 box((80, 121, 432, 270), c('#181818'), c('#858585'))
             text('Delete this screenshot?', 100, 142, 312, gold, 1)
             target = self.delete_target or self.entry

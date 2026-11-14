@@ -229,13 +229,35 @@ def frame_rect(rect, theme=None, clear_sides=False, limit=_LIMIT):
             min(limit[2], rect[2] + side), min(limit[3], rect[3] + bottom))
 
 
-def panel(image, rect, clear_sides=False):
-    """Draw a menu panel: its fill and the current theme's frame, in place."""
+WIDE_FROM = 136     # units past the classic page's 510 from which a window gets the wide pages
+WIDE_SPREAD = 172   # how much wider a 16:9 window's page is
+
+
+def wide_layout(width, height, basis=510, limit=WIDE_SPREAD):
+    """(spread, shift) of a wide menu page in a picture of this size; (0, 0) keeps the classic page.
+
+    The page is 384 units tall and one unit is as wide as it is tall. A window
+    wide enough (about 16:9) gets a page ``spread`` units wider than the
+    classic one; a wider window centres that page, ``shift`` units in from
+    each side, instead of stretching it.
+    """
+    extra = width * 384 / max(1, height) - basis
+    if extra < WIDE_FROM:
+        return 0, 0.0
+    spread = int(min(extra, limit))
+    return spread, (extra - spread) / 2
+
+
+def panel(image, rect, clear_sides=False, limit=_LIMIT):
+    """Draw a menu panel: its fill and the current theme's frame, in place.
+
+    A page drawn on a picture wider than the game's gives its own ``limit``.
+    """
     theme = _current
     if theme.frame is None:
         ImageDraw.Draw(image).rectangle(rect, fill=c('#181818'), outline=c('#858585'))
         return
-    outer = frame_rect(rect, theme, clear_sides)
+    outer = frame_rect(rect, theme, clear_sides, limit)
     size = (outer[2] - outer[0] + 1, outer[3] - outer[1] + 1)
     picture = _frame_picture(theme.name, size)
     image.paste(picture, outer[:2], picture)

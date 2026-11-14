@@ -391,7 +391,9 @@ class GameMenuSceneTests(unittest.TestCase):
                             self.settle_screenshot_gallery()
                             actual = ImageTk.getimage(scene.image_ref).convert('RGB')
                             self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
-                        gallery.hover(450, 285)
+                        # The delete button sits under the picture; a wide window's page puts it at its right edge.
+                        delete = gallery.DELETE
+                        gallery.hover((delete[0] + delete[2]) / 2, (delete[1] + delete[3]) / 2)
                         scene.redraw_screenshot_gallery()
                         actual = ImageTk.getimage(scene.image_ref).convert('RGB')
                         self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
@@ -404,8 +406,10 @@ class GameMenuSceneTests(unittest.TestCase):
                             self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
                             changed = ImageChops.difference(before, actual).getbbox()
                             self.assertIsNotNone(changed)
-                            self.assertGreater(changed[0], actual.width * 0.8)
-                            self.assertLess(changed[3], actual.height * 0.79)
+                            # Only the animated lava in the delete button changes.
+                            left, top, right, bottom = gallery.pixel_rect(delete, actual.size)
+                            self.assertTrue(left - 2 <= changed[0] < changed[2] <= right + 3, (changed, left, right))
+                            self.assertTrue(top - 2 <= changed[1] < changed[3] <= bottom + 3, (changed, top, bottom))
                         gameplay.assert_not_called()
                     self.assertIs(scene.image_ref, photo)
 
@@ -428,11 +432,13 @@ class GameMenuSceneTests(unittest.TestCase):
                         scene.redraw_screenshot_gallery()
                         photo = scene.image_ref
                         scene.dev_click(SimpleNamespace(x=70, y=100, num=1))
-                        for x, y in ((72, 100), (250, 160), (400, 230), (453, 286)):
+                        delete = gallery.DELETE   # where this window's page draws it
+                        drop = (delete[0] + delete[2]) // 2, (delete[1] + delete[3]) // 2
+                        for x, y in ((72, 100), (250, 160), (400, 230), drop):
                             scene.dev_hover(SimpleNamespace(x=x, y=y))
                             actual = ImageTk.getimage(scene.image_ref).convert('RGB')
                             self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
-                        scene.dev_release(SimpleNamespace(x=453, y=286, num=1))
+                        scene.dev_release(SimpleNamespace(x=drop[0], y=drop[1], num=1))
                         self.assertTrue(gallery.deleting)
                         self.assertEqual(gallery.focus, 60)
                         self.assertTrue(path.exists())
@@ -586,6 +592,82 @@ class GameMenuSceneTests(unittest.TestCase):
                     for x, y in ((left + 3, top + 3), (right - 3, bottom - 3)):
                         point = scene.dev_pointer(SimpleNamespace(x=origin[0] + x, y=origin[1] + y))
                         self.assertEqual(browser.hit(*point), index)
+
+    def test_wide_screenshots_page_answers_the_pointer_where_it_is_drawn(self):
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
+            Image.new('RGB', (510, 384), '#ab3456').save(Path(directory) / 'one.png')
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+            hint = scene.ui_font.text('Take Screenshots with F8', (253, 255, 168, 255))
+            for width, height in ((1920, 1080), (2560, 1080), (1434, 1080), (1920, 1200)):
+                with self.subTest(window=(width, height)), \
+                        patch.object(scene.canvas, 'winfo_width', return_value=width), \
+                        patch.object(scene.canvas, 'winfo_height', return_value=height):
+                    scene.present_viewport()
+                    frame = scene.screenshot_gallery_frame[1]
+                    wide = width * 384 / height - 510 >= 136
+                    self.assertEqual(bool(gallery.spread), wide)
+                    self.assertEqual(frame.size, (width, height) if wide else fit_viewport(width, height)[0])
+                    origin = ((width - frame.width) // 2, (height - frame.height) // 2)
+                    for index, rect in ((10, gallery.FOOTER[0]), (12, gallery.FOOTER[2]), (18, gallery.OPEN_FOLDER),
+                                        (13, gallery.DELETE), (15, gallery.REFRESH)):
+                        left, top, right, bottom = gallery.pixel_rect(rect, frame.size)
+                        for x, y in ((left + 3, top + 3), (right - 3, bottom - 3)):
+                            point = scene.dev_pointer(SimpleNamespace(x=origin[0] + x, y=origin[1] + y))
+                            self.assertEqual(gallery.hit(*point), index)
+                    # The hint keeps to the page's right edge, 12 units past the panel as on
+                    # the classic page, under it.
+                    sy = frame.height / 384
+                    plain = gallery.draw(scene.screenshot_gallery_source[2], scene.ui_font, visible=True)
+                    ink = ImageChops.difference(frame, plain.convert('RGB')).getbbox()
+                    self.assertIsNotNone(ink)
+                    hint_right = gallery.pixel_rect((0, 0, gallery.PANEL[2] + 12, 0), frame.size)[2]
+                    self.assertAlmostEqual(ink[2], hint_right, delta=round(2 * sy) + 2)
+                    self.assertGreater(ink[2] - ink[0], hint.width * sy * 0.8)
+                    self.assertGreater(ink[1], gallery.pixel_rect(gallery.PANEL, frame.size)[3])
+
+    def test_wide_controls_page_fills_the_window_and_answers_the_pointer(self):
+        scene = self.scene
+        scene.open_controls_page()
+        page = scene.game_menu.controls_page
+        for width, height in ((1920, 1080), (2560, 1080), (1434, 1080), (1920, 1200), (1920, 1080)):
+            with self.subTest(window=(width, height)), \
+                    patch.object(scene.canvas, 'winfo_width', return_value=width), \
+                    patch.object(scene.canvas, 'winfo_height', return_value=height):
+                scene.present_viewport()
+                frame = ImageTk.getimage(scene.image_ref)
+                wide = width * 384 / height - 510 >= 136
+                self.assertEqual(bool(page.spread), wide)
+                size, origin = ((width, height), (0, 0)) if wide else fit_viewport(width, height)
+                self.assertEqual(frame.size, size)
+                self.assertEqual(tuple(scene.canvas.coords(scene.canvas.find_all()[0])), tuple(map(float, origin)))
+                units = scene.wide_columns(width, height) if wide else 510
+                for device in ('keyboard', 'controller'):
+                    page.device = device
+                    for index, control in enumerate(page.controls()):
+                        left, top, right, bottom = page.control_rect(control)
+                        for x, y in ((left + 2, top + 2), (right - 2, bottom - 2)):
+                            pixel = origin[0] + (x - 1) * size[0] / units, origin[1] + y * size[1] / 384
+                            point = scene.dev_pointer(SimpleNamespace(x=pixel[0], y=pixel[1]))
+                            self.assertEqual(page.hit(*point), index, (device, control))
+                page.device = 'keyboard'
+                scene.present_viewport()
+                frame = ImageTk.getimage(scene.image_ref).convert('RGB')
+                if wide:
+                    # The page is drawn at the game's resolution on a picture as wide as the
+                    # window, the game's picture centred behind it, and enlarged without smoothing.
+                    self.assertEqual(page.PANEL[2] - page.PANEL[0], 470 + page.spread)
+                    canvas = Image.new('RGBA', (units + 2, 384), '#080808')
+                    canvas.paste(scene.screenshot_viewport, ((units + 2 - 512) // 2, 0))
+                    expected = page.draw(canvas, scene.ui_font).crop((1, 0, units + 1, 384)).convert('RGB')
+                    self.assertEqual(frame.tobytes(), expected.resize(size, Image.Resampling.NEAREST).tobytes())
+                else:
+                    expected = scene.native_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
+                    self.assertEqual(frame.tobytes(), expected.convert('RGB').tobytes())
+                # The classic page stays the capture "with menus".
+                self.assertEqual(scene.native_viewport.size, (512, 384))
 
     def test_save_dialog_and_scroll_update_pixels_without_redrawing_gameplay(self):
         scene = self.scene

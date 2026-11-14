@@ -1444,12 +1444,22 @@ class WindowControls(InputRouting):
             return menu_viewport_point(
                 event.x, event.y, self.canvas.winfo_width(), self.canvas.winfo_height())
         menu = getattr(self, 'game_menu', None)
-        if getattr(menu, 'page', None) == 'saves' and menu.save_browser is not None:
-            spread, shift = menu.save_browser.wide_layout(self.canvas.winfo_width(), self.canvas.winfo_height())
+        page = getattr(menu, 'page', None)
+        width, height = self.canvas.winfo_width(), self.canvas.winfo_height()
+        wide = (menu.save_browser if page == 'saves' else
+                getattr(menu, 'screenshot_gallery', None) if page == 'screenshots' else None)
+        if wide is not None:
+            spread, shift = wide.wide_layout(width, height)
             if spread:   # the wide page uses the whole window; its panel starts `shift` units in
-                point = menu_viewport_point(
-                    event.x, event.y, self.canvas.winfo_width(), self.canvas.winfo_height())
+                point = menu_viewport_point(event.x, event.y, width, height)
                 return None if point is None else (point[0] - shift, point[1])
+        controls = getattr(menu, 'controls_page', None) if page == 'controls' else None
+        if controls is not None and controls.wide_layout(width, height)[0]:
+            # Drawn on a picture as many units wide as the window (wide_controls_frame).
+            if not (0 <= event.x < width and 0 <= event.y < height):
+                return None
+            return (1 + event.x * self.wide_columns(width, height) / width,
+                    event.y * VISIBLE_SIZE[1] / height)
         return viewport_point(
             event.x, event.y, self.canvas.winfo_width(), self.canvas.winfo_height()
         )
@@ -1807,22 +1817,28 @@ class WindowControls(InputRouting):
         game_menu = getattr(self, 'game_menu', None)
         gallery = getattr(game_menu, 'screenshot_gallery', None) if getattr(game_menu, 'page', None) == 'screenshots' else None
         if gallery is not None:
+            fitted, origin = size, position
+            spread, shift = gallery.wide_layout(width, height)
+            if spread:
+                # The wide page fills the window; the game's picture stays centred behind it.
+                size, position = fit_menu_viewport(width, height)
             cached = getattr(self, 'screenshot_gallery_source', None)
             if cached is None or cached[0] is not self.screenshot_viewport or cached[1] != size:
-                source = self.screenshot_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+                source = self.menu_backdrop(fitted, origin, size, position)
                 self.screenshot_gallery_source = self.screenshot_viewport, size, source
             else:
                 source = cached[2]
-            frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True), visible=True).convert('RGB')
+            frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True), visible=True,
+                                                uniform=bool(spread), inset=shift).convert('RGB')
             previous = getattr(self, 'screenshot_gallery_frame', None)
             state = id(self.screenshot_viewport), id(self.ui_font), gallery.surface_state, gallery.overlay_active
             if previous is not None and previous[0] is gallery and previous[1].size == size and previous[2] is self.image_ref:
                 if previous[3] == state and not (gallery.choosing or gallery.deleting or gallery.overlay_active):
                     # Only the thumbnail strip and animated delete button can change.
                     damages = []
-                    for left, top, right, bottom in (gallery.LIST, gallery.DELETE):
-                        region = (round((left - 1) * size[0] / 510), round(top * size[1] / 384),
-                                  round((right - 1) * size[0] / 510) + 1, round(bottom * size[1] / 384) + 1)
+                    for rect in (gallery.LIST, gallery.DELETE):
+                        region = gallery.pixel_rect(rect, size)
+                        region = (*region[:2], region[2] + 1, region[3] + 1)
                         local = ImageChops.difference(previous[1].crop(region), frame.crop(region)).getbbox()
                         if local:
                             damages.append((local[0] + region[0], local[1] + region[1],
@@ -1851,10 +1867,7 @@ class WindowControls(InputRouting):
                 size, position = fit_menu_viewport(width, height)
             source_cache = getattr(self, 'save_menu_source', None)
             if source_cache is None or source_cache[0] is not self.screenshot_viewport or source_cache[1] != size:
-                source = self.screenshot_viewport.crop(VISIBLE_VIEWPORT).resize(fitted, Image.Resampling.NEAREST)
-                if size != fitted:
-                    picture, source = source, Image.new('RGBA', size, '#080808')
-                    source.paste(picture, (origin[0] - position[0], origin[1] - position[1]))
+                source = self.menu_backdrop(fitted, origin, size, position)
                 self.save_menu_source = (self.screenshot_viewport, size, source)
             else:
                 source = source_cache[2]
@@ -1888,7 +1901,11 @@ class WindowControls(InputRouting):
         else:
             self.save_menu_frame = None
             self.save_menu_source = None
-            frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+            frame = self.wide_controls_frame(width, height)
+            if frame is not None:
+                size, position = frame.size, (0, 0)
+            else:
+                frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
         menu = getattr(self, 'dev_menu', None)
         if menu is not None and menu.preview_enabled:
             frame = menu.present_map(frame, self.ui_font).convert('RGB')
@@ -1916,6 +1933,48 @@ class WindowControls(InputRouting):
             self.canvas.coords(self.canvas.find_all()[0], *position)
         else:
             self.canvas.create_image(*position, image=self.image_ref, anchor="nw")
+
+    def menu_backdrop(self, fitted, origin, size, position):
+        """The game's picture behind a menu page drawn at the window's resolution.
+
+        A wide page (``size`` differs from the ``fitted`` 4:3 picture) covers
+        the whole window; the picture then stays where the game shows it.
+        """
+        source = self.screenshot_viewport.crop(VISIBLE_VIEWPORT).resize(fitted, Image.Resampling.NEAREST)
+        if size != fitted:
+            picture, source = source, Image.new('RGBA', size, '#080808')
+            source.paste(picture, (origin[0] - position[0], origin[1] - position[1]))
+        return source
+
+    @staticmethod
+    def wide_columns(width, height):
+        """How many game units wide a window is, for the wide controls page."""
+        return round(width * VISIBLE_SIZE[1] / max(1, height))
+
+    def wide_controls_frame(self, width, height):
+        """The controls page laid out across a wide window, or None for the classic page.
+
+        The page is drawn at the game's resolution like the classic one, on a
+        picture as many units wide as the window, then enlarged to fill it.
+        The classic page stays in ``native_viewport`` for captures with menus.
+        """
+        from pop2.controls_page import ControlsPage
+
+        menu = getattr(self, 'game_menu', None)
+        page = getattr(menu, 'controls_page', None) if getattr(menu, 'page', None) == 'controls' else None
+        if page is None:
+            return None
+        if not ControlsPage.wide_layout(width, height)[0]:
+            # A window made narrower shows the classic page already drawn;
+            # the pointer must find its pieces there again.
+            page.lay_out()
+            return None
+        columns = self.wide_columns(width, height)
+        canvas = Image.new('RGBA', (columns + 2, VISIBLE_SIZE[1]), '#080808')
+        canvas.paste(self.screenshot_viewport, ((columns + 2 - self.screenshot_viewport.width) // 2, 0))
+        picture = self.draw_screenshot_notice(page.draw(canvas, self.ui_font), uniform=True)
+        return picture.crop((1, 0, columns + 1, VISIBLE_SIZE[1])).convert('RGB').resize(
+            (width, height), Image.Resampling.NEAREST)
 
     def expose_viewport(self, _event=None):
         if self.bitmap_presenter is not None:

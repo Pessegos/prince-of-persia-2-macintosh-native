@@ -3527,7 +3527,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         viewport.paste(text, (x, y), text)
         return viewport
 
-    def draw_screenshot_notice(self, viewport, *, visible=False, uniform=False):
+    def draw_screenshot_notice(self, viewport, *, visible=False, uniform=False, inset=0.0):
+        """Draw a capture's toast, or the screenshots page's hint, over a finished picture.
+
+        ``uniform`` pictures are wide menu pages whose units are as wide as
+        they are tall; the hint keeps to such a page's right edge, ``inset``
+        units in from the picture's side where a wider window centres it.
+        """
         gallery = (self.game_menu.screenshot_gallery if self.game_menu is not None
                    and self.game_menu.page == 'screenshots' else None)
         if gallery is not None and (gallery.choosing or gallery.deleting):
@@ -3543,9 +3549,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         text = self.ui_font.text(message, (253, 255, 168, 255))
         sx = viewport.width / (510 if visible else VIEWPORT_WIDTH)
         sy = viewport.height / VIEWPORT_HEIGHT
+        page_width = VIEWPORT_WIDTH
         if uniform:
             sx = sy
-        x = 8 if showing_toast else VIEWPORT_WIDTH - text.width - 8
+            page_width = viewport.width / sx + 2 * int(visible) - inset
+        x = 8 if showing_toast else round(page_width - text.width - 8)
 
         def point(x, y):
             return round((x - int(visible)) * sx), round(y * sy)

@@ -1,4 +1,5 @@
 from pathlib import Path
+import random
 from tempfile import TemporaryDirectory
 from threading import get_ident
 import time
@@ -6,8 +7,9 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from PIL import Image
+from PIL import Image, ImageOps
 
+from pop2 import menu_theme
 from pop2.screenshot_gallery import GalleryReads, ScreenshotGallery, open_capture_folder, read_capture, scan_captures
 from pop2.screenshots import ScreenshotSettings
 
@@ -250,7 +252,8 @@ class ScreenshotGalleryTests(unittest.TestCase):
         font = self.font()
         gallery.draw(Image.new('RGBA', (512, 384)), font)
         self.drain(gallery)
-        for visible, size in ((False, (512, 384)), (True, (1434, 1080)), (True, (800, 602))):
+        for visible, size in ((False, (512, 384)), (True, (1434, 1080)), (True, (800, 602)),
+                              (True, (1920, 1080)), (True, (3440, 1440))):
             for state in ('library', 'folders', 'delete'):
                 with self.subTest(size=size, state=state):
                     gallery.choosing = state == 'folders'
@@ -259,6 +262,76 @@ class ScreenshotGalleryTests(unittest.TestCase):
                     self.assertEqual(frame.size, size)
                     self.assertLessEqual(len(gallery.text_cache), 256)
                     self.assertLessEqual(len(gallery.image_cache), 48)
+
+    def test_wide_windows_get_a_wider_page_with_a_larger_picture(self):
+        layout = ScreenshotGallery.wide_layout
+        self.assertEqual(layout(1434, 1080), (0, 0.0))               # 4:3 keeps the classic page
+        self.assertEqual(layout(1920, 1200), (0, 0.0))               # 16:10 is not wide enough
+        self.assertEqual(layout(1024, 768, 512), (0, 0.0))
+        self.assertEqual(layout(1920, 1080)[0], 172)
+        spread, shift = layout(2560, 1080)                           # wider windows centre the 16:9 page
+        self.assertEqual(spread, 172)
+        self.assertAlmostEqual(2 * shift + 510 + spread, 2560 * 384 / 1080)
+
+        picture = Image.frombytes('RGB', (510, 384), random.Random(7).randbytes(510 * 384 * 3))
+        picture.save(self.folder / 'capture.png')
+        gallery = self.gallery()
+        classic = ScreenshotGallery
+        self.assertEqual((gallery.PANEL, gallery.PREVIEW, gallery.DELETE, gallery.FOOTER, gallery.OPEN_FOLDER,
+                          gallery.INCLUDE_UI, gallery.REFRESH),
+                         (classic.PANEL, classic.PREVIEW, classic.DELETE, classic.FOOTER, classic.OPEN_FOLDER,
+                          classic.INCLUDE_UI, classic.REFRESH))
+        self.addCleanup(menu_theme.use, menu_theme.current())
+        menu_theme.use(menu_theme.NEUTRAL)
+        font = self.font()
+        for size in ((1920, 1080), (2560, 1080)):
+            with self.subTest(size=size):
+                gallery.deleting = False
+                source = Image.new('RGBA', size, '#0d1117')
+                gallery.draw(source, font, visible=True)
+                self.drain(gallery)
+                frame = gallery.draw(source, font, visible=True)
+                left, top, right, bottom = gallery.PREVIEW
+                self.assertGreater(right - left, 272)                # larger than the classic picture
+                self.assertGreater(bottom - top, 188)
+                self.assertLessEqual(bottom, gallery.LIST[3])
+                self.assertAlmostEqual((right - left - 2) / (bottom - top - 2), 510 / 384, delta=0.01)
+                # The capture's own pixels, enlarged without smoothing.
+                inner = gallery.pixel_rect((left + 1, top + 1, right - 1, bottom - 1), size)
+                fitted = ImageOps.contain(picture, (inner[2] - inner[0], inner[3] - inner[1]),
+                                          method=Image.Resampling.NEAREST)
+                x = inner[0] + (inner[2] - inner[0] - fitted.width) // 2
+                y = inner[1] + (inner[3] - inner[1] - fitted.height) // 2
+                self.assertEqual(frame.crop((x, y, x + fitted.width, y + fitted.height)).convert('RGB').tobytes(),
+                                 fitted.tobytes())
+                # Not stretched: one unit is as wide as it is tall.
+                panel = gallery.pixel_rect(gallery.PANEL, size)
+                self.assertAlmostEqual(panel[2] - panel[0], (472 + gallery.spread) * size[1] / 384, delta=1)
+                self.assertEqual(frame.getpixel(panel[:2]), (133, 133, 133, 255))
+                self.assertGreaterEqual(panel[0], 0)
+                self.assertLess(panel[2], size[0])
+                # The details and the delete button stand beside the picture; the actions at the right edge.
+                self.assertGreater(gallery.DELETE[0], right)
+                self.assertEqual(gallery.DELETE[2], gallery.right)
+                self.assertEqual(gallery.FOOTER[2][2], gallery.right)
+                self.assertEqual(gallery.REFRESH[2], gallery.right)
+                for index, rect in ((12, gallery.FOOTER[2]), (18, gallery.OPEN_FOLDER), (13, gallery.DELETE),
+                                    (15, gallery.REFRESH), (4, gallery.INCLUDE_UI), (10, gallery.FOOTER[0])):
+                    self.assertEqual(gallery.hit(rect[0] + 2, rect[1] + 2), index)
+                    self.assertEqual(gallery.hit(rect[2] - 2, rect[3] - 2), index)
+                self.assertEqual(gallery.hit(40, 95), 100)
+                # The dialogs are centred on the wide page and answer there.
+                gallery.confirm_delete()
+                confirmed = gallery.draw(source, font, visible=True)
+                cancel, delete = gallery.CONFIRM_BUTTONS
+                shift = gallery.dialog_shift
+                self.assertEqual(shift, gallery.spread // 2)
+                self.assertEqual(gallery.hit(cancel[0] + shift + 2, cancel[1] + 2), 60)
+                self.assertEqual(gallery.hit(delete[2] + shift - 2, delete[1] + 2), 61)
+                self.assertIsNone(gallery.hit(cancel[0] + 2, cancel[1] + 2))
+                dialog = gallery.pixel_rect((80 + shift, 121, 432 + shift, 270), size)
+                self.assertEqual(confirmed.getpixel(dialog[:2]), (133, 133, 133, 255))
+                self.assertAlmostEqual(dialog[0] + dialog[2], panel[0] + panel[2], delta=2)
 
     def test_fixed_grid_hit_testing_and_navigation_keep_selection_visible(self):
         for i in range(40):
@@ -283,7 +356,7 @@ class ScreenshotGalleryTests(unittest.TestCase):
             self.png(f'{i}.png', color=(i * 15, 100, 200), size=(51, 38))
         gallery = self.gallery()
         font = self.font()
-        for size, visible in (((512, 384), False), ((1434, 1080), True)):
+        for size, visible in (((512, 384), False), ((1434, 1080), True), ((1920, 1080), True)):
             source = Image.new('RGBA', size, '#0d1117')
             for offset in (0, 24, 108, 380, 12):
                 gallery.scroll = min(offset, gallery.max_scroll)
@@ -488,12 +561,18 @@ class ScreenshotGalleryTests(unittest.TestCase):
                    return_value=(Image.new('RGBA', (36, 10), '#ff8000'),)):
             gallery.draw(Image.new('RGBA', (512, 384)), font)
             self.drain(gallery)
-        for size, visible in (((512, 384), False), ((1434, 1080), True)):
+        for size, visible in (((512, 384), False), ((1434, 1080), True), ((1920, 1080), True)):
             gallery.burn_seconds = None
-            gallery.begin_drag(70, 100)
-            gallery.move_drag(453, 286)
             source = Image.new('RGBA', size)
-            pixel = round((453 - int(visible)) * size[0] / (510 if visible else 512)), round(286 * size[1] / 384)
+            gallery.draw(source, font, visible=visible)   # lays the page out for this picture
+            # The lava's middle: (453, 286) on the classic page, at the wide page's right edge.
+            x, y = gallery.DELETE[0] + 21, gallery.DELETE[1] + 12
+            gallery.begin_drag(70, 100)
+            gallery.move_drag(x, y)
+            if visible:
+                pixel = gallery.pixel_rect((x, y, x, y), size)[:2]
+            else:
+                pixel = x, y
             self.assertEqual(gallery.draw(source, font, visible=visible).getpixel(pixel), (0, 0, 255, 255))
             self.assertEqual(gallery.draw(source, font, visible=visible).getpixel(pixel), (0, 0, 255, 255))
             gallery.cancel_drag()
@@ -529,7 +608,7 @@ class ScreenshotGalleryTests(unittest.TestCase):
         self.assertEqual(gallery.burn_seconds, 0)
         self.assertEqual(gallery.burn_target.path, original)
         self.assertEqual(gallery.burn_image.getpixel((0, 0)), (255, 0, 0))
-        for size, visible in (((512, 384), False), ((1434, 1080), True)):
+        for size, visible in (((512, 384), False), ((1434, 1080), True), ((1920, 1080), True)):
             canvas = Image.new('RGBA', size)
             cached = gallery.draw(canvas, font, visible=visible)
             gallery.surface_cache.clear()

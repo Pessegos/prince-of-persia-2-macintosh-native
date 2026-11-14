@@ -102,6 +102,26 @@ rectangles (`PANEL`, `LIST`, `PREVIEW`, ...) are properties that follow the
 layout of the last picture drawn, and the pointer is mapped to the same units.
 A picture saved with Shift+F8 "with menus" still shows the classic page.
 
+The screenshots and controls pages follow the same rule
+(`menu_theme.wide_layout`: from about 16:9, 172 units wider, centred beyond
+16:9). On the screenshots page the picture grows to a capture's own shape and
+reaches the foot of the list; the file's name, size and any message stand
+beside it, the lava delete button sits under them at the page's right edge,
+and Refresh, "With menus", Open folder and Capture PNG move to that edge. The
+folder and delete dialogs are laid out as on the classic page and centred on
+the wide one (`dialog_shift`). The page's hint, "Take Screenshots with F8",
+keeps to the page's right edge (`draw_screenshot_notice`'s `inset`).
+
+The controls page is drawn at the game's resolution like the classic one, on
+a picture as many units wide as the window (`WindowControls.wide_controls_frame`),
+and enlarged to fill it. Its pieces stay centred on the wider panel, and the
+keyboard's legend stands beside the keyboard as one column instead of under
+it, the two midway between the tabs and the buttons. The controller and the
+key lists are the classic page moved to the middle; the keyboard and the
+controller are not enlarged. `ControlsPage.lay_out` keeps the rectangles as
+instance attributes over the classic ones on the class; a window made
+narrower goes back to them before the pointer is read.
+
 ## The sign on the page
 
 A theme may leave a sign on its pages like a watermark (`mark`, the colour the
