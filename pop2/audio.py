@@ -37,19 +37,34 @@ LATE_DEATH_CUES = {16: 250}
 BURN_CUE = 69
 BURN_VOLUME = 0.4   # cue 69 peaks at 23% of full scale: 9%, as the reveal
 # Cue 69 opens with a bright pulsing rattle (to 0.165 s, a quiet gap), like
-# bones; only the lava's bubbling after it is kept, faded in over 5 ms.
+# bones; only the lava's bubbling after it is kept, faded in over 5 ms. It is
+# short (0.34 s), so it bubbles twice, the second time over the end of the
+# first (BURN_OVERLAP) and dying away over its second half.
 BURN_START = 0.165
 BURN_FADE_IN = 0.005
+BURN_PASSES = 2
+BURN_OVERLAP = 0.04
 
 
-def lava_part(raw, rate, channels, start=BURN_START, fade=BURN_FADE_IN):
-    """The mixer's 16-bit samples of cue 69 from ``start`` seconds, faded in over ``fade``."""
+def lava_part(raw, rate, channels, start=BURN_START, fade=BURN_FADE_IN,
+              passes=BURN_PASSES, overlap=BURN_OVERLAP):
+    """The mixer's 16-bit samples of cue 69's bubbling: from ``start`` seconds,
+    faded in over ``fade``, played ``passes`` times, each over the last
+    ``overlap`` seconds of the one before, the last dying away over its second half."""
     import numpy
 
-    samples = numpy.frombuffer(raw, dtype='<i2').reshape(-1, channels)[round(start * rate):].astype(float)
-    ramp = min(len(samples), max(1, round(fade * rate)))
-    samples[:ramp] *= (numpy.arange(ramp) / ramp)[:, None]
-    return samples.round().astype('<i2').tobytes()
+    part = numpy.frombuffer(raw, dtype='<i2').reshape(-1, channels)[round(start * rate):].astype(float)
+    ramp = min(len(part), max(1, round(fade * rate)))
+    part[:ramp] *= (numpy.arange(ramp) / ramp)[:, None]
+    lap = min(len(part) // 2, round(overlap * rate))
+    step = len(part) - lap
+    out = numpy.zeros((step * (passes - 1) + len(part), channels))
+    for index in range(passes):
+        out[index * step:index * step + len(part)] += part
+    if passes > 1:
+        half = len(part) // 2
+        out[len(out) - half:] *= numpy.linspace(1, 0, half)[:, None]
+    return numpy.clip(out.round(), -32768, 32767).astype('<i2').tobytes()
 
 class MixerPlayback:
     def __init__(self, directory, cues, mix_mechanisms=False, split_mechanisms=False):

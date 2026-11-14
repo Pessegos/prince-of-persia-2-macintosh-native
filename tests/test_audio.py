@@ -653,10 +653,14 @@ class PolyphonicCueTests(unittest.TestCase):
         frame = abs(bits) // 8 * channels
         whole = self.playback.sounds[69].get_raw()
         cut = round(0.165 * rate) * frame
-        self.assertEqual(len(burn.get_raw()), len(whole) - cut)
+        part = len(whole) - cut
+        lap = round(0.04 * rate) * frame
+        # It bubbles twice, the second time over the end of the first: about 0.64 s.
+        self.assertEqual(len(burn.get_raw()), 2 * part - lap)
         fade = round(0.005 * rate) * frame
-        self.assertEqual(burn.get_raw()[fade:], whole[cut + fade:])
+        self.assertEqual(burn.get_raw()[fade:part - lap], whole[cut + fade:len(whole) - lap])
         self.assertEqual(burn.get_raw()[:frame], bytes(frame))      # no click where it starts
+        self.assertEqual(burn.get_raw()[-frame:], bytes(frame))     # nor where it ends
         self.assertAlmostEqual(burn.get_volume(), 0.4, places=2)
         self.assertEqual(self.playback.sounds[69].get_volume(), 1)
         self.playback.play_ui('burn')
