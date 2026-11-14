@@ -1093,8 +1093,9 @@ def cavern_gates_up(program, room_id, phases):
 
 # Row clip of a moving door's SHAP relative to its row's top: the export
 # shows the ruins gate (3542) clipped 19 pixels above it and their exit
-# (3547) 10 above, against the caverns' 31 and 1 below.
-DOOR_CLIP_TOP = {3562: -31, 3563: -31, 3566: 1, 3542: -19, 3547: -10}
+# (3547) 10 above, against the caverns' 31 and 1 below. The temple gate
+# also uses row*120-19 (DrawTempGateMovable10:09ac-09b8).
+DOOR_CLIP_TOP = {3562: -31, 3563: -31, 3566: 1, 3542: -19, 3547: -10, 3576: -19}
 
 
 def pressure_drawing_commands(commands, records, phases, resources):
@@ -1103,9 +1104,12 @@ def pressure_drawing_commands(commands, records, phases, resources):
     # Ruins plates store the toggled state's commands for each changed slot.
     toggled = {tuple(key): command for record in records
                for key, command in zip(record['commands'], record.get('toggled', ()))}
-    # DrawHalf reuses the plate's drawing slot in its front-only climb repaint.
+    # DrawHalf/DrawFloorBuf repeat back-layer gates in the front pass too.
+    # Their pressure binding comes from the room's back pass, but the repaint
+    # must use the same live height rather than the imported initial position.
+    # DrawHalf also reuses the plate's drawing slot.
     for key, item in tuple(overrides.items()):
-        if item[0]['kind'] in (5, 6, 34):
+        if item[0]['kind'] in (4, 5, 6, 34):
             overrides[('front', *key[1:])] = item
     result = []
     for source in commands:
