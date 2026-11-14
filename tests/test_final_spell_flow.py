@@ -43,8 +43,10 @@ class FinalSpellFlowTests(unittest.TestCase):
                           scene.sequence_state.source_sequence_id,
                           scene.sequence_state.sequence_mode,
                           scene.combat.player.life), (3, 1, 55, 13, 3))
-        # SEQS 55's first AnimChar advances X from native 484 by six pixels.
-        self.assertEqual((scene.sequence_state.target_x, scene.action), (283, 207))
+        # 9:05de faces him right (word 0); SEQS 55's first AnimChar moves
+        # X six pixels back from native 484.
+        self.assertEqual(scene.sequence_state.facing, 1)
+        self.assertEqual((scene.sequence_state.target_x, scene.action), (271, 207))
 
     def test_saved_room_edge_and_animation_gate(self):
         from pop2.environments import Final
@@ -151,16 +153,16 @@ class FinalSpellRouteTests(unittest.TestCase):
         self.assertEqual((scene.room_id, scene.terrain_motion.row), (3, 1))
         self.play([((), (), 20)])
         self.assertEqual(scene.action, 171)
-        # Advance, sheathe and run: each key must leave the en-garde hold.
+        # Retreat, sheathe, turn and run: each key must leave the hold.
         x = scene.sequence_state.target_x
         self.play([(('L',), (), 4), ((), ('L',), 8)])
         self.assertLess(scene.sequence_state.target_x, x)
         self.play([(('down',), (), 2), ((), ('down',), 20)])
         self.assertFalse(scene.sword_drawn)
         x = scene.sequence_state.target_x
-        self.play([(('L',), (), 4), ((), ('L',), 2)])
-        self.assertEqual(scene.sequence_state.source_sequence_id, 1)
-        self.assertLess(scene.sequence_state.target_x, x)
+        self.play([(('L',), (), 12), ((), ('L',), 2)])
+        self.assertEqual(scene.sequence_state.facing, 0)
+        self.assertLess(scene.sequence_state.target_x, x - 20)
         self.assertTrue(scene.combat.player.alive)
 
 

@@ -174,10 +174,11 @@ class Final(Environment):
     def finish_spell(self):
         scene = self.scene
         # CODE 9:071a-075e calls PlayNIS(5), then 9:05d2 selects SEQS 55
-        # in native room 4, row 1, column 5, native X 484 (port X 277).
+        # in native room 4, row 1, column 5, native X 484 (port X 277),
+        # facing word 0 (9:05de): right, the port's facing 1.
         life, capacity = scene.combat.player.life, scene.combat.player.max_life
         mode = scene.sequence_state.sequence_mode
-        scene.jump_to_room(3, row=1, x=scene_x(484), facing=0,
+        scene.jump_to_room(3, row=1, x=scene_x(484), facing=1,
                            reset_guards=False, redraw=False)
         scene.combat.player.life, scene.combat.player.max_life = life, capacity
         scene.sequence_state.sequence_mode = mode
