@@ -455,7 +455,7 @@ class SaveBrowserTests(unittest.TestCase):
         browser.draw(source, font)
         self.assertEqual(browser.name_rows, 2)
         x, y = browser.DETAILS
-        self.assertEqual(browser.RENAME, (x, y, browser.right, y + 37))
+        self.assertEqual(browser.RENAME, (x, y, browser.right, y + 33))
         drawn = []
         with patch('pop2.save_slots.ImageDraw.ImageDraw.rectangle', autospec=True,
                    side_effect=lambda draw, rect, **kw: drawn.append(rect)):
@@ -464,7 +464,7 @@ class SaveBrowserTests(unittest.TestCase):
         sy = size[1] / 384
         # The tip sits under the two-line name; the details start below it.
         preview_left = round((browser.PREVIEW[0] + shift) * sy)
-        tip_bottom = (y + 30 + 11 + 17) * sy
+        tip_bottom = (y + 26 + 11 + 17) * sy
         # The details stand in the column's lower corner, level with the preview's foot.
         below = browser.PREVIEW[3] - 37
         self.assertGreaterEqual(below, y + 11 + browser.DETAIL_GAP)
@@ -472,7 +472,7 @@ class SaveBrowserTests(unittest.TestCase):
         overlapping = [rect for rect in drawn if rect[0] > preview_left
                        and any(rect[1] < (below + row) * sy < rect[3] for row in range(0, 38, 2))]
         self.assertEqual(overlapping, [])
-        self.assertTrue(any(abs(rect[1] - (y + 41) * sy) <= 1 for rect in drawn))
+        self.assertTrue(any(abs(rect[1] - (y + 37) * sy) <= 1 for rect in drawn))
 
     def test_clear_actions_current_marker_and_complete_wrapped_name(self):
         words = []

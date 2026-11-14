@@ -114,7 +114,7 @@ class SaveBrowser:
     # wide pages, so that the preview can be as tall as the list's first five rows.
     WIDE_PAD = 6
     WIDE_PREVIEW = menu_theme.WIDE_SPREAD + 2 * WIDE_PAD   # a 16:9 window: up to here the extra width enlarges the preview
-    DETAIL_GAP = 53      # wide page: the details never climb above name (26) + Rename tip (4 + 17) + 6
+    DETAIL_GAP = 49      # wide page: the details never climb above name (22) + Rename tip (4 + 17) + 6
     WIDE_LIMIT = 222     # wider windows give the list a little more room for long names, then stop (before the pad)
 
     def __post_init__(self):
@@ -177,8 +177,8 @@ class SaveBrowser:
     def RENAME(self):
         # A long name takes two lines; the highlight then covers both (draw sets name_rows).
         x, y = self.DETAILS
-        # The classic page's box is only as tall as the quill (22), so the details under it sit higher.
-        return x, y, self.right, y + (26 if self.spread else 22) + (self.name_rows - 1) * (11 if self.spread else 2)
+        # The box is only as tall as the quill (22).
+        return x, y, self.right, y + 22 + (self.name_rows - 1) * (11 if self.spread else 2)
 
     @property
     def FOOTER(self):
@@ -634,7 +634,7 @@ class SaveBrowser:
                     line(((name_x, y + 10), (name_x + width, y + 10)), cyan)
             if can_rename and self.hovered == 25 and not modal:
                 # Wide page: under the name, in the room kept above the details (DETAIL_GAP).
-                tip = top + 30 + extra if self.spread else top - 19
+                tip = top + 26 + extra if self.spread else top - 19
                 rectangle((right - 110, tip, right, tip + 17), fill=c('#303030'))
                 text('Rename save', right - 102, tip + 5, white, 94, True)
             resume = {'Level start': 'Resumes at level start',
