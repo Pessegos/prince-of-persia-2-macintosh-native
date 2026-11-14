@@ -22,6 +22,10 @@ Neither screenshot controls nor Developer Tools add a command row to F1.
 F2 toggles the screenshot gallery, and Escape closes it after cancelling any
 folder/deletion dialog; both restore the
 previous pause state. Switching among F1, F2 and F3 also preserves that state.
+The gallery keeps the folder's last listing and the pictures it has read
+(`SHARED_READS`, by path, time and size) for its next opening, so it opens
+with its thumbnails while the folder is read again in the background. A
+moving list is sent to Tk without comparing it with the previous frame.
 
 Developer Tools prepares its level and playback lists before the animation
 clock starts. Navigation reads scene-program metadata without decoding

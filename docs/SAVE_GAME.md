@@ -54,7 +54,10 @@ rebuilding the same destination on redraw. Old point-of-save thumbnails are
 ignored and their progress-based preview is reconstructed without rewriting
 the file. New preview metadata explicitly records `preview_at_resume: true`
 and `preview_version: 2`; older instant-entry previews are regenerated in memory.
-The browser is drawn at the fitted window resolution: font glyphs and previews
+`list_slots` keeps each save it has read while the file's time and size stay
+the same, so opening the page does not parse every save and decode its preview
+again. Opening the page straight from the game (Alt+S, Alt+O) draws only the
+page, not the F1 menu first. The browser is drawn at the fitted window resolution: font glyphs and previews
 are scaled directly from their sources, not from an enlarged 512x384 menu.
 New previews retain all 510x365 scene pixels, without the HUD. Both old
 224x160 and full-resolution PNG fields remain accepted by the file decoder.

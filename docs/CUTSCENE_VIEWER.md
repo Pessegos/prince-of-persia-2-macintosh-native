@@ -133,7 +133,9 @@ inside a clipped child Tk canvas and updates the small scrollbar patch;
 it does not copy the whole image, load assets, draw fonts or resize thumbnails
 on each frame. The full PIL renderer remains the reference for captures.
 Unlocked source previews are warmed before browsing. Locked previews are never
-requested. UI screenshots use direct rendering at their capture size, keeping
+requested. The fitted covers, cards and text are kept on the scene for the
+viewer's next opening (their keys name the size, scale and theme), so
+reopening it does not resample every cover again. UI screenshots use direct rendering at their capture size, keeping
 the menu's current aspect. A private gallery copy prevents export geometry from
 changing live hit boxes, selection, hover or dragging. Ordinary game screenshots
 keep their existing native crop and integer scaling.

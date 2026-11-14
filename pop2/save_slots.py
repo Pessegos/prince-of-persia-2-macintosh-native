@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import lru_cache
 import math
+import stat
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -68,9 +69,30 @@ def read_slot(path, name):
         return SaveSlot(path, name, True, error='Save unavailable')
 
 
+# Saves already read, by path: kept while the file's time and size stay the same,
+# so that opening the page does not decode every save's preview again.
+_READ_SLOTS = {}
+
+
 def list_slots(directory=SAVE_DIRECTORY):
     directory = Path(directory)
-    entries = [read_slot(path, path.stem) for path in directory.glob('*.pop2save') if path.is_file()]
+    entries = []
+    for path in directory.glob('*.pop2save'):
+        try:
+            status = path.stat()
+        except OSError:
+            continue
+        if not stat.S_ISREG(status.st_mode):
+            continue
+        version = status.st_mtime_ns, status.st_size
+        cached = _READ_SLOTS.get(path)
+        if cached is not None and cached[0] == version:
+            entries.append(cached[1])
+            continue
+        slot = read_slot(path, path.stem)
+        _READ_SLOTS.pop(path, None)
+        remember(_READ_SLOTS, path, (version, slot), 128)
+        entries.append(slot)
     return tuple(sorted(entries, key=lambda slot: (-slot.modified, slot.path.name.casefold())))
 
 

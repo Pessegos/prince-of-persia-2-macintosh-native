@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from PIL import Image, ImageOps
 
-from pop2 import menu_theme
+from pop2 import menu_theme, screenshot_gallery
 from pop2.screenshot_gallery import EMBER, GalleryReads, ScreenshotGallery, burn, lava_rock, rim_shades, open_capture_folder, read_capture, scan_captures
 from pop2.screenshots import ScreenshotSettings
 
@@ -20,6 +20,10 @@ class ScreenshotGalleryTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.folder = Path(directory.name)
         self.galleries = []
+        # Pictures and listings are kept between pages; each test starts without them.
+        for cache in (screenshot_gallery.SHARED_READS, screenshot_gallery.LAST_SCANS):
+            cache.clear()
+            self.addCleanup(cache.clear)
 
     def gallery(self, folder=None):
         gallery = ScreenshotGallery(folder or self.folder)
@@ -68,6 +72,34 @@ class ScreenshotGalleryTests(unittest.TestCase):
         path.write_text('broken')
         with self.assertRaises(OSError):
             read_capture(entry)
+
+    def test_reopening_the_page_shows_its_pictures_without_reading_them_again(self):
+        # Each opening used to start with an empty page and read every PNG again.
+        self.png('one.png', 'red')
+        self.png('two.png', 'blue')
+        source, font = Image.new('RGBA', (512, 384)), self.font()
+        first = self.gallery()
+        first.draw(source, font)
+        self.drain(first)
+        expected = first.draw(source, font).tobytes()
+        first.close()
+        with patch('pop2.screenshot_gallery.read_capture', side_effect=AssertionError('read again')):
+            again = ScreenshotGallery(self.folder)
+            self.addCleanup(again.close)
+            self.assertEqual([entry.path.name for entry in again.entries],
+                             [entry.path.name for entry in first.entries])   # before the folder is read again
+            self.assertEqual(again.draw(source, font).tobytes(), expected)   # the first picture is already whole
+            self.assertTrue(all(key in again.reads.cache for key in again.reads.wanted))
+            self.drain(again)
+            self.assertEqual(again.draw(source, font).tobytes(), expected)
+        # A file that changes is read afresh.
+        time.sleep(0.01)
+        self.png('one.png', 'green', (512, 384))
+        fresh = self.gallery()
+        fresh.draw(source, font)
+        self.drain(fresh)
+        entry = next(entry for entry in fresh.entries if entry.path.name == 'one.png')
+        self.assertEqual(fresh.reads.cache[fresh.image_key(entry, True)].value[1], (512, 384))
 
     def test_worker_runs_off_main_thread_and_close_does_not_wait_for_tk(self):
         reads = GalleryReads()

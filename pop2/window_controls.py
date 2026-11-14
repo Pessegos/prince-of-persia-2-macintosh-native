@@ -256,7 +256,7 @@ class WindowControls(InputRouting):
             if key in keys:
                 self.record_paused_key(SimpleNamespace(keysym=key), True)
 
-    def set_paused(self, paused):
+    def set_paused(self, paused, render=True):
         if self.paused == paused:
             return
         now = time.perf_counter()
@@ -294,7 +294,8 @@ class WindowControls(InputRouting):
                 # Keep the normal Up+direction chord window before the next tick.
                 self.next_animation_at += self.current_animation_interval_ms() / 1000
             self.schedule_next_animation()
-        self.render()
+        if render:
+            self.render()
 
     def toggle_fullscreen(self, _event=None, *, windowed_geometry=None, windowed_state=None):
         if not self.fullscreen:
@@ -773,7 +774,8 @@ class WindowControls(InputRouting):
             self.game_menu.fullscreen = self.fullscreen
             self.game_menu.copy_protection = getattr(self, "copy_protection_enabled", True)
 
-    def open_game_menu(self, page="menu"):
+    def open_game_menu(self, page="menu", render=True):
+        # render=False: the caller opens another page at once and draws only that one.
         if self.game_menu is not None:
             if self.game_menu.page != "confirm":
                 if page == "menu":
@@ -802,11 +804,14 @@ class WindowControls(InputRouting):
                                   screenshot_folder=str(self.screenshot_settings.folder))
         if page == 'screenshots':
             self.install_screenshot_gallery()
-        self.set_paused(True)
+        if render:
+            self.set_paused(True)
+        else:
+            self.set_paused(True, render=False)
         self.clear_keys(None)
         self.pause_resume_keys.update(self.window_keys_down)
         self.update_cursor_visibility()
-        if already_paused:
+        if already_paused and render:
             self.render()
 
     def toggle_screenshot_menu(self, _event=None):
@@ -927,7 +932,7 @@ class WindowControls(InputRouting):
             self.apply_save_action(action)
         elif action == "hall":
             if self.game_menu is None:
-                self.open_game_menu()
+                self.open_game_menu(render=False)
             elif self.game_menu.page == 'options':
                 self.open_game_menu()
             self.game_menu.focus = next(i for i, item in enumerate(self.game_menu.items)
@@ -1021,7 +1026,7 @@ class WindowControls(InputRouting):
 
         direct = self.game_menu is None
         if self.game_menu is None:
-            self.open_game_menu()
+            self.open_game_menu(render=False)
         parent = self.game_menu.return_to_menu if self.game_menu.page == 'saves' else self.game_menu.page == 'menu'
         self.dispose_screenshot_gallery()
         self.game_menu.show_page('saves')
@@ -1841,7 +1846,12 @@ class WindowControls(InputRouting):
                     for rect in (gallery.LIST, gallery.DELETE):
                         region = gallery.pixel_rect(rect, size)
                         region = (*region[:2], region[2] + 1, region[3] + 1)
-                        local = ImageChops.difference(previous[1].crop(region), frame.crop(region)).getbbox()
+                        if rect is gallery.LIST and gallery.scrolling:
+                            # A moving list changes all over: send it without comparing.
+                            local = (0, 0, min(region[2], frame.width) - region[0],
+                                     min(region[3], frame.height) - region[1])
+                        else:
+                            local = ImageChops.difference(previous[1].crop(region), frame.crop(region)).getbbox()
                         if local:
                             damages.append((local[0] + region[0], local[1] + region[1],
                                             local[2] + region[0], local[3] + region[1]))

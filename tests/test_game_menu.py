@@ -196,6 +196,20 @@ class GameMenuSceneTests(unittest.TestCase):
         self.scene.dev_key_release(self.event(key, state))
         return result
 
+    def test_saves_and_cutscenes_opened_directly_draw_only_their_own_page(self):
+        # Opening them straight from the game used to draw the F1 menu first, then the page.
+        scene = self.scene
+        for page, opening in (('saves', lambda: scene.open_save_browser(load=True)),
+                              ('cutscenes', scene.open_cutscene_viewer)):
+            with self.subTest(page=page):
+                self.assertIsNone(scene.game_menu)
+                with patch('pop2.save_slots.list_slots', return_value=()),                         patch.object(scene, 'render', wraps=scene.render) as render:
+                    opening()
+                self.assertEqual(render.call_count, 1)
+                self.assertEqual(scene.game_menu.page, page)
+                self.assertTrue(scene.paused)
+                scene.close_game_menu()
+
     def test_f1_is_a_paused_in_game_overlay_without_another_window(self):
         scene = self.scene
         scene.jump_to_screen("5")

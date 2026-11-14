@@ -15,7 +15,7 @@ from pop2.game_session import GameSession
 from pop2.rebirth import RebirthSnapshot
 from pop2.save_game import (SaveGameError, capture, decode_preview, encode_preview,
                            read_save, write_save)
-from pop2.save_slots import SaveBrowser, SaveSlot, list_slots, rename_quill
+from pop2.save_slots import SaveBrowser, SaveSlot, list_slots, read_slot, rename_quill
 from tests.test_game_session import EmptyEncounter, resources
 
 
@@ -500,6 +500,27 @@ class SaveBrowserTests(unittest.TestCase):
         full = browser.draw(source, font)
         self.assertEqual(unmarked.tobytes(), full.tobytes())
         self.assertNotEqual(marked.tobytes(), unmarked.tobytes())
+
+    def test_listing_again_reads_only_saves_that_changed(self):
+        # Opening the saves page used to parse every save and decode its preview each time.
+        def write(path, name):
+            path.write_text(json.dumps({'format': 'pop2-macintosh-native-save', 'version': 2,
+                'level': 3, 'name': name, 'resume': {'checkpoint': None, 'max_life': 3}}))
+
+        first, second = self.folder / 'a.pop2save', self.folder / 'b.pop2save'
+        write(first, 'First')
+        write(second, 'Second')
+        listed = list_slots(self.folder)
+        with patch('pop2.save_slots.read_slot', side_effect=AssertionError('read again')):
+            self.assertEqual(list_slots(self.folder), listed)
+        write(second, 'Second, renamed')
+        os.utime(second, ns=(second.stat().st_atime_ns, second.stat().st_mtime_ns + 10_000_000))
+        with patch('pop2.save_slots.read_slot', wraps=read_slot) as reads:
+            names = {slot.name for slot in list_slots(self.folder)}
+        self.assertEqual(names, {'First', 'Second, renamed'})
+        self.assertEqual([call.args[0] for call in reads.call_args_list], [second])
+        second.unlink()
+        self.assertEqual([slot.name for slot in list_slots(self.folder)], ['First'])
 
     def test_names_come_from_metadata_and_do_not_change_file_paths(self):
         path = self.folder / 'slot-01.pop2save'
