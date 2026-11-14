@@ -465,3 +465,48 @@ fails all three (three failures, no errors). A separate run with SDL's dummy
 audio device and the real mixer completed the same route with no Tk
 callback exception. The route keys are supplied; they are not the video's
 recorded input.
+
+## Room-6 false-Prince controller (2026-11-14)
+
+`pop2/final_tower.py` translates 9:1526, the AutoCtrl branch for type-6
+figures in native room 6, and `CombatEncounter` now runs it for actor
+type 6 in environment 6 instead of the generic scripted advance.
+
+- **Shimmer of the last figure.** 9:1568-1594 counts the room bank (less
+  one when the Prince is the shadow, type 1). With one figure left, a
+  selected sequence other than 240 and the saved Prince alive
+  (a5-0x50b6 < 0), it selects SEQS 240: nine idle frames, sound 270, then
+  SEQS 196. The branch then falls through to the pose tests, so a
+  shimmering idle figure can still strike.
+- **Strike.** In pose 15 the figure strikes only when the Prince is alive,
+  not in SEQS 44/6, type 0, in an exposed pose (FRAM +8 flag 0x40 or poses
+  191-205) and not in animation state 3/4. With CharDistance 4:49ee:
+  same facing 24 < d-15 < 71; behind it (d < 0) 24 < -15-d < 71 with a
+  turn; facing a landing Prince (pose 145) 24 < d-15 < 78. The strike
+  moves 15 px (AddCharX 4:2bae), draws the sword and selects SEQS 75.
+- **After the strike.** Pose 171 sheathes (sword off, SEQS 92); pose 52
+  after the Prince's death laughs (SEQS 197, sound 261); pose 109 rises
+  (SEQS 49).
+- **Fatal hits.** CheckStab 6:52b8-52ca deals 100 points when either side
+  is type 6. The kill routine 6:5562 gives a type-6 victim SEQS 196
+  (sound 260, poses 301-305, then `-17` removal). When a type-6 figure
+  kills the Prince, 6:56a6 calls `AllOtherJaffarsShimmerAway` 9:090e:
+  every other idle figure of the bank selects SEQS 240. The death method
+  table at 6:570e gives 17 for a type-6 killer.
+- **Transfer.** `RemoveChar` 4:48f8 removes a figure; in room 6 with
+  SEQS 240 and the Prince alive it calls 9:19fa, which sets column 17,
+  X 1132, row -3, path index 0 and SEQS 2. In the port the figure enters
+  native room 8 at native X 622 (1132 - 510), row 0, facing left, marked
+  `final_path` for the path controller.
+
+Not yet ported: the 9:16fe path controller and its position routines
+(9:09ca, 0a42, 0b28, 0ba6, 0cac/0cec, 0d28, 0dac, 14c8), the row -3 /
+Y -254 drop through UpdateOppInfo 9:185a, and the room-6 random facing
+draw 6:39a2. A figure in room 8 therefore stands idle.
+
+`tests.test_final_tower` covers the decision windows without the scene,
+then in a hidden level-14 scene: three hits dissolve three figures and the
+last shimmers into room 8; a figure that kills the Prince stays while the
+others shimmer; a crouching Prince ahead of a figure is struck and the
+figure laughs. The earlier port played SEQS 2 without control, so these
+scene checks fail on it. No native CPU probe of 9:1526 is claimed yet.
