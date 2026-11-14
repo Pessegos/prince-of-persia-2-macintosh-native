@@ -1,15 +1,18 @@
 """Temple stairs clip the Prince and hand off after the real exit-song gate."""
 
 from dataclasses import replace
+from itertools import product
 import struct
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from PIL import ImageChops
+from PIL import Image, ImageChops
 
-from pop2.caverns import cavern_exit_clip
+from pop2.caverns import (CavernRoom, cavern_assets, cavern_command_sprite,
+                          cavern_exit_clip, clipped_sprite)
 from pop2.paths import ASSET_DIR
+from pop2.render_opening import ROOM_HEIGHT, ROOM_ORIGIN_X, ROOM_WIDTH
 from pop2.sequence_runtime import SequenceState
 from pop2.terrain import LevelMap
 
@@ -20,6 +23,21 @@ INSTALLED = all((ASSET_DIR / f'temple_level{number}.json').is_file() for number 
 
 
 class TempleExitClipTests(unittest.TestCase):
+    def test_frame_promotion_follows_stair_poses_without_the_height_gate(self):
+        empty = Image.new('L', (510, 365))
+        cover = Image.new('RGBA', empty.size)
+        cover.paste((180, 60, 20, 255), (320, 130, 340, 220))
+        room = CavernRoom(Image.new('RGBA', empty.size), Image.new('RGBA', empty.size),
+                          {1: empty}, (), (), 0, 2, {}, exit_foreground=((cover, (0, 0)),))
+        for actor, pose, y in product((0, 2), (216, 217, 226, 227), (0, -24, -25, -42)):
+            with self.subTest(actor=actor, pose=pose, y=y):
+                state = SequenceState(70, actor_type=actor, action=pose, current_y=y)
+                frame = room.draw_actor_foreground(Image.new('RGBA', empty.size),
+                                                   state, (300, 120, 350, 220))
+                self.assertEqual(frame.getbbox(), cover.getbbox()
+                                 if actor == 0 and 217 <= pose <= 226 else None)
+        self.assertIsNone(room.actor_mask(1).getbbox())
+
     def test_temple_uses_its_native_rectangle_and_strict_stair_height(self):
         level = bytearray(0x49ca)
         struct.pack_into('>H', level, 0x2186, 2)
@@ -67,6 +85,98 @@ class TempleExitSceneTests(unittest.TestCase):
         self.assertTrue(self.scene.level_complete)
         self.assertIsNotNone(self.scene.game.exit, 'Temple completion must schedule its exit, not freeze')
         self.assertEqual(self.scene.game.exit.song, 187)
+
+    def test_each_door_keeps_its_stone_pixels_in_front_through_the_whole_entry(self):
+        scene = self.scene
+        scene.audio = None
+        observed, exposed = set(), set()
+        original = scene.composite_actor
+        room_rect = (ROOM_ORIGIN_X, 0, ROOM_ORIGIN_X + ROOM_WIDTH, ROOM_HEIGHT)
+
+        def without_player(frame, layer, row=None, bottom=None, state=None, bounds=None, record=None):
+            if state is not None and state.actor_type == 0:
+                layer = Image.new('RGBA', layer.size)
+            return original(frame, layer, row, bottom, state, bounds, record)
+
+        for site in DOORS:
+            with self.subTest(site=site):
+                number, room, _cell = site
+                self.open_exit(*site)
+                program, resources, palette, shapes = cavern_assets(number)
+                cover = Image.new('L', (510, 365))
+                for command in program['rooms'][str(room)]:
+                    if command[:2] == ['back', 3579] and command[7] == 4:
+                        sprite, position = clipped_sprite(
+                            cavern_command_sprite(command, resources, palette, shapes), command)
+                        cover.paste(sprite.getchannel('A'), position)
+                self.assertIsNotNone(cover.getbbox())
+                for _ in range(36):
+                    state = scene.sequence_state
+                    if 217 <= state.action <= 226:
+                        scene.render()
+                        fixed = scene.native_viewport.crop(room_rect).convert('RGB')
+                        # Remove the sprite, retaining exactly the same floor
+                        # repaint and front-table drawing at this pose.
+                        with patch.object(scene, 'composite_actor', side_effect=without_player):
+                            scene.render()
+                            stone = scene.native_viewport.crop(room_rect).convert('RGB')
+                        difference = ImageChops.difference(fixed, stone)
+                        for channel in difference.split():
+                            self.assertIsNone(ImageChops.multiply(channel, cover).getbbox(),
+                                              f'Prince overwrites door stone at pose {state.action}')
+                        observed.add((site, state.action))
+                        # A control with this promotion disabled must expose
+                        # actual Prince pixels on the jamb, as in the report.
+                        with patch.object(CavernRoom, 'draw_actor_foreground',
+                                          CavernRoom.draw_actor_floor_foreground):
+                            scene.render()
+                            unmasked = scene.native_viewport.crop(room_rect).convert('RGB')
+                        difference = ImageChops.difference(unmasked, stone)
+                        if any(ImageChops.multiply(channel, cover).getbbox()
+                               for channel in difference.split()):
+                            exposed.add(site)
+                    if scene.level_complete:
+                        break
+                    self.harness.tick()
+        self.assertEqual({site for site, _pose in observed}, set(DOORS))
+        self.assertEqual({pose for _site, pose in observed}, set(range(217, 227)))
+        self.assertEqual(exposed, set(DOORS))
+
+    def test_entry_occlusion_keeps_the_floor_corner_and_other_uncovered_scenery_stable(self):
+        scene = self.scene
+        scene.audio = None
+        room_rect = (ROOM_ORIGIN_X, 0, ROOM_ORIGIN_X + ROOM_WIDTH, ROOM_HEIGHT)
+        checked = set()
+        for site in DOORS:
+            with self.subTest(site=site):
+                self.open_exit(*site)
+                row, column = divmod(site[2], 10)
+                corners = [(column * 51 + dx, row * 120 + dy)
+                           for dx, dy in ((88, 96), (89, 96), (87, 97))]
+                for _ in range(36):
+                    state = scene.sequence_state
+                    if 217 <= state.action <= 226:
+                        scene.render()
+                        fixed = scene.native_viewport.crop(room_rect).convert('RGB')
+                        with patch.object(CavernRoom, 'draw_actor_foreground',
+                                          CavernRoom.draw_actor_floor_foreground):
+                            scene.render()
+                            ordinary = scene.native_viewport.crop(room_rect).convert('RGB')
+                        for point in corners:
+                            self.assertEqual(fixed.getpixel(point), ordinary.getpixel(point),
+                                             f'Door entry changes the floor corner at {point}')
+                        difference = ImageChops.difference(fixed, ordinary)
+                        left, top, right, bottom = scene.player_bounds()
+                        difference.paste((0, 0, 0), (max(0, left), max(0, top),
+                                                    min(ROOM_WIDTH, right + 1),
+                                                    min(ROOM_HEIGHT, bottom + 1)))
+                        self.assertIsNone(difference.getbbox(),
+                                          f'Door entry repaints scenery outside the Prince at pose {state.action}')
+                        checked.add(site)
+                    if scene.level_complete:
+                        break
+                    self.harness.tick()
+        self.assertEqual(checked, set(DOORS))
 
     def test_all_six_temple_exit_doors_clip_real_late_stair_pixels(self):
         scene = self.scene
