@@ -26,7 +26,8 @@ class GameMenuModelTests(unittest.TestCase):
         self.assertEqual(items[-1].action, "quit")
         self.assertNotIn("Alt+F", shortcuts)
         self.assertNotIn("Alt+E", shortcuts)
-        self.assertIn("Alt+Enter", shortcuts)
+        self.assertIn("Alt+P", shortcuts)
+        self.assertIn("Alt+Enter", {item.shortcut for item in GameMenu(page="options").items})
         self.assertNotIn("F2", shortcuts)
         self.assertNotIn("F3", shortcuts)
         self.assertNotIn("development", {item.action for item in items})
@@ -49,23 +50,52 @@ class GameMenuModelTests(unittest.TestCase):
     def test_quit_is_available_by_keyboard_and_mouse(self):
         menu = GameMenu()
         menu.key("Up")
-        self.assertEqual(menu.menu_scroll, 1)
+        self.assertEqual(menu.menu_scroll, 0)
         self.assertEqual(menu.key("Return"), "quit")
         left, top, _, _ = menu.row_rect(len(menu.items) - 1)
         self.assertEqual(menu.click(left + 8, top + 8), "quit")
 
-    def test_original_row_spacing_is_kept_with_one_row_of_scroll(self):
+    def test_original_row_spacing_is_kept_and_every_command_fits_without_scrolling(self):
+        # The settings moved to the Options page, so the command list no
+        # longer scrolls (it had 15 rows for 14 places).
         menu = GameMenu()
         self.assertEqual(menu.ROW_HEIGHT, 22)
-        self.assertEqual(list(menu.visible_indices()), list(range(14)))
-        self.assertIsNone(menu.hit(90, menu.ROW_TOP + 14 * menu.ROW_HEIGHT + 8))
-        self.assertEqual(menu.click(440, menu.row_rect(13)[1] + 8), "changed")
-        self.assertEqual(menu.menu_scroll, 1)
-        self.assertEqual(list(menu.visible_indices()), list(range(1, 15)))
-        self.assertEqual(menu.hit(90, menu.row_rect(14)[1] + 8), 14)
-        self.assertFalse(menu.wheel(1))
-        self.assertTrue(menu.wheel(-1))
+        self.assertEqual(list(menu.visible_indices()), list(range(len(menu.items))))
+        self.assertIsNone(menu.hit(90, menu.ROW_TOP + len(menu.items) * menu.ROW_HEIGHT + 8))
+        self.assertEqual(menu.click(440, menu.row_rect(len(menu.items) - 1)[1] + 8), "changed")
         self.assertEqual(menu.menu_scroll, 0)
+        self.assertFalse(menu.wheel(1))
+        self.assertFalse(menu.wheel(-1))
+        self.assertLess(menu.row_rect(len(menu.items) - 1)[3], menu.PANEL[3])
+
+    def test_settings_live_on_the_options_page(self):
+        settings = {"sound", "menu_sounds", "music", "ambience", "fullscreen", "copy_protection"}
+        menu = GameMenu()
+        self.assertFalse(settings & {item.action for item in menu.items})
+        menu.focus = next(i for i, item in enumerate(menu.items) if item.action == "options")
+        self.assertEqual(menu.key("Return"), "options")
+        menu.show_page("options")
+        self.assertEqual([item.action for item in menu.items][:-1],
+                         ["sound", "menu_sounds", "music", "ambience", "fullscreen", "copy_protection"])
+        self.assertEqual(menu.OPTION_HEADINGS, {0: "Sound", 3: "Display", 5: "Game"})
+        self.assertIs(GameMenu(page="options", menu_sounds=False).items[1].checked, False)
+        rect = menu.row_rect(1)
+        self.assertEqual(menu.click(rect[0] + 8, rect[1] + 8), "menu_sounds")
+        menu.focus = 0
+        menu.key("Up")
+        self.assertEqual(menu.items[menu.focus].label, "Back")
+        self.assertEqual(menu.key("Return"), "changed")
+        self.assertEqual(menu.page, "menu")
+        direct = GameMenu(page="options", return_to_menu=False)
+        self.assertEqual(direct.items[-1].label, "Close")
+        rect = direct.row_rect(len(direct.items) - 1)
+        self.assertEqual(direct.click(rect[0] + 8, rect[1] + 8), "close")
+        self.assertEqual(GameMenu(page="options", return_to_menu=False).key("Escape"), "close")
+        # Headings sit between rows, never on them.
+        options = GameMenu(page="options")
+        tops = [options.row_rect(i)[1] for i in options.visible_indices()]
+        self.assertEqual(tops[3] - tops[2], menu.ROW_HEIGHT + menu.HEADING_HEIGHT)
+        self.assertEqual(tops[1] - tops[0], menu.ROW_HEIGHT)
 
     def test_confirmation_defaults_to_cancel_and_returns_to_its_parent(self):
         menu = GameMenu(focus=1)
@@ -114,7 +144,7 @@ class GameMenuModelTests(unittest.TestCase):
 
     def test_all_game_menu_pages_are_centered_above_the_health_strip(self):
         menu = GameMenu()
-        for panel in (menu.PANEL, menu.SCREENSHOT_PANEL, menu.DIALOG, menu.ABOUT_DIALOG):
+        for panel in (menu.PANEL, menu.OPTIONS_PANEL, menu.SCREENSHOT_PANEL, menu.DIALOG, menu.ABOUT_DIALOG):
             with self.subTest(panel=panel):
                 self.assertEqual(panel[0] - 1, 511 - panel[2])
                 self.assertLessEqual(abs(panel[1] - (PLAYFIELD_VIEWPORT[3] - panel[3])), 1)
@@ -875,17 +905,41 @@ class GameMenuSceneTests(unittest.TestCase):
             self.press("q", 0x20000)
             destroy.assert_called_once_with()
 
-    def test_f1_mouse_wheel_reveals_quit_without_resizing_rows(self):
+    def test_f1_shows_quit_without_scrolling(self):
         scene = self.scene
         self.press("F1")
         menu = scene.game_menu
-        self.assertEqual(menu.menu_scroll, 0)
-        with patch.object(scene, "dev_pointer", return_value=(440, menu.row_rect(13)[1] + 8)):
+        last = len(menu.items) - 1
+        with patch.object(scene, "dev_pointer", return_value=(440, menu.row_rect(last)[1] + 8)):
             self.assertEqual(scene.dev_scroll(SimpleNamespace(delta=-120)), "break")
-        self.assertEqual(menu.menu_scroll, 1)
-        self.assertEqual(menu.hit(90, menu.row_rect(14)[1] + 8), 14)
-        self.press("Up")
         self.assertEqual(menu.menu_scroll, 0)
+        self.assertEqual(menu.hit(90, menu.row_rect(last)[1] + 8), last)
+
+    def test_options_page_opens_from_f1_and_alt_p_and_keeps_its_switches(self):
+        self.keep_preferences_here()
+        scene = self.scene
+        self.press("F1")
+        scene.game_menu.focus = next(i for i, item in enumerate(scene.game_menu.items)
+                                     if item.action == "options")
+        self.press("Return")
+        self.assertEqual(scene.game_menu.page, "options")
+        self.assertTrue(scene.game_menu.return_to_menu)
+        scene.game_menu.focus = 1
+        self.press("Return")
+        self.assertFalse(scene.menu_sounds_enabled)
+        self.assertFalse(load_preferences().menu_sounds)
+        scene.refresh_game_menu()
+        self.assertIs(scene.game_menu.items[1].checked, False)
+        self.press("Escape")
+        self.assertEqual(scene.game_menu.page, "menu")
+        self.press("F1")
+        self.assertIsNone(scene.game_menu)
+        self.press("p", 0x20000)
+        self.assertEqual(scene.game_menu.page, "options")
+        self.assertFalse(scene.game_menu.return_to_menu)
+        self.press("h", 0x20000)
+        self.assertEqual(scene.game_menu.page, "menu")
+        self.assertEqual(scene.game_menu.items[scene.game_menu.focus].action, "hall")
 
     def test_cave_ambience_starts_off_and_its_shortcut_works_when_paused(self):
         self.keep_preferences_here()
@@ -1061,13 +1115,13 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_all_pages_fit_the_native_canvas_and_leave_source_untouched(self):
         viewport = Image.new("RGBA", (512, 384), (80, 80, 80, 255))
-        for page in ("menu", "confirm", "about"):
+        for page in ("menu", "options", "confirm", "about"):
             menu = GameMenu(page=page)
             rendered = menu.draw(viewport, self.scene.ui_font)
             self.assertEqual(rendered.size, viewport.size)
             self.assertEqual(viewport.getpixel((256, 192)), (80, 80, 80, 255))
             for rect in ([menu.row_rect(i) for i in menu.visible_indices()]
-                         if page == "menu" else menu.BUTTONS):
+                         if page in ("menu", "options") else menu.BUTTONS):
                 self.assertTrue(0 <= rect[0] < rect[2] <= 512)
                 self.assertTrue(0 <= rect[1] < rect[3] <= 384)
 
@@ -1078,7 +1132,8 @@ class GameMenuSceneTests(unittest.TestCase):
         self.assertEqual(PLAYFIELD_VIEWPORT[3], ROOM_HEIGHT)
         viewport = Image.new("RGBA", (512, 384), (80, 80, 80, 255))
         menus = [(GameMenu(page=page), panel) for page, panel in (
-            ("menu", GameMenu.PANEL), ("screenshots", GameMenu.SCREENSHOT_PANEL),
+            ("menu", GameMenu.PANEL), ("options", GameMenu.OPTIONS_PANEL),
+            ("screenshots", GameMenu.SCREENSHOT_PANEL),
             ("confirm", GameMenu.DIALOG), ("about", GameMenu.ABOUT_DIALOG))]
         for levels in ((), ((1, "Level 1", ("1", "2")),)):
             for page in ('tools', 'playback'):
@@ -1108,6 +1163,7 @@ class GameMenuSceneTests(unittest.TestCase):
         font = self.scene.ui_font
         with patch.object(font, "text", wraps=font.text) as text:
             GameMenu().draw(self.scene.native_viewport, font)
+            GameMenu(page="options").draw(self.scene.native_viewport, font)
         labels = [call.args[0] for call in text.call_args_list]
         self.assertIn("Alt-N", labels)
         self.assertIn("Alt-Enter", labels)

@@ -28,6 +28,7 @@ class GameMenu:
     return_to_menu: bool = True
     copy_protection: bool = True
     cave_ambience: bool = False
+    menu_sounds: bool = True
     screenshot_scale: int = 3
     screenshot_folder: str = ""
     screenshot_status: str = ""
@@ -41,15 +42,22 @@ class GameMenu:
     cutscene_viewer: object = None
     controls_page: object = None
 
-    PANEL = centered_panel(384, 350)
+    ROW_HEIGHT = 22
+    VISIBLE_ROWS = 11
+    # The command list fits without scrolling; settings live on the Options page.
+    PANEL = centered_panel(384, 36 + VISIBLE_ROWS * ROW_HEIGHT + 14)
+    # Options: a heading (HEADING_HEIGHT) opens each group; Back stands apart.
+    OPTION_HEADINGS = {0: "Sound", 3: "Display", 5: "Game"}
+    HEADING_HEIGHT = 18
+    BACK_GAP = 10
+    OPTIONS_PANEL = centered_panel(384, 36 + 3 * HEADING_HEIGHT + 7 * ROW_HEIGHT + BACK_GAP + 14)
     DIALOG = centered_panel(352, 166)
     ABOUT_DIALOG = centered_panel(352, 184)
     BUTTONS = ((100, DIALOG[1] + 120, 242, DIALOG[1] + 150),
                (254, DIALOG[1] + 120, 412, DIALOG[1] + 150))
     ABOUT_BUTTON = (190, ABOUT_DIALOG[1] + 120, 322, ABOUT_DIALOG[1] + 150)
     ROW_TOP = PANEL[1] + 36
-    ROW_HEIGHT = 22
-    VISIBLE_ROWS = 14
+    OPTIONS_TOP = OPTIONS_PANEL[1] + 36
     SCREENSHOT_PANEL = centered_panel(352, 230)
     CAPTURE_CONTROLS = ((212, SCREENSHOT_PANEL[1] + 44, 412, SCREENSHOT_PANEL[1] + 72),
                         (100, SCREENSHOT_PANEL[1] + 88, 412, SCREENSHOT_PANEL[1] + 116),
@@ -59,24 +67,37 @@ class GameMenu:
                           for scale in range(1, 5))
 
     @property
-    def items(self):
+    def menu_items(self):
         return (
             MenuItem("resume", "Resume", "F1"),
             MenuItem("confirm_new", "New game", "Alt+N"),
             MenuItem("restart", "Restart level", "Alt+R"),
             MenuItem("save", "Save game", "Alt+S", self.save_available),
             MenuItem("open", "Load game", "Alt+O"),
-            MenuItem("cutscenes", "Cutscene Viewer", "Alt+C"),
+            MenuItem("options", "Options", "Alt+P"),
             MenuItem("controls", "Controls", "Alt+K"),
-            MenuItem("sound", "Sound", "Alt+T", checked=self.sound),
-            MenuItem("music", "Ambient music", "Alt+M", checked=self.music),
-            MenuItem("ambience", "Cave ambience", "Alt+A", checked=self.cave_ambience),
+            MenuItem("cutscenes", "Cutscene Viewer", "Alt+C"),
             MenuItem("hall", "Hall of Fame", "Alt+H", False),
             MenuItem("about", "About", "Alt+V"),
-            MenuItem("fullscreen", "Fullscreen", "Alt+Enter", checked=self.fullscreen),
-            MenuItem("copy_protection", "Copy protection", "", checked=self.copy_protection),
             MenuItem("quit", "Quit to Desktop", "Alt+Q"),
         )
+
+    @property
+    def option_items(self):
+        return (
+            MenuItem("sound", "Game sounds", "Alt+T", checked=self.sound),
+            MenuItem("menu_sounds", "Menu sounds", "", checked=self.menu_sounds),
+            MenuItem("music", "Ambient music", "Alt+M", checked=self.music),
+            MenuItem("ambience", "Cave ambience", "Alt+A", checked=self.cave_ambience),
+            MenuItem("fullscreen", "Fullscreen", "Alt+Enter", checked=self.fullscreen),
+            MenuItem("copy_protection", "Copy protection", "", checked=self.copy_protection),
+            MenuItem("options_back", "Back" if self.return_to_menu else "Close", ""),
+        )
+
+    @property
+    def items(self):
+        """The rows of the list page on show: the commands or the options."""
+        return self.option_items if self.page == "options" else self.menu_items
 
     def show_page(self, page):
         self.return_to_menu = self.page == "menu"
@@ -115,6 +136,8 @@ class GameMenu:
         if self.page == "about":
             return self.back()
         item = self.items[self.focus]
+        if item.action == "options_back":
+            return self.back()
         return item.action if item.enabled else "changed"
 
     def key(self, key, backwards=False, char='', control=False):
@@ -156,7 +179,7 @@ class GameMenu:
             return "close" if self.page == "menu" else self.back()
         if key in ("Return", "KP_Enter", "space"):
             return self.activate()
-        if self.page == "menu":
+        if self.page in ("menu", "options"):
             if key in ("Up", "Down", "Tab"):
                 delta = -1 if key == "Up" or key == "Tab" and backwards else 1
                 self.focus = (self.focus + delta) % len(self.items)
@@ -169,10 +192,19 @@ class GameMenu:
         return "changed"
 
     def row_rect(self, index):
+        if self.page == "options":
+            top = (self.OPTIONS_TOP + index * self.ROW_HEIGHT
+                   + self.HEADING_HEIGHT * sum(1 for first in self.OPTION_HEADINGS if first <= index))
+            if index == len(self.option_items) - 1:
+                top += self.BACK_GAP
+                return (190, top, 322, top + self.ROW_HEIGHT + 2)
+            return (80, top, 432, top + self.ROW_HEIGHT - 2)
         top = self.ROW_TOP + (index - self.menu_scroll) * self.ROW_HEIGHT
         return (80, top, 432, top + self.ROW_HEIGHT - 2)
 
     def visible_indices(self):
+        if self.page == "options":
+            return range(len(self.option_items))
         return range(self.menu_scroll, min(len(self.items), self.menu_scroll + self.VISIBLE_ROWS))
 
     def scroll_to_focus(self):
@@ -207,7 +239,7 @@ class GameMenu:
                 return None
             return next((i for i, rect in enumerate(self.CAPTURE_CONTROLS)
                          if DevelopmentMenu.contains(rect, x, y)), None)
-        if self.page == "menu":
+        if self.page in ("menu", "options"):
             return next((i for i in self.visible_indices()
                          if DevelopmentMenu.contains(self.row_rect(i), x, y)), None)
         rects = self.BUTTONS if self.page == "confirm" else (self.ABOUT_BUTTON,)
@@ -290,8 +322,25 @@ class GameMenu:
             text(label, (rect[0] + rect[2]) // 2, rect[1] + 10, align="center",
                  max_width=rect[2] - rect[0] - 12)
 
-        panel = self.SCREENSHOT_PANEL if self.page == "screenshots" else self.PANEL if self.page == "menu" else (
-            self.ABOUT_DIALOG if self.page == "about" else self.DIALOG)
+        def row(index, item):
+            rect = self.row_rect(index)
+            selected = index == self.focus
+            draw.rectangle(rect, fill=c("#303030") if selected else c("#222222"),
+                           outline=gold if selected else c("#404040"))
+            color = white if item.enabled else muted
+            x, y = rect[0] + 10, rect[1] + 5
+            if item.checked is not None:
+                draw.rectangle((x, y, x + 10, y + 10), fill=c("#121212"), outline=muted)
+                if item.checked:
+                    draw.line(((x + 2, y + 5), (x + 4, y + 8), (x + 8, y + 2)),
+                              fill=gold, width=2)
+                x += 20
+            text(item.label, x, y, color, max_width=204)
+            # The game's NFNT replaces '+' with a trademark glyph.
+            text(item.shortcut.replace("+", "-"), rect[2] - 10, y, color, "right", 100)
+
+        panel = {"screenshots": self.SCREENSHOT_PANEL, "menu": self.PANEL, "options": self.OPTIONS_PANEL,
+                 "about": self.ABOUT_DIALOG}.get(self.page, self.DIALOG)
         # The menu's scroll arrows sit at the panel's right edge: keep the frame clear of them.
         menu_theme.panel(image, panel, clear_sides=self.page == "menu")
         draw = ImageDraw.Draw(image)
@@ -343,25 +392,18 @@ class GameMenu:
             text("Work in progress", 256, panel_top + 78, muted, "center")
             button(self.ABOUT_BUTTON, "Back" if self.return_to_menu else "Close", True)
             text("by Pessegos", 420, panel_top + 162, muted, "right")
+        elif self.page == "options":
+            text("Options", 256, panel_top + 14, gold, "center")
+            items = self.option_items
+            for i, item in enumerate(items[:-1]):
+                if i in self.OPTION_HEADINGS:
+                    text(self.OPTION_HEADINGS[i], 82, self.row_rect(i)[1] - self.HEADING_HEIGHT + 4, gold)
+                row(i, item)
+            button(self.row_rect(len(items) - 1), items[-1].label, self.focus == len(items) - 1)
         else:
             text("Game Menu", 256, panel_top + 14, gold, "center")
             for i in self.visible_indices():
-                item = self.items[i]
-                rect = self.row_rect(i)
-                selected = i == self.focus
-                draw.rectangle(rect, fill=c("#303030") if selected else c("#222222"),
-                               outline=gold if selected else c("#404040"))
-                color = white if item.enabled else muted
-                x, y = rect[0] + 10, rect[1] + 5
-                if item.checked is not None:
-                    draw.rectangle((x, y, x + 10, y + 10), fill=c("#121212"), outline=muted)
-                    if item.checked:
-                        draw.line(((x + 2, y + 5), (x + 4, y + 8), (x + 8, y + 2)),
-                                  fill=gold, width=2)
-                    x += 20
-                text(item.label, x, y, color, max_width=204)
-                # The game's NFNT replaces '+' with a trademark glyph.
-                text(item.shortcut.replace("+", "-"), rect[2] - 10, y, color, "right", 100)
+                row(i, self.items[i])
             if self.menu_scroll:
                 draw.polygon(((437, self.ROW_TOP + 8), (443, self.ROW_TOP + 8),
                               (440, self.ROW_TOP + 4)), fill=gold)

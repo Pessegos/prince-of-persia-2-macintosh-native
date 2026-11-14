@@ -15,6 +15,7 @@ class Preferences:
     cave_ambience: bool = False
     copy_protection: bool = True
     fullscreen: bool = False
+    menu_sounds: bool = True
     # Port-only Controls page; an empty table means the default keys/buttons.
     keyboard_bindings: dict = field(default_factory=dict)
     controller_bindings: dict = field(default_factory=dict)

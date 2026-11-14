@@ -325,6 +325,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         preferences = load_preferences()
         self.copy_protection_enabled = preferences.copy_protection
         self.cave_ambience_enabled = preferences.cave_ambience
+        self.menu_sounds_enabled = preferences.menu_sounds
         self.keyboard_bindings = Bindings.from_saved('keyboard', preferences.keyboard_bindings)
         self.controller_bindings = Bindings.from_saved('controller', preferences.controller_bindings)
         self.controller_enabled = preferences.controller_enabled

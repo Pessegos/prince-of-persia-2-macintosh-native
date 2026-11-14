@@ -73,8 +73,10 @@ class MenuThemeTest(unittest.TestCase):
         self.assertIs(menu_theme.theme_for(game(5, harbor=object())), CAVERNS)
 
     def test_frame_stays_inside_the_playfield(self):
-        self.assertEqual(menu_theme.frame_rect(GameMenu.PANEL, CAVERNS), (62, 2, 450, 364))
-        self.assertEqual(menu_theme.frame_rect(GameMenu.PANEL, PALACE), (63, 1, 449, 364))
+        # The F1 list no longer scrolls, so its panel is shorter than the playfield.
+        self.assertEqual(menu_theme.frame_rect(GameMenu.PANEL, CAVERNS), (62, 31, 450, 335))
+        self.assertEqual(menu_theme.frame_rect(GameMenu.PANEL, PALACE), (63, 30, 449, 335))
+        self.assertEqual(menu_theme.frame_rect(GameMenu.OPTIONS_PANEL, CAVERNS), (62, 43, 450, 323))
         self.assertEqual(menu_theme.frame_rect((0, 0, 511, 383), CAVERNS), (1, 0, 510, 364))
         # Controls: its labels reach the panel's sides, so the frame stands outside them.
         self.assertEqual(menu_theme.frame_rect((21, 7, 491, 357), CAVERNS, True), (12, 2, 500, 364))

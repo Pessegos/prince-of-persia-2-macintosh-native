@@ -152,10 +152,15 @@ class MenuInputAudioTests(unittest.TestCase):
         rect = menu.row_rect(0)
         self.hover((rect[0] + 10, rect[1] + 4))
         self.assertEqual(self.host.audio.play_ui.call_args_list, [call('hover')] * 3)
+        # The game's sounds and the menu's sounds have separate switches.
         self.host.sound_enabled = False
         rect = menu.row_rect(1)
         self.hover((rect[0] + 10, rect[1] + 4))
-        self.assertEqual(self.host.audio.play_ui.call_count, 3)
+        self.assertEqual(self.host.audio.play_ui.call_count, 4)
+        self.host.menu_sounds_enabled = False
+        rect = menu.row_rect(2)
+        self.hover((rect[0] + 10, rect[1] + 4))
+        self.assertEqual(self.host.audio.play_ui.call_count, 4)
 
     def test_clicks_ignore_empty_space_disabled_rows_and_other_mouse_buttons(self):
         host, menu = self.host, self.host.game_menu

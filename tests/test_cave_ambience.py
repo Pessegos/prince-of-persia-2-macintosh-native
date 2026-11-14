@@ -2292,14 +2292,17 @@ class PixelArtRuleTests(unittest.TestCase):
 
 
 class MenuTests(unittest.TestCase):
-    def test_the_toggle_starts_off_beside_the_audio_items(self):
-        items = GameMenu().items
-        actions = [item.action for item in items]
-        self.assertEqual(actions.index('ambience'), actions.index('music') + 1)
-        item = items[actions.index('ambience')]
+    def test_the_toggle_starts_off_and_opens_the_display_options(self):
+        # A picture effect: it heads the Options page's Display group, not Sound.
+        menu = GameMenu(page='options')
+        actions = [item.action for item in menu.items]
+        self.assertNotIn('ambience', [item.action for item in menu.menu_items])
+        self.assertEqual(menu.OPTION_HEADINGS[actions.index('ambience')], 'Display')
+        self.assertEqual(actions.index('fullscreen'), actions.index('ambience') + 1)
+        item = menu.items[actions.index('ambience')]
         self.assertIs(item.checked, False)
         self.assertEqual(item.shortcut, 'Alt+A')
-        self.assertIs(GameMenu(cave_ambience=True).items[actions.index('ambience')].checked, True)
+        self.assertIs(GameMenu(page='options', cave_ambience=True).items[actions.index('ambience')].checked, True)
 
     def test_every_row_stays_inside_the_panel(self):
         # The menu scrolls once it has more rows than fit: check the rows shown
@@ -2313,6 +2316,11 @@ class MenuTests(unittest.TestCase):
                 rect = menu.row_rect(index)
                 self.assertGreaterEqual(rect[1], menu.ROW_TOP)
                 self.assertLessEqual(rect[3], menu.PANEL[3])
+        options = GameMenu(page='options')
+        for index in options.visible_indices():
+            rect = options.row_rect(index)
+            self.assertGreaterEqual(rect[1], options.OPTIONS_TOP)
+            self.assertLess(rect[3], options.OPTIONS_PANEL[3])
 
 
 @unittest.skipUnless(CAVERNS_INSTALLED, 'Imported cavern resources required')

@@ -769,6 +769,7 @@ class WindowControls(InputRouting):
             self.game_menu.sound = self.sound_enabled
             self.game_menu.music = self.music_enabled
             self.game_menu.cave_ambience = getattr(self, 'cave_ambience_enabled', False)
+            self.game_menu.menu_sounds = getattr(self, 'menu_sounds_enabled', True)
             self.game_menu.fullscreen = self.fullscreen
             self.game_menu.copy_protection = getattr(self, "copy_protection_enabled", True)
 
@@ -776,7 +777,7 @@ class WindowControls(InputRouting):
         if self.game_menu is not None:
             if self.game_menu.page != "confirm":
                 if page == "menu":
-                    if self.game_menu.page in ("screenshots", "saves", 'cutscenes', 'controls'):
+                    if self.game_menu.page in ("screenshots", "saves", 'cutscenes', 'controls', 'options'):
                         self.dispose_screenshot_gallery()
                         self.game_menu.show_page("menu")
                         self.pause_resume_keys.update(self.window_keys_down)
@@ -868,8 +869,13 @@ class WindowControls(InputRouting):
             self.close_game_menu(resume=action == "resume")
         elif action == "quit":
             self.root.destroy()
-        elif action in ("confirm_new", "about"):
+        elif action in ("confirm_new", "about", "options"):
             self.open_game_menu("confirm" if action == "confirm_new" else action)
+        elif action == "menu_sounds":
+            self.menu_sounds_enabled = not getattr(self, 'menu_sounds_enabled', True)
+            remember(menu_sounds=self.menu_sounds_enabled)
+            self.play_menu_sound('click')
+            self.render()
         elif action == "screenshot_folder":
             self.choose_screenshot_folder()
         elif action == "screenshot":
@@ -921,6 +927,8 @@ class WindowControls(InputRouting):
             self.apply_save_action(action)
         elif action == "hall":
             if self.game_menu is None:
+                self.open_game_menu()
+            elif self.game_menu.page == 'options':
                 self.open_game_menu()
             self.game_menu.focus = next(i for i, item in enumerate(self.game_menu.items)
                                         if item.action == action)
@@ -1100,7 +1108,8 @@ class WindowControls(InputRouting):
 
     def play_menu_sound(self, kind):
         audio = getattr(self, 'audio', None)
-        if audio is not None and getattr(self, 'sound_enabled', True):
+        # Menu sounds have their own switch on the Options page, apart from the game's sounds.
+        if audio is not None and getattr(self, 'menu_sounds_enabled', True):
             audio.play_ui(kind)
 
     def menu_sound_target(self, menu, point=None):
@@ -1300,7 +1309,7 @@ class WindowControls(InputRouting):
             return 'break'
         command = {"n": "confirm_new", "r": "restart", "t": "sound", "m": "music",
                    "a": "ambience", "s": "save", "o": "open", "l": "open", "h": "hall", "v": "about",
-                   "c": "cutscenes", "k": "controls", "q": "quit"}.get(
+                   "c": "cutscenes", "k": "controls", "p": "options", "q": "quit"}.get(
                        event.keysym.lower()) if alt and not event.state & (0x4 | 0x40) else None
         if command is not None:
             confirming_save = (self.game_menu is not None and self.game_menu.page == 'saves'

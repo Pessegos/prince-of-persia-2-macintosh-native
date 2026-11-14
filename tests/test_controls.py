@@ -1004,12 +1004,13 @@ class FakeFont:
 
 
 class GameMenuRowTests(unittest.TestCase):
-    def test_controls_row_follows_the_cutscene_viewer_and_fits(self):
+    def test_controls_row_follows_options_and_fits(self):
         menu = GameMenu()
         actions = [item.action for item in menu.items]
-        self.assertEqual(actions.index('controls'), actions.index('cutscenes') + 1)
+        self.assertEqual(actions.index('controls'), actions.index('options') + 1)
+        self.assertEqual(actions.index('cutscenes'), actions.index('controls') + 1)
         self.assertLessEqual(menu.row_rect(menu.visible_indices()[-1])[3], menu.PANEL[3])
-        menu.key('Up')  # Wrap to Quit and scroll the final row into view.
+        menu.key('Up')  # Wrap to Quit, which is already in view.
         self.assertEqual(menu.focus, len(menu.items) - 1)
         self.assertEqual(menu.visible_indices()[-1], menu.focus)
         self.assertLessEqual(menu.row_rect(menu.focus)[3], menu.PANEL[3])
