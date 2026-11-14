@@ -105,13 +105,13 @@ class DevelopmentMenu:
         7: (120, 80, 146, 106), 8: (120, 316, 392, 342),
     }
     MAP_CONTROLS = {
-        7: (14, 14, 40, 40), 5: (130, 14, 156, 40),
+        7: (12, 14, 38, 40), 5: (130, 14, 156, 40),
         0: (164, 14, 348, 40), 6: (356, 14, 382, 40),
-        4: (12, 52, 500, 330), 1: (16, 348, 292, 372),
-        2: (310, 348, 386, 372), 3: (394, 348, 494, 372),
+        4: (12, 52, 500, 330), 1: (12, 348, 308, 372),
+        2: (316, 348, 392, 372), 3: (400, 348, 500, 372),
     }
-    GAME_CONTROLS = {4: (120, 126, 392, 166), 8: (120, 174, 392, 210),
-                     1: (120, 218, 252, 248), 11: (264, 218, 392, 248),
+    GAME_CONTROLS = {4: (120, 128, 392, 164), 8: (120, 172, 392, 208),
+                     1: (120, 216, 252, 246), 11: (264, 216, 392, 246),
                      3: (120, 270, 392, 300)}
     GALLERY_CONTROLS = {**MAP_CONTROLS, 9: (420, 14, 446, 40), 10: (460, 14, 486, 40),
                         8: (14, 348, 40, 372), 1: (52, 348, 202, 372),
@@ -708,10 +708,10 @@ class DevelopmentMenu:
                            (cx - direction * 3, cy + 5)), fill=white, width=2)
         destination = self.return_screen
         label = (f'Return to {destination}' if destination is not None else 'Return to last room')
-        text(label, 154, 355, white if destination is not None else c('#777777'),
+        text(label, 160, 355, white if destination is not None else c('#777777'),
              centered=True, max_width=256)
-        text('Go', 348, 355, centered=True, max_width=64)
-        text('Resume', 444, 355, centered=True, max_width=88)
+        text('Go', 354, 355, centered=True, max_width=64)
+        text('Resume', 450, 355, centered=True, max_width=88)
         if self.error:
             # Just above the line, on the ground: drawn across it, the line struck it through.
             # The tail of an "f" ends a pixel above the line.
