@@ -13,11 +13,6 @@ are synthesised here as a small plucked instrument, like a santur or an oud:
   F sharp, G, A), whose augmented second gives it the game's flavour, to
   the octave, struck again twice like a short tremolo. It is heard rarely,
   so it may ring; it is still quiet.
-- ``burn``: a screenshot dropped on the lava meets it. Not a string: the
-  fizz of something wet touching hot lava, as in other games where an item
-  falls into it. A short hiss that comes in at once and dies away, growing
-  duller as it goes, rough as the game's 11 kHz samples, with a few dry
-  crackles like the sparks drawn above the burning picture.
 
 Each string is a Karplus-Strong loop: the string's shape as a finger leaves
 it goes round a delay line as long as one period of the note, and is softened
@@ -33,12 +28,12 @@ import numpy
 _SCALE = (587.33, 622.25, 739.99, 783.99, 880.00)
 # The notes hovering plays, in turn. One (A): the menu repeats a single quiet touch.
 HOVER_NOTES = (4,)
-KINDS = ('hover', 'click', 'reveal', 'burn')
+KINDS = ('hover', 'click', 'reveal')
 # Loudest sample of each sound, as a fraction of full scale. The first menu
 # ticks (0.0025 and 0.0075) were too quiet to hear; a first plucked version
 # (0.10 and 0.18, ringing for a quarter of a second and more) was far too much.
-PEAK = {'hover': 0.0075, 'click': 0.015, 'reveal': 0.09, 'burn': 0.06}   # three and two times the first ticks
-DURATION = {'hover': 0.05, 'click': 0.07, 'reveal': 1.30, 'burn': 0.75}
+PEAK = {'hover': 0.0075, 'click': 0.015, 'reveal': 0.09}   # three and two times the first ticks
+DURATION = {'hover': 0.05, 'click': 0.07, 'reveal': 1.30}
 
 
 def _string(frequency, seconds, rate, seed, damping=0.996, pick=0.5):
@@ -76,35 +71,6 @@ def _tap(seconds, rate, seed):
     return noise * numpy.exp(-numpy.arange(count) / (count / 5))
 
 
-def _fizz(seconds, rate, seed):
-    """A hiss that dies away and grows duller, with a few crackles: lava meeting something."""
-    rng = numpy.random.RandomState(seed)
-    count = max(2, round(seconds * rate))
-    # Rough noise, held for a few samples as at the game's 11 kHz, not a smooth digital hiss.
-    hold = max(1, round(rate / 11025))
-    noise = numpy.repeat(rng.uniform(-1, 1, count // hold + 1), hold)[:count]
-    # Duller as it dies: a one-pole low-pass whose corner falls from bright to dull.
-    t = numpy.arange(count) / rate
-    corner = 5200 * numpy.exp(-t / 0.35) + 900
-    alpha = 1 - numpy.exp(-2 * numpy.pi * corner / rate)
-    out = numpy.empty(count)
-    level = 0.0
-    for index in range(count):
-        level += alpha[index] * (noise[index] - level)
-        out[index] = level
-    out -= numpy.convolve(out, numpy.ones(64) / 64, 'same')   # no rumble under the hiss
-    # In at once, then away: loud for a moment, a sizzle that flutters, then gone.
-    flutter = numpy.repeat(rng.uniform(0.65, 1, count // round(rate * 0.02) + 1), round(rate * 0.02))[:count]
-    out *= numpy.minimum(1, t / 0.008) * numpy.exp(-t / 0.22) * flutter
-    # A few dry crackles in the first half, each a couple of milliseconds.
-    for _ in range(7):
-        start = round(rng.uniform(0.01, seconds * 0.5) * rate)
-        length = max(2, round(0.002 * rate))
-        crack = rng.uniform(-1, 1, length) * numpy.exp(-numpy.arange(length) / (length / 3))
-        out[start:start + length] += crack[:max(0, count - start)] * 0.5 * numpy.exp(-start / rate / 0.3)
-    return out
-
-
 def _mix(rate, seconds, parts):
     """Lay ``(start seconds, samples, gain)`` parts over one another."""
     out = numpy.zeros(round(seconds * rate))
@@ -132,8 +98,6 @@ def menu_samples(kind, rate, variant=0):
             (0, _tap(0.006, rate, 0x504F60), 0.6),
             (0, _string(_SCALE[0], seconds, rate, 0x504F61, damping=0.955, pick=0.4), 1),
         ])
-    elif kind == 'burn':
-        out = _fizz(seconds, rate, 0x504F80)
     else:
         # The game's own flavour: up the scale through its augmented second
         # (E flat to F sharp), quickly, as on a santur, to the octave, which

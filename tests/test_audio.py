@@ -642,13 +642,27 @@ class PolyphonicCueTests(unittest.TestCase):
         self.assertFalse(self.playback.playing_effects())
         self.assertFalse(self.audio.pending_effects)
 
-    def test_a_burning_screenshot_fizzes_on_the_menu_channel_without_touching_game_cues(self):
-        # It first used the game's cue 69 (a skeleton sinking into lava), whose start
-        # sounds like bones; the fizz is the port's own, made like the other menu sounds.
+    def test_a_burning_screenshot_sinks_with_the_lava_sound_of_a_body_at_the_reveal_level(self):
+        from pygame import mixer
+
         burn = self.playback.ui_sounds['burn']
-        self.assertNotEqual(burn.get_raw(), self.playback.sounds[69].get_raw())
+        self.assertIsNot(burn, self.playback.sounds[69])          # the game's own cue keeps its level
+        # Only the bubbling: the rattle of its first 0.165 s is left out (the whole cue was
+        # rejected for it), and the rest is the game's samples, faded in over 5 ms.
+        rate, bits, channels = mixer.get_init()
+        frame = abs(bits) // 8 * channels
+        whole = self.playback.sounds[69].get_raw()
+        cut = round(0.165 * rate) * frame
+        self.assertEqual(len(burn.get_raw()), len(whole) - cut)
+        fade = round(0.005 * rate) * frame
+        self.assertEqual(burn.get_raw()[fade:], whole[cut + fade:])
+        self.assertEqual(burn.get_raw()[:frame], bytes(frame))      # no click where it starts
+        self.assertAlmostEqual(burn.get_volume(), 0.4, places=2)
+        self.assertEqual(self.playback.sounds[69].get_volume(), 1)
         self.playback.play_ui('burn')
         self.assertIs(self.playback.ui_channels['click'].get_sound(), burn)
+        del self.playback.ui_sounds['burn']                       # an installation without cue 69
+        self.playback.play_ui('burn')
 
     def test_effect_pool_never_steals_music_menu_or_mechanism_channels(self):
         self.audio.add_song(40)

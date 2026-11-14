@@ -70,7 +70,7 @@ at the speed that puts them on pitch at any mixer rate (within a few cents).
 | `hover` | a new control is reached | one high damped note (A) with the fingertip's tap, nearer a click than a tone; always the same | 0.05 s | 0.75% |
 | `click` | a control is activated | the same touch a fifth lower (D), a little firmer | 0.07 s | 1.5% |
 | `reveal` | a chapter starts to resolve in the Cutscene Viewer | a quick run up the scale the game's music leans on (D, E flat, F sharp, G, A) to the octave, struck again twice like a short tremolo | 1.30 s | 9% |
-| `burn` | a screenshot dropped on the lava meets it (screenshots page) | a fizz, as when something falls into lava in other games: a hiss in at once that dies away duller, rough like the game's 11 kHz samples, with a few dry crackles. The game's cue 69 (a body sinking into lava) was tried first; its start sounds like rattling bones | 0.75 s | 6% |
+| `burn` | a screenshot dropped on the lava meets it (screenshots page) | the game's own cue 69, a body sinking into lava (GetLavaInfoHnd 8:34a6), without its first 0.165 s and faded in over 5 ms: only the bubbling, a copy at 40% of its level; absent without imported audio. The whole cue was rejected (its start is a bright pulsing rattle, like bones), and so was a synthesised fizz | 0.34 s | 9% |
 
 Two earlier versions were rejected by the user and bound these values from
 both sides. The first menu sounds were 12 and 18 ms ticks of filtered noise at
