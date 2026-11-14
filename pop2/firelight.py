@@ -48,6 +48,8 @@ RAY_STEPS = 14
 SHADOW_EDGE = 1.6
 RAY_CLEARANCE = 2.5
 SHADOW_STRIDE = 2
+# Cells of flame whose light is worked out together: only for speed.
+CELLS_AT_ONCE = 8
 # The warm light rock throws back on what is around it.
 BOUNCE = 0.3
 BOUNCE_SPREAD = 12.0
@@ -148,14 +150,15 @@ class Relief:
         self.rows, self.columns = rows.astype(numpy.float32), columns.astype(numpy.float32)
 
     def shadow(self, to_x, to_y, to_z, distance):
-        """How much of each point can see the light, by walking towards it."""
+        """How much of each point can see the light, by walking towards it.
+        [cell, y, x] for each cell of flame at once."""
         height, stride = self.height, SHADOW_STRIDE
         rows, columns = self.rows[::stride, ::stride], self.columns[::stride, ::stride]
-        to_x, to_y = to_x[::stride, ::stride], to_y[::stride, ::stride]
-        to_z, distance = to_z[::stride, ::stride], distance[::stride, ::stride]
+        to_x, to_y = to_x[:, ::stride, ::stride], to_y[:, ::stride, ::stride]
+        to_z, distance = to_z[:, ::stride, ::stride], distance[:, ::stride, ::stride]
         surface = height[::stride, ::stride]
         last_row, last_column = height.shape[0] - 1, height.shape[1] - 1
-        seen = numpy.ones_like(surface)
+        seen = numpy.ones(to_z.shape, dtype=surface.dtype)
         for step in range(1, RAY_STEPS + 1):
             along = step / (RAY_STEPS + 1)
             row = (rows + to_y * along + 0.5).astype(numpy.int32).clip(0, last_row)
@@ -164,24 +167,35 @@ class Relief:
             # A point cannot shade itself, and the flame stands in free air.
             counted = (distance * along > RAY_CLEARANCE) & (distance * (1 - along) > RAY_CLEARANCE)
             seen = numpy.minimum(seen, numpy.where(counted, (clear / SHADOW_EDGE * 0.5 + 0.5).clip(0, 1), 1.0))
-        spread = seen.repeat(stride, axis=0).repeat(stride, axis=1)
-        return spread[:height.shape[0], :height.shape[1]]
+        spread = seen.repeat(stride, axis=1).repeat(stride, axis=2)
+        return spread[:, :height.shape[0], :height.shape[1]]
 
-    def light_from(self, x, y):
-        """The light one cell of flame, at a place in the window, casts on the rock."""
-        row = min(max(int(y), 0), self.height.shape[0] - 1)
-        column = min(max(int(x), 0), self.height.shape[1] - 1)
-        lift = self.height[row, column] + FLAME_LIFT
-        to_x, to_y, to_z = x - self.columns, y - self.rows, lift - self.height
+    def lights_from(self, xs, ys):
+        """[cell, y, x] of the light that cells of flame, at places in the window,
+        cast on the rock. Worked out together: each is what it would be alone."""
+        rows = numpy.clip(ys.astype(numpy.int64), 0, self.height.shape[0] - 1)
+        columns = numpy.clip(xs.astype(numpy.int64), 0, self.height.shape[1] - 1)
+        lift = (self.height[rows, columns] + FLAME_LIFT)[:, None, None]
+        to_x, to_y, to_z = xs[:, None, None] - self.columns, ys[:, None, None] - self.rows, lift - self.height
         squared = to_x ** 2 + to_y ** 2 + to_z ** 2
         distance = numpy.sqrt(squared)
         facing = ((to_z - self.across * to_x - self.down * to_y) / (self.length * distance)).clip(0, 1)
         fading = (1 - squared / LIGHT_REACH ** 2).clip(0, 1) ** 2
         return facing * fading / (1 + squared / LIGHT_NEAR ** 2) * self.shadow(to_x, to_y, to_z, distance)
 
+    def light_from(self, x, y):
+        """The light one cell of flame, at a place in the window, casts on the rock."""
+        return self.lights_from(numpy.array([x], dtype=numpy.float64), numpy.array([y], dtype=numpy.float64))[0]
+
     def flame(self, places, shares):
-        """All of the flame's light."""
-        return sum(share * self.light_from(x, y) for (x, y), share in zip(places, shares))
+        """All of the flame's light, added cell by cell in order."""
+        places = numpy.asarray(places, dtype=numpy.float64)
+        total = 0
+        for first in range(0, len(places), CELLS_AT_ONCE):
+            lights = self.lights_from(places[first:first + CELLS_AT_ONCE, 0], places[first:first + CELLS_AT_ONCE, 1])
+            for share, light in zip(shares[first:first + CELLS_AT_ONCE], lights):
+                total = total + share * light
+        return total
 
 
 def pressed(light):

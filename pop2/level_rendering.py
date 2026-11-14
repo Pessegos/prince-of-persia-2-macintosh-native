@@ -9,6 +9,16 @@ from pop2.render_opening import (
 )
 
 
+# Environments drawn from the cave exports: caverns, ruins, temple and the tower.
+CAVE_KINDS = (2, 3, 4, 6)
+
+
+def room_kinds(terrain, room_id):
+    """The kinds of a room's tiles: all that reading a room for the ambience takes from
+    the level map."""
+    return tuple(terrain.tile(room_id, column, row).kind for row in range(3) for column in range(10))
+
+
 class LevelRenderer:
     def __init__(self, level, preload_room=True, retouch_caverns=True):
         if level.kind != 5 and level.number not in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14):
@@ -24,6 +34,10 @@ class LevelRenderer:
         self.cavern_map = None
         self.ambience = None
         self.ambience_air = {}
+        # Rooms read before the Prince comes in: {room: ((drawing key, tiles), air)}.
+        self.ambience_ahead = {}
+        self.ambience_reading = None
+        self.supported = None
         self.cavern_keys = {}
         if preload_room:
             self.room(level.start_room)
@@ -42,37 +56,12 @@ class LevelRenderer:
         if not 0 <= room_id < 32:
             raise ValueError("Invalid scenery room")
         if self.level.kind in (2, 3, 4, 6):
-            from pop2.caverns import (
-                cavern_pressure_signature,
-                cavern_scene_signature,
-                cavern_scythe_signature,
-            )
-
             if caverns is not None:
                 caverns.lava.enter_room(room_id,
                     self.cavern_program.get('lava', {}).get('rooms', {}).get(str(room_id), ()))
-            frame = caverns.entry_frame if caverns is not None else 0
-            signature = (cavern_scene_signature(self.cavern_program, room_id, caverns)
-                         if caverns is not None else '')
-            pressure = cavern_pressure_signature(self.cavern_program, room_id, caverns) if caverns else ()
-            fallen = caverns.bridge.fallen() if caverns is not None else frozenset()
-            wobble = frozenset(caverns.bridge.wobble.items()) if caverns is not None else frozenset()
-            scythe = (cavern_scythe_signature(self.cavern_program, room_id, caverns)
-                      if caverns is not None else ())
-            entry = caverns.entry_room if caverns is not None else self.level.start_room
-            alternate = caverns is not None and caverns.alternate_entry
-            redrawn = frozenset(caverns.loose.redrawn) if caverns is not None else frozenset()
-            key = (room_id, frame if room_id == entry else 0, signature, pressure, fallen, scythe, wobble,
-                   alternate, redrawn)
-            if key not in self.cavern_frames:
-                # Retain loose-floor variants, not every historical gate
-                # height or plank wobble.
-                for previous in tuple(self.cavern_frames):
-                    if previous[0] == room_id and (previous[3] != pressure or previous[6] or wobble):
-                        del self.cavern_frames[previous]
-                self.cavern_frames[key] = self.built_room(key)
+            key = self.room_key(room_id, caverns)
             self.cavern_keys[room_id] = key
-            self.rooms[room_id] = self.cavern_frames[key]
+            self.rooms[room_id] = self.cached_room(key)
             return self.rooms[room_id]
         if room_id not in self.rooms:
             if self.level.kind == 1:
@@ -89,6 +78,40 @@ class LevelRenderer:
                                                         level_resource_id=self.level.resource_id)
         return self.rooms[room_id]
 
+    def room_key(self, room_id, caverns=None):
+        """What a cave room's drawing depends on, as things stand. Only read."""
+        from pop2.caverns import (
+            cavern_pressure_signature,
+            cavern_scene_signature,
+            cavern_scythe_signature,
+        )
+
+        frame = caverns.entry_frame if caverns is not None else 0
+        signature = (cavern_scene_signature(self.cavern_program, room_id, caverns)
+                     if caverns is not None else '')
+        pressure = cavern_pressure_signature(self.cavern_program, room_id, caverns) if caverns else ()
+        fallen = caverns.bridge.fallen() if caverns is not None else frozenset()
+        wobble = frozenset(caverns.bridge.wobble.items()) if caverns is not None else frozenset()
+        scythe = (cavern_scythe_signature(self.cavern_program, room_id, caverns)
+                  if caverns is not None else ())
+        entry = caverns.entry_room if caverns is not None else self.level.start_room
+        alternate = caverns is not None and caverns.alternate_entry
+        redrawn = frozenset(caverns.loose.redrawn) if caverns is not None else frozenset()
+        return (room_id, frame if room_id == entry else 0, signature, pressure, fallen, scythe, wobble,
+                alternate, redrawn)
+
+    def cached_room(self, key):
+        """The cave room drawn for a key, built once."""
+        if key not in self.cavern_frames:
+            room_id, pressure, wobble = key[0], key[3], key[6]
+            # Retain loose-floor variants, not every historical gate
+            # height or plank wobble.
+            for previous in tuple(self.cavern_frames):
+                if previous[0] == room_id and (previous[3] != pressure or previous[6] or wobble):
+                    del self.cavern_frames[previous]
+            self.cavern_frames[key] = self.built_room(key)
+        return self.cavern_frames[key]
+
     def built_room(self, key):
         from pop2.caverns import cavern_room
 
@@ -100,13 +123,17 @@ class LevelRenderer:
 
     def room_with_gates_up(self, room_id):
         """The room as it stands now, but with every gate raised."""
-        from pop2.caverns import cavern_gates_up
-
         key = self.cavern_keys.get(room_id)
         if key is None:
             return self.rooms[room_id]
-        pressure = cavern_gates_up(self.cavern_program, room_id, key[3])
-        return self.rooms[room_id] if pressure == key[3] else self.built_room((*key[:3], pressure, *key[4:]))
+        return self.gates_up_of(key, self.rooms[room_id])
+
+    def gates_up_of(self, key, drawn):
+        """drawn, the room as drawn for key, with every gate raised."""
+        from pop2.caverns import cavern_gates_up
+
+        pressure = cavern_gates_up(self.cavern_program, key[0], key[3])
+        return drawn if pressure == key[3] else self.built_room((*key[:3], pressure, *key[4:]))
 
     def enter_room(self, room_id, caverns=None):
         if caverns is not None and self.cavern_display is not None and self.cavern_display[0] != room_id:
@@ -146,10 +173,67 @@ class LevelRenderer:
             return
         if self.ambience is None or self.ambience.room != room_id:
             if room_id not in self.ambience_air:
-                self.ambience_air[room_id] = room_air(self.level.number, room_id, self.rooms[room_id], terrain,
-                                                      self.room_with_gates_up(room_id))
+                ahead = self.ambience_ahead.pop(room_id, None)
+                if ahead is not None and ahead[0] == (self.cavern_keys.get(room_id), room_kinds(terrain, room_id)):
+                    # Read beforehand from this very drawing of the room.
+                    self.ambience_air[room_id] = ahead[1]
+                else:
+                    self.ambience_air[room_id] = room_air(self.level.number, room_id, self.rooms[room_id], terrain,
+                                                          lambda: self.room_with_gates_up(room_id))
             self.ambience = CavernAmbience(room_id, self.ambience_air[room_id])
         self.ambience.advance(terrain, footing, thuds)
+
+    def read_ambience_ahead(self, room_id, caverns, terrain):
+        """Read one room next to this one that the ambience has not read yet, while the
+        game waits for its next frame, so that walking in does not stall the frame.
+
+        What is read is kept with the drawing and the tiles it was read from: a room
+        that has changed by the time the Prince comes in is read again then, as it was
+        before there was any reading ahead.
+        It goes a step at a time, each call doing one: drawing the room, drawing it
+        with its gates up when it has torches, then reading it. Returns whether a step
+        was taken."""
+        from pop2.cavern_ambience import AMBIENCE_LEVELS, room_air, room_torches
+
+        if self.level.number not in AMBIENCE_LEVELS or self.level.kind not in (2, 3, 4, 6):
+            return False
+        reading = self.ambience_reading
+        if reading is not None and reading[0] in self.ambience_air:
+            reading = None  # The Prince went in first.
+        if reading is None:
+            reading = self.ambience_reading = self.room_to_read(room_id, caverns, terrain)
+            if reading is None:
+                return False
+        near, seen, steps = reading
+        key = seen[0]
+        if 'drawn' not in steps:
+            steps['drawn'] = self.cached_room(key)
+            return True
+        if 'raised' not in steps and room_torches(self.cavern_program, near):
+            steps['raised'] = self.gates_up_of(key, steps['drawn'])
+            return True
+        self.ambience_reading = None
+        self.ambience_ahead[near] = seen, room_air(self.level.number, near, steps['drawn'], terrain,
+                                                   steps.get('raised'))
+        return True
+
+    def room_to_read(self, room_id, caverns, terrain):
+        """(room, (drawing key, tiles), {}) of a room next door to read ahead, or None."""
+        rooms = set(self.supported_rooms_cache())
+        for direction in ('left', 'right', 'up', 'down'):
+            near = terrain.neighbor(room_id, direction)
+            # Once each: a room whose gates keep moving would be read again every frame.
+            if near is None or near not in rooms or near in self.ambience_air or near in self.ambience_ahead:
+                continue
+            # Walking in repaints the room whole, so no crevice keeps a redraw then.
+            key = (*self.room_key(near, caverns)[:8], frozenset())
+            return near, (key, room_kinds(terrain, near)), {}
+        return None
+
+    def supported_rooms_cache(self):
+        if self.supported is None:
+            self.supported = tuple(self.supported_rooms())
+        return self.supported
 
     def ambient_layer(self, frame, room_id):
         """Drawn after remember_scenery: a room cut keeps the scenery of the

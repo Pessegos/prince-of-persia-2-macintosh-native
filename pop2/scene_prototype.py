@@ -102,6 +102,9 @@ ANIMATION_FPS = 12
 ANIMATION_INTERVAL_MS = 1000 / ANIMATION_FPS
 COMBAT_ANIMATION_FPS = 10
 COMBAT_ANIMATION_INTERVAL_MS = 1000 / COMBAT_ANIMATION_FPS
+# Seconds that must be left before the next frame to ready a room or a level
+# ahead. A step takes 10 to 50 ms; a frame interval is about 83.
+SPARE_TIME_S = 0.05
 RUN_CYCLE_SEQUENCES = {1, 200, 201, 202}
 REST_SEQUENCES = {IDLE_SEQUENCE}
 CROUCH_SEQUENCES = {
@@ -567,7 +570,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             if previous.caverns is not None and game.caverns is not None:
                 # So does an upside-down world (a5-0x4fa8).
                 game.caverns.potions.flip_timer = previous.caverns.potions.flip_timer
-        renderer = LevelRenderer(game.level)
+        prepared = getattr(self, 'next_level', None)
+        renderer = (prepared.take(number, self.terrain_enabled, entry, game.level)
+                    if prepared is not None and prepared.number == number else None)
+        if renderer is not None:
+            self.next_level = None
+        else:
+            renderer = LevelRenderer(game.level)
         self.time_message, self.time_message_frames = None, 0
         self.bind_level(game, renderer)
         self.god_mode_added_hearts = 0
@@ -3348,6 +3357,45 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 interval_ms=self.current_animation_interval_ms(),
             )
         self.animation_after_id = self.root.after(delay_ms, self.advance_animation)
+        if getattr(self, "intro", None) is None and getattr(self, "demo", None) is None:
+            self.schedule_spare_work()
+
+    def schedule_spare_work(self):
+        """The time left before the next frame readies what is coming, a step at a
+        time: with the cave ambience on, a room next door; then the next level, so
+        that walking into either does not stall its first frames."""
+        # Test stand-ins for Tk may have no idle queue: then there is no spare time.
+        after_idle = getattr(self.root, 'after_idle', None)
+        if getattr(self, 'spare_work_after_id', None) is not None or after_idle is None:
+            return
+        self.spare_work_after_id = after_idle(self.use_spare_time)
+
+    def use_spare_time(self):
+        self.spare_work_after_id = None
+        game = getattr(self, 'game', None)
+        if (game is None or getattr(self, 'intro', None) is not None
+                or self.next_animation_at - time.perf_counter() < SPARE_TIME_S):
+            return
+        caverns, terrain = game.caverns, getattr(self, 'level_map', None)
+        if (getattr(self, 'cave_ambience_enabled', False) and caverns is not None and terrain is not None
+                and self.level_renderer.read_ambience_ahead(self.room_id, caverns, terrain)):
+            return
+        self.ready_next_level()
+
+    def ready_next_level(self):
+        from pop2.level_preparation import NextLevel
+
+        number = self.game.level.number + 1
+        if number > 14:
+            return
+        prepared = getattr(self, 'next_level', None)
+        if prepared is None or prepared.number != number:
+            # As load_level would choose it, were the level left now.
+            entry = self.game.ruins_entry if number == 7 else 1
+            prepared = self.next_level = NextLevel(
+                self.resources, number, self.terrain_enabled, entry,
+                ambience=lambda: getattr(self, 'cave_ambience_enabled', False))
+        prepared.step()
 
     def cancel_gate_presentation(self):
         pending = getattr(self, 'gate_presentation_after_id', None)
