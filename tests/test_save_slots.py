@@ -440,6 +440,34 @@ class SaveBrowserTests(unittest.TestCase):
                     full = browser.draw(source, font)
                     self.assertEqual(cached.tobytes(), full.tobytes())
 
+    def test_wide_page_two_line_name_keeps_quill_highlight_and_tip_clear_of_the_details(self):
+        # The tip used to sit under the name, over the save's first detail line,
+        # and the highlight stopped above the second line's underline.
+        font = SimpleNamespace(glyphs=dict.fromkeys(range(128)), text=lambda value, color:
+            Image.new('RGBA', (max(1, len(value)) * 14, 11), color))
+        slot = SaveSlot(self.folder / 'a', 'Level 12 - Checkpoint', True, level=12,
+                        date='12 Nov 2026  19:20', resume='Checkpoint', capacity=12)
+        size = (1920, 1080)
+        spread, shift = SaveBrowser.wide_layout(*size)
+        browser = SaveBrowser((slot,), 'load', spread=spread, shift=shift)
+        browser.focus = browser.hovered = 25
+        source = Image.new('RGBA', size, '#000000')
+        browser.draw(source, font)
+        self.assertEqual(browser.name_rows, 2)
+        x, y = browser.DETAILS
+        self.assertEqual(browser.RENAME, (x, y, browser.right, y + 37))
+        drawn = []
+        with patch('pop2.save_slots.ImageDraw.ImageDraw.rectangle', autospec=True,
+                   side_effect=lambda draw, rect, **kw: drawn.append(rect)):
+            browser.list_base_cache.clear()
+            browser.draw(source, font)
+        sy = size[1] / 384
+        # Every row from the name's foot down through the first detail line stays clear.
+        preview_left = round((browser.PREVIEW[0] + shift) * sy)
+        tips = [rect for rect in drawn if rect[0] > preview_left
+                and any(rect[1] < (y + row) * sy < rect[3] for row in range(38, 58, 2))]
+        self.assertEqual(tips, [])
+
     def test_clear_actions_current_marker_and_complete_wrapped_name(self):
         words = []
         def glyphs(value, color):

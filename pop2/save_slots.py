@@ -105,6 +105,7 @@ class SaveBrowser:
     # units wider than the classic page the panel is, and where it starts.
     spread: int = field(default=0, compare=False)
     shift: float = field(default=0.0, compare=False)
+    name_rows: int = field(default=1, compare=False)   # lines the selected save's name took when last drawn
 
     TABS = ((40, 53, 144, 79), (150, 53, 254, 79))
     ROW_HEIGHT = 42
@@ -165,8 +166,9 @@ class SaveBrowser:
 
     @property
     def RENAME(self):
+        # A long name takes two lines; the highlight then covers both (draw sets name_rows).
         x, y = self.DETAILS
-        return x, y, self.right, y + 26
+        return x, y, self.right, y + 26 + (self.name_rows - 1) * (11 if self.spread else 2)
 
     @property
     def FOOTER(self):
@@ -578,6 +580,17 @@ class SaveBrowser:
             right = self.right   # the preview's edges were unpacked into these names above
             name_x, name_width = (column + 24, right - column - 24) if can_rename else (column, right - column)
             name_color = cyan if highlighted else gold
+            name_lines = [slot.name]
+            if glyphs(slot.name, gold).width * 0.7 > name_width:
+                positions = range(1, len(slot.name))
+                word_breaks = [i for i in positions if slot.name[i].isspace()]
+                candidates = word_breaks or positions
+                split = min(candidates, key=lambda i: max(
+                    glyphs(slot.name[:i].rstrip(), gold).width,
+                    glyphs(slot.name[i:].lstrip(), gold).width))
+                name_lines = [slot.name[:split].rstrip(), slot.name[split:].lstrip()]
+            self.name_rows = len(name_lines)
+            extra = 11 * (len(name_lines) - 1)   # how much lower the name's block ends
             if highlighted:
                 rectangle(self.RENAME, fill=c('#202a2d'))
             if can_rename:
@@ -588,16 +601,8 @@ class SaveBrowser:
                 size = max(1, round(feather.width * scale * sx)), max(1, round(feather.height * scale * sy))
                 if size not in self.icon_cache:
                     remember(self.icon_cache, size, feather.resize(size, Image.Resampling.NEAREST), 8)
-                image.paste(self.icon_cache[size], point(column + 1, top + 1), self.icon_cache[size])
-            name_lines = [slot.name]
-            if glyphs(slot.name, gold).width * 0.7 > name_width:
-                positions = range(1, len(slot.name))
-                word_breaks = [i for i in positions if slot.name[i].isspace()]
-                candidates = word_breaks or positions
-                split = min(candidates, key=lambda i: max(
-                    glyphs(slot.name[:i].rstrip(), gold).width,
-                    glyphs(slot.name[i:].lstrip(), gold).width))
-                name_lines = [slot.name[:split].rstrip(), slot.name[split:].lstrip()]
+                # Level with the middle of the name, one line or two.
+                image.paste(self.icon_cache[size], point(column + 1, top + 1 + extra / 2), self.icon_cache[size])
             for index, value in enumerate(name_lines):
                 y = top + 6 + index * 11
                 text(value, name_x, y, name_color, name_width, True)
@@ -605,19 +610,21 @@ class SaveBrowser:
                     width = min(name_width, glyphs(value, name_color).width * 0.7)
                     line(((name_x, y + 10), (name_x + width, y + 10)), cyan)
             if can_rename and self.hovered == 25 and not modal:
-                tip = top + 30 if self.spread else top - 19   # the wide page has the preview above
-                rectangle((right - 110, tip, right, tip + 17), fill=c('#303030'))
-                text('Rename save', right - 102, tip + 5, white, 94, True)
+                # Like the classic page's tip over the preview's foot, the wide page's tip lies on the
+                # preview beside the name: above is the page's rule, below are the save's details.
+                tip_right, tip = (self.PREVIEW[2] - 4, top + 4 + extra // 2) if self.spread else (right, top - 19)
+                rectangle((tip_right - 110, tip, tip_right, tip + 17), fill=c('#303030'))
+                text('Rename save', tip_right - 102, tip + 5, white, 94, True)
             resume = {'Level start': 'Resumes at level start',
                       'Checkpoint': 'Resumes at checkpoint'}.get(slot.resume, slot.resume)
             message = self.error or self.status
             message_color = c('#ff9b9b') if self.error else muted
             if self.spread:
                 # Beside the preview: one detail on each line; messages go under the preview.
-                text(slot.resume, column, top + 36, muted, right - column, True)
-                text(slot.date, column, top + 50, muted, right - column, True)
+                text(slot.resume, column, top + 36 + extra, muted, right - column, True)
+                text(slot.date, column, top + 50 + extra, muted, right - column, True)
                 if slot.capacity is not None:
-                    text(f'Life {slot.capacity}', column, top + 64, muted, right - column, True)
+                    text(f'Life {slot.capacity}', column, top + 64 + extra, muted, right - column, True)
                 text(message, self.PREVIEW[0], self.PREVIEW[3] + 5, message_color,
                      right - self.PREVIEW[0], True)
             else:
