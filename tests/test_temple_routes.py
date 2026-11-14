@@ -34,8 +34,8 @@ ROUTES = {
 }
 
 
-# Level 12 is not finished: see the audit. This far, three loose floors hold
-# gates 3:2, 5:0 and 2:9 open for good.
+# An earlier, peaceful partial search of level 12 (see the audit). This far,
+# three loose floors hold gates 3:2, 5:0 and 2:9 open for good.
 LEVEL_12_GATES = ['leapR11', 'leapcatchL20', 'leapL5', 'runR5', 'runL5', 'hopcatchL', 'crawlL',
                   'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'tapL', 'stepL',
                   'crawlL', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8', 'creepL8',
@@ -56,6 +56,28 @@ LEVEL_12_GENIE = ['leapR11', 'leapcatchL20', 'leapL5', 'runL11', 'leapcatchR5', 
                   'leapcatchR11', 'leapL20', 'leapR11', 'descendhangR', 'descendhangR',
                   'leapcatchR20', 'climb', 'tapR', 'leapcatchR20', 'hopR', 'leapR20', 'crawlL',
                   'descendhangL', 'runL20', 'hopcatchL', 'runR5']
+
+# The player's Macintosh recording (docs/research/level12-video-route.md), with
+# opponents on from a fresh load: up through loose 1:26 from room 8, slabs on
+# 19:20, 5:28, 9:0 and 2:22, the room-9 guard fought off his platform onto
+# plate 9:24, the flaming sword parried down, plate 14:8 and back west through
+# rooms 14, 16, 6, 17, 10, 9, 8 and 19 to the stairway in room 7.
+LEVEL_12_VIDEO = [
+    'tapR', 'runR20', 'leapL11', 'tapL', 'climb', 'climb', 'tapR', 'jump', 'wait20', 'wait20', 'tapL',
+    'climb', 'tapR', 'hopshortR', 'nudgeR', 'nudgeR', 'tapL', 'jump', 'tapR', 'jump', 'tapL', 'jump',
+    'stepL', 'hopL', 'leapL5', 'stepL', 'stepL', 'tapR', 'climb', 'tapL', 'stepL', 'hopL', 'strike',
+    'descendL', 'leapR8', 'leapcatchL5', 'climb', 'hopcatchR', 'climb', 'leapcatchR20', 'stepL',
+    'hopcatchL', 'tapL', 'tapR', 'climb', 'climb', 'tapR', 'down', 'runL5', 'hopL', 'runL11', 'runR5',
+    'leapcatchL5', 'descendhangL', 'drink', 'leapR5', 'crawlL', 'leapcatchR5', 'climb', 'climb', 'climb',
+    'climb', 'runR11', 'hopR', 'leapcatchR11', 'leapR14', 'swordduel', 'down', 'runR20', 'leapR5', 'tapR',
+    'leapL11', 'runL11', 'runR5', 'runL5', 'crawlL', 'crawlL', 'crawlL', 'crawlL', 'crawlL', 'crawlL',
+    'duel', 'down', 'runL11', 'leapcatchL14', 'leapL20', 'runL20', 'descendL', 'crawlL', 'crawlL',
+    'crawlL', 'crawlL', 'duelfar', 'down', 'stepL', 'crawlL', 'runL20', 'descendhangL', 'hopcatchR',
+    'climb', 'climb', 'climb', 'leapcatchR11', 'climb', 'leapcatchR11', 'runR8', 'runR20', 'runR20',
+    'hopcatchR']
+# The recording's life bar shows twelve flasks on arrival; a level loaded on
+# its own starts with three, too few for the flaming sword.
+LEVEL_12_VIDEO_LIFE = 12
 
 INSTALLED = all(blades_exported(number) for number in (10, 11, 12, 13))
 
@@ -92,6 +114,27 @@ class TempleRouteTests(unittest.TestCase):
         self.assertIn((22, 24), harness.scene.game.caverns.potions.tiles)
         self.assertEqual(trace[-1][1:4], (18, 1, 9))
         self.assertTrue(trace[-1][-1], trace[-3:])
+
+    def test_level_12_is_finished_along_the_macintosh_video_route(self):
+        corpse = []
+
+        def after_the_fight(harness, name, phase):
+            if (name, phase) == ('strike', 'end'):
+                guards = harness.scene.combat.room_encounters[8][0]
+                corpse.extend((guard.alive, guard.row) for guard in guards)
+
+        reached, trace, harness = replay(12, LEVEL_12_VIDEO, draw=False, peaceful=False,
+                                         life=LEVEL_12_VIDEO_LIFE, log=after_the_fight)
+        self.addCleanup(harness.close)
+        self.assertTrue(reached, trace[-3:])
+        self.assertEqual(trace[-1][1:3], (7, 2))
+        # The guard lies dead on the lower floor, his body holding gate 5:2.
+        self.assertEqual(corpse, [(False, 2)])
+        terrain, plates = harness.scene.level_map, harness.scene.game.caverns.plates
+        for room, cell, link in ((3, 2, 103), (5, 0, 156), (5, 2, 106), (2, 9, 154), (1, 3, 159)):
+            with self.subTest(room=room, cell=cell):
+                self.assertEqual(plates.timers[link], 31)
+                self.assertEqual(terrain.tile(room - 1, cell % 10, cell // 10).foreground & 255, 255)
 
     def test_a_temple_blade_starts_and_cuts_like_a_ruins_scythe(self):
         # FrameAdv's environment 2 case (2:63e2-63f0) falls through to 5:57bc

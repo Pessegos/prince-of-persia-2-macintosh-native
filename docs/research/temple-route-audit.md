@@ -108,10 +108,19 @@ this search. It escapes upwards from room 8 through loose 1:26, drops the
 room-9 guard beside plate 9:24, opens the exit from **14:8**, and returns
 west via **16 -> 6 -> 17 -> 10 -> 9 -> 8 -> 19 -> 7**. It does not visit the
 genie. This corrects the obligatory-start-detour claim below and supports
-the guard/corpse hypothesis; a full port replay remains unverified. The
-following sections preserve the earlier partial search results.
+the guard/corpse hypothesis.
 
-Not finished, and not proven impossible. The east side is now played from a fresh
+**Port replay, 2026-11-14:** the port finishes level 12 along that route.
+`LEVEL_12_VIDEO` in `tests/test_temple_routes.py` plays 109 macros with real
+keys from a fresh load, with opponents on throughout, and enters the room-7
+stairway after 4,512 frames. The one supplied value is the Prince's life: the
+recording's bar shows twelve flasks on arrival. A level loaded on its own
+starts with three, too few to survive the flaming sword. What the replay
+shows and where it differs from the video is in
+[the video route](level12-video-route.md#port-replay-2026-11-14). The
+sections below keep the earlier partial search results.
+
+Before the video (kept as history): not finished, and not proven impossible. The east side is now played from a fresh
 load, and the search still ran without opponents. What is left is the way to the
 door.
 
@@ -170,6 +179,9 @@ gate is two cells, five climbs and a three-cell leap: roughly 195 frames by the
 measured climb of 31 frames. These figures are an estimate, not a proof.
 
 ### A hypothesis for gate 5:2
+
+Confirmed in the port on 2026-11-14 (see the follow-up at the top of this section):
+the guard's body on plate 9:24 holds gate 5:2 for good. The original paragraph follows.
 
 Not tested by that port audit. The later native video shows this guard
 falling beside the lower plate and the subsequent northern-gate traversal;

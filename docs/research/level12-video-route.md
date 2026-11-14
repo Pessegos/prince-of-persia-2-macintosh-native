@@ -130,7 +130,74 @@ These destinations were checked in LEVL:2011 with `PressurePlates.link`:
 | Plate 14:8 | Exit 7:23 | Crossed on the short top-right ledge at about 02:50, before the bottom-floor return. |
 | Loose 10:25 onto plate 17:25 | Closes gate 17:26 | Rubble visible by 03:56; the hole also provides the upward route to room 10. |
 
+## Port replay, 2026-11-14
+
+The port finishes the level along this route. `LEVEL_12_VIDEO` in
+`tests/test_temple_routes.py` is 109 macros of
+`tools/audit_temple_routes.py`. They are real keys from a fresh level load,
+with opponents on from the start and no supplied corpse, gate or slab. The
+replay enters the open room-7 stairway after 4,512 frames.
+
+The one supplied value is the Prince's life. The recording's bar shows twelve
+flasks on arrival from level 11, while a level loaded on its own starts with
+three. `replay(..., life=12)` sets both his life and his maximum. With three,
+the flaming sword kills him.
+
+Fights use three macros that react to the screen as a player would:
+
+- `strike` is the room-9 guard met on landing, a fixed series of stabs.
+- `swordduel` parries the flaming sword: up at its wind-up pose 152, forward
+  while it rests.
+- `duel`/`duelfar` fight the guards in rooms 14 and 6: parry at pose 152, stab
+  in reach, step closer otherwise.
+
+They are key policies, not state edits.
+
+### What the replay confirms
+
+- **The start:** plate 19:24 opens gate 8:29. A running leap left clears the
+  closing plate 19:23.
+- **Room 8:** a jump at room 8's top floor (facing right, beside the gap)
+  knocks loose 1:26 down to 8:26, and the Prince climbs up into room 1.
+- **The four slabs:** 3:20 lands on 19:20, 5:18 on 5:28, 5:20 on 9:0 and 2:12
+  on 2:22. Each holds its gate for good: 3:2, 5:0, 2:9 and 1:3 (timer 31,
+  gate at 255).
+- **Gate 5:2:** the room-9 guard, fought from the left as he turns on the
+  landing Prince, falls off the right edge of his platform and dies on plate
+  9:24. His body holds gate 5:2 for good. The hypothesis is confirmed in the
+  port. When the same guard is killed on his platform instead, the gate stays
+  shut.
+- **The sword and the exit:** the flaming sword wakes as the Prince lands on
+  room 7's top floor. Parried six times, it drops for 480 frames. Plate 14:8
+  then opens door 7:23 to 79, its open position, and the door stays open
+  until the end.
+- **The way back:** the room-14 guard comes in from room 15 after the Prince
+  crawls under its blade. The room-6 guard is fought after crawling under the
+  right blade. The climb in room 17 goes up through 10:25 into room 10, then
+  on through 9, 8 and 19 to the stairway.
+
+### Where it differs from the video
+
+These differences come from the keys, not from a known rule difference:
+
+- Loose 3:20 is dropped from beside it by three jumps (its third shake), not
+  by hanging into room 19.
+- Room 3 is crossed to room 11 through gate 3:18 (opened by plate 3:0), with
+  no detour to room 21. Loose 21:27 is not needed.
+- In the video the Prince runs east with the sword behind him. In the port he
+  lands eight pixels to its left, it pushes him back towards the edge, and
+  fleeing failed in every tried timing. Parrying it down is the port route.
+  Where the port's landing differs from the native one is not measured.
+- Gate 5:1 is passed while open, from plate 4:27; the slab of 4:17 is not
+  kept on it.
+- No exact native timings, audio or hidden state are compared. This is a
+  playable-route check, not native equivalence of the fights.
+
 ## Next bounded work for Claude
+
+*Done on 2026-11-14 for the port (above). Still open: where the native
+Prince lands beside the flaming sword, and the native timing of the three
+fights. The original task text follows.*
 
 Reproduce the early room-8 ceiling escape and the northern guard/slab puzzle
 from a fresh level load with opponents enabled throughout. Record actual

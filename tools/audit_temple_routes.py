@@ -216,6 +216,64 @@ def altar_death(harness):
     scene.peaceful = True
 
 
+def sword_duel(harness, limit=400):
+    """Level 12: leap from gate 3:18 onto room 7's top floor and parry the
+    flaming sword until it drops (it is worn down only by parries).
+
+    Keys answer what is on screen, as a player's would: up while the sword
+    winds up a strike (pose 152), forward while it rests between strikes,
+    both only while the Prince is on guard.
+    """
+    play(harness, [(('R',), (), 1), (('up',), (), 3), ((), ('up',), 14), ((), ('R',), 1)])
+    scene = harness.scene
+    for _ in range(limit):
+        info = harness.player()
+        if not info['alive']:
+            break
+        swords = [guard for guards, _points in scene.combat.room_encounters.values() for guard in guards
+                  if guard.flame_sword is not None and guard.room == scene.terrain_motion.room]
+        if not swords:
+            harness.tick()  # Still falling into the room.
+            continue
+        sword = swords[0]
+        if sword.flame_sword.timer:
+            break  # Down, for 480 frames.
+        on_guard = 150 <= info['action'] < 180
+        press(harness, 'up', on_guard and sword.state.action == 152)
+        press(harness, 'R', on_guard and sword.state.action in (170, 171)
+              and sword.state.target_x - info['x'] > 30)
+        harness.tick()
+    press(harness, 'up', False)
+    press(harness, 'R', False)
+
+
+def guard_duel(reach, every, limit=600):
+    """A sword fight on the Prince's floor until his opponent there falls:
+    up while the guard winds up a strike (pose 152), otherwise a stab every
+    few frames when he is within reach, and a step towards him when not."""
+    def duel(harness):
+        scene = harness.scene
+        for tick in range(limit):
+            info = harness.player()
+            guards = [guard for guard in scene.combat.active_guards()
+                      if guard.alive and guard.room == scene.terrain_motion.room and guard.row == info['row']]
+            if not info['alive'] or not guards:
+                break
+            guard = guards[0]
+            on_guard = 150 <= info['action'] < 180
+            distance = abs(guard.state.target_x - info['x'])
+            parry = on_guard and guard.state.action == 152
+            press(harness, 'up', parry)
+            press(harness, 'ctrl', on_guard and not parry and distance <= reach and tick % every == 0)
+            toward = 'L' if guard.state.target_x < info['x'] else 'R'
+            press(harness, 'R' if toward == 'L' else 'L', False)
+            press(harness, toward, on_guard and not parry and distance > reach and tick % 4 == 0)
+            harness.tick()
+        for key in ('up', 'ctrl', 'L', 'R'):
+            press(harness, key, False)
+    return duel
+
+
 def play(harness, script):
     """Runs (keys down, keys up, ticks) steps, or a scripted event."""
     if callable(script):
@@ -290,6 +348,13 @@ def macros():
     for ticks in (4, 8, 12, 16, 20):
         result[f'wait{ticks}'] = [((), (), ticks)]
     result['altar'] = altar_death
+    # Level 12, replays only. A short standing hop, then the room-9 guard met
+    # on landing: ten stabs push him off the platform onto plate 9:24.
+    result['hopshortR'] = [(('up', 'R'), (), 3), ((), ('up',), 6), ((), ('R',), 1)]
+    result['strike'] = [((), (), 3)] + [(('ctrl',), (), 2), ((), ('ctrl',), 4)] * 10 + [((), (), 40)]
+    result['swordduel'] = sword_duel
+    result['duel'] = guard_duel(60, 6)
+    result['duelfar'] = guard_duel(70, 8)
     result['drink'] = [(('shift',), (), 26), ((), ('shift',), 1)]
     # Level 11's plate 12:4 gives about a hundred frames to reach gate 6:19,
     # with a blade just past it: a return without stopping, jumping twice
@@ -303,7 +368,7 @@ def macros():
 MACROS = macros()
 # Fewer run lengths for the search; a replay can name any of MACROS.
 SEARCHED = {name: script for name, script in MACROS.items()
-            if not name.startswith('rush')
+            if not name.startswith(('rush', 'hopshort', 'strike', 'swordduel', 'duel'))
             and not any(name.endswith(suffix) for suffix in ('R7', 'L7', 'R9', 'L9', 'R13', 'L13',
                                                              'R15', 'L15', 'R16', 'L16', 'R28', 'L28'))}
 
@@ -487,10 +552,16 @@ class Search:
         return result
 
 
-def replay(number, route, *, draw=True, peaceful=True, god=False, log=None):
-    """Runs a route from a fresh load, without copied state."""
+def replay(number, route, *, draw=True, peaceful=True, god=False, log=None, life=None):
+    """Runs a route from a fresh load, without copied state.
+
+    ``life`` gives the Prince the life points he arrives with in a campaign,
+    which a level loaded on its own does not.
+    """
     harness = Harness(number, peaceful=peaceful, draw=draw, god=god)
     harness.number = number
+    if life is not None:
+        harness.scene.combat.player.life = harness.scene.combat.player.max_life = life
     settle(harness, 300)
     trace = []
     for name in route:
