@@ -9,7 +9,7 @@ from pop2.animation_data import parse_frame_records, shape_id_for_action
 from pop2.mac_resources import parse_resource_fork
 from pop2.paths import ASSET_DIR, OUTPUT_DIR
 from pop2.rebirth import DEAD_POSES
-from pop2.terrain import LevelMap, character_column, character_row, floor_contact_x
+from pop2.terrain import LevelMap, character_column, character_row, floor_contact_x, floor_y
 from pop2.harbor import HARBOR_ROOMS, SHIP_ROOM
 
 
@@ -146,6 +146,22 @@ def native_buffer_cells(bounds):
                  for column in range(first_column, last_column + 1))
 
 
+def ledge_surface_clip(state, bounds):
+    """Approved port improvement: keep the climbing Prince behind the stone.
+
+    The original pose-dependent half rectangles expose pixels inside the
+    slab. Preserve the support line (hands/feet on top) and use the actual
+    floor alpha below it, including transparent corners and the underside.
+    The drawn top stays on the climbed row across SEQS:10/68's row change.
+    """
+    if (bounds is None or getattr(state, 'actor_type', None) != 0
+            or getattr(state, 'source_sequence_id', None) not in (10, 68)
+            or not 135 <= state.action <= 144):
+        return None
+    row = character_row(bounds[1])
+    return row, (bounds[0], floor_y(row) + 1, bounds[2] + 1, bounds[3] + 1)
+
+
 @dataclass(frozen=True)
 class OpeningRoom:
     background: Image.Image
@@ -215,6 +231,7 @@ class OpeningRoom:
         # body still overlaps the lower row. Keep the climbed roof's near
         # face/ledge in front until the climb clears it, not its entire side.
         roof_row = row - int(climbing and state.action < 141 or hanging)
+        surface = ledge_surface_clip(state, bounds)
         for piece in self.pieces:
             # Full foreground SHAPs can overlap a body outside the two indexed
             # cells. Climbing keeps its separate partial-redraw exception.
@@ -236,6 +253,11 @@ class OpeningRoom:
                     alpha = piece.alpha.crop((rect[0] - piece.x, rect[1] - piece.y,
                                               rect[2] - piece.x, rect[3] - piece.y))
                     add_alpha(mask, alpha, rect[0], rect[1])
+                if surface is not None and piece.row == surface[0]:
+                    left, top, right, bottom_edge = surface[1]
+                    alpha = piece.alpha.crop((left - piece.x, top - piece.y,
+                                              right - piece.x, bottom_edge - piece.y))
+                    add_alpha(mask, alpha, left, top)
                 continue
             # Fall physics advances the supporting row before the sprite
             # clears the upper facade. Keep intersecting near-face SHAPs in
@@ -271,6 +293,11 @@ class OpeningRoom:
             if ledge.row >= roof_row and not ledge.behind_actor(state, bounds):
                 width = roof_ledge_width(self.room_id, ledge.row, row, bottom)
                 ledge.add_to(mask, width)
+            if surface is not None and ledge.row == surface[0]:
+                left, top, right, bottom_edge = surface[1]
+                alpha = ledge.alpha.crop((left - ledge.x, top - ledge.y,
+                                          right - ledge.x, bottom_edge - ledge.y))
+                add_alpha(mask, alpha, left, top)
         return mask
 
 

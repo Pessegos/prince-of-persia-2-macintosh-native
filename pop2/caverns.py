@@ -11,7 +11,8 @@ from PIL import Image, ImageChops, ImageOps
 from pop2.paths import ASSET_DIR
 from pop2.cavern_retouch import retouched_door_sprite, retouched_room_commands, retouched_sprite
 from pop2.opponent_generation import EMPTY_TILES, character_column
-from pop2.render_opening import OpeningRoom, decode_ctbl, decode_shap, load_resource_file
+from pop2.render_opening import (OpeningRoom, decode_ctbl, decode_shap, load_resource_file,
+                                 ledge_surface_clip, native_buffer_cells)
 from pop2.terrain import LevelMap, character_row, floor_contact_x
 
 
@@ -90,6 +91,16 @@ class CavernRoom(OpeningRoom):
         return mask
 
     def draw_actor_foreground(self, frame, state, bounds):
+        surface = ledge_surface_clip(state, bounds)
+        if surface is not None and self.floor_redraw is not None:
+            # Intentional improvement over ComputeHalfRect: the support line
+            # stays visible, but the whole intersecting slab hides the body
+            # below it in both directions, during descent as well as ascent.
+            row, clip = surface
+            records = [record for column, cell_row in native_buffer_cells(bounds)
+                       if cell_row == row
+                       for record in self.floor_redraw.get((column, row), ())]
+            return self.draw_floor_records(frame, records, clip)
         # QuickFloor 2:69b6-69e2 marks DrawHalf only for right-facing
         # poses 135-144, using the drawn left column and top row.
         clip = None
