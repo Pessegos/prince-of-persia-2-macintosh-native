@@ -665,3 +665,42 @@ Port choices:
 - with 2 life the shadow cannot cast and draws no sword.
 
 No native CPU probe is claimed.
+
+### Next: NIS 11 and the defeat variant (findings, not yet ported)
+
+- **NIS 11 (15:3c76).** It opens Happy.rsrc (a5-0x26b0) and first runs
+  15:44e2, the victory bedroom. That scene uses palette 0x7919 and SHAP
+  0x7a47, then plays ANI 0x7918 with flags 0x0e and callback 15:09c0. At
+  frame 1 the callback sets the brightness (0x51, 100).
+- **Running NIS 11 in `tools.extract_intro.recover_scenes`.** Three
+  additions are needed:
+  - 15:44e2 run inline;
+  - animation flags 0x0e allowed;
+  - SetForeColor 17:0eae, with the QuickDraw PaintRect trap that follows
+    it, as a fill.
+- **The epilogue animation (callback 15:411a).** It is driven by state
+  that persists across frames:
+  - a5-0x2340, a frame offset;
+  - a5-0x2342 and a5-0x2344, the HappyDialog text index and its delay;
+  - a5-0x1f7c and a5-0x1f6e, sound and playback status.
+  The per-frame isolated probe used for NIS 5 cannot capture that state.
+  One emulation that persists across frames, with modelled sound status,
+  is the next bounded task.
+- **Defeat variant (9:0062).** GenCtrl 6:0780-07a0 calls it for a dead
+  type-0 Kid (ALIVE > 6) in environment 6. When a5-0x5018 (the saved-game
+  structure) is present and he is not already in native room 11, it moves
+  him there (column 6, row 2, Y 352) and sets the camera room a5-0x4fc4 to
+  11. It then selects SEQS 71 and runs AnimChar five times. What room 11's
+  scripted type-6 actor does then (the laughter) still needs a trace.
+- **Room-3 drops (FinlCheckDeadOpp 9:00e2).** These replace the ordinary
+  death counter for room-3 type-2 opponents.
+  - At ALIVE 6, Rnd(2) gives 0/1/2 (none, healing, life enhancement).
+  - A drop needs:
+    - the opponent's cell to be floor (kind 1);
+    - fewer than 4 animated objects (a5-0x43e6);
+    - the cell to be outside 22-24.
+  - It writes tile 10 with foreground (kind << 5) | 0x4000 into native
+    room 3, then calls TriggerFlask 5:1ce8.
+  - At ALIVE 96 the body takes SEQS 239 with sound 243.
+  - The port's room-3 copies are still parked on path rows 4/8 and never
+    become visible fighters, so this drop needs that copy movement first.
