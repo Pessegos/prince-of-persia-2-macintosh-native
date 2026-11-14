@@ -946,11 +946,13 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, ac
             # DrawForeImg is independent of DrawFloorBuf. A statue/pillar
             # can have no floor record, but still occludes the moving slab.
             # Mask the slab to preserve live lighting on the foreground.
-            rect = (block.x, bottom - sprite.height, block.x + sprite.width, bottom)
+            # AddImgObj3:0302-030c stores top = bottom - height + 1.
+            # Unlike static room commands, a MOB's bottom is inclusive.
+            rect = (block.x, bottom - sprite.height + 1, block.x + sprite.width, bottom + 1)
             cover = art.foreground.crop(rect).getchannel('A')
             sprite = sprite.copy()
             sprite.putalpha(ImageChops.multiply(sprite.getchannel('A'), ImageChops.invert(cover)))
-            frame.paste(sprite, (block.x, bottom - sprite.height), sprite)
+            frame.paste(sprite, rect[:2], sprite)
             # The host paints complete SHAPs. Include any raster pixels
             # beyond the logical MOB box in the neighbouring-floor repaint.
             width = max(width, sprite.width)

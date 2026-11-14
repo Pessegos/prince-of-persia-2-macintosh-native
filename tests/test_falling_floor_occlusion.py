@@ -18,6 +18,21 @@ def previous_foreground(art, frame, x, y, size=(87, 43)):
 
 
 class StationaryForegroundTests(unittest.TestCase):
+    def test_moving_stone_uses_native_inclusive_bottom(self):
+        room = CavernRoom(Image.new('RGBA', (40, 40)), Image.new('RGBA', (40, 40)),
+                          {}, (), (), 0, 3, floor_redraw={})
+        frame = Image.new('RGBA', (40, 40), 'blue')
+        block = SimpleNamespace(room=0, x=10, y=20, size=(3, 2))
+        state = SimpleNamespace(loose=SimpleNamespace(falling=[block]))
+        with patch('pop2.caverns.room_assets', return_value=(None, None, None, None)), \
+                patch('pop2.caverns.cavern_command_sprite', side_effect=(
+                    Image.new('RGBA', (3, 2), 'white'), Image.new('RGBA', (1, 1)))):
+            draw_cavern_falling(frame, 0, state, bytearray(0x49ca), room, level_number=10)
+        self.assertEqual(frame.getpixel((10, 18)), (0, 0, 255, 255))
+        self.assertEqual(frame.getpixel((10, 19)), (255, 255, 255, 255))
+        self.assertEqual(frame.getpixel((12, 20)), (255, 255, 255, 255))
+        self.assertEqual(frame.getpixel((12, 21)), (0, 0, 255, 255))
+
     def test_slab_keeps_live_foreground_and_its_holes_without_floor_records(self):
         size = (120, 100)
         foreground = Image.new('RGBA', size)

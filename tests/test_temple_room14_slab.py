@@ -43,7 +43,10 @@ class Room14SlabTests(unittest.TestCase):
                     # Original slab still masks the trousers at the bottom
                     # border; the old cave-origin slab was already18px lower.
                     box = (285, 345, 301, 360)
-                    self.assertIsNone(ImageChops.difference(drawn.crop(box), scenery.crop(box)).getbbox())
+                    # Native dynamic images use an inclusive bottom, one
+                    # raster row below the same static floor SHAP.
+                    source = (box[0], box[1] - 1, box[2], box[3] - 1)
+                    self.assertIsNone(ImageChops.difference(drawn.crop(box), scenery.crop(source)).getbbox())
                     room = scene.room_cache[13]
                     self.assertFalse(room.floor_redraw.get((6, 2)))
                     # The slab must mask the trousers while remaining behind

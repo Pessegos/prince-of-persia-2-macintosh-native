@@ -126,3 +126,46 @@ Final follow-up validation:245 focused tests pass without skips in104.916s
 layering, temple playtests/exits, gate repaint and bridges). Dependency,
 Ruff F/E9, recovery-catalogue and whitespace checks pass. No new full-suite
 or native-probe run is claimed for this renderer-only follow-up.
+
+## Follow-up: one-pixel shift from fixed tile to moving slab (2026-11-14)
+
+The user noticed the next-frame floor movement and clarified that the still
+with three spent lives was Macintosh; the other still was Port. Inspection
+of the original clip's left floor edge around frames95-96 (about1.58-1.60s)
+shows a slight downward step before the slab leaves the room.
+
+The cause at this contact is the dynamic-image origin. AddImgObj3:0302-030c
+stores `top = bottom - image_height + 1`: its bottom coordinate is inclusive.
+Static exported room commands use an exclusive bottom. The host had placed
+moving slab pieces at `bottom-height`, so the first moving image occupied the
+same rows as the former fixed floor. Falling-slab pieces now start one raster
+row lower, with their stationary-foreground mask sampled at that same shifted
+rectangle. MOB coordinates, velocities, controller phases, fall timing and
+the guard contact rule are unchanged. The statue/plinth protection remains.
+The shared painter corrects the corresponding origin for caverns and ruins too.
+
+`tools.probe_loose_raster_origin` executes those original instructions for
+all six slab SHAPs across cave/ruins/temple resources and eight supplied bottom
+coordinates:48 comparisons, zero mismatches. Original level/environment/
+controller headers and imported SHAP headers are checked. A6/A3, caller's
+bottom, shape height and record allocation are supplied. Image loading,
+clipping, pixel decoding and the whole draw loop are excluded. This checks
+the native coordinate convention, not complete raster equivalence.
+
+The room14 contact regression now compares the moving floor texture with
+the static reference one row above, while retaining the plinth and guard
+checks. An asset-free test checks both the new top and inclusive last row.
+Restoring the99cf8bc painter fails these two tests without errors. Actual
+same-state before/fixed contact views were inspected; ignored evidence is
+under `rendered/temple-loose-shake`.
+
+Separate research finding: original temple shake phases include both
+3545/3547 and3546/3548 pairs, but legacy temple imports retain only the first
+shake state. That affects other attached shake phases and is not the cause
+of this fixed-to-MOB transition; it remains a bounded importer follow-up.
+No shake table, imported artwork or resource data is changed by this fix.
+
+Validation for this origin correction:246 focused tests pass without skips
+in90.983s (room14/slab/cavern/opening/loose/ledge/actor/temple/gate/bridge).
+Dependency, Ruff F/E9, recovery-catalogue and whitespace checks pass. No new
+full-discovery run is claimed for this drawing-only coordinate change.
