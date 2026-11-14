@@ -475,7 +475,8 @@ class SaveBrowser:
             if not value:
                 return
             key = id(font), str(value), color, width, small, ellipsize, sx, sy
-            glyph = self.text_cache.get(key)
+            cached = self.text_cache.get(key)
+            glyph, drop = cached if cached is not None else (None, 0)
             if glyph is None:
                 if ellipsize and glyphs(value, color).width * 0.7 > width:
                     while value and glyphs(value + '...', color).width * 0.7 > width:
@@ -490,9 +491,16 @@ class SaveBrowser:
                         max(1, round(glyph.height * scale * sy)))
                 if glyph.size != size:
                     glyph = glyph.resize(size, Image.Resampling.NEAREST)
-                remember(self.text_cache, key, glyph)
-            x, y = point(x, y)
+                # y is where capitals start: a taller letter (l, ?) or a lower first ink
+                # (only small letters) must not move the line's baseline.
+                drop = ((ink[1] if ink else 0) - cap_top()) * scale
+                remember(self.text_cache, key, (glyph, drop))
+            x, y = point(x, y + drop)
             image.paste(glyph, (x - glyph.width if align == 'right' else x, y), glyph)
+
+        def cap_top():
+            ink = glyphs('H', white).getbbox()
+            return ink[1] if ink else 0
 
         def button(rect, label, index, enabled=True, active=False):
             highlighted = self.focus == index or self.editing and self.hovered == index
