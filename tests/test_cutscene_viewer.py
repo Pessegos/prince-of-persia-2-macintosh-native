@@ -84,6 +84,27 @@ class GalleryTests(unittest.TestCase):
         return CutsceneGallery(CutsceneCollection(seen={'opening'}),
                                Mock(return_value=Image.new('RGB', (510, 384), '#773311')))
 
+    def test_revealed_title_dissolves_in_from_the_chapter_number(self):
+        # It used to swap from "Chapter N" to the title in one frame, halfway through.
+        seen = {chapter.key for chapter in CHAPTERS[:2]}
+        gallery = CutsceneGallery(CutsceneCollection(seen=seen),
+                                  Mock(return_value=Image.new('RGB', (510, 384), '#773311')))
+        index = 1
+        gallery.begin_reveal([index])
+        gallery.advance(gallery.REVEAL_DELAY + 1e-4)
+        font, steps = CaptionFont(), []
+        while gallery.reveal_stage(index) is not None and gallery.reveal_stage(index) < gallery.reveal_stages:
+            steps.append(gallery.title_dissolve(gallery.reveal_stage(index)))
+            gallery.card_image(index, font, 2, 2)
+            gallery.advance(1 / gallery.REVEAL_RATE)
+        self.assertEqual(steps, sorted(steps))
+        self.assertEqual((steps[0], gallery.title_dissolve(None)), (0, 1))
+        self.assertGreaterEqual(sum(0 < step < 1 for step in steps), 5)
+        both = {value for value in font.values if value in (f'Chapter {index + 1}', CHAPTERS[index].title)}
+        self.assertEqual(len(both), 2)
+        masks = [gallery.dissolve_mask(index, step, (40, 30)).histogram()[255] for step in (.2, .5, .8)]
+        self.assertEqual(masks, sorted(masks))
+
     def test_horizontal_navigation_and_explicit_activation(self):
         gallery = self.gallery()
         self.assertEqual(list(gallery.visible), [0, 1, 2, 3, 4, 5])

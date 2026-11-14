@@ -1,6 +1,7 @@
 """A device-resolution story shelf with continuous horizontal scrolling."""
 
 import math
+import random
 from dataclasses import dataclass, field
 
 from PIL import Image, ImageDraw, ImageOps
@@ -70,6 +71,8 @@ class CutsceneGallery:
     REVEAL_RATE = 15
     REVEAL_STEP = 1 / REVEAL_RATE   # seconds from one stage to the next
     REVEAL_DELAY = .6
+    # Share of the veil's stages over which "Chapter N" dissolves into the title.
+    TITLE_DISSOLVE = (.25, .85)
     # Once the cover is whole its border glows: bright, then cooling to the
     # accent colour, at its ordinary thickness. Meanwhile a band of light
     # crosses the cover. Times in seconds.
@@ -432,11 +435,23 @@ class CutsceneGallery:
             image.alpha_composite(cover, thumb[:2])
         band = c('#493c25') if selected else c('#252525')
         draw.rectangle((stroke, round((thumb_bottom + 1) * sy), size[0] - stroke - 1, size[1] - stroke - 1), fill=band)
-        # The title arrives halfway through a reveal; a locked chapter never shows it.
-        named = unlocked and (stage is None or stage >= self.reveal_stages / 2)
-        label = chapter.title if named else f'Chapter {index + 1}'
-        self.caption(image, font, label, (2, thumb_bottom + 1, self.CARD_WIDTH - 2, self.CARD_HEIGHT - 1),
-                     c('#f4d873') if selected else c('#eeeeee') if named else c('#999999'), .72, sx, sy)
+        # A locked chapter never shows its title. During a reveal "Chapter N" dissolves
+        # into the title, block by block, while the cover resolves.
+        caption_rect = (2, thumb_bottom + 1, self.CARD_WIDTH - 2, self.CARD_HEIGHT - 1)
+        named_colour = c('#f4d873') if selected else c('#eeeeee')
+        progress = self.title_dissolve(stage) if unlocked else 0
+        if progress >= 1:
+            self.caption(image, font, chapter.title, caption_rect, named_colour, .72, sx, sy)
+        elif progress <= 0:
+            self.caption(image, font, f'Chapter {index + 1}', caption_rect,
+                         c('#f4d873') if selected else c('#999999'), .72, sx, sy)
+        else:
+            before, after = image.copy(), image.copy()
+            self.caption(before, font, f'Chapter {index + 1}', caption_rect,
+                         c('#f4d873') if selected else c('#999999'), .72, sx, sy)
+            self.caption(after, font, chapter.title, caption_rect, named_colour, .72, sx, sy)
+            image = Image.composite(after, before, self.dissolve_mask(index, progress, size))
+            draw = ImageDraw.Draw(image)
         outline = c('#f4d873') if selected else c('#626262')
         glow = self.reveal_glow(index) if unlocked else None
         if glow is not None:
@@ -469,6 +484,27 @@ class CutsceneGallery:
         if elapsed is None:
             self.card_cache[key] = image
         return image
+
+    def title_dissolve(self, stage):
+        """How much of the title has replaced "Chapter N": 0 to 1, in whole reveal frames."""
+        if stage is None:
+            return 1
+        first, last = self.TITLE_DISSOLVE
+        start, end = first * self.reveal_stages, last * self.reveal_stages
+        return max(0.0, min(1.0, (stage - start) / (end - start)))
+
+    def dissolve_mask(self, index, progress, size):
+        """Which blocks already show the title: one block per page unit, in a fixed
+        scattered order for each chapter (an old game's pixel dissolve, hard-edged)."""
+        units = max(1, math.ceil(self.CARD_WIDTH)), max(1, math.ceil(self.CARD_HEIGHT))
+        key = index, 'order', units
+        if key not in self.image_cache:
+            rng = random.Random(index * 7919 + 17)
+            self.image_cache[key] = Image.frombytes(
+                'L', units, bytes(rng.randrange(1, 256) for _ in range(units[0] * units[1])))
+        limit = round(progress * 255)
+        mask = self.image_cache[key].point(lambda value: 255 if value <= limit else 0)
+        return mask.resize(size, Image.Resampling.NEAREST)
 
     def veil(self, index, cover, stage):
         """The cover at one stage of its veil: 0 as a locked chapter shows it, reveal_stages whole."""
