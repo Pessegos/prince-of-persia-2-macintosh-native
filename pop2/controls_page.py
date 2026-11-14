@@ -632,7 +632,7 @@ class ControlsPage:
                     text(label, left - 3, y - 5, c(WHITE), 'right', LABEL_WIDTH)
                 else:
                     text(label, left + 20, y - 5, c(WHITE), 'left', LABEL_WIDTH)
-        status_y = y0 + PAD_HEIGHT + 6
+        status_y = y0 + PAD_HEIGHT + 7
         if not self.controller_available:
             text('Controller support is unavailable here', 256, status_y, c(MUTED), 'center', 420)
         elif not self.controller_enabled:
