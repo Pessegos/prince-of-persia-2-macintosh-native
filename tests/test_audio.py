@@ -668,6 +668,23 @@ class PolyphonicCueTests(unittest.TestCase):
         del self.playback.ui_sounds['burn']                       # an installation without cue 69
         self.playback.play_ui('burn')
 
+    def test_a_fire_sound_beside_the_audio_replaces_the_lava_for_the_burn(self):
+        from pop2.audio import MixerPlayback
+
+        fire = Sample(b' ' * 3000, 8000).wav()
+        Path(self.directory.name, 'menu-burn.wav').write_bytes(fire)
+        cues = {69: {'mode': 1, 'priority': 69, 'file': 'sample.wav'}}
+        playback = MixerPlayback(self.directory.name, cues)
+        burn = playback.ui_sounds['burn']
+        self.assertNotEqual(burn.get_raw(), self.playback.ui_sounds['burn'].get_raw())
+        self.assertAlmostEqual(burn.get_volume(), 1.0, places=2)
+        playback.play_ui('burn')
+        self.assertIs(playback.ui_channels['click'].get_sound(), burn)
+        # A file that cannot be read leaves the lava sound.
+        Path(self.directory.name, 'menu-burn.wav').write_bytes(b'not a wave')
+        playback = MixerPlayback(self.directory.name, cues)
+        self.assertAlmostEqual(playback.ui_sounds['burn'].get_volume(), 0.4, places=2)
+
     def test_effect_pool_never_steals_music_menu_or_mechanism_channels(self):
         self.audio.add_song(40)
         self.audio.add_sound(17)

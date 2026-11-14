@@ -1,5 +1,6 @@
 """SDL effect mixing with coalesced stone-mechanism voices."""
 
+import io
 import json
 import os
 from pathlib import Path
@@ -36,6 +37,11 @@ LATE_DEATH_CUES = {16: 250}
 # The lava sound a screenshot burns with in the screenshots page, and its level.
 BURN_CUE = 69
 BURN_VOLUME = 0.4   # cue 69 peaks at 23% of full scale: 9%, as the reveal
+# A fire sound of the user's own put beside the imported audio replaces it. It
+# is not one of the game's resources and is not in the repository; its level
+# as recorded is about as loud as the lava sound above.
+BURN_FILE = "menu-burn.wav"
+BURN_FILE_VOLUME = 1.0
 # Cue 69 opens with a bright pulsing rattle (to 0.165 s, a quiet gap), like
 # bones; only the lava's bubbling after it is kept, faded in over 5 ms. It is
 # short (0.34 s), so it bubbles twice, the second time over the end of the
@@ -104,7 +110,17 @@ class MixerPlayback:
         # A screenshot dropped on the lava sinks into it with the game's own
         # sound for a body sinking into lava (cue 69, GetLavaInfoHnd 8:34a6),
         # without its rattling start, a copy of it brought down to the reveal's peak, on the click's channel.
-        if BURN_CUE in self.sounds:
+        burn_file = Path(directory) / BURN_FILE
+        if burn_file.is_file():
+            try:
+                burn = mixer.Sound(file=io.BytesIO(burn_file.read_bytes()))   # the file is not kept open
+            except Exception:   # an unreadable file: the lava sound instead
+                burn = None
+            if burn is not None:
+                burn.set_volume(BURN_FILE_VOLUME)
+                self.ui_sounds['burn'] = burn
+                self.ui_channels['burn'] = self.ui_channels['click']
+        if 'burn' not in self.ui_sounds and BURN_CUE in self.sounds:
             burn = mixer.Sound(buffer=lava_part(self.sounds[BURN_CUE].get_raw(), rate, channels))
             burn.set_volume(BURN_VOLUME)
             self.ui_sounds['burn'] = burn
