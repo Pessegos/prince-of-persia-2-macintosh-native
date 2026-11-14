@@ -5,6 +5,13 @@ rectangle, and completion of levels 10, 11 and 12 schedules the existing
 end-song/story/next-level path. No gate timing, checkpoint, artwork or save
 format changes are involved.
 
+Follow-up: the user's screenshot after the initial correction still showed
+the Prince over the right jamb. The rectangular rule below was recovered
+correctly, but was insufficient to establish complete doorway occlusion.
+The missing pose-dependent foreground piece is now restored too; see the
+follow-up section. The first milestone's full-suite totals below remain
+historical validation of that milestone, not a new full run of this follow-up.
+
 ## Recovered clipping rule
 
 `ClipChar` CODE 4:416a-420c handles actor type 0, poses 217 through 226,
@@ -64,9 +71,9 @@ non-entrance temple exit doors: native rooms 19 (level 10), 24 (11), 7 (12),
 28 and both doors in 32 (13). The fixtures explicitly open each door and
 place a supported Prince beside it; they do not assert natural full-level
 reachability. Actual rendered late poses obey the top/right bounds and
-change visible pixels at every door. Manual image inspection confirms the
-lintel/jamb occlusion, with identical animation state for each before/after
-pair.
+change visible pixels at every door. That first image comparison established
+the rectangular cut, but failed to reject the residual jamb overlap later
+reported by the user. Each before/after pair used identical animation state.
 
 The transition regressions finish the real stairs and exercise all three
 requested level pairs with queued music and a timed playback backend. They
@@ -97,3 +104,62 @@ Reproduce the native check with:
 
 The remaining boundary is full native clipping/scheduling/audio equivalence,
 not a new gameplay rule inferred from these bounded tests.
+
+## Follow-up: the doorway's front-table piece
+
+`DrawTempExitMovable` CODE 10:0562-0698 has another relevant rule. In pass 5,
+10:0652-0660 tests the global Prince pose for 217 through 226, without a Y
+test. It then resets a front BF item (`ResetNextBFItem` 3:29e2), transfers the
+source cell's middle fields (`TransferBFItemMidFields` 3:2b5c), and adds
+the PIEC record at offset 0x47c. Original Temple PIEC words are
+`(79, -11, -27)`: SHAP 3579, X column*51-11, bottom (row+1)*120+5-27.
+Outside these poses the same piece remains in the back table. Passes 1/2
+do not emit it. The static room export used a non-entry pose, so retained
+this arch/jamb only in the background.
+
+`tools.probe_temple_exit_foreground` executes that original drawer and the
+actual BF reset/previous-info/field-transfer routines. It checks all three
+rows, ten columns, poses 216-227, passes 1/2/5 and foreground words
+0/1/79/255: 4,320 comparisons, including 1,200 front promotions, zero
+mismatches. Original level-10 environment 2, PIEC and SHAP headers are
+checked. The BF caller state, buffer pointers, pass, pose and full viewport
+are supplied. `AddNextBFItemToTable` 3:0004 is a supplied shape-header/clip
+admission and counter endpoint; native resource lookup and rasterization
+do not execute. Back pass 0, dirty scheduling, ClipChar, other-actor ordering
+and full FrameAdv remain excluded.
+
+The port retains the clipped original SHAP and position alongside the room
+commands, and redraws it after the entering Prince's ordinary floor repaint.
+This uses the sprite's own transparency, retaining the actual arch and jamb
+contour, and leaves ordinary poses, NPCs and other environments alone. The
+existing rectangular clip and all three level transitions remain unchanged.
+Only the small positioned door pieces are retained, without an extra full-room
+image per cached variant.
+
+The six-door regression now compares the rendered image with the same pose
+and repaint path with only the player sprite removed. It requires zero
+player-colour differences over opaque door pixels in every entry frame,
+including repeated late poses. Viewport crops account for the one-pixel
+room origin. An asset-free test checks both pose endpoints, excluded poses,
+actor type and independence from the rectangular clip's Y threshold.
+Substituting the old drawing path rejects 15 cases/subcases, with no errors.
+The final focused group passes 161 tests (temple exits/arrival, cavern exits,
+cavern renderer, opening renderer and level endings), without skips. This
+render-only follow-up does not rerun full discovery. Before/after images for
+all six doors and a ten-pose strip were inspected. Initial test comparisons
+were corrected to preserve floor repaints and crop the room origin; their
+failures were not production pass results.
+
+Reproduce the new native check with:
+
+```powershell
+.venv\Scripts\python.exe -m tools.probe_temple_exit_foreground --source ..\PoP2-Mac-Code-Recovery --output rendered\temple-exit-foreground\native.json
+```
+
+Reports and images remain ignored under `rendered/temple-exit-foreground`.
+Temple resource-fork SHA-256:
+`7c7b532ef5251949b299d6177962062bdb003b385675285873d77f865ea68ccf`.
+New comparison-output SHA-256:
+`8a6d82ccbb34d70a85599652fc06c7185820eefb2e1b29d5a446cd9df7d552ad`.
+Full native draw/audio/frame equivalence remains the next bounded research
+boundary, not a prerequisite for this reproduced foreground repair.

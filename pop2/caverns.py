@@ -60,6 +60,7 @@ class CavernRoom(OpeningRoom):
     gate_occlusion: dict | None = None
     custom_occlusion: Image.Image | None = None
     torch_occlusion: dict | None = None
+    exit_foreground: tuple = ()
 
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
         mask = super().actor_mask(row, bottom, state, bounds, record)
@@ -91,6 +92,17 @@ class CavernRoom(OpeningRoom):
         return mask
 
     def draw_actor_foreground(self, frame, state, bounds):
+        frame = self.draw_actor_floor_foreground(frame, state, bounds)
+        if (self.exit_foreground and state.actor_type == 0
+                and 217 <= state.action <= 226):
+            # DrawTempExitMovable10:0652-0690 promotes SHAP3579 to the
+            # front table during stair entry, independently of ClipChar's
+            # later Y<-24 rectangle. Draw after the actor's floor repaint.
+            for sprite, position in self.exit_foreground:
+                frame.paste(sprite, position, sprite)
+        return frame
+
+    def draw_actor_floor_foreground(self, frame, state, bounds):
         surface = ledge_surface_clip(state, bounds)
         if surface is not None and self.floor_redraw is not None:
             # Intentional improvement over ComputeHalfRect: the support line
@@ -1423,6 +1435,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     custom_records = custom_foreground_records(resources, room_id)
     custom_mask = Image.new('L', background.size) if custom_records else None
     torch_occlusion = {} if animated and level_number in TEMPLE_LEVELS else None
+    exit_foreground = []
     # A crevice reveal's redraw paints over the displayed screen: its back
     # pieces also cover the earlier front pieces (slot_variant `redrawn`).
     redraw_start = variant.get('redraw_start', len(commands)) if variant is not None else len(commands)
@@ -1442,6 +1455,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         sprite, position = clipped
         destination = background if layer == 'back' else foreground
         destination.paste(sprite, position, sprite)
+        if layer == 'back' and library == 4 and index == 3579 and level_number in TEMPLE_LEVELS:
+            exit_foreground.append((sprite, position))
         if layer == 'back' and torch_occlusion is not None:
             # The temple's 47x42 candle frames include opaque wall and
             # holder pixels. Later back pieces may cover them too. Keep
@@ -1552,4 +1567,4 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         background.getchannel('A'), foreground.getchannel('A')))
     background = Image.alpha_composite(Image.new('RGBA', background.size, 'black'), background)
     return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
-                      redraw, floors, retained, gate_masks, custom_mask, torch_occlusion)
+                      redraw, floors, retained, gate_masks, custom_mask, torch_occlusion, tuple(exit_foreground))

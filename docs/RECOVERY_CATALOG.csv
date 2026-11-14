@@ -528,7 +528,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 9,Final Battle,GetFireballImg,0x275c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,0
 10,Temple,DrawTempBackWall,0x0004,decoded,indexed-only,,No semantic review recorded in this prototype catalog,13,9
 10,Temple,DrawTempExit1,0x050c,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,2
-10,Temple,DrawTempExitMovable,0x0562,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,15
+10,Temple,DrawTempExitMovable,0x0562,jump_table,partial,pop2/caverns.py;tools/probe_temple_exit_foreground.py,"4320 original drawer/BF-reset/middle-field comparisons including1200 SHAP3579 front promotions for Prince poses217-226 in pass5, independent of Y; supplied caller/buffers/PIEC and AddNextBFItem shape-header/clip/counter endpoint; pass0/resource lookup/raster/full scheduling excluded",0,15
 10,Temple,DrawTempGateMovable,0x0976,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,2
 10,Temple,DrawTempDownPlate,0x0c76,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,3
 10,Temple,DrawTempUpPlate,0x0da8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,3
