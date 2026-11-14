@@ -949,15 +949,41 @@ class LevelMap:
                             else cell + 72 - right_offset)
         return side, new_x + scene_x(edge) - (right + 1 if side == -1 else left)
 
+    def gate_passage_history(self, room, row, bounds, old_bounds, previous, state, armed=False):
+        """Retain admission through an open gate until the body clears it.
+
+        A closing gate must not turn a pose change into a new front crossing.
+        Cold overlaps with an already closed gate still need port recovery.
+        """
+        if armed or state.actor_type not in (0, None):
+            return ()
+        environment = struct.unpack_from('>H', self.level, 0x2186)[0]
+        if environment not in (2, 4):
+            return ()
+        retained = set()
+        for column in range(-2, 12):
+            tile = self.tile(room, column, row)
+            if tile.kind != 4 or tile.room is None or self.throne_gate(tile.room, tile):
+                continue
+            left, right = column * TILE_WIDTH + 62, column * TILE_WIDTH + 72
+            overlapping = [body for body in (bounds, old_bounds or bounds)
+                           if body[0] < right and left < body[2] + 1]
+            key = tile.room, tile.row * 10 + tile.column
+            # Inspect physical clearance, not SEQS68's contact exemption.
+            if overlapping and (key in previous or (
+                    bounds in overlapping and not stone_gate_blocks(tile.foreground, bounds))):
+                retained.add(key)
+        return tuple(sorted(retained))
+
     def wall_correction(self, room, old_x, new_x, bounds, old_bounds=None, facing=None,
-                        physical_row=None, state=None):
+                        physical_row=None, state=None, *, gate_passages=()):
         left, top, right, bottom = bounds
         delta = new_x - old_x
         if old_bounds is None:
             old_bounds = (left - delta, top, right - delta, bottom)
         rock = self.rock_correction(room, new_x, bounds, old_bounds, facing, physical_row, state)
         wall = self.tile_correction(room, delta, new_x, bounds, old_bounds, facing,
-                                    physical_row, state)
+                                    physical_row, state, gate_passages=gate_passages)
         if rock is None:
             return wall
         # CheckBarr 4:4f7a-4fc4 keeps the smallest column of a side, and
@@ -968,7 +994,7 @@ class LevelMap:
         return wall if side == 0 and wall < new_x else min(wall, rock)
 
     def tile_correction(self, room, delta, new_x, bounds, old_bounds, facing, physical_row, state,
-                        *, solid_only=False):
+                        *, solid_only=False, gate_passages=()):
         left, top, right, bottom = bounds
         old_left, _, old_right, _ = old_bounds
         if not delta and (old_left, old_right) == (left, right):
@@ -1035,14 +1061,16 @@ class LevelMap:
                 # leave crouching/crushing to CheckGateForKid instead.
                 native_gate = (ruins_gate and state is not None and state.actor_type in (0, None)
                                and (state.source_sequence_id in (14, 28)
-                                    or state.source_sequence_id == 1 and facing is not None
-                                    and struct.unpack_from('>H', self.level, 0x2186)[0] == 2))
+                                    or facing is not None
+                                    and ((tile.room, tile.row * 10 + tile.column) in gate_passages
+                                         or state.source_sequence_id == 1
+                                         and struct.unpack_from('>H', self.level, 0x2186)[0] == 2)))
                 # CheckBarr 4:4f8a-4fb4 compares side-overlap bits with the
                 # previous sample. Widening beneath an already-overlapped
                 # gate is not a fresh contact during the unarmed jump. A
-                # temple gate slamming behind a running Prince must not
-                # manufacture a front collision from his trailing arm either.
-                # Other families retain the port's overlap recovery below.
+                # gate that admitted the body before closing must not create
+                # a front collision from its trailing arm or stopping pose.
+                # Cold overlaps retain the port's recovery below.
                 if stone_gate or native_gate:
                     if facing != 0 and old_right + 1 <= wall_left < right + 1:
                         corrected = min(corrected, new_x + wall_left - right - 1)
@@ -1076,6 +1104,9 @@ class TerrainMotion:
     # The native working actor entered room zero below the visible room.
     # Keep camera-space Y here; Cut has rebased the native Y by -360.
     void_fall: bool = False
+    # Resolved (room, cell) identities admitted before a gate closes.
+    # Per actor, retained through a pose/room change and optional in old saves.
+    gate_passages: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1381,9 +1412,13 @@ class RooftopPhysics:
                 invulnerable=False, native_alive=None):
         state = runtime.state
         if motion.dead:
+            motion.gate_passages = ()
             return ()
 
         if protected:
+            motion.gate_passages = self.map.gate_passage_history(
+                motion.room, motion.row, bounds, old_bounds, motion.gate_passages,
+                state, sword_drawn)
             # Hanging poses have no floor flag. Late climb poses do, and a
             # disappearing slab must interrupt them before their idle link.
             if frame_record is not None:
@@ -1400,6 +1435,7 @@ class RooftopPhysics:
                 return (TerrainEvent("room"),)
             return ()
         if motion.sinking:
+            motion.gate_passages = ()
             # SEQS:27 owns every displacement; ordinary gravity must not run.
             if state.action == 185:
                 motion.sinking = False
@@ -1479,6 +1515,9 @@ class RooftopPhysics:
         collision_facing = None if sword_drawn else state.facing
         collision_bounds = (collision_bounds_for_state() if collision_bounds_for_state is not None
                             else bounds)
+        motion.gate_passages = self.map.gate_passage_history(
+            motion.room, motion.row, collision_bounds, old_bounds, motion.gate_passages,
+            state, sword_drawn)
         # CheckBarr samples before Collide displaces/reloads the actor.
         # Its previous bank is the previous sample, not the corrected pose.
         cached = motion.gate_contact_bounds
@@ -1532,7 +1571,8 @@ class RooftopPhysics:
                      or state.source_sequence_id in (70, 78) else
                      self.map.wall_correction(motion.room, old_x, state.target_x,
                                               collision_bounds, wall_old_bounds, collision_facing,
-                                              physical_row=motion.row, state=state))
+                                              physical_row=motion.row, state=state,
+                                              gate_passages=motion.gate_passages))
         if corrected != state.target_x:
             vertical_jump_response = (wall_old_bounds is not None and state.actor_type in (0, None)
                                       and not sword_drawn and state.source_sequence_id in (14, 28))

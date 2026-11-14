@@ -4,6 +4,10 @@ The user's level-12 room-3 port recording shows the Prince climbing onto the
 middle platform, running right onto the closing plate, then being thrown back
 to the left of the gate. The gate shuts and the route becomes blocked.
 
+Follow-up: the SEQS 1 correction below did not cover a short tap's stopping
+sequence. [Passage history](gate-passage-history.md) supersedes that limited
+scope and checks the shared ruins/temple gate path, preserving cold recovery.
+
 ## Reproduction and correction
 
 Supply a supported start at port room 2, row 1, X444, facing right, with gate

@@ -22,10 +22,12 @@ from tools.probe_vertical_jump_gate_contact import NativeVerticalJumpContact
 
 
 class NativeGatePassage(NativeVerticalJumpContact):
-    def sample_run(self, x, pose, facing):
+    def sample_run(self, x, pose, facing, *, sequence=1, room=3, row=1):
         actor = bytearray(62)
-        for offset, value in ((2, 0 if facing else -1), (4, x + 207), (6, 226),
-                              (10, pose), (14, 1), (16, 0), (22, 3), (26, 0), (28, -1), (40, 1)):
+        bottom = row * 120 + 106
+        for offset, value in ((2, 0 if facing else -1), (4, x + 207), (6, bottom),
+                              (10, pose), (14, row), (16, int(pose != 15)),
+                              (22, room), (26, 0), (28, -1), (40, sequence)):
             put_actor(actor, offset, value)
         self.cpu.mem_write(self.A5 - 0x5056, bytes(actor))
         self.call(4, 0x2a72)
@@ -33,7 +35,7 @@ class NativeGatePassage(NativeVerticalJumpContact):
         self.call(4, 0x5cbc)
         bounds = (self.word(-0x3564) - 207 + facing, self.word(-0x356c),
                   self.word(-0x3566) - 207 - (1 if facing else 2),
-                  226 + struct.unpack_from('>h', self.frame_data, pose * 10 + 6)[0])
+                  bottom + struct.unpack_from('>h', self.frame_data, pose * 10 + 6)[0])
         self.call(4, 0x4e34)
         self.responses = []
         self.call(4, 0x54da)
@@ -64,6 +66,7 @@ def run_probe(source):
             level = bytearray(original)
             machine.prepare(level, 3, 1)
             previous = None
+            passages = ()
             for index, (x, pose) in enumerate(path):
                 x = x if facing else 950 - x
                 phase = final if index == len(path) - 1 else 184
@@ -73,8 +76,10 @@ def run_probe(source):
                 if events:
                     raise AssertionError(('false native front collision', facing, phase, x, pose, events))
                 if previous:
-                    corrected = LevelMap(level).wall_correction(2, previous[0], x, bounds,
-                        previous[1], facing, 1, state)
+                    terrain = LevelMap(level)
+                    passages = terrain.gate_passage_history(2, 1, bounds, previous[1], passages, state)
+                    corrected = terrain.wall_correction(2, previous[0], x, bounds,
+                        previous[1], facing, 1, state, gate_passages=passages)
                     if corrected != x:
                         raise AssertionError(('port pushed runner back', facing, phase, x, corrected))
                     comparisons += 1
