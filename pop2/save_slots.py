@@ -177,7 +177,8 @@ class SaveBrowser:
     def RENAME(self):
         # A long name takes two lines; the highlight then covers both (draw sets name_rows).
         x, y = self.DETAILS
-        return x, y, self.right, y + 26 + (self.name_rows - 1) * (11 if self.spread else 2)
+        # The classic page's box is only as tall as the quill (22), so the details under it sit higher.
+        return x, y, self.right, y + (26 if self.spread else 22) + (self.name_rows - 1) * (11 if self.spread else 2)
 
     @property
     def FOOTER(self):
@@ -652,10 +653,10 @@ class SaveBrowser:
                 text(message, self.PREVIEW[0], self.PREVIEW[3] + 5, message_color,
                      right - self.PREVIEW[0], True)
             else:
-                text(resume, name_x, 299, muted, name_width, True)
+                text(resume, name_x, 295, muted, name_width, True)
                 if slot.capacity is not None:
-                    text(f'Life {slot.capacity}', 472, 313, muted, 64, True, align='right')
-                text(message or slot.date, name_x, 313, message_color,
+                    text(f'Life {slot.capacity}', 472, 309, muted, 64, True, align='right')
+                text(message or slot.date, name_x, 309, message_color,
                      name_width - 70 if slot.capacity is not None else name_width, True)
             for index, (rect, label) in zip((28, 26, 27, 29), zip(self.footer_rects,
                     ('Back', 'Delete', 'Overwrite' if self.mode == 'save' else 'Load game', 'New save'))):

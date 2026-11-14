@@ -556,7 +556,7 @@ class SaveBrowserTests(unittest.TestCase):
 
         classic = SaveBrowser(self.slots)
         self.assertEqual((classic.PANEL, classic.LIST, classic.PREVIEW, classic.RENAME),
-                         ((28, 16, 484, 368), (40, 99, 228, 321), (238, 99, 472, 267), (238, 270, 472, 296)))
+                         ((28, 16, 484, 368), (40, 99, 228, 321), (238, 99, 472, 267), (238, 270, 472, 292)))
         self.assertEqual(classic.FOOTER, ((40, 328, 108, 356), (116, 328, 196, 356),
                                           (204, 328, 324, 356), (332, 328, 472, 356)))
         # Load game used to stretch from 204 to the edge; it now stands alone at the right, as on the wide page.

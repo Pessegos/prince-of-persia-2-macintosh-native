@@ -989,7 +989,7 @@ class SaveSceneTests(unittest.TestCase):
                 photo = scene.image_ref
                 # The name stands under the preview, or beside it on the wide page.
                 left, top, _right, bottom = browser.RENAME
-                self.assertEqual(browser.RENAME == (238, 270, 472, 296), width != 3440)
+                self.assertEqual(browser.RENAME == (238, 270, 472, 292), width != 3440)
                 for point in ((left + 62, bottom + 6), (-1, -1), (60, 60)):
                     self.assertTrue(browser.hover(left + 20, top + 10))
                     scene.redraw_save_menu()
