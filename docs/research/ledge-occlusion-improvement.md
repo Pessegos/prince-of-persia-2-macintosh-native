@@ -32,6 +32,11 @@ changes. This is not a newly recovered native rule or a native pixel-parity
 claim. The desert's custom scenes have no corresponding floor records and
 receive no new mask.
 
+The separate [temple first-frame tip correction](temple-walkoff-tip.md) masks
+only pose 102's rear tip in the user's corrected target. The broader temple
+fall support-line experiment was rejected and reverted; it does not extend
+this climb/descent policy.
+
 ## Verification
 
 `tests.test_ledge_occlusion` checks the support line across the row change,

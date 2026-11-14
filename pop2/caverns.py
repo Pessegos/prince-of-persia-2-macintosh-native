@@ -61,6 +61,7 @@ class CavernRoom(OpeningRoom):
     custom_occlusion: Image.Image | None = None
     torch_occlusion: dict | None = None
     exit_foreground: tuple = ()
+    platform_contours: dict | None = None
 
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
         mask = super().actor_mask(row, bottom, state, bounds, record)
@@ -93,6 +94,7 @@ class CavernRoom(OpeningRoom):
 
     def draw_actor_foreground(self, frame, state, bounds):
         frame = self.draw_actor_floor_foreground(frame, state, bounds)
+        frame = self.draw_walkoff_tip(frame, state, bounds)
         if (self.exit_foreground and state.actor_type == 0
                 and 217 <= state.action <= 226):
             # DrawTempExitMovable10:0652-0690 promotes SHAP3579 to the
@@ -101,6 +103,19 @@ class CavernRoom(OpeningRoom):
             for sprite, position in self.exit_foreground:
                 frame.paste(sprite, position, sprite)
         return frame
+
+    def draw_walkoff_tip(self, frame, state, bounds):
+        if (not self.platform_contours or bounds is None or state.actor_type != 0
+                or state.level_kind != 2 or state.source_sequence_id != 7
+                or state.action != 102 or state.animation_state != 3 or state.facing != 0):
+            return frame
+        # User's first-frame correction: hide the rear tip along the real
+        # diagonal, retaining the original half repaint in all other frames.
+        row = character_row(bounds[1])
+        records = [record for cell in native_buffer_cells(bounds) if cell[1] == row
+                   for record in self.platform_contours.get(cell, ())]
+        return self.draw_floor_records(frame, records,
+            (max(0, bounds[0]), max(0, bounds[1]), min(510, bounds[2] + 1), min(365, bounds[3] + 1)))
 
     def draw_actor_floor_foreground(self, frame, state, bounds):
         surface = ledge_surface_clip(state, bounds)
@@ -1436,6 +1451,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     custom_mask = Image.new('L', background.size) if custom_records else None
     torch_occlusion = {} if animated and level_number in TEMPLE_LEVELS else None
     exit_foreground = []
+    platform_contours = {}
     # A crevice reveal's redraw paints over the displayed screen: its back
     # pieces also cover the earlier front pieces (slot_variant `redrawn`).
     redraw_start = variant.get('redraw_start', len(commands)) if variant is not None else len(commands)
@@ -1457,6 +1473,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         destination.paste(sprite, position, sprite)
         if layer == 'back' and library == 4 and index == 3579 and level_number in TEMPLE_LEVELS:
             exit_foreground.append((sprite, position))
+        if layer == 'back' and library == 4 and index == 3528 and level_number in TEMPLE_LEVELS:
+            platform_contours.setdefault(tuple(command[8:10]), []).append((sprite, position))
         if layer == 'back' and torch_occlusion is not None:
             # The temple's 47x42 candle frames include opaque wall and
             # holder pixels. Later back pieces may cover them too. Keep
@@ -1575,5 +1593,13 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         cover = Image.alpha_composite(background.crop(rect), foreground.crop(rect))
         cover.putalpha(sprite.getchannel('A'))
         visible_exits.append((cover, (x, y)))
+    visible_contours = {}
+    for cell, records in platform_contours.items():
+        for sprite, (x, y) in records:
+            rect = (x, y, x + sprite.width, y + sprite.height)
+            cover = Image.alpha_composite(background.crop(rect), foreground.crop(rect))
+            cover.putalpha(sprite.getchannel('A'))
+            visible_contours.setdefault(cell, []).append((cover, (x, y)))
     return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
-                      redraw, floors, retained, gate_masks, custom_mask, torch_occlusion, tuple(visible_exits))
+                      redraw, floors, retained, gate_masks, custom_mask, torch_occlusion, tuple(visible_exits),
+                      visible_contours or None)
