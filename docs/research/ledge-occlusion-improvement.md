@@ -25,7 +25,6 @@ Existing facade/parapet, pillar and decoration masks remain in force.
 Custom bridge planks have only a partial repaint in the export; where there
 is no full floor record, their existing native repaint is preserved.
 
-The temple walk-off extension below adds one more bounded player controller.
 The original ComputeHalfRect tables, ClipChar clipping and normal floor
 redraw selection are retained for other sequences and actors. No sprite,
 scenery asset, import format, motion, collision, input, timing or save data
@@ -81,46 +80,3 @@ regression (added after that discovery-module run). Ordinary single-process
 discovery was stopped for growing retained caches, not counted as a result.
 The ten exclusions were nine exclusive-desktop tests and the unavailable local
 native-enemy profile. No exclusive desktop run or native-equivalence claim.
-
-## Temple walk-off extension (2026-11-14)
-
-The user requested the same visual treatment for a clipped leg in level 10,
-native room 19. Real input from supported X225, row 1, facing left reaches
-SEQS 7's pose 102 after seven ticks: X151, relative Y -115, physical row 2,
-drawn bounds (139,161,195,231). The old floor repaint starts at Y220 and
-erases part of the rear trouser leg and boot above the upper platform's
-support line Y226. The physical row has already changed; using that lower
-row for drawing would select the wrong platform.
-
-`ledge_surface_clip` now also accepts the Prince's temple environment-2
-SEQS 7 fall, poses 102-106, modes 3/4. It uses the drawn top to select the
-upper platform, preserves the body on/above its support line, and uses the
-same real floor-alpha repaint below it. Existing climb/descent behavior is
-unchanged. Other environments' falls, NPCs, deaths, other fall controllers,
-and unrelated poses retain their previous drawing. This is the user's
-requested port visual improvement, not a newly recovered Macintosh rule.
-
-The exact reported pose restores 69 visible pixels in X181..195/Y220..226,
-including the trouser colour at (185,220) and the boot at (189,222).
-Everything below Y226 remains identical to the prior render in this pose,
-including the visible leading foot outside the sloping floor contour.
-No character sprite, scenery asset, input, timing, physics or save changes
-are made. Rendering leaves the full sequence state unchanged.
-
-`tests.test_temple_platform_mask` checks the new admission boundaries and
-drawn-row selection, both facings, the support line, transparent corners,
-holes, underside and foreground pillars. Five actual leftward walk-offs
-cover the reported platform and native rooms 7 (level 10), 21 (11), 7 (12)
-and 4 (13), with supported supplied starts and unmodified level cells.
-These are local fall replays, not full campaign routes. Both facings are
-checked by the synthetic geometry/admission tests; no natural rightward
-temple fall route is claimed. The old drawing fails all three new tests
-in 64 cases/subcases, without errors.
-
-The five before/after views were inspected under the ignored
-`rendered/temple-platform-contour` directory. No new native probe or full
-discovery run is claimed for this rendering-only extension. The original
-full-suite counts above describe the earlier climb/descent milestone.
-The focused platform/ledge/bridge/cavern/opening/temple-arrival/exit/ending/
-gate-repaint group passes 215 tests, without skips, in 110.963 seconds.
-Dependency, Ruff F/E9, recovery-catalog and whitespace checks pass.
