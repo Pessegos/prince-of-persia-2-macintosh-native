@@ -20,7 +20,7 @@ at Y216 and has the diagonal which the user's target follows.
 Rooms retain that complete plane's alpha and position, with colours sampled
 from the finished room composition. After the unchanged ordinary repaint,
 the extra contour is drawn only inside the actor's bounds, only for the
-Prince in environment 2, source SEQS 7, pose 102, mode 3, facing left.
+Prince in environments 2 and 4, source SEQS 7, pose 102, mode 3, facing left.
 Other frames, facings, actors, environments and controllers are excluded.
 The general `ledge_surface_clip` behavior is back to the accepted original
 climb/descent scope. There are no physics, timing, input, sprite, imported
@@ -32,6 +32,29 @@ colour. It reveals no boot or trouser pixels. The next fall poses and the
 preceding run frames remain pixel-identical to the restored renderer.
 The before/after crop was visually compared with the supplied target;
 this is not a pixel-for-pixel comparison against the attached image file.
+
+## Approved ruins comparison
+
+The user approved extending this same first-frame correction to the ruins,
+using level 6, native room 8 and the exact framing of the existing README
+ledge comparison instead of showing the temple. Ruins retain the complete
+SHAP3514-3517 floor planes under the same bounded policy. This remains a
+deliberate port visual improvement, not recovered native drawing behavior.
+
+From row 1, X275, facing left, seven actual Left ticks reach pose 102 at
+X202, relative Y -115, physical row 2. Exactly 13 native pixels in bounding
+box (238,218,246,220) receive the finished scenery colours. All other run
+and fall frames remain unchanged. The GIF uses native crop
+(176,135,306,325), enlarged three times with nearest-neighbour sampling.
+Before disables only `draw_walkoff_tip`; After uses the approved renderer
+at the same sequence state. The 14-frame, 75-colour GIF was checked for
+exact decoded RGB and timing against every source frame.
+
+The focused renderer group passes 119 tests without skips. Disabling only
+the ruins extension makes its new real-input regression fail, without
+errors. Ignored generator, validation and review images are under
+`rendered/ruins-left-fall`. No new native probe or full-discovery run is
+claimed for this extension.
 
 ## Verification and boundaries
 

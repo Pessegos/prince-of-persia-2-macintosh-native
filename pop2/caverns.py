@@ -117,7 +117,7 @@ class CavernRoom(OpeningRoom):
 
     def draw_walkoff_tip(self, frame, state, bounds):
         if (not self.platform_contours or bounds is None or state.actor_type != 0
-                or state.level_kind != 2 or state.source_sequence_id != 7
+                or state.level_kind not in (2, 4) or state.source_sequence_id != 7
                 or state.action != 102 or state.animation_state != 3 or state.facing != 0):
             return frame
         # User's first-frame correction: hide the rear tip along the real
@@ -1495,7 +1495,9 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                 exit_foreground.append((cover, (position[0], top)))
             else:
                 exit_foreground.append((sprite, position))
-        if layer == 'back' and library == 4 and index == 3528 and level_number in TEMPLE_LEVELS:
+        if (layer == 'back' and library == 4
+                and (index == 3528 and level_number in TEMPLE_LEVELS
+                     or 3514 <= index <= 3517 and level_number in RUINS_LEVELS)):
             platform_contours.setdefault(tuple(command[8:10]), []).append((sprite, position))
         if layer == 'back' and torch_occlusion is not None:
             # The temple's 47x42 candle frames include opaque wall and
