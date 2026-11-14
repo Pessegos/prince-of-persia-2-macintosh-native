@@ -80,3 +80,49 @@ OK with10 skips,822.035s. Exclusive-desktop tests were not run while the
 user could be playing. Existing Tk teardown messages and Pillow deprecation
 warnings did not produce test failures. This run precedes integration of
 the independently published menu-opening work.
+
+## Follow-up: slab over the statue plinth (2026-11-14)
+
+The user's paired stills exposed a residual in the first MOB3 frame: the
+slab covered the stationary plinth to its right. The preceding regression's
+X120 start checked trouser occlusion but did not make the actor's redraw
+rectangle reach far enough into that plinth to catch this error.
+
+`draw_cavern_falling` also runs after an offscreen actor, clipped to that
+actor's rectangle. Static foreground has already been composited at this
+point. The slab painter repeated the neighbouring floor records, but cell
+(6,2), tile8, has no DrawFloorBuf record. Its statue foreground was therefore
+left underneath the moving slab. Native drawing treats DrawForeImg3:2598
+independently of floor-buffer records (RedrawCell3:1d34/1dd4).
+
+Moving slab pieces now have the stationary foreground's alpha removed from
+their own alpha before compositing. This protects the plinth and other
+foreground contours even when the floor-record list is empty. It retains
+holes and live foreground lighting, without repainting cached static RGB
+across the frame. Cached SHAP images are copied before their alpha changes.
+Existing floor redraws, actor clipping, MOB3 origin/size, fall/guard timing
+and input remain unchanged. This is a bounded host compositor correction;
+no new native CPU/full-raster probe is claimed.
+
+Five actual Up/Right replays, starts X125/130/135/140/145, now check the
+whole plinth at the first detached frame as well as the existing trouser,
+fall and guard tests. A synthetic no-floor-record case checks foreground
+holes, live colours, outside pixels and unchanged cached source artwork.
+The previous painter fails all five overlap subcases plus that synthetic
+case, without errors. The corrected X145 before/fixed view was inspected
+against the user's supplied target.
+
+An ignored audit compares all original loose/shelf anchors in levels3-13:
+144 anchors,95 rooms,1,641 supplied drawing cases, with actual detached
+variants. Stationary occlusion changes1,054 cases at140 anchors. Every changed
+pixel restores the finished stationary scenery colour. These include
+supplied fall positions that are not naturally reachable through a solid
+floor; this is a drawing audit, not140 reproduced campaign bugs. The audit,
+negative controls and actual critical-frame view are under
+`rendered/slab-stationary-foreground`.
+
+Final follow-up validation:245 focused tests pass without skips in104.916s
+(room14, moving slabs, cavern/opening renderer, loose floors, ledges, actor
+layering, temple playtests/exits, gate repaint and bridges). Dependency,
+Ruff F/E9, recovery-catalogue and whitespace checks pass. No new full-suite
+or native-probe run is claimed for this renderer-only follow-up.

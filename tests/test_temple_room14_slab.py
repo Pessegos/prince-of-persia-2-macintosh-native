@@ -44,6 +44,16 @@ class Room14SlabTests(unittest.TestCase):
                     # border; the old cave-origin slab was already18px lower.
                     box = (285, 345, 301, 360)
                     self.assertIsNone(ImageChops.difference(drawn.crop(box), scenery.crop(box)).getbbox())
+                    room = scene.room_cache[13]
+                    self.assertFalse(room.floor_redraw.get((6, 2)))
+                    # The slab must mask the trousers while remaining behind
+                    # the statue's stationary plinth in the adjacent cell.
+                    box = (306, 334, 345, 365)
+                    mask = room.foreground.crop(box).getchannel('A')
+                    difference = ImageChops.difference(drawn.crop(box), scenery.crop(box))
+                    self.assertIsNotNone(mask.getbbox())
+                    for channel in difference.split():
+                        self.assertIsNone(ImageChops.multiply(channel, mask).getbbox())
                 if tick in (18, 19, 20, 21):
                     observed[tick] = (blocks[0].y, blocks[0].row)
                 if tick == 20:
@@ -58,3 +68,38 @@ class Room14SlabTests(unittest.TestCase):
             self.assertEqual(observed, {18: (47, 0), 19: (102, 0), 20: (165, 1), 21: (228, 1)})
         finally:
             harness.close()
+
+    def test_detached_slab_stays_behind_statue_for_overlapping_fall_positions(self):
+        from tools.audit_temple_routes import Harness, press
+        from pop2.caverns import cavern_room
+
+        for x in (125, 130, 135, 140, 145):
+            with self.subTest(start_x=x):
+                harness = Harness(10, draw=True, peaceful=False)
+                scene = harness.scene
+                scene.audio = None
+                try:
+                    scene.jump_to_room(13, 1, x, 1)
+                    press(harness, 'up', True)
+                    press(harness, 'R', True)
+                    for tick in range(18):
+                        harness.tick()
+                        if tick == 2:
+                            press(harness, 'up', False)
+                        if tick == 9:
+                            press(harness, 'R', False)
+                    block, = scene.game.caverns.loose.falling
+                    self.assertEqual((block.y, block.mob_type), (365, 3))
+                    self.assertEqual(scene.terrain_motion.row, 3)
+                    scene.render()
+                    room = scene.room_cache[13]
+                    self.assertFalse(room.floor_redraw.get((6, 2)))
+                    drawn = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
+                    scenery = cavern_room(13, level_number=10).flattened().convert('RGB')
+                    box = (306, 334, 345, 365)
+                    mask = room.foreground.crop(box).getchannel('A')
+                    delta = ImageChops.difference(drawn.crop(box), scenery.crop(box))
+                    for channel in delta.split():
+                        self.assertIsNone(ImageChops.multiply(channel, mask).getbbox())
+                finally:
+                    harness.close()

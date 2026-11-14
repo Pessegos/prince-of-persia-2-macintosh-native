@@ -943,10 +943,16 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, ac
         for index, bottom in pieces:
             sprite = cavern_command_sprite(['back', index, block.x, bottom, 16],
                                             resources, palette, shapes)
+            # DrawForeImg is independent of DrawFloorBuf. A statue/pillar
+            # can have no floor record, but still occludes the moving slab.
+            # Mask the slab to preserve live lighting on the foreground.
+            rect = (block.x, bottom - sprite.height, block.x + sprite.width, bottom)
+            cover = art.foreground.crop(rect).getchannel('A')
+            sprite = sprite.copy()
+            sprite.putalpha(ImageChops.multiply(sprite.getchannel('A'), ImageChops.invert(cover)))
             frame.paste(sprite, (block.x, bottom - sprite.height), sprite)
-            # The host paints complete SHAPs: the temple lip is 90px wide,
-            # beyond ComputeMobRect's 87px logical box. Repaint the whole
-            # drawn footprint so its last pixels cannot cover the next tile.
+            # The host paints complete SHAPs. Include any raster pixels
+            # beyond the logical MOB box in the neighbouring-floor repaint.
             width = max(width, sprite.width)
             height = max(height, y - bottom + sprite.height)
         redraw.append((block.x, y, (width, height)))
