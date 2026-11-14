@@ -4,6 +4,7 @@ import math
 import random
 from dataclasses import dataclass, field
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 
 from pop2 import menu_theme
@@ -71,8 +72,9 @@ class CutsceneGallery:
     REVEAL_RATE = 15
     REVEAL_STEP = 1 / REVEAL_RATE   # seconds from one stage to the next
     REVEAL_DELAY = .6
-    # Share of the veil's stages over which "Chapter N" dissolves into the title.
-    TITLE_DISSOLVE = (.25, .85)
+    # Share of the veil's stages over which "Chapter N" dissolves into the title:
+    # all of them, so the title and the cover come into focus together.
+    TITLE_DISSOLVE = (0, 1)
     # Once the cover is whole its border glows: bright, then cooling to the
     # accent colour, at its ordinary thickness. Meanwhile a band of light
     # crosses the cover. Times in seconds.
@@ -494,17 +496,32 @@ class CutsceneGallery:
         return max(0.0, min(1.0, (stage - start) / (end - start)))
 
     def dissolve_mask(self, index, progress, size):
-        """Which blocks already show the title: one block per page unit, in a fixed
-        scattered order for each chapter (an old game's pixel dissolve, hard-edged)."""
-        units = max(1, math.ceil(self.CARD_WIDTH)), max(1, math.ceil(self.CARD_HEIGHT))
-        key = index, 'order', units
+        """Which pixels already show the title, the way the game's story text dissolves
+        (DrawDisolveData 15:31ba, pop2.intro.dissolve_words): the card is cut into groups
+        of four page pixels a row, taken in a shuffled order; the first pass copies one
+        pair of each group (alternately the left and the right pair), the second pass
+        their other pair in the same order. Hard-edged, nothing blended."""
+        width = max(4, math.ceil(self.CARD_WIDTH / 4) * 4)
+        height = max(1, math.ceil(self.CARD_HEIGHT))
+        key = index, 'dissolve', width, height
         if key not in self.image_cache:
-            rng = random.Random(index * 7919 + 17)
-            self.image_cache[key] = Image.frombytes(
-                'L', units, bytes(rng.randrange(1, 256) for _ in range(units[0] * units[1])))
-        limit = round(progress * 255)
-        mask = self.image_cache[key].point(lambda value: 255 if value <= limit else 0)
-        return mask.resize(size, Image.Resampling.NEAREST)
+            columns = width // 4
+            count = columns * height
+            order = list(range(count))
+            random.Random(index).shuffle(order)
+            groups = np.asarray(order, dtype=np.intp)
+            first = np.arange(count) % 2          # which pair of its group the first pass copies
+            rank = np.empty((height, width), dtype=np.int32)
+            rows, lefts = groups // columns, groups % columns * 4
+            for pair, when in ((first, np.arange(count)), (1 - first, count + np.arange(count))):
+                for half in (0, 1):
+                    rank[rows, lefts + pair * 2 + half] = when
+            self.image_cache[key] = rank
+        rank = self.image_cache[key]
+        shown = rank < int(progress * rank.size / 2 + 1e-6)   # pairs copied so far, of two per group
+        mask = Image.fromarray(np.where(shown, 255, 0).astype(np.uint8), 'L')
+        return mask.resize((round(width * size[0] / self.CARD_WIDTH), round(height * size[1] / self.CARD_HEIGHT)),
+                           Image.Resampling.NEAREST).crop((0, 0, *size))
 
     def veil(self, index, cover, stage):
         """The cover at one stage of its veil: 0 as a locked chapter shows it, reveal_stages whole."""
