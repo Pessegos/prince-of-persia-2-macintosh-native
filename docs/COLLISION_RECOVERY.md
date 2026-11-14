@@ -194,6 +194,13 @@ Restricting a wide attack pose to the supporting foot's two cells exposed
 the forward foot through the next parapet. Near facade pieces cover the actor
 rectangle; climbing retains its native partial-floor redraw.
 
+For the Prince's controlled descent/climb, the user subsequently requested an
+intentional [ledge occlusion improvement](research/ledge-occlusion-improvement.md).
+Poses 135–144 in SEQS 68/10 now use the slab's full intersecting alpha below
+the support line, preserving hands/feet on top and feet below its underside.
+The original partial redraw remains the reference, not the visual target for
+this explicit port exception; other actors and sequences retain their rules.
+
 DrawRoofDecoration 23:`0x018e`-`0x0242` uses DATA tables at A5 cca8/ccea.
 All eleven shape/offset/pass entries are now used, including decoration
 modifiers in empty tiles. These supply the previously missing right-hand

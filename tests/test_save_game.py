@@ -406,11 +406,13 @@ class SaveFormatTests(unittest.TestCase):
         original.place(3, 2, 35, 0)
         bounds = (31, 268, 48, 346)
         original.motion.gate_contact_bounds = (3, 2, bounds, bounds)
+        original.motion.gate_passages = ((3, 25),)
         original.runtime.state.select(5)
         original.runtime.next_frame()
         write_save(self.path, capture(original))
         loaded, _saved = read_save(self.path, self.resources)
         self.assertEqual(loaded.motion.gate_contact_bounds, original.motion.gate_contact_bounds)
+        self.assertEqual(loaded.motion.gate_passages, ((3, 25),))
         self.assertEqual(loaded.runtime.state.animation_state, 7)
         self.assertEqual(vars(loaded.runtime.state), vars(original.runtime.state))
         value = json.loads(self.path.read_text())
@@ -419,6 +421,7 @@ class SaveFormatTests(unittest.TestCase):
             if isinstance(item, dict):
                 if item.get('record') == 'TerrainMotion':
                     item['fields'].pop('gate_contact_bounds', None)
+                    item['fields'].pop('gate_passages', None)
                 for child in item.values():
                     remove_contact(child)
             elif isinstance(item, list):
@@ -429,6 +432,7 @@ class SaveFormatTests(unittest.TestCase):
         self.path.write_text(json.dumps(value))
         loaded, _saved = read_save(self.path, self.resources)
         self.assertIsNone(loaded.motion.gate_contact_bounds)
+        self.assertEqual(loaded.motion.gate_passages, ())
 
     def test_failed_atomic_replace_preserves_previous_save_and_removes_temporary(self):
         self.path.write_bytes(b'old-save')

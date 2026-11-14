@@ -25,6 +25,7 @@ I'm trying to stay as close to the original as possible, while still making some
   - [Developer Tools (F3)](#developer-tools-f3)
   - [Cutscene Pausing](#cutscene-pausing)
   - [Overlapping Sound Effects](#overlapping-sound-effects)
+  - [Ledge Masking](#ledge-masking)
   - [Lava Overhaul](#lava-overhaul)
   - [Cave Ambience](#cave-ambience)
   - [Cavern Artwork](#cavern-artwork)
@@ -159,6 +160,18 @@ Different sound effects can now play at the same time. <br/> In this example, th
     <td valign="top"><video controls width="100%" src="https://github.com/user-attachments/assets/4b82128e-c92a-434c-bc1c-4cacdf9c8a3e"></video></td>
   </tr>
 </table>
+
+<br/>
+
+## Ledge Masking
+
+In the Macintosh version, parts of the Prince's body can show through the stone while climbing up or lowering himself from a ledge. I improved the masking in both animations to make the movement around the ledge look more natural.
+
+<br/>
+
+<img src="docs/github readme/ledge-masking-before-after.gif" alt="Before and after comparison of the Prince descending and climbing a ledge, with improved masking around the stone">
+
+*Slowed down for comparison.*
 
 <br/>
 

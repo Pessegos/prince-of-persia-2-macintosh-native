@@ -169,7 +169,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     record = value['fields']
     allowed = {field.name for field in fields(cls)} - OMIT.get(cls, set())
     # Earlier snapshots predate turning-contact history and explicit NPC banks.
-    optional = {'gate_contact_bounds', 'void_fall'} if cls is TerrainMotion else set()
+    optional = {'gate_contact_bounds', 'gate_passages', 'void_fall'} if cls is TerrainMotion else set()
     if cls is FallingFloor:
         optional.add('mob_type')
     if cls is GateCrush:

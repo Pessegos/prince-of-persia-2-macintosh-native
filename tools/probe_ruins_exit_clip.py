@@ -50,7 +50,7 @@ def run_probe(source):
     machine = NativeExitClip(parse_resource_fork(executable))
     digest, count = hashlib.sha256(), 0
     rects = {}
-    for number in range(3, 10):
+    for number in range(3, 14):
         original = prince['LEVL'][1999 + number]['data']
         environment = struct.unpack_from('>H', original, 0x2186)[0]
         pointer = struct.unpack_from('>i', machine.data, len(machine.data) - 0x452c + environment * 4)[0]
