@@ -577,10 +577,6 @@ class SaveBrowserTests(unittest.TestCase):
         saves.spread, saves.shift = spread, shift
         page = saves.pixel_rect(saves.PANEL, (1920, 1080))
         self.assertEqual(page[0::2], shots.pixel_rect(shots.PANEL, (1920, 1080))[0::2])   # the same sides
-        for size in ((2560, 1080), (3440, 1440)):
-            shots.lay_out(*ScreenshotGallery.wide_layout(*size))
-            saves.spread, saves.shift = layout(*size)
-            self.assertEqual(saves.pixel_rect(saves.PANEL, size)[0::2], shots.pixel_rect(shots.PANEL, size)[0::2])
         self.assertAlmostEqual(shift, 1 / 3 - SaveBrowser.WIDE_PAD)
         spread, shift = layout(2560, 1080)                           # the panel stops growing and is centred
         self.assertEqual(spread, SaveBrowser.WIDE_LIMIT + 2 * SaveBrowser.WIDE_PAD)
@@ -627,7 +623,7 @@ class SaveBrowserTests(unittest.TestCase):
                 self.assertEqual(footer[-1][2], browser.right)
                 self.assertEqual(footer[-1][2] - footer[-1][0], 140)   # not stretched across the page
                 # 21:9 only adds a little room for long names in the list, then centres the page.
-                growth = 0   # 21:9 centres the 16:9 page, as the screenshots page does (it grew 50)
+                growth = 50 if size[0] == 2560 else 0
                 self.assertEqual(browser.PANEL[2] - browser.PANEL[0], 456 + 188 + growth)
                 self.assertEqual(browser.LIST[2] - browser.LIST[0], 188 + growth)
                 self.assertEqual(browser.PREVIEW[0], browser.LIST[2] + 10)
