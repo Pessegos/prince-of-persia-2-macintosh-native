@@ -28,6 +28,9 @@ class NativeExitForeground(NativeRules):
         self.artwork = artwork
         self.commands = []
 
+    def drawing_clip(self):
+        return 0, 0, 365, 510
+
     def dispatch(self, cpu, address, size, user):
         if address != self.address(3, 4):
             return super().dispatch(cpu, address, size, user)
@@ -41,7 +44,8 @@ class NativeExitForeground(NativeRules):
             width, height = struct.unpack_from('>hH', self.artwork['SHAP'][shape]['data'], 4)
             x = fields[7] * 51 + fields[13]
             bottom = (fields[8] + 1) * 120 + 5 + fields[14]
-            clip = (max(0, bottom - height), max(0, x), min(365, bottom), min(510, x + width))
+            top, left, lower, right = self.drawing_clip()
+            clip = (max(top, bottom - height), max(left, x), min(lower, bottom), min(right, x + width))
             admitted = clip[0] < clip[2] and clip[1] < clip[3]
             if admitted:
                 front = fields[5] in (1, 2)

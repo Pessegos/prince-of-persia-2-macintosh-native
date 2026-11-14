@@ -444,7 +444,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 7,Ruins,SnakeUpdateOppInfo,0x1e04,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,4
 7,Ruins,DrawRuinBackWall,0x1ec6,decoded,indexed-only,,No semantic review recorded in this prototype catalog,15,8
 7,Ruins,DrawRuinCrevice,0x2344,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,9
-7,Ruins,DrawRuinExitMovable,0x25b4,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,17
+7,Ruins,DrawRuinExitMovable,0x25b4,jump_table,partial,pop2/caverns.py;tools/probe_cavern_ruins_exit_foreground.py,"2880 original BF cases verify SHAP3545 front promotion at poses217-226 without Y gate and source row*120-10 clip; supplied post-image caller/row clip/shape admission/counters; native reset/field transfer execute, full prefix/dirty/actor/raster pipeline excluded",0,17
 7,Ruins,DrawRuinGateMovable,0x2ac2,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,3
 7,Ruins,DrawRuinDownPlate,0x2e12,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,1,3
 7,Ruins,DrawRuinPosts,0x301e,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,9
@@ -477,7 +477,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 8,Caverns,TriggerCaveBars,0x1672,jump_table,partial,pop2/pressure_plates.py,fresh-press open/close and one phase per update with sounds 282/284,1,0
 8,Caverns,DrawCaveBackWall,0x16ee,decoded,indexed-only,,No semantic review recorded in this prototype catalog,10,3
 8,Caverns,DrawCaveDart,0x1aba,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,native mouth shapes and dimension-dependent clips; 315 whole room/floor/climb drawing-list comparisons for all nine shooters,0,3
-8,Caverns,DrawCaveExitMovable,0x1ba4,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py,"level-three exit body, pixel-phase displacement and native clips; 226 room/floor/climb command-list comparisons; special actor draw pipeline incomplete",0,12
+8,Caverns,DrawCaveExitMovable,0x1ba4,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py;tools/probe_cavern_ruins_exit_foreground.py,"exit body/pixel-phase/native clips;226 room/floor/climb comparisons;2880 original BF cases verify SHAP3565 front promotion only at poses217-226 and relativeY<-24; supplied post-image caller/row clip/shape admission/counters, not full dirty/actor/raster pipeline",0,12
 8,Caverns,DrawCaveFloor,0x1da8,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,12,4
 8,Caverns,DrawCaveGateMovable,0x1f40,jump_table,partial,pop2/caverns.py;tools/extract_pressure_plates.py;docs/CAVERN_RECOVERY.md,native two-layer shapes and quarter-phase displacement; historical 636 individual and 504 combined clean/floor/climb comparisons; front cap now preserved above ordinary dirty-cell clip during motion,2,8
 8,Caverns,DrawCaveLavaBubbles,0x219e,jump_table,partial,pop2/lava.py;pop2/caverns.py;tools/extract_lava.py,native reference cover/order/death triples compared; enhanced presentation uses continuous original surface,0,17

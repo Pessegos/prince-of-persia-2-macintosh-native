@@ -70,6 +70,17 @@ class CavernRoom(OpeningRoom):
             # CUST for every dirty cell; DrawHorse 3:23f0-2414 adds the
             # arrival statue to plane 1 independently of the actor's cell.
             mask = ImageChops.lighter(mask, self.custom_occlusion)
+        kind = getattr(state, 'level_kind', None)
+        if (self.exit_foreground and kind in (3, 4) and state.actor_type == 0
+                and 217 <= state.action <= 226
+                and (kind != 3 or state.current_y < -24)):
+            # Cave8:1cfe/ruins7:27c0 put the irregular frame in front.
+            # Mask the actor rather than repainting static RGB over the
+            # cave ambience already drawn on the stone behind him.
+            mask = mask.copy()
+            for sprite, (x, y) in self.exit_foreground:
+                rect = (x, y, x + sprite.width, y + sprite.height)
+                mask.paste(ImageChops.lighter(mask.crop(rect), sprite.getchannel('A')), (x, y))
         # Ruins back-layer slabs must not mask reaching/gripping hands.
         # QuickFloor's native repaint commands supply their foreground below.
         # CheckGateInFore 3:2722-2762/2860 peels the movable gate over
@@ -96,10 +107,10 @@ class CavernRoom(OpeningRoom):
         frame = self.draw_actor_floor_foreground(frame, state, bounds)
         frame = self.draw_walkoff_tip(frame, state, bounds)
         if (self.exit_foreground and state.actor_type == 0
-                and 217 <= state.action <= 226):
-            # DrawTempExitMovable10:0652-0690 promotes SHAP3579 to the
-            # front table during stair entry, independently of ClipChar's
-            # later Y<-24 rectangle. Draw after the actor's floor repaint.
+                and 217 <= state.action <= 226
+                and getattr(state, 'level_kind', None) not in (3, 4)):
+            # Retain the accepted temple front-table paint after the actor's
+            # floor repaint (DrawTempExitMovable10:0652-0690).
             for sprite, position in self.exit_foreground:
                 frame.paste(sprite, position, sprite)
         return frame
@@ -1451,6 +1462,9 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     custom_mask = Image.new('L', background.size) if custom_records else None
     torch_occlusion = {} if animated and level_number in TEMPLE_LEVELS else None
     exit_foreground = []
+    exit_shape = (3565 if level_number in SCENERY_LEVELS[3] else
+                  3545 if level_number in RUINS_LEVELS else
+                  3579 if level_number in TEMPLE_LEVELS else None)
     platform_contours = {}
     # A crevice reveal's redraw paints over the displayed screen: its back
     # pieces also cover the earlier front pieces (slot_variant `redrawn`).
@@ -1471,8 +1485,16 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         sprite, position = clipped
         destination = background if layer == 'back' else foreground
         destination.paste(sprite, position, sprite)
-        if layer == 'back' and library == 4 and index == 3579 and level_number in TEMPLE_LEVELS:
-            exit_foreground.append((sprite, position))
+        if layer == 'back' and library == 4 and index == exit_shape:
+            if index == 3545:
+                # The promoted ruins record comes from the moving-door
+                # drawer's row*120-10 clip (7:273e-274a), not pass 5's
+                # additional full-height background copy.
+                top = max(position[1], command[5] * 120 - 10)
+                cover = sprite.crop((0, top - position[1], sprite.width, sprite.height))
+                exit_foreground.append((cover, (position[0], top)))
+            else:
+                exit_foreground.append((sprite, position))
         if layer == 'back' and library == 4 and index == 3528 and level_number in TEMPLE_LEVELS:
             platform_contours.setdefault(tuple(command[8:10]), []).append((sprite, position))
         if layer == 'back' and torch_occlusion is not None:

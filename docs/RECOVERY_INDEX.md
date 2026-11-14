@@ -213,6 +213,16 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | F3 visual playback gallery | host feature | T: imported sequence groups, native snapshots for every part, private silent scene players, cached previews, six-part pages, direct seek, arrows/wheel, hover and high-resolution partial uploads, nested Back/Escape and pause/key-repeat protection | playback_preview, preview_cache, game_ui, window_controls / test_playback_preview, test_attract_scene; [details](PLAYBACK_GALLERY.md) |
 | In-game F3 menu, peaceful scene, ordinary-key pause resume, Windows fullscreen | host features | T: tabless tools hub and separate Playback page with optional debug bar, attract-cycle level-control exclusion, sample-offset seeking, centered cutscene pause, modifier/media/navigation/system-shortcut exclusions, held-key consumption and focus reset; not recovered Mac gameplay rules | window_controls/game_ui / test_game_ui, test_development_menu, test_attract_scene |
 
+## Cavern and ruins exit-door contours (2026-11-14)
+
+The [exit-contour check](research/cavern-ruins-exit-contours.md) restores the
+original SHAP3565/3545 foreground masks, including the irregular cavern stone
+and ruins' upper-right corner. CODE8:1cfe and7:27c0 promotion gates agree in
+5,760 bounded original comparisons, with BF caller state and image admission
+supplied. Real stairs at15 prepared anchors, exact alpha/void preservation and
+live-background colour retention are tested; full native raster/frame parity
+remains partial. Existing temple and narrow first-fall corrections are retained.
+
 ## Corpse Visibility
 
 The former guard-only visibility exception could leave either a small strip
