@@ -465,10 +465,12 @@ class SaveBrowserTests(unittest.TestCase):
         # The tip sits under the two-line name; the details start below it.
         preview_left = round((browser.PREVIEW[0] + shift) * sy)
         tip_bottom = (y + 30 + 11 + 17) * sy
-        details_top = (y + 11 + browser.DETAIL_GAP) * sy
-        self.assertLess(tip_bottom, details_top)
+        # The details stand in the column's lower corner, level with the preview's foot.
+        below = browser.PREVIEW[3] - 39
+        self.assertGreaterEqual(below, y + 11 + browser.DETAIL_GAP)
+        self.assertLess(tip_bottom, below * sy)
         overlapping = [rect for rect in drawn if rect[0] > preview_left
-                       and any(rect[1] < (y + 11 + browser.DETAIL_GAP + row) * sy < rect[3] for row in range(0, 10, 2))]
+                       and any(rect[1] < (below + row) * sy < rect[3] for row in range(0, 38, 2))]
         self.assertEqual(overlapping, [])
         self.assertTrue(any(abs(rect[1] - (y + 41) * sy) <= 1 for rect in drawn))
 

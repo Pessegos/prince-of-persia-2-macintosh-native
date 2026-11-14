@@ -111,7 +111,7 @@ class SaveBrowser:
     ROW_HEIGHT = 42
     WIDE_FROM = menu_theme.WIDE_FROM       # narrower windows keep the classic page, centred
     WIDE_PREVIEW = menu_theme.WIDE_SPREAD  # a 16:9 window: up to here the extra width enlarges the preview
-    DETAIL_GAP = 53      # wide page: name block (26) + Rename tip (4 + 17) + 6 before the details
+    DETAIL_GAP = 53      # wide page: the details never climb above name (26) + Rename tip (4 + 17) + 6
     WIDE_LIMIT = 222     # wider windows give the list a little more room for long names, then stop
 
     def __post_init__(self):
@@ -621,8 +621,9 @@ class SaveBrowser:
             message_color = c('#ff9b9b') if self.error else muted
             if self.spread:
                 # Beside the preview: one detail on each line; messages go under the preview.
-                # The details always sit below the Rename tip's place, so hovering moves nothing.
-                below = top + extra + self.DETAIL_GAP
+                # The details sit in the column's lower corner, level with the preview's foot,
+                # clear of the name and of the Rename tip under it, so hovering moves nothing.
+                below = max(top + extra + self.DETAIL_GAP, self.PREVIEW[3] - 39)
                 text(slot.resume, column, below, muted, right - column, True)
                 text(slot.date, column, below + 14, muted, right - column, True)
                 if slot.capacity is not None:
