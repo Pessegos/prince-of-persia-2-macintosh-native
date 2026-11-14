@@ -495,6 +495,9 @@ class WindowControls(InputRouting):
             changed = gallery.poll()
             moving = gallery.animate(now - previous)
             previous = now
+            if gallery.burn_cue:
+                gallery.burn_cue = False
+                self.play_menu_sound('burn')
             if gallery.committed_folder is not None:
                 self.screenshot_settings.folder = gallery.committed_folder
                 menu.screenshot_folder = str(gallery.committed_folder)

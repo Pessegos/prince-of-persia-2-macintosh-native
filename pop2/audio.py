@@ -33,6 +33,9 @@ def scene_sound_key(resource_id, kind):
 
 # a5-0x4396[16]: the altar burn (SetKidDeathMethod(16), 10:2aa6).
 LATE_DEATH_CUES = {16: 250}
+# The lava sound a screenshot burns with in the screenshots page, and its level.
+BURN_CUE = 69
+BURN_VOLUME = 0.4   # cue 69 peaks at 23% of full scale: 9%, as the reveal
 
 class MixerPlayback:
     def __init__(self, directory, cues, mix_mechanisms=False, split_mechanisms=False):
@@ -69,6 +72,14 @@ class MixerPlayback:
         self.ui_hover_step = 0
         self.sounds = {cue: mixer.Sound(str(Path(directory) / item["file"]))
                        for cue, item in cues.items() if item.get("file")}
+        # A screenshot dropped on the lava sinks into it with the game's own
+        # sound for a body sinking into lava (cue 69, GetLavaInfoHnd 8:34a6),
+        # a copy of it brought down to the reveal's peak, on the click's channel.
+        if BURN_CUE in self.sounds:
+            burn = mixer.Sound(buffer=self.sounds[BURN_CUE].get_raw())
+            burn.set_volume(BURN_VOLUME)
+            self.ui_sounds['burn'] = burn
+            self.ui_channels['burn'] = self.ui_channels['click']
         horse_theme = scene_sound_key(25006, 0)
         if horse_theme in self.sounds:
             self.sounds[horse_theme] = mixer.Sound(buffer=horse_music_ending(
@@ -209,8 +220,10 @@ class MixerPlayback:
         if kind == 'hover':
             sound = self.ui_hover_notes[self.ui_hover_step % len(self.ui_hover_notes)]
             self.ui_hover_step += 1
-        else:
+        elif kind in self.ui_sounds:
             sound = self.ui_sounds[kind]
+        else:
+            return   # a sound made from the game's resources that this installation lacks
         self.ui_channels[kind].play(sound)
 
     def stop_ui(self):

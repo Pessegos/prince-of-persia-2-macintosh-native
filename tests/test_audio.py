@@ -642,6 +642,17 @@ class PolyphonicCueTests(unittest.TestCase):
         self.assertFalse(self.playback.playing_effects())
         self.assertFalse(self.audio.pending_effects)
 
+    def test_a_burning_screenshot_sinks_with_the_lava_sound_of_a_body_at_the_reveal_level(self):
+        burn = self.playback.ui_sounds['burn']
+        self.assertIsNot(burn, self.playback.sounds[69])          # the game's own cue keeps its level
+        self.assertEqual(burn.get_raw(), self.playback.sounds[69].get_raw())
+        self.assertAlmostEqual(burn.get_volume(), 0.4, places=2)
+        self.assertEqual(self.playback.sounds[69].get_volume(), 1)
+        self.playback.play_ui('burn')
+        self.assertIs(self.playback.ui_channels['click'].get_sound(), burn)
+        del self.playback.ui_sounds['burn']                       # an installation without cue 69
+        self.playback.play_ui('burn')
+
     def test_effect_pool_never_steals_music_menu_or_mechanism_channels(self):
         self.audio.add_song(40)
         self.audio.add_sound(17)

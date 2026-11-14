@@ -116,7 +116,8 @@ Refresh, "With menus", Open folder and Capture PNG move to the right edge. The
 folder and delete dialogs are laid out as on the classic page and centred on
 the wide one (`dialog_shift`). The page's hint, "Take Screenshots with F8",
 keeps to the page's right edge and goes under the taller panel
-(`draw_screenshot_notice`'s `inset`).
+(`draw_screenshot_notice`'s `inset`). On the classic page it stands 3 units
+from the health strip, clear of the themed frame.
 
 The controls page keeps the classic page in every window, fitted like the
 game's picture: its keyboard and controller cannot be enlarged, and a wider

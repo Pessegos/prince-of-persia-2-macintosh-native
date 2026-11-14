@@ -398,6 +398,7 @@ class ScreenshotGallery:
         self.dragging = False
         self.burn_seconds, self.burn_image = None, None
         self.burn_target = None
+        self.burn_cue = False
         self.hovered = None
         self.keyboard_navigation = False
         self.draft, self.caret, self.anchor = '', 0, 0
@@ -638,6 +639,11 @@ class ScreenshotGallery:
     def scrolling(self):
         return abs(self.scroll_target - self.scroll) >= 0.025 or abs(self.velocity) >= 0.1
 
+    def burn_landed(self, seconds):
+        """Whether the falling picture has met the lava by then, in the game's steps, as draw shows it."""
+        step = math.floor(seconds * 12 + 1e-9)
+        return min(1, step / 12 / self.BURN_SECONDS) >= self.BURN_LANDING
+
     def ensure_visible(self, immediate=False):
         row = self.selected // self.COLUMNS
         top, bottom = row * self.row_height, (row + 1) * self.row_height
@@ -653,7 +659,10 @@ class ScreenshotGallery:
             return False
         icon_changed = self.burn_seconds is not None
         if self.burn_seconds is not None:
+            landed = self.burn_landed(self.burn_seconds)
             self.burn_seconds += max(0, seconds)
+            if not landed and self.burn_landed(self.burn_seconds):
+                self.burn_cue = True   # the scene plays the lava's sound and clears it
             if self.burn_seconds >= self.BURN_SECONDS:
                 self.burn_seconds, self.burn_image = None, None
                 self.burn_target = None

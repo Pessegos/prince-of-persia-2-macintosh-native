@@ -586,7 +586,8 @@ class GameMenuSceneTests(unittest.TestCase):
             bounds = ImageChops.difference(plain.convert('RGB'), hint.convert('RGB')).getbbox()
             self.assertIsNotNone(bounds)
             self.assertGreater(bounds[1], gallery.PANEL[3])
-            self.assertLess(bounds[3], 360)
+            # Three units lower than it was (bottom 357), clear of the themed frame, still above the health strip.
+            self.assertEqual(bounds[3], 360)
             for modal in ('choosing', 'deleting'):
                 setattr(gallery, modal, True)
                 self.assertIs(scene.draw_screenshot_notice(plain), plain)

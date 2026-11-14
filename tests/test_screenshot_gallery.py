@@ -698,8 +698,20 @@ class ScreenshotGalleryTests(unittest.TestCase):
             cached = gallery.draw(canvas, font, visible=visible)
             gallery.surface_cache.clear()
             self.assertEqual(cached.tobytes(), gallery.draw(canvas, font, visible=visible).tobytes())
+        # The lava's sound is asked for once, on the step the picture's foot meets the lava.
+        steps = []
+        while gallery.burn_seconds is not None and gallery.burn_seconds < gallery.BURN_LANDING + 0.2:
+            gallery.animate(1 / 60)
+            steps.append(gallery.burn_cue)
+            if gallery.burn_cue:
+                landing = gallery.burn_seconds
+                gallery.burn_cue = False
+        self.assertEqual(steps.count(True), 1)
+        self.assertTrue(gallery.burn_landed(landing))
+        self.assertFalse(gallery.burn_landed(landing - 1 / 60))
         gallery.animate(gallery.BURN_SECONDS + 0.01)
         self.assertIsNone(gallery.burn_seconds)
+        self.assertFalse(gallery.burn_cue)
         self.assertFalse(gallery.overlay_active)
 
     def test_drop_cancel_and_changed_file_do_not_start_burning(self):
