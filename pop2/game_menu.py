@@ -48,7 +48,7 @@ class GameMenu:
     PANEL = centered_panel(384, 36 + VISIBLE_ROWS * ROW_HEIGHT + 14)
     # Options: a heading (HEADING_HEIGHT) opens each group; Back stands apart.
     OPTION_HEADINGS = {0: "Sound", 3: "Display", 5: "Game"}
-    HEADING_HEIGHT = 18
+    HEADING_HEIGHT = 20
     BACK_GAP = 10
     OPTIONS_PANEL = centered_panel(384, 36 + 3 * HEADING_HEIGHT + 7 * ROW_HEIGHT + BACK_GAP + 14)
     DIALOG = centered_panel(352, 166)
@@ -396,9 +396,10 @@ class GameMenu:
             text("Options", 256, panel_top + 14, gold, "center")
             items = self.option_items
             for i, item in enumerate(items[:-1]):
-                if i in self.OPTION_HEADINGS:
-                    text(self.OPTION_HEADINGS[i], 82, self.row_rect(i)[1] - self.HEADING_HEIGHT + 4, gold)
                 row(i, item)
+            # Headings last: descenders (p, y) must not be covered by the row below.
+            for i, heading in self.OPTION_HEADINGS.items():
+                text(heading, 82, self.row_rect(i)[1] - self.HEADING_HEIGHT + 2, gold)
             button(self.row_rect(len(items) - 1), items[-1].label, self.focus == len(items) - 1)
         else:
             text("Game Menu", 256, panel_top + 14, gold, "center")
