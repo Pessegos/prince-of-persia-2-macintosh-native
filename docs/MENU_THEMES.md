@@ -120,13 +120,14 @@ panel around the same pieces gained nothing.
 ## The lava delete button
 
 The screenshots page deletes a picture dropped on a small pool of the
-caverns' lava. The pool sits in a rim of rock in the page's own background,
-a little darker (`rim_shades`), so it sits in the page rather than on it: a
-lit top, a darker front face, a dark line where the far rim drops to the
-lava; four hard shades and a lumpy edge, no outline. A dropped picture falls
-to the pool, comes to rest with its foot in it and only then burns away from the foot up (`burn`, one second in all): a ragged bright edge, an orange row, char
-above, a few sparks. It moves in the game's steps, twelve a second, and
-nothing is blended or faded.
+caverns' lava. The pool sits in a rim of rock made from the page's own
+background lit by the lava (`rim_shades`): the rim's top takes some of the
+lava's orange and its front face falls away a little darker than the page;
+four hard shades and a lumpy edge, no outline. A dropped picture falls until
+its foot meets the pool, then sinks into it while it burns from the foot up
+(`burn`, one second in all): a ragged bright edge just above the lava, an
+orange row, char above, a few sparks. It moves in the game's steps, twelve a
+second, and nothing is blended or faded.
 
 ## The sign on the page
 

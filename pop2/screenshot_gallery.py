@@ -77,13 +77,18 @@ def scan_folders(folder):
 
 
 # The rim's shades as parts of the page's own background: all a little darker than it.
-RIM_SHADES = (0.8, 0.64, 0.48, 0.32)   # lit top, top, front face, crevice
+# The rim is the page's own background lit by the lava: its top takes some of
+# the lava's orange, its front face falls away a little darker than the page.
+LAVA_LIGHT = (238, 124, 32)
+RIM_SHADES = (('lit', 0.34), ('lit', 0.2), ('dark', 0.85), ('dark', 0.72))   # lit top, top, front, crevice
 
 
 def rim_shades(background):
     """The rim's four shades for a page whose panel is ``background`` ('#rrggbb')."""
     rgb = tuple(int(background[i:i + 2], 16) for i in (1, 3, 5))
-    return tuple(tuple(round(value * share) for value in rgb) for share in RIM_SHADES)
+    return tuple(tuple(round(value + (light - value) * share) for value, light in zip(rgb, LAVA_LIGHT))
+                 if kind == 'lit' else tuple(round(value * share) for value in rgb)
+                 for kind, share in RIM_SHADES)
 
 
 ROCK = rim_shades('#181818')   # the neutral page's
@@ -92,7 +97,7 @@ ROCK = rim_shades('#181818')   # the neutral page's
 def lava_rock(liquid, shades=ROCK):
     """A rim of rock for the lava to sit in, as large as ``liquid`` (the pool's mask).
 
-    The rock is the page's background a little darker (``rim_shades``), so the
+    The rock is the page's background lit by the lava (``rim_shades``), so the
     pool sits in the page rather than on it: a few hard shades and a lumpy
     edge, no outline, the lit top of the rim, its darker front face below, and
     a dark line where the far rim drops to the lava.
@@ -299,6 +304,8 @@ class ScreenshotGallery:
     COLUMNS = 2
     ROW_HEIGHT = 64
     BURN_SECONDS = 1.0   # a dropped picture's fall into the lava and its burning
+    BURN_LANDING = 0.35  # the share of it spent falling to the lava
+    BURN_SINK = 0.6      # how much of its height sinks under the lava while it burns
     WIDE_COLUMNS = 4   # thumbnails across on the wide page
     WIDE_DROP = 28     # how much taller the wide page is
 
@@ -1006,12 +1013,13 @@ class ScreenshotGallery:
                 # The picture falls to the lava and burns away from its foot, in the game's steps.
                 step = math.floor(self.burn_seconds * 12 + 1e-9)
                 progress = min(1, step / 12 / self.BURN_SECONDS)
-                fall = min(1, progress / 0.4)
+                fall = min(1, progress / self.BURN_LANDING)
+                sinking = max(0, progress - self.BURN_LANDING) / (1 - self.BURN_LANDING)
                 scale = 1 - 0.45 * fall
                 width, height = max(1, round(56 * scale)), max(1, round(42 * scale))
                 x = self.DELETE[0] + 21
-                # It comes to rest with its foot in the middle of the pool.
-                y = self.DELETE[1] - 24 + (37 - height / 2) * fall * fall
+                # It falls until its foot meets the pool, then sinks into it as it burns.
+                y = self.DELETE[1] - 24 + (37 - height / 2) * fall * fall + self.BURN_SINK * height * sinking
             size = max(1, round(width * sx)), max(1, round(height * sy))
             fit_key = 'held', self.drag_target if self.dragging else self.burn_target, size
             if fit_key not in self.image_cache:
@@ -1023,8 +1031,9 @@ class ScreenshotGallery:
             left, top = left - sprite.width // 2, top - sprite.height // 2
             if not self.dragging:
                 block = max(1, round(min(sx, sy)))
-                # Alight only once it stands in the lava; the pool hides the first of it.
-                burnt = 0 if progress < 0.4 else min(1, 0.3 + 0.7 * (progress - 0.4) / 0.5)
+                # Alight once it meets the lava: the fire stays a little above the lava's
+                # line as it sinks, and the last of it burns as it goes under.
+                burnt = 0 if progress < self.BURN_LANDING else min(1, 0.12 + 0.88 * sinking)
                 sprite, sparks = burn(sprite, burnt, step, block)
                 lava = point(0, self.DELETE[1] + 13)[1]   # the lava's surface
                 sprite = sprite.crop((0, 0, sprite.width, max(0, min(sprite.height, lava - top))))

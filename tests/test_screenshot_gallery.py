@@ -366,8 +366,9 @@ class ScreenshotGalleryTests(unittest.TestCase):
         pool = Image.new('L', (60, 40))
         pool.paste(255, (15, 12, 45, 24))
         shades = rim_shades('#001831')                                    # the palace page's background
-        self.assertTrue(all(a <= b for shade in shades for a, b in zip(shade, (0, 24, 49))))   # all darker
-        self.assertEqual(shades[0], (0, 19, 39))
+        self.assertEqual(shades[0], (81, 58, 43))                         # its top lit by the lava
+        self.assertTrue(shades[0][0] > shades[1][0] > 0)
+        self.assertTrue(all(a <= b for shade in shades[2:] for a, b in zip(shade, (0, 24, 49))))   # the front darker
         rock = lava_rock(pool, shades)
         self.assertEqual(rock.size, pool.size)
         box = rock.getbbox()
