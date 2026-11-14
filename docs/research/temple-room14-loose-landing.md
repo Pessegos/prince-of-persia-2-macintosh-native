@@ -74,3 +74,9 @@ native reports are ignored under `rendered/room14-loose-landing`.
 Focused validation:93 tests pass without skips in40.595s, covering this replay,
 loose floors, room8 masking, temple playtests and routes, and actor layering.
 Dependency, Ruff F/E9, recovery-catalogue and whitespace checks pass.
+
+Full shared-desktop discovery on this gameplay change:4,222 tests,
+OK with10 skips,822.035s. Exclusive-desktop tests were not run while the
+user could be playing. Existing Tk teardown messages and Pillow deprecation
+warnings did not produce test failures. This run precedes integration of
+the independently published menu-opening work.
