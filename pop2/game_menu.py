@@ -314,7 +314,10 @@ class GameMenu:
                 x -= glyphs.width // 2
             elif align == "right":
                 x -= glyphs.width
-            image.paste(glyphs, (x, y - (ink[1] if ink else 0)), glyphs)
+            # y is where capitals start, whatever the first ink (l and ? stand taller).
+            capitals = font.text("H", color).getbbox()
+            top = capitals[1] if capitals else ink[1] if ink else 0
+            image.paste(glyphs, (x, y - top), glyphs)
 
         def button(rect, label, selected):
             draw.rectangle(rect, fill=c("#303030") if selected else c("#222222"),
@@ -391,7 +394,8 @@ class GameMenu:
             text("Macintosh Native", 256, panel_top + 46, align="center")
             text("Work in progress", 256, panel_top + 78, muted, "center")
             button(self.ABOUT_BUTTON, "Back" if self.return_to_menu else "Close", True)
-            text("by Pessegos", 420, panel_top + 162, muted, "right")
+            # Clear of the frame's inner edge (the frame stands a few units inside the panel).
+            text("by Pessegos", 412, panel_top + 159, muted, "right")
         elif self.page == "options":
             text("Options", 256, panel_top + 14, gold, "center")
             items = self.option_items

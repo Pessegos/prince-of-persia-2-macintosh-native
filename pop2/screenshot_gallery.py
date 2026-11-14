@@ -893,6 +893,9 @@ class ScreenshotGallery:
             if ink:
                 # flush: the first letter's ink, not its side bearing, starts at x.
                 raw = raw.crop((ink[0] if flush else 0, ink[1], raw.width, ink[3]))
+                # y is where capitals start: a taller letter (l, ?) or only small letters
+                # must not move the line's baseline.
+                y += (ink[1] - cap_top()) * scale
             key = ('fit', id(font), value, color, scale, sx, sy, flush)
             if key not in self.text_cache:
                 remember(self.text_cache, key, raw.resize((max(1, round(raw.width * scale * sx)),
@@ -901,6 +904,10 @@ class ScreenshotGallery:
             x, y = point(x, y)
             image.paste(raw, (x - raw.width if right else x, y), raw)
 
+        def cap_top():
+            ink = glyph('H').getbbox()
+            return ink[1] if ink else 0
+
         def button(rect, label, index, enabled=True, active=False, scale=0.7, centered=False):
             highlighted = self.focus == index or self.choosing and self.hovered == index
             box(rect, c('#303030') if highlighted else c('#222222'),
@@ -908,9 +915,10 @@ class ScreenshotGallery:
             x, y = rect[0] + 8, rect[1] + 7
             if centered:
                 raw = glyph(label)
-                ink = raw.getbbox()
+                capitals = glyph('H').getbbox()
                 x = (rect[0] + rect[2] - raw.width * scale) / 2
-                y = (rect[1] + rect[3] - ((ink[3] - ink[1]) if ink else raw.height) * scale) / 2
+                # Centre the capitals, so every label in a row shares one baseline.
+                y = (rect[1] + rect[3] - ((capitals[3] - capitals[1]) if capitals else raw.height) * scale) / 2
             text(label, x, y, rect[2] - rect[0] - 16, white if enabled else muted, scale)
 
         shown = []   # where pictures are, in pixels: the theme's sign keeps out of them
@@ -1143,7 +1151,7 @@ class ScreenshotGallery:
                 x = 70 + glyph(display_path[:self.caret]).width * 0.7 - offset
                 draw.line([point(x, 94), point(x, 109)], fill=cyan, width=max(1, round(sx)))
             for i, (rect, label) in enumerate(zip(self.FOLDER_TOOLS, ('Default', 'Home', 'Up', 'Drives'))):
-                button(rect, label, 41 + i)
+                button(rect, label, 41 + i, centered=True)
             box(self.FOLDER_LIST, c('#0c0c0c'))
             for i in range(self.folder_offset, min(len(self.folders), self.folder_offset + 6)):
                 y = 156 + (i - self.folder_offset) * 20
@@ -1163,7 +1171,7 @@ class ScreenshotGallery:
             text(self.folder_error, 64, 283, 384, c('#ff9b9b'), 0.6)
             for i, (rect, label) in enumerate(zip(self.FOLDER_BUTTONS,
                     ('Cancel', 'Working...' if self.commit_key is not None else 'Use folder'))):
-                button(rect, label, 45 + i, active=i == 1)
+                button(rect, label, 45 + i, active=i == 1, centered=True)
         elif self.deleting:
             if not menu_theme.panel_scaled(image, (80, 121, 432, 270), point, wide):
                 box((80, 121, 432, 270), c('#181818'), c('#858585'))

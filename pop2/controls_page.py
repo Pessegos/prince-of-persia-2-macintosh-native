@@ -525,7 +525,13 @@ class ControlsPage:
                 x -= glyphs.width // 2
             elif align == 'right':
                 x -= glyphs.width
-            image.paste(glyphs, (x, y - (ink[1] if ink else 0)), glyphs)
+            # y is where capitals start, whatever the first ink (l and ? stand taller).
+            reference = label_text(font, 'H', color)
+            capitals = reference.getbbox()
+            # A label drawn letter by letter (accents) has its own margins: keep its ink top then.
+            top = (capitals[1] if capitals and reference.height == glyphs.height
+                   else ink[1] if ink else 0)
+            image.paste(glyphs, (x, y - top), glyphs)
 
         def button(rect, label, selected, color=c(WHITE)):
             draw.rectangle(rect, fill=c('#303030') if selected else c('#222222'),

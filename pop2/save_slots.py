@@ -496,17 +496,22 @@ class SaveBrowser:
                 drop = ((ink[1] if ink else 0) - cap_top()) * scale
                 remember(self.text_cache, key, (glyph, drop))
             x, y = point(x, y + drop)
-            image.paste(glyph, (x - glyph.width if align == 'right' else x, y), glyph)
+            x -= glyph.width if align == 'right' else glyph.width // 2 if align == 'center' else 0
+            image.paste(glyph, (x, y), glyph)
 
         def cap_top():
             ink = glyphs('H', white).getbbox()
             return ink[1] if ink else 0
 
-        def button(rect, label, index, enabled=True, active=False):
+        def button(rect, label, index, enabled=True, active=False, centered=False):
             highlighted = self.focus == index or self.editing and self.hovered == index
             rectangle(rect, fill=c('#303030') if highlighted else c('#222222'),
                       outline=gold if highlighted else cyan if active else c('#626262'))
-            text(label, rect[0] + 10, rect[1] + 7, white if enabled else muted, rect[2] - rect[0] - 20)
+            if centered:   # dialog buttons, like the other menus' dialogs: the label in the middle
+                text(label, (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2 - 5,
+                     white if enabled else muted, rect[2] - rect[0] - 20, align='center')
+            else:
+                text(label, rect[0] + 10, rect[1] + 7, white if enabled else muted, rect[2] - rect[0] - 20)
 
         def draw_list():
             nonlocal image, draw, origin
@@ -690,7 +695,8 @@ class SaveBrowser:
             for index, (rect, label) in enumerate(zip(self.CONFIRM, ('Cancel',
                     ('Save' if self.editing == 'create' else 'Rename') if self.editing else
                     {'save': 'Replace', 'load': 'Load', 'delete': 'Delete'}[self.confirmation]))):
-                button(rect, label, 30 + index, index == 0 or not self.editing or bool(self.draft.strip()))
+                button(rect, label, 30 + index, index == 0 or not self.editing or bool(self.draft.strip()),
+                       centered=True)
             return image
         menu_theme.watermark(image, self.PANEL, point)
         return image
