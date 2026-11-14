@@ -162,7 +162,8 @@ class CavernRoom(OpeningRoom):
         width, height = size
         records = [record for cell in falling_floor_redraw_cells(x, y, height)
                    for record in (self.floor_redraw or {}).get(cell, ())]
-        # ComputeMobRect 5:32f6 uses width 87, bottom Y+1.
+        # Caller includes the raster footprint as well as ComputeMobRect's
+        # logical box (5:32f6); bottom Y+1 remains exclusive.
         return self.draw_floor_records(frame, records, (x, y - height, x + width, y + 1))
 
     def draw_floor_records(self, frame, records, clip):
@@ -938,11 +939,17 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, ac
         pieces = (((3514, y), (3518, y)) if level_number in RUINS_LEVELS
                   else ((3528, y), (3529, y)) if level_number in TEMPLE_LEVELS
                   else ((3557, y - 18), (3604, y)))
+        width, height = block.size
         for index, bottom in pieces:
             sprite = cavern_command_sprite(['back', index, block.x, bottom, 16],
                                             resources, palette, shapes)
             frame.paste(sprite, (block.x, bottom - sprite.height), sprite)
-        redraw.append((block.x, y, block.size))
+            # The host paints complete SHAPs: the temple lip is 90px wide,
+            # beyond ComputeMobRect's 87px logical box. Repaint the whole
+            # drawn footprint so its last pixels cannot cover the next tile.
+            width = max(width, sprite.width)
+            height = max(height, y - bottom + sprite.height)
+        redraw.append((block.x, y, (width, height)))
     for x, y, size in redraw:
         art.draw_falling_foreground(frame, x, y, size)
     if actor_bounds is not None:
