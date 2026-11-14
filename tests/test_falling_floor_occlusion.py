@@ -30,7 +30,8 @@ class ImportedFallingForegroundTests(unittest.TestCase):
             loose.trigger(scene.level_map.tile(7, 3, 1), force=True)
             loose.advance_tiles(scene.level_map)
             self.assertEqual(len(loose.falling), 1)
-            self.assertEqual(loose.falling[0].y, 263)
+            # Original AnimLoose creates temple MOB3 at the floor bottom.
+            self.assertEqual((loose.falling[0].y, loose.falling[0].mob_type), (245, 3))
             art = scene.level_renderer.room(7, scene.game.caverns)
             changed = 0
             for y in (263, 271, 287, 311):

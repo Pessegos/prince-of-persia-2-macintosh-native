@@ -633,8 +633,11 @@ class Caverns(Environment):
                     # User-approved temple exception: a slab visibly hitting
                     # a guard kills him even during the native mode-5 advance
                     # exemption or a supporting-foot change (room14 -> 13).
-                    body_hit = floor_hits_body(block, motion,
-                        scene.guard_art.bounds(state, floor_y(motion.row)), actor.alive)
+                    # Keep the approved horizontal body sweep, but do not
+                    # crush before ContactChar5:3642's ordinary head plane.
+                    body_hit = (block.y > floor_y(motion.row) + state.current_y - 57
+                        and floor_hits_body(block, motion,
+                            scene.guard_art.bounds(state, floor_y(motion.row)), actor.alive))
                     if body_hit:
                         sequence = 22
                 if (motion is None or not (body_hit or floor_hits_actor(block, motion, state, record, actor.alive))
