@@ -723,6 +723,12 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             return False
         # GenCtrl6:0c90-0cba accepts only fresh Ctrl with no directions;
         # running6:11e4 does not consume it or request a sword animation.
+        cast = getattr(environment_for(self), 'sword_key', None)
+        if cast is not None and cast():
+            self.modifier_input = 2
+            if not self.in_animation_tick:
+                self.advance_animation_now()
+            return True
         return self.start_sword_action('sword_draw')
 
     def latch_request(self, command):
@@ -1337,6 +1343,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 self.frames[state.action], self.player_bounds())
             self.player_x += offset
             state.current_x = state.target_x = self.player_x
+        standing_turn = getattr(environment_for(self), 'standing_turn', None)
+        if standing_turn is not None and standing_turn():
+            # 4:1fb2 replaced the turn (6:1188 skips JumpSeq(5) after SEQS 71).
+            self.advance_animation_now()
+            return
         self.start_sequence(STANDING_TURN_SEQUENCE)
         self.status.set("Standing turn: original SEQS:5")
         self.advance_animation_now()
@@ -1377,6 +1388,10 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.run_active = False
         self.run_stop_requested = False
         sequence = CROUCH_LOWER_SEQUENCE if running else CROUCH_STANDING_LOWER_SEQUENCE
+        crouch = getattr(environment_for(self), 'crouch_sequence', None)
+        lie_down = crouch() if crouch is not None and not running else None
+        if lie_down is not None:
+            sequence = lie_down
         self.start_sequence(sequence)
         self.status.set(f"Crouch: original SEQS:{sequence}")
         if not self.in_animation_tick:
@@ -2529,6 +2544,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             self.game.caverns.potions.float_timer = 0
             # 2:5bfe clears a5-0x4fd4 at every level start.
             self.game.caverns.altar, self.game.caverns.shadow = 0, None
+            self.game.caverns.final_magic = None
         self.remember_development_room()
         held = set(self.window_keys_down)
         self.repair_throne_checkpoint()
@@ -3448,7 +3464,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             caverns.crush.last_updated_at = now
             self.schedule_gate_presentation()
 
-    def player_sprite(self, action=None):
+    def player_sprite(self, action=None, ctbl=None):
         # Lava's SEQS 116 is drawn by its pool. Scythes also use death
         # method 5, but their ordinary Kid frames 267-271 must remain visible.
         death = getattr(self, 'death', None)
@@ -3459,12 +3475,36 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                                       self.action if action is None else action)
         if shape_id is None:
             return None
+        if ctbl is not None:
+            # Draw mode 0x30: the Kid's image in palette entries 48-63.
+            key = (ctbl, shape_id)
+            if key not in self.sprite_cache:
+                data = self.kid["SHAP"].get(shape_id)
+                if data is None:
+                    return None
+                colours = decode_ctbl(self.kid["CTBL"][ctbl]["data"])
+                self.sprite_cache[key] = decode_shap(data["data"], colours)
+            return self.sprite_cache[key]
         if shape_id not in self.sprite_cache:
             data = self.kid["SHAP"].get(shape_id)
             if data is None:
                 return None
             self.sprite_cache[shape_id] = decode_shap(data["data"], self.palette)
         return self.sprite_cache[shape_id]
+
+    def shadow_flame_sprite(self):
+        """SetupShadowFlame 4:2630: SHAP 4102 + frame % 9 in CTBL 4077,
+        whose entries 224-239 colour the images' 1-16."""
+        from pop2.temple_shadow import FLAME_PALETTE, flame_shape
+
+        combat = getattr(self, 'combat', None)
+        shape = flame_shape(combat.world_frame if combat is not None else 0)
+        key = (FLAME_PALETTE, shape)
+        if key not in self.sprite_cache:
+            colours = decode_ctbl(self.kid["CTBL"][FLAME_PALETTE]["data"])
+            colours = {index - 223: colour for index, colour in colours.items()}
+            self.sprite_cache[key] = decode_shap(self.kid["SHAP"][shape]["data"], colours)
+        return self.sprite_cache[key]
 
     def sword_set(self):
         """LoadSwordSet 3:5a4e: sword type 2 draws SHPL 1200 with AFRM 25201
@@ -3708,7 +3748,9 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         player_layer = Image.new("RGBA", frame.size)
         draw_state, draw_height = environment.drawn_player(self.sequence_state)
         draw_action = self.action if draw_height is None else draw_state.action
-        sprite = self.player_sprite(draw_action)
+        player_palette = getattr(environment, 'player_palette', None)
+        sprite = self.player_sprite(draw_action,
+                                    ctbl=player_palette() if player_palette is not None else None)
         drawn_bounds = None
         if sprite is not None:
             record = self.frames[draw_action]
@@ -3726,6 +3768,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 + (environment.draw_sag(combat.player) if combat is not None else 0),
                 sprite.height,
             )
+            player_flame = getattr(environment, 'player_flame', None)
+            if player_flame is not None and player_flame():
+                flame = self.shadow_flame_sprite()
+                if draw_state.facing:
+                    flame = ImageOps.mirror(flame)
+                player_layer.paste(flame, (x + sprite.width // 2 - flame.width // 2,
+                                           y + sprite.height - flame.height), flame)
             player_layer.paste(sprite, (x, y), sprite)
             drawn_bounds = (x, y, x + sprite.width - 1, y + sprite.height - 1)
             attachment = self.sword_sprite()

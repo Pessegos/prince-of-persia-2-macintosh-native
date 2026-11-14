@@ -166,10 +166,429 @@ class Final(Environment):
     def frame_hook(self):
         scene = self.scene
         room, right_edge, animation = getattr(scene, 'final_saved_prince', (-1, 0, 4))
-        if (room != 1 or right_edge > 486 or animation == 4
+        if not (room != 1 or right_edge > 486 or animation == 4
                 or not scene.combat.player.alive):
+            scene.start_story_scene('final_spell.json', self.finish_spell, "Jaffar's spell")
             return
-        scene.start_story_scene('final_spell.json', self.finish_spell, "Jaffar's spell")
+        self.advance_fireball()
+
+    # The Prince's magic (pop2.final_magic): turns, shadow, body and fire.
+    # The state lives on the level's environment record, since an
+    # Environment object is made for each call.
+
+    def magic(self):
+        from pop2.final_magic import FinalMagic
+
+        caverns = self.scene.game.caverns
+        magic = getattr(caverns, 'final_magic', None)
+        if magic is None:
+            magic = caverns.final_magic = FinalMagic()
+        return magic
+
+    def kill_prince(self):
+        """SEQS 71, DecLifePts(100) and death method 17 (4:3196)."""
+        from pop2.final_magic import COLLAPSE_SEQUENCE
+
+        scene = self.scene
+        scene.combat.player.life = 0
+        scene.start_sequence(COLLAPSE_SEQUENCE)
+        scene.death.begin(17)
+
+    def standing_turn(self):
+        """4:1fb2, before a standing turn's JumpSeq(5) (6:1184). True when
+        the turn is replaced: the Prince collapses or leaves his body."""
+        from pop2.final_magic import (
+            GLOW_TURNS, TRANSFORM_LIFE, TRANSFORM_TURNS, TURN_SEQUENCE,
+            TURN_SOUND, glow_palette)
+
+        scene = self.scene
+        # 6:116c-1182: environment 6 outside native rooms 1/2 of level 14.
+        if scene.room_id in (0, 1) or getattr(scene.game, 'caverns', None) is None:
+            return False
+        magic = self.magic()
+        state, player = scene.sequence_state, scene.combat.player
+        magic.fresh_turn = True
+        if magic.shadow or state.selected_sequence_id != TURN_SEQUENCE:
+            magic.turns = 1
+            return False
+        magic.turns += 1
+        if magic.turns < GLOW_TURNS:
+            return False
+        if magic.turns == GLOW_TURNS:
+            # 4:2000: PoPSetPalette(2000 + IsShadowImbued, 48).
+            magic.palette = glow_palette(player.life, state.sequence_mode == 13)
+        state.sound_events.append(TURN_SOUND)
+        life = player.life
+        if not getattr(scene, 'god_mode', False):
+            if life <= 1:
+                # DecLifePts(1) is fatal.
+                self.kill_prince()
+                return True
+            # The point is pending damage; capacity is lost at once.
+            player.life -= 1
+            player.max_life = max(player.life, player.max_life - 1)
+        if magic.turns != TRANSFORM_TURNS:
+            return False
+        # 4:2046 reads the life before this turn's pending point.
+        magic.turns = 0
+        if life > TRANSFORM_LIFE:
+            self.leave_body()
+        else:
+            self.kill_prince()
+        return True
+
+    def leave_body(self):
+        """LeaveBody 4:2206, then 4:2052-2076: the body falls (SEQS 71)
+        where he stood and the Kid record becomes the shadow (type 1, draw
+        mode 0x30, SEQS 2, sound 260, song 290)."""
+        from pop2.final_magic import (
+            COLLAPSE_SEQUENCE, TRANSFORM_SONG, TRANSFORM_SOUND, Body, glow_palette)
+        from pop2.opponent_generation import EMPTY_TILES
+        from pop2.sequence_runtime import SequenceRuntime, SequenceState
+
+        scene = self.scene
+        state, motion = scene.sequence_state, scene.terrain_motion
+        # AddCharX(25) when the cell behind is empty, else AddCharX(-25)
+        # when the cell in front is.
+        if scene.crawl_cell(-1)[1].kind in EMPTY_TILES:
+            shift = 25
+        elif scene.crawl_cell(1)[1].kind in EMPTY_TILES:
+            shift = -25
+        else:
+            shift = 0
+        scene.player_x = state.target_x = state.current_x = (
+            state.target_x + shift * (1 if state.facing else -1))
+        body = SequenceState(COLLAPSE_SEQUENCE, action=state.action, current_x=state.target_x,
+                             target_x=state.target_x, facing=state.facing, actor_type=0,
+                             level_kind=state.level_kind)
+        SequenceRuntime(scene.sequence_runtime.sequences, body).next_frame()
+        body.sequence_events.clear()
+        body.sound_events.clear()
+        magic = self.magic()
+        magic.body = Body(body, motion.room, motion.row)
+        magic.shadow, magic.flash = True, False
+        magic.palette = glow_palette(scene.combat.player.life)
+        state.actor_type = 1
+        scene.start_sequence(2)
+        state.sound_events.append(TRANSFORM_SOUND)
+        if getattr(scene, 'audio', None) is not None:
+            scene.audio.add_song(TRANSFORM_SONG)
+        scene.status.set("Shadow form")
+
+    def crouch_sequence(self):
+        """The shadow's Down (6:1068 -> 4:1f1e): within 51 pixels of the
+        body it lies down on it (SEQS 71), aligned with the body."""
+        from pop2.final_magic import BODY_REACH, COLLAPSE_SEQUENCE, body_distance
+
+        scene = self.scene
+        if getattr(scene.game, 'caverns', None) is None:
+            return None
+        magic = self.magic()
+        body = magic.body
+        if not magic.shadow or body is None or body.room != scene.room_id:
+            return None
+        state = scene.sequence_state
+        distance = body_distance(state, body.state, body.row, scene.terrain_motion.row)
+        if abs(distance) >= BODY_REACH:
+            return None
+        if state.facing != body.state.facing:
+            state.facing = body.state.facing
+            state.target_x += 6 if state.facing else -6
+            distance = body_distance(state, body.state, body.row, scene.terrain_motion.row)
+        # X -= distance - sign * 7, sign from a5-0x4b94 (right -1, left +1).
+        # The native Y - 1 is left out: the port keeps the Kid on his floor.
+        state.target_x -= distance - (-1 if state.facing else 1) * 7
+        scene.player_x = state.current_x = state.target_x
+        scene.step_cautious = False
+        return COLLAPSE_SEQUENCE
+
+    def rejoin_body(self):
+        """6:0b5a -> 4:25ce: the shadow lying on the body is the Prince
+        again (type 0, draw mode 0, SEQS 231)."""
+        from pop2.final_magic import REJOIN_SEQUENCE
+
+        scene = self.scene
+        magic = self.magic()
+        magic.shadow, magic.body, magic.turns, magic.flash = False, None, 0, False
+        scene.sequence_state.actor_type = 0
+        scene.start_sequence(REJOIN_SEQUENCE)
+        scene.status.set("Back in his body")
+
+    def shadow_died(self):
+        """4:2338: a dead shadow puts the Prince back in his dead body."""
+        from dataclasses import fields
+
+        scene = self.scene
+        magic = self.magic()
+        body = magic.body
+        magic.shadow, magic.body, magic.turns, magic.flash = False, None, 0, False
+        state = scene.sequence_state
+        state.actor_type = 0
+        if body is None:
+            return
+        player = scene.combat.player
+        life, capacity = player.life, player.max_life
+        if body.room != scene.room_id:
+            scene.jump_to_room(body.room, row=body.row, x=body.state.target_x,
+                               facing=body.state.facing, reset_guards=False, redraw=False)
+            player.life, player.max_life = life, capacity
+        for item in fields(state):
+            if item.name not in ('level_kind',):
+                setattr(state, item.name, getattr(body.state, item.name))
+        scene.terrain_motion.row = body.row
+        scene.action, scene.player_x = state.action, state.target_x
+
+    def sword_key(self):
+        """DoKidEngarde 6:1f4c-1f72: the shadow in native rooms 7/8 casts
+        (9:2674) instead of drawing the sword. True when Ctrl was used."""
+        from pop2.final_magic import CAST_COST, CAST_LIFE, CAST_SEQUENCE, CAST_SONG
+
+        scene = self.scene
+        if getattr(scene.game, 'caverns', None) is None:
+            return False
+        magic = self.magic()
+        if not magic.shadow or scene.room_id not in (6, 7):
+            return False
+        player = scene.combat.player
+        if player.life <= CAST_LIFE:
+            return True
+        state, motion = scene.sequence_state, scene.terrain_motion
+        # GetBarrDistances 4:5eae: closer than 35, AddCharX(d - 35).
+        boundary = scene.level_map.step_boundary(
+            motion.room, motion.row, state, scene.frames[state.action], scene.player_bounds())
+        if boundary.clearance < 35:
+            scene.player_x = state.target_x = state.current_x = (
+                state.target_x + (boundary.clearance - 35) * (1 if state.facing else -1))
+        if not getattr(scene, 'god_mode', False):
+            player.life -= CAST_COST
+        if getattr(scene, 'audio', None) is not None:
+            scene.audio.add_song(CAST_SONG)
+        scene.start_sequence(CAST_SEQUENCE)
+        scene.status.set("Magic fire")
+        return True
+
+    def controls(self):
+        """GenCtrl's environment-6 work for the Kid: 4:2174 (the turn count
+        and its flashes), the cast's throw (6:0732-0742), the rejoining
+        (6:0b5a) and the body's own frame."""
+        from pop2.final_magic import (
+            CAST_POSES, DEAD_POSE, FIREBALL_SOUND, REJOIN_REACH, STANDING_POSE, THROW_POSE,
+            TURN_FIRST_POSE, TURN_LAST_POSE, TURN_SEQUENCE, body_distance, throw_fireball,
+            turn_flash)
+
+        scene = self.scene
+        if getattr(scene.game, 'caverns', None) is None or scene.terrain_motion is None:
+            return
+        magic = self.magic()
+        state, motion = scene.sequence_state, scene.terrain_motion
+        pose = state.action
+        fresh, magic.fresh_turn = magic.fresh_turn, False
+        if fresh:
+            pass
+        elif pose == STANDING_POSE:
+            magic.turns, magic.flash = 0, False
+        elif TURN_FIRST_POSE <= pose <= TURN_LAST_POSE and scene.room_id not in (0, 1):
+            if magic.turns >= 4:
+                magic.flash = turn_flash(pose, magic.turns)
+        elif state.selected_sequence_id != TURN_SEQUENCE and magic.turns:
+            magic.turns, magic.flash = 0, False
+        if magic.shadow:
+            if not scene.combat.player.alive:
+                self.shadow_died()
+            elif pose in CAST_POSES:
+                # 9:2868: sound 258 each cast frame; pose 281 throws.
+                state.sound_events.append(FIREBALL_SOUND)
+                if pose == THROW_POSE and magic.fireball is None:
+                    magic.fireball = throw_fireball(state, motion.room, motion.row,
+                                                    floor_y(motion.row))
+            elif pose == DEAD_POSE and magic.body is not None and magic.body.room == motion.room:
+                distance = body_distance(state, magic.body.state, magic.body.row, motion.row)
+                if abs(distance) <= REJOIN_REACH:
+                    self.rejoin_body()
+        self.advance_body()
+        # FinlWatchOpps reads the count (a5-0x5004) and the Kid's type.
+        scene.combat.final_turns = magic.turns
+
+    def advance_body(self):
+        """The body's frame (SEQS 71: 179, then SEQS 213 to 185). While it
+        falls (not 179/183/185), 6:0bcc-0c2a costs the Prince a point and a
+        unit of capacity each frame."""
+        from pop2.final_magic import DEAD_POSE
+        from pop2.sequence_runtime import SequenceRuntime
+
+        scene = self.scene
+        body = self.magic().body
+        if body is None:
+            return
+        state = body.state
+        if state.action not in (179, 183, DEAD_POSE) and not getattr(scene, 'god_mode', False):
+            player = scene.combat.player
+            if player.life > 1:
+                player.life -= 1
+                player.max_life = max(player.life, player.max_life - 1)
+        if state.action != DEAD_POSE:
+            SequenceRuntime(scene.sequence_runtime.sequences, state).next_frame()
+            state.current_x = state.target_x
+            state.sequence_events.clear()
+            state.sound_events.clear()
+
+    def fireball_sprite(self, shape):
+        from pop2.final_magic import GLOW_PALETTE
+        from pop2.render_opening import decode_ctbl, decode_shap
+
+        scene = self.scene
+        cache = scene.__dict__.setdefault('fireball_sprites', {})
+        if shape not in cache:
+            colours = decode_ctbl(scene.kid['CTBL'][GLOW_PALETTE]['data'])
+            cache[shape] = decode_shap(scene.kid['SHAP'][shape]['data'], colours)
+        return cache[shape]
+
+    def advance_fireball(self):
+        """ATM 9:27a0 and, for Jaffar, the fire's collision 9:24ee."""
+        from pop2.combat import select_sequence
+        from pop2.final_magic import (
+            BURN_SEQUENCE, BURN_SOUND, ROOM_WIDTH, SHADOW_PALETTE, advance_fireball, fireball_hits)
+        from pop2.opponent_generation import WALL_TILES
+
+        scene = self.scene
+        if getattr(scene.game, 'caverns', None) is None:
+            return
+        magic = self.magic()
+        ball = magic.fireball
+        if ball is None:
+            return
+        level_map = scene.level_map
+        combat = scene.combat
+        width = self.fireball_sprite(ball.shape).width
+        sounds, ended = advance_fireball(
+            ball, lambda room, column, row: level_map.tile(room, column, row).kind in WALL_TILES,
+            width)
+        if ball.active and not 0 <= ball.x < ROOM_WIDTH:
+            # 9:23d4-2432: the fire passing a side is drawn in the next room.
+            side, shift = ('right', -ROOM_WIDTH) if ball.x >= ROOM_WIDTH else ('left', ROOM_WIDTH)
+            room = level_map.neighbor(ball.room, side)
+            if room is None:
+                ball.active, ended = False, True
+            else:
+                ball.room, ball.x = room, ball.x + shift
+        if ball.active and not ball.burst:
+            for figure in combat.active_guards():
+                figure_state = figure.state
+                if (figure_state.actor_type != 6 or not figure.alive
+                        or figure_state.selected_sequence_id == BURN_SEQUENCE):
+                    continue
+                offset = combat._room_offset(ball.room, figure.room)
+                left, _top, right, _bottom = combat.guard_art.bounds(figure_state, floor_y(figure.row))
+                if offset is None or not fireball_hits(ball, figure.row, left, right, offset):
+                    continue
+                # 9:258c-25d0: the fire bursts at his edge; DecLifePts(100),
+                # SEQS 230, AnimChar and sound 289.
+                ball.burst, ball.frame = True, 0
+                ball.x = (left + 8 if ball.speed > 0 else right - 7) - offset
+                figure.life = 0
+                select_sequence(figure, BURN_SEQUENCE)
+                figure.runtime.next_frame()
+                figure_state.current_x = figure_state.target_x
+                sounds.append(BURN_SOUND)
+                break
+        scene.sequence_state.sound_events.extend(sounds)
+        if ended:
+            magic.fireball = None
+            # 9:2838-2850: a weak Prince's colours go back to CTBL 2000.
+            if combat.player.life <= 2:
+                magic.palette = SHADOW_PALETTE
+
+    def level_events(self):
+        """9:182e-1840: the burnt Jaffar (SEQS 230's mode 12) advances the
+        next-level word a5-0x4f92 to 15, the end of the game."""
+        from pop2.final_magic import BURN_SEQUENCE
+        from pop2.final_path import BURNED_MODE
+
+        scene = self.scene
+        combat = getattr(scene, 'combat', None)
+        if combat is None or scene.level_complete:
+            return False
+        # 16fe runs for him in either palace room; the port's controller
+        # runs only in view, so the burnt Jaffar is also read directly.
+        burnt = any(figure.final_path and figure.state.selected_sequence_id == BURN_SEQUENCE
+                    and figure.state.sequence_mode == BURNED_MODE
+                    for figure in combat.active_guards())
+        if not (burnt or getattr(combat, 'final_hits', 0)):
+            return False
+        from pop2.level_transition import LevelExit
+
+        combat.final_hits = 0
+        scene.level_complete = True
+        scene.game.exit = LevelExit(None, 0)
+        scene.clear_keys(None)
+        scene.status.set("Jaffar is defeated")
+        return True
+
+    def finish_exit(self):
+        """CODE 2:4596: level 15 plays NIS 11 and the Hall of Fame, then the
+        presentation restarts. NIS 11 is not yet presented; the port goes
+        back to the introduction."""
+        scene = self.scene
+        scene.game.exit = None
+        scene.level_complete = False
+        scene.start_intro()
+
+    def player_palette(self):
+        """Draw mode 0x30: the shadow, or a turn's flash, in CTBL 2000/2001."""
+        caverns = getattr(self.scene.game, 'caverns', None)
+        magic = getattr(caverns, 'final_magic', None)
+        if magic is not None and (magic.shadow or magic.flash):
+            return magic.palette
+        return None
+
+    def player_flame(self):
+        """SetupShadowFlame 4:2630 behind the imbued shadow (life above 2)."""
+        caverns = getattr(self.scene.game, 'caverns', None)
+        magic = getattr(caverns, 'final_magic', None)
+        return (magic is not None and magic.shadow
+                and self.scene.combat.player.life > 2)
+
+    def extra_actors(self, size):
+        """The body lying where the Prince left it, in his own colours."""
+        from PIL import Image, ImageOps
+
+        from pop2.render_opening import character_sprite_top
+
+        scene = self.scene
+        caverns = getattr(scene.game, 'caverns', None)
+        magic = getattr(caverns, 'final_magic', None)
+        body = magic.body if magic is not None else None
+        if body is None or body.room != scene.room_id:
+            return ()
+        state = body.state
+        sprite = scene.player_sprite(state.action)
+        if sprite is None:
+            return ()
+        record = scene.frames[state.action]
+        anchor = record.offset_x
+        if state.facing:
+            sprite = ImageOps.mirror(sprite)
+            anchor = sprite.width - anchor
+        floor = floor_y(body.row)
+        x = state.target_x - anchor
+        y = character_sprite_top(floor + record.offset_y + state.current_y, sprite.height)
+        layer = Image.new('RGBA', size)
+        layer.paste(sprite, (x, y), sprite)
+        return ((state, record, scene.kid_bounds(state, floor), body.row, layer),)
+
+    def after_actors(self, frame, player_bounds):
+        """DrawObjFireball 9:26be: SHAP 4115-4118 in flight, 4119-4122 as it
+        bursts, in CTBL 2001, centred on its point (9:2476-24ac)."""
+        scene = self.scene
+        caverns = getattr(scene.game, 'caverns', None)
+        magic = getattr(caverns, 'final_magic', None)
+        ball = magic.fireball if magic is not None else None
+        if ball is None or not ball.active or ball.room != scene.room_id:
+            return frame
+        sprite = self.fireball_sprite(ball.shape)
+        frame = frame.copy()
+        frame.paste(sprite, (ball.x - sprite.width // 2, ball.y - sprite.height // 2), sprite)
+        return frame
 
     def finish_spell(self):
         scene = self.scene

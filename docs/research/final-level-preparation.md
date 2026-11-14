@@ -561,8 +561,8 @@ decision. A move already begun still finishes in the other palace room,
 so the figure does not freeze in the air. The video supports the view
 rule: the Prince crosses room 7's upper floor unharmed while the figure
 stands in room 8. The relocation's call site is assumed, not traced.
-`a5-0x5004` (turns) and the shadow are not yet ported, so the port's
-figure currently always closes in.
+The turn count (a5-0x5004) and the shadow are now ported (next section),
+so the figure flees from a strong shadow.
 
 `tests.test_final_path` covers decisions with a recording Kid. In a hidden
 scene it checks four cases: standing on the figure's floor is fatal
@@ -570,3 +570,98 @@ scene it checks four cases: standing on the figure's floor is fatal
 Prince below sends it through room 7's upper floor and down its ledge
 toward position 2; and relocation away from the palace. No native CPU
 probe of 9:16fe is claimed yet.
+
+## Shadow form and magic fire (2026-11-14)
+
+`pop2/final_magic.py` holds the rules. `Final` in `pop2/environments.py`
+runs them in the scene. Native facing word 0 is the port's facing 1.
+
+- **Turns (4:1fb2).** The standing turn calls it at 6:1184, before
+  JumpSeq(5). This happens in environments 2 and 6, but not in native
+  rooms 1/2 of level 14.
+  - A type-0 Kid already in SEQS 5 adds one to a5-0x5004; otherwise the
+    count becomes 1.
+  - On the fourth turn, palette 2000 + IsShadowImbued is loaded at 48.
+  - From the fourth turn on, each turn plays sound 288 and costs one point
+    (DecLifePts(1)) and one unit of capacity. A fatal point gives SEQS 71
+    with death method 17.
+  - On the eighth turn, the 4:2046 test reads the life from before this
+    turn's pending point. Above 4, LeaveBody runs and the Kid becomes type
+    1 (draw mode 0x30, SEQS 2, sound 260, song 290). Otherwise he takes
+    SEQS 71 and 100 points.
+  - 6:1188 skips the turn after SEQS 71.
+- **Flashes (4:2174).** GenCtrl runs this before the turn decision.
+  - Pose 15 clears the count.
+  - Poses 45-52 with a count of 4 or more select draw mode 0x30 when
+    4:250a says so.
+  - Any other sequence clears the count and restores the palette.
+- **The body (4:2206, 6:0bcc).** LeaveBody shifts the Kid 25 px away from
+  an empty cell, first behind him, then ahead. It then leaves a type-0
+  record with his position, facing and life, running SEQS 71 (179, then
+  SEQS 213 to 185). While the body falls through poses other than
+  179/183/185, every frame costs the Prince a point and a unit of
+  capacity. From 12 life this gives 7 at the change and 4 after the fall,
+  as in the video.
+- **Lying down and rejoining.** The shadow's Down (6:1068 -> 4:1f1e) acts
+  within 51 px of the body (4:24b2 distance: 6 more when both face the
+  same way):
+  - A shadow facing away from the body turns and moves 6 px.
+  - X then becomes X - (d - sign * 7), and the shadow takes SEQS 71.
+  - At pose 185 within 2 px, 6:0b5a -> 4:25ce removes the body and gives
+    type 0, draw mode 0 and SEQS 231.
+  - A dead shadow goes back into the dead body (4:2338).
+- **Cast (9:2674, from DoKidEngarde 6:1f4c).** This needs the type-1 Kid
+  in native rooms 7/8 of environment 6.
+  - With life above 2, a barrier closer than 35 moves him back by
+    AddCharX(d - 35). Then SEQS 242, DecLifePts(2) and AddSong 265.
+  - Otherwise nothing happens, and no sword is drawn either way.
+  - Poses 272-281 play sound 258 (9:2868). Pose 281 throws (9:2880): X is
+    AddCharX(43) - 207, Y is the Kid's Y - 55, the room is his, and the
+    speed is +-12.
+- **Flight (ATM 9:27a0, 9:25e4).**
+  - The speed changes by 3 a frame while below 25, reaching 27.
+  - In room 0 the fire ends.
+  - The wall test reads the cell at X - 22 + image width, or at
+    X - 22 - width when flying left. The width is a5-0x44e4, from the last
+    drawing. A negative X steps one column left.
+  - At a wall the fire aligns to the cell, bursts (state 8), plays 259
+    and stops song 265.
+  - Flying frames cycle through four images, with sound 258. A burst shows
+    frames 0-3 and ends.
+  - When the fire ends with the Prince's life at 2 or less, palette 2000
+    returns.
+  - The drawing (9:23a8) moves the fire into a side room as it crosses the
+    edge. It uses SHAP 4115-4118 in flight and 4119-4122 for the burst, in
+    CTBL 2001, centred on its point.
+- **Burning Jaffar (9:24ee).** For a living type-6 record not in SEQS 230:
+  - The fire must be on his row and not bursting.
+  - The span [x + speed - 17, x + speed + 17] must overlap his edges, ±510
+    between the palace rooms.
+  - Then the fire bursts at his edge, he takes DecLifePts(100) and SEQS
+    230 (AnimChar at once), and sound 289 plays.
+  - SEQS 230 ends in mode 12 at pose 185. 9:16fe then increments a5-0x4f92
+    to 15, and CODE 2:4596 starts NIS 11 and the Hall of Fame.
+
+Port choices:
+- The port's controller runs only in view, so the burnt Jaffar is also
+  read directly by `Final.level_events`.
+- The victory goes back to the introduction. NIS 11 (15:3c76,
+  Happy.rsrc) and the Hall of Fame are not yet presented.
+- The lie-down's native Y - 1 is left out to keep the Kid on his floor.
+- The shadow's fall off the bottom of the screen (4:3780) is not
+  separately ported.
+- The flame behind the shadow reuses the temple's SetupShadowFlame
+  drawing (4:2630) while his life is above 2.
+
+`tests.test_final_magic` checks the following:
+- the flash table, body distance, fire acceleration, wall bursts and the
+  hit span;
+- in hidden scenes, eight turns from 12 life leave the body and end at 4;
+- a weak Prince (8 life) collapses on the eighth turn with method 17;
+- lying down on the body rejoins it;
+- a dead shadow returns to the dead body;
+- from room 7, the fire burns Jaffar in room 8 and the game returns to the
+  introduction;
+- with 2 life the shadow cannot cast and draws no sword.
+
+No native CPU probe is claimed.
