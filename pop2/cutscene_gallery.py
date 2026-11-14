@@ -91,6 +91,9 @@ class CutsceneGallery:
         if self.layout_size == (logical_width, theme.name):
             return
         scroll, target = self.scroll / self.PITCH, self.scroll_target / self.PITCH
+        # The caches may come from the viewer's last opening (their keys name the
+        # sizes and theme they were drawn for): a new viewer keeps them.
+        relaid = self.layout_size is not None
         self.layout_size = logical_width, theme.name
         # A theme's frame stands outside the panel: leave it room at the sides
         # and below, where the plain page only has a thin outline.
@@ -115,8 +118,9 @@ class CutsceneGallery:
         self.hovered = None
         self.last_clicked = None
         self.background_cache = self.grid_cache = None
-        self.card_cache.clear()
-        self.image_cache.clear()
+        if relaid:
+            self.card_cache.clear()
+            self.image_cache.clear()
 
     @classmethod
     def cell(cls, index):
@@ -402,7 +406,7 @@ class CutsceneGallery:
         size = round(self.CARD_WIDTH * sx), round(self.CARD_HEIGHT * sy)
         # A card in the middle of its reveal changes on every frame and is not kept.
         elapsed = self.reveal.get(index) if unlocked else None
-        key = index, id(font), size, selected, unlocked, menu_theme.current().name
+        key = index, id(font), size, selected, unlocked, menu_theme.current().name, round(sx, 4), round(sy, 4)
         if elapsed is None and key in self.card_cache:
             return self.card_cache[key]
         image = Image.new('RGBA', size, c('#252525'))

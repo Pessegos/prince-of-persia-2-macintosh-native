@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import lru_cache
 import math
+import stat
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -68,9 +69,30 @@ def read_slot(path, name):
         return SaveSlot(path, name, True, error='Save unavailable')
 
 
+# Saves already read, by path: kept while the file's time and size stay the same,
+# so that opening the page does not decode every save's preview again.
+_READ_SLOTS = {}
+
+
 def list_slots(directory=SAVE_DIRECTORY):
     directory = Path(directory)
-    entries = [read_slot(path, path.stem) for path in directory.glob('*.pop2save') if path.is_file()]
+    entries = []
+    for path in directory.glob('*.pop2save'):
+        try:
+            status = path.stat()
+        except OSError:
+            continue
+        if not stat.S_ISREG(status.st_mode):
+            continue
+        version = status.st_mtime_ns, status.st_size
+        cached = _READ_SLOTS.get(path)
+        if cached is not None and cached[0] == version:
+            entries.append(cached[1])
+            continue
+        slot = read_slot(path, path.stem)
+        _READ_SLOTS.pop(path, None)
+        remember(_READ_SLOTS, path, (version, slot), 128)
+        entries.append(slot)
     return tuple(sorted(entries, key=lambda slot: (-slot.modified, slot.path.name.casefold())))
 
 
@@ -110,9 +132,12 @@ class SaveBrowser:
     TABS = ((40, 53, 144, 79), (150, 53, 254, 79))
     ROW_HEIGHT = 42
     WIDE_FROM = menu_theme.WIDE_FROM       # narrower windows keep the classic page, centred
-    WIDE_PREVIEW = menu_theme.WIDE_SPREAD  # a 16:9 window: up to here the extra width enlarges the preview
-    DETAIL_GAP = 53      # wide page: the details never climb above name (26) + Rename tip (4 + 17) + 6
-    WIDE_LIMIT = 222     # wider windows give the list a little more room for long names, then stop
+    # A wide page reaches WIDE_PAD units further out on each side than the other
+    # wide pages, so that the preview can be as tall as the list's first five rows.
+    WIDE_PAD = 6
+    WIDE_PREVIEW = menu_theme.WIDE_SPREAD + 2 * WIDE_PAD   # a 16:9 window: up to here the extra width enlarges the preview
+    DETAIL_GAP = 49      # wide page: the details never climb above name (22) + Rename tip (4 + 17) + 6
+    WIDE_LIMIT = 222     # wider windows give the list a little more room for long names, then stop (before the pad)
 
     def __post_init__(self):
         if self.mode == 'save' and not self.slots and self.focus == 100:
@@ -125,9 +150,13 @@ class SaveBrowser:
         The page is 384 units tall. A window wide enough gets a wider panel:
         a larger preview with the save's details beside it. Wider than 16:9,
         the list grows a little so that long names fit; beyond that the panel
-        is centred instead of being stretched.
+        is centred instead of being stretched. The saves page then reaches
+        WIDE_PAD units further out on each side.
         """
-        return menu_theme.wide_layout(width, height, basis, cls.WIDE_LIMIT)
+        spread, shift = menu_theme.wide_layout(width, height, basis, cls.WIDE_LIMIT)
+        if not spread:
+            return 0, 0.0
+        return spread + 2 * cls.WIDE_PAD, shift - cls.WIDE_PAD
 
     def pixel_rect(self, rect, size):
         """A rectangle of the page in the pixels of a visible picture of this size, as draw places it."""
@@ -157,7 +186,8 @@ class SaveBrowser:
         if not self.spread:
             return 238, 99, 472, 267
         left = 238 + self.list_growth
-        width = 276 - max(0, self.WIDE_PREVIEW - self.spread)
+        # In 16:9 and wider its foot is level with the fifth row's (306).
+        width = 288 - max(0, self.WIDE_PREVIEW - self.spread)
         return left, 99, left + width, 99 + round((width - 2) * 365 / 510) + 2   # a save picture's own shape
 
     @property
@@ -169,7 +199,8 @@ class SaveBrowser:
     def RENAME(self):
         # A long name takes two lines; the highlight then covers both (draw sets name_rows).
         x, y = self.DETAILS
-        return x, y, self.right, y + 26 + (self.name_rows - 1) * (11 if self.spread else 2)
+        # The box is only as tall as the quill (22).
+        return x, y, self.right, y + 22 + (self.name_rows - 1) * (11 if self.spread else 2)
 
     @property
     def FOOTER(self):
@@ -198,8 +229,8 @@ class SaveBrowser:
 
     @property
     def footer_rects(self):
-        return self.FOOTER if self.mode == 'save' else (
-            *self.FOOTER[:2], ((332 if self.spread else 204) + self.spread, 328, self.right, 356))
+        # Loading has one action: it stands alone at the page's right edge, as wide as New save.
+        return self.FOOTER if self.mode == 'save' else (*self.FOOTER[:2], self.FOOTER[3])
 
     @property
     def entry(self):
@@ -625,7 +656,7 @@ class SaveBrowser:
                     line(((name_x, y + 10), (name_x + width, y + 10)), cyan)
             if can_rename and self.hovered == 25 and not modal:
                 # Wide page: under the name, in the room kept above the details (DETAIL_GAP).
-                tip = top + 30 + extra if self.spread else top - 19
+                tip = top + 26 + extra if self.spread else top - 19
                 rectangle((right - 110, tip, right, tip + 17), fill=c('#303030'))
                 text('Rename save', right - 102, tip + 5, white, 94, True)
             resume = {'Level start': 'Resumes at level start',
@@ -634,9 +665,9 @@ class SaveBrowser:
             message_color = c('#ff9b9b') if self.error else muted
             if self.spread:
                 # Beside the preview: one detail on each line; messages go under the preview.
-                # The details sit in the column's lower corner, level with the preview's foot,
+                # The details sit in the column's lower corner, the last line's foot level with the preview's,
                 # clear of the name and of the Rename tip under it, so hovering moves nothing.
-                below = max(top + extra + self.DETAIL_GAP, self.PREVIEW[3] - 39)
+                below = max(top + extra + self.DETAIL_GAP, self.PREVIEW[3] - 37)
                 text(slot.resume, column, below, muted, right - column, True)
                 text(slot.date, column, below + 14, muted, right - column, True)
                 if slot.capacity is not None:
@@ -644,10 +675,10 @@ class SaveBrowser:
                 text(message, self.PREVIEW[0], self.PREVIEW[3] + 5, message_color,
                      right - self.PREVIEW[0], True)
             else:
-                text(resume, name_x, 299, muted, name_width, True)
+                text(resume, name_x, 295, muted, name_width, True)
                 if slot.capacity is not None:
-                    text(f'Life {slot.capacity}', 472, 313, muted, 64, True, align='right')
-                text(message or slot.date, name_x, 313, message_color,
+                    text(f'Life {slot.capacity}', 472, 309, muted, 64, True, align='right')
+                text(message or slot.date, name_x, 309, message_color,
                      name_width - 70 if slot.capacity is not None else name_width, True)
             for index, (rect, label) in zip((28, 26, 27, 29), zip(self.footer_rects,
                     ('Back', 'Delete', 'Overwrite' if self.mode == 'save' else 'Load game', 'New save'))):

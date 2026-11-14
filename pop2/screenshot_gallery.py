@@ -223,31 +223,56 @@ def open_capture_folder(folder):
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+# Pictures already read stay for the next time the page opens, so that it opens
+# with its thumbnails instead of reading every PNG again. A key names the file's
+# path, time and size, so a changed file is read afresh. Quotas per kind.
+SHARED_QUOTAS = {'thumb': 32, 'image': 2, 'icon': 8}
+SHARED_READS = {}
+THUMB_WORKERS = 3
+# The last listing of each folder: the page opens with it while the folder is read again.
+LAST_SCANS = {}
+
+
 class GalleryReads:
-    def __init__(self):
+    def __init__(self, shared=None):
         self.jobs, self.results = PriorityQueue(), Queue()
         self.pending, self.cache = set(), {}
+        self.shared = shared   # a dict kept between pages (SHARED_READS), or None
         self.closed, self.serial, self.thread = False, 0, None
         self.wanted = None
+        # The page's thumbnails are read by a few workers of their own: PNG
+        # decoding leaves Python's lock, so the page fills a few times sooner.
+        self.thumbs, self.thumb_threads = PriorityQueue(), []
 
     def request(self, key, function, priority=0):
         if key in self.cache:
             result = self.cache.pop(key)
             self.cache[key] = result
             return result
+        if self.shared is not None and key in self.shared and not self.closed:
+            self.store(key, self.shared[key])
+            return self.cache[key]
         if not self.closed and key not in self.pending and (
                 key[0] not in ('image', 'thumb') or priority < 0 or len(self.pending) < 12):
             self.pending.add(key)
             self.serial += 1
+            if key[0] == 'thumb' and self.shared is not None:
+                self.thumbs.put((priority, self.serial, key, function))
+                if len(self.thumb_threads) < THUMB_WORKERS:
+                    thread = Thread(target=self.work, args=(self.thumbs,), daemon=True, name='PNG thumbnail reads')
+                    self.thumb_threads.append(thread)
+                    thread.start()
+                return None
             self.jobs.put((priority, self.serial, key, function))
             if self.thread is None:
                 self.thread = Thread(target=self.work, daemon=True, name='PNG gallery reads')
                 self.thread.start()
         return None
 
-    def work(self):
+    def work(self, jobs=None):
+        jobs = self.jobs if jobs is None else jobs
         while not self.closed:
-            _priority, _serial, key, function = self.jobs.get()
+            _priority, _serial, key, function = jobs.get()
             if self.closed or function is None:
                 return
             if key[0] in ('image', 'thumb') and self.wanted is not None and key not in self.wanted:
@@ -271,17 +296,28 @@ class GalleryReads:
             if result is None:
                 changed = True
                 continue
-            kind = key[0]
-            quota = 3 if kind == 'image' else 64 if kind == 'thumb' else 8
-            category = [item for item in self.cache if item[0] == kind]
-            if len(category) >= quota:
-                del self.cache[category[0]]
-            remember(self.cache, key, result, 96)
+            self.store(key, result)
+            if self.shared is not None and key[0] in SHARED_QUOTAS and not result.error:
+                self.shared.pop(key, None)
+                category = [item for item in self.shared if item[0] == key[0]]
+                if len(category) >= SHARED_QUOTAS[key[0]]:
+                    del self.shared[category[0]]
+                self.shared[key] = result
             changed = True
+
+    def store(self, key, result):
+        kind = key[0]
+        quota = 3 if kind == 'image' else 64 if kind == 'thumb' else 8
+        category = [item for item in self.cache if item[0] == kind]
+        if len(category) >= quota:
+            del self.cache[category[0]]
+        remember(self.cache, key, result, 96)
 
     def close(self):
         self.closed = True
         self.jobs.put((-100, 0, None, None))
+        for _thread in self.thumb_threads:
+            self.thumbs.put((-100, 0, None, None))
         self.pending.clear()
         self.cache.clear()
 
@@ -367,7 +403,7 @@ class ScreenshotGallery:
         self.draft, self.caret, self.anchor = '', 0, 0
         self.browsing, self.folders, self.folder_selected, self.folder_offset = self.folder, (), 0, 0
         self.folder_error, self.revision = '', 0
-        self.reads = GalleryReads()
+        self.reads = GalleryReads(SHARED_READS)
         self.text_cache, self.image_cache = {}, {}
         self.modal_cache, self.art_revision = {}, 0
         self.surface_cache = {}
@@ -380,6 +416,8 @@ class ScreenshotGallery:
         self.open_key = None
         self.committed_folder = None
         self.refresh()
+        self.entries = LAST_SCANS.get(self.folder, ())   # until the folder's new listing arrives
+        self.ensure_visible(immediate=True)
 
     @property
     def lava_key(self):
@@ -466,6 +504,11 @@ class ScreenshotGallery:
         if result is not None and self.applied_scan != self.scan_key:
             self.applied_scan = self.scan_key
             self.entries = result.value or ()
+            if not result.error:
+                LAST_SCANS.pop(self.folder, None)
+                if len(LAST_SCANS) >= 4:
+                    del LAST_SCANS[next(iter(LAST_SCANS))]
+                LAST_SCANS[self.folder] = self.entries
             self.selected = next((i for i, item in enumerate(self.entries)
                                   if item.path == self.preferred_path), 0)
             if result.error:

@@ -635,6 +635,20 @@ class ViewerSceneTests(unittest.TestCase):
                         (round(left - parent[0]), round(top - parent[1])))
         return image
 
+    def test_reopening_the_viewer_reuses_its_covers_and_draws_the_same_page(self):
+        # Each opening used to fit every cover to its card again (about 80 ms).
+        scene = self.scene
+        scene.canvas.winfo_width = lambda: 1920
+        scene.canvas.winfo_height = lambda: 1080
+        self.open_viewer()
+        scene.present_viewport()
+        before = self.displayed_gallery()
+        scene.close_game_menu()
+        with patch('pop2.cutscene_gallery.ImageOps.fit', side_effect=AssertionError('fitted again')):
+            self.open_viewer()
+            scene.present_viewport()
+        self.assertEqual(self.displayed_gallery().tobytes(), before.tobytes())
+
     def test_f1_keeps_progress_and_f3_offers_the_same_chapters_with_developer_access(self):
         scene = self.scene
         self.assertIn('cutscenes', {item.action for item in GameMenu().items})

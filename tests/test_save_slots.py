@@ -15,7 +15,7 @@ from pop2.game_session import GameSession
 from pop2.rebirth import RebirthSnapshot
 from pop2.save_game import (SaveGameError, capture, decode_preview, encode_preview,
                            read_save, write_save)
-from pop2.save_slots import SaveBrowser, SaveSlot, list_slots, rename_quill
+from pop2.save_slots import SaveBrowser, SaveSlot, list_slots, read_slot, rename_quill
 from tests.test_game_session import EmptyEncounter, resources
 
 
@@ -268,7 +268,7 @@ class SaveBrowserTests(unittest.TestCase):
     def test_entire_name_strip_renames_in_both_modes_without_loading_or_saving(self):
         slot = SaveSlot(self.folder / 'journey.pop2save', 'My journey', True)
         for mode in ('save', 'load'):
-            for point in ((238, 273), (258, 280), (470, 292)):
+            for point in ((238, 273), (258, 280), (470, 291)):
                 with self.subTest(mode=mode, point=point):
                     menu = SaveBrowser((slot,), mode)
                     self.assertEqual(menu.hit(*point), 25)
@@ -455,7 +455,7 @@ class SaveBrowserTests(unittest.TestCase):
         browser.draw(source, font)
         self.assertEqual(browser.name_rows, 2)
         x, y = browser.DETAILS
-        self.assertEqual(browser.RENAME, (x, y, browser.right, y + 37))
+        self.assertEqual(browser.RENAME, (x, y, browser.right, y + 33))
         drawn = []
         with patch('pop2.save_slots.ImageDraw.ImageDraw.rectangle', autospec=True,
                    side_effect=lambda draw, rect, **kw: drawn.append(rect)):
@@ -464,15 +464,15 @@ class SaveBrowserTests(unittest.TestCase):
         sy = size[1] / 384
         # The tip sits under the two-line name; the details start below it.
         preview_left = round((browser.PREVIEW[0] + shift) * sy)
-        tip_bottom = (y + 30 + 11 + 17) * sy
+        tip_bottom = (y + 26 + 11 + 17) * sy
         # The details stand in the column's lower corner, level with the preview's foot.
-        below = browser.PREVIEW[3] - 39
+        below = browser.PREVIEW[3] - 37
         self.assertGreaterEqual(below, y + 11 + browser.DETAIL_GAP)
         self.assertLess(tip_bottom, below * sy)
         overlapping = [rect for rect in drawn if rect[0] > preview_left
                        and any(rect[1] < (below + row) * sy < rect[3] for row in range(0, 38, 2))]
         self.assertEqual(overlapping, [])
-        self.assertTrue(any(abs(rect[1] - (y + 41) * sy) <= 1 for rect in drawn))
+        self.assertTrue(any(abs(rect[1] - (y + 37) * sy) <= 1 for rect in drawn))
 
     def test_clear_actions_current_marker_and_complete_wrapped_name(self):
         words = []
@@ -500,6 +500,27 @@ class SaveBrowserTests(unittest.TestCase):
         full = browser.draw(source, font)
         self.assertEqual(unmarked.tobytes(), full.tobytes())
         self.assertNotEqual(marked.tobytes(), unmarked.tobytes())
+
+    def test_listing_again_reads_only_saves_that_changed(self):
+        # Opening the saves page used to parse every save and decode its preview each time.
+        def write(path, name):
+            path.write_text(json.dumps({'format': 'pop2-macintosh-native-save', 'version': 2,
+                'level': 3, 'name': name, 'resume': {'checkpoint': None, 'max_life': 3}}))
+
+        first, second = self.folder / 'a.pop2save', self.folder / 'b.pop2save'
+        write(first, 'First')
+        write(second, 'Second')
+        listed = list_slots(self.folder)
+        with patch('pop2.save_slots.read_slot', side_effect=AssertionError('read again')):
+            self.assertEqual(list_slots(self.folder), listed)
+        write(second, 'Second, renamed')
+        os.utime(second, ns=(second.stat().st_atime_ns, second.stat().st_mtime_ns + 10_000_000))
+        with patch('pop2.save_slots.read_slot', wraps=read_slot) as reads:
+            names = {slot.name for slot in list_slots(self.folder)}
+        self.assertEqual(names, {'First', 'Second, renamed'})
+        self.assertEqual([call.args[0] for call in reads.call_args_list], [second])
+        second.unlink()
+        self.assertEqual([slot.name for slot in list_slots(self.folder)], ['First'])
 
     def test_names_come_from_metadata_and_do_not_change_file_paths(self):
         path = self.folder / 'slot-01.pop2save'
@@ -548,17 +569,20 @@ class SaveBrowserTests(unittest.TestCase):
         self.assertEqual(layout(1920, 1200), (0, 0.0))               # 16:10 is not wide enough
         self.assertEqual(layout(1024, 768, 512), (0, 0.0))
         spread, shift = layout(1920, 1080)
-        self.assertEqual(spread, 172)
-        self.assertLess(shift, 1)
+        self.assertEqual(spread, 172 + 2 * SaveBrowser.WIDE_PAD)    # a little further out than the other wide pages
+        self.assertAlmostEqual(shift, 1 / 3 - SaveBrowser.WIDE_PAD)
         spread, shift = layout(2560, 1080)                           # the panel stops growing and is centred
-        self.assertEqual(spread, SaveBrowser.WIDE_LIMIT)
+        self.assertEqual(spread, SaveBrowser.WIDE_LIMIT + 2 * SaveBrowser.WIDE_PAD)
         self.assertAlmostEqual(2 * shift + 510 + spread, 2560 * 384 / 1080)
 
         classic = SaveBrowser(self.slots)
         self.assertEqual((classic.PANEL, classic.LIST, classic.PREVIEW, classic.RENAME),
-                         ((28, 16, 484, 368), (40, 99, 228, 321), (238, 99, 472, 267), (238, 270, 472, 296)))
+                         ((28, 16, 484, 368), (40, 99, 228, 321), (238, 99, 472, 267), (238, 270, 472, 292)))
         self.assertEqual(classic.FOOTER, ((40, 328, 108, 356), (116, 328, 196, 356),
                                           (204, 328, 324, 356), (332, 328, 472, 356)))
+        # Load game used to stretch from 204 to the edge; it now stands alone at the right, as on the wide page.
+        self.assertEqual(classic.footer_rects[2], (332, 328, 472, 356))
+        self.assertEqual(classic.hit(250, 340), None)
         self.assertEqual((classic.NAME_FIELD, classic.CONFIRM),
                          ((100, 166, 412, 199), ((100, 222, 246, 252), (258, 222, 412, 252))))
 
@@ -574,6 +598,7 @@ class SaveBrowserTests(unittest.TestCase):
                 left, top, right, bottom = browser.PREVIEW
                 self.assertGreater(right - left, 270)                # larger than the classic 234
                 self.assertLessEqual(bottom, browser.LIST[3])
+                self.assertEqual(bottom, browser.row_rect(4)[3])     # level with the fifth row's foot
                 self.assertAlmostEqual((right - left - 2) / (bottom - top - 2), 510 / 365, delta=0.01)
                 self.assertGreater(browser.DETAILS[0], right)        # the details stand beside it
                 self.assertEqual(browser.right - browser.DETAILS[0], 120)
@@ -592,7 +617,7 @@ class SaveBrowserTests(unittest.TestCase):
                 self.assertEqual(footer[-1][2] - footer[-1][0], 140)   # not stretched across the page
                 # 21:9 only adds a little room for long names in the list, then centres the page.
                 growth = 50 if size[0] == 2560 else 0
-                self.assertEqual(browser.PANEL[2] - browser.PANEL[0], 456 + 172 + growth)
+                self.assertEqual(browser.PANEL[2] - browser.PANEL[0], 456 + 184 + growth)
                 self.assertEqual(browser.LIST[2] - browser.LIST[0], 188 + growth)
                 self.assertEqual(browser.PREVIEW[0], browser.LIST[2] + 10)
                 self.assertEqual(browser.hit(footer[-1][2] - 2, 340), 27)
