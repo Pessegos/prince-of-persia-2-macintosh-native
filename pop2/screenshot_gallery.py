@@ -872,7 +872,7 @@ class ScreenshotGallery:
                 remember(self.text_cache, key, label_text(font, value, color))
             return self.text_cache[key]
 
-        def text(value, x, y, width=200, color=white, scale=0.7, right=False, tail=False):
+        def text(value, x, y, width=200, color=white, scale=0.7, right=False, tail=False, flush=False):
             if not value:
                 return
             value = str(value)
@@ -891,8 +891,9 @@ class ScreenshotGallery:
             raw = glyph(value, color)
             ink = raw.getbbox()
             if ink:
-                raw = raw.crop((0, ink[1], raw.width, ink[3]))
-            key = ('fit', id(font), value, color, scale, sx, sy)
+                # flush: the first letter's ink, not its side bearing, starts at x.
+                raw = raw.crop((ink[0] if flush else 0, ink[1], raw.width, ink[3]))
+            key = ('fit', id(font), value, color, scale, sx, sy, flush)
             if key not in self.text_cache:
                 remember(self.text_cache, key, raw.resize((max(1, round(raw.width * scale * sx)),
                     max(1, round(raw.height * scale * sy))), Image.Resampling.NEAREST))
@@ -913,6 +914,7 @@ class ScreenshotGallery:
             text(label, x, y, rect[2] - rect[0] - 16, white if enabled else muted, scale)
 
         shown = []   # where pictures are, in pixels: the theme's sign keeps out of them
+        framed_left = [None]   # the large picture's left frame edge, in page units, once drawn
 
         def keep_clear(left, top, right, bottom):
             shown.append((left + origin[0], top + origin[1], right + origin[0], bottom + origin[1]))
@@ -945,6 +947,10 @@ class ScreenshotGallery:
             draw.rectangle((pos[0] - border, pos[1] - border,
                             pos[0] + fitted.width + border - 1, pos[1] + fitted.height + border - 1),
                            outline=outline, width=border)
+            if rect == self.PREVIEW:
+                # The picture keeps its own shape inside the preview: remember where its frame
+                # starts, in page units, so the details under it line up with that edge.
+                framed_left[0] = (pos[0] - border + origin[0]) / sx + int(visible) - self.shift - dialog
             return result.value[1]
 
         def draw_list():
@@ -1083,11 +1089,11 @@ class ScreenshotGallery:
                 dimensions = picture(self.entry, self.PREVIEW)
                 name = self.entry.path.name.replace('_', ' ')
                 kilobytes = f'{self.entry.size / 1024:.0f} KB'
-                under = self.PREVIEW[0], self.PREVIEW[3]
-                text(name, under[0], under[1] + 5, self.DELETE[0] - 8 - under[0], gold, 0.55)
+                under = (self.PREVIEW[0] if framed_left[0] is None else framed_left[0]), self.PREVIEW[3]
+                text(name, under[0], under[1] + 5, self.DELETE[0] - 8 - under[0], gold, 0.55, flush=True)
                 # Size and weight read together under the name, not at opposite ends of the line.
                 details = f'{dimensions[0]} x {dimensions[1]}   {kilobytes}' if dimensions else kilobytes
-                text(details, under[0], under[1] + 18, self.DELETE[0] - 8 - under[0], muted, 0.55)
+                text(details, under[0], under[1] + 18, self.DELETE[0] - 8 - under[0], muted, 0.55, flush=True)
             else:
                 box(self.PREVIEW, c('#0c0c0c'))
                 text('Reading folder...' if self.applied_scan != self.scan_key else 'No screenshots yet',
